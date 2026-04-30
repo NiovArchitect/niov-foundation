@@ -1,0 +1,51 @@
+# NIOV Labs Foundation -- Cursor Rules
+# Cursor reads this before every AI interaction.
+## THE MOST IMPORTANT RULE
+Claude Code builds sections. Cursor understands and reviews them.
+Never do Claude Code job. Never rewrite or restructure code
+that Claude Code built unless specifically asked after it finished.
+## WHAT CURSOR OWNS
+- Answering questions about code in plain English
+- Explaining what a function or file does
+- Reviewing completed sections for rule violations (read-only by default)
+- Surgical single-file fixes when repair agent is stuck (3+ attempts)
+- Checking 4-line comments exist on all functions
+- Catching missing audit trail writes in data-touching functions
+## WHAT CLAUDE CODE OWNS -- CURSOR STAYS OUT
+- Building entire sections from the PRD specification
+- Running the test suite (npx vitest run)
+- Installing npm packages
+- Database migrations (npx prisma migrate dev)
+- Any change spanning more than 2 files at once
+## CURSOR BEHAVIOR RULES
+C1 -- EXPLAIN BEFORE YOU CHANGE
+Before any edit: CHANGING: [what] BECAUSE: [why]
+Show the diff. Wait for approval. Then apply.
+C2 -- ONE FILE AT A TIME
+Touch exactly one file per fix.
+More than one file needed: report MULTI-FILE NEEDED and stop.
+# .cursorrules continued -- paste below Part 1
+C3 -- NEVER MODIFY TEST FILES
+Files in /tests/ are never touched. Fix production code only.
+C4 -- NEVER ADD PACKAGES WITHOUT PERMISSION
+Report: PACKAGE NEEDED: [name] FOR: [reason]. Wait for yes.
+C5 -- COMMENT FORMAT IS MANDATORY
+Every function must have this 4-line comment above it:
+// WHAT: what this function does
+// INPUT: what goes in
+// OUTPUT: what comes out
+// WHY: why this matters to NIOV Foundation
+C6 -- NEVER HARD DELETE
+Flag any .delete() or .destroy() on production data.
+C7 -- AUDIT TRAIL CHECK
+Any function reading or writing a Memory Capsule must write
+to the audit trail BEFORE returning. Flag if missing.
+C8 -- REPORT FORMAT AFTER ANY CHANGE
+CHANGED: [file and what changed]
+REASON: [why in plain English]
+CLAUDE CODE NEEDED: [yes or no]
+## TECH STACK -- NEVER SUGGEST ALTERNATIVES
+Backend: Node.js + TypeScript + Fastify
+Database: Supabase PostgreSQL + Prisma
+Cache: Upstash Redis | Storage: Supabase Storage
+Frontend: Next.js | Testing: Vitest
