@@ -5,3 +5,8 @@
 //              that needs to verify or hash a password.
 
 export { hashPassword, verifyPassword, BCRYPT_ROUNDS } from "./password.js";
+export {
+  ContentEncryption,
+  makeContentEncryption,
+  sha256Hex,
+} from "./crypto.js";

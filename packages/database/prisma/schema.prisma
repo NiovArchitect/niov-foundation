@@ -103,6 +103,19 @@ model MemoryCapsule {
   monetization_enabled  Boolean @default(false)
   monetization_category String?
 
+  // Section 3C WRITE attribution: created_by may differ from entity_id
+  // when an authorized attributed write put a capsule into someone
+  // else's wallet. Once set at create time, created_by and
+  // created_session_id are NEVER overwritten. updated_by /
+  // updated_session_id reflect the most recent edit. previous_version
+  // is the version before the most recent update.
+  created_by         String?  @db.Uuid
+  created_session_id String?  @db.Uuid
+  write_reason       String?
+  updated_by         String?  @db.Uuid
+  updated_session_id String?  @db.Uuid
+  previous_version   Int?
+
   created_at       DateTime  @default(now())
   last_accessed_at DateTime?
   last_updated_at  DateTime  @updatedAt

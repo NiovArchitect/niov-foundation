@@ -9,12 +9,13 @@
 //              server.ts, and any future SupabaseContentStore.
 
 // WHAT: The contract every content-store implementation honors.
-// INPUT: Used as a parameter type for ReadService.
+// INPUT: Used as a parameter type for ReadService and WriteService.
 // OUTPUT: None -- this is a type, not a value.
-// WHY: Keeping the abstraction one method wide means we can swap
-//      Supabase Storage in later without touching ReadService.
+// WHY: Keeping the abstraction narrow means we can swap Supabase
+//      Storage in later without touching either service.
 export interface ContentStore {
   read(storageLocation: string): Promise<string | null>;
+  write(storageLocation: string, content: string): Promise<void>;
 }
 
 // WHAT: An in-memory ContentStore tests can preload with synthetic
@@ -32,10 +33,16 @@ export class MemoryContentStore implements ContentStore {
     return this.map.get(storageLocation) ?? null;
   }
 
+  async write(storageLocation: string, content: string): Promise<void> {
+    this.map.set(storageLocation, content);
+  }
+
   // WHAT: Plant content at a storage_location for a test to read back.
   // INPUT: The location string and the synthetic content body.
   // OUTPUT: None.
   // WHY: Tests need to seed the store before driving readContent.
+  //      Keeping this distinct from write() means tests cannot
+  //      accidentally rely on it from production code paths.
   setForTest(storageLocation: string, content: string): void {
     this.map.set(storageLocation, content);
   }

@@ -7,6 +7,11 @@
 import type { FastifyInstance } from "fastify";
 import type { NegotiateService } from "../services/cosmp/negotiate.service.js";
 import type { ReadService } from "../services/cosmp/read.service.js";
+import type {
+  CapsuleCreateInput,
+  CapsuleUpdateInput,
+  WriteService,
+} from "../services/cosmp/write.service.js";
 import type { AccessScope } from "@niov/database";
 
 // WHAT: Register the COSMP routes on a Fastify instance.
@@ -18,6 +23,7 @@ export async function registerCosmpRoutes(
   app: FastifyInstance,
   negotiateService: NegotiateService,
   readService: ReadService,
+  writeService: WriteService,
 ): Promise<void> {
   app.post<{
     Body: {
@@ -101,6 +107,69 @@ export async function registerCosmpRoutes(
         ok: true,
         metadata: result.metadata,
         metadata_fingerprint: result.metadata_fingerprint,
+      });
+    },
+  );
+
+  app.post<{ Body: CapsuleCreateInput }>(
+    "/api/v1/cosmp/capsule",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await writeService.createCapsule(
+        sessionToken,
+        request.body,
+        { ip_address: request.ip ?? null },
+      );
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(201).send({
+        ok: true,
+        capsule_id: result.capsule_id,
+        version: result.version,
+        content_hash: result.content_hash,
+        write_type: result.write_type,
+      });
+    },
+  );
+
+  app.patch<{ Params: { id: string }; Body: CapsuleUpdateInput }>(
+    "/api/v1/cosmp/capsule/:id",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const declarationToken = headerString(
+        request.headers["x-declaration-token"],
+      );
+      const result = await writeService.updateCapsule(
+        sessionToken,
+        request.params.id,
+        request.body,
+        declarationToken,
+        { ip_address: request.ip ?? null },
+      );
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send({
+        ok: true,
+        capsule_id: result.capsule_id,
+        version: result.version,
+        content_hash: result.content_hash,
+        write_type: result.write_type,
       });
     },
   );
@@ -204,12 +273,15 @@ function statusForCode(code: string): number {
     case "NO_PERMISSION":
     case "CLEARANCE_INSUFFICIENT":
     case "SCOPE_INSUFFICIENT_FOR_CONTENT":
+    case "WRITE_NOT_PERMITTED":
       return 403;
     case "CAPSULE_NOT_FOUND":
     case "CONTENT_NOT_FOUND":
       return 404;
     case "METADATA_FINGERPRINT_MISMATCH":
       return 409;
+    case "CAPSULE_DATA_INVALID":
+      return 422;
     default:
       return 400;
   }

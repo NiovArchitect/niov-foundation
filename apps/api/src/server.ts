@@ -6,9 +6,14 @@
 //              AuthService that several of them depend on.
 
 import Fastify, { type FastifyInstance } from "fastify";
+import {
+  ContentEncryption,
+  makeContentEncryption,
+} from "@niov/auth";
 import { AuthService } from "./services/auth.service.js";
 import { NegotiateService } from "./services/cosmp/negotiate.service.js";
 import { ReadService } from "./services/cosmp/read.service.js";
+import { WriteService } from "./services/cosmp/write.service.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
@@ -26,6 +31,7 @@ export interface BuildAppConfig {
   sessionNonceStore?: NonceStore;
   declarationStore?: NonceStore;
   contentStore?: ContentStore;
+  contentEncryption?: ContentEncryption;
 }
 
 // WHAT: Construct a fully wired Fastify instance ready for inject()
@@ -55,6 +61,9 @@ export async function buildApp(
   const contentStore: ContentStore =
     config.contentStore ?? new MemoryContentStore();
 
+  const contentEncryption: ContentEncryption =
+    config.contentEncryption ?? makeContentEncryption();
+
   const authService = new AuthService({
     jwtSecret,
     nonceStore: sessionNonceStore,
@@ -70,10 +79,17 @@ export async function buildApp(
     contentStore,
     jwtSecret,
   );
+  const writeService = new WriteService(
+    authService,
+    declarationStore,
+    contentStore,
+    contentEncryption,
+    jwtSecret,
+  );
 
   const app = Fastify({ logger: false });
   await registerAuthRoutes(app, authService);
-  await registerCosmpRoutes(app, negotiateService, readService);
+  await registerCosmpRoutes(app, negotiateService, readService, writeService);
 
   return app;
 }

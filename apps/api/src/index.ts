@@ -50,6 +50,17 @@ export type {
   SafeCapsuleMetadata,
 } from "./services/cosmp/read.service.js";
 
+export {
+  WriteService,
+  CHARS_PER_TOKEN,
+} from "./services/cosmp/write.service.js";
+export type {
+  CapsuleCreateInput,
+  CapsuleUpdateInput,
+  WriteSuccess,
+  WriteFailure,
+} from "./services/cosmp/write.service.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 
