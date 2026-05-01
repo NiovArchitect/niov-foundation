@@ -24,6 +24,7 @@ model Entity {
   entity_type          EntityType
   display_name         String
   email                String?       @unique
+  password_hash        String?
   status               EntityStatus  @default(ACTIVE)
   clearance_level      Int           @default(0)
   public_key           String

@@ -1,0 +1,20 @@
+{
+  "name": "@niov/auth",
+  "version": "0.0.1",
+  "private": true,
+  "description": "NIOV Foundation -- password hashing and JWT helpers.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./password": "./src/password.ts"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.7"
+  }
+}

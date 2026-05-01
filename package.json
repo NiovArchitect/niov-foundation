@@ -4,7 +4,8 @@
   "private": true,
   "description": "NIOV Labs Foundation -- Internet of Value protocol platform",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "test": "vitest run",

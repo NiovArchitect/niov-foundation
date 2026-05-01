@@ -106,6 +106,15 @@ export type {
   TARHashableFields,
 } from "./queries/tar.js";
 
+export {
+  createSession,
+  getSessionById,
+  terminateSession,
+  expireOldSessions,
+} from "./queries/session.js";
+
+export type { CreateSessionInput } from "./queries/session.js";
+
 export type {
   Entity,
   AuditLog,

@@ -8,6 +8,7 @@
 //              functions instead of touching the database directly.
 
 import { randomUUID } from "node:crypto";
+import { hashPassword } from "@niov/auth";
 import type {
   Entity,
   EntityStatus,
@@ -53,6 +54,10 @@ export interface CreateEntityInput {
   // Optional override for the wallet type. If omitted we pick a sensible
   // default from entity_type via defaultWalletTypeFor.
   wallet_type?: WalletType;
+  // Optional plaintext password. If supplied, hashed via bcrypt(12)
+  // before storing. Tests + register flows use this; system-created
+  // entities (devices, AI agents) usually leave it null.
+  password?: string;
 }
 
 // WHAT: The filters listEntities understands.
@@ -103,6 +108,11 @@ export async function createEntity(
   // Both inserts happen in one Postgres transaction inside withAudit.
   const newEntityId = randomUUID();
 
+  // Hash any provided password BEFORE the transaction starts. bcrypt is
+  // CPU-bound and we should not hold a database row open while it runs.
+  const passwordHash =
+    input.password !== undefined ? await hashPassword(input.password) : null;
+
   return withAudit(
     {
       action: "ENTITY_CREATE",
@@ -122,6 +132,7 @@ export async function createEntity(
           display_name: input.display_name,
           public_key: input.public_key,
           email: input.email ?? null,
+          password_hash: passwordHash,
           status: input.status ?? "ACTIVE",
           clearance_level: clearance,
         },
