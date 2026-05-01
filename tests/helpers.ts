@@ -7,7 +7,7 @@
 //              client exported by @niov/database.
 
 import { randomUUID } from "node:crypto";
-import { prisma } from "@niov/database";
+import { applyAuditEventTriggers, prisma } from "@niov/database";
 import type {
   CreateCapsuleInput,
   CreateEntityInput,
@@ -86,8 +86,42 @@ export async function cleanupTestData(): Promise<void> {
     await prisma.auditLog.deleteMany({
       where: { entity_id: { in: ids } },
     });
+
+    // audit_events is enforced append-only by a Postgres trigger.
+    // Tests still need to clean up the rows their entities created, so
+    // we briefly disable the trigger, delete only rows tied to test
+    // entities, and re-enable the trigger before exiting.
+    try {
+      await prisma.$executeRawUnsafe(
+        "ALTER TABLE audit_events DISABLE TRIGGER USER",
+      );
+      await prisma.auditEvent.deleteMany({
+        where: {
+          OR: [
+            { actor_entity_id: { in: ids } },
+            { target_entity_id: { in: ids } },
+          ],
+        },
+      });
+    } finally {
+      await prisma.$executeRawUnsafe(
+        "ALTER TABLE audit_events ENABLE TRIGGER USER",
+      );
+    }
+
     await prisma.entity.deleteMany({
       where: { entity_id: { in: ids } },
     });
   }
+}
+
+// WHAT: Make sure the append-only Postgres trigger is installed on the
+//        audit_events table.
+// INPUT: None.
+// OUTPUT: A promise that resolves once the trigger is in place.
+// WHY: Tests need the trigger active to verify Section 1E behaviors.
+//      applyAuditEventTriggers is idempotent, so calling it from
+//      every suite's beforeAll is safe.
+export async function ensureAuditTriggers(): Promise<void> {
+  await applyAuditEventTriggers();
 }

@@ -71,9 +71,28 @@ export {
 
 export type { CreatePermissionInput } from "./queries/permission.js";
 
+export {
+  writeAuditEvent,
+  queryAuditEvents,
+  verifyAuditChain,
+  getLatestEventHash,
+  applyAuditEventTriggers,
+  MAX_AUDIT_EVENTS_PAGE_SIZE,
+} from "./queries/audit.js";
+
+export type {
+  AuditEventType,
+  WriteAuditEventInput,
+  QueryAuditEventsFilters,
+  QueryAuditEventsResult,
+  VerifyAuditChainResult,
+} from "./queries/audit.js";
+
 export type {
   Entity,
   AuditLog,
+  AuditEvent,
+  AuditOutcome,
   EntityStatus,
   EntityType,
   Wallet,

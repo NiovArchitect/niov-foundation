@@ -119,6 +119,47 @@ model MemoryCapsule {
   @@map("memory_capsules")
 }
 
+// An AuditEvent is one entry in the compliance-grade, tamper-evident
+// audit-of-record. Unlike the lower-level AuditLog table (which records
+// every internal data action for Rule 4), AuditEvent records semantic
+// security and compliance events: logins, sessions, capsule lifecycle
+// events, permission grants, anomalies, admin actions.
+//
+// Two properties make it tamper-evident:
+//   1. event_hash is the SHA-256 of a canonical form of every other
+//      field, including previous_event_hash. Mutating any field without
+//      regenerating the hash breaks verification.
+//   2. previous_event_hash links each new event to the prior event in
+//      the same actor's chain, so reordering or deletion is also
+//      detectable.
+//
+// The table is enforced append-only by a Postgres BEFORE UPDATE OR
+// DELETE trigger installed by applyAuditEventTriggers. Tampering with
+// existing rows requires DDL-level privileges to disable that trigger.
+model AuditEvent {
+  audit_id            String       @id @default(uuid()) @db.Uuid
+  event_type          String
+  actor_entity_id     String?      @db.Uuid
+  target_entity_id    String?      @db.Uuid
+  target_capsule_id   String?      @db.Uuid
+  session_id          String?      @db.Uuid
+  outcome             AuditOutcome
+  denial_reason       String?
+  details             Json         @default("{}")
+  ip_address          String?
+  timestamp           DateTime     @default(now())
+  previous_event_hash String?
+  event_hash          String
+
+  @@index([actor_entity_id])
+  @@index([target_entity_id])
+  @@index([target_capsule_id])
+  @@index([event_type])
+  @@index([timestamp])
+  @@index([actor_entity_id, timestamp])
+  @@map("audit_events")
+}
+
 // A Permission row is one cryptographic grant (or block) of access from
 // one Entity to one Entity over one MemoryCapsule. Permissions created
 // in the same action share a bridge_id so they can be revoked as a
@@ -243,4 +284,10 @@ enum PermissionStatus {
   ACTIVE
   REVOKED
   EXPIRED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  DENIED
+  ERROR
 }
