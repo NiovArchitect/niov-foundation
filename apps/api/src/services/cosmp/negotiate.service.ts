@@ -22,6 +22,7 @@ import {
 } from "@niov/database";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
+import type { ComplianceService } from "../compliance/compliance.service.js";
 
 // WHAT: How long an access declaration is valid for, in seconds.
 // INPUT: None.
@@ -61,8 +62,10 @@ export interface NegotiateFailure {
     | "SESSION_INVALIDATED"
     | "OPERATION_NOT_PERMITTED"
     | "ACCESS_DENIED"
-    | "NO_PERMISSION";
+    | "NO_PERMISSION"
+    | "COMPLIANCE_CHECK_FAILED";
   message: string;
+  failing_framework?: string;
 }
 
 // WHAT: The shape of the JWT payload we sign for the access declaration.
@@ -138,6 +141,7 @@ export class NegotiateService {
     private readonly authService: AuthService,
     private readonly declarationStore: NonceStore,
     private readonly jwtSecret: string,
+    private readonly complianceService?: ComplianceService,
   ) {}
 
   // WHAT: Run the COSMP NEGOTIATE flow exactly as the spec describes.
@@ -313,6 +317,45 @@ export class NegotiateService {
         code: "NO_PERMISSION",
         message: "You do not have permission to access this capsule",
       };
+    }
+
+    // STEP 4.5 (Section 7) -- compliance check. Owner shortcut
+    // already returned earlier; this only runs for cross-entity
+    // access. If the target is bound by a framework whose
+    // predicate fails, STOP and return COMPLIANCE_CHECK_FAILED.
+    if (this.complianceService !== undefined) {
+      const compliance = await this.complianceService.runComplianceChecks({
+        operation_type: "NEGOTIATE",
+        actor_entity_id: validation.entity_id,
+        target_entity_id: metadata.entity_id,
+        capsule_id: targetCapsuleId,
+        capsule_type: metadata.capsule_type,
+        permission,
+        session_clearance_ceiling: validation.clearance_ceiling,
+      });
+      if (!compliance.compliant) {
+        await writeAuditEvent({
+          event_type: "NEGOTIATE",
+          outcome: "DENIED",
+          actor_entity_id: validation.entity_id,
+          target_capsule_id: targetCapsuleId,
+          target_entity_id: metadata.entity_id,
+          denial_reason: "COMPLIANCE_CHECK_FAILED",
+          ip_address: context.ip_address ?? null,
+          details: {
+            failing_framework: compliance.failing_framework,
+            framework_reason: compliance.reason,
+            entity_type: requester.entity_type,
+          },
+        });
+        return {
+          ok: false,
+          code: "COMPLIANCE_CHECK_FAILED",
+          message:
+            compliance.reason ?? "Operation blocked by a compliance framework",
+          failing_framework: compliance.failing_framework,
+        };
+      }
     }
 
     // STEP 5 -- scope narrowing

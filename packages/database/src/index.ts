@@ -145,5 +145,7 @@ export type {
   MonetizationEvent,
   MonetizationStatus,
   WalletBalance,
+  ComplianceFramework,
+  EntityComplianceProfile,
   Prisma,
 } from "@prisma/client";

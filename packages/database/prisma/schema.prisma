@@ -477,6 +477,41 @@ model HiveMembership {
   @@map("hive_memberships")
 }
 
+// A ComplianceFramework is one regulatory regime (HIPAA, GDPR, ...)
+// the protocol can hold an entity to. Rules are stored as JSON for
+// future flexibility; the actual predicate logic for each framework
+// lives in compliance.service.ts (one function per framework name).
+model ComplianceFramework {
+  framework_id              String   @id @default(uuid()) @db.Uuid
+  framework_name            String   @unique
+  jurisdiction              String[]
+  applicable_entity_sectors String[]
+  applicable_capsule_types  String[]
+  rules                     Json     @default("{}")
+  required_audit_events     String[]
+  is_active                 Boolean  @default(true)
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  @@map("compliance_frameworks")
+}
+
+// EntityComplianceProfile attaches one entity to zero or more
+// frameworks plus their declared sector + jurisdiction. The
+// compliance check pipeline reads this row to decide which
+// frameworks apply to the entity being acted on.
+model EntityComplianceProfile {
+  profile_id   String   @id @default(uuid()) @db.Uuid
+  entity_id    String   @unique @db.Uuid
+  frameworks   String[]
+  sector       String
+  jurisdiction String[]
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("entity_compliance_profiles")
+}
+
 // One MonetizationEvent per recorded data access that earned the
 // wallet holder some money. The split into niov_fee_usd +
 // holder_share_usd is computed at create time so historical splits

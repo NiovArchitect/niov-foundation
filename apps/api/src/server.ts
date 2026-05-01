@@ -21,6 +21,11 @@ import { HiveService } from "./services/hive/hive.service.js";
 import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { MonetizationService } from "./services/monetization/monetization.service.js";
 import { registerWalletRoutes } from "./routes/wallet.routes.js";
+import {
+  ComplianceService,
+  seedComplianceFrameworks,
+} from "./services/compliance/compliance.service.js";
+import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
@@ -75,10 +80,12 @@ export async function buildApp(
     jwtSecret,
     nonceStore: sessionNonceStore,
   });
+  const complianceService = new ComplianceService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
     jwtSecret,
+    complianceService,
   );
   const readService = new ReadService(
     authService,
@@ -120,6 +127,11 @@ export async function buildApp(
   await registerCoeRoutes(app, coeService);
   await registerHiveRoutes(app, hiveService);
   await registerWalletRoutes(app, monetizationService);
+  await registerComplianceRoutes(app, complianceService);
+
+  // Idempotent seed on every boot so a fresh DB has the seven
+  // spec frameworks ready before the first request lands.
+  await seedComplianceFrameworks();
 
   return app;
 }

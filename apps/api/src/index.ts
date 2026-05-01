@@ -135,6 +135,19 @@ export type {
 
 export { registerWalletRoutes } from "./routes/wallet.routes.js";
 
+export {
+  ComplianceService,
+  seedComplianceFrameworks,
+  SEED_FRAMEWORKS,
+} from "./services/compliance/compliance.service.js";
+export type {
+  ComplianceCheckInput,
+  ComplianceCheckResult,
+  ComplianceReport,
+} from "./services/compliance/compliance.service.js";
+
+export { registerComplianceRoutes } from "./routes/compliance.routes.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 

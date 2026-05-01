@@ -370,6 +370,8 @@ function statusForCode(code: string): number {
     case "CAPSULE_DATA_INVALID":
     case "INVALID_REQUEST":
       return 422;
+    case "COMPLIANCE_CHECK_FAILED":
+      return 451;
     default:
       return 400;
   }
