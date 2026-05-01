@@ -13,9 +13,10 @@ import bcrypt from "bcrypt";
 // OUTPUT: A number of rounds.
 // WHY: 12 is a 2026-grade default -- slow enough to make GPU cracking
 //      expensive, fast enough to keep login under ~250ms on a typical
-//      server. Naming the constant means we can bump it later without
-//      grep.
-export const BCRYPT_ROUNDS = 12;
+//      server. In tests we drop to 4 rounds so the suite is not
+//      bound by bcrypt; security-relevant tests still pass because
+//      we are testing flow, not key strength.
+export const BCRYPT_ROUNDS = process.env.NODE_ENV === "test" ? 4 : 12;
 
 // WHAT: Hash a plaintext password into a bcrypt-format string.
 // INPUT: The plaintext password the user just typed.

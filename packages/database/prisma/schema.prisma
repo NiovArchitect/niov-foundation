@@ -421,6 +421,13 @@ enum MembershipStatus {
   REMOVED
 }
 
+enum MonetizationStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  PERMANENTLY_FAILED
+}
+
 // A Hive is a many-entity collective. Members contribute capsules;
 // the system computes an anonymized aggregate (common topic tags
 // across members) and stores it as a single MemoryCapsule that
@@ -468,6 +475,48 @@ model HiveMembership {
   @@index([entity_id])
   @@index([status])
   @@map("hive_memberships")
+}
+
+// One MonetizationEvent per recorded data access that earned the
+// wallet holder some money. The split into niov_fee_usd +
+// holder_share_usd is computed at create time so historical splits
+// stay accurate even if the protocol ratio is later adjusted.
+model MonetizationEvent {
+  event_id                String              @id @default(uuid()) @db.Uuid
+  capsule_id              String              @db.Uuid
+  accessor_entity_id      String              @db.Uuid
+  wallet_holder_entity_id String              @db.Uuid
+  capsule_type            CapsuleType
+  gross_value_usd         Float
+  niov_fee_usd            Float
+  holder_share_usd        Float
+  status                  MonetizationStatus  @default(PENDING)
+  retry_count             Int                 @default(0)
+  failure_reason          String?
+  created_at              DateTime            @default(now())
+  processed_at            DateTime?
+
+  @@index([wallet_holder_entity_id])
+  @@index([accessor_entity_id])
+  @@index([capsule_id])
+  @@index([status])
+  @@index([created_at])
+  @@map("monetization_events")
+}
+
+// One WalletBalance row per entity. Lazily created on the entity's
+// first earning. available + pending + lifetime are running totals
+// in USD; settlement to a real bank rail is a future-section
+// concern.
+model WalletBalance {
+  balance_id             String   @id @default(uuid()) @db.Uuid
+  entity_id              String   @unique @db.Uuid
+  available_balance_usd  Float    @default(0)
+  pending_balance_usd    Float    @default(0)
+  lifetime_earned_usd    Float    @default(0)
+  updated_at             DateTime @updatedAt
+
+  @@map("wallet_balances")
 }
 
 // A COEOutcome records that a particular capsule was used for a

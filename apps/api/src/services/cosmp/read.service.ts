@@ -49,13 +49,16 @@ export interface ReadMetadataSuccess {
 // INPUT: Used as a return type only.
 // OUTPUT: None -- this is a type.
 // WHY: Carries the scope-filtered content plus the granted_scope so
-//      the caller knows which mode they got.
+//      the caller knows which mode they got. accessor_entity_id is
+//      surfaced so the route can hand it to the monetization
+//      service without re-validating the session.
 export interface ReadContentSuccess {
   ok: true;
   capsule_id: string;
   granted_scope: AccessScope;
   content: string;
   truncated: boolean;
+  accessor_entity_id: string;
 }
 
 // WHAT: The discriminated failure shape both reads share.
@@ -470,6 +473,7 @@ export class ReadService {
       granted_scope: granted,
       content: body,
       truncated,
+      accessor_entity_id: session.entity_id,
     };
   }
 

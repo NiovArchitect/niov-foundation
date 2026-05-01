@@ -16,6 +16,7 @@ import type {
   ShareRequest,
   ShareService,
 } from "../services/cosmp/share.service.js";
+import type { MonetizationService } from "../services/monetization/monetization.service.js";
 import type { AccessScope } from "@niov/database";
 
 // WHAT: Register the COSMP routes on a Fastify instance.
@@ -29,6 +30,7 @@ export async function registerCosmpRoutes(
   readService: ReadService,
   writeService: WriteService,
   shareService: ShareService,
+  monetizationService: MonetizationService,
 ): Promise<void> {
   app.post<{
     Body: {
@@ -279,12 +281,20 @@ export async function registerCosmpRoutes(
         return reply.code(statusForCode(result.code)).send(result);
       }
 
-      // Schedule the post-response increment AFTER our handler
+      // Schedule the post-response side effects AFTER our handler
       // returns. setImmediate runs once the current tick completes,
       // which is after Fastify has begun sending the response body.
+      // Two side effects: bump access_count, and trigger the
+      // monetization event (if the capsule is opted into the
+      // pool).
       const capsuleId = request.params.id;
+      const accessorEntityId = result.accessor_entity_id;
       setImmediate(() => {
         void readService.postResponseIncrement(capsuleId, null);
+        void monetizationService.triggerMonetizationEvent(
+          capsuleId,
+          accessorEntityId,
+        );
       });
 
       return reply.code(200).send({

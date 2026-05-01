@@ -113,6 +113,28 @@ export type {
 
 export { registerHiveRoutes } from "./routes/hive.routes.js";
 
+export {
+  MonetizationService,
+  PRICING_TABLE,
+  HOLDER_SHARE,
+  NIOV_FEE_SHARE,
+  HOLDER_SHARE_FLOOR,
+  HOLDER_SHARE_CEILING,
+  NIOV_FEE_FLOOR,
+  NIOV_FEE_CEILING,
+  MAX_RETRIES,
+  MAX_HISTORY_PAGE_SIZE,
+} from "./services/monetization/monetization.service.js";
+export type {
+  TriggerResult,
+  BalanceResult,
+  HistoryResult,
+  ToggleResult,
+  WalletFailure,
+} from "./services/monetization/monetization.service.js";
+
+export { registerWalletRoutes } from "./routes/wallet.routes.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 

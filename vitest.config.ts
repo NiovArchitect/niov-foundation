@@ -19,8 +19,14 @@ export default defineConfig({
     globals: false,
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    testTimeout: 120_000,
+    testTimeout: 300_000,
     hookTimeout: 60_000,
+    env: { NODE_ENV: "test" },
+    // Each test gets up to 2 retries to absorb single-query
+    // Supabase tail-latency hangs that show up roughly once per
+    // ~280 test invocations against shared free-tier infra. The
+    // logic under test is deterministic; the network is not.
+    retry: 2,
     pool: "forks",
     poolOptions: {
       forks: {

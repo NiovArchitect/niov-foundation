@@ -142,5 +142,8 @@ export type {
   HiveStatus,
   HiveMembership,
   MembershipStatus,
+  MonetizationEvent,
+  MonetizationStatus,
+  WalletBalance,
   Prisma,
 } from "@prisma/client";
