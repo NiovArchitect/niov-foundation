@@ -58,6 +58,19 @@ export type {
   SearchByTopicTagsInput,
 } from "./queries/capsule.js";
 
+export {
+  createPermission,
+  createPermissionBridge,
+  checkPermission,
+  revokePermission,
+  revokeBridge,
+  listPermissionsGranted,
+  listPermissionsReceived,
+  expireOldPermissions,
+} from "./queries/permission.js";
+
+export type { CreatePermissionInput } from "./queries/permission.js";
+
 export type {
   Entity,
   AuditLog,
@@ -69,5 +82,9 @@ export type {
   CapsuleType,
   DecayType,
   StorageTier,
+  Permission,
+  AccessScope,
+  DurationType,
+  PermissionStatus,
   Prisma,
 } from "@prisma/client";

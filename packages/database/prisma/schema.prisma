@@ -105,8 +105,9 @@ model MemoryCapsule {
   expires_at       DateTime?
   deleted_at       DateTime?
 
-  wallet Wallet @relation(fields: [wallet_id], references: [wallet_id], onDelete: Cascade)
-  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+  wallet      Wallet       @relation(fields: [wallet_id], references: [wallet_id], onDelete: Cascade)
+  entity      Entity       @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+  permissions Permission[]
 
   @@index([wallet_id])
   @@index([entity_id])
@@ -116,6 +117,41 @@ model MemoryCapsule {
   @@index([deleted_at])
   @@index([topic_tags], type: Gin)
   @@map("memory_capsules")
+}
+
+// A Permission row is one cryptographic grant (or block) of access from
+// one Entity to one Entity over one MemoryCapsule. Permissions created
+// in the same action share a bridge_id so they can be revoked as a
+// group later. Sovereignty rules (only PERSON can grant LONG_TERM or
+// PERMANENT, AI_AGENT cannot grant to AI_AGENT, etc.) are enforced at
+// create-time in /queries/permission.ts.
+model Permission {
+  permission_id        String           @id @default(uuid()) @db.Uuid
+  bridge_id            String           @db.Uuid
+  capsule_id           String           @db.Uuid
+  grantor_entity_id    String           @db.Uuid
+  grantee_entity_id    String           @db.Uuid
+  access_scope         AccessScope
+  duration_type        DurationType
+  can_share_forward    Boolean          @default(false)
+  monetization_active  Boolean          @default(false)
+  valid_from           DateTime         @default(now())
+  expires_at           DateTime?
+  conditions           Json             @default("{}")
+  status               PermissionStatus @default(ACTIVE)
+  revoked_at           DateTime?
+  revoked_by_entity_id String?          @db.Uuid
+  created_at           DateTime         @default(now())
+
+  capsule MemoryCapsule @relation(fields: [capsule_id], references: [capsule_id], onDelete: Cascade)
+
+  @@index([bridge_id])
+  @@index([capsule_id])
+  @@index([grantor_entity_id])
+  @@index([grantee_entity_id])
+  @@index([status])
+  @@index([expires_at])
+  @@map("permissions")
 }
 
 // An AuditLog row is the permanent record that someone or something acted
@@ -186,4 +222,25 @@ enum StorageTier {
   HOT
   WARM
   COLD
+}
+
+enum AccessScope {
+  METADATA_ONLY
+  SUMMARY
+  FULL
+}
+
+enum DurationType {
+  TEMPORARY
+  SHORT_TERM
+  LONG_TERM
+  PERMANENT
+  SESSION_ONLY
+  NONE
+}
+
+enum PermissionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
 }
