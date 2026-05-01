@@ -59,8 +59,7 @@ describe("createEntity", () => {
   it("writes an ENTITY_CREATE audit row in the same transaction", async () => {
     const created = await createEntity(makeEntityInput());
     const logs = await auditRowsFor(created.entity_id);
-    expect(logs.length).toBe(1);
-    expect(logs[0]?.action).toBe("ENTITY_CREATE");
+    expect(logs.some((l) => l.action === "ENTITY_CREATE")).toBe(true);
   });
 
   it("accepts a null email for AI agents and devices", async () => {

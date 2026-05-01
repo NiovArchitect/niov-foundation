@@ -26,10 +26,25 @@ export type {
   ListEntitiesFilters,
 } from "./queries/entity.js";
 
+export {
+  createWallet,
+  getWalletByEntityId,
+  getWalletById,
+  updateWalletSettings,
+  incrementCapsuleCount,
+  decrementCapsuleCount,
+  defaultWalletTypeFor,
+  defaultNiovAccessFor,
+} from "./queries/wallet.js";
+
+export type { WalletSettingsUpdate } from "./queries/wallet.js";
+
 export type {
   Entity,
   AuditLog,
   EntityStatus,
   EntityType,
+  Wallet,
+  WalletType,
   Prisma,
 } from "@prisma/client";

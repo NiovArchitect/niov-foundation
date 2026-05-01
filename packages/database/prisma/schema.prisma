@@ -33,10 +33,33 @@ model Entity {
   updated_at           DateTime      @updatedAt
   deleted_at           DateTime?
 
+  wallet Wallet?
+
   @@index([entity_type])
   @@index([status])
   @@index([deleted_at])
   @@map("entities")
+}
+
+// A Wallet is the Decentralized Memory Wallet (DMW) that holds the
+// pointers to an entity's Memory Capsules. Every entity has exactly
+// one wallet, created automatically the moment the entity is created.
+// Whether NIOV can read the actual capsule contents depends on the
+// wallet type (see niov_can_access_contents).
+model Wallet {
+  wallet_id                String     @id @default(uuid()) @db.Uuid
+  entity_id                String     @unique @db.Uuid
+  wallet_type              WalletType
+  niov_can_access_contents Boolean
+  monetization_enabled     Boolean    @default(false)
+  total_capsule_count      Int        @default(0)
+  created_at               DateTime   @default(now())
+  updated_at               DateTime   @updatedAt
+
+  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+
+  @@index([wallet_type])
+  @@map("wallets")
 }
 
 // An AuditLog row is the permanent record that someone or something acted
@@ -75,4 +98,10 @@ enum EntityStatus {
   ACTIVE
   SUSPENDED
   DELETED
+}
+
+enum WalletType {
+  PERSONAL
+  ENTERPRISE
+  DEVICE
 }

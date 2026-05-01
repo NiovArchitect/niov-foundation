@@ -8,9 +8,20 @@
 //              functions instead of touching the database directly.
 
 import { randomUUID } from "node:crypto";
-import type { Entity, EntityStatus, EntityType, Prisma } from "@prisma/client";
+import type {
+  Entity,
+  EntityStatus,
+  EntityType,
+  Prisma,
+  WalletType,
+} from "@prisma/client";
 import { withAudit } from "../audit.js";
 import { prisma } from "../client.js";
+import {
+  createWalletInTx,
+  defaultWalletTypeFor,
+  writeWalletCreateAudit,
+} from "./wallet.js";
 
 // WHAT: The lowest valid clearance level (public information, no restriction).
 // INPUT: None.
@@ -38,6 +49,9 @@ export interface CreateEntityInput {
   status?: EntityStatus;
   clearance_level?: number;
   actor_id?: string | null;
+  // Optional override for the wallet type. If omitted we pick a sensible
+  // default from entity_type via defaultWalletTypeFor.
+  wallet_type?: WalletType;
 }
 
 // WHAT: The filters listEntities understands.
@@ -111,6 +125,16 @@ export async function createEntity(
           clearance_level: clearance,
         },
       });
+
+      // Rule from Section 1B: every entity must have exactly one wallet,
+      // and it has to be created in the same transaction so we can never
+      // observe an entity without a wallet.
+      const wallet = await createWalletInTx(tx, {
+        entity_id: created.entity_id,
+        wallet_type: input.wallet_type ?? defaultWalletTypeFor(input.entity_type),
+      });
+      await writeWalletCreateAudit(tx, wallet, input.actor_id ?? null);
+
       return created;
     },
   );
