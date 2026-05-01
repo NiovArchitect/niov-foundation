@@ -71,6 +71,31 @@ export type {
   RevokeFailure,
 } from "./services/cosmp/share.service.js";
 
+export {
+  COEService,
+  TOKENS_PER_CAPSULE_ESTIMATE,
+  RELEVANCE_FORGET_FLOOR,
+} from "./services/coe/coe.service.js";
+export type {
+  ContextItem,
+  AssembleContextSuccess,
+  AssembleContextFailure,
+  RecallItem,
+  RecallSuccess,
+  RecallFailure,
+  RecordOutcomeSuccess,
+  RecordOutcomeFailure,
+} from "./services/coe/coe.service.js";
+
+export {
+  combinedScore,
+  extractKeywords,
+  recencyScore,
+  tagOverlapScore,
+} from "./services/coe/keywords.js";
+
+export { registerCoeRoutes } from "./routes/coe.routes.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 

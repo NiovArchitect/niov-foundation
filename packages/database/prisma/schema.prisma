@@ -402,3 +402,20 @@ enum SessionStatus {
   TERMINATED
   INVALIDATED
 }
+
+// A COEOutcome records that a particular capsule was used for a
+// particular session's request, plus whether that use was judged
+// successful. Section 10's feedback loops will read these rows to
+// nudge relevance scores up or down.
+model COEOutcome {
+  outcome_id  String   @id @default(uuid()) @db.Uuid
+  session_id  String?  @db.Uuid
+  capsule_id  String   @db.Uuid
+  success     Boolean
+  recorded_at DateTime @default(now())
+
+  @@index([session_id])
+  @@index([capsule_id])
+  @@index([recorded_at])
+  @@map("coe_outcomes")
+}

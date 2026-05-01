@@ -206,6 +206,58 @@ export class NegotiateService {
       return accessDenied();
     }
 
+    // OWNER SHORTCUT (Section 4 addition): when the requester owns
+    // the capsule, sovereignty grants them full access to their own
+    // data. Skip ai_access_blocked, clearance, and permission checks
+    // and issue a declaration at the requested scope. AI-cap is
+    // skipped too -- an entity cannot block itself from its own
+    // wallet just because it happens to be an AI.
+    if (metadata.entity_id === requester.entity_id) {
+      const declaration_id = randomUUID();
+      const issued_at = Date.now();
+      const valid_until = issued_at + DECLARATION_TTL_SECONDS * 1000;
+      const payload: AccessDeclarationPayload = {
+        declaration_id,
+        capsule_id: targetCapsuleId,
+        requesting_entity_id: validation.entity_id,
+        granted_scope: requestedScope,
+        issued_at,
+        valid_until,
+      };
+      const signOptions: SignOptions = { expiresIn: DECLARATION_TTL_SECONDS };
+      const declaration_token = jwt.sign(
+        payload,
+        this.jwtSecret,
+        signOptions,
+      );
+      await this.declarationStore.set(declaration_id, DECLARATION_TTL_SECONDS);
+
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "SUCCESS",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        target_entity_id: metadata.entity_id,
+        session_id: validation.session_id,
+        ip_address: context.ip_address ?? null,
+        details: {
+          entity_type: requester.entity_type,
+          declaration_id,
+          granted_scope: requestedScope,
+          owner_shortcut: true,
+        },
+      });
+
+      return {
+        ok: true,
+        declaration_id,
+        declaration_token,
+        capsule_id: targetCapsuleId,
+        granted_scope: requestedScope,
+        valid_until: new Date(valid_until),
+      };
+    }
+
     // PRE-CHECK -- AI / DEVICE-class entities respect ai_access_blocked
     if (restrictedClass && metadata.ai_access_blocked === true) {
       await writeAuditEvent({

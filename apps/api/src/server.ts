@@ -15,6 +15,8 @@ import { NegotiateService } from "./services/cosmp/negotiate.service.js";
 import { ReadService } from "./services/cosmp/read.service.js";
 import { WriteService } from "./services/cosmp/write.service.js";
 import { ShareService } from "./services/cosmp/share.service.js";
+import { COEService } from "./services/coe/coe.service.js";
+import { registerCoeRoutes } from "./routes/coe.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
@@ -88,6 +90,12 @@ export async function buildApp(
     jwtSecret,
   );
   const shareService = new ShareService(authService);
+  const coeService = new COEService(
+    authService,
+    negotiateService,
+    readService,
+    contentEncryption,
+  );
 
   const app = Fastify({ logger: false });
   await registerAuthRoutes(app, authService);
@@ -98,6 +106,7 @@ export async function buildApp(
     writeService,
     shareService,
   );
+  await registerCoeRoutes(app, coeService);
 
   return app;
 }
