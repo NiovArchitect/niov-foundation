@@ -403,6 +403,73 @@ enum SessionStatus {
   INVALIDATED
 }
 
+enum HiveType {
+  PERSONAL_NETWORK
+  ENTERPRISE
+  CROSS_ORGANIZATION
+  DEVICE_NETWORK
+  GOVERNMENT
+}
+
+enum HiveStatus {
+  ACTIVE
+  DISSOLVED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  REMOVED
+}
+
+// A Hive is a many-entity collective. Members contribute capsules;
+// the system computes an anonymized aggregate (common topic tags
+// across members) and stores it as a single MemoryCapsule that
+// every active member can read. The aggregate NEVER contains
+// individual entity_ids -- privacy is enforced at build time.
+model Hive {
+  hive_id              String     @id @default(uuid()) @db.Uuid
+  hive_name            String
+  created_by           String     @db.Uuid
+  hive_type            HiveType
+  governance_terms     Json       @default("{}")
+  aggregate_capsule_id String?    @db.Uuid
+  member_count         Int        @default(0)
+  status               HiveStatus @default(ACTIVE)
+  created_at           DateTime   @default(now())
+  updated_at           DateTime   @updatedAt
+
+  members HiveMembership[]
+
+  @@index([created_by])
+  @@index([status])
+  @@map("hives")
+}
+
+// HiveMembership ties one entity to one hive. capsule_types_*
+// + scope columns express what the member contributes and what
+// they receive back. Membership status (ACTIVE / REMOVED) is the
+// gate for getHiveIntelligence -- removed members lose access
+// the moment the row flips.
+model HiveMembership {
+  membership_id             String           @id @default(uuid()) @db.Uuid
+  hive_id                   String           @db.Uuid
+  entity_id                 String           @db.Uuid
+  capsule_types_contributed String[]
+  contribution_scope        AccessScope
+  capsule_types_accessible  String[]
+  access_scope              AccessScope
+  joined_at                 DateTime         @default(now())
+  expires_at                DateTime?
+  status                    MembershipStatus @default(ACTIVE)
+
+  hive Hive @relation(fields: [hive_id], references: [hive_id], onDelete: Cascade)
+
+  @@unique([hive_id, entity_id])
+  @@index([entity_id])
+  @@index([status])
+  @@map("hive_memberships")
+}
+
 // A COEOutcome records that a particular capsule was used for a
 // particular session's request, plus whether that use was judged
 // successful. Section 10's feedback loops will read these rows to

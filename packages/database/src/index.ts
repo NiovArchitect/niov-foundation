@@ -137,5 +137,10 @@ export type {
   TARStatus,
   Session,
   SessionStatus,
+  Hive,
+  HiveType,
+  HiveStatus,
+  HiveMembership,
+  MembershipStatus,
   Prisma,
 } from "@prisma/client";

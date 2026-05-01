@@ -96,6 +96,23 @@ export {
 
 export { registerCoeRoutes } from "./routes/coe.routes.js";
 
+export {
+  HiveService,
+  HIVE_AGGREGATE_TAG_FLOOR,
+} from "./services/hive/hive.service.js";
+export type {
+  MembershipSettings,
+  CreateHiveSuccess,
+  InviteSuccess,
+  RemoveMemberSuccess,
+  IntelligenceSuccess,
+  AggregateBuildSuccess,
+  HiveAggregate,
+  HiveFailure,
+} from "./services/hive/hive.service.js";
+
+export { registerHiveRoutes } from "./routes/hive.routes.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 
