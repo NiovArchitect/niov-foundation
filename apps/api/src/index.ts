@@ -61,6 +61,16 @@ export type {
   WriteFailure,
 } from "./services/cosmp/write.service.js";
 
+export { ShareService } from "./services/cosmp/share.service.js";
+export type {
+  CapsuleGrant,
+  ShareRequest,
+  ShareSuccess,
+  ShareFailure,
+  RevokeSuccess,
+  RevokeFailure,
+} from "./services/cosmp/share.service.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 

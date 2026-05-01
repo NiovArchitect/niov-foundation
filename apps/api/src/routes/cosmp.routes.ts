@@ -12,6 +12,10 @@ import type {
   CapsuleUpdateInput,
   WriteService,
 } from "../services/cosmp/write.service.js";
+import type {
+  ShareRequest,
+  ShareService,
+} from "../services/cosmp/share.service.js";
 import type { AccessScope } from "@niov/database";
 
 // WHAT: Register the COSMP routes on a Fastify instance.
@@ -24,6 +28,7 @@ export async function registerCosmpRoutes(
   negotiateService: NegotiateService,
   readService: ReadService,
   writeService: WriteService,
+  shareService: ShareService,
 ): Promise<void> {
   app.post<{
     Body: {
@@ -136,6 +141,71 @@ export async function registerCosmpRoutes(
         version: result.version,
         content_hash: result.content_hash,
         write_type: result.write_type,
+      });
+    },
+  );
+
+  app.post<{ Body: ShareRequest }>(
+    "/api/v1/cosmp/share",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      // Coerce date strings on the wire into Date objects so the
+      // service can compare expires_at directly.
+      const body = request.body;
+      if (body && Array.isArray(body.capsule_grants)) {
+        for (const g of body.capsule_grants) {
+          if (typeof g.valid_from === "string") {
+            g.valid_from = new Date(g.valid_from);
+          }
+          if (typeof g.expires_at === "string") {
+            g.expires_at = new Date(g.expires_at);
+          }
+        }
+      }
+      const result = await shareService.share(sessionToken, body, {
+        ip_address: request.ip ?? null,
+      });
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(201).send({
+        ok: true,
+        bridge_id: result.bridge_id,
+        permissions_created: result.permissions_created,
+      });
+    },
+  );
+
+  app.delete<{ Params: { bridgeId: string } }>(
+    "/api/v1/cosmp/share/:bridgeId",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await shareService.revoke(
+        sessionToken,
+        request.params.bridgeId,
+        { ip_address: request.ip ?? null },
+      );
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send({
+        ok: true,
+        bridge_id: result.bridge_id,
+        revoked_count: result.revoked_count,
       });
     },
   );
@@ -274,13 +344,21 @@ function statusForCode(code: string): number {
     case "CLEARANCE_INSUFFICIENT":
     case "SCOPE_INSUFFICIENT_FOR_CONTENT":
     case "WRITE_NOT_PERMITTED":
+    case "CAPSULES_NOT_OWNED":
+    case "NOT_GRANTOR":
+    case "CLEARANCE_INSUFFICIENT_FOR_CAPSULES":
       return 403;
     case "CAPSULE_NOT_FOUND":
     case "CONTENT_NOT_FOUND":
+    case "GRANTEE_NOT_FOUND":
+    case "GRANTEE_NO_TAR":
+    case "CAPSULES_NOT_FOUND":
+    case "BRIDGE_NOT_FOUND":
       return 404;
     case "METADATA_FINGERPRINT_MISMATCH":
       return 409;
     case "CAPSULE_DATA_INVALID":
+    case "INVALID_REQUEST":
       return 422;
     default:
       return 400;
