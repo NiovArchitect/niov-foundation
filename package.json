@@ -1,0 +1,23 @@
+{
+  "name": "niov-foundation",
+  "version": "0.0.1",
+  "private": true,
+  "description": "NIOV Labs Foundation -- Internet of Value protocol platform",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "npm --workspace @niov/database run db:generate",
+    "db:migrate": "npm --workspace @niov/database run db:migrate",
+    "db:push": "npm --workspace @niov/database run db:push"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,78 @@
+// FILE: schema.prisma
+// PURPOSE: Define the database tables that the NIOV Foundation runs on.
+//          Section 1A introduces two tables -- Entity and AuditLog.
+// CONNECTS TO: The Supabase Postgres database (URL in .env), the Prisma
+//              client used by /packages/database/src/client.ts, and every
+//              query function under /packages/database/src/queries/.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// An Entity is anyone or anything that can own intelligence inside the
+// NIOV Foundation -- people, companies, AI agents, devices, applications,
+// or governments. Every action in the system is performed by an Entity,
+// and every Memory Capsule is owned by an Entity.
+model Entity {
+  entity_id            String        @id @default(uuid()) @db.Uuid
+  entity_type          EntityType
+  display_name         String
+  email                String?       @unique
+  status               EntityStatus  @default(ACTIVE)
+  clearance_level      Int           @default(0)
+  public_key           String
+  failed_auth_attempts Int           @default(0)
+  suspended_at         DateTime?
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @updatedAt
+  deleted_at           DateTime?
+
+  @@index([entity_type])
+  @@index([status])
+  @@index([deleted_at])
+  @@map("entities")
+}
+
+// An AuditLog row is the permanent record that someone or something acted
+// on data. Rule 4 says no data action ships without an audit row written
+// first. Audit rows are never updated and never deleted.
+//
+// We deliberately do NOT enforce a foreign key on entity_id because audit
+// rows must be able to record probes for entity IDs that do not exist
+// (failed lookups are themselves a security signal worth keeping). The
+// column stays indexed so queries by entity_id stay fast.
+model AuditLog {
+  audit_id   String   @id @default(uuid()) @db.Uuid
+  entity_id  String?  @db.Uuid
+  actor_id   String?  @db.Uuid
+  action     String
+  meta       Json     @default("{}")
+  created_at DateTime @default(now())
+
+  @@index([entity_id])
+  @@index([actor_id])
+  @@index([action])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+enum EntityType {
+  PERSON
+  COMPANY
+  AI_AGENT
+  DEVICE
+  APPLICATION
+  GOVERNMENT
+}
+
+enum EntityStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
