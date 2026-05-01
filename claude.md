@@ -88,7 +88,7 @@ All cryptographic functions use standard AES-256 and SHA-256.
 All storage is Supabase. All cache is Redis. Nothing else.
 ## CURRENT BUILD STATUS -- UPDATE AFTER EACH SECTION
 Section 1 -- Data Foundations: COMPLETE (1A entity, 1B wallet, 1C capsule, 1D permission, 1E audit_events, 1F TAR + sessions, 160 tests)
-Section 2 -- Authentication and Sessions: NOT STARTED
+Section 2 -- Authentication and Sessions: COMPLETE (2A login/logout/validateSession, JWT + nonce, 189 tests)
 Section 3 -- COSMP Protocol Engine: NOT STARTED
 Section 4 -- Contextual Orchestration (COE): NOT STARTED
 Section 5 -- Hive Intelligence: NOT STARTED
