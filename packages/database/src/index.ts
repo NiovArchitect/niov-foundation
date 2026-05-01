@@ -39,6 +39,25 @@ export {
 
 export type { WalletSettingsUpdate } from "./queries/wallet.js";
 
+export {
+  createCapsule,
+  getCapsuleMetadata,
+  getCapsuleWithContent,
+  searchByTopicTags,
+  updateRelevanceScore,
+  updateStorageTier,
+  incrementAccessCount,
+  softDeleteCapsule,
+  MIN_CAPSULE_CLEARANCE,
+  MAX_CAPSULE_CLEARANCE,
+} from "./queries/capsule.js";
+
+export type {
+  CreateCapsuleInput,
+  CapsuleMetadata,
+  SearchByTopicTagsInput,
+} from "./queries/capsule.js";
+
 export type {
   Entity,
   AuditLog,
@@ -46,5 +65,9 @@ export type {
   EntityType,
   Wallet,
   WalletType,
+  MemoryCapsule,
+  CapsuleType,
+  DecayType,
+  StorageTier,
   Prisma,
 } from "@prisma/client";

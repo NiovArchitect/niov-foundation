@@ -8,7 +8,11 @@
 
 import { randomUUID } from "node:crypto";
 import { prisma } from "@niov/database";
-import type { CreateEntityInput, EntityType } from "@niov/database";
+import type {
+  CreateCapsuleInput,
+  CreateEntityInput,
+  EntityType,
+} from "@niov/database";
 
 // WHAT: A short, recognizable prefix used on every piece of test data so
 //        the cleanup helper can find and remove only the rows the tests
@@ -32,6 +36,33 @@ export function makeEntityInput(
     display_name: `${TEST_PREFIX}name_${id}`,
     public_key: `pk_${id}`,
     email: `${TEST_PREFIX}${id}@niov.test`,
+    ...overrides,
+  };
+}
+
+// WHAT: Build a CreateCapsuleInput object with safe defaults.
+// INPUT: The wallet_id and entity_id the capsule belongs to, plus an
+//        optional partial override for any other field.
+// OUTPUT: A complete CreateCapsuleInput ready to pass to createCapsule.
+// WHY: Tests should not have to spell out every required field every
+//      time. Defaults match a generic, non-FOUNDATIONAL capsule so
+//      tests that DO want FOUNDATIONAL behavior must opt in explicitly.
+export function makeCapsuleInput(
+  walletId: string,
+  entityId: string,
+  overrides: Partial<CreateCapsuleInput> = {},
+): CreateCapsuleInput {
+  const id = randomUUID();
+  return {
+    wallet_id: walletId,
+    entity_id: entityId,
+    capsule_type: "PREFERENCE",
+    topic_tags: [`${TEST_PREFIX}tag_${id}`],
+    decay_type: "TIME_BASED",
+    payload_summary: `${TEST_PREFIX}summary_${id}`,
+    payload_size_tokens: 100,
+    storage_location: `niov-test://capsules/${id}`,
+    content_hash: `sha256:${id.replace(/-/g, "")}`,
     ...overrides,
   };
 }

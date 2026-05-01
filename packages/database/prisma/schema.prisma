@@ -33,7 +33,8 @@ model Entity {
   updated_at           DateTime      @updatedAt
   deleted_at           DateTime?
 
-  wallet Wallet?
+  wallet   Wallet?
+  capsules MemoryCapsule[]
 
   @@index([entity_type])
   @@index([status])
@@ -56,10 +57,65 @@ model Wallet {
   created_at               DateTime   @default(now())
   updated_at               DateTime   @updatedAt
 
-  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+  entity   Entity          @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+  capsules MemoryCapsule[]
 
   @@index([wallet_type])
   @@map("wallets")
+}
+
+// A MemoryCapsule is one indivisible unit of intelligence inside the
+// NIOV Foundation. Every capsule belongs to exactly one Wallet and one
+// Entity. The actual encrypted content lives in Supabase Storage; the
+// row in this table holds the metadata that lets the system find,
+// score, and govern access to that content WITHOUT loading it.
+model MemoryCapsule {
+  capsule_id String @id @default(uuid()) @db.Uuid
+
+  wallet_id String @db.Uuid
+  entity_id String @db.Uuid
+  version   Int    @default(1)
+
+  capsule_type CapsuleType
+  topic_tags   String[]
+
+  relevance_score     Float     @default(1.0)
+  decay_type          DecayType
+  decay_rate          Float     @default(0.01)
+  feedback_loop_score Float     @default(0.0)
+  payload_summary     String
+  payload_size_tokens Int
+
+  storage_location String
+  storage_tier     StorageTier @default(WARM)
+
+  clearance_required Int    @default(0)
+  access_count       Int    @default(0)
+  content_hash       String
+
+  connected_capsule_ids String[]
+  connected_entity_ids  String[]
+
+  monetization_enabled  Boolean @default(false)
+  monetization_category String?
+
+  created_at       DateTime  @default(now())
+  last_accessed_at DateTime?
+  last_updated_at  DateTime  @updatedAt
+  expires_at       DateTime?
+  deleted_at       DateTime?
+
+  wallet Wallet @relation(fields: [wallet_id], references: [wallet_id], onDelete: Cascade)
+  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+
+  @@index([wallet_id])
+  @@index([entity_id])
+  @@index([capsule_type])
+  @@index([decay_type])
+  @@index([storage_tier])
+  @@index([deleted_at])
+  @@index([topic_tags], type: Gin)
+  @@map("memory_capsules")
 }
 
 // An AuditLog row is the permanent record that someone or something acted
@@ -104,4 +160,30 @@ enum WalletType {
   PERSONAL
   ENTERPRISE
   DEVICE
+}
+
+enum CapsuleType {
+  FOUNDATIONAL
+  PREFERENCE
+  RELATIONSHIP
+  DOMAIN_KNOWLEDGE
+  BEHAVIORAL_PATTERN
+  IDENTITY
+  DEVICE_DATA
+  SESSION_LEARNING
+  COMPLIANCE_RECORD
+}
+
+enum DecayType {
+  FOUNDATIONAL
+  TIME_BASED
+  ACCESS_BASED
+  PERMANENT
+  SESSION_ONLY
+}
+
+enum StorageTier {
+  HOT
+  WARM
+  COLD
 }
