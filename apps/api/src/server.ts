@@ -8,9 +8,11 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { AuthService } from "./services/auth.service.js";
 import { NegotiateService } from "./services/cosmp/negotiate.service.js";
+import { ReadService } from "./services/cosmp/read.service.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
+import { MemoryContentStore, type ContentStore } from "./content-store.js";
 
 // WHAT: The pieces buildApp needs to wire up.
 // INPUT: Used as a parameter type only.
@@ -23,6 +25,7 @@ export interface BuildAppConfig {
   jwtSecret?: string;
   sessionNonceStore?: NonceStore;
   declarationStore?: NonceStore;
+  contentStore?: ContentStore;
 }
 
 // WHAT: Construct a fully wired Fastify instance ready for inject()
@@ -49,6 +52,9 @@ export async function buildApp(
     config.declarationStore ??
     makeDefaultNonceStore("niov:cosmp:declaration:");
 
+  const contentStore: ContentStore =
+    config.contentStore ?? new MemoryContentStore();
+
   const authService = new AuthService({
     jwtSecret,
     nonceStore: sessionNonceStore,
@@ -58,10 +64,16 @@ export async function buildApp(
     declarationStore,
     jwtSecret,
   );
+  const readService = new ReadService(
+    authService,
+    declarationStore,
+    contentStore,
+    jwtSecret,
+  );
 
   const app = Fastify({ logger: false });
   await registerAuthRoutes(app, authService);
-  await registerCosmpRoutes(app, negotiateService);
+  await registerCosmpRoutes(app, negotiateService, readService);
 
   return app;
 }

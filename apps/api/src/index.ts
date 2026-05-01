@@ -37,4 +37,20 @@ export type {
   AccessDeclarationPayload,
 } from "./services/cosmp/negotiate.service.js";
 
+export {
+  ReadService,
+  computeMetadataFingerprint,
+  truncateToTokens,
+  SUMMARY_TOKEN_BUDGET,
+} from "./services/cosmp/read.service.js";
+export type {
+  ReadMetadataSuccess,
+  ReadContentSuccess,
+  ReadFailure,
+  SafeCapsuleMetadata,
+} from "./services/cosmp/read.service.js";
+
+export { MemoryContentStore } from "./content-store.js";
+export type { ContentStore } from "./content-store.js";
+
 export { registerCosmpRoutes } from "./routes/cosmp.routes.js";
