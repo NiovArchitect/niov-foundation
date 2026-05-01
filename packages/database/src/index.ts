@@ -88,6 +88,24 @@ export type {
   VerifyAuditChainResult,
 } from "./queries/audit.js";
 
+export {
+  createTAR,
+  getTARByEntityId,
+  checkCapability,
+  updateTARPermissions,
+  invalidateEntitySessions,
+  computeTARHash,
+  defaultCeilingFor,
+  MIN_TAR_CEILING,
+  MAX_TAR_CEILING,
+} from "./queries/tar.js";
+
+export type {
+  TARCapability,
+  TARPermissionsUpdate,
+  TARHashableFields,
+} from "./queries/tar.js";
+
 export type {
   Entity,
   AuditLog,
@@ -105,5 +123,10 @@ export type {
   AccessScope,
   DurationType,
   PermissionStatus,
+  TokenAttributeRepository,
+  MonetizationRole,
+  TARStatus,
+  Session,
+  SessionStatus,
   Prisma,
 } from "@prisma/client";

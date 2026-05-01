@@ -35,6 +35,8 @@ model Entity {
 
   wallet   Wallet?
   capsules MemoryCapsule[]
+  tar      TokenAttributeRepository?
+  sessions Session[]
 
   @@index([entity_type])
   @@index([status])
@@ -117,6 +119,80 @@ model MemoryCapsule {
   @@index([deleted_at])
   @@index([topic_tags], type: Gin)
   @@map("memory_capsules")
+}
+
+// A TokenAttributeRepository (TAR) is the cryptographic permission
+// envelope an entity carries. It says what the entity is allowed to do
+// (the eight capability flags), how high its clearance can ever go
+// (clearance_ceiling), what compliance regimes it is bound by, and
+// whether it can earn or spend in the monetization layer.
+//
+// The tar_hash is a SHA-256 over the policy fields. When any policy
+// field changes, the hash changes, and every active Session that was
+// issued under the old hash is immediately invalidated by
+// invalidateEntitySessions. That gives us cache-friendly capability
+// checks (sessions carry tar_hash_at_creation) AND instant revocation.
+//
+// Sovereignty defaults are baked in at create time by entity_type so
+// AI agents always start with lower ceilings than humans (Rule 0).
+model TokenAttributeRepository {
+  tar_id    String @id @default(uuid()) @db.Uuid
+  entity_id String @unique @db.Uuid
+
+  can_login               Boolean @default(true)
+  can_read_capsules       Boolean @default(true)
+  can_write_capsules      Boolean @default(true)
+  can_share_capsules      Boolean @default(true)
+  can_create_hives        Boolean @default(false)
+  can_access_external_api Boolean @default(false)
+  can_admin_niov          Boolean @default(false)
+  can_admin_org           Boolean @default(false)
+
+  clearance_ceiling     Int              @default(0)
+  monetization_role     MonetizationRole @default(NEITHER)
+  compliance_frameworks String[]
+
+  tar_version Int       @default(1)
+  tar_hash    String
+  status      TARStatus @default(ACTIVE)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("token_attribute_repositories")
+}
+
+// A Session is one issued login token's worth of authority. It carries
+// the tar_hash that was current when the session was issued; if the
+// entity's TAR is mutated later, the session's tar_hash will no longer
+// match and the session is invalidated. allowed_operations and
+// clearance_ceiling are snapshotted at issue time so Section 2's auth
+// layer can answer "what could this session do" without re-reading
+// the live TAR on every request.
+model Session {
+  session_id String @id @default(uuid()) @db.Uuid
+  entity_id  String @db.Uuid
+
+  tar_hash_at_creation String
+  allowed_operations   String[]
+  clearance_ceiling    Int
+
+  issued_at       DateTime  @default(now())
+  expires_at      DateTime?
+  terminated_at   DateTime?
+  invalidated_at  DateTime?
+
+  status SessionStatus @default(ACTIVE)
+
+  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+
+  @@index([entity_id])
+  @@index([status])
+  @@index([expires_at])
+  @@map("sessions")
 }
 
 // An AuditEvent is one entry in the compliance-grade, tamper-evident
@@ -290,4 +366,24 @@ enum AuditOutcome {
   SUCCESS
   DENIED
   ERROR
+}
+
+enum MonetizationRole {
+  EARNER
+  ACCESSOR
+  BOTH
+  NEITHER
+}
+
+enum TARStatus {
+  ACTIVE
+  REVOKED
+  SUSPENDED
+}
+
+enum SessionStatus {
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  INVALIDATED
 }

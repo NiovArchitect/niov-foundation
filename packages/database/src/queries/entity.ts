@@ -22,6 +22,7 @@ import {
   defaultWalletTypeFor,
   writeWalletCreateAudit,
 } from "./wallet.js";
+import { createTARInTx, writeTARCreateAudit } from "./tar.js";
 
 // WHAT: The lowest valid clearance level (public information, no restriction).
 // INPUT: None.
@@ -134,6 +135,16 @@ export async function createEntity(
         wallet_type: input.wallet_type ?? defaultWalletTypeFor(input.entity_type),
       });
       await writeWalletCreateAudit(tx, wallet, input.actor_id ?? null);
+
+      // Rule from Section 1F: every entity must have exactly one TAR,
+      // created in the same transaction with sovereignty-correct
+      // defaults so an entity without a permission envelope is
+      // impossible to observe.
+      const tar = await createTARInTx(tx, {
+        entity_id: created.entity_id,
+        entity_type: input.entity_type,
+      });
+      await writeTARCreateAudit(tx, tar, input.actor_id ?? null);
 
       return created;
     },
