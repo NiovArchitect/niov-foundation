@@ -7,17 +7,22 @@
 
 import Fastify, { type FastifyInstance } from "fastify";
 import { AuthService } from "./services/auth.service.js";
+import { NegotiateService } from "./services/cosmp/negotiate.service.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
+import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
 
 // WHAT: The pieces buildApp needs to wire up.
 // INPUT: Used as a parameter type only.
 // OUTPUT: None.
 // WHY: Tests inject their own NonceStore + JWT secret; production
-//      reads them from env. One shape covers both.
+//      reads them from env. One shape covers both. The two
+//      NonceStore slots are independent so tests can drive the
+//      session and declaration stores separately.
 export interface BuildAppConfig {
   jwtSecret?: string;
-  nonceStore?: NonceStore;
+  sessionNonceStore?: NonceStore;
+  declarationStore?: NonceStore;
 }
 
 // WHAT: Construct a fully wired Fastify instance ready for inject()
@@ -38,12 +43,25 @@ export async function buildApp(
       );
     })();
 
-  const nonceStore = config.nonceStore ?? makeDefaultNonceStore();
+  const sessionNonceStore =
+    config.sessionNonceStore ?? makeDefaultNonceStore("niov:session:nonce:");
+  const declarationStore =
+    config.declarationStore ??
+    makeDefaultNonceStore("niov:cosmp:declaration:");
 
-  const authService = new AuthService({ jwtSecret, nonceStore });
+  const authService = new AuthService({
+    jwtSecret,
+    nonceStore: sessionNonceStore,
+  });
+  const negotiateService = new NegotiateService(
+    authService,
+    declarationStore,
+    jwtSecret,
+  );
 
   const app = Fastify({ logger: false });
   await registerAuthRoutes(app, authService);
+  await registerCosmpRoutes(app, negotiateService);
 
   return app;
 }

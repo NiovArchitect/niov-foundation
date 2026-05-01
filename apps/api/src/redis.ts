@@ -53,40 +53,46 @@ export class MemoryNonceStore implements NonceStore {
 }
 
 // WHAT: A NonceStore backed by a real ioredis client.
-// INPUT: An ioredis Redis instance.
+// INPUT: An ioredis Redis instance plus an optional key prefix so the
+//        same Redis can host multiple kinds of presence-tokens
+//        (session nonces, COSMP declarations, etc) without collision.
 // OUTPUT: An object satisfying NonceStore.
 // WHY: Production needs a shared store across processes. ioredis
 //      handles reconnection, clustering, and pipelining for us.
 export class RedisNonceStore implements NonceStore {
-  private readonly keyPrefix = "niov:session:nonce:";
+  private readonly keyPrefix: string;
 
-  constructor(private readonly client: Redis) {}
-
-  async set(sessionId: string, ttlSeconds: number): Promise<void> {
-    await this.client.set(
-      this.keyPrefix + sessionId,
-      "1",
-      "EX",
-      ttlSeconds,
-    );
+  constructor(
+    private readonly client: Redis,
+    keyPrefix: string = "niov:session:nonce:",
+  ) {
+    this.keyPrefix = keyPrefix;
   }
 
-  async has(sessionId: string): Promise<boolean> {
-    const exists = await this.client.exists(this.keyPrefix + sessionId);
+  async set(key: string, ttlSeconds: number): Promise<void> {
+    await this.client.set(this.keyPrefix + key, "1", "EX", ttlSeconds);
+  }
+
+  async has(key: string): Promise<boolean> {
+    const exists = await this.client.exists(this.keyPrefix + key);
     return exists === 1;
   }
 
-  async delete(sessionId: string): Promise<void> {
-    await this.client.del(this.keyPrefix + sessionId);
+  async delete(key: string): Promise<void> {
+    await this.client.del(this.keyPrefix + key);
   }
 }
 
-// WHAT: Construct the right NonceStore for the current environment.
-// INPUT: None.
+// WHAT: Construct the right NonceStore for the current environment,
+//        scoped to a particular key prefix.
+// INPUT: An optional key prefix (defaults to the session-nonce one).
 // OUTPUT: A NonceStore instance.
 // WHY: Tests rarely have REDIS_URL set. Production always does. One
-//      function chooses the right backing for the caller.
-export function makeDefaultNonceStore(): NonceStore {
+//      function chooses the right backing for the caller. Different
+//      prefixes give us multiple isolated stores from one Redis.
+export function makeDefaultNonceStore(
+  keyPrefix: string = "niov:session:nonce:",
+): NonceStore {
   const url = process.env.REDIS_URL;
   if (typeof url !== "string" || url.length === 0) {
     return new MemoryNonceStore();
@@ -95,5 +101,5 @@ export function makeDefaultNonceStore(): NonceStore {
     lazyConnect: true,
     maxRetriesPerRequest: 2,
   });
-  return new RedisNonceStore(client);
+  return new RedisNonceStore(client, keyPrefix);
 }

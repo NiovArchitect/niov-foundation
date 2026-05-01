@@ -92,9 +92,10 @@ model MemoryCapsule {
   storage_location String
   storage_tier     StorageTier @default(WARM)
 
-  clearance_required Int    @default(0)
-  access_count       Int    @default(0)
+  clearance_required Int     @default(0)
+  access_count       Int     @default(0)
   content_hash       String
+  ai_access_blocked  Boolean @default(false)
 
   connected_capsule_ids String[]
   connected_entity_ids  String[]

@@ -44,7 +44,8 @@ export type AuditEventType =
   | "COMPLIANCE_CHECK_PASSED"
   | "COMPLIANCE_CHECK_FAILED"
   | "ANOMALY_DETECTED"
-  | "ADMIN_ACTION";
+  | "ADMIN_ACTION"
+  | "NEGOTIATE";
 
 // WHAT: The shape callers hand to writeAuditEvent.
 // INPUT: Used as a parameter type only.

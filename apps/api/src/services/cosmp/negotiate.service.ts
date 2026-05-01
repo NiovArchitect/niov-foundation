@@ -1,0 +1,355 @@
+// FILE: negotiate.service.ts
+// PURPOSE: Implement the COSMP NEGOTIATE operation -- the gate
+//          between "I know a capsule exists" and "I am allowed to
+//          actually call READ on it". On success, returns a
+//          short-lived, single-use access declaration that 3B
+//          (READ) will consume.
+// CONNECTS TO: AuthService.validateSession, getCapsuleMetadata,
+//              checkPermission, getEntityById, the AuditEvent table,
+//              and the declaration NonceStore (a Redis key prefix
+//              separate from session nonces).
+
+import { randomUUID } from "node:crypto";
+import jwt, { type SignOptions } from "jsonwebtoken";
+import {
+  checkPermission,
+  getCapsuleMetadata,
+  getEntityById,
+  writeAuditEvent,
+  type AccessScope,
+  type CapsuleMetadata,
+  type Permission,
+} from "@niov/database";
+import type { NonceStore } from "../../redis.js";
+import type { AuthService } from "../auth.service.js";
+
+// WHAT: How long an access declaration is valid for, in seconds.
+// INPUT: None.
+// OUTPUT: A duration in seconds.
+// WHY: Spec says 5 minutes. 3B (READ) checks the declaration is
+//      both present in the store AND inside its valid_until window.
+export const DECLARATION_TTL_SECONDS = 5 * 60;
+
+// WHAT: The success return shape of negotiate().
+// INPUT: Used as a return type only.
+// OUTPUT: None -- this is a type, not a value.
+// WHY: Routes return both the declaration_token (signed JWT, what 3B
+//      will be handed) AND structured metadata so the caller can
+//      display the granted scope without parsing the JWT.
+export interface NegotiateSuccess {
+  ok: true;
+  declaration_id: string;
+  declaration_token: string;
+  capsule_id: string;
+  granted_scope: AccessScope;
+  valid_until: Date;
+}
+
+// WHAT: The failure return shape of negotiate().
+// INPUT: Used as a return type only.
+// OUTPUT: None -- this is a type.
+// WHY: A discriminated union (ok: false) lets routes map specific
+//      codes to HTTP status without throwing. Generic ACCESS_DENIED
+//      is the same response shape whether the capsule does not
+//      exist or the caller's clearance is too low (security req).
+export interface NegotiateFailure {
+  ok: false;
+  code:
+    | "SESSION_INVALID"
+    | "SESSION_EXPIRED"
+    | "SESSION_REVOKED"
+    | "SESSION_INVALIDATED"
+    | "OPERATION_NOT_PERMITTED"
+    | "ACCESS_DENIED"
+    | "NO_PERMISSION";
+  message: string;
+}
+
+// WHAT: The shape of the JWT payload we sign for the access declaration.
+// INPUT: Used as a payload type for jwt.sign / jwt.verify.
+// OUTPUT: None -- this is a type.
+// WHY: 3B (READ) will jwt.verify with the same secret and read these
+//      fields out. Centralizing the shape keeps the producer and
+//      future consumer in sync.
+export interface AccessDeclarationPayload {
+  declaration_id: string;
+  capsule_id: string;
+  requesting_entity_id: string;
+  granted_scope: AccessScope;
+  issued_at: number; // ms epoch
+  valid_until: number; // ms epoch
+}
+
+// WHAT: An ordering of access scopes from least to most powerful.
+// INPUT: Used as a lookup table.
+// OUTPUT: A number for each AccessScope value.
+// WHY: We need to compute min(permission_scope, requested_scope).
+//      Numbers make that comparison trivial.
+const SCOPE_ORDER: Record<AccessScope, number> = {
+  METADATA_ONLY: 0,
+  SUMMARY: 1,
+  FULL: 2,
+};
+
+// WHAT: Take two AccessScope values and return whichever is smaller
+//        (more restrictive).
+// INPUT: Two AccessScope values.
+// OUTPUT: The more restrictive one.
+// WHY: Spec step 5 -- granted_scope = min(permission, requested).
+//      A pure helper makes that step easy to test alone.
+export function scopeMin(a: AccessScope, b: AccessScope): AccessScope {
+  return SCOPE_ORDER[a] <= SCOPE_ORDER[b] ? a : b;
+}
+
+// WHAT: True when an entity type triggers the AI / restricted-class
+//        sovereignty rules.
+// INPUT: An EntityType-like string from the entity row.
+// OUTPUT: A boolean.
+// WHY: Spec lumps AI_AGENT + DEVICE + ROBOT into the restricted
+//      class. ROBOT is intentionally absent from our enum (Section 1F
+//      decision); when we add ROBOT later we extend this guard.
+function isRestrictedAiClass(entityType: string): boolean {
+  return entityType === "AI_AGENT" || entityType === "DEVICE";
+}
+
+// WHAT: Determine whether an AI_AGENT can keep FULL scope despite the
+//        default cap.
+// INPUT: The matching permission row.
+// OUTPUT: true when the permission's conditions JSON carries
+//         allow_ai_full=true, false otherwise.
+// WHY: Spec says only an "explicit human override" lets an AI agent
+//      have FULL scope. We express that override as a permission-row
+//      condition the granting human sets at create time.
+function permissionAllowsAiFull(permission: Permission): boolean {
+  const conditions = permission.conditions as Record<string, unknown> | null;
+  if (conditions === null || typeof conditions !== "object") return false;
+  return conditions.allow_ai_full === true;
+}
+
+// WHAT: The class that orchestrates the NEGOTIATE flow.
+// INPUT: The authService (validates session), the declaration store
+//        (signs the access declaration into Redis or memory), and
+//        the JWT secret (signs the declaration token).
+// OUTPUT: A class with one negotiate() method.
+// WHY: Constructor injection means tests can swap a MemoryNonceStore
+//      and a known JWT secret without touching env vars.
+export class NegotiateService {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly declarationStore: NonceStore,
+    private readonly jwtSecret: string,
+  ) {}
+
+  // WHAT: Run the COSMP NEGOTIATE flow exactly as the spec describes.
+  // INPUT: The session token, the target capsule_id, the requested
+  //        AccessScope, and an optional client IP for the audit row.
+  // OUTPUT: A NegotiateSuccess on success, NegotiateFailure on any
+  //         rejection.
+  // WHY: PRE-CHECK + 8 numbered steps in order, each with its own
+  //      audit row. Generic ACCESS_DENIED for not-found / clearance
+  //      / AI-blocked so the caller cannot probe for capsule
+  //      existence; specific NO_PERMISSION when permission is the
+  //      only thing missing.
+  async negotiate(
+    sessionToken: string,
+    targetCapsuleId: string,
+    requestedScope: AccessScope,
+    context: { ip_address?: string | null } = {},
+  ): Promise<NegotiateSuccess | NegotiateFailure> {
+    // STEP 1 -- validate session
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "read",
+    );
+    if (!validation.valid) {
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        denial_reason: "SESSION_INVALID",
+        target_capsule_id: targetCapsuleId,
+        ip_address: context.ip_address ?? null,
+        details: { validation_code: validation.code },
+      });
+      return failure(validation.code, "Access denied");
+    }
+
+    // PRE-CHECK -- look up the entity to apply sovereignty rules
+    const requester = await getEntityById(validation.entity_id);
+    if (requester === null) {
+      // Defensive: should not happen because validateSession already
+      // confirmed the entity has an active TAR. Treat as access
+      // denied without revealing anything.
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        denial_reason: "ENTITY_VANISHED",
+        ip_address: context.ip_address ?? null,
+      });
+      return accessDenied();
+    }
+    const restrictedClass = isRestrictedAiClass(requester.entity_type);
+
+    // STEP 2 -- load capsule metadata
+    const metadata = await getCapsuleMetadata(targetCapsuleId);
+    if (metadata === null) {
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        denial_reason: "CAPSULE_NOT_FOUND",
+        ip_address: context.ip_address ?? null,
+        details: { entity_type: requester.entity_type },
+      });
+      return accessDenied();
+    }
+
+    // PRE-CHECK -- AI / DEVICE-class entities respect ai_access_blocked
+    if (restrictedClass && metadata.ai_access_blocked === true) {
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        target_entity_id: metadata.entity_id,
+        denial_reason: "AI_ACCESS_BLOCKED",
+        ip_address: context.ip_address ?? null,
+        details: { entity_type: requester.entity_type },
+      });
+      return accessDenied();
+    }
+
+    // STEP 3 -- clearance check (always before permission check)
+    if (validation.clearance_ceiling < metadata.clearance_required) {
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        target_entity_id: metadata.entity_id,
+        denial_reason: "CLEARANCE_INSUFFICIENT",
+        ip_address: context.ip_address ?? null,
+        details: {
+          entity_type: requester.entity_type,
+          session_ceiling: validation.clearance_ceiling,
+          capsule_required: metadata.clearance_required,
+        },
+      });
+      return accessDenied();
+    }
+
+    // STEP 4 -- permission check
+    const permission = await checkPermission(
+      targetCapsuleId,
+      validation.entity_id,
+    );
+    if (permission === null) {
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        target_entity_id: metadata.entity_id,
+        denial_reason: "NO_PERMISSION",
+        ip_address: context.ip_address ?? null,
+        details: { entity_type: requester.entity_type },
+      });
+      return {
+        ok: false,
+        code: "NO_PERMISSION",
+        message: "You do not have permission to access this capsule",
+      };
+    }
+
+    // STEP 5 -- scope narrowing
+    let grantedScope: AccessScope = scopeMin(
+      permission.access_scope,
+      requestedScope,
+    );
+
+    // AI sovereignty cap: AI_AGENT cannot get FULL unless the
+    // permission was created with an explicit human override flag.
+    if (
+      requester.entity_type === "AI_AGENT" &&
+      grantedScope === "FULL" &&
+      !permissionAllowsAiFull(permission)
+    ) {
+      grantedScope = "SUMMARY";
+    }
+
+    // STEP 6 -- issue access declaration (signed JWT + Redis presence)
+    const declaration_id = randomUUID();
+    const issued_at = Date.now();
+    const valid_until = issued_at + DECLARATION_TTL_SECONDS * 1000;
+
+    const payload: AccessDeclarationPayload = {
+      declaration_id,
+      capsule_id: targetCapsuleId,
+      requesting_entity_id: validation.entity_id,
+      granted_scope: grantedScope,
+      issued_at,
+      valid_until,
+    };
+    const signOptions: SignOptions = { expiresIn: DECLARATION_TTL_SECONDS };
+    const declaration_token = jwt.sign(payload, this.jwtSecret, signOptions);
+
+    await this.declarationStore.set(declaration_id, DECLARATION_TTL_SECONDS);
+
+    // STEP 7 -- audit success BEFORE returning
+    await writeAuditEvent({
+      event_type: "NEGOTIATE",
+      outcome: "SUCCESS",
+      actor_entity_id: validation.entity_id,
+      target_capsule_id: targetCapsuleId,
+      target_entity_id: metadata.entity_id,
+      session_id: validation.session_id,
+      ip_address: context.ip_address ?? null,
+      details: {
+        entity_type: requester.entity_type,
+        declaration_id,
+        granted_scope: grantedScope,
+        permission_id: permission.permission_id,
+        requested_scope: requestedScope,
+        ai_capped: requester.entity_type === "AI_AGENT" && requestedScope === "FULL" && grantedScope !== "FULL",
+      },
+    });
+
+    // STEP 8 -- return access declaration
+    return {
+      ok: true,
+      declaration_id,
+      declaration_token,
+      capsule_id: targetCapsuleId,
+      granted_scope: grantedScope,
+      valid_until: new Date(valid_until),
+    };
+  }
+}
+
+// WHAT: Build a generic "Access denied" failure.
+// INPUT: None.
+// OUTPUT: A NegotiateFailure with code ACCESS_DENIED.
+// WHY: Centralizing the message means not-found, clearance-failed,
+//      and AI-blocked all return identical responses. No info leak.
+function accessDenied(): NegotiateFailure {
+  return { ok: false, code: "ACCESS_DENIED", message: "Access denied" };
+}
+
+// WHAT: Build a session-class failure with a given code.
+// INPUT: The validate failure code and a message string.
+// OUTPUT: A NegotiateFailure.
+// WHY: Forwards validateSession's specific codes (SESSION_INVALID,
+//      SESSION_EXPIRED, etc) to the caller so middleware can render
+//      the right HTTP status.
+function failure(
+  code: NegotiateFailure["code"],
+  message: string,
+): NegotiateFailure {
+  return { ok: false, code, message };
+}
+
+// Re-export some types so route handlers can stay close to the
+// negotiate flow without reaching deep into @niov/database.
+export type { CapsuleMetadata };

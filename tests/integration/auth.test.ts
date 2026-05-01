@@ -25,13 +25,19 @@ import type { FastifyInstance } from "fastify";
 const TEST_JWT_SECRET = "auth-integration-secret-do-not-use-in-prod";
 
 let app: FastifyInstance;
-let nonceStore: MemoryNonceStore;
+let sessionNonceStore: MemoryNonceStore;
+let declarationStore: MemoryNonceStore;
 
 beforeAll(async () => {
   await ensureAuditTriggers();
   await cleanupTestData();
-  nonceStore = new MemoryNonceStore();
-  app = await buildApp({ jwtSecret: TEST_JWT_SECRET, nonceStore });
+  sessionNonceStore = new MemoryNonceStore();
+  declarationStore = new MemoryNonceStore();
+  app = await buildApp({
+    jwtSecret: TEST_JWT_SECRET,
+    sessionNonceStore,
+    declarationStore,
+  });
 });
 
 afterAll(async () => {

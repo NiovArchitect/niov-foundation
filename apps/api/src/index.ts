@@ -25,3 +25,16 @@ export type {
 
 export { requireAuth } from "./middleware/auth.middleware.js";
 export { registerAuthRoutes } from "./routes/auth.routes.js";
+
+export {
+  NegotiateService,
+  scopeMin,
+  DECLARATION_TTL_SECONDS,
+} from "./services/cosmp/negotiate.service.js";
+export type {
+  NegotiateSuccess,
+  NegotiateFailure,
+  AccessDeclarationPayload,
+} from "./services/cosmp/negotiate.service.js";
+
+export { registerCosmpRoutes } from "./routes/cosmp.routes.js";
