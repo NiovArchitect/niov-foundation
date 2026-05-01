@@ -26,6 +26,19 @@ import {
   seedComplianceFrameworks,
 } from "./services/compliance/compliance.service.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
+import {
+  makeDefaultRateLimitStore,
+  type RateLimitStore,
+} from "./rate-limit.js";
+import {
+  DEFAULT_LIMITS,
+  makeGatewayHook,
+  type RateLimitPolicy,
+} from "./middleware/gateway.middleware.js";
+import { registerHealthRoutes } from "./routes/health.routes.js";
+import { registerDeveloperRoutes } from "./routes/developer.routes.js";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
@@ -44,6 +57,8 @@ export interface BuildAppConfig {
   declarationStore?: NonceStore;
   contentStore?: ContentStore;
   contentEncryption?: ContentEncryption;
+  rateLimitStore?: RateLimitStore;
+  rateLimitOverrides?: Partial<Record<string, RateLimitPolicy>>;
 }
 
 // WHAT: Construct a fully wired Fastify instance ready for inject()
@@ -114,7 +129,38 @@ export async function buildApp(
   );
   const monetizationService = new MonetizationService(authService);
 
+  const rateLimitStore = config.rateLimitStore ?? makeDefaultRateLimitStore();
+  const rateLimits: Record<string, RateLimitPolicy> = {
+    ...DEFAULT_LIMITS,
+    ...(config.rateLimitOverrides ?? {}),
+  };
+
   const app = Fastify({ logger: false });
+
+  // Gateway hook -- rate limits run before any route handler.
+  app.addHook(
+    "onRequest",
+    makeGatewayHook({
+      store: rateLimitStore,
+      limits: rateLimits,
+      jwtSecret,
+    }),
+  );
+
+  // Swagger / OpenAPI surface -- registered before routes so the
+  // route definitions can attach schemas later if we add them.
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: "NIOV Foundation API",
+        description: "Internet of Value protocol platform",
+        version: "0.0.1",
+      },
+    },
+  });
+  await app.register(swaggerUi, { routePrefix: "/api/v1/docs" });
+
+  await registerHealthRoutes(app);
   await registerAuthRoutes(app, authService);
   await registerCosmpRoutes(
     app,
@@ -128,6 +174,7 @@ export async function buildApp(
   await registerHiveRoutes(app, hiveService);
   await registerWalletRoutes(app, monetizationService);
   await registerComplianceRoutes(app, complianceService);
+  await registerDeveloperRoutes(app, authService);
 
   // Idempotent seed on every boot so a fresh DB has the seven
   // spec frameworks ready before the first request lands.

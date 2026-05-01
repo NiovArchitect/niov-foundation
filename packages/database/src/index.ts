@@ -147,5 +147,6 @@ export type {
   WalletBalance,
   ComplianceFramework,
   EntityComplianceProfile,
+  ApiKey,
   Prisma,
 } from "@prisma/client";

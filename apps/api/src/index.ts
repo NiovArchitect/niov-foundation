@@ -148,6 +148,23 @@ export type {
 
 export { registerComplianceRoutes } from "./routes/compliance.routes.js";
 
+export {
+  MemoryRateLimitStore,
+  RedisRateLimitStore,
+  makeDefaultRateLimitStore,
+} from "./rate-limit.js";
+export type { RateLimitStore, RateLimitHit } from "./rate-limit.js";
+
+export {
+  DEFAULT_LIMITS,
+  detectOperation,
+  makeGatewayHook,
+} from "./middleware/gateway.middleware.js";
+export type { RateLimitPolicy } from "./middleware/gateway.middleware.js";
+
+export { registerHealthRoutes } from "./routes/health.routes.js";
+export { registerDeveloperRoutes } from "./routes/developer.routes.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 

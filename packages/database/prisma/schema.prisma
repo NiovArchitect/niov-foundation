@@ -38,6 +38,7 @@ model Entity {
   capsules MemoryCapsule[]
   tar      TokenAttributeRepository?
   sessions Session[]
+  api_keys ApiKey[]
 
   @@index([entity_type])
   @@index([status])
@@ -510,6 +511,27 @@ model EntityComplianceProfile {
   updated_at   DateTime @updatedAt
 
   @@map("entity_compliance_profiles")
+}
+
+// An ApiKey is a long-lived programmatic credential an entity can
+// use INSTEAD of a session JWT to call the API. is_active gates
+// usage; revocation is just is_active=false (we never hard-delete
+// keys per Rule 10).
+model ApiKey {
+  key_id       String    @id @default(uuid()) @db.Uuid
+  entity_id    String    @db.Uuid
+  api_key      String    @unique
+  key_name     String
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+  last_used_at DateTime?
+  expires_at   DateTime?
+
+  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+
+  @@index([entity_id])
+  @@index([is_active])
+  @@map("api_keys")
 }
 
 // One MonetizationEvent per recorded data access that earned the
