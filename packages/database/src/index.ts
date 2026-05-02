@@ -148,5 +148,17 @@ export type {
   ComplianceFramework,
   EntityComplianceProfile,
   ApiKey,
+  // Section 9 governance tables (Schema Part A).
+  EntityMembership,
+  EntityProfile,
+  OrgSettings,
+  TwinConfig,
+  SkillPackage,
+  TwinSkill,
+  MonetizationConfig,
+  Workflow,
+  OnboardingSession,
+  DeviceToken,
+  IntegrationCredential,
   Prisma,
 } from "@prisma/client";

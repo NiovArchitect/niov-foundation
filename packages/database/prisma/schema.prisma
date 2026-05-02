@@ -40,6 +40,11 @@ model Entity {
   sessions Session[]
   api_keys ApiKey[]
 
+  // Section 9 governance back-refs.
+  parent_memberships EntityMembership[] @relation("ParentMems")
+  child_memberships  EntityMembership[] @relation("ChildMems")
+  profile            EntityProfile?
+
   @@index([entity_type])
   @@index([status])
   @@index([deleted_at])
@@ -591,4 +596,213 @@ model COEOutcome {
   @@index([capsule_id])
   @@index([recorded_at])
   @@map("coe_outcomes")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 9 — Foundation Governance + Dandelion + Domain Seeding
+// Schema Part A: Governance tables (11 models)
+//
+// Most of these tables hold UUID columns referencing Entity (org,
+// twin, owner, etc.) but DO NOT declare @relation back to Entity.
+// That is intentional per Section 9 spec: governance/service code
+// owns existence checks (e.g., getOrgEntityId walks
+// EntityMembership; createTwin validates owners) so DB-level FK
+// cascades cannot fight the intentional soft-delete and
+// INVALIDATED-status patterns from Sections 1-8.
+// Application enforces, DB stores.
+//
+// Two structural exceptions DO carry cascading FKs because they
+// are pure join/parent-child rows: EntityMembership and TwinSkill.
+// ═══════════════════════════════════════════════════════════════════
+
+// EntityMembership encodes the org hierarchy between two entities.
+// hierarchy_level is a flat integer ladder (0=IC ... 7=OrgAdmin)
+// used by Dandelion analysis to order the activation queue.
+model EntityMembership {
+  membership_id   String   @id @default(uuid()) @db.Uuid
+  parent_id       String   @db.Uuid
+  child_id        String   @db.Uuid
+  role_title      String?
+  department      String?
+  hierarchy_level Int      @default(0)
+  is_admin        Boolean  @default(false)
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+
+  parent Entity @relation("ParentMems", fields: [parent_id], references: [entity_id], onDelete: Cascade)
+  child  Entity @relation("ChildMems", fields: [child_id], references: [entity_id], onDelete: Cascade)
+
+  @@unique([parent_id, child_id])
+  @@index([parent_id])
+  @@index([child_id])
+  @@map("entity_memberships")
+}
+
+// EntityProfile carries the human-readable display + contact fields
+// for one entity. 1:1 via the unique entity_id column. Prisma
+// requires the opposite-side relation when Entity declares
+// `profile EntityProfile?`, so the FK is materialized here. This is
+// the same "structural exception" pattern as EntityMembership and
+// TwinSkill -- a profile is meaningless without its entity, so
+// cascade on delete is correct.
+model EntityProfile {
+  profile_id String   @id @default(uuid()) @db.Uuid
+  entity_id  String   @unique @db.Uuid
+  first_name String?
+  last_name  String?
+  job_title  String?
+  username   String?  @unique
+  phone      String?
+  timezone   String?  @default("America/New_York")
+  bio        String?
+  avatar_url String?
+  updated_at DateTime @updatedAt
+
+  entity Entity @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+
+  @@map("entity_profiles")
+}
+
+// OrgSettings is the per-org configuration sheet read by login,
+// the gateway (ip_whitelist), Dandelion (industry), and most
+// /org/* endpoints.
+model OrgSettings {
+  org_entity_id           String   @id @db.Uuid
+  session_timeout_minutes Int      @default(480)
+  mfa_required            Boolean  @default(false)
+  ip_whitelist            String[] @default([])
+  auto_approve_low_risk   Boolean  @default(false)
+  cross_dept_collab       Boolean  @default(true)
+  swarm_formation         Boolean  @default(true)
+  dept_data_isolation     Boolean  @default(true)
+  audit_ai_actions        Boolean  @default(true)
+  require_human_approval  Boolean  @default(true)
+  federated_learning      Boolean  @default(true)
+  track_external_entities Boolean  @default(true)
+  industry                String?
+  updated_at              DateTime @updatedAt
+
+  @@map("org_settings")
+}
+
+// TwinConfig is the per-AI_AGENT-entity configuration. is_admin_twin
+// flips the autonomy_level default to EXECUTIVE_OVERRIDE and
+// triggers the wallet-scope-permission branch in createTwin.
+model TwinConfig {
+  twin_id            String   @id @db.Uuid
+  autonomy_level     String   @default("APPROVAL_REQUIRED")
+  swarm_enabled      Boolean  @default(false)
+  role_template      String?
+  is_admin_twin      Boolean  @default(false)
+  approver_entity_id String?  @db.Uuid
+  updated_at         DateTime @updatedAt
+
+  skills TwinSkill[]
+
+  @@map("twin_configs")
+}
+
+// SkillPackage is one named bundle of capabilities a twin can
+// equip. Seeded with 8 standard packages later in Section 9.
+model SkillPackage {
+  package_id       String   @id @default(uuid()) @db.Uuid
+  name             String   @unique
+  category         String
+  description      String
+  capability_flags String[] @default([])
+  created_at       DateTime @default(now())
+
+  twins TwinSkill[]
+
+  @@map("skill_packages")
+}
+
+// TwinSkill is the join table between a twin and its skill packages.
+// Both sides cascade so removing either end cleans up the join row.
+model TwinSkill {
+  id          String   @id @default(uuid()) @db.Uuid
+  twin_id     String   @db.Uuid
+  package_id  String   @db.Uuid
+  assigned_at DateTime @default(now())
+
+  twin    TwinConfig   @relation(fields: [twin_id], references: [twin_id], onDelete: Cascade)
+  package SkillPackage @relation(fields: [package_id], references: [package_id], onDelete: Cascade)
+
+  @@unique([twin_id, package_id])
+  @@map("twin_skills")
+}
+
+// MonetizationConfig is the future home of the platform's
+// adjustable revenue split. Section 6 still uses its hardcoded
+// HOLDER_SHARE / NIOV_FEE_SHARE constants; the wire-up from
+// constants -> DB lands in a later section.
+model MonetizationConfig {
+  config_id       String   @id @default(uuid()) @db.Uuid
+  niov_fee_share  Float    @default(0.30)
+  holder_share    Float    @default(0.70)
+  updated_at      DateTime @updatedAt
+  updated_by      String?  @db.Uuid
+
+  @@map("monetization_config")
+}
+
+// Workflow is one named automation rule for an org -- a trigger
+// plus a list of actions encoded as JSON.
+model Workflow {
+  workflow_id   String   @id @default(uuid()) @db.Uuid
+  org_entity_id String   @db.Uuid
+  name          String
+  trigger_type  String
+  actions       Json     @default("[]")
+  enabled       Boolean  @default(true)
+  created_by    String   @db.Uuid
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([org_entity_id])
+  @@map("workflows")
+}
+
+// OnboardingSession tracks one in-progress Dandelion run. One row
+// per org (the @unique on org_entity_id enforces this).
+model OnboardingSession {
+  session_id        String   @id @default(uuid()) @db.Uuid
+  org_entity_id     String   @unique @db.Uuid
+  propagation_order Json     @default("[]")
+  total_users       Int      @default(0)
+  onboarded_count   Int      @default(0)
+  started_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("onboarding_sessions")
+}
+
+// DeviceToken is one push-notification target for one entity.
+model DeviceToken {
+  token_id    String   @id @default(uuid()) @db.Uuid
+  entity_id   String   @db.Uuid
+  platform    String
+  push_token  String
+  device_name String?
+  active      Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  @@index([entity_id])
+  @@map("device_tokens")
+}
+
+// IntegrationCredential stores webhook secrets for one third-party
+// tool per org (e.g., GitHub, Slack). The unique pair guarantees
+// at most one credential per (org, tool).
+model IntegrationCredential {
+  credential_id  String   @id @default(uuid()) @db.Uuid
+  org_entity_id  String   @db.Uuid
+  tool           String
+  webhook_secret String
+  config         Json     @default("{}")
+  enabled        Boolean  @default(true)
+  created_at     DateTime @default(now())
+
+  @@unique([org_entity_id, tool])
+  @@map("integration_credentials")
 }
