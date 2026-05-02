@@ -9,6 +9,12 @@
 
 import type { FastifyInstance } from "fastify";
 import { hashPassword as _hashPassword } from "@niov/auth";
+import {
+  MAX_AUDIT_EVENTS_PAGE_SIZE,
+  prisma,
+  writeAuditEvent,
+  type Prisma,
+} from "@niov/database";
 import { requireAdminCapability } from "../middleware/admin.middleware.js";
 import {
   executePhase0,
@@ -102,6 +108,210 @@ export async function registerPlatformRoutes(
           message,
         });
       }
+    },
+  );
+
+  // ════════════════════════════════════════════════════════════════
+  // STATS
+  // ════════════════════════════════════════════════════════════════
+
+  // GET /platform/stats -- aggregate counts across all orgs.
+  app.get(
+    "/api/v1/platform/stats",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+    },
+    async (_request, reply) => {
+      const [
+        totalEntities,
+        totalCompanies,
+        totalAITwins,
+        totalCapsules,
+      ] = await Promise.all([
+        prisma.entity.groupBy({
+          by: ["entity_type"],
+          where: { deleted_at: null },
+          _count: { entity_id: true },
+        }),
+        prisma.entity.count({
+          where: { entity_type: "COMPANY", deleted_at: null },
+        }),
+        prisma.entity.count({
+          where: { entity_type: "AI_AGENT", deleted_at: null },
+        }),
+        prisma.memoryCapsule.count({ where: { deleted_at: null } }),
+      ]);
+      const total_entities_by_type: Record<string, number> = {};
+      for (const row of totalEntities) {
+        total_entities_by_type[row.entity_type] = row._count.entity_id;
+      }
+      return reply.code(200).send({
+        ok: true,
+        total_entities_by_type,
+        total_orgs: totalCompanies,
+        total_active_twins: totalAITwins,
+        total_capsules: totalCapsules,
+      });
+    },
+  );
+
+  // ════════════════════════════════════════════════════════════════
+  // AUDIT
+  // ════════════════════════════════════════════════════════════════
+
+  // GET /platform/audit -- audit_events across all orgs.
+  // Caps at MAX_AUDIT_EVENTS_PAGE_SIZE per Section 1E.
+  app.get<{ Querystring: { skip?: string; take?: string } }>(
+    "/api/v1/platform/audit",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+    },
+    async (request, reply) => {
+      const skipNum = Number.parseInt(request.query.skip ?? "0", 10);
+      const takeNum = Number.parseInt(request.query.take ?? "50", 10);
+      const skip = Number.isFinite(skipNum) && skipNum >= 0 ? skipNum : 0;
+      const take = Math.max(
+        1,
+        Math.min(
+          MAX_AUDIT_EVENTS_PAGE_SIZE,
+          Number.isFinite(takeNum) ? takeNum : 50,
+        ),
+      );
+      const [items, total] = await Promise.all([
+        prisma.auditEvent.findMany({
+          skip,
+          take,
+          orderBy: { timestamp: "desc" },
+        }),
+        prisma.auditEvent.count(),
+      ]);
+      return reply.code(200).send({
+        ok: true,
+        items,
+        total,
+        has_more: skip + take < total,
+      });
+    },
+  );
+
+  // ════════════════════════════════════════════════════════════════
+  // MONETIZATION CONFIG
+  // ════════════════════════════════════════════════════════════════
+
+  // PATCH /platform/monetization/config -- update the 70/30 split.
+  // Validates niov_fee_share + holder_share === 1.0 (within
+  // floating-point tolerance). Audit captures BOTH old + new shares
+  // so a future audit reader can reconstruct the rate-change history.
+  app.patch<{
+    Body: { niov_fee_share?: unknown; holder_share?: unknown };
+  }>(
+    "/api/v1/platform/monetization/config",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+    },
+    async (request, reply) => {
+      const body = request.body ?? {};
+      const niov = body.niov_fee_share;
+      const holder = body.holder_share;
+      if (typeof niov !== "number" || typeof holder !== "number") {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "niov_fee_share and holder_share must be numbers",
+        });
+      }
+      if (niov < 0 || niov > 1 || holder < 0 || holder > 1) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_SHARE_RANGE",
+          message: "Shares must be in [0, 1]",
+        });
+      }
+      if (Math.abs(niov + holder - 1.0) > 0.0001) {
+        return reply.code(422).send({
+          ok: false,
+          code: "SHARES_DO_NOT_SUM_TO_ONE",
+          message: `niov_fee_share + holder_share must equal 1.0 (got ${niov + holder})`,
+        });
+      }
+      const existing = await prisma.monetizationConfig.findFirst();
+      const oldShares = existing
+        ? {
+            niov_fee_share: existing.niov_fee_share,
+            holder_share: existing.holder_share,
+          }
+        : { niov_fee_share: 0.3, holder_share: 0.7 };
+      const data: Prisma.MonetizationConfigUpdateInput = {
+        niov_fee_share: niov,
+        holder_share: holder,
+        updated_by: request.auth?.entity_id ?? null,
+      };
+      let updated;
+      if (existing) {
+        updated = await prisma.monetizationConfig.update({
+          where: { config_id: existing.config_id },
+          data,
+        });
+      } else {
+        updated = await prisma.monetizationConfig.create({
+          data: {
+            niov_fee_share: niov,
+            holder_share: holder,
+            updated_by: request.auth?.entity_id ?? null,
+          },
+        });
+      }
+      await writeAuditEvent({
+        event_type: "ADMIN_ACTION",
+        outcome: "SUCCESS",
+        actor_entity_id: request.auth?.entity_id ?? null,
+        details: {
+          action: "MONETIZATION_CONFIG_UPDATE",
+          old: oldShares,
+          new: { niov_fee_share: niov, holder_share: holder },
+        },
+      });
+      return reply.code(200).send({ ok: true, config: updated });
+    },
+  );
+
+  // ════════════════════════════════════════════════════════════════
+  // ANOMALIES (stub; TODO Section 10 IncidentRecord table)
+  // ════════════════════════════════════════════════════════════════
+
+  app.get(
+    "/api/v1/platform/anomalies",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+    },
+    async (_request, reply) => {
+      // TODO(Section 10): query IncidentRecord rows where status=OPEN.
+      return reply.code(200).send({
+        ok: true,
+        items: [],
+        total: 0,
+        has_more: false,
+      });
+    },
+  );
+
+  // ════════════════════════════════════════════════════════════════
+  // LOOPS (stub; TODO Section 10/15 FeedbackLoopHealth table)
+  // ════════════════════════════════════════════════════════════════
+
+  app.get(
+    "/api/v1/platform/loops",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+    },
+    async (_request, reply) => {
+      // TODO(Section 10/15): query FeedbackLoopHealth aggregate.
+      return reply.code(200).send({
+        ok: true,
+        items: [],
+        total: 0,
+        has_more: false,
+      });
     },
   );
 }

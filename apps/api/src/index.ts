@@ -217,6 +217,7 @@ export type { AdminCapability } from "./middleware/admin.middleware.js";
 
 export { registerPlatformRoutes } from "./routes/platform.routes.js";
 export { registerOrgRoutes } from "./routes/org.routes.js";
+export { registerAuthAdminRoutes } from "./routes/auth-admin.routes.js";
 
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";

@@ -217,63 +217,73 @@ describe("/org/* -- can_admin_org gate", () => {
   });
 });
 
-describe("POST /org/members -- happy path + cross-tenant", () => {
-  // WHAT: Build an entire org via Phase 0 and login the admin so we
-  //        can call /org/members against a real org context.
-  async function createOrgAndAdmin(): Promise<{
-    orgId: string;
-    adminId: string;
-    adminToken: string;
-    adminIp: string;
-  }> {
-    // Direct service call: bypass HTTP for setup since we're not
-    // testing the platform route here.
-    const platformAdmin = await makeAdminAndLogin({ can_admin_niov: true });
-    const companyName = `${TEST_PREFIX}orgco_${randomUUID()}`;
-    const adminEmail = `${TEST_PREFIX}orgadmin_${randomUUID()}@niov.test`;
-    const adminPassword = "correct-horse-battery";
-    const orgResponse = await app.inject({
-      method: "POST",
-      url: "/api/v1/platform/orgs",
-      headers: { authorization: `Bearer ${platformAdmin.token}` },
-      payload: {
-        company_name: companyName,
-        admin_email: adminEmail,
-        admin_password: adminPassword,
-        industry: "TECH",
-      },
-      remoteAddress: platformAdmin.ip,
-    });
-    if (orgResponse.statusCode !== 201) {
-      throw new Error(`createOrg failed: ${orgResponse.statusCode}`);
-    }
-    const orgBody = orgResponse.json() as {
-      org_entity_id: string;
-      admin_entity_id: string;
-    };
-    const adminIp = `10.99.88.${Math.floor(Math.random() * 254) + 1}`;
-    const adminLogin = await app.inject({
-      method: "POST",
-      url: "/api/v1/auth/login",
-      payload: {
-        email: adminEmail,
-        password: adminPassword,
-        requested_operations: ["read", "write", "share"],
-      },
-      remoteAddress: adminIp,
-    });
-    if (adminLogin.statusCode !== 200) {
-      throw new Error(`admin login failed: ${adminLogin.statusCode}`);
-    }
-    const adminBody = adminLogin.json() as { token: string };
-    return {
-      orgId: orgBody.org_entity_id,
-      adminId: orgBody.admin_entity_id,
-      adminToken: adminBody.token,
-      adminIp,
-    };
+// WHAT: Build an entire org via Phase 0 and login the admin so we
+//        can call /org/* routes against a real org context.
+// INPUT: Optional industry override (default TECH).
+// OUTPUT: { orgId, adminId, adminToken, adminIp, adminEmail,
+//          defaultHiveId }.
+// WHY: Hoisted to module scope so the new /org/* describe blocks
+//      below can reuse it without re-declaring the helper.
+async function createOrgAndAdmin(
+  industry: string = "TECH",
+): Promise<{
+  orgId: string;
+  adminId: string;
+  adminToken: string;
+  adminIp: string;
+  adminEmail: string;
+  defaultHiveId: string;
+}> {
+  const platformAdmin = await makeAdminAndLogin({ can_admin_niov: true });
+  const companyName = `${TEST_PREFIX}orgco_${randomUUID()}`;
+  const adminEmail = `${TEST_PREFIX}orgadmin_${randomUUID()}@niov.test`;
+  const adminPassword = "correct-horse-battery";
+  const orgResponse = await app.inject({
+    method: "POST",
+    url: "/api/v1/platform/orgs",
+    headers: { authorization: `Bearer ${platformAdmin.token}` },
+    payload: {
+      company_name: companyName,
+      admin_email: adminEmail,
+      admin_password: adminPassword,
+      industry,
+    },
+    remoteAddress: platformAdmin.ip,
+  });
+  if (orgResponse.statusCode !== 201) {
+    throw new Error(`createOrg failed: ${orgResponse.statusCode}`);
   }
+  const orgBody = orgResponse.json() as {
+    org_entity_id: string;
+    admin_entity_id: string;
+    default_hive_id: string;
+  };
+  const adminIp = `10.99.88.${Math.floor(Math.random() * 254) + 1}`;
+  const adminLogin = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    payload: {
+      email: adminEmail,
+      password: adminPassword,
+      requested_operations: ["read", "write", "share"],
+    },
+    remoteAddress: adminIp,
+  });
+  if (adminLogin.statusCode !== 200) {
+    throw new Error(`admin login failed: ${adminLogin.statusCode}`);
+  }
+  const adminBody = adminLogin.json() as { token: string };
+  return {
+    orgId: orgBody.org_entity_id,
+    adminId: orgBody.admin_entity_id,
+    adminToken: adminBody.token,
+    adminIp,
+    adminEmail,
+    defaultHiveId: orgBody.default_hive_id,
+  };
+}
 
+describe("POST /org/members -- happy path + cross-tenant", () => {
   it("admin can add a member to their own org", async () => {
     const ctx = await createOrgAndAdmin();
     const newEmail = `${TEST_PREFIX}newmem_${randomUUID()}@niov.test`;
@@ -353,5 +363,577 @@ describe("POST /org/members -- happy path + cross-tenant", () => {
     expect(body.ok).toBe(true);
     expect(typeof body.compound_score).toBe("number");
     expect(Array.isArray(body.propagation_order)).toBe(true);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// SECTION 9 FINAL BOX -- read-side endpoint surface
+// ════════════════════════════════════════════════════════════════
+
+describe("GET /org/entities + /org/hierarchy", () => {
+  it("returns own-org entities with type filter, never other orgs'", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+
+    // Add a member to orgB so we have something to leak.
+    const orgBMemberEmail = `${TEST_PREFIX}orgB_${randomUUID()}@niov.test`;
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${orgB.adminToken}` },
+      payload: {
+        email: orgBMemberEmail,
+        password: "x",
+        hierarchy_level: 1,
+      },
+      remoteAddress: orgB.adminIp,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/entities",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      items: Array<{ entity_id: string; email: string | null }>;
+      total: number;
+    };
+    expect(body.ok).toBe(true);
+    // Cross-tenant: orgB's member email must not appear in orgA's list.
+    const emails = body.items.map((e) => e.email);
+    expect(emails).not.toContain(orgBMemberEmail);
+  });
+
+  it("GET /org/hierarchy returns memberships for caller's org only", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/hierarchy",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      org_entity_id: string;
+      memberships: Array<{ parent_id: string; child_id: string }>;
+    };
+    expect(body.org_entity_id).toBe(ctx.orgId);
+    expect(body.memberships.every((m) => m.parent_id === ctx.orgId)).toBe(true);
+  });
+});
+
+describe("GET + PATCH /org/settings", () => {
+  it("GET returns the live row when present", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/settings",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { ok: boolean; settings: { industry: string | null } };
+    expect(body.ok).toBe(true);
+    expect(body.settings.industry).toBe("TECH");
+  });
+
+  it("PATCH updates writable fields", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/org/settings",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { session_timeout_minutes: 720, mfa_required: true },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      settings: { session_timeout_minutes: number; mfa_required: boolean };
+    };
+    expect(body.settings.session_timeout_minutes).toBe(720);
+    expect(body.settings.mfa_required).toBe(true);
+  });
+
+  it("PATCH rejects unknown / immutable fields with UNKNOWN_FIELD 422", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/org/settings",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { org_entity_id: "deadbeef-dead-beef-dead-beefdeadbeef", random_field: 42 },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { code: string; unknown_fields: string[] };
+    expect(body.code).toBe("UNKNOWN_FIELD");
+    expect(body.unknown_fields).toContain("org_entity_id");
+    expect(body.unknown_fields).toContain("random_field");
+  });
+});
+
+describe("GET /org/analytics", () => {
+  it("returns compound_score from latest CompoundingMetrics", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/analytics",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      compound_score: number;
+      active_twins: number;
+      pending_approvals_count: number;
+    };
+    expect(body.compound_score).toBe(0); // freshly seeded
+    expect(body.active_twins).toBe(1); // admin twin from Phase 0
+    expect(body.pending_approvals_count).toBe(0); // stub
+  });
+});
+
+describe("GET /org/audit -- cross-tenant", () => {
+  it("orgA admin sees only orgA audit events", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/audit?take=100",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{ actor_entity_id: string | null; target_entity_id: string | null }>;
+    };
+    // No event in the response should reference orgB IDs.
+    const orgBIds = [orgB.orgId, orgB.adminId];
+    for (const e of body.items) {
+      expect(orgBIds).not.toContain(e.actor_entity_id);
+      expect(orgBIds).not.toContain(e.target_entity_id);
+    }
+  });
+});
+
+describe("GET + POST /org/vocabulary", () => {
+  it("TECH org has Sprint, API in seeded vocabulary; cross-tenant is isolated", async () => {
+    const techOrg = await createOrgAndAdmin("TECH");
+    const financeOrg = await createOrgAndAdmin("FINANCE");
+
+    const techResp = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/vocabulary?take=100",
+      headers: { authorization: `Bearer ${techOrg.adminToken}` },
+      remoteAddress: techOrg.adminIp,
+    });
+    const techBody = techResp.json() as { items: Array<{ term: string }> };
+    const techTerms = techBody.items.map((v) => v.term);
+    expect(techTerms).toContain("Sprint");
+    expect(techTerms).toContain("API");
+    expect(techTerms).not.toContain("EBITDA");
+
+    const finResp = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/vocabulary?take=100",
+      headers: { authorization: `Bearer ${financeOrg.adminToken}` },
+      remoteAddress: financeOrg.adminIp,
+    });
+    const finTerms = (finResp.json() as { items: Array<{ term: string }> }).items.map(
+      (v) => v.term,
+    );
+    expect(finTerms).toContain("EBITDA");
+    expect(finTerms).not.toContain("Sprint");
+  });
+
+  it("POST /org/vocabulary adds a term, second call same term is idempotent", async () => {
+    const ctx = await createOrgAndAdmin();
+    const customTerm = `custom-${randomUUID().slice(0, 8)}`;
+    const r1 = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/vocabulary",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { term: customTerm, term_type: "PRODUCT", definition: "A test product" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(r1.statusCode).toBe(201);
+    const r2 = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/vocabulary",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { term: customTerm, term_type: "PRODUCT" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(r2.statusCode).toBe(201);
+    const count = await prisma.domainVocabulary.count({
+      where: { org_entity_id: ctx.orgId, term: customTerm },
+    });
+    expect(count).toBe(1);
+  });
+});
+
+describe("GET /org/intelligence/compound-score", () => {
+  it("returns the latest CompoundingMetrics row for the org", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/intelligence/compound-score",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      compound_score: number;
+      org_entity_id: string;
+    };
+    expect(body.org_entity_id).toBe(ctx.orgId);
+    expect(typeof body.compound_score).toBe("number");
+  });
+});
+
+describe("POST /org/ai-teammates", () => {
+  it("admin creates a standard twin via the route -- APPROVAL_REQUIRED + Hive joined", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Add a non-admin employee via /org/members so we have an owner.
+    const empEmail = `${TEST_PREFIX}emp_${randomUUID()}@niov.test`;
+    const addResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {
+        email: empEmail,
+        password: "x",
+        hierarchy_level: 1,
+      },
+      remoteAddress: ctx.adminIp,
+    });
+    const empId = (addResp.json() as { entity_id: string }).entity_id;
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { owner_entity_id: empId, role_title: "Engineering Twin" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(201);
+    const body = response.json() as {
+      ok: boolean;
+      entity_id: string;
+      is_admin_twin: boolean;
+      default_hive_membership_id: string | null;
+    };
+    expect(body.is_admin_twin).toBe(false);
+    expect(body.default_hive_membership_id).not.toBeNull();
+    const config = await prisma.twinConfig.findUnique({
+      where: { twin_id: body.entity_id },
+    });
+    expect(config?.autonomy_level).toBe("APPROVAL_REQUIRED");
+  });
+});
+
+describe("GET /org/ai-teammates", () => {
+  it("lists admin twin + standard twins with autonomy_level + is_admin_twin badges", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{
+        entity_id: string;
+        config: { is_admin_twin: boolean; autonomy_level: string } | null;
+      }>;
+    };
+    // The Phase 0 admin twin must appear with is_admin_twin=true.
+    const adminTwin = body.items.find((t) => t.config?.is_admin_twin === true);
+    expect(adminTwin).toBeDefined();
+    expect(adminTwin?.config?.autonomy_level).toBe("EXECUTIVE_OVERRIDE");
+  });
+});
+
+describe("PATCH /org/ai-teammates/:id immutable + invalid-approver", () => {
+  it("rejects is_admin_twin escalation with IMMUTABLE_FIELD 422", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Get the admin twin id.
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const items = (list.json() as { items: Array<{ entity_id: string; config: { is_admin_twin: boolean } | null }> }).items;
+    const standardTwin = items.find((t) => t.config?.is_admin_twin === false);
+    // If no standard twin yet, create one for this test.
+    let twinId: string;
+    if (standardTwin === undefined) {
+      const empEmail = `${TEST_PREFIX}immemp_${randomUUID()}@niov.test`;
+      const addResp = await app.inject({
+        method: "POST",
+        url: "/api/v1/org/members",
+        headers: { authorization: `Bearer ${ctx.adminToken}` },
+        payload: { email: empEmail, password: "x", hierarchy_level: 1 },
+        remoteAddress: ctx.adminIp,
+      });
+      const empId = (addResp.json() as { entity_id: string }).entity_id;
+      const twinResp = await app.inject({
+        method: "POST",
+        url: "/api/v1/org/ai-teammates",
+        headers: { authorization: `Bearer ${ctx.adminToken}` },
+        payload: { owner_entity_id: empId, role_title: "Imm Test Twin" },
+        remoteAddress: ctx.adminIp,
+      });
+      twinId = (twinResp.json() as { entity_id: string }).entity_id;
+    } else {
+      twinId = standardTwin.entity_id;
+    }
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/org/ai-teammates/${twinId}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { is_admin_twin: true },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { code: string; immutable_fields: string[] };
+    expect(body.code).toBe("IMMUTABLE_FIELD");
+    expect(body.immutable_fields).toContain("is_admin_twin");
+  });
+
+  it("rejects approver_entity_id pointing at a SUSPENDED entity with INVALID_APPROVER 422", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Create a member, then suspend them, then attempt to set as approver.
+    const empEmail = `${TEST_PREFIX}susp_${randomUUID()}@niov.test`;
+    const addResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email: empEmail, password: "x", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const empId = (addResp.json() as { entity_id: string }).entity_id;
+    await prisma.entity.update({
+      where: { entity_id: empId },
+      data: { status: "SUSPENDED" },
+    });
+    // Use a fresh standard twin for the patch target.
+    const owner2Email = `${TEST_PREFIX}o2_${randomUUID()}@niov.test`;
+    const owner2Resp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email: owner2Email, password: "x", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const owner2Id = (owner2Resp.json() as { entity_id: string }).entity_id;
+    const twinResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { owner_entity_id: owner2Id, role_title: "Approver Test" },
+      remoteAddress: ctx.adminIp,
+    });
+    const twinId = (twinResp.json() as { entity_id: string }).entity_id;
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/org/ai-teammates/${twinId}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { approver_entity_id: empId },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(422);
+    expect((response.json() as { code: string }).code).toBe("INVALID_APPROVER");
+  });
+});
+
+describe("POST /org/ai-teammates/:id/skills", () => {
+  it("assigns a SkillPackage and second call with same package is idempotent", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Need a twin and a SkillPackage. Section 9C ships
+    // seedSkillPackages() as a no-op stub, so we manually insert
+    // one for the test and then assign it.
+    const pkg = await prisma.skillPackage.create({
+      data: {
+        name: `${TEST_PREFIX}pkg_${randomUUID()}`,
+        category: "test",
+        description: "Test package",
+        capability_flags: ["test_flag"],
+      },
+    });
+    // Phase 0 admin twin id.
+    const twinList = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const adminTwinId = (
+      twinList.json() as {
+        items: Array<{ entity_id: string; config: { is_admin_twin: boolean } | null }>;
+      }
+    ).items.find((t) => t.config?.is_admin_twin === true)!.entity_id;
+
+    const r1 = await app.inject({
+      method: "POST",
+      url: `/api/v1/org/ai-teammates/${adminTwinId}/skills`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { package_id: pkg.package_id },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(r1.statusCode).toBe(200);
+    const r2 = await app.inject({
+      method: "POST",
+      url: `/api/v1/org/ai-teammates/${adminTwinId}/skills`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { package_id: pkg.package_id },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(r2.statusCode).toBe(200);
+    const count = await prisma.twinSkill.count({
+      where: { twin_id: adminTwinId, package_id: pkg.package_id },
+    });
+    expect(count).toBe(1);
+  });
+});
+
+describe("POST /auth/refresh", () => {
+  it("returns a fresh token whose JWT exp - issued_at exactly matches OrgSettings.session_timeout_minutes", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Set the org's session timeout to a distinctive value so the
+    // refresh response can be verified against it.
+    const customTimeout = 720; // minutes
+    const ttlMs = customTimeout * 60 * 1000;
+    await prisma.orgSettings.update({
+      where: { org_entity_id: ctx.orgId },
+      data: { session_timeout_minutes: customTimeout },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/refresh",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      token: string;
+      expires_at: string;
+      ttl_minutes: number;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.ttl_minutes).toBe(customTimeout);
+
+    // Decode the new JWT and verify the TTL via internal anchors:
+    // payload.expires_at - payload.issued_at must exactly equal
+    // ttlMs. This is wall-clock independent so Supabase tail
+    // latency in the route handler can never make it flake.
+    const jwt = await import("jsonwebtoken");
+    const payload = jwt.default.verify(
+      body.token,
+      "admin-routes-test-secret-do-not-use-in-prod",
+    ) as { exp: number; expires_at: number; issued_at: number };
+    expect(payload.expires_at - payload.issued_at).toBe(ttlMs);
+
+    // Body's expires_at must match the JWT's expires_at field exactly
+    // (both come from the same JS-clock anchor in the handler).
+    const bodyExpMs = new Date(body.expires_at).getTime();
+    expect(bodyExpMs).toBe(payload.expires_at);
+
+    // JWT standard exp claim (seconds) must be within 1 second of
+    // floor(expires_at / 1000). The jsonwebtoken library generates
+    // exp internally from a fresh Date.now() call inside sign(),
+    // which can land 1ms after our custom issuedAt, occasionally
+    // crossing a second boundary. The 1-second tolerance absorbs
+    // that wall-clock race; the TTL semantics above are exact.
+    const expFromMs = Math.floor(payload.expires_at / 1000);
+    expect(Math.abs(payload.exp - expFromMs)).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("PATCH /platform/monetization/config", () => {
+  it("rejects shares not summing to 1.0 with SHARES_DO_NOT_SUM_TO_ONE 422", async () => {
+    const platformAdmin = await makeAdminAndLogin({ can_admin_niov: true });
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/platform/monetization/config",
+      headers: { authorization: `Bearer ${platformAdmin.token}` },
+      payload: { niov_fee_share: 0.5, holder_share: 0.6 },
+      remoteAddress: platformAdmin.ip,
+    });
+    expect(response.statusCode).toBe(422);
+    expect((response.json() as { code: string }).code).toBe(
+      "SHARES_DO_NOT_SUM_TO_ONE",
+    );
+  });
+
+  it("accepts a valid 0.4 / 0.6 split and audits old + new shares", async () => {
+    const platformAdmin = await makeAdminAndLogin({ can_admin_niov: true });
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/platform/monetization/config",
+      headers: { authorization: `Bearer ${platformAdmin.token}` },
+      payload: { niov_fee_share: 0.4, holder_share: 0.6 },
+      remoteAddress: platformAdmin.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      config: { niov_fee_share: number; holder_share: number };
+    };
+    expect(body.config.niov_fee_share).toBeCloseTo(0.4, 5);
+    expect(body.config.holder_share).toBeCloseTo(0.6, 5);
+    // Audit row carries old+new in details.
+    const audits = await prisma.auditEvent.findMany({
+      where: {
+        actor_entity_id: platformAdmin.entityId,
+        event_type: "ADMIN_ACTION",
+      },
+      orderBy: { timestamp: "desc" },
+      take: 5,
+    });
+    const monetAudit = audits.find((a) => {
+      const d = a.details as { action?: string };
+      return d.action === "MONETIZATION_CONFIG_UPDATE";
+    });
+    expect(monetAudit).toBeDefined();
+    const details = monetAudit!.details as {
+      old: { niov_fee_share: number };
+      new: { niov_fee_share: number };
+    };
+    expect(typeof details.old.niov_fee_share).toBe("number");
+    expect(details.new.niov_fee_share).toBeCloseTo(0.4, 5);
+    // Restore the spec defaults so other tests aren't surprised by
+    // non-default config rows.
+    await app.inject({
+      method: "PATCH",
+      url: "/api/v1/platform/monetization/config",
+      headers: { authorization: `Bearer ${platformAdmin.token}` },
+      payload: { niov_fee_share: 0.3, holder_share: 0.7 },
+      remoteAddress: platformAdmin.ip,
+    });
+  });
+});
+
+// TEST 12 from the green box -- standard twin offboarding cuts the
+// twin from the default Hive and from org-knowledge access. The
+// offboarding flow lives in Section 15 (P4 patch); the route to
+// trigger offboarding doesn't exist yet, so this test is skipped
+// here and tracked for that section.
+describe.skip("standard twin removed from default Hive on offboarding loses org-knowledge access", () => {
+  it("placeholder -- Section 15 (P4 patch) ships the offboarding flow", () => {
+    // Implementation: invoke the future POST /org/members/:id/offboard
+    // route, then verify the twin's HiveMembership.status is REMOVED
+    // and the twin's session is invalidated.
   });
 });
