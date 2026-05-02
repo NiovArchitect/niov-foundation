@@ -727,7 +727,7 @@ export async function executePhase3Invite(
           actor_entity_id: actorEntityId,
           target_entity_id: entityId,
           details: {
-            action: "DANDELION_PHASE_3_INVITE_ACCEPTED",
+            action: "ONBOARDING_INVITE_ACCEPTED",
             org_entity_id: orgEntityId,
             twin_id: twin.entity_id,
             is_admin_twin: twin.is_admin_twin,

@@ -996,21 +996,36 @@ export async function registerOrgRoutes(
         where: { org_entity_id: orgEntityId },
         orderBy: { measured_at: "desc" },
       });
+      // Defensive null-safety: Phase 0 always seeds a CompoundingMetrics
+      // row, so latest === null shouldn't happen in practice. But this
+      // is a public-facing analytics endpoint -- crashing on a missing
+      // row would be poor hygiene. Fall back to zeros across the board
+      // when no metrics row exists.
+      const metrics = latest ?? {
+        compound_score: 0,
+        active_twins: 0,
+        capsule_count: 0,
+        decision_count: 0,
+        pattern_count: 0,
+        vocab_count: 0,
+        external_count: 0,
+        completion_rate: 0,
+      };
       // TODO(Section 14): query EscalationRequest where status=PENDING
       // and target org matches; for now, this stays 0.
       const pending_approvals_count = 0;
       return reply.code(200).send({
         ok: true,
         org_entity_id: orgEntityId,
-        compound_score: latest?.compound_score ?? 0,
+        compound_score: metrics.compound_score,
         pending_approvals_count,
-        active_twins: latest?.active_twins ?? 0,
-        capsule_count: latest?.capsule_count ?? 0,
-        decision_count: latest?.decision_count ?? 0,
-        pattern_count: latest?.pattern_count ?? 0,
-        vocab_count: latest?.vocab_count ?? 0,
-        external_count: latest?.external_count ?? 0,
-        completion_rate: latest?.completion_rate ?? 0,
+        active_twins: metrics.active_twins,
+        capsule_count: metrics.capsule_count,
+        decision_count: metrics.decision_count,
+        pattern_count: metrics.pattern_count,
+        vocab_count: metrics.vocab_count,
+        external_count: metrics.external_count,
+        completion_rate: metrics.completion_rate,
       });
     },
   );
