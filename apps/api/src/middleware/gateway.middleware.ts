@@ -9,6 +9,7 @@
 import jwt from "jsonwebtoken";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { RateLimitStore } from "../rate-limit.js";
+import { getOrgSettingsOrDefaults } from "../services/governance/org.js";
 
 // WHAT: One per-operation policy.
 // INPUT: Used as a parameter type only.
@@ -149,6 +150,38 @@ export function makeGatewayHook(args: {
     reply: FastifyReply,
   ): Promise<void> {
     const operation = detectOperation(request.method, request.url);
+
+    // STEP 1 -- IP whitelist enforcement (Section 9).
+    // Fires for every authenticated request EXCEPT login. Login
+    // pre-dates the bearer token, and looking up email->entity->org
+    // before authentication would create an enumeration oracle that
+    // violates the Section 2A identical-error-for-unknown-email
+    // guarantee. The malicious authenticator from a non-whitelisted
+    // IP gets a session token but immediately gets 403 on every
+    // subsequent authenticated request.
+    if (operation !== "login") {
+      const entityId = entityFromBearer(
+        request.headers.authorization,
+        jwtSecret,
+      );
+      if (entityId !== null) {
+        const settings = await getOrgSettingsOrDefaults(entityId);
+        if (settings.ip_whitelist.length > 0) {
+          const ip = request.ip ?? "unknown";
+          // TODO: support CIDR matching. Exact-string match for MVP.
+          if (!settings.ip_whitelist.includes(ip)) {
+            await reply.code(403).send({
+              ok: false,
+              error: "IP_NOT_WHITELISTED",
+              message: "Source IP not in the org's allowed list",
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    // STEP 2 -- rate limiting (existing logic).
     if (operation === null) return; // not gated
     const policy = limits[operation];
     if (policy === undefined) return; // unknown op

@@ -17,13 +17,18 @@ import { prisma } from "../client.js";
 // OUTPUT: None -- this is a type, not a value.
 // WHY: A session needs to know which entity it is for, what TAR hash
 //      was current at issue time (for later invalidation checks),
-//      what operations are allowed, and when it expires.
+//      what operations are allowed, and when it expires. issued_at
+//      is optional -- callers that anchor JWT exp / DB expires_at /
+//      Redis TTL to the same JS clock should pass the SAME Date
+//      object here so all three expiry sources stay aligned.
+//      When omitted, Postgres @default(now()) fires.
 export interface CreateSessionInput {
   entity_id: string;
   tar_hash_at_creation: string;
   allowed_operations: string[];
   clearance_ceiling: number;
   expires_at: Date;
+  issued_at?: Date;
   session_id?: string;
 }
 
@@ -47,6 +52,9 @@ export async function createSession(
         allowed_operations: input.allowed_operations,
         clearance_ceiling: input.clearance_ceiling,
         expires_at: input.expires_at,
+        // Override @default(now()) only when caller anchors all three
+        // expiry sources to a known JS-clock instant (login does).
+        ...(input.issued_at !== undefined ? { issued_at: input.issued_at } : {}),
       },
     });
 

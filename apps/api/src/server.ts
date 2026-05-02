@@ -39,6 +39,12 @@ import { registerHealthRoutes } from "./routes/health.routes.js";
 import { registerDeveloperRoutes } from "./routes/developer.routes.js";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import cors from "@fastify/cors";
+import {
+  seedMonetizationConfig,
+  seedSkillPackages,
+  seedAgentTemplates,
+} from "./services/governance/seeds.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
@@ -137,7 +143,17 @@ export async function buildApp(
 
   const app = Fastify({ logger: false });
 
-  // Gateway hook -- rate limits run before any route handler.
+  // CORS first -- registered before the gateway hook so preflight
+  // OPTIONS responses are not subject to rate limiting and the
+  // CORS plugin's own headers land on every route's response.
+  await app.register(cors, {
+    origin: process.env.CONTROL_TOWER_URL ?? "http://localhost:5173",
+    credentials: true,
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  });
+
+  // Gateway hook -- IP whitelist + rate limits run before any
+  // route handler.
   app.addHook(
     "onRequest",
     makeGatewayHook({
@@ -179,6 +195,13 @@ export async function buildApp(
   // Idempotent seed on every boot so a fresh DB has the seven
   // spec frameworks ready before the first request lands.
   await seedComplianceFrameworks();
+
+  // Section 9 governance seeds. All idempotent. Some are no-op
+  // stubs whose data lives in later paste boxes -- see
+  // services/governance/seeds.ts for per-stub TODO references.
+  await seedMonetizationConfig();
+  await seedSkillPackages();
+  await seedAgentTemplates();
 
   return app;
 }

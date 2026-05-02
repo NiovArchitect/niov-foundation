@@ -339,3 +339,55 @@ describe("narrowOperations (pure helper)", () => {
     expect(result.allowed).not.toContain("no-such-op");
   });
 });
+
+describe("login -- session timeout from OrgSettings (Section 9)", () => {
+  it("falls back to the 480-minute spec default when no OrgSettings row exists", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const result = await service.login(email, password, ["read"]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 480 minutes = 28,800,000 ms.
+    const session = await prisma.session.findUnique({
+      where: { session_id: result.session_id },
+    });
+    const ttlMs =
+      session!.expires_at!.getTime() - session!.issued_at.getTime();
+    expect(ttlMs).toBe(480 * 60 * 1000);
+    void entity;
+  });
+
+  it("uses OrgSettings.session_timeout_minutes when an org has set it", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+
+    // Build COMPANY + EntityMembership + OrgSettings with custom
+    // 60-minute timeout.
+    const company = await createEntity(
+      makeEntityInput({ entity_type: "COMPANY" }),
+    );
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: company.entity_id,
+        child_id: entity.entity_id,
+        is_active: true,
+      },
+    });
+    await prisma.orgSettings.create({
+      data: {
+        org_entity_id: company.entity_id,
+        session_timeout_minutes: 60,
+      },
+    });
+
+    const result = await service.login(email, password, ["read"]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const session = await prisma.session.findUnique({
+      where: { session_id: result.session_id },
+    });
+    const ttlMs =
+      session!.expires_at!.getTime() - session!.issued_at.getTime();
+    expect(ttlMs).toBe(60 * 60 * 1000);
+  });
+});

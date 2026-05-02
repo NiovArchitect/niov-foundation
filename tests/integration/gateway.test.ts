@@ -150,6 +150,133 @@ describe("Protected routes return 401 without a session", () => {
   });
 });
 
+describe("IP whitelist enforcement (Section 9)", () => {
+  it("empty whitelist (default) lets the request through", async () => {
+    const password = "correct-horse-battery";
+    const input = makeEntityInput({ entity_type: "PERSON", password });
+    const entity = await createEntity(input);
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: input.email,
+        password,
+        requested_operations: ["read"],
+      },
+      // Unique IP for this test's login bucket; the wallet call uses
+      // a different IP because the orgless-entity path has no
+      // whitelist enforcement anyway.
+      remoteAddress: "10.99.50.5",
+    });
+    const token = (login.json() as { token: string }).token;
+
+    // Orgless entity -> default settings -> empty whitelist -> pass.
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/wallet/balance",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: "192.168.1.50",
+    });
+    expect(response.statusCode).toBe(200);
+    void entity;
+  });
+
+  it("populated whitelist with matching remoteAddress lets the request through", async () => {
+    const password = "correct-horse-battery";
+    const input = makeEntityInput({ entity_type: "PERSON", password });
+    const entity = await createEntity(input);
+
+    // Build COMPANY + EntityMembership + OrgSettings with whitelist.
+    const company = await createEntity(
+      makeEntityInput({ entity_type: "COMPANY" }),
+    );
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: company.entity_id,
+        child_id: entity.entity_id,
+        is_active: true,
+      },
+    });
+    await prisma.orgSettings.create({
+      data: {
+        org_entity_id: company.entity_id,
+        ip_whitelist: ["10.99.50.1", "10.99.50.2"],
+      },
+    });
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: input.email,
+        password,
+        requested_operations: ["read"],
+      },
+      // Login itself is exempt from the whitelist (no entity yet).
+      // Using a unique IP for this test's login bucket.
+      remoteAddress: "10.99.50.6",
+    });
+    expect(login.statusCode).toBe(200);
+    const token = (login.json() as { token: string }).token;
+
+    // Subsequent authed call from a whitelisted IP -> 200.
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/wallet/balance",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: "10.99.50.1",
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  it("populated whitelist with non-matching remoteAddress returns 403 IP_NOT_WHITELISTED", async () => {
+    const password = "correct-horse-battery";
+    const input = makeEntityInput({ entity_type: "PERSON", password });
+    const entity = await createEntity(input);
+    const company = await createEntity(
+      makeEntityInput({ entity_type: "COMPANY" }),
+    );
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: company.entity_id,
+        child_id: entity.entity_id,
+        is_active: true,
+      },
+    });
+    await prisma.orgSettings.create({
+      data: {
+        org_entity_id: company.entity_id,
+        ip_whitelist: ["10.99.51.1"],
+      },
+    });
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: input.email,
+        password,
+        requested_operations: ["read"],
+      },
+      // Unique IP for this test's login bucket.
+      remoteAddress: "10.99.50.7",
+    });
+    expect(login.statusCode).toBe(200);
+    const token = (login.json() as { token: string }).token;
+
+    // Authed call from a NON-whitelisted IP -> 403.
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/wallet/balance",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: "192.168.99.99",
+    });
+    expect(response.statusCode).toBe(403);
+    const body = response.json() as { error: string };
+    expect(body.error).toBe("IP_NOT_WHITELISTED");
+  });
+});
+
 describe("Developer API keys", () => {
   it("creates, lists, and revokes an API key", async () => {
     const password = "correct-horse-battery";

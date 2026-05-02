@@ -13,7 +13,7 @@ export {
 } from "./redis.js";
 export type { NonceStore } from "./redis.js";
 
-export { AuthService, narrowOperations, SESSION_TTL_MS } from "./services/auth.service.js";
+export { AuthService, narrowOperations } from "./services/auth.service.js";
 export type {
   AuthServiceConfig,
   LoginResult,
@@ -164,6 +164,28 @@ export type { RateLimitPolicy } from "./middleware/gateway.middleware.js";
 
 export { registerHealthRoutes } from "./routes/health.routes.js";
 export { registerDeveloperRoutes } from "./routes/developer.routes.js";
+
+// Section 9 governance helpers + seeds.
+export {
+  getOrgEntityId,
+  getOrgSettingsOrDefaults,
+  ORG_SETTINGS_DEFAULTS,
+  MAX_ORG_HIERARCHY_DEPTH,
+} from "./services/governance/org.js";
+export type { MergedOrgSettings } from "./services/governance/org.js";
+
+export { createSystemPermission } from "./services/governance/system-permission.js";
+export type {
+  CreateSystemPermissionInput,
+  CreateSystemPermissionResult,
+} from "./services/governance/system-permission.js";
+
+export {
+  seedMonetizationConfig,
+  seedSkillPackages,
+  seedAgentTemplates,
+  seedIndustryDomainTemplates,
+} from "./services/governance/seeds.js";
 
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";

@@ -17,6 +17,7 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.1.0",
     "@fastify/swagger": "^9.4.0",
     "@fastify/swagger-ui": "^5.2.1",
     "@niov/auth": "*",

@@ -27,13 +27,7 @@ import {
   type TokenAttributeRepository,
 } from "@niov/database";
 import type { NonceStore } from "../redis.js";
-
-// WHAT: How long a successful login's session is valid for.
-// INPUT: None.
-// OUTPUT: A duration in milliseconds.
-// WHY: 2 hours per spec. Centralizing the constant means the JWT exp
-//      claim, the DB expires_at, and the Redis TTL all stay in sync.
-export const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+import { getOrgSettingsOrDefaults } from "./governance/org.js";
 
 // WHAT: The per-account lockout threshold.
 // INPUT: None.
@@ -273,10 +267,17 @@ export class AuthService {
       return invalidCredentials();
     }
 
-    // STEP 5 -- create session, sign JWT, store nonce
+    // STEP 5 -- create session, sign JWT, store nonce.
+    // Session TTL is read from OrgSettings.session_timeout_minutes
+    // via the tolerant helper -- orgless or pre-Dandelion entities
+    // get the spec default (480 minutes) automatically.
+    const orgSettings = await getOrgSettingsOrDefaults(entity.entity_id);
+    const sessionTtlMs = orgSettings.session_timeout_minutes * 60 * 1000;
+    const sessionTtlSeconds = Math.floor(sessionTtlMs / 1000);
+
     const session_id = randomUUID();
     const issuedAt = new Date();
-    const expiresAt = new Date(issuedAt.getTime() + SESSION_TTL_MS);
+    const expiresAt = new Date(issuedAt.getTime() + sessionTtlMs);
 
     await createSession({
       session_id,
@@ -284,6 +285,7 @@ export class AuthService {
       tar_hash_at_creation: tar.tar_hash,
       allowed_operations: allowed,
       clearance_ceiling: tar.clearance_ceiling,
+      issued_at: issuedAt,
       expires_at: expiresAt,
     });
 
@@ -297,14 +299,11 @@ export class AuthService {
       issued_at: issuedAt.getTime(),
     };
     const signOptions: SignOptions = {
-      expiresIn: Math.floor(SESSION_TTL_MS / 1000),
+      expiresIn: sessionTtlSeconds,
     };
     const token = jwt.sign(payload, this.config.jwtSecret, signOptions);
 
-    await this.config.nonceStore.set(
-      session_id,
-      Math.floor(SESSION_TTL_MS / 1000),
-    );
+    await this.config.nonceStore.set(session_id, sessionTtlSeconds);
 
     // STEP 6 -- audit the success BEFORE the token leaves the function
     await writeAuditEvent({
