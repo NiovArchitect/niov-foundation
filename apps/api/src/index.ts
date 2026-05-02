@@ -187,6 +187,37 @@ export {
   seedIndustryDomainTemplates,
 } from "./services/governance/seeds.js";
 
+export {
+  createTwin,
+  findNextApprover,
+} from "./services/governance/twin.service.js";
+export type {
+  CreateTwinInput,
+  CreateTwinResult,
+} from "./services/governance/twin.service.js";
+
+export {
+  executePhase0,
+  analyzePhase2,
+  executePhase3Invite,
+  getPhase4Status,
+  reorderPhase4,
+} from "./services/governance/dandelion.service.js";
+export type {
+  Phase0Input,
+  Phase0Result,
+  Phase2Result,
+  Phase3Result,
+  Phase4Status,
+  PropagationEntry,
+} from "./services/governance/dandelion.service.js";
+
+export { requireAdminCapability } from "./middleware/admin.middleware.js";
+export type { AdminCapability } from "./middleware/admin.middleware.js";
+
+export { registerPlatformRoutes } from "./routes/platform.routes.js";
+export { registerOrgRoutes } from "./routes/org.routes.js";
+
 export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 

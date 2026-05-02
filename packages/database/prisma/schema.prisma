@@ -439,6 +439,14 @@ enum MonetizationStatus {
 // across members) and stores it as a single MemoryCapsule that
 // every active member can read. The aggregate NEVER contains
 // individual entity_ids -- privacy is enforced at build time.
+//
+// Section 9: org_entity_id + is_default_enterprise mark "the one
+// default Hive every org employee auto-joins on activation". Prisma
+// cannot express a partial unique index ("at most one default-true
+// per org"); the constraint is enforced application-side inside
+// createHive AND inside Dandelion Phase 0's atomic transaction.
+// Section 15 may retrofit a raw-SQL partial unique as a belt-and-
+// suspenders check.
 model Hive {
   hive_id              String     @id @default(uuid()) @db.Uuid
   hive_name            String
@@ -448,6 +456,8 @@ model Hive {
   aggregate_capsule_id String?    @db.Uuid
   member_count         Int        @default(0)
   status               HiveStatus @default(ACTIVE)
+  org_entity_id        String?    @db.Uuid
+  is_default_enterprise Boolean   @default(false)
   created_at           DateTime   @default(now())
   updated_at           DateTime   @updatedAt
 
@@ -455,6 +465,7 @@ model Hive {
 
   @@index([created_by])
   @@index([status])
+  @@index([org_entity_id, is_default_enterprise])
   @@map("hives")
 }
 

@@ -229,74 +229,99 @@ export async function applyAuditEventTriggers(
   `);
 }
 
+// WHAT: Inner work: acquire the per-chain advisory lock, look up the
+//        previous event hash, compute the new hash, and insert one row.
+// INPUT: A transaction client and a WriteAuditEventInput.
+// OUTPUT: The newly created AuditEvent record.
+// WHY: Pulled out so writeAuditEvent can be called either standalone
+//      (opens its own transaction) OR inside a caller-provided
+//      transaction (composable with Phase 0's atomic create-org flow).
+//      The advisory lock is acquired in whichever transaction is live
+//      so per-chain serialization works in both modes.
+async function writeAuditEventInTx(
+  tx: Prisma.TransactionClient,
+  input: WriteAuditEventInput,
+): Promise<AuditEvent> {
+  const chainKey = input.actor_entity_id ?? SYSTEM_CHAIN_KEY;
+  // Serialize per-chain writes so two concurrent writers cannot link
+  // to the same previous event. Held until the transaction commits.
+  await tx.$executeRawUnsafe(
+    `SELECT pg_advisory_xact_lock(hashtext($1))`,
+    chainKey,
+  );
+
+  const previous = await tx.auditEvent.findFirst({
+    where: input.actor_entity_id
+      ? { actor_entity_id: input.actor_entity_id }
+      : { actor_entity_id: null },
+    orderBy: { timestamp: "desc" },
+    select: { event_hash: true },
+  });
+
+  const audit_id = randomUUID();
+  const timestamp = new Date();
+  const details = input.details ?? {};
+  const previous_event_hash = previous?.event_hash ?? null;
+
+  const event_hash = sha256Hex(
+    canonicalRecord({
+      audit_id,
+      event_type: input.event_type,
+      actor_entity_id: input.actor_entity_id ?? null,
+      target_entity_id: input.target_entity_id ?? null,
+      target_capsule_id: input.target_capsule_id ?? null,
+      session_id: input.session_id ?? null,
+      outcome: input.outcome,
+      denial_reason: input.denial_reason ?? null,
+      details,
+      ip_address: input.ip_address ?? null,
+      timestamp,
+      previous_event_hash,
+    }),
+  );
+
+  return tx.auditEvent.create({
+    data: {
+      audit_id,
+      event_type: input.event_type,
+      actor_entity_id: input.actor_entity_id ?? null,
+      target_entity_id: input.target_entity_id ?? null,
+      target_capsule_id: input.target_capsule_id ?? null,
+      session_id: input.session_id ?? null,
+      outcome: input.outcome,
+      denial_reason: input.denial_reason ?? null,
+      details: details as Prisma.InputJsonValue,
+      ip_address: input.ip_address ?? null,
+      timestamp,
+      previous_event_hash,
+      event_hash,
+    },
+  });
+}
+
 // WHAT: Insert one row into audit_events, computing the chain hash and
 //        linking it to the previous event in the actor's chain.
-// INPUT: A WriteAuditEventInput.
+// INPUT: A WriteAuditEventInput, plus an optional transaction client
+//        for callers that want this write to happen inside their own
+//        outer transaction (Phase 0, Phase 3, etc.).
 // OUTPUT: The newly created AuditEvent record.
 // WHY: This is the only legal way to put data into audit_events. We
 //      hold an advisory lock on the chain so two concurrent writers
-//      cannot link to the same previous event. We never swallow
-//      errors -- callers must handle a failed audit write themselves.
+//      cannot link to the same previous event. When tx is omitted we
+//      open our own transaction (existing behavior, Section 1E
+//      baseline tests rely on this). When tx is provided we run the
+//      lock + lookup + insert inside it -- the outer transaction's
+//      commit/rollback determines whether the audit row persists,
+//      which is exactly what hash-chain integrity requires when
+//      composing with a multi-step atomic flow.
 export async function writeAuditEvent(
   input: WriteAuditEventInput,
+  tx?: Prisma.TransactionClient,
 ): Promise<AuditEvent> {
-  return prisma.$transaction(async (tx) => {
-    const chainKey = input.actor_entity_id ?? SYSTEM_CHAIN_KEY;
-    // Serialize per-chain writes so two concurrent writers cannot link
-    // to the same previous event. Held until the transaction commits.
-    await tx.$executeRawUnsafe(
-      `SELECT pg_advisory_xact_lock(hashtext($1))`,
-      chainKey,
-    );
-
-    const previous = await tx.auditEvent.findFirst({
-      where: input.actor_entity_id
-        ? { actor_entity_id: input.actor_entity_id }
-        : { actor_entity_id: null },
-      orderBy: { timestamp: "desc" },
-      select: { event_hash: true },
-    });
-
-    const audit_id = randomUUID();
-    const timestamp = new Date();
-    const details = input.details ?? {};
-    const previous_event_hash = previous?.event_hash ?? null;
-
-    const event_hash = sha256Hex(
-      canonicalRecord({
-        audit_id,
-        event_type: input.event_type,
-        actor_entity_id: input.actor_entity_id ?? null,
-        target_entity_id: input.target_entity_id ?? null,
-        target_capsule_id: input.target_capsule_id ?? null,
-        session_id: input.session_id ?? null,
-        outcome: input.outcome,
-        denial_reason: input.denial_reason ?? null,
-        details,
-        ip_address: input.ip_address ?? null,
-        timestamp,
-        previous_event_hash,
-      }),
-    );
-
-    return tx.auditEvent.create({
-      data: {
-        audit_id,
-        event_type: input.event_type,
-        actor_entity_id: input.actor_entity_id ?? null,
-        target_entity_id: input.target_entity_id ?? null,
-        target_capsule_id: input.target_capsule_id ?? null,
-        session_id: input.session_id ?? null,
-        outcome: input.outcome,
-        denial_reason: input.denial_reason ?? null,
-        details: details as Prisma.InputJsonValue,
-        ip_address: input.ip_address ?? null,
-        timestamp,
-        previous_event_hash,
-        event_hash,
-      },
-    });
-  });
+  if (tx !== undefined) {
+    return writeAuditEventInTx(tx, input);
+  }
+  return prisma.$transaction((innerTx) => writeAuditEventInTx(innerTx, input));
 }
 
 // WHAT: Read a paginated, filtered slice of audit_events.

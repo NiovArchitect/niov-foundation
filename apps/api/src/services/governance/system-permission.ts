@@ -9,6 +9,7 @@
 //              audit-of-record).
 
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import {
   prisma,
   writeAuditEvent,
@@ -82,8 +83,15 @@ export interface CreateSystemPermissionResult {
  */
 export async function createSystemPermission(
   input: CreateSystemPermissionInput,
+  tx?: Prisma.TransactionClient,
 ): Promise<CreateSystemPermissionResult> {
-  const wallet = await prisma.wallet.findUnique({
+  // Use the caller's transaction client when provided (Phase 0 / Phase 3
+  // composition); fall back to the global prisma client when standalone.
+  // The query interface is identical -- only $transaction differs, which
+  // we never call from this function.
+  const db = tx ?? prisma;
+
+  const wallet = await db.wallet.findUnique({
     where: { entity_id: input.grantor_entity_id },
     select: { wallet_id: true },
   });
@@ -91,14 +99,14 @@ export async function createSystemPermission(
     throw new Error("GRANTOR_HAS_NO_WALLET");
   }
 
-  const where: import("@prisma/client").Prisma.MemoryCapsuleWhereInput = {
+  const where: Prisma.MemoryCapsuleWhereInput = {
     wallet_id: wallet.wallet_id,
     deleted_at: null,
   };
   if (input.capsule_type_filter !== undefined && input.capsule_type_filter !== null) {
     where.capsule_type = input.capsule_type_filter;
   }
-  const capsules = await prisma.memoryCapsule.findMany({
+  const capsules = await db.memoryCapsule.findMany({
     where,
     select: { capsule_id: true },
   });
@@ -115,7 +123,7 @@ export async function createSystemPermission(
 
   const created: Permission[] = [];
   for (const cap of capsules) {
-    const row = await prisma.permission.create({
+    const row = await db.permission.create({
       data: {
         bridge_id: bridgeId,
         capsule_id: cap.capsule_id,
@@ -131,24 +139,27 @@ export async function createSystemPermission(
     created.push(row);
   }
 
-  await writeAuditEvent({
-    event_type: "ADMIN_ACTION",
-    outcome: "SUCCESS",
-    actor_entity_id: null,
-    target_entity_id: input.grantee_entity_id,
-    details: {
-      action: "SYSTEM_PERMISSION_CREATED",
-      system_permission: true,
-      bridge_id: bridgeId,
-      grantor_entity_id: input.grantor_entity_id,
-      grantee_entity_id: input.grantee_entity_id,
-      access_scope: input.access_scope,
-      capsule_type_filter: input.capsule_type_filter ?? null,
-      permanent: isPermanent,
-      permission_count: created.length,
-      reason: input.reason ?? null,
+  await writeAuditEvent(
+    {
+      event_type: "ADMIN_ACTION",
+      outcome: "SUCCESS",
+      actor_entity_id: null,
+      target_entity_id: input.grantee_entity_id,
+      details: {
+        action: "SYSTEM_PERMISSION_CREATED",
+        system_permission: true,
+        bridge_id: bridgeId,
+        grantor_entity_id: input.grantor_entity_id,
+        grantee_entity_id: input.grantee_entity_id,
+        access_scope: input.access_scope,
+        capsule_type_filter: input.capsule_type_filter ?? null,
+        permanent: isPermanent,
+        permission_count: created.length,
+        reason: input.reason ?? null,
+      },
     },
-  });
+    tx,
+  );
 
   return {
     bridge_id: bridgeId,

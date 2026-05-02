@@ -47,6 +47,8 @@ import {
 } from "./services/governance/seeds.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
+import { registerPlatformRoutes } from "./routes/platform.routes.js";
+import { registerOrgRoutes } from "./routes/org.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
 import { MemoryContentStore, type ContentStore } from "./content-store.js";
 
@@ -191,6 +193,8 @@ export async function buildApp(
   await registerWalletRoutes(app, monetizationService);
   await registerComplianceRoutes(app, complianceService);
   await registerDeveloperRoutes(app, authService);
+  await registerPlatformRoutes(app, authService);
+  await registerOrgRoutes(app, authService);
 
   // Idempotent seed on every boot so a fresh DB has the seven
   // spec frameworks ready before the first request lands.

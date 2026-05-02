@@ -28,6 +28,8 @@ export type {
 
 export {
   createWallet,
+  createWalletInTx,
+  writeWalletCreateAudit,
   getWalletByEntityId,
   getWalletById,
   updateWalletSettings,
@@ -90,6 +92,8 @@ export type {
 
 export {
   createTAR,
+  createTARInTx,
+  writeTARCreateAudit,
   getTARByEntityId,
   checkCapability,
   updateTARPermissions,

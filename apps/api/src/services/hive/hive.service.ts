@@ -11,6 +11,7 @@
 //              (durable storage for the encrypted aggregate body).
 
 import { randomUUID } from "node:crypto";
+import type { Hive, Prisma } from "@prisma/client";
 import { sha256Hex, type ContentEncryption } from "@niov/auth";
 import {
   prisma,
@@ -104,6 +105,19 @@ export interface HiveAggregate {
   built_at: string; // ISO timestamp
 }
 
+// WHAT: Optional knobs for createHive that don't fit the legacy
+//        positional signature. Accessed by name only.
+// INPUT: Used as a parameter type for the named-options bag.
+// OUTPUT: None -- this is a type.
+// WHY: Section 9 introduces is_default_enterprise as a named-only
+//      flag. Boolean positional args at index 7 would be unreadable
+//      ("createHive(t, n, ty, {}, {}, {}, true)"); a named-options
+//      bag stays self-documenting at the call site.
+export interface CreateHiveOptions {
+  org_entity_id?: string | null;
+  is_default_enterprise?: boolean;
+}
+
 // WHAT: The unified failure shape for Hive operations.
 // INPUT: Used as a return type only.
 // OUTPUT: None -- this is a type.
@@ -125,7 +139,8 @@ export interface HiveFailure {
     | "INVITEE_NO_WALLET"
     | "ALREADY_MEMBER"
     | "MEMBERSHIP_NOT_FOUND"
-    | "AGGREGATE_NOT_BUILT";
+    | "AGGREGATE_NOT_BUILT"
+    | "DEFAULT_HIVE_ALREADY_EXISTS";
   message: string;
 }
 
@@ -165,6 +180,7 @@ export class HiveService {
     terms: Record<string, unknown> = {},
     settings: MembershipSettings = {},
     context: { ip_address?: string | null } = {},
+    options: CreateHiveOptions = {},
   ): Promise<CreateHiveSuccess | HiveFailure> {
     if (typeof name !== "string" || name.length === 0) {
       return { ok: false, code: "INVALID_REQUEST", message: "hive_name is required" };
@@ -175,6 +191,40 @@ export class HiveService {
     );
     if (!session.valid) {
       return { ok: false, code: session.code, message: "Hive create denied" };
+    }
+
+    // Application-level uniqueness check for the per-org default-
+    // enterprise Hive (Prisma cannot express partial unique indexes).
+    // Inside Phase 0's atomic transaction this same check runs again
+    // against the open tx; here we run it standalone for any future
+    // API caller that creates a default Hive directly.
+    const isDefaultEnterprise = options.is_default_enterprise === true;
+    if (isDefaultEnterprise) {
+      if (
+        options.org_entity_id === undefined ||
+        options.org_entity_id === null
+      ) {
+        return {
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "org_entity_id is required when is_default_enterprise=true",
+        };
+      }
+      const existingDefault = await prisma.hive.findFirst({
+        where: {
+          org_entity_id: options.org_entity_id,
+          is_default_enterprise: true,
+          status: "ACTIVE",
+        },
+        select: { hive_id: true },
+      });
+      if (existingDefault !== null) {
+        return {
+          ok: false,
+          code: "DEFAULT_HIVE_ALREADY_EXISTS",
+          message: "This org already has a default-enterprise Hive",
+        };
+      }
     }
 
     const hive_id = randomUUID();
@@ -189,6 +239,8 @@ export class HiveService {
           hive_type: type,
           governance_terms: terms as object,
           member_count: 1,
+          org_entity_id: options.org_entity_id ?? null,
+          is_default_enterprise: isDefaultEnterprise,
         },
       }),
       prisma.hiveMembership.create({
@@ -216,10 +268,34 @@ export class HiveService {
         hive_id,
         hive_name: name,
         hive_type: type,
+        org_entity_id: options.org_entity_id ?? null,
+        is_default_enterprise: isDefaultEnterprise,
       },
     });
 
     return { ok: true, hive_id, membership_id };
+  }
+
+  // WHAT: Look up the unique default-enterprise Hive for one org.
+  // INPUT: The org's entity_id and an optional transaction client.
+  // OUTPUT: The Hive row when found, otherwise null.
+  // WHY: createTwin's standard branch needs to know which Hive to
+  //      auto-join the new twin into. Standalone callers pass no tx;
+  //      Dandelion Phase 3's atomic invite passes the tx so the read
+  //      sees rows pending in the same outer transaction (Phase 0
+  //      having created the Hive moments earlier).
+  async findDefaultEnterpriseHive(
+    orgEntityId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Hive | null> {
+    const db = tx ?? prisma;
+    return db.hive.findFirst({
+      where: {
+        org_entity_id: orgEntityId,
+        is_default_enterprise: true,
+        status: "ACTIVE",
+      },
+    });
   }
 
   // WHAT: Add another member to an existing hive.

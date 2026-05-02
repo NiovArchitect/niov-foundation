@@ -8,6 +8,7 @@
 // CONNECTS TO: prisma (writes seed rows), buildApp (calls these
 //              once at boot).
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@niov/database";
 
 // WHAT: Ensure the single MonetizationConfig row exists at the
@@ -64,33 +65,101 @@ export async function seedAgentTemplates(): Promise<void> {
   // Intentional no-op until role templates ship.
 }
 
+// WHAT: The canonical industry vocabulary maps from PDF page 12.
+//        Keys are uppercase industry names (matching OrgSettings.industry
+//        values); each value is the list of domain terms to seed.
+// INPUT: Used as a constant lookup table.
+// OUTPUT: None.
+// WHY: Per-spec these are the exact terms each industry's twins
+//      should recognize on day one. Keeping them in one frozen map
+//      means changes are auditable in code review.
+const INDUSTRY_TERMS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  TECH: [
+    "Sprint",
+    "Backlog",
+    "PR",
+    "CI/CD",
+    "SLA",
+    "API",
+    "DevOps",
+    "Scrum",
+    "KPI",
+  ],
+  HEALTHCARE: [
+    "EHR",
+    "HIPAA",
+    "PHI",
+    "ICD-10",
+    "Prior Auth",
+    "Census",
+    "Discharge",
+  ],
+  FINANCE: [
+    "P&L",
+    "ARR",
+    "MRR",
+    "LTV",
+    "CAC",
+    "IRR",
+    "EBITDA",
+    "LOC",
+    "AUM",
+    "SOX",
+  ],
+  MANUFACTURING: [
+    "BOM",
+    "COGS",
+    "OEE",
+    "Kanban",
+    "Kaizen",
+    "SKU",
+    "WIP",
+    "RFQ",
+    "MRP",
+  ],
+  SERVICES: [
+    "Retainer",
+    "SoW",
+    "NPS",
+    "CSAT",
+    "Churn",
+    "Upsell",
+    "QBR",
+    "ARR",
+  ],
+});
+
 // WHAT: Per-org seed of DomainVocabulary entries from an industry
 //        template.
-// INPUT: The org's entity_id and the industry string from
-//        OrgSettings.
-// OUTPUT: A no-op promise (until Dandelion Phase 0 ships).
-// WHY: Industry-specific vocabulary lists (TECH, HEALTHCARE, etc)
-//      are spelled out on PDF page 12 inside the Dandelion Phase 0
-//      paste box. That box wires the actual vocabulary in. This
-//      stub preserves the call surface so future code paths
-//      compile without hand-wiring the industry lists yet.
-//
-// TODO(Section 9 / Dandelion Phase 0 box): implement using the
-// industry maps documented on page 12:
-//   TECH: Sprint, Backlog, PR, CI/CD, SLA, API, DevOps, Scrum, KPI
-//   HEALTHCARE: EHR, HIPAA, PHI, ICD-10, Prior Auth, Census, Discharge
-//   FINANCE: P&L, ARR, MRR, LTV, CAC, IRR, EBITDA, LOC, AUM, SOX
-//   MANUFACTURING: BOM, COGS, OEE, Kanban, Kaizen, SKU, WIP, RFQ, MRP
-//   SERVICES: Retainer, SoW, NPS, CSAT, Churn, Upsell, QBR, ARR
-// Each becomes one DomainVocabulary row with term_type = "ACRONYM".
-// Use prisma.domainVocabulary.upsert keyed on
-// @@unique([org_entity_id, term]) so re-running stays idempotent.
+// INPUT: The org's entity_id, the industry string from OrgSettings,
+//        and an optional transaction client (Phase 0 composes this
+//        seed inside its outer atomic transaction).
+// OUTPUT: A promise resolving once rows are upserted (or no-op when
+//         industry is null / not in the table).
+// WHY: Each twin's first interaction must already recognize the
+//      org's domain language. Idempotent via the
+//      @@unique([org_entity_id, term]) constraint -- repeated calls
+//      with the same industry produce the same final state.
 export async function seedIndustryDomainTemplates(
   orgEntityId: string,
   industry: string | null,
+  tx?: Prisma.TransactionClient,
 ): Promise<void> {
-  // Mark the parameters as used so the unused-args lint stays
-  // green; intentional no-op until Dandelion Phase 0 wires this in.
-  void orgEntityId;
-  void industry;
+  if (industry === null) return;
+  const upper = industry.toUpperCase();
+  const terms = INDUSTRY_TERMS[upper];
+  if (terms === undefined || terms.length === 0) {
+    // Unknown industry: no seed list, no-op. Future sections may
+    // add new industries to the map; we do not error here.
+    return;
+  }
+  const db = tx ?? prisma;
+  await db.domainVocabulary.createMany({
+    data: terms.map((term) => ({
+      org_entity_id: orgEntityId,
+      term,
+      term_type: "ACRONYM",
+    })),
+    skipDuplicates: true,
+  });
 }
