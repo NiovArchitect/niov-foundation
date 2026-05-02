@@ -806,3 +806,90 @@ model IntegrationCredential {
   @@unique([org_entity_id, tool])
   @@map("integration_credentials")
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 9 — Schema Part B: Domain-intelligence tables (4 models)
+//
+// These tables capture the org's compounding knowledge layer:
+// vocabulary, external relationships, recurring patterns, and the
+// 0-100 compound score that quantifies intelligence density.
+// All 4 use plain UUID columns without @relation per spec --
+// service code owns existence checks.
+// ═══════════════════════════════════════════════════════════════════
+
+// DomainVocabulary holds org-specific terms, acronyms, client names,
+// product names, and methods. Extractors consult these to recognize
+// domain-specific language in conversations.
+model DomainVocabulary {
+  vocab_id      String   @id @default(uuid()) @db.Uuid
+  org_entity_id String   @db.Uuid
+  term          String
+  term_type     String // ACRONYM|CLIENT|PRODUCT|METHOD|DEPARTMENT|PERSON_NICKNAME
+  definition    String?
+  aliases       String[] @default([])
+  frequency     Int      @default(1) // how often it appears in conversations
+  created_at    DateTime @default(now())
+
+  @@unique([org_entity_id, term])
+  @@index([org_entity_id])
+  @@map("domain_vocabulary")
+}
+
+// ExternalEntity captures clients, partners, vendors, competitors,
+// and regulators mentioned in org conversations. These are NOT
+// Otzar users -- they are external entities the org interacts with.
+model ExternalEntity {
+  external_id    String    @id @default(uuid()) @db.Uuid
+  org_entity_id  String    @db.Uuid
+  name           String
+  entity_type    String // CLIENT|PARTNER|VENDOR|COMPETITOR|REGULATOR
+  aliases        String[]  @default([])
+  last_mentioned DateTime?
+  mention_count  Int       @default(1)
+  sentiment      String? // POSITIVE|NEUTRAL|NEGATIVE|MIXED
+  notes          String?
+  created_at     DateTime  @default(now())
+
+  @@unique([org_entity_id, name])
+  @@index([org_entity_id])
+  @@map("external_entities")
+}
+
+// IntelligencePattern records recurring themes, behaviors, and
+// patterns detected across an org's conversations. These feed the
+// predictive and proactive intelligence layers.
+model IntelligencePattern {
+  pattern_id       String   @id @default(uuid()) @db.Uuid
+  org_entity_id    String   @db.Uuid
+  pattern_type     String // RECURRING_BLOCKER|COORDINATION_FAILURE|COMMITMENT_RISK|KNOWLEDGE_GAP|DECISION_LOOP|EXECUTION_STALL|EXTERNAL_RISK
+  description      String
+  evidence         Json     @default("[]") // [{conversation_id, date, excerpt}]
+  first_seen       DateTime @default(now())
+  last_seen        DateTime @default(now())
+  occurrence_count Int      @default(1)
+  status           String   @default("ACTIVE") // ACTIVE|RESOLVED|MONITORED
+  resolution       String?
+
+  @@index([org_entity_id, pattern_type])
+  @@map("intelligence_patterns")
+}
+
+// CompoundingMetrics is the time-series of the org's intelligence
+// density. The compound_score (0-100) is a primary KPI surfaced on
+// the Control Tower Home Dashboard. Each row is a snapshot.
+model CompoundingMetrics {
+  metric_id       String   @id @default(uuid()) @db.Uuid
+  org_entity_id   String   @db.Uuid
+  measured_at     DateTime @default(now())
+  compound_score  Float // 0-100
+  capsule_count   Int // total org wallet capsules
+  decision_count  Int // DECISION capsules
+  pattern_count   Int // active IntelligencePatterns
+  vocab_count     Int // DomainVocabulary entries
+  external_count  Int // ExternalEntity entries
+  active_twins    Int // twins with conversations this week
+  completion_rate Float // commitment completion %
+
+  @@index([org_entity_id])
+  @@map("compounding_metrics")
+}

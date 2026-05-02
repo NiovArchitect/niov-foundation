@@ -160,5 +160,10 @@ export type {
   OnboardingSession,
   DeviceToken,
   IntegrationCredential,
+  // Section 9 domain-intelligence tables (Schema Part B).
+  DomainVocabulary,
+  ExternalEntity,
+  IntelligencePattern,
+  CompoundingMetrics,
   Prisma,
 } from "@prisma/client";
