@@ -53,6 +53,10 @@ import {
   startScheduler,
   type SchedulerHandle,
 } from "./services/feedback/scheduler.js";
+import { OtzarService } from "./services/otzar/otzar.service.js";
+import { makeDefaultKVCache } from "./services/otzar/cache.js";
+import { getLLMProvider, MockLLMProvider } from "./services/llm/llm.service.js";
+import { registerOtzarRoutes } from "./routes/otzar.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerPlatformRoutes } from "./routes/platform.routes.js";
@@ -76,6 +80,9 @@ export interface BuildAppConfig {
   contentEncryption?: ContentEncryption;
   rateLimitStore?: RateLimitStore;
   rateLimitOverrides?: Partial<Record<string, RateLimitPolicy>>;
+  // Section 11B test injection points -- production reads from env.
+  otzarCache?: import("./services/otzar/cache.js").KVCache;
+  otzarLLM?: import("./services/llm/llm.service.js").LLMProvider;
 }
 
 // WHAT: Construct a fully wired Fastify instance ready for inject()
@@ -184,6 +191,30 @@ export async function buildApp(
     ...(config.rateLimitOverrides ?? {}),
   };
 
+  // Section 11B Otzar service. KVCache + LLM provider + COE +
+  // Auth dependencies. In test mode (NODE_ENV=test), buildApp uses
+  // a MockLLMProvider returning deterministic strings -- the real
+  // Anthropic/OpenAI SDKs are never instantiated under CI.
+  const otzarCache = config.otzarCache ?? makeDefaultKVCache();
+  const otzarLLM =
+    config.otzarLLM ??
+    (process.env.NODE_ENV === "test"
+      ? new MockLLMProvider([
+          {
+            ok: true,
+            text: "topics: stub-topic-a, stub-topic-b",
+            provider: "mock",
+            model: "mock-1",
+          },
+        ])
+      : getLLMProvider());
+  const otzarService = new OtzarService(
+    authService,
+    coeService,
+    otzarLLM,
+    otzarCache,
+  );
+
   const app = Fastify({ logger: false });
 
   // CORS first -- registered before the gateway hook so preflight
@@ -237,6 +268,7 @@ export async function buildApp(
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);
   await registerAuthAdminRoutes(app, authService, jwtSecret);
+  await registerOtzarRoutes(app, otzarService);
 
   // Idempotent seed on every boot so a fresh DB has the seven
   // spec frameworks ready before the first request lands.
@@ -263,7 +295,10 @@ export async function buildApp(
   // NODE_ENV=test (scheduler.ts short-circuits before registering
   // any cron tasks). Production calls scheduler.stop() during
   // graceful shutdown via main() below.
-  const scheduler: SchedulerHandle = startScheduler(feedbackService);
+  const scheduler: SchedulerHandle = startScheduler(
+    feedbackService,
+    otzarService,
+  );
   // Attach to the app so callers (production main, tests asserting
   // scheduler state) can reach it without a second buildApp return
   // value.

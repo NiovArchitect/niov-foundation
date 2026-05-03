@@ -1,0 +1,165 @@
+// FILE: otzar.routes.ts
+// PURPOSE: HTTP surface for Otzar conductSession (POST /message) and
+//          closeConversation (POST /close). Bearer-validated; no
+//          admin capability gate (these are user-facing employee
+//          routes). Maps OtzarService result codes to HTTP status.
+// CONNECTS TO: OtzarService, AuthService (validation handled inside
+//              the service via the bearer token).
+
+import type { FastifyInstance } from "fastify";
+import type { OtzarService } from "../services/otzar/otzar.service.js";
+
+// WHAT: Hard ceiling on caller-supplied token_budget. Above this,
+//        reject with BUDGET_TOO_LARGE 422 -- protects the LLM
+//        provider from accidental denial-of-service via massive
+//        prompts.
+const MAX_BUDGET = 50_000;
+const DEFAULT_BUDGET = 8_000;
+
+// WHAT: Pull the bearer token out of an Authorization header.
+function bearerFrom(value: string | string[] | undefined): string | null {
+  if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
+  const token = value.slice("Bearer ".length).trim();
+  return token.length === 0 ? null : token;
+}
+
+// WHAT: Map an OtzarService failure code to HTTP status.
+function statusForCode(code: string): number {
+  switch (code) {
+    case "SESSION_INVALID":
+    case "SESSION_EXPIRED":
+    case "SESSION_REVOKED":
+    case "SESSION_INVALIDATED":
+      return 401;
+    case "OPERATION_NOT_PERMITTED":
+    case "NOT_CONVERSATION_OWNER":
+      return 403;
+    case "TWIN_NOT_FOUND":
+    case "CONVERSATION_NOT_FOUND":
+      return 404;
+    case "INVALID_HISTORY":
+      return 422;
+    case "TOKEN_BUDGET_EXCEEDED":
+      return 413;
+    case "LLM_UNAVAILABLE":
+      return 503;
+    default:
+      return 400;
+  }
+}
+
+// WHAT: Register the Otzar routes.
+export async function registerOtzarRoutes(
+  app: FastifyInstance,
+  otzarService: OtzarService,
+): Promise<void> {
+  app.post<{
+    Body: {
+      message?: unknown;
+      conversation_id?: unknown;
+      conversation_history?: unknown;
+      token_budget?: unknown;
+    };
+  }>("/api/v1/otzar/conversation/message", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const body = request.body ?? {};
+    if (typeof body.message !== "string" || body.message.length === 0) {
+      return reply.code(422).send({
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "message is required (non-empty string)",
+      });
+    }
+    let tokenBudget = DEFAULT_BUDGET;
+    if (typeof body.token_budget === "number") {
+      if (
+        !Number.isFinite(body.token_budget) ||
+        body.token_budget <= 0 ||
+        body.token_budget > MAX_BUDGET
+      ) {
+        return reply.code(422).send({
+          ok: false,
+          code: "BUDGET_TOO_LARGE",
+          message: `token_budget must be in (0, ${MAX_BUDGET}]`,
+        });
+      }
+      tokenBudget = body.token_budget;
+    }
+    const conversationId =
+      typeof body.conversation_id === "string" &&
+      body.conversation_id.length > 0
+        ? body.conversation_id
+        : undefined;
+    const history = Array.isArray(body.conversation_history)
+      ? (body.conversation_history.filter(
+          (h): h is string => typeof h === "string",
+        ))
+      : [];
+
+    const result = await otzarService.conductSession({
+      token,
+      message: body.message,
+      conversation_id: conversationId,
+      conversation_history: history,
+      token_budget: tokenBudget,
+    });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
+  app.post<{
+    Body: {
+      conversation_id?: unknown;
+      capsule_ids_used?: unknown;
+      conversation_history?: unknown;
+    };
+  }>("/api/v1/otzar/conversation/close", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const body = request.body ?? {};
+    if (
+      typeof body.conversation_id !== "string" ||
+      body.conversation_id.length === 0
+    ) {
+      return reply.code(422).send({
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "conversation_id is required",
+      });
+    }
+    const capsuleIdsUsed = Array.isArray(body.capsule_ids_used)
+      ? body.capsule_ids_used.filter((c): c is string => typeof c === "string")
+      : [];
+    const history = Array.isArray(body.conversation_history)
+      ? body.conversation_history.filter(
+          (h): h is string => typeof h === "string",
+        )
+      : undefined;
+
+    const result = await otzarService.closeConversation({
+      token,
+      conversation_id: body.conversation_id,
+      capsule_ids_used: capsuleIdsUsed,
+      conversation_history: history,
+    });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+}

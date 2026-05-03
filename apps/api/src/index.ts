@@ -232,6 +232,43 @@ export type { COEFeedbackHook } from "./services/coe/coe.service.js";
 export type { ReadFeedbackHook } from "./services/cosmp/read.service.js";
 
 export {
+  OtzarService,
+} from "./services/otzar/otzar.service.js";
+export type {
+  ConductSessionInput,
+  ConductSessionSuccess,
+  CloseConversationInput,
+  CloseConversationSuccess,
+  OtzarFailure,
+} from "./services/otzar/otzar.service.js";
+
+export {
+  truncateToTokenBudget,
+  TokenBudgetExceededError,
+} from "./services/otzar/truncation.js";
+export type {
+  LayerBundle,
+  TokenBudgetExceededDetail,
+  TruncateResult,
+} from "./services/otzar/truncation.js";
+
+export {
+  MemoryKVCache,
+  RedisKVCache,
+  makeDefaultKVCache,
+} from "./services/otzar/cache.js";
+export type { KVCache } from "./services/otzar/cache.js";
+
+export {
+  getPriming,
+  formatPrimingContext,
+  PRIMING_TTL_SECONDS,
+} from "./services/otzar/priming.js";
+export type { PrimingResult } from "./services/otzar/priming.js";
+
+export { registerOtzarRoutes } from "./routes/otzar.routes.js";
+
+export {
   createTwin,
   findNextApprover,
 } from "./services/governance/twin.service.js";

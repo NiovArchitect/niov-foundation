@@ -1,0 +1,701 @@
+// FILE: otzar.service.ts
+// PURPOSE: The Otzar conversational service. conductSession runs
+//          STEP 0 priming + 8-layer context assembly + P3 token-
+//          budget truncation + LLM call. closeConversation writes
+//          a CONVERSATION_LEARNING capsule to the EMPLOYEE wallet
+//          (portability invariant) and fires the COE recordOutcome
+//          hook so Loop 1 (relevance scoring) updates. Auto-close
+//          sweep iterates ACTIVE OtzarConversation rows and closes
+//          those idle for >30 minutes.
+// CONNECTS TO: AuthService (session), COEService (assembleContext +
+//              recordOutcome), LLMProvider (generation), KVCache
+//              (priming + last_active + first-convo-today flag),
+//              prisma (capsule + conversation + metrics rows).
+
+import { randomUUID } from "node:crypto";
+import {
+  prisma,
+  type CapsuleType,
+} from "@niov/database";
+import type { AuthService } from "../auth.service.js";
+import type { COEService } from "../coe/coe.service.js";
+import type { LLMProvider, LLMResult } from "../llm/llm.service.js";
+import type { KVCache } from "./cache.js";
+import { getPriming } from "./priming.js";
+import {
+  truncateToTokenBudget,
+  TokenBudgetExceededError,
+  type LayerBundle,
+} from "./truncation.js";
+
+// WHAT: Maximum messages allowed in client-supplied L8 history.
+const L8_MAX_MESSAGES = 50;
+
+// WHAT: Section 11B null-role-template fallback. Substituted with
+//        twin display_name + owner display_name at build time.
+//        Documented as a deliberate fallback so future maintainers
+//        know it's intentional (not a bug to "fix" by stripping the
+//        template).
+const NULL_ROLE_TEMPLATE_FALLBACK =
+  "You are {twin_display_name}, a digital twin assistant for {owner_display_name}. " +
+  "You exist to extend their working capacity. Defer to your owner on permission " +
+  "grants, financial decisions, and any high-stakes external commitments. When " +
+  "uncertain, ask before acting.";
+
+// WHAT: How long the Redis flag for "first conversation of the day"
+//        survives. Computed dynamically each set: seconds until
+//        next 04:00 local. Tests that need to skip the morning
+//        brief just pre-populate the flag.
+function secondsUntilNext4amLocal(): number {
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(4, 0, 0, 0);
+  if (target.getTime() <= now.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+  return Math.ceil((target.getTime() - now.getTime()) / 1000);
+}
+
+// WHAT: How long Redis caches the "last active" timestamp for an
+//        OtzarConversation. Auto-close sweep treats missing OR
+//        stale-by-30min as eligible for close.
+const LAST_ACTIVE_TTL_SECONDS = 7200;
+const AUTO_CLOSE_STALE_THRESHOLD_MS = 30 * 60 * 1000;
+
+// WHAT: Caller-facing input shape for conductSession.
+export interface ConductSessionInput {
+  token: string;
+  message: string;
+  conversation_id?: string;
+  conversation_history?: string[];
+  token_budget?: number;
+}
+
+// WHAT: Successful conductSession return.
+export interface ConductSessionSuccess {
+  ok: true;
+  response: string;
+  context_used: number;
+  tokens_consumed: number;
+  conversation_id: string;
+}
+
+// WHAT: Failure shape for conductSession + closeConversation.
+export interface OtzarFailure {
+  ok: false;
+  code:
+    | "SESSION_INVALID"
+    | "SESSION_EXPIRED"
+    | "SESSION_REVOKED"
+    | "SESSION_INVALIDATED"
+    | "OPERATION_NOT_PERMITTED"
+    | "TWIN_NOT_FOUND"
+    | "INVALID_HISTORY"
+    | "TOKEN_BUDGET_EXCEEDED"
+    | "LLM_UNAVAILABLE"
+    | "CONVERSATION_NOT_FOUND"
+    | "NOT_CONVERSATION_OWNER";
+  message: string;
+  detail?: unknown;
+}
+
+// WHAT: Inputs for closeConversation.
+export interface CloseConversationInput {
+  token: string;
+  conversation_id: string;
+  capsule_ids_used?: string[];
+  conversation_history?: string[];
+}
+
+// WHAT: Successful closeConversation return.
+export interface CloseConversationSuccess {
+  ok: true;
+  capsule_id: string;
+  conversation_id: string;
+  topics: string[];
+}
+
+// WHAT: The Otzar service.
+// INPUT: AuthService, COEService, LLMProvider, KVCache.
+// OUTPUT: A class with conductSession, closeConversation, and
+//         runAutoCloseSweep methods.
+// WHY: Constructor injection keeps tests cleanly composable -- they
+//      can swap in MockLLMProvider + MemoryKVCache without any env
+//      coupling.
+export class OtzarService {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly coeService: COEService,
+    private readonly llmProvider: LLMProvider,
+    private readonly cache: KVCache,
+  ) {}
+
+  // ──────────────────────────────────────────────────────────────
+  // conductSession -- the 8-layer assembly + truncation + LLM call.
+  // ──────────────────────────────────────────────────────────────
+  async conductSession(
+    input: ConductSessionInput,
+  ): Promise<ConductSessionSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Otzar denied" };
+    }
+    const ownerEntityId = session.entity_id;
+
+    // Resolve owner's twin (AI_AGENT child via EntityMembership).
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: ownerEntityId, is_active: true },
+      select: { child_id: true },
+    });
+    const childIds = memberships.map((m) => m.child_id);
+    const twins = await prisma.entity.findMany({
+      where: {
+        entity_id: { in: childIds },
+        entity_type: "AI_AGENT",
+        deleted_at: null,
+      },
+    });
+    const twin = twins[0];
+    if (twin === undefined) {
+      return {
+        ok: false,
+        code: "TWIN_NOT_FOUND",
+        message: "Caller has no digital twin",
+      };
+    }
+    const twinConfig = await prisma.twinConfig.findUnique({
+      where: { twin_id: twin.entity_id },
+    });
+    const owner = await prisma.entity.findUnique({
+      where: { entity_id: ownerEntityId },
+    });
+    const ownerDisplayName = owner?.display_name ?? "Owner";
+    const twinDisplayName = twin.display_name ?? "Twin";
+
+    // Resolve org for priming. Tolerant -- orgless callers get null.
+    const { getOrgEntityId } = await import("../governance/org.js");
+    let orgEntityId: string | null;
+    try {
+      orgEntityId = await getOrgEntityId(ownerEntityId);
+    } catch {
+      orgEntityId = null;
+    }
+
+    const callerRole =
+      memberships.length > 0
+        ? "employee"
+        : "individual";
+    const tokenBudget = input.token_budget ?? 8000;
+
+    // Validate L8 history length up front.
+    const history = input.conversation_history ?? [];
+    if (history.length > L8_MAX_MESSAGES) {
+      return {
+        ok: false,
+        code: "INVALID_HISTORY",
+        message: `conversation_history capped at ${L8_MAX_MESSAGES} messages`,
+      };
+    }
+
+    // STEP 0 -- priming.
+    const priming = await getPriming({
+      ownerEntityId,
+      orgEntityId,
+      callerRole,
+      message: input.message,
+      cache: this.cache,
+    });
+
+    // Look up the caller's wallet for layer queries.
+    const ownerWallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+      select: { wallet_id: true },
+    });
+    const ownerWalletId = ownerWallet?.wallet_id ?? null;
+
+    // LAYER 1 -- CORRECTION capsules (NEVER TRIM).
+    const l1Caps =
+      ownerWalletId === null
+        ? []
+        : await prisma.memoryCapsule.findMany({
+            where: {
+              wallet_id: ownerWalletId,
+              capsule_type: "CORRECTION",
+              deleted_at: null,
+            },
+            take: 50,
+            select: { payload_summary: true },
+          });
+    const L1 =
+      l1Caps.length > 0
+        ? "[CORRECTIONS]\n" + l1Caps.map((c) => c.payload_summary).join("\n")
+        : "";
+
+    // LAYER 2 -- role template (or null-template fallback).
+    let L2: string;
+    if (typeof twinConfig?.role_template === "string") {
+      const tpl = await prisma.agentTemplate.findUnique({
+        where: { role_name: twinConfig.role_template },
+      });
+      L2 =
+        tpl?.template_content ??
+        NULL_ROLE_TEMPLATE_FALLBACK.replace(
+          "{twin_display_name}",
+          twinDisplayName,
+        ).replace("{owner_display_name}", ownerDisplayName);
+    } else {
+      L2 = NULL_ROLE_TEMPLATE_FALLBACK.replace(
+        "{twin_display_name}",
+        twinDisplayName,
+      ).replace("{owner_display_name}", ownerDisplayName);
+    }
+
+    // LAYER 3 -- WORK_PATTERN / COMMUNICATION_PREF / DECISION_STYLE.
+    const l3Caps =
+      ownerWalletId === null
+        ? []
+        : await prisma.memoryCapsule.findMany({
+            where: {
+              wallet_id: ownerWalletId,
+              capsule_type: {
+                in: [
+                  "WORK_PATTERN",
+                  "COMMUNICATION_PREF",
+                  "DECISION_STYLE",
+                ] as CapsuleType[],
+              },
+              deleted_at: null,
+            },
+            orderBy: { relevance_score: "desc" },
+            take: 5,
+            select: { payload_summary: true },
+          });
+    const L3 =
+      l3Caps.length > 0
+        ? "[WORK PROFILE]\n" + l3Caps.map((c) => c.payload_summary).join("\n")
+        : "";
+
+    // LAYERS 4 + 5 via single COE call, partitioned by capsule_type.
+    const coe = await this.coeService.assembleContext(
+      input.token,
+      input.message,
+      tokenBudget,
+    );
+    let L4 = "";
+    let L5_items: { content: string; relevance_score: number }[] = [];
+    if (coe.ok) {
+      const foundational = coe.context.filter(
+        (c) => c.capsule_type === "FOUNDATIONAL",
+      );
+      const others = coe.context.filter(
+        (c) => c.capsule_type !== "FOUNDATIONAL",
+      );
+      L4 =
+        foundational.length > 0
+          ? "[FOUNDATIONAL]\n" + foundational.map((c) => c.content).join("\n")
+          : "";
+      // L5 items keep relevance_score for truncation ordering.
+      // ContextItem doesn't carry relevance_score in its shape; for
+      // 11B we approximate with the position in the COE-returned
+      // list (earlier items have higher COE-computed relevance).
+      L5_items = others.map((c, idx) => ({
+        content: c.content,
+        relevance_score: 1 - idx * 0.01,
+      }));
+    }
+
+    // LAYER 6 -- TaskQueue (stub: no table yet, returns []).
+    // TODO(Section 14 admin tooling): query TaskQueue where
+    // assignee_id = twin.entity_id AND status IN ('OPEN',
+    // 'IN_PROGRESS') AND priority >= 5, order by priority desc,
+    // limit 5. L6 stays an identity layer (NEVER TRIM) so the
+    // architectural slot is preserved.
+    const L6 = "";
+
+    // LAYER 7 -- morning brief gated by Redis flag.
+    const briefFlagKey = `otzar:entity:${ownerEntityId}:first_convo_today`;
+    const briefFlag = await this.cache.get(briefFlagKey);
+    let L7 = "";
+    if (briefFlag === null) {
+      L7 = `[TODAY'S BRIEF]\nGood morning, ${ownerDisplayName}. You have ${l1Caps.length} active corrections to keep in mind and ${l3Caps.length} work-profile signals loaded.`;
+      await this.cache.set(
+        briefFlagKey,
+        "1",
+        secondsUntilNext4amLocal(),
+      );
+    }
+
+    // LAYER 8 -- conversation_history from client.
+    const L8_items = [...history];
+
+    // P3 truncation. Tokenizer used at write time was anthropic;
+    // we use the same tokenizer here for consistency. Lazy import
+    // to avoid WASM load in tests that don't reach this path.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { countTokens } = require("@anthropic-ai/tokenizer") as {
+      countTokens: (text: string) => number;
+    };
+
+    const bundle: LayerBundle = {
+      priming: priming.text,
+      L1,
+      L2,
+      L3,
+      L4,
+      L5_items,
+      L6,
+      L7,
+      L8_items,
+    };
+
+    let truncated;
+    try {
+      truncated = truncateToTokenBudget({
+        bundle,
+        budget: tokenBudget,
+        countTokens,
+      });
+    } catch (err) {
+      if (err instanceof TokenBudgetExceededError) {
+        return {
+          ok: false,
+          code: "TOKEN_BUDGET_EXCEEDED",
+          message: "Token budget exceeded after exhausting trimmable layers",
+          detail: err.detail,
+        };
+      }
+      throw err;
+    }
+
+    // Build the final system prompt + user message.
+    const systemPrompt = [
+      truncated.final.priming,
+      truncated.final.L1,
+      truncated.final.L2,
+      truncated.final.L3,
+      truncated.final.L4,
+      truncated.final.L5_items.map((i) => i.content).join("\n"),
+      truncated.final.L6,
+      truncated.final.L7,
+    ]
+      .filter((s) => s.length > 0)
+      .join("\n\n");
+    const userPrompt =
+      truncated.final.L8_items.length > 0
+        ? truncated.final.L8_items.join("\n") + "\n\n" + input.message
+        : input.message;
+
+    const llmResult: LLMResult = await this.llmProvider.generateResponse({
+      system: systemPrompt,
+      user: userPrompt,
+    });
+    if (!llmResult.ok) {
+      return {
+        ok: false,
+        code: "LLM_UNAVAILABLE",
+        message: llmResult.fallback_message,
+      };
+    }
+
+    // Persist conversation row (create or update).
+    let conversationId: string;
+    if (
+      typeof input.conversation_id === "string" &&
+      input.conversation_id.length > 0
+    ) {
+      conversationId = input.conversation_id;
+      await prisma.otzarConversation.update({
+        where: { conversation_id: conversationId },
+        data: { message_count: { increment: 1 } },
+      });
+    } else {
+      conversationId = randomUUID();
+      await prisma.otzarConversation.create({
+        data: {
+          conversation_id: conversationId,
+          entity_id: ownerEntityId,
+          twin_id: twin.entity_id,
+          source_type: "CHAT",
+          participants: [ownerEntityId, twin.entity_id],
+          message_count: 1,
+          status: "ACTIVE",
+        },
+      });
+    }
+    // Refresh last_active so the auto-close sweep keeps this
+    // conversation marked as ACTIVE for another 30 minutes.
+    await this.cache.set(
+      `otzar:conv:${conversationId}:last_active`,
+      String(Date.now()),
+      LAST_ACTIVE_TTL_SECONDS,
+    );
+
+    const contextUsed =
+      l1Caps.length +
+      l3Caps.length +
+      (L4.length > 0 ? 1 : 0) +
+      truncated.final.L5_items.length;
+
+    return {
+      ok: true,
+      response: llmResult.text,
+      context_used: contextUsed,
+      tokens_consumed: truncated.total_tokens,
+      conversation_id: conversationId,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // closeConversation -- PORTABILITY: writes CONVERSATION_LEARNING
+  // capsule to EMPLOYEE wallet (NOT org wallet). Fires Loop 1 hook
+  // via coeService.recordOutcome. Invalidates priming cache.
+  // ──────────────────────────────────────────────────────────────
+  async closeConversation(
+    input: CloseConversationInput,
+  ): Promise<CloseConversationSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Otzar close denied" };
+    }
+    const ownerEntityId = session.entity_id;
+
+    const conv = await prisma.otzarConversation.findUnique({
+      where: { conversation_id: input.conversation_id },
+    });
+    if (conv === null) {
+      return {
+        ok: false,
+        code: "CONVERSATION_NOT_FOUND",
+        message: "Conversation not found",
+      };
+    }
+    if (conv.entity_id !== ownerEntityId) {
+      return {
+        ok: false,
+        code: "NOT_CONVERSATION_OWNER",
+        message: "Caller does not own this conversation",
+      };
+    }
+
+    // Topic extraction. Degraded path (auto-close) skips LLM call
+    // and uses a generic topic. Otherwise prompt the LLM, parse,
+    // fall back to "conversation_summary" on any malformed shape.
+    const topics = await this.extractTopics(input.conversation_history);
+
+    // PORTABILITY: write CONVERSATION_LEARNING capsule to the
+    // EMPLOYEE wallet, never the org wallet. Section 15 P4
+    // offboarding will preserve this -- the employee's
+    // CONVERSATION_LEARNING capsules travel with them.
+    const ownerWallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+      select: { wallet_id: true },
+    });
+    if (ownerWallet === null) {
+      return {
+        ok: false,
+        code: "TWIN_NOT_FOUND",
+        message: "Caller has no wallet",
+      };
+    }
+    const newCapsuleId = randomUUID();
+    const summary = `Conversation ${input.conversation_id} closed; topics: ${topics.join(", ")}`;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { countTokens } = require("@anthropic-ai/tokenizer") as {
+      countTokens: (text: string) => number;
+    };
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: newCapsuleId,
+        wallet_id: ownerWallet.wallet_id,
+        entity_id: ownerEntityId, // EMPLOYEE -- portability invariant
+        version: 1,
+        capsule_type: "CONVERSATION_LEARNING",
+        topic_tags: topics,
+        decay_type: "TIME_BASED",
+        payload_summary: summary,
+        payload_size_tokens: Math.ceil(summary.length / 4),
+        tokens: countTokens(summary),
+        tokens_tokenizer: "anthropic",
+        storage_location: `niov://otzar/conv/${input.conversation_id}/${newCapsuleId}`,
+        content_hash: `sha256:placeholder-${newCapsuleId}`,
+        created_by: ownerEntityId,
+      },
+    });
+
+    // Fire Loop 1 hook via coeService.recordOutcome (Section 10
+    // wiring already in place via buildApp's COEFeedbackHook).
+    const used = input.capsule_ids_used ?? [];
+    if (used.length > 0) {
+      await this.coeService.recordOutcome(input.token, null, used, true);
+    }
+
+    // Flip conversation status.
+    await prisma.otzarConversation.update({
+      where: { conversation_id: input.conversation_id },
+      data: { status: "CLOSED", closed_at: new Date() },
+    });
+
+    // Increment latest CompoundingMetrics.capsule_count for the org.
+    try {
+      const { getOrgEntityId } = await import("../governance/org.js");
+      const orgEntityId = await getOrgEntityId(ownerEntityId);
+      const latestMetric = await prisma.compoundingMetrics.findFirst({
+        where: { org_entity_id: orgEntityId },
+        orderBy: { measured_at: "desc" },
+      });
+      if (latestMetric !== null) {
+        await prisma.compoundingMetrics.update({
+          where: { metric_id: latestMetric.metric_id },
+          data: { capsule_count: { increment: 1 } },
+        });
+      }
+    } catch {
+      // Orgless caller -- nothing to update. Silent.
+    }
+
+    // Invalidate priming cache so the next conversation sees fresh
+    // data.
+    await this.cache.delete(`otzar:prime:${ownerEntityId}`);
+    // Clear last_active so the auto-close sweep doesn't reprocess.
+    await this.cache.delete(`otzar:conv:${input.conversation_id}:last_active`);
+
+    return {
+      ok: true,
+      capsule_id: newCapsuleId,
+      conversation_id: input.conversation_id,
+      topics,
+    };
+  }
+
+  // WHAT: Extract conversation topics via the LLM, with robust
+  //        fallbacks.
+  // INPUT: Optional history string array.
+  // OUTPUT: An array of topic strings; ["conversation_summary"]
+  //         on any failure / malformed response.
+  // WHY: Auto-close path passes no history -- we shortcut to the
+  //      fallback. For the user-driven close path, the LLM might
+  //      return malformed shapes; we never throw, just fall back.
+  private async extractTopics(history?: string[]): Promise<string[]> {
+    const FALLBACK = ["conversation_summary"];
+    if (!Array.isArray(history) || history.length === 0) {
+      return FALLBACK;
+    }
+    try {
+      const result = await this.llmProvider.generateResponse({
+        system:
+          "Extract the top 3 topics from this conversation. Respond with exactly: 'topics: a, b, c'.",
+        user: history.join("\n"),
+      });
+      if (!result.ok) return FALLBACK;
+      const text = result.text ?? "";
+      const match = text.match(/topics:\s*(.+)/i);
+      if (match === null) return FALLBACK;
+      const items = match[1]!
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      return items.length > 0 ? items : FALLBACK;
+    } catch {
+      return FALLBACK;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // runAutoCloseSweep -- iterate ACTIVE conversations, close any
+  // whose last_active is missing or > 30 minutes old. Defensive
+  // per-row try/catch so one bad row doesn't tank the sweep.
+  //
+  // FAILURE OBSERVABILITY: per-row failures land in console.warn for
+  // 11B. Section 14 may wire structured audit events here when admin
+  // tooling is on top of this metric stream.
+  // ──────────────────────────────────────────────────────────────
+  async runAutoCloseSweep(): Promise<{ closed: number; skipped: number }> {
+    const active = await prisma.otzarConversation.findMany({
+      where: { status: "ACTIVE" },
+      select: {
+        conversation_id: true,
+        entity_id: true,
+      },
+    });
+    const now = Date.now();
+    let closed = 0;
+    let skipped = 0;
+    for (const conv of active) {
+      try {
+        const lastActiveStr = await this.cache.get(
+          `otzar:conv:${conv.conversation_id}:last_active`,
+        );
+        const lastActive =
+          lastActiveStr === null ? null : Number.parseInt(lastActiveStr, 10);
+        const stale =
+          lastActive === null ||
+          !Number.isFinite(lastActive) ||
+          now - lastActive > AUTO_CLOSE_STALE_THRESHOLD_MS;
+        if (!stale) {
+          skipped++;
+          continue;
+        }
+        // Degraded close: no token (cron context), no history.
+        // Manually do what closeConversation does WITHOUT session
+        // validation, since cron has no JWT to validate.
+        await this.degradedClose(conv.conversation_id, conv.entity_id);
+        closed++;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[otzar.autoClose] failed to close conversation ${conv.conversation_id}:`,
+          err,
+        );
+      }
+    }
+    return { closed, skipped };
+  }
+
+  // WHAT: Degraded close path used by auto-close cron. No session
+  //        validation, no LLM topic extraction, no recordOutcome
+  //        (cron has no token).
+  // INPUT: conversation_id, owner entity_id.
+  // OUTPUT: A promise resolving once the row is flipped + capsule
+  //         written.
+  // WHY: Auto-close runs without a request context. We still
+  //      preserve PORTABILITY (capsule lands in employee wallet)
+  //      and the status transition; only the LLM topic extraction
+  //      and recordOutcome are skipped (those are user-context
+  //      operations).
+  private async degradedClose(
+    conversationId: string,
+    ownerEntityId: string,
+  ): Promise<void> {
+    const ownerWallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+      select: { wallet_id: true },
+    });
+    if (ownerWallet === null) return;
+    const newCapsuleId = randomUUID();
+    const summary = `Conversation ${conversationId} auto-closed (idle > 30 min)`;
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: newCapsuleId,
+        wallet_id: ownerWallet.wallet_id,
+        entity_id: ownerEntityId,
+        version: 1,
+        capsule_type: "CONVERSATION_LEARNING",
+        topic_tags: ["auto_closed"],
+        decay_type: "TIME_BASED",
+        payload_summary: summary,
+        payload_size_tokens: Math.ceil(summary.length / 4),
+        tokens: 0,
+        tokens_tokenizer: "anthropic",
+        storage_location: `niov://otzar/conv/${conversationId}/${newCapsuleId}`,
+        content_hash: `sha256:auto-${newCapsuleId}`,
+        created_by: ownerEntityId,
+      },
+    });
+    await prisma.otzarConversation.update({
+      where: { conversation_id: conversationId },
+      data: { status: "CLOSED", closed_at: new Date() },
+    });
+    await this.cache.delete(`otzar:conv:${conversationId}:last_active`);
+    await this.cache.delete(`otzar:prime:${ownerEntityId}`);
+  }
+}

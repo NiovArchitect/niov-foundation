@@ -10,6 +10,7 @@
 
 import * as cron from "node-cron";
 import type { FeedbackService } from "./feedback.service.js";
+import type { OtzarService } from "../otzar/otzar.service.js";
 
 // WHAT: The handle returned by startScheduler.
 // INPUT: Used as a return type only.
@@ -34,6 +35,7 @@ export interface SchedulerHandle {
 //      feedbackService.runLoopXOnce() directly.
 export function startScheduler(
   feedbackService: FeedbackService,
+  otzarService?: OtzarService,
 ): SchedulerHandle {
   if (process.env.NODE_ENV === "test") {
     return {
@@ -93,6 +95,21 @@ export function startScheduler(
       });
     }),
   );
+
+  // Section 11B -- Otzar auto-close sweep, every 30 minutes.
+  // Only registered when an OtzarService is provided (Section 10
+  // tests construct startScheduler with feedbackService alone and
+  // intentionally skip this cron).
+  if (otzarService !== undefined) {
+    tasks.push(
+      cron.schedule("*/30 * * * *", () => {
+        otzarService.runAutoCloseSweep().catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error("[scheduler] Otzar auto-close failed:", err);
+        });
+      }),
+    );
+  }
 
   let running = true;
   return {
