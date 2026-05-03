@@ -1752,4 +1752,49 @@ export async function registerOrgRoutes(
       });
     },
   );
+
+  // ════════════════════════════════════════════════════════════════
+  // SUGGESTIONS (Section 10 Loop 3)
+  // ════════════════════════════════════════════════════════════════
+
+  // GET /org/suggestions -- PermissionSuggestion rows where grantor
+  // OR grantee is in caller's org. Cross-tenant filter: build the
+  // org-scope id list (org + active children) and filter on either
+  // side of the suggestion.
+  app.get<{ Querystring: { skip?: string; take?: string } }>(
+    "/api/v1/org/suggestions",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const { skip, take } = parsePagination(request.query);
+      const memberships = await prisma.entityMembership.findMany({
+        where: { parent_id: orgEntityId, is_active: true },
+        select: { child_id: true },
+      });
+      const orgScope = [orgEntityId, ...memberships.map((m) => m.child_id)];
+      const where: Prisma.PermissionSuggestionWhereInput = {
+        OR: [
+          { grantor_id: { in: orgScope } },
+          { grantee_id: { in: orgScope } },
+        ],
+      };
+      const [items, total] = await Promise.all([
+        prisma.permissionSuggestion.findMany({
+          where,
+          skip,
+          take,
+          orderBy: { created_at: "desc" },
+        }),
+        prisma.permissionSuggestion.count({ where }),
+      ]);
+      return reply.code(200).send({
+        ok: true,
+        ...paginatedResponse(items, total, skip, take),
+      });
+    },
+  );
 }

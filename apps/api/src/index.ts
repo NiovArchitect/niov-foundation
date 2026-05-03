@@ -185,7 +185,33 @@ export {
   seedSkillPackages,
   seedAgentTemplates,
   seedIndustryDomainTemplates,
+  seedFeedbackLoopHealth,
 } from "./services/governance/seeds.js";
+
+export {
+  FeedbackService,
+  FEEDBACK_LOOPS,
+  LOOP_EXPECTED_INTERVAL_MINUTES,
+  DEMAND_LOW_MAX,
+  DEMAND_MEDIUM_MAX,
+} from "./services/feedback/feedback.service.js";
+export type {
+  Loop1Result,
+  Loop2Result,
+  Loop3Result,
+  Loop4Result,
+  Loop5Result,
+  Loop6Result,
+  Loop7Result,
+} from "./services/feedback/feedback.service.js";
+
+export {
+  startScheduler,
+} from "./services/feedback/scheduler.js";
+export type { SchedulerHandle } from "./services/feedback/scheduler.js";
+
+export type { COEFeedbackHook } from "./services/coe/coe.service.js";
+export type { ReadFeedbackHook } from "./services/cosmp/read.service.js";
 
 export {
   createTwin,

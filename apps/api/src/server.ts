@@ -44,7 +44,13 @@ import {
   seedMonetizationConfig,
   seedSkillPackages,
   seedAgentTemplates,
+  seedFeedbackLoopHealth,
 } from "./services/governance/seeds.js";
+import { FeedbackService } from "./services/feedback/feedback.service.js";
+import {
+  startScheduler,
+  type SchedulerHandle,
+} from "./services/feedback/scheduler.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerPlatformRoutes } from "./routes/platform.routes.js";
@@ -111,12 +117,6 @@ export async function buildApp(
     jwtSecret,
     complianceService,
   );
-  const readService = new ReadService(
-    authService,
-    declarationStore,
-    contentStore,
-    jwtSecret,
-  );
   const writeService = new WriteService(
     authService,
     declarationStore,
@@ -125,12 +125,6 @@ export async function buildApp(
     jwtSecret,
   );
   const shareService = new ShareService(authService);
-  const coeService = new COEService(
-    authService,
-    negotiateService,
-    readService,
-    contentEncryption,
-  );
   const hiveService = new HiveService(
     authService,
     contentEncryption,
@@ -139,6 +133,44 @@ export async function buildApp(
   const monetizationService = new MonetizationService(authService);
 
   const rateLimitStore = config.rateLimitStore ?? makeDefaultRateLimitStore();
+
+  // Section 10 feedback service is constructed BEFORE ReadService
+  // and COEService so the optional Loop 1 / Loop 5 hooks can be
+  // wired in. The hooks are no-ops in test mode (FeedbackService
+  // constructed but the cron scheduler is skipped via
+  // NODE_ENV=test below). Tests that don't need feedback wiring
+  // simply construct services directly via @niov/api exports.
+  const feedbackService = new FeedbackService(hiveService, rateLimitStore);
+  const readService = new ReadService(
+    authService,
+    declarationStore,
+    contentStore,
+    jwtSecret,
+    {
+      onContentRead: async (input) => {
+        await feedbackService.runLoop5Once(input);
+      },
+    },
+  );
+  const coeService = new COEService(
+    authService,
+    negotiateService,
+    readService,
+    contentEncryption,
+    {
+      onRecordOutcome: async (input) => {
+        // Run Loop 1 once per outcome. We collapse the per-outcome
+        // call into a single relevance pass for the candidate set
+        // (the relevance bumps are per-capsule, not per-outcome).
+        if (input.outcome_ids.length === 0) return;
+        await feedbackService.runLoop1Once({
+          outcome_id: input.outcome_ids[0]!,
+          candidate_capsule_ids: input.candidate_capsule_ids,
+          used_capsule_ids: input.used_capsule_ids,
+        });
+      },
+    },
+  );
   const rateLimits: Record<string, RateLimitPolicy> = {
     ...DEFAULT_LIMITS,
     ...(config.rateLimitOverrides ?? {}),
@@ -191,7 +223,7 @@ export async function buildApp(
   );
   await registerCoeRoutes(app, coeService);
   await registerHiveRoutes(app, hiveService);
-  await registerWalletRoutes(app, monetizationService);
+  await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);
@@ -209,6 +241,20 @@ export async function buildApp(
   await seedSkillPackages();
   await seedAgentTemplates();
 
+  // Section 10 -- seed the seven FeedbackLoopHealth rows so Loop 7
+  // has a baseline to compare against on its first run.
+  await seedFeedbackLoopHealth();
+
+  // Section 10 -- start the cron scheduler. NO-OP under
+  // NODE_ENV=test (scheduler.ts short-circuits before registering
+  // any cron tasks). Production calls scheduler.stop() during
+  // graceful shutdown via main() below.
+  const scheduler: SchedulerHandle = startScheduler(feedbackService);
+  // Attach to the app so callers (production main, tests asserting
+  // scheduler state) can reach it without a second buildApp return
+  // value.
+  (app as unknown as { scheduler: SchedulerHandle }).scheduler = scheduler;
+
   return app;
 }
 
@@ -223,6 +269,27 @@ async function main(): Promise<void> {
   await app.listen({ port, host: "0.0.0.0" });
   // eslint-disable-next-line no-console
   console.log(`NIOV API listening on :${port}`);
+
+  // Graceful shutdown: stop the cron scheduler BEFORE Fastify
+  // closes so an in-flight loop fire doesn't outlive the server.
+  const scheduler = (app as unknown as { scheduler?: SchedulerHandle })
+    .scheduler;
+  const shutdown = async (signal: string) => {
+    // eslint-disable-next-line no-console
+    console.log(`[server] received ${signal}, shutting down`);
+    try {
+      scheduler?.stop();
+      await app.close();
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
 }
 
 if (process.argv[1]?.endsWith("server.ts")) {

@@ -4,6 +4,8 @@
 // CONNECTS TO: MonetizationService.
 
 import type { FastifyInstance } from "fastify";
+import { prisma, type Prisma } from "@niov/database";
+import type { AuthService } from "../services/auth.service.js";
 import type { MonetizationService } from "../services/monetization/monetization.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
@@ -47,6 +49,7 @@ function statusForCode(code: string): number {
 export async function registerWalletRoutes(
   app: FastifyInstance,
   monetizationService: MonetizationService,
+  authService?: AuthService,
 ): Promise<void> {
   app.get("/api/v1/wallet/balance", async (request, reply) => {
     const sessionToken = bearerFrom(request.headers.authorization);
@@ -121,4 +124,56 @@ export async function registerWalletRoutes(
     }
     return reply.code(200).send(result);
   });
+
+  // GET /wallet/suggestions -- MonetizationSuggestion rows for the
+  // caller's wallet HOLDER (entity_id). Section 10 Loop 6 produces
+  // these. Privacy invariant: rows here NEVER carry accessor
+  // identity -- only capsule_type + demand_level + estimated value.
+  if (authService !== undefined) {
+    app.get<{ Querystring: { skip?: string; take?: string } }>(
+      "/api/v1/wallet/suggestions",
+      async (request, reply) => {
+        const sessionToken = bearerFrom(request.headers.authorization);
+        if (sessionToken === null) {
+          return reply.code(401).send({
+            ok: false,
+            code: "SESSION_INVALID",
+            message: "Missing bearer token",
+          });
+        }
+        const session = await authService.validateSession(sessionToken, "read");
+        if (!session.valid) {
+          return reply.code(statusForCode(session.code)).send({
+            ok: false,
+            code: session.code,
+          });
+        }
+        const skipNum = Number.parseInt(request.query.skip ?? "0", 10);
+        const takeNum = Number.parseInt(request.query.take ?? "50", 10);
+        const skip = Number.isFinite(skipNum) && skipNum >= 0 ? skipNum : 0;
+        const take = Math.max(
+          1,
+          Math.min(200, Number.isFinite(takeNum) ? takeNum : 50),
+        );
+        const where: Prisma.MonetizationSuggestionWhereInput = {
+          entity_id: session.entity_id,
+        };
+        const [items, total] = await Promise.all([
+          prisma.monetizationSuggestion.findMany({
+            where,
+            skip,
+            take,
+            orderBy: { created_at: "desc" },
+          }),
+          prisma.monetizationSuggestion.count({ where }),
+        ]);
+        return reply.code(200).send({
+          ok: true,
+          items,
+          total,
+          has_more: skip + take < total,
+        });
+      },
+    );
+  }
 }

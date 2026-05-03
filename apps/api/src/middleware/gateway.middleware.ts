@@ -204,7 +204,13 @@ export function makeGatewayHook(args: {
     }
 
     const result = await store.hit(key, windowSeconds);
-    if (result.count > policy.perMinute) {
+    // Section 10 Loop 5 may have temporarily reduced this key's
+    // effective allowance via setMultiplier (e.g., 0.5 for 1h after
+    // an anomaly fires). Apply it to the threshold check; default
+    // multiplier is 1.0 when no Loop 5 entry is active.
+    const multiplier = await store.getMultiplier(key);
+    const effectiveLimit = policy.perMinute * multiplier;
+    if (result.count > effectiveLimit) {
       await reply
         .code(429)
         .header("Retry-After", String(result.ttl_seconds))

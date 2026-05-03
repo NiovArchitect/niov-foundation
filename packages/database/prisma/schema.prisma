@@ -596,12 +596,21 @@ model WalletBalance {
 // particular session's request, plus whether that use was judged
 // successful. Section 10's feedback loops will read these rows to
 // nudge relevance scores up or down.
+//
+// Section 10 additive: tokens_loaded + tokens_used record how much
+// context budget was spent vs. what the LLM actually consumed. Loop 2
+// (token efficiency) reads these to adjust the relevance floor when
+// retrievals routinely under- or over-fill the LLM's actual usage.
+// Both nullable with @default(0) so existing 367-test baseline writes
+// continue to work without setting them.
 model COEOutcome {
-  outcome_id  String   @id @default(uuid()) @db.Uuid
-  session_id  String?  @db.Uuid
-  capsule_id  String   @db.Uuid
-  success     Boolean
-  recorded_at DateTime @default(now())
+  outcome_id    String   @id @default(uuid()) @db.Uuid
+  session_id    String?  @db.Uuid
+  capsule_id    String   @db.Uuid
+  success       Boolean
+  tokens_loaded Int?     @default(0)
+  tokens_used   Int?     @default(0)
+  recorded_at   DateTime @default(now())
 
   @@index([session_id])
   @@index([capsule_id])
@@ -903,4 +912,84 @@ model CompoundingMetrics {
 
   @@index([org_entity_id])
   @@map("compounding_metrics")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 10 — Seven Feedback Loops (4 tables)
+//
+// FeedbackConfig is a single-row tunable used by Loop 2 (token
+// efficiency) to raise / lower the relevance floor. Suggestion tables
+// hold non-binding hints that admins or holders can act on. Loop
+// health is the meta-monitoring table read by Loop 7.
+// All four use plain UUID columns (no @relation) per the Section 9
+// pattern: service code owns existence checks.
+// ═══════════════════════════════════════════════════════════════════
+
+// FeedbackConfig is a single-row tunable read by Loop 2. The
+// relevance_floor governs the minimum relevance_score a capsule must
+// have to be retrieved by the COE assembly path. Loop 2 nudges this
+// floor up when retrievals run lean (under-using their budget) or
+// down when retrievals run hot but with poor success.
+model FeedbackConfig {
+  config_id        String   @id @default(uuid()) @db.Uuid
+  relevance_floor  Float    @default(0.2)
+  updated_at       DateTime @updatedAt
+
+  @@map("feedback_config")
+}
+
+// PermissionSuggestion is a non-binding hint produced by Loop 3 when
+// the same (grantor, grantee, capsule_type) triple appears in 3+
+// distinct PermissionBridges over 30 days -- i.e., the admin keeps
+// re-granting the same shape of access. The suggestion proposes
+// converting the pattern into a standing permission. Acknowledged_at
+// marks that the holder dismissed or accepted the hint.
+model PermissionSuggestion {
+  suggestion_id   String    @id @default(uuid()) @db.Uuid
+  grantor_id      String    @db.Uuid
+  grantee_id      String    @db.Uuid
+  capsule_type    String
+  suggestion_text String
+  created_at      DateTime  @default(now())
+  acknowledged_at DateTime?
+
+  @@index([grantor_id])
+  @@index([grantee_id])
+  @@index([acknowledged_at])
+  @@map("permission_suggestions")
+}
+
+// MonetizationSuggestion is a non-binding hint produced by Loop 6.
+//
+// PRIVACY-CRITICAL: rows in this table NEVER contain accessor
+// identity. entity_id holds the wallet HOLDER (the entity who could
+// monetize). capsule_type + demand_level + estimated_value_usd are
+// aggregate signals across all accessors. Loop 6's Prisma query
+// GROUPs BY capsule_type ONLY -- never by accessor_entity_id. See
+// patent claim US 12,517,919 + the privacy invariant test in
+// tests/unit/feedback.test.ts.
+model MonetizationSuggestion {
+  suggestion_id        String   @id @default(uuid()) @db.Uuid
+  entity_id            String   @db.Uuid // wallet HOLDER, never accessor
+  capsule_type         String
+  demand_level         String   // LOW | MEDIUM | HIGH
+  estimated_value_usd  Float
+  created_at           DateTime @default(now())
+
+  @@index([entity_id])
+  @@map("monetization_suggestions")
+}
+
+// FeedbackLoopHealth tracks the most recent run of each of the seven
+// feedback loops. loop_id is the literal string "loop_1".."loop_7"
+// (NOT a UUID -- the schema docs both this and the seed function in
+// services/governance/seeds.ts). Loop 7 reads this table monthly to
+// flag any loop whose last_run is older than 2x its expected interval.
+model FeedbackLoopHealth {
+  loop_id     String    @id
+  loop_name   String
+  last_run    DateTime?
+  last_status String    @default("NEVER_RUN")
+
+  @@map("feedback_loop_health")
 }

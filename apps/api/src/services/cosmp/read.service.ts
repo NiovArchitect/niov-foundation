@@ -195,12 +195,24 @@ function toSafeMetadata(meta: CapsuleMetadata): SafeCapsuleMetadata {
 // WHY: Constructor injection keeps tests cleanly composable -- they
 //      can swap in a MemoryContentStore preloaded with synthetic
 //      content and a MemoryNonceStore for declarations.
+//
+// SECTION 10 HOOK: An optional ReadFeedbackHook is fired after a
+// successful readContent. Section 10 wires Loop 5 (anomaly detection)
+// here. Default = undefined → no-op for tests + offline use.
+export interface ReadFeedbackHook {
+  onContentRead(input: {
+    actor_entity_id: string;
+    capsule_id: string;
+  }): Promise<void>;
+}
+
 export class ReadService {
   constructor(
     private readonly authService: AuthService,
     private readonly declarationStore: NonceStore,
     private readonly contentStore: ContentStore,
     private readonly jwtSecret: string,
+    private readonly feedbackHook?: ReadFeedbackHook,
   ) {}
 
   // WHAT: Step 1 of READ -- return safe capsule metadata + a
@@ -466,6 +478,21 @@ export class ReadService {
     await this.declarationStore.delete(
       declarationCheck.declaration.declaration_id,
     );
+
+    // Section 10 Loop 5 hook: anomaly detection on the
+    // (actor, capsule) pair. Fire-and-await; on hook failure log
+    // but do NOT fail the read (security telemetry is advisory).
+    if (this.feedbackHook !== undefined) {
+      try {
+        await this.feedbackHook.onContentRead({
+          actor_entity_id: session.entity_id,
+          capsule_id: capsuleId,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[read] Loop 5 hook failed:", err);
+      }
+    }
 
     return {
       ok: true,

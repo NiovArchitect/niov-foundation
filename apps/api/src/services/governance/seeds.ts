@@ -65,6 +65,30 @@ export async function seedAgentTemplates(): Promise<void> {
   // Intentional no-op until role templates ship.
 }
 
+// WHAT: Seed the seven FeedbackLoopHealth rows on boot.
+// INPUT: None.
+// OUTPUT: A promise that resolves once rows are upserted.
+// WHY: Section 10 Loop 7 reads this table to detect stale loops.
+//      Seeding all seven rows on boot guarantees Loop 7 has
+//      something to compare against from day one. Idempotent via
+//      createMany skipDuplicates -- re-running on a populated DB
+//      leaves existing rows untouched (so we don't reset their
+//      last_run timestamps).
+export async function seedFeedbackLoopHealth(): Promise<void> {
+  await prisma.feedbackLoopHealth.createMany({
+    data: [
+      { loop_id: "loop_1", loop_name: "Capsule Relevance" },
+      { loop_id: "loop_2", loop_name: "Token Efficiency" },
+      { loop_id: "loop_3", loop_name: "Permission Patterns" },
+      { loop_id: "loop_4", loop_name: "Hive Aggregate Refresh" },
+      { loop_id: "loop_5", loop_name: "Anomaly Detection" },
+      { loop_id: "loop_6", loop_name: "Monetization Demand" },
+      { loop_id: "loop_7", loop_name: "Meta Health Check" },
+    ],
+    skipDuplicates: true,
+  });
+}
+
 // WHAT: The canonical industry vocabulary maps from PDF page 12.
 //        Keys are uppercase industry names (matching OrgSettings.industry
 //        values); each value is the list of domain terms to seed.

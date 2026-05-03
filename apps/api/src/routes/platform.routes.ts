@@ -296,7 +296,7 @@ export async function registerPlatformRoutes(
   );
 
   // ════════════════════════════════════════════════════════════════
-  // LOOPS (stub; TODO Section 10/15 FeedbackLoopHealth table)
+  // LOOPS (Section 10 -- reads FeedbackLoopHealth)
   // ════════════════════════════════════════════════════════════════
 
   app.get(
@@ -305,11 +305,13 @@ export async function registerPlatformRoutes(
       preHandler: requireAdminCapability(authService, "can_admin_niov"),
     },
     async (_request, reply) => {
-      // TODO(Section 10/15): query FeedbackLoopHealth aggregate.
+      const items = await prisma.feedbackLoopHealth.findMany({
+        orderBy: { loop_id: "asc" },
+      });
       return reply.code(200).send({
         ok: true,
-        items: [],
-        total: 0,
+        items,
+        total: items.length,
         has_more: false,
       });
     },

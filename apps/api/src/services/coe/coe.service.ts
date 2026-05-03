@@ -135,12 +135,30 @@ export interface RecordOutcomeFailure {
 // OUTPUT: A class with assembleContext, explicitRecall, recordOutcome.
 // WHY: Constructor injection lets tests swap a mock NegotiateService
 //      to verify parallel execution without touching real Supabase.
+// WHAT: Optional event hook fired by recordOutcome when an outcome
+//        row lands. Section 10 wires Loop 1 here (capsule relevance
+//        adjustment). Default is undefined → no-op for tests + any
+//        caller that doesn't care about feedback loops.
+// INPUT: Used as a parameter type only.
+// OUTPUT: None.
+// WHY: Optional-dependency pattern keeps Section 4's recordOutcome
+//      uncoupled from Section 10. Existing tests construct COEService
+//      without a hook; Section 10 buildApp wires the real hook in.
+export interface COEFeedbackHook {
+  onRecordOutcome(input: {
+    outcome_ids: string[];
+    candidate_capsule_ids: string[];
+    used_capsule_ids: string[];
+  }): Promise<void>;
+}
+
 export class COEService {
   constructor(
     private readonly authService: AuthService,
     private readonly negotiateService: NegotiateService,
     private readonly readService: ReadService,
     private readonly encryption: ContentEncryption,
+    private readonly feedbackHook?: COEFeedbackHook,
   ) {}
 
   // WHAT: Run the seven-step assembleContext flow.
@@ -452,7 +470,10 @@ export class COEService {
     sessionIdHint: string | null,
     capsuleIdsUsed: string[],
     success: boolean,
-    context: { ip_address?: string | null } = {},
+    context: {
+      ip_address?: string | null;
+      candidate_capsule_ids?: string[];
+    } = {},
   ): Promise<RecordOutcomeSuccess | RecordOutcomeFailure> {
     if (!Array.isArray(capsuleIdsUsed) || typeof success !== "boolean") {
       return {
@@ -472,13 +493,18 @@ export class COEService {
       return { ok: true, recorded: 0 };
     }
 
-    await prisma.cOEOutcome.createMany({
-      data: capsuleIdsUsed.map((capsuleId) => ({
-        session_id: sessionIdHint ?? session.session_id,
-        capsule_id: capsuleId,
-        success,
-      })),
-    });
+    const created = await Promise.all(
+      capsuleIdsUsed.map((capsuleId) =>
+        prisma.cOEOutcome.create({
+          data: {
+            session_id: sessionIdHint ?? session.session_id,
+            capsule_id: capsuleId,
+            success,
+          },
+          select: { outcome_id: true },
+        }),
+      ),
+    );
 
     await writeAuditEvent({
       event_type: "ADMIN_ACTION",
@@ -493,6 +519,31 @@ export class COEService {
         capsule_ids: capsuleIdsUsed,
       },
     });
+
+    // Section 10 Loop 1 hook: bump used capsule relevance, decay
+    // unused-but-candidate capsules. Fire-and-await so a hook
+    // failure surfaces to the caller (preferred over silent loss
+    // for the relevance-tuning signal). Default = undefined → no-op
+    // for tests + any caller that doesn't pass a hook.
+    if (this.feedbackHook !== undefined) {
+      const candidates =
+        Array.isArray(context.candidate_capsule_ids) &&
+        context.candidate_capsule_ids.length > 0
+          ? context.candidate_capsule_ids
+          : capsuleIdsUsed;
+      try {
+        await this.feedbackHook.onRecordOutcome({
+          outcome_ids: created.map((c) => c.outcome_id),
+          candidate_capsule_ids: candidates,
+          used_capsule_ids: capsuleIdsUsed,
+        });
+      } catch (err) {
+        // Log but don't fail the outcome write -- relevance tuning
+        // is advisory.
+        // eslint-disable-next-line no-console
+        console.error("[coe] Loop 1 hook failed:", err);
+      }
+    }
 
     return { ok: true, recorded: capsuleIdsUsed.length };
   }

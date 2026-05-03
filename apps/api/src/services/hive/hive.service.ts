@@ -640,6 +640,14 @@ export class HiveService {
   //      in a single MemoryCapsule (created on first build, updated
   //      thereafter). Critically, NO entity_ids end up in the
   //      aggregate body.
+  //
+  // PORTABILITY (Section 10 patch): When is_default_enterprise=true,
+  // the aggregate capsule is owned by the org wallet (org_entity_id)
+  // rather than hive.created_by. This is required so admin
+  // offboarding does not transfer the org knowledge summary into the
+  // departing admin's portable personal wallet. See Section 15 P4
+  // patch + patent claim US 12,517,919. All other Hives keep the
+  // original behavior (aggregate owned by hive.created_by).
   async buildHiveAggregate(
     hiveId: string,
   ): Promise<AggregateBuildSuccess | HiveFailure> {
@@ -711,20 +719,34 @@ export class HiveService {
     const newHash = sha256Hex(ciphertext);
     const tokenSize = Math.ceil(plaintext.length / 4);
 
+    // PORTABILITY: When is_default_enterprise=true, the aggregate
+    // capsule is owned by the org wallet (hive.org_entity_id) rather
+    // than hive.created_by. This is required so admin offboarding does
+    // not transfer org knowledge summary into the departing admin's
+    // portable personal wallet. See Section 15 P4 patch + patent claim
+    // US 12,517,919.
+    //
+    // For all other Hives the aggregate stays anchored to
+    // hive.created_by (the original Section 5 behavior, preserved by
+    // 272 baseline tests).
+    const aggregateOwnerEntityId =
+      hive.is_default_enterprise && hive.org_entity_id !== null
+        ? hive.org_entity_id
+        : hive.created_by;
+
     let aggregateCapsuleId = hive.aggregate_capsule_id;
     if (aggregateCapsuleId === null) {
-      // Create a fresh aggregate capsule under hive.created_by's
-      // wallet. The hive creator is the de-facto owner; members
-      // read via membership, not via Permission.
+      // Create a fresh aggregate capsule under the resolved owner's
+      // wallet. Members read via membership, not via Permission.
       const ownerWallet = await prisma.wallet.findUnique({
-        where: { entity_id: hive.created_by },
+        where: { entity_id: aggregateOwnerEntityId },
         select: { wallet_id: true },
       });
       if (ownerWallet === null) {
         return {
           ok: false,
           code: "INVITEE_NO_WALLET",
-          message: "Hive creator has no wallet -- cannot anchor aggregate",
+          message: "Hive aggregate owner has no wallet -- cannot anchor aggregate",
         };
       }
       const newCapsuleId = randomUUID();
@@ -734,7 +756,7 @@ export class HiveService {
         data: {
           capsule_id: newCapsuleId,
           wallet_id: ownerWallet.wallet_id,
-          entity_id: hive.created_by,
+          entity_id: aggregateOwnerEntityId,
           version: 1,
           capsule_type: "DOMAIN_KNOWLEDGE",
           topic_tags: ["hive-aggregate", `hive-${hiveId}`],

@@ -20,10 +20,21 @@ export interface RateLimitHit {
 // WHAT: The contract every rate-limit store implementation honors.
 // INPUT: Used as a parameter type only.
 // OUTPUT: None.
-// WHY: Single method keeps the interface narrow -- Redis and
-//      Memory both implement just hit().
+// WHY: hit() is the per-request counter. setMultiplier (Section 10
+//      Loop 5) lets the anomaly detector temporarily reduce the
+//      effective limit on a key for ttlSeconds. multiplier=0.5 means
+//      "halve the user's normal allowance for the next ttl"; the
+//      threshold check inside hit() compares count against
+//      perMinute * multiplier instead of perMinute. multiplier
+//      defaults to 1.0 when no entry exists.
 export interface RateLimitStore {
   hit(key: string, ttlSeconds: number): Promise<RateLimitHit>;
+  setMultiplier(
+    key: string,
+    multiplier: number,
+    ttlSeconds: number,
+  ): Promise<void>;
+  getMultiplier(key: string): Promise<number>;
 }
 
 // WHAT: An in-memory RateLimitStore for tests + REDIS_URL-less envs.
@@ -36,6 +47,10 @@ export class MemoryRateLimitStore implements RateLimitStore {
   private readonly entries = new Map<
     string,
     { count: number; expiresAt: number }
+  >();
+  private readonly multipliers = new Map<
+    string,
+    { multiplier: number; expiresAt: number }
   >();
 
   async hit(key: string, ttlSeconds: number): Promise<RateLimitHit> {
@@ -57,6 +72,27 @@ export class MemoryRateLimitStore implements RateLimitStore {
       ),
     };
   }
+
+  async setMultiplier(
+    key: string,
+    multiplier: number,
+    ttlSeconds: number,
+  ): Promise<void> {
+    this.multipliers.set(key, {
+      multiplier,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
+  }
+
+  async getMultiplier(key: string): Promise<number> {
+    const entry = this.multipliers.get(key);
+    if (entry === undefined) return 1.0;
+    if (entry.expiresAt <= Date.now()) {
+      this.multipliers.delete(key);
+      return 1.0;
+    }
+    return entry.multiplier;
+  }
 }
 
 // WHAT: A RateLimitStore backed by a real ioredis client.
@@ -67,12 +103,14 @@ export class MemoryRateLimitStore implements RateLimitStore {
 //      fixed-window counter for our needs.
 export class RedisRateLimitStore implements RateLimitStore {
   private readonly keyPrefix: string;
+  private readonly multPrefix: string;
 
   constructor(
     private readonly client: Redis,
     keyPrefix: string = "niov:rate:",
   ) {
     this.keyPrefix = keyPrefix;
+    this.multPrefix = `${keyPrefix}mult:`;
   }
 
   async hit(key: string, ttlSeconds: number): Promise<RateLimitHit> {
@@ -86,6 +124,26 @@ export class RedisRateLimitStore implements RateLimitStore {
       count,
       ttl_seconds: ttl > 0 ? ttl : ttlSeconds,
     };
+  }
+
+  async setMultiplier(
+    key: string,
+    multiplier: number,
+    ttlSeconds: number,
+  ): Promise<void> {
+    await this.client.set(
+      this.multPrefix + key,
+      String(multiplier),
+      "EX",
+      ttlSeconds,
+    );
+  }
+
+  async getMultiplier(key: string): Promise<number> {
+    const raw = await this.client.get(this.multPrefix + key);
+    if (raw === null) return 1.0;
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 1.0;
   }
 }
 

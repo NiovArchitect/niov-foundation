@@ -169,5 +169,10 @@ export type {
   ExternalEntity,
   IntelligencePattern,
   CompoundingMetrics,
+  // Section 10 feedback-loop tables.
+  FeedbackConfig,
+  PermissionSuggestion,
+  MonetizationSuggestion,
+  FeedbackLoopHealth,
   Prisma,
 } from "@prisma/client";
