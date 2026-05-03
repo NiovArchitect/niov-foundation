@@ -45,7 +45,9 @@ import {
   seedSkillPackages,
   seedAgentTemplates,
   seedFeedbackLoopHealth,
+  seedOtzarEntity,
 } from "./services/governance/seeds.js";
+import { validateBootEnvironment } from "./boot-validation.js";
 import { FeedbackService } from "./services/feedback/feedback.service.js";
 import {
   startScheduler,
@@ -85,6 +87,12 @@ export interface BuildAppConfig {
 export async function buildApp(
   config: BuildAppConfig = {},
 ): Promise<FastifyInstance> {
+  // Section 11A boot validation -- fail fast on missing required
+  // env vars before constructing any service. Skip when the caller
+  // passes an explicit jwtSecret (test-mode buildApp pattern).
+  if (config.jwtSecret === undefined) {
+    validateBootEnvironment();
+  }
   const jwtSecret =
     config.jwtSecret ??
     process.env.JWT_SECRET ??
@@ -244,6 +252,12 @@ export async function buildApp(
   // Section 10 -- seed the seven FeedbackLoopHealth rows so Loop 7
   // has a baseline to compare against on its first run.
   await seedFeedbackLoopHealth();
+
+  // Section 11A -- seed the Otzar APPLICATION entity (no-op when
+  // OTZAR_ENTITY_ID is set + entity exists; warn-and-create when
+  // missing). Tests set OTZAR_ENTITY_ID via the helper to avoid
+  // bootstrap warnings polluting CI output.
+  await seedOtzarEntity();
 
   // Section 10 -- start the cron scheduler. NO-OP under
   // NODE_ENV=test (scheduler.ts short-circuits before registering

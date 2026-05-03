@@ -94,6 +94,14 @@ model MemoryCapsule {
   feedback_loop_score Float     @default(0.0)
   payload_summary     String
   payload_size_tokens Int
+  // Section 11A P3 prep: real tokenizer count + which tokenizer
+  // produced it. Section 11B's conductSession truncation reads both
+  // fields and re-tokenizes on read when tokens=0 (pre-11A capsule)
+  // or when tokens_tokenizer doesn't match the currently-configured
+  // PREFERRED_LLM. Both default to safe fallbacks so existing 383
+  // baseline writes that don't set them keep working.
+  tokens              Int?    @default(0)
+  tokens_tokenizer    String? @default("anthropic")
 
   storage_location String
   storage_tier     StorageTier @default(WARM)
@@ -346,6 +354,19 @@ enum CapsuleType {
   DEVICE_DATA
   SESSION_LEARNING
   COMPLIANCE_RECORD
+  // Section 11A additions: conversation + work pattern + extracted
+  // intelligence types Otzar surfaces from observation pipeline.
+  CONVERSATION_LEARNING
+  TASK_LEARNING
+  WORK_PATTERN
+  COMMUNICATION_PREF
+  DECISION_STYLE
+  COMMITMENT
+  BLOCKER
+  RISK
+  HANDOFF
+  DECISION
+  CORRECTION
 }
 
 enum DecayType {
@@ -992,4 +1013,50 @@ model FeedbackLoopHealth {
   last_status String    @default("NEVER_RUN")
 
   @@map("feedback_loop_health")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 11A — Otzar conversation + AgentTemplate (2 tables)
+//
+// OtzarConversation tracks one conversation session between an
+// employee entity and their twin (or a multi-party group). Section
+// 11B's conductSession increments message_count and flips status
+// to CLOSED. Plain UUID columns per Section 9 / 10 pattern.
+//
+// AgentTemplate holds the seeded role-template definitions read by
+// createTwin's STEP 6 (currently silent-skip in Section 9D; 11B
+// wires it up). org_entity_id NULL means a global/built-in
+// template; non-null means a per-org custom template.
+// ═══════════════════════════════════════════════════════════════════
+
+model OtzarConversation {
+  conversation_id String   @id @default(uuid()) @db.Uuid
+  entity_id       String   @db.Uuid
+  twin_id         String   @db.Uuid
+  source_type     String   @default("CHAT")
+  participants    String[] @default([])
+  message_count   Int      @default(0)
+  status          String   @default("ACTIVE")
+  started_at      DateTime @default(now())
+  closed_at       DateTime?
+
+  @@index([entity_id])
+  @@map("otzar_conversations")
+}
+
+model AgentTemplate {
+  template_id      String   @id @default(uuid()) @db.Uuid
+  role_name        String   @unique
+  role_category    String
+  template_content String
+  skill_packages   String[] @default([])
+  autonomy_default String   @default("APPROVAL_REQUIRED")
+  is_custom        Boolean  @default(false)
+  org_entity_id    String?  @db.Uuid
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  @@index([role_category])
+  @@index([org_entity_id])
+  @@map("agent_templates")
 }

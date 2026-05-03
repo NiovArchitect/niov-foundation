@@ -153,12 +153,36 @@ function validateCreateInput(input: CapsuleCreateInput): string[] {
   return errors;
 }
 
-// WHAT: Compute the content_hash + payload_size_tokens + the
-//        ciphertext we want to store.
+// WHAT: Real tokenizer count using @anthropic-ai/tokenizer.
+// INPUT: Plaintext content.
+// OUTPUT: An integer token count.
+// WHY: Section 11A P3 prep -- replaces the chars/4 estimate with a
+//      precise count Section 11B's conductSession truncation can
+//      trust. Tokenizer choice (anthropic) matches the default
+//      PREFERRED_LLM=anthropic; if the deployment switches to
+//      openai later, tokens_tokenizer column on the row records
+//      which tokenizer produced the count, and conductSession can
+//      re-tokenize on read when the tokenizer no longer matches.
+function countTokensAnthropic(content: string): number {
+  // Lazy require so the tokenizer's WASM doesn't load at module
+  // import time in tests that never write capsules.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { countTokens } = require("@anthropic-ai/tokenizer") as {
+    countTokens: (text: string) => number;
+  };
+  return countTokens(content);
+}
+
+// WHAT: Compute the content_hash + payload_size_tokens + tokens
+//        (real tokenizer count) + the ciphertext we want to store.
 // INPUT: The plaintext content and the encryption helper.
-// OUTPUT: { ciphertext, content_hash, payload_size_tokens }.
+// OUTPUT: { ciphertext, content_hash, payload_size_tokens, tokens,
+//          tokens_tokenizer }.
 // WHY: Encryption + hashing + token count are always done together
 //      on a write. Centralizing keeps the steps in one tested path.
+//      Section 11A adds tokens + tokens_tokenizer alongside the
+//      pre-existing payload_size_tokens (which 383 baseline tests
+//      depend on; both columns coexist by design).
 function processContentForStorage(
   content: string,
   encryption: ContentEncryption,
@@ -166,12 +190,16 @@ function processContentForStorage(
   ciphertext: string;
   content_hash: string;
   payload_size_tokens: number;
+  tokens: number;
+  tokens_tokenizer: string;
 } {
   const ciphertext = encryption.encrypt(content);
   return {
     ciphertext,
     content_hash: sha256Hex(ciphertext),
     payload_size_tokens: Math.ceil(content.length / CHARS_PER_TOKEN),
+    tokens: countTokensAnthropic(content),
+    tokens_tokenizer: "anthropic",
   };
 }
 
@@ -297,6 +325,8 @@ export class WriteService {
         decay_rate: input.decay_rate ?? 0.01,
         payload_summary: input.payload_summary,
         payload_size_tokens: processed.payload_size_tokens,
+        tokens: processed.tokens,
+        tokens_tokenizer: processed.tokens_tokenizer,
         storage_location: storageLocation,
         storage_tier: storageTier,
         clearance_required: input.clearance_required ?? 0,
@@ -546,6 +576,8 @@ export class WriteService {
       await this.contentStore.write(existing.storage_location, processed.ciphertext);
       data.content_hash = processed.content_hash;
       data.payload_size_tokens = processed.payload_size_tokens;
+      data.tokens = processed.tokens;
+      data.tokens_tokenizer = processed.tokens_tokenizer;
       newContentHash = processed.content_hash;
     }
 

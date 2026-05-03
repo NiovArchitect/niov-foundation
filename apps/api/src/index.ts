@@ -186,7 +186,25 @@ export {
   seedAgentTemplates,
   seedIndustryDomainTemplates,
   seedFeedbackLoopHealth,
+  seedOtzarEntity,
 } from "./services/governance/seeds.js";
+export type { SeedOtzarEntityResult } from "./services/governance/seeds.js";
+
+export { validateBootEnvironment } from "./boot-validation.js";
+
+export {
+  AnthropicProvider,
+  CircuitBreaker,
+  MockLLMProvider,
+  OpenAIProvider,
+  getLLMProvider,
+  withCircuitBreaker,
+} from "./services/llm/llm.service.js";
+export type {
+  CircuitState,
+  LLMProvider,
+  LLMResult,
+} from "./services/llm/llm.service.js";
 
 export {
   FeedbackService,

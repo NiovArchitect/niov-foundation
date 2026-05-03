@@ -22,7 +22,11 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
+    "@anthropic-ai/tokenizer": "^0.0.4",
     "@types/node-cron": "^3.0.11",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "openai": "^6.35.0",
+    "tiktoken": "^1.0.22"
   }
 }

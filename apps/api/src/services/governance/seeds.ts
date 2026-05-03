@@ -8,8 +8,13 @@
 // CONNECTS TO: prisma (writes seed rows), buildApp (calls these
 //              once at boot).
 
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@niov/database";
+import {
+  computeTARHash,
+  prisma,
+  writeAudit,
+} from "@niov/database";
 
 // WHAT: Ensure the single MonetizationConfig row exists at the
 //        spec defaults (70/30 split).
@@ -51,18 +56,118 @@ export async function seedSkillPackages(): Promise<void> {
   // Intentional no-op until the package roster ships.
 }
 
-// WHAT: Stub for the 13 role templates loaded from /templates/roles/.
-// INPUT: None.
-// OUTPUT: A no-op promise.
-// WHY: The role-template files (.md) and their target table do not
-//      yet exist in the repo. Stub today; implement when the
-//      templates land.
-//
-// TODO(later in Section 9 / role-template box): read the 13 .md
-// files from a /templates/roles/ directory and upsert one row per
-// template into whichever table the spec introduces for them.
-export async function seedAgentTemplates(): Promise<void> {
-  // Intentional no-op until role templates ship.
+// WHAT: YAML frontmatter + body splitter.
+// INPUT: The full markdown file contents.
+// OUTPUT: { frontmatter (parsed object), body (string after the
+//          second --- delimiter) }.
+// WHY: Hand-rolled because we only support a tightly controlled
+//      frontmatter shape: role_name (string), role_category
+//      (string), skill_packages (string array), autonomy_default
+//      (string). YAML frontmatter follows Jekyll convention but
+//      this parser only handles the subset we actually use.
+//      Adding more fields requires updating this parser.
+function parseTemplateFile(raw: string): {
+  frontmatter: {
+    role_name: string;
+    role_category: string;
+    skill_packages: string[];
+    autonomy_default: string;
+  };
+  body: string;
+} {
+  // Match opening ---, capture frontmatter block, then body.
+  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+  if (match === null) {
+    throw new Error("template parse: missing --- frontmatter delimiters");
+  }
+  const fmText = match[1] ?? "";
+  const body = (match[2] ?? "").trim();
+  const fm: Record<string, string | string[]> = {};
+  for (const line of fmText.split("\n")) {
+    const m = line.match(/^([a-z_]+):\s*(.+)$/);
+    if (m === null) continue;
+    const key = m[1]!;
+    const valueRaw = m[2]!.trim();
+    if (valueRaw.startsWith("[") && valueRaw.endsWith("]")) {
+      // Array of quoted strings: ["a", "b", "c"].
+      const inner = valueRaw.slice(1, -1).trim();
+      const items =
+        inner.length === 0
+          ? []
+          : inner.split(",").map((s) =>
+              s.trim().replace(/^["']|["']$/g, ""),
+            );
+      fm[key] = items;
+    } else {
+      fm[key] = valueRaw.replace(/^["']|["']$/g, "");
+    }
+  }
+  return {
+    frontmatter: {
+      role_name: String(fm.role_name ?? ""),
+      role_category: String(fm.role_category ?? ""),
+      skill_packages: Array.isArray(fm.skill_packages)
+        ? (fm.skill_packages as string[])
+        : [],
+      autonomy_default: String(fm.autonomy_default ?? "APPROVAL_REQUIRED"),
+    },
+    body,
+  };
+}
+
+// WHAT: Seed all 13 role-template rows from
+//        apps/api/templates/roles/*.md into the AgentTemplate table.
+// INPUT: An optional directory override (tests use a fixture dir).
+// OUTPUT: Number of rows upserted.
+// WHY: Section 11B's createTwin role-template apply path reads from
+//      this table. Idempotent via role_name @unique upsert: re-run
+//      after editing a markdown file refreshes the corresponding
+//      row's content + skill_packages without touching org-custom
+//      templates (those carry org_entity_id !== null and is_custom
+//      true).
+export async function seedAgentTemplates(
+  templatesDir?: string,
+): Promise<number> {
+  const path = await import("node:path");
+  const fs = await import("node:fs/promises");
+  const dir =
+    templatesDir ??
+    path.resolve(process.cwd(), "apps/api/templates/roles");
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    // Directory missing -- treat as no-op (caller can choose to
+    // surface the absence as an error elsewhere).
+    return 0;
+  }
+  const files = entries.filter((e) => e.endsWith(".md"));
+  let upserted = 0;
+  for (const file of files) {
+    const raw = await fs.readFile(path.join(dir, file), "utf8");
+    const { frontmatter, body } = parseTemplateFile(raw);
+    if (frontmatter.role_name.length === 0) continue;
+    await prisma.agentTemplate.upsert({
+      where: { role_name: frontmatter.role_name },
+      create: {
+        role_name: frontmatter.role_name,
+        role_category: frontmatter.role_category,
+        template_content: body,
+        skill_packages: frontmatter.skill_packages,
+        autonomy_default: frontmatter.autonomy_default,
+        is_custom: false,
+        org_entity_id: null,
+      },
+      update: {
+        role_category: frontmatter.role_category,
+        template_content: body,
+        skill_packages: frontmatter.skill_packages,
+        autonomy_default: frontmatter.autonomy_default,
+      },
+    });
+    upserted++;
+  }
+  return upserted;
 }
 
 // WHAT: Seed the seven FeedbackLoopHealth rows on boot.
@@ -185,5 +290,144 @@ export async function seedIndustryDomainTemplates(
       term_type: "ACRONYM",
     })),
     skipDuplicates: true,
+  });
+}
+
+// WHAT: The Otzar APPLICATION entity's TAR capability set.
+// INPUT: Used as a constant.
+// OUTPUT: A snapshot of TAR fields ready for hashing + persistence.
+// WHY: Otzar is an APPLICATION entity that consumes Foundation
+//      primitives (read/write/share capsules + external API
+//      access). can_create_hives is EXPLICIT FALSE: Hive creation
+//      belongs to the Dandelion Phase 0 admin path, not Otzar.
+//      Setting it false here means a future feature accidentally
+//      calling createHive from Otzar will surface as a denied
+//      permission rather than silently succeeding.
+const OTZAR_TAR_POLICY = {
+  can_login: true,
+  can_read_capsules: true,
+  can_write_capsules: true,
+  can_share_capsules: true,
+  can_create_hives: false,
+  can_access_external_api: true,
+  can_admin_niov: false,
+  can_admin_org: false,
+  clearance_ceiling: 4,
+  monetization_role: "NEITHER" as const,
+  compliance_frameworks: [] as string[],
+  status: "ACTIVE" as const,
+};
+
+// WHAT: The result of seedOtzarEntity.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Tests + buildApp can both reach for the resolved entity_id
+//      without re-querying. created=true when a brand new
+//      APPLICATION entity was minted; false when an existing one
+//      was found via OTZAR_ENTITY_ID.
+export interface SeedOtzarEntityResult {
+  otzar_entity_id: string;
+  created: boolean;
+}
+
+// WHAT: Idempotent seed that ensures the Otzar APPLICATION entity
+//        exists with the right TAR.
+// INPUT: An optional override env-var bag (tests pass a custom env).
+// OUTPUT: { otzar_entity_id, created }.
+// WHY: In production OTZAR_ENTITY_ID is set in .env and points at
+//      the existing entity; we look it up + reconcile the TAR
+//      capability flags so a TAR drift doesn't block Otzar at
+//      runtime. In dev/test OTZAR_ENTITY_ID is unset; we mint a
+//      fresh APPLICATION entity, set up its TAR, log a warning with
+//      the new id so the operator can drop it into .env.
+//      Re-running with the same OTZAR_ENTITY_ID is a no-op (TAR is
+//      already canonical). The print-and-warn pattern is the only
+//      safe way to bootstrap Otzar's identity without baking a
+//      hardcoded UUID into the codebase.
+export async function seedOtzarEntity(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<SeedOtzarEntityResult> {
+  const existingId =
+    typeof env.OTZAR_ENTITY_ID === "string" && env.OTZAR_ENTITY_ID.length > 0
+      ? env.OTZAR_ENTITY_ID
+      : null;
+
+  if (existingId !== null) {
+    const found = await prisma.entity.findUnique({
+      where: { entity_id: existingId },
+    });
+    if (found !== null) {
+      // Reconcile TAR (idempotent).
+      await reconcileOtzarTar(existingId);
+      return { otzar_entity_id: existingId, created: false };
+    }
+    // Configured ID points at a missing entity; fall through to
+    // create a fresh one and warn loudly.
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[seedOtzarEntity] OTZAR_ENTITY_ID=${existingId} does not exist in the DB; creating a fresh APPLICATION entity.`,
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const newId = randomUUID();
+    await tx.entity.create({
+      data: {
+        entity_id: newId,
+        entity_type: "APPLICATION",
+        display_name: "Otzar",
+        public_key: `pk_otzar_${newId}`,
+        status: "ACTIVE",
+        clearance_level: 4,
+      },
+    });
+    await tx.wallet.create({
+      data: {
+        entity_id: newId,
+        wallet_type: "PERSONAL",
+        niov_can_access_contents: false,
+      },
+    });
+    await tx.tokenAttributeRepository.create({
+      data: {
+        entity_id: newId,
+        ...OTZAR_TAR_POLICY,
+        tar_hash: computeTARHash(OTZAR_TAR_POLICY),
+        tar_version: 1,
+      },
+    });
+    await writeAudit(tx, {
+      action: "ENTITY_CREATE",
+      entity_id: newId,
+      actor_id: null,
+      meta: {
+        entity_type: "APPLICATION",
+        display_name: "Otzar",
+        via: "seedOtzarEntity",
+      },
+    });
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[seedOtzarEntity] Created new Otzar APPLICATION entity. Add to .env: OTZAR_ENTITY_ID=${newId}`,
+    );
+    return { otzar_entity_id: newId, created: true };
+  });
+}
+
+// WHAT: Force the existing Otzar entity's TAR to canonical policy.
+// INPUT: The Otzar entity_id.
+// OUTPUT: A promise that resolves once the TAR is reconciled.
+// WHY: A TAR can drift if an admin tweaks it manually or a prior
+//      seed used a different policy. Re-applying the canonical
+//      values + recomputing the hash keeps Otzar's capabilities
+//      stable across boots. Idempotent.
+async function reconcileOtzarTar(entityId: string): Promise<void> {
+  const newHash = computeTARHash(OTZAR_TAR_POLICY);
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entityId },
+    data: {
+      ...OTZAR_TAR_POLICY,
+      tar_hash: newHash,
+    },
   });
 }

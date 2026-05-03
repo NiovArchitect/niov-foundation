@@ -174,5 +174,8 @@ export type {
   PermissionSuggestion,
   MonetizationSuggestion,
   FeedbackLoopHealth,
+  // Section 11A tables.
+  OtzarConversation,
+  AgentTemplate,
   Prisma,
 } from "@prisma/client";

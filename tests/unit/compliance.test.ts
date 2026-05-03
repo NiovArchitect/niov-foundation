@@ -264,6 +264,78 @@ describe("runComplianceChecks -- HIPAA predicate", () => {
     expect(result.compliant).toBe(true);
   });
 
+  it("P2 PATCH: HIPAA predicate triggers on CONVERSATION_LEARNING capsule_type", async () => {
+    const { auth, compliance, write } = makeServices();
+    const owner = await loginAs(auth);
+    const accessor = await loginAs(auth);
+    await setComplianceProfile(
+      owner.entity.entity_id,
+      ["HIPAA"],
+      "HEALTHCARE",
+      ["US"],
+    );
+    const created = await write.createCapsule(owner.token, {
+      capsule_type: "CONVERSATION_LEARNING",
+      topic_tags: ["p2-patch"],
+      payload_summary: "convo extract",
+      content: "patient mentioned chronic back pain",
+    });
+    if (!created.ok) throw new Error("create failed");
+
+    // Without consent → blocked.
+    const denyPermission = await createPermission({
+      capsule_id: created.capsule_id,
+      grantor_entity_id: owner.entity.entity_id,
+      grantee_entity_id: accessor.entity.entity_id,
+      access_scope: "SUMMARY",
+      duration_type: "TEMPORARY",
+    });
+    const denied = await compliance.runComplianceChecks({
+      operation_type: "NEGOTIATE",
+      actor_entity_id: accessor.entity.entity_id,
+      target_entity_id: owner.entity.entity_id,
+      capsule_id: created.capsule_id,
+      capsule_type: "CONVERSATION_LEARNING",
+      permission: denyPermission,
+    });
+    expect(denied.compliant).toBe(false);
+    expect(denied.reason ?? "").toMatch(/CONVERSATION_LEARNING/);
+
+    // With consent → permitted.
+    const owner2 = await loginAs(auth);
+    const accessor2 = await loginAs(auth);
+    await setComplianceProfile(
+      owner2.entity.entity_id,
+      ["HIPAA"],
+      "HEALTHCARE",
+      ["US"],
+    );
+    const created2 = await write.createCapsule(owner2.token, {
+      capsule_type: "CONVERSATION_LEARNING",
+      topic_tags: ["p2-patch-with-consent"],
+      payload_summary: "convo extract 2",
+      content: "patient discussed sleep issues",
+    });
+    if (!created2.ok) throw new Error("create failed");
+    const consentPermission = await createPermission({
+      capsule_id: created2.capsule_id,
+      grantor_entity_id: owner2.entity.entity_id,
+      grantee_entity_id: accessor2.entity.entity_id,
+      access_scope: "SUMMARY",
+      duration_type: "TEMPORARY",
+      conditions: { health_data_consent: true },
+    });
+    const allowed = await compliance.runComplianceChecks({
+      operation_type: "NEGOTIATE",
+      actor_entity_id: accessor2.entity.entity_id,
+      target_entity_id: owner2.entity.entity_id,
+      capsule_id: created2.capsule_id,
+      capsule_type: "CONVERSATION_LEARNING",
+      permission: consentPermission,
+    });
+    expect(allowed.compliant).toBe(true);
+  });
+
   it("writes a COMPLIANCE_CHECK_FAILED audit event when blocking", async () => {
     const { auth, compliance, write } = makeServices();
     const owner = await loginAs(auth);

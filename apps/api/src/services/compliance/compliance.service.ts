@@ -81,7 +81,11 @@ export const SEED_FRAMEWORKS: Array<{
     framework_name: "HIPAA",
     jurisdiction: ["US"],
     applicable_entity_sectors: ["HEALTHCARE"],
-    applicable_capsule_types: ["IDENTITY", "SESSION_LEARNING"],
+    // P2 PATCH (Section 11A): CONVERSATION_LEARNING capsules surface
+    // Otzar's extracted conversational intelligence and can carry
+    // PHI; HIPAA gating must include them. Seed re-runs on every
+    // boot and overwrites this column in org_compliance_profiles.
+    applicable_capsule_types: ["IDENTITY", "SESSION_LEARNING", "CONVERSATION_LEARNING"],
     rules: { requires_consent_for_health_data: true },
     required_audit_events: ["CAPSULE_CONTENT_READ", "PERMISSION_CREATED"],
   },
@@ -311,20 +315,25 @@ export class ComplianceService {
     }
   }
 
-  // WHAT: HIPAA predicate -- block IDENTITY / SESSION_LEARNING
-  //        access without explicit health-data consent.
+  // WHAT: HIPAA predicate -- block IDENTITY / SESSION_LEARNING /
+  //        CONVERSATION_LEARNING access without explicit health-data
+  //        consent.
   // INPUT: ComplianceCheckInput.
   // OUTPUT: { compliant, reason? }.
   // WHY: Spec rule "requires_consent_for_health_data: true" plus
   //      the HEALTHCARE-sector targeting that getApplicable
   //      Frameworks already filtered for.
+  //      P2 PATCH (Section 11A): added CONVERSATION_LEARNING because
+  //      Otzar conversation extracts can carry PHI just like
+  //      session learnings.
   private evaluateHIPAA(input: ComplianceCheckInput): {
     compliant: boolean;
     reason?: string;
   } {
     if (
       input.capsule_type !== "IDENTITY" &&
-      input.capsule_type !== "SESSION_LEARNING"
+      input.capsule_type !== "SESSION_LEARNING" &&
+      input.capsule_type !== "CONVERSATION_LEARNING"
     ) {
       return { compliant: true };
     }
@@ -334,7 +343,7 @@ export class ComplianceService {
       return {
         compliant: false,
         reason:
-          "HIPAA: explicit health_data_consent is required to access IDENTITY or SESSION_LEARNING capsules in HEALTHCARE sector",
+          "HIPAA: explicit health_data_consent is required to access IDENTITY, SESSION_LEARNING, or CONVERSATION_LEARNING capsules in HEALTHCARE sector",
       };
     }
     return { compliant: true };

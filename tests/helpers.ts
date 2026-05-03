@@ -125,3 +125,17 @@ export async function cleanupTestData(): Promise<void> {
 export async function ensureAuditTriggers(): Promise<void> {
   await applyAuditEventTriggers();
 }
+
+// WHAT: Stand up a fresh Otzar APPLICATION entity for tests that
+//        need an OTZAR_ENTITY_ID without depending on .env.
+// INPUT: None.
+// OUTPUT: The new Otzar entity_id.
+// WHY: Most Section 11 tests reference Otzar; rather than each test
+//      seeding it inline, this helper centralizes the setup so the
+//      pattern stays DRY. Calls seedOtzarEntity with an empty env
+//      (forces creation path) and returns the resulting id.
+export async function createOtzarApplicationEntity(): Promise<string> {
+  const { seedOtzarEntity } = await import("@niov/api");
+  const result = await seedOtzarEntity({});
+  return result.otzar_entity_id;
+}
