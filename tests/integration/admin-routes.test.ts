@@ -661,6 +661,104 @@ describe("GET /org/ai-teammates", () => {
   });
 });
 
+describe("GET /org/ai-teammates/:id", () => {
+  it("returns one twin with owner and assigned SkillPackages for the detail drawer", async () => {
+    const ctx = await createOrgAndAdmin();
+    const pkg = await prisma.skillPackage.create({
+      data: {
+        name: `${TEST_PREFIX}detailpkg_${randomUUID()}`,
+        category: "test",
+        description: "Detail drawer package",
+        capability_flags: ["detail_drawer"],
+      },
+    });
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const adminTwinId = (
+      list.json() as {
+        items: Array<{ entity_id: string; config: { is_admin_twin: boolean } | null }>;
+      }
+    ).items.find((t) => t.config?.is_admin_twin === true)!.entity_id;
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/org/ai-teammates/${adminTwinId}/skills`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { package_id: pkg.package_id },
+      remoteAddress: ctx.adminIp,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/ai-teammates/${adminTwinId}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      entity: { entity_id: string; entity_type: string };
+      twin_config: { twin_id: string; is_admin_twin: boolean };
+      owner_entity_id: string;
+      skills: Array<{
+        twin_id: string;
+        package_id: string;
+        package: { package_id: string; name: string };
+      }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.entity.entity_id).toBe(adminTwinId);
+    expect(body.entity.entity_type).toBe("AI_AGENT");
+    expect(body.twin_config.twin_id).toBe(adminTwinId);
+    expect(body.owner_entity_id).toBe(ctx.adminId);
+    expect(body.skills).toHaveLength(1);
+    expect(body.skills[0]?.twin_id).toBe(adminTwinId);
+    expect(body.skills[0]?.package_id).toBe(pkg.package_id);
+    expect(body.skills[0]?.package.package_id).toBe(pkg.package_id);
+    expect(body.skills[0]?.package.name).toBe(pkg.name);
+  });
+
+  it("returns 404 instead of leaking twins from another org", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    const listB = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${orgB.adminToken}` },
+      remoteAddress: orgB.adminIp,
+    });
+    const orgBTwinId = (
+      listB.json() as {
+        items: Array<{ entity_id: string; config: { is_admin_twin: boolean } | null }>;
+      }
+    ).items.find((t) => t.config?.is_admin_twin === true)!.entity_id;
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/ai-teammates/${orgBTwinId}`,
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(response.statusCode).toBe(404);
+    expect((response.json() as { code: string }).code).toBe("TWIN_NOT_IN_ORG");
+  });
+
+  it("returns 404 for a missing twin id", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/ai-teammates/${randomUUID()}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(404);
+    expect((response.json() as { code: string }).code).toBe("TWIN_NOT_FOUND");
+  });
+});
+
 describe("PATCH /org/ai-teammates/:id immutable + invalid-approver", () => {
   it("rejects is_admin_twin escalation with IMMUTABLE_FIELD 422", async () => {
     const ctx = await createOrgAndAdmin();

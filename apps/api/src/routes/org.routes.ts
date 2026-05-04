@@ -1318,6 +1318,86 @@ export async function registerOrgRoutes(
     },
   );
 
+  // GET /org/ai-teammates/:id -- single AI Teammate detail for the
+  // Control Tower drawer. This is a read-only companion to PATCH
+  // /org/ai-teammates/:id; it verifies org ownership with the same
+  // owner-membership walk as PATCH, then returns the entity, config,
+  // owner id, and assigned SkillPackages in one schema-honest payload.
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/org/ai-teammates/:id",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+
+      const [entity, config] = await Promise.all([
+        prisma.entity.findUnique({
+          where: { entity_id: request.params.id },
+        }),
+        prisma.twinConfig.findUnique({
+          where: { twin_id: request.params.id },
+        }),
+      ]);
+      if (
+        entity === null ||
+        entity.entity_type !== "AI_AGENT" ||
+        entity.deleted_at !== null ||
+        config === null
+      ) {
+        return reply.code(404).send({
+          ok: false,
+          code: "TWIN_NOT_FOUND",
+          message: "Twin not found",
+        });
+      }
+
+      const ownerMembership = await prisma.entityMembership.findFirst({
+        where: { child_id: request.params.id, is_active: true },
+      });
+      if (ownerMembership === null) {
+        return reply.code(404).send({
+          ok: false,
+          code: "TWIN_NOT_FOUND",
+          message: "Twin has no owner",
+        });
+      }
+
+      const ownerInOrg = ownerMembership.parent_id === orgEntityId
+        ? true
+        : (await prisma.entityMembership.findFirst({
+            where: {
+              parent_id: orgEntityId,
+              child_id: ownerMembership.parent_id,
+              is_active: true,
+            },
+          })) !== null;
+      if (!ownerInOrg) {
+        return reply.code(404).send({
+          ok: false,
+          code: "TWIN_NOT_IN_ORG",
+          message: "Twin not in your org",
+        });
+      }
+
+      const skills = await prisma.twinSkill.findMany({
+        where: { twin_id: request.params.id },
+        include: { package: true },
+        orderBy: { assigned_at: "asc" },
+      });
+
+      return reply.code(200).send({
+        ok: true,
+        entity,
+        twin_config: config,
+        owner_entity_id: ownerMembership.parent_id,
+        skills,
+      });
+    },
+  );
+
   // PATCH /org/ai-teammates/:id -- mutable: autonomy_level,
   // swarm_enabled, role_template, approver_entity_id.
   // Immutable (422 IMMUTABLE_FIELD): entity_id, twin_id, created_at,
