@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import {
   prisma,
+  writeAuditEvent,
   type CapsuleType,
 } from "@niov/database";
 import type { AuthService } from "../auth.service.js";
@@ -132,6 +133,16 @@ export class OtzarService {
 
   // ──────────────────────────────────────────────────────────────
   // conductSession -- the 8-layer assembly + truncation + LLM call.
+  //
+  // MONETIZATION DESIGN NOTE (Section 11): conductSession reads many
+  // capsules during 8-layer assembly via coeService. These internal
+  // reads do NOT fire monetization events. Monetization fires only at
+  // user-driven HTTP boundaries (e.g., POST /cosmp/read at the route
+  // level). The user-facing event here is "user sent a message"; the
+  // internal context retrieval is implementation detail. A future
+  // section may introduce per-agent-action monetization at a different
+  // granularity for autonomous agent activity, but that is out of
+  // scope for the user-driven conductSession path.
   // ──────────────────────────────────────────────────────────────
   async conductSession(
     input: ConductSessionInput,
@@ -421,6 +432,20 @@ export class OtzarService {
           status: "ACTIVE",
         },
       });
+      // Section 11D TP9 -- emit CONVERSATION_STARTED audit ONLY on
+      // new-conversation creation. Continued messages of an existing
+      // conversation rely on the COE-internal CAPSULE_CONTENT_READ
+      // audits already wired by readService for per-read traceability.
+      await writeAuditEvent({
+        event_type: "CONVERSATION_STARTED",
+        outcome: "SUCCESS",
+        actor_entity_id: ownerEntityId,
+        target_entity_id: ownerEntityId,
+        details: {
+          conversation_id: conversationId,
+          twin_id: twin.entity_id,
+        },
+      });
     }
     // Refresh last_active so the auto-close sweep keeps this
     // conversation marked as ACTIVE for another 30 minutes.
@@ -558,6 +583,23 @@ export class OtzarService {
     await this.cache.delete(`otzar:prime:${ownerEntityId}`);
     // Clear last_active so the auto-close sweep doesn't reprocess.
     await this.cache.delete(`otzar:conv:${input.conversation_id}:last_active`);
+
+    // Section 11D TP9 -- emit CONVERSATION_CLOSED audit event with
+    // hash-chained trail. Carries the conversation_id, the
+    // CONVERSATION_LEARNING capsule_id we just wrote, and the
+    // capsule_ids_used the caller passed in (for downstream Loop 1
+    // attribution analysis if needed).
+    await writeAuditEvent({
+      event_type: "CONVERSATION_CLOSED",
+      outcome: "SUCCESS",
+      actor_entity_id: ownerEntityId,
+      target_entity_id: ownerEntityId,
+      details: {
+        conversation_id: input.conversation_id,
+        capsule_id: newCapsuleId,
+        capsule_ids_used: used,
+      },
+    });
 
     return {
       ok: true,

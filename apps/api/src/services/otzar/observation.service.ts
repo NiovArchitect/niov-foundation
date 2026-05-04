@@ -110,6 +110,13 @@ interface ExtractedIntelligence {
   next_steps?: Array<{ description?: string }>;
   key_topics?: string[];
   participants_mentioned?: string[];
+  // TODO(Section 12+): Route capsules with extracted projects_mentioned
+  // to the matching project Hive via HiveService lookup. For 11C the
+  // field is extracted into capsule metadata but capsules are not
+  // hive-routed by project. Wire-up requires (a) HiveService.findByName
+  // for project-name lookup within the org's hive tree, (b) hive_id
+  // assignment on the capsule write path. Section 12 owns this work
+  // when Otzar Control Tower formalizes project surface area.
   projects_mentioned?: string[];
   external_entities_mentioned?: string[];
 }

@@ -48,7 +48,13 @@ export type AuditEventType =
   | "COMPLIANCE_CHECK_FAILED"
   | "ANOMALY_DETECTED"
   | "ADMIN_ACTION"
-  | "NEGOTIATE";
+  | "NEGOTIATE"
+  // Section 11D: Otzar conversation lifecycle events. Emitted by
+  // OtzarService.conductSession (on new-conversation creation
+  // only; not on continuation) and OtzarService.closeConversation.
+  // Hash-chained per Section 1E like every other audit event.
+  | "CONVERSATION_STARTED"
+  | "CONVERSATION_CLOSED";
 
 // WHAT: The shape callers hand to writeAuditEvent.
 // INPUT: Used as a parameter type only.

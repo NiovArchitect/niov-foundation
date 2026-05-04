@@ -609,3 +609,84 @@ describe("conductSession Layer 1 (CORRECTION) ordered BEFORE Layer 2 (role templ
     expect(correctionIdx).toBeLessThan(roleIdx);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// SECTION 11D TP9 -- AUDIT EMISSION ON CONVERSATION LIFECYCLE
+// ──────────────────────────────────────────────────────────────────
+
+describe("conductSession + closeConversation -- audit emission (TP9)", () => {
+  it("CONVERSATION_STARTED audit emitted on NEW conversation only; NOT emitted on continuation", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+
+    // POSITIVE: new conversation triggers CONVERSATION_STARTED.
+    const r1 = await otzar.conductSession({
+      token: owner.token,
+      message: "first message",
+    });
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+
+    const startedRows = await prisma.auditEvent.findMany({
+      where: {
+        event_type: "CONVERSATION_STARTED",
+        actor_entity_id: owner.entity.entity_id,
+      },
+    });
+    expect(startedRows.length).toBe(1);
+    const details = startedRows[0]!.details as { conversation_id: string };
+    expect(details.conversation_id).toBe(r1.conversation_id);
+
+    // NEGATIVE: continuation of the same conversation must NOT emit
+    // a second STARTED event (per Section 1E continuation-no-emit
+    // semantics; continued reads are covered by COE-internal
+    // CAPSULE_CONTENT_READ events).
+    const r2 = await otzar.conductSession({
+      token: owner.token,
+      message: "follow-up",
+      conversation_id: r1.conversation_id,
+    });
+    expect(r2.ok).toBe(true);
+    const startedAfter = await prisma.auditEvent.count({
+      where: {
+        event_type: "CONVERSATION_STARTED",
+        actor_entity_id: owner.entity.entity_id,
+      },
+    });
+    expect(startedAfter).toBe(1);
+  });
+
+  it("CONVERSATION_CLOSED audit emitted on close with capsule_id + conversation_id in details", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+    const conv = await otzar.conductSession({
+      token: owner.token,
+      message: "hi",
+    });
+    if (!conv.ok) throw new Error("conductSession failed");
+
+    const close = await otzar.closeConversation({
+      token: owner.token,
+      conversation_id: conv.conversation_id,
+      capsule_ids_used: [],
+    });
+    expect(close.ok).toBe(true);
+    if (!close.ok) return;
+
+    const closedRows = await prisma.auditEvent.findMany({
+      where: {
+        event_type: "CONVERSATION_CLOSED",
+        actor_entity_id: owner.entity.entity_id,
+      },
+    });
+    expect(closedRows.length).toBe(1);
+    const details = closedRows[0]!.details as {
+      conversation_id: string;
+      capsule_id: string;
+    };
+    expect(details.conversation_id).toBe(conv.conversation_id);
+    expect(details.capsule_id).toBe(close.capsule_id);
+  });
+});
