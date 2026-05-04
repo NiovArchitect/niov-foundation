@@ -102,6 +102,11 @@ model MemoryCapsule {
   // baseline writes that don't set them keep working.
   tokens              Int?    @default(0)
   tokens_tokenizer    String? @default("anthropic")
+  // Section 11C: structured due-date for COMMITMENT capsules so
+  // priming.getCommitmentsDueSoon can query [now, now+48h] without
+  // string-parsing payload_summary. Nullable -- only COMMITMENT
+  // capsules populate this; everything else leaves it null.
+  commitment_date     DateTime?
 
   storage_location String
   storage_tier     StorageTier @default(WARM)

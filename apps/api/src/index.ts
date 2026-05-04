@@ -269,6 +269,22 @@ export type { PrimingResult } from "./services/otzar/priming.js";
 export { registerOtzarRoutes } from "./routes/otzar.routes.js";
 
 export {
+  ObservationService,
+} from "./services/otzar/observation.service.js";
+export type {
+  ObserveInput,
+  ObserveSuccess,
+  ObserveSkipped,
+  ObserveFailure,
+  CorrectionInput,
+  CorrectionSuccess,
+  AddDomainTermInput,
+  AddDomainTermSuccess,
+} from "./services/otzar/observation.service.js";
+
+export { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
+
+export {
   createTwin,
   findNextApprover,
 } from "./services/governance/twin.service.js";

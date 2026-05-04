@@ -54,9 +54,11 @@ import {
   type SchedulerHandle,
 } from "./services/feedback/scheduler.js";
 import { OtzarService } from "./services/otzar/otzar.service.js";
+import { ObservationService } from "./services/otzar/observation.service.js";
 import { makeDefaultKVCache } from "./services/otzar/cache.js";
 import { getLLMProvider, MockLLMProvider } from "./services/llm/llm.service.js";
 import { registerOtzarRoutes } from "./routes/otzar.routes.js";
+import { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerPlatformRoutes } from "./routes/platform.routes.js";
@@ -215,6 +217,11 @@ export async function buildApp(
     otzarCache,
   );
 
+  // Section 11C observation pipeline. Reuses the same LLM provider
+  // OtzarService uses (deterministic mock in NODE_ENV=test, real
+  // provider otherwise).
+  const observationService = new ObservationService(authService, otzarLLM);
+
   const app = Fastify({ logger: false });
 
   // CORS first -- registered before the gateway hook so preflight
@@ -269,6 +276,7 @@ export async function buildApp(
   await registerOrgRoutes(app, authService);
   await registerAuthAdminRoutes(app, authService, jwtSecret);
   await registerOtzarRoutes(app, otzarService);
+  await registerOtzarObservationRoutes(app, observationService, authService);
 
   // Idempotent seed on every boot so a fresh DB has the seven
   // spec frameworks ready before the first request lands.

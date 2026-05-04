@@ -555,3 +555,57 @@ describe("runAutoCloseSweep", () => {
     void conv;
   });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// SECTION 11C TEST 8 -- CORRECTION before role template ordering
+// ──────────────────────────────────────────────────────────────────
+
+describe("conductSession Layer 1 (CORRECTION) ordered BEFORE Layer 2 (role template)", () => {
+  it("after writing CORRECTION capsule, conductSession's system prompt contains correction text BEFORE role template content", async () => {
+    const { auth, otzar, llm } = makeServices();
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+    // Write a CORRECTION capsule directly to the owner's wallet.
+    const ownerWallet = await prisma.wallet.findUnique({
+      where: { entity_id: owner.entity.entity_id },
+    });
+    const correctionMarker = `CORRECTION_MARKER_${randomUUID()}`;
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: randomUUID(),
+        wallet_id: ownerWallet!.wallet_id,
+        entity_id: owner.entity.entity_id,
+        version: 1,
+        capsule_type: "CORRECTION",
+        topic_tags: ["correction"],
+        decay_type: "TIME_BASED",
+        payload_summary: correctionMarker,
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:correction-${randomUUID()}`,
+      },
+    });
+    // Trigger conductSession.
+    const result = await otzar.conductSession({
+      token: owner.token,
+      message: "hello",
+    });
+    expect(result.ok).toBe(true);
+    // Inspect the recorded MockLLM call's system prompt.
+    const calls = llm.getCalls();
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    const systemPrompt = calls[0]!.system;
+    // Both pieces must be present.
+    expect(systemPrompt).toContain(correctionMarker);
+    // Role template fallback substitutes {twin_display_name}; we
+    // search for a stable string fragment from the fallback.
+    expect(systemPrompt).toContain("digital twin assistant");
+    // CORRECTION marker must appear BEFORE the role template
+    // fallback string.
+    const correctionIdx = systemPrompt.indexOf(correctionMarker);
+    const roleIdx = systemPrompt.indexOf("digital twin assistant");
+    expect(correctionIdx).toBeGreaterThanOrEqual(0);
+    expect(roleIdx).toBeGreaterThanOrEqual(0);
+    expect(correctionIdx).toBeLessThan(roleIdx);
+  });
+});

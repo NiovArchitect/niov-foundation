@@ -79,25 +79,43 @@ function formatPrimingContext(args: {
   ].join("\n");
 }
 
-// WHAT: Stub for "commitments due in N hours" query. Returns [].
-// INPUT: ownerEntityId, lookahead hours.
-// OUTPUT: Always [] for 11B.
-// WHY: COMMITMENT capsules don't yet have a commitment_date
-//      column to filter on. The schema lands when Section 11C's
-//      observation pipeline starts extracting commitments from
-//      conversations and writing them with structured due dates.
-//      Returning [] today means the priming block renders the
-//      "none" line consistently; once the column exists, swap
-//      this stub for a real findMany.
-//
-// TODO(Section 11C): Real query when COMMITMENT capsules carry
-// commitment_date. Filter to caller's wallet, capsule_type =
-// COMMITMENT, commitment_date < now + lookaheadHours hours.
+// WHAT: Real "commitments due in N hours" query (Section 11C wire-up).
+// INPUT: ownerEntityId, lookahead hours (typically 48).
+// OUTPUT: COMMITMENT capsules in caller's wallet with
+//         commitment_date in [now, now+lookaheadHours).
+// WHY: Section 11C's observation pipeline writes COMMITMENT capsules
+//      with structured commitment_date values parsed from LLM
+//      extraction. This query closes the loop: priming surfaces the
+//      caller's near-term commitments to the LLM at conversation
+//      start. Capsules with null commitment_date (auto-close
+//      degraded path, manual writes, etc.) are excluded by the
+//      gte/lte filter naturally.
 async function getCommitmentsDueSoon(
-  _ownerEntityId: string,
-  _lookaheadHours: number,
+  ownerEntityId: string,
+  lookaheadHours: number,
 ): Promise<CommitmentItem[]> {
-  return [];
+  const wallet = await prisma.wallet.findUnique({
+    where: { entity_id: ownerEntityId },
+    select: { wallet_id: true },
+  });
+  if (wallet === null) return [];
+  const now = new Date();
+  const horizon = new Date(now.getTime() + lookaheadHours * 60 * 60 * 1000);
+  const rows = await prisma.memoryCapsule.findMany({
+    where: {
+      wallet_id: wallet.wallet_id,
+      capsule_type: "COMMITMENT",
+      deleted_at: null,
+      commitment_date: { gte: now, lte: horizon },
+    },
+    orderBy: { commitment_date: "asc" },
+    take: 10,
+    select: { payload_summary: true, commitment_date: true },
+  });
+  return rows.map((r) => ({
+    description: r.payload_summary,
+    due_at: r.commitment_date,
+  }));
 }
 
 // WHAT: Stub for "pending escalations" query. Returns [].

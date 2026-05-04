@@ -317,10 +317,20 @@ export function getLLMProvider(): LLMProvider {
 export class MockLLMProvider implements LLMProvider {
   readonly name = "mock";
   private cursor = 0;
+  private readonly calls: Array<{
+    system: string;
+    user: string;
+    context?: string;
+  }> = [];
 
   constructor(private readonly responses: LLMResult[]) {}
 
-  async generateResponse(): Promise<LLMResult> {
+  async generateResponse(args: {
+    system: string;
+    user: string;
+    context?: string;
+  }): Promise<LLMResult> {
+    this.calls.push(args);
     if (this.responses.length === 0) {
       return {
         ok: false,
@@ -332,5 +342,21 @@ export class MockLLMProvider implements LLMProvider {
     const idx = Math.min(this.cursor, this.responses.length - 1);
     this.cursor++;
     return this.responses[idx]!;
+  }
+
+  // WHAT: Test-only helper. Returns the array of args every prior
+  //        generateResponse call received, in order.
+  // INPUT: None.
+  // OUTPUT: An array of { system, user, context? }.
+  // WHY: Production code MUST NOT depend on this method's existence;
+  //      the recorded calls array is an implementation detail
+  //      surfaced solely for assertion-style tests like the
+  //      CORRECTION-before-role-template ordering test in 11C.
+  getCalls(): ReadonlyArray<{
+    system: string;
+    user: string;
+    context?: string;
+  }> {
+    return this.calls;
   }
 }
