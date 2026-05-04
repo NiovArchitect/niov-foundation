@@ -478,4 +478,81 @@ describe("12B.0: audit_event_id surfaced on write endpoint responses", () => {
     expect(body.bridge_id).toBe(bridgeId);
     await assertAuditEventIdResolves(body.audit_event_id, "PERMISSION_REVOKED");
   });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Test 7 -- POST /org/ai-teammates/:id/skills
+  // Endpoint emits ADMIN_ACTION (action=TWIN_SKILLS_ASSIGNED).
+  // 12B-FOUNDATION (skills audit) extension: this handler had no
+  // audit emission before today (Section 1E Rule 4 violation surfaced
+  // during 12B.3 pre-flight). Now emits + surfaces audit_event_id,
+  // matching the contract on the 6 prior write endpoints.
+  //
+  // Q1(b) -- details payload includes twin_owner_entity_id so
+  // forensic analysis is self-contained without an EntityMembership
+  // join 18 months from now.
+  // ──────────────────────────────────────────────────────────────────
+  it("POST /org/ai-teammates/:id/skills surfaces audit_event_id resolving to an ADMIN_ACTION row", async () => {
+    const ctx = await createOrgAndAdmin();
+
+    // Step 1: create a twin owned by the admin.
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {
+        owner_entity_id: ctx.adminId,
+        role_title: `${TEST_PREFIX}roleforskills_${randomUUID()}`,
+      },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const twinId = (createResponse.json() as { entity_id: string }).entity_id;
+
+    // Step 2: pick a seeded SkillPackage. Phase 0 seeds the default
+    // packages; any one works for this assertion.
+    const pkg = await prisma.skillPackage.findFirst();
+    expect(pkg).not.toBeNull();
+    const packageId = pkg!.package_id;
+    const packageName = pkg!.name;
+
+    // Step 3: assign the skill.
+    const assignResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/org/ai-teammates/${twinId}/skills`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { package_id: packageId },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(assignResponse.statusCode).toBe(200);
+    const body = assignResponse.json() as {
+      ok: true;
+      skill: { twin_id: string; package_id: string };
+      audit_event_id: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.skill.twin_id).toBe(twinId);
+    expect(body.skill.package_id).toBe(packageId);
+
+    // Step 4: assert the audit row resolves with the expected
+    // event_type + details payload (Q1(b) baked-in fields).
+    await assertAuditEventIdResolves(body.audit_event_id, "ADMIN_ACTION");
+    const auditRow = await prisma.auditEvent.findUnique({
+      where: { audit_id: body.audit_event_id },
+    });
+    expect(auditRow).not.toBeNull();
+    expect(auditRow!.actor_entity_id).toBe(ctx.adminId);
+    expect(auditRow!.target_entity_id).toBe(twinId);
+    const details = auditRow!.details as Record<string, unknown>;
+    expect(details.action).toBe("TWIN_SKILLS_ASSIGNED");
+    expect(details.twin_id).toBe(twinId);
+    expect(details.skill_package_id).toBe(packageId);
+    expect(typeof details.package_name).toBe("string");
+    expect((details.package_name as string).length).toBeGreaterThan(0);
+    expect(details.package_name).toBe(packageName);
+    // Q1(b): twin_owner_entity_id baked into details. The twin was
+    // created with owner_entity_id=ctx.adminId via the normal flow,
+    // so the EntityMembership row exists and the field is populated.
+    expect(typeof details.twin_owner_entity_id).toBe("string");
+    expect(details.twin_owner_entity_id).toBe(ctx.adminId);
+  });
 });

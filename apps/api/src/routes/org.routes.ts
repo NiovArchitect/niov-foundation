@@ -1618,7 +1618,42 @@ export async function registerOrgRoutes(
         },
         update: {},
       });
-      return reply.code(200).send({ ok: true, skill });
+      // 12B-FOUNDATION (skills audit): emit ADMIN_ACTION audit row
+      // and surface audit_event_id so the audit-aware UI's Stage-4
+      // toast can render a clickable link from the skill assignment
+      // to the audit log entry. Mirrors the 12B.0 contract on the
+      // 6 other write endpoints. Failure paths (TWIN_NOT_FOUND,
+      // SKILL_PACKAGE_NOT_FOUND, INVALID_REQUEST) intentionally omit
+      // audit_event_id.
+      //
+      // Q1(b) -- twin_owner_entity_id baked into details so forensic
+      // analysis 18 months from now doesn't need an EntityMembership
+      // join. Lookup is cheap on the hot path; the self-contained
+      // audit row is the compounding decision. If the membership
+      // row is absent (data integrity edge case), surface null
+      // rather than throw -- the audit row still writes.
+      const ownerMembership = await prisma.entityMembership.findFirst({
+        where: { child_id: request.params.id, is_active: true },
+        select: { parent_id: true },
+      });
+      const auditEvent = await writeAuditEvent({
+        event_type: "ADMIN_ACTION",
+        outcome: "SUCCESS",
+        actor_entity_id: callerId,
+        target_entity_id: request.params.id,
+        details: {
+          action: "TWIN_SKILLS_ASSIGNED",
+          twin_id: request.params.id,
+          twin_owner_entity_id: ownerMembership?.parent_id ?? null,
+          skill_package_id: packageId,
+          package_name: pkg.name,
+        },
+      });
+      return reply.code(200).send({
+        ok: true,
+        skill,
+        audit_event_id: auditEvent.audit_id,
+      });
     },
   );
 
