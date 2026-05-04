@@ -139,11 +139,20 @@ async function resolveOrgOrFail(
 // WHY: One-shot data layer call; we never call createEntity
 //      directly because we want to attach the EntityMembership row
 //      in the same transaction as the entity + wallet + TAR + profile.
+// 12B.0: addOneMember now returns the audit_id of the
+// ORG_MEMBER_ADDED summary ADMIN_ACTION row alongside the entity,
+// so the POST /org/members and /org/members/bulk routes can surface
+// audit_event_id on their responses for audit-aware UI clickability.
+interface AddOneMemberResult {
+  entity: Entity;
+  audit_event_id: string;
+}
+
 async function addOneMember(
   member: MemberInput,
   orgEntityId: string,
   actorEntityId: string,
-): Promise<Entity> {
+): Promise<AddOneMemberResult> {
   const email = asNonEmptyString(member.email);
   const password = asNonEmptyString(member.password);
   const firstName = asNonEmptyString(member.first_name);
@@ -214,7 +223,7 @@ async function addOneMember(
         is_active: true,
       },
     });
-    await writeAuditEvent(
+    const memberAudit = await writeAuditEvent(
       {
         event_type: "ADMIN_ACTION",
         outcome: "SUCCESS",
@@ -231,7 +240,7 @@ async function addOneMember(
       },
       tx,
     );
-    return created;
+    return { entity: created, audit_event_id: memberAudit.audit_id };
   });
 }
 
@@ -253,16 +262,21 @@ export async function registerOrgRoutes(
       const orgEntityId = await resolveOrgOrFail(callerId, reply);
       if (orgEntityId === null) return;
       try {
-        const member = await addOneMember(
+        const result = await addOneMember(
           request.body ?? {},
           orgEntityId,
           callerId,
         );
+        // 12B.0: audit_event_id surfaces the audit_id of the
+        // ADMIN_ACTION (action=ORG_MEMBER_ADDED) row written
+        // inside addOneMember's transaction. Audit-aware UI keys
+        // off this for the success-toast clickable link.
         return reply.code(201).send({
           ok: true,
-          entity_id: member.entity_id,
-          email: member.email,
-          display_name: member.display_name,
+          entity_id: result.entity.entity_id,
+          email: result.entity.email,
+          display_name: result.entity.display_name,
+          audit_event_id: result.audit_event_id,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown";
@@ -314,12 +328,22 @@ export async function registerOrgRoutes(
           message: `bulk add cap is ${BULK_ADD_LIMIT}`,
         });
       }
-      const created: Array<{ entity_id: string; email: string | null }> = [];
+      // 12B.0: each created row carries its own audit_event_id so
+      // bulk responses are individually clickable from audit-aware UI.
+      const created: Array<{
+        entity_id: string;
+        email: string | null;
+        audit_event_id: string;
+      }> = [];
       const failures: Array<{ index: number; error: string }> = [];
       for (let i = 0; i < members.length; i++) {
         try {
-          const m = await addOneMember(members[i]!, orgEntityId, callerId);
-          created.push({ entity_id: m.entity_id, email: m.email });
+          const r = await addOneMember(members[i]!, orgEntityId, callerId);
+          created.push({
+            entity_id: r.entity.entity_id,
+            email: r.entity.email,
+            audit_event_id: r.audit_event_id,
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : "unknown";
           failures.push({ index: i, error: message });
@@ -1476,7 +1500,9 @@ export async function registerOrgRoutes(
         where: { twin_id: request.params.id },
         data,
       });
-      await writeAuditEvent({
+      // 12B.0: capture the audit_id so the success response surfaces
+      // audit_event_id for audit-aware UI clickability.
+      const updateAudit = await writeAuditEvent({
         event_type: "ADMIN_ACTION",
         outcome: "SUCCESS",
         actor_entity_id: callerId,
@@ -1489,7 +1515,11 @@ export async function registerOrgRoutes(
           new_values: newValues,
         },
       });
-      return reply.code(200).send({ ok: true, twin_config: updated });
+      return reply.code(200).send({
+        ok: true,
+        twin_config: updated,
+        audit_event_id: updateAudit.audit_id,
+      });
     },
   );
 

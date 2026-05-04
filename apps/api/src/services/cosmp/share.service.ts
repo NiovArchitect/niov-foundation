@@ -54,10 +54,23 @@ export interface ShareRequest {
 // OUTPUT: None.
 // WHY: Caller needs the bridge_id to revoke later AND the list of
 //      permission_ids the share produced.
+//
+// 12B.0: audit_event_id is the audit_id of the success-summary
+// PERMISSION_CREATED row. Surfaced so audit-aware UI can render a
+// clickable link from the action confirmation toast to the audit
+// row in Security & Audit.
+//
+// FAILURE PATHS INTENTIONALLY DO NOT INCLUDE audit_event_id: denied
+// shares (CAPSULES_NOT_OWNED, CLEARANCE_INSUFFICIENT_FOR_CAPSULES,
+// etc.) still write audit rows server-side for compliance/forensic
+// record, but those ids are not surfaced to the client. Audit-aware
+// UI is for confirming successful actions, not for exposing
+// forensic ids of denied operations.
 export interface ShareSuccess {
   ok: true;
   bridge_id: string;
   permissions_created: string[];
+  audit_event_id: string;
 }
 
 // WHAT: Failure shape for SHARE.
@@ -91,10 +104,15 @@ export interface ShareFailure {
 // OUTPUT: None.
 // WHY: The count tells the caller how many permissions actually
 //      flipped (already-revoked ones are skipped by revokeBridge).
+//
+// 12B.0: audit_event_id surfaced for audit-aware UI clickability
+// (same contract as ShareSuccess; see that interface's JSDoc for
+// why failure paths intentionally omit the field).
 export interface RevokeSuccess {
   ok: true;
   revoked_count: number;
   bridge_id: string;
+  audit_event_id: string;
 }
 
 // WHAT: Failure shape for REVOKE.
@@ -296,7 +314,11 @@ export class ShareService {
       session.entity_id,
     );
 
-    await writeAuditEvent({
+    // 12B.0: capture the success-summary audit event so the route
+    // can surface audit_event_id on the SHARE response. Enables
+    // audit-aware UI to render a clickable link from the action
+    // confirmation toast to the audit row in Security & Audit.
+    const auditEvent = await writeAuditEvent({
       event_type: "PERMISSION_CREATED",
       outcome: "SUCCESS",
       actor_entity_id: session.entity_id,
@@ -316,6 +338,7 @@ export class ShareService {
       ok: true,
       bridge_id: bridgeId,
       permissions_created: permissionIds,
+      audit_event_id: auditEvent.audit_id,
     };
   }
 
@@ -394,7 +417,9 @@ export class ShareService {
       session.entity_id,
     );
 
-    await writeAuditEvent({
+    // 12B.0: capture the success-summary audit event so the route
+    // can surface audit_event_id on the REVOKE response.
+    const auditEvent = await writeAuditEvent({
       event_type: "PERMISSION_REVOKED",
       outcome: "SUCCESS",
       actor_entity_id: session.entity_id,
@@ -408,7 +433,12 @@ export class ShareService {
       },
     });
 
-    return { ok: true, revoked_count: count, bridge_id: bridgeId };
+    return {
+      ok: true,
+      revoked_count: count,
+      bridge_id: bridgeId,
+      audit_event_id: auditEvent.audit_id,
+    };
   }
 }
 

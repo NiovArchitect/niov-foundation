@@ -177,10 +177,17 @@ export async function registerCosmpRoutes(
       if (!result.ok) {
         return reply.code(statusForCode(result.code)).send(result);
       }
+      // 12B.0: audit_event_id surfaces the audit_id of the
+      // PERMISSION_CREATED summary row so audit-aware UI can render
+      // a clickable link from the action confirmation toast to the
+      // audit row in Security & Audit. Failure responses
+      // intentionally do not include audit_event_id; see
+      // ShareSuccess JSDoc in share.service.ts for the rationale.
       return reply.code(201).send({
         ok: true,
         bridge_id: result.bridge_id,
         permissions_created: result.permissions_created,
+        audit_event_id: result.audit_event_id,
       });
     },
   );
@@ -204,10 +211,14 @@ export async function registerCosmpRoutes(
       if (!result.ok) {
         return reply.code(statusForCode(result.code)).send(result);
       }
+      // 12B.0: audit_event_id surfaces the audit_id of the
+      // PERMISSION_REVOKED summary row for audit-aware UI
+      // clickability. See RevokeSuccess JSDoc in share.service.ts.
       return reply.code(200).send({
         ok: true,
         bridge_id: result.bridge_id,
         revoked_count: result.revoked_count,
+        audit_event_id: result.audit_event_id,
       });
     },
   );

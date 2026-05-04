@@ -67,6 +67,14 @@ export interface CreateTwinResult {
    * (admins do not auto-join the default Hive).
    */
   default_hive_membership_id: string | null;
+  /**
+   * 12B.0: audit_id of the TWIN_CREATED summary ADMIN_ACTION row.
+   * Surfaced so audit-aware UI can render a clickable link from
+   * the action confirmation toast to the audit row in Security &
+   * Audit. Always populated on success; not present on failure
+   * (failures throw before the summary audit fires).
+   */
+  audit_event_id: string;
 }
 
 // WHAT: How many EntityMembership levels findNextApprover walks
@@ -331,7 +339,10 @@ async function createTwinInTx(
 
   // STEP 7 -- summary audit event so the entire twin-creation
   // operation has one canonical entry in the hash chain.
-  await writeAuditEvent(
+  // 12B.0: capture the audit row so CreateTwinResult surfaces
+  // audit_event_id for audit-aware UI clickability on the
+  // POST /org/ai-teammates response.
+  const summaryAudit = await writeAuditEvent(
     {
       event_type: "ADMIN_ACTION",
       outcome: "SUCCESS",
@@ -360,6 +371,7 @@ async function createTwinInTx(
     org_permission_bridge_id: orgPermissionBridgeId,
     owner_permission_bridge_id: ownerPerm.bridge_id,
     default_hive_membership_id: defaultHiveMembershipId,
+    audit_event_id: summaryAudit.audit_id,
   };
 }
 

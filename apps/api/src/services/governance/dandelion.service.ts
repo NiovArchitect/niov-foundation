@@ -96,12 +96,19 @@ export interface Phase2Result {
 }
 
 // WHAT: Phase 3 (invite) return shape.
+//
+// 12B.0: audit_event_id is the audit_id of the
+// ADMIN_ACTION (action=ONBOARDING_INVITE_ACCEPTED) row written
+// inside the same transaction that mints the twin. Surfaced so
+// audit-aware UI can render a clickable link from the action
+// confirmation toast to the audit row in Security & Audit.
 export interface Phase3Result {
   org_entity_id: string;
   entity_id: string;
   twin_id: string;
   hive_membership_id: string | null;
   activation_credential: string;
+  audit_event_id: string;
 }
 
 // WHAT: Phase 4 status return shape.
@@ -720,7 +727,10 @@ export async function executePhase3Invite(
       }
 
       // STEP 7 -- audit the invite acceptance.
-      await writeAuditEvent(
+      // 12B.0: capture the audit row so Phase3Result surfaces
+      // audit_event_id for audit-aware UI clickability on the
+      // POST /org/onboarding/invite response.
+      const inviteAudit = await writeAuditEvent(
         {
           event_type: "ADMIN_ACTION",
           outcome: "SUCCESS",
@@ -755,6 +765,7 @@ export async function executePhase3Invite(
         twin_id: twin.entity_id,
         hive_membership_id: twin.default_hive_membership_id,
         activation_credential: activationCredential,
+        audit_event_id: inviteAudit.audit_id,
       };
     },
     {
