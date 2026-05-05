@@ -3,3 +3,9 @@ node_modules/
 .next/
 dist/
 .DS_Store
+
+# Working-reference PDFs in docs/ are snapshots of evolving build
+# guides (often spanning multiple repos / sections). Keep them in
+# the working tree but never commit — pattern-match catches future
+# snapshots without manual maintenance.
+docs/*.pdf
