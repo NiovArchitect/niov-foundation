@@ -10,3 +10,5 @@ export {
   makeContentEncryption,
   sha256Hex,
 } from "./crypto.js";
+export { CRYPTO_CONFIG } from "./crypto-config.js";
+export type { CryptoConfig } from "./crypto-config.js";

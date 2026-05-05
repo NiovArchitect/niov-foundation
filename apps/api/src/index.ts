@@ -6,6 +6,11 @@
 export { buildApp } from "./server.js";
 export type { BuildAppConfig } from "./server.js";
 
+// 12C.0 Item 8: shared structured logger for service-class +
+// boot-time use. Tests can spy on logger.warn / logger.error to
+// assert structured emissions in place of pre-12C.0 console.* spies.
+export { logger } from "./logger.js";
+
 export {
   MemoryNonceStore,
   RedisNonceStore,

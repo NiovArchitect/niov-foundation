@@ -18,6 +18,7 @@ import {
   writeAuditEvent,
   type CapsuleType,
 } from "@niov/database";
+import { logger } from "../../logger.js";
 import type { AuthService } from "../auth.service.js";
 import type { COEService } from "../coe/coe.service.js";
 import type { LLMProvider, LLMResult } from "../llm/llm.service.js";
@@ -683,10 +684,9 @@ export class OtzarService {
         await this.degradedClose(conv.conversation_id, conv.entity_id);
         closed++;
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[otzar.autoClose] failed to close conversation ${conv.conversation_id}:`,
-          err,
+        logger.warn(
+          { err, conversation_id: conv.conversation_id },
+          "[otzar.autoClose] failed to close conversation",
         );
       }
     }

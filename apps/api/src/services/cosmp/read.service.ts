@@ -21,6 +21,7 @@ import {
   type AccessScope,
   type CapsuleMetadata,
 } from "@niov/database";
+import { logger } from "../../logger.js";
 import type { ContentStore } from "../../content-store.js";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
@@ -489,8 +490,7 @@ export class ReadService {
           capsule_id: capsuleId,
         });
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("[read] Loop 5 hook failed:", err);
+        logger.error({ err }, "[read] Loop 5 hook failed");
       }
     }
 

@@ -17,6 +17,7 @@ import {
   type ComplianceFramework,
   type Permission,
 } from "@niov/database";
+import { getOrgEntityId } from "../governance/org.js";
 import type { AuthService } from "../auth.service.js";
 
 // WHAT: Inputs to a per-operation compliance check.
@@ -47,6 +48,38 @@ export interface ComplianceCheckResult {
   failing_framework?: string;
   reason?: string;
   evaluated_frameworks: string[];
+}
+
+// WHAT: Per-framework verdict in a getComplianceState response.
+// INPUT: Used as a return-type fragment.
+// OUTPUT: None.
+// WHY: 12C.0 Item 9 surface for continuous monitoring. compliant
+//      flips on the presence of any COMPLIANCE_CHECK_FAILED row
+//      within the configured window (default 24h). since names the
+//      most recent PASSED event so SIEM dashboards can show
+//      "compliant since 2026-05-04T18:00:00Z". last_check names the
+//      most recent event of either type so dashboards can show
+//      data freshness. sample_failure_count_24h is the failure row
+//      count within the window for at-a-glance severity sorting.
+export interface FrameworkComplianceState {
+  framework_name: string;
+  compliant: boolean;
+  since: Date | null;
+  last_check: Date | null;
+  sample_failure_count_24h: number;
+}
+
+// WHAT: Full response shape for getComplianceState.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Matches the GET /api/v1/compliance/state HTTP response
+//      shape one-to-one. evaluated_at is the timestamp of the
+//      query so SIEM ingestion can distinguish a stale dashboard
+//      cache from a live read.
+export interface ComplianceStateReport {
+  org_entity_id: string;
+  frameworks: FrameworkComplianceState[];
+  evaluated_at: Date;
 }
 
 // WHAT: A row of generateComplianceReport output.
@@ -459,6 +492,152 @@ export class ComplianceService {
       passed_count: passedCount,
       failed_count: failedCount,
       recent_failures: recentFailures,
+    };
+  }
+
+  // WHAT: Compute live compliance posture for an org's applicable
+  //        frameworks based on recent COMPLIANCE_CHECK_PASSED /
+  //        COMPLIANCE_CHECK_FAILED audit events.
+  // INPUT: orgEntityId (the org-level EntityComplianceProfile
+  //        owner), optional window (defaults to 24 hours).
+  // OUTPUT: A ComplianceStateReport with per-framework verdicts.
+  // WHY: 12C.0 Item 9 -- exposes live compliance posture as a
+  //      queryable surface for SOC 2 Type II / ISO 27001 ConMon /
+  //      FedRAMP ConMon use. Closes Compliance Architecture Review
+  //      finding 3.3 YELLOW (continuous compliance state). The
+  //      lookup is org-LEVEL per DRIFT 15: EntityComplianceProfile
+  //      attaches frameworks to the org entity, not aggregated
+  //      across per-member profiles. Section 12.5 Sub-box 7's
+  //      compliance attestation reports consume this method's
+  //      output as input to variant-(ii) attestation bodies.
+  //      Section 12.5 medium remediation for 1.7 will add a
+  //      periodic re-evaluation loop; this method is read-only
+  //      against existing audit verdicts.
+  // WHAT: Validate a session and compute the caller's org's
+  //        compliance posture in one call. Used by the
+  //        GET /api/v1/compliance/state route.
+  // INPUT: Session token + optional window in ms.
+  // OUTPUT: ComplianceStateReport on success; auth-failure shape
+  //          on session invalid.
+  // WHY: 12C.0 Item 9 + DRIFT 14 -- mirrors checkOnBehalfOf's auth
+  //      pattern (manual bearer + session validation, not the
+  //      requireAdminCapability middleware) for consistency with
+  //      sibling /compliance/* endpoints. Section 12.5 Sub-box 7
+  //      will standardize all /compliance/* under a unified auth
+  //      model when verifiable-credentials infrastructure lands.
+  async getComplianceStateForCaller(
+    sessionToken: string,
+    windowMs: number = 24 * 60 * 60 * 1000,
+  ): Promise<
+    | { ok: true; state: ComplianceStateReport }
+    | { ok: false; code: string }
+  > {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "read",
+    );
+    if (!validation.valid) {
+      return { ok: false, code: validation.code };
+    }
+    const orgEntityId = await getOrgEntityId(validation.entity_id);
+    const state = await this.getComplianceState(orgEntityId, windowMs);
+    return { ok: true, state };
+  }
+
+  async getComplianceState(
+    orgEntityId: string,
+    windowMs: number = 24 * 60 * 60 * 1000,
+  ): Promise<ComplianceStateReport> {
+    const evaluatedAt = new Date();
+    const windowStart = new Date(evaluatedAt.getTime() - windowMs);
+
+    const profile = await prisma.entityComplianceProfile.findUnique({
+      where: { entity_id: orgEntityId },
+    });
+    if (profile === null || profile.frameworks.length === 0) {
+      return {
+        org_entity_id: orgEntityId,
+        frameworks: [],
+        evaluated_at: evaluatedAt,
+      };
+    }
+
+    const applicable = await prisma.complianceFramework.findMany({
+      where: {
+        framework_name: { in: profile.frameworks },
+        is_active: true,
+      },
+    });
+
+    // Per-framework: query the most recent PASSED + FAILED events
+    // in the window, scoped to the org by target_entity_id +
+    // failing_framework details. The audit chain is the source of
+    // truth; this method is purely a read-side projection.
+    const frameworks = await Promise.all(
+      applicable.map(async (f) => {
+        const where = {
+          target_entity_id: orgEntityId,
+          timestamp: { gte: windowStart, lte: evaluatedAt },
+        };
+        const failureWhere = {
+          ...where,
+          event_type: "COMPLIANCE_CHECK_FAILED",
+          details: {
+            path: ["failing_framework"],
+            equals: f.framework_name,
+          },
+        } as import("@prisma/client").Prisma.AuditEventWhereInput;
+        const passWhere = {
+          ...where,
+          event_type: "COMPLIANCE_CHECK_PASSED",
+        };
+
+        const [failureCount, lastFailure, lastPass, lastEvent] =
+          await Promise.all([
+            prisma.auditEvent.count({ where: failureWhere }),
+            prisma.auditEvent.findFirst({
+              where: failureWhere,
+              orderBy: { timestamp: "desc" },
+              select: { timestamp: true },
+            }),
+            prisma.auditEvent.findFirst({
+              where: passWhere,
+              orderBy: { timestamp: "desc" },
+              select: { timestamp: true },
+            }),
+            prisma.auditEvent.findFirst({
+              where: {
+                ...where,
+                event_type: {
+                  in: [
+                    "COMPLIANCE_CHECK_PASSED",
+                    "COMPLIANCE_CHECK_FAILED",
+                  ],
+                },
+              },
+              orderBy: { timestamp: "desc" },
+              select: { timestamp: true },
+            }),
+          ]);
+
+        // compliant=true when there are no FAILED events in the
+        // window. since=last PASSED timestamp (or null if no
+        // PASSED events have ever recorded for this framework).
+        const compliant = failureCount === 0;
+        return {
+          framework_name: f.framework_name,
+          compliant,
+          since: lastPass?.timestamp ?? null,
+          last_check: lastEvent?.timestamp ?? lastFailure?.timestamp ?? null,
+          sample_failure_count_24h: failureCount,
+        };
+      }),
+    );
+
+    return {
+      org_entity_id: orgEntityId,
+      frameworks,
+      evaluated_at: evaluatedAt,
     };
   }
 

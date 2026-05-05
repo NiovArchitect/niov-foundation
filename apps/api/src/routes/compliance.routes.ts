@@ -91,6 +91,38 @@ export async function registerComplianceRoutes(
     return reply.code(200).send(result);
   });
 
+  // 12C.0 Item 9: GET /api/v1/compliance/state -- live compliance
+  // posture for the caller's org's applicable frameworks. Closes
+  // Compliance Architecture Review finding 3.3 YELLOW.
+  //
+  // Auth pattern matches existing /compliance/* endpoints (manual
+  // bearer + session validation). Section 12.5 Sub-box 7 will
+  // standardize all /compliance/* endpoints under a unified auth
+  // model when verifiable-credentials infrastructure lands. The
+  // posture is org-LEVEL per DRIFT 15: looks up
+  // EntityComplianceProfile by entity_id == orgEntityId, not
+  // aggregated across per-member profiles.
+  app.get(
+    "/api/v1/compliance/state",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await complianceService.getComplianceStateForCaller(
+        sessionToken,
+      );
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send({ ok: true, state: result.state });
+    },
+  );
+
   app.get<{
     Querystring: {
       entity_id: string;

@@ -15,6 +15,7 @@ import {
   prisma,
   writeAudit,
 } from "@niov/database";
+import { logger } from "../../logger.js";
 
 // WHAT: Ensure the single MonetizationConfig row exists at the
 //        spec defaults (70/30 split).
@@ -363,8 +364,7 @@ export async function seedOtzarEntity(
     }
     // Configured ID points at a missing entity; fall through to
     // create a fresh one and warn loudly.
-    // eslint-disable-next-line no-console
-    console.warn(
+    logger.warn(
       `[seedOtzarEntity] OTZAR_ENTITY_ID=${existingId} does not exist in the DB; creating a fresh APPLICATION entity.`,
     );
   }
@@ -406,8 +406,7 @@ export async function seedOtzarEntity(
         via: "seedOtzarEntity",
       },
     });
-    // eslint-disable-next-line no-console
-    console.warn(
+    logger.warn(
       `[seedOtzarEntity] Created new Otzar APPLICATION entity. Add to .env: OTZAR_ENTITY_ID=${newId}`,
     );
     return { otzar_entity_id: newId, created: true };

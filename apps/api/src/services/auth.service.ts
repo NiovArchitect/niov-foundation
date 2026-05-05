@@ -11,7 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 import jwt, { type SignOptions } from "jsonwebtoken";
-import { verifyPassword } from "@niov/auth";
+import { CRYPTO_CONFIG, verifyPassword } from "@niov/auth";
 import {
   createSession,
   getEntityByEmail,
@@ -298,8 +298,14 @@ export class AuthService {
       expires_at: expiresAt.getTime(),
       issued_at: issuedAt.getTime(),
     };
+    // 12C.0 Item 5: pin algorithm explicitly to CRYPTO_CONFIG.JWT_ALGORITHM
+    // (HS256). Matches the prior implicit jsonwebtoken default; pinning
+    // prevents silent drift if the library ever changes its default.
+    // Existing JWTs remain verifiable. See packages/auth/src/crypto-config.ts
+    // for the FIPS posture rationale.
     const signOptions: SignOptions = {
       expiresIn: sessionTtlSeconds,
+      algorithm: CRYPTO_CONFIG.JWT_ALGORITHM,
     };
     const token = jwt.sign(payload, this.config.jwtSecret, signOptions);
 

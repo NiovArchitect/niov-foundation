@@ -54,7 +54,16 @@ export type AuditEventType =
   // only; not on continuation) and OtzarService.closeConversation.
   // Hash-chained per Section 1E like every other audit event.
   | "CONVERSATION_STARTED"
-  | "CONVERSATION_CLOSED";
+  | "CONVERSATION_CLOSED"
+  // 12C.0 Item 7: Foundation feedback-loop scheduler operational
+  // events. Emitted by apps/api/src/services/feedback/scheduler.ts
+  // wrapping each cron task in try/catch with timing. Both literals
+  // are SYSTEM-PRINCIPAL events (system_principal:
+  // SYSTEM_PRINCIPALS.SCHEDULER), not human ADMIN_ACTION events --
+  // they sit alongside HIVE_AGGREGATE_BUILT in the operational
+  // event class.
+  | "FEEDBACK_LOOP_EXECUTED"
+  | "FEEDBACK_LOOP_FAILED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -98,6 +107,9 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "NEGOTIATE",
   "CONVERSATION_STARTED",
   "CONVERSATION_CLOSED",
+  // 12C.0 Item 7
+  "FEEDBACK_LOOP_EXECUTED",
+  "FEEDBACK_LOOP_FAILED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
@@ -124,6 +136,13 @@ export interface WriteAuditEventInput {
   denial_reason?: string | null;
   details?: Record<string, unknown>;
   ip_address?: string | null;
+  // 12C.0 Item 7: optional system principal for system-initiated
+  // emissions (scheduler ticks, boot validators, compliance seeders,
+  // feedback loops). Selects which dedicated chain the event joins
+  // when actor_entity_id is null. When BOTH actor_entity_id and
+  // system_principal are absent, chainKey selection falls back to
+  // the legacy SYSTEM_CHAIN_KEY (DRIFT 12 backwards-compat anchor).
+  system_principal?: SystemPrincipal | null;
 }
 
 // WHAT: Filters queryAuditEvents accepts.
@@ -174,14 +193,44 @@ export interface VerifyAuditChainResult {
 //      change it later without grep.
 export const MAX_AUDIT_EVENTS_PAGE_SIZE = 100;
 
-// WHAT: A sentinel string used as the chain key when actor_entity_id is
-//        null (system events).
+// WHAT: Legacy sentinel used as chainKey when neither actor_entity_id
+//        nor system_principal is provided.
 // INPUT: None.
 // OUTPUT: A literal string.
-// WHY: pg_advisory_xact_lock needs a stable hash input. Using a
-//      sentinel for nulls means the system chain is serialized just
-//      like a real entity's chain.
+// WHY: pg_advisory_xact_lock needs a stable hash input. Pre-12C.0
+//      every system-initiated emission collapsed onto this single
+//      sentinel, joining one shared chain. 12C.0 Item 7 adds
+//      SYSTEM_PRINCIPALS so subsystem-attributable emissions chain
+//      separately, but this constant remains exported (DRIFT 12
+//      backwards-compat anchor): existing audit rows written under
+//      the legacy sentinel must remain verifiable, and existing
+//      writeAuditEvent callers without system_principal must
+//      continue working unchanged.
 const SYSTEM_CHAIN_KEY = "__niov_system_chain__";
+
+// WHAT: 12C.0 Item 7 enumerated system principals.
+// INPUT: None.
+// OUTPUT: A frozen object with sentinel chain-key strings keyed by
+//         a small set of named subsystems.
+// WHY: Pre-12C.0 every system-initiated audit event collapsed onto
+//      one SYSTEM_CHAIN_KEY sentinel chain. FedRAMP / SOC 2 reviewers
+//      prefer enumerated system identities so audit reconstruction
+//      can attribute system actions to a specific subsystem.
+//      Object.freeze is asserted by tests/unit/audit-system-principals.test.ts
+//      so future engineers (or LLMs) cannot mutate the enum at
+//      runtime without breaking a red test. New principals MUST be
+//      added here AND have their chainKey value reviewed for
+//      naming-collision (the "__niov_system_<subsystem>__" pattern
+//      is the convention).
+export const SYSTEM_PRINCIPALS = Object.freeze({
+  SCHEDULER: "__niov_system_scheduler__",
+  BOOT_VALIDATOR: "__niov_system_boot_validator__",
+  COMPLIANCE_SEEDER: "__niov_system_compliance_seeder__",
+  FEEDBACK_LOOP: "__niov_system_feedback_loop__",
+} as const);
+
+export type SystemPrincipal =
+  (typeof SYSTEM_PRINCIPALS)[keyof typeof SYSTEM_PRINCIPALS];
 
 // WHAT: Convert any JS value into a deterministic JSON string with
 //        sorted object keys.
@@ -301,7 +350,15 @@ async function writeAuditEventInTx(
   tx: Prisma.TransactionClient,
   input: WriteAuditEventInput,
 ): Promise<AuditEvent> {
-  const chainKey = input.actor_entity_id ?? SYSTEM_CHAIN_KEY;
+  // 12C.0 Item 7 chainKey selection priority:
+  //   1. actor_entity_id (real authenticated entity) -- existing path
+  //   2. system_principal (named subsystem -- new in 12C.0)
+  //   3. legacy SYSTEM_CHAIN_KEY (DRIFT 12 backwards-compat: existing
+  //      callers without either parameter still produce verifiable
+  //      audit rows, and historical rows under the legacy sentinel
+  //      remain in their own chain).
+  const chainKey =
+    input.actor_entity_id ?? input.system_principal ?? SYSTEM_CHAIN_KEY;
   // Serialize per-chain writes so two concurrent writers cannot link
   // to the same previous event. Held until the transaction commits.
   await tx.$executeRawUnsafe(
@@ -319,7 +376,16 @@ async function writeAuditEventInTx(
 
   const audit_id = randomUUID();
   const timestamp = new Date();
-  const details = input.details ?? {};
+  // 12C.0 Item 7: merge system_principal into details so subsystem
+  // attribution is preserved in the row AND participates in the
+  // canonical hash (canonicalJson(details) walks every key). Existing
+  // emissions without system_principal write unchanged details
+  // (DRIFT 12 backwards-compat: legacy rows have no system_principal
+  // key; the canonical hash for those continues to compute identically).
+  const details: Record<string, unknown> =
+    input.system_principal !== undefined && input.system_principal !== null
+      ? { ...(input.details ?? {}), system_principal: input.system_principal }
+      : (input.details ?? {});
   const previous_event_hash = previous?.event_hash ?? null;
 
   const event_hash = sha256Hex(

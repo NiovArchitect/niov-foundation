@@ -9,8 +9,75 @@
 //              calls startScheduler in production).
 
 import * as cron from "node-cron";
+import { SYSTEM_PRINCIPALS, writeAuditEvent } from "@niov/database";
 import type { FeedbackService } from "./feedback.service.js";
 import type { OtzarService } from "../otzar/otzar.service.js";
+
+// WHAT: Wrap one cron-scheduled loop call so success and failure
+//        both emit hash-chained audit rows under the SCHEDULER
+//        system principal.
+// INPUT: A loop_name (string used in details + error attribution),
+//        the async runner function, and an optional duration tracker.
+// OUTPUT: Promise<void> (the cron callback awaits internally).
+// WHY: 12C.0 Item 7 -- prior to this batch, scheduler tick failures
+//      surfaced via console.error only and successful runs were
+//      invisible to audit reconstruction. Now each tick emits
+//      FEEDBACK_LOOP_EXECUTED on success or FEEDBACK_LOOP_FAILED
+//      on catch with timing + loop_name + error_summary, all under
+//      system_principal: SCHEDULER. NIST 800-53 AU-2 calls out
+//      audit coverage of system activities including scheduled
+//      processes; this closes the Compliance Architecture Review
+//      finding 1.4 gap (system actor enumeration) for the
+//      cron-driven loops.
+async function runLoopWithAudit(
+  loopName: string,
+  runner: () => Promise<unknown>,
+): Promise<void> {
+  const startedAt = Date.now();
+  try {
+    const result = await runner();
+    const durationMs = Date.now() - startedAt;
+    // items_processed is best-effort -- runners that return a
+    // count-shaped object surface it; runners that return void
+    // omit it from details.
+    let itemsProcessed: number | undefined;
+    if (
+      result !== null &&
+      typeof result === "object" &&
+      "items_processed" in result
+    ) {
+      const n = (result as { items_processed: unknown }).items_processed;
+      if (typeof n === "number") itemsProcessed = n;
+    }
+    await writeAuditEvent({
+      event_type: "FEEDBACK_LOOP_EXECUTED",
+      outcome: "SUCCESS",
+      actor_entity_id: null,
+      system_principal: SYSTEM_PRINCIPALS.SCHEDULER,
+      details: {
+        loop_name: loopName,
+        duration_ms: durationMs,
+        ...(itemsProcessed !== undefined
+          ? { items_processed: itemsProcessed }
+          : {}),
+      },
+    });
+  } catch (err) {
+    const durationMsPartial = Date.now() - startedAt;
+    const errorSummary = err instanceof Error ? err.message : String(err);
+    await writeAuditEvent({
+      event_type: "FEEDBACK_LOOP_FAILED",
+      outcome: "ERROR",
+      actor_entity_id: null,
+      system_principal: SYSTEM_PRINCIPALS.SCHEDULER,
+      details: {
+        loop_name: loopName,
+        duration_ms_partial: durationMsPartial,
+        error_summary: errorSummary,
+      },
+    });
+  }
+}
 
 // WHAT: The handle returned by startScheduler.
 // INPUT: Used as a return type only.
@@ -49,50 +116,35 @@ export function startScheduler(
   // Loop 2 -- Token Efficiency, hourly.
   tasks.push(
     cron.schedule("0 * * * *", () => {
-      feedbackService.runLoop2Once().catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error("[scheduler] Loop 2 failed:", err);
-      });
+      void runLoopWithAudit("loop_2", () => feedbackService.runLoop2Once());
     }),
   );
 
   // Loop 3 -- Permission Patterns, daily at 02:00.
   tasks.push(
     cron.schedule("0 2 * * *", () => {
-      feedbackService.runLoop3Once().catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error("[scheduler] Loop 3 failed:", err);
-      });
+      void runLoopWithAudit("loop_3", () => feedbackService.runLoop3Once());
     }),
   );
 
   // Loop 4 -- Hive Aggregate Refresh, every 30 minutes.
   tasks.push(
     cron.schedule("*/30 * * * *", () => {
-      feedbackService.runLoop4Once().catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error("[scheduler] Loop 4 failed:", err);
-      });
+      void runLoopWithAudit("loop_4", () => feedbackService.runLoop4Once());
     }),
   );
 
   // Loop 6 -- Monetization Demand, weekly on Sunday at 03:00.
   tasks.push(
     cron.schedule("0 3 * * 0", () => {
-      feedbackService.runLoop6Once().catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error("[scheduler] Loop 6 failed:", err);
-      });
+      void runLoopWithAudit("loop_6", () => feedbackService.runLoop6Once());
     }),
   );
 
   // Loop 7 -- Meta Health Check, monthly on the 1st at 04:00.
   tasks.push(
     cron.schedule("0 4 1 * *", () => {
-      feedbackService.runLoop7Once().catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error("[scheduler] Loop 7 failed:", err);
-      });
+      void runLoopWithAudit("loop_7", () => feedbackService.runLoop7Once());
     }),
   );
 
@@ -103,10 +155,9 @@ export function startScheduler(
   if (otzarService !== undefined) {
     tasks.push(
       cron.schedule("*/30 * * * *", () => {
-        otzarService.runAutoCloseSweep().catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error("[scheduler] Otzar auto-close failed:", err);
-        });
+        void runLoopWithAudit("otzar_auto_close", () =>
+          otzarService.runAutoCloseSweep(),
+        );
       }),
     );
   }

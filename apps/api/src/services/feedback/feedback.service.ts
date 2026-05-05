@@ -13,6 +13,7 @@
 
 import {
   prisma,
+  SYSTEM_PRINCIPALS,
   writeAuditEvent,
   type CapsuleType,
 } from "@niov/database";
@@ -621,10 +622,15 @@ export class FeedbackService {
         }
       }
       if (stale.length > 0) {
+        // 12C.0 Item 7: this emission is system-initiated (cron-
+        // driven Loop 7 health check, no real actor). Tag with the
+        // FEEDBACK_LOOP system principal so audit reconstruction
+        // can attribute the action to the feedback subsystem.
         await writeAuditEvent({
           event_type: "ADMIN_ACTION",
           outcome: "SUCCESS",
           actor_entity_id: null,
+          system_principal: SYSTEM_PRINCIPALS.FEEDBACK_LOOP,
           details: {
             action: "FEEDBACK_LOOP_STALE",
             stale_loops: stale,

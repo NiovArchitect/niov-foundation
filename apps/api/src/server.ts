@@ -6,6 +6,8 @@
 //              AuthService that several of them depend on.
 
 import Fastify, { type FastifyInstance } from "fastify";
+import pino from "pino";
+import { logger } from "./logger.js";
 import {
   ContentEncryption,
   makeContentEncryption,
@@ -222,7 +224,40 @@ export async function buildApp(
   // provider otherwise).
   const observationService = new ObservationService(authService, otzarLLM);
 
-  const app = Fastify({ logger: false });
+  // 12C.0 Item 8: re-enable Fastify's pino logger with JSON output
+  // and redact paths. NODE_ENV=test sets level to "silent" so the
+  // vitest reporter stays clean; production / development use
+  // LOG_LEVEL or default to "info". Redact paths per DRIFT 13
+  // expanded list cover credentials (authorization header, cookie,
+  // password, token), user PII (email), cryptographic material
+  // (public_key), and Otzar conversation content (message --
+  // potentially carries other data subjects' PII per the
+  // hash+content split rationale in
+  // docs/COMPLIANCE_ARCHITECTURE_REVIEW.md Tension 5).
+  const app = Fastify({
+    logger: {
+      level:
+        process.env.NODE_ENV === "test"
+          ? "silent"
+          : (process.env.LOG_LEVEL ?? "info"),
+      formatters: {
+        level: (label: string) => ({ level: label }),
+      },
+      timestamp: pino.stdTimeFunctions.isoTime,
+      redact: {
+        paths: [
+          "req.headers.authorization",
+          "req.headers.cookie",
+          "req.body.password",
+          "req.body.token",
+          "req.body.email",
+          "req.body.public_key",
+          "req.body.message",
+        ],
+        censor: "[REDACTED]",
+      },
+    },
+  });
 
   // CORS first -- registered before the gateway hook so preflight
   // OPTIONS responses are not subject to rate limiting and the
@@ -324,16 +359,14 @@ async function main(): Promise<void> {
   const app = await buildApp();
   const port = Number.parseInt(process.env.PORT ?? "3000", 10);
   await app.listen({ port, host: "0.0.0.0" });
-  // eslint-disable-next-line no-console
-  console.log(`NIOV API listening on :${port}`);
+  app.log.info({ port }, "NIOV API listening");
 
   // Graceful shutdown: stop the cron scheduler BEFORE Fastify
   // closes so an in-flight loop fire doesn't outlive the server.
   const scheduler = (app as unknown as { scheduler?: SchedulerHandle })
     .scheduler;
   const shutdown = async (signal: string) => {
-    // eslint-disable-next-line no-console
-    console.log(`[server] received ${signal}, shutting down`);
+    app.log.info({ signal }, "[server] received shutdown signal");
     try {
       scheduler?.stop();
       await app.close();
@@ -351,8 +384,7 @@ async function main(): Promise<void> {
 
 if (process.argv[1]?.endsWith("server.ts")) {
   main().catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error("Failed to start server", err);
+    logger.error({ err }, "Failed to start server");
     process.exit(1);
   });
 }

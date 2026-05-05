@@ -7,16 +7,22 @@
 //              admin-set-password flows.
 
 import bcrypt from "bcrypt";
+import { CRYPTO_CONFIG } from "./crypto-config.js";
 
 // WHAT: How many bcrypt rounds we use to derive each password hash.
 // INPUT: None.
 // OUTPUT: A number of rounds.
-// WHY: 12 is a 2026-grade default -- slow enough to make GPU cracking
-//      expensive, fast enough to keep login under ~250ms on a typical
-//      server. In tests we drop to 4 rounds so the suite is not
-//      bound by bcrypt; security-relevant tests still pass because
-//      we are testing flow, not key strength.
-export const BCRYPT_ROUNDS = process.env.NODE_ENV === "test" ? 4 : 12;
+// WHY: 12C.0 Item 5: rounds now sourced from CRYPTO_CONFIG so all
+//      cryptographic algorithm choices live in one frozen place.
+//      Production uses CRYPTO_CONFIG.BCRYPT_ROUNDS_PRODUCTION (12);
+//      tests use CRYPTO_CONFIG.BCRYPT_ROUNDS_TEST (4) so the suite
+//      is not bound by bcrypt cost. Both are NIST SP 800-63B-acceptable
+//      iterated-hash settings (production minimum is 10 per
+//      CRYPTO_CONFIG.BCRYPT_ROUNDS_MIN_PRODUCTION).
+export const BCRYPT_ROUNDS =
+  process.env.NODE_ENV === "test"
+    ? CRYPTO_CONFIG.BCRYPT_ROUNDS_TEST
+    : CRYPTO_CONFIG.BCRYPT_ROUNDS_PRODUCTION;
 
 // WHAT: Hash a plaintext password into a bcrypt-format string.
 // INPUT: The plaintext password the user just typed.

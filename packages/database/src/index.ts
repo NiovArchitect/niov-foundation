@@ -82,6 +82,7 @@ export {
   MAX_AUDIT_EVENTS_PAGE_SIZE,
   AUDIT_EVENT_TYPE_VALUES,
   isKnownAuditEventType,
+  SYSTEM_PRINCIPALS,
 } from "./queries/audit.js";
 
 export type {
@@ -90,6 +91,7 @@ export type {
   QueryAuditEventsFilters,
   QueryAuditEventsResult,
   VerifyAuditChainResult,
+  SystemPrincipal,
 } from "./queries/audit.js";
 
 export {

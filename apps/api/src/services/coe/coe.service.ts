@@ -18,6 +18,7 @@ import {
   type DecayType,
 } from "@niov/database";
 import { type ContentEncryption } from "@niov/auth";
+import { logger } from "../../logger.js";
 import type { AuthService } from "../auth.service.js";
 import type { NegotiateService } from "../cosmp/negotiate.service.js";
 import type { ReadService } from "../cosmp/read.service.js";
@@ -540,8 +541,7 @@ export class COEService {
       } catch (err) {
         // Log but don't fail the outcome write -- relevance tuning
         // is advisory.
-        // eslint-disable-next-line no-console
-        console.error("[coe] Loop 1 hook failed:", err);
+        logger.error({ err }, "[coe] Loop 1 hook failed");
       }
     }
 
