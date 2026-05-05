@@ -555,4 +555,137 @@ describe("12B.0: audit_event_id surfaced on write endpoint responses", () => {
     expect(typeof details.twin_owner_entity_id).toBe("string");
     expect(details.twin_owner_entity_id).toBe(ctx.adminId);
   });
+
+  // 12C.0 Item 1: DELETE /org/ai-teammates/:id/skills/:packageId
+  // surfaces audit_event_id resolving to an ADMIN_ACTION row with
+  // details.action: "TWIN_SKILL_REMOVED" (singular -- DELETE removes
+  // one package per call). Symmetric to the POST emission shape.
+  it("DELETE /org/ai-teammates/:id/skills/:packageId surfaces audit_event_id resolving to an ADMIN_ACTION row", async () => {
+    const ctx = await createOrgAndAdmin();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {
+        owner_entity_id: ctx.adminId,
+        role_title: `${TEST_PREFIX}rolefordel_${randomUUID()}`,
+      },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const twinId = (createResponse.json() as { entity_id: string }).entity_id;
+
+    const pkg = await prisma.skillPackage.findFirst();
+    expect(pkg).not.toBeNull();
+    const packageId = pkg!.package_id;
+    const packageName = pkg!.name;
+
+    // Assign first so we have something to delete.
+    const assignResponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/org/ai-teammates/${twinId}/skills`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { package_id: packageId },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(assignResponse.statusCode).toBe(200);
+
+    // Now delete it.
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/org/ai-teammates/${twinId}/skills/${packageId}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(deleteResponse.statusCode).toBe(200);
+    const body = deleteResponse.json() as {
+      ok: true;
+      audit_event_id: string;
+    };
+    expect(body.ok).toBe(true);
+
+    await assertAuditEventIdResolves(body.audit_event_id, "ADMIN_ACTION");
+    const auditRow = await prisma.auditEvent.findUnique({
+      where: { audit_id: body.audit_event_id },
+    });
+    expect(auditRow).not.toBeNull();
+    expect(auditRow!.actor_entity_id).toBe(ctx.adminId);
+    expect(auditRow!.target_entity_id).toBe(twinId);
+    const details = auditRow!.details as Record<string, unknown>;
+    expect(details.action).toBe("TWIN_SKILL_REMOVED");
+    expect(details.twin_id).toBe(twinId);
+    expect(details.skill_package_id).toBe(packageId);
+    expect(details.package_name).toBe(packageName);
+    expect(details.twin_owner_entity_id).toBe(ctx.adminId);
+
+    // Verify the TwinSkill row was actually removed.
+    const remaining = await prisma.twinSkill.findFirst({
+      where: { twin_id: twinId, package_id: packageId },
+    });
+    expect(remaining).toBeNull();
+  });
+
+  // 12C.0 Item 2: PATCH /org/entities/:id surfaces audit_event_id
+  // resolving to an ADMIN_ACTION row with details.action:
+  // "ORG_ENTITY_UPDATE". Closes the last
+  // pending-foundation-extension sentinel in otzar-control-tower
+  // (12B.2 Members job_title edit + Suspend/Reactivate).
+  it("PATCH /org/entities/:id surfaces audit_event_id resolving to an ADMIN_ACTION row", async () => {
+    const ctx = await createOrgAndAdmin();
+
+    // Step 1: invite a new member into the org so we have an entity
+    // to PATCH.
+    const memberEmail = `${TEST_PREFIX}patchee_${randomUUID()}@niov.test`;
+    const memberResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {
+        email: memberEmail,
+        password: "correct-horse-battery",
+        first_name: "Initial",
+        last_name: "Member",
+      },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(memberResponse.statusCode).toBe(201);
+    const memberId = (memberResponse.json() as { entity_id: string })
+      .entity_id;
+
+    // Step 2: PATCH a profile field.
+    const newJobTitle = `${TEST_PREFIX}patched_${randomUUID()}`;
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/org/entities/${memberId}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { job_title: newJobTitle },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(patchResponse.statusCode).toBe(200);
+    const body = patchResponse.json() as {
+      ok: true;
+      audit_event_id: string;
+    };
+    expect(body.ok).toBe(true);
+
+    // Step 3: assert the audit row resolves and details look right.
+    // 12C.0 anchor: the response now carries audit_event_id; the
+    // pending-foundation-extension sentinel in otzar-control-tower
+    // can be removed.
+    await assertAuditEventIdResolves(body.audit_event_id, "ADMIN_ACTION");
+    const auditRow = await prisma.auditEvent.findUnique({
+      where: { audit_id: body.audit_event_id },
+    });
+    expect(auditRow).not.toBeNull();
+    expect(auditRow!.actor_entity_id).toBe(ctx.adminId);
+    expect(auditRow!.target_entity_id).toBe(memberId);
+    const details = auditRow!.details as Record<string, unknown>;
+    expect(details.action).toBe("ORG_ENTITY_UPDATE");
+    // fields_changed should contain only job_title (the field we
+    // actually modified), not all 7 writable profile fields.
+    expect(Array.isArray(details.fields_changed)).toBe(true);
+    const fieldsChanged = details.fields_changed as string[];
+    expect(fieldsChanged).toEqual(["job_title"]);
+  });
 });

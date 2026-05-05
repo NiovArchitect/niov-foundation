@@ -80,6 +80,8 @@ export {
   getLatestEventHash,
   applyAuditEventTriggers,
   MAX_AUDIT_EVENTS_PAGE_SIZE,
+  AUDIT_EVENT_TYPE_VALUES,
+  isKnownAuditEventType,
 } from "./queries/audit.js";
 
 export type {

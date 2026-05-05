@@ -56,6 +56,59 @@ export type AuditEventType =
   | "CONVERSATION_STARTED"
   | "CONVERSATION_CLOSED";
 
+// WHAT: Runtime-iterable list of every recognized AuditEventType.
+// INPUT: None.
+// OUTPUT: A readonly array of AuditEventType literals.
+// WHY: 12C.0 (Item 3) GET /org/audit ?event_type= filter validation
+//      needs to reject unknown literals at the route layer (422
+//      INVALID_REQUEST). TypeScript's type-only union is unavailable
+//      at runtime; this constant is the compile-time-checked source
+//      of truth so routes can `Set<AuditEventType>` membership-test
+//      without duplicating the literal list. Add new event types to
+//      BOTH this array AND the union above; the `satisfies` clause
+//      catches drift at typecheck time.
+export const AUDIT_EVENT_TYPE_VALUES = [
+  "ENTITY_REGISTERED",
+  "ENTITY_SUSPENDED",
+  "ENTITY_REACTIVATED",
+  "LOGIN_SUCCESS",
+  "LOGIN_FAILED",
+  "LOGOUT",
+  "SESSION_CREATED",
+  "SESSION_EXPIRED",
+  "SESSION_REVOKED",
+  "CAPSULE_CREATED",
+  "CAPSULE_METADATA_READ",
+  "CAPSULE_CONTENT_READ",
+  "CAPSULE_UPDATED",
+  "CAPSULE_DELETED",
+  "PERMISSION_CREATED",
+  "PERMISSION_REVOKED",
+  "PERMISSION_EXPIRED",
+  "DATA_MONETIZED",
+  "HIVE_CREATED",
+  "HIVE_MEMBER_ADDED",
+  "HIVE_MEMBER_REMOVED",
+  "HIVE_INTELLIGENCE_READ",
+  "HIVE_AGGREGATE_BUILT",
+  "COMPLIANCE_CHECK_PASSED",
+  "COMPLIANCE_CHECK_FAILED",
+  "ANOMALY_DETECTED",
+  "ADMIN_ACTION",
+  "NEGOTIATE",
+  "CONVERSATION_STARTED",
+  "CONVERSATION_CLOSED",
+] as const satisfies readonly AuditEventType[];
+
+export function isKnownAuditEventType(
+  value: unknown,
+): value is AuditEventType {
+  return (
+    typeof value === "string" &&
+    (AUDIT_EVENT_TYPE_VALUES as readonly string[]).includes(value)
+  );
+}
+
 // WHAT: The shape callers hand to writeAuditEvent.
 // INPUT: Used as a parameter type only.
 // OUTPUT: None -- this is a type, not a value.

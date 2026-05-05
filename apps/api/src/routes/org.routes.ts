@@ -15,12 +15,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createTARInTx,
   createWalletInTx,
+  isKnownAuditEventType,
   MAX_AUDIT_EVENTS_PAGE_SIZE,
   prisma,
   writeAudit,
   writeAuditEvent,
   writeTARCreateAudit,
   writeWalletCreateAudit,
+  type AuditEventType,
   type Entity,
   type Prisma,
 } from "@niov/database";
@@ -44,6 +46,17 @@ import type { AuthService } from "../services/auth.service.js";
 //      database down through these read endpoints.
 const DEFAULT_TAKE = 50;
 const MAX_TAKE = 200;
+
+// WHAT: UUID v4 format validator for query params.
+// INPUT: Used as a constant; consumed by 12C.0 Item 3 + Item 4
+//        filter validation paths.
+// OUTPUT: A RegExp.
+// WHY: Validate at the route layer so Prisma never surfaces a
+//      cryptic P2023 (invalid argument value) on malformed UUID
+//      input. Reject with 422 INVALID_REQUEST upstream so callers
+//      get a clear actionable error.
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // WHAT: Parse skip/take query params and clamp to safe ranges.
 // INPUT: The request query bag and an optional override for the cap
@@ -636,7 +649,12 @@ export async function registerOrgRoutes(
           update: profileData,
         });
       }
-      await writeAuditEvent({
+      // 12C.0 (Item 2): capture the returned auditEvent and surface
+      // audit_event_id in the response. Closes the last
+      // pending-foundation-extension sentinel in otzar-control-tower
+      // (12B.2 Members job_title edit + Suspend/Reactivate). Mirrors
+      // the 12B.0 contract on the 7 other audit-aware write endpoints.
+      const auditEvent = await writeAuditEvent({
         event_type: "ADMIN_ACTION",
         outcome: "SUCCESS",
         actor_entity_id: callerId,
@@ -649,7 +667,9 @@ export async function registerOrgRoutes(
           ],
         },
       });
-      return reply.code(200).send({ ok: true });
+      return reply
+        .code(200)
+        .send({ ok: true, audit_event_id: auditEvent.audit_id });
     },
   );
 
@@ -893,7 +913,20 @@ export async function registerOrgRoutes(
 
   // GET /org/permissions -- Permission rows where grantor or grantee
   // is in caller's org.
-  app.get<{ Querystring: { skip?: string; take?: string } }>(
+  // GET /org/permissions -- ACTIVE Permission rows scoped to org.
+  // 12C.0 (Item 4) added optional ?bridge_id= filter that AND-narrows
+  // within the existing OR-of-grantor-or-grantee org-scope. Lifts
+  // the 12B.4 BridgeDetailDrawer client-side filter pattern (Drift 5
+  // in 12B.4 pre-flight) to server-side. Cross-org leak prevention
+  // is enforced by the outer org-scope fence (filter narrows, never
+  // widens — same architectural invariant as Item 3 audit filters).
+  app.get<{
+    Querystring: {
+      skip?: string;
+      take?: string;
+      bridge_id?: string;
+    };
+  }>(
     "/api/v1/org/permissions",
     {
       preHandler: requireAdminCapability(authService, "can_admin_org"),
@@ -903,18 +936,42 @@ export async function registerOrgRoutes(
       const orgEntityId = await resolveOrgOrFail(callerId, reply);
       if (orgEntityId === null) return;
       const { skip, take } = parsePagination(request.query);
+
+      // Validate UUID at the route layer so Prisma doesn't surface
+      // P2023 on malformed input.
+      let bridgeIdFilter: string | undefined;
+      if (typeof request.query.bridge_id === "string") {
+        if (!UUID_REGEX.test(request.query.bridge_id)) {
+          return reply.code(422).send({
+            ok: false,
+            code: "INVALID_REQUEST",
+            message: "bridge_id must be a valid UUID",
+          });
+        }
+        bridgeIdFilter = request.query.bridge_id;
+      }
+
       const memberships = await prisma.entityMembership.findMany({
         where: { parent_id: orgEntityId, is_active: true },
         select: { child_id: true },
       });
       const orgEntityIds = [orgEntityId, ...memberships.map((m) => m.child_id)];
-      const where: Prisma.PermissionWhereInput = {
-        OR: [
-          { grantor_entity_id: { in: orgEntityIds } },
-          { grantee_entity_id: { in: orgEntityIds } },
-        ],
-        status: "ACTIVE",
-      };
+      // The org-scope OR + status=ACTIVE form the outer fence;
+      // bridge_id filter (when set) AND-composes via the top-level
+      // AND array, narrowing the result without escaping the fence.
+      const filterClauses: Prisma.PermissionWhereInput[] = [
+        {
+          OR: [
+            { grantor_entity_id: { in: orgEntityIds } },
+            { grantee_entity_id: { in: orgEntityIds } },
+          ],
+          status: "ACTIVE",
+        },
+      ];
+      if (bridgeIdFilter !== undefined) {
+        filterClauses.push({ bridge_id: bridgeIdFilter });
+      }
+      const where: Prisma.PermissionWhereInput = { AND: filterClauses };
       const [items, total] = await Promise.all([
         prisma.permission.findMany({
           where,
@@ -961,7 +1018,23 @@ export async function registerOrgRoutes(
 
   // GET /org/audit -- audit_events filtered to caller's org.
   // Caps at MAX_AUDIT_EVENTS_PAGE_SIZE per Section 1E.
-  app.get<{ Querystring: { skip?: string; take?: string } }>(
+  // GET /org/audit -- AuditEvent rows scoped to caller's org.
+  // 12C.0 (Item 3) added 3 optional filters: ?event_type=,
+  // ?actor_entity_id=, ?target_entity_id=. Filters AND-narrow within
+  // the existing OR-of-actor-or-target org-scope; they NEVER widen
+  // it (cross-org leak prevention is the architectural anchor —
+  // see admin-routes.test.ts cross-org leak test for the invariant).
+  // Lifts the 12B.2/12B.3/12B.4 frontend client-side filter pattern
+  // to server-side per Compliance Architecture Review Bucket A.
+  app.get<{
+    Querystring: {
+      skip?: string;
+      take?: string;
+      event_type?: string;
+      actor_entity_id?: string;
+      target_entity_id?: string;
+    };
+  }>(
     "/api/v1/org/audit",
     {
       preHandler: requireAdminCapability(authService, "can_admin_org"),
@@ -973,17 +1046,75 @@ export async function registerOrgRoutes(
       const { skip, take } = parsePagination(request.query, {
         maxTake: MAX_AUDIT_EVENTS_PAGE_SIZE,
       });
+
+      // Validate event_type against the canonical
+      // AUDIT_EVENT_TYPE_VALUES enum. Unknown literals reject with
+      // 422 INVALID_REQUEST so callers cannot probe with arbitrary
+      // strings (also keeps the typed AuditEvent.event_type column
+      // honest at the route layer).
+      let eventTypeFilter: AuditEventType | undefined;
+      if (typeof request.query.event_type === "string") {
+        if (!isKnownAuditEventType(request.query.event_type)) {
+          return reply.code(422).send({
+            ok: false,
+            code: "INVALID_REQUEST",
+            message: "event_type must be a known AuditEventType",
+          });
+        }
+        eventTypeFilter = request.query.event_type;
+      }
+      // Validate UUIDs at the route layer so Prisma doesn't surface
+      // a cryptic P2023 (invalid argument value) on malformed input.
+      let actorEntityIdFilter: string | undefined;
+      if (typeof request.query.actor_entity_id === "string") {
+        if (!UUID_REGEX.test(request.query.actor_entity_id)) {
+          return reply.code(422).send({
+            ok: false,
+            code: "INVALID_REQUEST",
+            message: "actor_entity_id must be a valid UUID",
+          });
+        }
+        actorEntityIdFilter = request.query.actor_entity_id;
+      }
+      let targetEntityIdFilter: string | undefined;
+      if (typeof request.query.target_entity_id === "string") {
+        if (!UUID_REGEX.test(request.query.target_entity_id)) {
+          return reply.code(422).send({
+            ok: false,
+            code: "INVALID_REQUEST",
+            message: "target_entity_id must be a valid UUID",
+          });
+        }
+        targetEntityIdFilter = request.query.target_entity_id;
+      }
+
       const memberships = await prisma.entityMembership.findMany({
         where: { parent_id: orgEntityId, is_active: true },
         select: { child_id: true },
       });
       const orgScope = [orgEntityId, ...memberships.map((m) => m.child_id)];
-      const where: Prisma.AuditEventWhereInput = {
-        OR: [
-          { actor_entity_id: { in: orgScope } },
-          { target_entity_id: { in: orgScope } },
-        ],
-      };
+      // The org-scope OR is the outer fence. Optional filters AND-
+      // compose with it via the top-level `AND` array — every
+      // additional filter NARROWS the result. Filters cannot widen
+      // (Prisma `where` semantics) and never escape the org fence.
+      const filterClauses: Prisma.AuditEventWhereInput[] = [
+        {
+          OR: [
+            { actor_entity_id: { in: orgScope } },
+            { target_entity_id: { in: orgScope } },
+          ],
+        },
+      ];
+      if (eventTypeFilter !== undefined) {
+        filterClauses.push({ event_type: eventTypeFilter });
+      }
+      if (actorEntityIdFilter !== undefined) {
+        filterClauses.push({ actor_entity_id: actorEntityIdFilter });
+      }
+      if (targetEntityIdFilter !== undefined) {
+        filterClauses.push({ target_entity_id: targetEntityIdFilter });
+      }
+      const where: Prisma.AuditEventWhereInput = { AND: filterClauses };
       const [items, total] = await Promise.all([
         prisma.auditEvent.findMany({
           where,
@@ -1732,6 +1863,116 @@ export async function registerOrgRoutes(
       return reply.code(200).send({
         ok: true,
         skill,
+        audit_event_id: auditEvent.audit_id,
+      });
+    },
+  );
+
+  // 12C.0 (Item 1): DELETE /org/ai-teammates/:id/skills/:packageId --
+  // remove a previously-assigned SkillPackage from a twin. Closes
+  // the 12B.3 Q5 deferral (RemoveSkillButton stub-omitted, queued
+  // for Foundation extension batch). Mirrors POST /skills auth +
+  // org-membership scope + audit emission shape; uses the
+  // ADMIN_ACTION + details.action: "TWIN_SKILL_REMOVED" pattern
+  // (singular -- DELETE removes one package per call) for symmetry
+  // with the existing TWIN_SKILLS_ASSIGNED (plural -- POST).
+  app.delete<{
+    Params: { id: string; packageId: string };
+  }>(
+    "/api/v1/org/ai-teammates/:id/skills/:packageId",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      // Verify the twin is in caller's org via a 2-hop EntityMembership
+      // walk: twin's parent (the owner) must itself be a child of the
+      // org. Twins are grandchildren of the org -- their direct parent
+      // is the OWNER (a PERSON who is a first-level org child). Admin-
+      // owned twins set parent=org directly; standard twins set
+      // parent=owner. Both shapes resolve via this 2-hop check.
+      const ownerMembership = await prisma.entityMembership.findFirst({
+        where: { child_id: request.params.id, is_active: true },
+        select: { parent_id: true },
+      });
+      if (ownerMembership === null) {
+        return reply.code(404).send({
+          ok: false,
+          code: "TWIN_NOT_FOUND",
+          message: "Twin not found in this org",
+        });
+      }
+      // Admin-owned twin: parent IS org. Standard twin: parent is
+      // owner (employee), and owner must be in org.
+      const ownerInOrg =
+        ownerMembership.parent_id === orgEntityId ||
+        (await prisma.entityMembership.findFirst({
+          where: {
+            parent_id: orgEntityId,
+            child_id: ownerMembership.parent_id,
+            is_active: true,
+          },
+          select: { membership_id: true },
+        })) !== null;
+      if (!ownerInOrg) {
+        return reply.code(404).send({
+          ok: false,
+          code: "TWIN_NOT_FOUND",
+          message: "Twin not found in this org",
+        });
+      }
+      // Verify the SkillPackage exists (so the failure mode is
+      // explicit -- distinguishes "package_id is malformed" from
+      // "assignment doesn't exist").
+      const pkg = await prisma.skillPackage.findUnique({
+        where: { package_id: request.params.packageId },
+      });
+      if (pkg === null) {
+        return reply.code(404).send({
+          ok: false,
+          code: "SKILL_PACKAGE_NOT_FOUND",
+          message: "Skill package not found",
+        });
+      }
+      // Verify the assignment exists; 404 if not. We use deleteMany
+      // + count check rather than findUnique-then-delete so the
+      // "didn't exist" path returns a clean 404 without a thrown
+      // P2025 from prisma.twinSkill.delete.
+      const result = await prisma.twinSkill.deleteMany({
+        where: {
+          twin_id: request.params.id,
+          package_id: request.params.packageId,
+        },
+      });
+      if (result.count === 0) {
+        return reply.code(404).send({
+          ok: false,
+          code: "SKILL_NOT_ASSIGNED",
+          message: "Skill package is not assigned to this twin",
+        });
+      }
+      // 12B.0 contract: emit ADMIN_ACTION audit row and surface
+      // audit_event_id. Mirrors the POST /skills emission shape
+      // (twin_owner_entity_id baked in for forensic self-containment
+      // per Q1(b)). On the DELETE path the owner is necessarily
+      // ownerMembership.parent_id which we already loaded above.
+      const auditEvent = await writeAuditEvent({
+        event_type: "ADMIN_ACTION",
+        outcome: "SUCCESS",
+        actor_entity_id: callerId,
+        target_entity_id: request.params.id,
+        details: {
+          action: "TWIN_SKILL_REMOVED",
+          twin_id: request.params.id,
+          twin_owner_entity_id: ownerMembership.parent_id,
+          skill_package_id: request.params.packageId,
+          package_name: pkg.name,
+        },
+      });
+      return reply.code(200).send({
+        ok: true,
         audit_event_id: auditEvent.audit_id,
       });
     },

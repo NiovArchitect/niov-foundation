@@ -521,6 +521,380 @@ describe("GET /org/audit -- cross-tenant", () => {
   });
 });
 
+// 12C.0 Item 3: GET /org/audit query-param filters.
+// Filters AND-narrow within the existing OR-of-actor-or-target
+// org-scope; they NEVER widen it. The cross-org leak prevention
+// test below is the architectural invariant anchor for all current
+// and future filter additions on this endpoint.
+describe("GET /org/audit -- 12C.0 query-param filters", () => {
+  it("?event_type=ADMIN_ACTION returns only ADMIN_ACTION rows", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Generate a known ADMIN_ACTION event by inviting a member.
+    const memberResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {
+        email: `${TEST_PREFIX}auditfilter_${randomUUID()}@niov.test`,
+        password: "x",
+      },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(memberResp.statusCode).toBe(201);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/audit?event_type=ADMIN_ACTION&take=100",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{ event_type: string }>;
+    };
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const e of body.items) expect(e.event_type).toBe("ADMIN_ACTION");
+  });
+
+  it("?actor_entity_id=<uuid> narrows to only that actor's events", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/audit?actor_entity_id=${ctx.adminId}&take=100`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{ actor_entity_id: string | null }>;
+    };
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const e of body.items)
+      expect(e.actor_entity_id).toBe(ctx.adminId);
+  });
+
+  it("?target_entity_id=<uuid> narrows to only events targeting that entity", async () => {
+    const ctx = await createOrgAndAdmin();
+    // The org admin's CREATE_ORG audit row targets the org entity.
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/audit?target_entity_id=${ctx.orgId}&take=100`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{ target_entity_id: string | null }>;
+    };
+    for (const e of body.items)
+      expect(e.target_entity_id).toBe(ctx.orgId);
+  });
+
+  it("combined filters compose with AND semantics (event_type + actor_entity_id)", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/audit?event_type=ADMIN_ACTION&actor_entity_id=${ctx.adminId}&take=100`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{ event_type: string; actor_entity_id: string | null }>;
+    };
+    for (const e of body.items) {
+      expect(e.event_type).toBe("ADMIN_ACTION");
+      expect(e.actor_entity_id).toBe(ctx.adminId);
+    }
+  });
+
+  it("?event_type=INVALID_LITERAL returns 422 INVALID_REQUEST", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/audit?event_type=NOT_A_REAL_EVENT_TYPE",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("INVALID_REQUEST");
+  });
+
+  it("?actor_entity_id=not-a-uuid returns 422 INVALID_REQUEST", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/audit?actor_entity_id=not-a-uuid",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("INVALID_REQUEST");
+  });
+
+  // ⭐ DRIFT 9 ARCHITECTURAL ANCHOR ⭐
+  // Cross-org leak prevention: when an orgA admin filters with an
+  // actor_entity_id belonging to orgB, the response is empty. The
+  // filter narrows WITHIN the OR-of-actor-or-target org-scope; it
+  // CANNOT widen the scope to reach orgB's events. Future devs
+  // adding new filters MUST preserve this invariant — any filter
+  // addition that allows cross-org reach is a security regression.
+  it("⭐ DRIFT 9: ?actor_entity_id=<other-org-entity-id> returns empty (cross-org leak prevention)", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    // Generate at least one ADMIN_ACTION row for orgB so we know
+    // such a row EXISTS — and confirm orgA's filter still returns
+    // empty for that actor.
+    const memberResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${orgB.adminToken}` },
+      payload: {
+        email: `${TEST_PREFIX}leak_${randomUUID()}@niov.test`,
+        password: "x",
+      },
+      remoteAddress: orgB.adminIp,
+    });
+    expect(memberResp.statusCode).toBe(201);
+    // OrgA filtering with orgB.adminId as actor: filter narrows
+    // within orgA's OR-scope, never widens. orgB.adminId is NOT in
+    // orgA's orgScope, so the AND-composed where clause yields
+    // empty.
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/audit?actor_entity_id=${orgB.adminId}&take=100`,
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[] };
+    expect(body.items).toEqual([]);
+  });
+});
+
+// 12C.0 Item 4: GET /org/permissions ?bridge_id= filter.
+// Same cross-org leak prevention invariant as Item 3. Lifts the
+// 12B.4 BridgeDetailDrawer client-side filter to server-side.
+describe("GET /org/permissions -- 12C.0 ?bridge_id= filter", () => {
+  it("?bridge_id=<uuid> narrows correctly to permissions in that bridge", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Insert a fixture Permission row directly via prisma so we
+    // have a known bridge_id with at least one row visible in the
+    // org's permissions scope. createSystemPermission emits zero
+    // rows when the grantor's wallet has zero capsules (Phase 0
+    // mints empty bridges in this state), so synthesizing the
+    // permission via prisma is the clean test path.
+    const adminWallet = await prisma.wallet.findUniqueOrThrow({
+      where: { entity_id: ctx.adminId },
+    });
+    const fixtureCapsuleId = randomUUID();
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: fixtureCapsuleId,
+        wallet_id: adminWallet.wallet_id,
+        entity_id: ctx.adminId,
+        capsule_type: "FOUNDATIONAL",
+        topic_tags: [],
+        payload_summary: `${TEST_PREFIX}fixture`,
+        payload_size_tokens: 10,
+        storage_location: "test://memory/fixture",
+        content_hash: "test-fixture-hash",
+        decay_type: "PERMANENT",
+        decay_rate: 0,
+      },
+    });
+    const fixtureBridgeId = randomUUID();
+    await prisma.permission.create({
+      data: {
+        permission_id: randomUUID(),
+        bridge_id: fixtureBridgeId,
+        capsule_id: fixtureCapsuleId,
+        grantor_entity_id: ctx.adminId,
+        grantee_entity_id: ctx.adminId,
+        access_scope: "FULL",
+        duration_type: "PERMANENT",
+        status: "ACTIVE",
+        valid_from: new Date(),
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/permissions?bridge_id=${fixtureBridgeId}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: Array<{ bridge_id: string; capsule_id: string }>;
+    };
+    expect(body.items.length).toBe(1);
+    expect(body.items[0]!.bridge_id).toBe(fixtureBridgeId);
+    expect(body.items[0]!.capsule_id).toBe(fixtureCapsuleId);
+  });
+
+  it("?bridge_id=not-a-uuid returns 422 INVALID_REQUEST", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/permissions?bridge_id=not-a-uuid",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("INVALID_REQUEST");
+  });
+
+  // Cross-org leak prevention — same architectural invariant as
+  // the audit endpoint's DRIFT 9 anchor.
+  it("?bridge_id=<other-org-bridge> returns empty (cross-org leak prevention)", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    // Build a bridge_id in orgB.
+    const bEmpEmail = `${TEST_PREFIX}bemp_${randomUUID()}@niov.test`;
+    const bAddResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${orgB.adminToken}` },
+      payload: { email: bEmpEmail, password: "x", hierarchy_level: 1 },
+      remoteAddress: orgB.adminIp,
+    });
+    const bEmpId = (bAddResp.json() as { entity_id: string }).entity_id;
+    const bTwinResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${orgB.adminToken}` },
+      payload: {
+        owner_entity_id: bEmpId,
+        role_title: `${TEST_PREFIX}brole_${randomUUID()}`,
+      },
+      remoteAddress: orgB.adminIp,
+    });
+    expect(bTwinResp.statusCode).toBe(201);
+    const bBridgeId = (bTwinResp.json() as {
+      owner_permission_bridge_id: string;
+    }).owner_permission_bridge_id;
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/permissions?bridge_id=${bBridgeId}`,
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: unknown[] };
+    expect(body.items).toEqual([]);
+  });
+});
+
+// 12C.0 Item 1: DELETE /org/ai-teammates/:id/skills/:packageId
+// auth + org-scope tests. The audit_event_id surfacing test for
+// this endpoint lives in audit-event-id-surfacing.test.ts.
+describe("DELETE /org/ai-teammates/:id/skills/:packageId -- 12C.0 Item 1", () => {
+  it("rejects 403 without can_admin_org", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Caller without can_admin_org tries to delete.
+    const caller = await makeAdminAndLogin({ can_admin_org: false });
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/org/ai-teammates/${ctx.adminId}/skills/${randomUUID()}`,
+      headers: { authorization: `Bearer ${caller.token}` },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(403);
+    const body = response.json() as { error: string; required: string };
+    expect(body.error).toBe("ADMIN_CAPABILITY_REQUIRED");
+    expect(body.required).toBe("can_admin_org");
+  });
+
+  it("rejects 404 when twin entity is not in caller's org", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    // Build a twin in orgB.
+    const bTwinResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${orgB.adminToken}` },
+      payload: {
+        owner_entity_id: orgB.adminId,
+        role_title: `${TEST_PREFIX}orgbrole_${randomUUID()}`,
+      },
+      remoteAddress: orgB.adminIp,
+    });
+    const orgBTwinId = (bTwinResp.json() as { entity_id: string })
+      .entity_id;
+    // OrgA admin tries to delete a skill from orgB's twin.
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/org/ai-teammates/${orgBTwinId}/skills/${randomUUID()}`,
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(response.statusCode).toBe(404);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("TWIN_NOT_FOUND");
+  });
+
+  it("rejects 404 when packageId is not a known SkillPackage", async () => {
+    const ctx = await createOrgAndAdmin();
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/org/ai-teammates/${ctx.adminId}/skills/${randomUUID()}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(404);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("SKILL_PACKAGE_NOT_FOUND");
+  });
+
+  it("rejects 404 SKILL_NOT_ASSIGNED when package exists but is not assigned to the twin", async () => {
+    const ctx = await createOrgAndAdmin();
+    // The admin entity itself is not a twin in the strict sense
+    // (TwinConfig row doesn't exist), but our scope check uses
+    // EntityMembership which DOES include the admin under the org.
+    // Use a real twin instead so we exercise the SKILL_NOT_ASSIGNED
+    // path.
+    const empResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {
+        email: `${TEST_PREFIX}sknotemp_${randomUUID()}@niov.test`,
+        password: "x",
+        hierarchy_level: 1,
+      },
+      remoteAddress: ctx.adminIp,
+    });
+    const empId = (empResp.json() as { entity_id: string }).entity_id;
+    const twinResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {
+        owner_entity_id: empId,
+        role_title: `${TEST_PREFIX}sknotrole_${randomUUID()}`,
+      },
+      remoteAddress: ctx.adminIp,
+    });
+    const twinId = (twinResp.json() as { entity_id: string }).entity_id;
+    const pkg = await prisma.skillPackage.findFirst();
+    expect(pkg).not.toBeNull();
+    // Try to remove the unassigned skill.
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/org/ai-teammates/${twinId}/skills/${pkg!.package_id}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(response.statusCode).toBe(404);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("SKILL_NOT_ASSIGNED");
+  });
+});
+
 describe("GET + POST /org/vocabulary", () => {
   it("TECH org has Sprint, API in seeded vocabulary; cross-tenant is isolated", async () => {
     const techOrg = await createOrgAndAdmin("TECH");
