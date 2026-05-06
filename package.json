@@ -12,14 +12,17 @@
     "test:watch": "vitest",
     "db:generate": "npm --workspace @niov/database run db:generate",
     "db:migrate": "npm --workspace @niov/database run db:migrate",
-    "db:push": "npm --workspace @niov/database run db:push"
+    "db:push": "npm --workspace @niov/database run db:push",
+    "docs:gen": "typedoc",
+    "docs:check": "typedoc --emit none"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "dotenv": "^16.4.7",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "typedoc": "^0.27.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

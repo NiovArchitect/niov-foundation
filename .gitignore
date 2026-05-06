@@ -9,3 +9,6 @@ dist/
 # the working tree but never commit — pattern-match catches future
 # snapshots without manual maintenance.
 docs/*.pdf
+
+# typedoc output (Section 12C.0.5 Phase 4)
+docs/_generated/
