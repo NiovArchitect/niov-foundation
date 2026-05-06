@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "unit-observation-vocab-unknown-name",
+  "fullHash": "b6a70e823020a2d0ef67139dd69f025e000fd39e393e0ecf0993ae9bd6b1c611",
+  "input": {
+    "system": "The organization operates in CONSULTING.\nNo domain vocabulary registered yet.\nAnalyze this conversation. Extract as JSON:\n{ decisions, action_items, commitments, blockers, risks, handoffs,\n  knowledge_gaps, next_steps, key_topics, participants_mentioned,\n  projects_mentioned, external_entities_mentioned }\ndecisions: list of { topic, outcome }\ncommitments: list of { description, due } (due may be ISO-8601 or unix-ms)\nexternal_entities_mentioned: names of clients/partners/vendors mentioned\nkey_topics: list of strings (acronyms or proper nouns from the conversation)\nReturn ONLY valid JSON.",
+    "user": "Pat: We just landed Northwind Industries as a new client.\nSam: Great. I'll set up the kickoff for next Monday.\nPat: Make sure to loop in legal for the MSA review.",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "```json\n{\n  \"decisions\": [\n    {\n      \"topic\": \"Client acquisition\",\n      \"outcome\": \"Northwind Industries has been onboarded as a new client\"\n    }\n  ],\n  \"action_items\": [\n    {\n      \"description\": \"Set up kickoff meeting\",\n      \"owner\": \"Sam\",\n      \"due\": \"next Monday\"\n    },\n    {\n      \"description\": \"Loop in legal for MSA review\",\n      \"owner\": \"Sam\",\n      \"due\": null\n    }\n  ],\n  \"commitments\": [\n    {\n      \"description\": \"Sam will set up the kickoff meeting\",\n      \"due\": \"next Monday\"\n    },\n    {\n      \"description\": \"Legal team to be included for MSA review\",\n      \"due\": null\n    }\n  ],\n  \"blockers\": [],\n  \"risks\": [\n    {\n      \"description\": \"MSA review by legal not yet initiated, which could delay project kickoff\"\n    }\n  ],\n  \"handoffs\": [\n    {\n      \"description\": \"MSA review handed off to legal team\",\n      \"from\": \"Pat\",\n      \"to\": \"Legal\"\n    }\n  ],\n  \"knowledge_gaps\": [\n    \"Exact date of next Monday is not specified\",\n    \"Scope of engagement with Northwind Industries is unknown\"\n  ],\n  \"next_steps\": [\n    \"Sam schedules kickoff meeting for next Monday\",\n    \"Legal team is looped in for MSA review\"\n  ],\n  \"key_topics\": [\n    \"MSA\",\n    \"Northwind Industries\",\n    \"Kickoff Meeting\",\n    \"Legal Review\"\n  ],\n  \"participants_mentioned\": [\n    \"Pat\",\n    \"Sam\",\n    \"Legal\"\n  ],\n  \"projects_mentioned\": [\n    \"Northwind Industries engagement\"\n  ],\n  \"external_entities_mentioned\": [\n    \"Northwind Industries\"\n  ]\n}\n```",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:11:41.576Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/unit/observation.test.ts:307",
+    "promptId": "unit-observation-vocab-unknown-name"
+  }
+}

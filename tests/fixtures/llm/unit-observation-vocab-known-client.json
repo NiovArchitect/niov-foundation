@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "unit-observation-vocab-known-client",
+  "fullHash": "766f2254b687b00c3109ce98bec806775d427538376519463a318897dd7e20a2",
+  "input": {
+    "system": "The organization operates in CONSULTING.\nKnown org terms: Acme Corp (CLIENT), Helix (PROJECT_CODENAME).\nAnalyze this conversation. Extract as JSON:\n{ decisions, action_items, commitments, blockers, risks, handoffs,\n  knowledge_gaps, next_steps, key_topics, participants_mentioned,\n  projects_mentioned, external_entities_mentioned }\ndecisions: list of { topic, outcome }\ncommitments: list of { description, due } (due may be ISO-8601 or unix-ms)\nexternal_entities_mentioned: names of clients/partners/vendors mentioned\nkey_topics: list of strings (acronyms or proper nouns from the conversation)\nReturn ONLY valid JSON.",
+    "user": "Pat: Acme Corp wants to expand the Helix scope.\nSam: They added two more workstreams. I'll send the revised SOW Tuesday.\nPat: Make sure the timeline reflects the new scope.",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "```json\n{\n  \"decisions\": [\n    {\n      \"topic\": \"Helix project scope\",\n      \"outcome\": \"Scope expanded to include two additional workstreams as requested by Acme Corp\"\n    }\n  ],\n  \"action_items\": [\n    {\n      \"description\": \"Send revised SOW reflecting expanded scope\",\n      \"owner\": \"Sam\",\n      \"due\": \"Tuesday\"\n    },\n    {\n      \"description\": \"Ensure timeline in revised SOW reflects the new scope\",\n      \"owner\": \"Sam\",\n      \"due\": \"Tuesday\"\n    }\n  ],\n  \"commitments\": [\n    {\n      \"description\": \"Sam to send revised Statement of Work with updated scope and timeline\",\n      \"due\": \"Tuesday\"\n    }\n  ],\n  \"blockers\": [],\n  \"risks\": [\n    {\n      \"description\": \"Timeline may not adequately reflect the impact of two additional workstreams if not carefully updated\"\n    }\n  ],\n  \"handoffs\": [\n    {\n      \"description\": \"Revised SOW to be sent from Sam to Pat (and presumably Acme Corp)\"\n    }\n  ],\n  \"knowledge_gaps\": [\n    \"Specific nature of the two new workstreams is not defined\",\n    \"Exact Tuesday date is not specified (no calendar date provided)\",\n    \"Budget implications of scope expansion not discussed\"\n  ],\n  \"next_steps\": [\n    \"Sam prepares and sends revised SOW by Tuesday\",\n    \"SOW to include updated timeline reflecting expanded scope\"\n  ],\n  \"key_topics\": [\n    \"SOW\",\n    \"Helix\",\n    \"Acme Corp\",\n    \"Scope Expansion\",\n    \"Workstreams\",\n    \"Timeline\"\n  ],\n  \"participants_mentioned\": [\n    \"Pat\",\n    \"Sam\"\n  ],\n  \"projects_mentioned\": [\n    \"Helix\"\n  ],\n  \"external_entities_mentioned\": [\n    \"Acme Corp\"\n  ]\n}\n```",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:11:31.746Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/unit/observation.test.ts:254",
+    "promptId": "unit-observation-vocab-known-client"
+  }
+}

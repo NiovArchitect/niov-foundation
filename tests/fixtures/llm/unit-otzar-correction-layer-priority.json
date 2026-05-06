@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "unit-otzar-correction-layer-priority",
+  "fullHash": "89dc61be67b5e77c9f8ce86b00aeab3cb4236c72f6d679c23975a73c55ebab8d",
+  "input": {
+    "system": "CORRECTION (highest priority): when answering questions about project deadlines, always reference the canonical project tracker, not memory of past conversations.\n\nRole template: digital twin acting as a research assistant.\n\nOperator entity: 00000000-0000-4000-8000-000000000004.\n\nWallet contents: 1 CORRECTION capsule (the correction text above).",
+    "user": "When is the Phase 2 deadline?",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "I don't have access to the canonical project tracker, so I can't give you a reliable answer about the Phase 2 deadline.\n\nPer my correction protocol, I need to reference the **canonical project tracker** for deadline information rather than relying on memory of past conversations — and I don't have direct access to that system.\n\n**Please check the canonical project tracker directly** for the accurate Phase 2 deadline. If you can share the relevant information from it here, I'm happy to help you work with that data!",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:11:06.763Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/unit/otzar.test.ts:564",
+    "promptId": "unit-otzar-correction-layer-priority"
+  }
+}

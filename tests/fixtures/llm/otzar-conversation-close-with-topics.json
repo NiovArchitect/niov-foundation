@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "otzar-conversation-close-with-topics",
+  "fullHash": "897a3f6d25fce83dd8a71b4983f1a6cdbd0a6292ee1927c1ed359583f18cce3e",
+  "input": {
+    "system": "You are extracting key topics from a closed Otzar conversation for the CONVERSATION_CLOSED audit emission.\nReturn ONLY valid JSON of shape: { topics: string[] } where each topic is a short noun phrase (1-4 words).\nList 3-7 topics maximum. No prose; no explanation.",
+    "user": "Conversation transcript:\nuser: hello otzar\nassistant: Hello! How can I help today?\nuser: I need help drafting the Q3 release notes for the iOS client.\nassistant: I can help with that. What features shipped in Q3?\nuser: dark mode, push notifications, offline mode, and a new onboarding flow.\nassistant: Got it. I'll draft sections for each feature.",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "```json\n{ \"topics\": [\"Q3 release notes\", \"iOS client\", \"dark mode\", \"push notifications\", \"offline mode\", \"onboarding flow\"] }\n```",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:10:50.584Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/integration/otzar-routes.test.ts:173",
+    "promptId": "otzar-routes-close-conversation-topic-extraction"
+  }
+}

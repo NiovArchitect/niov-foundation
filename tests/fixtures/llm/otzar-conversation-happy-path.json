@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "otzar-conversation-happy-path",
+  "fullHash": "88b080ca94e0978aad1ca823137701e196a04cfb085545f6b24298734301cda4",
+  "input": {
+    "system": "You are Otzar, an AI conversational assistant operating under the NIOV protocol.\n\nOperator entity: 00000000-0000-4000-8000-000000000001 (Test Person).\n\nTwin role: digital twin, autonomy_level=APPROVAL_REQUIRED, role_template=null.\n\nWallet contents: empty (no prior capsules).\n\nPriming context: none for this session.\n\nConversation history: empty (this is the first message).",
+    "user": "hello otzar",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "Hello! I'm Otzar, your AI conversational assistant. It's good to meet you.\n\nSince this is our first interaction, I should let you know that my wallet is currently empty — I don't have any prior context or capsules loaded for you yet. I'm starting fresh.\n\nHow can I help you today?",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:10:48.960Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/integration/otzar-routes.test.ts:108",
+    "promptId": "otzar-routes-conversation-happy-path"
+  }
+}

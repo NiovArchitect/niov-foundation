@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "unit-otzar-l7-morning-brief",
+  "fullHash": "4768f95c39d48d17b60413f864e5ca2da7b0f39db016f950cd7783471bbfc499",
+  "input": {
+    "system": "You are Otzar, an AI conversational assistant.\n\nOperator entity: 00000000-0000-4000-8000-000000000003.\n\nL7 morning brief (2026-05-06): 2 commitments due today; 1 deferred from yesterday.\n\nCommitment 1: review Q3 release notes (due 2026-05-06T17:00:00Z).\n\nCommitment 2: respond to partner email re: integration timeline (due 2026-05-06T15:00:00Z).\n\nDeferred: schedule 1:1 with engineering lead.",
+    "user": "What's on my plate today?",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "Here's your plate for today, **Wednesday, May 6, 2026**:\n\n---\n\n### ⏰ Due Today\n1. **Respond to partner email** — re: integration timeline\n   - Due by **3:00 PM UTC**\n2. **Review Q3 release notes**\n   - Due by **5:00 PM UTC**\n\n---\n\n### 🔄 Carried Over from Yesterday\n- **Schedule 1:1 with engineering lead** *(deferred)*\n\n---\n\nThe partner email is your most time-sensitive item, so you may want to tackle that first. Want help drafting a response or working through any of these?",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:11:03.384Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/unit/otzar.test.ts:375",
+    "promptId": "unit-otzar-l7-morning-brief"
+  }
+}

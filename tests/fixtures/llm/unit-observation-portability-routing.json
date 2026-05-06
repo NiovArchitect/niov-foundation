@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "unit-observation-portability-routing",
+  "fullHash": "2a1566186105e55850a3dc2f661fce251ed2f7dc13b28a26ea6add0f0ea18388",
+  "input": {
+    "system": "The organization operates in TECH.\nKnown org terms: Phoenix (PROJECT_CODENAME).\nAnalyze this conversation. Extract as JSON:\n{ decisions, action_items, commitments, blockers, risks, handoffs,\n  knowledge_gaps, next_steps, key_topics, participants_mentioned,\n  projects_mentioned, external_entities_mentioned }\ndecisions: list of { topic, outcome }\ncommitments: list of { description, due } (due may be ISO-8601 or unix-ms)\nexternal_entities_mentioned: names of clients/partners/vendors mentioned\nkey_topics: list of strings (acronyms or proper nouns from the conversation)\nReturn ONLY valid JSON.",
+    "user": "Pat: We're going with PostgreSQL for Phoenix. Locked in.\nSam: I noticed the team works better when standups are async-first; might pitch that to leadership.\nPat: Good idea. Decision on database is final though, let's not revisit.",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "```json\n{\n  \"decisions\": [\n    {\n      \"topic\": \"Database selection for Project Phoenix\",\n      \"outcome\": \"PostgreSQL selected and locked in; not to be revisited\"\n    }\n  ],\n  \"action_items\": [\n    {\n      \"description\": \"Sam to pitch async-first standups to leadership\",\n      \"owner\": \"Sam\"\n    }\n  ],\n  \"commitments\": [],\n  \"blockers\": [],\n  \"risks\": [],\n  \"handoffs\": [],\n  \"knowledge_gaps\": [],\n  \"next_steps\": [\n    \"Sam pitches async-first standup format to leadership\"\n  ],\n  \"key_topics\": [\n    \"PostgreSQL\",\n    \"Phoenix\",\n    \"async-first standups\"\n  ],\n  \"participants_mentioned\": [\n    \"Pat\",\n    \"Sam\"\n  ],\n  \"projects_mentioned\": [\n    \"Phoenix\"\n  ],\n  \"external_entities_mentioned\": []\n}\n```",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:11:51.202Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/unit/observation.test.ts:488",
+    "promptId": "unit-observation-portability-routing"
+  }
+}

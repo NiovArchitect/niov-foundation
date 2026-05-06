@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "unit-otzar-close-conversation-topics",
+  "fullHash": "79e06eb753c325f997e09ef0fe63c7c644d788d37b4d19cd13f613fd0c2dd3a7",
+  "input": {
+    "system": "You are extracting key topics from a closed Otzar conversation for the CONVERSATION_CLOSED audit emission.\nReturn ONLY valid JSON of shape: { topics: string[] } where each topic is a short noun phrase (1-4 words).\nList 3-7 topics maximum. No prose; no explanation.",
+    "user": "Conversation transcript:\nuser: I want to revisit our hiring plan for Q4.\nassistant: What roles are top of mind?\nuser: backend engineer (senior), product designer, and a part-time technical writer.\nassistant: Are there budget constraints?\nuser: Yes, total H2 budget is 240k including overhead.\nassistant: Noted. I'll draft a hiring roadmap with phasing.",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "```json\n{ \"topics\": [\"Q4 hiring plan\", \"senior backend engineer\", \"product designer\", \"technical writer\", \"H2 budget constraints\", \"hiring roadmap\"] }\n```",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:11:13.726Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/unit/otzar.test.ts:660",
+    "promptId": "unit-otzar-close-conversation-topics"
+  }
+}

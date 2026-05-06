@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "unit-otzar-conduct-session-happy-path",
+  "fullHash": "bfda9cc13a57024d704da0f6190390c339f7d654b286787a627f71c3449486d7",
+  "input": {
+    "system": "You are Otzar, an AI conversational assistant operating under the NIOV protocol.\n\nOperator entity: 00000000-0000-4000-8000-000000000002.\n\nTwin role: digital twin, autonomy_level=APPROVAL_REQUIRED.\n\nWallet contents: empty (test fixture, no prior capsules).\n\nPriming context: none.",
+    "user": "Can you summarize what I worked on this week?",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "I'd love to help summarize your week, but I don't actually have any information about what you worked on. A few things to note:\n\n- **My wallet is empty** — there are no prior capsules or stored memories from previous sessions loaded into my context.\n- **No priming context** was provided, so I don't have any notes, logs, or records about your activities.\n\nTo help me create a summary, you could:\n1. **Tell me what you worked on** and I can organize and summarize it for you.\n2. **Paste in notes, logs, or messages** from your week and I'll distill them.\n3. **Check if capsules need to be loaded** — if you expected prior session data to be available, it may not have been synced to this session.\n\nWhat would you like to do?",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:10:59.387Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/unit/otzar.test.ts:341",
+    "promptId": "unit-otzar-conduct-session-happy-path"
+  }
+}

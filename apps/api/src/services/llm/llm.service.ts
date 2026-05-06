@@ -15,6 +15,9 @@
 //              tests/unit/llm.test.ts (circuit-breaker matrix
 //              against MockLLMProvider).
 
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 
@@ -36,11 +39,10 @@ export type LLMResult =
 //      scripted responses.
 export interface LLMProvider {
   readonly name: string;
-  generateResponse(args: {
-    system: string;
-    user: string;
-    context?: string;
-  }): Promise<LLMResult>;
+  generateResponse(
+    args: { system: string; user: string; context?: string },
+    opts?: { fixtureKey?: string },
+  ): Promise<LLMResult>;
 }
 
 // WHAT: How long the circuit stays OPEN before allowing a HALF_OPEN
@@ -154,7 +156,7 @@ export function withCircuitBreaker(
   const wrapped: LLMProvider & { breaker: CircuitBreaker } = {
     name: provider.name,
     breaker,
-    async generateResponse(args) {
+    async generateResponse(args, opts) {
       if (!breaker.shouldAttempt()) {
         return {
           ok: false,
@@ -164,7 +166,7 @@ export function withCircuitBreaker(
           provider: provider.name,
         };
       }
-      const result = await provider.generateResponse(args);
+      const result = await provider.generateResponse(args, opts);
       if (result.ok) {
         breaker.recordSuccess();
       } else {
@@ -197,11 +199,10 @@ export class AnthropicProvider implements LLMProvider {
     this.model = args.model ?? "claude-sonnet-4-6";
   }
 
-  async generateResponse(args: {
-    system: string;
-    user: string;
-    context?: string;
-  }): Promise<LLMResult> {
+  async generateResponse(
+    args: { system: string; user: string; context?: string },
+    _opts?: { fixtureKey?: string },
+  ): Promise<LLMResult> {
     try {
       const userContent =
         args.context !== undefined && args.context.length > 0
@@ -256,11 +257,10 @@ export class OpenAIProvider implements LLMProvider {
     this.model = args.model ?? "gpt-4o";
   }
 
-  async generateResponse(args: {
-    system: string;
-    user: string;
-    context?: string;
-  }): Promise<LLMResult> {
+  async generateResponse(
+    args: { system: string; user: string; context?: string },
+    _opts?: { fixtureKey?: string },
+  ): Promise<LLMResult> {
     try {
       const userContent =
         args.context !== undefined && args.context.length > 0
@@ -325,11 +325,10 @@ export class MockLLMProvider implements LLMProvider {
 
   constructor(private readonly responses: LLMResult[]) {}
 
-  async generateResponse(args: {
-    system: string;
-    user: string;
-    context?: string;
-  }): Promise<LLMResult> {
+  async generateResponse(
+    args: { system: string; user: string; context?: string },
+    _opts?: { fixtureKey?: string },
+  ): Promise<LLMResult> {
     this.calls.push(args);
     if (this.responses.length === 0) {
       return {
@@ -358,5 +357,162 @@ export class MockLLMProvider implements LLMProvider {
     context?: string;
   }> {
     return this.calls;
+  }
+}
+
+// WHAT: The on-disk shape of one recorded fixture file (per ADR-0014).
+// INPUT: Used as a parameter type only.
+// OUTPUT: None -- this is a type, not a value.
+// WHY: FixtureBasedLLMProvider parses fixture JSON files into this
+//      shape and verifies the parsed object matches before use.
+//      Mirrors the JSON shape produced by scripts/record-llm-fixtures.ts.
+export interface FixtureFile {
+  fixtureKey: string;
+  fullHash: string;
+  input: { system: string; user: string; context: string | null };
+  response: LLMResult;
+  metadata: {
+    recordedAt: string;
+    recordingTemperature: number;
+    sourceFile: string;
+    promptId: string;
+  };
+}
+
+// WHAT: Compute the canonical sha256 hex of an LLM input triple.
+// INPUT: { system, user, context? } -- the same shape generateResponse
+//        receives.
+// OUTPUT: A 64-char lowercase hex string.
+// WHY: Both FixtureBasedLLMProvider (sanity-check on load) and
+//      scripts/record-llm-fixtures.ts (recording-time fullHash field)
+//      hash inputs the same way; centralizing the function ensures
+//      both sides agree on the canonical form.
+export function computeLLMInputHash(args: {
+  system: string;
+  user: string;
+  context?: string;
+}): string {
+  const joined = `${args.system}\n---\n${args.user}\n---\n${args.context ?? ""}`;
+  return createHash("sha256").update(joined).digest("hex");
+}
+
+// WHAT: Test-mode LLMProvider that dispatches by operator-chosen
+//        fixture key (per ADR-0014). Loads recorded JSON fixtures from
+//        tests/fixtures/llm/ and replays the response Claude returned
+//        when the fixture was recorded.
+// INPUT: Optional fixturesDir (defaults to <cwd>/tests/fixtures/llm).
+// OUTPUT: An LLMProvider whose generateResponse requires
+//          opts.fixtureKey and replays the corresponding fixture.
+// WHY: ADR-0014 supersedes ADR-0012's hash-by-content dispatch.
+//      Tests pass opts.fixtureKey to identify the recorded scenario;
+//      the hash is preserved as a sanity check (mismatch logs a
+//      warning but does not fail) so that prompt drift is surveilled
+//      without breaking unrelated assertions. Strict missing-fixture
+//      failure: if opts.fixtureKey is absent OR points at a missing
+//      file, the provider throws -- silent fallback is forbidden.
+export class FixtureBasedLLMProvider implements LLMProvider {
+  readonly name = "fixture-based";
+  private readonly fixturesDir: string;
+  private readonly cache = new Map<string, FixtureFile>();
+
+  constructor(fixturesDir?: string) {
+    this.fixturesDir =
+      fixturesDir ?? resolve(process.cwd(), "tests/fixtures/llm");
+  }
+
+  async generateResponse(
+    args: { system: string; user: string; context?: string },
+    opts?: { fixtureKey?: string },
+  ): Promise<LLMResult> {
+    const fixtureKey = opts?.fixtureKey;
+    if (typeof fixtureKey !== "string" || fixtureKey.length === 0) {
+      throw new Error(
+        "FixtureBasedLLMProvider.generateResponse requires opts.fixtureKey " +
+          "(per ADR-0014). Pass { fixtureKey: \"<key>\" } as the second " +
+          "argument; do not invoke this provider without one.",
+      );
+    }
+    const fixture = this.loadFixture(fixtureKey);
+    this.verifyHashSanity(args, fixture, fixtureKey);
+    return fixture.response;
+  }
+
+  private loadFixture(fixtureKey: string): FixtureFile {
+    const cached = this.cache.get(fixtureKey);
+    if (cached !== undefined) return cached;
+    const filePath = resolve(this.fixturesDir, `${fixtureKey}.json`);
+    if (!existsSync(filePath)) {
+      throw new Error(
+        `FixtureBasedLLMProvider: missing fixture for key ` +
+          `"${fixtureKey}". Resolved path: ${filePath}. ` +
+          `Run: npx tsx scripts/record-llm-fixtures.ts to record this ` +
+          `fixture (per ADR-0014). Silent fallback is forbidden.`,
+      );
+    }
+    const raw = readFileSync(filePath, "utf-8");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `FixtureBasedLLMProvider: fixture file ${filePath} is not valid ` +
+          `JSON: ${message}`,
+      );
+    }
+    const fixture = parsed as FixtureFile;
+    if (
+      typeof fixture.fixtureKey !== "string" ||
+      typeof fixture.fullHash !== "string" ||
+      fixture.input === undefined ||
+      fixture.response === undefined
+    ) {
+      throw new Error(
+        `FixtureBasedLLMProvider: fixture file ${filePath} is malformed ` +
+          `(missing fixtureKey, fullHash, input, or response). ` +
+          `Re-record via scripts/record-llm-fixtures.ts.`,
+      );
+    }
+    if (fixture.fixtureKey !== fixtureKey) {
+      throw new Error(
+        `FixtureBasedLLMProvider: fixture file ${filePath} has fixtureKey ` +
+          `"${fixture.fixtureKey}" but was loaded under key "${fixtureKey}". ` +
+          `Filename and fixtureKey must match.`,
+      );
+    }
+    this.cache.set(fixtureKey, fixture);
+    return fixture;
+  }
+
+  // WHAT: Compute the live-input hash and compare against the recorded
+  //        fixture's fullHash. Warn on mismatch; never throw.
+  // INPUT: The live args, the loaded fixture, the fixtureKey.
+  // OUTPUT: None.
+  // WHY: Per ADR-0014, hash is a sanity check, not a dispatch
+  //      mechanism. Mismatch indicates either fixture corruption
+  //      (rare) or test-prompt drift (expected for tests with
+  //      randomized inputs). The test asserts on the recorded
+  //      response, not the input hash, so execution continues. A
+  //      future Gate 7 may promote warnings to errors via
+  //      HASH_DRIFT_FATAL=true.
+  private verifyHashSanity(
+    args: { system: string; user: string; context?: string },
+    fixture: FixtureFile,
+    fixtureKey: string,
+  ): void {
+    const liveHash = computeLLMInputHash(args);
+    if (liveHash === fixture.fullHash) return;
+    const liveShort = liveHash.slice(0, 16);
+    const recordedShort = fixture.fullHash.slice(0, 16);
+    const systemSnippet = args.system.slice(0, 200);
+    const userSnippet = args.user.slice(0, 200);
+    process.stderr.write(
+      `[FixtureBasedLLMProvider] hash drift on fixtureKey=${fixtureKey}: ` +
+        `live=${liveShort}... recorded=${recordedShort}... ` +
+        `(this is benign per ADR-0014 if test inputs are non-deterministic; ` +
+        `re-record fixture if the prompt shape changed intentionally). ` +
+        `system[0:200]=${JSON.stringify(systemSnippet)} ` +
+        `user[0:200]=${JSON.stringify(userSnippet)}\n`,
+    );
   }
 }

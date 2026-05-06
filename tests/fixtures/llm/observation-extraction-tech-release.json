@@ -1,0 +1,21 @@
+{
+  "fixtureKey": "observation-extraction-tech-release",
+  "fullHash": "160a29a1fbb7933ea2eae46a4c8f89cf3e25389855825d8b8b52bd0d5583af62",
+  "input": {
+    "system": "The organization operates in TECH.\nNo domain vocabulary registered yet.\nAnalyze this conversation. Extract as JSON:\n{ decisions, action_items, commitments, blockers, risks, handoffs,\n  knowledge_gaps, next_steps, key_topics, participants_mentioned,\n  projects_mentioned, external_entities_mentioned }\ndecisions: list of { topic, outcome }\ncommitments: list of { description, due } (due may be ISO-8601 or unix-ms)\nexternal_entities_mentioned: names of clients/partners/vendors mentioned\nkey_topics: list of strings (acronyms or proper nouns from the conversation)\nReturn ONLY valid JSON.",
+    "user": "Pat: We need to lock the release date.\nSam: I think we ship Friday. Marketing is ready.\nPat: Agreed. Friday it is. I'll update the release tracker.\nSam: I'll send the all-hands announcement Wednesday.",
+    "context": null
+  },
+  "response": {
+    "ok": true,
+    "text": "```json\n{\n  \"decisions\": [\n    {\n      \"topic\": \"Release date\",\n      \"outcome\": \"Ship on Friday\"\n    }\n  ],\n  \"action_items\": [\n    {\n      \"description\": \"Update the release tracker\",\n      \"owner\": \"Pat\"\n    },\n    {\n      \"description\": \"Send the all-hands announcement\",\n      \"owner\": \"Sam\",\n      \"due\": \"Wednesday\"\n    }\n  ],\n  \"commitments\": [\n    {\n      \"description\": \"Pat will update the release tracker\",\n      \"due\": null\n    },\n    {\n      \"description\": \"Sam will send the all-hands announcement\",\n      \"due\": \"Wednesday\"\n    }\n  ],\n  \"blockers\": [],\n  \"risks\": [],\n  \"handoffs\": [],\n  \"knowledge_gaps\": [],\n  \"next_steps\": [\n    \"Pat updates the release tracker\",\n    \"Sam sends all-hands announcement on Wednesday\",\n    \"Ship product on Friday\"\n  ],\n  \"key_topics\": [\n    \"Release Date\",\n    \"Release Tracker\",\n    \"All-Hands Announcement\"\n  ],\n  \"participants_mentioned\": [\n    \"Pat\",\n    \"Sam\"\n  ],\n  \"projects_mentioned\": [\n    \"Release Tracker\"\n  ],\n  \"external_entities_mentioned\": [\n    \"Marketing\"\n  ]\n}\n```",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  },
+  "metadata": {
+    "recordedAt": "2026-05-06T20:10:54.552Z",
+    "recordingTemperature": 0,
+    "sourceFile": "tests/integration/observation-routes.test.ts:118",
+    "promptId": "observation-routes-extraction-tech-release"
+  }
+}
