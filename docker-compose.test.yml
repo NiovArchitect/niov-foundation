@@ -1,0 +1,27 @@
+# Foundation test database container.
+# Runs locally for unit and integration test tiers per
+# ADR-0011 + ADR-0013. NOT for production use.
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: niov-foundation-test-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: foundation_test
+    volumes:
+      - foundation_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d foundation_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  foundation_test_data:
+    name: niov-foundation-test-data

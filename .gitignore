@@ -12,3 +12,6 @@ docs/*.pdf
 
 # typedoc output (Section 12C.0.5 Phase 4)
 docs/_generated/
+
+# Track A test infrastructure (per ADR-0013)
+.env.test.local
