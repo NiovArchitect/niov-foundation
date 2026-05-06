@@ -2,8 +2,12 @@
 
 ## Status
 
-Proposed 2026-05-06 (Track A architectural lock; will move to
-Accepted when the Track A architectural-lock commit lands)
+Accepted 2026-05-06 (Track A architectural-lock commit
+`d728cd4`). §Decision hash-by-content dispatch superseded in
+part by ADR-0014 (Track A Gate 3 amendment, 2026-05-06).
+Other decisions in this ADR (`MockLLMProvider` preservation,
+recording script architecture, strict missing-fixture
+failure, tier integration) remain in effect.
 
 ## Context
 
