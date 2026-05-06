@@ -35,6 +35,7 @@ export interface RateLimitStore {
     ttlSeconds: number,
   ): Promise<void>;
   getMultiplier(key: string): Promise<number>;
+  reset(): Promise<void>;
 }
 
 // WHAT: An in-memory RateLimitStore for tests + REDIS_URL-less envs.
@@ -93,6 +94,33 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
     return entry.multiplier;
   }
+
+  // WHAT: Clear all rate-limit state (entries + multipliers).
+  // INPUT: None.
+  // OUTPUT: A promise that resolves immediately (in-memory clear
+  //          is synchronous; async signature satisfies the
+  //          RateLimitStore interface contract uniformly with
+  //          RedisRateLimitStore).
+  // WHY: Test infrastructure use ONLY. Production code does not
+  //      invoke this method. Tests that exercise rate-limit-
+  //      protected endpoints repeatedly within one file's
+  //      lifetime call this between cases (via the
+  //      resetRateLimits / withCleanRateLimits helpers in
+  //      tests/helpers.ts) to reset state. Tests that explicitly
+  //      assert on rate-limit BEHAVIOR (e.g.,
+  //      tests/integration/gateway.test.ts:349) must NOT call
+  //      this; they should set up rate-limit state
+  //      deterministically.
+  //
+  //      Per Drift G4-G: containerized Postgres runs ~37×
+  //      faster than real Supabase, so rapid-fire test logins
+  //      now collide with the auth rate limiter that real-
+  //      Supabase latency naturally avoided. This method
+  //      enables clean isolation.
+  async reset(): Promise<void> {
+    this.entries.clear();
+    this.multipliers.clear();
+  }
 }
 
 // WHAT: A RateLimitStore backed by a real ioredis client.
@@ -144,6 +172,42 @@ export class RedisRateLimitStore implements RateLimitStore {
     if (raw === null) return 1.0;
     const parsed = Number.parseFloat(raw);
     return Number.isFinite(parsed) ? parsed : 1.0;
+  }
+
+  // WHAT: Clear all rate-limit state under this store's key
+  //        prefixes (both rate-limit counters and multipliers).
+  // INPUT: None.
+  // OUTPUT: A promise that resolves once the SCAN+DEL sweep
+  //          completes.
+  // WHY: Same rationale as MemoryRateLimitStore.reset --
+  //      uniform RateLimitStore interface compliance for test
+  //      infrastructure. Production code does not invoke this.
+  //
+  //      Implementation uses SCAN with MATCH on each prefix
+  //      (rather than FLUSHDB) to avoid touching unrelated
+  //      keys if the Redis instance is shared with other
+  //      Foundation subsystems. SCAN is non-blocking; tests
+  //      using a Redis-backed store (none today; future-proof)
+  //      get clean isolation without disrupting any other keys
+  //      in the same database.
+  async reset(): Promise<void> {
+    for (const prefix of [this.keyPrefix, this.multPrefix]) {
+      const pattern = `${prefix}*`;
+      let cursor = "0";
+      do {
+        const [next, keys] = await this.client.scan(
+          cursor,
+          "MATCH",
+          pattern,
+          "COUNT",
+          100,
+        );
+        cursor = next;
+        if (keys.length > 0) {
+          await this.client.del(...keys);
+        }
+      } while (cursor !== "0");
+    }
   }
 }
 

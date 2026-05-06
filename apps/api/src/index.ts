@@ -200,13 +200,16 @@ export { validateBootEnvironment } from "./boot-validation.js";
 export {
   AnthropicProvider,
   CircuitBreaker,
+  FixtureBasedLLMProvider,
   MockLLMProvider,
   OpenAIProvider,
+  computeLLMInputHash,
   getLLMProvider,
   withCircuitBreaker,
 } from "./services/llm/llm.service.js";
 export type {
   CircuitState,
+  FixtureFile,
   LLMProvider,
   LLMResult,
 } from "./services/llm/llm.service.js";

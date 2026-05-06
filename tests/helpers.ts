@@ -7,6 +7,12 @@
 //              client exported by @niov/database.
 
 import { randomUUID } from "node:crypto";
+import { beforeEach } from "vitest";
+import {
+  FixtureBasedLLMProvider,
+  type LLMProvider,
+  type RateLimitStore,
+} from "@niov/api";
 import { applyAuditEventTriggers, prisma } from "@niov/database";
 import type {
   CreateCapsuleInput,
@@ -138,4 +144,73 @@ export async function createOtzarApplicationEntity(): Promise<string> {
   const { seedOtzarEntity } = await import("@niov/api");
   const result = await seedOtzarEntity({});
   return result.otzar_entity_id;
+}
+
+// WHAT: Construct a test-side LLMProvider adapter that wraps
+//        FixtureBasedLLMProvider with a pre-bound fixture key.
+// INPUT: fixtureKey -- the recorded fixture identifier per ADR-0014.
+// OUTPUT: An LLMProvider whose generateResponse routes to
+//          FixtureBasedLLMProvider with the bound key.
+// WHY: Production code at otzar.service.ts:400, :627 and
+//      observation.service.ts:295 calls
+//      provider.generateResponse(args) without opts. Tests need to
+//      dispatch by fixtureKey without modifying production call
+//      sites. The adapter satisfies the LLMProvider interface
+//      and pre-binds the fixture key internally; production code
+//      remains unchanged.
+//
+//      Per Track A Gate 5 Decision 3 (test-side adapter pattern).
+//      The 4 fixture-migration target test files
+//      (tests/integration/otzar-routes.test.ts,
+//       tests/integration/observation-routes.test.ts,
+//       tests/unit/otzar.test.ts, tests/unit/observation.test.ts)
+//      use this helper instead of `new MockLLMProvider([...])` for
+//      their happy-path test cases that map to recorded fixtures.
+//      Tests that script error sequences (circuit-breaker matrix,
+//      retry tests) continue using MockLLMProvider directly per
+//      ADR-0012's preservation.
+export function makeFixtureProvider(fixtureKey: string): LLMProvider {
+  const provider = new FixtureBasedLLMProvider();
+  return {
+    name: provider.name,
+    generateResponse(args, _opts) {
+      return provider.generateResponse(args, { fixtureKey });
+    },
+  };
+}
+
+// WHAT: Reset the rate-limit store between tests.
+// INPUT: store -- the RateLimitStore (typically a
+//         MemoryRateLimitStore in tests; the helper accepts any
+//         impl honoring the RateLimitStore.reset contract).
+// OUTPUT: A promise that resolves when reset is complete.
+// WHY: Per Drift G4-G, containerized Postgres runs ~37x faster
+//      than real Supabase. Rapid-fire test logins now collide
+//      with the auth rate limiter that real-Supabase latency
+//      naturally avoided. Tests that need clean rate-limit state
+//      per case call this in beforeEach.
+//
+//      Tests that explicitly assert on rate-limit BEHAVIOR
+//      (e.g., tests/integration/gateway.test.ts:349) should NOT
+//      call this; they should set up rate-limit state
+//      deterministically.
+export async function resetRateLimits(
+  store: RateLimitStore,
+): Promise<void> {
+  await store.reset();
+}
+
+// WHAT: beforeEach convenience that registers resetRateLimits as
+//        a hook against the given store.
+// INPUT: store -- the RateLimitStore to reset between cases.
+// OUTPUT: None (registers a beforeEach hook).
+// WHY: Tests that need clean rate-limit state in every describe
+//      block can call this once at the describe level rather than
+//      repeating beforeEach blocks across many it() cases.
+//      Same exclusion as resetRateLimits: rate-limit-BEHAVIOR
+//      tests must NOT use this convenience.
+export function withCleanRateLimits(store: RateLimitStore): void {
+  beforeEach(async () => {
+    await resetRateLimits(store);
+  });
 }
