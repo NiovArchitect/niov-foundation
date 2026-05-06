@@ -10,6 +10,12 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:unit": "vitest --config vitest.unit.config.ts --run",
+    "test:integration": "vitest --config vitest.integration.config.ts --run",
+    "test:real-llm": "vitest --config vitest.real-llm.config.ts --run",
+    "test:all": "npm run test:unit && npm run test:integration",
+    "db:test:up": "bash scripts/test-db-up.sh",
+    "db:test:down": "bash scripts/test-db-down.sh",
     "db:generate": "npm --workspace @niov/database run db:generate",
     "db:migrate": "npm --workspace @niov/database run db:migrate",
     "db:push": "npm --workspace @niov/database run db:push",
