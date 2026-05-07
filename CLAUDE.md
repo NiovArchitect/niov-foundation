@@ -87,7 +87,7 @@ niov-foundation/
 ├── docs/
 │   ├── architecture/
 │   │   ├── README.md                 (ADR catalog)
-│   │   └── decisions/                (ADRs 0001-0010 + template)
+│   │   └── decisions/                (ADRs 0001-0017 + template)
 │   ├── reference/
 │   │   ├── glossary.md
 │   │   ├── architectural-anchors.md
@@ -260,7 +260,7 @@ authoritative locations:
   permissions filter narrowing, DRIFT 2 Option C no-console,
   DRIFT 12 chainKey priority, frozen `CRYPTO_CONFIG`, frozen
   `SYSTEM_PRINCIPALS`)
-- `docs/architecture/decisions/` — the 10 ADRs with
+- `docs/architecture/decisions/` — the 17 ADRs with
   Decision / Consequences / Alternatives in Michael Nygard
   format
 
@@ -269,7 +269,7 @@ documentation, **cite the reference**, do not redefine.
 
 ## 5. Key Architectural Decisions
 
-The 10 ADRs as of Section 12C.0. The `docs/architecture/README.md`
+The 17 ADRs as of Track A Gate 8a. The `docs/architecture/README.md`
 is the source of truth for ADR navigation; this is a quick-
 reference jump table.
 
@@ -283,6 +283,13 @@ reference jump table.
 - **ADR-0008** — `EntityComplianceProfile` is org-level, not aggregated (Section 12C.0; DRIFT 15)
 - **ADR-0009** — COSMP 7-operation enumeration (locked by patent US 12,517,919)
 - **ADR-0010** — Foundation tests are legitimately slow (90-110 min) (Section 12C.0 emergent lesson)
+- **ADR-0011** — Three-tier test stratification (Track A Gate 1; Gate 6 reproducibility-verification amendment in-place at `cae8cf4`)
+- **ADR-0012** — Test-mode LLM provider hardening (Track A Gate 1; hash-dispatch decision superseded in part by ADR-0014)
+- **ADR-0013** — Containerized Postgres for unit and integration tiers (Track A Gate 1; `postgres:16.4-alpine` pin)
+- **ADR-0014** — FixtureBasedLLMProvider key-based dispatch (Track A Gate 3 ADR amendment; supersedes ADR-0012's hash-by-content dispatch)
+- **ADR-0015** — CI Workflow Architecture (Track A Gate 7; 8 locked decisions A-H including postgres + Node pins)
+- **ADR-0016** — Pin-and-Optimize Framework (substrate-pinning canonical reference; companion to ADR-0017; five-question template)
+- **ADR-0017** — Production Discipline (substrate-investigation canonical reference; companion to ADR-0016; nine-step template)
 
 ADR amendments and supersession follow the discipline in
 `docs/architecture/README.md` §ADR Lifecycle.
@@ -300,8 +307,29 @@ this documentation infrastructure batch. Recent landmarks:
   (24 dimensions, 6 patent claim families)
 - Section 12C.0.5 — this commit (operating manual + docs
   infrastructure)
-- Track A — queued post-Section-12C.0.5 (containerized
-  Postgres, mocked LLM provider, real-LLM nightly tier)
+- Track A — IN FLIGHT (post-Section-12C.0.5):
+  - Gate 1 (architectural lock; ADRs 0011/0012/0013): CLOSED `d728cd4`
+  - Gate 2 (OrbStack install): CLOSED (operator-side)
+  - Gate 3 Half A (containerized Postgres infra): CLOSED `081d35e`
+  - Gate 3 ADR amendment (ADR-0014 supersedes ADR-0012 dispatch): CLOSED `2a14dec`
+  - Gate 3 Half B (FixtureBasedLLMProvider + 10 fixtures): CLOSED `16b4482`
+  - Gate 4 (tier configs + npm scripts): CLOSED `925761d`
+  - Gate 5a (foundational substrate): CLOSED `c5c8b00`
+  - Gate 5b (consumer adoption + 3-tier verification): CLOSED `9260c53`
+  - Gate 6 (reproducibility evidence; ADR-0011 amendment): CLOSED `cae8cf4`
+  - Gate 7-pre (lock-file sync): CLOSED `e8a559e`
+  - Gate 7 (CI workflow architecture; ADR-0015): CLOSED `78cf1b5`
+  - Gate 7-post (Drift G7-E fix): CLOSED `9f8e909`
+  - Gate 7-post-2 (Drift G7-PRE-C fix): CLOSED `2fbc057`
+  - Gate 8a (ADR cross-citation back-references): CLOSED `3febf83`
+  - **Gate 8b (CLAUDE.md update): IN FLIGHT (this commit)**
+  - Gate 8c (testing.md + onboarding.md): QUEUED
+  - Gate 8d (discipline-pattern documentation): QUEUED
+- Independent companion tracks (canonical references; landed
+  alongside Track A):
+  - G5b-I Resolution: CLOSED `fbc7942`
+  - ADR-0016 Pin-and-Optimize Framework: CLOSED `782154c`
+  - ADR-0017 Production Discipline: CLOSED `444cf56`
 - Section 12.5 Sub-boxes 1-9 — queued after Track A
 
 The live tracker is `docs/reference/section-12-progress.md`.
@@ -339,6 +367,23 @@ Practical guidance for an agent starting work:
   Never replace the org-scope predicate; never broaden scope.
   See ADR-0006 and `tests/integration/admin-routes.test.ts`
   (DRIFT 9 anchor).
+- **Pin external dependencies via the Pin-and-Optimize
+  Framework** (ADR-0016). Every external dependency
+  (runtime version, container image, package version, schema
+  version, third-party SDK) gets pinned to a specific version
+  with the dominant optimization axis documented per the
+  five-question template. Decisions E + H of ADR-0015
+  (postgres:16.4-alpine + Node 22.11.0) are the canonical
+  worked examples.
+- **Investigate drifts via the Production Discipline**
+  (ADR-0017). The nine-step template applies to all substrate
+  investigations: frame the drift, distinguish observation
+  from inference, verify inferred premises empirically before
+  fix design, reframe based on evidence, identify root causes
+  end-to-end, design defense-in-depth fix scope, apply with
+  three-approvals discipline, encode prevention (substrate
+  test or pre-flight check), document the lineage. The G5b-I
+  Resolution Gate is the canonical worked example.
 
 For commits, use the section-prefix convention observed in
 `git log`:
@@ -413,7 +458,7 @@ Concrete anti-patterns observable across the build cycle:
 
 Four documentation roots cover the substrate of the project:
 
-- **`docs/architecture/`** — ADR-0001 through ADR-0010 plus
+- **`docs/architecture/`** — ADR-0001 through ADR-0017 plus
   the template (`0000-template.md`) and the architecture
   README. Start with `docs/architecture/README.md`.
 - **`docs/reference/`** — `glossary.md` (term definitions),
