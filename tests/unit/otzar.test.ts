@@ -34,6 +34,7 @@ import {
   truncateToTokenBudget,
   WriteService,
   type LayerBundle,
+  type LLMProvider,
   type LLMResult,
   type LoginResult,
 } from "@niov/api";
@@ -44,7 +45,11 @@ import {
   cleanupTestData,
   ensureAuditTriggers,
   makeEntityInput,
+  makeFixtureProvider,
 } from "../helpers.js";
+import unitOtzarConductHappy from "../fixtures/llm/unit-otzar-conduct-session-happy-path.json";
+import unitOtzarL7Brief from "../fixtures/llm/unit-otzar-l7-morning-brief.json";
+import unitOtzarCloseTopics from "../fixtures/llm/unit-otzar-close-conversation-topics.json";
 
 const TEST_JWT_SECRET = "otzar-test-secret-do-not-use-in-prod";
 const TEST_KEY = randomBytes(32);
@@ -61,7 +66,24 @@ afterAll(async () => {
 
 // WHAT: Build a fresh service stack for tests that exercise
 //        conductSession / closeConversation end-to-end.
-function makeServices(opts: { mockResponses?: LLMResult[] } = {}) {
+// OPTS:
+//   - mockResponses: scripted LLMResult queue (passed to
+//     MockLLMProvider). Used by tests that need specific response
+//     sequences (e.g., the malformed-LLM-fallback test at L478).
+//   - llm: optional LLMProvider override that REPLACES the default
+//     MockLLMProvider for OtzarService construction only. The
+//     factory still constructs and RETURNS a MockLLMProvider under
+//     the `llm` key so Test 564 (CORRECTION priority) can call
+//     llm.getCalls() for system-prompt introspection. When opts.llm
+//     is passed, the returned MockLLMProvider is unused by the test
+//     that passed it. Per Track A Gate 5 Decision 2 (Drifts G5b-B
+//     + G5b-E): preserves the 12+ existing call-site signatures
+//     while letting fixture-adopting tests inject a fixture-replay
+//     provider via opts.llm.
+function makeServices(opts: {
+  mockResponses?: LLMResult[];
+  llm?: LLMProvider;
+} = {}) {
   const sessionStore = new MemoryNonceStore();
   const declarationStore = new MemoryNonceStore();
   const contentStore = new MemoryContentStore();
@@ -93,13 +115,14 @@ function makeServices(opts: { mockResponses?: LLMResult[] } = {}) {
   const coe = new COEService(auth, negotiate, read, encryption);
   const hive = new HiveService(auth, encryption, contentStore);
   const cache = new MemoryKVCache();
-  const llm = new MockLLMProvider(
+  const mockLlm = new MockLLMProvider(
     opts.mockResponses ?? [
       { ok: true, text: "stub LLM response", provider: "mock", model: "mock-1" },
     ],
   );
-  const otzar = new OtzarService(auth, coe, llm, cache);
-  return { auth, write, hive, cache, llm, otzar, coe };
+  const llmForService: LLMProvider = opts.llm ?? mockLlm;
+  const otzar = new OtzarService(auth, coe, llmForService, cache);
+  return { auth, write, hive, cache, llm: mockLlm, otzar, coe };
 }
 
 async function loginAs(
@@ -339,7 +362,9 @@ describe("conductSession", () => {
   });
 
   it("happy path returns ok with conversation_id, response, context_used, tokens_consumed", async () => {
-    const { auth, otzar } = makeServices();
+    const { auth, otzar } = makeServices({
+      llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+    });
     const owner = await loginAs(auth);
     await attachTwin(owner.entity.entity_id);
     const result = await otzar.conductSession({
@@ -350,7 +375,10 @@ describe("conductSession", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.response).toBe("stub LLM response");
+    // Decision 1 Option C: exact-equality against recorded fixture
+    // response.text. Re-recording the fixture re-aligns this
+    // assertion automatically.
+    expect(result.response).toBe(unitOtzarConductHappy.response.text);
     expect(result.conversation_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(typeof result.tokens_consumed).toBe("number");
     expect(typeof result.context_used).toBe("number");
@@ -373,7 +401,13 @@ describe("conductSession", () => {
   });
 
   it("L7 morning brief: first call sets Redis flag, second call same day skips brief", async () => {
-    const { auth, otzar, cache } = makeServices();
+    // Both conductSession calls share the same fixture (single-key
+    // adapter); the test asserts on the cache-flag flip, not on
+    // response content, so serving the same recorded brief twice
+    // is correct.
+    const { auth, otzar, cache } = makeServices({
+      llm: makeFixtureProvider("unit-otzar-l7-morning-brief"),
+    });
     const owner = await loginAs(auth);
     await attachTwin(owner.entity.entity_id);
     const flagKey = `otzar:entity:${owner.entity.entity_id}:first_convo_today`;
@@ -392,6 +426,8 @@ describe("conductSession", () => {
       message: "and again",
     });
     expect(r2.ok).toBe(true);
+    // Sanity-check the L7-brief fixture import loaded correctly.
+    expect(unitOtzarL7Brief.fixtureKey).toBe("unit-otzar-l7-morning-brief");
   });
 });
 
@@ -658,7 +694,13 @@ describe("conductSession + closeConversation -- audit emission (TP9)", () => {
   });
 
   it("CONVERSATION_CLOSED audit emitted on close with capsule_id + conversation_id in details", async () => {
-    const { auth, otzar } = makeServices();
+    // Both LLM calls (conduct + close) share the same fixture
+    // (single-key adapter); the conduct call's response goes
+    // unasserted, while the close call's parser extracts the 6
+    // recorded topics from the JSON-fenced response.text.
+    const { auth, otzar } = makeServices({
+      llm: makeFixtureProvider("unit-otzar-close-conversation-topics"),
+    });
     const owner = await loginAs(auth);
     await attachTwin(owner.entity.entity_id);
     const conv = await otzar.conductSession({
@@ -674,6 +716,16 @@ describe("conductSession + closeConversation -- audit emission (TP9)", () => {
     });
     expect(close.ok).toBe(true);
     if (!close.ok) return;
+    // SUBSTRATE-HONESTY NOTE (Drift G5b-H): This test does not
+    // pass conversation_history to closeConversation, so
+    // OtzarService.extractTopics early-returns the FALLBACK
+    // ["conversation_summary"] (otzar.service.ts:621-625).
+    // The fixture's recorded JSON-fenced response.text exercises
+    // the conduct call only; the close call's topic extraction
+    // hits the fallback path. A future test that exercises the
+    // topic-extraction success path (post-G5b-I-resolution) will
+    // consume the close-conversation fixture's recorded topics
+    // through the parser.
 
     const closedRows = await prisma.auditEvent.findMany({
       where: {
@@ -688,5 +740,9 @@ describe("conductSession + closeConversation -- audit emission (TP9)", () => {
     };
     expect(details.conversation_id).toBe(conv.conversation_id);
     expect(details.capsule_id).toBe(close.capsule_id);
+    // Sanity-check the close-topics fixture import loaded correctly.
+    expect(unitOtzarCloseTopics.fixtureKey).toBe(
+      "unit-otzar-close-conversation-topics",
+    );
   });
 });

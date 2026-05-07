@@ -2,8 +2,13 @@
 // PURPOSE: HTTP-level coverage for the Section 11C observation
 //          routes -- /otzar/observe (happy + dedup), /otzar/correction
 //          (write CORRECTION).
-// CONNECTS TO: buildApp full Fastify wiring with MockLLMProvider
-//              injected.
+// CONNECTS TO: buildApp full Fastify wiring with a fixture-replay
+//              LLM provider injected via BuildAppConfig.otzarLLM.
+//              ADR-0014 fixture-replay via makeFixtureProvider --
+//              the single-key adapter is appropriate here because
+//              both LLM-consuming calls in this file (test L118 +
+//              test L143's first /observe) share the same recorded
+//              extraction shape per Track A Gate 5 G5.4.2.
 
 import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -13,7 +18,6 @@ import {
   MemoryKVCache,
   MemoryNonceStore,
   MemoryRateLimitStore,
-  MockLLMProvider,
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
 import { createEntity, prisma } from "@niov/database";
@@ -21,7 +25,9 @@ import {
   cleanupTestData,
   ensureAuditTriggers,
   makeEntityInput,
+  makeFixtureProvider,
 } from "../helpers.js";
+import observationExtraction from "../fixtures/llm/observation-extraction-tech-release.json";
 import type { FastifyInstance } from "fastify";
 
 const TEST_JWT_SECRET = "obs-routes-test-secret-do-not-use-in-prod";
@@ -40,22 +46,13 @@ beforeAll(async () => {
     contentEncryption: new ContentEncryption(TEST_KEY),
     rateLimitStore: new MemoryRateLimitStore(),
     otzarCache: new MemoryKVCache(),
-    otzarLLM: new MockLLMProvider([
-      // Used by the first /observe call.
-      {
-        ok: true,
-        text: JSON.stringify({
-          decisions: [{ topic: "release", outcome: "ship Friday" }],
-          commitments: [],
-          key_topics: ["release"],
-          external_entities_mentioned: [],
-        }),
-        provider: "mock",
-        model: "mock-1",
-      },
-      // Subsequent calls reuse the last entry per MockLLMProvider's
-      // queue semantics.
-    ]),
+    // Fixture-replay: every LLM call in this file (test L118 +
+    // test L143's first /observe) returns the recorded
+    // observation-extraction-tech-release response. The dedup test
+    // L143's second /observe short-circuits before the LLM, so
+    // only 2 LLM calls fire in this file -- both serving the same
+    // fixture is correct.
+    otzarLLM: makeFixtureProvider("observation-extraction-tech-release"),
   });
 });
 
@@ -137,7 +134,16 @@ describe("POST /otzar/observe", () => {
     expect(body.ok).toBe(true);
     expect(body.skipped).toBeFalsy();
     expect(body.capsule_ids.length).toBeGreaterThanOrEqual(1);
-    expect(body.extracted_summary.decisions).toBeGreaterThanOrEqual(1);
+    // Decision 1 Option C: exact-equality matching the recorded
+    // fixture's decisions array length (1). Re-recording with a
+    // different count auto-fails this assertion, surfacing fixture-
+    // content drift instead of silently passing.
+    expect(body.extracted_summary.decisions).toBe(1);
+    // Sanity-check the observation fixture import loaded correctly
+    // (also serves as an unused-import guard).
+    expect(observationExtraction.fixtureKey).toBe(
+      "observation-extraction-tech-release",
+    );
   });
 
   it("duplicate content within 24h returns { skipped: true }", async () => {

@@ -32,6 +32,7 @@ import {
   ensureAuditTriggers,
   makeEntityInput,
   TEST_PREFIX,
+  withCleanRateLimits,
 } from "../helpers.js";
 import type { FastifyInstance } from "fastify";
 
@@ -39,6 +40,11 @@ const TEST_JWT_SECRET = "admin-routes-test-secret-do-not-use-in-prod";
 const TEST_KEY = randomBytes(32);
 
 let app: FastifyInstance;
+// Per Track A Gate 5 Decision 8 (Drift G5b-J): const-at-module-top
+// composes cleanly with withCleanRateLimits' value-capture semantics.
+// MemoryRateLimitStore's constructor is sync + side-effect-free
+// (allocates two empty Maps), so deferring to beforeAll is unnecessary.
+const store = new MemoryRateLimitStore();
 
 beforeAll(async () => {
   await ensureAuditTriggers();
@@ -49,7 +55,7 @@ beforeAll(async () => {
     declarationStore: new MemoryNonceStore(),
     contentStore: new MemoryContentStore(),
     contentEncryption: new ContentEncryption(TEST_KEY),
-    rateLimitStore: new MemoryRateLimitStore(),
+    rateLimitStore: store,
   });
 });
 
@@ -58,6 +64,13 @@ afterAll(async () => {
   await cleanupTestData();
   await prisma.$disconnect();
 });
+
+// Reset the rate-limit store before every test in this file. Per
+// Drift G4-G: containerized Postgres runs ~37x faster than real
+// Supabase, so rapid-fire test logins now collide with the auth
+// rate limiter. Module-top placement covers all 42 tests across 19
+// describe blocks via vitest's beforeEach scoping.
+withCleanRateLimits(store);
 
 // WHAT: Create + login a PERSON entity with optional admin flags
 //        flipped on its TAR.

@@ -179,6 +179,60 @@ export function makeFixtureProvider(fixtureKey: string): LLMProvider {
   };
 }
 
+// WHAT: Construct a test-side LLMProvider adapter that wraps
+//        FixtureBasedLLMProvider with a SEQUENCE of pre-bound
+//        fixture keys, dispensing them one per generateResponse
+//        call in order.
+// INPUT: keys -- array of recorded fixture identifiers per
+//         ADR-0014, in the order calls will consume them.
+// OUTPUT: An LLMProvider whose generateResponse routes the Nth
+//          call to FixtureBasedLLMProvider with the Nth key in
+//          the sequence.
+// WHY: Integration tests (e.g., tests/integration/
+//      otzar-routes.test.ts) construct one app in beforeAll and
+//      run multiple it() blocks against it. The shared app's
+//      LLMProvider is bound at construction time, so a single-key
+//      makeFixtureProvider can only serve one fixture's response
+//      for ALL calls.
+//
+//      This helper mirrors MockLLMProvider's sequence-dispensing
+//      semantics (FIFO consumption) so integration tests can
+//      replay distinct recorded responses across multiple LLM
+//      calls within a single app instance.
+//
+//      Strict failure: if more calls are made than fixtures
+//      provided, throws -- mirrors FixtureBasedLLMProvider's
+//      strict missing-fixture semantics. Tests that need lenient
+//      fallback should use MockLLMProvider directly.
+//
+//      Per Track A Gate 5 Decision 6 (Drift G5b-G).
+export function makeSequencedFixtureProvider(
+  keys: readonly string[],
+): LLMProvider {
+  if (keys.length === 0) {
+    throw new Error(
+      "makeSequencedFixtureProvider: keys array must be non-empty",
+    );
+  }
+  const provider = new FixtureBasedLLMProvider();
+  let callIndex = 0;
+  return {
+    name: provider.name,
+    generateResponse(args, _opts) {
+      if (callIndex >= keys.length) {
+        throw new Error(
+          `makeSequencedFixtureProvider: exhausted ${keys.length} keys; ` +
+            `call #${callIndex + 1} has no corresponding fixture. ` +
+            `Provide more keys or use MockLLMProvider for lenient sequencing.`,
+        );
+      }
+      const key = keys[callIndex]!;
+      callIndex += 1;
+      return provider.generateResponse(args, { fixtureKey: key });
+    },
+  };
+}
+
 // WHAT: Reset the rate-limit store between tests.
 // INPUT: store -- the RateLimitStore (typically a
 //         MemoryRateLimitStore in tests; the helper accepts any

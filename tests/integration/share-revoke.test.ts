@@ -14,6 +14,7 @@ import {
   buildApp,
   MemoryContentStore,
   MemoryNonceStore,
+  MemoryRateLimitStore,
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
 import { createEntity, prisma } from "@niov/database";
@@ -21,6 +22,7 @@ import {
   cleanupTestData,
   ensureAuditTriggers,
   makeEntityInput,
+  withCleanRateLimits,
 } from "../helpers.js";
 import type { FastifyInstance } from "fastify";
 
@@ -28,6 +30,15 @@ const TEST_JWT_SECRET = "share-revoke-integration-secret";
 
 let app: FastifyInstance;
 let contentStore: MemoryContentStore;
+// Per Track A Gate 5 Decision 3 D-1 + Decision 8 (Drift G5b-J):
+// explicit MemoryRateLimitStore construction at module top level
+// composes cleanly with withCleanRateLimits' value-capture
+// semantics. Pre-G5.5 this file relied on makeDefaultRateLimitStore
+// (the buildApp default), which produced a fresh store per app
+// instance but offered no per-test reset hook. Per Drift G4-G:
+// containerized Postgres runs ~37x faster than real Supabase, so
+// rapid-fire test logins now collide with the auth rate limiter.
+const store = new MemoryRateLimitStore();
 
 beforeAll(async () => {
   await ensureAuditTriggers();
@@ -39,6 +50,7 @@ beforeAll(async () => {
     declarationStore: new MemoryNonceStore(),
     contentStore,
     contentEncryption: new ContentEncryption(randomBytes(32)),
+    rateLimitStore: store,
   });
 });
 
@@ -47,6 +59,11 @@ afterAll(async () => {
   await cleanupTestData();
   await prisma.$disconnect();
 });
+
+// Reset the rate-limit store before every test in this file.
+// Module-top placement covers all 6 tests (across all describe
+// blocks) via vitest's beforeEach scoping.
+withCleanRateLimits(store);
 
 // WHAT: Create a PERSON entity with a known password, log them in,
 //        and return everything the test needs to drive HTTP calls.

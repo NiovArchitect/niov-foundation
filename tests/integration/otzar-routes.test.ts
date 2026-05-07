@@ -1,11 +1,16 @@
 // FILE: otzar-routes.test.ts (integration)
 // PURPOSE: HTTP-level coverage for POST /otzar/conversation/message
 //          and POST /otzar/conversation/close. Exercises the routes
-//          end-to-end through buildApp's full Fastify wiring (with
-//          a MockLLMProvider injected via BuildAppConfig.otzarLLM
-//          so no real Anthropic API calls fire).
+//          end-to-end through buildApp's full Fastify wiring with
+//          a sequenced fixture-replay LLM provider injected via
+//          BuildAppConfig.otzarLLM (so no real Anthropic API calls
+//          fire and assertions can hold against recorded responses).
 // CONNECTS TO: buildApp, OtzarService routes, AuthService for
-//              login.
+//              login. ADR-0014 fixture-replay via
+//              makeSequencedFixtureProvider — the shared app's LLM
+//              dispenses a recorded response per call across both
+//              describe blocks per Track A Gate 5 Decision 6 (Drift
+//              G5b-G).
 
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -15,7 +20,6 @@ import {
   MemoryKVCache,
   MemoryNonceStore,
   MemoryRateLimitStore,
-  MockLLMProvider,
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
 import { createEntity, prisma } from "@niov/database";
@@ -23,7 +27,10 @@ import {
   cleanupTestData,
   ensureAuditTriggers,
   makeEntityInput,
+  makeSequencedFixtureProvider,
 } from "../helpers.js";
+import otzarHappyPath from "../fixtures/llm/otzar-conversation-happy-path.json";
+import otzarCloseWithTopics from "../fixtures/llm/otzar-conversation-close-with-topics.json";
 import type { FastifyInstance } from "fastify";
 
 const TEST_JWT_SECRET = "otzar-routes-test-secret-do-not-use-in-prod";
@@ -42,13 +49,13 @@ beforeAll(async () => {
     contentEncryption: new ContentEncryption(TEST_KEY),
     rateLimitStore: new MemoryRateLimitStore(),
     otzarCache: new MemoryKVCache(),
-    otzarLLM: new MockLLMProvider([
-      {
-        ok: true,
-        text: "stub LLM response",
-        provider: "mock",
-        model: "mock-1",
-      },
+    // Sequence: test 108 consumes call #1 (happy-path); test 173
+    // consumes call #2 (conduct -> happy-path) and call #3 (close
+    // -> close-with-topics, JSON-shaped topic extraction).
+    otzarLLM: makeSequencedFixtureProvider([
+      "otzar-conversation-happy-path",
+      "otzar-conversation-happy-path",
+      "otzar-conversation-close-with-topics",
     ]),
   });
 });
@@ -123,7 +130,10 @@ describe("POST /otzar/conversation/message", () => {
       tokens_consumed: number;
     };
     expect(body.ok).toBe(true);
-    expect(body.response).toBe("stub LLM response");
+    // Decision 1 Option C: exact-equality against recorded fixture
+    // response.text. Re-recording the fixture re-aligns this
+    // assertion automatically.
+    expect(body.response).toBe(otzarHappyPath.response.text);
     expect(body.conversation_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(typeof body.tokens_consumed).toBe("number");
     expect(typeof body.context_used).toBe("number");
@@ -199,5 +209,19 @@ describe("POST /otzar/conversation/close", () => {
     expect(body.ok).toBe(true);
     expect(body.conversation_id).toBe(conv);
     expect(Array.isArray(body.topics)).toBe(true);
+    // SUBSTRATE-HONESTY NOTE (Drift G5b-H): The close test does
+    // not pass conversation_history, so OtzarService.extractTopics
+    // early-returns the FALLBACK ["conversation_summary"] without
+    // firing an LLM call (otzar.service.ts:621-625). Position 3
+    // of makeSequencedFixtureProvider's key sequence
+    // ("otzar-conversation-close-with-topics") is therefore
+    // forward-looking substrate -- not consumed at runtime. A
+    // future test that exercises the topic-extraction success
+    // path (post-G5b-I-resolution) will consume it.
+    // Sanity-check the close-fixture import loaded correctly (also
+    // serves as an unused-import guard).
+    expect(otzarCloseWithTopics.fixtureKey).toBe(
+      "otzar-conversation-close-with-topics",
+    );
   });
 });
