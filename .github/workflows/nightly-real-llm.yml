@@ -1,0 +1,148 @@
+# Track A Gate 7: nightly real-LLM tier verification per
+# ADR-0015. Runs at 09:00 UTC daily (Pacific morning per
+# Decision A) and on-demand via workflow_dispatch.
+#
+# Cost: ~$0.013/run × 365 = ~$4.75/year per Decision 4.
+# Concurrency allowed per Decision F (real-LLM tests are
+# stateless; bounded cost).
+# Failure-issue automation creates a GitHub issue with a
+# pre-populated investigation checklist on every failure.
+#
+# Drift G7-B verification: vitest.real-llm.config.ts loads
+# .env.test (no override) then .env.test.local
+# (override:true). In CI, .env.test.local doesn't exist;
+# the step-level env: ANTHROPIC_API_KEY: ${{ secrets... }}
+# below sets the secret BEFORE vitest runs; dotenv's
+# no-override default preserves the secret value through
+# the entire load chain; the stub guard at vitest.real-llm
+# .config.ts:75-88 passes; tests run with real key.
+#
+# Drift G7-PRE-B: npm run db:generate is REQUIRED after
+# npm ci (npm ci wipes node_modules/.prisma/client).
+
+name: Nightly real-LLM verification
+
+on:
+  schedule:
+    # 09:00 UTC daily (Pacific morning per Decision A).
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  real-llm-tests:
+    name: Real-LLM tier (2 tests; ~$0.013)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: foundation_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d foundation_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Step-level secret survives dotenv's no-override default
+      # in vitest.real-llm.config.ts (verified at Drift G7-B).
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate
+      - name: Push schema to test database
+        run: npm run db:push
+      - name: Apply audit triggers
+        run: npx tsx scripts/apply-audit-triggers.ts
+      - name: Run real-LLM tests (real Anthropic API calls)
+        run: |
+          set -o pipefail
+          npm run test:real-llm 2>&1 | tee test-real-llm-output.log
+      - name: Capture failure context
+        if: failure()
+        run: |
+          {
+            echo "=== Run metadata ==="
+            echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "Trigger: ${{ github.event_name }}"
+            echo "Commit: ${{ github.sha }}"
+            echo ""
+            echo "=== Node + npm ==="
+            node -v
+            npm -v
+            echo ""
+            echo "=== Vitest version ==="
+            npx vitest --version || true
+            echo ""
+            echo "=== Anthropic SDK version (from package-lock) ==="
+            jq '.packages."node_modules/@anthropic-ai/sdk".version' package-lock.json || true
+            echo ""
+            echo "=== Test output tail ==="
+            tail -50 test-real-llm-output.log || true
+          } > failure-context.log 2>&1
+      - name: Upload real-LLM diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-llm-diagnostics-${{ github.run_id }}
+          path: |
+            test-real-llm-output.log
+            failure-context.log
+          retention-days: 30
+      - name: Open GitHub issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const today = new Date().toISOString().slice(0, 10);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const artifactsUrl = `${runUrl}#artifacts`;
+            const body = [
+              `Nightly real-LLM CI run failed on ${today}.`,
+              ``,
+              `## Workflow run`,
+              ``,
+              `- Run: ${runUrl}`,
+              `- Artifacts: ${artifactsUrl}`,
+              `- Trigger: ${context.eventName}`,
+              `- Commit: ${context.sha}`,
+              ``,
+              `## Investigation checklist`,
+              ``,
+              `- [ ] Reviewed test failure output (download \`real-llm-diagnostics\` artifact above)`,
+              `- [ ] Identified root cause (model drift / Foundation parsing assumption / network / Anthropic API issue / other)`,
+              `- [ ] Decided resolution path (parser fix / prompt update / test update / Anthropic side issue)`,
+              `- [ ] Committed fix and verified locally with \`npm run test:real-llm\``,
+              `- [ ] Closed this issue with link to the fix commit`,
+              ``,
+              `## Context`,
+              ``,
+              `Per ADR-0015 (Track A Gate 7 CI workflow architecture),`,
+              `nightly real-LLM failures surface within 24 hours of`,
+              `Anthropic model behavior drift or Foundation parsing`,
+              `regression. Substrate modification remains a human`,
+              `decision; this issue is a notification + investigation`,
+              `scaffold, not an auto-fix request.`,
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly real-LLM CI failure - ${today}`,
+              body,
+              labels: ['ci-failure', 'real-llm', 'nightly'],
+            });

@@ -1,0 +1,182 @@
+# Track A Gate 7: PR-blocking CI checks per ADR-0015.
+# Runs typecheck + unit + integration tiers on every PR and
+# every push to main. The real-LLM tier is excluded here
+# (lives in nightly-real-llm.yml per Decision C).
+#
+# 8 locked architectural decisions (A-H) in ADR-0015. Key
+# pins for substrate-honesty discipline:
+# - Decision E: postgres:16.4-alpine pinned (true parity
+#   with docker-compose.test.yml; Drift G7-A resolution)
+# - Decision G: npm caching via setup-node@v4
+# - Decision H: Node 22.11.0 via .nvmrc (LTS posture per
+#   Decision 11 Path 2; Drifts G7-C resolution)
+# - Drift G7-PRE-B: npm run db:generate REQUIRED after
+#   npm ci because npm ci wipes node_modules including
+#   node_modules/.prisma/client; without this step every
+#   job fails at module load and TS error count regresses
+#   from 12 to 254.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    name: Typecheck (strict 12-error baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate
+      - name: Run typecheck (strict baseline)
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.json 2>&1 | tee tsc-output.log
+          set -e
+          ERROR_COUNT=$(grep -c "error TS" tsc-output.log || echo 0)
+          echo "TS error count: $ERROR_COUNT (baseline: 12)"
+          if [ "$ERROR_COUNT" -gt 12 ]; then
+            echo "::error::TS error count $ERROR_COUNT exceeds baseline 12"
+            exit 1
+          fi
+          echo "✓ TS baseline preserved at $ERROR_COUNT errors"
+      - name: Upload typecheck diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-diagnostics-${{ github.run_id }}
+          path: tsc-output.log
+          retention-days: 14
+
+  unit-tests:
+    name: Unit tier (370 tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: foundation_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d foundation_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate
+      - name: Push schema to test database
+        run: npm run db:push
+      - name: Apply audit triggers
+        run: npx tsx scripts/apply-audit-triggers.ts
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          npm run test:unit 2>&1 | tee test-unit-output.log
+      - name: Capture environment metadata on failure
+        if: failure()
+        run: |
+          {
+            echo "=== Node + npm ==="
+            node -v
+            npm -v
+            echo ""
+            echo "=== OS ==="
+            cat /etc/os-release || true
+            echo ""
+            echo "=== Vitest version ==="
+            npx vitest --version || true
+            echo ""
+            echo "=== Postgres image ==="
+            docker ps --filter ancestor=postgres:16.4-alpine || true
+          } > env-metadata.log 2>&1
+      - name: Upload unit-tier diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tier-diagnostics-${{ github.run_id }}
+          path: |
+            test-unit-output.log
+            env-metadata.log
+          retention-days: 14
+
+  integration-tests:
+    name: Integration tier (111 tests + 1 skipped)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: foundation_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d foundation_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npm run db:generate
+      - name: Push schema to test database
+        run: npm run db:push
+      - name: Apply audit triggers
+        run: npx tsx scripts/apply-audit-triggers.ts
+      - name: Run integration tests
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee test-integration-output.log
+      - name: Capture environment metadata on failure
+        if: failure()
+        run: |
+          {
+            echo "=== Node + npm ==="
+            node -v
+            npm -v
+            echo ""
+            echo "=== OS ==="
+            cat /etc/os-release || true
+            echo ""
+            echo "=== Vitest version ==="
+            npx vitest --version || true
+            echo ""
+            echo "=== Postgres image ==="
+            docker ps --filter ancestor=postgres:16.4-alpine || true
+          } > env-metadata.log 2>&1
+      - name: Upload integration-tier diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-tier-diagnostics-${{ github.run_id }}
+          path: |
+            test-integration-output.log
+            env-metadata.log
+          retention-days: 14
