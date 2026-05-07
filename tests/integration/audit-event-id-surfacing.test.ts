@@ -508,12 +508,20 @@ describe("12B.0: audit_event_id surfaced on write endpoint responses", () => {
     expect(createResponse.statusCode).toBe(201);
     const twinId = (createResponse.json() as { entity_id: string }).entity_id;
 
-    // Step 2: pick a seeded SkillPackage. Phase 0 seeds the default
-    // packages; any one works for this assertion.
-    const pkg = await prisma.skillPackage.findFirst();
-    expect(pkg).not.toBeNull();
-    const packageId = pkg!.package_id;
-    const packageName = pkg!.name;
+    // Step 2: create a SkillPackage locally. seedSkillPackages() at
+    // apps/api/src/services/governance/seeds.ts is a no-op stub
+    // (Section 9 product work pending), so we manually insert one
+    // for this test to avoid fresh-vs-warm-container state dependency.
+    const pkg = await prisma.skillPackage.create({
+      data: {
+        name: `${TEST_PREFIX}audit_skill_assign_${randomUUID()}`,
+        category: "test",
+        description: "Test package for skill-assign audit",
+        capability_flags: ["test_flag"],
+      },
+    });
+    const packageId = pkg.package_id;
+    const packageName = pkg.name;
 
     // Step 3: assign the skill.
     const assignResponse = await app.inject({
@@ -576,10 +584,18 @@ describe("12B.0: audit_event_id surfaced on write endpoint responses", () => {
     expect(createResponse.statusCode).toBe(201);
     const twinId = (createResponse.json() as { entity_id: string }).entity_id;
 
-    const pkg = await prisma.skillPackage.findFirst();
-    expect(pkg).not.toBeNull();
-    const packageId = pkg!.package_id;
-    const packageName = pkg!.name;
+    // Create a SkillPackage locally (seedSkillPackages no-op stub
+    // avoidance per Drift G7-PRE-C resolution).
+    const pkg = await prisma.skillPackage.create({
+      data: {
+        name: `${TEST_PREFIX}audit_skill_unassign_${randomUUID()}`,
+        category: "test",
+        description: "Test package for skill-unassign audit",
+        capability_flags: ["test_flag"],
+      },
+    });
+    const packageId = pkg.package_id;
+    const packageName = pkg.name;
 
     // Assign first so we have something to delete.
     const assignResponse = await app.inject({

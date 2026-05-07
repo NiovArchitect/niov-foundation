@@ -893,12 +893,22 @@ describe("DELETE /org/ai-teammates/:id/skills/:packageId -- 12C.0 Item 1", () =>
       remoteAddress: ctx.adminIp,
     });
     const twinId = (twinResp.json() as { entity_id: string }).entity_id;
-    const pkg = await prisma.skillPackage.findFirst();
-    expect(pkg).not.toBeNull();
+    // seedSkillPackages() at apps/api/src/services/governance/seeds.ts is
+    // a no-op stub (Section 9 product work pending), so we manually
+    // insert one for this test to avoid fresh-vs-warm-container state
+    // dependency. Mirrors the canonical pattern at line 1248.
+    const pkg = await prisma.skillPackage.create({
+      data: {
+        name: `${TEST_PREFIX}admin_skill_not_assigned_${randomUUID()}`,
+        category: "test",
+        description: "Test package for SKILL_NOT_ASSIGNED",
+        capability_flags: ["test_flag"],
+      },
+    });
     // Try to remove the unassigned skill.
     const response = await app.inject({
       method: "DELETE",
-      url: `/api/v1/org/ai-teammates/${twinId}/skills/${pkg!.package_id}`,
+      url: `/api/v1/org/ai-teammates/${twinId}/skills/${pkg.package_id}`,
       headers: { authorization: `Bearer ${ctx.adminToken}` },
       remoteAddress: ctx.adminIp,
     });
