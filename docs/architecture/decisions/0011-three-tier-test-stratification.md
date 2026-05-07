@@ -178,6 +178,15 @@ Bidirectional citations (cited from):
   (back-citations in Track A Gate 8)
 - `docs/reference/architectural-anchors.md` — no anchor;
   tier-classification is discipline, not runtime invariant
+- **ADR-0017** (Production Discipline) — Principle 4
+  (determinism enforcement across container lifecycles)
+  is the substrate-test-discipline analog of ADR-0011's
+  empirical-evidence discipline; Principle 3 (pre-flight
+  verification at every external-process boundary)
+  reinforces the workflow-substrate that ADR-0011's
+  reproducibility amendment depends on. The Gate 6
+  amendment's variance bounds are the empirical evidence
+  ADR-0017 protects.
 
 ## Amendment: Reproducibility Verification Evidence (Track A Gate 6)
 

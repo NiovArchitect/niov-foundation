@@ -500,9 +500,13 @@ Bidirectional citations (cited from):
 - Track A Gate 8 will add ADR-0016 references in
   `docs/contributing/testing.md` and `CLAUDE.md` where
   pinning discipline is mentioned.
-- Future Production Discipline ADR (Gate 8+ work) will
-  reference ADR-0016's framework as one of the canonical
-  disciplines.
+- **ADR-0017** (Production Discipline; landed `444cf56`)
+  — cites ADR-0016 as companion ADR forming the substrate-
+  discipline canonical references pair. ADR-0016 covers
+  what-to-pin (substrate-pinning); ADR-0017 covers
+  how-to-investigate-drifts (substrate-maintenance). The
+  forward-tense reference in this section's earlier
+  drafting is delivered.
 - Future pinning decisions (Anthropic SDK explicit pin,
   Prisma version evaluation, capsule schema versioning,
   vitest version evaluation) will cite ADR-0016 as their

@@ -702,11 +702,12 @@ references.
 
 Bidirectional citations (cited from):
 
-- Track A Gate 8 will add ADR-0017 references in
-  ADR-0011 (linking reproducibility evidence to
-  Principles 3 + 4) and ADR-0014 (linking fixture
-  infrastructure to Principle 1).
-- Track A Gate 8 will add ADR-0017 references in
+- **ADR-0011** + **ADR-0014** — back-references added in
+  Track A Gate 8a (this gate). ADR-0011's Bidirectional
+  Citations link reproducibility evidence to Principles
+  3 + 4; ADR-0014's Bidirectional Citations link fixture
+  infrastructure to Principle 1.
+- Track A Gate 8c will add ADR-0017 references in
   `CLAUDE.md` and a forthcoming
   `docs/contributing/onboarding.md` when contributor
   onboarding doc lands.

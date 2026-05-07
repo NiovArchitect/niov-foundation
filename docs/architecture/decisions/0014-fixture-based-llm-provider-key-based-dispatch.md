@@ -178,3 +178,12 @@ Bidirectional citations (cited from):
 - ADR-0012 §Status — in-place amendment in same commit
 - `docs/reference/architectural-anchors.md` — no anchor;
   dispatch is discipline, not runtime invariant
+- **ADR-0017** (Production Discipline) — Principle 1
+  (convert inference to observation before fixing)
+  leveraged the AnthropicProvider directly for G5b-I
+  Resolution's verification call. The fixture
+  infrastructure ADR-0014 codifies is what made
+  fixture-vs-production alignment auditable; the
+  verification pattern Principle 1 codifies is the
+  substrate-investigation analog of ADR-0014's
+  recording-script pattern.

@@ -435,3 +435,16 @@ Bidirectional citations (cited from):
 - Future GitHub Actions workflow modifications, when they
   reflect deliberate architectural changes, should
   back-reference this ADR.
+- **ADR-0016** (Pin-and-Optimize Framework) — Decisions E
+  (postgres:16.4-alpine; parity-with-local axis) and H
+  (Node 22.11.0; LTS-compliance axis) introduced the
+  dominant-concern-per-axis pattern that ADR-0016 elevates
+  to canonical framework. Decisions E + H are the
+  pattern's first concrete instances; ADR-0016's Worked
+  Examples cite them as canonical references.
+- **ADR-0017** (Production Discipline) — diagnostic-
+  richness pattern + substrate-modification-remains-
+  human-decision principle codified in this ADR map to
+  Principle 6 of Production Discipline. ADR-0017 elevates
+  the principle from CI-workflow-specific to canonical
+  operational rule across all substrate modification work.
