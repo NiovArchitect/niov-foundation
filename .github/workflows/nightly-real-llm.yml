@@ -51,6 +51,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
       # Step-level secret survives dotenv's no-override default
       # in vitest.real-llm.config.ts (verified at Drift G7-B).
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

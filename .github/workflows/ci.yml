@@ -62,6 +62,9 @@ jobs:
   unit-tests:
     name: Unit tier (370 tests)
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
     services:
       postgres:
         image: postgres:16.4-alpine
@@ -123,6 +126,9 @@ jobs:
   integration-tests:
     name: Integration tier (111 tests + 1 skipped)
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
     services:
       postgres:
         image: postgres:16.4-alpine
