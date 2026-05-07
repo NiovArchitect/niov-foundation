@@ -196,7 +196,16 @@ describe("POST /otzar/conversation/close", () => {
       method: "POST",
       url: "/api/v1/otzar/conversation/close",
       headers: { authorization: `Bearer ${ctx.token}` },
-      payload: { conversation_id: conv, capsule_ids_used: [] },
+      payload: {
+        conversation_id: conv,
+        capsule_ids_used: [],
+        // Pass conversation_history per G5b-H resolution: forces
+        // extractTopics to call the LLM (instead of early-returning
+        // FALLBACK on empty history). The fixture-replay then
+        // exercises the parser through the recorded topics
+        // response.
+        conversation_history: ["user: hello", "assistant: hi"],
+      },
       remoteAddress: ctx.ip,
     });
     expect(close.statusCode).toBe(200);
@@ -209,17 +218,16 @@ describe("POST /otzar/conversation/close", () => {
     expect(body.ok).toBe(true);
     expect(body.conversation_id).toBe(conv);
     expect(Array.isArray(body.topics)).toBe(true);
-    // SUBSTRATE-HONESTY NOTE (Drift G5b-H): The close test does
-    // not pass conversation_history, so OtzarService.extractTopics
-    // early-returns the FALLBACK ["conversation_summary"] without
-    // firing an LLM call (otzar.service.ts:621-625). Position 3
-    // of makeSequencedFixtureProvider's key sequence
-    // ("otzar-conversation-close-with-topics") is therefore
-    // forward-looking substrate -- not consumed at runtime. A
-    // future test that exercises the topic-extraction success
-    // path (post-G5b-I-resolution) will consume it.
-    // Sanity-check the close-fixture import loaded correctly (also
-    // serves as an unused-import guard).
+    // Strengthened post-G5b-I: the close call now exercises the
+    // parser path against the re-recorded fixture's
+    // "topics: <list>" response. Topics array is non-empty (NOT
+    // the fallback ["conversation_summary"]). Position 3 of
+    // makeSequencedFixtureProvider's key sequence
+    // ("otzar-conversation-close-with-topics") is now
+    // runtime-consumed substrate.
+    expect(body.topics.length).toBeGreaterThan(0);
+    expect(body.topics).not.toEqual(["conversation_summary"]);
+    // Sanity-check the close-fixture import loaded correctly.
     expect(otzarCloseWithTopics.fixtureKey).toBe(
       "otzar-conversation-close-with-topics",
     );

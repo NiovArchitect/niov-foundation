@@ -101,13 +101,14 @@ const CURATED_PROMPTS: ReadonlyArray<CuratedPrompt> = [
     fixtureKey: "otzar-conversation-close-with-topics",
     sourceFile: "tests/integration/otzar-routes.test.ts:173",
     promptId: "otzar-routes-close-conversation-topic-extraction",
-    system: [
-      "You are extracting key topics from a closed Otzar conversation for the CONVERSATION_CLOSED audit emission.",
-      "Return ONLY valid JSON of shape: { topics: string[] } where each topic is a short noun phrase (1-4 words).",
-      "List 3-7 topics maximum. No prose; no explanation.",
-    ].join("\n"),
+    // Production prompt verbatim from
+    // apps/api/src/services/otzar/otzar.service.ts:629
+    // (G5b-I Resolution Gate: prior recording prompt asked for
+    // JSON shape and diverged from production's "topics: a, b, c"
+    // request).
+    system:
+      "Extract the top 3 topics from this conversation. Respond with exactly: 'topics: a, b, c'.",
     user: [
-      "Conversation transcript:",
       "user: hello otzar",
       "assistant: Hello! How can I help today?",
       "user: I need help drafting the Q3 release notes for the iOS client.",
@@ -193,13 +194,14 @@ const CURATED_PROMPTS: ReadonlyArray<CuratedPrompt> = [
     fixtureKey: "unit-otzar-close-conversation-topics",
     sourceFile: "tests/unit/otzar.test.ts:660",
     promptId: "unit-otzar-close-conversation-topics",
-    system: [
-      "You are extracting key topics from a closed Otzar conversation for the CONVERSATION_CLOSED audit emission.",
-      "Return ONLY valid JSON of shape: { topics: string[] } where each topic is a short noun phrase (1-4 words).",
-      "List 3-7 topics maximum. No prose; no explanation.",
-    ].join("\n"),
+    // Production prompt verbatim from
+    // apps/api/src/services/otzar/otzar.service.ts:629
+    // (G5b-I Resolution Gate: prior recording prompt asked for
+    // JSON shape and diverged from production's "topics: a, b, c"
+    // request).
+    system:
+      "Extract the top 3 topics from this conversation. Respond with exactly: 'topics: a, b, c'.",
     user: [
-      "Conversation transcript:",
       "user: I want to revisit our hiring plan for Q4.",
       "assistant: What roles are top of mind?",
       "user: backend engineer (senior), product designer, and a part-time technical writer.",

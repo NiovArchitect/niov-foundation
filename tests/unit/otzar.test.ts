@@ -543,6 +543,45 @@ describe("closeConversation", () => {
     if (!close.ok) return;
     expect(close.topics).toEqual(["conversation_summary"]);
   });
+
+  it("topic extraction returns parsed topics on valid 'topics: a, b, c' LLM response (positive case)", async () => {
+    const { auth, otzar } = makeServices({
+      mockResponses: [
+        // First call (the conductSession LLM) is fine.
+        { ok: true, text: "stub", provider: "mock", model: "mock-1" },
+        // Second call (close's topic extraction) returns the
+        // production prompt's expected format. Production parser
+        // regex /topics:\s*(.+)/i at otzar.service.ts:634 matches
+        // and splits on comma.
+        {
+          ok: true,
+          text: "topics: foo, bar, baz",
+          provider: "mock",
+          model: "mock-1",
+        },
+      ],
+    });
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+    const conv = await otzar.conductSession({
+      token: owner.token,
+      message: "hi",
+    });
+    if (!conv.ok) throw new Error("conductSession failed");
+    const close = await otzar.closeConversation({
+      token: owner.token,
+      conversation_id: conv.conversation_id,
+      capsule_ids_used: [],
+      conversation_history: ["user: hi", "assistant: hello"],
+    });
+    expect(close.ok).toBe(true);
+    if (!close.ok) return;
+    // Production parser successfully extracts topics from the
+    // expected format. NOT the fallback ["conversation_summary"].
+    // This is the load-bearing positive-case coverage missing
+    // until G5b-I Resolution.
+    expect(close.topics).toEqual(["foo", "bar", "baz"]);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────
@@ -695,9 +734,11 @@ describe("conductSession + closeConversation -- audit emission (TP9)", () => {
 
   it("CONVERSATION_CLOSED audit emitted on close with capsule_id + conversation_id in details", async () => {
     // Both LLM calls (conduct + close) share the same fixture
-    // (single-key adapter); the conduct call's response goes
-    // unasserted, while the close call's parser extracts the 6
-    // recorded topics from the JSON-fenced response.text.
+    // (single-key adapter). After G5b-I Resolution re-recorded
+    // the close-conversation fixture under the production prompt,
+    // the close call's parser extracts the recorded topics
+    // through the production parser path (was fallback path
+    // pre-G5b-I; see Drift G5b-H + G5b-I).
     const { auth, otzar } = makeServices({
       llm: makeFixtureProvider("unit-otzar-close-conversation-topics"),
     });
@@ -713,19 +754,20 @@ describe("conductSession + closeConversation -- audit emission (TP9)", () => {
       token: owner.token,
       conversation_id: conv.conversation_id,
       capsule_ids_used: [],
+      // Pass conversation_history per G5b-H resolution: forces
+      // extractTopics to call the LLM (instead of early-returning
+      // FALLBACK on empty history). The fixture-replay then
+      // exercises the parser through the recorded topics response.
+      conversation_history: ["user: hi", "assistant: hello"],
     });
     expect(close.ok).toBe(true);
     if (!close.ok) return;
-    // SUBSTRATE-HONESTY NOTE (Drift G5b-H): This test does not
-    // pass conversation_history to closeConversation, so
-    // OtzarService.extractTopics early-returns the FALLBACK
-    // ["conversation_summary"] (otzar.service.ts:621-625).
-    // The fixture's recorded JSON-fenced response.text exercises
-    // the conduct call only; the close call's topic extraction
-    // hits the fallback path. A future test that exercises the
-    // topic-extraction success path (post-G5b-I-resolution) will
-    // consume the close-conversation fixture's recorded topics
-    // through the parser.
+    // Strengthened post-G5b-I: the close call now exercises the
+    // parser path against the re-recorded fixture's
+    // "topics: <list>" response. Topics array is non-empty
+    // (NOT the fallback ["conversation_summary"]).
+    expect(close.topics.length).toBeGreaterThan(0);
+    expect(close.topics).not.toEqual(["conversation_summary"]);
 
     const closedRows = await prisma.auditEvent.findMany({
       where: {
