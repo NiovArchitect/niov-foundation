@@ -178,3 +178,101 @@ Bidirectional citations (cited from):
   (back-citations in Track A Gate 8)
 - `docs/reference/architectural-anchors.md` — no anchor;
   tier-classification is discipline, not runtime invariant
+
+## Amendment: Reproducibility Verification Evidence (Track A Gate 6)
+
+Status: Active
+Date: 2026-05-06
+Trigger: Track A Gate 6 reproducibility verification gate
+
+### Context
+
+ADR-0011's three-tier stratification claims that each tier
+produces deterministic behavior at its layer of real-data
+fidelity. Reproducibility — pass-rate identity and runtime
+bounded variance across consecutive runs — is the empirical
+claim that makes stratification load-bearing for enterprise
+and government compliance review. This amendment documents
+the empirical evidence supporting the claim, captured during
+Track A Gates 5 and 6 execution.
+
+### Reproducibility Evidence
+
+#### Unit + Integration Tier (test:all)
+
+| Run | Date | Source | Pass Rate | Duration |
+|-----|------|--------|-----------|----------|
+| 1 | 2026-05-06 | G5.7 Step 4 | 481/482 (1 skipped) | 150.47s |
+| 2 | 2026-05-06 | G5.7 Step 6 | 481/482 (1 skipped) | 154.15s |
+| 3 | 2026-05-06 | Gate 6 Step 2 | 481/482 (1 skipped) | 147.98s |
+
+Pass-rate identity: confirmed across all 3 runs (481 passing
++ 1 deliberate skip = 482 total).
+Duration variance: ~4.1% (range 6.17s over mean 150.87s).
+Skip preserved: 1 deliberate skip preserved across all runs.
+
+#### Real-LLM Tier (test:real-llm)
+
+| Run | Date | Source | Pass Rate | Duration | Anthropic Cost |
+|-----|------|--------|-----------|----------|----------------|
+| 1 | 2026-05-06 | G5.6 close | 2/2 | 12.58s | ~$0.013 |
+| 2 | 2026-05-06 | G5.7 Step 5 | 2/2 | 13.59s | ~$0.013 |
+| 3 | 2026-05-06 | Gate 6 Step 2 | 2/2 | 13.58s | ~$0.013 |
+
+Pass-rate identity: confirmed across all 3 runs.
+Duration variance: ~7.6% (range 1.01s over mean 13.25s).
+Cost variance: bounded within Decision 4 budget (~$0.013/run).
+
+### Determinism Properties Verified
+
+- Pass-rate identity: 100% across all 3 formal runs at each tier
+- Duration variance: bounded within ~4% (unit+integration) and
+  ~8% (real-LLM, larger relative range explained by Anthropic
+  API latency variance)
+- No flaky failures observed
+- 1 deliberate skip preserved across all runs
+- TS error baseline: 12 errors unchanged across all runs
+  (no new errors introduced by the verification cycles)
+
+### Implications
+
+- Three-tier stratification produces empirically-verified
+  deterministic behavior, supporting enterprise/government
+  compliance posture.
+- Gate 7 (GitHub Actions workflow) will enforce this
+  reproducibility automatically on every PR and nightly
+  schedule.
+- Future regressions in determinism (e.g., new flaky tests,
+  new race conditions, unbounded latency growth) will surface
+  within 24 hours of nightly invocation.
+- The 12 baseline TS errors (from prior Track A work) remain
+  unchanged, indicating no new issues introduced by the
+  verification cycles themselves.
+
+### Drift surfaced during Gate 6
+
+**Drift G6-A — Cold-start container variance observation.**
+During Gate 6 Step 2, `test:all` was executed twice. The first
+execution returned a wallclock of 159.56s (Postgres container
+freshly brought up via `npm run db:test:up` immediately
+before); the second execution returned 147.98s (Postgres
+container warmed from the first run). Including the 159.56s
+observation alongside the 3 formal runs widens the
+unit+integration tier variance to ~7.6% (range 11.58s over
+mean 153.04s, n=4). The pass-rate identity at 481/482 was
+confirmed indirectly via `test:all`'s short-circuit chain
+semantics (`test:unit && test:integration` would not run
+integration if unit failed; integration completed normally
+with checkmarks).
+
+This observation suggests cold-start container variance may
+contribute meaningfully to wallclock spread on the FIRST run
+after `db:test:up`. Statistical sample (n=3-4) is too small
+to pin down distribution. Gate 7's CI workflow will accumulate
+larger n over time and provide a tighter empirical bound;
+this amendment's ~4% (formal, n=3) and ~8% (extended, n=4)
+bounds should be re-validated then.
+
+The 159.56s observation is recorded here for substrate-honesty
+rather than excluded; future amendments may revise variance
+bounds based on Gate 7's CI accumulation.
