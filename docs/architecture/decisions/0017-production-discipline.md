@@ -707,10 +707,14 @@ Bidirectional citations (cited from):
   Citations link reproducibility evidence to Principles
   3 + 4; ADR-0014's Bidirectional Citations link fixture
   infrastructure to Principle 1.
-- Track A Gate 8c will add ADR-0017 references in
-  `CLAUDE.md` and a forthcoming
+- Track A Gate 8b (commit `3a571fb`) added the ADR-0017
+  reference to `CLAUDE.md` Section 7 (operational
+  pointer for Production Discipline). Track A Gate 8c
+  will add an ADR-0017 reference to a forthcoming
   `docs/contributing/onboarding.md` when contributor
-  onboarding doc lands.
+  onboarding doc lands; `docs/contributing/testing.md`
+  may also receive an ADR-0017 reference per Gate 8c's
+  queued scope.
 - Future drift investigations will cite ADR-0017 as
   their canonical reference for the nine-step template.
 - Future Production Discipline amendments (when discipline

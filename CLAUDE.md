@@ -37,9 +37,12 @@ data access is audited and attributed.
 `niov-foundation` is **not** the Otzar product, the Glonari
 deployment, or the otzar-control-tower frontend. The Foundation
 is backend-only. Tech stack: Node.js + TypeScript + Fastify
-(API), Supabase PostgreSQL with Prisma ORM (database), Upstash
-Redis (cache), Supabase Storage (storage), Vitest (tests). All
-infrastructure is centralized cloud services. There is no
+(API), Postgres 16+ with Prisma ORM (database; provider-agnostic
+per ADR-0018, current operator deployment Supabase), Upstash
+Redis (cache), Supabase Storage (storage), Vitest (tests). The
+substrate is deployment-target agnostic per ADR-0018 (managed
+cloud, sovereign cloud, on-premise, or air-gapped); current
+operator deployment is Supabase-hosted. There is no
 blockchain, no distributed ledger, no smart contracts, no
 token. **DECENTRALIZED in DMW means SOVEREIGNTY, not
 infrastructure** — no central authority owns or controls entity
@@ -87,7 +90,7 @@ niov-foundation/
 ├── docs/
 │   ├── architecture/
 │   │   ├── README.md                 (ADR catalog)
-│   │   └── decisions/                (ADRs 0001-0017 + template)
+│   │   └── decisions/                (ADRs 0001-0019 + template)
 │   ├── reference/
 │   │   ├── glossary.md
 │   │   ├── architectural-anchors.md
@@ -260,7 +263,7 @@ authoritative locations:
   permissions filter narrowing, DRIFT 2 Option C no-console,
   DRIFT 12 chainKey priority, frozen `CRYPTO_CONFIG`, frozen
   `SYSTEM_PRINCIPALS`)
-- `docs/architecture/decisions/` — the 17 ADRs with
+- `docs/architecture/decisions/` — the 19 ADRs with
   Decision / Consequences / Alternatives in Michael Nygard
   format
 
@@ -269,7 +272,7 @@ documentation, **cite the reference**, do not redefine.
 
 ## 5. Key Architectural Decisions
 
-The 17 ADRs as of Track A Gate 8a. The `docs/architecture/README.md`
+The 19 ADRs as of Track A Gate 8b-amendment. The `docs/architecture/README.md`
 is the source of truth for ADR navigation; this is a quick-
 reference jump table.
 
@@ -290,6 +293,8 @@ reference jump table.
 - **ADR-0015** — CI Workflow Architecture (Track A Gate 7; 8 locked decisions A-H including postgres + Node pins)
 - **ADR-0016** — Pin-and-Optimize Framework (substrate-pinning canonical reference; companion to ADR-0017; five-question template)
 - **ADR-0017** — Production Discipline (substrate-investigation canonical reference; companion to ADR-0016; nine-step template)
+- **ADR-0018** — Deployment-Target Agnosticism Posture (substrate-portability canonical reference; companion to ADR-0016/0017/0019; five-step decision template; commit `657a794`)
+- **ADR-0019** — Cryptographic-Suite Posture (substrate-cryptographic-resilience canonical reference; companion to ADR-0016/0017/0018; six-step decision template; commit `7216784`)
 
 ADR amendments and supersession follow the discipline in
 `docs/architecture/README.md` §ADR Lifecycle.
@@ -322,14 +327,39 @@ this documentation infrastructure batch. Recent landmarks:
   - Gate 7-post (Drift G7-E fix): CLOSED `9f8e909`
   - Gate 7-post-2 (Drift G7-PRE-C fix): CLOSED `2fbc057`
   - Gate 8a (ADR cross-citation back-references): CLOSED `3febf83`
-  - **Gate 8b (CLAUDE.md update): IN FLIGHT (this commit)**
-  - Gate 8c (testing.md + onboarding.md): QUEUED
-  - Gate 8d (discipline-pattern documentation): QUEUED
+  - Gate 8b (CLAUDE.md update): CLOSED `3a571fb`
+  - **Gate 8b-amendment (ADR-0018/0019 + audit-bucket closure): IN FLIGHT (this commit)**
+  - Gate 8c (onboarding.md + testing.md back-citations): QUEUED
+  - Gate 8d (discipline-pattern documentation; scope expanded per ADR-0019 to include hardcoded algorithm literal cleanup at `createCipheriv`, `createHash`, `"sha256:"` prefix sites): QUEUED
+  - Gate 8e (ADR-0016 amendment adding deployment-target + cryptographic-suite worked example categories): QUEUED
 - Independent companion tracks (canonical references; landed
   alongside Track A):
   - G5b-I Resolution: CLOSED `fbc7942`
   - ADR-0016 Pin-and-Optimize Framework: CLOSED `782154c`
   - ADR-0017 Production Discipline: CLOSED `444cf56`
+  - ADR-0018 Deployment-Target Agnosticism Posture: CLOSED `657a794`
+  - ADR-0019 Cryptographic-Suite Posture: CLOSED `7216784`
+  - FIPS_DEPLOYMENT_POSTURE.md alignment to ADR-0019: CLOSED `38d941f`
+
+**Substrate-discipline canonical reference quartet — framing
+growth-drift acknowledgment.** ADR-0016 and ADR-0017 frame the
+canonical references as a "pair." ADR-0018 frames as a "trio."
+ADR-0019 frames as a "quartet." Each framing was correct as-of
+writing — when ADR-0016 landed (`782154c`), ADR-0017 was the
+only companion canonical reference; when ADR-0019 landed
+(`7216784`), all four existed. The four ADRs operate coherently
+as a quartet despite the asymmetric internal framing language
+— no factual error occurs; each ADR's framing is true about
+its time of writing. ADR-0016/0017/0018 are NOT retroactively
+amended to use "quartet" because substrate-honesty principle
+favors contemporaneous accuracy: the patent-holder
+implementation record values truthful chronology over
+retroactive uniformity. New ADRs joining the canonical
+reference set will continue using the count appropriate to
+their landing time — the next ADR after 0019 would frame as
+the "fifth canonical reference" or "fifth leg of substrate-
+discipline canonical references."
+
 - Section 12.5 Sub-boxes 1-9 — queued after Track A
 
 The live tracker is `docs/reference/section-12-progress.md`.
@@ -384,6 +414,30 @@ Practical guidance for an agent starting work:
   three-approvals discipline, encode prevention (substrate
   test or pre-flight check), document the lineage. The G5b-I
   Resolution Gate is the canonical worked example.
+- **Document deployment-target portability via the
+  Deployment-Target Agnosticism Posture** (ADR-0018). The
+  five-step decision template applies when a customer
+  deployment-target requirement surfaces (sovereign cloud,
+  on-premise, air-gapped, blockchain substrate): identify the
+  category, verify Postgres-compatibility constraints, identify
+  deployment-target-specific work (IaC, KMS, IDP, audit-trail
+  crosswalk), verify the agnosticism still holds, document the
+  deployment as a worked example. AWS GovCloud RDS for
+  PostgreSQL is the queued canonical worked example for the
+  sovereign-cloud category.
+- **Document cryptographic-suite resilience via the
+  Cryptographic-Suite Posture** (ADR-0019). The six-step
+  decision template applies when a new cryptographic operation
+  is needed (signature, hash, encryption, KDF, random, HMAC,
+  key exchange): identify the operation, verify whether
+  `CRYPTO_CONFIG` already covers it, if new primitive needed
+  apply PQC-aware selection (FIPS 203/204/205 or hybrid), add
+  to `CRYPTO_CONFIG` with anchor test, document re-evaluation
+  triggers, document migration path for in-flight data. The
+  current symmetric-only stack (HS256, SHA-256, AES-256-GCM,
+  bcrypt) is the canonical worked example — post-quantum ready
+  by primitive selection with zero Shor's-vulnerable crypto in
+  production.
 
 For commits, use the section-prefix convention observed in
 `git log`:
@@ -458,7 +512,7 @@ Concrete anti-patterns observable across the build cycle:
 
 Four documentation roots cover the substrate of the project:
 
-- **`docs/architecture/`** — ADR-0001 through ADR-0017 plus
+- **`docs/architecture/`** — ADR-0001 through ADR-0019 plus
   the template (`0000-template.md`) and the architecture
   README. Start with `docs/architecture/README.md`.
 - **`docs/reference/`** — `glossary.md` (term definitions),
