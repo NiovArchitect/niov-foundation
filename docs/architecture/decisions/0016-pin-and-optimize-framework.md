@@ -296,6 +296,111 @@ consistent decisions about new resources.
 - **Action**: Gate 8+ documentation work; affirm or
   formalize the pin with an ADR amendment.
 
+### Deployment-target category (ADR-0018)
+
+- **Pinned**: Postgres-compatible deployment-target
+  category (Postgres 16+ semantics, `postgresql://`
+  connection, role/permission model, pgbouncer-aware
+  connection pool) — not a specific vendor or product.
+  Current operator deployment: Supabase-hosted.
+- **Dominant axis**: substrate-portability for commercial
+  reach across procurement-mandated customer categories
+  (managed cloud, sovereign cloud, on-premise, air-
+  gapped, blockchain reserved-for-future).
+- **Reasoning**: ADR-0018's coherence audit empirically
+  verified Foundation has zero vendor SDK imports, zero
+  Postgres extensions, and provider-agnostic Prisma —
+  the substrate is already deployment-target agnostic
+  by inherited substrate decisions (ADR-0001 wallet
+  architecture, ADR-0004 service-owned auth gate,
+  ADR-0006 cross-org leak prevention via filter
+  narrowing, ADR-0013 containerized Postgres). Pinning
+  the deployment-target category (not a specific vendor)
+  preserves COSMP/DMW commercial reach across
+  procurement gates (DoD CNSA 2.0, NSM-10, FedRAMP,
+  EU NIS2, on-premise compliance environments) without
+  per-customer substrate forking. The pin is enforced
+  by deliberate non-decisions (no vendor SDK adoption,
+  no Postgres extensions) verified at audit time, not
+  by a specific config-file constraint.
+- **Trade-off accepted**: per-deployment optimization
+  opportunities sacrificed (Supabase-specific Realtime
+  channels, AWS-specific RDS Proxy caching, Azure-
+  specific managed identity integration). The
+  agnosticism floor outweighs vendor-specific
+  performance gains because procurement-mandated
+  categories require zero-vendor-lock evidence;
+  cost/performance optimization loses to substrate-
+  portability when commercial reach depends on
+  portability.
+- **Re-evaluation triggers**: customer requirement
+  that's not Postgres-compatible (e.g., DynamoDB-only
+  deployment); substrate decision to adopt a vendor-
+  specific feature (gets its own ADR per ADR-0018's
+  relaxation framework); blockchain integration
+  category activation per NIOV roadmap.
+
+### Cryptographic-suite (ADR-0019)
+
+- **Pinned**: symmetric-only cryptographic suite via
+  `CRYPTO_CONFIG` (`packages/auth/src/crypto-config.ts`)
+  with `Object.freeze` + boot-validation anchor tests
+  per ADR-0003: HS256 (JWT), SHA-256 (hashes), AES-256-
+  GCM (content), bcrypt rounds=12-prod / 4-test
+  (passwords). Future asymmetric crypto (e.g.,
+  Sub-box 7's `ATTESTATION_ALGORITHM`) MUST be PQC
+  primitives (FIPS 204 ML-DSA, FIPS 203 ML-KEM, FIPS
+  205 SLH-DSA) or hybrid schemes per ADR-0019's six-
+  step decision template; pre-quantum asymmetric
+  primitives (RS256, ES256, Ed25519, ECDSA) are
+  rejected.
+- **Dominant axis**: security-posture for post-quantum
+  readiness. Foundation's substrate is already post-
+  quantum ready by primitive selection (zero Shor's-
+  algorithm-vulnerable crypto in production per
+  ADR-0019's audit). Codifying as deliberate posture
+  preserves the property as a maintained discipline
+  rather than emergent fact.
+- **Reasoning**: PQC-readiness is increasingly a
+  procurement gate for DoD CNSA 2.0, federal civilian
+  under NSM-10, EU NIS2 affected entities, and
+  forward-looking enterprise (SEC retention, HIPAA
+  long-lived data, defense industrial base). Sub-box
+  7's anticipated `ATTESTATION_ALGORITHM` landing is
+  the substrate's first asymmetric inflection point
+  — pre-positioning the discipline before that ADR
+  lands prevents RS256/ES256 from incurring PQC-
+  migration debt. CRYPTO_CONFIG centralization +
+  ADR-0003 freeze pattern + boot-validation anchor
+  tests serve the pinning discipline directly: every
+  algorithm is pinned at the constant level;
+  modification requires deliberate code change with
+  anchor-test re-verification; no runtime mutation
+  possible.
+- **Trade-off accepted**: PQC primitive sizes are
+  larger than classical alternatives (ML-DSA-65
+  signatures ~3.3 KB vs ~64 bytes for Ed25519; SLH-DSA
+  signatures 8-50 KB). Hybrid schemes during transition
+  double signing work. The audit-posture and PQC-
+  readiness gains dominate over performance optimization
+  because audit reviewers and acquisition officers
+  evaluate cryptographic resilience as substrate
+  evidence during due-diligence; audit-trail-stability
+  axis benefits as a secondary consequence (algorithm
+  changes propagate through every signature/hash/
+  encryption record, so stability itself is substrate
+  evidence).
+- **Re-evaluation triggers**: NIST PQC standards
+  updates (additional FIPS publications); cryptanalysis
+  advances against current primitives (lattice-based
+  schemes are an active research area); customer-
+  specific compliance constraints (CNSS Policy 15,
+  FIPS 140-3 module restrictions); Sub-box 7
+  implementation ADR (the next asymmetric crypto
+  primitive selection). Per-primitive re-evaluation
+  triggers are documented in ADR-0019's worked
+  examples.
+
 ## Decision Template for Future Pinning Decisions
 
 When a new pinning decision arises, the ADR (or ADR
@@ -494,12 +599,16 @@ amendment before merge.
 
 Bidirectional citations (cited from):
 
-- Track A Gate 8 will add ADR-0016 back-references in
-  ADR-0015's References section (Decisions E + H
-  retroactively cite this canonical framework).
-- Track A Gate 8 will add ADR-0016 references in
-  `docs/contributing/testing.md` and `CLAUDE.md` where
-  pinning discipline is mentioned.
+- Track A Gate 8a (commit `3febf83`) added ADR-0016
+  back-references in ADR-0015's References section
+  (Decisions E + H retroactively cite this canonical
+  framework).
+- Track A Gate 8b (commit `3a571fb`) added ADR-0016
+  references in `CLAUDE.md` Section 7 (operational
+  pointer for Pin-and-Optimize Framework). Track A
+  Gate 8c will add an ADR-0016 reference in a
+  forthcoming `docs/contributing/testing.md` when the
+  testing documentation lands.
 - **ADR-0017** (Production Discipline; landed `444cf56`)
   — cites ADR-0016 as companion ADR forming the substrate-
   discipline canonical references pair. ADR-0016 covers
@@ -507,6 +616,33 @@ Bidirectional citations (cited from):
   how-to-investigate-drifts (substrate-maintenance). The
   forward-tense reference in this section's earlier
   drafting is delivered.
+- **ADR-0018** (Deployment-Target Agnosticism Posture;
+  landed `657a794`) — cites ADR-0016 as the framework
+  governing deployment-target category pin discipline.
+  The Pin-and-Optimize five-question template applies
+  to deployment-target decisions; the new Worked
+  Examples entry "Deployment-target category (ADR-0018)"
+  makes the pattern explicit. ADR-0018 is the third
+  leg of the substrate-discipline canonical references
+  (ADR-0016 what-to-pin + ADR-0017 how-to-investigate
+  + ADR-0018 where-to-deploy); CLAUDE.md Section 6's
+  "framing growth-drift acknowledgment" narrative
+  explains why this ADR's body language stays as "pair"
+  while the canonical-reference set has grown to four
+  members.
+- **ADR-0019** (Cryptographic-Suite Posture; landed
+  `7216784`) — cites ADR-0016 as the framework
+  governing cryptographic-primitive pin discipline.
+  The Pin-and-Optimize five-question template applies
+  to per-primitive PQC-or-hybrid selection; the new
+  Worked Examples entry "Cryptographic-suite
+  (ADR-0019)" makes the pattern explicit. ADR-0019
+  is the fourth leg of the substrate-discipline
+  canonical references (what-to-pin + how-to-
+  investigate + where-to-deploy + cryptographic-
+  suite); the asymmetric framing language across
+  ADR-0016/0017/0018/0019 is growth drift, not
+  contradiction (CLAUDE.md Section 6 narrative).
 - Future pinning decisions (Anthropic SDK explicit pin,
   Prisma version evaluation, capsule schema versioning,
   vitest version evaluation) will cite ADR-0016 as their
