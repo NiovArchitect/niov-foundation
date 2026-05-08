@@ -5,14 +5,20 @@ cryptographic algorithm choices, runtime FIPS validation path, and
 secret-management posture. SSP authors, FedRAMP 3PAOs, and
 procurement reviewers should cite this document together with
 `packages/auth/src/crypto-config.ts` (the canonical algorithm
-contract) as the FIPS evidence package.
+contract) and ADR-0019 (Cryptographic-Suite Posture; the canonical
+reference for primitive selection including post-quantum-readiness
+discipline) as the FIPS evidence package.
 
-Foundation HEAD baseline for this document: 12C.0 batch (Commit 2).
+Foundation HEAD baseline for this document: 12C.0 batch (Commit 2) for §§1-4 (current cryptographic substrate) and ADR-0019 (post-7216784) for §5 (Sub-box 7 forward reference).
 Algorithm selections covered here apply to **session token signing,
 password hashing, content encryption, content fingerprinting, and
 audit-of-record chain integrity**. Asymmetric attestation signing
-(RS256 / ES256) is **not yet present** and lands with Section 12.5
-Sub-box 7 (Compliance Architecture Review Family 5).
+is **not yet present** and lands with Section 12.5 Sub-box 7
+(Compliance Architecture Review Family 5). Per ADR-0019
+(Cryptographic-Suite Posture), Sub-box 7's primitive selection
+MUST be post-quantum-resistant (FIPS 204 ML-DSA) or hybrid
+(classical + ML-DSA); pre-quantum-only primitives (RS256, ES256)
+are rejected. See §5.
 
 ## 1. Algorithm Choices and NIST Mapping
 
@@ -135,31 +141,68 @@ The `CRYPTO_CONFIG` constant is intentionally extensible. Section
 12.5 Sub-box 7 (Compliance Architecture Review Family 5 —
 Compliance-attested COSMP capsules + verifiable reports) adds an
 **asymmetric signing path** for compliance attestations published
-to external recipients. Specifically:
+to external recipients.
+
+ADR-0019 (Cryptographic-Suite Posture) is the canonical reference
+governing primitive selection for `ATTESTATION_ALGORITHM`. Per
+ADR-0019's six-step decision template, Sub-box 7's primitive
+choice MUST be a post-quantum-resistant primitive (FIPS 204
+ML-DSA-65 or ML-DSA-87) or a hybrid signature scheme (classical
++ ML-DSA during transition; verifiers accept either signature).
+Pre-quantum asymmetric primitives (RS256, ES256, Ed25519, ECDSA
+on classical curves) are **rejected** — Foundation's substrate
+is currently post-quantum ready by primitive selection (zero
+Shor's-vulnerable crypto in production), and the Sub-box 7
+inflection point must preserve this posture rather than incur
+PQC-migration debt.
+
+Specifically:
 
 - A new `ATTESTATION_ALGORITHM` constant joins this config with
-  value `"RS256"` or `"ES256"` (decision deferred to Sub-box 7
-  build-time).
+  primitive selection per ADR-0019's six-step decision template
+  (PQC or hybrid; never pre-quantum asymmetric only). The
+  constant gets its own anchor test per ADR-0003's freeze
+  pattern in the same commit as the addition.
 - A new `ATTESTATION_KEY_*` configuration block specifies the
   asymmetric key pair location (likely a JWKS endpoint at
   `/.well-known/jwks.json` published over HTTP for recipient
-  verification).
+  verification). Key sizes accommodate PQC primitive sizes
+  (~1.3 KB ML-DSA-65 public keys; ~2.6 KB ML-DSA-87 public
+  keys; vs. ~91 bytes for ES256) — JWKS endpoint sizing and
+  recipient parsing must accommodate the larger keys.
 - Existing `JWT_ALGORITHM = "HS256"` stays unchanged; HS256
   remains the algorithm for **internal session tokens** (which
   Foundation services verify against the shared JWT secret).
 - The asymmetric path covers external compliance attestations
   (which recipients verify against Foundation's published key
-  without possessing the JWT secret).
+  without possessing the JWT secret). External recipient
+  signature-format support is the practical gate for hybrid vs
+  PQC-only choice — 3PAO assessors and regulators may not yet
+  accept ML-DSA signatures at Sub-box 7 build-time, making
+  hybrid the practical transition path.
 
 This is the cleanest extension point for federated verification,
 which Family 1 (lawful-basis attestation) and Family 5
-(compliance-attested capsule reports + selective disclosure with
-BBS+ signatures) both depend on.
+(compliance-attested capsule reports + selective disclosure)
+both depend on. Selective disclosure primitive selection (the
+substrate-discipline question of which scheme to use for Family
+5's capsule-redaction-with-verifiability requirement) is also
+subject to ADR-0019's six-step template; pre-quantum schemes
+including BBS+ signatures are subject to the same PQC-or-hybrid
+discipline. Selective disclosure is an active PQC research area;
+if no mature PQC selective-disclosure scheme is available at
+Sub-box 7 build-time, ADR-0019's relaxation framework applies
+and the Sub-box 7 ADR documents the relaxation explicitly.
 
 ## 6. Cross-Reference
 
 - `packages/auth/src/crypto-config.ts` — algorithm constants
   (canonical contract)
+- `docs/architecture/decisions/0019-cryptographic-suite-posture.md`
+  — Cryptographic-Suite Posture; canonical reference for
+  `ATTESTATION_ALGORITHM` primitive selection (PQC or hybrid;
+  pre-quantum asymmetric rejected) and the broader post-quantum-
+  readiness discipline applied to all asymmetric crypto adoption
 - `apps/api/src/boot-validation.ts` — production gate enforcement
 - `tests/unit/boot-validation.test.ts` — anchor tests for
   CRYPTO_CONFIG immutability and gate behavior
