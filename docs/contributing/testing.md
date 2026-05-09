@@ -367,7 +367,7 @@ extending CI:
 | D | Workflow file split | `ci.yml` + `nightly-real-llm.yml` |
 | E | Postgres image pin | `postgres:16.4-alpine` (parity-with-local axis) |
 | F | Concurrency control nightly | allow concurrent runs (no concurrency block) |
-| G | npm caching | `actions/setup-node@v4` `cache: 'npm'` |
+| G | npm caching | `actions/setup-node@v6` `cache: 'npm'` |
 | H | Node version pin | `.nvmrc` = `22.11.0` (LTS-compliance axis) |
 
 Decision B's 12-error threshold is enforced by

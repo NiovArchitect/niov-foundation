@@ -129,7 +129,7 @@ don't corrupt each other. Cost is bounded (each run is
 should not be blocked.
 
 **Decision G**: npm caching = enabled via
-`actions/setup-node@v4`'s `cache: 'npm'` option. Rationale:
+`actions/setup-node@v6`'s `cache: 'npm'` option. Rationale:
 npm dependency resolution + download dominates CI runtime
 when uncached; caching saves ~30-60s per job. Cache key
 defaults to `package-lock.json` hash, so cache invalidates
@@ -137,7 +137,7 @@ correctly when dependencies change.
 
 **Decision H**: Node version = `.nvmrc` containing `22.11.0`
 (Node 22 LTS), referenced by both workflows via
-`actions/setup-node@v4`'s `node-version-file: '.nvmrc'`
+`actions/setup-node@v6`'s `node-version-file: '.nvmrc'`
 parameter.
 
 Track A Gate 7's primer drafted both workflow YAMLs with
@@ -171,11 +171,11 @@ reasoning that goes beyond mere parity:
 - The operator migrated local Node from v24.13.1 to
   v22.11.0 (via nvm) as part of Decision 11's resolution.
   The corrected `.nvmrc` content is `22.11.0` (no v prefix
-  per nvm convention; `actions/setup-node@v4` handles both
+  per nvm convention; `actions/setup-node@v6` handles both
   with and without prefix).
 - Single source of truth for both local development (where
   `nvm use` automatically picks up the version) and CI
-  (where `actions/setup-node@v4` reads it). Future Node
+  (where `actions/setup-node@v6` reads it). Future Node
   version updates touch one file; both local and CI
   auto-track.
 - The `@types/node: ^22.10.0` constraint in `package.json`
