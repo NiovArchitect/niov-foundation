@@ -126,45 +126,60 @@ Per Section 12 standalone Build Guide.
 
 ## Section 6 — PROTECTED-PRIORITY queued work
 
-These two gates are LOCKED at the top of the forward queue. Scope
-detail is preserved verbatim from the 2026-05-07 session.
+PROTECTED-PRIORITY queue tracks the two-gate window at the top of
+the forward queue: the gate currently in flight (closed at end-of-
+commit) and the gate immediately following it. Earlier closures
+are tracked in §5 closed-gates table; deeper queue work is tracked
+in §12 Recommended Architectural Additions and the Track A gate
+plan.
 
-### Track A Gate 8c — `testing.md` + `onboarding.md` (~2 hours)
+### Track A Gate 9 — Architectural framing integration into operating manual (~30 min)
+
+**Status:** closed at end-of-commit.
 
 **Scope:**
 
-- Create `docs/contributing/testing.md` with **ADR-0011** + **ADR-0015**
-  back-citations.
-- Create `docs/contributing/onboarding.md` with **ADR-0017**
-  back-citation (per ADR-0017 line 710-713 as corrected in commit
-  `7269a7a`).
-- Optional: ADR-0017 reference in `testing.md`.
-- Optional: ADR-0016 reference in `testing.md` (per ADR-0016
-  L500-602 forward-promise corrected in commit `e829644`).
+- `CLAUDE.md` — RULE 17 (architectural framing is load-on-open) +
+  RULE 18 (verify operation type against actual file state).
+- `docs/contributing/onboarding.md` — §3 Step 5 (load architectural
+  framing) + RULE-count update (16 → 18).
+- `docs/CURRENT_BUILD_STATE.md` — §6 closure tracking (Gate 8c +
+  Gate 8d removed; Gate 9 + Gate 8h added) + §12.7 closed entry
+  (RAA 12.7 Dynamic Flow Architecture).
 
-**Substrate-discipline alignment:** closes ADR-0011 / ADR-0015 /
-ADR-0016 / ADR-0017 forward promises (RULE 14 bidirectional citation
-discipline).
+**Lineage:** operator directive captured in RAA 12.7 commit
+`0fd8da7` body — *future AI tool sessions on Foundation must
+automatically load architectural framing without re-prompting
+(qi-and-blood lens, bilateral-vs-unilateral zones,
+embodied-substrate framing)*. RULE 18 emerged from D-G9-3 surfaced
+during Gate 9 investigation (operation-type mismatch between plan
+and actual file state).
 
-### Track A Gate 8d — Discipline-pattern documentation + algorithm-literal cleanup (~1.5 hours)
+**Substrate-discipline alignment:** RULE 14 (bidirectional citation
+discipline — RULE 17 ↔ onboarding.md §3 Step 5; §12.7 ↔ commit
+`0fd8da7`).
 
-**Scope (substrate-discipline-driven per ADR-0019):**
+### Track A Gate 8h — Canonical reference refresh (~1 hour)
 
-- Hardcoded algorithm literal cleanup at:
-  - `createCipheriv("aes-256-gcm")` call sites
-  - `createHash("sha256")` call sites
-  - `"sha256:"` prefix sites in `observation.service.ts`
-- Replace with `CRYPTO_CONFIG` constant references.
-- Restores crypto-agility from 2/5 toward 3-4/5 per ADR-0019 audit.
-- Node.js 20 deprecation warnings (CI workflow runs on Node.js 20).
-- `npm audit` warnings.
-- Discipline-pattern documentation: how the substrate-discipline
-  canonical reference quartet operates in practice; cross-references
-  between ADR-0016 (what-to-pin) + ADR-0017 (how-to-investigate) +
-  ADR-0018 (where-to-deploy) + ADR-0019 (cryptographic-suite).
+**Status:** queued.
 
-**Substrate-discipline alignment:** closes ADR-0019 Outstanding Work
-+ addresses Track A Gate 7 carryforward items.
+**Scope:**
+
+- `CLAUDE.md` §5 / §6 — closed-gate references and queue items
+  brought to current state.
+- `docs/CURRENT_BUILD_STATE.md` §4 / §5 / §8 / §9 — sub-section
+  status, closed-gates table, test surface counts, cross-repo
+  state refreshed.
+- Workflow YAML test count drift (unit tier label "(370 tests)"
+  vs. local `npm run test:unit` reporting 371; investigate which
+  test landed between Gate 6 `cae8cf4` and Gate 8d `2fc025a` to
+  account for the +1 drift; update workflow label or document the
+  drift as substrate-honest).
+
+**Substrate-discipline alignment:** closes the canonical reference
+staleness window opened by 2026-05-08/09 commit cycle
+(`95ad861`, `bea1b33`, `2fc025a`, `0fd8da7`, plus this Gate 9
+commit).
 
 ---
 
@@ -567,6 +582,29 @@ LLM providers' own moves into agent orchestration.
 category-claim language in CLAUDE.md and canonical reference.
 Possibly external positioning materials (whitepaper, technical
 brief, investor deck supporting documents).
+
+### 12.7 Dynamic Flow Architecture (CLOSED)
+
+**Status:** CLOSED — landed at commit `0fd8da7` on origin/main
+2026-05-09.
+
+**Document:** `docs/architecture/dynamic-flow-architecture.md`
+(1,451 lines, 15 sections, 2 Mermaid diagrams).
+
+**Establishes:** Foundation as embodied substrate for AI cognition
+— substrate-as-body framing, not substrate-as-brain. Codifies
+bilateral-vs-unilateral zone discrimination (4 unilateral / 5
+bilateral; default rule: bilateral). Classifies 10 dynamic-flow
+capabilities as 5 SUBSTRATE / 2 PARTIAL / 3 NET-NEW. Encodes
+qi-and-blood metaphor as architectural anchor; positions Foundation
+for the ASI consumer trajectory. Adapts 8 public-domain research
+patterns (CRDTs, Attention, Federated Learning, Logical clocks,
+Spatial indexing, Active learning, Multi-armed bandits, Multi-source
+query parallelism) within Foundation's patent-protected COSMP/DMW
+envelope.
+
+**Forward dependency:** RAA 12.2 (static interconnection map; queued)
+builds over this dynamic flow foundation, not the other way around.
 
 ---
 

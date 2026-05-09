@@ -26,8 +26,8 @@ one-paragraph summary.
 In this order, before any code or doc work:
 
 1. **`CLAUDE.md`** (repo root) — the operational rulebook. The
-   16 RULES (0-10 + 12-16) define what every session in this
-   repo internalizes.
+   18 RULES (0-10 + 12-18; RULE 11 vacant) define what every
+   session in this repo internalizes.
 2. **`docs/CURRENT_BUILD_STATE.md`** — the persistent canonical
    reference for what's built, what's in flight, what's queued,
    and what's been captured for forward architectural work.
@@ -51,11 +51,12 @@ guides become readable in any order driven by the current task.
 Concrete steps every Claude Code session and every operator
 terminal session:
 
-1. **Read `CLAUDE.md`.** Confirm the 16 RULES are loaded into
+1. **Read `CLAUDE.md`.** Confirm the 18 RULES are loaded into
    context. RULE 12 (pre-flight grep) and RULE 13 (surface
    drifts) govern every drafting action; RULE 14 (bidirectional
    citation) governs every ADR or reference doc that cites
-   another.
+   another. RULE 17 governs architectural framing load-on-open;
+   RULE 18 governs operation-type verification.
 2. **View `docs/CURRENT_BUILD_STATE.md`.** This is the
    forward-living source of truth. Its Section 3 tells you
    which Build Guide sections are closed; its Section 4 tells
@@ -70,6 +71,16 @@ terminal session:
    ```
    If either is wrong, fix it before any commit. See §7
    below.
+5. **Load architectural framing.** View
+   `docs/architecture/dynamic-flow-architecture.md` §1
+   (Foundation as Embodied Substrate for AI Cognition) at
+   minimum. As additional canonical RAAs land in
+   `docs/architecture/`, read those too. The framing —
+   qi-and-blood lens, bilateral-vs-unilateral zones,
+   embodied-substrate distinction — informs all subsequent
+   work; sessions that skip this step operate without the
+   architectural lens that distinguishes substrate-honest
+   work from idealized-model work. See CLAUDE.md RULE 17.
 
 The ritual is short by design — it's not a setup checklist; it's
 a context-loading checklist. Each step exists because skipping
@@ -339,7 +350,7 @@ For your first non-trivial contribution to Foundation:
 
 ## 11. See Also
 
-- `CLAUDE.md` — the operational rulebook (16 RULES; read
+- `CLAUDE.md` — the operational rulebook (18 RULES; read
   before every action).
 - `docs/CURRENT_BUILD_STATE.md` — the persistent canonical
   reference (load at session start).

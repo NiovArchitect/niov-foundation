@@ -249,6 +249,41 @@ Option C anchor). Use the structured logger
 ADR-0005 (no `console.*` in `apps/api/src`) and
 `docs/contributing/code-style.md` §Logging.
 
+### RULE 17 -- ARCHITECTURAL FRAMING IS LOAD-ON-OPEN
+
+Foundation's architectural framing is not optional context
+for AI tool sessions; it is the lens through which substrate
+work is understood. Sessions that begin without loading the
+framing operate on incomplete substrate. Architectural framing
+established in canonical RAA documents must be cross-referenced
+in this operating manual and read on session opening per the
+onboarding ritual.
+
+Currently canonical: `docs/architecture/dynamic-flow-architecture.md`
+(RAA 12.7) — Foundation as embodied substrate for AI cognition;
+qi-and-blood metaphor; bilateral-vs-unilateral zone discrimination;
+default-rule-bilateral. As additional canonical RAAs land in
+`docs/architecture/`, they join this load list.
+
+Operationalized via `docs/contributing/onboarding.md` §3 Step 5.
+Lineage: this rule emerged from RAA 12.7 (commit `0fd8da7`); see
+Gate 9 commit body for the operator directive.
+
+### RULE 18 -- VERIFY OPERATION TYPE AGAINST ACTUAL FILE STATE
+
+When investigation surfaces an edit plan, the operation verb
+(move / update / replace / insert / create) must match what
+the substrate actually supports. Plans that assume "move" when
+the source does not exist, "update" when the field is absent,
+or "extend" when the structure is closed are substrate-
+incoherent — they describe an edit against an idealized file
+rather than the real one. Investigation must verify the
+operation verb against the actual current file state and
+surface the correction inline before drafting.
+
+Lineage: this rule emerged from D-G9-3 surfaced during Gate 9
+investigation; see this commit body for the precedent case.
+
 ## 4. Architectural Vocabulary
 
 This file is not the glossary. Vocabulary lives in three
