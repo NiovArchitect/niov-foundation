@@ -13,6 +13,7 @@
 //              CREATED audits).
 
 import { createHash, randomUUID } from "node:crypto";
+import { CRYPTO_CONFIG } from "@niov/auth";
 import {
   prisma,
   writeAuditEvent,
@@ -127,8 +128,8 @@ interface ExtractedIntelligence {
 //        trailing differences (timestamps, signatures).
 function dedupContentHash(content: string): string {
   return (
-    "sha256:" +
-    createHash("sha256")
+    `${CRYPTO_CONFIG.HASH_ALGORITHM}:` +
+    createHash(CRYPTO_CONFIG.HASH_ALGORITHM)
       .update(content.slice(0, DEDUP_CONTENT_PREFIX))
       .digest("hex")
   );

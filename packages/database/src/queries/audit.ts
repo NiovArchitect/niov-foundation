@@ -10,6 +10,7 @@
 //              verify the chain has not been tampered with.
 
 import { createHash, randomUUID } from "node:crypto";
+import { CRYPTO_CONFIG } from "@niov/auth";
 import type { AuditEvent, AuditOutcome, Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 
@@ -298,7 +299,7 @@ function canonicalRecord(parts: {
 // OUTPUT: A 64-character hex string.
 // WHY: Hex is human-readable in the database and easy to compare.
 function sha256Hex(canonical: string): string {
-  return createHash("sha256").update(canonical).digest("hex");
+  return createHash(CRYPTO_CONFIG.HASH_ALGORITHM).update(canonical).digest("hex");
 }
 
 // WHAT: Install the Postgres trigger that makes audit_events

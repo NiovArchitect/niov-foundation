@@ -12,6 +12,7 @@
 
 import { createHash } from "node:crypto";
 import jwt from "jsonwebtoken";
+import { CRYPTO_CONFIG } from "@niov/auth";
 import {
   getCapsuleMetadata,
   getCapsuleWithContent,
@@ -149,7 +150,7 @@ export function computeMetadataFingerprint(
     last_updated_at: metadata.last_updated_at,
     clearance_required: metadata.clearance_required,
   });
-  return createHash("sha256").update(canonical).digest("hex");
+  return createHash(CRYPTO_CONFIG.HASH_ALGORITHM).update(canonical).digest("hex");
 }
 
 // WHAT: Truncate a string to at most maxTokens whitespace-separated

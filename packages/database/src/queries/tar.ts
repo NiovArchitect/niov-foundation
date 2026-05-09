@@ -11,6 +11,7 @@
 //              and createEntity which calls createTARInTx.
 
 import { createHash, randomUUID } from "node:crypto";
+import { CRYPTO_CONFIG } from "@niov/auth";
 import type {
   EntityType,
   MonetizationRole,
@@ -176,7 +177,7 @@ export function computeTARHash(fields: TARHashableFields): string {
     compliance_frameworks: [...fields.compliance_frameworks].sort(),
     status: fields.status,
   });
-  return createHash("sha256").update(canonical).digest("hex");
+  return createHash(CRYPTO_CONFIG.HASH_ALGORITHM).update(canonical).digest("hex");
 }
 
 // WHAT: Build the initial TARHashableFields for a brand new TAR.

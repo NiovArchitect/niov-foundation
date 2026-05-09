@@ -8,6 +8,8 @@
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
+import { CRYPTO_CONFIG } from "./crypto-config.js";
+
 // WHAT: Class that wraps a 32-byte AES-256 key and exposes encrypt /
 //        decrypt methods.
 // INPUT: A 32-byte Buffer at construction.
@@ -31,7 +33,7 @@ export class ContentEncryption {
   //      tag detects tampering at decrypt time.
   encrypt(plaintext: string): string {
     const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.key, iv);
+    const cipher = createCipheriv(CRYPTO_CONFIG.AES_ALGORITHM, this.key, iv);
     const ct = Buffer.concat([
       cipher.update(plaintext, "utf8"),
       cipher.final(),
@@ -54,7 +56,7 @@ export class ContentEncryption {
     const iv = Buffer.from(ivB64!, "base64");
     const tag = Buffer.from(tagB64!, "base64");
     const ct = Buffer.from(ctB64!, "base64");
-    const decipher = createDecipheriv("aes-256-gcm", this.key, iv);
+    const decipher = createDecipheriv(CRYPTO_CONFIG.AES_ALGORITHM, this.key, iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ct), decipher.final()]).toString(
       "utf8",
@@ -76,7 +78,7 @@ export function makeContentEncryption(): ContentEncryption {
   }
   const fallback = process.env.JWT_SECRET;
   if (typeof fallback === "string" && fallback.length > 0) {
-    const key = createHash("sha256").update(fallback).digest();
+    const key = createHash(CRYPTO_CONFIG.HASH_ALGORITHM).update(fallback).digest();
     return new ContentEncryption(key);
   }
   throw new Error(
@@ -90,5 +92,5 @@ export function makeContentEncryption(): ContentEncryption {
 // WHY: Section 3C stores content_hash = SHA-256 of the encrypted
 //      ciphertext so tampering at the storage layer is detectable.
 export function sha256Hex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+  return createHash(CRYPTO_CONFIG.HASH_ALGORITHM).update(input).digest("hex");
 }

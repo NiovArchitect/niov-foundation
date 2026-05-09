@@ -20,6 +20,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { CRYPTO_CONFIG } from "@niov/auth";
 
 // WHAT: The unified result shape every LLMProvider must return.
 // INPUT: Used as a return type only.
@@ -393,7 +394,7 @@ export function computeLLMInputHash(args: {
   context?: string;
 }): string {
   const joined = `${args.system}\n---\n${args.user}\n---\n${args.context ?? ""}`;
-  return createHash("sha256").update(joined).digest("hex");
+  return createHash(CRYPTO_CONFIG.HASH_ALGORITHM).update(joined).digest("hex");
 }
 
 // WHAT: Test-mode LLMProvider that dispatches by operator-chosen
