@@ -87,7 +87,7 @@ Per Section 12 standalone Build Guide.
 | 12F | Onboarding wizard · Documentation · a11y · Playwright · Section 12 close | → BUILD (target ~22 tests) |
 
 **otzar-control-tower HEAD:** `0a28f90` (closes 12B).
-**niov-foundation HEAD:** `e829644` (Track A Gate 8e).
+**niov-foundation HEAD:** `47d8596` (Track A Gate 8f).
 
 ---
 
@@ -119,6 +119,12 @@ Per Section 12 standalone Build Guide.
 | DOCS-ALIGN (FIPS_DEPLOYMENT_POSTURE.md) | `38d941f` |
 | Gate 8b-amendment | `7269a7a` |
 | Gate 8e (ADR-0016 amendment) | `e829644` |
+| BUILD-RECONCILIATION + CANONICAL-REFERENCE | `95ad861` |
+| Gate 8c (testing.md + onboarding.md) | `bea1b33` |
+| Gate 8d (algorithm-literal cleanup) | `2fc025a` |
+| RAA 12.7 (Dynamic Flow Architecture) | `0fd8da7` |
+| Gate 9 (architectural framing integration) | `c399980` |
+| Gate 8f (fast-uri 3.1.0→3.1.2 npm overrides) | `47d8596` |
 
 **Queued:** see Section 6 (PROTECTED-PRIORITY).
 
@@ -133,53 +139,84 @@ are tracked in §5 closed-gates table; deeper queue work is tracked
 in §12 Recommended Architectural Additions and the Track A gate
 plan.
 
-### Track A Gate 9 — Architectural framing integration into operating manual (~30 min)
+### Track A Gate 8h — Canonical reference refresh (~1 hour)
 
 **Status:** closed at end-of-commit.
 
 **Scope:**
 
-- `CLAUDE.md` — RULE 17 (architectural framing is load-on-open) +
-  RULE 18 (verify operation type against actual file state).
-- `docs/contributing/onboarding.md` — §3 Step 5 (load architectural
-  framing) + RULE-count update (16 → 18).
-- `docs/CURRENT_BUILD_STATE.md` — §6 closure tracking (Gate 8c +
-  Gate 8d removed; Gate 9 + Gate 8h added) + §12.7 closed entry
-  (RAA 12.7 Dynamic Flow Architecture).
+- `CLAUDE.md` §5 + §6 — "as of Track A Gate 8b-amendment" updated
+  to "as of Track A Gate 8h"; §6 Track A list operational status
+  refreshed (Gate 8b-amendment / 8c / 8d / 8e all marked CLOSED
+  with SHAs). §6 historical framing (L348 + L398) preserved per
+  Gate 9 D-2 option (c) precedent (contemporaneous accuracy).
+- `docs/CURRENT_BUILD_STATE.md` — §4 niov-foundation HEAD updated
+  `e829644` → `47d8596`; §5 closed-gates table appended with 6
+  missing entries (BUILD-RECONCILIATION `95ad861`, Gate 8c
+  `bea1b33`, Gate 8d `2fc025a`, RAA 12.7 `0fd8da7`, Gate 9
+  `c399980`, Gate 8f `47d8596`); §6 rotated to Gate 8h
+  closed-at-end-of-commit + Gate 8g queued; §8 test surface
+  counts updated (Unit 370 → 371; Total 482 → 483; CI run
+  25539791355 → 25611252522); §9 cross-repo niov-foundation HEAD
+  `e829644` → `47d8596`.
+- `.github/workflows/ci.yml` L63 — unit-tier job name label
+  `(370 tests)` → `(371 tests)`. Cosmetic display only; vitest
+  runs whatever passes.
 
-**Lineage:** operator directive captured in RAA 12.7 commit
-`0fd8da7` body — *future AI tool sessions on Foundation must
-automatically load architectural framing without re-prompting
-(qi-and-blood lens, bilateral-vs-unilateral zones,
-embodied-substrate framing)*. RULE 18 emerged from D-G9-3 surfaced
-during Gate 9 investigation (operation-type mismatch between plan
-and actual file state).
+**Lineage:** RAA 12.7 (`0fd8da7`) + Gate 9 (`c399980`) + Gate 8f
+(`47d8596`) commit bodies all deferred canonical-reference
+refresh to Gate 8h. D-G8H-1 substrate-honesty drift surfaced
+during Gate 8h investigation: forward "Node.js 20→24" gate
+predicted in Gate 8f / Gate 9 / RAA 12.7 commit bodies as
+"Gate 8e" conflicted with closed Gate 8e (`e829644` ADR-0016
+amendment, immutable record). D-1 resolution: forward
+toolchain-modernization gate renamed to Gate 10. Gate 8x family
+preserved as security-advisory cluster (8a/8b-amendment/8c/8d/
+8e/8f/8g/8h); Gate 10 starts toolchain-modernization cluster.
+Older commit-body forecasts referencing "Gate 8e Node.js 20→24"
+become slightly inaccurate predictions but not substrate
+violations per origin/main immutability discipline.
 
-**Substrate-discipline alignment:** RULE 14 (bidirectional citation
-discipline — RULE 17 ↔ onboarding.md §3 Step 5; §12.7 ↔ commit
-`0fd8da7`).
+**Substrate-discipline alignment:** closes the canonical reference
+staleness window opened by 2026-05-08/09/10 commit cycle. RULE
+14 (bidirectional citation — §6 entries cite SHAs; SHAs cite §6
+via commit-body cross-reference). RULE 13 (drift surfacing —
+D-G8H-1 Gate 8e numbering, D-G8H-2 historical framing
+preservation, D-G8H-3 last-verified CI run reference, D-G8H-E5
+table format substrate-coherence, all surfaced inline before
+silent fix).
 
-### Track A Gate 8h — Canonical reference refresh (~1 hour)
+### Track A Gate 8g — tar/bcrypt 5→6 breaking + remaining audit advisories (~2-3 hours; dedicated session)
 
 **Status:** queued.
 
 **Scope:**
 
-- `CLAUDE.md` §5 / §6 — closed-gate references and queue items
-  brought to current state.
-- `docs/CURRENT_BUILD_STATE.md` §4 / §5 / §8 / §9 — sub-section
-  status, closed-gates table, test surface counts, cross-repo
-  state refreshed.
-- Workflow YAML test count drift (unit tier label "(370 tests)"
-  vs. local `npm run test:unit` reporting 371; investigate which
-  test landed between Gate 6 `cae8cf4` and Gate 8d `2fc025a` to
-  account for the +1 drift; update workflow label or document the
-  drift as substrate-honest).
+- `tar` 5→6 transition (HIGH-severity advisories: hardlink path
+  traversal, symlink poisoning, race condition on macOS APFS,
+  drive-relative linkpath, etc. — 6 advisories total).
+- `bcrypt` 5→6 transition (depends on `@mapbox/node-pre-gyp` →
+  `tar` chain; bcrypt is critical password-hashing surface and
+  the major-version migration affects auth code paths).
+- Remaining `esbuild` advisory (moderate; dev-tree via
+  `vitest`/`vite`/`vite-node`/`@vitest/mocker` chain — separate
+  evaluation: dev-only surface vs production vulnerability).
+- `npm audit fix --force` would auto-bump but introduces
+  `vitest@4.1.5` breaking change; substrate-honesty
+  investigation of impact required first.
 
-**Substrate-discipline alignment:** closes the canonical reference
-staleness window opened by 2026-05-08/09 commit cycle
-(`95ad861`, `bea1b33`, `2fc025a`, `0fd8da7`, plus this Gate 9
-commit).
+**Lineage:** Gate 8f (`47d8596`) cleared 2 fast-uri advisories
+non-breakingly; tar/bcrypt remaining HIGH-severity advisories
+require breaking upgrades and dedicated fresh-sharpness session
+per Gate 8f commit body and operator session-opening queue.
+
+**Substrate-discipline alignment:** ADR-0016 Pin-and-Optimize
+Framework (security-patch-cadence axis applies; whether to bump
+bcrypt 5→6 also touches PQC migration trajectory per ADR-0019).
+ADR-0017 Production Discipline (nine-step template applies to
+breaking dependency upgrade — frame the drift, distinguish
+observation/inference, verify empirically before fix design).
+8x security-advisory cluster closes with Gate 8g.
 
 ---
 
@@ -216,10 +253,10 @@ canonical reference quartet **bolded**.
 
 | Tier | Count | Last verified |
 |---|---|---|
-| Unit | 370 | CI run 25539791355 (2026-05-07) |
-| Integration | 111 + 1 skipped | CI run 25539791355 (2026-05-07) |
+| Unit | 371 | CI run 25611252522 (2026-05-10) |
+| Integration | 111 + 1 skipped | CI run 25611252522 (2026-05-10) |
 | LLM-required nightly | (verify count when nightly runs) | (verify) |
-| **Total** | **482** | CI run 25539791355 (2026-05-07) |
+| **Total** | **483** | CI run 25611252522 (2026-05-10) |
 
 Test count timeline reference: see
 `docs/reconciliation/2026-05-08-build-reconciliation.md` Section 5
@@ -232,7 +269,7 @@ Gate substrate work).
 
 | Repo | Role | HEAD |
 |---|---|---|
-| niov-foundation | Substrate (Foundation) | `e829644` (2026-05-07) |
+| niov-foundation | Substrate (Foundation) | `47d8596` (2026-05-10) |
 | otzar-control-tower | Otzar Control Tower frontend | `0a28f90` (2026-05-05; closes 12B) |
 
 **Cross-repo discipline** (per Section 12 standalone Build Guide):

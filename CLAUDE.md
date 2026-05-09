@@ -307,7 +307,7 @@ documentation, **cite the reference**, do not redefine.
 
 ## 5. Key Architectural Decisions
 
-The 19 ADRs as of Track A Gate 8b-amendment. The `docs/architecture/README.md`
+The 19 ADRs as of Track A Gate 8h. The `docs/architecture/README.md`
 is the source of truth for ADR navigation; this is a quick-
 reference jump table.
 
@@ -363,10 +363,10 @@ this documentation infrastructure batch. Recent landmarks:
   - Gate 7-post-2 (Drift G7-PRE-C fix): CLOSED `2fbc057`
   - Gate 8a (ADR cross-citation back-references): CLOSED `3febf83`
   - Gate 8b (CLAUDE.md update): CLOSED `3a571fb`
-  - **Gate 8b-amendment (ADR-0018/0019 + audit-bucket closure): IN FLIGHT (this commit)**
-  - Gate 8c (onboarding.md + testing.md back-citations): QUEUED
-  - Gate 8d (discipline-pattern documentation; scope expanded per ADR-0019 to include hardcoded algorithm literal cleanup at `createCipheriv`, `createHash`, `"sha256:"` prefix sites): QUEUED
-  - Gate 8e (ADR-0016 amendment adding deployment-target + cryptographic-suite worked example categories): QUEUED
+  - Gate 8b-amendment (ADR-0018/0019 + audit-bucket closure): CLOSED `7269a7a`
+  - Gate 8c (onboarding.md + testing.md back-citations): CLOSED `bea1b33`
+  - Gate 8d (discipline-pattern documentation; scope expanded per ADR-0019 to include hardcoded algorithm literal cleanup at `createCipheriv`, `createHash`, `"sha256:"` prefix sites): CLOSED `2fc025a`
+  - Gate 8e (ADR-0016 amendment adding deployment-target + cryptographic-suite worked example categories): CLOSED `e829644`
 - Independent companion tracks (canonical references; landed
   alongside Track A):
   - G5b-I Resolution: CLOSED `fbc7942`

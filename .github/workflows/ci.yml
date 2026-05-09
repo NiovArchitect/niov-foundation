@@ -60,7 +60,7 @@ jobs:
           retention-days: 14
 
   unit-tests:
-    name: Unit tier (370 tests)
+    name: Unit tier (371 tests)
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
