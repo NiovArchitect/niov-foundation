@@ -1171,100 +1171,301 @@ Per Decision 4 (all blocks required due to interconnection), Surface 2 engineeri
 
 ## Section 5 — Surface 3: Agentic Coherence
 
+Section 5 canonicalizes Surface 3 of RAA 12.8 substrate-dynamics architecture. Surface 3 designs how substrate stays coherent under autonomous agentic execution AND human-in-the-loop validation as first-class architectural property. Section 5 closes four Phase 1 / Phase 1 extension drifts inline (D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL via §5.2; D-2D-D11-AGENT-TO-AGENT-INTENTIONAL-VS-GAP via §5.4; D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY via §5.5; D-2C-D5-ACCESS-BASED-STUB via §5.7) and surfaces two OPERATOR REVIEW REQUIRED markers (§5.6 DurationType-vs-DecayType collision per D-2C-D5-DURATION-COLLISION; §5.8 NEW Per-DMW-Type Sovereignty Rules per Correction 4). Section 5 §5.9 enumerates the Step 2E engineering surface that closes the architectural canonicalization with implementation work.
+
 ### 5.1 Dual-posture canonicalization per Correction 4
 
-**Per Correction 4 reframing:** Dual-posture is not "humans validate AI outputs" simple model. Dual-posture is "humans-in-the-loop is the underlying sovereignty principle; AI_AGENT autonomy operates within human-sovereign boundaries." The sovereignty principle is foundational architectural property, not opt-in feature.
+Per Correction 4 (folded at outline commit `10ef10f`): dual-posture is not "humans validate AI outputs" simple model. Dual-posture is "humans-in-the-loop is the underlying sovereignty principle; AI_AGENT autonomy operates within human-sovereign boundaries." The sovereignty principle is foundational architectural property, not opt-in feature.
 
-Substrate primitives supporting dual-posture (already substrate-active): AI sovereignty cap at NEGOTIATE (`negotiate.service.ts:367-370`); explicit human override flag on Permission (`negotiate.service.ts:368` — `allow_ai_full=true`); AI_AGENT entity-type discrimination in EntityType enum; EXECUTIVE_OVERRIDE autonomy level in TwinConfig. RAA 12.8 extends the substrate with EscalationRequest model (Section 5.2) and correction-propagation chain (Section 5.2).
+#### Substrate primitives supporting dual-posture — verified active
 
-### 5.2 Human-in-the-loop primitives expansion
+Pre-flight verification (substrate-evidence gathering before draft) confirmed substrate-active dual-posture primitives:
 
-Substrate state per Phase 1 extension D10: priming.ts already shapes context as `escalations: EscalationItem[]` while EscalationRequest Prisma model does not exist (Section 14 TODO at `priming.ts:128`). Closes D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL drift.
+- **AI sovereignty cap at NEGOTIATE.** `apps/api/src/services/cosmp/negotiate.service.ts:367-374` enforces: `if (requester.entity_type === "AI_AGENT" && grantedScope === "FULL" && !permissionAllowsAiFull(permission)) { grantedScope = "SUMMARY"; }`. AI_AGENT cannot keep FULL scope unless an explicit human override flag is set on Permission. Substrate-honest path correction: file is at `services/cosmp/negotiate.service.ts` (not at `services/negotiate.service.ts`).
+- **Restricted entity types.** `negotiate.service.ts:115` discriminates AI_AGENT + DEVICE as restricted entity types via `entityType === "AI_AGENT" || entityType === "DEVICE"` predicate.
+- **Explicit human override flag.** `negotiate.service.ts:129` — `permissionAllowsAiFull(permission)` returns `true` only when `conditions.allow_ai_full === true`. The override is per-Permission-row and explicit; default behavior caps AI scope.
+- **AI sovereignty audit signal.** `negotiate.service.ts:410` audit details include `ai_capped: requester.entity_type === "AI_AGENT" && requestedScope === "FULL" && grantedScope !== "FULL"`. Substrate makes the cap event observable in audit chain per Zone U1 + Zone U4.
+- **EXECUTIVE_OVERRIDE autonomy level in TwinConfig.** `apps/api/src/services/governance/twin.service.ts:233` assigns `autonomyLevel = isAdmin ? "EXECUTIVE_OVERRIDE" : "APPROVAL_REQUIRED"`. TwinConfig substrate-active per `dandelion.service.ts:398` admin-twin creation flow.
+- **AI_AGENT entity-type discrimination in EntityType enum.** Verified verbatim: `enum EntityType { PERSON COMPANY AI_AGENT DEVICE APPLICATION GOVERNMENT }`.
 
-Surface 3 expansion territory:
-- **EscalationRequest model.** Prisma schema addition; status workflow (PENDING → APPROVED/REJECTED/EXPIRED); escalation-source-entity + escalation-target-entity + capsule-context-set linkage.
-- **Validation gate flags.** `requires_validation` flag on Capsule or Permission; gate-trigger conditions; gate-resolution audit lineage.
-- **Approval workflow primitives.** Multi-step approval chains; per-step approver discrimination; timeout policies.
-- **Correction propagation chain.** When human corrects AI output, correction flows back to: (a) feedback service (Loop 1 informativeness signal per Section 5.5); (b) capsule relevance update; (c) audit chain (correction event); (d) Hive coordination (correction influences aggregate per Section 4.8).
+#### Cross-section reach
 
-### 5.3 Self-introspection primitive (NET-NEW)
+Surface 3 §5.1 dual-posture couples to:
 
-Substrate currently has zero self-introspection primitives (per Phase 1 extension D11). Surface 3 adds substrate primitive for substrate writing capsules about substrate state.
+- **§3.8 Surface 1** — per-DMW-type sovereignty as scheduling constraint per Correction 4 enforces dual-posture at parallel-orchestration tier
+- **§5.4 agent-to-agent coordination per Corrections 1+3+4** — extends dual-posture to multi-agent scenarios; substrate-mediated allowed; direct cross-AI grant forbidden per RULE 0
+- **§5.8 per-DMW-type sovereignty rules** — operationalizes dual-posture as per-DMW-type governance constraint
+- **RAA 12.7 §2.5 Zones U3 + U4** — identity verification + permission grant lineage are the trust roots dual-posture depends on
 
-Mechanism: `SUBSTRATE_OBSERVATION` CapsuleType extension per ADR-0021 (single canonical addition exercises ADR-0021 extension protocol; PRICING_TABLE update bundled). Substrate-tier observation events written as capsules into a system-principal-owned wallet (HIVE_AGGREGATE_BUILT system principal precedent; see `audit.ts:103`). Observable substrate state: per-(entity, capsule_type) relevance distribution shifts; per-wallet retrieval pattern changes; informativeness signal trends.
+### 5.2 Human-in-the-loop primitives expansion (closes D-2D-D10 drift)
 
-Self-introspection coupling to Surface 2 Field 5 context-dependent salience: substrate observations condition salience for substrate-administrator queries; substrate becomes its own consumer of context.
+Section 5.2 closes the D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL drift by canonicalizing the EscalationRequest substrate territory + validation gate flags + approval workflow primitives + correction propagation chain.
 
-### 5.4 Agent-to-agent coordination per Corrections 1+3+4
+#### Verified substrate state — D-2D-D10 confirmed
 
-**Per Correction 1 broader scope:** AI_AGENT entities are first-class peer entities with their own DMWs (per memory entry #21 + EntityType enum). Two AI_AGENT entities can coordinate via substrate primitives PERSON entities use.
+Pre-flight verification confirmed the drift state:
 
-**Per Correction 3 entity-type uniformity:** Whether participating entities are PERSON, AI_AGENT, COMPANY, DEVICE, APPLICATION, or GOVERNMENT, they coordinate via the same substrate primitives (COE retrieval, Hive participation, bilateral feedback). Universal coordination pattern at primitive level.
+- **`EscalationItem` interface present** at `apps/api/src/services/otzar/priming.ts:36`: `interface EscalationItem { description: string; severity: string; }`
+- **`getEscalationsPending` stub** at `priming.ts:131-134` returns empty array `[]`
+- **TODO Section 14 comment** at `priming.ts:128`: `// TODO(Section 14): Replace with prisma.escalationRequest.findMany`
+- **EscalationRequest Prisma model NOT YET BUILT** — `grep "model.*[Ee]scalation" packages/database/prisma/schema.prisma` returns zero matches; substrate carries the consumer-side shape but not the storage-side model
 
-**Per Correction 4 sovereignty constraint:** AI_AGENT first-class for coordination AND constrained by owning-human sovereignty for governance. The architectural distinction:
+Drift D-2D-D10 confirmed at substrate-state. The priming context shape is ahead of the substrate model; canonical resolution canonicalizes the EscalationRequest model.
 
-- **Forbidden per RULE 0:** AI_AGENT_A directly grants Permission to AI_AGENT_B. Cross-AI direct permission grant breaks RULE 0.
-- **Allowed per substrate primitives:** AI_AGENT_A and AI_AGENT_B both have wallets; COE provides each its capsule context; Hive aggregates form across AI_AGENT entities; bilateral feedback flows between agent wallets. Substrate-mediated coordination is architecturally distinct from direct permission grant.
+#### Surface 3 §5.2 expansion territory
 
-Closes D-2D-D11-AGENT-TO-AGENT-INTENTIONAL-VS-GAP drift: agent-to-agent coordination is substrate-mediated (allowed) vs direct-grant-mediated (forbidden); substrate carries primitives for the allowed pattern via existing COE/Hive/feedback architecture extended for AI_AGENT-to-AI_AGENT participation.
+- **EscalationRequest Prisma model.** Schema addition with fields: `escalation_id` (UUID PK); `source_entity_id` + `target_entity_id` (entity references); `capsule_id` (optional capsule context reference); `escalation_type` (enum value indicating reason for escalation); `severity` (enum value); `status` (PENDING / APPROVED / REJECTED / EXPIRED); `created_at` / `resolved_at` (timestamps); `resolution_metadata` (JSON for resolver context); `resolved_by_entity_id` (resolver entity).
+- **Status workflow.** PENDING → APPROVED/REJECTED/EXPIRED transitions; status transition writes audit event per Zone U1; transition restricted to authorized resolver per per-DMW-type sovereignty rules at §5.8.
+- **Validation gate flags.** `requires_validation` flag on Capsule or Permission; gate-trigger conditions specified per per-DMW-type policy; gate-resolution audit lineage per Zone U4.
+- **Approval workflow primitives.** Multi-step approval chains (chained EscalationRequest rows); per-step approver discrimination via EntityMembership traversal per §3.8; timeout policies via `expires_at` field.
+- **Correction propagation chain.** When human corrects AI output, correction flows back to: (a) feedback service Loop 1 informativeness signal per §5.5 (correction = max informativeness per INT-3); (b) capsule relevance_score update; (c) audit chain correction event per Zone U1; (d) Hive coordination influences aggregate per §4.8 if cross-Hive correction.
 
-### 5.5 Active-learning informativeness as refinement (closes D-2D-D8)
+#### Cross-section reach
 
-Per RAA 12.7 §4.1 + §8 + §10 forward enhancement framing + Phase 1 extension D8 finding: substrate Loop 1 closes the bilateral feedback loop with uniform updates (RELEVANCE_USED_BUMP=+0.05; RELEVANCE_UNUSED_DECAY=-0.02). Forward enhancement is informativeness weighting per RELEAP 2025 / ORIS 2024 / multi-armed bandits / Thompson sampling research patterns canonicalized in RAA 12.7.
+- **§5.5 active-learning informativeness** — correction propagation chain per INT-3 is the high-informativeness signal feeding Loop 1 refinement
+- **§4.8 Hive coordination** — corrections within Hive context propagate to aggregate per Correction 2 + Correction 4 sovereignty
+- **RAA 12.7 §2.5 Zone U1** — escalation status transitions write audit events forward-only per audit chain integrity
 
-Surface 3 frames informativeness as refinement, not net-new dimension (per D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY drift): existing relevance_score is partial informativeness signal degraded by uniform updates; informativeness weighting refines existing substrate signal. Refinement preserves patent-implementation-evidence continuity (extension of canonicalized substrate primitive vs introduction of new primitive).
+### 5.3 Self-introspection NET-NEW (SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021)
 
-Coupling to ADR-0022: combined_score amends rather than supersedes; ADR-0022 Forward implications canonicalize this path; RAA 12.8 may necessitate ADR-0022 amendment to add informativeness component.
+Substrate currently has zero self-introspection primitives per Phase 1 extension D11 + Section 5 pre-flight verification. Surface 3 §5.3 adds substrate primitive for substrate writing capsules about substrate state via the ADR-0021 Capsule Type Extension Protocol.
 
-### 5.6 DurationType vs DecayType collision resolution (operator-review-required marker)
+#### Verified NET-NEW substrate state
 
-**OPERATOR REVIEW REQUIRED:** PERMANENT + SESSION_ONLY exist as both DurationType (Permission model — operational) and DecayType (MemoryCapsule model — vocabulary-only) per D-2C-D5-DURATION-COLLISION drift. Two options:
+Pre-flight verification confirmed:
 
-- **Option A — Operationalize.** DecayType PERMANENT + SESSION_ONLY gain behavioral paths in retrieval (PERMANENT bypasses time-based decay independent of FOUNDATIONAL; SESSION_ONLY filters by session boundary). Substrate-coherent vocabulary-to-behavior conversion.
-- **Option B — Rename.** Rename DecayType values to disambiguate from DurationType (e.g., `DECAY_PERMANENT`, `DECAY_SESSION_ONLY`) preserving vocabulary distinction without operationalizing. Schema migration; existing code updates.
+- **CapsuleType enum** verified verbatim at `packages/database/prisma/schema.prisma`: 20 values (9 original — FOUNDATIONAL / PREFERENCE / RELATIONSHIP / DOMAIN_KNOWLEDGE / BEHAVIORAL_PATTERN / IDENTITY / DEVICE_DATA / SESSION_LEARNING / COMPLIANCE_RECORD; 11 Section 11A — CONVERSATION_LEARNING / TASK_LEARNING / WORK_PATTERN / COMMUNICATION_PREF / DECISION_STYLE / COMMITMENT / BLOCKER / RISK / HANDOFF / DECISION / CORRECTION). SUBSTRATE_OBSERVATION confirmed absent.
+- **System-principal infrastructure substrate-active.** `SYSTEM_PRINCIPALS.SCHEDULER` at `apps/api/src/services/feedback/scheduler.ts:56` and `SYSTEM_PRINCIPALS.FEEDBACK_LOOP` at `apps/api/src/services/feedback/feedback.service.ts:633`. Substrate already has the system-principal pattern for substrate-tier audit attribution; SUBSTRATE_OBSERVATION composes with existing infrastructure.
 
-Decision deferred to full-document drafting; outline flags the territory.
+#### ADR-0021 extension protocol applies cleanly
 
-### 5.7 ACCESS_BASED behavioral closure (deferred to Step 2E)
+ADR-0021 (Capsule Type Extension Protocol) governs extensions to the CapsuleType enum: existing 20 values immutability invariant preserved; new value added via single canonical addition; PRICING_TABLE entry update per ADR-0021 Decision Step 3 deliberate-blocker worked example. SUBSTRATE_OBSERVATION as net-new CapsuleType extension exercises the protocol cleanly.
 
-Per D-2C-D5-ACCESS-BASED-STUB drift: comment-only stub at `queries/capsule.ts:402` ("ACCESS_BASED capsules relevant while they are being used") is intent-without-implementation. Surface 3 frames the closure (ACCESS_BASED differentiates from TIME_BASED via access-pattern-driven decay; access_count + recent-access-window condition decay rate). Engineering implementation deferred to Step 2E.
+#### Surface 3 §5.3 canonicalizes
 
-### 5.8 Per-DMW-Type Sovereignty Rules (NEW SECTION per Correction 4 — operator-review-required marker)
+- **SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021 protocol.** Schema migration via Prisma `db push`; PRICING_TABLE entry per ADR-0021 Decision Step 3 (substantive deliberate-blocker worked example for the protocol).
+- **System-principal-owned wallet.** Substrate-tier observation events written as Capsules into a wallet owned by a SYSTEM_PRINCIPAL (e.g., new `SYSTEM_PRINCIPALS.SUBSTRATE_OBSERVER` constant added alongside existing SCHEDULER + FEEDBACK_LOOP).
+- **Observable substrate state.** Per-(entity, capsule_type) relevance distribution shifts; per-wallet retrieval pattern changes; informativeness signal trends; spreading-activation propagation patterns per Field 1; coherence/contradiction signals per Field 3; salience-conditioned scoring patterns per Field 5.
 
-**OPERATOR REVIEW REQUIRED:** explicit canonicalization of how six EntityType values translate to wallet governance rules. Per memory entry #16, three DMW types exist (Personal / Enterprise zero-payload / Device). Per EntityType enum, six entity types exist (PERSON / COMPANY / AI_AGENT / DEVICE / APPLICATION / GOVERNMENT).
+#### INT-2 coupling — self-introspection IS informativeness primitive
 
-**Mapping question requiring operator review:**
+Per Phase 1 extension INT-2: D8 informativeness signal IS D11 self-introspection primitive. Substrate that knows which retrievals were informative is substrate that observes its own behavior. SUBSTRATE_OBSERVATION CapsuleType per §5.3 IS the substrate primitive that feeds active-learning informativeness at §5.5 — designing one designs the other; the two architectures share substrate primitive.
 
-- **PERSON → Personal DMW.** Direct mapping; canonical case.
-- **COMPANY → Enterprise zero-payload DMW.** Direct mapping; canonical case per memory entry #16.
-- **DEVICE → Device DMW.** Direct mapping; canonical case.
-- **AI_AGENT → ?** Maps to owning-human's Personal DMW (twin pattern per `governance/twin.service.ts`)? Or warrants its own DMW type designation?
-- **APPLICATION → ?** Maps to which existing DMW type? Or warrants its own DMW type designation?
-- **GOVERNMENT → ?** Maps to Enterprise zero-payload DMW? Or warrants its own DMW type designation given regulatory sovereignty differs from commercial enterprise?
+#### Self-introspection coupling to Surface 2 Field 5 context-dependent salience
 
-**Sovereignty rules per-DMW-type (canonical territory):**
+Substrate observations condition salience for substrate-administrator queries — when a substrate admin queries about substrate state, retrieval surfaces SUBSTRATE_OBSERVATION Capsules with high salience. Substrate becomes its own consumer of context per Field 5 §4.6 conditioning.
 
-- **Personal DMW.** Owner-human is sovereign per RULE 0; only owner-human grants LONG_TERM or PERMANENT; AI_AGENT cannot grant to AI_AGENT.
-- **Enterprise zero-payload DMW.** Zero-payload constraint: enterprise carries metadata + governance, not raw payload content; payload remains in contributing entity's wallet; per memory entry #16.
-- **Device DMW.** Device-owner sovereignty (the human who owns the device); device cannot grant beyond owner-permitted scope.
-- **AI_AGENT (mapping pending operator review).** Owning-human sovereignty bounds AI_AGENT autonomy; AI_AGENT cannot grant to AI_AGENT directly per RULE 0; substrate-mediated coordination allowed per Section 5.4.
-- **APPLICATION (mapping pending operator review).** Application-owner sovereignty (the human or organization deploying the application); sovereignty rules pending.
-- **GOVERNMENT (mapping pending operator review).** Government-jurisdiction sovereignty; regulatory governance applies; per-jurisdiction sovereignty rules pending.
+### 5.4 Agent-to-agent coordination per Corrections 1+3+4 (closes D-2D-D11 drift)
 
-**Patent-implementation-evidence territory:** per-DMW-type sovereignty differentiation is substantive substrate-architecture coverage extension under US 12,517,919. Continuation patent candidate per Section 8.4. Operator-review-required marker captures the patent-territory implication.
+Section 5.4 closes the D-2D-D11-AGENT-TO-AGENT-INTENTIONAL-VS-GAP drift by canonicalizing the substrate-mediated-vs-direct-grant distinction per Corrections 1+3+4 jointly.
 
-### 5.9 Surface 3 decisions list
+#### Per Correction 1 broader scope
 
-Decision territory enumerated:
-- D-S3-1: EscalationRequest model schema
-- D-S3-2: Validation gate flag mechanics
-- D-S3-3: Approval workflow primitives
-- D-S3-4: Correction propagation chain mechanics
-- D-S3-5: Self-introspection — SUBSTRATE_OBSERVATION CapsuleType + system-principal wallet + observation-event schema
-- D-S3-6: Agent-to-agent coordination — substrate-mediated coordination mechanics for AI_AGENT-to-AI_AGENT (Hive participation; cross-wallet COE)
-- D-S3-7: Active-learning informativeness function (refinement coefficients + signal computation)
-- D-S3-8: DurationType-vs-DecayType resolution (Option A operationalize vs Option B rename — per Section 5.6 marker)
-- D-S3-9: Per-DMW-type sovereignty rules — six EntityType → DMW type mapping (per Section 5.8 marker)
+AI_AGENT entities are first-class peer entities with their own DMWs per memory entry #21 + EntityType enum (verified at substrate). Two AI_AGENT entities can coordinate via substrate primitives PERSON entities use — there is no entity-type-tier restriction on coordination primitives.
+
+#### Per Correction 3 entity-type uniformity
+
+Whether participating entities are PERSON, AI_AGENT, COMPANY, DEVICE, APPLICATION, or GOVERNMENT, they coordinate via the same substrate primitives (COE retrieval per §3.1-§3.8; Hive participation per §4.8; bilateral feedback Loop 1 per RAA 12.7 §2.5 Zone B1). Universal coordination pattern at primitive level — the substrate-tier mechanism does not change with entity type.
+
+#### Per Correction 4 sovereignty constraint
+
+AI_AGENT first-class for coordination AND constrained by owning-human sovereignty for governance. The architectural distinction is exact:
+
+- **Forbidden per RULE 0:** AI_AGENT_A directly grants Permission to AI_AGENT_B. Cross-AI direct permission grant breaks RULE 0 sovereign-human invariance. AI cannot be the sovereign granting access.
+- **Allowed per substrate primitives:** AI_AGENT_A and AI_AGENT_B both have wallets; COE provides each its capsule context per §3.8 parallel orchestration; Hive aggregates form across AI_AGENT entities per §4.8 (HiveMembership substrate-active for any EntityType); bilateral feedback Loop 1 flows between agent wallets per Zone B1. Substrate-mediated coordination is architecturally distinct from direct permission grant.
+
+#### Drift closure mechanism
+
+D-2D-D11 surfaced at Phase 1 extension as "intentional restriction vs substrate gap" — substrate appeared to forbid agent-to-agent coordination, but Phase 1 extension investigation surfaced that the restriction was direct-permission-grant (per RULE 0) not substrate-mediated-coordination. The distinction:
+
+- **Direct grant path forbidden** — AI_AGENT_A creates Permission row where `grantor_entity_id = AI_AGENT_A` and `grantee_entity_id = AI_AGENT_B`. Forbidden per RULE 0 + Permission creation logic.
+- **Substrate-mediated path allowed** — AI_AGENT_A writes Capsule into its wallet; owning-human grants AI_AGENT_B's owning-human access via Permission; AI_AGENT_B retrieves AI_AGENT_A's Capsule via COE under owning-human's permission. Substrate carries primitives for the allowed pattern; engineering work formalizes the coordination interface per §5.9 Step 2E.
+
+#### Cross-section reach
+
+- **§4.8 Hive coordination per Correction 2** — agents coordinate via Hive participation; substrate-mediated mechanism canonical
+- **§3.8 parallel orchestration per Correction 4** — cross-wallet COE supports AI_AGENT-to-AI_AGENT context-sharing under owning-human sovereignty
+- **§5.1 dual-posture** — agent-to-agent coordination operates within human-sovereign boundaries per §5.1 framing
+
+### 5.5 Active-learning informativeness as refinement (closes D-2D-D8 drift; INT-2 + INT-3 + INT-6 territory)
+
+Section 5.5 closes the D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY drift by framing active-learning informativeness as refinement of existing Loop 1 substrate (not net-new dimension).
+
+#### Verified Loop 1 substrate state
+
+Pre-flight verification (substrate-evidence gathering before draft) confirmed Loop 1 substrate-active at `apps/api/src/services/feedback/feedback.service.ts`:
+
+- **Constants** at lines 85-88: `RELEVANCE_USED_BUMP = 0.05`; `RELEVANCE_UNUSED_DECAY = 0.02`; `RELEVANCE_MIN = 0.0`; `RELEVANCE_MAX = 1.0`
+- **Update logic** at lines 219-228: Used capsules `relevance_score += RELEVANCE_USED_BUMP` (capped at RELEVANCE_MAX); unused capsules `relevance_score -= RELEVANCE_UNUSED_DECAY` (floored at RELEVANCE_MIN)
+- **Loop 1 trigger** at line 35: 1440 minutes (event-driven; stale if no recordOutcome in 24h)
+- **`recordOutcome`** is the substrate-active feedback signal; Loop 1 processes outcomes into relevance updates
+
+#### Refinement framing per RAA 12.7 §4.1 + §8 + §10
+
+RAA 12.7 §4.1 + §8 + §10 framed active-learning informativeness as forward enhancement of Loop 1 — research patterns include RELEAP (2025), ORIS (2024), multi-armed bandits, Thompson sampling. Surface 3 §5.5 frames informativeness as refinement of the canonicalized substrate primitive — not introduction of net-new primitive.
+
+The distinction matters per D-2D-D8 drift framing: existing `relevance_score` is partial informativeness signal degraded by uniform updates (every used Capsule gets +0.05 regardless of contribution quality; every unused Capsule gets -0.02 regardless of contextual relevance). Informativeness weighting refines the existing substrate signal:
+
+- **Differential bump.** Capsules contributing high-informativeness outcomes (e.g., correction-resolving Capsules per INT-3) receive larger bump than baseline-relevance Capsules
+- **Differential decay.** Unused Capsules in contexts where their unused-ness is informative (e.g., explicitly-rejected context layers) receive larger decay than baseline-irrelevant Capsules
+- **Coefficient parameterization.** Informativeness coefficients become tamper-anchored architectural property per INT-6
+
+#### INT-2 coupling — Field 5 salience IS informativeness input
+
+Per Phase 1 extension INT-2: Field 5 salience signal at Surface 2 §4.6 IS the substrate signal feeding informativeness weighting. Capsule that resolved an ambiguity in this session conditions higher informativeness for similar future situations — salience signal output at §4.6 is informativeness input at §5.5.
+
+#### INT-3 coupling — correction = max informativeness
+
+Per Phase 1 extension INT-3: human correction propagation chain per §5.2 IS the high-informativeness signal. When human corrects AI output, the corrected Capsules carry maximum informativeness — the correction event is the rarest and most-informative outcome signal. Surface 3 §5.5 weights correction-resolving Capsules with maximum bump coefficient.
+
+#### INT-6 coupling — informativeness function joins frozen-anchors family
+
+Per Phase 1 extension INT-6: informativeness function coefficients become tamper-anchored architectural property like `combined_score` per ADR-0022. The informativeness function joins the frozen-anchors family alongside `combined_score` coefficients + `RELEVANCE_FORGET_FLOOR` per ADR-0022.
+
+#### Refinement preserves patent-implementation-evidence continuity
+
+Refinement (extension of canonicalized substrate primitive) preserves patent-implementation-evidence continuity per Zone U2 + Decision Patent-A. Net-new primitive introduction would create discontinuity in the evidence chain; refinement is additive to the existing substrate. ADR-0022 amendment path per Forward implications canonicalizes the informativeness component extension — combined_score per ADR-0022 amends rather than supersedes.
+
+### 5.6 DurationType vs DecayType collision resolution — OPERATOR REVIEW REQUIRED (D-2C-D5)
+
+Section 5.6 surfaces the D-2C-D5-DURATION-COLLISION drift as OPERATOR REVIEW REQUIRED marker — substrate carries semantic overlap between two enums that requires operator decision.
+
+#### Verified substrate-state collision
+
+Pre-flight verification (substrate-evidence gathering before draft) confirmed the collision at substrate-state:
+
+- **DurationType enum (6 values)** at `packages/database/prisma/schema.prisma`: TEMPORARY / SHORT_TERM / LONG_TERM / **PERMANENT** / **SESSION_ONLY** / NONE. Used in Permission lifetime context (4 usage sites in `apps/api/src`).
+- **DecayType enum (5 values)** at `packages/database/prisma/schema.prisma`: FOUNDATIONAL / TIME_BASED / ACCESS_BASED / **PERMANENT** / **SESSION_ONLY**. Used in MemoryCapsule decay context (6 usage sites in `apps/api/src`).
+- **Collision verified.** PERMANENT and SESSION_ONLY are present in BOTH enums (verified verbatim). The collision is exact, not approximate — same value names with potentially different semantics across enum boundary.
+
+#### OPERATOR REVIEW REQUIRED — two architectural options
+
+**Option A — Operationalize.** Canonicalize the semantic overlap as architectural property:
+
+- DurationType governs Permission lifetime (how long the grant is valid)
+- DecayType governs Capsule relevance lifecycle (how the Capsule's relevance evolves over time)
+- PERMANENT in DurationType = Permission valid indefinitely; PERMANENT in DecayType = Capsule relevance does not decay
+- SESSION_ONLY in DurationType = Permission valid only within issuing session; SESSION_ONLY in DecayType = Capsule relevance scoped to session lifetime
+- The two PERMANENTs (or two SESSION_ONLYs) operate at different architectural registers; the substrate distinction preserves vocabulary and adds clarification
+- Engineering effort: zero substrate engineering; canonical documentation clarifies the distinction at §5.6
+
+**Option B — Rename.** Rename DecayType values to disambiguate from DurationType:
+
+- `PERMANENT` → `DECAY_PERMANENT`
+- `SESSION_ONLY` → `DECAY_SESSION_ONLY`
+- Substrate semantics preserved; vocabulary precision strengthened
+- Engineering effort: substantial — schema migration via Prisma `db push` + existing code updates (6 DecayType usage sites + tests + queries) + canonical reference updates
+
+#### Substrate-honest articulation of trade-off
+
+Option A engineering effort is zero (documentation-tier work); Option B engineering effort is substantial (schema migration + code updates). Option A vocabulary remains overlapping but operationally distinguished; Option B vocabulary is unambiguous.
+
+Default until operator review: Option A operationalize (preserves substrate-state without rename engineering cost). Decision deferred to operator at Step 2D-completion or Step 2E-planning.
+
+### 5.7 ACCESS_BASED behavioral closure (deferred to Step 2E per D-2C-D5-ACCESS-BASED-STUB)
+
+Section 5.7 frames the D-2C-D5-ACCESS-BASED-STUB drift — substrate carries the ACCESS_BASED DecayType enum value but the operational behavior is stub-only. Closure framing canonical at §5.7; engineering implementation deferred to Step 2E.
+
+#### Verified stub state
+
+Pre-flight verification confirmed:
+
+- **ACCESS_BASED enum value present** at `packages/database/prisma/schema.prisma:380` within DecayType enum
+- **Comment-only stub** at `packages/database/src/queries/capsule.ts:402`: `// WHY: The decay job and feedback loops use access_count to keep ACCESS_BASED capsules relevant while they are being used.` The comment describes intent but no operational behavior implements it.
+- **Substrate fields present** for the intended behavior: `MemoryCapsule.access_count Int @default(0)` (incremented by `incrementAccessCount` at `capsule.ts:402`); `MemoryCapsule.last_accessed_at DateTime?` (timestamped on access). The fields exist; the decay logic operating against them does not.
+
+#### Surface 3 §5.7 closure framing
+
+ACCESS_BASED differentiates from TIME_BASED via access-pattern-driven decay:
+
+- **TIME_BASED** decay: `relevance_score` decays per `recencyScore` formula per ADR-0022 (linear decay day 7→90; floor at day 90)
+- **ACCESS_BASED** decay: `relevance_score` decay rate conditioned on `access_count` and `last_accessed_at` — frequently-accessed Capsules decay slower; long-unaccessed Capsules decay faster than TIME_BASED baseline
+
+Engineering implementation deferred to Step 2E per §5.9. The substrate already carries the fields needed for ACCESS_BASED behavior (`access_count` + `last_accessed_at` + `incrementAccessCount` write path); the decay-rate-conditioning logic against the fields is the engineering work.
+
+### 5.8 Per-DMW-Type Sovereignty Rules (NEW SECTION per Correction 4) — OPERATOR REVIEW REQUIRED
+
+Section 5.8 is the most strategically consequential operator-review-required marker in RAA 12.8. Per Path 1 directive: Section 5 ships with §5.8 outline-tier preserved + three direct EntityType mappings canonicalized + three pending-operator-review mappings flagged. Operator decisions on AI_AGENT / APPLICATION / GOVERNMENT mappings resolve in subsequent commit or full-document drafting completion review.
+
+#### Verified substrate evidence
+
+- **EntityType enum (6 values)** verified verbatim at `packages/database/prisma/schema.prisma`: PERSON / COMPANY / AI_AGENT / DEVICE / APPLICATION / GOVERNMENT
+- **Three DMW types per memory entry #16**: Personal / Enterprise zero-payload / Device
+
+#### Three direct mappings canonicalized
+
+- **PERSON → Personal DMW.** Direct mapping; canonical case. Owner-human is sovereign per RULE 0; only owner-human grants LONG_TERM or PERMANENT (per DurationType enum at §5.6); full-payload contribution permitted; full-payload consumption permitted.
+- **COMPANY → Enterprise zero-payload DMW.** Direct mapping; canonical case per memory entry #16. Zero-payload constraint: Enterprise carries metadata + governance, not raw payload content. Payload remains in contributing entity's wallet. The zero-payload constraint is sovereignty-preserving by construction — Enterprise cannot accumulate raw entity intelligence that breaks individual sovereignty.
+- **DEVICE → Device DMW.** Direct mapping; canonical case. Device-owner sovereignty: the human who owns the device is sovereign; device cannot grant beyond owner-permitted scope. Device acts within owner-bounded delegation.
+
+#### Three pending-operator-review mappings flagged
+
+**AI_AGENT → OPERATOR REVIEW REQUIRED.** Candidates surfaced for operator decision:
+
+- **(a) Personal DMW.** AI_AGENT operates with its own Personal-tier wallet; owner-human grants permissions; pattern aligns with twin pattern per `apps/api/src/services/governance/twin.service.ts` (TwinConfig + autonomy_level). Substrate-active precedent.
+- **(b) Personal DMW bounded by owning-human sovereignty.** Per Correction 4 + RULE 0 + memory entry #21: AI_AGENT carries Personal DMW BUT all governance operations route through owning-human's sovereignty boundary. AI_AGENT cannot grant LONG_TERM or PERMANENT (per RULE 0); AI_AGENT cannot grant to AI_AGENT (per RULE 0); EXECUTIVE_OVERRIDE autonomy level granted only by owning-human per twin pattern.
+- **(c) Custom DMW type.** Net-new DMW type designation (e.g., "Agent DMW") with explicit AI-specific sovereignty constraints. Schema and substrate primitive extension required.
+
+Default until operator review: outline-tier preserved (pending operator decision). Substrate-active twin pattern (b) is the substantive forward direction.
+
+**APPLICATION → OPERATOR REVIEW REQUIRED.** Candidates surfaced for operator decision:
+
+- **(a) Personal DMW.** APPLICATION operates as personal-tier deployment; application-owner (human or organization) is sovereign per RULE 0.
+- **(b) Enterprise zero-payload DMW.** APPLICATION operates as enterprise-tier deployment; zero-payload constraint applies; application carries metadata + governance for application-tier coordination.
+- **(c) Custom DMW type.** Net-new DMW type designation (e.g., "Application DMW") with explicit application-specific sovereignty constraints.
+
+Application semantics determine mapping. Operator review weighs whether APPLICATION deployment semantics aligns more with Personal-tier sovereignty (individual user deploying application) or Enterprise-tier sovereignty (organization deploying application across users).
+
+Default until operator review: outline-tier preserved (pending operator decision).
+
+**GOVERNMENT → OPERATOR REVIEW REQUIRED.** Candidates surfaced for operator decision:
+
+- **(a) Enterprise zero-payload DMW.** GOVERNMENT operates as enterprise-tier deployment; zero-payload constraint applies; government carries metadata + governance for jurisdictional coordination.
+- **(b) Custom DMW type with GOV-tier sovereignty constraints.** Net-new DMW type designation (e.g., "Government DMW") with explicit jurisdictional sovereignty constraints — FedRAMP / IL4 / IL5 / IL6 / CMMC compliance per memory entry #21. Substrate primitive extension required.
+- **(c) Multiple DMW types depending on government tier.** Different mappings per government tier (federal vs state vs local; defense vs civilian; foreign-jurisdiction vs domestic).
+
+Government-jurisdiction sovereignty differs from commercial enterprise sovereignty — regulatory governance applies with per-jurisdiction sovereignty rules. Operator review weighs whether substrate-tier discrimination of government deployment is necessary or whether Enterprise zero-payload DMW with governance_terms suffices.
+
+Default until operator review: outline-tier preserved (pending operator decision).
+
+#### Universal coordination primitives + per-DMW-type governance
+
+The architectural distinction per Correction 3 + Correction 4: coordination primitives are universal (substrate-tier mechanisms operate the same across entity types); governance rules are per-DMW-type (sovereignty constraints differ across DMW types). The two operate at distinct architectural registers.
+
+The §5.8 mapping resolution operationalizes the per-DMW-type governance dimension. Once operator decides AI_AGENT / APPLICATION / GOVERNMENT mappings, substrate sovereignty enforcement per §3.8 + §4.8 has canonical reference for entity-type-discriminated scheduling constraints.
+
+#### Patent-implementation-evidence territory
+
+Per-DMW-type sovereignty differentiation is substantive substrate-architecture coverage extension under US 12,517,919. Continuation patent candidate per §8.4. Operator-review-required marker captures the patent-territory implication — the mapping decisions are not merely engineering decisions but substantive patent-claim-coverage decisions.
+
+#### Cross-section reach
+
+- **§3.8 Surface 1 parallel orchestration** — per-DMW-type sovereignty as scheduling constraint per Correction 4; §5.8 canonicalizes the EntityType-to-DMW-type mapping that §3.8 references
+- **§4.4 Field 3 resonance/coherence** — cross-wallet coherence detection respects per-DMW-type sovereignty per Correction 4
+- **§4.6 Field 5 context-dependent salience** — cross-wallet salience signal scoped per-wallet per per-DMW-type discipline
+- **§4.8 Hive coordination per Correction 2 + Correction 4** — HiveMembership sovereignty primitives align with §5.8 mappings
+- **§6 cross-surface architectural decisions** — INT-1 unified cross-wallet context layer references §5.8 per-DMW-type discipline
+- **§8.4 continuation patent candidate** — §5.8 differentiation flagged as continuation patent candidate per Decision Patent-A
+
+### 5.9 Step 2E engineering surface enumerated
+
+Section 5 canonicalizes Surface 3 architectural decisions; Step 2E implements the canonicalization. The §5.9 enumeration surfaces the substrate-honest engineering surface for Surface 3.
+
+Step 2E engineering surface for Surface 3:
+
+- **D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL closure** — implement EscalationRequest Prisma model per §5.2; validation gate flags primitives; approval workflow primitives; correction propagation chain. Schema migration via Prisma `db push`. Replace `getEscalationsPending` stub at `priming.ts:131-134` with substrate-active `prisma.escalationRequest.findMany` per TODO Section 14.
+- **SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021 protocol** per §5.3 — schema enum extension; PRICING_TABLE entry update per ADR-0021 Decision Step 3 deliberate-blocker; SYSTEM_PRINCIPALS.SUBSTRATE_OBSERVER constant addition; substrate-tier observation event writer implementation; coupling to INT-2 informativeness consumer at §5.5.
+- **D-2D-D11-AGENT-TO-AGENT-INTENTIONAL-VS-GAP closure** — substrate-mediated agent-to-agent coordination canonical interface per §5.4. Engineering tier: formalize the COE cross-wallet retrieval path for AI_AGENT-to-AI_AGENT context-sharing under owning-human sovereignty; Hive coordination for AI_AGENT participation per §4.8.
+- **D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY closure** — active-learning informativeness coefficient implementation per §5.5. Differential bump for high-informativeness outcomes (correction-resolving Capsules per INT-3); differential decay for explicitly-rejected context layers; informativeness function joins frozen-anchors family per INT-6; ADR-0022 amendment path for combined_score component extension.
+- **DurationType-vs-DecayType collision resolution implementation** per §5.6 operator review (Option A: zero substrate engineering; documentation clarification; Option B: schema migration + 6 DecayType usage site updates).
+- **ACCESS_BASED behavioral implementation** per §5.7 (decay-rate-conditioning on `access_count` + `last_accessed_at`; differentiation from TIME_BASED recencyScore per ADR-0022).
+- **Per-DMW-type sovereignty rules implementation** per §5.8 (after operator decisions resolve AI_AGENT / APPLICATION / GOVERNMENT mappings). Engineering tier: per-DMW-type scheduling constraint enforcement at §3.8 cross-wallet retrieval; per-DMW-type HiveMembership constraint at §4.8 Hive coordination.
+
+#### Engineering effort estimate
+
+Surface 3 Step 2E engineering surface is substantial — multi-sprint scope across §5.2-§5.8. The EscalationRequest model + SUBSTRATE_OBSERVATION extension + informativeness coefficient implementation are NET-NEW substrate work; the DurationType-vs-DecayType resolution + ACCESS_BASED closure + per-DMW-type sovereignty rules build on existing substrate. ADR-0017 production-discipline applies to each implementation surface.
+
+Per Decision 4 (all blocks required due to interconnection), Surface 3 engineering work proceeds after RAA 12.8 full-document drafting completes (Sections 6-10); the engineering surface is sequenced after architectural canonicalization. Section 5.9 enumeration is the canonical Step 2E reference for Surface 3 work scope.
 
 ---
 
