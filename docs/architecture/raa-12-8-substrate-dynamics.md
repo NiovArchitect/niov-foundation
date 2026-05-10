@@ -500,48 +500,338 @@ The worked example confirms the decision tree preserves RAA 12.7 §2.5 zone clas
 
 ## Section 3 — Surface 1: Scale Architecture
 
-### 3.1 Scale target framing
+Section 3 canonicalizes Surface 1 of RAA 12.8 substrate-dynamics architecture. Surface 1 designs how substrate behaves at O(10⁷) capsules per entity — five orders of magnitude beyond current substrate state. Surface 1 closes the D-2D-D12-STORAGE-TIER-RETRIEVAL-DRIFT inline (§3.2) and surfaces the architectural territory for tier-aware retrieval, index-driven candidate pre-filter, cursor-based pagination, materialized aggregates, latency budgets, query complexity bounds, and parallel orchestration with per-DMW-type sovereignty as scheduling constraint per Correction 4. Section 3 §3.9 enumerates the Step 2E engineering surface that closes the architectural canonicalization with implementation work.
 
-Substrate must serve O(10⁷) capsules per entity. Current substrate tested at O(10²) per entity. Scale jump traverses five orders of magnitude. Per-DMW-type sovereignty rules (Section 5.8 per Correction 4) apply asymmetrically: Personal DMW carries individual-human capsule density; Enterprise DMW zero-payload carries metadata-only density; Device DMW carries machine-generated telemetry density. Scale architecture must accommodate heterogeneous density.
+### 3.1 Scale problem statement
+
+Foundation substrate must serve O(10⁷) capsules per entity. Current substrate is tested at O(10²) per entity. The five-orders-of-magnitude scale jump traverses architectural territory absent at current substrate state; the territory must be canonicalized at substrate-architecture level before engineering implementation per ADR-0017 production discipline.
+
+#### Operator strategic framing
+
+Per operator strategic framing: "millions of capsules per entity orchestrating with interconnecting relationships." The framing is operator-locked at memory-entry register; the substrate-design implication is that retrieval architecture must scale alongside capsule density without degrading ASI-consumer latency requirements (per §3.6) or sovereignty guarantees (per RULE 0 + §3.8 + §5.8). Scale is not a performance optimization concern; scale is an architectural property that determines whether substrate continues to serve autonomous-grade agentic execution as entity intelligence accumulates.
+
+#### Five-orders-of-magnitude scale territory
+
+The O(10²) → O(10⁷) jump is not a single architectural transition but a sequence of architectural territories with distinct dominant constraints:
+
+- **O(10²) → O(10³).** Acceptable with current substrate architecture. COE retrieval at `apps/api/src/services/coe/coe.service.ts:201-216` performs `findUnique` on wallet + `findMany` over wallet-scoped candidates + score-rank-select within budget. Tier-blind retrieval still completes within ASI-consumer latency budgets at O(10³) candidates entering memory.
+- **O(10³) → O(10⁵).** Requires tier-aware retrieval (§3.2) + index-driven candidate pre-filter (§3.3). At O(10⁵) candidates entering memory, score-rank-select across all candidates exceeds ASI-consumer latency budgets per §3.6; pre-filter discipline bounds candidates entering scoring.
+- **O(10⁵) → O(10⁷).** Requires materialized aggregates (§3.5) + parallel orchestration mechanics (§3.8). At O(10⁷) candidates per entity, even tier-aware index-driven pre-filter cannot complete within latency budgets without pre-computed per-(entity, capsule_type) aggregates; cross-wallet retrieval (Zone B3 NET-NEW per RAA 12.7) requires parallel orchestration with sovereignty-respecting scheduling.
+
+The architectural territories nest: §3.2-§3.3 are necessary conditions for §3.5 + §3.8; the lower-scale territories' design is preserved as scale grows rather than replaced. Substrate architecture is additive across scale territories per RULE 1 build-forward-only discipline.
+
+#### Cross-section dependencies
+
+Surface 1 Scale couples to other RAA 12.8 surfaces at multiple points per §6 cross-surface architectural decisions:
+
+- **INT-4 cross-type-balance-at-scale.** Cross-type balance (D-2C-D6 territory) becomes critical at Surface 1 scale; cross-wallet retrieval (§3.8) compounds the type-balance problem. Surface 1 + Surface 2 jointly address the substrate-tier policy. RAA 12.9 cites the substrate-tier policy as dependency for per-data-point monetization at trillion scale.
+- **INT-5 spreading activation activates connected_capsule_ids.** Surface 2 §4.2 Field 1 spreading activation operates over `connected_capsule_ids` substrate primitive; the activation propagates within Surface 1 latency budgets. Surface 1 §3.6 latency budgets bound activation propagation depth; Surface 2 §4.2 activation algorithm operates within those bounds.
+- **§5.8 Per-DMW-Type Sovereignty Rules.** Surface 1 §3.8 parallel orchestration requires the EntityType-to-DMW-type mapping canonicalized at Section 5.8. Cross-wallet scheduling depends on which DMW type each contributing wallet operates as.
+
+#### Latency commitment
+
+ASI-class consumers depend on substrate retrieval at single-digit-millisecond latency. Substrate that breaks under ASI-consumer latency requirements ceases to serve agentic-grade autonomous execution; latency is not a performance metric but an architectural property that determines whether substrate qualifies as ASI-substrate per §1.1 ASI-substrate framing. RAA 12.7 §3.4 canonicalizes audit-chain integrity as ASI accuracy anchor; RAA 12.8 §3.6 canonicalizes retrieval latency as ASI cognitive-cycle anchor. Both anchors must hold or substrate fails its design role.
 
 ### 3.2 Tier-aware retrieval (closes D-2D-D12-STORAGE-TIER-RETRIEVAL-DRIFT)
 
-Substrate already carries `MemoryCapsule.storage_tier StorageTier @default(WARM)` enum (HOT/WARM/COLD) with write-time auto-classification (`write.service.ts:314` — FOUNDATIONAL→HOT). Retrieval is currently tier-blind. Surface 1 closes the gap: HOT-tier-first retrieval; WARM-tier on demand; COLD-tier read-on-explicit-request. Closes D-2D-D12 drift.
+Substrate already carries the storage tier primitive at write tier; retrieval currently does not consume the primitive. Surface 1 §3.2 closes the gap.
 
-### 3.3 Index-driven candidate pre-filter
+#### Substrate primitive — verified active
 
-Current COE retrieval loads all wallet candidates into memory then filters/scores client-side. Substrate has 8 indexes on MemoryCapsule including GIN on topic_tags. Surface 1 design: leverage GIN index for keyword-driven candidate pre-filter; relevance-score-indexed pre-filter for forget-floor exclusion; bounded candidate set entering scoring stage.
+`MemoryCapsule.storage_tier StorageTier @default(WARM)` at `packages/database/prisma/schema.prisma`; `enum StorageTier { HOT WARM COLD }`. Auto-classification at `apps/api/src/services/cosmp/write.service.ts:314`:
+
+```ts
+const storageTier: StorageTier =
+  decayType === "FOUNDATIONAL" ? "HOT" : input.storage_tier ?? "WARM";
+```
+
+The auto-classification is substrate-active: FOUNDATIONAL Capsules promote to HOT at write time; explicit `input.storage_tier` override allowed; default WARM otherwise. Schema indexes include `@@index([storage_tier])` for index-driven tier filter at scale.
+
+#### D-2D-D12-STORAGE-TIER-RETRIEVAL-DRIFT
+
+Phase 1 extension D12 finding: COE `assembleContext` does NOT consume `storage_tier` in candidate selection. The current `findMany` filter at `coe.service.ts:214-227` filters on `wallet_id`, `deleted_at`, `clearance_required` — no `storage_tier` clause. Substrate carries the tier primitive at write tier and at schema index tier; retrieval is tier-blind. Drift surfaced inline per RULE 13; closure via Section 3.2 architectural canonicalization.
+
+#### Tier-aware retrieval policy
+
+Surface 1 §3.2 canonicalizes the tier-aware retrieval policy:
+
+- **HOT-tier first.** HOT capsules enter scoring before WARM/COLD. The HOT tier carries FOUNDATIONAL Capsules (per write-time auto-classification) plus explicit-override HOT capsules. Hot-path retrieval is HOT-tier-only at first-pass; latency budget per §3.6 is bounded by HOT-tier candidate set size.
+- **WARM-tier on demand.** WARM capsules enter scoring when HOT-tier candidate set is under threshold (typical: HOT-tier candidate count below `maxCapsules` per §3.4 candidate budget). WARM-tier retrieval extends candidate set when HOT-tier alone does not satisfy the query.
+- **COLD-tier on explicit request.** COLD capsules enter scoring only when query carries explicit tier-COLD signal — archive query, long-form research query, or explicit operator-issued query carrying COLD-tier flag. COLD-tier retrieval is opt-in and operates with relaxed latency budget per §3.6.
+
+#### Tier transitions
+
+Surface 1 §3.2 also canonicalizes tier transition discipline operating at substrate-tier:
+
+- **WARM → HOT promotion.** When `access_count` crosses a threshold within a sustained window (typical: 10+ accesses within 7 days), the substrate promotes the WARM Capsule to HOT. Promotion improves retrieval latency for emerging hot-path Capsules; promotion is automatic and substrate-internal.
+- **HOT → WARM demotion.** When `relevance_score` drops below a threshold for a sustained period (typical: relevance_score below 0.5 for 30+ days post-FOUNDATIONAL-classification), the substrate demotes the HOT Capsule to WARM. Demotion releases HOT-tier candidate budget for newly-promoted Capsules.
+- **WARM → COLD demotion.** When `last_accessed_at` exceeds a configurable archival window (typical: 365 days) AND `relevance_score` is below RELEVANCE_FORGET_FLOOR (per `coe.service.ts:44` constant = 0.2), the substrate demotes WARM → COLD. The demotion respects RAA 12.7 / cognitive-science framing: long-unaccessed-low-relevance Capsules are intentional-forgetting candidates per the retrieval-induced-forgetting tradition (Anderson, Bjork & Bjork 1994).
+
+#### FOUNDATIONAL bypass invariant
+
+Tier-aware retrieval respects the FOUNDATIONAL bypass per `coe.service.ts` STEP 3 filter (`if (c.decay_type === "FOUNDATIONAL") return true;` after FOUNDATIONAL bypass; verified at `coe.service.ts:233-240`). FOUNDATIONAL Capsules bypass the relevance floor; the same bypass applies to the tier filter — FOUNDATIONAL Capsules are HOT-tier-classified at write time (per `write.service.ts:314`) and bypass tier-demotion. The invariant preserves the cognitive-science framing: identity / name / permanent commitments do not decay, regardless of access pattern.
+
+### 3.3 Index-driven candidate pre-filter (substrate-honest schema state)
+
+Current COE retrieval at `coe.service.ts:214-227` performs `findMany` over `wallet_id` + filters in TypeScript per row (`allCandidates.filter`). At O(10⁵) candidates per wallet, the pattern loads all candidates into application memory before filtering — incompatible with §3.6 latency budgets and §3.4 memory bounds. Surface 1 §3.3 designs index-driven candidate pre-filter operating at database tier.
+
+#### Substrate-honest schema state — 7 indexes on MemoryCapsule (verified)
+
+Schema verification (per `packages/database/prisma/schema.prisma` MemoryCapsule model) confirms **seven indexes** currently on the model:
+
+- `@@index([wallet_id])` — wallet-scoped retrieval (current COE entry filter)
+- `@@index([entity_id])` — entity-scoped queries
+- `@@index([capsule_type])` — type-filter retrieval (Otzar allowlist + future per-type routing)
+- `@@index([decay_type])` — decay-class queries
+- `@@index([storage_tier])` — tier-aware retrieval per §3.2
+- `@@index([deleted_at])` — soft-delete filter (RULE 10 invariant)
+- `@@index([topic_tags], type: Gin)` — GIN-tier topic-tag overlap queries
+
+The seven indexes establish the index-driven pre-filter substrate. Three additional indexes are commonly assumed but not present in current schema: `relevance_score`, `last_updated_at`, `connected_capsule_ids`. Substrate-honest acknowledgment: relevance-score range scan per §3.3 below requires new schema index added at Step 2E (per §3.9 engineering surface); the current substrate state is the baseline against which Surface 1 designs.
+
+#### Index-driven candidate pre-filter mechanics
+
+Surface 1 §3.3 canonicalizes the pre-filter pipeline operating at database tier:
+
+- **Step 1 — GIN-driven topic_tags overlap pre-filter.** Query keyword extraction (per `extractKeywords` at `coe.service.ts:190+`) produces a query-tag set. Database query: `WHERE topic_tags && query_tags` leveraging the GIN index. The `&&` operator (PostgreSQL array-overlap) is GIN-indexable and produces a bounded candidate set in single-digit-ms even at O(10⁷) capsule scale per wallet.
+- **Step 2 — relevance_score >= RELEVANCE_FORGET_FLOOR exclusion.** Per `coe.service.ts:44` `RELEVANCE_FORGET_FLOOR = 0.2`. Database query adds `AND (decay_type = 'FOUNDATIONAL' OR relevance_score >= 0.2)`. The clause requires a new index on `relevance_score` (Step 2E engineering work per §3.9); without the index, the clause is a sequential scan over the GIN-pre-filtered set, which is acceptable at O(10³) post-Step-1 candidates but degrades at higher scales.
+- **Step 3 — storage_tier filter per §3.2.** Database query adds `AND storage_tier = 'HOT'` (HOT-tier-first first-pass). Leverages existing `@@index([storage_tier])`. WARM/COLD tier inclusion is conditional per §3.2 policy.
+- **Step 4 — capsule_type filter per session-context allowlist.** Otzar's existing pattern at `apps/api/src/services/otzar/otzar.service.ts:272-277` is the canonical worked example: `capsule_type: { in: [...] as CapsuleType[] }`. Database query adds the IN clause. Leverages existing `@@index([capsule_type])`. Per Correction 3 entity-type uniformity, the allowlist mechanism is entity-type-uniform — same primitive applies to Personal / Twin / Enterprise / Device retrievals; per-DMW-type sovereignty operates as scheduling constraint per §3.8, not as type-filter modification.
+- **Step 5 — bounded candidate set entering scoring.** Pre-filter produces a candidate set bounded at O(100-500) entries even at O(10⁷) wallet capsule count. Combined `combined_score` scoring per ADR-0022 operates over the bounded set; selection within `maxCapsules` budget per §3.4 + `coe.service.ts:37` `TOKENS_PER_CAPSULE_ESTIMATE = 200`.
+
+#### Architectural decisions
+
+Surface 1 §3.3 canonicalizes:
+
+- Pre-filter is **candidate-set-bounding**, not result-set-bounding. The final result still applies `combined_score` ranking + token budget; pre-filter limits which candidates enter scoring, not which capsules enter the response.
+- Pre-filter respects FOUNDATIONAL bypass — FOUNDATIONAL Capsules enter scoring regardless of pre-filter state (Step 2 filter explicitly preserves FOUNDATIONAL via the `decay_type = 'FOUNDATIONAL' OR ...` clause).
+- GIN index utilization is the canonical pre-filter primitive at substrate-tier. The GIN index on `topic_tags` is the existing substrate primitive that makes O(10⁷) candidate scan tractable.
+- Pre-filter latency budget per §3.6: target ≤5ms for pre-filter pipeline (Step 1 + Step 2 + Step 3 + Step 4). The budget conditions which Step-2E indexes warrant addition (relevance_score range scan adds ~1-3ms without index; with index, sub-ms).
 
 ### 3.4 Pagination + candidate budgeting
 
-Current pagination exists only in audit query (`audit.ts:487-488`). COE retrieval has no pagination. Surface 1 design: cursor-based pagination for retrieval; candidate budget bounds (cap candidate set entering scoring); progressive retrieval for large-context-budget cases.
+Current COE retrieval at `coe.service.ts:214-227` calls `findMany` without `skip` / `take` — all wallet candidates load into application memory. Substrate-honest acknowledgment: at O(10⁷) per-wallet capsule count, the pattern OOMs; the substrate ceases to operate. Surface 1 §3.4 closes the OOM risk via cursor-based pagination + bounded candidate budget.
 
-### 3.5 Materialized aggregates per (entity, capsule_type)
+#### Cursor-based pagination architecture
 
-Current substrate has `Wallet.total_capsule_count` (substrate-tracked) and `CompoundingMetrics.capsule_count` (org-level). Per-type aggregates not materialized. Surface 1 design: materialized per-(entity, capsule_type) aggregates for hot-path acceleration; refresh discipline (write-through vs cron-backed); coupling to per-type baseline weights from Surface 2.
+Surface 1 §3.4 canonicalizes cursor-based pagination:
 
-### 3.6 Latency budgets canonicalized
+- **Cursor primitive.** Last `(relevance_score, capsule_id)` tuple from prior page. Pagination cursor is opaque to caller; cursor encodes position within pre-filtered candidate set.
+- **Page size bound.** Bounded candidate budget per page (typical: 100 candidates per page; ceiling: 500 candidates per page). Page size derived from `TOKENS_PER_CAPSULE_ESTIMATE = 200` per `coe.service.ts:37` — page size aligns with candidate budget such that one page maximally fills the token budget.
+- **Pagination terminates** when score budget exhausted (top-K candidates ranked + selected within budget) OR page count budget exhausted (max pages per query bound per §3.7 query complexity bounds) OR pre-filter candidate set exhausted.
+- **Memory bound.** Pagination ensures O(page_size) memory per query, not O(wallet_capsule_count) memory. The bound is the architectural property that closes the OOM risk.
 
-ASI-class agentic execution demands single-digit-ms retrieval latency. Surface 1 canonicalizes per-stage budget: candidate pre-filter (≤Xms), scoring (≤Yms), NEGOTIATE parallelism (≤Zms), context assembly total (≤Tms). Specific values emerge during full-document drafting; outline establishes the canonicalization pattern.
+#### Candidate budgeting
 
-### 3.7 Query complexity bounds
+Surface 1 §3.4 also canonicalizes candidate budgeting per ADR-0022 + existing substrate constants:
 
-Surface 1 bounds query complexity: maximum N candidates entering scoring (function of token budget + tier policy); maximum K capsules returned; maximum M hops in spreading activation (Surface 2 coupling); maximum pagination depth. Bounds prevent pathological scaling under adversarial queries.
+- `TOKENS_PER_CAPSULE_ESTIMATE = 200` per `coe.service.ts:37` — existing substrate constant. Token budget input is derived from session context window allowance (caller-supplied via `assembleContext(sessionToken, requestText, tokenBudget, context)` per `coe.service.ts:172`).
+- Candidate budget: `maxCapsules = floor(tokenBudget / TOKENS_PER_CAPSULE_ESTIMATE)` per existing `coe.service.ts:191-194` logic. The expression already operates substrate-side; Surface 1 §3.4 preserves the formula and adds pagination layer above.
+- Final selection ranked by `combined_score` per ADR-0022; selected within `maxCapsules` budget; FOUNDATIONAL Capsules first per `coe.service.ts:248-256` STEP 4 logic — selection mechanics canonicalized at ADR-0022 are preserved by §3.4 pagination architecture.
 
-### 3.8 Parallel orchestration mechanics
+#### Architectural decisions
 
-Cross-wallet retrieval (closes Zone B3 per RAA 12.7) operates per-DMW-type-asymmetric per Correction 4. Personal + Twin + Enterprise concurrent retrieval respects each wallet's sovereignty constraints: Enterprise zero-payload constraint applies even when retrieval crosses into Enterprise DMW; AI_AGENT-owned wallet constraint applies (owning-human sovereignty bounds twin autonomy). Parallel orchestration must encode per-wallet sovereignty as scheduling constraint, not afterthought.
+Surface 1 §3.4 canonicalizes:
 
-### 3.9 Surface 1 decisions list
+- Pagination is **candidate-pagination, not result-pagination.** Paginated candidates flow into `combined_score` ranking; result is single ranked set within budget. The distinction matters because result-pagination would break ASI-consumer cognitive-cycle invariants (a single retrieval cycle returns a single ranked context-set, not a paginated stream).
+- Memory bound is the architectural property; pagination ensures memory usage scales with page size, not wallet capsule count.
+- Pagination respects per-DMW-type sovereignty per §3.8: cross-wallet pagination interleaves per-wallet pages with sovereignty-respecting scheduling. Cross-wallet pagination is not a separate pagination mechanism but the per-wallet pagination operating in parallel with cross-wallet aggregation per §3.8.
 
-Decision territory enumerated; each decision receives Decision/Consequences/Alternatives treatment in full-document drafting:
-- D-S1-1: Tier-aware retrieval policy (HOT-first vs unified scoring with tier weight)
-- D-S1-2: Candidate pre-filter algorithm (GIN-driven topic_tags vs relevance-floor-driven vs combined)
-- D-S1-3: Pagination strategy (cursor vs offset; bounds)
-- D-S1-4: Materialized aggregate refresh discipline (write-through vs cron)
-- D-S1-5: Latency budget per-stage values
-- D-S1-6: Query complexity bounds values
-- D-S1-7: Cross-wallet parallel orchestration scheduling (sovereignty-as-scheduling-constraint mechanics)
+### 3.5 Materialized aggregates per (entity, capsule_type) with refresh discipline
+
+Current substrate has `Wallet.total_capsule_count Int @default(0)` (per `packages/database/prisma/schema.prisma` Wallet model) and `CompoundingMetrics.capsule_count` (org-level metrics tracked via `apps/api/src/services/otzar/otzar.service.ts:564-575`). Per-(entity, capsule_type) aggregates are NOT materialized; substrate computes per-type counts at query time via `prisma.memoryCapsule.count` (verified at `apps/api/src/services/otzar/observation.service.ts:606`). At O(10⁷) capsule scale, query-time count operations exceed §3.6 latency budgets. Surface 1 §3.5 designs materialized per-(entity, capsule_type) aggregates for hot-path acceleration.
+
+#### Materialized aggregate content
+
+Surface 1 §3.5 canonicalizes per-(entity, capsule_type) aggregate content. Each aggregate row carries:
+
+- **count** — total non-deleted Capsules of the type within the entity's wallet
+- **avg_relevance_score** — mean of `relevance_score` across non-FOUNDATIONAL Capsules of the type (FOUNDATIONAL excluded because their relevance is invariant by construction)
+- **avg_feedback_loop_score** — mean of `feedback_loop_score` across Capsules of the type (Loop 1 substrate-active per RAA 12.7 §2.5 Zone B1)
+- **most_recent_write_at** — `MAX(last_updated_at)` across non-deleted Capsules of the type
+- **hot_tier_percentage** — fraction of Capsules of the type in HOT storage tier per §3.2
+
+The aggregate row is keyed on `(entity_id, capsule_type)` — primary key composite. Schema addition at Step 2E per §3.9 engineering surface.
+
+#### Refresh discipline
+
+Surface 1 §3.5 canonicalizes hybrid refresh discipline:
+
+- **Write-through for relevance + feedback updates.** `relevance_score` and `feedback_loop_score` mutations (Loop 1 update path at `apps/api/src/services/feedback/feedback.service.ts`) update aggregate atomically. Atomicity preserves correctness invariants; eventual-consistency risk minimized at substrate boundary.
+- **Cron-backed for count + recency updates.** Capsule count and `most_recent_write_at` rebuild via cron (Loop 2 schedule per `apps/api/src/services/feedback/scheduler.ts`). Operational simplicity; staleness window bounded by cron frequency. The hybrid discipline trades correctness-tier (write-through for hot signals) for operational-tier (cron for cold signals).
+- **Hot-tier-percentage rebuild on tier-transition.** Tier transitions per §3.2 (WARM→HOT promotion; HOT→WARM demotion) trigger hot_tier_percentage recomputation. The recomputation is amortized — only the affected aggregate row is updated.
+
+#### Coupling to Surface 2 §4.4 per-type baseline weights
+
+The materialized aggregates couple to Surface 2 §4.4 Field 3 resonance/coherence dynamics at substrate-tier:
+
+- **Per-(entity, capsule_type) avg_relevance_score informs per-type baseline weight.** Type baseline operates as scoring normalization factor — a Capsule scored relative to its type's baseline rather than absolute score. Cross-type comparison normalized.
+- **Coupling preserves substrate-honest cross-type balance per D-2C-D6 territory.** D-2C-D6-OTZAR-ALLOWLIST-AS-IMPLICIT-POLICY drift surfaced cross-type balance as application-layer-implicit. Per-type baseline weights make cross-type balance substrate-tier-explicit; the discipline is deferred to RAA 12.9 §6.4 for monetization-at-scale framing.
+- **Forward-citation reciprocal.** Surface 2 §4.4 cites Surface 1 §3.5 materialized aggregates as substrate dependency; Surface 1 §3.5 reciprocates per RULE 14 bidirectional citation discipline.
+
+#### Architectural decisions
+
+Surface 1 §3.5 canonicalizes:
+
+- Materialized aggregates enable scoring decisions without scan of all wallet Capsules. The architectural property is essential at O(10⁷) scale per §3.1.
+- Refresh discipline canonicalization respects substrate atomicity invariants per ADR-0001 + ADR-0002. Write-through atomicity holds within the existing transactional envelope; cron-backed refresh operates outside hot-path retrieval.
+- Per Correction 4: per-DMW-type aggregates may differ in semantic — Personal DMW carries `avg_relevance_score` semantic; Enterprise zero-payload DMW may carry `metadata-density` semantic instead (raw payload absent; aggregate operates over metadata only). The per-DMW-type variation is canonicalized at §5.8; §3.5 references the variation as forward dependency.
+
+### 3.6 Latency budgets canonicalized — OPERATOR REVIEW REQUIRED (single-digit-ms target precision)
+
+ASI-class consumer latency requirement: single-digit milliseconds for COE `assembleContext`. Surface 1 §3.6 canonicalizes latency budgets per pipeline stage; operator review required for target-precision values.
+
+#### Latency budget breakdown
+
+Single-wallet retrieval (current COE pattern extended with §3.2-§3.4):
+
+- **Pre-filter:** ≤5ms target. GIN index scan + relevance-score range scan (post-Step-2E index addition) + tier filter + type filter. Latency dominated by GIN scan at high tag overlap; typical 1-3ms; ceiling 5ms.
+- **Scoring:** ≤5ms target. `combined_score` computation per candidate over bounded candidate set per §3.3-§3.4 (target: 100-500 candidates entering scoring). At 500 candidates × ~10μs per scoring computation = ~5ms.
+- **Total assembleContext:** ≤10ms target; ≤20ms ceiling.
+
+Cross-wallet retrieval (per §3.8 parallel orchestration):
+
+- **Per-wallet retrieval:** ≤10ms target (single-wallet pipeline running concurrently for each contributing wallet).
+- **Cross-wallet aggregation:** ≤5ms target (parallel results merge + cross-wallet `combined_score` re-ranking + final budget application).
+- **Total cross-wallet assembleContext:** ≤15ms target; ≤30ms ceiling.
+
+#### OPERATOR REVIEW REQUIRED — single-digit-ms target precision
+
+**OPERATOR REVIEW REQUIRED:** single-digit-ms target precision (≤10ms vs ≤5ms vs ≤2ms target band) requires operator review against Foundation latency-tier ASI-consumer requirements. The Surface 1 §3.6 canonicalization establishes the latency-budget framework; specific target values resolve during full-document drafting at Section 3 (this section) — operator confirms target band or directs alternate target band.
+
+Three candidate target bands surfaced inline:
+
+- **≤10ms target band.** Conservative; allows substrate to operate alongside other latency-budget consumers (LLM inference; orchestration layer; rendering). Risk: aggressive ASI consumers may exceed budget when chaining multiple retrievals per cognitive cycle.
+- **≤5ms target band.** Aggressive; substrate-internal target leaves headroom for other latency-budget consumers. Risk: at O(10⁷) capsule scale per §3.5, materialized aggregate refresh discipline must be bullet-proof to maintain budget.
+- **≤2ms target band.** ASI-grade autonomous-execution target; substrate operates as memory architecture for chains of cognitive cycles per second. Risk: requires aggressive engineering at Step 2E (specialized indexes, possibly Redis-tier hot-path caching for §3.5 aggregates).
+
+Operator confirms target band during full-document drafting; outline territory establishes the decision framework. Default until operator review: ≤10ms target band as Surface 1 §3.6 canonical baseline.
+
+#### Cross-section reach
+
+Surface 1 §3.6 latency budgets condition:
+
+- §3.7 query complexity bounds — bounds enforce latency budget under adversarial queries
+- §3.8 parallel orchestration — distributes latency across wallets via concurrent retrieval pipelines
+- §4.5 emergent retrieval convergence parameters — Surface 2 §4.5 emergent retrieval iteration cap is bounded by §3.6 latency budget
+- §5.5 active-learning informativeness — Surface 3 §5.5 informativeness-weighted Loop 1 update operates within §3.6 latency-tier budgets
+
+### 3.7 Query complexity bounds (adversarial-query resistance)
+
+Substrate must not degrade pathologically under adversarial queries. Adversarial queries craft inputs that exhaust pre-filter budget, bypass tier filter via wildcard expansion, or trigger denial-of-service via crafted query complexity. Surface 1 §3.7 canonicalizes query complexity bounds operating as architectural property.
+
+#### Query complexity bounds
+
+Surface 1 §3.7 canonicalizes:
+
+- **Maximum topic_tags per query:** bounded constant. Typical: 20 tags. Ceiling: 50 tags. Bound prevents GIN-scan budget exhaustion via wildcard tag expansion.
+- **Maximum candidate-set size entering scoring:** bounded constant per §3.3-§3.4 candidate budget. Typical: 500 candidates. Ceiling: 2000 candidates. Bound prevents scoring-stage latency budget exhaustion.
+- **Maximum wall-clock latency per query:** ceiling per §3.6. ≤30ms cross-wallet ceiling. Queries exceeding ceiling are terminated and surfaced as substrate-honest errors per RULE 13.
+- **Maximum cross-wallet count per query:** bounded constant. Typical: 3 wallets (Personal + Twin + Enterprise canonical case). Ceiling: 10 wallets (multi-wallet enterprise scenarios). Bound prevents parallel-orchestration scheduling cost from dominating retrieval latency.
+- **Maximum spreading-activation hops per Surface 2 §4.2 Field 1:** bounded constant. Typical: 3 hops. Ceiling: 5 hops. Bound prevents activation propagation from exhausting compute budget; coupled with §3.6 latency budget.
+
+#### Architectural decisions
+
+Surface 1 §3.7 canonicalizes:
+
+- **Bound enforcement at COE entry point.** Queries exceeding any bound are rejected before substrate work begins. Rejection surfaces inline as substrate-honest error per RULE 13 — `INVALID_REQUEST` discriminated-union response with bound-violation reason.
+- **Bound values enumerated explicitly** — typical and ceiling. Typical band is the substrate-design baseline; ceiling band is the upper bound beyond which substrate behavior becomes pathological.
+- **Bound violations are denial-of-service-resistance properties.** Adversarial query crafting cannot exceed bounds; bounded retrieval is architectural property, not defensive engineering.
+
+#### Adversarial-actor protection per RULE 19 + Decision Patent-A
+
+Per Decision Patent-A defensive publication strategy + RULE 19 two-register IP discipline: query complexity bounds prevent adversarial actors from extracting substrate behavior via crafted query patterns. Pathological-degradation queries that trigger predictable substrate behavior are denial-of-service-resistance failures and substrate-information-leak failures simultaneously. Bounds canonicalize the resistance property at substrate-architecture level.
+
+### 3.8 Parallel orchestration mechanics — cross-wallet retrieval; per-DMW-type sovereignty as scheduling constraint per Correction 4
+
+Cross-wallet retrieval (Zone B3 NET-NEW per RAA 12.7 §2.5) operates as parallel orchestration with per-DMW-type sovereignty operating as scheduling constraint per Correction 4. Section 3.8 canonicalizes the parallel orchestration architecture with sovereignty-as-scheduling-constraint discipline.
+
+#### Substrate primitive precedent — verified active
+
+Cross-wallet `findMany` substrate-active in Otzar at `apps/api/src/services/otzar/observation.service.ts:587-608`:
+
+```ts
+const wallets = await prisma.wallet.findMany({
+  where: { entity_id: { in: memberIds } },
+  select: { wallet_id: true },
+});
+const walletIds = wallets.map((w) => w.wallet_id);
+// ...
+const count = await prisma.memoryCapsule.count({
+  where: {
+    wallet_id: { in: walletIds },
+    deleted_at: null,
+    // ...
+  },
+});
+```
+
+The pattern proves cross-wallet retrieval is substrate-active — not net-new at substrate. The pattern is currently scoped to Otzar observation tier; COE generalization is the §3.8 design surface.
+
+EntityMembership query sites in the substrate: 52 references across `apps/api/src/**/*.ts` (verified). The richness of EntityMembership integration substantiates cross-wallet retrieval as a foundational substrate property — the relationship-graph primitive is substrate-active across governance, twin, organization, and Otzar tiers; Surface 1 §3.8 canonicalizes COE-tier consumption.
+
+#### COE current state — single-wallet only
+
+COE retrieval at `apps/api/src/services/coe/coe.service.ts:201-205`:
+
+```ts
+const wallet = await prisma.wallet.findUnique({
+  where: { entity_id: session.entity_id },
+  select: { wallet_id: true },
+});
+```
+
+The current pattern is `findUnique` keyed on session entity — strict single-wallet retrieval. Schema enforces `Wallet.entity_id @unique` (1:1 entity-wallet relationship per ADR-0001 Three-Wallet Architecture). Cross-wallet generalization is the §3.8 architectural canonicalization; engineering implementation is enumerated at §3.9 Step 2E.
+
+#### Parallel orchestration architecture
+
+Surface 1 §3.8 canonicalizes:
+
+- **Per-wallet retrieval pipelines run concurrently.** Each contributing wallet (Personal + Twin + Enterprise + Device per canonical multi-DMW scenario) executes its own retrieval pipeline (§3.2 tier filter → §3.3 pre-filter → §3.4 pagination → bounded candidate set with §3.6 latency budget).
+- **Cross-wallet aggregation.** Bounded candidate sets from each per-wallet pipeline are merged. Combined `combined_score` per ADR-0022 is re-ranked across the merged set (cross-wallet candidates compete on score within the merged context).
+- **Final budget applied.** Total candidate budget applied at cross-wallet level; FOUNDATIONAL bypass per ADR-0022 + `coe.service.ts:248` operates across the merged set.
+- **Latency bounded per §3.6.** Per-wallet retrieval at ≤10ms target; cross-wallet aggregation at ≤5ms target; total cross-wallet assembleContext at ≤15ms target.
+
+#### Per-DMW-type sovereignty as scheduling constraint per Correction 4
+
+The architectural distinction per Correction 4 is precise: per-DMW-type sovereignty operates as **scheduling constraint** at parallel orchestration tier — not as **post-hoc filter** at result-rendering tier. The distinction matters because post-hoc filtering creates sovereignty-erasure risk (substrate computed across sovereignty boundaries; filter applied after; sovereignty broken in window between computation and filter). Substrate enforces sovereignty constraints at retrieval-time, not at result-rendering time.
+
+Per-DMW-type sovereignty constraints applied at scheduling tier:
+
+- **Personal DMW.** Full-payload contribution per RULE 0 owner-sovereignty. Personal DMW retrieval pipeline operates without payload restriction; full Capsule metadata + payload flows into cross-wallet ranking.
+- **Enterprise zero-payload DMW.** Metadata-only contribution per zero-payload constraint. Per memory entry #16, the zero-payload constraint is sovereignty-preserving by construction — Enterprise DMW carries metadata + governance, not raw payload content; payload remains in contributing entity's wallet. Surface 1 §3.8 enforces the constraint at scheduling: Enterprise retrieval pipeline excludes raw payload from cross-wallet aggregation; Enterprise contributes metadata weights into cross-wallet `combined_score` ranking; raw payload retrieval routes to the originating Personal wallet via Permission lineage per Zone U4.
+- **AI_AGENT DMW.** Contribution bounded by owning-human sovereignty per Correction 4 + RULE 0 + memory entry #21. AI_AGENT-owned wallet contribution operates within owning-human's permission grants; the AI_AGENT retrieval pipeline scope is constrained by what the owning human has permitted the AI_AGENT to access. Surface 1 §3.8 enforces the constraint at scheduling: AI_AGENT retrieval pipeline operates with reduced scope reflecting owning-human sovereignty; cross-wallet ranking respects the bounded scope.
+- **Device DMW.** Contribution bounded by device-owner sovereignty. Device DMW retrieval pipeline operates within device-owner permitted scope; device cannot contribute capsules beyond owner-permitted access. Sovereignty enforcement at scheduling tier; cross-wallet ranking operates over scope-respecting candidates only.
+
+#### Architectural decisions
+
+Surface 1 §3.8 canonicalizes:
+
+- **Per-DMW-type sovereignty operates as scheduling constraint.** Which wallets contribute; what each wallet contributes; how contributions weight in cross-wallet ranking — all determined at scheduling tier, not at result-rendering tier. Per-DMW-type sovereignty is architectural-tier property, not engineering-tier defensive measure.
+- **Substrate enforces sovereignty constraints at retrieval-time.** Sovereignty-erasure risk minimized by enforcing at substrate boundary rather than at consumer boundary.
+- **Cross-section reach.** §5.8 per-DMW-type sovereignty rules canonicalize the EntityType-to-DMW-type mapping; §3.8 references the mapping as scheduling constraint. Bidirectional citation per RULE 14: §3.8 cites §5.8; §5.8 reciprocates with reference to §3.8 cross-wallet retrieval mechanics.
+- **Scope-respecting candidate sets per Correction 4.** Surface 1 §3.8 design preserves substrate-honesty per RULE 13: each per-wallet pipeline emits candidates within its sovereignty scope; cross-wallet merge does not introduce capsules outside the contributing wallet's scope; result-set composition reflects the sovereignty asymmetry.
+
+### 3.9 Step 2E engineering surface enumerated
+
+Section 3 canonicalizes Surface 1 architectural decisions; Step 2E (per RAA 12.8 forward queue + §1.4) implements the canonicalization. The §3.9 enumeration surfaces the substrate-honest engineering surface — specific implementation work needed to close the architectural canonicalization with substrate-active behavior.
+
+Step 2E engineering surface for Surface 1:
+
+- **D-2D-D12-STORAGE-TIER-RETRIEVAL-DRIFT closure** — implement tier-aware retrieval per §3.2. Tier filter added to COE `assembleContext` `findMany` clause; tier transition logic added to `feedback.service.ts` Loop schedule. Closes the drift first surfaced at Phase 1 extension D12.
+- **GIN-driven candidate pre-filter implementation per §3.3** — add `topic_tags && query_tags` clause to COE `findMany`. Schema-side: existing GIN index on `topic_tags` already supports the clause. Engineering-tier: rewrite `coe.service.ts:214-227` `findMany` to leverage GIN index.
+- **relevance_score range-scan index** — add `@@index([relevance_score])` to MemoryCapsule schema per §3.3 Step 2 substrate-honesty. The index supports the Step 2 `relevance_score >= RELEVANCE_FORGET_FLOOR` clause. Schema migration via Prisma `db push` per ADR-0001 (no migrations directory).
+- **Cursor-based pagination implementation per §3.4** — add cursor parameter to `assembleContext` interface; rewrite `findMany` to use cursor + take semantics; implement page count budget enforcement.
+- **Materialized aggregate schema + write-through + refresh implementation per §3.5** — new Prisma model `EntityCapsuleTypeAggregate` keyed on `(entity_id, capsule_type)` composite; write-through update logic in `feedback.service.ts` Loop 1 path; cron-backed rebuild logic in scheduler. Schema migration via Prisma `db push`.
+- **Latency budget enforcement** — typed Result<latency> returns from `assembleContext`; latency-bound exceptions emitted when budgets exceeded; observability per `apps/api/src/logger.ts` structured logging.
+- **Query complexity bound enforcement at COE entry point** — bound check at `assembleContext` entry; bound violations return `INVALID_REQUEST` discriminated-union response per existing pattern at `coe.service.ts:178-184`.
+- **Cross-wallet COE retrieval generalization per §3.8** — extension of single-wallet `findUnique` to multi-wallet `findMany` with `wallet_id: { in: walletIds }` pattern. EntityMembership-driven wallet aggregation. Per-DMW-type sovereignty as scheduling constraint per Correction 4. Cross-wallet `combined_score` re-ranking. Engineering effort estimate: substantial (multi-sprint scope); coupling to §3.5 materialized aggregates (cross-wallet ranking benefits from per-(entity, capsule_type) aggregate access).
+
+#### Engineering effort estimate
+
+Surface 1 Step 2E engineering surface is substantial — multi-sprint scope across §3.2-§3.8. The architectural canonicalization in this RAA enables coordinated implementation: each engineering item references the §3.x section that canonicalizes the architectural decision; ADR-0017 production-discipline applies to each implementation surface (substrate-investigation discipline; substrate-honesty drift surfacing; coordinated test coverage).
+
+Per Decision 4 (all blocks required due to interconnection), Surface 1 engineering work proceeds after RAA 12.8 full-document drafting completes (Sections 3-10); the engineering surface is sequenced after architectural canonicalization. Section 3.9 enumeration is the canonical Step 2E reference for Surface 1 work scope.
 
 ---
 
