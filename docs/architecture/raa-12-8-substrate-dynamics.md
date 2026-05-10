@@ -298,37 +298,203 @@ The continuation patent candidate review is queued for future patent counsel eng
 
 ## Section 2 — Zone Discrimination Methodology Extension
 
+Section 2 extends RAA 12.7 §2.5's zone discrimination methodology with a third flow-direction class. RAA 12.7 canonicalizes 4 unilateral + 5 bilateral zones; RAA 12.8 introduces 6 lateral zones operating at intra-substrate dynamics layer. The extension is methodologically continuous — Section 2 builds on RAA 12.7's burden-of-proof discipline rather than replacing it. The three-class discrimination (unilateral / bilateral / lateral) governs how every architectural decision in RAA 12.8 selects flow direction.
+
 ### 2.1 RAA 12.7 §2.5 verbatim precedent
 
-RAA 12.7 §2.5 canonicalizes zone discrimination across two flow-direction classes: 4 unilateral (U1 audit chain integrity / U2 patent-holder implementation record / U3 identity verification / U4 permission grant lineage) + 5 bilateral (B1 feedback loop circulation / B2 cross-entity resonance Hive / B3 multi-DMW concurrent flow / B4 cross-entity similar-trait resonance / B5 real-time proximity awareness).
+RAA 12.7 §2.5 (commit `0fd8da7`) canonicalizes zone discrimination across two flow-direction classes. The methodology is precise: zone classification is the architecture, not an afterthought. Forward architectural decisions reference the zone classification before selecting flow direction. RAA 12.8 §2 extends RAA 12.7's two-class methodology to a three-class methodology by adding the lateral class; the extension preserves RAA 12.7's burden-of-proof discipline and default-rule-bilateral posture.
 
-Default rule: bilateral. Static-data paradigm assumes unilateral by default; Foundation rejects static-data paradigm; therefore Foundation default is bilateral unless a correctness guarantee demands unilateral.
+#### Four unilateral zones (RAA 12.7 §2.5)
+
+Unilateral zones operate forward-only because bidirectional flow would break the correctness guarantee the zone provides. ASI consumers depend on these guarantees holding; bilateralizing them undermines the trust roots ASI itself relies on:
+
+- **Zone U1 — Audit chain integrity.** `writeAuditEvent` appends rows forward only (`packages/database/src/queries/audit.ts`); `previous_event_hash` chains backward as cryptographic proof, but the chain itself only grows forward. `verifyAuditChain` at `audit.ts:505` validates chain integrity. BEFORE DELETE trigger per ADR-0002 enforces append-only at database level. SHA-256 routing through `CRYPTO_CONFIG.HASH_ALGORITHM` per Gate 8d (commit `2fc025a`). **Why unilateral:** bidirectional editing of audit log breaks the integrity guarantee that makes the audit chain a trustworthy accuracy anchor for ASI consumers.
+
+- **Zone U2 — Patent-holder implementation record.** Each commit on `origin/main` is contemporaneous record of NIOV Labs implementing patented invention. Append-only forward; no rewriting history. Author identity invariant (`niovarchitect <sadeil@niovlabs.com>`) preserved across every commit; empty Trailers invariant (no `Co-Authored-By:`, no AI tooling attribution) maintaining sole-authorship evidence; cryptographic-timestamp property of git commit SHAs as contemporaneous record. **Why unilateral:** bidirectional rewrite breaks cryptographic-timestamp evidence value. The implementation log is the patent-holder's contemporaneous record per memory entry #12; rewriting commits would invalidate the defensible-record property that supports patent-prosecution and due-diligence review.
+
+- **Zone U3 — Identity verification.** AUTHENTICATE accepts a credential and produces a session token; never goes backward (`apps/api/src/services/auth.service.ts`). The session JWT carries `tar_hash_at_creation` + `allowed_operations` snapshotted at issue time per `packages/database/prisma/schema.prisma:209-230` Session model. **Why unilateral:** bidirectional auth would mean sessions could rewrite their own identity claims, breaking the trust root. The cryptographic linkage between credential → session → operations is the authority chain ASI depends on.
+
+- **Zone U4 — Permission grant lineage.** SHARE creates Permission rows forward (each with a `bridge_id` grouping per `apps/api/src/services/cosmp/share.service.ts`). REVOKE marks rows REVOKED forward; the original grant is preserved as evidence per `packages/database/prisma/schema.prisma:279-306` (`Permission` model with `bridge_id`, `status`, `revoked_at`, `revoked_by_entity_id`). **Why unilateral:** revocation that erases prior grant breaks the audit lineage of who had what access when. Forward-only revocation preserves the answerable question "did entity X have access to capsule Y at time T?" — required for SOC 2 / HIPAA / FedRAMP audit posture.
+
+#### Five bilateral zones (RAA 12.7 §2.5)
+
+Bilateral zones operate cross-entity because ASI cognition requires substrate that learns from its own outputs in real time. One-way "save outcomes for later batch processing" is a static-data paradigm that breaks under ASI consumers:
+
+- **Zone B1 — Feedback loop circulation (substrate; PARTIAL forward extension).** Response generated → outcome observed → outcome feeds back to update relevance weights → next retrieval reflects updated weights. Substrate citations: `apps/api/src/services/coe/coe.service.ts:535-545` (`feedbackHook.onRecordOutcome` invocation); Loop 1 wiring in `apps/api/src/services/feedback/feedback.service.ts`. Update logic: used capsules `relevance_score += 0.05` (cap at 1.0); unused candidates `relevance_score -= 0.02` (floor at 0.0). PARTIAL forward extension: active-learning informativeness weighting (RELEAP 2025 / ORIS 2024) — RAA 12.8 Surface 3 §5.5 closes via refinement framing. **Why bilateral:** ASI cognition requires substrate that learns from its own outputs in real time. Privacy boundary: feedback loop circulation operates within a single entity's session and wallet. No cross-entity flow.
+
+- **Zone B2 — Cross-entity resonance (Hive Intelligence; PARTIAL forward consumption).** Personal flows contribute to aggregate via Hive membership. Aggregate flows back into personal context assembly when relevant. Substrate citations: `apps/api/src/services/hive/hive.service.ts:651-840` (`buildHiveAggregate`); Loop 4 cron rebuild every 30 min via `feedback.service.ts:424`; aggregate stored as `DOMAIN_KNOWLEDGE` capsule in owner's wallet. PARTIAL consumption: explicit COE-aggregate consumption path — RAA 12.8 Surface 2 §4.8 closes via Correction 2 reframing (Hive as DMW-to-DMW coordination). Privacy boundary: aggregate body contains ZERO individual entity IDs; 3-member floor ensures no single member's tags dominate. **Why bilateral:** ASI cognition spanning multiple entities cannot be unilateral aggregation alone; the aggregate must influence individual context or it's a write-only sink.
+
+- **Zone B3 — Multi-DMW concurrent flow (NET-NEW).** Personal + Enterprise + Device wallets coordinate for single response. Each wallet contributes; response circulates back to update relevance in each contributing wallet. Current state: UNILATERAL by accident (because not yet built). COE retrieves single wallet only (`coe.service.ts:202-216` — `prisma.wallet.findUnique({ where: { entity_id: session.entity_id } })`). RAA 12.8 Surface 1 §3.8 designs cross-wallet retrieval mechanics with per-DMW-type sovereignty as scheduling constraint per Correction 4. **Why bilateral:** ASI cognition that pulls from multiple ownership contexts must let outcomes propagate back to each context, or contributions decay into noise over time.
+
+- **Zone B4 — Cross-entity similar-trait resonance (NET-NEW).** Entities with similar traits/attributes/roles contribute to each other's context grounding. A's pattern recognition informs B's context; B's outcomes inform A's pattern weights. Privacy boundary: similar-trait matching operates on attribute aggregates, not raw entity data. Forward architecture: federated personalization layer (FedPer 2019 + FedMosaic 2025 + FedPDA 2025). RAA 12.8 references substrate as RAA 12.9 territory candidate (cohort discoverability per Decision 1). **Why bilateral:** federated personalization layer architecture requires bidirectional contribution + benefit. Unilateral similar-trait extraction is surveillance; bilateral is resonance.
+
+- **Zone B5 — Real-time proximity awareness (NET-NEW).** Spatial proximity between entities influences context retrieval. A's location context informs B's proximity-relevant retrieval; B's outcomes inform A's spatial pattern weights. Privacy boundary: spatial proximity computed on H3 cell granularity (not raw lat/long); proximity-derived context gates through NEGOTIATE permission checks per COSMP envelope. Current state: schema has zero location fields; entirely net-new. Forward architecture: H3 / S2 / geohash / R-tree spatial indexing within COSMP NEGOTIATE envelope. **Why bilateral:** spatial context that doesn't update as entities move is stale; static spatial data is broken under ASI consumers.
+
+#### Default rule and burden-of-proof discipline
+
+Default rule per RAA 12.7 §2.5: **bilateral.** Static-data paradigm assumes unilateral by default; Foundation rejects static-data paradigm; therefore Foundation default is bilateral unless a correctness guarantee demands unilateral. New capabilities default to bilateral flow; the burden is on showing that a correctness guarantee (audit integrity, identity trust root, lineage evidence, patent-record evidentiary value) requires unilateral treatment. This default biases Foundation toward embodied-substrate behavior rather than database-layer behavior.
+
+Burden-of-proof discipline canonicalized at RAA 12.7 governs zone classification: unilateral classification requires correctness-guarantee justification (the zone provides a trust-root guarantee that bidirectional flow would break); bilateral classification follows the default and requires cross-entity flow rationale (the zone enables cross-entity coordination); the burden falls on the unilateral classifier, not on the bilateral default. RAA 12.8 §2 preserves this discipline and extends it with a third class carrying its own discipline (per §2.2 + §2.4).
 
 ### 2.2 Lateral class introduction (third flow-direction)
 
-RAA 12.8 introduces a third flow-direction class: **lateral**. Lateral flow operates between capsules within a wallet (or across wallets for multi-DMW retrieval per Surface 1) without conforming to forward-only (unilateral) or feedback-loop (bilateral) patterns. Lateral flow is co-temporal: capsules co-activate, co-resonate, co-condition each other's salience during retrieval.
+RAA 12.8 introduces a third flow-direction class: **lateral**. Lateral flow operates at intra-substrate dynamics layer within entity sovereignty boundary. Lateral is not a variation of unilateral or bilateral; it is a third class with distinct architectural properties.
 
-Lateral class is necessary because the five-field integration (Surface 2) introduces dynamics that neither unilateral nor bilateral captures. Spreading activation is not feedback-loop closure; it is co-temporal propagation. Hypergraph relational consumption is not forward-only flow; it is N-ary co-membership query. Resonance/coherence is not appended-row chain; it is real-time mutual-conditioning between capsules.
+#### Definition
+
+Lateral flow is intra-substrate dynamics within entity sovereignty boundary. Lateral flow operates between capsules within a wallet (or across wallets for multi-DMW retrieval per Surface 1) without conforming to forward-only (unilateral) or feedback-loop (bilateral) patterns. Lateral flow is co-temporal: capsules co-activate, co-resonate, co-condition each other's salience during retrieval. The flow is intra-query-cycle rather than across-query-cycle; the flow is mutual-conditioning rather than directional.
+
+#### Three architectural properties of the lateral class
+
+The lateral class is defined by three architectural properties operating jointly. Substrate primitives that satisfy all three properties are lateral; primitives that fail any property are not lateral and discriminate to unilateral or bilateral per §2.4 decision tree.
+
+- **Intra-substrate.** Lateral flow operates within substrate primitives without external coordination. Capsule-to-capsule activation, hypergraph relational queries, coherence/contradiction detection, emergent retrieval, salience conditioning all operate within substrate-tier mechanisms. External orchestration (cron, scheduler, cross-system messaging) is not lateral — those are bilateral or unilateral patterns operating outside substrate-internal dynamics.
+
+- **Within entity sovereignty.** Lateral flow does not cross entity ownership boundary; lateral flow respects per-DMW-type sovereignty per Correction 4 by construction. When lateral flow operates within a single wallet, sovereignty is preserved trivially. When lateral flow operates across wallets (multi-DMW retrieval per Surface 1), the per-DMW-type sovereignty rules canonicalized at §5.8 apply as scheduling constraints — Personal contributes full payload-permitting capsules; Enterprise zero-payload contributes metadata; AI_AGENT contributes within owning-human sovereignty; Device contributes within device-owner sovereignty. Lateral-flow architecture must encode the per-DMW-type discipline; lateral flow that bypasses sovereignty rules is incoherent under RULE 0 sovereign-human invariance.
+
+- **Dynamics-tier.** Lateral flow operates at substrate-dynamics layer per §1.4 Surface 2; lateral flow does not extend trust roots layer per RAA 12.7 §2.5 Zones U1-U4. Trust roots remain unilateral (audit chain integrity, identity verification, permission grant lineage). Cross-entity coordination remains bilateral (feedback loops, Hive aggregation as DMW-to-DMW coordination, multi-DMW outcome propagation). Lateral operates orthogonally — within-substrate dynamics that condition retrieval salience, capsule co-activation, coherence emergence — without altering the trust-root or cross-entity layers.
+
+#### Distinction from unilateral
+
+Unilateral establishes trust roots; lateral operates within established trust roots. The audit chain is unilateral because its integrity is the trust root that ASI consumers depend on. Spreading activation through `connected_capsule_ids` edges is lateral because it operates within a trust-root-established wallet, conditions retrieval salience without altering the audit chain, and respects the permission lineage that gates access. Lateral flow does not establish trust roots — the audit / identity / permission / patent-holder unilateral zones remain the trust establishment layer.
+
+#### Distinction from bilateral
+
+Bilateral crosses entity sovereignty boundary; lateral preserves entity sovereignty by construction. Hive aggregation as DMW-to-DMW coordination per Correction 2 is bilateral because aggregate flow crosses entity-wallet boundaries (multiple entities contribute; aggregate flows back to participating entities). The L6 lateral zone (Hive-aggregate consumption) is the lateral counterpart that operates within receiving entity's wallet — once the bilateral cross-entity flow has produced the aggregate, the consuming-entity-side L6 zone conditions retrieval salience laterally within the receiving entity's sovereignty. Bilateral and lateral compose at Zone B2 / L6 boundary; the bilateral side handles cross-entity flow, the lateral side handles intra-entity dynamics consumption.
+
+The distinction prevents zone-classification ambiguity. A flow primitive is bilateral if and only if it crosses entity sovereignty boundary; otherwise it is lateral (if intra-substrate dynamics) or unilateral (if trust-root-establishing). The discrimination is exact, not approximate.
+
+#### Lateral class canonicalization rationale
+
+Foundation substrate at scale (millions of capsules per entity per operator framing for Surface 1) requires flow primitives that are neither one-way trust establishment nor cross-entity coordination. Spreading activation networks (Quillian 1968+) operate within a single entity's associative graph as activation propagates across edges; the propagation is co-temporal within a query cycle; the propagation is intra-substrate. Hypergraph relational consumption operates over N-ary capsule co-membership within a single entity's relational structure; the consumption is co-membership query, not feedback loop. Resonance/coherence dynamics operate as real-time mutual-conditioning between capsules within a query cycle; the conditioning is intra-substrate.
+
+Without a third class, RAA 12.8's five-field integration (Surface 2) would force these primitives into either unilateral classification (incorrect — they don't establish trust roots; they operate within established trust roots) or bilateral classification (incorrect — they don't cross entity sovereignty; they preserve it by construction). The lateral class makes the classification exact and operationally consequential.
+
+The lateral class also addresses substrate landscape investigation findings per §1.3 D2 + D13 dimensions. D2 found `connected_capsule_ids` substrate primitive written but unconsumed (D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER drift); the consumer is lateral-class spreading activation per L1. D13 found five fields net-new at substrate (zero spreading activation primitives; zero resonance/coherence; zero emergent retrieval; zero context-dependent salience; binary embedded edges only); each field maps to a lateral zone per L1-L5. The lateral class is the architectural register at which these primitives are designed.
 
 ### 2.3 Lateral zone enumeration (operator-review-required marker — count = 6 proposed)
 
-**OPERATOR REVIEW REQUIRED:** lateral zone count of 6 is proposed; full-document drafting confirms count or extends. Six lateral zones proposed:
+**OPERATOR REVIEW REQUIRED:** lateral zone count of 6 is proposed; full-document drafting confirms count or extends. The enumeration below canonicalizes six lateral zones with substrate primitives, cross-section reach, drift closure citations, and per-DMW-type sovereignty notes where applicable. Operator confirms enumeration completeness or extends with additional lateral zones (candidate forward extensions: temporal-correlation lateral zone; cross-conversation salience lateral zone; substrate-observation lateral zone if Section 5.3 self-introspection primitive grows into substantive subsystem).
 
-- **L1 — Capsule-to-capsule spreading activation.** Activation propagates through `connected_capsule_ids` edges during retrieval; capsule activation conditions other capsules' candidate scoring within the same query cycle.
-- **L2 — Hypergraph relational consumption.** N-ary capsule co-membership in shared relational structures conditions retrieval; precision decision (true hypergraph vs directed-edge-list) deferred to Section 4.3.
-- **L3 — Resonance/coherence dynamics.** Capsules reinforce or contradict each other; coherence_score conditions retrieval; contradiction-detection surfaces capsule-pair conflicts during context assembly.
-- **L4 — Emergent retrieval.** Retrieval set emerges from local capsule-interaction dynamics rather than top-down score-rank-select; convergence parameters condition emergence.
-- **L5 — Context-dependent salience.** Session state (conversation history, prior retrievals, recent outcome patterns) conditions per-capsule salience; same capsule set scores differently across session states.
-- **L6 — Hive-aggregate consumption.** Hive aggregates condition retrieval as explicit context layer alongside personal capsules per Correction 2 reframing; aggregate salience conditions retrieval scoring; closure of Zone B2 PARTIAL.
+Six lateral zones proposed:
+
+#### Zone L1 — Capsule-to-capsule spreading activation
+
+Activation propagates through `connected_capsule_ids` edges during retrieval; capsule activation conditions other capsules' candidate scoring within the same query cycle.
+
+- **Substrate primitive.** `MemoryCapsule.connected_capsule_ids: String[]` at `packages/database/prisma/schema.prisma`; substrate-active in writes (`apps/api/src/services/cosmp/write.service.ts`; `packages/database/src/queries/capsule.ts`); currently unconsumed in retrieval per D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER drift.
+- **Architectural decisions.** Surface 2 §4.2 Field 1 canonicalizes spreading activation networks per Quillian 1968 onward; Collins & Loftus 1975 spreading-activation theory of semantic memory; Anderson ACT-R 1976+. Activation decay function bounds propagation; seed capsules emerge from initial scoring; activation propagates through connected_capsule_ids with per-edge decay.
+- **Drift closure.** Closes D-2C-D2 via §4.7 lateral flow operationalization. The dormant primitive becomes consumed at L1 zone; the substrate-honesty discipline (RULE 13) recorded the drift inline; the closure operationalizes the consumer surface.
+- **Per-DMW-type sovereignty note.** Spreading activation within Personal DMW operates with full owner-sovereignty per RULE 0; spreading activation within Enterprise zero-payload DMW respects metadata-only constraint (activation propagates over metadata, not raw payload); spreading activation within Device DMW respects device-owner sovereignty.
+
+#### Zone L2 — Hypergraph relational consumption
+
+N-ary capsule co-membership in shared relational structures conditions retrieval; precision decision pending §4.3 Field 2 per D-2D-D13-HYPERGRAPH-NAMING-PRECISION drift.
+
+- **Substrate primitive.** Currently `connected_capsule_ids` + `connected_entity_ids` are directed embedded binary edges (binary edge graph), not true N-ary hypergraph. Substrate-honest vocabulary precision per D-2D-D13 surfaced during Phase 1 extension.
+- **Architectural decisions.** Surface 2 §4.3 Field 2 canonicalizes the precision decision: Option A true hypergraph upgrade (add `CapsuleRelation` Prisma model with `members: String[]` for N-ary relationships; schema migration; vocabulary precision strengthened) vs Option B vocabulary patch (rename to "directed edge graph"; substrate stays as-is; vocabulary precision strengthened with zero engineering; limits relational expressiveness to binary edges).
+- **Operator review required marker** at §4.3 — full-document drafting at Section 4 carries the precision decision; outline flags the territory.
+- **Per-DMW-type sovereignty note.** N-ary co-membership queries cross-wallet require per-DMW-type scheduling constraint per Surface 1 §3.8; N-ary co-membership within single wallet respects single-DMW-type sovereignty rules.
+
+#### Zone L3 — Resonance/coherence dynamics
+
+Capsules reinforce or contradict each other; `coherence_score` conditions retrieval; contradiction-detection surfaces capsule-pair conflicts during context assembly.
+
+- **Substrate primitive.** NET-NEW at substrate. Phase 1 extension D13 finding: zero current substrate primitives for resonance/coherence (`grep "resonance|coherence|reinforce|contradict"` returned empty in services). Glossary has "resonance" and "coherence" as RAA 12.7 conceptual vocabulary; substrate carries zero operational presence.
+- **Architectural decisions.** Surface 2 §4.4 Field 3 canonicalizes resonance/coherence dynamics per Hofstadter & Mitchell Copycat 1992; Hofstadter Fluid Concepts and Creative Analogies 1995; Mitchell Metacat 1993. Substrate primitives required: `coherence_score` field (capsule-pair or capsule-set scoped); reinforcement-detection algorithm (capsules with overlapping `topic_tags` + complementary content); contradiction-detection algorithm (capsules with overlapping `topic_tags` + opposing content).
+- **Per-DMW-type sovereignty note.** Resonance/coherence detection respects sovereignty boundaries: cross-wallet detection requires per-DMW-type scheduling constraint per Surface 1 §3.8; intra-wallet detection respects single-DMW-type sovereignty rules. Adversarial-actor protection: contradiction detection must not surface contradictions across sovereignty boundaries that would expose private capsule content from other wallets.
+
+#### Zone L4 — Emergent retrieval
+
+Retrieval set emerges from local capsule-interaction dynamics rather than top-down deterministic score-rank-select; convergence parameters condition emergence.
+
+- **Substrate primitive.** NET-NEW at substrate. Phase 1 extension D13 finding: zero current emergent / self-organizing primitives (`grep "emergent|self.*organiz|local.*interaction|crystalliz"` returned empty in services). Current COE retrieval is fully top-down deterministic (extract keywords → score → select within budget).
+- **Architectural decisions.** Surface 2 §4.5 Field 4 canonicalizes emergent retrieval per complexity science / self-organization literature. Local interactions: spreading activation (Field 1 / L1) + resonance/coherence (Field 3 / L3) + context-conditioning (Field 5 / L5) operating concurrently within bounded compute budget; final retrieval set is the equilibrium state. Convergence parameters (iteration cap; stability threshold; activation floor) condition emergence; bounds prevent runaway computation per Surface 1 latency budgets.
+- **Coupling with L1 + L3 + L5.** Emergent retrieval composes the other lateral zones — it is the meta-zone that coordinates how L1 / L3 / L5 jointly produce a retrieval set. The composition is intra-query-cycle by definition (lateral); equilibrium emerges within bounded compute budget rather than across cycles.
+
+#### Zone L5 — Context-dependent salience
+
+Session state (conversation history, prior retrievals, recent outcome patterns) conditions per-capsule salience; same capsule scores differently across session states.
+
+- **Substrate primitive.** NET-NEW at substrate. Phase 1 extension D13 finding: zero current context-dependent salience primitives (`grep "context.*depend|salience|situational|situated|context.*aware"` returned empty in services). `combined_score` formula per ADR-0022 is session-state-independent — same capsules score identically regardless of conversation history, prior retrievals in session, recent outcome patterns. KVCache holds session metadata but does not condition retrieval scoring.
+- **Architectural decisions.** Surface 2 §4.6 Field 5 canonicalizes context-dependent salience per Bartlett 1932 *Remembering*; Schank scripts 1977; Rumelhart schemata; situated cognition literature. Substrate primitives required: session-state input to scoring function; conversation-history capsule-aware scoring; outcome-pattern-aware scoring.
+- **Coupling with Surface 3 active-learning informativeness §5.5.** Salience conditioning IS the substrate signal that feeds informativeness weighting (capsule that resolved an ambiguity in this session conditions higher informativeness for similar future situations). The L5 lateral zone produces session-conditioned salience; the §5.5 active-learning informativeness consumes the salience signal as informativeness input; the two architectures share substrate primitive per INT-2.
+
+#### Zone L6 — Hive-aggregate consumption
+
+Hive aggregates condition retrieval as explicit context layer alongside personal capsules per Correction 2 reframing; aggregate salience conditions retrieval scoring; closure of Zone B2 PARTIAL.
+
+- **Substrate primitive.** Hive aggregate construction substrate-active per Loop 4 cron rebuild every 30 min (`feedback.service.ts:424`; `hive.service.ts:651-840`); aggregate stored as `DOMAIN_KNOWLEDGE` capsule in owner's wallet. Consumption asymmetric per D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY drift: explicit endpoint `getHiveIntelligence` reads aggregate; COE assembleContext does NOT consume aggregate via privileged path.
+- **Architectural decisions.** Surface 2 §4.8 canonicalizes Hive aggregation as DMW-to-DMW coordination per Correction 2 (Hive IS the substrate mechanism for wallets to coordinate via shared intelligence; not aggregation artifact). The L6 zone canonicalizes the consumer-side lateral flow: once Hive aggregate has been produced via bilateral cross-entity coordination (Zone B2), the consumer wallet's L6 lateral zone conditions retrieval salience by treating the aggregate as explicit context layer alongside personal capsules.
+- **Drift closure.** Closes D-2D-D9 via §4.8 explicit COE-aggregate consumption path. The bilateral cross-entity production remains Zone B2; the lateral consumer-side flow is Zone L6; the two zones compose at the production-consumption boundary.
+- **Per-DMW-type sovereignty constraint per Correction 4.** Hive coordination respects per-DMW-type sovereignty: Enterprise zero-payload participates differently than Personal (zero-payload constraint conditions what Enterprise contributes); AI_AGENT participation bounded by owning-human sovereignty (owning human's sovereignty bounds AI_AGENT's Hive participation); Personal full owner-sovereignty per RULE 0; Device per device-owner sovereignty. The L6 consumer-side lateral zone applies these constraints when conditioning retrieval salience — aggregate from Personal-DMW-only Hive conditions retrieval differently than aggregate from mixed-DMW-type Hive.
 
 ### 2.4 Zone discrimination decision tree
 
-Forward architectural decisions reference the extended zone classification. New capability is asked: **"U, B, or L — and why?"** before flow direction is chosen.
+Forward architectural decisions reference the extended three-class zone classification. Section 2.4 canonicalizes the decision tree extending RAA 12.7 §2.5: every new substrate capability is asked **"U, B, or L — and why?"** before flow direction is chosen. The decision tree operates via three-step discrimination with burden-of-proof discipline per class.
 
-- If correctness guarantee demands forward-only: U class (audit, identity, lineage, patent record).
-- Else if outcome must propagate back to update substrate state for future cycles: B class (feedback loops, cross-entity resonance, multi-DMW outcome propagation).
-- Else if co-temporal mutual-conditioning between capsules within a query cycle: L class (the six lateral zones).
-- Default L when retrieval-time dynamics; default B when learning-cycle dynamics; default U only when correctness demands.
+#### Three-step discrimination
+
+The decision tree applies three steps in order. Steps are not independent; the order encodes the discipline that trust roots take precedence over cross-entity coordination, and cross-entity coordination takes precedence over intra-substrate dynamics.
+
+**Step 1 — Does the flow establish a trust root?**
+
+If YES → **unilateral classification**. The flow joins Zone U1-U4 family (audit chain integrity / patent-holder implementation record / identity verification / permission grant lineage) or extends the unilateral class with new trust-root-establishing zone. Burden-of-proof discipline: classifier surfaces the correctness-guarantee justification (which trust root the zone provides; what bidirectional flow would break; why ASI consumers depend on the guarantee holding). Classification requires explicit ADR or RAA section canonicalizing the trust-root extension.
+
+If NO → continue to Step 2.
+
+**Step 2 — Does the flow cross entity sovereignty boundary?**
+
+If YES → **bilateral classification**. The flow joins Zone B1-B5 family (feedback loop circulation / cross-entity Hive aggregation / multi-DMW concurrent flow / cross-entity similar-trait resonance / real-time proximity awareness) or extends the bilateral class with new cross-entity zone. Burden-of-proof discipline: classifier surfaces the cross-entity flow rationale (which entities coordinate; what flows back; why the aggregate must influence individual context). Classification respects RAA 12.7 default-rule-bilateral — cross-entity flow is the bilateral-default territory.
+
+If NO → continue to Step 3.
+
+**Step 3 — Does the flow operate at intra-substrate dynamics layer within entity sovereignty?**
+
+If YES → **lateral classification**. The flow joins Zone L1-L6 family (capsule-to-capsule spreading activation / hypergraph relational consumption / resonance/coherence dynamics / emergent retrieval / context-dependent salience / Hive-aggregate consumption) or extends the lateral class with new intra-substrate zone. Burden-of-proof discipline: classifier surfaces the three-property test (intra-substrate / within entity sovereignty / dynamics-tier per §2.2); classification respects per-DMW-type sovereignty per Correction 4 by construction.
+
+If NO → **flow type undetermined**; substrate-honest investigation required per RULE 13. Failure to discriminate may indicate the flow is novel architectural territory not anticipated by RAA 12.7 + RAA 12.8 zone discrimination methodology; investigation surfaces the gap inline; resolution may require methodology extension via future RAA.
+
+#### Burden-of-proof discipline per class
+
+Each zone class carries its own burden-of-proof discipline:
+
+- **Unilateral (U class) — correctness-guarantee justification.** Classifier must surface what trust root the zone provides and what bidirectional flow would break. Burden falls on the unilateral classifier; bilateral default holds otherwise. Worked examples: U1 audit chain integrity provides the trust root that ASI accuracy anchors against (per RAA 12.7 §3.4 + §7); U2 patent-holder implementation record provides the trust root that defensive publication strategy depends on (per Decision Patent-A); U3 identity verification provides the trust root that authority chains derive from; U4 permission grant lineage provides the trust root that audit-trail-required compliance frameworks (SOC 2 / HIPAA / FedRAMP) depend on.
+
+- **Bilateral (B class) — cross-entity flow rationale.** Classifier must surface which entities coordinate, what flows back, and why the aggregate must influence individual context. Default-rule per RAA 12.7 — bilateral is the default class; classification follows the default unless one of the other classifications applies. Worked examples: B1 feedback loop circulation requires bidirectional outcome-to-relevance flow within single-entity context; B2 Hive aggregation requires cross-entity contribution + aggregate consumption; B3 multi-DMW requires multi-wallet contribution + per-wallet outcome propagation.
+
+- **Lateral (L class) — intra-substrate dynamics + within-sovereignty discipline.** Classifier must satisfy the three architectural properties (intra-substrate / within entity sovereignty / dynamics-tier per §2.2). Burden falls on the lateral classifier; the discrimination from unilateral and bilateral is exact, not approximate. Worked examples: L1 spreading activation operates within wallet via `connected_capsule_ids` edges (intra-substrate; within sovereignty; dynamics-tier); L3 resonance/coherence operates within wallet via `coherence_score` (NET-NEW substrate primitive; intra-substrate; within sovereignty; dynamics-tier); L6 Hive-aggregate consumption operates within receiving wallet after bilateral cross-entity production has completed (intra-substrate; within sovereignty; dynamics-tier on receiving side).
+
+#### Default rules per architectural register
+
+The decision tree composes with default rules at architectural register:
+
+- **Default U** when correctness demands forward-only flow (the trust-root-establishing default; rare; requires explicit canonicalization).
+- **Default B** when learning-cycle dynamics cross entity sovereignty (the cross-entity-coordination default; common; default-rule-bilateral per RAA 12.7).
+- **Default L** when retrieval-time dynamics operate within entity sovereignty (the intra-substrate-dynamics default; emerging at substrate as Surface 2 fields land; expected to grow as relational-dynamics primitives canonicalize).
+
+The defaults are not pre-emptive classification; they are the burden-of-proof anchors. New capabilities default to bilateral per RAA 12.7; the burden is on showing unilateral or lateral classification. RAA 12.8's lateral-class introduction does not modify the default-rule-bilateral posture; it adds a third class with its own discipline operating alongside the existing bilateral default.
+
+#### Worked example — `connected_capsule_ids` consumer surface
+
+Applying the decision tree to the `connected_capsule_ids` consumer surface (D-2C-D2 drift closure):
+
+- **Step 1.** Does spreading activation through `connected_capsule_ids` establish a trust root? **No.** The activation propagates within trust-root-established context (audit chain integrity holds; identity verification holds; permission lineage holds); the activation does not establish trust roots itself.
+- **Step 2.** Does spreading activation cross entity sovereignty boundary? **No.** The activation operates within a single wallet's `connected_capsule_ids` graph; the activation does not cross entity ownership.
+- **Step 3.** Does spreading activation operate at intra-substrate dynamics layer within entity sovereignty? **Yes.** The activation is intra-substrate (operates via substrate-tier `connected_capsule_ids` primitive); within entity sovereignty (single-wallet scope); dynamics-tier (operates at substrate-dynamics layer per Surface 2 §4.2).
+- **Classification.** Lateral; Zone L1.
+
+The worked example confirms the decision tree produces exact classification. The `connected_capsule_ids` consumer surface canonicalizes at Surface 2 §4.7 as L1 lateral zone; substrate-honest discipline closes the D-2C-D2 drift.
+
+#### Worked example — multi-DMW concurrent flow
+
+Applying the decision tree to multi-DMW concurrent flow (Zone B3 per RAA 12.7):
+
+- **Step 1.** Does multi-DMW concurrent flow establish a trust root? **No.** Multi-DMW retrieval operates within trust-root-established context per individual wallet.
+- **Step 2.** Does multi-DMW concurrent flow cross entity sovereignty boundary? **Yes.** Personal + Twin + Enterprise concurrent retrieval crosses three entity sovereignty boundaries by definition.
+- **Classification.** Bilateral; Zone B3 (per RAA 12.7 §2.5 classification preserved). RAA 12.8 does NOT reclassify B3 as lateral; the cross-entity sovereignty boundary discriminates the classification at Step 2 before reaching Step 3.
+
+The worked example confirms the decision tree preserves RAA 12.7 §2.5 zone classifications. Lateral-class introduction extends the classification space; lateral does not absorb existing bilateral zones. Zone B3 remains bilateral; the per-DMW-type sovereignty as scheduling constraint per Correction 4 operates at Surface 1 §3.8 cross-wallet retrieval mechanics, not via reclassification to lateral.
 
 ---
 
