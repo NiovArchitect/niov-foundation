@@ -837,61 +837,335 @@ Per Decision 4 (all blocks required due to interconnection), Surface 1 engineeri
 
 ## Section 4 — Surface 2: Relational Dynamics
 
+Section 4 canonicalizes Surface 2 of RAA 12.8 substrate-dynamics architecture. Surface 2 designs the conjunction of five mathematical/architectural fields composing as substrate primitive: spreading activation networks + hypergraph relational consumption + resonance/coherence dynamics + self-organizing emergent retrieval + context-dependent salience. Section 4 closes two Phase 1 / Phase 1 extension drifts inline (D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER via §4.7; D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY via §4.8) and surfaces an OPERATOR REVIEW REQUIRED marker at §4.3 (D-2D-D13-HYPERGRAPH-NAMING-PRECISION precision decision). Section 4 §4.9 enumerates the Step 2E engineering surface that closes the architectural canonicalization with implementation work.
+
 ### 4.1 Five-field integration framing
 
-Operator-confirmed scope: Surface 2 integrates five mathematical/architectural fields in conjunction, not in sequence. Integration is the design surface, not selection of one field. Spreading activation provides propagation primitive; hypergraph provides relational structure primitive; resonance/coherence provides mutual-conditioning primitive; emergent retrieval provides selection-from-local-interaction primitive; context-dependent salience provides session-conditioning primitive. The five fields compose; substrate must support all five operating concurrently.
+Operator-confirmed scope: Surface 2 integrates five mathematical/architectural fields in conjunction, not in sequence. Integration is the design surface, not selection of one field. The five fields compose at substrate-architecture register; substrate must support all five operating concurrently within Surface 1 §3.6 latency budget bounds.
 
-### 4.2 Field 1 — Spreading activation (Quillian 1968+)
+#### Five fields enumerated
 
-Activation propagates through capsule edges during retrieval. Foundation primitive: `MemoryCapsule.connected_capsule_ids: String[]` substrate-active in writes (`write.service.ts`; `queries/capsule.ts`) but unconsumed in retrieval (per D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER drift). Surface 2 activates the primitive: spreading-activation traversal from seed capsules (top-K from initial scoring) through `connected_capsule_ids` with activation decay function.
+- **Field 1 — Spreading activation networks** (Quillian 1968 onward; Collins & Loftus 1975 spreading-activation theory of semantic memory; Anderson ACT-R 1976+). Activation propagates through associative network structures during retrieval; activated nodes activate connected nodes with decay. Foundation primitive: `MemoryCapsule.connected_capsule_ids: String[]` (verified substrate-active in writes; per D-2C-D2 drift currently dormant in retrieval). Field 1 operationalizes the dormant primitive; closes D-2C-D2 via §4.7.
+- **Field 2 — Hypergraph relational consumption.** N-ary capsule co-membership in shared relational structures conditions retrieval. Foundation primitive: directed embedded binary edges (`connected_capsule_ids` + `connected_entity_ids`) — not true N-ary hypergraph per D-2D-D13 drift. §4.3 carries OPERATOR REVIEW REQUIRED precision decision (Option A true hypergraph upgrade vs Option B vocabulary patch).
+- **Field 3 — Resonance/coherence dynamics** (Hofstadter & Mitchell Copycat 1992; Hofstadter Fluid Concepts and Creative Analogies 1995; Mitchell Metacat 1993). Capsules reinforce or contradict each other; coherent sets emerge from local-interaction dynamics. Foundation primitive: NET-NEW at substrate (verified zero substrate primitives per Phase 1 extension D13 grep). §4.4 designs the schema additions + detection algorithms.
+- **Field 4 — Self-organizing emergent retrieval** (complexity science; local-interaction-driven selection rather than top-down score-rank-select). Foundation primitive: NET-NEW at substrate (verified zero emergent / self-organizing primitives per D13 grep). §4.5 designs the convergence discipline + parameter bounds.
+- **Field 5 — Context-dependent salience** (Bartlett 1932 *Remembering*; Schank scripts 1977; Rumelhart schemata; situated cognition literature). Same capsule scores differently across session states. Foundation primitive: NET-NEW at substrate (verified zero context-dependent salience primitives per D13 grep). `combined_score` per ADR-0022 is session-state-independent. §4.6 designs the session-state-conditioned scoring function.
 
-### 4.3 Field 2 — Hypergraph precision decision (operator-review-required marker)
+#### Conjunction novelty at substrate-architecture register
 
-**OPERATOR REVIEW REQUIRED:** precision decision between two paths. Per D-2D-D13-HYPERGRAPH-NAMING-PRECISION drift, current substrate is directed embedded binary edge list, not true hypergraph. Two paths:
+Each field individually is well-documented in cognitive-science / database-systems literature. Foundation's contribution is the conjunction at substrate-architecture register: substrate carries all five fields composing concurrently within COSMP/DMW protocol governance; no other memory architecture composes the conjunction at substrate-tier with sovereignty-respecting cross-entity coordination + cryptographic anchoring + audit-chain integrity per RAA 12.7 §2.5 trust roots.
 
-- **Option A — True hypergraph upgrade.** Add `CapsuleRelation` model with `members: String[]` for N-ary relationships. Schema migration. Vocabulary precision strengthened. Substantial engineering effort.
-- **Option B — Vocabulary patch.** Rename to "directed edge graph" or "embedded edge list" in canonical vocabulary; substrate stays as-is. Vocabulary precision strengthened with zero engineering. Limits relational expressiveness to binary edges.
+The conjunction operates within bounded compute budget per Surface 1 §3.6 latency budget (≤10ms target band for cross-wallet retrieval; ≤5ms for single-wallet pre-filter + scoring; conjunction operates within bound). Bounded conjunction is the architectural property — substrate composes the five fields without exceeding ASI-consumer latency requirements. The boundedness is non-trivial: spreading activation alone can exceed latency budgets at high hop counts; resonance/coherence detection alone can exceed budgets at high pair-comparison counts; emergent retrieval alone can exceed budgets without convergence parameters. The conjunction bounds emerge from the joint architecture — Field 1 + Field 4 share iteration budget; Field 3 detection runs within Field 4 convergence; Field 5 conditioning composes with Field 1 propagation.
 
-Decision deferred to full-document drafting; outline flags the territory and surfaces both options. Adversarial-actor protection consideration per memory entry #12: imprecise vocabulary (claiming hypergraph when substrate has edge list) creates argument surface; precise vocabulary preempts argument.
+#### Cross-section reach
 
-### 4.4 Field 3 — Resonance/coherence dynamics (Hofstadter)
+Surface 2 couples to other RAA 12.8 surfaces at multiple points per §6:
 
-Capsules reinforce or contradict each other. Substrate primitives required: `coherence_score` field (capsule-pair or capsule-set scoped); reinforcement-detection algorithm (capsules with overlapping topic_tags + complementary content); contradiction-detection algorithm (capsules with overlapping topic_tags + opposing content). Surface 2 designs the schema additions and detection-algorithm specifications.
+- **§3.6 latency budget bounds** field operation. All five fields must operate within Surface 1 §3.6 budgets; convergence + propagation + detection algorithms are bounded by latency.
+- **§3.7 query complexity bounds** condition Field 1 max-hops + Field 4 max-iterations.
+- **§5.5 active-learning informativeness consumes Field 5 salience signal** per INT-2. The two architectures share substrate primitive — substrate that knows which retrievals were informative is substrate that observes its own behavior; Field 5 salience signal feeds informativeness weighting.
+- **§6.5 INT-5 spreading activation activates connected_capsule_ids** dormant primitive. Field 1 (§4.2) IS the canonical lateral consumer that closes D-2C-D2 via §4.7.
 
-### 4.5 Field 4 — Emergent retrieval (complexity science)
+### 4.2 Field 1 — Spreading activation networks (Quillian 1968+; Collins & Loftus 1975; Anderson ACT-R 1976+)
 
-Retrieval set emerges from local capsule-interaction dynamics rather than top-down deterministic score-rank-select. Local interactions: spreading activation (Field 1) + resonance/coherence (Field 3) + context-conditioning (Field 5) operating concurrently within bounded compute budget; final retrieval set is the equilibrium state.
+Activation propagates through `MemoryCapsule.connected_capsule_ids` edges during retrieval; capsule activation conditions other capsules' candidate scoring within the same query cycle. Field 1 is the canonical lateral zone L1 consumer per Section 2 §2.3 + RAA 12.7 §2.5 lateral class.
 
-Convergence parameters (iteration cap; stability threshold; activation floor) condition emergence. Surface 2 designs the convergence discipline; bounds prevent runaway computation per Surface 1 latency budgets.
+#### Substrate primitive — verified active in writes; dormant in retrieval
 
-### 4.6 Field 5 — Context-dependent salience (Bartlett 1932; Schank scripts)
+Pre-flight verification (substrate-evidence gathering before draft): `MemoryCapsule.connected_capsule_ids: String[]` and `MemoryCapsule.connected_entity_ids: String[]` are substrate-active in writes per `apps/api/src/services/cosmp/write.service.ts:53-54` (interface declarations), `:79-80` (update interface declarations), `:334-335` (create-data assignments), `:546-549` (update-data assignments). Five write sites total; consumer sites in retrieval-tier code: zero. The dormancy is the D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER drift surfaced at Phase 1 investigation and closed by §4.7 lateral flow operationalization.
 
-Same capsule scores differently across session states. Conversation history conditions salience; prior retrievals in session condition salience; recent outcome patterns condition salience. Substrate primitives required: session-state input to scoring function; conversation-history capsule-aware scoring; outcome-pattern-aware scoring.
+#### Cognitive-science grounding
 
-Coupling to Surface 3 active-learning informativeness: salience conditioning IS the substrate signal that feeds informativeness weighting (capsule that resolved an ambiguity in this session conditions higher informativeness for similar future situations).
+The field operationalizes the cognitive-science-validated mechanism of associative spreading activation. Quillian 1968 introduced the spreading-activation hypothesis for semantic memory; Collins & Loftus 1975 formalized the spreading-activation theory of semantic processing as substrate-tier mechanism; Anderson ACT-R 1976+ embedded spreading activation as core architectural primitive in cognitive architecture. The literature is decades-validated; Foundation operationalizes the mechanism within COSMP/DMW protocol governance — substrate-architecture register, not engineering optimization.
 
-### 4.7 Lateral flow operationalization (closes D-2C-D2)
+#### Architectural decisions
 
-Closes D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER drift. Substrate has `connected_capsule_ids` and `connected_entity_ids` actively written but unconsumed. Surface 2 operationalizes consumption via Field 1 spreading activation; Section 4.7 canonicalizes the consumer surface.
+Surface 2 §4.2 canonicalizes:
 
-### 4.8 Hive aggregation as DMW-to-DMW coordination per Correction 2 + per-DMW-type sovereignty per Correction 4 (closes D-2D-D9)
+- **Seed capsules emerge from initial scoring.** Top-K candidates from `combined_score` ranking per ADR-0022 become activation seeds. The seed set is bounded per Surface 1 §3.4 candidate budget; activation proceeds from bounded seed set.
+- **Activation propagates through `connected_capsule_ids` edges with per-edge decay.** The decay coefficient is bounded — typical 0.7 (each hop reduces propagated activation to 70% of source); ceiling 0.9 (slower decay; deeper propagation). Decay coefficient resolves during full-document drafting per operator review; outline establishes the decision territory.
+- **Activation accumulates per-candidate.** A capsule activated by multiple seed capsules accumulates activation (not max-of, but sum-with-decay). The accumulation conditions the candidate's `combined_score` — activation contributes a weighted addend to the score formula. Coefficient resolves during full-document drafting.
+- **Activation propagation respects RELEVANCE_FORGET_FLOOR per `coe.service.ts:44`.** Sub-floor capsules are excluded from activation propagation source set; sub-floor activated capsules are not promoted above floor by activation alone (the floor is intentional-forgetting per cognitive-science framing per §1.1 + Anderson, Bjork & Bjork 1994; activation does not bypass intentional forgetting).
+- **Max hops bounded per Surface 1 §3.7 query complexity bound.** Typical: 3 hops. Ceiling: 5 hops. Beyond ceiling, activation propagation exceeds latency budget; bound enforced at COE entry per §3.7.
 
-**Per Correction 2 reframing:** Hive is not aggregation artifact; Hive IS the substrate mechanism for wallets (= entities, including AI_AGENT entities) to coordinate via shared intelligence. Wallets ARE entities; entities ARE represented by wallets; Hives ARE coordination across entity-wallets. COE provides each participating wallet/agent its memory capsule information through Hive participation. Feedback loop is data flowing back from wallets maintaining relevance + informativeness + Hive coherence.
+#### Drift closure — D-2C-D2 via §4.7
 
-**Per Correction 4 sovereignty constraint:** Hive coordination respects per-DMW-type sovereignty. Enterprise DMW zero-payload participates differently than Personal DMW (zero-payload constraint conditions what Enterprise can contribute); AI_AGENT wallet participation constrained by owning-human sovereignty (owning human's sovereignty bounds AI_AGENT's Hive participation); Personal DMW participates with full owner-sovereignty per RULE 0; Device DMW participates per device-owner sovereignty.
+Field 1 spreading activation IS the canonical lateral flow consumer of `connected_capsule_ids` substrate primitive. The dormant primitive becomes consumer-active when §4.7 lateral flow operationalization implements the spreading-activation traversal in COE retrieval. Substrate-honesty discipline operating per RULE 13: D-2C-D2 surfaced inline at investigation; closure mechanism canonical here; engineering implementation enumerated at §4.9 Step 2E.
 
-**Closes D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY:** explicit COE-aggregate consumption path canonicalized; aggregate enters context assembly as explicit layer rather than score-rank lottery.
+#### Cross-section reach
 
-### 4.9 Surface 2 decisions list
+- §3.6 latency budget bounds activation propagation depth (typical 3 hops within ≤5ms scoring budget)
+- §3.7 max-hops complexity bound (ceiling 5)
+- §6.5 INT-5 (Field 1 + D2 dormant primitive joint canonicalization)
+- §4.7 lateral flow operationalization (D-2C-D2 closure)
+- §4.5 Field 4 emergent retrieval composes Field 1 with Fields 3+5 within bounded compute budget
 
-Decision territory enumerated:
-- D-S2-1: Field 2 hypergraph precision (Option A upgrade vs Option B vocabulary patch — per Section 4.3 marker)
-- D-S2-2: Spreading activation decay function specification
-- D-S2-3: Coherence/contradiction detection algorithm specification
-- D-S2-4: Emergent retrieval convergence parameters (iteration cap; stability threshold; activation floor)
-- D-S2-5: Context-dependent salience scoring function (session-state input shape)
-- D-S2-6: Hive coordination per-DMW-type sovereignty schedule (which DMW types participate how per Correction 4)
-- D-S2-7: COE-aggregate consumption path mechanics (explicit context layer assembly)
+### 4.3 Field 2 — Hypergraph relational consumption — OPERATOR REVIEW REQUIRED (D-2D-D13 precision decision)
+
+Substrate primitive: `MemoryCapsule.connected_capsule_ids: String[]` and `MemoryCapsule.connected_entity_ids: String[]` are directed embedded binary edges (binary edge graph), not true N-ary hypergraph. The vocabulary distinction matters for substrate-architecture canonicalization; per D-2D-D13-HYPERGRAPH-NAMING-PRECISION drift surfaced at Phase 1 extension, the precision decision requires operator review.
+
+#### Verified substrate state
+
+Pre-flight verification confirms current substrate state:
+- `connected_capsule_ids String[]` field on MemoryCapsule — array of capsule UUIDs, ordered, possibly duplicate-free (no schema constraint enforces uniqueness)
+- `connected_entity_ids String[]` field on MemoryCapsule — array of entity UUIDs
+- Both fields are directed (reference outward from the carrier capsule); both are binary at edge level (each entry is a single target reference); zero N-ary hyperedge primitive currently exists at substrate
+
+The substrate carries an embedded edge list, not a hypergraph. The drift surfaced at Phase 1 extension noted that glossary canonical vocabulary referenced "hypergraph" while substrate carried "binary edge graph" — substrate-vocabulary inconsistency.
+
+#### OPERATOR REVIEW REQUIRED — two architectural options
+
+**OPERATOR REVIEW REQUIRED:** precision decision between two paths. Both options strengthen substrate vocabulary precision; the trade-off is engineering effort vs relational expressiveness.
+
+**Option A — True N-ary hypergraph upgrade.**
+
+Add `CapsuleRelation` Prisma model with `members: String[]` for N-ary capsule co-membership:
+
+```prisma
+model CapsuleRelation {
+  relation_id   String   @id @default(uuid()) @db.Uuid
+  members       String[] // N-ary capsule UUIDs
+  relation_type String?  // optional semantic type
+  created_at    DateTime @default(now())
+  // ... per-DMW-type sovereignty + audit fields
+}
+```
+
+Schema migration via Prisma `db push` per ADR-0001 no-migrations-directory pattern. Write-tier changes: SHARE / WRITE operations may create CapsuleRelation rows alongside connected_capsule_ids. Retrieval-tier changes: Field 1 spreading activation Field 2 hypergraph traversal extends to CapsuleRelation members.
+
+- **Engineering effort.** Substantial. New Prisma model + schema migration + write-tier changes + retrieval-tier changes + per-DMW-type sovereignty enforcement at hypergraph traversal.
+- **Relational expressiveness.** N-ary co-membership — capsules participate in shared relational structures with arbitrary arity. Hypergraph traversal supports queries like "all capsules participating in relation R alongside capsule C" without binary-edge-list expansion.
+- **Patent claim coverage.** Extends substrate-architecture-level coverage for true N-ary hypergraph relational structure — US 12,164,537 (DMW + Foundation primitives) + US 12,517,919 (COSMP/DMW protocol) territory. Substantive forward extension.
+- **Vocabulary precision.** "Hypergraph" canonical vocabulary aligns with substrate primitive.
+
+**Option B — Vocabulary patch.**
+
+Rename glossary "hypergraph" canonical vocabulary to "directed edge graph" or "embedded edge list". Substrate stays as-is. Glossary update at Step 2F refresh (post-RAA-12.8-full-document).
+
+- **Engineering effort.** Zero substrate engineering. Glossary refresh only; documentation-tier work.
+- **Relational expressiveness.** Limited to binary edges. N-ary co-membership emulated via shared connected_capsule_ids entries (every member of an N-ary relation has every other member in its connected_capsule_ids list — combinatorial expansion at write tier).
+- **Patent claim coverage.** Substrate-architecture-level coverage at binary-edge graph register. Less broad than Option A; still substantive territory (binary edge graphs are themselves patent-claim-worthy when composed within COSMP/DMW protocol governance).
+- **Vocabulary precision.** Glossary aligns with substrate primitive at "directed edge graph" register.
+
+#### Substrate-honest articulation of trade-off
+
+Option A engineering effort is substantial — multi-sprint scope including new Prisma model + per-DMW-type sovereignty + retrieval traversal + audit-chain extension to relational events. Option B zero-engineering effort delivers vocabulary precision without expressiveness extension. Operator review weighs:
+
+- Patent-implementation-evidence value of N-ary hypergraph claim territory vs binary-edge-graph claim territory (Option A broader; Option B narrower-but-substantive)
+- Engineering capacity at Step 2E (Surface 1 + Surface 2 + Surface 3 each enumerate substantial Step 2E surfaces; Option A adds further substantial scope)
+- Adversarial-actor protection per Decision Patent-A (precise vocabulary preempts vocabulary-drift argument; both options achieve precision)
+
+Operator review required at full-document drafting; outline canonicalizes the decision territory; default until operator review = decision deferred to operator at Step 2D-completion or Step 2E-planning.
+
+#### Cross-section reach
+
+- §6.4 INT-4 cross-type-balance-at-scale (Field 2 expressiveness conditions cross-type query patterns at scale; Option A enables N-ary cross-type relational queries that Option B requires combinatorial binary-edge expansion to express)
+- §4.7 lateral flow operationalization (Field 2 traversal joins Field 1 spreading activation as lateral flow consumer; both Options A and B operate as lateral consumers)
+
+### 4.4 Field 3 — Resonance/coherence dynamics (Hofstadter Copycat 1992; Metacat 1993; Fluid Concepts 1995)
+
+Capsules reinforce or contradict each other within retrieval cycles; coherent sets emerge from local-interaction dynamics; substrate carries `coherence_score` and detection algorithms as net-new primitives. Field 3 is the substrate-tier canonicalization of resonance/coherence dynamics from cognitive-science / fluid-analogies-research literature.
+
+#### Verified NET-NEW substrate state
+
+Pre-flight verification (Phase 1 extension D13 grep + Section 4 pre-flight): zero substrate primitives exist for resonance/coherence dynamics. `grep "coherence_score|coherence_dynamics|reinforcement_detect|contradiction_detect" apps/api/src --include="*.ts"` returns zero results. `MemoryCapsule` schema contains zero coherence-related fields. Substrate state is genuinely NET-NEW; Field 3 designs the primitives.
+
+#### Cognitive-science grounding
+
+Hofstadter & Mitchell Copycat 1992 introduced the architecture of fluid analogies — concepts as activation patterns; coherence as emergent property of analogy-making; contradiction-resolution as architectural mechanism. Hofstadter *Fluid Concepts and Creative Analogies* 1995 generalized the framework as cognitive architecture. Mitchell *Metacat* 1993 extended the framework with explicit reflection on analogy-making (the substrate-observation-of-substrate primitive that couples to Surface 3 §5.3 self-introspection). Foundation operationalizes resonance/coherence dynamics within COSMP/DMW protocol governance at substrate-architecture register.
+
+#### Architectural decisions — schema additions
+
+Surface 2 §4.4 canonicalizes net-new schema additions:
+
+- **`coherence_score Float`** — capsule-pair-scoped or capsule-set-scoped coherence value. Coherence operates at two registers (decision per operator review during full-document drafting; both registers canonicalized as candidates):
+  - **Capsule-pair tier.** New Prisma model `CapsulePairCoherence` keyed on `(capsule_id_a, capsule_id_b)` composite; `coherence_score` field per pair; reinforcement / contradiction signal field. Pair-tier supports localized coherence detection.
+  - **Capsule-set tier.** Aggregate coherence_score over a retrieval set (e.g., the candidates entering a query cycle). Set-tier supports retrieval-set-level coherence emergence.
+- **Reinforcement-detection algorithm.** Capsules with overlapping `topic_tags` + complementary content reinforce each other; coherence_score increases. Algorithm specification: tag overlap > threshold AND content semantic-similarity > threshold (where semantic-similarity is computed via vector-tier retrieval if available, or content-hash overlap if not).
+- **Contradiction-detection algorithm.** Capsules with overlapping `topic_tags` + opposing content contradict each other; coherence_score decreases or surfaces explicit contradiction signal. Algorithm specification: tag overlap > threshold AND content semantic-distance > threshold.
+
+#### Resonance/coherence as retrieval-time-conditioning
+
+Coherence_score conditions retrieval scoring per the lateral class architecture (Section 2 §2.3 Zone L3). High-coherence capsules cluster in retrieval (capsules that reinforce each other co-retrieve more often); contradictions surface inline rather than silently coexisting in returned context (substrate makes contradiction visible to ASI-consumer rather than presenting contradictory context as if coherent).
+
+The retrieval-time-conditioning is intra-query-cycle (lateral flow per Section 2 §2.2); contradictions discovered during retrieval may trigger retrieval-set adjustment within the bounded compute budget per Surface 1 §3.6 latency budget. Contradictions discovered post-retrieval (during Surface 3 §5.5 informativeness weighting) feed back to Loop 1 relevance updates per RAA 12.7 §2.5 Zone B1 — bilateral feedback closes the loop.
+
+#### Per-DMW-type sovereignty per Correction 4
+
+Cross-wallet coherence detection requires per-DMW-type scheduling constraint per Surface 1 §3.8. Adversarial-actor protection: contradiction detection must not surface contradictions across sovereignty boundaries that would expose private capsule content from other wallets. Substrate enforces:
+
+- **Personal DMW intra-wallet.** Coherence detection operates within single Personal wallet with full owner-sovereignty per RULE 0; contradictions surface to owner.
+- **Enterprise zero-payload DMW.** Coherence detection operates over metadata only (zero-payload constraint per memory entry #16); cross-Enterprise coherence does not access raw payload from contributing entity wallets.
+- **AI_AGENT DMW.** Coherence detection bounded by owning-human sovereignty per Correction 4 + RULE 0 + memory entry #21; AI_AGENT-owned wallet coherence operates within owning-human's permission grants.
+- **Device DMW.** Coherence detection bounded by device-owner sovereignty.
+- **Cross-wallet coherence.** Operates with per-DMW-type scheduling constraint per Surface 1 §3.8; coherence signals cross-wallet only where sovereignty permits.
+
+#### Coupling to Surface 1 §3.5 materialized aggregates
+
+Per-(entity, capsule_type) `avg_relevance_score` from Surface 1 §3.5 materialized aggregates informs per-type baseline; coherence operates relative to baseline. A capsule's coherence with another capsule is computed as deviation-from-baseline rather than absolute score; baseline normalization respects cross-type balance per D-2C-D6 territory.
+
+### 4.5 Field 4 — Self-organizing emergent retrieval (complexity science; local-interaction-driven selection)
+
+Retrieval set emerges from local capsule-interaction dynamics rather than top-down deterministic score-rank-select. Field 4 is the meta-zone that coordinates Fields 1+3+5 jointly producing a retrieval set within bounded compute budget. Field 4 is genuinely NET-NEW at substrate per Phase 1 extension D13 verification.
+
+#### Verified NET-NEW substrate state
+
+Pre-flight verification: zero current emergent / self-organizing primitives. `grep "emergent.*retriev|self.*organiz|local.*interaction" apps/api/src --include="*.ts"` returns zero results. Current COE retrieval at `apps/api/src/services/coe/coe.service.ts:230-260` is fully top-down deterministic — `combinedScore` per ADR-0022 + score-rank-sort + budget-cap select. Field 4 designs the architectural transition from top-down to emergent.
+
+#### Architectural decisions — local-interaction-driven selection
+
+Surface 2 §4.5 canonicalizes:
+
+- **Local interactions.** Spreading activation (Field 1) + resonance/coherence (Field 3) + context-conditioning (Field 5) operating concurrently within bounded compute budget. Fields 1+3+5 each contribute conditioning signals to the candidate set; the conditioning is co-temporal (lateral per Section 2 §2.2).
+- **Final retrieval set is the equilibrium state.** No top-down score-rank-select. The retrieval set emerges as the candidates that satisfy joint conditioning from Fields 1+3+5 within the convergence parameters.
+- **Convergence parameters bound emergence.** Three parameters jointly bound convergence:
+  - **Iteration cap.** Max iterations before equilibrium accepted; bounded by Surface 1 §3.6 latency budget (typical: 5-10 iterations within ≤5ms scoring budget; ceiling: 15 iterations within ≤10ms ceiling).
+  - **Stability threshold.** Acceptable change-per-iteration before convergence declared; typical: 5% change in score-set across iteration; ceiling: 10%. Below threshold, retrieval set stabilized.
+  - **Activation floor.** Sub-floor activations excluded from emergence; respects RELEVANCE_FORGET_FLOOR per `coe.service.ts:44` invariant.
+
+#### Field 4 as meta-zone for Fields 1+3+5
+
+Field 4 composition is intra-query-cycle by definition (per Section 2 §2.2 lateral class); equilibrium emerges within bounded compute budget rather than across cycles. The composition is non-trivial:
+
+- **Field 1 propagates activation** through `connected_capsule_ids` (per §4.2)
+- **Field 3 detects coherence/contradiction** between activated capsules (per §4.4)
+- **Field 5 conditions per-capsule salience** by session state (per §4.6)
+- **Field 4 iterates until convergence** — Fields 1+3+5 conditioning compose; iteration adjusts candidate set; equilibrium emerges when conditioning produces stable retrieval set
+
+Field 4 is the architectural primitive that makes Surface 2 a coherent design rather than five independent fields. Without Field 4, the five fields would compose ad-hoc per query cycle without convergence guarantees; Field 4 canonicalizes the equilibrium discipline.
+
+#### Cross-section reach
+
+- §3.6 latency budget bounds iteration cap (typical 5-10 iterations within ≤5ms; ceiling 15 within ≤10ms)
+- §3.7 query complexity bound enforces emergence termination (max iterations bounded; emergence cannot exceed bound)
+- §4.2 Field 1 spreading activation operates within Field 4 emergence
+- §4.4 Field 3 resonance/coherence detection operates within Field 4 emergence
+- §4.6 Field 5 context-dependent salience operates within Field 4 emergence
+
+### 4.6 Field 5 — Context-dependent salience (Bartlett 1932; Schank scripts 1977; situated cognition)
+
+Same capsule scores differently across session states. Conversation history conditions salience; prior retrievals in session condition salience; recent outcome patterns condition salience. Field 5 is the canonical lateral zone L5 per Section 2 §2.3.
+
+#### Verified NET-NEW substrate state
+
+Pre-flight verification: zero current context-dependent salience primitives. `grep "context.*depend|salience|situated.*cognition|context.*aware" apps/api/src --include="*.ts"` returns zero results. `combinedScore` formula at `apps/api/src/services/coe/keywords.ts:87-93` per ADR-0022 is session-state-independent — same capsules score identically regardless of conversation history, prior retrievals in session, recent outcome patterns. Field 5 designs the session-state-conditioned scoring extension.
+
+#### Cognitive-science grounding
+
+Bartlett 1932 *Remembering* introduced schema-conditioned reconstruction — memory retrieval reconstructs against schema templates rather than reading literal traces. Same "memory" reconstructs differently across schema contexts. Schank scripts 1977 formalized the schema framework as substrate-tier mechanism; Rumelhart schemata (Rumelhart 1980) extended the framework. Situated cognition literature (Suchman 1987; Hutchins 1995) extended the framework to environment-conditioned cognition. Foundation operationalizes context-dependent salience within COSMP/DMW protocol governance.
+
+#### Architectural decisions — session-state input pipeline
+
+Surface 2 §4.6 canonicalizes:
+
+- **Session-state input to scoring function.** `assembleContext(sessionToken, requestText, tokenBudget, context)` extends with session-state argument carrying conversation history + prior retrievals + recent outcomes. The session-state shape resolves during full-document drafting per operator review.
+- **Conversation-history capsule-aware scoring.** Capsules referenced earlier in session weight higher within same session (recency-of-reference signal beyond `recencyScore` per ADR-0022 — distinct from absolute recency; this is session-recency).
+- **Outcome-pattern-aware scoring.** Capsules that resolved similar prior session ambiguities weight higher. The outcome-pattern signal is computed from Loop 1 substrate-active feedback at `feedback.service.ts` — session-bounded outcome history conditions retrieval.
+- **Salience signal output for INT-2 consumption.** Field 5 produces an explicit salience signal (per-capsule, per-query) consumed by Surface 3 §5.5 active-learning informativeness. The signal IS the substrate primitive that feeds informativeness weighting per INT-2.
+
+#### Coupling with Surface 3 §5.5 active-learning informativeness per INT-2
+
+Per Phase 1 extension INT-2: D8 informativeness signal IS D11 self-introspection primitive; substrate that knows which retrievals were informative is substrate that observes its own behavior. Field 5 salience signal IS the substrate signal that feeds informativeness weighting at Surface 3 §5.5 — capsule that resolved an ambiguity in this session conditions higher informativeness for similar future situations. Designing Field 5 designs the input to §5.5 informativeness; the two architectures share substrate primitive.
+
+#### Per-DMW-type sovereignty
+
+Salience signal is scoped per-wallet — Personal session-state conditions Personal wallet salience; cross-wallet salience composition operates with per-DMW-type scheduling per Surface 1 §3.8. Adversarial-actor protection: salience signal does not leak session content across sovereignty boundaries; salience operates at signal-tier (per-capsule weight modifier), not at content-tier (no payload information flows through salience signal across wallets).
+
+### 4.7 Lateral flow operationalization (closes D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER drift)
+
+Section 4.7 closes the D-2C-D2 drift by canonicalizing the consumer surface for the dormant `connected_capsule_ids` substrate primitive. Field 1 spreading activation IS the canonical lateral flow consumer per L1 lateral zone + INT-5.
+
+#### Drift closure mechanism
+
+Drift D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER surfaced at Phase 1 investigation (D2 finding): `connected_capsule_ids` substrate-active in writes (verified at pre-flight: 5 write sites in `apps/api/src/services/cosmp/write.service.ts`); consumer in retrieval-tier code: zero. Closing the drift requires canonicalizing a consumer surface; §4.7 designates Field 1 spreading activation as the canonical consumer.
+
+#### Lateral flow architecture
+
+Surface 2 §4.7 canonicalizes:
+
+- **Seed capsules from initial pre-filter + scoring.** Per Surface 1 §3.3 index-driven candidate pre-filter + ADR-0022 `combined_score` ranking; top-K candidates emerge as activation seeds.
+- **Activation propagation through `connected_capsule_ids` edges.** Per Field 1 §4.2 architectural decisions: per-edge decay; max hops bounded by §3.7 query complexity bound; activation accumulates per-candidate.
+- **Activated capsules condition `combined_score`.** Activation signal contributes weighted addend to score (per Field 1 §4.2).
+- **Lateral flow respects per-DMW-type sovereignty per §3.8.** Cross-wallet activation propagation respects scheduling constraint — activation does not propagate across sovereignty boundaries that would expose other-wallet capsule content; per-wallet sub-graphs propagate independently with cross-wallet aggregation at Surface 1 §3.8 mechanics.
+
+#### Substrate primitive transition
+
+The `connected_capsule_ids` substrate primitive transitions from dormant (write-only) to substrate-active consumer surface. Substrate-honesty discipline operating per RULE 13: drift surfaced inline at investigation; closure mechanism canonical at §4.7; engineering implementation enumerated at §4.9 Step 2E.
+
+#### Cross-section reach
+
+- §4.2 Field 1 architectural decisions (Field 1 mechanics canonicalize the consumer surface §4.7 designates)
+- §6.5 INT-5 Field 1 + D2 dormant primitive joint canonicalization
+- §3.8 per-DMW-type sovereignty as scheduling constraint applies to lateral flow
+
+### 4.8 Hive aggregation as DMW-to-DMW coordination per Correction 2 + per-DMW-type sovereignty per Correction 4 (closes D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY drift)
+
+Section 4.8 closes the D-2D-D9 drift by canonicalizing the consumer-side lateral flow for Hive aggregate consumption. Per Correction 2: Hive IS the substrate mechanism for wallets to coordinate via shared intelligence — not aggregation artifact. Per Correction 4: Hive coordination respects per-DMW-type sovereignty.
+
+#### Verified substrate state
+
+Pre-flight verification (substrate-evidence gathering before draft):
+
+- **Hive Prisma model** (`packages/database/prisma/schema.prisma`): `hive_id` / `hive_name` / `created_by` / `hive_type` / `governance_terms` / `aggregate_capsule_id String?` / `member_count` / `status` / `org_entity_id` / `is_default_enterprise`. Aggregate is NOT stored in a separate "HiveAggregate" model — aggregate is a `DOMAIN_KNOWLEDGE` Capsule referenced by `Hive.aggregate_capsule_id` foreign key (substrate-honest acknowledgment per RULE 13 — the model is `Hive`; the aggregate lives in the Capsule registry).
+- **HiveMembership Prisma model**: `hive_id` / `entity_id` / `capsule_types_contributed: String[]` / `contribution_scope: AccessScope` / `capsule_types_accessible: String[]` / `access_scope: AccessScope` / `joined_at` / `expires_at` / `status`. The HiveMembership model carries richer per-DMW-type sovereignty primitives than baseline assumption: `capsule_types_contributed` + `contribution_scope` + `capsule_types_accessible` + `access_scope` are existing substrate-tier sovereignty enforcement primitives.
+- **`buildHiveAggregate`** at `apps/api/src/services/hive/hive.service.ts:651` — substrate-active production. Loop 4 cron rebuild every 30 min via `feedback.service.ts:424` — substrate-active scheduling. `LOOP_4_MIN_MEMBERS = 3` at `feedback.service.ts:106` — verified active 3-member floor invariant.
+- **`HIVE_AGGREGATE_TAG_FLOOR = 3`** at `hive.service.ts:154` — verified active substrate constant. `hive.service.ts:707` filters tags by floor: `.filter(([, count]) => count >= HIVE_AGGREGATE_TAG_FLOOR)`. Privacy-preserving by construction per memory entry #16.
+- **`getHiveIntelligence`** at `hive.service.ts:539` — explicit dedicated read endpoint; substrate-active.
+- **COE Hive aggregate consumer** (verify D-2D-D9 zero): `grep "hiveAggregate|HiveAggregate|hive_aggregate|getHiveIntelligence" apps/api/src/services/coe/coe.service.ts` returns zero matches — D-2D-D9 asymmetry confirmed at substrate-state.
+
+#### Per Correction 2 reframing
+
+Per Correction 2 (folded at outline commit `10ef10f`): Hive is not aggregation artifact; Hive IS the substrate mechanism for wallets (= entities, including AI_AGENT entities) to coordinate via shared intelligence. The reframing operationalizes:
+
+- **Wallets ARE entities; entities ARE represented by wallets; Hives ARE coordination across entity-wallets.** The vocabulary precision matters: Hive is not data structure (aggregation) but coordination primitive (DMW-to-DMW). The substrate mechanism is wallet-to-wallet via Hive membership.
+- **COE provides each participating wallet/agent its memory capsule information through Hive participation.** Hive aggregate is consumed at retrieval-time as explicit context layer — COE assembleContext incorporates Hive aggregate alongside personal capsules, not as score-rank lottery candidate.
+- **Feedback loop is data flowing back from wallets maintaining relevance + informativeness + Hive coherence.** Bilateral cross-entity flow per RAA 12.7 §2.5 Zone B2 preserves; Loop 1 substrate-active feedback per Zone B1 within each contributing wallet preserves; the §4.8 reframing canonicalizes the consumer-side lateral flow.
+
+#### Per Correction 4 sovereignty constraint
+
+Per Correction 4 (folded at outline commit `10ef10f`): Hive coordination respects per-DMW-type sovereignty. Substrate-tier coordination primitives are universal across entity types; governance rules are per-DMW-type because underlying sovereignty differs across DMW types.
+
+- **Personal DMW.** Full owner-sovereignty per RULE 0; owner-human grants Hive participation; full-payload contribution permitted; full-payload consumption permitted via aggregate.
+- **Enterprise zero-payload DMW.** Zero-payload constraint per memory entry #16: Enterprise carries metadata + governance, not raw payload content; payload remains in contributing entity's wallet. Hive aggregation in Enterprise context operates over metadata only; aggregate body contains zero raw payload per privacy boundary; aggregate consumption respects zero-payload constraint at consumer side.
+- **AI_AGENT DMW.** Participation bounded by owning-human sovereignty per Correction 4 + RULE 0 + memory entry #21. AI_AGENT-owned wallet contributes to Hive within owning-human's permission grants; consumption operates within bounded scope.
+- **Device DMW.** Participation bounded by device-owner sovereignty.
+
+The HiveMembership substrate primitives (`capsule_types_contributed` / `contribution_scope` / `capsule_types_accessible` / `access_scope`) are the existing substrate-tier sovereignty enforcement primitives — Surface 2 §4.8 reframes them per Correction 4 as per-DMW-type sovereignty operating at HiveMembership tier. The substrate already carries the discipline; §4.8 canonicalizes the operational semantics.
+
+#### Closes D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY
+
+Drift D-2D-D9 surfaced at Phase 1 extension: production substrate-active (verified `buildHiveAggregate` + Loop 4 cron + 3-member floor + audit event); consumption asymmetric (verified zero COE Hive consumer; explicit endpoint `getHiveIntelligence` reads aggregate; COE assembleContext does NOT consume aggregate via privileged path).
+
+§4.8 canonicalizes:
+
+- **Production-side bilateral cross-entity coordination** (Zone B2 per RAA 12.7 §2.5; preserved from RAA 12.7). Hive aggregate built via Loop 4 cron over HIVE_AGGREGATE_TAG_FLOOR-filtered tags from contributing members.
+- **Consumer-side lateral flow** within receiving entity's wallet (Zone L6 per Section 2 §2.3; new lateral consumer canonicalized at §4.8). COE assembleContext consumes Hive aggregate via privileged path — aggregate enters context assembly as explicit layer alongside personal capsules.
+- **Per-DMW-type sovereignty as scheduling constraint per Correction 4.** Consumption operates at retrieval-time, not at result-rendering time per Surface 1 §3.8 discipline. Sovereignty enforcement at consumer side: Personal consumes full aggregate; Enterprise zero-payload consumes metadata-only aggregate; AI_AGENT consumes within owning-human bounds; Device consumes within device-owner bounds.
+
+#### Privacy boundary preserved by construction
+
+Privacy boundary per memory entry #16: aggregate body contains zero individual entity IDs; 3-member floor (`HIVE_AGGREGATE_TAG_FLOOR = 3`) ensures no single member's tags dominate. The privacy-preservation is by-construction substrate property — aggregate cannot accidentally leak individual entity content because aggregation operates at tag-frequency tier above 3-member threshold. Surface 2 §4.8 preserves the privacy boundary in consumer-side operationalization.
+
+Adversarial-actor protection per Decision Patent-A + RULE 19: aggregate consumption respects sovereignty constraints at retrieval-time, not at result-rendering time (per Surface 1 §3.8 discipline). Consumer-side enforcement prevents aggregation-then-filter sovereignty-erasure pattern; aggregation respects sovereignty at production tier (HIVE_AGGREGATE_TAG_FLOOR floor + zero-individual-IDs invariant); consumption respects sovereignty at retrieval tier (per-DMW-type scheduling constraint).
+
+### 4.9 Step 2E engineering surface enumerated
+
+Section 4 canonicalizes Surface 2 architectural decisions; Step 2E (per RAA 12.8 forward queue + §1.4) implements the canonicalization. The §4.9 enumeration surfaces the substrate-honest engineering surface — specific implementation work needed to close the architectural canonicalization with substrate-active behavior.
+
+Step 2E engineering surface for Surface 2:
+
+- **D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER closure** — implement Field 1 spreading activation per §4.2 + §4.7. Engineering tier: extend COE assembleContext STEP 3 candidate set with spreading-activation traversal from top-K seeds through `connected_capsule_ids` with per-edge decay; bounded by §3.7 max-hops complexity bound. Closes the dormant primitive surfaced at Phase 1 D2.
+- **D-2D-D13-HYPERGRAPH-NAMING-PRECISION closure** — per operator review at §4.3 (Option A: CapsuleRelation Prisma model + schema migration + write-tier changes + retrieval-tier hypergraph traversal; Option B: glossary refresh + vocabulary patch). Decision deferred to operator at Step 2D-completion or Step 2E-planning.
+- **Field 3 resonance/coherence dynamics** — schema additions (`coherence_score Float` field; `CapsulePairCoherence` Prisma model OR set-tier aggregate per operator review during full-document drafting); reinforcement-detection algorithm implementation; contradiction-detection algorithm implementation. Schema migration via Prisma `db push`.
+- **Field 4 emergent retrieval** — convergence parameter implementation (iteration cap + stability threshold + activation floor); iteration cap enforcement bounded by Surface 1 §3.6 latency budget; emergence equilibrium algorithm composing Fields 1+3+5.
+- **Field 5 context-dependent salience** — session-state input pipeline (extend `assembleContext` interface with session-state argument); conversation-history capsule-aware scoring; outcome-pattern-aware scoring (consume Loop 1 substrate-active feedback at `feedback.service.ts`); salience signal output for INT-2 consumption at Surface 3 §5.5.
+- **D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY closure** — implement COE-aggregate consumption path per §4.8 with per-DMW-type sovereignty as scheduling constraint per Correction 4. Engineering tier: extend COE assembleContext to consume `Hive.aggregate_capsule_id` reference + `getHiveIntelligence` semantic; aggregate enters context assembly as explicit layer; sovereignty enforcement at consumer side per HiveMembership `contribution_scope` / `access_scope` primitives.
+
+#### Engineering effort estimate
+
+Surface 2 Step 2E engineering surface is substantial — multi-sprint scope across §4.2-§4.8. Field 3 + Field 4 + Field 5 are NET-NEW substrate primitives requiring schema additions + algorithm implementation; Field 1 + §4.7 + §4.8 are dormant-primitive-activation work building on existing substrate. ADR-0017 production-discipline applies to each implementation surface (substrate-investigation discipline; substrate-honesty drift surfacing; coordinated test coverage).
+
+Per Decision 4 (all blocks required due to interconnection), Surface 2 engineering work proceeds after RAA 12.8 full-document drafting completes (Sections 5-10); the engineering surface is sequenced after architectural canonicalization. Section 4.9 enumeration is the canonical Step 2E reference for Surface 2 work scope.
 
 ---
 
