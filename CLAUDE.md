@@ -34,8 +34,8 @@ the right time. Applications like Otzar (the conversational
 intelligence product) run on top of this Foundation. Every
 data access is audited and attributed.
 
-`niov-foundation` is **not** the Otzar product, the Glonari
-deployment, or the otzar-control-tower frontend. The Foundation
+`niov-foundation` is **not** the Otzar product or the
+otzar-control-tower frontend. The Foundation
 is backend-only. Tech stack: Node.js + TypeScript + Fastify
 (API), Postgres 16+ with Prisma ORM (database; provider-agnostic
 per ADR-0018, current operator deployment Supabase), Upstash
@@ -283,6 +283,46 @@ surface the correction inline before drafting.
 
 Lineage: this rule emerged from D-G9-3 surfaced during Gate 9
 investigation; see this commit body for the precedent case.
+
+### RULE 19 -- TWO-REGISTER IP DISCIPLINE
+
+Foundation operates in two registers: Register 1 (AI authorship
+lens — private architectural scaffolding: metaphors, philosophical
+framing, conceptual handles) and Register 2 (concrete form —
+business-grade canonical topology: entities, wallets, capsules,
+COSMP, hardened ASI-grade substrate documentation).
+
+Metaphors stay in Register 1. Concrete form is what enters
+Register 2. Authorship voice for all canonical RAA documents,
+business surfaces, customer documentation, integration partner
+materials, government procurement materials, and patent licensee
+disclosures is Register 2 only. Register 1 framing is loaded as
+AI-internal context (via RULE 17 architectural framing load-on-
+open) to inform structural reasoning but is not exposed in
+document body.
+
+Identity-level naming (named individuals — adversarial actors,
+current and former team members in operational context, third-
+party legal counterparts, vendor relationships under NDA,
+financial counterparts, investor relationships, hiring-pipeline
+candidates, advisor relationships — project internal codenames
+not yet publicly disclosed, future-product naming pre-
+announcement, partnership relationships pre-announcement, and
+discontinued-engagement names) is Register 1 content. It never
+enters canonical documentation, commits, ADRs, RAAs, business
+surfaces, or any repo-visible surface.
+
+Verify which register a document operates in before selecting
+voice — extension of RULE 18 spec-vs-substrate-coherence
+discipline to the register-discrimination dimension.
+Cross-register bleed (Register 1 framing appearing in a Register
+2 surface) is a substrate-honesty drift; surface inline per RULE
+13 and correct before the document ships.
+
+See ADR-0020 for the decision lineage. RAA 12.7 §1 (qi-and-blood
+metaphor) is the canonical Register-1 example; ADR-0001 +
+ADR-0019 + `docs/contributing/onboarding.md` §1 are canonical
+Register-2 examples.
 
 ## 4. Architectural Vocabulary
 

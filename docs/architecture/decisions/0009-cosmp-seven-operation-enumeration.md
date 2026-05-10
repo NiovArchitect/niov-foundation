@@ -56,7 +56,7 @@ COSMP defines exactly seven operations:
   chain).
 
 Additions to the enumeration require patent counsel review
-(Edmond DeFrank) and an ADR superseding this one. Reductions
+and an ADR superseding this one. Reductions
 are forbidden — the enumeration count is part of patent claim
 coverage.
 

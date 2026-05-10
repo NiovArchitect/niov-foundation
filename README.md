@@ -33,7 +33,7 @@ Fastify (API), Supabase PostgreSQL with Prisma ORM
 (database), Upstash Redis (cache), Supabase Storage
 (storage), Vitest (tests). It is **not** the Otzar product
 (the conversational intelligence application that runs on
-top of the Foundation), the Glonari deployment, or the
+top of the Foundation) or the
 [otzar-control-tower](../otzar-control-tower) frontend
 (Vite + React, separate repo).
 

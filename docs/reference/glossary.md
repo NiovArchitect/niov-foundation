@@ -240,9 +240,8 @@ READ, WRITE, SHARE, REVOKE, AUDIT).
 ## N
 
 **NIOV Labs.** The company that owns niov-foundation, Otzar,
-Pulse Presence, Glonari Pulse, and the three patents covering
-the protocol substrate. Sole owner: Sadeil Lewis (Founder and
-CEO).
+and the three patents covering the protocol substrate. Sole
+owner: Sadeil Lewis (Founder and CEO).
 
 ## O
 
@@ -262,9 +261,6 @@ otzar-control-tower @ `0a28f90`.
 **Personal DMW.** The wallet type owned by an individual
 (`WalletType.PERSONAL`). Employee personal capsules live here
 and port to the next employer on departure. See ADR-0001.
-
-**Pulse Presence.** A NIOV Labs product. Capitalized as a proper
-noun.
 
 ## S
 
