@@ -1679,17 +1679,267 @@ Step 2E informativeness coefficient implementation operates within ADR-0022 amen
 
 ## Section 7 — Active-Learning Informativeness as Refinement
 
-### 7.1 Substrate continuity claim
+Section 7 deepens the §5.5 active-learning informativeness refinement framing with operational detail at the four architectural registers required for Step 2E engineering: informativeness-vs-relevance distinction (§7.1); multi-dimensional coefficient design (§7.2); ADR-0022 amendment path with explicit formula extension specification (§7.3); frozen-anchors family extension per INT-6 with ADR-0019 + ADR-0003 discipline applied (§7.4); Step 2E engineering surface enumerated (§7.5). Section 7 operationalizes D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY drift closure per §5.5 framing — refinement of canonicalized substrate primitive rather than introduction of net-new dimension; patent-implementation-evidence continuity preserved per §1.6.
 
-Existing `relevance_score` accumulates informativeness implicitly via uniform Loop 1 updates. The signal is partial informativeness signal degraded by uniform updates. Active-learning informativeness refines existing substrate signal rather than introducing net-new dimension. Refinement preserves patent-implementation-evidence continuity per Section 1.6.
+### 7.1 D8 informativeness-vs-relevance distinction (refinement framing operationalized)
 
-### 7.2 Refinement decisions reference
+The existing `relevance_score` IS partial informativeness signal — degraded by uniform Loop 1 updates. The architectural distinction matters at substrate-tier: refinement extends the existing signal; net-new dimension would introduce parallel signal with discontinuity from existing substrate.
 
-Surface 3 §5.5 decision D-S3-7 specifies refinement function. Coefficients: outcome-informativeness scoring weight; surprise-driven retention multiplier; exploration budget allocation. Function locked via anchor test per Section 6.6.
+#### Verified Loop 1 substrate state — uniform updates erode informativeness gradient
 
-### 7.3 Forward ADR amendment
+Pre-flight verification confirmed Loop 1 substrate-active at `apps/api/src/services/feedback/feedback.service.ts:215-235` with raw SQL atomic updates:
 
-Per ADR-0022 Forward implications: combined_score amends rather than supersedes; informativeness component extension is amendment territory. RAA 12.8 ship-to-origin/main may necessitate ADR-0022 amendment in subsequent commit; outline flags the amendment path; full-document drafting confirms timing.
+```sql
+-- Used capsule path (lines 219-222):
+UPDATE memory_capsules
+SET relevance_score = LEAST(${RELEVANCE_MAX}::float8,
+  relevance_score + ${RELEVANCE_USED_BUMP}::float8)
+WHERE capsule_id = ${id}::uuid AND deleted_at IS NULL
+
+-- Unused candidate path (lines 226-229):
+UPDATE memory_capsules
+SET relevance_score = GREATEST(${RELEVANCE_MIN}::float8,
+  relevance_score - ${RELEVANCE_UNUSED_DECAY}::float8)
+WHERE capsule_id = ${id}::uuid AND deleted_at IS NULL
+```
+
+Per-capsule iteration through `input.candidate_capsule_ids`; used-set discrimination via `if (used.has(id))` predicate; raw SQL atomicity preserves correctness under concurrent recordOutcome invocations. The architectural property is clean — but the coefficient is uniform.
+
+#### The informativeness gradient that uniform updates erode
+
+Every used Capsule receives identical bump (RELEVANCE_USED_BUMP = 0.05) regardless of contribution quality:
+- A Capsule that resolved a CORRECTION-triggering ambiguity receives +0.05
+- A Capsule that confirmed a baseline-relevance retrieval receives +0.05
+- A Capsule that contributed marginally to context receives +0.05
+
+Every unused Capsule receives identical decay (RELEVANCE_UNUSED_DECAY = 0.02) regardless of contextual relevance:
+- A Capsule rejected because it contradicted the response receives -0.02
+- A Capsule unused because the query was scoped to a different topic receives -0.02
+- A Capsule unused because the session was brief receives -0.02
+
+The informativeness signal lives in the difference between high-contribution Capsules (correction-resolving; high-salience) and baseline-relevance Capsules — uniform updates collapse the difference. After enough Loop 1 cycles, the `relevance_score` distribution converges toward the floor/ceiling boundary with informativeness gradient eroded.
+
+#### Refinement framing per §5.5 + D-2D-D8 drift closure
+
+Refinement extends Loop 1 with differential coefficients preserving informativeness gradient — refines the existing substrate signal rather than introducing net-new dimension. The framing matters per patent-implementation-evidence continuity per §1.6:
+
+- **Refinement (preserves continuity):** existing `relevance_score` field continues operating; Loop 1 update logic gains differential coefficient mapping; substrate-architecture coverage extends within the canonicalized substrate primitive
+- **Net-new dimension (introduces discontinuity):** parallel `informativeness_score` field; parallel update logic; substrate-architecture coverage requires net-new primitive introduction; refinement-evidence-chain breaks
+
+D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY drift closure per §5.5 canonical resolution: refinement framing operates. Section 7 deepens the framing with operational coefficient design at §7.2.
+
+#### Cross-section reach
+
+- §5.5 active-learning informativeness as refinement (canonical D-2D-D8 closure framing)
+- §6.2 INT-2 informativeness signal IS self-introspection primitive
+- §6.3 INT-3 correction = max informativeness signal
+- §6.6 INT-6 informativeness function joins frozen-anchors family
+- RAA 12.7 §4.1 + §8 + §10 forward enhancement framing (RELEAP 2025 / ORIS 2024 / multi-armed bandits / Thompson sampling research patterns)
+
+### 7.2 Operationalize informativeness coefficient design (multi-dimensional coefficient surface)
+
+The coefficient design surface is multi-dimensional. Single-coefficient bump (uniform 0.05) collapses to single-coefficient differential bump only when the input space is one-dimensional. The substrate-tier informativeness signal operates across four orthogonal dimensions; the coefficient surface must support all four jointly.
+
+#### Dimension 1 — Per-CapsuleType coefficient
+
+Different CapsuleType values carry different informativeness profiles by construction. CORRECTION CapsuleType receives max-bump coefficient per INT-3 (verified substrate-active at 2 write sites: `apps/api/src/services/otzar/otzar.service.ts:235` + `apps/api/src/services/otzar/observation.service.ts:447`); correction-tier capsule classification IS the highest-signal substrate-tier classification.
+
+Other CapsuleTypes receive baseline-or-tiered coefficients per their informativeness profile:
+- **High-tier (correction-tier):** CORRECTION
+- **Mid-tier (decision-tier):** DECISION + DECISION_STYLE + BLOCKER + RISK
+- **Baseline-tier (knowledge/preference):** PREFERENCE + RELATIONSHIP + DOMAIN_KNOWLEDGE + COMMITMENT + HANDOFF + COMMUNICATION_PREF
+- **Foundation-tier (substrate-baseline):** FOUNDATIONAL + IDENTITY (already bypass relevance updates per FOUNDATIONAL bypass at `coe.service.ts` STEP 3; per `coe.service.ts:44` RELEVANCE_FORGET_FLOOR invariant)
+
+The per-CapsuleType coefficient table is the substrate-tier policy that operationalizes informativeness gradient at the type-classification register.
+
+#### Dimension 2 — Per-event-type coefficient
+
+Correction-resolving outcomes receive differential bump vs uniform-used outcomes. The discrimination operates at outcome-event tier — same Capsule may participate in different outcome types within the same session:
+
+- **Correction-resolving outcome:** Capsule retrieved + resolved a CORRECTION context → max-bump coefficient
+- **Decision-supporting outcome:** Capsule retrieved + supported a DECISION outcome → mid-tier bump coefficient
+- **Baseline-context outcome:** Capsule retrieved + contributed baseline context → baseline coefficient (existing RELEVANCE_USED_BUMP = 0.05)
+- **Contradicted outcome:** Capsule retrieved + contradicted the response → negative differential bump (sub-baseline; possibly net-negative)
+
+The per-event-type coefficient operationalizes the outcome-tier informativeness signal — what the Capsule did, not just whether it was used.
+
+#### Dimension 3 — Per-self-introspection coefficient
+
+SUBSTRATE_OBSERVATION CapsuleType (per §5.3 NET-NEW via ADR-0021; verified absent at substrate per pre-flight) will carry informativeness signal trends as observable substrate-tier capsule. Per INT-2 (§6.2): informativeness signal IS self-introspection primitive. SUBSTRATE_OBSERVATION Capsules observe per-(entity, capsule_type) relevance distribution shifts; per-wallet retrieval pattern changes; informativeness signal trends.
+
+Per-Capsule observed informativeness conditions per-Capsule differential bump:
+- Capsule with sustained high-informativeness observation profile → coefficient bias toward max-bump
+- Capsule with declining informativeness observation profile → coefficient bias toward baseline-or-decay
+- Capsule with anomalous informativeness pattern → SUBSTRATE_OBSERVATION event triggers operator review per §5.3
+
+The per-self-introspection coefficient dimension is paired Step 2E work with SUBSTRATE_OBSERVATION extension per §6.2 INT-2 architectural coupling.
+
+#### Dimension 4 — Per-context-conditioned-salience coefficient
+
+Field 5 salience signal (per §4.6 Field 5 context-dependent salience NET-NEW) feeds per-Capsule informativeness scaling factor per INT-2 coupling. Same Capsule that resolved an ambiguity in this session conditions higher informativeness for similar future situations — session-conditioned salience IS context-dependent informativeness input.
+
+Salience signal bands:
+- **High-salience:** Capsule referenced earlier in session (recency-of-reference signal) + resolved ambiguity → scaling-up coefficient
+- **Mid-salience:** Capsule contributed to session context without ambiguity-resolution → baseline coefficient
+- **Low-salience:** Capsule retrieved but not referenced; session context bypassed it → scaling-down coefficient
+
+The per-context-conditioned-salience coefficient operationalizes Field 5 lateral zone L5 as informativeness conditioning input.
+
+#### Coefficient table operationalization
+
+Coefficient table maps `(CapsuleType, event_type, salience_band)` → `bump_coefficient`:
+
+```
+coefficient_table: Record<
+  CapsuleType,
+  Record<EventType, Record<SalienceBand, number>>
+>
+```
+
+Per-entity-introspection conditioning per Dimension 3 operates as multiplicative scaling factor on the table lookup. Final differential bump = `coefficient_table[capsule_type][event_type][salience_band] × per_capsule_introspection_factor`.
+
+#### Substrate-honest acknowledgment
+
+Net-new substrate engineering required — current Loop 1 carries only uniform constants per pre-flight verification (RELEVANCE_USED_BUMP = 0.05; RELEVANCE_UNUSED_DECAY = 0.02 at `feedback.service.ts:85-88`). The coefficient table data structure + multi-dimensional lookup logic + per-Capsule introspection conditioning are net-new substrate primitives canonicalized at §7.2 and enumerated at §7.5 Step 2E engineering surface.
+
+### 7.3 ADR-0022 amendment path detail (combined_score formula extension specification)
+
+ADR-0022 amends rather than supersedes per its Forward implications; informativeness component extension is amendment territory. Section 7.3 specifies the formula extension with substrate-honest substrate-state grounding.
+
+#### Verified baseline — combined_score formula at substrate (inline numeric literals)
+
+Pre-flight verification at `apps/api/src/services/coe/keywords.ts:87-93`:
+
+```typescript
+// WHY: Spec: combined = (tag * 0.45) + (base * 0.35) + (recency * 0.20).
+//      One helper means the weights live in one place.
+export function combinedScore(
+  tagOverlap: number,
+  baseRelevance: number,
+  recency: number,
+): number {
+  return tagOverlap * 0.45 + baseRelevance * 0.35 + recency * 0.2;
+}
+```
+
+**Substrate-honest acknowledgment per RULE 13:** Coefficients are inline numeric literals at substrate (`0.45 / 0.35 / 0.2`), NOT named constants. The WHY comment references the spec values directly; the substrate inlines them rather than declaring `TAG_OVERLAP_WEIGHT` / `BASE_RELEVANCE_WEIGHT` / `RECENCY_WEIGHT` constants. The substrate state is the baseline against which extension operates.
+
+#### Anchor test verified at substrate
+
+Anchor test at `tests/unit/coe.test.ts:132-136`:
+
+```typescript
+it("combinedScore weights match the spec (0.45 / 0.35 / 0.20)", () => {
+  expect(combinedScore(1, 0, 0)).toBeCloseTo(0.45, 5);
+  expect(combinedScore(0, 1, 0)).toBeCloseTo(0.35, 5);
+  expect(combinedScore(0, 0, 1)).toBeCloseTo(0.2, 5);
+  expect(combinedScore(1, 1, 1)).toBeCloseTo(1.0, 5);
+});
+```
+
+ADR-0022 frozen-anchor mechanism operating substrate-actively. Coefficient changes break the test; substrate-tier tamper resistance per ADR-0003 anchor test discipline.
+
+#### Amendment specification
+
+Extension adds INFORMATIVENESS_WEIGHT component as fourth coefficient:
+
+- **Current formula** (verified verbatim at `keywords.ts:93`):
+  ```
+  combined_score = (tag_overlap × 0.45) + (base_relevance × 0.35) + (recency × 0.2)
+  ```
+
+- **Extended formula** (proposed amendment):
+  ```
+  combined_score = (tag_overlap × w_tag) + (base_relevance × w_relevance) + (recency × w_recency) + (informativeness × w_informativeness)
+  ```
+
+#### Coefficient sum invariant
+
+Sum of weights = 1.0 (coefficient-sum constraint preserves combined_score range invariant: scoring values normalize to [0, 1] for downstream rank comparisons):
+
+- **Current substrate:** `0.45 + 0.35 + 0.2 = 1.0` ✓
+- **Extended (proposed):** `w_tag + w_relevance + w_recency + w_informativeness = 1.0`
+
+Coefficient redistribution per ADR-0022 amendment is the substantive operator-review territory — informativeness component requires weight allocation from existing three components. The redistribution is not arbitrary; the weights are the architecture per ADR-0022 + RAA 12.7 §3.3 framing.
+
+Candidate redistribution surfaced for operator review during ADR-0022 amendment drafting:
+- **Conservative redistribution:** w_informativeness = 0.10; existing weights scale to 0.405 + 0.315 + 0.180 (proportional reduction)
+- **Mid redistribution:** w_informativeness = 0.20; weights scale to 0.36 + 0.28 + 0.16
+- **Aggressive redistribution:** w_informativeness = 0.30; weights scale to 0.315 + 0.245 + 0.14
+
+Default until operator review: conservative redistribution preserves substrate-state coefficient ratios while introducing informativeness signal. Coefficient redistribution decision deferred to ADR-0022 amendment drafting at Step 2D-completion or Step 2E-planning.
+
+#### ADR-0022 amendment path preserves patent-implementation-evidence continuity
+
+Per §5.5 framing + §1.6 patent-implementation-evidence framing: amendment (rather than supersession) preserves continuity of canonicalized substrate primitive. The combined_score formula remains the canonical retrieval scoring primitive; the amendment extends the formula with informativeness component within the canonical primitive.
+
+ADR-0022 amendment lands as separate commit per ADR amendment discipline per `docs/architecture/README.md`; full-document drafting at Step 2D-completion or Step 2E-planning specifies amendment timing.
+
+### 7.4 Frozen-anchors family extension (informativeness coefficients tamper-anchored per INT-6)
+
+INT-6 (§6.6) canonicalizes informativeness function joins the frozen-anchors family. Section 7.4 specifies the discipline application — ADR-0019 frozen-config tamper-anchor pattern + ADR-0003 anchor test discipline + ADR-0022 combined_score formula amendment path operating jointly.
+
+#### Verified frozen-anchors family substrate-active
+
+Pre-flight verification confirmed frozen-anchors family substrate-active:
+
+- **CRYPTO_CONFIG at `packages/auth/src/crypto-config.ts`** (substrate-honest path; operator spec referenced `packages/database/src/`; verified path correction folded here). The module is centralized frozen configuration for every cryptographic algorithm choice; HS256 (HMAC-SHA-256) JWT signing; bcrypt password hashing; AES-256-GCM symmetric encryption; SHA-256 hash function. ADR-0019 frozen-config tamper-anchor pattern operates at substrate-tier.
+- **combined_score coefficients at `apps/api/src/services/coe/keywords.ts:87-93`** — inline numeric literals (0.45 / 0.35 / 0.2) per ADR-0022 frozen-anchor architectural decision; anchor test at `tests/unit/coe.test.ts:132-136` enforces tamper resistance.
+- **RELEVANCE_FORGET_FLOOR = 0.2 at `apps/api/src/services/coe/coe.service.ts:44`** — frozen intentional-forgetting threshold per §1.1 cognitive-science framing.
+
+#### Extension per INT-6
+
+INFORMATIVENESS_WEIGHT coefficient (per §7.3) + per-Dimension coefficient table (per §7.2 four-dimensional surface) join the frozen-anchors family. The extension applies three disciplines jointly:
+
+- **ADR-0019 frozen-config tamper-anchor pattern.** Informativeness coefficients defined in dedicated frozen-config module — analogous to CRYPTO_CONFIG pattern at `packages/auth/src/crypto-config.ts`. Candidate module path: `apps/api/src/services/coe/informativeness-config.ts` or `apps/api/src/services/feedback/informativeness-config.ts` (decision deferred per Step 2E planning). Frozen-config module exports `Object.freeze`-wrapped coefficient table preventing runtime mutation.
+- **ADR-0003 anchor test discipline.** Anchor tests verify coefficient values; coefficient changes break tests; substrate-tier tamper resistance. Test pattern analogous to `tests/unit/coe.test.ts:132-136` combined_score anchor test — coefficient redistribution sum verified; per-dimension coefficient values pinned.
+- **ADR-0022 combined_score formula amendment path.** INFORMATIVENESS_WEIGHT component extension via amendment (per §7.3 specification) preserves coefficient-sum invariant; ADR-0022 amendment lands alongside frozen-config module per coordinated commit discipline.
+
+#### Patent-implementation-evidence territory per §8.4
+
+Frozen-anchors family is patent-implementation territory per §8.4. The cryptographic anchors (CRYPTO_CONFIG) + retrieval scoring anchors (combined_score) + intentional-forgetting anchors (RELEVANCE_FORGET_FLOOR) compose substrate-architecture coverage under US 12,517,919. Informativeness coefficients joining the family extends substrate-architecture coverage to the active-learning informativeness dimension — substantive patent-implementation-evidence extension per §1.6.
+
+The frozen-config pattern carries adversarial-actor protection by construction per Decision Patent-A: tamper anchors that operate at substrate-tier (not at policy-tier) cannot be bypassed by adversarial actors implementing the patented architecture without licensing — the anchors are evidentiary primitives that demonstrate substrate-tier discipline.
+
+#### Cross-section reach
+
+- §5.5 active-learning informativeness as refinement (canonical D-2D-D8 closure framing)
+- §6.6 INT-6 informativeness function joins frozen-anchors family (cross-surface interconnection)
+- §7.3 ADR-0022 amendment path (formula extension specification)
+- §8 patent-implementation-evidence framing (frozen-anchors family patent territory per §8.4)
+- ADR-0019 cryptographic-suite posture (CRYPTO_CONFIG frozen-anchor pattern precedent)
+- ADR-0022 combined_score formula canonicalization (frozen-anchor decision precedent)
+- ADR-0003 frozen-config tamper anchors (anchor test discipline precedent)
+
+### 7.5 Step 2E engineering surface for informativeness coefficient implementation
+
+Section 7 canonicalizes the architectural decisions; Step 2E implements the canonicalization. The §7.5 enumeration surfaces the substrate-honest engineering surface for informativeness coefficient implementation.
+
+Step 2E engineering surface for Section 7:
+
+- **Coefficient table data structure** — per-CapsuleType × per-event-type × per-salience-band coefficient mapping per §7.2 four-dimensional surface. Type definition: `Record<CapsuleType, Record<EventType, Record<SalienceBand, number>>>`. Frozen module per §7.4 ADR-0019 discipline.
+- **Differential bump logic in Loop 1** — replace uniform `RELEVANCE_USED_BUMP` with coefficient-lookup-based differential bump. Engineering tier: extend `feedback.service.ts:215-235` raw SQL UPDATE to apply differential coefficient computed at outcome ingestion. Preserve directional gradient — high-informativeness outcomes produce larger bump; baseline outcomes produce existing 0.05-equivalent baseline.
+- **Differential decay logic in Loop 1** — replace uniform `RELEVANCE_UNUSED_DECAY` with context-conditioned differential decay. Decay coefficient conditioned on whether Capsule was rejected (contradicted response) vs unused (out-of-scope) vs candidate-not-selected-by-budget (per §3.4 candidate budgeting).
+- **INFORMATIVENESS_WEIGHT coefficient in combined_score formula** — extend `keywords.ts:87-93` formula per §7.3 amendment specification. Inline numeric literal updated; anchor test at `tests/unit/coe.test.ts:132-136` extended to validate coefficient sum invariant (sum of weights = 1.0).
+- **Frozen-config module for informativeness coefficients** per ADR-0019 discipline. Module path TBD per Step 2E planning (candidates: `apps/api/src/services/coe/informativeness-config.ts` or `apps/api/src/services/feedback/informativeness-config.ts`).
+- **Anchor tests for informativeness coefficients** per ADR-0003 discipline. Per-dimension coefficient values pinned; coefficient table sum invariant verified; coefficient-table-structure invariant verified.
+- **SUBSTRATE_OBSERVATION integration** — informativeness signal trends feed coefficient table updates per INT-2 architectural coupling. SUBSTRATE_OBSERVATION write path observes informativeness gradient; read path conditions per-Capsule introspection factor (Dimension 3 of §7.2 coefficient design surface). Paired Step 2E work with §5.3 SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021.
+- **ADR-0022 amendment commit** — separate commit landing alongside frozen-config module per coordinated commit discipline. Coefficient redistribution decision resolved per §7.3 operator review.
+
+#### Engineering effort estimate
+
+Step 2E engineering surface for Section 7 is multi-sprint scope. The coefficient table data structure + multi-dimensional lookup logic + per-Capsule introspection conditioning + frozen-config module + anchor tests + Loop 1 update logic refactor + combined_score formula extension + ADR-0022 amendment compose substantial substrate work. ADR-0017 production-discipline applies per item.
+
+Per Decision 4 (all blocks required due to interconnection), Section 7 engineering work proceeds after RAA 12.8 full-document drafting completes (Sections 8-10); the engineering surface is sequenced after architectural canonicalization. Section 7.5 enumeration is the canonical Step 2E reference for active-learning informativeness work scope.
+
+#### Cross-section reach
+
+- §5.5 active-learning informativeness as refinement
+- §5.9 Section 5 Step 2E engineering surface (D-2D-D8 closure item references §7.5 detail)
+- §6.2 INT-2 informativeness IS self-introspection primitive (paired Step 2E work)
+- §6.3 INT-3 correction = max informativeness signal (Dimension 1 + Dimension 2 of §7.2)
+- §6.6 INT-6 informativeness function joins frozen-anchors family
+- §8.4 patent-implementation-evidence territory (frozen-anchors family extension is patent-implementation extension)
 
 ---
 
