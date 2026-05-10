@@ -21,6 +21,12 @@ DMW). When the underlying asset's permission state changes, the
 ABT is invalidated cryptographically. See US patent 12,517,919
 and the COSMP specification.
 
+**ACCESS_BASED (DecayType).** A `DecayType` enum value indicating
+the Capsule's relevance decays as a function of access frequency
+— frequently retrieved Capsules retain weight; rarely retrieved
+ones decay over time. See `packages/database/prisma/schema.prisma`
+DecayType enum.
+
 **Account-of-Record Discipline.** The compliance principle that
 every audit event maps to a real authenticated entity --
 shared service accounts, anonymous actions, and system principals
@@ -55,6 +61,20 @@ event") in running prose when discussing events in general. See
 
 ## B
 
+**BEHAVIORAL_PATTERN Capsule.** A Capsule type carrying observed
+Entity behavior intelligence — recurring patterns, habitual
+responses, and inferred tendencies extracted from interaction
+history. Distinct from PREFERENCE Capsule (declared) by being
+observed. See `packages/database/prisma/schema.prisma`
+CapsuleType enum.
+
+**BLOCKER Capsule.** A Capsule type carrying intelligence about
+obstacles preventing Entity progress — blocking issues,
+dependency gaps, resource constraints, and resolution attempts.
+Created by observation pipeline when execution surfaces friction;
+resolved by subsequent CORRECTION or HANDOFF Capsules. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
 **BOOT_VALIDATOR.** One of the four `SYSTEM_PRINCIPALS` enum
 values. Tags audit emissions originating from boot-time
 validation paths (e.g., production-mode crypto gate failures).
@@ -74,10 +94,8 @@ first mention in any document; "capsule" in subsequent uses
 within the same document.
 
 **Capsule Type.** One of 20 enumerated values categorizing what
-kind of intelligence a Memory Capsule contains (FOUNDATIONAL,
-PREFERENCE, RELATIONSHIP, DOMAIN_KNOWLEDGE, BEHAVIORAL_PATTERN,
-IDENTITY, DEVICE_DATA, SESSION_LEARNING, COMPLIANCE_RECORD, plus
-11 conversation/work-pattern types added in Section 11A). See
+kind of intelligence a Memory Capsule contains. See per-type
+entries in this glossary (entries ending in "Capsule"). See also
 `packages/database/prisma/schema.prisma` CapsuleType enum.
 
 **COE (Contextual Orchestration Engine).** The runtime engine
@@ -93,16 +111,69 @@ Orchestration" phrase is shared with COSMP by design — COE is
 the engine that implements COSMP's contextual-orchestration
 contract. See COSMP entry and patent US 12,517,919.
 
-**COMPLIANCE_SEEDER.** One of the four `SYSTEM_PRINCIPALS` enum
-values. Tags audit emissions from compliance-framework seeding
-paths. See `apps/api/src/services/compliance/compliance.service.ts`
-and ADR-0006.
+**combined_score.** The substrate's central retrieval scoring
+formula computed by COE during convergence:
+`tagOverlap * 0.45 + baseRelevance * 0.35 + recencyScore * 0.2`.
+Per RAA 12.7 §3.3, the weights are architectural decisions, not
+arbitrary numbers; ADR-tier canonicalization queued for ADR-0022.
+Future Weighting Architecture work (RAA 12.8 queued) may extend
+this formula with additional weight components. See
+`apps/api/src/services/coe/keywords.ts` and RAA 12.7 §3.3.
+
+**COMMITMENT Capsule.** A Capsule type carrying intelligence
+about Entity commitments — promises made, deadlines accepted,
+obligations entered, and follow-through context. Carries a
+dedicated `commitment_date` schema field for due-date queries;
+surfaced via `priming.getCommitmentsDueSoon` within a 48-hour
+window. Time-layer attributes track commitment lifecycle from
+creation through fulfillment or revocation. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
+**COMMUNICATION_PREF Capsule.** A Capsule type carrying
+intelligence about an Entity's communication style — preferred
+channels, response cadence, formality calibration, and stylistic
+attributes. Inferred from observation; refined by explicit
+feedback signals. See `packages/database/prisma/schema.prisma`
+CapsuleType enum.
 
 **Compliance Framework.** A regulatory regime Foundation can
 attach to an entity via `EntityComplianceProfile`. Seven
 frameworks ship by default: HIPAA, GDPR, CCPA, FedRAMP_Moderate,
 FERPA, SOC2_Type2, CMMC_Level2. See
 `apps/api/src/services/compliance/compliance.service.ts:80-145`.
+
+**COMPLIANCE_RECORD Capsule.** A Capsule type carrying
+compliance-relevant intelligence — audit attestations, regulatory
+acknowledgments, framework-specific records (FedRAMP, IL4, IL5,
+IL6, CMMC), and clearance-tier evidence. Append-only by
+compliance posture; cross-cutting with the audit chain. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
+**COMPLIANCE_SEEDER.** One of the four `SYSTEM_PRINCIPALS` enum
+values. Tags audit emissions from compliance-framework seeding
+paths. See `apps/api/src/services/compliance/compliance.service.ts`
+and ADR-0006.
+
+**CONVERSATION_LEARNING Capsule.** A Capsule type carrying
+intelligence extracted from a specific conversation — topics
+discussed, decisions reached, relevance signals, and
+conversational outcomes. Written by the closeConversation
+operation; retrieved by COE alongside other Capsule types during
+convergence. See `packages/database/prisma/schema.prisma`
+CapsuleType enum and RAA 12.7 §4.1
+(`docs/architecture/dynamic-flow-architecture.md`).
+
+**CORRECTION Capsule.** A Capsule type carrying intelligence
+about course-corrections — what was wrong, what changed, what
+the Entity learned from being corrected. Generated by
+human-validation-loop signals and self-correction events;
+informs subsequent BEHAVIORAL_PATTERN and DECISION_STYLE
+refinement. See `packages/database/prisma/schema.prisma`
+CapsuleType enum.
+
+**Cortex Router.** The component-level dispatch layer inside the
+COE that selects which retrieval path (cache hit / DMW lookup /
+hive-aggregate read) services a given context-assembly request.
 
 **COSMP (Contextual Orchestration and Scoped Memory Protocol).**
 The protocol layer governing all interactions with Memory
@@ -115,10 +186,6 @@ contextual-orchestration responsibility is fulfilled at runtime
 by the Contextual Orchestration Engine (COE); the shared
 "Contextual Orchestration" phrase reflects this kinship and is
 not a collision. See ADR-0009 for the operation enumeration.
-
-**Cortex Router.** The component-level dispatch layer inside the
-COE that selects which retrieval path (cache hit / DMW lookup /
-hive-aggregate read) services a given context-assembly request.
 
 **Cross-Org Leak Prevention.** The architectural property that
 endpoint query filters narrow within the caller's existing
@@ -136,9 +203,30 @@ portable), Device (device-bound). "Decentralized" refers to
 intelligence) -- not blockchain infrastructure. See ADR-0001
 and the COSMP specification.
 
+**DECISION Capsule.** A Capsule type carrying intelligence about
+a specific decision an Entity made — decision content, options
+considered, rationale, and downstream commitments. Distinct from
+DECISION_STYLE Capsule (pattern-aggregated) by being a single
+decision instance. See `packages/database/prisma/schema.prisma`
+CapsuleType enum.
+
+**DECISION_STYLE Capsule.** A Capsule type carrying intelligence
+about how an Entity makes decisions — risk tolerance,
+deliberation depth, evidence weighting, and decision-pattern
+attributes. Distinct from BEHAVIORAL_PATTERN Capsule by being
+decision-domain-specific. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
 **Device DMW.** The wallet type bound to a specific device
 (`WalletType.DEVICE`). Device-generated capsules live here.
 See ADR-0001.
+
+**DEVICE_DATA Capsule.** A Capsule type carrying device-context
+intelligence owned by a Device DMW — device telemetry,
+device-specific configuration, sensor readings, and device-bound
+observation data. The substrate primitive for device and robot
+intelligence. See `packages/database/prisma/schema.prisma`
+CapsuleType enum.
 
 **Digital Twin.** An `AI_AGENT` entity that represents an
 employee's AI counterpart. Each digital twin has its own
@@ -148,6 +236,12 @@ via EntityMembership.
 
 **Digital Twin Wallet.** Synonym for the Personal DMW belonging
 to an AI_AGENT entity (a digital twin).
+
+**DOMAIN_KNOWLEDGE Capsule.** A Capsule type carrying
+subject-matter intelligence within a defined knowledge domain —
+facts, concepts, and structured information an Entity has
+accumulated about a specific area of work, study, or interest.
+See `packages/database/prisma/schema.prisma` CapsuleType enum.
 
 **Drift.** A discrepancy between a primer's assumed state and
 the actual codebase state, surfaced via pre-flight grep before
@@ -183,11 +277,36 @@ loops (Loops 2, 3, 4, 6, 7 are scheduler-driven; Loops 1, 5 are
 event-driven). See `apps/api/src/services/feedback/` and
 ADR-0006.
 
+**feedback_loop_score.** A `Float` field on the `MemoryCapsule`
+schema (default 0.0) accumulating feedback signals across Loop 1
+bilateral feedback events. Distinct from `relevance_score` by
+being signal-accumulation rather than current-relevance-state.
+See `packages/database/prisma/schema.prisma` MemoryCapsule model
+and `apps/api/src/services/feedback/feedback.service.ts`.
+
 **Foundation.** The repository and runtime layer this glossary
 describes (niov-foundation). Implements COSMP, DMW, COE, Hive
 Intelligence, Compliance Router, and Authentication services.
 Built on Node.js + TypeScript + Fastify + Supabase Postgres +
 Upstash Redis.
+
+**FOUNDATIONAL Capsule.** A Capsule type carrying core
+identity-anchoring intelligence about an Entity — durable
+attributes, root-level context, and substrate-defining facts
+that other Capsules reference. Always included in COE retrieval
+regardless of `relevance_score`; bypasses
+`RELEVANCE_FORGET_FLOOR`; bypasses token budget allocation.
+Typically created at Entity registration and updated rarely.
+See `packages/database/prisma/schema.prisma` CapsuleType enum
+and RAA 12.7 §3.3.
+
+**FOUNDATIONAL (DecayType).** A `DecayType` enum value matching
+CapsuleType FOUNDATIONAL — indicates the Capsule belongs to the
+retrieval-privilege class. Capsules with this DecayType are
+always included in COE retrieval regardless of `relevance_score`;
+bypass `RELEVANCE_FORGET_FLOOR`; bypass token budget allocation.
+See `packages/database/prisma/schema.prisma` DecayType enum and
+RAA 12.7 §3.3.
 
 **Frozen Config.** A configuration constant exported as
 `Object.freeze()` and tested at runtime with `Object.isFrozen()`
@@ -196,6 +315,12 @@ assertions. Tamper anchors. Two such anchors as of Section 12C.0:
 (system-actor enumeration). See ADR-0003.
 
 ## H
+
+**HANDOFF Capsule.** A Capsule type carrying intelligence about
+work transitions — what was delegated, to whom, with what
+context, with what acceptance criteria. The substrate primitive
+for digital twin to human or human to digital twin transitions.
+See `packages/database/prisma/schema.prisma` CapsuleType enum.
 
 **Hash Chain.** See Audit Chain. The hash-chain mechanism is one
 property of the broader audit chain.
@@ -210,6 +335,15 @@ aggregate capsules across multiple entities while preserving
 per-entity privacy. The privacy-preserving aggregation pattern
 is protected by patent US 12,517,919. See
 `apps/api/src/services/hive/hive.service.ts`.
+
+## I
+
+**IDENTITY Capsule.** A Capsule type carrying Entity
+identity-verification and identity-asserting intelligence —
+credentials, identity proofs, and authentication-relevant
+attributes. Government clearance tier assignments and
+compliance-framework identity attestations attach here. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
 
 ## M
 
@@ -258,9 +392,81 @@ otzar-control-tower @ `0a28f90`.
 
 ## P
 
+**PERMANENT (DecayType).** A `DecayType` enum value indicating
+the Capsule's `relevance_score` is stable regardless of time
+elapsed or access patterns — does not decay. Used for Capsules
+carrying intelligence whose value does not erode. See
+`packages/database/prisma/schema.prisma` DecayType enum.
+
 **Personal DMW.** The wallet type owned by an individual
 (`WalletType.PERSONAL`). Employee personal capsules live here
 and port to the next employer on departure. See ADR-0001.
+
+**PREFERENCE Capsule.** A Capsule type carrying explicit Entity
+preferences — stated choices, configured options, and declared
+inclinations that govern how applications and AI agents interact
+with the Entity. Distinct from BEHAVIORAL_PATTERN Capsule
+(observed) by being declared. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
+## R
+
+**recencyScore.** A computed `Float` value (range [0.0, 1.0])
+representing the Capsule's recency weight at retrieval time:
+1.0 if `last_accessed_at` is within 7 days; linear decay between
+day 7 and day 90; 0.0 after day 90. Component of `combined_score`
+(recencyScore × 0.2). See
+`apps/api/src/services/coe/keywords.ts` and RAA 12.7 §3.3.
+
+**RELATIONSHIP Capsule.** A Capsule type carrying intelligence
+about an Entity's relationship to another Entity — connection
+type, relationship history, shared context, and bilateral
+attributes. Cardinality is encoded in Capsule metadata per the
+substrate's parallel relationship-resolution model. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
+**RELEVANCE_FORGET_FLOOR.** A substrate constant (0.2) below
+which Capsules are excluded from COE retrieval — the substrate's
+intentional-forgetting threshold. Below-floor Capsules persist
+in storage but do not surface in retrieval results until
+reinforced above the floor by Loop 1 bilateral feedback.
+FOUNDATIONAL Capsules bypass this floor. See
+`apps/api/src/services/coe/coe.service.ts`.
+
+**relevance_score.** A `Float` field on the `MemoryCapsule`
+schema (range [0.0, 1.0]; default 1.0) representing the
+Capsule's per-capsule relevance weight. Adjusted by Loop 1
+bilateral feedback via `RELEVANCE_USED_BUMP` and
+`RELEVANCE_UNUSED_DECAY` constants. Capsules below
+`RELEVANCE_FORGET_FLOOR` are excluded from retrieval (intentional
+forgetting). FOUNDATIONAL Capsules bypass this filtering. See
+`packages/database/prisma/schema.prisma` MemoryCapsule model,
+`apps/api/src/services/feedback/feedback.service.ts`,
+`apps/api/src/services/coe/coe.service.ts`, and RAA 12.7 §3.3 +
+Zone B1.
+
+**RELEVANCE_UNUSED_DECAY.** A substrate constant (-0.02) applied
+to `relevance_score` by Loop 1 bilateral feedback when a Capsule
+is retrieved-but-unused. Inverse partner of RELEVANCE_USED_BUMP.
+Implements the substrate's natural-forgetting semantic for
+low-relevance intelligence. See
+`apps/api/src/services/feedback/feedback.service.ts` and
+RAA 12.7 Zone B1.
+
+**RELEVANCE_USED_BUMP.** A substrate constant (+0.05) applied to
+`relevance_score` by Loop 1 bilateral feedback when a Capsule
+is retrieved-and-used. Inverse partner of
+RELEVANCE_UNUSED_DECAY. Implements the substrate's reinforcement
+semantic for high-relevance intelligence. See
+`apps/api/src/services/feedback/feedback.service.ts` and
+RAA 12.7 Zone B1.
+
+**RISK Capsule.** A Capsule type carrying intelligence about
+identified risks — exposure descriptions, probability and
+impact attributes, mitigation context, and risk-related
+decisions. Distinct from BLOCKER Capsule by being prospective
+rather than current-friction. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
 
 ## S
 
@@ -298,6 +504,20 @@ handles authentication + delegation in one call, rather than
 routes reaching into private service fields for session
 validation. See ADR-0004.
 
+**SESSION_LEARNING Capsule.** A Capsule type carrying
+intelligence extracted from a single bounded interaction
+session — what was discussed, what changed, what an Entity
+learned during a defined session window. Coarser-grained than
+CONVERSATION_LEARNING Capsule, broader than a single
+conversational turn. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
+**SESSION_ONLY (DecayType).** A `DecayType` enum value indicating
+the Capsule's relevance is bounded to a single session —
+relevant during the session, decays sharply at session close.
+Used for ephemeral session-scoped intelligence. See
+`packages/database/prisma/schema.prisma` DecayType enum.
+
 **SYSTEM_PRINCIPALS.** The frozen enumeration of system actors
 that emit audit events outside of human-initiated sessions.
 Four values: SCHEDULER, BOOT_VALIDATOR, COMPLIANCE_SEEDER,
@@ -312,13 +532,35 @@ attributes (clearance ceiling, allowed operations, compliance
 frameworks, capability flags) attached to an entity's session
 JWT. See `packages/database/prisma/schema.prisma` TAR model.
 
+**TASK_LEARNING Capsule.** A Capsule type carrying intelligence
+extracted from task execution — what worked, what failed, what
+context applied, what an Entity learned about a specific kind
+of work. Distinct from WORK_PATTERN Capsule by being
+task-bounded rather than pattern-aggregated. See
+`packages/database/prisma/schema.prisma` CapsuleType enum.
+
 **Three-Wallet Architecture.** Foundation's memory-ownership
 model with three distinct DMW types: Enterprise (company),
 Personal (employee, portable), Device (device-bound). The
 architecture is the patent claim covered by US 12,517,919.
 See ADR-0001.
 
+**TIME_BASED (DecayType).** A `DecayType` enum value indicating
+the Capsule's relevance decays as a function of time elapsed
+since last access — older Capsules decay unless reinforced.
+Operationally typical for CONVERSATION_LEARNING, TASK_LEARNING,
+WORK_PATTERN, and SESSION_LEARNING Capsule types. See
+`packages/database/prisma/schema.prisma` DecayType enum.
+
 ## W
+
+**WORK_PATTERN Capsule.** A Capsule type carrying intelligence
+about how an Entity approaches recurring work — sequencing,
+sequencing exceptions, tooling preferences, and aggregated
+work-style attributes inferred across multiple task instances.
+Distinct from TASK_LEARNING Capsule by being aggregated rather
+than task-bounded. See `packages/database/prisma/schema.prisma`
+CapsuleType enum.
 
 **writeAuditEvent.** The Foundation function that emits a
 hash-chained audit row. Takes `WriteAuditEventInput`
