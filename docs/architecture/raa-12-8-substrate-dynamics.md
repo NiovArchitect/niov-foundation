@@ -1471,31 +1471,209 @@ Per Decision 4 (all blocks required due to interconnection), Surface 3 engineeri
 
 ## Section 6 — Cross-Surface Architectural Decisions
 
-### 6.1 INT-1 unified cross-wallet context layer per Corrections 3+4
+Section 6 canonicalizes the six cross-surface architectural interconnections discovered during Step 2C Phase 1 + Phase 1 extension investigation. The six INT-* interconnections (INT-1 through INT-6) document substrate primitives that span Surface 1 (Scale) + Surface 2 (Relational Dynamics) + Surface 3 (Agentic Coherence) — primitives that are not contained within any single Surface and must be canonicalized at cross-surface register. Each §6.x subsection canonicalizes one INT-* interconnection with substrate citation depth, cross-section reach, and engineering implication.
 
-Per Correction 3 entity-type uniformity: cross-wallet context layer treats all six EntityType values as first-class participants via universal coordination primitives. Per Correction 4 sovereignty asymmetry: cross-wallet retrieval across heterogeneous entity types is asymmetric — Enterprise zero-payload contributes metadata; Personal contributes full payload-permitting capsules; AI_AGENT contributes within owning-human sovereignty; Device contributes within device-owner sovereignty; APPLICATION + GOVERNMENT per Section 5.8 mapping resolution.
+The interconnection structure is the reason Decision 4 requires all three Surfaces ship together — piecewise canonicalization would strand the interconnection dependencies; Section 6 consolidates the shared substrate primitives at canonical-record register so engineering implementation per Step 2E references the shared design.
 
-Multi-DMW retrieval (Surface 1 §3.8) + Hive consumption (Surface 2 §4.8) share substrate primitive: cross-wallet context layer with per-DMW-type sovereignty as scheduling constraint.
+### 6.1 INT-1 — Unified cross-wallet context layer per Corrections 3+4 (D7 multi-DMW + D9 Hive coordination share substrate primitive)
 
-### 6.2 INT-2 informativeness signal IS self-introspection primitive
+D7 multi-DMW retrieval and D9 Hive coordination share substrate primitive: the cross-wallet context layer. Surface 1 §3.8 designs parallel orchestration mechanics; Surface 2 §4.8 designs Hive aggregation as DMW-to-DMW coordination per Correction 2. Both architectures consume the same substrate primitive — cross-wallet context aggregation with per-DMW-type sovereignty as scheduling constraint.
 
-Per Phase 1 extension INT-2: active-learning informativeness (Surface 3 §5.5) is also the substrate primitive for self-introspection (Surface 3 §5.3). Substrate that knows which retrievals were informative is substrate that observes its own behavior. Designing one designs both. SUBSTRATE_OBSERVATION CapsuleType captures informativeness trend observations as first-class capsules.
+#### Verified substrate primitive — cross-wallet aggregation substrate-active
 
-### 6.3 INT-3 correction propagation IS high-informativeness signal
+Pre-flight verification confirmed:
 
-Per Phase 1 extension INT-3: when a human corrects an AI output (Surface 3 §5.2), the corrected capsules carry maximum informativeness (Surface 3 §5.5). Correction propagation chain = high-signal informativeness input. Surface 3 designs both as coupled subsystem.
+- **Cross-wallet `findMany` substrate-active in Otzar** at `apps/api/src/services/otzar/observation.service.ts:608` — `wallet_id: { in: walletIds }` pattern. The pattern is substrate-tier mechanism for cross-wallet capsule queries; substrate-active in Otzar observation tier.
+- **EntityMembership richly substrate-active** — 52 references in `apps/api/src` confirms substrate-active relationship-graph primitive across governance / twin / org / Otzar tiers.
+- **COE current single-wallet pattern** at `apps/api/src/services/coe/coe.service.ts:202` + `:412` — `prisma.wallet.findUnique` keyed on session entity. COE generalization to cross-wallet retrieval is Surface 1 §3.8 design surface.
 
-### 6.4 INT-4 cross-type-balance-at-scale (Surfaces 1+2+RAA 12.9 forward)
+#### Per Corrections 3+4 — universal + per-DMW-type distinction
 
-Cross-type balance (Phase 1 D6) becomes critical at Surface 1 scale (millions of capsules per entity); cross-wallet retrieval (Surface 1 §3.8) compounds the type-balance problem. Surface 1 + Surface 2 jointly address the substrate-tier policy. RAA 12.9 cites the substrate-tier policy as dependency for per-data-point monetization at trillion scale.
+Per Correction 3 entity-type uniformity: cross-wallet context layer treats all six EntityType values as first-class participants via universal coordination primitives. The substrate-tier mechanism does not change with entity type — `wallet_id: { in: walletIds }` operates uniformly across PERSON / COMPANY / AI_AGENT / DEVICE / APPLICATION / GOVERNMENT wallets.
 
-### 6.5 INT-5 spreading activation activates dormant connected_capsule_ids
+Per Correction 4 sovereignty asymmetry: cross-wallet retrieval across heterogeneous entity types is asymmetric — Enterprise zero-payload contributes metadata; Personal contributes full payload-permitting capsules; AI_AGENT contributes within owning-human sovereignty; Device contributes within device-owner sovereignty; APPLICATION + GOVERNMENT per §5.8 mapping resolution.
 
-Per Phase 1 extension INT-5: spreading activation (Surface 2 Field 1 §4.2) is the natural consumer of `connected_capsule_ids` substrate primitive. Closes D-2C-D2 drift via Surface 2 design.
+The two Corrections operate at distinct architectural registers within the unified cross-wallet context layer: universal at substrate-mechanism level; per-DMW-type at sovereignty-policy level. Substrate enforces sovereignty constraints at retrieval-time per Surface 1 §3.8 — not at result-rendering time.
 
-### 6.6 INT-6 informativeness function joins frozen-anchors family
+#### Architectural decision
 
-Per Phase 1 extension INT-6: informativeness function (Surface 3 §5.5) coefficients become tamper-anchored architectural property like `combined_score` coefficients (per ADR-0022). RAA 12.8 must lock the informativeness function with anchor test discipline; placement alongside `CRYPTO_CONFIG` + `combined_score` test anchors per ADR-0003 frozen-config tamper-anchor pattern.
+INT-1 canonicalizes the cross-wallet context layer as substrate-tier primitive that BOTH multi-DMW retrieval (Surface 1 §3.8) AND Hive aggregation (Surface 2 §4.8) consume. Engineering implementation per Step 2E implements the layer once; multiple consumers leverage the shared substrate.
+
+#### Cross-section reach
+
+- §3.8 Surface 1 parallel orchestration mechanics
+- §4.8 Surface 2 Hive coordination per Correction 2 + per-DMW-type sovereignty per Correction 4
+- §5.8 NEW Per-DMW-Type Sovereignty Rules canonicalizes the EntityType-to-DMW-type mapping
+- RAA 12.7 §2.5 Zone B2 (Hive cross-entity) + Zone B3 (multi-DMW concurrent flow NET-NEW)
+
+#### Engineering implication
+
+Step 2E implements cross-wallet context layer as shared substrate primitive — single implementation consumed by Surface 1 §3.8 + Surface 2 §4.8 architectures. The interconnection structure prevents architectural duplication and ensures sovereignty enforcement is consistent across consumer architectures.
+
+### 6.2 INT-2 — Informativeness signal IS self-introspection primitive (D8 + D11)
+
+D8 informativeness signal and D11 self-introspection primitive share substrate primitive. Substrate that knows which retrievals were informative IS substrate that observes its own behavior. Designing one designs the other — the two architectures are not independent; they are two manifestations of the same substrate-tier property.
+
+#### Substrate primitive coupling
+
+- **D8 informativeness signal** — Surface 3 §5.5 active-learning informativeness as refinement (refines Loop 1 substrate-active feedback at `feedback.service.ts` per RELEVANCE_USED_BUMP / RELEVANCE_UNUSED_DECAY constants verified verbatim at lines 85-88)
+- **D11 self-introspection primitive** — Surface 3 §5.3 SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021 (substrate writes capsules about substrate state into system-principal-owned wallet)
+- **Field 5 context-dependent salience** — Surface 2 §4.6 produces session-conditioned salience signal; L5 lateral zone consumes the signal as informativeness input
+
+#### Architectural decision
+
+SUBSTRATE_OBSERVATION CapsuleType (§5.3) IS the substrate primitive that feeds active-learning informativeness (§5.5). The Capsules written by substrate observation observe informativeness signal trends; the informativeness coefficient refinement consumes those observations. The two architectures share substrate primitive — not coincidentally, but architecturally: substrate-tier self-observation produces the informativeness signal Loop 1 refinement consumes.
+
+#### Cross-section reach
+
+- §4.6 Field 5 context-dependent salience (session-state salience signal IS informativeness input)
+- §5.3 self-introspection NET-NEW (SUBSTRATE_OBSERVATION CapsuleType extension)
+- §5.5 active-learning informativeness as refinement (consumer of self-introspection signal)
+- §6.6 INT-6 informativeness function joins frozen-anchors family (informativeness coefficients tamper-anchored)
+
+#### Engineering implication
+
+Step 2E SUBSTRATE_OBSERVATION extension (per §5.3) + informativeness coefficient implementation (per §5.5) share substrate-primitive design surface. The two engineering items are coupled — implementing one without the other strands the interconnection. Step 2E sequencing must implement both as paired work.
+
+### 6.3 INT-3 — Correction = max informativeness signal (D10 correction propagation + D8 informativeness)
+
+Human correction event IS the rarest and most-informative outcome signal at Loop 1. D10 correction propagation chain (Surface 3 §5.2) produces high-informativeness signal at Loop 1 (Surface 3 §5.5). The interconnection canonicalizes correction as max informativeness coefficient at substrate-tier.
+
+#### Substrate primitive — CORRECTION CapsuleType substrate-active
+
+Pre-flight verification confirmed:
+
+- **CORRECTION CapsuleType substrate-active at 2 write sites** — `apps/api/src/services/otzar/otzar.service.ts:235` + `apps/api/src/services/otzar/observation.service.ts:447`. The CapsuleType is verified-active per Section 11A additions to CapsuleType enum (per §5.3 + §1.6 CapsuleType enum verbatim).
+- **Otzar correction workflow** writes CORRECTION Capsules into wallet — substrate carries correction-tier capsule classification ready for INT-3 informativeness weighting.
+
+#### Architectural decision
+
+Correction propagation chain (per §5.2) produces high-informativeness signal at Loop 1 (per §5.5). Informativeness coefficient assigns maximum bump to correction-resolving Capsules — capsules that resolved a CORRECTION-triggering ambiguity receive informativeness-weighted bump greater than uniform `RELEVANCE_USED_BUMP = 0.05` baseline.
+
+The architectural decision composes with INT-2: human correction = max informativeness IS the substrate signal that SUBSTRATE_OBSERVATION captures (correction events are the highest-signal substrate observations); the three architectures (correction propagation + self-introspection + informativeness weighting) are jointly canonicalized.
+
+#### Cross-section reach
+
+- §5.2 HITL primitives expansion (correction propagation chain canonical)
+- §5.5 active-learning informativeness as refinement (consumer of correction signal)
+- RAA 12.7 §2.5 Zone B1 (Loop 1 bilateral feedback loop substrate-active)
+- §6.2 INT-2 + §6.6 INT-6 (joint canonicalization)
+
+#### Engineering implication
+
+Step 2E informativeness coefficient implementation assigns max-bump-coefficient to CORRECTION CapsuleType + correction-resolving outcomes. The coefficient differential is the architectural property — uniform Loop 1 updates degrade informativeness signal; differential coefficient preserves correction-tier signal.
+
+### 6.4 INT-4 — Cross-type-balance-at-scale (D6 + D7 + D12; RAA 12.9 forward territory)
+
+Cross-type balance at scale is substrate-tier policy territory that compounds across Surface 1 + Surface 2 + RAA 12.9. The interconnection canonicalizes the territory; substantive policy resolution defers to RAA 12.9.
+
+#### Verified substrate state — application-layer-implicit policy
+
+Pre-flight verification confirmed:
+
+- **Zero substrate-tier type-quota / type-mix / diversity primitives** in COE retrieval (per §3.3 + §3.4 substrate-honest acknowledgment).
+- **Otzar allowlist filter** at `apps/api/src/services/otzar/otzar.service.ts:272-277` is the canonical application-layer-implicit policy — `capsule_type: { in: ["WORK_PATTERN", "COMMUNICATION_PREF", "DECISION_STYLE"] as CapsuleType[] }`. Cross-type balance is policy-by-application, not policy-by-substrate.
+- **PRICING_TABLE substrate-active across 7 sites** — declaration at `monetization.service.ts:30` (`Record<CapsuleType, number>`); usage at `monetization.service.ts:182`; export at `index.ts:123`; import + usage at `feedback.service.ts:21+72+570-574`. The PRICING_TABLE import into `feedback.service.ts` is the D-2C-D3-PRICING-IMPORT-LEAK drift — pricing table leaks into feedback tier beyond monetization scope.
+- **Wallet aggregate fields substrate-active** — `Wallet.total_capsule_count Int @default(0)` at `packages/database/prisma/schema.prisma:65`; `CompoundingMetrics.capsule_count Int` at `:931`. Aggregate-tier fields exist; per-(entity, capsule_type) aggregates per §3.5 are NOT materialized.
+
+#### D-2C-D6-OTZAR-ALLOWLIST-AS-IMPLICIT-POLICY drift
+
+The drift surfaced at Phase 1 D6: substrate has zero type-quota / type-mix primitives; cross-type policy is application-layer-implicit. Otzar's allowlist filter is the canonical worked example of the implicit policy pattern. At Surface 1 scale (millions of capsules per entity), cross-type policy becomes critical — query patterns scale with capsule density; type-balance affects retrieval distribution at scale.
+
+#### Architectural decision — RAA 12.9 forward territory
+
+Cross-type balance policy resolution is RAA 12.9 substrate dependency. RAA 12.9 (Governance & Monetization at Scale) cites RAA 12.8 cross-type balance policy as substrate dependency for per-data-point monetization at trillion scale — RAA 12.9 cannot canonicalize per-type pricing without RAA 12.8 canonicalizing cross-type balance.
+
+The reciprocal forward citation per RULE 14 bidirectional discipline: §1.5 + §6.4 (this section) + §9.1 cite RAA 12.9 forward dependency; RAA 12.9 reciprocates the citation when drafted (Step 3+).
+
+#### Three-Surface coupling
+
+INT-4 couples three Surfaces:
+
+- **Surface 1 §3.1 scale problem** + **§3.5 materialized aggregates** per-(entity, capsule_type) baseline — cross-type policy operates on per-type baselines that §3.5 materializes
+- **Surface 2 §4.4 Field 3 baseline normalization** — coherence_score operates relative to per-type baseline informed by §3.5 aggregates
+- **Surface 3 §5.5 active-learning informativeness** — per-type informativeness coefficients (extension territory at §5.5)
+- **RAA 12.9** — substrate-dependency consumer at monetization tier
+
+#### Cross-section reach
+
+- §3.1 scale problem + §3.5 materialized aggregates
+- §4.4 Field 3 baseline normalization
+- §5.5 active-learning informativeness per-type coefficients
+- §1.5 + §9.1 RAA 12.9 forward dependency
+- D-2C-D3-PRICING-IMPORT-LEAK + D-2C-D6-OTZAR-ALLOWLIST-AS-IMPLICIT-POLICY drift territory
+
+#### Engineering implication
+
+Cross-type balance policy implementation deferred to RAA 12.9 substrate-engineering scope. RAA 12.8 surfaces the territory + canonicalizes the interconnection; RAA 12.9 resolves the substantive policy. The deferral preserves RAA 12.8 tractability (substrate dynamics canonicalization) + RAA 12.9 distinct territory (monetization at scale).
+
+### 6.5 INT-5 — Spreading activation activates connected_capsule_ids dormant primitive (D13 Field 1 + D2)
+
+Field 1 spreading activation networks (Surface 2 §4.2) IS the canonical consumer of `connected_capsule_ids` dormant substrate primitive. D13 Field 1 + D2 dormant primitive share substrate primitive — the two architectures are jointly canonicalized at §4.7 lateral flow operationalization.
+
+#### Verified substrate state
+
+Pre-flight verification confirmed:
+
+- **`connected_capsule_ids` substrate-active in writes — 5 sites** at `apps/api/src/services/cosmp/write.service.ts`: lines 53 (input interface), 79 (update interface), 334 (create-data assignment), 546-547 (update-data assignments). The substrate primitive is write-active.
+- **Zero consumer sites in COE retrieval** — `grep "connected_capsule_ids" apps/api/src/services/coe` returns zero results. D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER drift confirmed substrate-state.
+
+#### Architectural decision — drift closure via §4.7
+
+INT-5 canonicalizes Field 1 spreading activation as the canonical consumer of `connected_capsule_ids` dormant primitive. D-2C-D2 drift closes via §4.7 lateral flow operationalization. The Field 1 architecture (§4.2) operationalizes the substrate primitive — spreading activation traverses the edge list with per-edge decay function bounded by max-hops complexity bound per §3.7.
+
+The interconnection is exact: Field 1 is not a generic consumer; Field 1 is the canonical consumer designed to operationalize the specific substrate primitive that D2 surfaced as dormant. The architecture and the drift co-evolved; §6.5 canonicalizes the co-evolution.
+
+#### Cross-section reach
+
+- §4.2 Field 1 spreading activation architectural decisions
+- §4.7 lateral flow operationalization (drift closure mechanism)
+- Section 2 §2.3 Zone L1 lateral classification (spreading activation as canonical L1 lateral zone)
+- §3.7 query complexity bounds (max hops bound; iteration cap)
+- §6.4 INT-4 (cross-type-balance compounds with spreading activation across types)
+
+#### Engineering implication
+
+Step 2E spreading activation traversal implementation (per §4.2 + §4.7) activates the `connected_capsule_ids` consumer surface. The implementation transitions the substrate primitive from dormant (write-only) to substrate-active consumer. The transition is the architectural property — substrate primitives that exist in writes but lack consumers represent dormant capacity; consumer implementation activates capacity.
+
+### 6.6 INT-6 — Informativeness function joins frozen-anchors family (D8 + D11; ADR-0022 amendment path)
+
+Informativeness function coefficients become tamper-anchored architectural property like `combined_score` per ADR-0022. The interconnection canonicalizes informativeness function as member of the frozen-anchors family with ADR-0019 + ADR-0003 discipline applied.
+
+#### Verified substrate state — frozen-anchors family substrate-active
+
+Pre-flight verification confirmed:
+
+- **`combined_score` coefficients per ADR-0022** — tag overlap weight + base relevance weight + recency weight canonical at coe.service.ts; per ADR-0022 frozen-anchor architectural decision.
+- **`CRYPTO_CONFIG` frozen anchors per ADR-0019** — substrate-active at 10+ usage sites: `observation.service.ts:131-132`; `llm.service.ts:23+397`; `auth.service.ts:14+301+308`; `cosmp/read.service.ts:15+153`; etc. CRYPTO_CONFIG.HASH_ALGORITHM + CRYPTO_CONFIG.JWT_ALGORITHM canonical tamper anchors.
+- **`RELEVANCE_FORGET_FLOOR = 0.2`** at `apps/api/src/services/coe/coe.service.ts:44` — frozen intentional-forgetting threshold per §1.1 cognitive-science framing.
+
+#### Architectural decision — ADR-0022 amendment path
+
+Informativeness function coefficients extend `combined_score` formula via ADR-0022 amendment path per §5.5 framing. ADR-0022 Forward implications canonicalize combined_score amendment (rather than supersession) for informativeness component extension. The amendment preserves patent-implementation-evidence continuity (refinement of canonicalized substrate primitive vs introduction of new primitive).
+
+The frozen-anchors family extends to informativeness coefficients per ADR-0019 + ADR-0003 discipline:
+
+- **ADR-0019 CRYPTO_CONFIG discipline** — frozen-config tamper-anchor pattern applied to informativeness coefficients
+- **ADR-0003 tamper-anchor pattern** — anchor test discipline for informativeness function (coefficient changes break tests; substrate-tier tamper resistance)
+- **ADR-0022 combined_score formula** — informativeness component extension via amendment path
+
+#### Patent-implementation-evidence territory
+
+Frozen-anchors family is patent-implementation territory per §8.4. Informativeness function joining the family per INT-6 extends patent-implementation-evidence coverage — tamper-anchored architectural property is substantive substrate-architecture coverage under US 12,517,919.
+
+#### Cross-section reach
+
+- §5.5 active-learning informativeness as refinement (substrate consumer)
+- ADR-0022 combined_score formula canonicalization (amendment path)
+- ADR-0019 CRYPTO_CONFIG cryptographic-suite posture (frozen-anchors family precedent)
+- ADR-0003 frozen-config tamper anchors (anchor test discipline)
+- §8 patent-implementation-evidence framing (frozen-anchors family patent territory)
+- §6.2 INT-2 (informativeness signal IS self-introspection primitive; coupling preserved)
+
+#### Engineering implication
+
+Step 2E informativeness coefficient implementation operates within ADR-0022 amendment path + ADR-0019 frozen-anchors discipline + ADR-0003 anchor test discipline. The implementation is not arbitrary coefficient engineering; the implementation is frozen-anchor extension with tamper-resistance properties.
 
 ---
 
