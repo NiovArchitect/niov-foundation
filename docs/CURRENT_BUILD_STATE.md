@@ -5,8 +5,11 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-08 (initial landing alongside
-`docs/reconciliation/2026-05-08-build-reconciliation.md`)
+**Last updated:** 2026-05-11 ([DOCS-BUILD-STATE-REFRESH]
+post-Track A + RAA 12.8 canonicalization; 18-commit staleness
+window closed; substrate-truth canonical at refresh register
+per RULE 13 substrate-honest discipline + fourteen-consecutive-
+commit substrate-honest pre-flight verification pattern).
 
 ---
 
@@ -32,7 +35,7 @@ protect the architecture: **12,164,537** (Dec 2024), **12,399,904**
 
 | Document | Authority |
 |---|---|
-| ADRs 0001-0019 (`docs/architecture/decisions/`) | **CANONICAL** for architectural decisions |
+| ADRs 0001-0022 (`docs/architecture/decisions/`) | **CANONICAL** for architectural decisions |
 | `origin/main` code | **CANONICAL** for substrate state |
 | `CLAUDE.md` (repo root) | **CANONICAL** operator-facing reference |
 | `docs/CURRENT_BUILD_STATE.md` (this document) | **CANONICAL** persistent build state |
@@ -67,6 +70,30 @@ protect the architecture: **12,164,537** (Dec 2024), **12,399,904**
 | 16 | Otzar Product Completeness | NOT STARTED |
 | 17 | Intelligence Engine — Full 6-Layer Stack | NOT STARTED |
 
+**Cross-cutting substrate-architecture canonicalization work
+(not numbered Sections; substrate-architecture register):**
+
+- **Track A (test infrastructure isolation; 18 gates + REVISED
+  Gate 2):** SUBSTANTIVELY COMPLETE on origin/main. Gate 1
+  architectural lock `d728cd4` (2026-05-06) → Gate 8e `e829644`
+  → Gate 8c `bea1b33` → Gate 8d `2fc025a` → Gate 9 `c399980` →
+  Gate 8f `47d8596` → Gate 8h `c1b3d02` → Gate 10 `b1c02d4`
+  (@v6/@v7 toolchain) → Gate 8g `95f4aca` (bcrypt 5→6) →
+  TRACK-A-RULE-19 `75a90de` (ADR-0020 + RULE 19 canonicalization)
+  → REVISED Gate 2 `5be42e5` (Colima canonicalization; ADR-0013
+  amendment per RULE 13 substrate-state drift correction).
+- **RAA 12.8 substrate-architecture canonicalization (14-commit
+  chain; Sections 1-10 enumerated):** COMPLETE on origin/main.
+  Outline `10ef10f` → §1 `78e376a` → §2 `a2335cd` → §3 `582216e`
+  → §4 `271e9cc` → §5 `5eb3f49` → §6 `2148bfe` → §7 `1fa1c12` →
+  §5.8 amendment chain (`604aac6` + `2cced88` + `127a383`) → §8
+  `00d86a1` → §9 `7bb52a6` → §10 `e31f948` (canonical record
+  closure per §9.6 Step 2D-completion handoff discipline).
+- **Pre-RAA-12.8 ADR cluster (3 commits; 2026-05-10):**
+  [GLOSSARY-G-3] `74b2765` + ADR-0021 `ba3ef11` (Capsule Type
+  Extension Protocol) + ADR-0022 `3c2eb99` (combined_score
+  Formula Canonicalization).
+
 ---
 
 ## Section 4 — Section 12 sub-section status
@@ -87,7 +114,22 @@ Per Section 12 standalone Build Guide.
 | 12F | Onboarding wizard · Documentation · a11y · Playwright · Section 12 close | → BUILD (target ~22 tests) |
 
 **otzar-control-tower HEAD:** `0a28f90` (closes 12B).
-**niov-foundation HEAD:** `47d8596` (Track A Gate 8f).
+**niov-foundation HEAD:** `5be42e5` ([TRACK-A-G2] Gate 2
+REVISED — Colima canonicalization).
+
+**Section 12.5 sub-box framing (per `docs/reference/section-12-
+progress.md`):**
+
+| 12.5 Sub-box | Status | Description |
+|---|---|---|
+| 12.5 Sub-box 1 (EscalationRequest + dual-control) | **UNBLOCKED** | Foundation primitive previously blocking Bucket B; Track A complete; **Phase 2 primary engineering scope candidate**. Substrate-architecture coverage at RAA 12.8 §5.2 + §5.9 item 1 (D-2D-D10 closure) + Section 14 admin-tooling box (TODO comment framing at `apps/api/src/services/otzar/priming.ts:131-134`). |
+| 12.5 Sub-box 2-9 | QUEUED | Dependency-ordered post Sub-box 1 (Sub-box 2 privileged action audit chain + Sub-box 5 GDPR Article 17 pseudonymization + Sub-box 7 verifiable-credentials + compliance attestation). |
+
+Sub-box 1 = D-2D-D10 closure = unified engineering territory
+at intersection of 4 framing registers (RAA 12.8 §5.2 + Section
+12.5 Sub-box 1 + §5.9 item 1 + Section 14 admin-tooling box).
+Single substantive engineering scope per Phase 2 today's
+selection.
 
 ---
 
@@ -125,6 +167,36 @@ Per Section 12 standalone Build Guide.
 | RAA 12.7 (Dynamic Flow Architecture) | `0fd8da7` |
 | Gate 9 (architectural framing integration) | `c399980` |
 | Gate 8f (fast-uri 3.1.0→3.1.2 npm overrides) | `47d8596` |
+| Gate 8h (canonical reference refresh) | `c1b3d02` |
+| Gate 10 (GitHub Actions toolchain @v6/@v7) | `b1c02d4` |
+| Gate 8g (bcrypt 5→6 closes 8x cluster) | `95f4aca` |
+| TRACK-A-RULE-19 (ADR-0020 + RULE 19 canonicalization) | `75a90de` |
+| GLOSSARY-G-3 (32 canonical-grade vocab entries) | `74b2765` |
+| ADR-0021 (Capsule Type Extension Protocol) | `ba3ef11` |
+| ADR-0022 (combined_score Formula Canonicalization) | `3c2eb99` |
+| RAA 12.8 Outline (Three surfaces; four corrections folded) | `10ef10f` |
+| RAA 12.8 §1 (three canonical framings) | `78e376a` |
+| RAA 12.8 §2 (lateral class introduction; 6 lateral zones) | `a2335cd` |
+| RAA 12.8 §3 (Surface 1 Scale Architecture; D-2D-D12 closure) | `582216e` |
+| RAA 12.8 §4 (Surface 2 Relational Dynamics; D-2C-D2 + D-2D-D9 closure) | `271e9cc` |
+| RAA 12.8 §5 (Surface 3 Agentic Coherence; four drifts closed) | `5eb3f49` |
+| RAA 12.8 §6 (Cross-Surface Architectural Decisions; six INT-*) | `2148bfe` |
+| RAA 12.8 §7 (Active-Learning Informativeness; ADR-0022 amendment path) | `1fa1c12` |
+| RAA 12.8 §5.8 Amendment Commit 1 (six EntityType mappings) | `604aac6` |
+| RAA 12.8 §5.8 Amendment Commit 2 (Path B-2 18-site body-text amendment) | `2cced88` |
+| RAA 12.8 §5.8 Amendment Commit 3 (§5.10 NEW H3 Correction E) | `127a383` |
+| RAA 12.8 §8 (Patent-Implementation-Evidence; Zone U2 + three-patent coverage map) | `00d86a1` |
+| RAA 12.8 §9 (Forward Implications; 12 drift IDs canonical) | `7bb52a6` |
+| RAA 12.8 §10 (References; canonical record closure) | `e31f948` |
+| TRACK-A-G2 REVISED (Colima canonicalization; ADR-0013 amendment per RULE 13) | `5be42e5` |
+
+**Chronological substrate-truth canonical at table position per
+Zone U2 framing + memory entry #12 cryptographically-timestamped
+evidence framing.** DRIFT 9 reconciliation per chronological
+ordering: Gate 8e closed 2026-05-07 → Gate 8c closed 2026-05-08
+→ Gate 8d closed 2026-05-08 (substrate-truth chronological
+ordering canonical at commit chain register; supersedes prior
+canonical-record reference orderings).
 
 **Queued:** see Section 6 (PROTECTED-PRIORITY).
 
@@ -222,8 +294,11 @@ observation/inference, verify empirically before fix design).
 
 ## Section 7 — ADR inventory
 
-All 19 ADRs at `docs/architecture/decisions/`. Substrate-discipline
-canonical reference quartet **bolded**.
+All 22 ADRs at `docs/architecture/decisions/`. Substrate-discipline
+canonical reference quartet **bolded** (ADR-0016/0017/0018/0019).
+ADR-0020/0021/0022 added as independent ADR cluster at different
+substrate registers (IP-discipline + extension-protocol +
+scoring-formula vs substrate-discipline-canonical).
 
 | ADR | Title |
 |---|---|
@@ -246,6 +321,9 @@ canonical reference quartet **bolded**.
 | **0017** | **Production Discipline** (substrate-investigation canonical reference) |
 | **0018** | **Deployment-Target Agnosticism Posture** (substrate-portability canonical reference) |
 | **0019** | **Cryptographic-Suite Posture** (substrate-cryptographic-resilience canonical reference) |
+| 0020 | Two-Register IP Discipline (IP-discipline register; protected-name boundary + RULE 19 canonical at canonical-record register) |
+| 0021 | Capsule Type Extension Protocol (extension-protocol register; CapsuleType enum extension pattern + SUBSTRATE_OBSERVATION territory) |
+| 0022 | combined_score Formula Canonicalization (scoring-formula register; frozen-anchors family per INT-6; informativeness coefficient extension path per RAA 12.8 §7.4) |
 
 ---
 
@@ -269,7 +347,7 @@ Gate substrate work).
 
 | Repo | Role | HEAD |
 |---|---|---|
-| niov-foundation | Substrate (Foundation) | `47d8596` (2026-05-10) |
+| niov-foundation | Substrate (Foundation) | `5be42e5` (2026-05-11; [TRACK-A-G2] Gate 2 REVISED) |
 | otzar-control-tower | Otzar Control Tower frontend | `0a28f90` (2026-05-05; closes 12B) |
 
 **Cross-repo discipline** (per Section 12 standalone Build Guide):
@@ -330,6 +408,19 @@ Relations, Time, Permissions, Audit.
 - US 12,164,537 (Dec 2024) — ABT database / file management.
 - US 12,399,904 (Aug 2025) — alert manager + TARs continuation.
 - US 12,517,919 (Jan 2026) — COSMP / DMW continuation.
+
+**Substrate-architecture canonicalization (RAA 12.8; 2026-05-11):**
+
+RAA 12.8 substrate-architecture canonicalization complete on
+origin/main at `e31f948` ([RAA-12.8-S10]; final commit in 14-commit
+RAA 12.8 chain). Substrate-architecture coverage at three-patent
+register canonical per §8.3 coverage map. Step 2D substrate-
+architecture canonicalization complete per §9.6 handoff discipline;
+Step 2E engineering work surface + Step 2F glossary refresh
+handoff per coordinated architectural-engineering discipline.
+Section 12.5 Sub-box 1 (EscalationRequest + dual-control middleware;
+D-2D-D10 closure per §5.9 item 1) unblocked per Track A complete;
+Phase 2 primary engineering scope candidate.
 
 ---
 
@@ -643,13 +734,61 @@ envelope.
 **Forward dependency:** RAA 12.2 (static interconnection map; queued)
 builds over this dynamic flow foundation, not the other way around.
 
+### 12.8 Substrate Dynamics: Scale, Relational Dynamics, Agentic Coherence (CLOSED)
+
+**Status:** CLOSED — landed at commit `e31f948` ([RAA-12.8-S10];
+final commit in 14-commit RAA 12.8 chain) on origin/main 2026-05-11.
+
+**Document:** `docs/architecture/raa-12-8-substrate-dynamics.md`
+(2778 lines; 10 H2 + 72 H3 + 261 H4; 14-commit canonical chain).
+
+**Establishes:** Three architectural surfaces of substrate dynamics
+canonicalized (Surface 1 Scale Architecture + Surface 2 Relational
+Dynamics + Surface 3 Agentic Coherence). Six EntityType mappings
+canonical per §5.8 amendment chain (PERSON / COMPANY / AI_AGENT
+owning-entity-derived / DEVICE / APPLICATION / GOVERNMENT). §5.10
+Correction E NEW substrate territory (substrate-vs-configuration
+separation + permission-batching primitives + permission-class
+taxonomy + permission-trickle-through-non-human-DMW + auto-grant
+authorization + cognitive-load measurement). §8 Patent-
+Implementation-Evidence Framing (Zone U2 patent-holder
+implementation record substrate + Decision Patent-A defensive
+publication strategy + three-patent coverage map: US 12,164,537 +
+US 12,399,904 + US 12,517,919 substrate-architecture register).
+§9.6 Step 2D-completion handoff discipline (Step 2E engineering
+work surface + Step 2F glossary refresh + RAA 12.9 forward
+dependency + OPERATOR REVIEW REQUIRED markers).
+
+**Substrate-discipline pattern:** Eleven-consecutive-commit
+substrate-honest pre-flight verification pattern operational
+across full RAA 12.8 6-commit run (Sections 3-7 + §5.8 amendment
+Commit 1 + Path B-2 backwards-propagation Commit 2 + Correction E
+Commit 3 + §8 + §9 + §10). Path A discipline (preserve existing
+numbering; expand substantively) + Option C discipline (range-
+endpoint reference framings for D-2C-D1 + D-2D-D7 per substrate
+truth) canonical at §10 References canonicalization.
+
+**Forward dependencies:**
+- **RAA 12.9** (Governance & Monetization at Scale; queued) cites
+  RAA 12.8 cross-type balance policy as substrate dependency per
+  §9.1 forward dependency framing.
+- **§9.4 Future RAA candidates:** RAA on Self-Introspection
+  Architecture + RAA on Multi-DMW Concurrent Flow + RAA on
+  Permission-Class Taxonomy + RAA on Cognitive-Load Measurement +
+  RAA on Auto-Grant Authorization (5 candidate territories
+  surfaced from RAA 12.8 work; deferred to operator selection).
+- **§9.5 ADR amendment paths:** ADR-0021 + ADR-0022 + ADR-0020 +
+  ADR-0019 amendment paths + 6 new ADR candidate territories
+  surfaced; deferred to operator selection.
+
 ---
 
 ## Section 13 — Source-of-truth pointers
 
 | Type | Location |
 |---|---|
-| Architectural decisions | `docs/architecture/decisions/0001-*.md` through `0019-*.md` |
+| Architectural decisions | `docs/architecture/decisions/0001-*.md` through `0022-*.md` |
+| RAA 12.8 substrate-dynamics canonicalization | `docs/architecture/raa-12-8-substrate-dynamics.md` (landed `e31f948` 2026-05-11) |
 | Operator-facing canonical reference | `CLAUDE.md` (repo root) |
 | Persistent build state (this document) | `docs/CURRENT_BUILD_STATE.md` (repo root level under docs/) |
 | Compliance posture | `docs/FIPS_DEPLOYMENT_POSTURE.md` |
