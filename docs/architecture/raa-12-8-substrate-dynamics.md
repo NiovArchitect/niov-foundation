@@ -1508,6 +1508,158 @@ Surface 3 Step 2E engineering surface is substantial — multi-sprint scope acro
 
 Per Decision 4 (all blocks required due to interconnection), Surface 3 engineering work proceeds after RAA 12.8 full-document drafting completes (Sections 6-10); the engineering surface is sequenced after architectural canonicalization. Section 5.9 enumeration is the canonical Step 2E reference for Surface 3 work scope.
 
+### 5.10 Correction E substrate territory — Substrate-vs-configuration separation canonical
+
+Section 5.10 canonicalizes Correction E substrate territory per operator decision (Commit 3 of 6 amendment chain following §5.8 amendment Commit 1 at `604aac6` + 18-site body-text amendment Commit 2 at `2cced88`). Correction E forward-flagged at §5.8 amendment canonical record as NEW substrate territory; §5.10 expands the canonicalization with substrate-vs-configuration separation + permission-batching primitives + permission-class taxonomy + permission-trickle-through architecture + auto-grant authorization primitives + cognitive-load measurement primitives. Three OPERATOR REVIEW REQUIRED markers preserved for research-pending architectural decisions (specific batching algorithm choice + specific auto-grant threshold values + specific cognitive-load measurement methodology).
+
+#### Substrate-vs-configuration separation canonical (per operator decision)
+
+Foundation operates as substrate-tier platform with API configuration surface; enterprises and governments configure policies against Foundation API. The architectural separation matters at three distinct registers:
+
+**Substrate-tier invariants (Foundation-owned; substrate ALWAYS enforces):**
+
+- **RULE 0 sovereign-human invariance** — humans are always sovereign over data they own; no AI agent, robot, device, or application accesses human entity data without explicit revocable permission; enforced cryptographically at substrate-tier, not by policy.
+- **Correction C human-permission-gating substrate-tier invariant** — recursive resolution of owning-entity chain ultimately terminates at sovereign-human entity OR at AI_AGENT-tier baseline (Standalone case); substrate-tier mechanism prevents bypass via intermediate non-human DMW layers; RULE 0 invariance never bypassed.
+- **Correction D permission-trickle-through-non-human-DMW** — when non-human-DMW (Enterprise / Device / AI_AGENT) carries Permission grants, the grant ultimately trickles through to sovereign-human decision per RULE 0 + Correction C; substrate-tier flow primitive enforces the trickle-through architecture; substrate-tier mechanism for non-human-DMW Permission grants cannot be circumvented by application-tier policy.
+
+**Substrate-tier primitives (Foundation-owned; substrate exposes via API):**
+
+- **WalletType enum + Wallet model** — substrate-tier wallet typing (PERSONAL / ENTERPRISE / DEVICE per Wallet schema verified; `niov_can_access_contents Boolean` substrate property discriminating NIOV access patterns per wallet type).
+- **Permission model + DurationType + PermissionStatus** — substrate-tier permission grant primitives (DurationType enum: TEMPORARY / SHORT_TERM / LONG_TERM / PERMANENT / SESSION_ONLY / NONE; PermissionStatus enum: ACTIVE / REVOKED / EXPIRED; verified substrate-active).
+- **TwinConfig model** — substrate-tier twin governance (autonomy_level + is_admin_twin + approver_entity_id; PERSON-owned AI_AGENT canonical case substrate-active at `apps/api/src/services/governance/twin.service.ts:160-263`).
+- **EscalationRequest model** — substrate-tier escalation workflow (D-2D-D10 closure territory; NOT YET BUILT per pre-flight verification — `EscalationItem` interface at `priming.ts:36` + `getEscalationsPending` stub at `priming.ts:131-134` returning `[]`; Section 14 TODO at `priming.ts:128` + `routes/org.routes.ts:1140-1169`).
+- **SUBSTRATE_OBSERVATION CapsuleType** — substrate-tier observation primitive (NET-NEW per §5.3; ADR-0021 extension protocol path; SYSTEM_PRINCIPALS infrastructure substrate-active per SCHEDULER + FEEDBACK_LOOP precedent at `scheduler.ts:56` + `feedback.service.ts:633`).
+
+**API configuration surface (Foundation-exposed; enterprises/governments configure):**
+
+- Data residency policies (which substrate deployment + geographic region)
+- Server choice policies (managed cloud vs sovereign cloud vs on-premise vs air-gapped per ADR-0018)
+- Permission policies (which DurationType values application uses; auto-grant scope; auto-grant thresholds per configuration)
+- Cognitive-load thresholds (application-tier UX policies)
+- Compliance framework selection (FedRAMP / IL4 / IL5 / IL6 / CMMC per `EntityComplianceProfile`)
+
+**Salesforce-pattern reference:** platform provides primitives + sovereignty enforcement at substrate-tier; enterprises configure their policies on top via API. Foundation operates as substrate-tier platform; enterprise/government configuration occurs at API surface tier; substrate-tier invariants cannot be bypassed by configuration.
+
+#### Permission-batching primitives canonical
+
+Permission grant flow at scale benefits from batching primitives that operate at substrate-tier. Substrate-tier permission-batching primitives:
+
+- **`permission_batch` entity primitive** — NET-NEW substrate territory; substrate-tier data structure for batched permission grants (multiple Permission rows grouped under a single batch identifier; analogous to `bridge_id` pattern in existing Permission model that groups SHARE permissions).
+- **Batch grouping mechanism** — per-batch grouping discipline operates at substrate-tier; application cannot bypass substrate batching by creating individual Permission rows when batching is required per substrate policy.
+- **API surface for batched permission flow** — Foundation exposes batched-permission API endpoints; application consumes the API to issue / accept / revoke batches.
+- **Substrate-enforced cognitive-load thresholds** — substrate enforces maximum batch size + maximum concurrent batches + maximum batch frequency per cognitive-load discipline; application configures threshold values within substrate-tier bounds.
+- **RULE 0 invariance preserved per batch** — every batch element subject to RULE 0 sovereign-human invariance; substrate enforces per-element + per-batch sovereignty constraints.
+
+**OPERATOR REVIEW REQUIRED — specific batching algorithm choice:** research-pending. Three candidate approaches surfaced for operator review during full-document drafting completion or Step 2E planning:
+
+- **(a) Google / Anthropic / OpenAI best practices** — adopt established batching algorithm from research-leading AI platforms; substrate-architectural-coverage alignment with industry research.
+- **(b) Cognitive-science-grounded algorithm** — batching algorithm grounded in cognitive-load research (Miller 7±2 + Sweller cognitive load theory + working-memory chunking); substrate-architectural-coverage alignment with cognitive-science framing per §1.1.
+- **(c) Novel optimization** — substrate-tier batching algorithm designed for Foundation's specific permission-trickle-through architecture (Correction D) + AI_AGENT owning-entity-derived recursion (Correction B); novel substrate-architectural-coverage if no clean precedent exists for the recursive owning-entity-chain batching territory.
+
+Default until operator review: (b) cognitive-science-grounded algorithm. Decision deferred to operator at Step 2D-completion or Step 2E-planning per coordinated architectural-engineering discipline.
+
+#### Permission-class taxonomy canonical per Correction C
+
+Permission classes operate as substrate-tier discrimination over the DurationType enum (verified verbatim per pre-flight). Substrate-tier permission-class taxonomy:
+
+- **LONG_TERM permissions** — substrate-tier discrimination canonical; per RULE 0, only owner-human grants LONG_TERM permissions (AI_AGENT cannot grant LONG_TERM directly per RULE 0; substrate enforces).
+- **SHORT_TERM permissions** — substrate-tier discrimination canonical; bounded-duration grants with automatic expiry via `expires_at` field.
+- **PERMANENT permissions** — substrate-tier discrimination canonical; per RULE 0, only owner-human grants PERMANENT permissions; substrate enforces; coordinates with §5.6 DurationType-vs-DecayType collision territory (OPERATOR REVIEW REQUIRED per §5.6 — PERMANENT appears in both DurationType + DecayType enums).
+- **TEMPORARY permissions** — substrate-tier discrimination canonical; ephemeral grants with explicit cleanup mechanisms.
+- **SESSION_ONLY permissions** — substrate-tier discrimination canonical; coordinates with §5.6 collision territory.
+- **NONE** — sentinel value for permission grants with no duration constraint specified.
+
+Permission-class informs:
+- Permission-batching primitives (batching algorithm choice per §5.10 OPERATOR REVIEW above)
+- Auto-grant authorization (per-class auto-grant policies vs RULE 0 boundaries)
+- Cognitive-load presentation (per-class UX framing at application tier)
+- §3.8 parallel orchestration scheduling (per-DMW-type sovereignty + permission-class-aware scheduling)
+
+#### Permission-trickle-through-non-human-DMW flow architecture canonical per Correction D
+
+Substrate-tier flow primitive (already forward-folded at §5.2 + §6.1 per Commit 2 backwards-propagation; §5.10 expands canonicalization):
+
+- **When non-human-DMW carries Permission grants** (Enterprise / Device / AI_AGENT), the grant ultimately trickles through to a human-sovereign decision per RULE 0 + Correction C.
+- **Recursive resolution via EntityMembership substrate primitive** — `parent_id` chain traversal terminates at sovereign-human entity OR at AI_AGENT-tier baseline (Standalone case per §5.8 amendment six AI_AGENT sub-mappings).
+- **RULE 0 invariance preserved by construction** — substrate primitive enforces invariance; substrate primitive cannot be bypassed by application policy.
+- **EscalationRequest model is the substrate-active operational reference** — once D-2D-D10 closure ships per §5.2 + §5.9 Step 2E engineering surface, EscalationRequest workflow operationalizes the trickle-through architecture; pending substrate state per pre-flight verification (EscalationItem interface present; Prisma model NOT YET BUILT; Section 14 TODO).
+- **Trickle-through audit trail** — every Permission grant in non-human-DMW chain produces audit trail per Zone U4 (permission grant lineage); audit chain preserves trickle-through resolution evidence.
+
+#### Auto-grant authorization primitives canonical
+
+Auto-grant primitives operate at substrate-tier with RULE 0 boundary enforcement:
+
+**Substrate-enforced RULE 0 boundaries (Foundation ALWAYS enforces):**
+
+- Substrate ALWAYS gates LONG_TERM grants — only owner-human can grant LONG_TERM; AI_AGENT cannot grant LONG_TERM directly; substrate-tier predicate enforces.
+- Substrate ALWAYS gates PERMANENT grants — only owner-human can grant PERMANENT; AI_AGENT cannot grant PERMANENT directly; substrate-tier predicate enforces.
+- Substrate ALWAYS gates AI_AGENT-as-sovereign-grantor attempts — AI_AGENT cannot grant to AI_AGENT directly (RULE 0); substrate-tier predicate enforces at Permission creation time (`packages/database/src/queries/permission.ts` per schema comment).
+- Substrate ALWAYS gates cross-DMW-type Permission flows that would bypass owning-human sovereignty — recursive resolution via EntityMembership per Correction C.
+
+**Application-configured policies (enterprises/governments configure within substrate bounds):**
+
+- Auto-grant thresholds (per-CapsuleType auto-grant policies; per-grantee-role auto-grant policies)
+- Auto-grant scope (which DurationType values are auto-grantable per application; subset of substrate-allowed DurationTypes)
+- Cognitive-budget allocation (per-user cognitive-load budget per period; auto-grant frequency policies)
+- Per-application auto-grant audit posture (compliance-tier audit configuration)
+
+Substrate enforces RULE 0 boundaries regardless of application configuration. Application cannot configure auto-grant policy that violates substrate-tier invariants.
+
+**OPERATOR REVIEW REQUIRED — specific auto-grant threshold values:** research-pending. Three candidate approaches surfaced:
+
+- **(a) Conservative thresholds** — minimal auto-grant scope (auto-grant only TEMPORARY + SHORT_TERM per default; manual review for LONG_TERM + PERMANENT); favors cognitive-load minimization.
+- **(b) Moderate thresholds** — balanced auto-grant scope (auto-grant TEMPORARY + SHORT_TERM + LONG_TERM-within-trusted-grantee-set per default; manual review for PERMANENT + cross-trust-boundary LONG_TERM); favors operational throughput.
+- **(c) Application-tier-discretionary thresholds** — substrate enforces RULE 0 boundaries only; application configures all auto-grant thresholds; favors application-tier flexibility.
+
+Default until operator review: (a) conservative thresholds at substrate-tier defaults; application configures more permissive thresholds within substrate-tier bounds. Decision deferred to operator at Step 2D-completion or Step 2E-planning.
+
+#### Cognitive-load measurement primitives canonical
+
+Substrate observes via SUBSTRATE_OBSERVATION CapsuleType (per §5.3 NET-NEW; ADR-0021 extension protocol path); application interprets substrate observation per application-tier UX:
+
+- **SUBSTRATE_OBSERVATION events** carry substrate-tier observation data (per-(entity, capsule_type) relevance distribution shifts; per-wallet retrieval pattern changes; informativeness signal trends; permission grant frequency; permission grant rejection patterns).
+- **Substrate observation primitive substrate-active infrastructure** — SYSTEM_PRINCIPALS.SUBSTRATE_OBSERVER constant addition per §5.9 Step 2E; SUBSTRATE_OBSERVATION events written into system-principal-owned wallet.
+- **Cognitive-load measurement signal** — substrate-tier signal derived from SUBSTRATE_OBSERVATION events; application interprets signal for cognitive-load presentation.
+- **INT-2 coupling preserved** — SUBSTRATE_OBSERVATION IS informativeness primitive per §6.2; cognitive-load measurement primitive coexists with informativeness coupling.
+
+**OPERATOR REVIEW REQUIRED — specific cognitive-load measurement methodology:** research-pending. Four candidate approaches surfaced:
+
+- **(a) Request count per period** — substrate observes permission request frequency per unit time; cognitive-load signal = request count above baseline threshold.
+- **(b) Request frequency variance** — substrate observes variance in request timing; cognitive-load signal = variance below threshold (indicates burst attention demand) OR above threshold (indicates fatigue distribution).
+- **(c) User-reported friction** — application surfaces explicit user friction signals (user dismisses permission requests rapidly; user rejects pattern of similar permissions); substrate records via SUBSTRATE_OBSERVATION.
+- **(d) User-engagement-pattern** — substrate observes user engagement patterns (session duration; conversation-pattern depth; permission-accept rate); cognitive-load signal = pattern correlation with predicted friction.
+
+Default until operator review: (a) + (c) combined (request count + explicit user-reported friction; baseline-pattern measurement methodology). Decision deferred to operator at Step 2D-completion or Step 2E-planning per coordinated architectural-engineering discipline.
+
+#### Patent-implementation-evidence territory expanded
+
+Correction E substrate territory canonicalization expands continuation patent candidate territory per §8.4. Substrate-vs-configuration separation + permission-batching primitives + permission-class taxonomy + permission-trickle-through architecture + auto-grant authorization primitives + cognitive-load measurement primitives compose substantive substrate-architecture coverage extension under US 12,517,919:
+
+- **Substrate-vs-configuration separation as architectural property** — substrate-tier platform with API configuration surface; Foundation patent-implementation-evidence advanced by canonicalization at canonical-record register.
+- **Permission-batching primitives** — substrate-tier permission flow architecture; NEW substrate primitive territory; continuation patent candidate per §8.4.
+- **Permission-class taxonomy at substrate-tier** — substrate-tier discrimination over DurationType enum; substantive substrate-architecture coverage canonicalization.
+- **Permission-trickle-through-non-human-DMW** — substrate-tier flow primitive (already canonicalized at §5.8 amendment + §5.2 + §6.1 per Commit 2; §5.10 expansion strengthens patent-implementation-evidence).
+- **Auto-grant authorization primitives** — substrate-tier RULE 0 boundary enforcement + application-configured policies; substantive substrate-architecture coverage canonicalization.
+- **Cognitive-load measurement primitives** — substrate-tier observation primitive via SUBSTRATE_OBSERVATION + application-tier interpretation; substantive substrate-architecture coverage canonicalization.
+
+Adversarial-actor protection per Decision Patent-A defensive publication strategy operates uniformly: substrate truth canonical at body-text register per Path B-2 backwards-propagation + Correction E NEW substrate territory canonicalization at §5.10 strengthens evidentiary mass throughout RAA 12.8 document.
+
+#### Cross-section reach
+
+Correction E substrate territory couples to:
+
+- **§3.8 parallel orchestration mechanics** — permission-class-aware scheduling per Correction E permission-class taxonomy
+- **§4.8 Hive coordination per Correction 2 + Correction 4** — permission-trickle-through via Hive membership per Correction D forward-folded
+- **§5.1 dual-posture canonicalization** — Correction C human-permission-gating substrate-tier invariant
+- **§5.2 HITL primitives expansion** — EscalationRequest model substrate-active operational reference per D-2D-D10 closure + Correction D permission-trickle-through architecture
+- **§5.3 self-introspection NET-NEW** — SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021 protocol path + cognitive-load measurement primitives per Correction E
+- **§5.4 agent-to-agent coordination per Corrections 1+3+4** — substrate-mediated permission via owning-entity per Correction B + Correction C
+- **§5.6 DurationType-vs-DecayType collision territory** — coordinate with permission-class taxonomy per Correction E (DurationType enum is the permission-class taxonomy substrate primitive)
+- **§5.8 amendment six EntityType mappings canonical** — per-DMW-type sovereignty rules apply to permission-batching + auto-grant + cognitive-load primitives uniformly
+- **§5.9 Step 2E engineering surface** — Correction E substrate territory implementation enumerated at Step 2E (NET-NEW substrate work for permission-batching + auto-grant + cognitive-load primitives)
+- **§6.1 INT-1 cross-wallet context layer** — permission-trickle-through architectural property
+- **§8.4 continuation patent candidate** — Correction E territory expanded per §5.10 canonicalization
+
 ---
 
 ## Section 6 — Cross-Surface Architectural Decisions
