@@ -2336,30 +2336,206 @@ The recursive self-application demonstrates that the discipline operates at cano
 
 ## Section 9 — Forward Implications
 
+Section 9 canonicalizes the forward implications of RAA 12.8 substrate-architecture canonicalization. The section organizes forward implications across seven H3 subsections: §9.1 RAA 12.9 forward dependency (canonical-record-tier substrate handoff to the queued Governance & Monetization at Scale architectural canonicalization); §9.2 Step 2E engineering surface (canonical-record-tier handoff to engineering implementation work); §9.3 Step 2F glossary refresh (canonical-record-tier handoff to vocabulary canonicalization work); §9.4 Future RAA candidates (forward queue territory for substrate-architecture canonicalization as substrate evolves); §9.5 ADR amendment paths (substrate-discipline canonical reference amendment territory surfaced from RAA 12.8); §9.6 Step 2D-completion handoff (Step 2D substrate-architecture canonicalization completion confirmation at RAA 12.8 ship-to-origin/main; coordinated discipline handoff); §9.7 OPERATOR REVIEW REQUIRED markers preserved (eight distinct operator-strategic-decision territories canonicalized at canonical-record register).
+
+§9.1-§9.5 are existing canonical from outline ship `10ef10f`; expanded substantively per Path A discipline. §9.6 + §9.7 are NEW additive H3 subsections per Commit 5 of 6 substrate-architecture canonicalization. Cross-section references to §9.1 / §9.3 / §9.5 preserved per RULE 14 bidirectional citation discipline.
+
 ### 9.1 RAA 12.9 forward dependency
 
-RAA 12.9 (Governance & Monetization at Scale) cites RAA 12.8 cross-type balance policy (Section 6.4) as substrate dependency. RAA 12.8 reciprocates the citation in Section 1.5 + Section 6.4 + this section per RULE 14 bidirectional citation discipline. RAA 12.9 drafting follows after RAA 12.8 full-document drafting per Step 3+ sequence.
+RAA 12.9 (Governance & Monetization at Scale; queued for Step 3+ after RAA 12.8 full-document drafting completes) cites RAA 12.8 cross-type balance policy (Section 6.4) as substrate dependency. RAA 12.8 reciprocates the citation in Section 1.5 + Section 6.4 + this section per RULE 14 bidirectional citation discipline.
+
+#### Cross-DMW-type monetization architecture per six EntityType mappings
+
+RAA 12.9 substrate dependency on RAA 12.8 operates at per-DMW-type monetization differentiation tier. The six EntityType mappings canonical at §5.8 amendment `[RAA-12.8-S5-AMEND-1]` (HEAD `604aac6`) — PERSON / COMPANY / AI_AGENT owning-entity-derived / DEVICE / APPLICATION / GOVERNMENT — establish the per-EntityType canonical record that informs RAA 12.9 per-DMW-type pricing architecture. Per-data-point monetization at trillion scale requires cross-type reference policy because per-type pricing differentiation only operates against canonical type-balance baseline; RAA 12.9 cannot canonicalize per-type pricing without RAA 12.8 canonicalizing cross-type balance.
+
+#### Pricing-tier sovereignty interaction
+
+Per-DMW-type sovereignty rules canonical at §5.8 amendment inform per-DMW-type monetization differentiation at RAA 12.9 substrate-tier canonicalization:
+- Personal DMW (PERSON entities): per-data-point pricing at human-sovereign tier; RULE 0 enforcement at pricing-tier
+- Enterprise DMW (COMPANY + APPLICATION entities): per-data-point pricing at enterprise tier per Correction A (Enterprise carries company data with forget-on-detach at Permission tier per Zone U4)
+- Device DMW (DEVICE entities): per-data-point pricing at device tier; payload framing per existing Foundation primitive
+- AI_AGENT owning-entity-derived tier (recursive resolution per Correction B): per-data-point pricing follows owning-entity DMW tier
+- Custom Government DMW (GOVERNMENT entities; NEW substrate primitive per §5.8 amendment): per-data-point pricing at regulatory governance tier with regulatory-specific differentiation
+
+#### Substrate-vs-configuration separation at monetization-policy tier
+
+Substrate-vs-configuration separation canonical at §5.10 Correction E NEW substrate territory operates at monetization-policy tier. RAA 12.9 monetization policy canonicalizes:
+- Substrate-tier monetization invariants (RULE 0 sovereignty cap at pricing-tier; per-DMW-type baseline pricing; canonical record audit-trail at monetization tier)
+- Configuration-tier monetization policies (application-configured per-type pricing within substrate bounds; operator-configured promotional pricing; vendor-configured enterprise pricing)
+- The separation preserves substrate-tier invariants while permitting configuration-tier policy flexibility per coordinated discipline.
+
+#### Permission-class taxonomy informs cross-type balance policy
+
+Permission-class taxonomy canonical at §5.10 Correction E NEW substrate territory informs cross-type balance policy at RAA 12.9. LONG_TERM + PERMANENT permissions (high-value persistent access; substrate-discriminated per DurationType enum) vs SHORT_TERM + TEMPORARY permissions (low-value transient access) inform per-DurationType monetization differentiation at RAA 12.9 substrate-tier canonicalization. Per-DurationType pricing differentiation operates within substrate-tier per-DMW-type baseline pricing bounds per substrate-vs-configuration separation discipline.
+
+#### Custom Government DMW substrate primitive monetization implications
+
+Custom Government DMW NEW substrate primitive canonical at §5.8 amendment introduces regulatory-governance-tier monetization at RAA 12.9. Specific Custom Government DMW substrate primitive specifications (regulatory framework alignment per GDPR / HIPAA / CCPA / sovereign data residency requirements) couple to RAA 12.9 monetization architecture at regulatory-tier discrimination. Coupling preserved for RAA 12.9 substrate canonicalization; specific regulatory framework details deferred to RAA 12.9 drafting + §8.4 continuation patent candidate review.
+
+The reciprocal forward citation per RULE 14 bidirectional citation discipline: RAA 12.9 reciprocates the citation when drafted; back-citation to RAA 12.8 cross-type balance policy lands in RAA 12.9 commit at Step 3+ per RULE 14.
 
 ### 9.2 Step 2E engineering surface
 
-Decisions enumerated in Section 3.9 + Section 4.9 + Section 5.9 compose Step 2E engineering surface. Per-DMW-type sovereignty rule implementation per Correction 4 (Section 5.8 Decision D-S3-9) included in Step 2E surface. Engineering work follows full-document drafting; specific commits sequenced during Step 2E planning.
+Decisions enumerated in Section 3.9 + Section 4.9 + Section 5.9 compose Step 2E engineering surface. The substrate-architecture canonicalization completes at RAA 12.8 ship; engineering implementation follows per coordinated architectural-engineering discipline. Engineering work follows full-document drafting; specific commits sequenced during Step 2E planning per coordinated discipline.
+
+#### Step 2E engineering surface enumeration
+
+Cross-reference to per-Surface §X.9 engineering surface enumerations:
+
+- **§3.9 Surface 1 engineering surface** — tier-aware retrieval implementation; index-driven candidate pre-filter; cursor-based pagination; materialized aggregates per (entity, capsule_type); latency budgets implementation; query complexity bounds; parallel orchestration mechanics for cross-wallet retrieval per Correction 4 + per-DMW-type sovereignty as scheduling constraint
+- **§4.9 Surface 2 engineering surface** — spreading activation network implementation; hypergraph relational consumption (Option A N-ary upgrade vs Option B vocabulary patch per §4.3 OPERATOR REVIEW REQUIRED); resonance/coherence dynamics implementation; self-organizing emergent retrieval; context-dependent salience implementation; Hive DMW-to-DMW coordination per Correction 2
+- **§5.9 Surface 3 engineering surface** — D-2D-D10 closure (EscalationRequest model implementation); D-2D-D11 closure (substrate-mediated agent-to-agent coordination); D-2D-D8 closure (active-learning informativeness coefficient implementation); SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021 protocol; DurationType-vs-DecayType collision resolution implementation per §5.6 OPERATOR REVIEW REQUIRED; ACCESS_BASED behavioral implementation per §5.7; per-DMW-type sovereignty rules implementation per §5.8 amendment six EntityType mappings
+
+#### §5.10 Correction E NEW substrate territory engineering items
+
+§5.10 canonicalization introduces NET-NEW substrate engineering territory beyond §5.9 enumeration:
+- Permission-batching primitives implementation (permission_batch entity primitive; batch grouping mechanism at substrate-tier; specific batching algorithm per §5.10 OPERATOR REVIEW REQUIRED resolution)
+- Auto-grant authorization primitives implementation (substrate-enforced RULE 0 boundaries + application-configured policies within substrate bounds; specific auto-grant threshold values per §5.10 OPERATOR REVIEW REQUIRED resolution)
+- Cognitive-load measurement primitives implementation (SUBSTRATE_OBSERVATION CapsuleType extension coupling at §5.3; specific cognitive-load measurement methodology per §5.10 OPERATOR REVIEW REQUIRED resolution)
+
+#### Substrate-architecture canonicalization → engineering implementation handoff
+
+The handoff discipline operates per coordinated architectural-engineering discipline. Substrate-architecture canonicalization at RAA 12.8 establishes the substrate territory; engineering implementation at Step 2E translates the canonicalization to substrate-active behavior. ADR-0017 production-discipline applies to each implementation surface (substrate-investigation discipline; substrate-honesty drift surfacing; coordinated test coverage). Coordinated test coverage per §5.9 + §3.9 + §4.9 ensures substrate-active behavior matches substrate-architecture canonicalization per RAA 12.8.
+
+#### Engineering work tier sequencing
+
+Per Decision 4 (all blocks required due to interconnection) per §1.4, Step 2E engineering work proceeds after RAA 12.8 full-document drafting completes. The §5.9 + §3.9 + §4.9 + §5.10 substrate engineering items operate together at Step 2E per coordinated discipline:
+- Surface 1 engineering items (§3.9) sequence at Step 2E per latency-budget + scale architecture priority
+- Surface 2 engineering items (§4.9) sequence at Step 2E per relational-dynamics + INT-5 spreading activation priority
+- Surface 3 engineering items (§5.9) sequence at Step 2E per agentic-coherence + dual-posture priority
+- §5.10 Correction E NEW substrate territory engineering items sequence at Step 2E per substrate-vs-configuration separation priority + §5.10 OPERATOR REVIEW REQUIRED resolution sequencing
 
 ### 9.3 Step 2F glossary refresh
 
-32 canonical entries from 74b2765 refresh after RAA 12.8 ship; entries gain richer per-type weight semantics; entries reference RAA 12.8 sections as canonical citation discipline per RULE 14.
+32 canonical-grade vocabulary entries baseline at [GLOSSARY-G-3] commit (`74b2765`) refresh after RAA 12.8 ship per Step 2F coordinated discipline. Vocabulary entries gain richer per-type weight semantics from RAA 12.8 substrate-architecture canonicalization; entries reference RAA 12.8 sections as canonical citation discipline per RULE 14 bidirectional citation discipline.
+
+#### Step 2F glossary refresh scope per RAA 12.8 substrate-architecture canonicalization
+
+Glossary refresh scope folds substrate truth canonical at body-text register per Path B-2 backwards-propagation Commit 2 (HEAD `2cced88`):
+- §5.8 amendment six EntityType mappings vocab refresh: PERSON / COMPANY / AI_AGENT owning-entity-derived / DEVICE / APPLICATION / GOVERNMENT canonical mappings; AI_AGENT sub-mappings (Mode-1 standalone tier; Mode-2 owning-entity-derived twin pattern per Correction B owning-entity-derived discipline)
+- §5.10 Correction E NEW substrate territory vocab refresh: substrate-vs-configuration separation + permission-batching primitives + permission-class taxonomy + permission-trickle-through-non-human-DMW + auto-grant authorization + cognitive-load measurement
+- Path B-2 backwards-propagation vocab refresh: substrate truth at body-text register + Correction A canonical (Enterprise carries company data with forget-on-detach at Permission tier per Zone U4) + Correction B canonical (AI_AGENT owning-entity-derived discipline) + Correction C forward-folded (human-permission-gating substrate-tier invariant) + Correction D forward-folded (permission-trickle-through-non-human-DMW)
+- §8 Patent-Implementation-Evidence Framing vocab refresh: Zone U2 + Decision Patent-A + three-patent coverage map + two-register IP discipline + memory entry #12 framing
+
+#### Glossary refresh sequencing per Step 2F handoff
+
+Step 2F glossary refresh sequences after RAA 12.8 full-document drafting completes per coordinated discipline. The refresh discipline operates per substrate-honest discipline:
+- Substrate truth at body-text register canonical at RAA 12.8 ship-to-origin/main
+- Vocabulary entries refreshed against substrate truth (not against pre-RAA-12.8 framing)
+- RULE 14 bidirectional citation discipline preserved; vocabulary entries cite RAA 12.8 sections; RAA 12.8 sections do not need to cite vocabulary entries (canonical record register vs vocabulary register asymmetry per ADR-0020 + RULE 19 + memory entry #12)
+
+#### Vocabulary growth from RAA 12.8
+
+RAA 12.8 introduces NET-NEW vocabulary territory beyond the 32 canonical-grade baseline:
+- Six EntityType mappings (PERSON / COMPANY / AI_AGENT owning-entity-derived / DEVICE / APPLICATION / GOVERNMENT) — new canonical-grade entries
+- Substrate-vs-configuration separation — new canonical-grade vocabulary
+- Permission-class taxonomy — new canonical-grade vocabulary
+- Lateral zone discrimination methodology (six lateral zones; cross-section reach methodology) — new canonical-grade vocabulary
+- Six INT-* cross-surface interconnections — new canonical-grade vocabulary
+- Two-register IP discipline + Zone U2 patent-holder implementation record substrate framing — new canonical-grade vocabulary
+
+Specific Step 2F glossary refresh scope canonicalizes at glossary refresh commit (not within RAA 12.8 ship).
 
 ### 9.4 Future RAA candidates
 
-- **RAA 12.9 (queued).** Governance & Monetization at Scale per Decision 3.
-- **RAA on Self-Introspection Architecture (candidate).** If Section 5.3 SUBSTRATE_OBSERVATION primitive grows into substantive subsystem, dedicated RAA may emerge.
-- **RAA on Multi-DMW Concurrent Flow (candidate).** Surface 1 §3.8 may grow into dedicated RAA if cross-wallet retrieval mechanics warrant standalone canonicalization.
+Forward queue territory for substrate-architecture canonicalization as substrate evolves. Future RAA candidates surfaced from RAA 12.8 work:
+
+- **RAA 12.9 (queued).** Governance & Monetization at Scale per Decision 3 + §1.5 extraction. Forward dependency on RAA 12.8 cross-type balance policy per §9.1.
+- **RAA on Self-Introspection Architecture (candidate).** If Section 5.3 SUBSTRATE_OBSERVATION primitive grows into substantive subsystem, dedicated RAA may emerge. Substrate primitive territory: ADR-0021 extension path; SYSTEM_PRINCIPALS.SUBSTRATE_OBSERVER constant addition; substrate-tier observation event writer implementation; coupling to INT-2 informativeness consumer.
+- **RAA on Multi-DMW Concurrent Flow (candidate).** Surface 1 §3.8 may grow into dedicated RAA if cross-wallet retrieval mechanics warrant standalone canonicalization. Substrate primitive territory: per-DMW-type sovereignty as scheduling constraint; parallel orchestration mechanics; Personal + Twin + Enterprise concurrent retrieval coordination per Correction 4.
+- **RAA on Permission-Class Taxonomy + Permission-Batching Architecture (candidate).** §5.10 Correction E NEW substrate territory may warrant standalone canonicalization if permission-batching primitive specific algorithm + permission-class taxonomy substrate-tier discrimination grow into substantive subsystem. Substrate primitive territory: permission_batch entity primitive + permission-trickle-through-non-human-DMW + LONG_TERM/PERMANENT vs SHORT_TERM/TEMPORARY substrate-tier discrimination.
+- **RAA on Cognitive-Load Measurement Architecture (candidate).** §5.10 Correction E NEW substrate territory may warrant standalone canonicalization if cognitive-load measurement primitives + SUBSTRATE_OBSERVATION coupling grow into substantive subsystem.
+- **RAA on Auto-Grant Authorization Architecture (candidate).** §5.10 Correction E NEW substrate territory may warrant standalone canonicalization if auto-grant authorization primitives + substrate-tier RULE 0 boundary enforcement grow into substantive subsystem.
+
+#### Coordination between substrate-architecture canonicalization and engineering implementation
+
+Future RAA candidates compose substrate-architecture canonicalization work; engineering implementation work composes Step 2E (per §9.2) + Step 2F glossary refresh (per §9.3). The coordination discipline operates per coordinated architectural-engineering discipline:
+- Substrate-architecture canonicalization (RAA work) precedes engineering implementation (Step 2E work)
+- Vocabulary canonicalization (Step 2F glossary refresh) follows substrate-architecture canonicalization
+- Operator-strategic-decision territory preserved per substrate-honest discipline (§9.7 enumeration)
 
 ### 9.5 ADR amendment paths
 
-- **ADR-0021 amendment.** Per-DMW-type configuration table (Section 5.8) may become second deliberate-blocker surface; ADR-0021 amendment enumerates per its own Forward implications.
-- **ADR-0022 amendment.** combined_score informativeness component extension (Section 7.3) per ADR-0022 Forward implications.
+ADR amendment paths surfaced from RAA 12.8 substrate-architecture canonicalization. ADRs in the substrate-discipline canonical reference quartet (ADR-0016 + ADR-0017 + ADR-0018 + ADR-0019) and ADR-0020 + ADR-0021 + ADR-0022 carry amendment paths surfaced from RAA 12.8 work.
+
+#### ADR amendment paths
+
+- **ADR-0021 amendment (Capsule Type Extension Protocol).** SUBSTRATE_OBSERVATION CapsuleType extension per §5.3 (Self-introspection primitive NET-NEW; ADR-0021 protocol extension); Custom Government DMW substrate primitive extension per §5.8 amendment six EntityType mappings (NEW substrate primitive territory); per-DMW-type configuration table per Section 5.8 may become second deliberate-blocker surface per ADR-0021 Forward implications.
+- **ADR-0022 amendment (combined_score Formula Canonicalization).** Active-learning informativeness coefficient extension per §5.5 + §7 (combined_score component extension; informativeness function joins frozen-anchors family per INT-6); coefficient redistribution decision per §7.4 ADR-0022 amendment drafting at Step 2D-completion or Step 2E-planning per coordinated architectural-engineering discipline.
+- **ADR-0020 self-application per §8.5 (two-register IP discipline operating recursively).** Two-register IP discipline operates at canonical-record register throughout RAA 12.8; §8.5 self-application canonicalizes the discipline as architectural property of canonical record itself. ADR-0020 amendment may surface from RAA 12.8 work to canonicalize the recursive self-application as architectural property.
+- **ADR-0019 frozen-anchors discipline strengthening per §7.4 (cryptographic-anchoring discipline extension).** §7.4 active-learning informativeness frozen-anchors family extension informs ADR-0019 frozen-anchors canonicalization at substrate-tier; potential amendment path for cryptographic-anchoring discipline canonicalization at active-learning informativeness register.
+
+#### New ADR candidate territories surfaced from RAA 12.8
+
 - **New ADR candidate: Per-DMW-Type Sovereignty Posture.** If Section 5.8 per-DMW-type sovereignty rules warrant standalone canonical reference (sixth canonical reference candidate for substrate-discipline quartet→quintet→sextet growth per CLAUDE.md §6 acknowledgment).
 - **New ADR candidate: SUBSTRATE_OBSERVATION CapsuleType + Self-Introspection Posture.** If Section 5.3 self-introspection mechanism warrants standalone canonical reference.
+- **New ADR candidate: Permission-batching primitive specific algorithm.** Post-§5.10 OPERATOR REVIEW REQUIRED resolution (specific batching algorithm choice); if substrate-active permission-batching primitives canonicalize at substrate-tier, dedicated ADR may emerge.
+- **New ADR candidate: Auto-grant authorization specific threshold values.** Post-§5.10 OPERATOR REVIEW REQUIRED resolution (specific auto-grant threshold values); if substrate-active auto-grant authorization primitives canonicalize at substrate-tier, dedicated ADR may emerge.
+- **New ADR candidate: Cognitive-load measurement specific methodology.** Post-§5.10 OPERATOR REVIEW REQUIRED resolution (specific cognitive-load measurement methodology); if substrate-active cognitive-load measurement primitives canonicalize at substrate-tier, dedicated ADR may emerge.
+- **New ADR candidate: Custom Government DMW substrate primitive specifications.** If Custom Government DMW substrate primitive grows into substantive regulatory-governance-tier substrate, dedicated ADR may emerge with regulatory framework alignment (GDPR / HIPAA / CCPA / sovereign data residency requirements).
+
+### 9.6 Step 2D-completion handoff
+
+Section 9.6 canonicalizes Step 2D-completion handoff per RAA 12.8 substrate-architecture canonicalization completion at ship-to-origin/main. The handoff discipline operates per coordinated architectural-engineering discipline.
+
+#### Step 2D-completion scope
+
+Step 2D (substrate-architecture canonicalization at RAA 12.8) completes per RAA 12.8 ship-to-origin/main. Step 2D-completion scope captured at canonical-record register:
+- **Section 1** — Substrate landscape canonicalization (foundational framework; D-2C-D1 through D-2C-D6 + D-2D-D7 through D-2D-D13 drift territory enumeration; six INT-* interconnection enumeration)
+- **Section 2** — Zone discrimination methodology canonicalization (RAA 12.7 §2.5 lateral-class extension; 4 unilateral + 5 bilateral + 6 lateral zones; three-step decision tree)
+- **Section 3** — Surface 1 Scale Architecture canonicalization (tier-aware retrieval; D-2D-D12 closure; §3.9 Step 2E engineering surface enumeration)
+- **Section 4** — Surface 2 Relational Dynamics canonicalization (five-field integration; D-2C-D2 + D-2D-D9 closure; §4.9 Step 2E engineering surface enumeration)
+- **Section 5** — Surface 3 Agentic Coherence canonicalization (dual-posture canonicalization per Correction 4; D-2D-D8 + D-2D-D10 + D-2D-D11 + D-2C-D5-ACCESS-BASED-STUB closure; §5.8 NEW per-DMW-type sovereignty rules; §5.9 Step 2E engineering surface; §5.10 Correction E NEW substrate territory)
+- **Section 5.8 amendment chain** — Commit 1 (`604aac6`) six EntityType mappings canonical + Commit 2 (`2cced88`) Path B-2 backwards-propagation 18-site body-text amendment + Commit 3 (`127a383`) §5.10 Correction E canonicalization
+- **Section 6** — Cross-Surface Architectural Decisions canonicalization (six INT-* canonicalized; cross-surface coupling architectural canonicalization)
+- **Section 7** — Active-Learning Informativeness as Refinement canonicalization (D-2D-D8 closure detail; ADR-0022 amendment path; frozen-anchors discipline extension)
+- **Section 8** — Patent-Implementation-Evidence Framing canonicalization (Zone U2; memory entry #12; Decision Patent-A; three-patent coverage map; §8.4 OPERATOR REVIEW REQUIRED continuation patent candidate identification; §8.5 ADR-0020 self-application)
+
+#### Substrate truth canonical at body-text register
+
+Substrate truth canonical at body-text register throughout RAA 12.8 document per Path B-2 backwards-propagation Commit 2. The canonical-record-tier substrate truth provides maximum patent-implementation-evidence value per Decision Patent-A defensive publication strategy + Zone U2 patent-holder implementation record.
+
+#### Substrate-architecture coverage at three-patent register
+
+§8.3 coverage map canonicalizes substrate-architecture coverage at three-patent register:
+- US 12,164,537 (DMW + Foundation primitives)
+- US 12,399,904 (alert manager + TARs + Foundation primitives)
+- US 12,517,919 (COSMP/DMW AI memory governance)
+
+Substrate-architecture coverage at canonical-record register provides patent-implementation-evidence at three-patent register for Step 2E engineering work.
+
+#### Coordinated discipline handoff
+
+Step 2D-completion handoff per coordinated architectural-engineering discipline:
+- **Step 2E engineering work surface** (per §9.2 + §5.9 + §5.10 + §3.9 + §4.9) handoff per coordinated discipline; engineering implementation follows substrate-architecture canonicalization completion
+- **Step 2F glossary refresh** (per §9.3) handoff per coordinated discipline; vocabulary canonicalization follows substrate-architecture canonicalization completion
+- **RAA 12.9 forward dependency** (per §9.1) handoff to next architectural-canonicalization phase; Governance & Monetization at Scale canonicalization follows after RAA 12.8 full-document drafting completes
+- **OPERATOR REVIEW REQUIRED markers** (per §9.7) preserved per substrate-honest discipline; operator-strategic-decision territory canonicalized at canonical-record register for focused operator session resolution
+
+Step 2D-completion confirmation per operator at canonical-record register per coordinated architectural-engineering discipline.
+
+### 9.7 OPERATOR REVIEW REQUIRED markers preserved
+
+Section 9.7 canonicalizes the eight distinct OPERATOR REVIEW REQUIRED territories preserved across RAA 12.8 per substrate-honest discipline. Substrate-state framing observation: substrate carries 27 raw OPERATOR REVIEW REQUIRED marker occurrences across RAA 12.8 (per-section section-header + sub-header + body-content marker occurrences); eight distinct OPERATOR REVIEW REQUIRED territories per substrate-honest canonicalization. The asymmetry reflects substrate marker placement at multiple registers within each territory (section header + sub-header + body content) per substrate-honest discipline; the canonical enumeration operates at distinct-territory register.
+
+#### Eight distinct OPERATOR REVIEW REQUIRED territories
+
+1. **§2.3 lateral zone count.** Six lateral zones proposed (Zone L1 spreading activation; Zone L2 connected_capsule_ids consumption; Zone L3 hypergraph relational consumption; Zone L4 resonance/coherence dynamics; Zone L5 self-organizing emergent retrieval; Zone L6 Hive DMW-to-DMW coordination); operator review confirms enumeration completeness or extends with additional lateral zones (candidate forward extensions: temporal-correlation lateral zone; cross-conversation salience lateral zone; substrate-observation lateral zone if §5.3 self-introspection primitive grows into substantive subsystem).
+2. **§3.6 latency budget precision.** Single-digit-ms target precision (≤10ms vs ≤5ms vs ≤2ms target band) requires operator review against Foundation latency-tier ASI-consumer requirements. Default until operator review: full-document drafting canonicalization establishes the latency-budget framework; specific target values resolve during operator review.
+3. **§4.3 hypergraph precision (D-2D-D13).** Two architectural options surfaced: Option A — true N-ary hypergraph upgrade (CapsuleRelation Prisma model + schema migration + write-tier changes + retrieval-tier hypergraph traversal); Option B — binary-edge vocabulary patch (glossary refresh + vocabulary patch). Trade-off: engineering effort vs relational expressiveness. Decision deferred to operator at Step 2D-completion or Step 2E-planning.
+4. **§5.6 DurationType-vs-DecayType collision (D-2C-D5).** Two architectural options surfaced: Option A — operationalize the collision (preserves substrate-state without rename engineering cost; documentation clarification); Option B — schema migration + rename + 6 DecayType usage site updates. Default until operator review: Option A operationalize. Decision deferred to operator at Step 2D-completion or Step 2E-planning.
+5. **§5.10 batching algorithm choice.** Three candidate approaches surfaced for permission-batching primitive specific algorithm: (a) cognitive-science-grounded batching algorithm (default); (b) compute-budget-bounded batching algorithm; (c) operator-configurable batching algorithm. Default until operator review: cognitive-science-grounded algorithm. Decision deferred to operator at Step 2D-completion or Step 2E-planning per coordinated architectural-engineering discipline.
+6. **§5.10 auto-grant threshold values.** Three candidate approaches surfaced for auto-grant authorization specific threshold values: (a) conservative thresholds at substrate-tier defaults (default); (b) permissive thresholds at substrate-tier; (c) substrate-tier baseline with application-configured within-bound thresholds. Default until operator review: (a) conservative thresholds at substrate-tier defaults; application configures more permissive thresholds within substrate-tier bounds. Decision deferred to operator at Step 2D-completion or Step 2E-planning.
+7. **§5.10 cognitive-load measurement methodology.** Four candidate approaches surfaced for cognitive-load measurement specific methodology: (a) request count; (b) latency-based measurement; (c) explicit user-reported friction; (d) (a) + (c) combined (default). Default until operator review: (a) + (c) combined (request count + explicit user-reported friction; baseline-pattern measurement methodology). Decision deferred to operator at Step 2D-completion or Step 2E-planning per coordinated architectural-engineering discipline.
+8. **§8.4 continuation patent candidate selection.** Six continuation patent candidate territories surfaced: Custom Government DMW NEW substrate primitive extension; AI_AGENT owning-entity-derived discipline; permission-batching primitives at substrate-tier; auto-grant authorization primitives; cognitive-load measurement primitives via SUBSTRATE_OBSERVATION; substrate-vs-configuration separation as architectural property. Specific continuation patent candidate selection deferred to patent counsel review per §8.4 OPERATOR REVIEW REQUIRED. New patent counsel engagement needed (Register 2 categorical framing; specific protected-name details per Register 1 framing not surfaced per ADR-0020 + RULE 19).
+
+#### Substrate-honest discipline preserves operator-strategic-decision territory
+
+The eight distinct territories canonicalize operator-strategic-decision territory at canonical-record register per substrate-honest discipline. Specific decisions deferred to focused operator session per coordinated discipline; the canonicalization documents the territory rather than pre-committing to specific resolution. The discipline operates per RAA 12.8 substrate-honest discipline + §8.5 ADR-0020 self-application: substrate-honest framing observations + operator-strategic-decision territory + protected-name discipline preserved throughout RAA 12.8 substrate-architecture canonicalization.
+
+#### §9.7 documents the operator-decision discipline operating throughout RAA 12.8
+
+§9.7 canonicalization operates as architectural property of canonical record: the operator-decision discipline operates as substrate-honest discipline throughout RAA 12.8 substrate-architecture canonicalization. Future architectural canonicalization work (RAA 12.9 + future RAA candidates per §9.4) inherits the operator-decision discipline per RAA 12.8 precedent.
 
 ---
 
