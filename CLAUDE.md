@@ -247,7 +247,10 @@ Option C anchor). Use the structured logger
 (`apps/api/src/logger.ts` for module-level / boot-time;
 `request.log.*` or `fastify.log.*` for request-scoped). See
 ADR-0005 (no `console.*` in `apps/api/src`) and
-`docs/contributing/code-style.md` §Logging.
+`docs/contributing/code-style.md` §Logging. Enforced at TEST
+tier via `tests/unit/no-console-in-api-src.test.ts` and at
+git-hook tier via `.husky/pre-commit` per ADR-0024
+(pre-commit-hook-posture).
 
 ### RULE 17 -- ARCHITECTURAL FRAMING IS LOAD-ON-OPEN
 
