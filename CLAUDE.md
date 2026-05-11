@@ -389,7 +389,7 @@ this documentation infrastructure batch. Recent landmarks:
   infrastructure)
 - Track A — IN FLIGHT (post-Section-12C.0.5):
   - Gate 1 (architectural lock; ADRs 0011/0012/0013): CLOSED `d728cd4`
-  - Gate 2 (OrbStack install): CLOSED (operator-side)
+  - Gate 2 REVISED (Colima canonicalization; ADR-0013 amendment per RULE 13 substrate-honest discipline; substrate-active runtime is Colima 0.10.1 on operator's Intel Mac; OrbStack + Docker Desktop confirmed NOT installed; multi-runtime contributor onboarding flexibility preserved at ADR-0011 register): IN FLIGHT (`[TRACK-A-G2]`)
   - Gate 3 Half A (containerized Postgres infra): CLOSED `081d35e`
   - Gate 3 ADR amendment (ADR-0014 supersedes ADR-0012 dispatch): CLOSED `2a14dec`
   - Gate 3 Half B (FixtureBasedLLMProvider + 10 fixtures): CLOSED `16b4482`

@@ -33,18 +33,46 @@ integration with ADR-0011, and CI shape.
 
 ## Decision
 
-**Container runtime: OrbStack on macOS.** Drop-in `docker` CLI,
-native ARM64, ~2s Postgres startup. Docker Desktop is the
-fallback for non-OrbStack environments and CI. Install via
-`brew install orbstack`; Track A Gate 2 covers this before any
-infrastructure code lands.
+**Container runtime: Colima on macOS.** Drop-in `docker` CLI
+compatibility via Colima's Docker socket; lightweight macOS
+Virtualization.Framework-based runtime; ~2s Postgres startup.
+OrbStack and Docker Desktop are alternative substrate-runtime
+options that route through the same `docker` CLI. Install via
+`brew install colima docker` on macOS; Track A Gate 2 (REVISED)
+covers this before any infrastructure code lands.
+
+Substrate-active configuration on operator's MacBook (Intel
+Mac; Darwin 22.6.0): Colima 0.10.1 + Docker 29.4.2 installed
+via Homebrew at `/usr/local/bin/`; Colima running using macOS
+Virtualization.Framework; arch x86_64; runtime docker; mountType
+virtiofs; Docker socket at `~/.colima/default/docker.sock`;
+Docker context `colima` active. OrbStack and Docker Desktop
+confirmed NOT installed on the operator's machine — Colima is
+the canonical substrate-active runtime at runtime-reference
+register.
 
 **Container image: `postgres:16-alpine`.** Postgres 16 matches
 Supabase's default major; alpine is lightweight (~120MB).
 Pinned to a specific minor+patch in `docker-compose.test.yml`
 (e.g., `postgres:16.4-alpine`); version bumps are deliberate.
 
-**Bring-up sequence (3 ordered steps):**
+**Bring-up sequence (3 ordered steps; substrate-runtime-tier
+verify-and-start guard prepended per REVISED Gate 2):**
+
+**Substrate-runtime-tier pre-step (Colima-specific; idempotent
+guard).** Before Step 1, the bring-up script verifies Colima
+VM is running via `colima status`; if not running, invokes
+`colima start`. The substrate-runtime-tier guard is idempotent
+(running Colima → no-op; stopped Colima → start) and operates
+below the architectural-decision register. The three-step
+architectural pattern below is preserved at architectural-
+decision register; only substrate-runtime-tier coordination is
+added per Colima substrate-runtime characteristics (Colima
+requires explicit VM start; OrbStack auto-started on app
+launch). For non-Colima substrate-runtime environments (OrbStack
+auto-start; Docker Desktop auto-start; CI environments with
+docker daemon pre-started), the guard is no-op and the
+architectural pattern operates identically.
 
 1. **`docker compose -f docker-compose.test.yml up -d`** with
    a `pg_isready` healthcheck — readiness gate for steps 2-3.
@@ -101,8 +129,10 @@ tag promotion.
 ### Harder
 
 - **Container runtime is a new prerequisite.** ADR-0011 names
-  this; ADR-0013 specifies the install path (OrbStack via
-  `brew install orbstack`).
+  this; ADR-0013 specifies the install path (Colima via
+  `brew install colima docker` on macOS; OrbStack or Docker
+  Desktop alternative substrate-runtime options route through
+  the same `docker` CLI).
 - **Postgres major-version drift from Supabase is now a bug
   class.** If Supabase upgrades to 17, the local pin should
   follow; drift surfaces as 17-only feature failures (none
@@ -148,6 +178,33 @@ revisit if intra-tier parallelization becomes desirable.
 Reject. Adds a Java-flavored dependency that doesn't fit
 Foundation's TypeScript-only substrate. docker-compose with a
 health-checked service start has less surface area.
+
+## Substrate-state framing observation (RULE 13)
+
+Gate 1 architectural lock at `d728cd4` carried OrbStack-canonical
+references in this ADR's original ship state. Substrate truth
+surfaced at REVISED Gate 2 (`[TRACK-A-G2]` amendment commit):
+Colima 0.10.1 is the substrate-active runtime on the operator's
+MacBook (Intel Mac; macOS Virtualization.Framework; x86_64;
+virtiofs mount type; Docker CLI 29.4.2 routing through Colima
+socket); OrbStack and Docker Desktop confirmed NOT installed.
+
+REVISED Gate 2 amendment canonicalizes Colima as substrate-active
+runtime per RULE 13 substrate-honest discipline + RULE 14
+bidirectional citation discipline. Architectural intent preserved
+at architectural-decision register (containerized Postgres +
+tier-stratification per ADR-0011 + 3-step bring-up architectural
+pattern + `postgres:16-alpine` image pin + Docker CLI compatibility
+via Docker socket); runtime-reference register corrected from
+OrbStack-canonical to Colima-canonical. The substrate-runtime-tier
+verify-and-start guard (prepended pre-step above) is the only
+Colima-specific substrate addition per Option C resolution
+discipline; non-Colima substrate-runtime environments operate as
+no-op through the guard.
+
+Thirteen-consecutive-commit substrate-honest pre-flight
+verification pattern operational (RAA 12.8 chain twelve commits
++ this Gate 2 REVISED amendment).
 
 ## References
 

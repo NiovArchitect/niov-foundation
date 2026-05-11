@@ -115,8 +115,11 @@ commit their rationale alongside the test.
   plus existing `vitest.config.ts` retained for `npm test`
   backwards-compat.
 - **Container runtime is now a developer-machine prerequisite.**
-  New contributors install OrbStack (or Docker Desktop) per
-  ADR-0013 before running tests.
+  New contributors install Colima (or OrbStack or Docker Desktop)
+  per ADR-0013 before running tests. Colima is the substrate-
+  active runtime on the operator's machine per REVISED Gate 2;
+  multi-runtime flexibility is preserved at contributor onboarding
+  register since all three route through the same `docker` CLI.
 - **CI from scratch.** Foundation has no `.github/workflows/`
   today; Track A creates the CI surface with this ADR's
   gating discipline driving the workflow shape.
