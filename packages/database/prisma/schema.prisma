@@ -45,6 +45,11 @@ model Entity {
   child_memberships  EntityMembership[] @relation("ChildMems")
   profile            EntityProfile?
 
+  // D-2D-D10 escalation back-refs (Section 12.5 Sub-box 1).
+  source_escalations   EscalationRequest[] @relation("SourceEscalations")
+  target_escalations   EscalationRequest[] @relation("TargetEscalations")
+  resolved_escalations EscalationRequest[] @relation("ResolvedEscalations")
+
   @@index([entity_type])
   @@index([status])
   @@index([deleted_at])
@@ -144,6 +149,7 @@ model MemoryCapsule {
   wallet      Wallet       @relation(fields: [wallet_id], references: [wallet_id], onDelete: Cascade)
   entity      Entity       @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
   permissions Permission[]
+  escalations EscalationRequest[]
 
   @@index([wallet_id])
   @@index([entity_id])
@@ -458,6 +464,22 @@ enum MonetizationStatus {
   PROCESSED
   FAILED
   PERMANENTLY_FAILED
+}
+
+enum EscalationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum EscalationType {
+  HUMAN_REVIEW_REQUIRED
+  SOVEREIGNTY_VIOLATION
+  THRESHOLD_BREACH
+  POLICY_CONFLICT
+  AUTHORIZATION_FAILURE
+  COMPLIANCE_GATE
 }
 
 // A Hive is a many-entity collective. Members contribute capsules;
@@ -1064,4 +1086,42 @@ model AgentTemplate {
   @@index([role_category])
   @@index([org_entity_id])
   @@map("agent_templates")
+}
+
+// D-2D-D10 closure substrate (Section 12.5 Sub-box 1; RAA 12.8 §5.2):
+// EscalationRequest canonicalizes the human-in-the-loop primitive
+// substrate territory. Storage-side model with status workflow
+// (PENDING → APPROVED/REJECTED/EXPIRED) per RAA 12.8 §5.2; consumer-
+// side EscalationItem interface at apps/api/src/services/otzar/
+// priming.ts:36 is the read-projection superset-mapped from this
+// model. RULE 10 soft-delete discipline preserved (no FK cascade;
+// audit lineage canonical at audit-trail register per Zone U1).
+model EscalationRequest {
+  escalation_id         String           @id @default(uuid()) @db.Uuid
+  source_entity_id      String           @db.Uuid
+  target_entity_id      String           @db.Uuid
+  capsule_id            String?          @db.Uuid
+  escalation_type       EscalationType
+  severity              String
+  description           String
+  status                EscalationStatus @default(PENDING)
+  resolved_by_entity_id String?          @db.Uuid
+  resolution_metadata   Json?
+  created_at            DateTime         @default(now())
+  resolved_at           DateTime?
+  expires_at            DateTime?
+
+  source_entity   Entity         @relation("SourceEscalations", fields: [source_entity_id], references: [entity_id])
+  target_entity   Entity         @relation("TargetEscalations", fields: [target_entity_id], references: [entity_id])
+  resolver_entity Entity?        @relation("ResolvedEscalations", fields: [resolved_by_entity_id], references: [entity_id])
+  capsule         MemoryCapsule? @relation(fields: [capsule_id], references: [capsule_id])
+
+  @@index([source_entity_id])
+  @@index([target_entity_id])
+  @@index([resolved_by_entity_id])
+  @@index([capsule_id])
+  @@index([status])
+  @@index([created_at])
+  @@index([escalation_type])
+  @@map("escalation_requests")
 }
