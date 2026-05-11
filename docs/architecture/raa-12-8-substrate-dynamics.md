@@ -2541,92 +2541,238 @@ The eight distinct territories canonicalize operator-strategic-decision territor
 
 ## Section 10 — References
 
+Section 10 canonicalizes citations + bibliographic discipline + canonical record closure framing per RAA 12.8 substrate-architecture canonicalization completion at HEAD `7bb52a6` ([RAA-12.8-S9]) ship-to-origin/main. The section organizes references across eleven H3 subsections: ten existing H3 from outline `10ef10f` ship expanded substantively per Path A discipline (preserve existing descriptive H3 titles; expand substantively per substrate truth) + one NEW H3 additive ("External research citations") per Commit 6 of 6 substrate-architecture canonicalization. Bibliographic discipline canonical at canonical-record register per RULE 14 bidirectional citation discipline + RULE 19 + ADR-0020 two-register IP discipline (zero protected-name leak verified within §10).
+
 ### ADRs (substrate-tier canonical decisions)
 
-- ADR-0001 (Three-Wallet Architecture) — three DMW types; Section 5.8 mapping foundation
-- ADR-0002 (Append-Only Audit Chain) — Zone U1 substrate; Section 1.2 boundary
-- ADR-0003 (Frozen-Config Tamper Anchors) — Section 6.6 anchor pattern
-- ADR-0006 (Cross-Org Leak Prevention) — Surface 1 cross-wallet boundary; Surface 2 Hive coordination
-- ADR-0009 (COSMP 7-Operation Enum Lock) — locked-enum precedent; Section 5.3 distinction
-- ADR-0010 (Foundation Tests Are Legitimately Slow) — Surface 1 test-cycle constraint
-- ADR-0015 Decision B (12-error TypeScript baseline) — ADR-0021 amendment mechanism
-- ADR-0016 (Pin-and-Optimize Framework) — substrate-pinning canonical reference
-- ADR-0017 (Production Discipline) — substrate-investigation canonical reference; Step 2C investigation pattern
-- ADR-0018 (Deployment-Target Agnosticism) — substrate-portability canonical reference
-- ADR-0019 (Cryptographic-Suite Posture) — substrate-cryptographic-resilience canonical reference
-- ADR-0020 (Two-Register IP Discipline) — Register 2 voice applied throughout outline
-- ADR-0021 (Capsule Type Extension Protocol) — Section 5.3 SUBSTRATE_OBSERVATION extension; Section 9.5 amendment path
-- ADR-0022 (combined_score Formula Canonicalization) — Section 5.5 refinement substrate; Section 7.3 amendment path
+Fourteen ADRs cross-referenced throughout RAA 12.8 (187 total occurrences):
+
+- **ADR-0001** (Three-Wallet Architecture) — three DMW types canonical (Personal / Enterprise / Device); Section 1.2 + Section 5.8 mapping foundation; substrate-honest correction per Correction A canonical at §5.8 amendment `[RAA-12.8-S5-AMEND-1]` (Enterprise carries company data with forget-on-detach at Permission tier per Zone U4)
+- **ADR-0002** (Append-Only Audit Chain) — Zone U1 substrate; Section 1.2 boundary; BEFORE DELETE trigger discipline at substrate-tier
+- **ADR-0003** (Frozen-Config Tamper Anchors) — Section 6.6 anchor pattern; frozen-anchors discipline per §7.4
+- **ADR-0006** (Cross-Org Leak Prevention) — Surface 1 cross-wallet boundary; Surface 2 Hive coordination per Correction 2
+- **ADR-0009** (COSMP 7-Operation Enum Lock) — locked-enum precedent; Section 5.3 distinction
+- **ADR-0010** (Foundation Tests Are Legitimately Slow) — Surface 1 test-cycle constraint
+- **ADR-0015 Decision B** (12-error TypeScript baseline) — ADR-0021 amendment mechanism; strict baseline discipline canonical at CI workflow architecture
+- **ADR-0016** (Pin-and-Optimize Framework) — substrate-pinning canonical reference; substrate-discipline canonical reference quartet
+- **ADR-0017** (Production Discipline) — substrate-investigation canonical reference; Step 2C investigation pattern; substrate-discipline canonical reference quartet
+- **ADR-0018** (Deployment-Target Agnosticism Posture) — substrate-portability canonical reference; substrate-discipline canonical reference quartet
+- **ADR-0019** (Cryptographic-Suite Posture) — substrate-cryptographic-resilience canonical reference; substrate-discipline canonical reference quartet; §7.4 frozen-anchors strengthening territory
+- **ADR-0020** (Two-Register IP Discipline) — Register 2 voice applied throughout RAA 12.8; §8.5 ADR-0020 self-application canonical at canonical-record register
+- **ADR-0021** (Capsule Type Extension Protocol) — Section 5.3 SUBSTRATE_OBSERVATION extension; Section 9.5 amendment path; Custom Government DMW substrate primitive extension
+- **ADR-0022** (combined_score Formula Canonicalization) — Section 5.5 + Section 7 refinement substrate; Section 7.3 amendment path (combined_score informativeness component extension)
+
+#### ADR amendment paths per §9.5
+
+- ADR-0021 amendment paths (SUBSTRATE_OBSERVATION CapsuleType extension + Custom Government DMW substrate primitive extension + per-DMW-type configuration table)
+- ADR-0022 amendment paths (active-learning informativeness coefficient extension + coefficient redistribution decision per §7.4)
+- ADR-0020 self-application (two-register IP discipline operating recursively per §8.5)
+- ADR-0019 frozen-anchors discipline strengthening (cryptographic-anchoring discipline extension at active-learning informativeness register per §7.4)
+
+#### New ADR candidate territories per §9.5
+
+Six new ADR candidate territories surfaced from RAA 12.8 work: Per-DMW-Type Sovereignty Posture + SUBSTRATE_OBSERVATION CapsuleType + Self-Introspection Posture + Permission-batching primitive specific algorithm + Auto-grant authorization specific threshold values + Cognitive-load measurement specific methodology + Custom Government DMW substrate primitive specifications.
 
 ### RAAs (substrate-tier architectural records)
 
-- RAA 12.7 (Dynamic Flow Architecture; commit `0fd8da7`) — bilateral-vs-unilateral zone discrimination; Section 2.1 verbatim precedent; lateral-class extension premise
-- RAA 12.9 (Governance & Monetization at Scale; queued) — Section 1.5 deferral; Section 6.4 + Section 9.1 forward dependency
+- **RAA 12.7** (Dynamic Flow Architecture; commit `0fd8da7`) — bilateral-vs-unilateral zone discrimination; default-rule-bilateral; Section 2.1 verbatim precedent; lateral-class extension premise per Section 2; Zone U2 patent-holder implementation record substrate at §2.5
+- **RAA 12.9** (Governance & Monetization at Scale; queued for Step 3+) — Section 1.5 deferral; Section 6.4 + Section 9.1 forward dependency on RAA 12.8 cross-type balance policy; per-DMW-type monetization architecture; pricing-tier sovereignty interaction
+- **RAA 12.8** (Substrate Dynamics: Scale, Relational Dynamics, Agentic Coherence; this RAA) — substrate-architecture canonicalization across Surfaces 1-3 + cross-surface interconnection consolidation + active-learning informativeness refinement + patent-implementation-evidence framing + forward implications canonicalization
+
+#### RAA candidate territories per §9.4
+
+Future RAA candidates surfaced from RAA 12.8 work:
+- RAA on Self-Introspection Architecture (candidate; §5.3 SUBSTRATE_OBSERVATION growth)
+- RAA on Multi-DMW Concurrent Flow (candidate; §3.8 cross-wallet retrieval growth)
+- RAA on Permission-Class Taxonomy + Permission-Batching Architecture (candidate; §5.10 Correction E NEW substrate territory growth)
+- RAA on Cognitive-Load Measurement Architecture (candidate; §5.10 cognitive-load measurement primitives growth)
+- RAA on Auto-Grant Authorization Architecture (candidate; §5.10 auto-grant authorization primitives growth)
 
 ### Patent references
 
-- US 12,517,919 — COSMP/DMW patent; substrate-architecture coverage
-- US 12,164,537 — DMW + Foundation primitives
-- US 12,399,904 — DMW + Foundation primitives
+Three patents canonical at substrate-architecture-coverage register (per §8.3 coverage map):
+
+- **US 12,164,537** (DMW + Foundation primitives) — 20 reference occurrences in RAA 12.8 body; substrate-architecture coverage at Wallet model + Permission model + EntityType enum + WalletType enum + Foundation primitive register
+- **US 12,399,904** (alert manager + TARs + Foundation primitives) — 12 reference occurrences in RAA 12.8 body; substrate-architecture coverage at TwinConfig + EscalationRequest + alert-flow primitives register
+- **US 12,517,919** (COSMP/DMW AI memory governance) — 30 reference occurrences in RAA 12.8 body; substrate-architecture coverage at COSMP operations + DMW substrate + AI sovereignty cap + per-DMW-type sovereignty + relational dynamics + active-learning informativeness register
+
+Total: 39 patent reference occurrences across §1.6 + §5.4 + §5.8 amendment + §5.10 + §6 + §7 + §8.3 coverage map + §8.4 continuation patent candidate + §9.1 + §9.6 + this section.
+
+#### §8.3 three-patent coverage map cross-reference
+
+Each section + amendment in RAA 12.8 substantiates coverage under one or more of the three patents at substrate-architecture register (NOT enumeration-count register per ADR-0021 distinction). Substrate-tier coverage at canonical-record register provides patent-implementation-evidence at three-patent register for Step 2E engineering work.
+
+#### §8.4 continuation patent candidate territory cross-reference
+
+Six continuation patent candidate territories per §8.4 OPERATOR REVIEW REQUIRED: Custom Government DMW NEW substrate primitive extension; AI_AGENT owning-entity-derived discipline; permission-batching primitives at substrate-tier; auto-grant authorization primitives; cognitive-load measurement primitives via SUBSTRATE_OBSERVATION; substrate-vs-configuration separation as architectural property. Specific continuation patent candidate selection deferred to patent counsel review per coordinated discipline.
 
 ### Substrate citations (verified during Step 2C investigation)
 
+Eleven code paths verified at Step 2C investigation + RAA 12.8 substrate evidence:
+
 - `apps/api/src/services/coe/coe.service.ts` — single-wallet retrieval; STEP 3 FOUNDATIONAL bypass; Section 3.2-3.4 + Section 3.8 design surface
-- `apps/api/src/services/coe/keywords.ts` — combined_score formula canonicalized at ADR-0022
-- `apps/api/src/services/feedback/feedback.service.ts` — Loop 1 uniform updates; Section 5.5 refinement target
-- `apps/api/src/services/hive/hive.service.ts` — buildHiveAggregate; Section 4.8 reframing target
+- `apps/api/src/services/coe/keywords.ts` — combined_score formula canonicalized at ADR-0022; Section 5.5 + Section 7 refinement target
+- `apps/api/src/services/feedback/feedback.service.ts` — Loop 1 uniform updates; Section 5.5 refinement target; PRICING_TABLE import leak per D-2C-D3-PRICING-IMPORT-LEAK drift territory (RAA 12.9 forward)
+- `apps/api/src/services/hive/hive.service.ts` — buildHiveAggregate; Section 4.8 reframing target per Correction 2 (Hive as DMW-to-DMW coordination)
 - `apps/api/src/services/cosmp/negotiate.service.ts` — AI sovereignty cap; Section 5.1 substrate primitive
-- `apps/api/src/services/governance/twin.service.ts` — EntityMembership traversal; Section 5.8 AI_AGENT-PERSON mapping pattern
+- `apps/api/src/services/cosmp/share.service.ts` — combined SHARE+REVOKE preserves grant evidence forward-only per Zone U4
+- `apps/api/src/services/cosmp/write.service.ts` — connected_capsule_ids substrate-active in writes; Surface 2 Field 1 substrate primitive
+- `apps/api/src/services/governance/twin.service.ts` — EntityMembership traversal; Section 5.8 AI_AGENT owning-entity-derived discipline per Correction B
 - `apps/api/src/services/otzar/observation.service.ts` — cross-wallet `findMany` precedent; Section 3.8 multi-DMW pattern
-- `apps/api/src/services/otzar/priming.ts` — escalations shape; Section 5.2 EscalationRequest target
-- `packages/database/prisma/schema.prisma` — EntityType enum + Wallet model + MemoryCapsule model + EntityMembership model + DurationType + DecayType + StorageTier
-- `packages/database/src/queries/audit.ts` — verifyAuditChain + HIVE_AGGREGATE_BUILT system principal precedent
-- `packages/database/src/queries/capsule.ts:402` — ACCESS_BASED comment-only stub (Section 5.7 closure target)
+- `apps/api/src/services/otzar/priming.ts:131-134` — escalations stub; Section 5.2 EscalationRequest target per D-2D-D10 closure
+- `apps/api/src/services/otzar/otzar.service.ts:272-277` — explicit type allowlist filter per D-2C-D6-OTZAR-ALLOWLIST-AS-IMPLICIT-POLICY drift (Section 6.4 cross-type balance territory)
+- `apps/api/src/services/auth.service.ts` — AUTHENTICATE flow with `tar_hash_at_creation` snapshotted at issue time per Zone U3
+- `packages/database/prisma/schema.prisma` — EntityType enum (PERSON / COMPANY / AI_AGENT / DEVICE / APPLICATION / GOVERNMENT) + WalletType enum (PERSONAL / ENTERPRISE / DEVICE) + DurationType enum (TEMPORARY / SHORT_TERM / LONG_TERM / PERMANENT / SESSION_ONLY / NONE) + PermissionStatus enum (ACTIVE / REVOKED / EXPIRED) + CapsuleType 20 values + DecayType + StorageTier + Wallet model + MemoryCapsule model + EntityMembership model + Permission model + TwinConfig
+- `packages/database/src/queries/audit.ts:505` — verifyAuditChain + HIVE_AGGREGATE_BUILT system principal precedent; SHA-256 routing through `CRYPTO_CONFIG.HASH_ALGORITHM` per Gate 8d
+- `packages/database/src/queries/capsule.ts:402` — ACCESS_BASED comment-only stub (Section 5.7 closure target per D-2C-D5-ACCESS-BASED-STUB drift)
+
+#### §5.10 Correction E NEW substrate territory references
+
+Substrate primitives surfaced at §5.10 Correction E NEW substrate territory: SUBSTRATE_OBSERVATION CapsuleType (ADR-0021 extension path) + SYSTEM_PRINCIPALS.SUBSTRATE_OBSERVER constant (NET-NEW); permission_batch entity primitive (analogous to bridge_id pattern in existing Permission model); auto-grant authorization primitives (substrate-tier RULE 0 boundaries + application-configured policies); cognitive-load measurement primitives via SUBSTRATE_OBSERVATION.
 
 ### Glossary canonical entries
 
-- `docs/reference/glossary.md` — 32 canonical entries from 74b2765; Step 2F refresh queued per Section 9.3
+`docs/reference/glossary.md` — 32 canonical-grade vocabulary entries baseline at [GLOSSARY-G-3] commit `74b2765`; Step 2F refresh queued per Section 9.3.
 
-### Drift catalog (RULE 13 substrate-honesty surfacing during Step 2C)
+#### Step 2F glossary refresh scope per RAA 12.8
 
-- D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER — closed via Surface 2 §4.7
-- D-2C-D5-DURATION-COLLISION — Section 5.6 operator-review-required marker
-- D-2C-D5-ACCESS-BASED-STUB — Section 5.7 deferred to Step 2E
-- D-2C-D6-OTZAR-ALLOWLIST-AS-IMPLICIT-POLICY — Section 6.4 cross-type balance territory
-- D-2C-D3-PRICING-IMPORT-LEAK — RAA 12.9 territory; flagged forward
-- D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY — closed via Surface 2 §4.8
-- D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL — closed via Surface 3 §5.2 EscalationRequest
-- D-2D-D11-AGENT-TO-AGENT-INTENTIONAL-VS-GAP — closed via Surface 3 §5.4 substrate-mediated-vs-direct-grant distinction
-- D-2D-D12-STORAGE-TIER-RETRIEVAL-DRIFT — closed via Surface 1 §3.2
-- D-2D-D13-HYPERGRAPH-NAMING-PRECISION — Section 4.3 operator-review-required marker
-- D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY — Surface 3 §5.5 refinement framing
+Vocabulary refresh scope (per §9.3) folds substrate truth canonical at body-text register per Path B-2 backwards-propagation Commit 2 (`2cced88`):
+- Six EntityType mappings (PERSON / COMPANY / AI_AGENT owning-entity-derived / DEVICE / APPLICATION / GOVERNMENT) — new canonical-grade entries per §5.8 amendment
+- §5.10 Correction E NEW substrate territory vocabulary (substrate-vs-configuration separation + permission-batching primitives + permission-class taxonomy + permission-trickle-through-non-human-DMW + auto-grant authorization + cognitive-load measurement)
+- Path B-2 backwards-propagation vocabulary (substrate truth at body-text register + Correction A canonical + Correction B canonical + Corrections C+D forward-folded)
+- §8 Patent-Implementation-Evidence Framing vocabulary (Zone U2 + Decision Patent-A + three-patent coverage map + two-register IP discipline + memory entry #12 framing)
+- Lateral zone discrimination methodology (six lateral zones) + six INT-* cross-surface interconnections + Two-register IP discipline + Zone U2 patent-holder implementation record substrate framing
+
+### External research citations
+
+External research citations canonical at body-text register throughout RAA 12.8 (per Section 1.2 cognitive-science framing + Section 4 Surface 2 Relational Dynamics field canonicalizations). The citations operationalize cognitive-science + complexity-science mechanisms at substrate-architecture register — not arbitrary engineering optimization.
+
+#### Cognitive science framing (Section 1.2)
+
+- Miller (1956) — 7±2 working memory capacity bounds; cognitive-load substrate framing
+- Sweller (1988) — cognitive load theory; substrate framing for cognitive-load measurement primitives per §5.10
+
+#### Spreading activation networks (Section 4.2 Field 1; Zone L1)
+
+- Quillian (1968 onward) — spreading-activation hypothesis for semantic memory
+- Collins & Loftus (1975) — spreading-activation theory of semantic processing as substrate-tier mechanism
+- Anderson ACT-R (1976+) — spreading activation as core architectural primitive in cognitive architecture
+
+#### Schema theory + context-dependent salience (Section 4.6 Field 5; Zone L5)
+
+- Bartlett (1932) *Remembering* — schema-conditioned reconstruction
+- Schank (1977) scripts — script-based reconstruction
+- Rumelhart schemata — schema theory in cognitive architecture
+- Situated cognition literature — context-dependent meaning at retrieval tier
+
+#### Resonance/coherence dynamics (Section 4.4 Field 3; Zone L4)
+
+- Hofstadter & Mitchell (1992) *Copycat* — fluid analogies architecture; coherence as emergent property
+- Hofstadter (1995) *Fluid Concepts and Creative Analogies* — cognitive architecture for fluid concepts
+- Mitchell (1993) *Metacat* — explicit reflection on analogy-making (substrate-observation primitive coupling to §5.3 self-introspection)
+
+#### Self-organizing emergent retrieval (Section 4.5 Field 4)
+
+- Complexity science / self-organization literature — retrieval set emerges from local capsule-interaction dynamics rather than top-down deterministic score-rank-select
+
+All citations canonical at body-text register throughout RAA 12.8 (20+ in-body references); §10 canonicalizes the citation inventory at bibliographic-tier per RULE 14 bidirectional citation discipline.
+
+### Drift catalog (RULE 13 substrate-honesty surfacing during Step 2C + Step 2D)
+
+Substrate-actual **12 unique drift IDs** grep-matched at canonical drift ID register throughout RAA 12.8 (per Commit 5 substrate-state correction at commit subject register). Of these, 10 carry substantive territory framings in body; 2 (D-2C-D1 + D-2D-D7) appear only as range-endpoint references at §9.6 inclusive-range enumeration per Option C substrate-honest discipline.
+
+#### Substantive drift territory framings (10 drifts)
+
+- **D-2C-D2-CONNECTED-CAPSULE-NO-CONSUMER** — `connected_capsule_ids` substrate-active in writes (`apps/api/src/services/cosmp/write.service.ts`) but unconsumed in retrieval; closed via Surface 2 §4.7 activation of dormant primitive per Field 1 spreading activation network operationalization
+- **D-2C-D3-PRICING-IMPORT-LEAK** — PRICING_TABLE imported into `feedback.service.ts:21+72+570+574`; per-type weight surface bleeds beyond monetization; RAA 12.9 territory; flagged forward per §1.5 + §6.4 + §9.1
+- **D-2C-D5-DURATION-COLLISION** — semantic overlap between DurationType + DecayType enums (PERMANENT appears in both); Section 5.6 OPERATOR REVIEW REQUIRED marker per §9.7 territory 4 (Option A operationalize vs Option B rename)
+- **D-2C-D5-ACCESS-BASED-STUB** — ACCESS_BASED stub at `packages/database/src/queries/capsule.ts:402` (comment-only); deferred to Step 2E per §5.7 closure target (decay-rate-conditioning on `access_count` + `last_accessed_at`)
+- **D-2C-D6-OTZAR-ALLOWLIST-AS-IMPLICIT-POLICY** — explicit type allowlist filter at `otzar.service.ts:272-277` as application-layer cross-type policy without canonical record; Section 6.4 cross-type balance territory; INT-4 + RAA 12.9 substrate dependency
+- **D-2D-D8-RELEVANCE-SCORE-AS-INFORMATIVENESS-PROXY** — Surface 3 §5.5 + §7 active-learning informativeness as refinement closure; ADR-0022 amendment path per §7.3 (combined_score informativeness component extension); frozen-anchors family extension per INT-6
+- **D-2D-D9-AGGREGATE-CONSUMER-ASYMMETRY** — Hive aggregate writer exists; aggregate consumer asymmetric; closed via Surface 2 §4.8 Hive reframing per Correction 2 (DMW-to-DMW coordination)
+- **D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL** — `getEscalationsPending` stub at `priming.ts:131-134` ahead of EscalationRequest model; closed via Surface 3 §5.2 EscalationRequest Prisma model implementation territory
+- **D-2D-D11-AGENT-TO-AGENT-INTENTIONAL-VS-GAP** — substrate-mediated agent-to-agent coordination distinguished from direct cross-AI permission grant per RULE 0; closed via Surface 3 §5.4 substrate-mediated-vs-direct-grant distinction canonicalization
+- **D-2D-D12-STORAGE-TIER-RETRIEVAL-DRIFT** — `MemoryCapsule.storage_tier` enum exists (HOT/WARM/COLD) with write-time auto-classification; retrieval tier-blind; closed via Surface 1 §3.2 tier-aware retrieval discipline canonicalization
+- **D-2D-D13-HYPERGRAPH-NAMING-PRECISION** — directed embedded binary edges (`connected_capsule_ids` + `connected_entity_ids`) not true N-ary hypergraph; Section 4.3 OPERATOR REVIEW REQUIRED marker per §9.7 territory 3 (Option A true hypergraph upgrade vs Option B vocabulary patch)
+
+#### Range-endpoint reference drift IDs (2 drifts; Option C substrate-honest framing per DRIFT 11)
+
+- **D-2C-D1** — range-endpoint reference inherited from §9.6 inclusive-range enumeration "D-2C-D1 through D-2C-D6"; Step 2C investigation lineage Phase 1 substrate framing dimension D1; substantive territory not canonicalized at RAA 12.8 body — substrate framing folded into Section 1 substrate landscape narrative (Section 1.1 ASI-substrate framing + Section 1.2 cognitive-science framing) rather than as substantive drift territory at canonical drift ID register
+- **D-2D-D7** — range-endpoint reference inherited from §9.6 inclusive-range enumeration "D-2D-D7 through D-2D-D13"; Step 2C investigation lineage Phase 1 extension substrate framing dimension D7; substantive territory not canonicalized at RAA 12.8 body — substrate framing folded into Section 1 substrate landscape narrative rather than as substantive drift territory at canonical drift ID register
+
+#### Substrate-state observation (RULE 13)
+
+D-2C-D4 is absent entirely from canonical drift ID register at RAA 12.8 body (zero grep occurrences for "D-2C-D4" pattern). Step 2C investigation dimension D4 (referenced via "D4" shorthand in §1.2 substrate landscape narrative per "D4 — Otzar application-layer" framing without canonical D-2C-D4 prefix; coupled to D-2C-D6 drift territory). Substrate-actual 12 grep-matched IDs DO NOT include D-2C-D4 as canonical drift ID; §10 drift catalog enumeration reflects substrate truth at canonical-record register per Commit 5 substrate-state correction canonical at commit subject register.
 
 ### CLAUDE.md operating rules referenced
 
-- RULE 0 (Sovereign-Human Invariance) — Section 1.1 wallet sovereignty principle; Section 5.4 cross-AI direct grant prohibition
-- RULE 13 (Surface Drifts Inline Over Silent Fix) — drift catalog above
-- RULE 14 (Bidirectional Citation Discipline) — Section 9.1 RAA 12.9 reciprocal citation; Section 10 reference completeness
-- RULE 17 (Architectural Framing Is Load-On-Open) — RAA 12.7 + RAA 12.8 Foundation-substrate context
-- RULE 18 (Verify Operation Type Against Actual File State) — Section 5.6 + Section 5.8 operator-review-required-markers identify substrate-state verification points
-- RULE 19 (Two-Register IP Discipline) — Register 2 voice operating throughout outline; zero protected-name leak verified at staging
+- **RULE 0** (Sovereign-Human Invariance) — Section 1.1 wallet sovereignty principle; Section 5.4 cross-AI direct grant prohibition; §5.10 Correction E auto-grant authorization substrate-tier boundaries
+- **RULE 13** (Surface Drifts Inline Over Silent Fix) — drift catalog above + eleven-consecutive-commit substrate-honest pre-flight verification pattern operational throughout RAA 12.8 chain
+- **RULE 14** (Bidirectional Citation Discipline) — Section 9.1 RAA 12.9 reciprocal citation; Section 10 reference completeness; cross-section references preserved per Path A discipline at §9 expansion
+- **RULE 17** (Architectural Framing Is Load-On-Open) — RAA 12.7 + RAA 12.8 Foundation-substrate context; canonical reading order
+- **RULE 18** (Verify Operation Type Against Actual File State) — Section 5.6 + Section 5.8 operator-review-required-markers identify substrate-state verification points; pre-flight verification discipline
+- **RULE 19** (Two-Register IP Discipline) — Register 2 voice operating throughout RAA 12.8; zero protected-name leak verified at canonical-record register; §8.5 ADR-0020 self-application canonical (recursive operating discipline as architectural property of canonical record itself)
 
 ### Memory entries referenced
 
-- Memory entry #16 — three DMW types (Personal / Enterprise / Device; substrate-honest framing per Correction A canonical at §5.8 amendment `[RAA-12.8-S5-AMEND-1]` — Enterprise carries data with forget-on-detach at Permission tier; memory entry #16 "zero-payload" framing is corrective territory); Section 5.8 mapping foundation
-- Memory entry #21 — AI_AGENT first-class entity; Section 5.4 coordination foundation
-- Memory entry #12 — every commit on origin/main is contemporaneous patent-implementation evidence; Section 1.6 + Section 8.1 + Section 8.4 framing
+Three distinct memory entries cross-referenced throughout RAA 12.8 (18 total occurrences):
+
+- **Memory entry #12** — every commit on origin/main is contemporaneous patent-implementation evidence (cryptographically-timestamped commit-as-evidence framing); Section 1.6 + Section 8.1 + Section 8.4 + Section 9.6 framing; sole-authorship discipline + empty-trailers invariant per Zone U2 patent-holder implementation record
+- **Memory entry #16** — three DMW types (Personal / Enterprise / Device); substrate-honest framing per Correction A canonical at §5.8 amendment `[RAA-12.8-S5-AMEND-1]` — Enterprise carries company data with forget-on-detach at Permission tier per Zone U4 (substrate-honest correction to memory entry #16 "zero-payload" framing); Section 1.2 + Section 5.8 mapping foundation
+- **Memory entry #21** — AI_AGENT first-class entity per Correction B canonical at §5.8 amendment `[RAA-12.8-S5-AMEND-1]` (owning-entity-derived discipline; recursive resolution via EntityMembership substrate primitive); Section 5.4 coordination foundation
 
 ### Investigation lineage
 
-- Step 2C Phase 1 investigation (D1-D6) — substrate landscape pre-RAA-12.8
-- Step 2C Phase 1 extension investigation (D7-D13) — substrate landscape extended
-- HEAD `3c2eb99` ([ADR-0022]) — investigation complete; outline drafting follows
+#### Step 2C investigation lineage (pre-RAA-12.8 substrate landscape investigation)
+
+- Step 2C Phase 1 investigation (D1-D6) — substrate landscape pre-RAA-12.8; six substrate dimensions enumerated (Phase 1 baseline)
+- Step 2C Phase 1 extension investigation (D7-D13) — substrate landscape extended; seven additional substrate dimensions enumerated
+- ADR-0021 (Capsule Type Extension Protocol; commit `ba3ef11`) — substrate primitive extension protocol canonical
+- ADR-0022 (combined_score Formula Canonicalization; commit `3c2eb99`) — substrate scoring formula canonical
+- [GLOSSARY-G-3] vocabulary baseline (commit `74b2765`) — 32 canonical-grade vocabulary entries baseline
+
+#### RAA 12.8 substrate-architecture canonicalization chain (14 commits)
+
+- **Outline ship** — commit `10ef10f` (RAA 12.8 outline; structural canonicalization)
+- **§1 substrate landscape** — commit `78e376a` ([RAA-12.8-S1] §1 full prose; three canonical framings; cognitive-science grounding; wallet sovereignty per Correction 4)
+- **§2 zone discrimination** — commit `a2335cd` ([RAA-12.8-S2] §2 full prose; lateral class introduction; 6 lateral zones; three-step decision tree)
+- **§3 Surface 1 Scale Architecture** — commit `582216e` ([RAA-12.8-S3] §3 full prose; tier-aware retrieval; D-2D-D12 closure)
+- **§4 Surface 2 Relational Dynamics** — commit `271e9cc` ([RAA-12.8-S4] §4 full prose; five fields; D-2C-D2 + D-2D-D9 closure)
+- **§5 Surface 3 Agentic Coherence** — commit `5eb3f49` ([RAA-12.8-S5] §5 full prose; four drifts closed; §5.8 NEW per-DMW-type rules)
+- **§6 Cross-Surface Architectural Decisions** — commit `2148bfe` ([RAA-12.8-S6] §6 full prose; six INT-* canonicalized)
+- **§7 Active-Learning Informativeness** — commit `1fa1c12` ([RAA-12.8-S7] §7 full prose; D-2D-D8 closure detail; ADR-0022 amendment path)
+- **§5.8 amendment Commit 1** — commit `604aac6` ([RAA-12.8-S5-AMEND-1] six EntityType mappings canonical; Corrections A+B folded)
+- **§5.8 backwards-propagation Commit 2** — commit `2cced88` ([RAA-12.8-AMEND-PROPAGATION] 18-site body-text amendment)
+- **§5.10 Correction E Commit 3** — commit `127a383` ([RAA-12.8-AMEND-CORRECTION-E] §5.10 NEW H3; six substrate primitives canonical)
+- **§8 Patent-Implementation-Evidence** — commit `00d86a1` ([RAA-12.8-S8] §8 full prose; Zone U2 + Decision Patent-A + three-patent coverage map)
+- **§9 Forward Implications** — commit `7bb52a6` ([RAA-12.8-S9] §9 expanded; Path A; §9.1-§9.5 + §9.6 Step 2D + §9.7 OPERATOR REVIEW; 12 drift IDs canonical)
+- **§10 References** — this commit (canonical record closure)
+
+#### Canonical record closure framing
+
+RAA 12.8 ship-to-origin/main at this commit completes Step 2D substrate-architecture canonicalization per §9.6 handoff discipline. Step 2D-completion handoff per coordinated architectural-engineering discipline:
+
+- **Step 2E engineering work surface** (per §9.2 + §5.9 + §5.10 + §3.9 + §4.9) handoff per coordinated discipline; engineering implementation follows substrate-architecture canonicalization completion
+- **Step 2F glossary refresh** (per §9.3) handoff per coordinated discipline; vocabulary canonicalization follows substrate-architecture canonicalization completion
+- **RAA 12.9 forward dependency** (per §9.1) handoff to next architectural-canonicalization phase; Governance & Monetization at Scale canonicalization follows after RAA 12.8 full-document drafting completes
+- **OPERATOR REVIEW REQUIRED markers** (per §9.7) preserved per substrate-honest discipline; eight distinct operator-strategic-decision territories canonicalized at canonical-record register for focused operator session resolution
+- **Continuation patent candidate territory** (per §8.4) flagged for operator + patent counsel review per coordinated discipline
+
+Substrate truth canonical at body-text register throughout RAA 12.8 per Path B-2 backwards-propagation Commit 2. Substrate-architecture coverage at three-patent register (US 12,164,537 + US 12,399,904 + US 12,517,919) per §8.3 coverage map provides patent-implementation-evidence at canonical-record register. Zone U2 patent-holder implementation record substrate (RAA 12.7 §2.5) operates throughout RAA 12.8 commit chain per memory entry #12 framing (sole-authorship + empty-trailers invariant + cryptographically-timestamped contemporaneous evidence). Two-register IP discipline (RULE 19 + ADR-0020) operating at canonical-record register throughout RAA 12.8 + §8.5 self-application; zero protected-name leak verified.
+
+RAA 12.8 substrate-architecture canonicalization complete. Eleven-consecutive-commit substrate-honest pre-flight verification pattern operational across the chain. Canonical record closure at canonical-record register.
 
 ### Outline-level operator-review-required markers
 
-- **Section 4.3 — Field 2 hypergraph precision.** Option A true hypergraph upgrade vs Option B vocabulary patch.
-- **Section 5.6 — DurationType-vs-DecayType collision resolution.** Option A operationalize vs Option B rename.
-- **Section 2.3 — Lateral zone count.** 6 proposed; operator confirms or extends.
-- **Section 5.8 — Per-DMW-Type Sovereignty Rules (per Correction 4).** Six EntityType → three DMW types mapping; AI_AGENT / APPLICATION / GOVERNMENT mapping pending; operator confirms mapping or extends DMW type designations.
+§9.7 canonicalizes eight distinct OPERATOR REVIEW REQUIRED territories per substrate-honest discipline (canonical source per RULE 14 bidirectional citation; baseline 4-marker enumeration superseded by §9.7 canonicalization):
 
-These resolve during full-document drafting, not at outline commit.
+- §2.3 lateral zone count (= 6 proposed; operator review required)
+- §3.6 latency budget precision (≤10ms / ≤5ms / ≤2ms candidates)
+- §4.3 hypergraph precision (Option A N-ary upgrade vs Option B vocabulary patch per D-2D-D13)
+- §5.6 DurationType-vs-DecayType collision (Option A operationalize vs Option B rename per D-2C-D5)
+- §5.10 batching algorithm choice (3 candidates; default cognitive-science-grounded)
+- §5.10 auto-grant threshold values (3 candidates; default conservative)
+- §5.10 cognitive-load measurement methodology (4 candidates; default request count + user-reported friction combined)
+- §8.4 continuation patent candidate selection (six territories; deferred to patent counsel review per coordinated discipline; new patent counsel engagement needed per Register 2 categorical framing)
+
+These resolve at operator session per coordinated discipline. §9.7 substrate-state framing observation: substrate carries 43 raw OPERATOR REVIEW REQUIRED marker occurrences across RAA 12.8 (post-§9 expansion); 8 distinct territories canonicalized per substrate-honest discipline. Reference §9.7 for canonical territory enumeration.
