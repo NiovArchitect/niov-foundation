@@ -36,6 +36,7 @@ import {
 } from "../services/governance/dandelion.service.js";
 import { createTwin } from "../services/governance/twin.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
+import { countEscalationsPending } from "../services/governance/escalation.service.js";
 import type { AuthService } from "../services/auth.service.js";
 
 // WHAT: Default + max page size for list endpoints. Audit-table reads
@@ -1136,8 +1137,8 @@ export async function registerOrgRoutes(
   // ════════════════════════════════════════════════════════════════
 
   // GET /org/analytics -- composed numbers from latest
-  // CompoundingMetrics + counts. pending_approvals_count is a stub
-  // returning 0 (TODO Section 14: EscalationRequest table).
+  // CompoundingMetrics + counts. pending_approvals_count counts
+  // PENDING EscalationRequest rows targeted at this org (D-2D-D10-2).
   app.get(
     "/api/v1/org/analytics",
     {
@@ -1166,9 +1167,14 @@ export async function registerOrgRoutes(
         external_count: 0,
         completion_rate: 0,
       };
-      // TODO(Section 14): query EscalationRequest where status=PENDING
-      // and target org matches; for now, this stays 0.
-      const pending_approvals_count = 0;
+      // Pending escalations targeted at this org. countEscalationsPending
+      // is an unguarded plain helper -- the route's
+      // requireAdminCapability(authService, "can_admin_org") preHandler
+      // + resolveOrgOrFail(callerId) above have already discharged the
+      // authorization gate for orgEntityId, so the service does not
+      // re-gate. See escalation.service.ts countEscalationsPending JSDoc
+      // for the route-tier-auth-gate framing (D-2D-D10-2).
+      const pending_approvals_count = await countEscalationsPending(orgEntityId);
       return reply.code(200).send({
         ok: true,
         org_entity_id: orgEntityId,

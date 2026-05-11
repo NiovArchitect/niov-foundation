@@ -11,6 +11,7 @@
 //              KVCache (priming cache), otzar.service.ts.
 
 import { prisma } from "@niov/database";
+import { listEscalationsPendingForCaller } from "../governance/escalation.service.js";
 import type { KVCache } from "./cache.js";
 
 // WHAT: How long the priming string stays cached.
@@ -118,21 +119,31 @@ async function getCommitmentsDueSoon(
   }));
 }
 
-// WHAT: Stub for "pending escalations" query. Returns [].
-// INPUT: ownerEntityId, top-N limit.
-// OUTPUT: Always [] for 11B.
-// WHY: EscalationRequest table doesn't exist yet. The Section 14
-//      admin-tooling box introduces it. Until then this priming
-//      slot stays "none".
-//
-// TODO(Section 14): Replace with prisma.escalationRequest.findMany
-// where target_entity_id = ownerEntityId, status = "PENDING",
-// order severity desc, take = limit.
+// WHAT: Pending escalations targeted at the owner, projected to the
+//        priming-context shape. Closes the D-2D-D10 Section 14 TODO.
+// INPUT: ownerEntityId (the priming caller == target), top-N limit.
+// OUTPUT: Up to N EscalationItem { description, severity }, newest
+//          first.
+// WHY: The owner's priming context surfaces "what is waiting for
+//      your decision". Delegates to listEscalationsPendingForCaller
+//      (the service-owned auth gate per ADR-0004; caller == target
+//      here since priming runs in the owner's session context) and
+//      projects the full EscalationRequest rows down to the 2-field
+//      priming shape. EscalationRequest substrate landed in
+//      [D-2D-D10-1]; the service in [D-2D-D10-2].
 async function getEscalationsPending(
-  _ownerEntityId: string,
-  _limit: number,
+  ownerEntityId: string,
+  limit: number,
 ): Promise<EscalationItem[]> {
-  return [];
+  const rows = await listEscalationsPendingForCaller(
+    ownerEntityId, // callerEntityId
+    ownerEntityId, // targetEntityId (priming caller is the owner == target)
+    limit,
+  );
+  return rows.map((r) => ({
+    description: r.description,
+    severity: r.severity,
+  }));
 }
 
 // WHAT: DECISION capsules whose payload_summary contains tokens

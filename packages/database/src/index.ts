@@ -181,5 +181,9 @@ export type {
   // Section 11A tables.
   OtzarConversation,
   AgentTemplate,
+  // Section 12.5 Sub-box 1 / D-2D-D10 tables.
+  EscalationRequest,
+  EscalationStatus,
+  EscalationType,
   Prisma,
 } from "@prisma/client";
