@@ -2138,21 +2138,199 @@ Per Decision 4 (all blocks required due to interconnection), Section 7 engineeri
 
 ## Section 8 — Patent-Implementation-Evidence Framing
 
-### 8.1 Cryptographically-timestamped contemporaneous record
+Section 8 canonicalizes patent-implementation-evidence framing for the substrate-architecture work canonicalized at Sections 1-7 + §5.8 amendment chain (Commits 1+2+3 at HEADs `604aac6` / `2cced88` / `127a383`). The framing operates per RAA 12.7 §2.5 Zone U2 (patent-holder implementation record) + Decision Patent-A defensive publication strategy + ADR-0020 two-register IP discipline (RULE 19 self-application). Each subsection canonicalizes a distinct architectural register of patent-implementation-evidence per the substrate-honest discipline operating throughout RAA 12.8.
 
-Per memory entry #12, every commit on origin/main is cryptographically-timestamped contemporaneous record. RAA 12.8 outline commit + RAA 12.8 full-document commit + Step 2E engineering commits compose evidentiary mass. Per Zone U2 (RAA 12.7 §2.5), patent-holder implementation record is unilateral forward-only flow; rewriting commits would invalidate evidentiary value.
+### 8.1 Patent-holder implementation record (Zone U2 substrate-active)
 
-### 8.2 Defensive publication strategy
+Per RAA 12.7 §2.5 Zone U2, the patent-holder implementation record is a unilateral forward-only flow: every commit on `origin/main` is cryptographically-timestamped contemporaneous record of patented invention practiced in production substrate. Rewriting commits would invalidate evidentiary value; the forward-only flow is architectural property preserved across the substrate's full lifetime.
 
-Per operator Decision 2, patent counsel not currently engaged; Option Patent-A defensive publication strategy authorized. RAA 12.8 ship-to-origin/main provides prior-art protection. Defensive publication preserves patent-prosecution optionality without requiring active counsel engagement.
+#### Memory entry #12 substrate
 
-### 8.3 Substrate-architecture-level patent claim coverage
+Per memory entry #12 — every commit on `origin/main` is cryptographically-timestamped contemporaneous patent-implementation evidence. The memory entry establishes the substrate-honest framing applied throughout RAA 12.8:
+- Each commit's SHA hash provides cryptographic timestamp ordering
+- Each commit's author identity provides sole-authorship attribution per Zone U2 commit chain
+- Each commit's content provides substrate-architecture evidence at the moment of canonicalization
+- Cumulative commit count + content composition compose evidentiary mass over time
 
-Per ADR-0021 distinction from ADR-0009: patent claim coverage applies at substrate-architecture level (typed Capsules within Three-Wallet Architecture; COSMP operations governing them; retrieval/decay/feedback dynamics) rather than at enumeration-count level. RAA 12.8 extends substrate-architecture coverage along three surfaces (Scale + Relational Dynamics + Agentic Coherence) without altering enumeration-count locks.
+The Zone U2 flow operates uniformly; substrate truth at canonical-record register provides the substantive content carried by the cryptographic-timestamp envelope.
 
-### 8.4 Continuation patent candidate identification
+#### Sole-authorship discipline (commit chain attribution)
 
-Per Correction 4: per-DMW-type sovereignty differentiation (Section 5.8) is substantive substrate-architecture coverage extension under US 12,517,919. Continuation patent candidate identified. Adversarial-actor protection consideration: per-DMW-type sovereignty rules canonicalized on origin/main establish prior-art for the differentiation; if adversarial actor later attempts to claim sovereignty-undifferentiated substrate, canonical record on origin/main shows substrate has carried per-DMW-type differentiation since RAA 12.8 commit. Continuation patent candidate review queued for future patent counsel engagement (timing per Decision 2 strategy).
+Per Zone U2 commit chain register, sole-authorship attribution operates as:
+- Author identity: `niovarchitect <sadeil@niovlabs.com>` (verified across every commit on `origin/main` since RAA 12.8 outline commit `10ef10f`)
+- Committer identity: same as author (verified per 4-check discipline at every commit)
+- Zero AI-tooling attribution: no `Co-Authored-By` trailers; no AI-tooling identifiers in commit metadata; no platform-attribution headers
+- Empty-trailers invariant: commit body trailers are empty (verified per 4-check discipline at every commit)
+- Patent-implementation-evidence preserved: sole-authorship discipline supports patent-prosecution + adversarial-actor protection requirements
+
+#### Cumulative evidentiary mass as of RAA 12.8 commit chain
+
+33+ sole-authored commits cumulative as of HEAD `127a383` ([RAA-12.8-AMEND-CORRECTION-E]). RAA 12.8 chain specifically contributes 13 commits since outline at `10ef10f`:
+- §1 (`78e376a`) + §2 (`a2335cd`) + §3 (`582216e`) + §4 (`271e9cc`) + §5 (`5eb3f49`) + §6 (`2148bfe`) + §7 (`1fa1c12`) = 7 full-prose section commits
+- Outline (`10ef10f`) = 1 outline-tier canonicalization commit
+- §5.8 amendment chain Commit 1 (`604aac6`) + Commit 2 (`2cced88`) + Commit 3 (`127a383`) = 3 amendment-chain commits per coordinated discipline
+- Plus this commit `[RAA-12.8-S8]` + §9 + §10 remaining
+
+#### Patent ownership
+
+Sole-owner of three US patents at substrate-architecture-coverage tier as of 2026:
+- US 12,164,537 (DMW + Foundation primitives at substrate-architecture register)
+- US 12,399,904 (alert manager + TARs + Foundation primitives extending substrate coverage)
+- US 12,517,919 (COSMP/DMW AI memory governance + substrate-architecture register)
+
+Co-ownership status at substrate-architecture-coverage tier: sole-owner per current substrate state; prior co-ownership arrangements discontinued (specific protected-name details per Register 1 framing not surfaced at canonical-record register per ADR-0020 two-register IP discipline + RULE 19 protected-name discipline; see §8.5 self-application).
+
+Patent ownership at substrate-architecture-coverage tier informs:
+- Patent-implementation-evidence value preserved at sole-authorship register (commit chain attribution coheres with patent-ownership attribution at substrate-architecture register)
+- Defensive publication strategy operates per single-patent-holder discipline (no third-party co-owner approval requirements at canonical-record-tier publication)
+- Continuation patent candidate selection per §8.4 operates per single-patent-holder discretion at patent counsel engagement tier
+
+### 8.2 Adversarial-actor protection per Decision Patent-A defensive publication strategy
+
+Per operator Decision 2 + Decision Patent-A, defensive publication strategy authorized: substrate-architecture canonicalization at `origin/main` provides prior-art protection without requiring active patent counsel engagement. RAA 12.8 ship-to-origin/main canonicalizes substrate-architecture coverage at the moment of canonicalization; the cryptographic-timestamp envelope per Zone U2 preserves evidentiary value at the moment substrate truth is canonical.
+
+#### Adversarial-actor context
+
+Specific identified adversarial actor(s) have attempted to build patented architecture without licensing per substrate-honest acknowledgment. The adversarial actor(s) operate in the territory of:
+- "Blockchain-only" workaround framing — substrate-honest correction: substrate is NOT blockchain-only architecture; substrate carries substrate-architecture coverage at substrate-tier (not at distributed-ledger-tier); "blockchain-only" framing rejected per substrate truth canonical at body-text register throughout RAA 12.8
+- Substrate-architecture coverage workaround attempts — substrate-honest correction: substrate-architecture coverage operates at substrate-tier per ADR-0021 distinction (not at enumeration-count tier); workaround attempts that operate at enumeration-count tier or below substrate-architecture register cannot establish prior-art predating RAA 12.8 commit chain
+- Patent claim narrowing attempts — substrate-honest correction: continuation patent candidate territory per §8.4 expands substrate-architecture coverage; narrowing attempts cannot precede §8.4 continuation patent candidate identification
+
+Specific adversarial-actor names per Register 1 framing not surfaced at canonical-record register per ADR-0020 two-register IP discipline + RULE 19 protected-name discipline; categorical "adversarial actor" framing operates at Register 2 voice throughout §8 + RAA 12.8.
+
+#### Substrate truth at canonical-record register strengthens evidentiary mass
+
+Path B-2 backwards-propagation amendment at Commit 2 (`2cced88`) canonicalized substrate truth at body-text register throughout RAA 12.8 document (18 sites amended; Corrections A+B canonical; Corrections C+D forward-folded). The architectural property operates per substrate-honest discipline: substrate truth at canonical-record register cannot be disputed through framing-tier challenges because every body-text site asserts substrate truth per substrate evidence verbatim verification.
+
+Adversarial-actor framing-tier challenges (e.g., "blockchain-only workaround" or "substrate is not what canonical record describes") cannot prevail against:
+- Path B-2 substrate truth at body-text register (substrate-tier framing-tier-uniform canonical record)
+- §5.8 amendment Commit 1 six EntityType mappings canonical at substrate-architecture register
+- §5.10 Correction E NEW substrate territory canonicalization (substrate-vs-configuration separation + six substrate primitive territories)
+- 33+ sole-authored commits cumulative evidentiary mass per Zone U2 commit chain
+
+#### Multi-commit amendment chain documents systematic discipline
+
+The §5.8 amendment chain (Commits 1+2+3) at HEADs `604aac6` / `2cced88` / `127a383` documents coordinated multi-commit discipline at canonical-record register per substrate-honest framing:
+- Commit 1 canonicalizes Corrections A+B at §5.8 amendment canonical record
+- Commit 2 propagates Corrections A+B to 18 sites at body-text register per Path B-2
+- Commit 3 canonicalizes Correction E NEW substrate territory at §5.10
+
+The chain demonstrates substrate-honest discipline operating systematically — not as one-off correction but as coordinated multi-commit substrate-truth canonicalization. Adversarial-actor attempts to claim substrate truth "drifted" between commits cannot prevail against the documented coordinated discipline at Zone U2 commit chain register.
+
+### 8.3 RAA 12.8 patent-implementation-evidence coverage map
+
+Per ADR-0021 distinction from ADR-0009: patent claim coverage applies at substrate-architecture-coverage register (typed Capsules within Three-Wallet Architecture; COSMP operations governing them; retrieval/decay/feedback dynamics; per-DMW-type sovereignty enforcement; relational-dynamics primitives) rather than at enumeration-count register. RAA 12.8 extends substrate-architecture coverage along three architectural surfaces + cross-surface architectural decisions + active-learning informativeness without altering enumeration-count locks.
+
+#### Sections 1-7 substrate-architecture canonicalization mapping
+
+- **§1 substrate landscape + scope statement** — substantiates foundational substrate-architecture register coverage. Coverage anchors: WalletType enum (PERSONAL / ENTERPRISE / DEVICE); Wallet model substrate primitives; EntityType enum (six values); RULE 0 sovereign-human invariance. Patent coverage: US 12,517,919 + US 12,164,537 + US 12,399,904 at substrate-architecture register.
+- **§2 zone discrimination methodology extension** — substantiates lateral class methodology coverage. Coverage anchors: U1-U4 + B1-B5 + L1-L6 zone discrimination; three-step decision tree at §2.4. Patent coverage: US 12,517,919 at substrate-tier discrimination register.
+- **§3 Surface 1 Scale Architecture** — substantiates scale architecture coverage. Coverage anchors: tier-aware retrieval per §3.2; per-DMW-type aggregates per §3.5; parallel orchestration mechanics per §3.8. Patent coverage: US 12,164,537 + US 12,517,919 at scale-architecture register.
+- **§4 Surface 2 Relational Dynamics** — substantiates relational dynamics coverage. Coverage anchors: five fields conjoined as substrate primitive (spreading activation + hypergraph + resonance/coherence + emergent retrieval + context-dependent salience); Field 3 NET-NEW substrate primitives. Patent coverage: US 12,517,919 + US 12,164,537 at relational-dynamics register.
+- **§5 Surface 3 Agentic Coherence** — substantiates agentic coherence coverage. Coverage anchors: AI sovereignty cap; HITL primitives; SUBSTRATE_OBSERVATION CapsuleType (per §5.3 NET-NEW); agent-to-agent coordination per Corrections 1+3+4; active-learning informativeness per §5.5. Patent coverage: US 12,517,919 + US 12,164,537 + US 12,399,904 at agentic-coherence register.
+- **§5.8 amendment six EntityType mappings canonical** — substantiates per-DMW-type sovereignty differentiation coverage (Commits 1+2+3 amendment chain). Coverage anchors: PERSON / COMPANY / DEVICE direct mappings; AI_AGENT owning-entity-derived discipline (Correction B); APPLICATION → Enterprise; GOVERNMENT → Custom Government DMW NEW. Patent coverage: US 12,517,919 at substrate-architecture-coverage extension register.
+- **§5.10 Correction E NEW substrate territory** (per Commit 3 canonicalization) — substantiates substrate-vs-configuration separation coverage. Coverage anchors: substrate-vs-configuration separation per operator decision; six substrate primitive territories canonical (permission-batching + permission-class taxonomy + permission-trickle-through + auto-grant authorization + cognitive-load measurement primitives); three OPERATOR REVIEW REQUIRED research-pending markers preserved. Patent coverage: US 12,517,919 + US 12,164,537 at substrate-vs-configuration-separation register.
+- **§6 cross-surface architectural decisions** — substantiates cross-surface interconnection coverage. Coverage anchors: six INT-* interconnections (INT-1 through INT-6); Decision 4 operationally validated. Patent coverage: US 12,517,919 + US 12,164,537 + US 12,399,904 at cross-surface architectural register.
+- **§7 Active-Learning Informativeness as Refinement** — substantiates active-learning informativeness coverage. Coverage anchors: refinement framing (not net-new dimension); ADR-0022 amendment path; frozen-anchors family extension per INT-6. Patent coverage: US 12,517,919 + US 12,164,537 at active-learning-informativeness register.
+
+#### Three-patent coverage at substrate-architecture register
+
+- **US 12,164,537** (DMW + Foundation primitives) — substrate-architecture coverage at Wallet model + Permission model + EntityType enum + WalletType enum + Foundation primitive register
+- **US 12,399,904** (alert manager + TARs + extension primitives) — substrate-architecture coverage at TwinConfig + EscalationRequest + alert-flow primitives register
+- **US 12,517,919** (COSMP/DMW AI memory governance) — substrate-architecture coverage at COSMP operations + DMW substrate + AI sovereignty cap + per-DMW-type sovereignty + relational dynamics + active-learning informativeness register
+
+Each section + amendment in RAA 12.8 substantiates coverage under one or more of the three patents per the mapping above. The three-patent coverage map provides substantive patent-implementation-evidence territory at substrate-architecture register; adversarial-actor framing-tier challenges cannot prevail against substrate-tier coverage canonical at canonical-record register.
+
+### 8.4 Continuation patent candidate identification — OPERATOR REVIEW REQUIRED
+
+Per Correction 4 + §5.8 amendment + §5.10 Correction E + Path B-2 backwards-propagation: substantive substrate-architecture coverage extension surfaced during RAA 12.8 work. Continuation patent candidate territory enumerated for patent counsel review per substrate-honest discipline; specific continuation patent candidate selection deferred to focused operator session with patent counsel engagement.
+
+#### Continuation patent candidate territory enumerated
+
+Substrate territories surfaced from RAA 12.8 work flagged for patent-counsel-review per §8.4 OPERATOR REVIEW REQUIRED discipline:
+
+- **Custom Government DMW NEW substrate primitive extension** — per §5.8 amendment six EntityType mappings canonical; GOVERNMENT → Custom Government DMW with FedRAMP / IL4 / IL5 / IL6 / CMMC sovereignty constraints; WalletType enum extension via ADR-0021 pattern. Patent territory: US 12,517,919 + US 12,164,537 substrate-architecture-coverage extension.
+- **AI_AGENT owning-entity-derived discipline** — per Correction B canonical at §5.8 amendment; recursive resolution via EntityMembership substrate primitive; six AI_AGENT sub-mappings (PERSON-owned → Personal; COMPANY-owned → Enterprise; APPLICATION-owned → Enterprise; GOVERNMENT-owned → Custom Government; DEVICE-owned → Device; AI_AGENT-owned → recursive; Standalone → AI_AGENT-tier). Patent territory: US 12,517,919 + US 12,164,537 substrate-architecture-coverage extension at owning-entity-derived register.
+- **Permission-batching primitives at substrate-tier** — per §5.10 Correction E NEW substrate territory; permission_batch entity primitive (analogous to bridge_id pattern in existing Permission model); batch grouping mechanism at substrate-tier; OPERATOR REVIEW REQUIRED on specific batching algorithm choice. Patent territory: US 12,517,919 + US 12,164,537 substrate-architecture-coverage extension at permission-flow register.
+- **Auto-grant authorization primitives** — per §5.10 Correction E NEW substrate territory; substrate-enforced RULE 0 boundaries + application-configured policies within substrate bounds; OPERATOR REVIEW REQUIRED on specific auto-grant threshold values. Patent territory: US 12,517,919 + US 12,399,904 substrate-architecture-coverage extension at authorization-architecture register.
+- **Cognitive-load measurement primitives via SUBSTRATE_OBSERVATION CapsuleType** — per §5.10 Correction E NEW substrate territory + §5.3 SUBSTRATE_OBSERVATION CapsuleType NET-NEW; ADR-0021 extension protocol path; OPERATOR REVIEW REQUIRED on specific cognitive-load measurement methodology. Patent territory: US 12,517,919 + US 12,164,537 substrate-architecture-coverage extension at observation-architecture register.
+- **Substrate-vs-configuration separation as architectural property** — per §5.10 Correction E + operator-strategic decision; Foundation owns substrate-tier invariants + primitives + API configuration surface; enterprises/governments configure policies against Foundation API. Patent territory: US 12,517,919 + US 12,164,537 + US 12,399,904 substrate-architecture-coverage extension at substrate-platform-architecture register.
+
+#### Adversarial-actor protection consideration
+
+Per Decision Patent-A defensive publication strategy: each continuation patent candidate territory canonicalized on `origin/main` at the moment of canonicalization establishes prior-art for the substrate-architecture coverage extension. If adversarial actor(s) later attempt to claim substrate-architecture coverage at any of the six territories, canonical record on `origin/main` shows substrate has carried the territory canonicalization since the relevant RAA 12.8 commit. Adversarial-actor protection operates at canonical-record register before patent counsel engagement begins.
+
+#### OPERATOR REVIEW REQUIRED — Continuation patent candidate selection
+
+**OPERATOR REVIEW REQUIRED:** specific continuation patent candidate selection from the six territories enumerated requires patent counsel review. Patent counsel review scope:
+- Prosecution history review of all three patents (US 12,164,537 + US 12,399,904 + US 12,517,919) for any conflicts that may have weakened claims during prosecution
+- Continuation patent strategy selection from §8.4 territories per substrate-architecture-coverage-extension value vs prosecution effort + filing cost considerations
+- Coordination with §5.8 amendment chain canonical record + §5.10 Correction E canonical record for prior-art positioning
+- RULE 19 + ADR-0020 two-register IP discipline preserved during patent counsel engagement — protected-name boundary canonical at Zone U2 commit chain register
+
+New patent counsel engagement needed per recent updates per substrate-honest acknowledgment; prior counsel engagement discontinued (specific protected-name details per Register 1 framing not surfaced at canonical-record register per ADR-0020 + RULE 19; see §8.5 self-application). Continuation patent candidate review queued for focused operator session with new patent counsel engagement.
+
+§8.4 preserves outline-tier flag-for-operator-review framing per substrate-honest discipline; specific continuation patent candidate enumeration deferred to focused operator session with new patent counsel.
+
+### 8.5 Two-register IP discipline per ADR-0020 (RULE 19 self-application)
+
+Per ADR-0020 two-register IP discipline: Register 1 vs Register 2 distinction canonical throughout Foundation document architecture. RAA 12.8 document operates in Register 2 voice exclusively at canonical-record register on `origin/main`.
+
+#### Register 1 vs Register 2 distinction
+
+- **Register 1 voice** — operator-and-conversation context register; surfaces named individuals (adversarial actors; current and former team members in operational context; third-party legal counterparts; vendor relationships under NDA; financial counterparts; investor relationships; hiring-pipeline candidates; advisor relationships); project internal codenames not yet publicly disclosed; future-product naming pre-announcement; partnership relationships pre-announcement; discontinued-engagement names. Register 1 voice operates at session-conversation-tier ONLY — never at canonical-record register.
+- **Register 2 voice** — canonical-record register; categorical class references only; named-individual references prohibited per RULE 19; protected-name discipline preserved at canonical-record-tier. Register 2 voice operates at canonical-record register on `origin/main` + ADR + RAA + glossary + reference documents.
+
+The two-register distinction operates per architectural-tier separation: Register 1 carries operator-and-conversation context that informs decisions; Register 2 carries decisions + substrate-architecture canonicalization at canonical-record-tier. Decisions made per Register 1 input materialize at Register 2 voice in canonical record without protected-name leak.
+
+#### Categorical references throughout §8 + RAA 12.8
+
+Per RULE 19 + ADR-0020 application throughout RAA 12.8:
+
+- §8.1 patent ownership references: "sole-owner of three US patents" + "prior co-ownership arrangements discontinued" (categorical; no named former co-owner surfaced)
+- §8.2 adversarial-actor references: "specific identified adversarial actor(s)" + "adversarial actor(s) attempting to build patented architecture" (categorical; no named adversarial actor(s) surfaced)
+- §8.4 patent counsel references: "new patent counsel engagement needed" + "prior counsel engagement discontinued" (categorical; no named prior counsel surfaced)
+- Throughout §1-§7: substrate-tier substrate primitives + substrate-architecture coverage references operate at categorical class register
+
+The categorical framing operates per Register 2 voice discipline; specific protected-name details per Register 1 framing inform decisions at operator-and-conversation context tier but never surface at canonical-record register on `origin/main`.
+
+#### Two-register discipline strengthens defensive publication strategy
+
+Per Decision Patent-A defensive publication strategy: substrate truth at canonical-record register provides adversarial-actor protection at the moment substrate is canonical. Two-register IP discipline strengthens defensive publication by preserving protected-name boundary at canonical-record register — adversarial-actor framing-tier challenges cannot leverage protected-name leaks (because zero leaks exist) and substrate truth at canonical-record register cannot be disputed through framing-tier challenges.
+
+The combination operates as systematic defensive publication discipline:
+- Substrate truth at body-text register (Path B-2 backwards-propagation canonical)
+- Protected-name boundary at canonical-record register (RULE 19 + ADR-0020 discipline)
+- Zone U2 commit chain register sole-authorship attribution (memory entry #12 framing)
+- Substrate-architecture coverage at three-patent register (§8.3 coverage map)
+- Continuation patent candidate territory flagged for operator + patent counsel review (§8.4 OPERATOR REVIEW REQUIRED)
+
+Each register operates uniformly; adversarial-actor framing-tier challenges cannot prevail against the systematic discipline canonical at canonical-record register on `origin/main`.
+
+#### §8.5 self-application of RULE 19 + ADR-0020
+
+This subsection (§8.5) operates as the self-application of RULE 19 + ADR-0020 throughout §8 + RAA 12.8. The self-application is recursive:
+- §8.1 references the discipline at sole-authorship attribution tier
+- §8.2 references the discipline at adversarial-actor framing tier (categorical only)
+- §8.3 references the discipline at substrate-architecture coverage tier (substrate primitives + categorical class references)
+- §8.4 references the discipline at patent counsel engagement tier (new + prior counsel categorical only)
+- §8.5 canonicalizes the discipline at §8 self-application tier (this subsection)
+
+The recursive self-application demonstrates that the discipline operates at canonical-record register throughout — not just as policy but as architectural property of the canonical record itself. Substrate-honest pattern: substrate truth canonicalized at body-text register; protected-name boundary preserved at canonical-record register; both operate uniformly per ADR-0020 + RULE 19.
+
+#### Cross-section reach
+
+- §1.6 patent-implementation-evidence framing (foundational substrate per §8.1 expansion)
+- §5.4 agent-to-agent coordination per Corrections 1+3+4 (substrate-mediated path canonical per §8.3 coverage)
+- §5.8 amendment six EntityType mappings (§8.3 coverage map + §8.4 continuation patent candidate)
+- §5.10 Correction E NEW substrate territory (§8.4 continuation patent candidate enumeration)
+- §6 cross-surface architectural decisions (§8.3 coverage map cross-surface)
+- §9 forward implications (Step 2D-completion + Step 2E engineering handoff)
+- §10 References (citation discipline; bibliographic completion)
+- RAA 12.7 §2.5 Zone U2 (patent-holder implementation record substrate)
+- ADR-0020 two-register IP discipline (canonical substrate for §8.5 self-application)
+- ADR-0021 Capsule Type Extension Protocol (substrate-architecture vs enumeration-count distinction per §8.3)
+- ADR-0022 combined_score formula canonicalization (frozen-anchors discipline strengthens patent-implementation-evidence per §7.4)
 
 ---
 
