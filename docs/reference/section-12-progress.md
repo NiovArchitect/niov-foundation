@@ -27,9 +27,9 @@ demonstrated pace, not industry standard.
 | 12.5 (Compliance Architecture Review) | CLOSED | `9671776` | 24 dimensions assessed; 9 patent-relevant findings; 6 claim families; 9 sub-boxes dependency-ordered |
 | 12C.0 Commit 1 (endpoint extensions) | CLOSED | `2aa1a88` | DELETE skill + PATCH entities audit_event_id + audit filters + bridge_id filter; +16 tests; 2 anchor properties (DRIFT 9 audit + permissions) |
 | 12C.0 Commit 2 (compliance hardening) | CLOSED | `f3359fb` | crypto-config + retention posture + system principals + structured logging + /compliance/state; +22 tests; 4 anchor properties (DRIFT 2 Option C, DRIFT 12, frozen CRYPTO_CONFIG, frozen SYSTEM_PRINCIPALS) |
-| 12C.0.5 (operating manual + docs) | IN PROGRESS | this commit | CLAUDE.md + AGENTS.md + 10 ADRs + contributing guides + reference catalog |
-| Track A (test infrastructure isolation) | QUEUED | — | Containerized Postgres for unit tests <60s; mocked LLM for integration tier; real-LLM reserved for nightly/pre-release |
-| 12.5 Sub-box 1 (EscalationRequest + dual-control) | QUEUED | — | Foundation primitive blocking Bucket B; depends on Track A acceleration |
+| 12C.0.5 (operating manual + docs) | CLOSED | `23e263d` | CLAUDE.md + AGENTS.md + 10 ADRs + contributing guides + reference catalog |
+| Track A (test infrastructure isolation) | SUBSTANTIVELY COMPLETE | `d728cd4` → `5be42e5` | 18 gates closed + REVISED Gate 2 (Colima canonicalization per RULE 13 substrate-state drift correction); containerized Postgres + mocked LLM tier-stratification per ADR-0011; full chain at CURRENT_BUILD_STATE.md §5 |
+| 12.5 Sub-box 1 (EscalationRequest + dual-control) | **UNBLOCKED** | — | Track A delivered; Phase 2 primary engineering scope candidate; D-2D-D10 closure per RAA 12.8 §5.2 + §5.9 item 1 (4-framing-register unified engineering territory; see Dependency Notes below) |
 | 12.5 Sub-box 2-9 | QUEUED | — | Dependency-ordered post Sub-box 1 |
 | 12C.1 (frontend Playground + Intelligence) | QUEUED | — | 6 cleanup items including 3 sentinel sites in otzar-control-tower (`MemberDetailDrawer.tsx:284`, `Users.tsx:175`, `Users.tsx:195`) |
 | 12D (Security & Audit screen) | QUEUED | — | Frontend |
@@ -38,12 +38,44 @@ demonstrated pace, not industry standard.
 
 ## Dependency Notes
 
-**Track A unlocks Sub-box 1:** The 90-110 minute Foundation full-
-suite test cycle (per ADR-0010) makes Sub-box 1's dual-control
-middleware iteration prohibitively slow. Containerized Postgres
-+ mocked LLM brings unit subset to <60s; integration tier with
-mocked LLM brings to 5-15 min; real-LLM reserved for nightly /
-pre-release. Sub-box 1 starts after Track A delivers.
+**Track A DELIVERED; Sub-box 1 unblocked.** The 90-110 minute
+Foundation full-suite test cycle (per ADR-0010) made Sub-box 1's
+dual-control middleware iteration prohibitively slow. Track A
+test infrastructure isolation (18 gates + REVISED Gate 2 closed
+on origin/main per `CURRENT_BUILD_STATE.md` §5) delivered
+containerized Postgres + mocked LLM tier-stratification per
+ADR-0011: unit subset <60s; integration tier 5-15 min; real-LLM
+reserved for nightly / pre-release. Sub-box 1 is now unblocked
+as Phase 2 primary engineering scope candidate per substrate
+truth canonical at session-anchor canonical reference register
+(`docs/CURRENT_BUILD_STATE.md` refreshed at `ecfdf7f` Phase 1a).
+
+**Sub-box 1 = D-2D-D10 unified engineering territory (4-framing-
+register cross-reference per RAA 12.8 §9.6 Step 2D-completion
+handoff discipline):** Sub-box 1 (EscalationRequest + dual-control
+middleware; Foundation primitive blocking Bucket B) coincides
+with D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL closure per RAA 12.8
+substrate-architecture canonicalization. The single engineering
+work substantiates 4 framing registers concurrently:
+
+- **RAA 12.8 §5.2** (EscalationRequest Prisma model + validation
+  gate flags + approval workflow + correction propagation chain;
+  D-2D-D10 closure detail)
+- **Section 12.5 Sub-box 1** (Foundation primitive blocking Bucket
+  B; dual-control middleware framing)
+- **RAA 12.8 §5.9 item 1** (Step 2E engineering surface
+  enumeration; canonical engineering surface for Surface 3)
+- **Section 14 admin-tooling box** (existing TODO comment framing
+  at `apps/api/src/services/otzar/priming.ts:131-134`:
+  "EscalationRequest table doesn't exist yet. The Section 14
+  admin-tooling box introduces it.")
+
+Substrate-state observation per RULE 13: priming.ts substrate-
+actual path is `apps/api/src/services/otzar/priming.ts` (otzar
+service register, NOT coe service register as RAA 12.8 §5.9
+ambiguously referenced). Implementation path canonical at otzar
+service register; engineering scope unified per Phase 2
+substrate-honest discipline.
 
 **Sub-boxes 2-9 depend on Sub-box 1:** Sub-box 1 introduces the
 `EscalationRequest` primitive + dual-control middleware that
@@ -96,10 +128,22 @@ When an architectural anchor lands:
 
 ## See Also
 
+- `docs/CURRENT_BUILD_STATE.md` — session-anchor canonical
+  reference for build state; §3 cross-cutting substrate-
+  architecture canonicalization work; §4 Section 12.5 sub-box
+  framing table (refreshed at `ecfdf7f` Phase 1a; 2026-05-11)
+- `docs/architecture/raa-12-8-substrate-dynamics.md` — RAA 12.8
+  substrate-architecture canonicalization (14-commit chain
+  canonical at `e31f948`; 2026-05-11); §5.2 D-2D-D10 closure
+  detail + §5.9 Step 2E engineering surface enumeration + §9.6
+  Step 2D-completion handoff discipline
 - `docs/reference/architectural-anchors.md` — runtime invariants
   catalog (6 anchors as of `f3359fb`)
 - `docs/architecture/decisions/` — Architecture Decision Records
-- `docs/reference/glossary.md` — term definitions
+  (22 ADRs canonical at 2026-05-11)
+- `docs/reference/glossary.md` — term definitions (32 canonical-
+  grade entries at `74b2765` [GLOSSARY-G-3]; Step 2F refresh
+  queued per RAA 12.8 §9.3)
 - `CLAUDE.md` — operating manual (Section 2 mirrors this tracker
   in summary form)
 - `docs/COMPLIANCE_ARCHITECTURE_REVIEW.md` — Section 12.5
