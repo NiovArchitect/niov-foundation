@@ -42,6 +42,7 @@ import { registerDeveloperRoutes } from "./routes/developer.routes.js";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import {
   seedMonetizationConfig,
   seedSkillPackages,
@@ -259,9 +260,20 @@ export async function buildApp(
     },
   });
 
-  // CORS first -- registered before the gateway hook so preflight
-  // OPTIONS responses are not subject to rate limiting and the
-  // CORS plugin's own headers land on every route's response.
+  // Helmet first -- security headers (HSTS + X-Frame-Options +
+  // X-Content-Type-Options + Referrer-Policy + Cross-Origin-*) land on
+  // every response including CORS preflight OPTIONS and rate-limited
+  // 429s. CSP + COEP deferred to forward queue per ADR-0023 (frontend
+  // integration substrate not yet canonical).
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    global: true,
+  });
+
+  // CORS registered next, still before the gateway hook so preflight
+  // OPTIONS responses are not subject to rate limiting and the CORS
+  // plugin's own headers layer on top of helmet baseline.
   await app.register(cors, {
     origin: process.env.CONTROL_TOWER_URL ?? "http://localhost:5173",
     credentials: true,
