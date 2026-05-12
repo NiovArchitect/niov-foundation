@@ -89,6 +89,33 @@ several downstream sub-boxes consume:
 - Sub-box 7 (verifiable-credentials + compliance attestation
   reports, Family 5) requires escalation for credential issuance
 
+**Substrate-state note: Sub-box numbering divergence (RULE 13).**
+The Sub-box enumeration used in this tracker (Sub-box 1 =
+EscalationRequest + dual-control; Sub-box 2 = privileged action
+audit chain; Sub-box 5 = GDPR Article 17 pseudonymization; Sub-box
+7 = verifiable-credentials + compliance attestation) is a
+**working-tracker designation**. The **authoritative** sub-box
+enumeration is at `docs/COMPLIANCE_ARCHITECTURE_REVIEW.md` lines
+2200+ (the "Engineering surface" section): Sub-box 1 =
+EscalationRequest + dual-control middleware (matches this tracker);
+Sub-box 2 = Jurisdiction tagging; Sub-box 3 = REGULATOR +
+Lawful-Basis; Sub-box 4 = DecisionRecord + DataSubjectReference +
+Agent Attestation; Sub-box 5 = EntityIdentity + Pseudonymization +
+Erasure; Sub-box 6 = NIST Control Mappings + SSP Evidence
+Generator; Sub-box 7 = ComplianceAttestation + Selective
+Disclosure; Sub-box 8 = Cross-Tenant Compliance Benchmarking;
+Sub-box 9 = Capsule Compliance Provenance. The divergence at
+Sub-box 2+ is pre-existing across landed commits (including the
+immutable `[SEC-SUBBOX1-ITEM4-DEFER]` `49e2934` commit body, which
+references "Sub-box 2 (privileged action audit chain)", and the
+`[SEC-SUBBOX1-ITEM5-DEFER]` `263bf77` + `[SEC-SUBBOX1-ITEM6-DEFER]`
+`dd6fc09` bodies). Full renumbering reconciliation is forward-queued
+as a separate careful pass (it must handle the immutable commit-body
+references). Future sessions: when reading "Sub-box N" references in
+this tracker, treat them as working-tracker designations; for
+authoritative sub-box scope per the engineering surface, consult
+`docs/COMPLIANCE_ARCHITECTURE_REVIEW.md`.
+
 **12C.1 frontend depends on no Foundation work** but waits for
 design alignment. Specifically: the 3 sentinel sites in
 otzar-control-tower (`MemberDetailDrawer.tsx:284`,
@@ -477,10 +504,18 @@ When an architectural anchor lands:
 - `docs/reference/architectural-anchors.md` — runtime invariants
   catalog (6 anchors as of `f3359fb`)
 - `docs/architecture/decisions/` — Architecture Decision Records
-  (22 ADRs canonical at 2026-05-11)
+  (25 ADRs canonical at 2026-05-12 per [SEC-DBPUSH-CLOSE] `5a18491`
+  + the [SEC-INT6-ADR0022] `d743e4c` ADR-0022 amendment; ADRs
+  0023/0024/0025 + the ADR-0022 amendment landed after 2026-05-11)
 - `docs/reference/glossary.md` — term definitions (32 canonical-
-  grade entries at `74b2765` [GLOSSARY-G-3]; Step 2F refresh
-  queued per RAA 12.8 §9.3)
+  grade entries landed at `74b2765` [GLOSSARY-G-3]; + 8 entries
+  added across Section 12.5 substrate — Validation Gate Flag / AI
+  Access Block / Correction Propagation / Escalation Routes per the
+  [D-2D-D10] arc; Schema-Push-Target Discipline per
+  [SEC-DBPUSH-CLOSE]; Inference Surface / LLM-Equivalence-Hive /
+  SLM-Equivalence per [SEC-RAA12-9-GLOSSARY]; current total ~85
+  `**`-prefixed entries; Step 2F full refresh queued per RAA 12.8
+  §9.3)
 - `CLAUDE.md` — operating manual (Section 2 mirrors this tracker
   in summary form)
 - `docs/COMPLIANCE_ARCHITECTURE_REVIEW.md` — Section 12.5

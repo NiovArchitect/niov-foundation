@@ -41,7 +41,8 @@ citation block, ISO-dated Status). The template at
 `decisions/0000-template.md` includes both the structure and
 the "How To Use This Template" guidance for new ADRs.
 
-ADR catalog as of Section 12C.0:
+ADR catalog as of [DOCS-CATALOG-REFRESH-CATALOGS] (2026-05-12;
+25 ADRs):
 
 - **ADR-0001** — Three-wallet architecture (foundational)
 - **ADR-0002** — Append-only audit chain with BEFORE DELETE trigger (foundational)
@@ -53,6 +54,21 @@ ADR catalog as of Section 12C.0:
 - **ADR-0008** — `EntityComplianceProfile` is org-level, not aggregated (Section 12C.0; DRIFT 15)
 - **ADR-0009** — COSMP 7-operation enumeration (locked by patent US 12,517,919)
 - **ADR-0010** — Foundation tests are legitimately slow (90-110 min) (Section 12C.0 emergent lesson)
+- **ADR-0011** — Three-tier test stratification (Track A Gate 1; Gate 6 reproducibility-verification amendment in-place)
+- **ADR-0012** — Test-mode LLM provider hardening (Track A Gate 1; hash-dispatch decision superseded in part by ADR-0014)
+- **ADR-0013** — Containerized Postgres for unit and integration tiers (Track A Gate 1; `postgres:16.4-alpine` pin)
+- **ADR-0014** — FixtureBasedLLMProvider key-based dispatch (Track A Gate 3; supersedes ADR-0012's hash-by-content dispatch)
+- **ADR-0015** — CI Workflow Architecture (Track A Gate 7; 8 locked decisions A-H including postgres + Node pins)
+- **ADR-0016** — Pin-and-Optimize Framework (substrate-pinning canonical reference; companion to ADR-0017/0018/0019; five-question template)
+- **ADR-0017** — Production Discipline (substrate-investigation canonical reference; companion to ADR-0016/0018/0019; nine-step template)
+- **ADR-0018** — Deployment-Target Agnosticism Posture (substrate-portability canonical reference; companion to ADR-0016/0017/0019; five-step decision template)
+- **ADR-0019** — Cryptographic-Suite Posture (substrate-cryptographic-resilience canonical reference; companion to ADR-0016/0017/0018; six-step decision template)
+- **ADR-0020** — Two-Register IP Discipline (IP-discipline register; the protected-name boundary + RULE 19 at canonical-record register)
+- **ADR-0021** — Capsule Type Extension Protocol (extension-protocol register; CapsuleType enum extension pattern + the PRICING_TABLE deliberate-blocker worked example)
+- **ADR-0022** — combined_score Formula Canonicalization (scoring-formula register; the 0.45/0.35/0.20 coefficients + recency thresholds; amended for the INT-6 frozen-anchors-family informativeness-coefficient join)
+- **ADR-0023** — Security Headers Posture (security-headers register; the `@fastify/helmet` posture)
+- **ADR-0024** — Pre-Commit Hook Posture (git-hook-tier enforcement register; husky pre-commit running the typecheck baseline + the RULE 16 no-console anchor + the ADR-0025 db-push guard)
+- **ADR-0025** — Schema-Push-Target Discipline (schema-push-target register; the `prisma db push` explicit-env-target rule + the wrapper + the pre-commit db-push guard; the [D-2D-D10-4] production-schema-push trap)
 
 ADRs are sequentially numbered. Gaps are not closed when ADRs
 are superseded or deprecated — a retired ADR keeps its number

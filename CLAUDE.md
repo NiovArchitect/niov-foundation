@@ -350,9 +350,9 @@ documentation, **cite the reference**, do not redefine.
 
 ## 5. Key Architectural Decisions
 
-The 19 ADRs as of Track A Gate 8h. The `docs/architecture/README.md`
-is the source of truth for ADR navigation; this is a quick-
-reference jump table.
+The 25 ADRs as of [DOCS-CATALOG-REFRESH-CATALOGS] (`dd6fc09` parent;
+2026-05-12). The `docs/architecture/README.md` is the source of
+truth for ADR navigation; this is a quick-reference jump table.
 
 - **ADR-0001** — Three-wallet architecture (foundational)
 - **ADR-0002** — Append-only audit chain with BEFORE DELETE trigger (foundational)
@@ -373,6 +373,12 @@ reference jump table.
 - **ADR-0017** — Production Discipline (substrate-investigation canonical reference; companion to ADR-0016; nine-step template)
 - **ADR-0018** — Deployment-Target Agnosticism Posture (substrate-portability canonical reference; companion to ADR-0016/0017/0019; five-step decision template; commit `657a794`)
 - **ADR-0019** — Cryptographic-Suite Posture (substrate-cryptographic-resilience canonical reference; companion to ADR-0016/0017/0018; six-step decision template; commit `7216784`)
+- **ADR-0020** — Two-Register IP Discipline (IP-discipline register; the protected-name boundary + RULE 19 at canonical-record register; commit `75a90de` [TRACK-A-RULE-19])
+- **ADR-0021** — Capsule Type Extension Protocol (extension-protocol register; CapsuleType enum extension pattern + the PRICING_TABLE `monetization.service.ts:30` deliberate-blocker worked example)
+- **ADR-0022** — combined_score Formula Canonicalization (scoring-formula register; the 0.45/0.35/0.20 coefficients + recency 7-day/90-day thresholds; amended at [SEC-INT6-ADR0022] `d743e4c` for the INT-6 frozen-anchors-family informativeness-coefficient join — formula extension is Step 2E)
+- **ADR-0023** — Security Headers Posture (security-headers register; the `@fastify/helmet` posture; production-readiness audit lineage)
+- **ADR-0024** — Pre-Commit Hook Posture (git-hook-tier enforcement register; husky `^9.1.7`; `.husky/pre-commit` runs the db-push guard (ADR-0025) → typecheck baseline → the RULE 16 no-console anchor; `--no-verify` override preserved)
+- **ADR-0025** — Schema-Push-Target Discipline (schema-push-target register; the `prisma db push` explicit-env-target rule + `scripts/prisma-db-push-test.sh` + the `.husky/pre-commit` db-push guard + the `db:push:test` alias; the [D-2D-D10-4] production-schema-push trap; [SEC-DBPUSH] mini-arc `d8d6236`→`e1dbc1e`→`ed9a519`→`5a18491`)
 
 ADR amendments and supersession follow the discipline in
 `docs/architecture/README.md` §ADR Lifecycle.
