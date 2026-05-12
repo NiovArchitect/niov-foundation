@@ -235,3 +235,10 @@ Bidirectional citations (cited from):
   Track A Gate 8)
 - `docs/reference/architectural-anchors.md` — no anchor;
   containerization is infrastructure, not runtime invariant
+- ADR-0025 (Schema-Push-Target Discipline; landed in [SEC-DBPUSH-ADR]
+  on 2026-05-12) — canonicalizes the schema-push-target discipline that
+  consumes this ADR's containerized `localhost:5433` test-DB substrate
+  as the canonical wrapper-script target (forward-queued at
+  [SEC-DBPUSH-WRAPPER]). The test-tier substrate canonical here is the
+  validated target; ADR-0025's Decision section names this ADR as the
+  canonical test-DB target.

@@ -134,6 +134,15 @@ pre-commit patience tolerance.
   before edits chained — the pre-existing-vs-introduced vuln
   distinction surfaced at pre-flight)
 
+Bidirectional citations (cited from):
+
+- ADR-0025 (Schema-Push-Target Discipline; landed in [SEC-DBPUSH-ADR]
+  on 2026-05-12) — canonicalizes the schema-push-target discipline that
+  will extend this ADR's pre-commit hook substrate with a db-push guard
+  (forward-queued at [SEC-DBPUSH-HOOK-CI]). The hook substrate canonical
+  here is the load-bearing extension point; ADR-0025's Decision section
+  names this ADR as the canonical extension target.
+
 ## Forward Queue
 
 - **ESLint adoption** (lint/format/typecheck CI batch per DRIFT 2

@@ -204,13 +204,20 @@ extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
 **Forward queue (6 items deferred from the arc; NOT landed at
 [D-2D-D10-8]):**
 
-1. **[SEC-DBPUSH-DISCIPLINE] / ADR-0025** — `scripts/prisma-db-push-test.sh`
-   wrapper (loads `.env.test`; rejects a non-localhost
-   `DATABASE_URL`) + a pre-commit / CI guard against bare
-   `npx prisma db push`. Next-arc candidate; substantive
-   engineering substrate, not canonical-record register — gets its
-   own arc cycle per the [ADDENDUM-DMW-SLM] register-separation
-   precedent. Source: [D-2D-D10-4] Observation 1.
+1. **[SEC-DBPUSH-DISCIPLINE]** — ADR-0025 (Schema-Push-Target
+   Discipline) landed at [SEC-DBPUSH-ADR] on 2026-05-12, canonicalizing
+   the discipline at the canonical-record register (schema-push commands
+   MUST use an explicit env-target qualifier; the wrapper script is
+   canonical once landed; CI is already safe; production schema changes
+   sequence only via the deploy pipeline). The engineering substrate
+   forward-queue within the [SEC-DBPUSH] mini-arc: [SEC-DBPUSH-WRAPPER]
+   (`scripts/prisma-db-push-test.sh` — loads `.env.test`, validates
+   `DATABASE_URL` points to `localhost`, fail-closed) →
+   [SEC-DBPUSH-HOOK-CI] (pre-commit hook db-push guard per ADR-0024 + a
+   CI workflow guard against bare `npx prisma db push` per ADR-0015) → a
+   glossary entry for `Schema-Push-Target Discipline` per RULE 17.
+   Source: [D-2D-D10-4] Observation 1 (the production schema-push target
+   drift event) + [D-2D-D10-1] near-certain analogous exposure.
 2. **INT-6 frozen-anchors / ADR-0022 amendment** — the
    informativeness-coefficient parameterization joining the
    frozen-anchors family alongside `combined_score`. Future
