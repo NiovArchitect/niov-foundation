@@ -1,10 +1,58 @@
 # NIOV Foundation pre-commit hook
-# Enforces: typecheck (strict 12-error baseline per ADR-0015 Decision B) + RULE 16 no-console invariant
-# Canonical ADR: docs/architecture/decisions/0024-pre-commit-hook-posture.md
+# Enforces (in order): db-push guard (ADR-0025) -> typecheck (strict 12-error
+#   baseline per ADR-0015 Decision B) -> RULE 16 no-console invariant
+# Canonical ADRs: docs/architecture/decisions/0024-pre-commit-hook-posture.md
+#   (the hook itself) + docs/architecture/decisions/0025-schema-push-target-discipline.md
+#   (the db-push guard)
 # RULE 13 -- surface substrate truth before edits chain
 # Bypass: git commit --no-verify (emergency override preserved)
+# POSIX sh-safe: no bash-only syntax ([[ ]], arrays) -- the hook runs under
+# husky's sh wrapper; external contributors may not have bash as /bin/sh.
 
 set -e
+
+# ============================================================
+# Check 1: db-push guard (ADR-0025 Schema-Push-Target Discipline)
+# ============================================================
+# Reject staged files that introduce a bare `prisma db push` invocation
+# outside the canonical allowlist. Bare `prisma db push` auto-loads `.env`
+# from the repo root (the operator's production credentials per ADR-0018) --
+# this is the [D-2D-D10-4] trap. Use the localhost-validated wrapper
+# (`npm run db:push:test` / `scripts/prisma-db-push-test.sh`) instead.
+# This guard self-tests: this very commit must pass it (the wrapper script,
+# `.husky/pre-commit` itself, the smoke test, and the canonical CI
+# `packages/database/package.json` `db:push` script are allowlisted;
+# `scripts/test-db-up.sh` post-retrofit invokes the wrapper, not a bare push).
+echo "→ db-push guard (ADR-0025 Schema-Push-Target Discipline)"
+DBPUSH_ALLOWLIST="scripts/prisma-db-push-test.sh packages/database/package.json .husky/pre-commit scripts/test-db-push-wrapper.sh"
+DBPUSH_VIOLATIONS=""
+for file in $(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.sh$|/package\.json$|^package\.json$' || true); do
+  allowed=0
+  for a in $DBPUSH_ALLOWLIST; do
+    if [ "$file" = "$a" ]; then allowed=1; break; fi
+  done
+  [ "$allowed" -eq 1 ] && continue
+  [ ! -f "$file" ] && continue
+  # Precise match: a line that *invokes* `prisma db push` -- not a comment,
+  # not an echo/printf string, not the wrapper-script invocation.
+  if grep -nE 'prisma db push' "$file" 2>/dev/null \
+      | grep -vE '^[0-9]+:[[:space:]]*#' \
+      | grep -vE 'echo|printf' \
+      | grep -vE 'prisma-db-push-test\.sh' \
+      | grep -q .; then
+    DBPUSH_VIOLATIONS="$DBPUSH_VIOLATIONS
+  - $file"
+  fi
+done
+if [ -n "$DBPUSH_VIOLATIONS" ]; then
+  echo "  ::error:: db-push guard (ADR-0025): bare 'prisma db push' invocation in staged file(s):$DBPUSH_VIOLATIONS"
+  echo "       Use: npm run db:push:test   (or: bash scripts/prisma-db-push-test.sh)"
+  echo "       Bare 'prisma db push' auto-loads .env (production) -- the [D-2D-D10-4] trap."
+  echo "       See ADR-0025 (docs/architecture/decisions/0025-schema-push-target-discipline.md)."
+  echo "       Override (emergency only): git commit --no-verify"
+  exit 1
+fi
+echo "  ✓ db-push guard passed"
 
 echo "→ typecheck (tsc --noEmit; strict 12-error baseline per ADR-0015 Decision B)"
 npx tsc --noEmit -p tsconfig.json 2>&1 | tee /tmp/niov-precommit-tsc.log

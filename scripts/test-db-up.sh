@@ -2,6 +2,9 @@
 # Foundation test database bring-up.
 # Implements the 3-step bring-up from ADR-0013 §Decision.
 # Idempotent: safe to run repeatedly.
+# Step 2 (schema push) goes through scripts/prisma-db-push-test.sh per
+# ADR-0025 (Schema-Push-Target Discipline) -- fail-closed localhost
+# validation, never a bare `npx prisma db push` (the [D-2D-D10-4] trap).
 
 set -euo pipefail
 
@@ -31,9 +34,8 @@ set -a
 source .env.test
 set +a
 
-echo "==> [2/3] Pushing schema (prisma db push)..."
-npx prisma db push --skip-generate \
-  --schema=packages/database/prisma/schema.prisma
+echo "==> [2/3] Pushing schema (via scripts/prisma-db-push-test.sh -- fail-closed localhost validation per ADR-0025)..."
+bash scripts/prisma-db-push-test.sh
 
 echo "==> [3/3] Applying audit triggers..."
 npx tsx scripts/apply-audit-triggers.ts
