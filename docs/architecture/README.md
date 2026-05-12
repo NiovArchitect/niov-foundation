@@ -116,10 +116,12 @@ runtime-enforced architectural properties locked by tests).
 
 - `docs/reference/glossary.md` — term definitions and
   capitalization conventions
-- `docs/reference/architectural-anchors.md` — the 6
+- `docs/reference/architectural-anchors.md` — the 8
   runtime-enforced architectural properties (DRIFT 9 audit,
   DRIFT 9 permissions, DRIFT 2 Option C, DRIFT 12, frozen
-  CRYPTO_CONFIG, frozen SYSTEM_PRINCIPALS) as of Section 12C.0
+  CRYPTO_CONFIG, frozen SYSTEM_PRINCIPALS, `combined_score`
+  coefficient invariants per ADR-0022, `RELEVANCE_FORGET_FLOOR`
+  behavioral lock per ADR-0022) as of [DOCS-CATALOG-REFRESH-ANCHORS]
 - `docs/reference/section-12-progress.md` — Section 12
   build-cycle live tracker
 - `docs/contributing/` — contributor guides (coming in Phase 2

@@ -10,7 +10,44 @@ Postgres BEFORE DELETE trigger (ADR-0002), the anchor catalog is
 enforced by being committed substrate that every contributor
 reads before making architectural decisions.
 
-**Current count:** 6 anchors (as of Section 12C.0 @ `f3359fb`)
+**Current count:** 8 anchors (as of [DOCS-CATALOG-REFRESH-ANCHORS] —
+commit 2 of 2 of the [DOCS-CATALOG-REFRESH] mini-arc; `cf10637`
+parent; 2026-05-12)
+
+## Anchor Mechanisms — Three Substrate-Tier Tamper-Resistance Patterns
+
+The 8 anchors in this catalog use distinct substrate-tier
+tamper-resistance mechanisms. A session extending this catalog must
+match the new anchor to one of these patterns (or document a new
+mechanism explicitly):
+
+1. **Filter-narrowing / regex-scan / fallback-assertion tests** —
+   anchors 1-4. The architectural property is enforced via test
+   substrate that asserts the runtime behavior: cross-org filter
+   narrowing (anchors 1+2 per ADR-0006), no-`console.*` regex scan
+   (anchor 3 per ADR-0005), `writeAuditEvent` chainKey-priority
+   fallback assertion (anchor 4 per ADR-0002).
+2. **`Object.freeze` tamper-prevention** — anchors 5+6
+   (`CRYPTO_CONFIG`, `SYSTEM_PRINCIPALS` per ADR-0003). The
+   configuration object is `Object.freeze`-wrapped at module load;
+   tamper attempts throw at runtime; the test asserts
+   `Object.isFrozen(...)` plus the specific values. The substrate
+   property is the freeze itself.
+3. **Value-pin assertions** — anchor 7 (`combined_score` per
+   ADR-0022). The numeric coefficients are pinned via explicit
+   `expect(...).toBeCloseTo(value, precision)` assertions
+   (`tests/unit/coe.test.ts:132-136` — four value-pin assertions for
+   the 0.45 / 0.35 / 0.20 / 1.0 invariants; `:121-129` for recency
+   monotonicity). Changing a coefficient breaks a direct value-pin.
+4. **Behavioral-lock assertions** — anchor 8 (`RELEVANCE_FORGET_FLOOR`
+   per ADR-0022). The constant value is NOT directly pinned; the
+   *behavior the constant gates* is tested — the `relevance_score < 0.2`
+   exclusion test (`coe.test.ts:170`) + the FOUNDATIONAL bypass test
+   (`coe.test.ts:141-145`) + a relational lower-bound assertion
+   (`coe.test.ts:316` — `expect(0.05).toBeLessThan(RELEVANCE_FORGET_FLOOR)`).
+   Changing the constant would not break a direct value-pin (none
+   exists); it would break the behavioral assertions about the
+   exclusion / bypass semantics.
 
 ## Summary
 
@@ -22,6 +59,8 @@ reads before making architectural decisions.
 | 4 | DRIFT 12 | `writeAuditEvent` backwards-compat fallback | `tests/unit/audit-system-principals.test.ts` | 12 | `f3359fb` | ACTIVE |
 | 5 | Frozen `CRYPTO_CONFIG` | Tamper anchor on cryptography config | `tests/unit/boot-validation.test.ts` | — | `f3359fb` | ACTIVE |
 | 6 | Frozen `SYSTEM_PRINCIPALS` | Tamper anchor on system-principal enumeration | `tests/unit/audit-system-principals.test.ts` | — | `f3359fb` | ACTIVE |
+| 7 | `combined_score` coefficient invariants | The 0.45/0.35/0.20 tag/base/recency ratios + sum=1.0 + recency monotonicity (per ADR-0022) | `tests/unit/coe.test.ts:132-136` (value-pin) + `:121-129` (recency monotonicity) | — | catalog landed `cf10637`+1 ([DOCS-CATALOG-REFRESH-ANCHORS]); test substrate predates | ACTIVE |
+| 8 | `RELEVANCE_FORGET_FLOOR` behavioral lock | The 0.2 intentional-forgetting floor (`relevance_score < 0.2` excluded; FOUNDATIONAL Capsules bypass) (per ADR-0022 + ADR-0021) | `tests/unit/coe.test.ts:170` (exclusion) + `:141-145` (FOUNDATIONAL bypass) + `:316` (relational lower-bound) | — | catalog landed `cf10637`+1 ([DOCS-CATALOG-REFRESH-ANCHORS]); test substrate predates | ACTIVE |
 
 ---
 
@@ -363,6 +402,145 @@ covers new additions automatically.
 
 ---
 
+## 7. `combined_score` coefficient invariants
+
+**Status:** ACTIVE
+**Test:** `tests/unit/coe.test.ts:132-136` (coefficient lock) +
+`tests/unit/coe.test.ts:121-129` (recency monotonicity lock)
+**Drift Reference:** combined_score formula canonicalization (see
+ADR-0022); the INT-6 frozen-anchors-family extension path (RAA 12.8
+§6.6 + §7.4)
+**Cataloged In:** `cf10637`+1 ([DOCS-CATALOG-REFRESH-ANCHORS] —
+commit 2 of 2 of the [DOCS-CATALOG-REFRESH] mini-arc); the test
+substrate predates this catalog entry (ADR-0022 lineage)
+
+### What It Locks
+
+The `combined_score(tagOverlap, baseRelevance, recency)` formula
+coefficients — `tagOverlap * 0.45 + baseRelevance * 0.35 + recency
+* 0.2` at `apps/api/src/services/coe/keywords.ts:87-93` (inline
+numeric literals) — the 0.45 / 0.35 / 0.20 tag/base/recency ratios,
+the sum-=-1.0 constraint, and the `recencyScore` monotonicity
+envelope (fresh = 1.0, old = 0.0, monotonic decreasing in between).
+`combined_score` is the canonical retrieval-ranking primitive: every
+COE retrieval ranks Capsules by this formula.
+
+### Why This Matters
+
+Coefficient drift would change retrieval semantics across every
+Capsule operation — a session that "tuned" the weights without
+coordinated test update would silently re-rank the substrate's
+intelligence. The 0.45/0.35/0.20 distribution encodes the
+architectural claim that semantic-match (tagOverlap) dominates,
+accumulated-usefulness (baseRelevance) is the middle signal, and
+freshness (recency) is the tiebreaker — per ADR-0022 + RAA 12.7
+§3.3 ("weights are the architecture, not arbitrary numbers"). The
+formula is also patent-implementation territory under US 12,517,919
+(substrate-architecture-level coverage); the anchor keeps the
+canonical coefficients on a verifiable test chain.
+
+### How It Is Enforced
+
+VALUE-PIN mechanism. `tests/unit/coe.test.ts:132-136` —
+`it("combinedScore weights match the spec (0.45 / 0.35 / 0.20)",
+...)` with four explicit `expect(combinedScore(...)).toBeCloseTo(value,
+5)` assertions: `combinedScore(1,0,0) ≈ 0.45`, `combinedScore(0,1,0)
+≈ 0.35`, `combinedScore(0,0,1) ≈ 0.2`, `combinedScore(1,1,1) ≈ 1.0`.
+`tests/unit/coe.test.ts:121-129` — `it("recencyScore is 1.0 for
+fresh, 0.0 for old, monotonic between", ...)` pins the recency
+envelope. Any coefficient change without coordinated test update
+fails CI.
+
+### How To Extend This Anchor
+
+Per the ADR-0022 amendment §"Forward-queue: formula extension to
+Step 2E engineering": the `INFORMATIVENESS_WEIGHT` 4th-coefficient
+formula extension (`combined_score = tag*w_tag + base*w_relevance +
+recency*w_recency + informativeness*w_informativeness`, sum-=-1.0
+preserved; coefficient redistribution candidates — conservative
+`w_informativeness = 0.10` → `0.405/0.315/0.180`; mid `0.20` →
+`0.36/0.28/0.16`; aggressive `0.30` → `0.315/0.245/0.14`; default
+conservative) is Step 2E engineering substrate per RAA 12.8 §7.3 +
+§7.5 — when it lands, the `coe.test.ts:132-136` anchor test extends
+to validate the 4-coefficient sum invariant and the value-pins for
+the new weights. A pure coefficient retune (preserving the sum
+constraint and the signal hierarchy) requires an ADR-0022 amendment
++ coordinated test update.
+
+---
+
+## 8. `RELEVANCE_FORGET_FLOOR` behavioral lock
+
+**Status:** ACTIVE
+**Test:** `tests/unit/coe.test.ts:170` (exclusion behavior) +
+`tests/unit/coe.test.ts:141-145` (FOUNDATIONAL bypass) +
+`tests/unit/coe.test.ts:316` (relational lower-bound assertion)
+**Drift Reference:** intentional-forgetting threshold (see ADR-0022
+References + ADR-0021 FOUNDATIONAL retrieval-privilege class); the
+INT-6 frozen-anchors-family extension path (RAA 12.8 §6.6 + §7.4)
+**Cataloged In:** `cf10637`+1 ([DOCS-CATALOG-REFRESH-ANCHORS] —
+commit 2 of 2 of the [DOCS-CATALOG-REFRESH] mini-arc); the test
+substrate predates this catalog entry (ADR-0021/ADR-0022 lineage)
+
+### What It Locks
+
+The intentional-forgetting envelope around `RELEVANCE_FORGET_FLOOR =
+0.2` at `apps/api/src/services/coe/coe.service.ts:44`: a
+non-FOUNDATIONAL Capsule with `relevance_score < 0.2` is excluded
+from regular retrieval ("intentional forgetting"); FOUNDATIONAL
+Capsules are always included regardless of `relevance_score` (the
+FOUNDATIONAL retrieval-privilege class per ADR-0021); and the floor
+sits above the per-cycle Loop-1 decay step (`RELEVANCE_UNUSED_DECAY
+= 0.02`) so that a Capsule decays toward — not past — the floor over
+multiple unused cycles.
+
+### Why This Matters
+
+The floor implements the substrate's "intentional forgetting"
+property — Capsules that have proven persistently un-useful drop out
+of retrieval rather than diluting context. Changing the floor
+without updating the exclusion semantics (or the FOUNDATIONAL
+bypass) would break the substrate invariant: too low and forgetting
+never happens; too high and useful-but-quiet Capsules get
+prematurely dropped; bypass-removal would let a low-relevance
+FOUNDATIONAL Capsule fall out of retrieval, which contradicts
+ADR-0021's FOUNDATIONAL-first invariant. The floor is patent-
+implementation territory per RAA 12.7 §3.3 (cognitive-science
+intentional-forgetting framing) + ADR-0021.
+
+### How It Is Enforced
+
+BEHAVIORAL-LOCK mechanism — the constant value is NOT directly
+pinned; the behavior it gates is tested. `tests/unit/coe.test.ts:170`
+— `it("non-FOUNDATIONAL capsule with relevance_score < 0.2 is
+excluded from regular retrieval", ...)` (the exclusion behavior).
+`tests/unit/coe.test.ts:141-145` — `it("FOUNDATIONAL capsules are
+always included regardless of relevance_score", ...)` with a
+fixture scored "WAY below the 0.2 floor" (the bypass). `tests/unit/coe.test.ts:316`
+— `expect(0.05).toBeLessThan(RELEVANCE_FORGET_FLOOR)` (a relational
+lower-bound assertion that fails if the floor ever drops to ≤ 0.05).
+Changing the constant value would not break a direct value-pin
+(none exists); it would break the exclusion / bypass behavioral
+assertions (or the relational lower-bound, for an extreme change).
+
+### How To Extend This Anchor
+
+A floor retune (e.g., to 0.15 or 0.25) requires updating the
+exclusion-semantics tests' fixture scores + re-verifying the
+FOUNDATIONAL-bypass interaction + re-checking the floor stays above
+`RELEVANCE_UNUSED_DECAY`; per ADR-0022 References (which cites
+`RELEVANCE_FORGET_FLOOR = 0.2 at coe.service.ts:44`) + ADR-0021's
+FOUNDATIONAL retrieval-privilege class. The floor is a tunable
+threshold but its behavioral envelope — exclusion below it,
+FOUNDATIONAL bypass, sits-above-decay-step — is the substrate
+invariant the anchor protects. Adding a value-pin
+(`expect(RELEVANCE_FORGET_FLOOR).toBe(0.2)`) alongside the
+behavioral assertions would convert this to a hybrid value-pin +
+behavioral-lock anchor — a strengthening that does not require an
+ADR.
+
+---
+
 ## Anchor Lifecycle
 
 How to propose, add, evolve, or retire an anchor.
@@ -397,9 +575,10 @@ When a new anchor lands:
 2. Add a per-anchor detail section with all five sub-sections
    (What It Locks, Why This Matters, How It Is Enforced, How To
    Extend This Anchor) filled in.
-3. Update the count in the file header (e.g., "6 anchors" → "7
-   anchors") and update the "as of Section X.Y @ <hash>" stamp
-   to the new commit.
+3. Update the count in the file header (e.g., "8 anchors" → "9
+   anchors") and update the "as of … <hash>" stamp to the new
+   commit. If the new anchor uses a mechanism not already listed in
+   "Anchor Mechanisms", add it there too.
 4. Cross-reference the anchor's commit hash against the actual
    git log before committing.
 5. If the anchor introduces a new architectural pattern,

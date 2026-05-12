@@ -1334,7 +1334,7 @@ require this body. Foundation is being built to be that body.
 - `docs/reference/glossary.md` — definitions for Capsule, COSMP, DMW,
   COE, TAR, Audit Chain, Bridge, Hive Intelligence, Three-Wallet
   Architecture, etc.
-- `docs/reference/architectural-anchors.md` — the 6 runtime-enforced
+- `docs/reference/architectural-anchors.md` — the 8 runtime-enforced
   architectural anchors.
 - `docs/CURRENT_BUILD_STATE.md` — persistent canonical reference for
   build state.

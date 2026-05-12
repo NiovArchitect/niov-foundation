@@ -173,7 +173,7 @@ cost on every PR.
 An **architectural anchor** is a runtime-enforced invariant
 that future contributors might unintentionally violate without
 the test catching them. Anchors are documented in
-`docs/reference/architectural-anchors.md`. The 6 current
+`docs/reference/architectural-anchors.md`. The 8 current
 anchors are:
 
 | # | Anchor | Test path |
@@ -184,10 +184,16 @@ anchors are:
 | 4 | DRIFT 12 — `writeAuditEvent` chainKey priority backwards-compat | `tests/unit/audit-system-principals.test.ts` |
 | 5 | Frozen `CRYPTO_CONFIG` (tamper resistance) | `tests/unit/boot-validation.test.ts` |
 | 6 | Frozen `SYSTEM_PRINCIPALS` (tamper resistance) | `tests/unit/audit-system-principals.test.ts:39-44` |
+| 7 | `combined_score` coefficient invariants (value-pin) | `tests/unit/coe.test.ts:132-136` + `:121-129` |
+| 8 | `RELEVANCE_FORGET_FLOOR` behavioral lock (behavioral-lock) | `tests/unit/coe.test.ts:170` + `:141-145` + `:316` |
 
 ADR-0005 (no `console.*` in `apps/api/src`) and ADR-0006
 (cross-org leak prevention) are the canonical write-ups for
-anchors 3 and 1+2.
+anchors 3 and 1+2; ADR-0022 (combined_score Formula
+Canonicalization) is the canonical write-up for anchors 7+8.
+`architectural-anchors.md` documents three anchor mechanisms —
+`Object.freeze` (anchors 5+6), value-pin (anchor 7),
+behavioral-lock (anchor 8).
 
 ### When to add a new anchor
 

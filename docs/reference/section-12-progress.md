@@ -502,7 +502,11 @@ When an architectural anchor lands:
   detail + §5.9 Step 2E engineering surface enumeration + §9.6
   Step 2D-completion handoff discipline
 - `docs/reference/architectural-anchors.md` — runtime invariants
-  catalog (6 anchors as of `f3359fb`)
+  catalog (8 anchors as of [DOCS-CATALOG-REFRESH-ANCHORS] —
+  commit 2 of 2 of the [DOCS-CATALOG-REFRESH] mini-arc; anchors
+  7 + 8 — `combined_score` coefficient invariants (VALUE-PIN) +
+  `RELEVANCE_FORGET_FLOOR` behavioral lock (BEHAVIORAL-LOCK) per
+  ADR-0022 — added there)
 - `docs/architecture/decisions/` — Architecture Decision Records
   (25 ADRs canonical at 2026-05-12 per [SEC-DBPUSH-CLOSE] `5a18491`
   + the [SEC-INT6-ADR0022] `d743e4c` ADR-0022 amendment; ADRs

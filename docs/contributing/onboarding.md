@@ -37,11 +37,14 @@ In this order, before any code or doc work:
    EntityComplianceProfile, `writeAuditEvent`,
    `SYSTEM_PRINCIPALS`, etc.) with definitions, schema
    citations, and capitalization conventions.
-4. **`docs/reference/architectural-anchors.md`** — the 6
+4. **`docs/reference/architectural-anchors.md`** — the 8
    runtime-enforced architectural properties (DRIFT 9 audit +
    permissions filter narrowing, DRIFT 2 Option C no-console,
    DRIFT 12 chainKey priority, frozen `CRYPTO_CONFIG`, frozen
-   `SYSTEM_PRINCIPALS`).
+   `SYSTEM_PRINCIPALS`, `combined_score` coefficient invariants
+   per ADR-0022, `RELEVANCE_FORGET_FLOOR` behavioral lock per
+   ADR-0022) + the "Anchor Mechanisms" taxonomy (`Object.freeze`
+   / value-pin / behavioral-lock).
 
 After this entry sequence, individual ADRs and contributing
 guides become readable in any order driven by the current task.
@@ -311,7 +314,7 @@ before CI revealed substrate regression.
 | Audit retention posture | `docs/AUDIT_RETENTION_POSTURE.md` |
 | Structured logging schema | `docs/STRUCTURED_LOGGING_SCHEMA.md` |
 | Glossary | `docs/reference/glossary.md` |
-| Architectural anchors (6) | `docs/reference/architectural-anchors.md` |
+| Architectural anchors (8) | `docs/reference/architectural-anchors.md` |
 | Section 12 progress tracker | `docs/reference/section-12-progress.md` |
 | Reconciliation evidence | `docs/reconciliation/2026-05-08-build-reconciliation.md` |
 | Code style conventions | `docs/contributing/code-style.md` |
@@ -379,5 +382,5 @@ For your first non-trivial contribution to Foundation:
   bidirectional citation discipline (RULE 14).
 - `docs/reference/glossary.md` — every Foundation-specific
   term defined.
-- `docs/reference/architectural-anchors.md` — the 6
+- `docs/reference/architectural-anchors.md` — the 8
   runtime-enforced architectural properties.

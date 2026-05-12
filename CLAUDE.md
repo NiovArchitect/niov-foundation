@@ -336,12 +336,15 @@ authoritative locations:
   term (Memory Capsule, COSMP, COE, DMW, EntityComplianceProfile,
   writeAuditEvent, SYSTEM_PRINCIPALS, etc.) with definitions,
   schema citations, and capitalization conventions
-- `docs/reference/architectural-anchors.md` — the 6
+- `docs/reference/architectural-anchors.md` — the 8
   runtime-enforced architectural properties (DRIFT 9 audit +
   permissions filter narrowing, DRIFT 2 Option C no-console,
   DRIFT 12 chainKey priority, frozen `CRYPTO_CONFIG`, frozen
-  `SYSTEM_PRINCIPALS`)
-- `docs/architecture/decisions/` — the 19 ADRs with
+  `SYSTEM_PRINCIPALS`, `combined_score` coefficient invariants
+  per ADR-0022, `RELEVANCE_FORGET_FLOOR` behavioral lock per
+  ADR-0022) — plus the "Anchor Mechanisms" taxonomy (`Object.freeze`
+  / value-pin / behavioral-lock)
+- `docs/architecture/decisions/` — the 25 ADRs with
   Decision / Consequences / Alternatives in Michael Nygard
   format
 
@@ -596,11 +599,11 @@ Concrete anti-patterns observable across the build cycle:
 
 Four documentation roots cover the substrate of the project:
 
-- **`docs/architecture/`** — ADR-0001 through ADR-0019 plus
+- **`docs/architecture/`** — ADR-0001 through ADR-0025 plus
   the template (`0000-template.md`) and the architecture
   README. Start with `docs/architecture/README.md`.
 - **`docs/reference/`** — `glossary.md` (term definitions),
-  `architectural-anchors.md` (the 6 runtime invariants),
+  `architectural-anchors.md` (the 8 runtime invariants),
   `section-12-progress.md` (live build tracker).
 - **`docs/contributing/`** — `README.md` index plus
   `code-style.md`, `testing.md`, `parallel-sessions.md`,
