@@ -137,11 +137,17 @@ pre-commit patience tolerance.
 Bidirectional citations (cited from):
 
 - ADR-0025 (Schema-Push-Target Discipline; landed in [SEC-DBPUSH-ADR]
-  on 2026-05-12) — canonicalizes the schema-push-target discipline that
-  will extend this ADR's pre-commit hook substrate with a db-push guard
-  (forward-queued at [SEC-DBPUSH-HOOK-CI]). The hook substrate canonical
-  here is the load-bearing extension point; ADR-0025's Decision section
-  names this ADR as the canonical extension target.
+  `d8d6236` on 2026-05-12) — canonicalizes the schema-push-target
+  discipline that extends this ADR's pre-commit hook substrate with a
+  db-push guard. The db-push-guard extension landed at [SEC-DBPUSH-HOOK]
+  `ed9a519` (as the first check in the hook, before typecheck;
+  POSIX-sh-safe; precise allowlist — the wrapper script + the canonical
+  CI `packages/database/package.json` `db:push` + the hook itself + the
+  smoke test; `::error::` message citing ADR-0025 + `npm run db:push:test`
+  + the `--no-verify` override; self-tests against its own staged
+  substrate). The hook substrate canonical here is the load-bearing
+  extension point; ADR-0025's Decision section names this ADR as the
+  canonical extension target.
 
 ## Forward Queue
 

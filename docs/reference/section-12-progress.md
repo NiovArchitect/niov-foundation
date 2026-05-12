@@ -204,20 +204,32 @@ extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
 **Forward queue (6 items deferred from the arc; NOT landed at
 [D-2D-D10-8]):**
 
-1. **[SEC-DBPUSH-DISCIPLINE]** — ADR-0025 (Schema-Push-Target
-   Discipline) landed at [SEC-DBPUSH-ADR] on 2026-05-12, canonicalizing
-   the discipline at the canonical-record register (schema-push commands
-   MUST use an explicit env-target qualifier; the wrapper script is
-   canonical once landed; CI is already safe; production schema changes
-   sequence only via the deploy pipeline). The engineering substrate
-   forward-queue within the [SEC-DBPUSH] mini-arc: [SEC-DBPUSH-WRAPPER]
-   (`scripts/prisma-db-push-test.sh` — loads `.env.test`, validates
-   `DATABASE_URL` points to `localhost`, fail-closed) →
-   [SEC-DBPUSH-HOOK-CI] (pre-commit hook db-push guard per ADR-0024 + a
-   CI workflow guard against bare `npx prisma db push` per ADR-0015) → a
-   glossary entry for `Schema-Push-Target Discipline` per RULE 17.
-   Source: [D-2D-D10-4] Observation 1 (the production schema-push target
-   drift event) + [D-2D-D10-1] near-certain analogous exposure.
+1. **[SEC-DBPUSH-DISCIPLINE] — COMPLETE.** The [SEC-DBPUSH] mini-arc
+   landed across 4 commits on 2026-05-12 (sequential per the
+   [ADDENDUM-DMW-SLM] register-separation precedent): [SEC-DBPUSH-ADR]
+   `d8d6236` (canonical-record — ADR-0025 Schema-Push-Target Discipline:
+   schema-push commands MUST use an explicit env-target qualifier;
+   production schema changes via the deploy pipeline only) →
+   [SEC-DBPUSH-WRAPPER] `e1dbc1e` (engineering substrate —
+   `scripts/prisma-db-push-test.sh` wrapper: loads `.env.test`, 4
+   fail-closed checks, then `prisma db push --schema=… --skip-generate`
+   with the validated env; + the `db:push:test` npm alias; `db:push`
+   UNCHANGED — CI safe via workflow-set `DATABASE_URL`) →
+   [SEC-DBPUSH-HOOK] `ed9a519` (local-tier enforcement —
+   `.husky/pre-commit` db-push guard as the first check, POSIX-sh-safe,
+   precise allowlist, self-tests; `scripts/test-db-up.sh` step-2 retrofit
+   to invoke the wrapper; `scripts/test-db-push-wrapper.sh` 3-case smoke
+   test; + the `test:db-push-wrapper` npm alias) → [SEC-DBPUSH-CLOSE]
+   (closing — ADR-0024/0025 amendments + this tracker amendment + the
+   `Schema-Push-Target Discipline` glossary entry per RULE 17). The CI
+   workflow guard substrate is forward-queued substantively-tangential
+   per the [SEC-DBPUSH-CLOSE] Q1 Option C scope decision: the workflow
+   YAML has zero bare `npx prisma db push` today (CI's `npm run db:push`
+   is safe via a workflow-set `DATABASE_URL`); the realistic threat
+   surface is local invocation auto-loading `.env`, covered by the
+   pre-commit hook at [SEC-DBPUSH-HOOK]. Source: [D-2D-D10-4]
+   Observation 1 (the production schema-push target drift event) +
+   [D-2D-D10-1] near-certain analogous exposure.
 2. **INT-6 frozen-anchors / ADR-0022 amendment** — the
    informativeness-coefficient parameterization joining the
    frozen-anchors family alongside `combined_score`. Future

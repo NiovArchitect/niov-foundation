@@ -193,22 +193,65 @@ mechanize the rejection.
 Bidirectional citations (cited from):
 
 - `docs/reference/section-12-progress.md` Sub-box 1 CLOSED narrative —
-  forward-queue item 1 amended at [SEC-DBPUSH-ADR] to reflect ADR-0025
-  landed.
+  forward-queue item 1 amended at [SEC-DBPUSH-ADR] (ADR-0025 landed),
+  then marked COMPLETE at [SEC-DBPUSH-CLOSE] (the full 4-commit mini-arc).
+- `docs/reference/glossary.md` `Schema-Push-Target Discipline` canonical
+  entry landed at [SEC-DBPUSH-CLOSE] per RULE 17 future-session-loading
+  discipline.
+- ADR-0024 (Pre-Commit-Hook Posture) — its "Bidirectional citations
+  (cited from)" sub-block names this ADR; updated at [SEC-DBPUSH-CLOSE]
+  to record that the db-push-guard extension landed at [SEC-DBPUSH-HOOK]
+  `ed9a519`.
 
 ## Forward Queue
 
-Sequenced subsequent commits within the [SEC-DBPUSH] mini-arc:
+The [SEC-DBPUSH] mini-arc landed across 4 commits (sequential per the
+[ADDENDUM-DMW-SLM] register-separation precedent: canonical-record →
+engineering → local-enforcement → closing):
 
-1. **[SEC-DBPUSH-WRAPPER]** — `scripts/prisma-db-push-test.sh`: loads
-   `.env.test`, validates `DATABASE_URL` points to `localhost`
-   (fail-closed), invokes `prisma db push --schema=… --skip-generate`
-   with the validated env. Engineering substrate; a smoke test if
-   substantively warranted.
-2. **[SEC-DBPUSH-HOOK-CI]** — a pre-commit hook db-push guard (extends
-   `.husky/pre-commit` per ADR-0024) + a CI workflow guard against bare
-   `npx prisma db push` (extends `ci.yml` per ADR-0015). Engineering
-   substrate; tests if substantively warranted.
-3. **Glossary entry** — `Schema-Push-Target Discipline` canonical entry
-   per RULE 17; may land with [SEC-DBPUSH-HOOK-CI] or as its own commit
-   per substantive scope.
+1. **[SEC-DBPUSH-ADR]** `d8d6236` — ADR-0025 at the canonical-record
+   register. Status "Active"; the discipline is in force from this commit.
+2. **[SEC-DBPUSH-WRAPPER]** `e1dbc1e` — engineering substrate.
+   `scripts/prisma-db-push-test.sh` (Bash wrapper; loads `.env.test`;
+   4 fail-closed checks — `.env.test` absent / `DATABASE_URL` unset /
+   `DATABASE_URL` host ≠ localhost / `DIRECT_URL` host ≠ localhost if set;
+   then `prisma db push --schema=packages/database/prisma/schema.prisma
+   --skip-generate` with the validated env). `package.json`
+   `"db:push:test"` alias in the `db:test:*` family. `"db:push"` UNCHANGED
+   (CI substrate preserved — the workflow sets `DATABASE_URL` to the
+   ephemeral container before `npm run db:push` at `ci.yml:92`/`:156` +
+   `nightly-real-llm.yml:69`; safe via the pre-set env).
+3. **[SEC-DBPUSH-HOOK]** `ed9a519` — local-tier enforcement substrate.
+   `.husky/pre-commit` db-push guard as the first check (POSIX-sh-safe;
+   precise allowlist — the wrapper + the canonical CI
+   `packages/database/package.json` `db:push` + the hook itself + the
+   smoke test; `::error::` message citing this ADR + `npm run db:push:test`
+   + the `--no-verify` override; self-tests against its own staged
+   substrate). `scripts/test-db-up.sh` step-2 retrofit (invokes
+   `bash scripts/prisma-db-push-test.sh` per this ADR).
+   `scripts/test-db-push-wrapper.sh` NEW (Bash smoke test; 3 cases — (a)
+   `.env.test` absent → exit 1 / (c) non-localhost `DATABASE_URL` → exit 1
+   via a trap-protected tamper / happy path → exit 0, container-gated;
+   case (b) `DATABASE_URL` unset skipped per RULE 17 — verified via the
+   host-extraction eval at [SEC-DBPUSH-WRAPPER]). `package.json`
+   `"test:db-push-wrapper"` alias.
+4. **[SEC-DBPUSH-CLOSE]** (this commit) — closing canonical-record
+   amendments + the glossary entry. ADR-0024's "Bidirectional citations
+   (cited from)" sub-block updated (the stale "will extend / forward-queued"
+   framing → "landed at [SEC-DBPUSH-HOOK] `ed9a519`"); this ADR's Forward
+   Queue rewritten to the actual 4-commit mini-arc; `section-12-progress.md`
+   Sub-box 1 CLOSED narrative forward-queue item 1 marked COMPLETE; the
+   `docs/reference/glossary.md` `Schema-Push-Target Discipline` entry
+   landed per RULE 17.
+
+### Forward-queued substantively-tangential
+
+- **CI workflow guard against a bare `npx prisma db push`** — deferred
+  per the [SEC-DBPUSH-CLOSE] scope decision (Option C). The workflow YAML
+  has zero bare `npx prisma db push` today (all CI schema-push invocations
+  go through `npm run db:push` with a workflow-set `DATABASE_URL`; safe
+  via the pre-set env). The realistic threat surface is local invocation
+  auto-loading `.env`, which the pre-commit hook at [SEC-DBPUSH-HOOK]
+  already covers. A CI workflow-YAML guard would catch a future-drift that
+  has not occurred — YAGNI + scope discipline at the mini-arc closer. It
+  lands if a bare `npx prisma db push` ever appears in a workflow step.

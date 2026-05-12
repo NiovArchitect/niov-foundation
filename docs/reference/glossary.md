@@ -548,6 +548,42 @@ Tags audit emissions originating from cron-driven feedback-loop
 runs. See `apps/api/src/services/feedback/scheduler.ts` and
 ADR-0006.
 
+**Schema-Push-Target Discipline.** Schema-push commands
+(`prisma db push`) MUST use an explicit env-target qualifier —
+never a bare `npx prisma db push`, which auto-loads `.env` from
+the repo root (the operator's production Supabase credentials per
+ADR-0018; the [D-2D-D10-4] trap). The canonical local-invocation
+surface is `npm run db:push:test` (or `bash
+scripts/prisma-db-push-test.sh`) — a fail-closed Bash wrapper that
+loads `.env.test`, validates `DATABASE_URL` (and `DIRECT_URL` if
+set) point to `localhost`/`127.0.0.1`, then invokes `prisma db
+push --schema=packages/database/prisma/schema.prisma
+--skip-generate` with the validated env. Local-tier enforcement:
+the `.husky/pre-commit` db-push guard rejects a bare `prisma db
+push` invocation in a staged `.sh` / `package.json` file outside
+the canonical allowlist (the wrapper + `packages/database/package.json`'s
+CI `db:push` + the hook itself + the smoke test); `--no-verify`
+is preserved as the emergency override per ADR-0024.
+`scripts/test-db-up.sh`'s step-2 schema-push goes through the
+wrapper; `scripts/test-db-push-wrapper.sh` is the wrapper's smoke
+test (3 cases — `.env.test` absent, non-localhost `DATABASE_URL`,
+happy path). CI substrate is already safe (the workflow sets
+`DATABASE_URL` to the ephemeral container before `npm run
+db:push`); a CI workflow-YAML guard for a bare invocation is
+forward-queued substantively-tangential. Production schema
+changes go through the deploy pipeline, never via a local `db
+push`. The [SEC-DBPUSH] mini-arc landed across 4 commits on
+2026-05-12: [SEC-DBPUSH-ADR] `d8d6236` (ADR-0025 canonical-record)
+→ [SEC-DBPUSH-WRAPPER] `e1dbc1e` (wrapper + alias) →
+[SEC-DBPUSH-HOOK] `ed9a519` (hook guard + retrofit + smoke test)
+→ [SEC-DBPUSH-CLOSE] (canonical-record closure + this entry).
+See ADR-0025 (canonical specification), ADR-0024 (the hook
+substrate the guard extends), ADR-0013 (the containerized
+`localhost:5433` test DB the wrapper validates against), ADR-0011
+(test-infrastructure isolation), ADR-0018 (`.env` as the
+operator's production deployment target), and [D-2D-D10-4]
+Observation 1 (the drift event this discipline canonicalizes).
+
 **Section.** A unit of Foundation build progress. Sections are
 numbered (Section 1 through Section 17 are defined). Each
 Section closes on a tagged commit and a green test suite. The
