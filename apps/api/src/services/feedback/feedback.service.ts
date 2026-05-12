@@ -5,11 +5,17 @@
 //          (Loops 2, 3, 4, 6, 7) or as an event-driven hook from the
 //          read / outcome services (Loops 1 and 5). Every loop end
 //          touches FeedbackLoopHealth so Loop 7 can detect staleness.
+//          Also exports the module-level propagateCorrection (the
+//          §5.2 correction propagation chain -- D-2D-D10-6 -- a
+//          Loop-1-adjacent max-informativeness path that snaps
+//          corrected capsules to RELEVANCE_MAX; see its JSDoc).
 // CONNECTS TO: prisma (relevance / suggestion / metrics tables),
 //              hiveService.buildHiveAggregate (Loop 4),
-//              writeAuditEvent (anomaly + admin audit), the
-//              RateLimitStore.setMultiplier (Loop 5 throttle), and
-//              the scheduler.ts entry point.
+//              writeAuditEvent (anomaly + admin audit +
+//              CORRECTION_PROPAGATED), the RateLimitStore.setMultiplier
+//              (Loop 5 throttle), the scheduler.ts entry point, and
+//              apps/api/src/services/otzar/observation.service.ts
+//              (consumes propagateCorrection from processCorrection).
 
 import {
   prisma,
@@ -86,6 +92,16 @@ const RELEVANCE_USED_BUMP = 0.05;
 const RELEVANCE_UNUSED_DECAY = 0.02;
 const RELEVANCE_MIN = 0.0;
 const RELEVANCE_MAX = 1.0;
+
+// WHAT: The relevance value propagateCorrection (D-2D-D10-6) snaps a
+//        corrected capsule to. RAA 12.8 §5.5 INT-3 frames a human
+//        correction as "max informativeness" -- the rarest and
+//        strongest signal -- so a correction does not incrementally
+//        bump like Loop 1's RELEVANCE_USED_BUMP; it snaps to the
+//        ceiling. (INT-6's informativeness-coefficient parameterization
+//        -- joining the frozen-anchors family alongside combined_score
+//        per ADR-0022 -- is forward-queue, not landed here.)
+const RELEVANCE_CORRECTION_BUMP = RELEVANCE_MAX;
 
 // WHAT: The relevance-floor adjustment Loop 2 makes.
 const FLOOR_STEP = 0.05;
@@ -177,6 +193,71 @@ async function touchLoopHealth(
       last_status: status,
     },
   });
+}
+
+// WHAT: The correction propagation chain per RAA 12.8 §5.2 + §5.5
+//        INT-3. ObservationService.processCorrection calls this after a
+//        CORRECTION capsule lands; it fires the §5.2 downstream effects:
+//        (a) Loop 1 informativeness signal = snap relevance_score to
+//            RELEVANCE_CORRECTION_BUMP (= RELEVANCE_MAX, 1.0) on the
+//            correction capsule + (if present) the corrected target
+//            capsule;
+//        (b) capsule relevance_score update (raw SQL UPDATE, mirroring
+//            runLoop1Once's per-id $executeRaw pattern -- no clamping
+//            needed since MAX is the target);
+//        (c) audit chain CORRECTION_PROPAGATED event per Zone U1
+//            (human-actor: actor_entity_id = the correcting entity);
+//        (d) Hive coordination influences aggregate via the next
+//            scheduled Loop 4 buildHiveAggregate cron -- documented-
+//            implicit; no synchronous Hive code here (that would need a
+//            HiveService dep; overkill for "influences aggregate" which
+//            Loop 4's 30-min cron already handles by reading
+//            relevance_score).
+// INPUT: correctionCapsuleId (the CORRECTION capsule processCorrection
+//        wrote); targetCapsuleId (the corrected capsule, or null when
+//        the correction names no specific target); actorEntityId (the
+//        entity submitting the correction).
+// OUTPUT: Promise<void>. Throws on failure -- the caller wraps in
+//         try/catch per the RULE 4 best-effort discipline (the
+//         CORRECTION capsule + its CAPSULE_CREATED audit are the
+//         authoritative record; propagation is a downstream signal).
+// WHY: Module-level (not a FeedbackService method) so ObservationService
+//      can call it without gaining a FeedbackService constructor dep --
+//      mirrors the touchLoopHealth precedent. Substantiates
+//      ADDENDUM-DMW-SLM §3 ("confidence accumulation" + "personalization
+//      confidence" threshold criteria) at runtime register: a correction
+//      drives the DMW's contextual inference surface maximally.
+export async function propagateCorrection(input: {
+  correctionCapsuleId: string;
+  targetCapsuleId: string | null;
+  actorEntityId: string;
+}): Promise<void> {
+  const capsuleIds = [input.correctionCapsuleId];
+  if (input.targetCapsuleId !== null) {
+    capsuleIds.push(input.targetCapsuleId);
+  }
+  // (a) + (b): snap relevance_score to MAX. Per-id $executeRaw mirrors
+  // runLoop1Once's pattern (parameterized ::uuid cast; deleted_at guard).
+  for (const id of capsuleIds) {
+    await prisma.$executeRaw`
+      UPDATE memory_capsules
+      SET relevance_score = ${RELEVANCE_CORRECTION_BUMP}::float8
+      WHERE capsule_id = ${id}::uuid AND deleted_at IS NULL
+    `;
+  }
+  // (c): Zone U1 audit event.
+  await writeAuditEvent({
+    event_type: "CORRECTION_PROPAGATED",
+    outcome: "SUCCESS",
+    actor_entity_id: input.actorEntityId,
+    target_capsule_id: input.correctionCapsuleId,
+    details: {
+      action: "CORRECTION_PROPAGATED",
+      correction_capsule_id: input.correctionCapsuleId,
+      target_capsule_id: input.targetCapsuleId,
+    },
+  });
+  // (d): Hive aggregate update -- implicit via the next Loop 4 cron.
 }
 
 // WHAT: The seven-loop service.

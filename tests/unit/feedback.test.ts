@@ -15,6 +15,7 @@ import {
   MemoryContentStore,
   MemoryNonceStore,
   MemoryRateLimitStore,
+  propagateCorrection,
   startScheduler,
   WriteService,
   type LoginResult,
@@ -178,6 +179,133 @@ describe("Loop 1 -- Capsule Relevance", () => {
     });
     expect(highRow?.relevance_score).toBeCloseTo(1.0, 5);
     expect(lowRow?.relevance_score).toBeCloseTo(0.0, 5);
+  });
+});
+
+describe("propagateCorrection -- correction propagation chain (D-2D-D10-6)", () => {
+  it("snaps relevance_score to MAX (1.0) on both the correction and target capsule + writes a CORRECTION_PROPAGATED audit event", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const target = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["correction-target"],
+      payload_summary: "the thing that was wrong",
+      content: "wrong",
+    });
+    const correction = await write.createCapsule(owner.token, {
+      capsule_type: "CORRECTION",
+      topic_tags: ["correction"],
+      payload_summary: "wrong → right",
+      content: "right",
+    });
+    if (!target.ok || !correction.ok) throw new Error("create failed");
+    await prisma.memoryCapsule.update({
+      where: { capsule_id: target.capsule_id },
+      data: { relevance_score: 0.5 },
+    });
+    await prisma.memoryCapsule.update({
+      where: { capsule_id: correction.capsule_id },
+      data: { relevance_score: 0.7 },
+    });
+
+    await propagateCorrection({
+      correctionCapsuleId: correction.capsule_id,
+      targetCapsuleId: target.capsule_id,
+      actorEntityId: owner.entity.entity_id,
+    });
+
+    const targetRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: target.capsule_id },
+    });
+    const correctionRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: correction.capsule_id },
+    });
+    expect(targetRow?.relevance_score).toBeCloseTo(1.0, 5);
+    expect(correctionRow?.relevance_score).toBeCloseTo(1.0, 5);
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        event_type: "CORRECTION_PROPAGATED",
+        target_capsule_id: correction.capsule_id,
+      },
+    });
+    expect(audit).not.toBeNull();
+    expect(audit?.actor_entity_id).toBe(owner.entity.entity_id);
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.action).toBe("CORRECTION_PROPAGATED");
+    expect(details.correction_capsule_id).toBe(correction.capsule_id);
+    expect(details.target_capsule_id).toBe(target.capsule_id);
+  });
+
+  it("snaps the correction capsule to MAX (1.0) with no target + writes an audit event with details.target_capsule_id null", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const correction = await write.createCapsule(owner.token, {
+      capsule_type: "CORRECTION",
+      topic_tags: ["correction-no-target"],
+      payload_summary: "no specific target",
+      content: "x",
+    });
+    if (!correction.ok) throw new Error("create failed");
+    await prisma.memoryCapsule.update({
+      where: { capsule_id: correction.capsule_id },
+      data: { relevance_score: 0.3 },
+    });
+
+    await propagateCorrection({
+      correctionCapsuleId: correction.capsule_id,
+      targetCapsuleId: null,
+      actorEntityId: owner.entity.entity_id,
+    });
+
+    const correctionRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: correction.capsule_id },
+    });
+    expect(correctionRow?.relevance_score).toBeCloseTo(1.0, 5);
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        event_type: "CORRECTION_PROPAGATED",
+        target_capsule_id: correction.capsule_id,
+      },
+    });
+    expect(audit).not.toBeNull();
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.target_capsule_id).toBeNull();
+  });
+
+  it("is idempotent on relevance (a second propagateCorrection still leaves the capsule at MAX) and writes one audit event per call", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const correction = await write.createCapsule(owner.token, {
+      capsule_type: "CORRECTION",
+      topic_tags: ["correction-idempotent"],
+      payload_summary: "twice",
+      content: "x",
+    });
+    if (!correction.ok) throw new Error("create failed");
+
+    await propagateCorrection({
+      correctionCapsuleId: correction.capsule_id,
+      targetCapsuleId: null,
+      actorEntityId: owner.entity.entity_id,
+    });
+    await propagateCorrection({
+      correctionCapsuleId: correction.capsule_id,
+      targetCapsuleId: null,
+      actorEntityId: owner.entity.entity_id,
+    });
+
+    const correctionRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: correction.capsule_id },
+    });
+    expect(correctionRow?.relevance_score).toBeCloseTo(1.0, 5);
+    const auditCount = await prisma.auditEvent.count({
+      where: {
+        event_type: "CORRECTION_PROPAGATED",
+        target_capsule_id: correction.capsule_id,
+      },
+    });
+    expect(auditCount).toBe(2);
   });
 });
 

@@ -36,6 +36,13 @@ export type AuditEventType =
   | "CAPSULE_CONTENT_READ"
   | "CAPSULE_UPDATED"
   | "CAPSULE_DELETED"
+  // D-2D-D10-6: correction propagation chain audit event per RAA 12.8
+  // §5.2. Fires when propagateCorrection (feedback.service.ts) snaps
+  // the correction capsule + (if present) the corrected target capsule
+  // relevance_score to RELEVANCE_MAX. Unlike FEEDBACK_LOOP_* below this
+  // is a human-actor event (actor_entity_id = the entity submitting the
+  // correction), not a SYSTEM-PRINCIPAL one.
+  | "CORRECTION_PROPAGATED"
   | "PERMISSION_CREATED"
   | "PERMISSION_REVOKED"
   | "PERMISSION_EXPIRED"
@@ -92,6 +99,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CAPSULE_CONTENT_READ",
   "CAPSULE_UPDATED",
   "CAPSULE_DELETED",
+  // D-2D-D10-6: correction propagation chain (RAA 12.8 §5.2)
+  "CORRECTION_PROPAGATED",
   "PERMISSION_CREATED",
   "PERMISSION_REVOKED",
   "PERMISSION_EXPIRED",

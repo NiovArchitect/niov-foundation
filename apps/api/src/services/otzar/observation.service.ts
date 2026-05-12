@@ -21,6 +21,8 @@ import {
 } from "@niov/database";
 import type { AuthService } from "../auth.service.js";
 import type { LLMProvider } from "../llm/llm.service.js";
+import { propagateCorrection } from "../feedback/feedback.service.js";
+import { logger } from "../../logger.js";
 
 // WHAT: How many leading characters of content go into the dedup hash.
 const DEDUP_CONTENT_PREFIX = 500;
@@ -437,9 +439,14 @@ export class ObservationService {
       };
     }
     const summary = `${input.incorrect_description} → ${input.correct_behavior}`;
+    const targetCapsuleId =
+      typeof input.target_capsule_id === "string" &&
+      input.target_capsule_id.length > 0
+        ? input.target_capsule_id
+        : null;
     const tags = ["correction"];
-    if (typeof input.target_capsule_id === "string" && input.target_capsule_id.length > 0) {
-      tags.push(`correction-of-${input.target_capsule_id}`);
+    if (targetCapsuleId !== null) {
+      tags.push(`correction-of-${targetCapsuleId}`);
     }
     const id = await this.writeCapsule({
       wallet_id: wallet.wallet_id,
@@ -451,6 +458,25 @@ export class ObservationService {
       actor_entity_id: callerEntityId,
       commitment_date: null,
     });
+    // Correction propagation chain (D-2D-D10-6). After the CORRECTION
+    // capsule lands, fire the RAA 12.8 §5.2 chain: snap relevance to
+    // RELEVANCE_MAX on the correction + (if named) the target capsule;
+    // CORRECTION_PROPAGATED audit per Zone U1; Loop 4 Hive aggregate
+    // implicit. Best-effort: the CORRECTION capsule + its
+    // CAPSULE_CREATED audit are the authoritative record (RULE 4);
+    // propagation failure does not turn a clean correction into a 500.
+    try {
+      await propagateCorrection({
+        correctionCapsuleId: id,
+        targetCapsuleId,
+        actorEntityId: callerEntityId,
+      });
+    } catch (err) {
+      logger.warn(
+        { err, correction_capsule_id: id },
+        "correction propagation failed; correction capsule stands",
+      );
+    }
     return { ok: true, correction_capsule_id: id };
   }
 

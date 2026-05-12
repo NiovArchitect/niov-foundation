@@ -595,6 +595,82 @@ describe("ObservationService.processCorrection", () => {
     expect(capsule?.deleted_at).toBeNull();
     expect(capsule?.entity_id).toBe(owner.entity.entity_id);
   });
+
+  it("triggers the correction propagation chain (D-2D-D10-6): the CORRECTION capsule lands at MAX relevance + a CORRECTION_PROPAGATED audit event exists", async () => {
+    const { auth, observation } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await observation.processCorrection({
+      token: owner.token,
+      incorrect_description: "you summarized too aggressively",
+      correct_behavior: "preserve nuance in summaries",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const capsule = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: result.correction_capsule_id },
+    });
+    expect(capsule?.relevance_score).toBeCloseTo(1.0, 5);
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        event_type: "CORRECTION_PROPAGATED",
+        target_capsule_id: result.correction_capsule_id,
+      },
+    });
+    expect(audit).not.toBeNull();
+    expect(audit?.actor_entity_id).toBe(owner.entity.entity_id);
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.correction_capsule_id).toBe(result.correction_capsule_id);
+    expect(details.target_capsule_id).toBeNull();
+  });
+
+  it("with target_capsule_id, propagation snaps both the correction and the target capsule to MAX relevance", async () => {
+    const { auth, observation } = makeServices();
+    const owner = await loginAs(auth);
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: owner.entity.entity_id },
+    });
+    const target = await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: randomUUID(),
+        wallet_id: wallet!.wallet_id,
+        entity_id: owner.entity.entity_id,
+        version: 1,
+        capsule_type: "PREFERENCE",
+        topic_tags: ["correction-target"],
+        decay_type: "TIME_BASED",
+        payload_summary: "the wrong behavior",
+        payload_size_tokens: 4,
+        storage_location: `test://${randomUUID()}`,
+        content_hash: `sha256:${randomUUID().replace(/-/g, "")}`,
+        relevance_score: 0.5,
+      },
+    });
+    const result = await observation.processCorrection({
+      token: owner.token,
+      incorrect_description: "the wrong behavior",
+      correct_behavior: "the right behavior",
+      target_capsule_id: target.capsule_id,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const correctionRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: result.correction_capsule_id },
+    });
+    const targetRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: target.capsule_id },
+    });
+    expect(correctionRow?.relevance_score).toBeCloseTo(1.0, 5);
+    expect(targetRow?.relevance_score).toBeCloseTo(1.0, 5);
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        event_type: "CORRECTION_PROPAGATED",
+        target_capsule_id: result.correction_capsule_id,
+      },
+    });
+    expect(audit).not.toBeNull();
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.target_capsule_id).toBe(target.capsule_id);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────

@@ -220,6 +220,7 @@ export {
   LOOP_EXPECTED_INTERVAL_MINUTES,
   DEMAND_LOW_MAX,
   DEMAND_MEDIUM_MAX,
+  propagateCorrection,
 } from "./services/feedback/feedback.service.js";
 export type {
   Loop1Result,
