@@ -365,11 +365,81 @@ extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
    RAA 12.8 §5.9 item 7 (Step 2E engineering surface enumeration) +
    [RAA-12.8-S5-AMEND-1] amendment chain (`604aac6` + `2cced88` +
    `127a383`).
-6. **EntityMembership-traversal multi-step approval chains** — per
-   RAA 12.8 §5.2 "multi-step approval chains (chained
+6. **EntityMembership-traversal multi-step approval chains —
+   DEFERRED to Step 2E engineering (RAA 12.8 §5.2 approval-workflow-
+   primitives multi-step-chain portion / §5.9 item 1).** Marked
+   DEFERRED at [SEC-SUBBOX1-ITEM6-DEFER] on 2026-05-12 per Sub-box
+   dependency-ordering substrate canonical. Substrate-state
+   observation: RAA 12.8 §5.2 multi-step approval chain substantive
+   substrate canonical at architectural register — quoted verbatim:
+   "Approval workflow primitives. Multi-step approval chains (chained
    EscalationRequest rows); per-step approver discrimination via
-   EntityMembership traversal per §3.8" — chained-approval
-   substrate beyond the current single-resolver gate.
+   EntityMembership traversal per §3.8; timeout policies via
+   expires_at field." The D-2D-D10 closure arc ([D-2D-D10-1..8])
+   implemented the SINGLE-STEP EscalationRequest substrate canonical
+   (Prisma model at `packages/database/prisma/schema.prisma:1105` —
+   escalation_id PK + source/target/resolver entity FKs + status enum
+   + severity + expires_at timeout + indexes; 7-fn service at
+   `apps/api/src/services/governance/escalation.service.ts`;
+   validation gate flag + gate-fail→COMPLIANCE_GATE coupling;
+   correction propagation chain; HTTP routes at
+   `apps/api/src/routes/escalation.routes.ts`). The multi-step-chain
+   portion (chained EscalationRequest rows + per-step approver
+   discrimination + per-step timeout) was deliberately deferred to
+   this forward-queue item 6 — Sub-box 1 CLOSED status was declared
+   "substrate-complete at dc0a26f" with the single-step model
+   canonical; multi-step is NET-NEW engineering substrate. Required
+   NET-NEW substrate per RAA 12.8 §5.2 + §3.8 framing: (a)
+   `parent_escalation_id String? @db.Uuid` self-reference field on
+   `EscalationRequest` + relation + index for chain traversal; (b)
+   per-step approver logic replacing the current
+   `transitionPendingForCaller` skeleton gate (lines 290-296: `caller
+   === target OR caller === resolved_by may transition`) with
+   EntityMembership-traversal-based per-step approver discrimination
+   per §3.8 (the `EntityMembership` model at
+   `packages/database/prisma/schema.prisma:695` already exists with
+   parent_id/child_id/role_title/hierarchy_level/is_admin substrate
+   canonical; the multi-step substrate consumes EntityMembership
+   canonical traversal logic per §3.8 — walking the
+   parent/child/hierarchy graph to discriminate per-step approver
+   eligibility based on role/department/hierarchy_level); (c) per-step
+   timeout canonical per the existing `expires_at` field extended to
+   per-step granularity; (d) audit chain extension per Zone U1-U4
+   substantive substrate canonical at each chain step. Destination
+   canonical: RAA 12.8 §5.9 item 1 (Step 2E engineering surface) —
+   quoted verbatim: "D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL closure —
+   implement EscalationRequest Prisma model per §5.2; validation gate
+   flags primitives; approval workflow primitives; correction
+   propagation chain." The multi-step-chain portion of "approval
+   workflow primitives" is the remaining engineering substrate
+   canonical from §5.9 item 1's enumeration. Multi-sprint Step 2E
+   engineering substantively-canonical per RAA 12.8 §5.9 + Decision 4
+   — sequenced after architectural canonicalization completes
+   (Sections 6-10). Substrate-state distinction observation per RULE
+   13: this deferral destination (RAA 12.8 §5.2 approval-workflow-
+   primitives multi-step-chain portion / §5.9 item 1 Step 2E
+   engineering surface) is a different organizing frame from the
+   [SEC-SUBBOX1-ITEM4-DEFER] destination (Sub-box 2 per
+   COMPLIANCE_ARCHITECTURE_REVIEW.md numbering) and the
+   [SEC-SUBBOX1-ITEM5-DEFER] destination (RAA 12.8 §5.9 item 7 / Step
+   2E engineering surface for per-DMW-type sovereignty integration).
+   Three different canonical destinations for three different
+   forward-queue items — preserve all three distinctions; items 4 and
+   5 are at distinct §5.9 items (4 → Sub-box 2 enumerated privileged
+   endpoint families; 5 → §5.9 item 7; 6 → §5.9 item 1
+   approval-workflow-primitives multi-step portion). The pre-existing
+   cross-doc Sub-box numbering drift from item 4 is separate substrate
+   (forward-queued to a future reconciliation pass /
+   [DOCS-CATALOG-REFRESH] candidate). Substrate-state observation per
+   RULE 17: this commit closes Sub-box 1 forward-queue substantively —
+   3 COMPLETE (items 1+2+3) + 3 DEFERRED (items 4+5+6) — substantively
+   FULLY canonical-record-substrate-complete. Source: RAA 12.8 §5.2
+   ("Approval workflow primitives. Multi-step approval chains ...") +
+   RAA 12.8 §5.9 item 1 ("D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL
+   closure — ... approval workflow primitives ...") + the D-2D-D10
+   closure arc ([D-2D-D10-1..8] commits implementing the single-step
+   substrate canonical) + Decision 4 (Step 2E sequenced after
+   architectural canonicalization).
 
 ## How To Update This Tracker
 
