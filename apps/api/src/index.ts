@@ -340,6 +340,7 @@ export type { AdminCapability } from "./middleware/admin.middleware.js";
 
 export { registerPlatformRoutes } from "./routes/platform.routes.js";
 export { registerOrgRoutes } from "./routes/org.routes.js";
+export { registerEscalationRoutes } from "./routes/escalation.routes.js";
 export { registerAuthAdminRoutes } from "./routes/auth-admin.routes.js";
 
 export { MemoryContentStore } from "./content-store.js";

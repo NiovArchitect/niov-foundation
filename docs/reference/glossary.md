@@ -307,6 +307,33 @@ multi-hop traversal is explicit. See
 (`WalletType.ENTERPRISE`). Org-level memory capsules live here
 and stay with the company on employee departure. See ADR-0001.
 
+**Escalation Routes (`registerEscalationRoutes`).** The HTTP
+surface for EscalationRequest resolution: `POST
+/api/v1/escalations/:id/approve`, `POST
+/api/v1/escalations/:id/reject`, `GET /api/v1/escalations/:id`,
+`GET /api/v1/escalations/pending` (`?limit=`, default 50). The
+source ≠ resolver dual-control gate is enforced SERVICE-TIER at
+`transitionPendingForCaller`'s skeleton gate (a source-only
+caller fails per D-2D-D10-2); the routes map the domain-string
+throws to HTTP codes (`ESCALATION_FORBIDDEN` → 403;
+`ESCALATION_NOT_FOUND` → 404; `ESCALATION_INVALID_TRANSITION` →
+409). The canonical `ESCALATION_APPROVED` / `ESCALATION_REJECTED`
+audit events (`event_type: "ADMIN_ACTION"` + `details.action`)
+fire from the service tier — these routes write nothing
+additional. `POST /api/v1/escalations` (general create) is
+deliberately not exposed: the only escalation-creation path is
+the gate-fail coupling at `negotiate.service.ts` per D-2D-D10-5
+(`createGateEscalationForCaller`). Module at
+`apps/api/src/routes/escalation.routes.ts`. Per RAA 12.8 §5.2
+approval workflow primitives + Section 12.5 Sub-box 1 dual-control
+framing — the generalized `requireDualControl` preHandler (the
+Sub-box 2 enumerated-set consumer) is forward-queue per the
+"enumerated dual-control set, not a general primitive" framing in
+`COMPLIANCE_ARCHITECTURE_REVIEW.md` (two-person rule; Patent
+Relevance: None — conventional). Substantiates ADDENDUM-DMW-SLM
+§5 "Audit lineage per operation (Zone U1-U4)" + "Permission-
+governed composition" at the route tier. Landed in D-2D-D10-7.
+
 ## F
 
 **FEEDBACK_LOOP.** One of the four `SYSTEM_PRINCIPALS` enum
