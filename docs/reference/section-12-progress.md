@@ -278,12 +278,38 @@ extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
    document; the source-of-substance is ADDENDUM-DMW-SLM. Source:
    ADDENDUM-DMW-SLM §9 "forward-queue candidates; not specified
    here" framing — canonicalized at this commit.
-4. **Generalized `requireDualControl` preHandler** — the Sub-box 2
-   "enumerated endpoint families" consumer of the dual-control
-   middleware. Sub-box 2 territory; built when the second consumer
-   lands (YAGNI). Source: [D-2D-D10-7] Observation 1 +
-   COMPLIANCE_ARCHITECTURE_REVIEW.md "enumerated dual-control set,
-   not a general primitive" framing.
+4. **Generalized `requireDualControl` preHandler — DEFERRED to Sub-box 2
+   substantive substrate.** Marked DEFERRED at [SEC-SUBBOX1-ITEM4-DEFER]
+   on 2026-05-12 per Sub-box dependency-ordering substrate canonical.
+   Substrate-state observation: `requireDualControl` does NOT exist as
+   code — zero Fastify-preHandler consumers across `apps/api/src/`; the 2
+   grep matches at `apps/api/src/routes/escalation.routes.ts` (lines 11 +
+   32) are WHY-comment forward-queue framing references, not call sites.
+   The dual-control gate is enforced service-tier only via the
+   `transitionPendingForCaller` skeleton gate at
+   `apps/api/src/services/governance/escalation.service.ts` (a source-only
+   caller fails; caller === target OR caller === resolved_by may
+   transition) — the [D-2D-D10-7] Observation 1 scope decision was
+   deliberately to NOT add route-tier dual-control middleware; the
+   service-tier gate is the canonical 1-consumer substrate, the routes
+   (requireAuth preHandler only) map domain-string throws to HTTP codes.
+   Canonical destination: Sub-box 2 (privileged action audit chain)
+   enumerated privileged endpoint families — the substantively-substantial
+   2nd+ consumers; the refactor trigger is canonical at the 2nd consumer
+   landing per the COMPLIANCE_ARCHITECTURE_REVIEW.md "enumerated
+   dual-control set, not a general primitive" framing. YAGNI rationale:
+   generalizing a Fastify preHandler against one service-tier-only
+   consumer is premature substrate; the second consumer (enumerated
+   privileged endpoint families per Sub-box 2 substrate) is the canonical
+   refactor trigger — substantively-substantial substrate observation per
+   Sub-box dependency-ordering. Substrate-state cross-doc drift observation
+   per RULE 13: section-12-progress.md's "Sub-box 2 = privileged action
+   audit chain" numbering does NOT match COMPLIANCE_ARCHITECTURE_REVIEW.md's
+   "Sub-box 2 = Jurisdiction tagging" numbering; the cross-doc drift is
+   pre-existing and out of scope for this amendment (forward-queued to a
+   future reconciliation pass / [DOCS-CATALOG-REFRESH] candidate). Source:
+   [D-2D-D10-7] Observation 1 + COMPLIANCE_ARCHITECTURE_REVIEW.md
+   "enumerated dual-control set, not a general primitive" framing.
 5. **§5.8 per-DMW-type sovereignty integration of the escalation
    gate** — gate-trigger conditions specified per per-DMW-type
    policy; the `transitionPendingForCaller` skeleton gate (target
