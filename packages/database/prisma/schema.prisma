@@ -486,6 +486,7 @@ enum EscalationType {
   POLICY_CONFLICT
   AUTHORIZATION_FAILURE
   COMPLIANCE_GATE
+  DUAL_CONTROL_REQUIRED /// Privileged-operation second-approver gate per ADR-0026; distinct from HUMAN_REVIEW_REQUIRED (AI-uncertainty trigger).
 }
 
 // A Hive is a many-entity collective. Members contribute capsules;
