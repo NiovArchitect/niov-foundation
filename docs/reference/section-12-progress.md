@@ -311,11 +311,60 @@ extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
    [D-2D-D10-7] Observation 1 + COMPLIANCE_ARCHITECTURE_REVIEW.md
    "enumerated dual-control set, not a general primitive" framing.
 5. **§5.8 per-DMW-type sovereignty integration of the escalation
-   gate** — gate-trigger conditions specified per per-DMW-type
-   policy; the `transitionPendingForCaller` skeleton gate (target
-   OR resolver may transition) becomes the full per-DMW-type
-   sovereignty-rule integration. Broader RAA 12.8 §5.8 territory;
-   per RAA 12.8 §5.9 item 7.
+   gate — DEFERRED to RAA 12.8 §5.9 item 7 (Step 2E engineering
+   surface).** Marked DEFERRED at [SEC-SUBBOX1-ITEM5-DEFER] on
+   2026-05-12 per Sub-box dependency-ordering substrate canonical.
+   Substrate-state observation: RAA 12.8 §5.8 substantive substrate
+   is already complete at RAA-tier per the [RAA-12.8-S5-AMEND-1]
+   amendment chain (`604aac6` Commit 1 six EntityType mappings +
+   `2cced88` Commit 2 18-site body-text amendment + `127a383`
+   Commit 3 §5.10 Correction E) — the six EntityType → WalletType
+   mappings canonical (PERSON → Personal full-owner-sovereignty per
+   RULE 0; COMPANY → Enterprise Permission-scoped with forget-on-detach
+   at Permission tier per Correction A; DEVICE → Device device-owner
+   sovereignty; AI_AGENT → owning-entity-derived recursion via
+   EntityMembership terminating at sovereign-human or AI_AGENT-tier
+   baseline per Correction B; APPLICATION → Enterprise enterprise-scoped;
+   GOVERNMENT → Custom Government NET-NEW substrate primitive with
+   FedRAMP/IL4/IL5/IL6/CMMC) + per-DMW-type sovereignty rules +
+   Corrections C/D/E canonical at §5.10. Nothing to add at
+   canonical-record register at this commit — the substrate is
+   canonical-record-complete at RAA-tier. The escalation-gate
+   integration itself (wiring per-DMW-type sovereignty rules into the
+   `transitionPendingForCaller` authorization logic at
+   `apps/api/src/services/governance/escalation.service.ts:276` to
+   replace the current skeleton gate at lines 290-296 — `caller ===
+   target OR caller === resolved_by may transition`) is explicitly
+   RAA 12.8 §5.9 item 7 (Step 2E engineering surface): "Per-DMW-type
+   sovereignty rules implementation per §5.8 (after operator decisions
+   resolve AI_AGENT / APPLICATION / GOVERNMENT mappings). Engineering
+   tier: per-DMW-type scheduling constraint enforcement at §3.8
+   cross-wallet retrieval; per-DMW-type HiveMembership constraint at
+   §4.8 Hive coordination." Multi-sprint Step 2E engineering substrate
+   canonical per RAA 12.8 §5.9 + Decision 4 — sequenced after
+   architectural canonicalization completes (Sections 6-10). The §5.9
+   "after operator decisions resolve AI_AGENT / APPLICATION /
+   GOVERNMENT mappings" precondition is now SATISFIED per the
+   [RAA-12.8-S5-AMEND-1] chain — the item is unblocked for Step 2E
+   substantively. The `escalation.service.ts` header (lines 60-65) +
+   the `transitionPendingForCaller` block (lines 269-296) already
+   carry the FORWARD QUEUE per §5.8 framing substantively — no code
+   amendment needed at canonical-record register; the forward-queue
+   framing is canonical at code register already. Substrate-state
+   distinction observation per RULE 13: this deferral destination
+   (RAA 12.8 §5.9 item 7 / Step 2E engineering surface) is a different
+   organizing frame from the [SEC-SUBBOX1-ITEM4-DEFER] destination
+   (Sub-box 2 per COMPLIANCE_ARCHITECTURE_REVIEW.md numbering — the
+   privileged action audit chain enumerated privileged endpoint
+   families). Two different canonical destinations for two different
+   forward-queue items — preserve the distinction; the pre-existing
+   cross-doc Sub-box numbering drift from item 4 is separate substrate
+   (forward-queued to a future reconciliation pass /
+   [DOCS-CATALOG-REFRESH] candidate). Source: RAA 12.8 §5.8 (six
+   EntityType→WalletType mappings + per-DMW-type sovereignty rules) +
+   RAA 12.8 §5.9 item 7 (Step 2E engineering surface enumeration) +
+   [RAA-12.8-S5-AMEND-1] amendment chain (`604aac6` + `2cced88` +
+   `127a383`).
 6. **EntityMembership-traversal multi-step approval chains** — per
    RAA 12.8 §5.2 "multi-step approval chains (chained
    EscalationRequest rows); per-step approver discrimination via
