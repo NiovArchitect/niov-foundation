@@ -317,6 +317,22 @@ export type {
   PropagationEntry,
 } from "./services/governance/dandelion.service.js";
 
+// escalation.service.ts re-exports -- D-2D-D10-2 substrate (CRUD +
+// PENDING -> APPROVED/REJECTED/EXPIRED state machine over the
+// EscalationRequest model). External consumers (tests, sibling
+// packages) reach these via "@niov/api"; intra-apps/api/src callers
+// (priming.ts, org.routes.ts) use deep relative imports.
+export {
+  createEscalationForCaller,
+  getEscalationForCaller,
+  listEscalationsPendingForCaller,
+  countEscalationsPending,
+  approveEscalationForCaller,
+  rejectEscalationForCaller,
+  expireEscalation,
+} from "./services/governance/escalation.service.js";
+export type { CreateEscalationInput } from "./services/governance/escalation.service.js";
+
 export { requireAdminCapability } from "./middleware/admin.middleware.js";
 export type { AdminCapability } from "./middleware/admin.middleware.js";
 
