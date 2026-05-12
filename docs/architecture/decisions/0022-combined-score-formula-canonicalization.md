@@ -142,6 +142,32 @@ ADR-0022's discipline propagates to:
 
 - **FOUNDATIONAL Capsule retrieval-privilege class.** FOUNDATIONAL Capsules bypass `RELEVANCE_FORGET_FLOOR` and bypass token budget allocation per ADR-0021's invariant statement. combined_score is computed for FOUNDATIONAL Capsules but doesn't gate inclusion (they are added first irrespective of score). ADR-0022 acknowledges this interaction without re-canonicalizing it (already documented in RAA 12.7 §3.3 + ADR-0021).
 
+## Amendment — Informativeness-coefficient parameterization joins the frozen-anchors family (INT-6)
+
+**Amendment date**: 2026-05-12
+**Amendment trigger**: [D-2D-D10-6] `38205b3` landed `RELEVANCE_CORRECTION_BUMP = RELEVANCE_MAX` substrate (snap-to-MAX semantics per RAA 12.8 §5.5 INT-3 "maximum bump coefficient"). The substrate-tier landing is bounded; this amendment is the canonical-record-tier follow-up per [D-2D-D10-6] Observation 3 + the Sub-box 1 CLOSED narrative forward-queue item 2.
+
+### Informativeness-coefficient family
+
+The following per-Capsule relevance constants canonical at `apps/api/src/services/feedback/feedback.service.ts` (L91-104) + `apps/api/src/services/coe/coe.service.ts` (L44) join the frozen-anchors family per INT-6:
+
+- `RELEVANCE_USED_BUMP = 0.05` — `feedback.service.ts:91` (used-signal canonical bump; Loop 1 bilateral feedback per RAA 12.7 Zone B1)
+- `RELEVANCE_UNUSED_DECAY = 0.02` — `feedback.service.ts:92` (unused-signal canonical decay)
+- `RELEVANCE_MIN = 0.0` — `feedback.service.ts:93` (lower bound)
+- `RELEVANCE_MAX = 1.0` — `feedback.service.ts:94` (upper bound)
+- `RELEVANCE_CORRECTION_BUMP = RELEVANCE_MAX` — `feedback.service.ts:104` (per [D-2D-D10-6]; snap-to-MAX semantics; a human correction is the "maximum bump coefficient" signal per RAA 12.8 §5.5 INT-3 — rarest and strongest, so it snaps to the ceiling rather than incrementally bumping like `RELEVANCE_USED_BUMP`)
+- `RELEVANCE_FORGET_FLOOR = 0.2` — `coe.service.ts:44` (intentional-forgetting threshold; exported; FOUNDATIONAL Capsules bypass per ADR-0021)
+
+### Frozen-anchors family canonical extension path
+
+Per RAA 12.8 §6.6 + §7.4: the informativeness-coefficient family is a canonical extension of the frozen-anchors family alongside this ADR's `combined_score` formula-anchor test (`tests/unit/coe.test.ts:132-136` coefficient lock + `:121-129` recency monotonicity lock). Substrate-honest framing: the existing frozen-anchors cataloged at `docs/reference/architectural-anchors.md` include `Object.freeze`-wrapped configuration anchors (`CRYPTO_CONFIG`, `SYSTEM_PRINCIPALS` per ADR-0019); the value-assertion anchors (`combined_score` coefficients; this amendment's informativeness coefficients) operate via canonical-record assertion + test substrate. Both are substrate-tier tamper-resistance mechanisms; different substrate registers. Cataloging `combined_score` + `RELEVANCE_FORGET_FLOOR` into `architectural-anchors.md` is a substantively-bounded follow-up deferred to a future `[DOCS-CATALOG-REFRESH]` (substrate-state distinction between value-assertion and `Object.freeze` anchors; scope discipline).
+
+### Forward-queue: formula extension to Step 2E engineering
+
+Per RAA 12.8 §7.3 + §7.5: the actual `INFORMATIVENESS_WEIGHT` 4th-coefficient formula extension — `combined_score = tag*w_tag + base*w_relevance + recency*w_recency + informativeness*w_informativeness`, sum-=-1.0 invariant preserved, coefficient redistribution candidates surfaced for operator review at amendment-drafting time (conservative `w_informativeness = 0.10` → `0.405 / 0.315 / 0.180`; mid `0.20` → `0.36 / 0.28 / 0.16`; aggressive `0.30` → `0.315 / 0.245 / 0.14`; default conservative) — is explicitly Step 2E engineering substrate. Substantively-substantial scope: multi-sprint; NET-NEW per-CapsuleType × per-event-type × per-salience-band coefficient table; frozen-config module canonical at `apps/api/src/services/coe/informativeness-config.ts` OR `apps/api/src/services/feedback/informativeness-config.ts` (Step 2E planning decision per the ADR-0019 frozen-config pattern); Loop 1 differential-bump/decay refactor at `feedback.service.ts`; ADR-0003-discipline anchor tests for the new coefficients; the `combined_score` anchor test at `coe.test.ts:132-136` extended to validate the 4-coefficient sum invariant. The ADR-0022 amendment for the formula extension lands alongside the frozen-config module per coordinated commit discipline per RAA 12.8 §7.5.
+
+This amendment canonicalizes the family join at the canonical-record register; the engineering substrate (Step 2E) sequences after RAA 12.8 full-document drafting per the §7.5 operator framing. The `combined_score` formula and recency thresholds canonicalized above (Decision section) are unchanged by this amendment — the amendment is additive (per RAA 12.8 §7.3 "amends rather than supersedes").
+
 ## References
 
 - 74b2765 ([GLOSSARY-G-3] glossary canonicalization; combined_score / recencyScore / relevance_score / RELEVANCE_FORGET_FLOOR / RELEVANCE_UNUSED_DECAY / RELEVANCE_USED_BUMP entries; forward citation closes here)
@@ -153,7 +179,7 @@ ADR-0022's discipline propagates to:
 - ADR-0021 (Capsule Type Extension Protocol; FOUNDATIONAL bypass interaction referenced)
 - RAA 12.7 §3.3 (RAA-tier canonicalization predates ADR-0022; ADR-0022 elevates to ADR-tier)
 - RAA 12.7 Zone B1 (Loop 1 bilateral feedback; relevance_score signal maintenance)
-- RAA 12.8 Weighting Architecture (queued; future extensions via ADR-0022 amendment)
+- RAA 12.8 Weighting Architecture — §6.6 (frozen-anchors family canonical inventory; INT-6 informativeness function joins the family), §7.3 (ADR-0022 amendment path detail; `INFORMATIVENESS_WEIGHT` 4th-coefficient formula extension specification + coefficient redistribution candidates), §7.4 (frozen-anchors family extension discipline; ADR-0019 frozen-config pattern + ADR-0003 anchor test discipline applied jointly), §7.5 (Step 2E engineering surface; coordinated commit discipline — amendment lands alongside the frozen-config module). The amendment landed at [SEC-INT6-ADR0022] documents the family join at canonical-record register; the formula extension itself is Step 2E engineering substrate.
 - `apps/api/src/services/coe/keywords.ts` (canonical implementation: `combinedScore`, `recencyScore`, `tagOverlapScore`)
 - `apps/api/src/services/coe/coe.service.ts` (`RELEVANCE_FORGET_FLOOR`, `TOKENS_PER_CAPSULE_ESTIMATE`, FOUNDATIONAL bypass)
 - `apps/api/src/services/feedback/feedback.service.ts` (`RELEVANCE_USED_BUMP`, `RELEVANCE_UNUSED_DECAY`; Zone B1 implementation)
@@ -161,3 +187,10 @@ ADR-0022's discipline propagates to:
 - `tests/unit/coe.test.ts:121-129` (recency monotonicity lock)
 - `docs/reconciliation/2026-05-08-build-reconciliation.md` Section 4 (combined_score documented as substrate architectural decision)
 - US 12,517,919 (COSMP/DMW patent; combined_score is implementation-level architectural decision; patent claim coverage at substrate-architecture level rather than formula-coefficient level)
+
+Bidirectional citations (cited from):
+
+- RAA 12.8 (`docs/architecture/raa-12-8-substrate-dynamics.md`) — §6.6 frozen-anchors family canonical inventory (INT-6); §7.3 ADR-0022 amendment path detail; §7.4 frozen-anchors family extension discipline; §7.5 Step 2E engineering surface. RAA 12.8 cites this ADR as the `combined_score` formula-anchor precedent and as the amendment target for the informativeness-coefficient formula extension.
+- `docs/CURRENT_BUILD_STATE.md` ADR catalog — describes this ADR's substrate as "frozen-anchors family per INT-6; informativeness coefficient extension path per RAA 12.8 §7.4."
+- `docs/reference/section-12-progress.md` Sub-box 1 CLOSED narrative forward-queue item 2 — marked COMPLETE at [SEC-INT6-ADR0022] reflecting the canonical-record-tier follow-up landed by this amendment.
+- [D-2D-D10-6] `38205b3` — landed `RELEVANCE_CORRECTION_BUMP = RELEVANCE_MAX` substrate-tier canonical; Observation 3 explicitly framed this amendment as the canonical-record-tier follow-up.

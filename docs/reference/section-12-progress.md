@@ -230,13 +230,31 @@ extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
    pre-commit hook at [SEC-DBPUSH-HOOK]. Source: [D-2D-D10-4]
    Observation 1 (the production schema-push target drift event) +
    [D-2D-D10-1] near-certain analogous exposure.
-2. **INT-6 frozen-anchors / ADR-0022 amendment** — the
-   informativeness-coefficient parameterization joining the
-   frozen-anchors family alongside `combined_score`. Future
-   ADR-0022 amendment commit. Source: [D-2D-D10-6] Observation 3
-   (`RELEVANCE_CORRECTION_BUMP = RELEVANCE_MAX` is the
-   substrate-tier landing; the parameterization is the
-   canonical-record-tier follow-up).
+2. **INT-6 frozen-anchors / ADR-0022 amendment — COMPLETE.** Landed
+   at [SEC-INT6-ADR0022] on 2026-05-12 as a canonical-record-tier
+   amendment to ADR-0022 (combined_score Formula Canonicalization).
+   The informativeness-coefficient family (`RELEVANCE_USED_BUMP` /
+   `RELEVANCE_UNUSED_DECAY` / `RELEVANCE_MIN` / `RELEVANCE_MAX` /
+   `RELEVANCE_CORRECTION_BUMP` / `RELEVANCE_FORGET_FLOOR`) joins
+   the frozen-anchors family alongside `combined_score` per
+   RAA 12.8 §6.6 + §7.4. The formula extension itself (4th
+   coefficient `INFORMATIVENESS_WEIGHT` + coefficient redistribution
+   + frozen-config module + Loop 1 differential-bump/decay refactor
+   + anchor tests for new coefficients) is explicitly Step 2E
+   engineering substrate per RAA 12.8 §7.3 + §7.5 — multi-sprint;
+   NET-NEW; lands alongside the frozen-config module per
+   coordinated commit discipline. The ADR-0022 amendment also
+   tightened its RAA-12.8 References entries from generic to the
+   specific landed sections (§6.6 / §7.3 / §7.4 / §7.5) and added
+   a "Bidirectional citations (cited from):" sub-block per the
+   `docs/architecture/README.md` discipline (the [SEC-DBPUSH-ADR]
+   ADR-0024 precedent). Cataloging `combined_score` +
+   `RELEVANCE_FORGET_FLOOR` into `architectural-anchors.md`, and
+   the README ADR-catalog refresh, are deferred to a future
+   `[DOCS-CATALOG-REFRESH]`. Source: [D-2D-D10-6] Observation 3
+   (the substrate-tier landing at `RELEVANCE_CORRECTION_BUMP =
+   RELEVANCE_MAX`); this amendment is the canonical-record-tier
+   follow-up.
 3. **RAA-12.9-tier glossary concept entries** — `SLM-Equivalence`
    / `LLM-Equivalence-Hive` / `Inference Surface` concept entries
    elaborating ADDENDUM-DMW-SLM §3 + §4. RAA-12.9-tier commit, per
