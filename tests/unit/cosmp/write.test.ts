@@ -215,6 +215,37 @@ describe("createCapsule -- owner write", () => {
     });
     expect(row?.payload_size_tokens).toBe(4);
   });
+
+  it("persists requires_validation when set at create time (D-2D-D10-4); defaults to false otherwise", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const gated = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["gated"],
+      payload_summary: "summary",
+      content: "content",
+      requires_validation: true,
+    });
+    expect(gated.ok).toBe(true);
+    if (!gated.ok) return;
+    const gatedRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: gated.capsule_id },
+    });
+    expect(gatedRow?.requires_validation).toBe(true);
+
+    const plain = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["plain"],
+      payload_summary: "summary",
+      content: "content",
+    });
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) return;
+    const plainRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: plain.capsule_id },
+    });
+    expect(plainRow?.requires_validation).toBe(false);
+  });
 });
 
 describe("updateCapsule -- owner update", () => {
@@ -278,6 +309,34 @@ describe("updateCapsule -- owner update", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe("CAPSULE_NOT_FOUND");
+  });
+
+  it("flips requires_validation via updateCapsule (D-2D-D10-4 validation gate flag)", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const created = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["gate-toggle"],
+      payload_summary: "summary",
+      content: "content",
+    });
+    if (!created.ok) throw new Error("create failed");
+    const before = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: created.capsule_id },
+    });
+    expect(before?.requires_validation).toBe(false);
+
+    const updated = await write.updateCapsule(
+      owner.token,
+      created.capsule_id,
+      { requires_validation: true },
+      null,
+    );
+    expect(updated.ok).toBe(true);
+    const after = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: created.capsule_id },
+    });
+    expect(after?.requires_validation).toBe(true);
   });
 });
 

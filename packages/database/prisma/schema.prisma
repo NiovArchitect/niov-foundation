@@ -120,6 +120,12 @@ model MemoryCapsule {
   access_count       Int     @default(0)
   content_hash       String
   ai_access_blocked  Boolean @default(false)
+  // D-2D-D10-4 validation gate flag (RAA 12.8 §5.2): when true, a
+  // restricted-class entity's NEGOTIATE is denied (VALIDATION_REQUIRED)
+  // until a human clears the gate. Read-side mirror of ai_access_blocked;
+  // the escalation-coupling (gate fail -> COMPLIANCE_GATE escalation)
+  // lands in [D-2D-D10-5].
+  requires_validation Boolean @default(false)
 
   connected_capsule_ids String[]
   connected_entity_ids  String[]

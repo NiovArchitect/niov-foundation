@@ -96,6 +96,7 @@ export interface CreateCapsuleInput {
   monetization_category?: string | null;
   expires_at?: Date | null;
   ai_access_blocked?: boolean;
+  requires_validation?: boolean;
 
   actor_id?: string | null;
 }
@@ -188,6 +189,7 @@ export async function createCapsule(
           monetization_category: input.monetization_category ?? null,
           expires_at: input.expires_at ?? null,
           ai_access_blocked: input.ai_access_blocked ?? false,
+          requires_validation: input.requires_validation ?? false,
         },
       });
     },
@@ -226,6 +228,7 @@ export async function getCapsuleMetadata(
         access_count: true,
         content_hash: true,
         ai_access_blocked: true,
+        requires_validation: true,
         connected_capsule_ids: true,
         connected_entity_ids: true,
         monetization_enabled: true,

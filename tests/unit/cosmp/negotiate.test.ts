@@ -470,6 +470,72 @@ describe("negotiate -- AI sovereignty", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("requires_validation rejects an AI_AGENT request (D-2D-D10-4 validation gate flag)", async () => {
+    const { auth, negotiate } = makeServices();
+    const owner = await loginAs(auth);
+    const capsule = await makeCapsuleFor(owner.entity.entity_id, {
+      requires_validation: true,
+    });
+    const ai = await loginAs(auth, { entity_type: "AI_AGENT" });
+    await createPermission({
+      capsule_id: capsule.capsule_id,
+      grantor_entity_id: owner.entity.entity_id,
+      grantee_entity_id: ai.entity.entity_id,
+      access_scope: "SUMMARY",
+      duration_type: "TEMPORARY",
+    });
+    const result = await negotiate.negotiate(
+      ai.token,
+      capsule.capsule_id,
+      "SUMMARY",
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("ACCESS_DENIED");
+  });
+
+  it("requires_validation still lets a PERSON through", async () => {
+    const { auth, negotiate } = makeServices();
+    const owner = await loginAs(auth);
+    const capsule = await makeCapsuleFor(owner.entity.entity_id, {
+      requires_validation: true,
+    });
+    const human = await loginAs(auth);
+    await createPermission({
+      capsule_id: capsule.capsule_id,
+      grantor_entity_id: owner.entity.entity_id,
+      grantee_entity_id: human.entity.entity_id,
+      access_scope: "FULL",
+      duration_type: "TEMPORARY",
+    });
+    const result = await negotiate.negotiate(
+      human.token,
+      capsule.capsule_id,
+      "FULL",
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("requires_validation defaults to false -- an AI_AGENT request is not gated", async () => {
+    const { auth, negotiate } = makeServices();
+    const owner = await loginAs(auth);
+    const capsule = await makeCapsuleFor(owner.entity.entity_id);
+    const ai = await loginAs(auth, { entity_type: "AI_AGENT" });
+    await createPermission({
+      capsule_id: capsule.capsule_id,
+      grantor_entity_id: owner.entity.entity_id,
+      grantee_entity_id: ai.entity.entity_id,
+      access_scope: "SUMMARY",
+      duration_type: "TEMPORARY",
+    });
+    const result = await negotiate.negotiate(
+      ai.token,
+      capsule.capsule_id,
+      "SUMMARY",
+    );
+    expect(result.ok).toBe(true);
+  });
+
   it("AI_AGENT requesting FULL is silently capped to SUMMARY by default", async () => {
     const { auth, negotiate } = makeServices();
     const owner = await loginAs(auth);

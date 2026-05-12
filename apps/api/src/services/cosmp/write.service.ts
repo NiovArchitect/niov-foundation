@@ -56,6 +56,7 @@ export interface CapsuleCreateInput {
   monetization_category?: string | null;
   expires_at?: Date | null;
   ai_access_blocked?: boolean;
+  requires_validation?: boolean;
 
   write_reason?: string;
 }
@@ -81,6 +82,7 @@ export interface CapsuleUpdateInput {
   monetization_enabled?: boolean;
   monetization_category?: string | null;
   ai_access_blocked?: boolean;
+  requires_validation?: boolean;
 
   write_reason?: string;
 }
@@ -337,6 +339,7 @@ export class WriteService {
         monetization_category: input.monetization_category ?? null,
         expires_at: input.expires_at ?? null,
         ai_access_blocked: input.ai_access_blocked ?? false,
+        requires_validation: input.requires_validation ?? false,
 
         // Attribution (set once, never overwritten on update).
         created_by: session.entity_id,
@@ -553,6 +556,8 @@ export class WriteService {
       data.monetization_category = input.monetization_category;
     if (input.ai_access_blocked !== undefined)
       data.ai_access_blocked = input.ai_access_blocked;
+    if (input.requires_validation !== undefined)
+      data.requires_validation = input.requires_validation;
 
     let newContentHash = existing.content_hash;
     if (input.content !== undefined) {

@@ -277,6 +277,26 @@ export class NegotiateService {
       return accessDenied();
     }
 
+    // PRE-CHECK -- AI / DEVICE-class entities respect the validation
+    // gate flag (RAA 12.8 §5.2 / D-2D-D10-4): a capsule marked
+    // requires_validation is withheld from restricted-class entities
+    // until a human clears the gate. Read-side mirror of
+    // ai_access_blocked; the gate-fail -> COMPLIANCE_GATE escalation
+    // coupling lands in [D-2D-D10-5].
+    if (restrictedClass && metadata.requires_validation === true) {
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        target_entity_id: metadata.entity_id,
+        denial_reason: "VALIDATION_REQUIRED",
+        ip_address: context.ip_address ?? null,
+        details: { entity_type: requester.entity_type },
+      });
+      return accessDenied();
+    }
+
     // STEP 3 -- clearance check (always before permission check)
     if (validation.clearance_ceiling < metadata.clearance_required) {
       await writeAuditEvent({

@@ -38,6 +38,16 @@ implementation: `SYSTEM_PRINCIPALS` enum + the legacy
 `docs/COMPLIANCE_ARCHITECTURE_REVIEW.md` Section 1 Dimension 1.4
 and ADR-0006.
 
+**AI Access Block (`ai_access_blocked`).** A read-side gate flag
+on the `MemoryCapsule` model. When `true`, a restricted-class
+entity (AI_AGENT / DEVICE class) requesting NEGOTIATE access is
+denied with `denial_reason: "AI_ACCESS_BLOCKED"`; PERSON-class
+requesters are unaffected, and the capsule's owner is unaffected
+(the owner shortcut precedes the check). Owner-controlled via
+`CapsuleCreateInput` / `CapsuleUpdateInput`. Enforced at
+`apps/api/src/services/cosmp/negotiate.service.ts`. Sibling of
+the `requires_validation` Validation Gate Flag.
+
 **Architectural Anchor.** A runtime-enforced invariant test that
 locks an architectural property future engineers (or LLMs)
 cannot break without a red test. Six anchors are active as of
@@ -357,7 +367,7 @@ intelligence in COSMP. The implementation
 `tokens`, `tokens_tokenizer`, `commitment_date`,
 `storage_location`, `storage_tier`, `clearance_required`,
 `access_count`, `content_hash`, `ai_access_blocked`,
-`connected_capsule_ids`, `connected_entity_ids`,
+`requires_validation`, `connected_capsule_ids`, `connected_entity_ids`,
 `monetization_enabled`, `monetization_category`, write-attribution
 columns (`created_by`, `created_session_id`, `write_reason`,
 `updated_by`, `updated_session_id`, `previous_version`), and
@@ -551,6 +561,22 @@ since last access — older Capsules decay unless reinforced.
 Operationally typical for CONVERSATION_LEARNING, TASK_LEARNING,
 WORK_PATTERN, and SESSION_LEARNING Capsule types. See
 `packages/database/prisma/schema.prisma` DecayType enum.
+
+## V
+
+**Validation Gate Flag (`requires_validation`).** A read-side
+gate flag on the `MemoryCapsule` model (`@default(false)`). When
+`true`, a restricted-class entity (AI_AGENT / DEVICE class)
+requesting NEGOTIATE access is denied with `denial_reason:
+"VALIDATION_REQUIRED"` until a human clears the gate; PERSON-class
+requesters and the capsule's owner are unaffected. Owner-controlled
+via `CapsuleCreateInput` / `CapsuleUpdateInput`. Enforced at
+`apps/api/src/services/cosmp/negotiate.service.ts` (the check sits
+directly after the `ai_access_blocked` AI Access Block check). The
+read-side primitive landed in D-2D-D10-4 per RAA 12.8 §5.2
+("validation gate flags"); the gate-fail → COMPLIANCE_GATE
+EscalationRequest coupling lands in D-2D-D10-5 (approval workflow
+primitive). Sibling of the `ai_access_blocked` AI Access Block.
 
 ## W
 
