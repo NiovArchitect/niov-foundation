@@ -281,3 +281,13 @@ Bidirectional citations (cited from):
   lineage)
 - `docs/contributing/onboarding.md` §3 Step 1 (RULE-count
   inventory updated to include RULE 19 in this commit)
+- `docs/architecture/addendum-dmw-slm-equivalence.md` (ADDENDUM-DMW-SLM;
+  landed in `[ADDENDUM-DMW-SLM]` `67fb083` on 2026-05-11): a
+  canonical-record-register patent-implementation-evidence addendum
+  operating purely at Register-2 architectural framing (zero
+  protected-name leak; the SLM/LLM-equivalence consequence is
+  business-grade concrete-form prose, no Register-1 metaphor bleed).
+  The addendum's header Cross-references block and §10 References cite
+  this ADR for the two-register discipline it preserves throughout.
+  RULE 14 back-citation landed at `[D-2D-D10-8]` (deferred from the
+  addendum commit per the Sub-box-1 closure-amendment grouping).

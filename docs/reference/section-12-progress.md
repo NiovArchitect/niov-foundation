@@ -29,8 +29,8 @@ demonstrated pace, not industry standard.
 | 12C.0 Commit 2 (compliance hardening) | CLOSED | `f3359fb` | crypto-config + retention posture + system principals + structured logging + /compliance/state; +22 tests; 4 anchor properties (DRIFT 2 Option C, DRIFT 12, frozen CRYPTO_CONFIG, frozen SYSTEM_PRINCIPALS) |
 | 12C.0.5 (operating manual + docs) | CLOSED | `23e263d` | CLAUDE.md + AGENTS.md + 10 ADRs + contributing guides + reference catalog |
 | Track A (test infrastructure isolation) | SUBSTANTIVELY COMPLETE | `d728cd4` → `5be42e5` | 18 gates closed + REVISED Gate 2 (Colima canonicalization per RULE 13 substrate-state drift correction); containerized Postgres + mocked LLM tier-stratification per ADR-0011; full chain at CURRENT_BUILD_STATE.md §5 |
-| 12.5 Sub-box 1 (EscalationRequest + dual-control) | **UNBLOCKED** | — | Track A delivered; Phase 2 primary engineering scope candidate; D-2D-D10 closure per RAA 12.8 §5.2 + §5.9 item 1 (4-framing-register unified engineering territory; see Dependency Notes below) |
-| 12.5 Sub-box 2-9 | QUEUED | — | Dependency-ordered post Sub-box 1 |
+| 12.5 Sub-box 1 (EscalationRequest + dual-control) | **CLOSED** | `dc0a26f` | Substrate-complete at `dc0a26f` ([D-2D-D10-7]); closure-amendment at [D-2D-D10-8]. 4-framing-register closure (substrate + service + route + canonical-record tiers) of D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL per RAA 12.8 §5.2 + §5.9 item 1: EscalationRequest model + 7-fn service + validation gate flag + gate-fail→COMPLIANCE_GATE coupling + correction propagation chain + escalation HTTP routes; +33 unit (escalation.test.ts) + 10 unit (gate-flag/coupling/propagation cases) + 8 integration (escalation-routes.test.ts); [ADDENDUM-DMW-SLM] canonical-record addendum landed alongside; no new architectural anchors; glossary +4 entries (Validation Gate Flag, AI Access Block, Correction Propagation, Escalation Routes). See "Sub-box 1 CLOSED" narrative below for the arc chronology + 6-item forward queue. |
+| 12.5 Sub-box 2-9 | QUEUED | — | Dependency-ordered post Sub-box 1 (now CLOSED at `dc0a26f`); Sub-box 2 (privileged action audit chain) consumes the generalized `requireDualControl` preHandler forward-queued from [D-2D-D10-7] |
 | 12C.1 (frontend Playground + Intelligence) | QUEUED | — | 6 cleanup items including 3 sentinel sites in otzar-control-tower (`MemberDetailDrawer.tsx:284`, `Users.tsx:175`, `Users.tsx:195`) |
 | 12D (Security & Audit screen) | QUEUED | — | Frontend |
 | 12E (Policies / Sharing rules) | QUEUED | — | Frontend |
@@ -103,6 +103,143 @@ to real audit event ID.
 status requires (a) a clean push to main, (b) verification report
 approved, (c) architectural anchor catalog updated if new
 anchors landed, (d) glossary updated if new terms landed.
+
+### Sub-box 1 CLOSED — D-2D-D10-PRIMING-SHAPE-AHEAD-OF-MODEL closure (2026-05-11)
+
+Sub-box 1 closes as a **4-framing-register event** — substrate +
+service + route + canonical-record tiers all on origin/main:
+
+- **Substrate-tier** (RAA 12.8 §5.2 canonical pieces — the four
+  closure pieces):
+  - [D-2D-D10-1] `8202771` — EscalationRequest Prisma schema (13
+    fields + 4 relations + 7 indexes + EscalationStatus /
+    EscalationType enums)
+  - [D-2D-D10-2] `40dac21` — escalation.service.ts (7 exported
+    functions: create / get / list-pending / count / approve /
+    reject / expire; pre-success audit-in-tx per ADR-0002 + RULE 4)
+  - [D-2D-D10-3] `d96b16a` — escalation.service.ts unit coverage
+    (33 cases / 7 describe) + `@niov/api` re-export
+  - [D-2D-D10-4] `33a25c6` — `requires_validation` gate flag on
+    MemoryCapsule (read-side NEGOTIATE denial; ai_access_blocked
+    mirror)
+  - [D-2D-D10-5] `6d9b636` — gate-fail → `COMPLIANCE_GATE`
+    escalation coupling (`createGateEscalationForCaller`,
+    get-or-create dedup; negotiate.service.ts wire)
+  - [D-2D-D10-6] `38205b3` — correction propagation chain
+    (`propagateCorrection` snap-to-`RELEVANCE_MAX`; `CORRECTION_PROPAGATED`
+    Zone U1 audit; processCorrection wire)
+- **Route-tier** (HTTP surface):
+  - [D-2D-D10-7] `dc0a26f` — escalation HTTP routes (`POST
+    :id/approve`, `POST :id/reject`, `GET :id`, `GET /pending`;
+    service-tier source≠resolver dual-control gate; 8 integration
+    tests)
+- **Canonical-record-tier**:
+  - [ADDENDUM-DMW-SLM] `67fb083` — DMW federation as emergent
+    SLM/LLM-equivalent inference surface (the inference-tier
+    consequence of US 12,164,537 / US 12,399,904 / US 12,517,919
+    patent claims; prior-art posture; landed alongside as a
+    standalone canonical-record commit)
+  - [D-2D-D10-8] (this commit) — Sub-box 1 closure amendment +
+    RULE 14 back-citations into RAA 12.8 + ADR-0020
+- **Discipline-tier** (substrate-honest pattern infrastructure
+  that landed during the arc):
+  - [SEC-HELMET] `68179ee` — @fastify/helmet substrate + ADR-0023
+    (security-headers posture)
+  - [DOCS-HUSKY] `6012b59` — husky 9.x pre-commit hook + ADR-0024
+    (pre-commit-hook posture)
+
+**Arc commit chronology (Day-6 arc; 2026-05-11; 11 cumulative
+commits in the window):** [D-2D-D10-1] → [SEC-HELMET] →
+[DOCS-HUSKY] → [D-2D-D10-2] → [D-2D-D10-3] → [D-2D-D10-4] →
+[ADDENDUM-DMW-SLM] → [D-2D-D10-5] → [D-2D-D10-6] → [D-2D-D10-7] →
+[D-2D-D10-8]. The "9-commit-window arc" framing in the commit
+bodies counts [SEC-HELMET] + [DOCS-HUSKY] + [D-2D-D10-2..8]
+(9 commits); [D-2D-D10-1] preceded the arc-window ("Phase 2
+Commit 1"); [ADDENDUM-DMW-SLM] interleaved as a standalone
+canonical-record commit.
+
+**Three consecutive ADDENDUM-DMW-SLM substantiation events** form
+a continuous multi-register patent-implementation-evidence chain
+on origin/main:
+
+- **Canonical-record register** — the ADDENDUM landed at
+  `67fb083` (framing SLM/LLM-equivalence as a consequence of the
+  existing patent claims)
+- **Service-tier register, §5** — [D-2D-D10-5] `6d9b636`
+  substantiated "Audit lineage per operation (Zone U1-U4)" at the
+  gate-resolution chain (gate-fail → COMPLIANCE_GATE escalation →
+  human review → status-transition audit event)
+- **Service-tier register, §3** — [D-2D-D10-6] `38205b3`
+  substantiated "confidence accumulation" + "personalization
+  confidence" (a correction snaps relevance to RELEVANCE_MAX —
+  the max-informativeness signal driving the DMW's contextual
+  inference surface)
+- **Route-tier register, §5** — [D-2D-D10-7] `dc0a26f`
+  substantiated "Audit lineage per operation (Zone U1-U4)" +
+  "Permission-governed composition" at the HTTP approve/reject
+  surface (resolver as actor; source≠resolver gate)
+
+**Substrate-honest pre-flight verification pattern operational
+across the arc** (26-consecutive-commit count at [D-2D-D10-8]).
+Substrate-state drifts caught + resolved in real time per
+RULE 13: production schema-push target drift at [D-2D-D10-4]
+(`prisma db push` auto-loaded `.env` → hit production
+`memory_capsules`; resolved Option A — leave the additive
+column; forward-queued as [SEC-DBPUSH-DISCIPLINE]/ADR-0025);
+draft-not-in-session at [ADDENDUM-DMW-SLM] (the "draft I
+provided" was not in the session transcript → STAND DOWN +
+operator re-paste → landed verbatim); audit-lookup `orderBy`
+correction at [D-2D-D10-7] (`findFirst` by `details.escalation_id`
+matched the earlier `ESCALATION_CREATED` event before the
+resolution event → caught at the isolated test run → fixed inline
+with `orderBy: { timestamp: "desc" }` before staging). DRIFT 2
+REDUX: the `cleanupTestEscalations` test-local-cleanup pattern
+([D-2D-D10-3] Option A — escalation_requests rows FK-block
+`cleanupTestData()`'s hard-delete of test entities) is now
+operational across 3 test files (escalation.test.ts /
+cosmp/negotiate.test.ts / integration/escalation-routes.test.ts);
+the shared `helpers.ts:cleanupTestData()` was deliberately NOT
+extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
+
+**Forward queue (6 items deferred from the arc; NOT landed at
+[D-2D-D10-8]):**
+
+1. **[SEC-DBPUSH-DISCIPLINE] / ADR-0025** — `scripts/prisma-db-push-test.sh`
+   wrapper (loads `.env.test`; rejects a non-localhost
+   `DATABASE_URL`) + a pre-commit / CI guard against bare
+   `npx prisma db push`. Next-arc candidate; substantive
+   engineering substrate, not canonical-record register — gets its
+   own arc cycle per the [ADDENDUM-DMW-SLM] register-separation
+   precedent. Source: [D-2D-D10-4] Observation 1.
+2. **INT-6 frozen-anchors / ADR-0022 amendment** — the
+   informativeness-coefficient parameterization joining the
+   frozen-anchors family alongside `combined_score`. Future
+   ADR-0022 amendment commit. Source: [D-2D-D10-6] Observation 3
+   (`RELEVANCE_CORRECTION_BUMP = RELEVANCE_MAX` is the
+   substrate-tier landing; the parameterization is the
+   canonical-record-tier follow-up).
+3. **RAA-12.9-tier glossary concept entries** — `SLM-Equivalence`
+   / `LLM-Equivalence-Hive` / `Inference Surface` concept entries
+   elaborating ADDENDUM-DMW-SLM §3 + §4. RAA-12.9-tier commit, per
+   the ADDENDUM §9 "forward-queue candidates; not specified here"
+   framing.
+4. **Generalized `requireDualControl` preHandler** — the Sub-box 2
+   "enumerated endpoint families" consumer of the dual-control
+   middleware. Sub-box 2 territory; built when the second consumer
+   lands (YAGNI). Source: [D-2D-D10-7] Observation 1 +
+   COMPLIANCE_ARCHITECTURE_REVIEW.md "enumerated dual-control set,
+   not a general primitive" framing.
+5. **§5.8 per-DMW-type sovereignty integration of the escalation
+   gate** — gate-trigger conditions specified per per-DMW-type
+   policy; the `transitionPendingForCaller` skeleton gate (target
+   OR resolver may transition) becomes the full per-DMW-type
+   sovereignty-rule integration. Broader RAA 12.8 §5.8 territory;
+   per RAA 12.8 §5.9 item 7.
+6. **EntityMembership-traversal multi-step approval chains** — per
+   RAA 12.8 §5.2 "multi-step approval chains (chained
+   EscalationRequest rows); per-step approver discrimination via
+   EntityMembership traversal per §3.8" — chained-approval
+   substrate beyond the current single-resolver gate.
 
 ## How To Update This Tracker
 
