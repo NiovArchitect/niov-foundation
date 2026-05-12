@@ -575,8 +575,11 @@ via `CapsuleCreateInput` / `CapsuleUpdateInput`. Enforced at
 directly after the `ai_access_blocked` AI Access Block check). The
 read-side primitive landed in D-2D-D10-4 per RAA 12.8 §5.2
 ("validation gate flags"); the gate-fail → COMPLIANCE_GATE
-EscalationRequest coupling lands in D-2D-D10-5 (approval workflow
-primitive). Sibling of the `ai_access_blocked` AI Access Block.
+EscalationRequest coupling landed in D-2D-D10-5 via
+`createGateEscalationForCaller` (get-or-create dedup at the
+`negotiate.service.ts` gate-fail block; resolver pathway via
+`approveEscalationForCaller` / `rejectEscalationForCaller` from
+D-2D-D10-2). Sibling of the `ai_access_blocked` AI Access Block.
 
 ## W
 

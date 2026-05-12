@@ -23,6 +23,8 @@ import {
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
 import type { ComplianceService } from "../compliance/compliance.service.js";
+import { createGateEscalationForCaller } from "../governance/escalation.service.js";
+import { logger } from "../../logger.js";
 
 // WHAT: How long an access declaration is valid for, in seconds.
 // INPUT: None.
@@ -282,7 +284,8 @@ export class NegotiateService {
     // requires_validation is withheld from restricted-class entities
     // until a human clears the gate. Read-side mirror of
     // ai_access_blocked; the gate-fail -> COMPLIANCE_GATE escalation
-    // coupling lands in [D-2D-D10-5].
+    // coupling landed in [D-2D-D10-5] (createGateEscalationForCaller;
+    // get-or-create dedup) -- see below.
     if (restrictedClass && metadata.requires_validation === true) {
       await writeAuditEvent({
         event_type: "NEGOTIATE",
@@ -294,6 +297,25 @@ export class NegotiateService {
         ip_address: context.ip_address ?? null,
         details: { entity_type: requester.entity_type },
       });
+      // Gate-fail -> COMPLIANCE_GATE escalation coupling (D-2D-D10-5).
+      // A restricted-class denial automatically creates a human-review
+      // escalation targeting the capsule owner. Get-or-create dedup
+      // prevents AI-retry-flood at the human-review queue. Failure here
+      // is best-effort logged but does NOT block the denial -- the
+      // NEGOTIATE/DENIED audit event above is the authoritative denial
+      // record (RULE 4); the escalation is a downstream signal.
+      try {
+        await createGateEscalationForCaller(
+          validation.entity_id, // source (restricted-class requester)
+          targetCapsuleId,
+          metadata.entity_id, // target (capsule owner)
+        );
+      } catch (err) {
+        logger.warn(
+          { err, capsule_id: targetCapsuleId },
+          "gate escalation creation failed; denial stands",
+        );
+      }
       return accessDenied();
     }
 

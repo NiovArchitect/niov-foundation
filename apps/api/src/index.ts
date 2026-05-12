@@ -324,6 +324,7 @@ export type {
 // (priming.ts, org.routes.ts) use deep relative imports.
 export {
   createEscalationForCaller,
+  createGateEscalationForCaller,
   getEscalationForCaller,
   listEscalationsPendingForCaller,
   countEscalationsPending,

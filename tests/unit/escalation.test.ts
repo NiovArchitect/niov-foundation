@@ -43,15 +43,23 @@ import {
   approveEscalationForCaller,
   countEscalationsPending,
   createEscalationForCaller,
+  createGateEscalationForCaller,
   expireEscalation,
   getEscalationForCaller,
   listEscalationsPendingForCaller,
   rejectEscalationForCaller,
 } from "@niov/api";
-import { createEntity, prisma, SYSTEM_PRINCIPALS } from "@niov/database";
+import {
+  createCapsule,
+  createEntity,
+  getWalletByEntityId,
+  prisma,
+  SYSTEM_PRINCIPALS,
+} from "@niov/database";
 import {
   cleanupTestData,
   ensureAuditTriggers,
+  makeCapsuleInput,
   makeEntityInput,
   TEST_PREFIX,
 } from "../helpers.js";
@@ -90,6 +98,22 @@ async function cleanupTestEscalations(): Promise<void> {
 async function makeParty(): Promise<string> {
   const e = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
   return e.entity_id;
+}
+
+// WHAT: Build a capsule owned by a given entity; return its capsule_id.
+// INPUT: ownerId (the capsule owner; createEntity already minted their
+//        wallet in the same tx per Section 1B).
+// OUTPUT: The new capsule_id.
+// WHY: createGateEscalationForCaller takes a real capsule_id (the
+//      escalation_requests.capsule_id FK points at memory_capsules);
+//      the other escalation tests pass capsule_id null and so do not
+//      need a real capsule, but the gate-escalation path does.
+async function makeCapsuleFor(ownerId: string): Promise<string> {
+  const wallet = await getWalletByEntityId(ownerId);
+  const capsule = await createCapsule(
+    makeCapsuleInput(wallet!.wallet_id, ownerId),
+  );
+  return capsule.capsule_id;
 }
 
 // WHAT: Find the audit_events row this escalation produced.
@@ -212,6 +236,58 @@ describe("createEscalationForCaller", () => {
       where: { source_entity_id: sourceId },
     });
     expect(orphan).toHaveLength(0);
+  });
+});
+
+describe("createGateEscalationForCaller", () => {
+  it("creates a COMPLIANCE_GATE escalation on the first gate-fail (source=caller, target=owner, capsule set, severity HIGH, PENDING, no resolver)", async () => {
+    const ownerId = await makeParty();
+    const capsuleId = await makeCapsuleFor(ownerId);
+    const created = await createGateEscalationForCaller(
+      sourceId, // caller (the restricted-class requester)
+      capsuleId,
+      ownerId,
+    );
+    expect(created.source_entity_id).toBe(sourceId);
+    expect(created.target_entity_id).toBe(ownerId);
+    expect(created.capsule_id).toBe(capsuleId);
+    expect(created.escalation_type).toBe("COMPLIANCE_GATE");
+    expect(created.severity).toBe("HIGH");
+    expect(created.status).toBe("PENDING");
+    expect(created.resolved_by_entity_id).toBeNull();
+    // ESCALATION_CREATED audit event fired on the create path.
+    const audit = await findEscalationAudit(created.escalation_id);
+    expect(audit).toBeDefined();
+    expect(audit!.details.action).toBe("ESCALATION_CREATED");
+  });
+
+  it("get-or-create dedups: a second gate-fail with the same (source, capsule) returns the same row and writes no second audit event", async () => {
+    const ownerId = await makeParty();
+    const capsuleId = await makeCapsuleFor(ownerId);
+    const first = await createGateEscalationForCaller(sourceId, capsuleId, ownerId);
+    const second = await createGateEscalationForCaller(sourceId, capsuleId, ownerId);
+    expect(second.escalation_id).toBe(first.escalation_id);
+    const rows = await prisma.escalationRequest.findMany({
+      where: { source_entity_id: sourceId, capsule_id: capsuleId },
+    });
+    expect(rows).toHaveLength(1);
+    const auditCount = await prisma.auditEvent.count({
+      where: {
+        event_type: "ADMIN_ACTION",
+        details: { path: ["escalation_id"], equals: first.escalation_id },
+      },
+    });
+    expect(auditCount).toBe(1);
+  });
+
+  it("creates a fresh PENDING escalation after the prior one is resolved", async () => {
+    const ownerId = await makeParty();
+    const capsuleId = await makeCapsuleFor(ownerId);
+    const first = await createGateEscalationForCaller(sourceId, capsuleId, ownerId);
+    await approveEscalationForCaller(ownerId, first.escalation_id);
+    const second = await createGateEscalationForCaller(sourceId, capsuleId, ownerId);
+    expect(second.escalation_id).not.toBe(first.escalation_id);
+    expect(second.status).toBe("PENDING");
   });
 });
 

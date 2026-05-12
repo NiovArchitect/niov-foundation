@@ -6,7 +6,7 @@
 //              capsule / permission queries, MemoryNonceStore, and
 //              the audit_events table.
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   AuthService,
   MemoryNonceStore,
@@ -29,16 +29,57 @@ import {
   ensureAuditTriggers,
   makeCapsuleInput,
   makeEntityInput,
+  TEST_PREFIX,
 } from "../../helpers.js";
 
 const TEST_JWT_SECRET = "negotiate-test-secret-do-not-use-in-prod";
 
+// WHAT: Delete every escalation_requests row that references a test
+//        entity (source / target / resolver). Query-based (parameterless)
+//        so it also clears stale rows from a previous run.
+// INPUT: None.
+// OUTPUT: A promise that resolves once the rows are gone.
+// WHY: As of D-2D-D10-5, a restricted-class NEGOTIATE denial against a
+//      requires_validation capsule creates a COMPLIANCE_GATE escalation
+//      row referencing the requester + the owner. Those rows FK-block
+//      cleanupTestData()'s hard-delete of test entities, so this runs
+//      BEFORE cleanupTestData(). RULE 17 cross-reference: this mirrors
+//      tests/unit/escalation.test.ts ([D-2D-D10-3] DRIFT 2 Option A
+//      resolution). RULE 10 no-FK-cascade preservation: test-local
+//      cleanup, not a shared-helper extension -- do NOT extend
+//      helpers.ts:cleanupTestData() (the blast-radius coupling problem
+//      per [D-2D-D10-3] Option C rejection).
+async function cleanupTestEscalations(): Promise<void> {
+  const testEntities = await prisma.entity.findMany({
+    where: { display_name: { startsWith: TEST_PREFIX } },
+    select: { entity_id: true },
+  });
+  const ids = testEntities.map((e) => e.entity_id);
+  if (ids.length === 0) return;
+  await prisma.escalationRequest.deleteMany({
+    where: {
+      OR: [
+        { source_entity_id: { in: ids } },
+        { target_entity_id: { in: ids } },
+        { resolved_by_entity_id: { in: ids } },
+      ],
+    },
+  });
+}
+
 beforeAll(async () => {
   await ensureAuditTriggers();
+  await cleanupTestEscalations();
+  await cleanupTestData();
+});
+
+afterEach(async () => {
+  await cleanupTestEscalations();
   await cleanupTestData();
 });
 
 afterAll(async () => {
+  await cleanupTestEscalations();
   await cleanupTestData();
   await prisma.$disconnect();
 });
@@ -534,6 +575,62 @@ describe("negotiate -- AI sovereignty", () => {
       "SUMMARY",
     );
     expect(result.ok).toBe(true);
+  });
+
+  it("a requires_validation gate-fail creates a COMPLIANCE_GATE escalation targeting the capsule owner (D-2D-D10-5 coupling)", async () => {
+    const { auth, negotiate } = makeServices();
+    const owner = await loginAs(auth);
+    const capsule = await makeCapsuleFor(owner.entity.entity_id, {
+      requires_validation: true,
+    });
+    const ai = await loginAs(auth, { entity_type: "AI_AGENT" });
+    await createPermission({
+      capsule_id: capsule.capsule_id,
+      grantor_entity_id: owner.entity.entity_id,
+      grantee_entity_id: ai.entity.entity_id,
+      access_scope: "SUMMARY",
+      duration_type: "TEMPORARY",
+    });
+    const result = await negotiate.negotiate(
+      ai.token,
+      capsule.capsule_id,
+      "SUMMARY",
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("ACCESS_DENIED");
+    const escalations = await prisma.escalationRequest.findMany({
+      where: { capsule_id: capsule.capsule_id },
+    });
+    expect(escalations).toHaveLength(1);
+    expect(escalations[0]!.source_entity_id).toBe(ai.entity.entity_id);
+    expect(escalations[0]!.target_entity_id).toBe(owner.entity.entity_id);
+    expect(escalations[0]!.escalation_type).toBe("COMPLIANCE_GATE");
+    expect(escalations[0]!.status).toBe("PENDING");
+  });
+
+  it("a repeat requires_validation gate-fail by the same AI_AGENT on the same capsule does not create a duplicate escalation", async () => {
+    const { auth, negotiate } = makeServices();
+    const owner = await loginAs(auth);
+    const capsule = await makeCapsuleFor(owner.entity.entity_id, {
+      requires_validation: true,
+    });
+    const ai = await loginAs(auth, { entity_type: "AI_AGENT" });
+    await createPermission({
+      capsule_id: capsule.capsule_id,
+      grantor_entity_id: owner.entity.entity_id,
+      grantee_entity_id: ai.entity.entity_id,
+      access_scope: "SUMMARY",
+      duration_type: "TEMPORARY",
+    });
+    const first = await negotiate.negotiate(ai.token, capsule.capsule_id, "SUMMARY");
+    const second = await negotiate.negotiate(ai.token, capsule.capsule_id, "SUMMARY");
+    expect(first.ok).toBe(false);
+    expect(second.ok).toBe(false);
+    const escalations = await prisma.escalationRequest.findMany({
+      where: { capsule_id: capsule.capsule_id },
+    });
+    expect(escalations).toHaveLength(1);
   });
 
   it("AI_AGENT requesting FULL is silently capped to SUMMARY by default", async () => {

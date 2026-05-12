@@ -1,9 +1,11 @@
 // FILE: escalation.service.ts
 // PURPOSE: CRUD + state-machine over the EscalationRequest substrate
 //          (the human-in-the-loop primitive that closes D-2D-D10).
-//          Creates escalations, lists/counts pending ones, and drives
-//          the PENDING → APPROVED/REJECTED/EXPIRED workflow with a
-//          pre-success audit write on every state mutation.
+//          Creates escalations (incl. the D-2D-D10-5 gate-fail
+//          get-or-create helper createGateEscalationForCaller), lists/
+//          counts pending ones, and drives the PENDING →
+//          APPROVED/REJECTED/EXPIRED workflow with a pre-success audit
+//          write on every state mutation.
 // CONNECTS TO: @niov/database (prisma EscalationRequest model,
 //              writeAuditEvent hash-chain, SYSTEM_PRINCIPALS),
 //              apps/api/src/logger.ts (module-level structured
@@ -11,12 +13,16 @@
 //              apps/api/src/services/otzar/priming.ts (consumes
 //              listEscalationsPendingForCaller for the priming slot),
 //              apps/api/src/routes/org.routes.ts:1148 (consumes
-//              countEscalationsPending for the analytics endpoint).
+//              countEscalationsPending for the analytics endpoint),
+//              apps/api/src/services/cosmp/negotiate.service.ts
+//              (consumes createGateEscalationForCaller at the
+//              requires_validation gate-fail block per D-2D-D10-5).
 //
 // 4-FRAMING-REGISTER CROSS-REFERENCE (RULE 17 load-on-open):
 //   - RAA 12.8 §5.2 -- canonical EscalationRequest substrate +
-//     status workflow + (validation gate flags / approval workflow /
-//     correction propagation chain are forward-queue [D-2D-D10-4/5/6])
+//     status workflow + validation gate flags ([D-2D-D10-4]) +
+//     approval-workflow gate-fail coupling ([D-2D-D10-5], this commit;
+//     correction propagation chain still forward-queue [D-2D-D10-6])
 //   - Section 12.5 Sub-box 1 -- the Foundation primitive blocking
 //     Bucket B; dual-control middleware framing (forward [D-2D-D10-7])
 //   - RAA 12.8 §5.9 item 1 -- Step 2E engineering surface enumeration
@@ -129,6 +135,54 @@ export async function createEscalationForCaller(
       tx,
     );
     return created;
+  });
+}
+
+// WHAT: Gate-fail escalation get-or-create helper. A restricted-class
+//        entity (AI_AGENT / DEVICE) hit a requires_validation capsule at
+//        NEGOTIATE; this fires from negotiate.service.ts's gate-fail
+//        block AFTER the NEGOTIATE/DENIED audit event but BEFORE the
+//        accessDenied() return (D-2D-D10-5).
+// INPUT: callerEntityId (the restricted-class requester -> source);
+//        capsuleId (the gated capsule); ownerEntityId (capsule owner ->
+//        target_entity_id, the human who clears the gate).
+// OUTPUT: EscalationRequest -- the existing PENDING row for the
+//          (source, capsule) pair, or a freshly-created one.
+// WHY: Restricted-class entities retry on denial; without dedup a retry
+//      loop floods the human-review queue. Get-or-create returns the
+//      existing PENDING row silently (no duplicate ESCALATION_CREATED
+//      audit event -- duplicates do not deserve duplicate audit events)
+//      and creates fresh only when no PENDING row exists for the pair.
+//      The ESCALATION_CREATED audit event fires only on the new path
+//      (via createEscalationForCaller's in-tx writeAuditEvent).
+//      COMPLIANCE_GATE defaults: severity HIGH (the owner's deliberate
+//      requires_validation flag IS the high-severity signal -- MEDIUM
+//      would understate it), resolver_entity_id null at create-time
+//      (populated when approveEscalationForCaller / rejectEscalationForCaller
+//      fires per D-2D-D10-2), expires_at null (no auto-expiry; the gate
+//      is human-cleared). Substantiates the Zone U4 gate-resolution
+//      audit lineage per RAA 12.8 §5.2.
+export async function createGateEscalationForCaller(
+  callerEntityId: string,
+  capsuleId: string,
+  ownerEntityId: string,
+): Promise<EscalationRequest> {
+  const existing = await prisma.escalationRequest.findFirst({
+    where: {
+      source_entity_id: callerEntityId,
+      capsule_id: capsuleId,
+      status: "PENDING",
+    },
+  });
+  if (existing !== null) return existing;
+  return createEscalationForCaller(callerEntityId, {
+    target_entity_id: ownerEntityId,
+    capsule_id: capsuleId,
+    escalation_type: "COMPLIANCE_GATE",
+    severity: "HIGH",
+    description:
+      "Validation gate triggered: a restricted-class entity was denied " +
+      "NEGOTIATE access to this capsule; human review required to clear the gate.",
   });
 }
 
