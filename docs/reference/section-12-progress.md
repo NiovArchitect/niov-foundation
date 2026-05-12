@@ -255,11 +255,29 @@ extended ([D-2D-D10-3] Option C rejection — blast-radius coupling).
    (the substrate-tier landing at `RELEVANCE_CORRECTION_BUMP =
    RELEVANCE_MAX`); this amendment is the canonical-record-tier
    follow-up.
-3. **RAA-12.9-tier glossary concept entries** — `SLM-Equivalence`
-   / `LLM-Equivalence-Hive` / `Inference Surface` concept entries
-   elaborating ADDENDUM-DMW-SLM §3 + §4. RAA-12.9-tier commit, per
-   the ADDENDUM §9 "forward-queue candidates; not specified here"
-   framing.
+3. **RAA-12.9-tier glossary concept entries — COMPLETE.** Landed
+   at [SEC-RAA12-9-GLOSSARY] on 2026-05-12 — 3 substantive concept
+   entries elaborating ADDENDUM-DMW-SLM §3 (SLM-equivalence
+   threshold) + §4 (LLM-equivalence threshold) + §5 (categorical
+   distinction from market-tier swarm intelligence) + §7 (prior-art
+   posture protection) + §8 (does-not-claim guardrails) + §9
+   (forward-queue framing): `Inference Surface` (## I section;
+   emergent inference characteristic substrate), `LLM-Equivalence-Hive`
+   (new ## L section; DMW federation under hive composition), and
+   `SLM-Equivalence` (## S section; individual DMW under continuous
+   COSMP feedback-loop operation). Each entry: definition +
+   ADDENDUM-DMW-SLM cross-references + the 3 patents (US 12,164,537
+   / US 12,399,904 / US 12,517,919) + RAA 12.8 §5 (Surface 3 —
+   Agentic Coherence runtime-tier substantiation register) + the §8
+   does-not-claim guardrails reflected + "See also" sibling entries
+   per RULE 17 future-session-loading. ADDENDUM-DMW-SLM also gained a
+   "Bidirectional citations (cited from):" sub-block at this commit
+   (discipline-alignment fix per the [SEC-DBPUSH-ADR] ADR-0024 +
+   [SEC-INT6-ADR0022] ADR-0022 precedents). "RAA-12.9-tier" is a
+   register designation, not a citation — there is no RAA 12.9
+   document; the source-of-substance is ADDENDUM-DMW-SLM. Source:
+   ADDENDUM-DMW-SLM §9 "forward-queue candidates; not specified
+   here" framing — canonicalized at this commit.
 4. **Generalized `requireDualControl` preHandler** — the Sub-box 2
    "enumerated endpoint families" consumer of the dual-control
    middleware. Sub-box 2 territory; built when the second consumer

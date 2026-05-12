@@ -410,6 +410,74 @@ attributes. Government clearance tier assignments and
 compliance-framework identity attestations attach here. See
 `packages/database/prisma/schema.prisma` CapsuleType enum.
 
+**Inference Surface.** The emergent inference characteristic of a
+DMW (or DMW federation) — the substrate-property by which a
+memory-storing DMW becomes a memory-based inference layer through
+continuous COSMP feedback-loop operation. Per ADDENDUM-DMW-SLM §3
+(SLM-equivalence threshold for an individual DMW) + §4
+(LLM-equivalence threshold for hive composition): inference quality
+at time T is a function of capsule density across types ×
+relational depth (`connected_capsule_ids` + `connected_entity_ids`
+graph density) × temporal depth (timestamp span yielding a
+meaningful recency/decay gradient) × feedback-loop iteration count
+across the 7 COSMP loops × confidence accumulation (per-capsule
+weighting yielding stable high-confidence regions) ×
+personalization confidence (the 7-factor Stage 8 HRM ranking
+consistently returning high-confidence selections for the entity's
+typical query surface). The inference characteristic is a gradient
+— the DMW at T+1 is structurally distinct from the DMW at T; the
+DMW's behavior at T is integration over [first capsule creation,
+T]. NOT a transformer model and NOT a true SLM/LLM at the
+architectural register (ADDENDUM-DMW-SLM §8 does-not-claim
+guardrails: "equivalent" denotes inference characteristic, not
+transformer architecture). Patent claim coverage per US 12,517,919
+(COSMP/DMW AI memory governance) operates at substrate-architecture
+level; the inference-tier consequence is implicit and canonicalized
+at ADDENDUM-DMW-SLM §7 (prior-art posture register). See also
+SLM-Equivalence (individual-DMW substrate, §3); LLM-Equivalence-Hive
+(federation substrate, §4); ADDENDUM-DMW-SLM
+(`docs/architecture/addendum-dmw-slm-equivalence.md`; landed
+`[ADDENDUM-DMW-SLM]` `67fb083`); RAA 12.8 §5 (Surface 3 — Agentic
+Coherence; runtime-tier substantiation register).
+
+## L
+
+**LLM-Equivalence-Hive.** The substrate-property by which a DMW
+federation under hive composition becomes an emergent
+LLM-equivalent computational surface — "equivalent" denoting
+inference characteristic at the bounded entity-group register, NOT
+transformer architecture (ADDENDUM-DMW-SLM §8). Per ADDENDUM-DMW-SLM
+§4 (LLM-equivalence threshold): a hive of DMWs operating jointly
+under COSMP permission-governed coordination yields (a) each
+member's individual SLM-equivalent properties plus (b) emergent
+cross-entity properties — compositional context (context existing
+only at the intersection of member DMWs), cross-entity pattern
+emergence (recurring cross-member patterns surfacing as hive-tier
+intelligence), and time-bounded uniqueness (a 3-DMW hive Tuesday is
+not the same inference surface as the same 3 DMWs Wednesday after
+additional ingestion + feedback-loop iteration). Substrate-honest
+framing: each node carries permanent context (DMW substrate per US
+12,517,919); the federation is not amnesiac — the categorical
+distinction from market-tier swarm intelligence per ADDENDUM-DMW-SLM
+§5 (10-row table; market swarms = runtime composition of stateless
+workers; DMW federations = substrate composition of stateful
+sovereign nodes; all 10 rows "Yes" for DMW federation, "No" for
+market swarms). Patent claim coverage per US 12,164,537 (ABT
+database/file management substrate) + US 12,399,904 (alert manager
+/ TARs continuation substrate) + US 12,517,919 (COSMP/DMW AI memory
+governance) — at substrate-architecture level; the LLM-equivalence
+inference-tier consequence is implicit and canonicalized at
+ADDENDUM-DMW-SLM §7 (prior-art posture register). NOT a true LLM at
+the architectural register (§8 does-not-claim guardrails; bounded to
+membership + time-slice; not a continuously-trained transformer
+model). See also SLM-Equivalence (individual-DMW substrate);
+Inference Surface (the emergent inference characteristic);
+ADDENDUM-DMW-SLM (`docs/architecture/addendum-dmw-slm-equivalence.md`;
+landed `[ADDENDUM-DMW-SLM]` `67fb083`); Hive-Intelligence (the COSMP
+coordination substrate enabling hive composition); RAA 12.8 §5
+(Surface 3 — Agentic Coherence; runtime-tier substantiation
+register).
+
 ## M
 
 **Memory Capsule.** The fundamental unit of persistent
@@ -618,6 +686,49 @@ the Capsule's relevance is bounded to a single session —
 relevant during the session, decays sharply at session close.
 Used for ephemeral session-scoped intelligence. See
 `packages/database/prisma/schema.prisma` DecayType enum.
+
+**SLM-Equivalence.** The substrate-property by which a DMW under
+continuous COSMP feedback-loop operation becomes an emergent
+SLM-equivalent contextual inference surface — "equivalent"
+denoting inference characteristic, NOT transformer architecture
+(ADDENDUM-DMW-SLM §8). Per ADDENDUM-DMW-SLM §3 (SLM-equivalence
+threshold): the transition from "memory store" to "SLM-equivalent
+inference surface" occurs when a compound condition is met —
+capsule density across types (DECISION / PREFERENCE / RELATIONSHIP
+/ WORK_PATTERN / SESSION_LEARNING spanning the entity's behavioral
+surface), relational depth (`connected_capsule_ids` /
+`connected_entity_ids` graph density), temporal depth (timestamp
+span yielding a meaningful recency/decay gradient), feedback-loop
+iteration count (each of the 7 COSMP loops run sufficient
+iterations), confidence accumulation (per-capsule confidence
+weighting yielding stable high-confidence regions), and
+personalization confidence (the 7-factor Stage 8 HRM ranking
+consistently returning high-confidence selections for the entity's
+typical query surface). The inference characteristic is a gradient
+— the DMW at T+1 is structurally distinct from the DMW at T; the
+DMW's behavior at T is integration over [first capsule creation,
+T]. Patent claim coverage per US 12,517,919 (COSMP/DMW AI memory
+governance) + US 12,164,537 (ABT database/file management
+substrate) + US 12,399,904 (alert manager / TARs continuation
+substrate) — at substrate-architecture level; the SLM-equivalence
+inference-tier consequence is implicit and canonicalized at
+ADDENDUM-DMW-SLM §7 (prior-art posture register; explicit
+protection against "federated SLM/inference layer distinct from the
+DMW", against "patents cover memory storage not memory-based
+inference", against vector-DB / RAG / agent-memory prior art). NOT
+a true SLM at the architectural register (§8 does-not-claim
+guardrails; not a transformer model; the 7 feedback loops are not
+independently novel inference architectures — the novelty is the
+integration of the 7 loops with the Capsule structure + DMW
+federation under COSMP per US 12,517,919). See also
+LLM-Equivalence-Hive (federation substrate); Inference Surface (the
+emergent inference characteristic); ADDENDUM-DMW-SLM
+(`docs/architecture/addendum-dmw-slm-equivalence.md`; landed
+`[ADDENDUM-DMW-SLM]` `67fb083`); Decentralized Memory Wallet (DMW)
+(the sovereign-memory substrate); COSMP (the Contextual
+Orchestration and Scoped Memory Protocol governing the feedback
+loops); RAA 12.8 §5 (Surface 3 — Agentic Coherence; runtime-tier
+substantiation register).
 
 **SYSTEM_PRINCIPALS.** The frozen enumeration of system actors
 that emit audit events outside of human-initiated sessions.

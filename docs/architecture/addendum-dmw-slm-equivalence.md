@@ -125,3 +125,12 @@ These are forward-queue candidates; not specified here.
 - RAA 12.8 (docs/architecture/raa-12-8-substrate-dynamics.md) — substrate dynamics; §5 contains the human-in-the-loop primitive expansion that this addendum's inference-tier framing complements
 - ADR-0020 (docs/architecture/decisions/0020-two-register-ip-discipline.md) — two-register IP discipline preserved throughout this addendum
 - Glossary: Decentralized Memory Wallet (DMW), COSMP, Capsule, ABT (Asset Bound Token), Hive-Intelligence (docs/reference/glossary.md)
+
+Bidirectional citations (cited from):
+
+- RAA 12.8 (`docs/architecture/raa-12-8-substrate-dynamics.md`) — the Cross-references block (back-citation landed `[D-2D-D10-8]`) names this addendum as articulating the inference-tier consequence of §5.2's substrate; §5 of this addendum substantiates the audit-lineage + permission-governed-composition framing that §5.2 of that RAA describes at runtime register, and §3 substantiates the "confidence accumulation" threshold criterion.
+- ADR-0020 (`docs/architecture/decisions/0020-two-register-ip-discipline.md`) — the Bidirectional citations sub-block (landed `[D-2D-D10-8]`) names this addendum as a canonical-record-register patent-implementation-evidence addendum preserving the two-register IP discipline.
+- ADR-0025 (`docs/architecture/decisions/0025-schema-push-target-discipline.md`) — the Forward Queue + Bidirectional citations sub-block names this addendum as the register-separation precedent (canonical-record → engineering substrate sequenced separately) for the `[SEC-DBPUSH]` mini-arc.
+- `docs/reference/glossary.md` — the **Inference Surface** entry cites this addendum §3 + §4 (inference-quality substrate) + §7 (prior-art posture) + §8 (does-not-claim guardrails); landed `[SEC-RAA12-9-GLOSSARY]`.
+- `docs/reference/glossary.md` — the **LLM-Equivalence-Hive** entry cites this addendum §4 (LLM-equivalence threshold) + §5 (the 10-row categorical distinction) + §7 + §8; landed `[SEC-RAA12-9-GLOSSARY]`.
+- `docs/reference/glossary.md` — the **SLM-Equivalence** entry cites this addendum §3 (SLM-equivalence threshold) + §7 (prior-art posture) + §8; landed `[SEC-RAA12-9-GLOSSARY]`.
