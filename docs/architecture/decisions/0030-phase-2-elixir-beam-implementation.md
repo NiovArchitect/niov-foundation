@@ -9,7 +9,7 @@ A (`3b76c3d`) resolved the cascade-grep markdown-line-wrap limitation
 (catch #1). Substrate-build tools are operational; engineering substrate is
 canonical at 29 ADRs / 20 RULES / 139 commits / 56-consecutive-commit
 substrate-honest pre-flight pattern. This ADR documents the Phase 2
-implementation — the 13-sub-phase Block B arc that ships Elixir/BEAM substrate
+implementation — the 14-sub-phase Block B arc that ships Elixir/BEAM substrate
 as production Foundation services + canonicalizes the three-language stack
 (TypeScript + Elixir + Postgres; Python ML when it lands).
 
@@ -65,7 +65,8 @@ bridge is exercised, but the migration triggers gate the load-bearing shift.
 ## Decision
 
 NIOV Labs implements Phase 2 Elixir/BEAM coordination layer as the Block B
-13-sub-phase mini-arc of Day 9. The decomposition:
+14-sub-phase mini-arc of Day 9 (expanded from 13 at sub-phase 4a per
+Q-G split — see ADR-0031). The decomposition:
 
 **COSMP Coordination Layer (6 sub-phases):**
 
@@ -79,10 +80,22 @@ NIOV Labs implements Phase 2 Elixir/BEAM coordination layer as the Block B
    Supervisor tree at `lib/cosmp_router/application.ex`; child specs for the
    GenServers sub-phase 4 introduces; mix.exs deps; ExUnit test framework
    scaffolding.
-4. **`[BEAM-COSMP-GENSERVER]`** — COSMP message-routing GenServer at
-   `lib/cosmp_router/router.ex`. Instantiates the 6 BEAM-compatibility
-   patterns (per ADR-0026 §5) in Elixir/OTP idiomatic form (see Implementation
-   Detail §). ExUnit tests covering all 6 patterns observable behavior.
+4a. **`[BEAM-COSMP-GENSERVER-ADR]`** — Decision substrate. ADR-0031 (BEAM
+    Routing Substrate Architecture) lands; documents GenServer state shape,
+    7-op `handle_call` dispatch pattern, `Capsule` placeholder (7 layers
+    per US 12,517,919), supervision tree integration, idempotency deferral
+    to sub-phase 5/6 (Q-D), and load-bearing subset of ADR-0026 §5 BEAM
+    patterns (**patterns 1, 2, 6** at sub-phase 4b; patterns **3, 4, 5**
+    forward-queued to sub-phases 5/6 with their consumers).
+4b. **`[BEAM-COSMP-GENSERVER-CODE]`** — Code substrate. `CosmpRouter.Router`
+    GenServer at `lib/cosmp_router/router.ex` + `CosmpRouter.Capsule`
+    placeholder struct + `CosmpRouter.Application` MOD (children list adds
+    Router as first worker). Instantiates ADR-0026 §5 **load-bearing subset
+    (patterns 1, 2, 6)** in Elixir/OTP idiomatic form per ADR-0031 §Decision.
+    All 7 ops as `handle_call` stubs returning `{:ok, :not_implemented}` per
+    Q-C; bodies fill at sub-phase 5+ with consumers. ExUnit tests covering
+    subset behavior; smoke test pattern from sub-phase 3 updates
+    (`which_children/1` expects 1 child).
 5. **`[BEAM-COSMP-INTEROP]`** — Fastify ↔ Elixir gRPC bridge. TypeScript-side
    client at `apps/api/src/services/cosmp-client.ts`; Elixir-side server at
    `apps/cosmp_router/lib/cosmp_router/grpc.ex`; `.proto` definitions at
@@ -212,7 +225,7 @@ the table directly for the substrate-architectural breadth claim.
 
 **Harder:**
 
-- **13-sub-phase mini-arc.** ~10-13 hours engineering at current velocity (the
+- **14-sub-phase mini-arc.** ~10-13 hours engineering at current velocity (the
   Block B arc). The substrate-build tools (cascade-grep multiline + templates)
   reduce token-cost-per-catch substantially but engineering time is real.
 - **Dual-runtime operational complexity.** Elixir + TypeScript both deployed
@@ -309,7 +322,7 @@ operational (58 after this commit lands).
   forward-queued the Phase 2 ship-commitment; this ADR is the implementation
   ADR fulfilling that commitment. ADR-0028's Forward Queue line 151-152
   (originally referenced "ADR-0029") and the `(cited from)` block both
-  back-cite this ADR. The Phase 2 mini-arc (13 sub-phases) ports the 6
+  back-cite this ADR. The Phase 2 mini-arc (14 sub-phases) ports the 6
   BEAM-compatibility patterns to production Elixir/BEAM.
 - ADR-0026 (Dual-Control Middleware Pattern + Privileged Endpoint Registry +
   Per-Route Binding Discipline; landed at sub-phase H `[SEC-DUAL-CONTROL-ADR]`
@@ -318,6 +331,15 @@ operational (58 after this commit lands).
   mimicking BEAM); this ADR ports those patterns to Register-2 (production
   Elixir/BEAM). ADR-0026's `(cited from)` block back-cites this ADR — the
   patterns become production substrate in Phase 2.
+- ADR-0031 (BEAM Routing Substrate Architecture; landed at sub-phase 4a
+  `[BEAM-COSMP-GENSERVER-ADR]`) — **load-bearing**: ADR-0031 is the
+  decision substrate for sub-phase 4b's routing GenServer; cites this
+  ADR §Decision sub-phase 4a/4b for the substantive scope. Sub-phase 4b
+  `[BEAM-COSMP-GENSERVER-CODE]` instantiates ADR-0031's decisions
+  (GenServer state shape + 7-op `handle_call` dispatch + `Capsule`
+  placeholder + supervision tree integration + load-bearing subset of
+  ADR-0026 §5 patterns 1, 2, 6). ADR-0031's `(cited from)` block
+  back-cites this ADR.
 - ADR-0020 (Two-Register IP Discipline) — referenced in this ADR's Context
   for the patent-implementation-evidence framing (Phase 2 = Register-2
   implementation of the substrate-state-register patterns); prose-mention,

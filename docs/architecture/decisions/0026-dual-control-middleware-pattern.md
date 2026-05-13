@@ -342,11 +342,22 @@ Bidirectional citations (cited from):
 - ADR-0030 (Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
   DBGI Supervisor + Three-Language Stack Canonicalization; landed at Block B
   sub-phase 1 `[BEAM-PHASE-2-ADR]`) — **load-bearing**: ADR-0030 is the Phase 2
-  implementation ADR; the 13-sub-phase Block B mini-arc ports the 6
-  BEAM-compatibility patterns documented in this ADR's §5 (at substrate-state
-  register — TypeScript code mimicking BEAM) to **Register-2** (production
-  Elixir/BEAM substrate). ADR-0030 §Implementation Detail includes a
-  pattern→Elixir-idiom mapping table treating this ADR's §5 as the canonical
-  source. Per ADR-0020 two-register IP discipline, the §5 patterns existed at
+  implementation ADR; the 14-sub-phase Block B mini-arc (expanded from 13 at
+  sub-phase 4a per Q-G split) ports the 6 BEAM-compatibility patterns
+  documented in this ADR's §5 (at substrate-state register — TypeScript code
+  mimicking BEAM) to **Register-2** (production Elixir/BEAM substrate).
+  ADR-0030 §Implementation Detail includes a pattern→Elixir-idiom mapping
+  table treating this ADR's §5 as the canonical source. Per ADR-0020
+  two-register IP discipline, the §5 patterns existed at
   substrate-state-register from ADR-0026's H-commit; Phase 2 makes them
   observable substrate at Register-2.
+- ADR-0031 (BEAM Routing Substrate Architecture; landed at sub-phase 4a
+  `[BEAM-COSMP-GENSERVER-ADR]`) — **load-bearing**: ADR-0031 cites this
+  ADR's §5 6 BEAM-compatibility patterns and identifies the **load-bearing
+  subset for sub-phase 4b routing GenServer instantiation — patterns 1
+  (message-passing semantics), 2 (supervisor-friendly failure modes), 6
+  (pure transformation over imperative control)**. Patterns 3 (state
+  reconstructible from durable storage), 4 (event-sourced audit semantics),
+  5 (idempotent verification keys) **forward-queue to sub-phases 5/6** with
+  their consumers (gRPC interop + Postgres integration). ADR-0031 §Decision
+  documents the per-pattern instantiation register.
