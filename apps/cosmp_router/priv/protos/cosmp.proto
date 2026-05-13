@@ -1,0 +1,245 @@
+// FILE: apps/cosmp_router/priv/protos/cosmp.proto
+//
+// PURPOSE: Canonical Protobuf schema for the COSMP coordination layer
+//          per ADR-0032 (BEAM gRPC Interop Architecture). Documents
+//          the cross-language transport boundary between Fastify+
+//          TypeScript API (`apps/api/`) and Elixir+BEAM routing layer
+//          (`apps/cosmp_router/`).
+//
+// PATENT-CANONICAL ROLE: 7 COSMP operations (AUTHENTICATE, NEGOTIATE,
+//          READ, WRITE, SHARE, REVOKE, AUDIT) per US 12,517,919.
+//          Capsule message field numbers 1-7 mirror patent layer
+//          ordering verbatim (Payload / Metadata / Rules / Relations /
+//          Time / Permissions / Audit) per ADR-0031 Q-J +
+//          ADR-0032 §Decision Protobuf canonical structure.
+//
+// VERSIONING: Package `cosmp.v1` per ADR-0032 §Decision `.proto`
+//          versioning via package namespace evolution. Breaking
+//          changes trigger `cosmp.v2` + ADR amendment per ADR
+//          lifecycle discipline.
+//
+// HAND-WRITTEN COMPANION: Per ADR-0032 Q-U Option B (sub-phase 5a
+//          authorization), the Elixir Protobuf modules at
+//          `lib/cosmp_router/proto/cosmp.pb.ex` are hand-written to
+//          match this schema. The `.proto` file is canonical
+//          documentation; both must stay in sync.
+
+syntax = "proto3";
+
+package cosmp.v1;
+
+// ============================================================================
+// Capsule — 7-layer patent-canonical structure
+// ============================================================================
+// Field numbers 1-7 match patent layer ordering verbatim per
+// US 12,517,919 + ADR-0031 Q-J. At byte-level Protobuf inspection,
+// the patent-canonical surface is preserved.
+
+message Capsule {
+  bytes payload = 1;
+  map<string, string> metadata = 2;
+  repeated Rule rules = 3;
+  repeated Relation relations = 4;
+  TimeAttributes time = 5;
+  Permissions permissions = 6;
+  repeated AuditEntry audit = 7;
+}
+
+message Rule {
+  string name = 1;
+  string value = 2;
+}
+
+message Relation {
+  string kind = 1;
+  string target_id = 2;
+}
+
+message TimeAttributes {
+  int64 created_at = 1;
+  int64 modified_at = 2;
+  int64 expires_at = 3;
+}
+
+message Permissions {
+  string owner = 1;
+  repeated string granted_to = 2;
+}
+
+message AuditEntry {
+  string event_type = 1;
+  string actor = 2;
+  int64 timestamp = 3;
+}
+
+// ============================================================================
+// CosmpError envelope (oneof discipline per ADR-0032 §Decision Error
+// envelope structure; informed by ADR-0026 §5 Pattern 2 supervisor-
+// friendly failure modes)
+// ============================================================================
+
+message CosmpError {
+  enum Kind {
+    UNKNOWN = 0;
+    NOT_IMPLEMENTED = 1;
+    INVALID_CAPSULE = 2;
+    PERMISSION_DENIED = 3;
+    CAPSULE_NOT_FOUND = 4;
+    IDEMPOTENCY_CONFLICT = 5;
+    INTERNAL = 6;
+  }
+  Kind kind = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+// ============================================================================
+// COSMP Service — 7 patent-canonical RPCs per US 12,517,919
+// ============================================================================
+
+service CosmpRouter {
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
+  rpc Negotiate(NegotiateRequest) returns (NegotiateResponse);
+  rpc Read(ReadRequest) returns (ReadResponse);
+  rpc Write(WriteRequest) returns (WriteResponse);
+  rpc Share(ShareRequest) returns (ShareResponse);
+  rpc Revoke(RevokeRequest) returns (RevokeResponse);
+  rpc Audit(AuditRequest) returns (AuditResponse);
+}
+
+// ----------------------------------------------------------------------------
+// AUTHENTICATE — DMW/principal identity verification
+// ----------------------------------------------------------------------------
+
+message AuthenticateRequest {
+  Capsule capsule = 1;
+  string principal_id = 2;
+}
+
+message AuthenticateResponse {
+  oneof result {
+    AuthenticateSuccess success = 1;
+    CosmpError error = 2;
+  }
+}
+
+message AuthenticateSuccess {
+  bool authenticated = 1;
+  string principal_id = 2;
+}
+
+// ----------------------------------------------------------------------------
+// NEGOTIATE — Cross-DMW capability + scope agreement
+// ----------------------------------------------------------------------------
+
+message NegotiateRequest {
+  Capsule capsule = 1;
+  repeated string requested_scopes = 2;
+}
+
+message NegotiateResponse {
+  oneof result {
+    NegotiateSuccess success = 1;
+    CosmpError error = 2;
+  }
+}
+
+message NegotiateSuccess {
+  repeated string granted_scopes = 1;
+}
+
+// ----------------------------------------------------------------------------
+// READ — Metadata-first capsule retrieval
+// ----------------------------------------------------------------------------
+
+message ReadRequest {
+  string capsule_id = 1;
+}
+
+message ReadResponse {
+  oneof result {
+    Capsule capsule = 1;
+    CosmpError error = 2;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// WRITE — Append-only capsule write with audit-chain
+// ----------------------------------------------------------------------------
+
+message WriteRequest {
+  string capsule_id = 1;
+  Capsule capsule = 2;
+}
+
+message WriteResponse {
+  oneof result {
+    WriteSuccess success = 1;
+    CosmpError error = 2;
+  }
+}
+
+message WriteSuccess {
+  string capsule_id = 1;
+}
+
+// ----------------------------------------------------------------------------
+// SHARE — Permissioned scope grant across DMWs
+// ----------------------------------------------------------------------------
+
+message ShareRequest {
+  string capsule_id = 1;
+  string grantee = 2;
+}
+
+message ShareResponse {
+  oneof result {
+    ShareSuccess success = 1;
+    CosmpError error = 2;
+  }
+}
+
+message ShareSuccess {
+  string capsule_id = 1;
+  repeated string granted_to = 2;
+}
+
+// ----------------------------------------------------------------------------
+// REVOKE — Capability revocation + downstream cascade
+// ----------------------------------------------------------------------------
+
+message RevokeRequest {
+  string capsule_id = 1;
+  string grantee = 2;
+}
+
+message RevokeResponse {
+  oneof result {
+    RevokeSuccess success = 1;
+    CosmpError error = 2;
+  }
+}
+
+message RevokeSuccess {
+  string capsule_id = 1;
+  repeated string remaining_grantees = 2;
+}
+
+// ----------------------------------------------------------------------------
+// AUDIT — Append-only audit log query (pre-success guaranteed)
+// ----------------------------------------------------------------------------
+
+message AuditRequest {
+  string capsule_id = 1;
+}
+
+message AuditResponse {
+  oneof result {
+    AuditSuccess success = 1;
+    CosmpError error = 2;
+  }
+}
+
+message AuditSuccess {
+  repeated AuditEntry entries = 1;
+}

@@ -41,10 +41,16 @@ defmodule CosmpRouter.MixProject do
     ]
   end
 
-  # Sub-phase 3: empty deps. Sub-phases 4-11 add as their consumers
-  # arrive (telemetry at sub-phase 11; Jason / gRPC libs at sub-phase 5;
-  # etc.). Substrate-honest discipline: deps land with their consumers.
+  # Sub-phase 5b-i [BEAM-COSMP-INTEROP-GRPC]: gRPC deps land per ADR-0032
+  # §Decision gRPC library choice (Q-M). :ecto + :postgrex deferred to
+  # sub-phase 5b-ii per Q-R (Persistence layer); :telemetry_metrics +
+  # :telemetry_poller at sub-phase 11. Substrate-honest discipline: deps
+  # land with their consumers per ADR-0016 Pin-and-Optimize Framework.
   defp deps do
-    []
+    [
+      # gRPC server + transport (canonical Elixir gRPC stack per Q-M)
+      {:grpc, "~> 0.10"},
+      {:protobuf, "~> 0.14"}
+    ]
   end
 end

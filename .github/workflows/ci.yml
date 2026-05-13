@@ -201,16 +201,17 @@ jobs:
           version-type: strict
 
       - name: Restore deps + _build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             deps
             _build
-          # Sub-phase 3: no mix.lock yet (no deps). Sub-phase 4 first
-          # dep landing triggers cache-key update to include
-          # '**/mix.lock' hash. Forward-substrate awareness flagged at
-          # sub-phase 4 pre-flight.
-          key: ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}
+          # Sub-phase 5b-i: mix.lock landed alongside :grpc + :protobuf
+          # deps for the BEAM gRPC interop layer (ADR-0032). Cache key
+          # now hashes both .tool-versions (BEAM runtime pin) and
+          # **/mix.lock (Hex dep pin). actions/cache pinned to v5 per
+          # the 2026-06-02 v4 deprecation.
+          key: ${{ runner.os }}-mix-${{ hashFiles('.tool-versions', '**/mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-mix-
 

@@ -76,6 +76,54 @@ export type {
   RevokeFailure,
 } from "./services/cosmp/share.service.js";
 
+// ───────────────────────────────────────────────────────────────
+// gRPC client for the Elixir CosmpRouter routing layer (sub-phase
+// 5b-i [BEAM-COSMP-INTEROP-GRPC]).
+//
+// PURPOSE: gRPC client surface for the 7 patent-canonical COSMP
+//   operations per US 12,517,919 + ADR-0032 (BEAM gRPC Interop
+//   Architecture). Routes through gRPC to CosmpRouter.Router
+//   GenServer at apps/cosmp_router/.
+//
+// Q-V PARALLEL PATH: Additive to the in-process COSMP services
+//   above (NegotiateService, ReadService, WriteService,
+//   ShareService). Sub-phase 5b-i does NOT replace existing
+//   services; migration deferred to sub-phase 6 or 11+ per Q-V
+//   lock.
+//
+// CONNECTS TO: apps/cosmp_router/priv/protos/cosmp.proto +
+//   apps/cosmp_router/lib/cosmp_router/grpc/server.ex.
+// ───────────────────────────────────────────────────────────────
+
+export {
+  authenticate,
+  negotiate,
+  read,
+  write,
+  share,
+  revoke,
+  audit,
+  resetClient,
+} from "./services/cosmp-client.js";
+export type {
+  CapsuleProto,
+  CosmpError,
+  AuthenticateRpcRequest,
+  AuthenticateRpcResponse,
+  NegotiateRpcRequest,
+  NegotiateRpcResponse,
+  ReadRpcRequest,
+  ReadRpcResponse,
+  WriteRpcRequest,
+  WriteRpcResponse,
+  ShareRpcRequest,
+  ShareRpcResponse,
+  RevokeRpcRequest,
+  RevokeRpcResponse,
+  AuditRpcRequest,
+  AuditRpcResponse,
+} from "./services/cosmp-client.js";
+
 export {
   COEService,
   TOKENS_PER_CAPSULE_ESTIMATE,
