@@ -338,6 +338,20 @@ export type { CreateEscalationInput } from "./services/governance/escalation.ser
 export { requireAdminCapability } from "./middleware/admin.middleware.js";
 export type { AdminCapability } from "./middleware/admin.middleware.js";
 
+// Sub-box 2 Phase 1 sub-phase D [SEC-PRIVILEGED-REGISTRY]: the LIVE
+// privileged-endpoint runtime registry the requireDualControl preHandler
+// (sub-phase E) consumes. External consumers (the test tier, sibling
+// packages) reach these via "@niov/api"; the middleware uses a deep
+// relative import within apps/api/src.
+export {
+  PRIVILEGED_ENDPOINTS,
+  isPrivilegedEndpoint,
+} from "./security/privileged-endpoints.js";
+export type {
+  PrivilegedEndpoint,
+  EscalationActionDescriptor,
+} from "./security/privileged-endpoints.js";
+
 export { registerPlatformRoutes } from "./routes/platform.routes.js";
 export { registerOrgRoutes } from "./routes/org.routes.js";
 export { registerEscalationRoutes } from "./routes/escalation.routes.js";
