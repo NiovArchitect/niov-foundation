@@ -16,7 +16,14 @@
 //              countEscalationsPending for the analytics endpoint),
 //              apps/api/src/services/cosmp/negotiate.service.ts
 //              (consumes createGateEscalationForCaller at the
-//              requires_validation gate-fail block per D-2D-D10-5).
+//              requires_validation gate-fail block per D-2D-D10-5),
+//              apps/api/src/security/privileged-endpoints.ts
+//              (EscalationActionDescriptor type + dualControlDescription
+//              helper -- consumed by findApprovedDualControlForCaller),
+//              apps/api/src/middleware/dual-control.middleware.ts
+//              (consumes findApprovedDualControlForCaller +
+//              createEscalationForCaller for the dual-control gate;
+//              sub-phase E [SEC-DUAL-CONTROL-MIDDLEWARE]).
 //
 // 4-FRAMING-REGISTER CROSS-REFERENCE (RULE 17 load-on-open):
 //   - RAA 12.8 §5.2 -- canonical EscalationRequest substrate +
@@ -73,6 +80,8 @@ import type {
   EscalationType,
   Prisma,
 } from "@niov/database";
+import type { EscalationActionDescriptor } from "../../security/privileged-endpoints.js";
+import { dualControlDescription } from "../../security/privileged-endpoints.js";
 import { logger } from "../../logger.js";
 
 // WHAT: The named-fields shape createEscalationForCaller accepts.
@@ -211,6 +220,104 @@ export async function getEscalationForCaller(
     throw new Error("ESCALATION_FORBIDDEN");
   }
   return row;
+}
+
+// WHAT: Look up an APPROVED dual-control EscalationRequest for the caller
+//        matching a specific privileged-endpoint action descriptor.
+// INPUT: callerEntityId (the request initiator -- the source of the
+//        dual-control escalation) + actionDescriptor (the
+//        EscalationActionDescriptor for the privileged endpoint the
+//        requireDualControl preHandler matched).
+// OUTPUT: The single APPROVED EscalationRequest row matching all of:
+//          source_entity_id === callerEntityId,
+//          escalation_type === "DUAL_CONTROL_REQUIRED",
+//          status === "APPROVED",
+//          description === dualControlDescription(actionDescriptor.type)
+//          -- newest-resolved first if more than one matches; null when
+//          no match.
+// WHY: The requireDualControl Fastify preHandler
+//      (apps/api/src/middleware/dual-control.middleware.ts, sub-phase E
+//      [SEC-DUAL-CONTROL-MIDDLEWARE]) calls this to verify an APPROVED
+//      second-approver gate exists before delegating to a privileged-
+//      endpoint handler. The DB lookup lives here, in the service tier
+//      (RULE 9: services connect through APIs; no cross-service DB reads)
+//      -- the middleware never touches Prisma directly. Read-side check
+//      only: this confirms an APPROVED row EXISTS; the approver-semantics
+//      gate (source ≠ resolver / the §5.8 skeleton in
+//      transitionPendingForCaller) is enforced upstream when the second
+//      approver calls POST /api/v1/escalations/:id/approve. The
+//      description-as-carrier convention is per
+//      docs/architecture/dual-control-operations-canonical-record.md §3
+//      step 3 ("action descriptor match via description or a future
+//      action field") -- the EscalationRequest model has no details JSON
+//      column; dualControlDescription is the exact-match key.
+export async function findApprovedDualControlForCaller(
+  callerEntityId: string,
+  actionDescriptor: EscalationActionDescriptor,
+): Promise<EscalationRequest | null> {
+  return prisma.escalationRequest.findFirst({
+    where: {
+      source_entity_id: callerEntityId,
+      escalation_type: "DUAL_CONTROL_REQUIRED",
+      status: "APPROVED",
+      description: dualControlDescription(actionDescriptor.type),
+    },
+    orderBy: { resolved_at: "desc" },
+  });
+}
+
+// WHAT: Get-or-create a PENDING dual-control EscalationRequest for the
+//        caller matching a specific privileged-endpoint action descriptor.
+// INPUT: callerEntityId (the request initiator -- the source of the
+//        dual-control escalation) + actionDescriptor (the
+//        EscalationActionDescriptor for the privileged endpoint the
+//        requireDualControl preHandler matched).
+// OUTPUT: The PENDING EscalationRequest row. If a matching PENDING row
+//          already exists for this (callerEntityId, actionDescriptor) pair
+//          (matched via description === dualControlDescription(actionType)),
+//          returns the existing row WITHOUT writing a new ESCALATION_CREATED
+//          audit event. If no matching PENDING exists, delegates to
+//          createEscalationForCaller (which creates the PENDING row inside
+//          a transaction and writes the ESCALATION_CREATED audit event).
+// WHY: Prevents queue flooding when a restricted caller retries a
+//      privileged endpoint repeatedly -- each retry would otherwise create
+//      a duplicate PENDING dual-control escalation, polluting approver
+//      queues and the audit chain. Mirrors the createGateEscalationForCaller
+//      dedup pattern above (the requires_validation gate-fail path) which
+//      prevents the same flooding. Consumed by the requireDualControl
+//      Fastify preHandler (apps/api/src/middleware/dual-control.middleware.ts,
+//      sub-phase E [SEC-DUAL-CONTROL-MIDDLEWARE]) on the denied path.
+//
+//      SUBSTRATE-STATE LIMITATION: target_entity_id is set to the caller
+//      (self-target) as a sub-phase E placeholder. The dual-control
+//      canonical record (§3 step 6) specifies the target should be "a
+//      designated approver or the requesting org's admin set", but
+//      org-admin-set resolution is forward-queued (Sub-box 2 Phase 2). The
+//      transitionPendingForCaller skeleton gate below currently allows
+//      caller === target self-resolve per §5.8; ADR-0026 at sub-phase H +
+//      Phase 2 substrate resolve this to a distinct second human.
+export async function getOrCreatePendingDualControlForCaller(
+  callerEntityId: string,
+  actionDescriptor: EscalationActionDescriptor,
+): Promise<EscalationRequest> {
+  const existing = await prisma.escalationRequest.findFirst({
+    where: {
+      source_entity_id: callerEntityId,
+      escalation_type: "DUAL_CONTROL_REQUIRED",
+      status: "PENDING",
+      description: dualControlDescription(actionDescriptor.type),
+    },
+    orderBy: { created_at: "desc" },
+  });
+  if (existing !== null) {
+    return existing;
+  }
+  return createEscalationForCaller(callerEntityId, {
+    target_entity_id: callerEntityId, // placeholder; Phase 2 substrate resolves
+    escalation_type: "DUAL_CONTROL_REQUIRED",
+    severity: "HIGH",
+    description: dualControlDescription(actionDescriptor.type),
+  });
 }
 
 // WHAT: List the caller's own pending escalations (caller == target).

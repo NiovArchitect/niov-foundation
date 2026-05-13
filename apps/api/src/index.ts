@@ -332,6 +332,8 @@ export {
   approveEscalationForCaller,
   rejectEscalationForCaller,
   expireEscalation,
+  findApprovedDualControlForCaller,
+  getOrCreatePendingDualControlForCaller,
 } from "./services/governance/escalation.service.js";
 export type { CreateEscalationInput } from "./services/governance/escalation.service.js";
 
@@ -346,11 +348,26 @@ export type { AdminCapability } from "./middleware/admin.middleware.js";
 export {
   PRIVILEGED_ENDPOINTS,
   isPrivilegedEndpoint,
+  dualControlDescription,
 } from "./security/privileged-endpoints.js";
 export type {
   PrivilegedEndpoint,
   EscalationActionDescriptor,
 } from "./security/privileged-endpoints.js";
+
+// Sub-box 2 Phase 1 sub-phase E [SEC-DUAL-CONTROL-MIDDLEWARE]: the
+// dual-control Fastify preHandler + its pure verification transform +
+// failure/outcome types. Route bindings land at sub-phases F + G; the
+// test tier + sibling packages reach these via "@niov/api".
+export {
+  requireDualControl,
+  evaluateDualControlState,
+} from "./middleware/dual-control.middleware.js";
+export type {
+  DualControlFailure,
+  DualControlOutcome,
+  DualControlEscalationView,
+} from "./middleware/dual-control.middleware.js";
 
 export { registerPlatformRoutes } from "./routes/platform.routes.js";
 export { registerOrgRoutes } from "./routes/org.routes.js";

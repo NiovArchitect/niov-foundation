@@ -130,3 +130,32 @@ export function isPrivilegedEndpoint(
     (entry) => entry.method === method && entry.route === route,
   );
 }
+
+/**
+ * WHAT: Canonical `description` string for an EscalationRequest gating a
+ *       dual-control privileged-endpoint operation -- the exact-match
+ *       carrier of the action-descriptor type.
+ * INPUT: actionType (an EscalationActionDescriptor["type"] literal -- the
+ *        privileged-endpoint operation being gated).
+ * OUTPUT: A string of the form `DUAL_CONTROL:${actionType}` (uppercase
+ *         prefix + colon + the descriptor literal).
+ * WHY: The EscalationRequest model has no `details` JSON column (it has
+ *      `description: String` and `resolution_metadata: Json?`), and the
+ *      dual-control canonical record (§3 step 3) specifies the action
+ *      descriptor is matched "via description or a future action field".
+ *      Until that future field exists, the `description` column is the
+ *      carrier. Both the `requireDualControl` Fastify preHandler
+ *      (`apps/api/src/middleware/dual-control.middleware.ts`, sub-phase E)
+ *      and `findApprovedDualControlForCaller`
+ *      (`apps/api/src/services/governance/escalation.service.ts`) route
+ *      through this helper so the create-side write and the read-side
+ *      query use identical exact-match semantics -- no typo drift, and a
+ *      future reader can grep `DUAL_CONTROL:` to find every dual-control
+ *      escalation. See `docs/architecture/dual-control-operations-canonical-record.md`
+ *      §3 + §4.
+ */
+export function dualControlDescription(
+  actionType: EscalationActionDescriptor["type"],
+): string {
+  return `DUAL_CONTROL:${actionType}`;
+}
