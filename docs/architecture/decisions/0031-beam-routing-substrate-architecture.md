@@ -243,7 +243,7 @@ Forward-queued to sub-phases 5/6:
    (operator's local Elixir install state at sub-phase 4a's authoring
    time is partial per Q-SUBSTRATE-STATE Option A-revised).
 
-### Sub-phase 5b `[BEAM-COSMP-INTEROP-CODE]` arrives (split per Q-P at sub-phase 5a per ADR-0032)
+### Sub-phase 5b-i `[BEAM-COSMP-INTEROP-GRPC]` arrives (split per Q-P at sub-phase 5a per ADR-0032; further split per Q-R at sub-phase 5b-i per ADR-0033 forthcoming)
 
 1. **First deps landing** (`:grpc` + `:protobuf` per ADR-0032 §Decision
    gRPC library choice) → cache-key evolution from
@@ -305,7 +305,8 @@ ADR-0020 two-register IP discipline.
 | 4a | `[BEAM-COSMP-GENSERVER-ADR]` (this ADR) | Decision substrate ratified |
 | 4b | `[BEAM-COSMP-GENSERVER-CODE]` | Router GenServer + Capsule placeholder + Application MOD + tests; patterns 1, 2, 6 instantiated |
 | 5a | `[BEAM-COSMP-INTEROP-ADR]` | ADR-0032 (BEAM gRPC Interop Architecture) lands; documents `:grpc` + `:protobuf` canonical libraries + sync unary semantics + Protobuf encoding + auth at Fastify boundary + `.proto` versioning |
-| 5b | `[BEAM-COSMP-INTEROP-CODE]` | gRPC bridge (`cosmp.proto` + server + translator + 7 `handle_call` bodies fill) + `:grpc` + `:protobuf` deps + TypeScript `@grpc/grpc-js` client + cache-key forward-evolution |
+| 5b-i | `[BEAM-COSMP-INTEROP-GRPC]` | gRPC bridge (`cosmp.proto` + server + translator + 7 `handle_call` bodies fill) + `:grpc` + `:protobuf` deps + TypeScript `@grpc/grpc-js` client + cache-key forward-evolution |
+| 5b-ii | `[BEAM-COSMP-INTEROP-PERSISTENCE]` | Postgres durable substrate + Ecto Repo + Capsule storage schema (7-layer JSONB mapping) + audit-chain integration + idempotency layer + ADR-0033 forthcoming |
 | 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | End-to-end 7-op flow; patterns 3, 4, 5 fully instantiated; idempotency strategy (potential ADR-0033 if non-obvious) |
 | 7 | `[BEAM-DBGI-APP-SKELETON]` | Sibling DBGI supervisor app skeleton |
 | 8 | `[BEAM-DBGI-PROCESS-GROUPS]` | `:pg` + `:gproc` registry |
@@ -315,9 +316,10 @@ ADR-0020 two-register IP discipline.
 | 12 | `[BEAM-CANONICAL-RECORD]` | `beam-coordination-canonical-record.md` |
 | 13 | `[BEAM-ARC-CLOSURE]` | Onboarding cascade + section-12 row 35 + ADR-0028 forward → landed + ADR-0030 arc-closure |
 
-Block B count expansion: **15 sub-phases** (expanded 13 → 14 at
-sub-phase 4a per Q-G split; 14 → 15 at sub-phase 5a per Q-P split —
-see ADR-0032).
+Block B count expansion: **16 sub-phases** (expanded 13 → 14 at
+sub-phase 4a per Q-G split — see this ADR; 14 → 15 at sub-phase 5a
+per Q-P split — see ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R
+split — see ADR-0033 forthcoming).
 
 Bidirectional citations (cited from):
 

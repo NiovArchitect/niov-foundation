@@ -21,8 +21,8 @@ defmodule CosmpRouter.Capsule do
   ## Sub-phase 4b status — placeholder only
 
   No validation logic at sub-phase 4b per ADR-0031 Q-B Option A.
-  Full validation + persistence integration arrives at sub-phase 5
-  `[BEAM-COSMP-INTEROP-CODE]` when gRPC interop populates Capsules from
+  Full validation + persistence integration arrives at sub-phase 5b-i
+  `[BEAM-COSMP-INTEROP-GRPC]` when gRPC interop populates Capsules from
   external payloads.
 
   ## References

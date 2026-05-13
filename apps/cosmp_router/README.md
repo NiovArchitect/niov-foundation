@@ -63,7 +63,9 @@ Production-grade workers land starting sub-phase 4
 | Sub-phase | Subject | Adds |
 |-----------|---------|------|
 | 4 | `[BEAM-COSMP-GENSERVER]` | Routing GenServer + 6 BEAM patterns from ADR-0026 §5 |
-| 5 | `[BEAM-COSMP-INTEROP-CODE]` | Fastify ↔ Elixir gRPC bridge worker |
+| 5a | `[BEAM-COSMP-INTEROP-ADR]` | ADR-0032 decision substrate (gRPC interop architecture) |
+| 5b-i | `[BEAM-COSMP-INTEROP-GRPC]` | Fastify ↔ Elixir gRPC bridge worker |
+| 5b-ii | `[BEAM-COSMP-INTEROP-PERSISTENCE]` | Postgres durable substrate + Ecto Repo + Capsule storage schema (7-layer JSONB mapping) + audit-chain integration + idempotency layer + ADR-0033 forthcoming |
 | 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | End-to-end COSMP op flow tests |
 
 ## References

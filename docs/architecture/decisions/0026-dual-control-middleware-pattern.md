@@ -342,9 +342,10 @@ Bidirectional citations (cited from):
 - ADR-0030 (Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
   DBGI Supervisor + Three-Language Stack Canonicalization; landed at Block B
   sub-phase 1 `[BEAM-PHASE-2-ADR]`) — **load-bearing**: ADR-0030 is the Phase 2
-  implementation ADR; the 15-sub-phase Block B mini-arc (expanded 13 → 14 at
-  sub-phase 4a per Q-G split; 14 → 15 at sub-phase 5a per Q-P split — see
-  ADR-0032) ports the 6 BEAM-compatibility patterns
+  implementation ADR; the 16-sub-phase Block B mini-arc (expanded 13 → 14 at
+  sub-phase 4a per Q-G split — see ADR-0031; 14 → 15 at sub-phase 5a per
+  Q-P split — see ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R split — see
+  ADR-0033 forthcoming) ports the 6 BEAM-compatibility patterns
   documented in this ADR's §5 (at substrate-state register — TypeScript code
   mimicking BEAM) to **Register-2** (production Elixir/BEAM substrate).
   ADR-0030 §Implementation Detail includes a pattern→Elixir-idiom mapping

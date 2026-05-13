@@ -35,7 +35,7 @@ scale demands:
 
 Sub-phase 4b `[BEAM-COSMP-GENSERVER-CODE]` (`5712a2b`) landed the
 Router GenServer with 7 `handle_call` stubs returning
-`{:ok, :not_implemented}`. Sub-phase 5b `[BEAM-COSMP-INTEROP-CODE]`
+`{:ok, :not_implemented}`. Sub-phase 5b-i `[BEAM-COSMP-INTEROP-GRPC]`
 fills all 7 bodies with real routing logic AND establishes the gRPC
 boundary per Q-N (no `:not_implemented` stubs cross gRPC boundary).
 This ADR documents the boundary decisions before code lands.
@@ -338,7 +338,8 @@ per ADR-0026 §5 Pattern 5 instantiation).
 | Sub-phase | Subject | This ADR's instantiation |
 |-----------|---------|---------------------------|
 | 5a | `[BEAM-COSMP-INTEROP-ADR]` (this ADR) | gRPC interop decision substrate |
-| 5b | `[BEAM-COSMP-INTEROP-CODE]` | `:grpc` + `:protobuf` deps; `cosmp.proto`; gRPC server + translator; all 7 `handle_call` bodies fill; `@grpc/grpc-js` + `@grpc/proto-loader` TypeScript client; cache-key forward-evolution |
+| 5b-i | `[BEAM-COSMP-INTEROP-GRPC]` | `:grpc` + `:protobuf` deps; `cosmp.proto`; gRPC server + translator; all 7 `handle_call` bodies fill; `@grpc/grpc-js` + `@grpc/proto-loader` TypeScript client; cache-key forward-evolution |
+| 5b-ii | `[BEAM-COSMP-INTEROP-PERSISTENCE]` | Postgres durable substrate + Ecto Repo + Capsule storage schema (7-layer JSONB mapping) + audit-chain integration + idempotency layer + ADR-0033 forthcoming |
 | 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | 7-op end-to-end integration tests; idempotency cache decision (potential ADR-0033 if non-obvious) |
 | 7 | `[BEAM-DBGI-APP-SKELETON]` | Sibling DBGI supervisor app skeleton |
 | 8 | `[BEAM-DBGI-PROCESS-GROUPS]` | `:pg` + `:gproc` registry |
@@ -348,9 +349,10 @@ per ADR-0026 §5 Pattern 5 instantiation).
 | 12 | `[BEAM-CANONICAL-RECORD]` | `beam-coordination-canonical-record.md` |
 | 13 | `[BEAM-ARC-CLOSURE]` | Onboarding cascade + section-12 row 35 + ADR-0028 forward → landed + ADR-0030 arc-closure |
 
-Block B count expansion: **15 sub-phases** (expanded 13 → 14 at
+Block B count expansion: **16 sub-phases** (expanded 13 → 14 at
 sub-phase 4a per Q-G split — see ADR-0031; 14 → 15 at sub-phase 5a
-per Q-P split — see this ADR).
+per Q-P split — see this ADR; 15 → 16 at sub-phase 5b-i per Q-R
+split — see ADR-0033 forthcoming).
 
 Bidirectional citations (cited from):
 

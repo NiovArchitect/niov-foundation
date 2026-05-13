@@ -23,8 +23,8 @@ defmodule CosmpRouter do
   ## Sub-phase 3 status
 
   Skeleton only. The substantive routing logic lands at sub-phase 4
-  `[BEAM-COSMP-GENSERVER]`; interop at sub-phase 5
-  `[BEAM-COSMP-INTEROP-CODE]`; integration tests at sub-phase 6
+  `[BEAM-COSMP-GENSERVER]`; interop at sub-phase 5b-i
+  `[BEAM-COSMP-INTEROP-GRPC]`; integration tests at sub-phase 6
   `[BEAM-COSMP-INTEGRATION-TESTS]`.
 
   ## References
