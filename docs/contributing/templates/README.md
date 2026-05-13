@@ -128,7 +128,7 @@ Sub-phases 4-5 of the SUBSTRATE-BUILD-OPTIMIZATIONS arc add:
 
 - `[SUBSTRATE-BUILD-PROSE-GUIDANCE]` — strategy-tier prose discipline
   (CLAUDE.md §7 bullet per ADR-0029 Optimization 3, decided at
-  sub-phase 4 → this commit).
+  sub-phase 4 → `49222ad`).
 - `[SUBSTRATE-BUILD-ONBOARDING-CASCADE]` — `onboarding.md` +
   `onboarding-for-engineers.md` references to the templates and
   cascade-grep tool.

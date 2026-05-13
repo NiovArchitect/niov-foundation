@@ -96,7 +96,7 @@ directory and are observable in their structure.
 ## What This Directory Does Not Cover
 
 - **Architectural Decision Records** → `docs/architecture/`
-  (`README.md` and `decisions/0001-0010`).
+  (`README.md` and the 29 ADRs `0001-…` through `0029-…`).
 - **Glossary, anchors catalog, build-cycle progress** →
   `docs/reference/glossary.md`,
   `docs/reference/architectural-anchors.md`,

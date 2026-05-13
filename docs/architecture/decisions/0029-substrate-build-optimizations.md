@@ -95,8 +95,8 @@ substrate-state observation directly. The substrate-honest pre-flight discipline
 at the *engineering* tier (the pre-flight reports, the catch surfacings, the
 commit bodies) stays full-fidelity — this addresses authorization-tier prose
 only. **Substrate placement: CLAUDE.md §7 prose-discipline bullet (Option B),
-decided at sub-phase 4 pre-flight (`[SUBSTRATE-BUILD-PROSE-GUIDANCE]`, this
-commit).** Rationale: failure-mode-category distinction — RULES 12/13/18 govern
+decided at sub-phase 4 pre-flight (`[SUBSTRATE-BUILD-PROSE-GUIDANCE]`,
+`49222ad`).** Rationale: failure-mode-category distinction — RULES 12/13/18 govern
 substrate-correctness failures (high blast radius: silent drift, scope
 undercount, spec-vs-substrate incoherence); the prose discipline governs
 cosmetic-quality failures (low blast radius: recursive phrasing accretion).
@@ -179,16 +179,29 @@ prose discipline per sub-phase 4's resolution.
   + wrapper + `scripts/preflight/README.md` + smoke test.
 - **Sub-phase 3 `[SUBSTRATE-BUILD-COMMIT-TEMPLATES]`** — the 3 commit-class templates
   + `docs/contributing/templates/README.md`.
-- **Sub-phase 4 `[SUBSTRATE-BUILD-PROSE-GUIDANCE]`** — CLOSED at this commit.
+- **Sub-phase 4 `[SUBSTRATE-BUILD-PROSE-GUIDANCE]`** — CLOSED at `49222ad`.
   Optimization 3 substrate placement resolved to **CLAUDE.md §7 prose-discipline
   bullet (Option B)** per the failure-mode-category distinction (RULES govern
   substrate-correctness; the prose discipline governs cosmetic-quality), the
   lived-experience evidence from sub-phases 2-3, and the lighter-cascade
   preservation of sub-phase 5's scope.
-- **Sub-phase 5 `[SUBSTRATE-BUILD-ONBOARDING-CASCADE]`** — the onboarding-doc
-  updates; also the post-commit-hash backfill venue for the sub-phase-4 `this
-  commit` placeholders in this ADR and `docs/contributing/templates/README.md`
-  line 130 (the first worked example of `POST-COMMIT-HASH-CASCADE.template.md`).
+- **Sub-phase 5 `[SUBSTRATE-BUILD-ONBOARDING-CASCADE]`** — CLOSED at this
+  commit. Onboarding-doc cascade (onboarding.md §6 + onboarding-for-engineers.md
+  §1 + §6) gains references to `scripts/preflight/cascade-grep.sh` +
+  `docs/contributing/templates/` + the CLAUDE.md §7 prose-discipline bullet.
+  Sub-phase-4 hash `49222ad` backfilled into the 4 placeholder sites (3 in this
+  ADR — Decision § lines 98-99 line-wrapped, Forward Queue line 182,
+  Bidirectional citations line 237; 1 in `docs/contributing/templates/README.md`
+  line 131) — the first completed worked example of
+  `POST-COMMIT-HASH-CASCADE.template.md`'s mid-arc backfill pattern. Catch
+  #1b from sub-phase 3 resolved (`docs/contributing/README.md` line 99 stale
+  `decisions/0001-0010` reference); catch #2 from sub-phase 5 pre-flight
+  resolved (`docs/contributing/onboarding-for-engineers.md` 3 sites of stale
+  "27 ADRs" → "29 ADRs"). `docs/reference/section-12-progress.md` gains a
+  SUBSTRATE-BUILD-OPTIMIZATIONS arc-closure row with permanent "this commit"
+  placeholder per sub-phase J Decision 3 precedent. **The 5-commit
+  SUBSTRATE-BUILD-OPTIMIZATIONS arc is CLOSED** (`ba78216` → `37e4bcc` →
+  `9f0514b` → `49222ad` → this commit).
 - **Potential ADR-0030** — if Sub-box 2 Phase 2 (the Elixir/BEAM mini-arc) surfaces
   new substrate-build patterns (a dual-runtime cascade convention; an Elixir-tier
   pre-flight discipline), a follow-up ADR formalizes them.
@@ -208,6 +221,44 @@ follow-up arc's first sub-phase surfaces zero — the cascade patterns are now
 known, and the substrate-build optimizations in this ADR aim to reduce friction
 on the catches that do still surface in future *engineering* arcs (where the
 substrate is novel and the cascade scope is genuinely uncertain).
+
+Sub-phase 5: **3 catches surfaced at pre-flight, all resolved in-commit (arc-closure
+substrate observation).**
+
+- **Catch #1 — script-tier limitation (`cascade-grep.sh` markdown line-wrap).**
+  The `hash` subcommand's regex `this commit` is line-bounded; markdown-wrapped
+  placeholders at 80-character boundaries are missed. ADR-0029 lines 98-99 had
+  "this\ncommit" wrapped across two lines and the regex failed to surface it.
+  Tool surfaced 3 of 4 sub-phase-4 placeholders mechanically; the line-wrap
+  target required manual surfacing (operator discipline caught the 4th).
+  **Not a sub-phase-5 blocker** — manually backfilled. Surfaced as a
+  substrate-state observation for future improvement: a follow-up substrate-build
+  commit could add `pcre2grep -M` multiline mode or a markdown-wrapping
+  pre-collapse pass; potentially feeds ADR-0030 if Sub-box 2 Phase 2's
+  Elixir/BEAM mini-arc surfaces additional substrate-build patterns. Tool earns
+  its place — 75% mechanical surfacing is substantial token-cost reduction even
+  at this regex fidelity.
+- **Catch #2 — pre-existing drift in `docs/contributing/onboarding-for-engineers.md`.**
+  Three sites of stale "27 ADRs" at 29 ADRs canonical: line 53 (§2 title),
+  line 67 (the ADRs catalog citation), line 183 (the Recommended Reading Order
+  ADR-catalog citation). Resolved in this commit via Q-C:A (the file was being
+  MOD-ed anyway per the onboarding cascade; substrate-coherent to bring to
+  current).
+- **Catch #1b from sub-phase 3 — deferred-then-resolved.**
+  `docs/contributing/README.md` line 99 stale `decisions/0001-0010` reference
+  at 29 ADRs canonical, surfaced at sub-phase 3 pre-flight, deferred there per
+  scope-boundary discipline. Resolved in this commit via Q-A:A (the contributing-
+  docs neighborhood was being touched per the onboarding cascade; coherent
+  venue; 1-line fix).
+
+**Arc-closure tally:** 4 distinct catches across the 5-commit
+SUBSTRATE-BUILD-OPTIMIZATIONS arc (sub-phase 3 surfaced catch #1 + catch #1b;
+sub-phase 5 surfaced catch #1 [script-tier] + catch #2 + catch #1b-resolution).
+All resolved in-arc; zero broken commits on origin/main. The discipline-converges
+observation holds: the cascade landscape becomes familiar; new catches surface
+in narrower categories (pre-existing drift, tool-tier limitation) rather than
+substantive-engineering-tier failures. 54-consecutive-commit substrate-honest
+pre-flight verification pattern operational (55 after this commit lands).
 
 Sub-phase 4: **zero new catches at pre-flight.** The cascade landscape for both
 Q-A options (Option A: RULE 21 + full RULE-cascade; Option B: §7 bullet + light
@@ -234,7 +285,7 @@ Bidirectional citations (cited from):
   fulfills that forward-queue commitment). ADR-0028's "(cited from)" block
   back-cites this ADR.
 - CLAUDE.md §7 (Operating in This Repo; the prose-discipline bullet — landed at
-  sub-phase 4 `[SUBSTRATE-BUILD-PROSE-GUIDANCE]`, this commit) — load-bearing
+  sub-phase 4 `[SUBSTRATE-BUILD-PROSE-GUIDANCE]`, `49222ad`) — load-bearing
   citation: the §7 bullet is the substrate placement of Optimization 3 resolved
   at sub-phase 4. The bullet cites this ADR as `ADR-0029 Optimization 3`; the
   citation graph closes across the §3 RULES / §7 guidance boundary.

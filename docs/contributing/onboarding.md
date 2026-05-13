@@ -235,6 +235,47 @@ closed and a future reader grepping any file in the graph can
 navigate to every related file. See `docs/architecture/README.md`
 §Bidirectional Citation Discipline for the full rationale.
 
+**Pre-flight tooling — the SUBSTRATE-BUILD-OPTIMIZATIONS arc
+(ADR-0029).** The discipline above is the *behavior*; the
+arc adds *mechanical aids* that surface the cascade landscape
+before drafting, lowering the token-cost per catch. They are
+**advisory** — they feed RULE 12 / RULE 13 / RULE 18, not
+replace them.
+
+- **`scripts/preflight/cascade-grep.sh`** — greps `docs/` +
+  `CLAUDE.md` + `AGENTS.md` for ADR-cascade / RULE-cascade /
+  post-commit-hash-cascade patterns. Subcommands: `adr <N>`,
+  `rule <N>`, `hash`, `all <N>`, `--self-test`,
+  `--help`. Run before drafting any commit that lands or
+  modifies an ADR / RULE / arc-progress reference; the output
+  is `file:line: matched-pattern`, one match per line — the
+  reviewer (operator or AI agent) confirms each match in-scope
+  or deliberately out-of-scope. See
+  `scripts/preflight/README.md`.
+- **`docs/contributing/templates/`** — commit-class scaffolds
+  enumerating the standard cascade scope by template rather
+  than by recall: `NEW-ADR.template.md`,
+  `NEW-RULE.template.md`,
+  `POST-COMMIT-HASH-CASCADE.template.md`. Each template lists
+  the minimum cascade targets + names the cascade-grep
+  subcommand for verification. Templates and cascade-grep are
+  **complements** — templates enumerate expected scope by
+  recall-shape; cascade-grep verifies against actual repo
+  state.
+- **`CLAUDE.md` §7 prose-discipline bullet** (Optimization 3
+  of ADR-0029). Plain language at the authorization tier
+  where Claude Code speaks to the operator; engineering-tier
+  pre-flight prose (pre-flight reports, catch surfacings,
+  commit bodies) stays full-fidelity. Behavioral constraint,
+  not hook-enforced — see CLAUDE.md §7 for the canonical
+  statement.
+
+Lineage: ADR-0029 (the decision document) and the 5-commit
+SUBSTRATE-BUILD-OPTIMIZATIONS arc (sub-phases 1-5,
+`ba78216` → this commit) are the worked example. The arc
+addresses the 26-catch dual-control arc patterns by reducing
+token-cost-per-catch for future engineering arcs.
+
 ## 7. Commit attribution discipline
 
 Foundation commits are sole-authored corporate-identity

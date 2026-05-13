@@ -48,9 +48,30 @@ discipline by reading that arc's commit bodies (`git log --grep '\[SEC-DUAL-CONT
 and `[SEC-CONTRIBUTOR-GOVERNANCE]`) and `docs/architecture/decisions/0026-…`
 + `0027-…`'s "Substrate-State Catches Resolved" sections.
 
+**Mechanical aids (ADR-0029 SUBSTRATE-BUILD-OPTIMIZATIONS arc).** The discipline
+above is behavioral; three mechanical aids lower the token-cost-per-catch
+without replacing the discipline:
+
+- **`scripts/preflight/cascade-grep.sh`** — pre-flight grep tool for ADR-cascade
+  (`adr <N>`), RULE-cascade (`rule <N>`), and post-commit-hash-cascade (`hash`)
+  patterns. Run it before drafting any commit that lands or modifies an ADR /
+  RULE / arc-progress reference; the output enumerates the actual cascade
+  landscape so the planning tier doesn't reconstruct it from recall. Advisory
+  — feeds RULE 12 / 13 / 18, doesn't replace them.
+- **`docs/contributing/templates/`** — commit-class scaffolds enumerating the
+  standard cascade scope by template: `NEW-ADR.template.md`,
+  `NEW-RULE.template.md`, `POST-COMMIT-HASH-CASCADE.template.md`. Copy the
+  appropriate template at draft time; verify with cascade-grep.
+- **CLAUDE.md §7 prose-discipline bullet** (Optimization 3) — plain language at
+  the authorization tier; engineering-tier prose (pre-flight reports, catch
+  surfacings, commit bodies) stays full-fidelity. Behavioral.
+
+See ADR-0029 for the decision lineage; `scripts/preflight/README.md` and
+`docs/contributing/templates/README.md` for the operational details.
+
 ---
 
-## 2. The 20 RULES + 27 ADRs as Canonical Reference
+## 2. The 20 RULES + 29 ADRs as Canonical Reference
 
 The authorization-tier substrate of the codebase lives in two places:
 
@@ -64,7 +85,7 @@ The authorization-tier substrate of the codebase lives in two places:
   (services connect through APIs — no cross-service DB reads), RULE 14
   (bidirectional citation discipline), RULE 16 (no `console.*` in
   `apps/api/src`), RULE 20 (Rule-Modification Authority — see §3).
-- **`docs/architecture/decisions/` — the 27 ADRs** (`0001-…` through `0027-…`,
+- **`docs/architecture/decisions/` — the 29 ADRs** (`0001-…` through `0029-…`,
   plus `0000-template.md`). Michael Nygard format with niov-foundation
   extensions (Easier/Harder consequence split, bidirectional-citation block,
   ISO-dated Status). `docs/architecture/README.md` is the navigable catalog;
@@ -180,7 +201,7 @@ Two things follow for a contributor:
 ## 6. Recommended Reading Order
 
 1. **`CLAUDE.md`** — the operational rulebook (the 20 RULES; read all of it).
-2. **`docs/architecture/README.md`** — the ADR catalog (27 ADRs) + the ADR
+2. **`docs/architecture/README.md`** — the ADR catalog (29 ADRs) + the ADR
    Lifecycle discipline.
 3. **`docs/architecture/decisions/0001-…` onward** — at minimum ADR-0001
    (three-wallet architecture), ADR-0002 (append-only audit chain), ADR-0004
@@ -199,6 +220,11 @@ Two things follow for a contributor:
 8. **`docs/contributing/onboarding.md`** — the AI-tool-session ritual (useful
    context even if you're a human; it's what Claude Code / Codex / Cursor run on
    session open).
+9. **`docs/contributing/templates/`** + `scripts/preflight/cascade-grep.sh` —
+   commit-class scaffolds + cascade-grep tool (ADR-0029 SUBSTRATE-BUILD-OPTIMIZATIONS
+   arc). Use the appropriate template at draft time for any commit that lands
+   or modifies an ADR / RULE / arc-progress reference; run cascade-grep before
+   authorization to surface the actual cascade landscape.
 
 When in doubt: read the cited reference; cite ADRs by number; surface
 substrate-state observations rather than guessing; and a RULE/ADR change is the
