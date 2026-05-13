@@ -148,8 +148,14 @@ coordination tier).
   supervision + OtzarComm + DBGI substrate); sub-phases 7-8 (observability +
   production readiness). The exact sub-phase decomposition is fixed at the Phase 2
   pre-flight.
-- **ADR-0029** — documenting the Phase 2 canonical architectural decisions as they
-  land (the Phase 2 analog of this ADR).
+- **ADR-0030** — Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
+  DBGI Supervisor + Three-Language Stack Canonicalization (LANDED at Block B
+  sub-phase 1 `[BEAM-PHASE-2-ADR]`; documents Phase 2 implementation; the
+  13-sub-phase decomposition; cites this ADR load-bearing for the 6 BEAM patterns
+  + forward-queue source). ADR-0029 was SUBSTRATE-BUILD-OPTIMIZATIONS (a different
+  scope — the substrate-build meta-tooling arc that ran between this ADR's
+  commitment-to-ship and ADR-0030's landing); this catch is documented in
+  ADR-0030's Substrate-State Catches Resolved § (catch #1).
 - **A future BEAM-coordination-layer canonical-record-analog doc** — mirroring
   `docs/architecture/dual-control-operations-canonical-record.md` but for the BEAM
   coordination substrate (the operational companion to the Phase 2 ADR set).
@@ -242,3 +248,13 @@ Bidirectional citations (cited from):
   implement them (the `scripts/preflight/` cascade-grep scripts; the
   `docs/contributing/templates/` commit-class scaffolds; the strategy-tier prose
   discipline; the onboarding cascade).
+- ADR-0030 (Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
+  DBGI Supervisor + Three-Language Stack Canonicalization; landed at Block B
+  sub-phase 1 `[BEAM-PHASE-2-ADR]`) — **load-bearing**: ADR-0030 is the Phase 2
+  implementation ADR fulfilling this ADR's commitment-to-ship. The 13-sub-phase
+  Block B mini-arc ports the 6 BEAM-compatibility patterns (this ADR's load-bearing
+  citation of ADR-0026 §5) from TypeScript-pattern-mimicking-BEAM to production
+  Elixir/BEAM substrate (mix umbrella + COSMP router GenServer + DBGI supervisor
+  + gRPC interop + observability + canonical-record-analog doc). The "Forward
+  Queue → ADR-0029" pre-existing entry was reframed at sub-phase 1 to point at
+  ADR-0030 (catch #1; see ADR-0030 Substrate-State Catches Resolved §).

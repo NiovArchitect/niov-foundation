@@ -339,3 +339,14 @@ Bidirectional citations (cited from):
   ADR-0028 is the Sub-box 2 Phase 2 mini-arc commitment that ports those patterns
   to production Elixir/BEAM (a 6-8-commit / ~3-4-week mini-arc; the three-language
   stack — Fastify+TypeScript API + Elixir COSMP + Python ML + Postgres storage).
+- ADR-0030 (Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
+  DBGI Supervisor + Three-Language Stack Canonicalization; landed at Block B
+  sub-phase 1 `[BEAM-PHASE-2-ADR]`) — **load-bearing**: ADR-0030 is the Phase 2
+  implementation ADR; the 13-sub-phase Block B mini-arc ports the 6
+  BEAM-compatibility patterns documented in this ADR's §5 (at substrate-state
+  register — TypeScript code mimicking BEAM) to **Register-2** (production
+  Elixir/BEAM substrate). ADR-0030 §Implementation Detail includes a
+  pattern→Elixir-idiom mapping table treating this ADR's §5 as the canonical
+  source. Per ADR-0020 two-register IP discipline, the §5 patterns existed at
+  substrate-state-register from ADR-0026's H-commit; Phase 2 makes them
+  observable substrate at Register-2.

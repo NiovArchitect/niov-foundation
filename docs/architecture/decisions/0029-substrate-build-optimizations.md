@@ -202,9 +202,14 @@ prose discipline per sub-phase 4's resolution.
   placeholder per sub-phase J Decision 3 precedent. **The 5-commit
   SUBSTRATE-BUILD-OPTIMIZATIONS arc is CLOSED** (`ba78216` → `37e4bcc` →
   `9f0514b` → `49222ad` → this commit).
-- **Potential ADR-0030** — if Sub-box 2 Phase 2 (the Elixir/BEAM mini-arc) surfaces
-  new substrate-build patterns (a dual-runtime cascade convention; an Elixir-tier
-  pre-flight discipline), a follow-up ADR formalizes them.
+- **ADR-0030 — LANDED** at Block B sub-phase 1 `[BEAM-PHASE-2-ADR]`; documents
+  the Phase 2 implementation (mix umbrella + COSMP router + DBGI supervisor +
+  three-language stack canonicalization). The original Forward-Queue framing
+  ("Potential ADR-0030 — if Sub-box 2 Phase 2 surfaces new substrate-build
+  patterns, a follow-up ADR formalizes them") was reframed at sub-phase 1
+  (catch #2; see ADR-0030 Substrate-State Catches Resolved §). If new
+  substrate-build patterns emerge from Phase 2 work (a dual-runtime cascade
+  convention; an Elixir-tier pre-flight discipline), they'd land in ADR-0031+.
 
 ## Substrate-State Catches Resolved
 
