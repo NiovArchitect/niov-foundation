@@ -12,18 +12,32 @@ and anchors catalog (`docs/reference/`).
 
 For a first-time reader, read in this order:
 
-1. **`code-style.md`** first — TypeScript conventions are
+1. **`onboarding.md`** first — load-on-open per RULE 17; the
+   architectural framing every AI session loads at start.
+2. **`onboarding-for-engineers.md`** second — contributor
+   onboarding (the human-engineer entry point; complements
+   `onboarding.md`).
+3. **`code-style.md`** third — TypeScript conventions are
    prerequisite for everything else.
-2. **`testing.md`** second — depends on `code-style.md` for
+4. **`testing.md`** fourth — depends on `code-style.md` for
    conventions in test files.
-3. **`parallel-sessions.md`** third — depends on `testing.md`
+5. **`parallel-sessions.md`** fifth — depends on `testing.md`
    §Test-Cycle Discipline for the 90-110 minute reality.
-4. **`codex-vs-claude-code.md`**, **`cursor-bootstrap.md`**,
+6. **`codex-vs-claude-code.md`**, **`cursor-bootstrap.md`**,
    **`chatgpt-bootstrap.md`** as needed by which agent you
    are configuring or invoking.
+7. **`templates/`** as a reference during commit drafting —
+   the commit-class scaffolds for new ADRs, new RULES, and
+   post-commit-hash cascades (per ADR-0029).
 
 ## Files in This Directory
 
+- **`onboarding.md`** — Load-on-open architectural framing
+  per RULE 17; the session-start ritual every AI agent
+  performs; canonical RAA references.
+- **`onboarding-for-engineers.md`** — Human-engineer
+  contributor onboarding: repo orientation, key disciplines,
+  first-PR walkthrough.
 - **`code-style.md`** — TypeScript conventions: file headers,
   JSDoc/TSDoc blocks, naming, imports, service classes, error
   handling, logging.
@@ -42,6 +56,10 @@ For a first-time reader, read in this order:
 - **`chatgpt-bootstrap.md`** — ChatGPT consultative usage:
   anti-hallucination discipline, copy-paste templates,
   scope boundaries.
+- **`templates/`** — Commit-class scaffolds (NEW-ADR,
+  NEW-RULE, POST-COMMIT-HASH-CASCADE) per ADR-0029
+  Optimization 2; used during commit drafting to enumerate
+  the standard cascade scope.
 
 ## Operational Disciplines
 
