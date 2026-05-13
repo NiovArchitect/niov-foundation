@@ -234,3 +234,11 @@ Bidirectional citations (cited from):
   10-commit arc this ADR closes) + §7 (the Phase 2 forward path). The canonical
   record's line 19 + §8 "(cited from)" sub-block cite this ADR as the sub-phase-J
   commitment-to-ship.
+- ADR-0029 (Substrate-Build Optimizations: Cascade-Inventory Scripts +
+  Commit-Class Templates + Strategy-Tier Prose Discipline; landed at sub-phase 1
+  of the SUBSTRATE-BUILD-OPTIMIZATIONS arc `[SUBSTRATE-BUILD-ADR]`) — load-bearing:
+  ADR-0029 formalizes the three optimizations this ADR forward-queued in its
+  "Substrate-build optimizations" Forward-Queue bullet; sub-phases 2-5 of that arc
+  implement them (the `scripts/preflight/` cascade-grep scripts; the
+  `docs/contributing/templates/` commit-class scaffolds; the strategy-tier prose
+  discipline; the onboarding cascade).

@@ -41,8 +41,8 @@ citation block, ISO-dated Status). The template at
 `decisions/0000-template.md` includes both the structure and
 the "How To Use This Template" guidance for new ADRs.
 
-ADR catalog as of [SEC-BEAM-FORWARD-SUBSTRATE] (2026-05-12;
-28 ADRs):
+ADR catalog as of [SUBSTRATE-BUILD-ADR] (2026-05-12;
+29 ADRs):
 
 - **ADR-0001** — Three-wallet architecture (foundational)
 - **ADR-0002** — Append-only audit chain with BEFORE DELETE trigger (foundational)
@@ -72,6 +72,7 @@ ADR catalog as of [SEC-BEAM-FORWARD-SUBSTRATE] (2026-05-12;
 - **ADR-0026** — Dual-Control Middleware Pattern + Privileged Endpoint Registry + Per-Route Binding Discipline (dual-control register; the Sub-box 2 Phase 1 architectural bundle — the `requireDualControl` Fastify preHandler + the `PRIVILEGED_ENDPOINTS` runtime registry + the `preHandler` binding contract + the 6 BEAM-compatibility patterns; the operational companion is `docs/architecture/dual-control-operations-canonical-record.md`)
 - **ADR-0027** — Contributor Governance + AI-Alignment + Rule-Modification Authority (governance register; the authorization-tier protection — RULE 20: only the patent-holder Founder may modify/add/remove RULES or ADRs; the AI-alignment discipline — surface RULE/ADR-modification proposals per RULE 13, don't execute; onboarding companion `docs/contributing/onboarding-for-engineers.md`)
 - **ADR-0028** — Forward-Substrate: Elixir/BEAM Coordination Layer for Capsule Supervision + OtzarComm + DBGI Integration (forward-substrate register; the Sub-box 2 Phase 2 commitment-to-ship — NIOV commits to ship the Elixir/BEAM COSMP coordination layer as a production service, a 6-8-commit / ~3-4-week mini-arc; the three-language stack — Fastify+TypeScript API + Elixir COSMP + Python ML + Postgres storage; cites ADR-0026 for the 6 BEAM-compatibility patterns it commits to ship; the closing commit of the 10-commit Sub-box 2 Phase 1 arc)
+- **ADR-0029** — Substrate-Build Optimizations: Cascade-Inventory Scripts + Commit-Class Templates + Strategy-Tier Prose Discipline (substrate-build register; the three optimizations addressing the 26-catch dual-control-arc patterns + the discipline's token-cost dimension — `scripts/preflight/` cascade-grep scripts, `docs/contributing/templates/` commit-class scaffolds, strategy-tier prose discipline; cites ADR-0028 — the forward-queue source; sub-phase 1 of the SUBSTRATE-BUILD-OPTIMIZATIONS arc — the decision document; sub-phases 2-5 implement)
 
 ADRs are sequentially numbered. Gaps are not closed when ADRs
 are superseded or deprecated — a retired ADR keeps its number
