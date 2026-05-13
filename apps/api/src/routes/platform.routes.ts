@@ -1,10 +1,17 @@
 // FILE: platform.routes.ts
 // PURPOSE: HTTP surface for NIOV-Platform-level operations -- the
-//          /platform/* namespace, today carrying just POST /orgs
-//          (Dandelion Phase 0 createOrg). Every route here is
-//          gated by can_admin_niov.
+//          /platform/* namespace, today carrying POST /orgs (Dandelion
+//          Phase 0 createOrg) and PATCH /monetization/config (the 70/30
+//          revenue-split mutation). Every route here is gated by
+//          can_admin_niov; PATCH /monetization/config additionally
+//          carries the dual-control gate (sub-phase F).
 // CONNECTS TO: dandelion.service.ts (executePhase0),
 //              admin.middleware.ts (capability gate),
+//              dual-control.middleware.ts (the requireDualControl
+//              preHandler on PATCH /monetization/config; sub-phase F
+//              [SEC-DUAL-CONTROL-BINDING-CONFIG]),
+//              security/privileged-endpoints.ts (PRIVILEGED_ENDPOINTS --
+//              the Operation A descriptor passed to requireDualControl),
 //              auth.service.ts (session validation upstream).
 
 import type { FastifyInstance } from "fastify";
@@ -16,6 +23,8 @@ import {
   type Prisma,
 } from "@niov/database";
 import { requireAdminCapability } from "../middleware/admin.middleware.js";
+import { requireDualControl } from "../middleware/dual-control.middleware.js";
+import { PRIVILEGED_ENDPOINTS } from "../security/privileged-endpoints.js";
 import {
   executePhase0,
   type Phase0Input,
@@ -55,6 +64,22 @@ export async function registerPlatformRoutes(
   app: FastifyInstance,
   authService: AuthService,
 ): Promise<void> {
+  // Sub-box 2 Phase 1 sub-phase F [SEC-DUAL-CONTROL-BINDING-CONFIG]:
+  // resolve the Operation A privileged-endpoint descriptor from the
+  // runtime registry once at route-registration time. The throw-guard
+  // fails fast at server boot if the registry ever drifts -- the entry
+  // is provably present (PRIVILEGED_ENDPOINTS is `as const`), so this is
+  // a substrate-integrity assertion, not a runtime branch the request
+  // path ever takes.
+  const monetizationConfigEndpoint = PRIVILEGED_ENDPOINTS.find(
+    (e) => e.actionDescriptor.type === "PLATFORM_MONETIZATION_CONFIG_UPDATE",
+  );
+  if (!monetizationConfigEndpoint) {
+    throw new Error(
+      "PRIVILEGED_ENDPOINTS registry missing required entry for PLATFORM_MONETIZATION_CONFIG_UPDATE",
+    );
+  }
+
   app.post<{ Body: CreateOrgBody }>(
     "/api/v1/platform/orgs",
     {
@@ -202,12 +227,24 @@ export async function registerPlatformRoutes(
   // Validates niov_fee_share + holder_share === 1.0 (within
   // floating-point tolerance). Audit captures BOTH old + new shares
   // so a future audit reader can reconstruct the rate-change history.
+  //
+  // Sub-box 2 Phase 1 sub-phase F [SEC-DUAL-CONTROL-BINDING-CONFIG]:
+  // Operation A is dual-control-gated. preHandler ORDER MATTERS --
+  // requireAdminCapability MUST run first (it populates
+  // request.auth.entity_id, which requireDualControl reads per the
+  // BINDING CONTRACT in dual-control.middleware.ts). requireDualControl
+  // intercepts requests lacking an APPROVED dual-control EscalationRequest
+  // (returns 403 + creates a PENDING one) and writes the Zone U1 audit-
+  // event sequence per docs/architecture/dual-control-operations-canonical-record.md §4.
   app.patch<{
     Body: { niov_fee_share?: unknown; holder_share?: unknown };
   }>(
     "/api/v1/platform/monetization/config",
     {
-      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+      preHandler: [
+        requireAdminCapability(authService, "can_admin_niov"),
+        requireDualControl(monetizationConfigEndpoint),
+      ],
     },
     async (request, reply) => {
       const body = request.body ?? {};

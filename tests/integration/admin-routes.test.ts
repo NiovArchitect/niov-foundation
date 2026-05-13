@@ -1356,69 +1356,13 @@ describe("POST /auth/refresh", () => {
   });
 });
 
-describe("PATCH /platform/monetization/config", () => {
-  it("rejects shares not summing to 1.0 with SHARES_DO_NOT_SUM_TO_ONE 422", async () => {
-    const platformAdmin = await makeAdminAndLogin({ can_admin_niov: true });
-    const response = await app.inject({
-      method: "PATCH",
-      url: "/api/v1/platform/monetization/config",
-      headers: { authorization: `Bearer ${platformAdmin.token}` },
-      payload: { niov_fee_share: 0.5, holder_share: 0.6 },
-      remoteAddress: platformAdmin.ip,
-    });
-    expect(response.statusCode).toBe(422);
-    expect((response.json() as { code: string }).code).toBe(
-      "SHARES_DO_NOT_SUM_TO_ONE",
-    );
-  });
-
-  it("accepts a valid 0.4 / 0.6 split and audits old + new shares", async () => {
-    const platformAdmin = await makeAdminAndLogin({ can_admin_niov: true });
-    const response = await app.inject({
-      method: "PATCH",
-      url: "/api/v1/platform/monetization/config",
-      headers: { authorization: `Bearer ${platformAdmin.token}` },
-      payload: { niov_fee_share: 0.4, holder_share: 0.6 },
-      remoteAddress: platformAdmin.ip,
-    });
-    expect(response.statusCode).toBe(200);
-    const body = response.json() as {
-      ok: boolean;
-      config: { niov_fee_share: number; holder_share: number };
-    };
-    expect(body.config.niov_fee_share).toBeCloseTo(0.4, 5);
-    expect(body.config.holder_share).toBeCloseTo(0.6, 5);
-    // Audit row carries old+new in details.
-    const audits = await prisma.auditEvent.findMany({
-      where: {
-        actor_entity_id: platformAdmin.entityId,
-        event_type: "ADMIN_ACTION",
-      },
-      orderBy: { timestamp: "desc" },
-      take: 5,
-    });
-    const monetAudit = audits.find((a) => {
-      const d = a.details as { action?: string };
-      return d.action === "MONETIZATION_CONFIG_UPDATE";
-    });
-    expect(monetAudit).toBeDefined();
-    const details = monetAudit!.details as {
-      old: { niov_fee_share: number };
-      new: { niov_fee_share: number };
-    };
-    expect(typeof details.old.niov_fee_share).toBe("number");
-    expect(details.new.niov_fee_share).toBeCloseTo(0.4, 5);
-    // Restore the spec defaults so other tests aren't surprised by
-    // non-default config rows.
-    await app.inject({
-      method: "PATCH",
-      url: "/api/v1/platform/monetization/config",
-      headers: { authorization: `Bearer ${platformAdmin.token}` },
-      payload: { niov_fee_share: 0.3, holder_share: 0.7 },
-      remoteAddress: platformAdmin.ip,
-    });
-  });
-});
+// PATCH /platform/monetization/config moved to
+// tests/integration/dual-control-binding-config.test.ts at
+// [SEC-DUAL-CONTROL-BINDING-CONFIG] (sub-phase F): the route now
+// carries the requireDualControl preHandler, so its behavior (the
+// dual-control gate + the re-homed 422 body-validation and the
+// 200-with-MONETIZATION_CONFIG_UPDATE-audit cases) is exercised in
+// the dedicated dual-control binding test file.
 
 // TEST 12 from the green box -- standard twin offboarding cuts the
 // twin from the default Hive and from org-knowledge access. The
