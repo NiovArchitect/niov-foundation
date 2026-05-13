@@ -26,7 +26,7 @@ one-paragraph summary.
 In this order, before any code or doc work:
 
 1. **`CLAUDE.md`** (repo root) — the operational rulebook. The
-   19 RULES (0-10 + 12-19; RULE 11 vacant) define what every
+   20 RULES (0-10 + 12-20; RULE 11 vacant) define what every
    session in this repo internalizes.
 2. **`docs/CURRENT_BUILD_STATE.md`** — the persistent canonical
    reference for what's built, what's in flight, what's queued,
@@ -54,13 +54,15 @@ guides become readable in any order driven by the current task.
 Concrete steps every Claude Code session and every operator
 terminal session:
 
-1. **Read `CLAUDE.md`.** Confirm the 19 RULES are loaded into
+1. **Read `CLAUDE.md`.** Confirm the 20 RULES are loaded into
    context. RULE 12 (pre-flight grep) and RULE 13 (surface
    drifts) govern every drafting action; RULE 14 (bidirectional
    citation) governs every ADR or reference doc that cites
    another. RULE 17 governs architectural framing load-on-open;
    RULE 18 governs operation-type verification; RULE 19 governs
-   two-register IP discipline.
+   two-register IP discipline; RULE 20 governs rule-modification
+   authority (only the patent-holder Founder may modify RULES or
+   ADRs — surface a proposal per RULE 13, do not execute it).
 2. **View `docs/CURRENT_BUILD_STATE.md`.** This is the
    forward-living source of truth. Its Section 3 tells you
    which Build Guide sections are closed; its Section 4 tells
@@ -354,7 +356,7 @@ For your first non-trivial contribution to Foundation:
 
 ## 11. See Also
 
-- `CLAUDE.md` — the operational rulebook (19 RULES; read
+- `CLAUDE.md` — the operational rulebook (20 RULES; read
   before every action).
 - `docs/CURRENT_BUILD_STATE.md` — the persistent canonical
   reference (load at session start).

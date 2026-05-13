@@ -291,3 +291,10 @@ Bidirectional citations (cited from):
   this ADR for the two-register discipline it preserves throughout.
   RULE 14 back-citation landed at `[D-2D-D10-8]` (deferred from the
   addendum commit per the Sub-box-1 closure-amendment grouping).
+- ADR-0027 (Contributor Governance + AI-Alignment + Rule-Modification
+  Authority; landed at sub-phase I `[SEC-CONTRIBUTOR-GOVERNANCE]`) — RULE
+  20 (this ADR's decision-tier corollary, established by ADR-0027) exists
+  to protect this ADR's Register-2 patent-implementation evidence trail
+  against rogue-engineer/rogue-AI modifications of the authorization-tier
+  substrate (RULES + ADRs). ADR-0027's Context + §Decision + Bidirectional-
+  citations cite this ADR for the discipline RULE 20 preserves.

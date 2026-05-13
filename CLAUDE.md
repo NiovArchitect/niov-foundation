@@ -2,15 +2,18 @@
 
 Authoritative operational rules for Claude Code sessions in
 `niov-foundation`. Read this entire file before every action.
-The 11 preserved RULES (0-10) and the 5 RULES added in Section
-12C.0.5 (12-16) define what every session in this repo
-internalizes; the rest of the file provides the project context
-those rules operate against.
+The 11 preserved RULES (0-10) and RULES 12-20 — added
+incrementally since Section 12C.0.5 (12-16 in the 12C.0.5 batch;
+17 from RAA 12.7; 18 from Gate 9; 19 from ADR-0020; 20 from
+ADR-0027) — define what every session in this repo internalizes;
+the rest of the file provides the project context those rules
+operate against.
 
 This file replaces the pre-Section-12 `claude.md` (lowercase)
 in Section 12C.0.5 Phase 3a. The 11 preserved RULES are quoted
-verbatim from the prior file; the new RULES emerged from Phase
-1-2 substrate work in the same commit.
+verbatim from the prior file; RULES 12-16 emerged from Phase 1-2
+substrate work in that same commit, and RULES 17-20 were added
+subsequently (each with its own ADR or substrate-work lineage).
 
 ## 1. Project Overview
 
@@ -111,9 +114,11 @@ niov-foundation/
 ## 3. Critical Operating Rules
 
 These rules govern every session. Rules 0-10 are preserved
-verbatim from the pre-Section-12 `claude.md`; Rules 12-16 were
-added in Section 12C.0.5 from Phase 1-2 substrate work. RULE 11
-is intentionally vacant — the prior file had 11 rules numbered
+verbatim from the pre-Section-12 `claude.md`; RULES 12-20 were
+added incrementally since Section 12C.0.5 — Rules 12-16 from the
+12C.0.5 Phase 1-2 substrate work; RULE 17 from RAA 12.7; RULE 18
+from Gate 9; RULE 19 from ADR-0020; RULE 20 from ADR-0027. RULE
+11 is intentionally vacant — the prior file had 11 rules numbered
 0-10, and new rules start at 12 to maintain stable numbering as
 the rule list grows.
 
@@ -327,6 +332,51 @@ metaphor) is the canonical Register-1 example; ADR-0001 +
 ADR-0019 + `docs/contributing/onboarding.md` §1 are canonical
 Register-2 examples.
 
+### RULE 20 -- RULE-MODIFICATION AUTHORITY
+
+Only the patent-holder Founder may modify, add, or remove RULES
+(`CLAUDE.md`) or ADRs (`docs/architecture/decisions/*.md`).
+
+Pull requests proposing such modifications must explicitly cite
+this RULE in the PR description and surface the proposed
+modification for explicit Founder authorization before merge.
+
+Contributors and AI assistants (including Claude, Claude Code,
+Codex, Cursor, and any other AI coding tools) MUST NOT modify
+`CLAUDE.md` RULES or `docs/architecture/decisions/*.md` content
+without explicit Founder authorization, even when authorized to
+modify other repository files. An AI assistant surfaces a
+RULE/ADR-modification proposal as a substrate-state observation
+per RULE 13 rather than executing it, and cites this RULE when
+declining; drafting a *proposed* amendment for the Founder's
+review is permitted (drafting is not modifying — the Founder's
+authorization is the act that lands it).
+
+Rationale: this RULE protects the patent-implementation evidence
+trail per ADR-0020 (two-register IP discipline) against
+rogue-engineer or rogue-AI substrate modifications that could
+erode the substrate-state coherence the patent-holder substrate
+depends on. RULES + ADRs constitute the authorization-tier
+substrate of the codebase; modifications to that substrate
+require the same authorization tier as substrate creation. The
+substrate-honest pre-flight discipline (RULE 12/13/18) is the
+behavioral half — surface, don't silently patch; this RULE is
+the authority half — even when surfaced, a RULE/ADR change is
+the Founder's. See ADR-0027 for the decision lineage and
+`docs/contributing/onboarding-for-engineers.md` for the
+contributor-facing operationalization.
+
+Forward substrate: a future ADR may formalize a
+substrate-observation-to-RULE promotion path — recognizing that
+substrate-honest observations accumulating across multiple
+commits (the kind documented in ADR "Substrate-State Catches
+Resolved" sections, the canonical-record docs, and
+`docs/contributing/onboarding-for-engineers.md`) may prove
+beneficial enough at the substrate-state register to warrant
+formal RULE-tier promotion. Until that ADR lands, RULE
+additions/modifications remain Founder-only per the authority
+half above.
+
 ## 4. Architectural Vocabulary
 
 This file is not the glossary. Vocabulary lives in three
@@ -344,7 +394,7 @@ authoritative locations:
   per ADR-0022, `RELEVANCE_FORGET_FLOOR` behavioral lock per
   ADR-0022) — plus the "Anchor Mechanisms" taxonomy (`Object.freeze`
   / value-pin / behavioral-lock)
-- `docs/architecture/decisions/` — the 26 ADRs with
+- `docs/architecture/decisions/` — the 27 ADRs with
   Decision / Consequences / Alternatives in Michael Nygard
   format
 
@@ -353,7 +403,7 @@ documentation, **cite the reference**, do not redefine.
 
 ## 5. Key Architectural Decisions
 
-The 26 ADRs as of [SEC-DUAL-CONTROL-ADR] (`ceb418f` parent;
+The 27 ADRs as of [SEC-CONTRIBUTOR-GOVERNANCE] (`135fee0` parent;
 2026-05-12). The `docs/architecture/README.md` is the source of
 truth for ADR navigation; this is a quick-reference jump table.
 
@@ -382,7 +432,8 @@ truth for ADR navigation; this is a quick-reference jump table.
 - **ADR-0023** — Security Headers Posture (security-headers register; the `@fastify/helmet` posture; production-readiness audit lineage)
 - **ADR-0024** — Pre-Commit Hook Posture (git-hook-tier enforcement register; husky `^9.1.7`; `.husky/pre-commit` runs the db-push guard (ADR-0025) → typecheck baseline → the RULE 16 no-console anchor; `--no-verify` override preserved)
 - **ADR-0025** — Schema-Push-Target Discipline (schema-push-target register; the `prisma db push` explicit-env-target rule + `scripts/prisma-db-push-test.sh` + the `.husky/pre-commit` db-push guard + the `db:push:test` alias; the [D-2D-D10-4] production-schema-push trap; [SEC-DBPUSH] mini-arc `d8d6236`→`e1dbc1e`→`ed9a519`→`5a18491`)
-- **ADR-0026** — Dual-Control Middleware Pattern + Privileged Endpoint Registry + Per-Route Binding Discipline (dual-control register; the Sub-box 2 Phase 1 bundle — `requireDualControl` Fastify preHandler + `PRIVILEGED_ENDPOINTS` runtime registry + the `preHandler` BINDING CONTRACT + the 6 BEAM-compatibility patterns + the `executePhase0` setup-primitive boundary; LIVE on Operation A `PATCH /platform/monetization/config` + Operation B `POST /platform/orgs`; operational companion `docs/architecture/dual-control-operations-canonical-record.md`; [SEC-DUAL-CONTROL] arc `b34c5cf`→`6a1a380`→`d42e2a6`→`9628efa`→`3f2f329`→`34eea82`→`ceb418f`→ this commit; sub-phases I + J forward)
+- **ADR-0026** — Dual-Control Middleware Pattern + Privileged Endpoint Registry + Per-Route Binding Discipline (dual-control register; the Sub-box 2 Phase 1 bundle — `requireDualControl` Fastify preHandler + `PRIVILEGED_ENDPOINTS` runtime registry + the `preHandler` BINDING CONTRACT + the 6 BEAM-compatibility patterns + the `executePhase0` setup-primitive boundary; LIVE on Operation A `PATCH /platform/monetization/config` + Operation B `POST /platform/orgs`; operational companion `docs/architecture/dual-control-operations-canonical-record.md`; [SEC-DUAL-CONTROL] arc `b34c5cf`→`6a1a380`→`d42e2a6`→`9628efa`→`3f2f329`→`34eea82`→`ceb418f`→`135fee0`; sub-phase J forward)
+- **ADR-0027** — Contributor Governance + AI-Alignment + Rule-Modification Authority (governance register; the authorization-tier protection — RULE 20: only the patent-holder Founder may modify/add/remove RULES or ADRs; the AI-alignment discipline — surface RULE/ADR-modification proposals per RULE 13, don't execute; the contributor-onboarding surface `docs/contributing/onboarding-for-engineers.md` NEW; cites ADR-0020 — RULE 20 protects ADR-0020's Register-2 evidence trail; [SEC-CONTRIBUTOR-GOVERNANCE] sub-phase I of the Sub-box 2 Phase 1 arc)
 
 ADR amendments and supersession follow the discipline in
 `docs/architecture/README.md` §ADR Lifecycle.
@@ -600,7 +651,7 @@ Concrete anti-patterns observable across the build cycle:
 
 Four documentation roots cover the substrate of the project:
 
-- **`docs/architecture/`** — ADR-0001 through ADR-0026 plus
+- **`docs/architecture/`** — ADR-0001 through ADR-0027 plus
   the template (`0000-template.md`) and the architecture
   README. Start with `docs/architecture/README.md`.
 - **`docs/reference/`** — `glossary.md` (term definitions),
