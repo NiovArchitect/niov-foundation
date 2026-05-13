@@ -63,7 +63,7 @@ Production-grade workers land starting sub-phase 4
 | Sub-phase | Subject | Adds |
 |-----------|---------|------|
 | 4 | `[BEAM-COSMP-GENSERVER]` | Routing GenServer + 6 BEAM patterns from ADR-0026 §5 |
-| 5 | `[BEAM-COSMP-INTEROP]` | Fastify ↔ Elixir gRPC bridge worker |
+| 5 | `[BEAM-COSMP-INTEROP-CODE]` | Fastify ↔ Elixir gRPC bridge worker |
 | 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | End-to-end COSMP op flow tests |
 
 ## References

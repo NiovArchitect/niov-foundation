@@ -13,7 +13,7 @@ defmodule CosmpRouterTest do
   Sub-phase 4b `[BEAM-COSMP-GENSERVER-CODE]` added the first child
   (`CosmpRouter.Router` GenServer) to the supervision tree per
   ADR-0031 §Decision. The `which_children` assertion below updated
-  accordingly. Sub-phase 5 `[BEAM-COSMP-INTEROP]` adds the gRPC bridge
+  accordingly. Sub-phase 5 `[BEAM-COSMP-INTEROP-CODE]` adds the gRPC bridge
   as 2nd child; assertion updates again. The pattern itself
   (named-supervisor + tree introspection) carries forward unchanged.
   """
@@ -29,7 +29,7 @@ defmodule CosmpRouterTest do
   test "supervision tree is introspectable" do
     children = Supervisor.which_children(CosmpRouter.Supervisor)
     # Sub-phase 4b [BEAM-COSMP-GENSERVER-CODE]: tree has 1 child (Router GenServer).
-    # Sub-phase 5 [BEAM-COSMP-INTEROP] adds 2nd child (gRPC bridge).
+    # Sub-phase 5 [BEAM-COSMP-INTEROP-CODE] adds 2nd child (gRPC bridge).
     assert is_list(children)
     assert length(children) == 1
     assert {CosmpRouter.Router, _pid, :worker, [CosmpRouter.Router]} = hd(children)

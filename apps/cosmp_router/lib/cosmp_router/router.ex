@@ -41,7 +41,7 @@ defmodule CosmpRouter.Router do
   All 7 ops as `handle_call` stubs returning `{:ok, :not_implemented}`
   per ADR-0031 Q-C. Bodies fill at sub-phase 5+ with consumers:
 
-  - Sub-phase 5 `[BEAM-COSMP-INTEROP]` — READ/WRITE first (gRPC bridge consumer)
+  - Sub-phase 5 `[BEAM-COSMP-INTEROP-CODE]` — READ/WRITE first (gRPC bridge consumer)
   - Sub-phase 6 `[BEAM-COSMP-INTEGRATION-TESTS]` — SHARE/REVOKE/AUTHENTICATE/NEGOTIATE/AUDIT (end-to-end test consumer)
 
   ## References

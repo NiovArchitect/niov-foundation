@@ -12,7 +12,7 @@ defmodule CosmpRouter.Application do
 
   Children list contains the routing GenServer (`CosmpRouter.Router`)
   added at sub-phase 4b `[BEAM-COSMP-GENSERVER-CODE]` per ADR-0031
-  §Decision. Sub-phase 5 `[BEAM-COSMP-INTEROP]` adds the gRPC bridge
+  §Decision. Sub-phase 5 `[BEAM-COSMP-INTEROP-CODE]` adds the gRPC bridge
   worker.
 
   ## References
@@ -30,7 +30,7 @@ defmodule CosmpRouter.Application do
     children = [
       # Sub-phase 4b [BEAM-COSMP-GENSERVER-CODE]: COSMP routing GenServer.
       {CosmpRouter.Router, []}
-      # Sub-phase 5 [BEAM-COSMP-INTEROP] adds the gRPC bridge worker here.
+      # Sub-phase 5 [BEAM-COSMP-INTEROP-CODE] adds the gRPC bridge worker here.
     ]
 
     opts = [strategy: :one_for_one, name: CosmpRouter.Supervisor]

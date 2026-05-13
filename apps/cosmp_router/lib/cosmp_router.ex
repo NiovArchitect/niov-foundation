@@ -24,7 +24,7 @@ defmodule CosmpRouter do
 
   Skeleton only. The substantive routing logic lands at sub-phase 4
   `[BEAM-COSMP-GENSERVER]`; interop at sub-phase 5
-  `[BEAM-COSMP-INTEROP]`; integration tests at sub-phase 6
+  `[BEAM-COSMP-INTEROP-CODE]`; integration tests at sub-phase 6
   `[BEAM-COSMP-INTEGRATION-TESTS]`.
 
   ## References

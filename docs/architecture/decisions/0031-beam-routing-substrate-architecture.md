@@ -140,9 +140,11 @@ sub-phases 5-11.
 
 No `:logger`-beyond-default, no `:telemetry`, no `:jason`, no `:ecto`.
 Deps land with their consumers per substrate-honest discipline:
-- `:jason` at sub-phase 5 (gRPC payload JSON-encoding)
+- `:grpc` + `:protobuf` at sub-phase 5b (gRPC framework + Protobuf
+  binary encoding per Q-M / ADR-0032 §Decision gRPC library choice)
 - `:telemetry_metrics` + `:telemetry_poller` at sub-phase 11
-- `:ecto` at sub-phase 5 if Postgres-backed idempotency chosen (Q-D)
+- `:ecto` at sub-phase 6 if Postgres-backed idempotency chosen (per
+  ADR-0031 Q-D; potential ADR-0033 territory)
 
 ## Rationale
 
@@ -186,10 +188,11 @@ choice territory** at sub-phase 4:
 - **Postgres**: durable; survives crashes; adds query latency per op.
 
 Pattern 5 (idempotent verification keys per ADR-0026 §5) lands at
-sub-phase 5/6 with the consumer choice (gRPC interop → ETS likely;
-full Postgres state hydration → Postgres-backed). The decision
-deserves its own ADR (potential ADR-0032) if non-obvious architectural
-choices arise.
+sub-phase 6 with the consumer choice (sub-phase 5b gRPC interop
+ETS-likely; full Postgres state hydration sub-phase 6 Postgres-backed).
+The decision deserves its own ADR (potential **ADR-0033 territory**)
+if non-obvious architectural choices arise — ADR-0032 is gRPC interop
+per Q-O lock; idempotency forward-queues to sub-phase 6 consumer.
 
 ### Why ADR-0026 §5 load-bearing subset (patterns 1, 2, 6)?
 
@@ -240,18 +243,23 @@ Forward-queued to sub-phases 5/6:
    (operator's local Elixir install state at sub-phase 4a's authoring
    time is partial per Q-SUBSTRATE-STATE Option A-revised).
 
-### Sub-phase 5 `[BEAM-COSMP-INTEROP]` arrives
+### Sub-phase 5b `[BEAM-COSMP-INTEROP-CODE]` arrives (split per Q-P at sub-phase 5a per ADR-0032)
 
-1. **First dep landing** (`:jason` for gRPC payload JSON-encoding) →
-   cache-key evolution from `hashFiles('.tool-versions')` to
+1. **First deps landing** (`:grpc` + `:protobuf` per ADR-0032 §Decision
+   gRPC library choice) → cache-key evolution from
+   `hashFiles('.tool-versions')` to
    `hashFiles('.tool-versions', '**/mix.lock')` per the forward-substrate
    awareness flag at sub-phase 3 `.github/workflows/ci.yml` cache step.
-2. Fastify ↔ Elixir gRPC bridge worker added to Router supervision.
-3. Idempotency strategy decision lands (ETS or Postgres-backed;
-   potential ADR-0032 territory if non-obvious).
-4. **Pattern 5 (idempotent verification keys)** instantiated.
-5. First real COSMP op `handle_call` body populates (likely READ +
-   WRITE first; SHARE / REVOKE / AUDIT at sub-phase 6).
+2. Fastify ↔ Elixir gRPC bridge worker added to Router supervision
+   (per ADR-0032 §Decision Connection management).
+3. **All 7 `handle_call` bodies fill** per Q-N (production live-grade;
+   no `:not_implemented` stubs cross gRPC boundary per ADR-0032).
+4. Idempotency strategy decision deferred to sub-phase 6
+   `[BEAM-COSMP-INTEGRATION-TESTS]` consumer (ETS or Postgres-backed;
+   potential **ADR-0033 territory** if non-obvious — ADR-0032 is
+   gRPC interop per Q-O lock).
+5. **Pattern 5 (idempotent verification keys)** instantiated at
+   sub-phase 6 with idempotency strategy.
 
 ### Sub-phase 6 `[BEAM-COSMP-INTEGRATION-TESTS]` arrives
 
@@ -296,8 +304,9 @@ ADR-0020 two-register IP discipline.
 |-----------|---------|---------------------------|
 | 4a | `[BEAM-COSMP-GENSERVER-ADR]` (this ADR) | Decision substrate ratified |
 | 4b | `[BEAM-COSMP-GENSERVER-CODE]` | Router GenServer + Capsule placeholder + Application MOD + tests; patterns 1, 2, 6 instantiated |
-| 5 | `[BEAM-COSMP-INTEROP]` | gRPC bridge + `:jason` dep + idempotency strategy lands (potential ADR-0032); cache-key evolution |
-| 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | End-to-end 7-op flow; patterns 3, 4, 5 fully instantiated |
+| 5a | `[BEAM-COSMP-INTEROP-ADR]` | ADR-0032 (BEAM gRPC Interop Architecture) lands; documents `:grpc` + `:protobuf` canonical libraries + sync unary semantics + Protobuf encoding + auth at Fastify boundary + `.proto` versioning |
+| 5b | `[BEAM-COSMP-INTEROP-CODE]` | gRPC bridge (`cosmp.proto` + server + translator + 7 `handle_call` bodies fill) + `:grpc` + `:protobuf` deps + TypeScript `@grpc/grpc-js` client + cache-key forward-evolution |
+| 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | End-to-end 7-op flow; patterns 3, 4, 5 fully instantiated; idempotency strategy (potential ADR-0033 if non-obvious) |
 | 7 | `[BEAM-DBGI-APP-SKELETON]` | Sibling DBGI supervisor app skeleton |
 | 8 | `[BEAM-DBGI-PROCESS-GROUPS]` | `:pg` + `:gproc` registry |
 | 9 | `[BEAM-DBGI-LIBCLUSTER]` | Multi-region clustering |
@@ -306,14 +315,21 @@ ADR-0020 two-register IP discipline.
 | 12 | `[BEAM-CANONICAL-RECORD]` | `beam-coordination-canonical-record.md` |
 | 13 | `[BEAM-ARC-CLOSURE]` | Onboarding cascade + section-12 row 35 + ADR-0028 forward → landed + ADR-0030 arc-closure |
 
-Block B count expansion: **14 sub-phases** (was 13; 4a + 4b split per
-Q-G).
+Block B count expansion: **15 sub-phases** (expanded 13 → 14 at
+sub-phase 4a per Q-G split; 14 → 15 at sub-phase 5a per Q-P split —
+see ADR-0032).
 
 Bidirectional citations (cited from):
 
 - ADR-0030 (Phase 2 Elixir/BEAM Implementation) — §Decision sub-phase
   4a/4b forward-cites this ADR as the canonical decision substrate;
   ADR-0030 §Bidirectional citations back-cites this ADR.
+- ADR-0032 (BEAM gRPC Interop Architecture; landed at sub-phase 5a
+  `[BEAM-COSMP-INTEROP-ADR]`) — **load-bearing**: ADR-0032 instantiates
+  the cross-language transport boundary this ADR's §Forward path
+  sub-phase 5 declared (now sub-phase 5a + 5b per Q-P split). ADR-0032
+  §References cites this ADR's §Forward path entry; ADR-0032's
+  `(cited from)` block back-cites this ADR.
 - ADR-0026 (Dual-Control Middleware Pattern) — §Bidirectional
   citations back-cites this ADR as a consumer of §5 patterns 1, 2, 6
   (load-bearing subset; patterns 3, 4, 5 forward-queued to sub-phases

@@ -9,7 +9,7 @@ A (`3b76c3d`) resolved the cascade-grep markdown-line-wrap limitation
 (catch #1). Substrate-build tools are operational; engineering substrate is
 canonical at 29 ADRs / 20 RULES / 139 commits / 56-consecutive-commit
 substrate-honest pre-flight pattern. This ADR documents the Phase 2
-implementation — the 14-sub-phase Block B arc that ships Elixir/BEAM substrate
+implementation — the 15-sub-phase Block B arc (expanded 13 → 14 at sub-phase 4a per Q-G split — see ADR-0031; 14 → 15 at sub-phase 5a per Q-P split — see ADR-0032) that ships Elixir/BEAM substrate
 as production Foundation services + canonicalizes the three-language stack
 (TypeScript + Elixir + Postgres; Python ML when it lands).
 
@@ -65,8 +65,9 @@ bridge is exercised, but the migration triggers gate the load-bearing shift.
 ## Decision
 
 NIOV Labs implements Phase 2 Elixir/BEAM coordination layer as the Block B
-14-sub-phase mini-arc of Day 9 (expanded from 13 at sub-phase 4a per
-Q-G split — see ADR-0031). The decomposition:
+15-sub-phase mini-arc of Day 9 (expanded 13 → 14 at sub-phase 4a per
+Q-G split — see ADR-0031; 14 → 15 at sub-phase 5a per Q-P split — see
+ADR-0032). The decomposition:
 
 **COSMP Coordination Layer (6 sub-phases):**
 
@@ -96,11 +97,26 @@ Q-G split — see ADR-0031). The decomposition:
     Q-C; bodies fill at sub-phase 5+ with consumers. ExUnit tests covering
     subset behavior; smoke test pattern from sub-phase 3 updates
     (`which_children/1` expects 1 child).
-5. **`[BEAM-COSMP-INTEROP]`** — Fastify ↔ Elixir gRPC bridge. TypeScript-side
-   client at `apps/api/src/services/cosmp-client.ts`; Elixir-side server at
-   `apps/cosmp_router/lib/cosmp_router/grpc.ex`; `.proto` definitions at
-   `proto/cosmp.proto`; protobuf-based contract; mTLS placeholder for
-   production hardening.
+5a. **`[BEAM-COSMP-INTEROP-ADR]`** — Decision substrate. ADR-0032
+    (BEAM gRPC Interop Architecture) lands; documents `:grpc` +
+    `:protobuf` canonical Elixir libraries + `@grpc/grpc-js` +
+    `@grpc/proto-loader` canonical TypeScript libraries + sync unary
+    call semantics for 7 patent-canonical COSMP ops + Protobuf
+    canonical schema with patent-verbatim Capsule field numbers 1-7
+    matching layer ordering + auth boundary at Fastify (NOT gRPC
+    layer) per RULE 20/ADR-0027 + error envelope `oneof` discipline
+    informed by ADR-0026 §5 Pattern 2 + `.proto` versioning via
+    package namespace evolution.
+5b. **`[BEAM-COSMP-INTEROP-CODE]`** — Code substrate. Fastify ↔
+    Elixir gRPC bridge per ADR-0032 §Decision. `apps/cosmp_router/priv/protos/cosmp.proto`
+    canonical schema + `apps/cosmp_router/lib/cosmp_router/grpc/{server,translator}.ex`
+    + `apps/cosmp_router/mix.exs` adds `:grpc` + `:protobuf` deps +
+    `apps/api/package.json` adds `@grpc/grpc-js` + `@grpc/proto-loader`
+    + `apps/api/src/services/cosmp-client.ts` TypeScript client.
+    **All 7 `handle_call` bodies fill** per Q-N (production
+    live-grade; no `:not_implemented` stubs cross gRPC boundary).
+    `mix.lock` arrives; CI cache-key forward-evolution lands per the
+    sub-phase 3 `.github/workflows/ci.yml` cache step.
 6. **`[BEAM-COSMP-INTEGRATION-TESTS]`** — end-to-end tests across the bridge
    (TypeScript test exercises Elixir router via gRPC; verifies routing
    correctness + the 6 patterns observable at the substrate boundary).
@@ -225,7 +241,9 @@ the table directly for the substrate-architectural breadth claim.
 
 **Harder:**
 
-- **14-sub-phase mini-arc.** ~10-13 hours engineering at current velocity (the
+- **15-sub-phase mini-arc** (expanded 13 → 14 at sub-phase 4a per Q-G
+  split; 14 → 15 at sub-phase 5a per Q-P split — see ADR-0032).
+  ~10-13 hours engineering at current velocity (the
   Block B arc). The substrate-build tools (cascade-grep multiline + templates)
   reduce token-cost-per-catch substantially but engineering time is real.
 - **Dual-runtime operational complexity.** Elixir + TypeScript both deployed
@@ -322,7 +340,9 @@ operational (58 after this commit lands).
   forward-queued the Phase 2 ship-commitment; this ADR is the implementation
   ADR fulfilling that commitment. ADR-0028's Forward Queue line 151-152
   (originally referenced "ADR-0029") and the `(cited from)` block both
-  back-cite this ADR. The Phase 2 mini-arc (14 sub-phases) ports the 6
+  back-cite this ADR. The Phase 2 mini-arc (15 sub-phases; expanded
+  13 → 14 at sub-phase 4a per Q-G split; 14 → 15 at sub-phase 5a per
+  Q-P split — see ADR-0032) ports the 6
   BEAM-compatibility patterns to production Elixir/BEAM.
 - ADR-0026 (Dual-Control Middleware Pattern + Privileged Endpoint Registry +
   Per-Route Binding Discipline; landed at sub-phase H `[SEC-DUAL-CONTROL-ADR]`
@@ -339,6 +359,18 @@ operational (58 after this commit lands).
   (GenServer state shape + 7-op `handle_call` dispatch + `Capsule`
   placeholder + supervision tree integration + load-bearing subset of
   ADR-0026 §5 patterns 1, 2, 6). ADR-0031's `(cited from)` block
+  back-cites this ADR.
+- ADR-0032 (BEAM gRPC Interop Architecture; landed at sub-phase 5a
+  `[BEAM-COSMP-INTEROP-ADR]`) — **load-bearing**: ADR-0032 is the
+  decision substrate for sub-phase 5b's gRPC bridge; cites this ADR
+  §Decision sub-phase 5a/5b for the substantive scope. Sub-phase 5b
+  `[BEAM-COSMP-INTEROP-CODE]` instantiates ADR-0032's decisions
+  (cross-language transport boundary + `:grpc` + `:protobuf` canonical
+  Elixir libraries + `@grpc/grpc-js` + `@grpc/proto-loader` canonical
+  TypeScript libraries + sync unary call semantics + Protobuf
+  canonical schema with patent-verbatim Capsule field ordering + auth
+  boundary at Fastify per RULE 20/ADR-0027 + error envelope `oneof`
+  discipline + `.proto` versioning). ADR-0032's `(cited from)` block
   back-cites this ADR.
 - ADR-0020 (Two-Register IP Discipline) — referenced in this ADR's Context
   for the patent-implementation-evidence framing (Phase 2 = Register-2
