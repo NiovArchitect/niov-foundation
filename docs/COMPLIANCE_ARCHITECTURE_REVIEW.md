@@ -2070,23 +2070,133 @@ that, but the schema primitive must exist or rework is required.
 **Resolution: enumerated dual-control set.**
 
 The `EscalationRequest` model gates only an explicitly enumerated
-list of operations:
+list of operations — an **enumerated set, not a general primitive**
+(dual-control on every privileged action would destroy throughput;
+the gate is conservative by construction).
 
-- **Account creation with `can_admin_niov`** (platform-administrator
-  account creation; AC-3(2) high-water mark)
-- **Audit-trigger-disable attempts** (`audit_events_immutable`
-  trigger drop attempts surface a high-severity audit event;
-  privilege required for that DDL is itself dual-control gated)
-- **Capsule mass-deletion** (any deletion exceeding N capsules in
-  a single operation requires a second approver; threshold
-  configurable per tenant)
-- **Regulator access grant** (REGULATOR EntityType per 2.1
-  receiving FULL scope to a tenant's capsules)
-- **Lawful-basis attestation issuance** with no documented
-  reference (basis_reference null/unverified — requires second
-  attesting authority before access)
-- **TAR mutation lifting clearance ceiling** above a threshold
-  (clearance_ceiling raised to or above 5 requires dual approval)
+**Amendment (sub-phase B of the Sub-box 2 Phase 1 arc; commit
+[SEC-TENSION-3-AMENDMENT]):** the original 6-operation enumeration
+was ahead of the substrate at the time of writing. Substrate-state
+verification at the Sub-box 2 Phase 1 pre-flight (per RULE 13 +
+RULE 18) confirmed that 5 of the 6 named operations do not yet exist
+as Fastify routes — operation 1 (account creation with
+`can_admin_niov`) is not a route today (account creation operates at
+`can_admin_org` tier in `apps/api/src/routes/auth-admin.routes.ts`);
+operations 4 + 5 (REGULATOR access grant + lawful-basis attestation)
+require Sub-box 3/4 substrate that has not yet shipped; operation 2
+(audit-trigger-disable) is DB-tier substrate per ADR-0002 and is not
+route-gateable; operation 3 (Capsule mass-deletion) contradicts
+RULE 10 (Capsules are soft-deleted via `deleted_at` per
+`packages/database/prisma/schema.prisma:35` + `:153` + `:165` with
+`@@index([deleted_at])`; bulk hard-delete is not a substrate
+operation); operation 6 (TAR clearance-ceiling mutation) has a
+service-tier flow at `apps/api/src/services/tar.ts:407` but no
+Fastify route surfaces it today. The substrate-honest reframe below
+organizes the 6 operations into 4 categories, preserving the
+"enumerated set, not a general primitive" architectural principle
+while correcting the substrate-state framing. The `EscalationType`
+enum value `DUAL_CONTROL_REQUIRED` (schema-canonical at
+[SEC-DUAL-CONTROL-ENUM] `b34c5cf`) is the canonical escalation type
+for category (1) LIVE operations.
+
+**Category (1) — LIVE Phase 1 bindings (substrate-active at
+sub-phases F + G of the Sub-box 2 Phase 1 arc):**
+
+- **Operation A — `PATCH /api/v1/platform/monetization/config`**
+  (the 70/30 revenue-split mutation; `can_admin_niov`-gated; the
+  highest economic-impact substrate operation in the Foundation —
+  a change affects every holder's monetization economics).
+  Substrate-state observation: the route exists today at
+  `apps/api/src/routes/platform.routes.ts`; the `requireDualControl`
+  Fastify preHandler binds here. Forward path: LIVE at sub-phase F
+  `[SEC-DUAL-CONTROL-BINDING-CONFIG]`.
+- **Operation B — `POST /api/v1/platform/orgs`** (org creation;
+  Dandelion Phase 0; `can_admin_niov`-gated; provisions new tenants
+  on the Foundation). Substrate-state observation: the route exists
+  today at `apps/api/src/routes/platform.routes.ts`; the
+  `requireDualControl` Fastify preHandler binds here. Forward path:
+  LIVE at sub-phase G `[SEC-DUAL-CONTROL-BINDING-ORGS]`.
+
+**Category (2) — Forward-substrate route-tier operations (land as
+LIVE bindings when the target substrate ships):**
+
+- **Operation 1** (original Tension 3 entry: "Account creation with
+  `can_admin_niov`"). Substrate-state observation: no
+  `can_admin_niov`-tier account-creation route exists today; account
+  creation operates at `can_admin_org` tier in
+  `apps/api/src/routes/auth-admin.routes.ts`. The substrate-honest
+  reframe: high-stakes account creation should be dual-control-gated
+  regardless of admin tier; this becomes a LIVE binding at Sub-box 2
+  Phase 2 once the substrate-state observation surfaces the canonical
+  scope. Forward path: Sub-box 2 Phase 2 LIVE binding.
+- **Operation 4** (original Tension 3 entry: "Regulator access
+  grant"). Substrate-state observation: the `EntityType` enum at
+  `packages/database/prisma/schema.prisma:343-350` is `PERSON /
+  COMPANY / AI_AGENT / DEVICE / APPLICATION / GOVERNMENT` — no
+  `REGULATOR` value. REGULATOR substrate is explicitly Sub-box 3
+  territory per this document's "Engineering surface" Sub-box
+  enumeration. Forward path: LIVE binding at Sub-box 3 when the
+  REGULATOR EntityType ships.
+- **Operation 5** (original Tension 3 entry: "Lawful-basis
+  attestation issuance with no documented reference"). Substrate-state
+  observation: no lawful-basis attestation substrate exists today;
+  this is Sub-box 3/4 territory (REGULATOR + Lawful-Basis at
+  Sub-box 3; DecisionRecord + DataSubjectReference + Agent
+  Attestation at Sub-box 4). Forward path: LIVE binding at Sub-box 3
+  or 4 when the lawful-basis substrate ships.
+- **Operation 6** (original Tension 3 entry: "TAR mutation lifting
+  clearance ceiling above a threshold"). Substrate-state observation:
+  `clearance_ceiling` exists on the TAR per
+  `packages/database/prisma/schema.prisma`; a service-tier update
+  flow exists at `apps/api/src/services/tar.ts:407`; no Fastify route
+  currently surfaces this mutation. Forward path: Sub-box 2 Phase 2
+  or 3 LIVE binding when the route substrate surfaces.
+
+**Category (3) — DB-tier substrate (not route-gateable; dual-control
+enforced at the PostgreSQL role-permission tier, not the Fastify
+preHandler tier):**
+
+- **Operation 2** (original Tension 3 entry: "Audit-trigger-disable
+  attempts"). Substrate-state observation: the
+  `audit_events_immutable` BEFORE DELETE trigger is DB-level per
+  ADR-0002 — this is DDL substrate, not a Fastify route. The
+  dual-control enforcement on this operation lives at the PostgreSQL
+  role-permission tier: the database role required to drop the trigger
+  has its credentials dual-control-gated at the secrets-management
+  substrate. Forward path: substrate-honest documentation that this
+  operation's dual-control enforcement is architecturally distinct
+  from category (1) LIVE bindings — it is NOT in the
+  `requireDualControl` middleware scope; the secrets-management
+  substrate documents the role-credential dual-control discipline per
+  ADR-0002.
+
+**Category (4) — RULE-10-retired (substrate-canonical entry retired
+as incompatible with a Foundation invariant):**
+
+- **Operation 3** (original Tension 3 entry: "Capsule mass-deletion
+  exceeding N capsules in a single operation"). Substrate-state
+  observation: per RULE 10 (the Capsule soft-delete invariant —
+  "Nothing is ever deleted"), Capsules are soft-deleted via the
+  `deleted_at` field (`schema.prisma:35` + `:153` + `:165` with
+  `@@index([deleted_at])`); bulk hard-delete of Capsules is not a
+  substrate operation in the Foundation. The "mass-deletion" framing
+  contradicts RULE 10 and is retired from the substrate-canonical
+  enumeration. Forward path: none — the substrate-state observation
+  closes this entry as architecturally incompatible with Foundation
+  invariants.
+
+**Category cross-references:** category (1) LIVE bindings land at
+sub-phases F (`[SEC-DUAL-CONTROL-BINDING-CONFIG]`) + G
+(`[SEC-DUAL-CONTROL-BINDING-ORGS]`) of the Sub-box 2 Phase 1 arc (10
+commits A-J; ADR-0026 at sub-phase H bundles the full dual-control
+middleware + privileged-endpoint-registry + per-route-binding
+discipline pattern; ADR-0028 at sub-phase J documents the
+Elixir/BEAM coordination-layer forward-substrate). Category (2)
+forward-substrate operations land at their respective Sub-box scopes
+(operation 1 → Sub-box 2 Phase 2; operations 4 + 5 → Sub-box 3/4;
+operation 6 → Sub-box 2 Phase 2 or 3). Category (3) DB-tier substrate
+is documented at the secrets-management register per ADR-0002.
+Category (4) is retired per RULE 10.
 
 Everything else stays single-actor. The schema primitive is
 present, the runtime gate is conservative, throughput is preserved
