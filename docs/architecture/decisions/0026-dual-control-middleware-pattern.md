@@ -304,10 +304,13 @@ operator confirmation before edits chained.
   `target_entity_id: callerEntityId` placeholder is replaced with the requesting
   org's admin set (or a designated approver), so the gate enforces a *distinct
   second human*. Phase 2 deliverable.
-- **ADR-0028 (sub-phase J) — Elixir/BEAM coordination layer commitment-to-ship.**
-  The Sub-box 2 Phase 2 Elixir/BEAM COSMP router as a production service; the 6
-  BEAM-compatibility patterns adopted in this ADR's middleware substrate make the
-  port mechanical. ADR-0028 will back-cite this ADR when it lands.
+- **ADR-0028 (sub-phase J) — Elixir/BEAM coordination layer commitment-to-ship
+  (LANDED).** The Sub-box 2 Phase 2 Elixir/BEAM COSMP router as a production
+  service; the 6 BEAM-compatibility patterns adopted in this ADR's middleware
+  substrate make the port mechanical. ADR-0028 landed at sub-phase J
+  `[SEC-BEAM-FORWARD-SUBSTRATE]` and back-cites this ADR for the 6 patterns it
+  commits to ship — see the "(cited from)" block below; the Phase 2 mini-arc
+  (6-8 commits / ~3-4 weeks) ports those patterns to production Elixir/BEAM.
 - **`section-12-progress.md` + canonical-record §6 `H ✅ <hash>` cascade.** This
   commit's hash is cascaded into the canonical-record §6 arc-list (`H ✅ <hash>`)
   and the `section-12-progress.md` Sub-box 2 row at sub-phase I (the
@@ -329,6 +332,10 @@ Bidirectional citations (cited from):
   audit-chain substrate the `requireDualControl` preHandler writes its 5-event
   (+ 1 failure-mode) sequence to; the immutability the event-sourced-audit BEAM
   pattern relies on. ADR-0002's "(cited from)" block back-cites this ADR.
-- Forward: ADR-0028 (sub-phase J — the Elixir/BEAM coordination-layer
-  commitment-to-ship) will cite this ADR for the 6 BEAM-compatibility patterns
-  its middleware substrate adopts.
+- ADR-0028 (Forward-Substrate: Elixir/BEAM Coordination Layer for Capsule
+  Supervision + OtzarComm + DBGI Integration; landed at sub-phase J
+  `[SEC-BEAM-FORWARD-SUBSTRATE]`) — commits to ship the 6 BEAM-compatibility
+  patterns this ADR's middleware substrate documents at substrate-state register;
+  ADR-0028 is the Sub-box 2 Phase 2 mini-arc commitment that ports those patterns
+  to production Elixir/BEAM (a 6-8-commit / ~3-4-week mini-arc; the three-language
+  stack — Fastify+TypeScript API + Elixir COSMP + Python ML + Postgres storage).

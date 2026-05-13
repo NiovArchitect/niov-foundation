@@ -394,7 +394,7 @@ authoritative locations:
   per ADR-0022, `RELEVANCE_FORGET_FLOOR` behavioral lock per
   ADR-0022) — plus the "Anchor Mechanisms" taxonomy (`Object.freeze`
   / value-pin / behavioral-lock)
-- `docs/architecture/decisions/` — the 27 ADRs with
+- `docs/architecture/decisions/` — the 28 ADRs with
   Decision / Consequences / Alternatives in Michael Nygard
   format
 
@@ -403,7 +403,7 @@ documentation, **cite the reference**, do not redefine.
 
 ## 5. Key Architectural Decisions
 
-The 27 ADRs as of [SEC-CONTRIBUTOR-GOVERNANCE] (`135fee0` parent;
+The 28 ADRs as of [SEC-BEAM-FORWARD-SUBSTRATE] (`62d472c` parent;
 2026-05-12). The `docs/architecture/README.md` is the source of
 truth for ADR navigation; this is a quick-reference jump table.
 
@@ -432,8 +432,9 @@ truth for ADR navigation; this is a quick-reference jump table.
 - **ADR-0023** — Security Headers Posture (security-headers register; the `@fastify/helmet` posture; production-readiness audit lineage)
 - **ADR-0024** — Pre-Commit Hook Posture (git-hook-tier enforcement register; husky `^9.1.7`; `.husky/pre-commit` runs the db-push guard (ADR-0025) → typecheck baseline → the RULE 16 no-console anchor; `--no-verify` override preserved)
 - **ADR-0025** — Schema-Push-Target Discipline (schema-push-target register; the `prisma db push` explicit-env-target rule + `scripts/prisma-db-push-test.sh` + the `.husky/pre-commit` db-push guard + the `db:push:test` alias; the [D-2D-D10-4] production-schema-push trap; [SEC-DBPUSH] mini-arc `d8d6236`→`e1dbc1e`→`ed9a519`→`5a18491`)
-- **ADR-0026** — Dual-Control Middleware Pattern + Privileged Endpoint Registry + Per-Route Binding Discipline (dual-control register; the Sub-box 2 Phase 1 bundle — `requireDualControl` Fastify preHandler + `PRIVILEGED_ENDPOINTS` runtime registry + the `preHandler` BINDING CONTRACT + the 6 BEAM-compatibility patterns + the `executePhase0` setup-primitive boundary; LIVE on Operation A `PATCH /platform/monetization/config` + Operation B `POST /platform/orgs`; operational companion `docs/architecture/dual-control-operations-canonical-record.md`; [SEC-DUAL-CONTROL] arc `b34c5cf`→`6a1a380`→`d42e2a6`→`9628efa`→`3f2f329`→`34eea82`→`ceb418f`→`135fee0`; sub-phase J forward)
+- **ADR-0026** — Dual-Control Middleware Pattern + Privileged Endpoint Registry + Per-Route Binding Discipline (dual-control register; the Sub-box 2 Phase 1 bundle — `requireDualControl` Fastify preHandler + `PRIVILEGED_ENDPOINTS` runtime registry + the `preHandler` BINDING CONTRACT + the 6 BEAM-compatibility patterns + the `executePhase0` setup-primitive boundary; LIVE on Operation A `PATCH /platform/monetization/config` + Operation B `POST /platform/orgs`; operational companion `docs/architecture/dual-control-operations-canonical-record.md`; [SEC-DUAL-CONTROL] arc `b34c5cf`→`6a1a380`→`d42e2a6`→`9628efa`→`3f2f329`→`34eea82`→`ceb418f`→`135fee0`→`62d472c`→ this commit; the 10-commit arc closed at sub-phase J)
 - **ADR-0027** — Contributor Governance + AI-Alignment + Rule-Modification Authority (governance register; the authorization-tier protection — RULE 20: only the patent-holder Founder may modify/add/remove RULES or ADRs; the AI-alignment discipline — surface RULE/ADR-modification proposals per RULE 13, don't execute; the contributor-onboarding surface `docs/contributing/onboarding-for-engineers.md` NEW; cites ADR-0020 — RULE 20 protects ADR-0020's Register-2 evidence trail; [SEC-CONTRIBUTOR-GOVERNANCE] sub-phase I of the Sub-box 2 Phase 1 arc)
+- **ADR-0028** — Forward-Substrate: Elixir/BEAM Coordination Layer for Capsule Supervision + OtzarComm + DBGI Integration (forward-substrate register; the Sub-box 2 Phase 2 commitment-to-ship — NIOV commits to ship the Elixir/BEAM COSMP coordination layer as a production service, a 6-8-commit / ~3-4-week mini-arc; the three-language stack canonicalization — Fastify+TypeScript API + Elixir COSMP coordination + Python ML + Postgres storage; migration triggers — >1M capsules / >10M-100M daily OtzarComm / multi-region; cites ADR-0026 load-bearingly for the 6 BEAM-compatibility patterns it commits to ship; [SEC-BEAM-FORWARD-SUBSTRATE] sub-phase J — the arc-closure commit; companion canonical-record-analog doc forward-queued at Phase 2)
 
 ADR amendments and supersession follow the discipline in
 `docs/architecture/README.md` §ADR Lifecycle.
@@ -651,7 +652,7 @@ Concrete anti-patterns observable across the build cycle:
 
 Four documentation roots cover the substrate of the project:
 
-- **`docs/architecture/`** — ADR-0001 through ADR-0027 plus
+- **`docs/architecture/`** — ADR-0001 through ADR-0028 plus
   the template (`0000-template.md`) and the architecture
   README. Start with `docs/architecture/README.md`.
 - **`docs/reference/`** — `glossary.md` (term definitions),
