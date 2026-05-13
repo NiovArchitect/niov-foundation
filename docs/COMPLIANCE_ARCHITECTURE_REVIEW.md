@@ -2196,7 +2196,15 @@ forward-substrate operations land at their respective Sub-box scopes
 (operation 1 → Sub-box 2 Phase 2; operations 4 + 5 → Sub-box 3/4;
 operation 6 → Sub-box 2 Phase 2 or 3). Category (3) DB-tier substrate
 is documented at the secrets-management register per ADR-0002.
-Category (4) is retired per RULE 10.
+Category (4) is retired per RULE 10. The implementation-facing
+per-operation canonical record (route paths, authorization tiers,
+Zone U1 audit substrate, dual-control enforcement mechanisms, the
+`EscalationRequest` model fields, the `escalation.service.ts`
+surface, the `requireDualControl` verification flow, the Zone U1
+audit-event sequence, the 6 BEAM-compatibility patterns, the
+10-commit arc) is at
+`docs/architecture/dual-control-operations-canonical-record.md`
+(landed at sub-phase C `[SEC-DUAL-CONTROL-CANONICAL-RECORD]`).
 
 Everything else stays single-actor. The schema primitive is
 present, the runtime gate is conservative, throughput is preserved

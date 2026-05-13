@@ -1226,6 +1226,7 @@ Drift D-2D-D10 confirmed at substrate-state. The priming context shape is ahead 
 - **§5.5 active-learning informativeness** — correction propagation chain per INT-3 is the high-informativeness signal feeding Loop 1 refinement
 - **§4.8 Hive coordination** — corrections within Hive context propagate to aggregate per Correction 2 + Correction 4 sovereignty
 - **RAA 12.7 §2.5 Zone U1** — escalation status transitions write audit events forward-only per audit chain integrity
+- **`docs/architecture/dual-control-operations-canonical-record.md`** — the implementation-facing canonical record of dual-control operations builds on this §5.2 `EscalationRequest`/HITL substrate (per-operation route paths, authorization tiers, the `requireDualControl` verification flow, the Zone U1 audit-event sequence PRE_VERIFICATION → ESCALATION_LOOKUP → APPROVAL_VERIFIED → HANDLER_DELEGATED/DENIED, the 6 BEAM-compatibility patterns, the Sub-box 2 Phase 1 10-commit arc); landed at sub-phase C `[SEC-DUAL-CONTROL-CANONICAL-RECORD]`
 
 ### 5.3 Self-introspection NET-NEW (SUBSTRATE_OBSERVATION CapsuleType extension via ADR-0021)
 
