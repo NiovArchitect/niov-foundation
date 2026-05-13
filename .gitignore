@@ -15,3 +15,20 @@ docs/_generated/
 
 # Track A test infrastructure (per ADR-0013)
 .env.test.local
+
+# Elixir/BEAM (Block B sub-phase 2 [BEAM-MIX-WORKSPACE] per ADR-0030)
+_build/
+apps/*/_build/
+apps/*/deps/
+deps/
+*.beam
+*.ez
+erl_crash.dump
+cover/
+doc/
+.elixir_ls/
+.lexical/
+
+# Mix-generated release + repo artifacts
+apps/*/priv/static/
+apps/*/priv/repo/structure.sql

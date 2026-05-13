@@ -1,0 +1,8 @@
+# asdf-compatible tool version pins per ADR-0016 Pin-and-Optimize
+# Framework. Single source of truth for Elixir + Erlang/OTP versions
+# in the Foundation Phase 2 substrate per ADR-0030 (Phase 2 Elixir/BEAM
+# Implementation). Pin to Homebrew current-stable as of 2026-05-13 —
+# substrate-honest pin to what's actually installable on the operator's
+# Intel Mac BSD substrate.
+elixir 1.19.5-otp-28
+erlang 28.5
