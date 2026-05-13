@@ -21,6 +21,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   buildApp,
+  executePhase0,
   MemoryContentStore,
   MemoryNonceStore,
   MemoryRateLimitStore,
@@ -146,69 +147,14 @@ async function makeAdminAndLogin(opts: {
   return { entityId: entity.entity_id, token: body.token, ip };
 }
 
-describe("POST /platform/orgs -- can_admin_niov gate", () => {
-  it("returns 403 ADMIN_CAPABILITY_REQUIRED for callers without can_admin_niov", async () => {
-    const caller = await makeAdminAndLogin({ can_admin_niov: false });
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/v1/platform/orgs",
-      headers: { authorization: `Bearer ${caller.token}` },
-      payload: {
-        company_name: `${TEST_PREFIX}gateco_${randomUUID()}`,
-        admin_email: `${TEST_PREFIX}gate_${randomUUID()}@niov.test`,
-        admin_password: "any",
-        industry: "TECH",
-      },
-      remoteAddress: caller.ip,
-    });
-    expect(response.statusCode).toBe(403);
-    const body = response.json() as { error: string; required: string };
-    expect(body.error).toBe("ADMIN_CAPABILITY_REQUIRED");
-    expect(body.required).toBe("can_admin_niov");
-  });
-
-  it("creates a new org end-to-end for callers with can_admin_niov=true", async () => {
-    const platformAdmin = await makeAdminAndLogin({ can_admin_niov: true });
-    const companyName = `${TEST_PREFIX}fullco_${randomUUID()}`;
-    const adminEmail = `${TEST_PREFIX}fulladmin_${randomUUID()}@niov.test`;
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/v1/platform/orgs",
-      headers: { authorization: `Bearer ${platformAdmin.token}` },
-      payload: {
-        company_name: companyName,
-        admin_email: adminEmail,
-        admin_password: "correct-horse-battery",
-        industry: "TECH",
-        admin_first_name: "Full",
-        admin_last_name: "Admin",
-      },
-      remoteAddress: platformAdmin.ip,
-    });
-    expect(response.statusCode).toBe(201);
-    const body = response.json() as {
-      ok: boolean;
-      org_entity_id: string;
-      admin_entity_id: string;
-      admin_twin_id: string;
-      default_hive_id: string;
-    };
-    expect(body.ok).toBe(true);
-    expect(body.org_entity_id).toMatch(/^[0-9a-f-]{36}$/);
-    // The created admin can log in with the password we set.
-    const adminLogin = await app.inject({
-      method: "POST",
-      url: "/api/v1/auth/login",
-      payload: {
-        email: adminEmail,
-        password: "correct-horse-battery",
-        requested_operations: ["read"],
-      },
-      remoteAddress: `10.99.77.${Math.floor(Math.random() * 254) + 1}`,
-    });
-    expect(adminLogin.statusCode).toBe(200);
-  });
-});
+// POST /platform/orgs moved to
+// tests/integration/dual-control-binding-orgs.test.ts at
+// [SEC-DUAL-CONTROL-BINDING-ORGS] (sub-phase G): the route now carries
+// the requireDualControl preHandler, so its behavior (the dual-control
+// gate + the re-homed can_admin_niov-gate and end-to-end-create cases)
+// is exercised in the dedicated dual-control binding test file. The
+// createOrgAndAdmin helper below bypasses the route via executePhase0
+// (it is an org-setup primitive, not a test of the route).
 
 describe("/org/* -- can_admin_org gate", () => {
   it("returns 403 ADMIN_CAPABILITY_REQUIRED on POST /org/members for callers without can_admin_org", async () => {
@@ -251,26 +197,20 @@ async function createOrgAndAdmin(
   const companyName = `${TEST_PREFIX}orgco_${randomUUID()}`;
   const adminEmail = `${TEST_PREFIX}orgadmin_${randomUUID()}@niov.test`;
   const adminPassword = "correct-horse-battery";
-  const orgResponse = await app.inject({
-    method: "POST",
-    url: "/api/v1/platform/orgs",
-    headers: { authorization: `Bearer ${platformAdmin.token}` },
-    payload: {
-      company_name: companyName,
-      admin_email: adminEmail,
-      admin_password: adminPassword,
-      industry,
-    },
-    remoteAddress: platformAdmin.ip,
+  // Bypass the dual-control-gated POST /platform/orgs route -- this helper
+  // is an org-setup primitive, not a test of the route; create the org
+  // via the executePhase0 service function directly. (Sub-box 2 Phase 1
+  // sub-phase G [SEC-DUAL-CONTROL-BINDING-ORGS] -- the route's behavior is
+  // exercised in tests/integration/dual-control-binding-orgs.test.ts.)
+  const orgBody = await executePhase0({
+    company_name: companyName,
+    industry,
+    admin_email: adminEmail,
+    admin_password: adminPassword,
+    admin_first_name: null,
+    admin_last_name: null,
+    actor_entity_id: platformAdmin.entityId,
   });
-  if (orgResponse.statusCode !== 201) {
-    throw new Error(`createOrg failed: ${orgResponse.statusCode}`);
-  }
-  const orgBody = orgResponse.json() as {
-    org_entity_id: string;
-    admin_entity_id: string;
-    default_hive_id: string;
-  };
   const adminIp = `10.99.88.${Math.floor(Math.random() * 254) + 1}`;
   const adminLogin = await app.inject({
     method: "POST",

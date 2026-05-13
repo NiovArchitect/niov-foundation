@@ -3,15 +3,18 @@
 //          /platform/* namespace, today carrying POST /orgs (Dandelion
 //          Phase 0 createOrg) and PATCH /monetization/config (the 70/30
 //          revenue-split mutation). Every route here is gated by
-//          can_admin_niov; PATCH /monetization/config additionally
-//          carries the dual-control gate (sub-phase F).
+//          can_admin_niov; both POST /orgs (Operation B; sub-phase G) and
+//          PATCH /monetization/config (Operation A; sub-phase F)
+//          additionally carry the dual-control gate.
 // CONNECTS TO: dandelion.service.ts (executePhase0),
 //              admin.middleware.ts (capability gate),
 //              dual-control.middleware.ts (the requireDualControl
-//              preHandler on PATCH /monetization/config; sub-phase F
-//              [SEC-DUAL-CONTROL-BINDING-CONFIG]),
+//              preHandler on PATCH /monetization/config -- sub-phase F
+//              [SEC-DUAL-CONTROL-BINDING-CONFIG] -- and on POST /orgs --
+//              sub-phase G [SEC-DUAL-CONTROL-BINDING-ORGS]),
 //              security/privileged-endpoints.ts (PRIVILEGED_ENDPOINTS --
-//              the Operation A descriptor passed to requireDualControl),
+//              the Operation A + Operation B descriptors passed to
+//              requireDualControl),
 //              auth.service.ts (session validation upstream).
 
 import type { FastifyInstance } from "fastify";
@@ -64,13 +67,14 @@ export async function registerPlatformRoutes(
   app: FastifyInstance,
   authService: AuthService,
 ): Promise<void> {
-  // Sub-box 2 Phase 1 sub-phase F [SEC-DUAL-CONTROL-BINDING-CONFIG]:
-  // resolve the Operation A privileged-endpoint descriptor from the
-  // runtime registry once at route-registration time. The throw-guard
-  // fails fast at server boot if the registry ever drifts -- the entry
-  // is provably present (PRIVILEGED_ENDPOINTS is `as const`), so this is
-  // a substrate-integrity assertion, not a runtime branch the request
-  // path ever takes.
+  // Sub-box 2 Phase 1 sub-phases F + G: resolve the Operation A
+  // (PATCH /monetization/config -- [SEC-DUAL-CONTROL-BINDING-CONFIG]) and
+  // Operation B (POST /orgs -- [SEC-DUAL-CONTROL-BINDING-ORGS]) privileged-
+  // endpoint descriptors from the runtime registry once at route-
+  // registration time. The throw-guards fail fast at server boot if the
+  // registry ever drifts -- the entries are provably present
+  // (PRIVILEGED_ENDPOINTS is `as const`), so these are substrate-integrity
+  // assertions, not runtime branches the request path ever takes.
   const monetizationConfigEndpoint = PRIVILEGED_ENDPOINTS.find(
     (e) => e.actionDescriptor.type === "PLATFORM_MONETIZATION_CONFIG_UPDATE",
   );
@@ -79,11 +83,32 @@ export async function registerPlatformRoutes(
       "PRIVILEGED_ENDPOINTS registry missing required entry for PLATFORM_MONETIZATION_CONFIG_UPDATE",
     );
   }
+  const orgCreationEndpoint = PRIVILEGED_ENDPOINTS.find(
+    (e) => e.actionDescriptor.type === "PLATFORM_ORG_CREATION",
+  );
+  if (!orgCreationEndpoint) {
+    throw new Error(
+      "PRIVILEGED_ENDPOINTS registry missing required entry for PLATFORM_ORG_CREATION",
+    );
+  }
 
+  // Sub-box 2 Phase 1 sub-phase G [SEC-DUAL-CONTROL-BINDING-ORGS]:
+  // Operation B (org creation -- Dandelion Phase 0) is dual-control-gated.
+  // preHandler ORDER MATTERS -- requireAdminCapability MUST run first (it
+  // populates request.auth.entity_id, which requireDualControl reads per
+  // the BINDING CONTRACT in dual-control.middleware.ts). requireDualControl
+  // intercepts requests lacking an APPROVED dual-control EscalationRequest
+  // (returns 403 + creates a PENDING one) and writes the Zone U1 audit-
+  // event sequence per docs/architecture/dual-control-operations-canonical-record.md
+  // §4; on the approved path executePhase0 then writes its own
+  // DANDELION_PHASE_0_COMPLETE audit event.
   app.post<{ Body: CreateOrgBody }>(
     "/api/v1/platform/orgs",
     {
-      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+      preHandler: [
+        requireAdminCapability(authService, "can_admin_niov"),
+        requireDualControl(orgCreationEndpoint),
+      ],
     },
     async (request, reply) => {
       const body = request.body ?? {};

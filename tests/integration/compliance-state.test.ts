@@ -15,6 +15,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   buildApp,
+  executePhase0,
   MemoryContentStore,
   MemoryNonceStore,
   MemoryRateLimitStore,
@@ -129,25 +130,19 @@ async function createOrgAndAdmin(): Promise<{
   const companyName = `${TEST_PREFIX}cstateco_${randomUUID()}`;
   const adminEmail = `${TEST_PREFIX}cstateadmin_${randomUUID()}@niov.test`;
   const adminPassword = "correct-horse-battery";
-  const orgResponse = await app.inject({
-    method: "POST",
-    url: "/api/v1/platform/orgs",
-    headers: { authorization: `Bearer ${platformAdmin.token}` },
-    payload: {
-      company_name: companyName,
-      admin_email: adminEmail,
-      admin_password: adminPassword,
-      industry: "TECH",
-    },
-    remoteAddress: platformAdmin.ip,
+  // Bypass the dual-control-gated POST /platform/orgs route -- this helper
+  // is an org-setup primitive, not a test of the route; create the org
+  // via the executePhase0 service function directly. (Sub-box 2 Phase 1
+  // sub-phase G [SEC-DUAL-CONTROL-BINDING-ORGS].)
+  const orgBody = await executePhase0({
+    company_name: companyName,
+    industry: "TECH",
+    admin_email: adminEmail,
+    admin_password: adminPassword,
+    admin_first_name: null,
+    admin_last_name: null,
+    actor_entity_id: platformAdmin.entityId,
   });
-  if (orgResponse.statusCode !== 201) {
-    throw new Error(`createOrg failed: ${orgResponse.statusCode}`);
-  }
-  const orgBody = orgResponse.json() as {
-    org_entity_id: string;
-    admin_entity_id: string;
-  };
   const adminIp = `10.99.88.${Math.floor(Math.random() * 254) + 1}`;
   const adminLogin = await app.inject({
     method: "POST",
