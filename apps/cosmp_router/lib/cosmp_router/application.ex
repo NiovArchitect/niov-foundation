@@ -8,15 +8,17 @@ defmodule CosmpRouter.Application do
   worker crash MUST NOT cascade to drop other in-flight COSMP
   operations.
 
-  ## Sub-phase 3 status
+  ## Sub-phase 4b status
 
-  Empty children list. Sub-phase 4 `[BEAM-COSMP-GENSERVER]` adds
-  the first child (the routing GenServer); sub-phase 5
-  `[BEAM-COSMP-INTEROP]` adds the gRPC bridge worker.
+  Children list contains the routing GenServer (`CosmpRouter.Router`)
+  added at sub-phase 4b `[BEAM-COSMP-GENSERVER-CODE]` per ADR-0031
+  §Decision. Sub-phase 5 `[BEAM-COSMP-INTEROP]` adds the gRPC bridge
+  worker.
 
   ## References
 
-  - ADR-0030 (Phase 2 Elixir/BEAM Implementation) §Decision sub-phase 3
+  - ADR-0031 (BEAM Routing Substrate Architecture) §Decision Supervision tree integration
+  - ADR-0030 (Phase 2 Elixir/BEAM Implementation) §Decision sub-phase 3 + 4b
   - https://hexdocs.pm/elixir/Application.html
   - https://hexdocs.pm/elixir/Supervisor.html
   """
@@ -26,8 +28,9 @@ defmodule CosmpRouter.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Sub-phase 4 adds the routing GenServer here.
-      # Sub-phase 5 adds the gRPC bridge worker here.
+      # Sub-phase 4b [BEAM-COSMP-GENSERVER-CODE]: COSMP routing GenServer.
+      {CosmpRouter.Router, []}
+      # Sub-phase 5 [BEAM-COSMP-INTEROP] adds the gRPC bridge worker here.
     ]
 
     opts = [strategy: :one_for_one, name: CosmpRouter.Supervisor]

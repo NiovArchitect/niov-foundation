@@ -151,7 +151,7 @@ coordination tier).
 - **ADR-0030** — Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
   DBGI Supervisor + Three-Language Stack Canonicalization (LANDED at Block B
   sub-phase 1 `[BEAM-PHASE-2-ADR]`; documents Phase 2 implementation; the
-  13-sub-phase decomposition; cites this ADR load-bearing for the 6 BEAM patterns
+  14-sub-phase decomposition (expanded from 13 at sub-phase 4a per Q-G split — see ADR-0031); cites this ADR load-bearing for the 6 BEAM patterns
   + forward-queue source). ADR-0029 was SUBSTRATE-BUILD-OPTIMIZATIONS (a different
   scope — the substrate-build meta-tooling arc that ran between this ADR's
   commitment-to-ship and ADR-0030's landing); this catch is documented in
@@ -251,8 +251,9 @@ Bidirectional citations (cited from):
 - ADR-0030 (Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
   DBGI Supervisor + Three-Language Stack Canonicalization; landed at Block B
   sub-phase 1 `[BEAM-PHASE-2-ADR]`) — **load-bearing**: ADR-0030 is the Phase 2
-  implementation ADR fulfilling this ADR's commitment-to-ship. The 13-sub-phase
-  Block B mini-arc ports the 6 BEAM-compatibility patterns (this ADR's load-bearing
+  implementation ADR fulfilling this ADR's commitment-to-ship. The 14-sub-phase
+  Block B mini-arc (expanded from 13 at sub-phase 4a per Q-G split — see ADR-0031)
+  ports the 6 BEAM-compatibility patterns (this ADR's load-bearing
   citation of ADR-0026 §5) from TypeScript-pattern-mimicking-BEAM to production
   Elixir/BEAM substrate (mix umbrella + COSMP router GenServer + DBGI supervisor
   + gRPC interop + observability + canonical-record-analog doc). The "Forward
