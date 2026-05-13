@@ -238,6 +238,25 @@ substrate observation).**
   Elixir/BEAM mini-arc surfaces additional substrate-build patterns. Tool earns
   its place — 75% mechanical surfacing is substantial token-cost reduction even
   at this regex fidelity.
+
+  **Block A follow-up — RESOLVED at this commit.** The `cascade-grep.sh hash`
+  subcommand gains multiline-aware behavior via an `awk` pre-collapse pass that
+  joins consecutive non-empty lines into single-line paragraphs before regex
+  matching. Substrate-state observation surfaced at Block A pre-flight:
+  `pcre2grep -M` and `ripgrep -U` (the obvious multiline-grep tools) are
+  unavailable on the operator's Intel Mac BSD grep substrate (BSD grep
+  2.6.0-FreeBSD; `grep -P` returns `invalid option`); the awk pre-collapse
+  approach is the POSIX-portable feasible implementation — not a preference
+  choice, a substrate-state constraint. Canary 4 added to `--self-test`:
+  asserts multiline-aware detection of the line-wrapped `this commit` permanent
+  placeholder at ADR-0029 line 188-189 (the sub-phase 5 arc-closure placeholder
+  per sub-phase J Decision 3 — stable across future arcs, won't be backfilled).
+  The cascade-grep tool now mechanically surfaces line-wrapped placeholders
+  (75% → ~100% improvement from Block A); operator discipline remains the
+  safety net for cases neither line-bounded nor markdown-paragraph-bounded
+  grep can catch. Output format note: multiline-aware results show the
+  paragraph's `start_line`, not the exact match line — for wrapped paragraphs
+  the reviewer reads from `start_line` to find the matched placeholder.
 - **Catch #2 — pre-existing drift in `docs/contributing/onboarding-for-engineers.md`.**
   Three sites of stale "27 ADRs" at 29 ADRs canonical: line 53 (§2 title),
   line 67 (the ADRs catalog citation), line 183 (the Recommended Reading Order

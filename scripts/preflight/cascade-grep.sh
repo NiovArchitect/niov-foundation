@@ -96,6 +96,48 @@ cascade_grep() {
   grep -rnE "$pattern" "${SEARCH_PATHS[@]}" 2>/dev/null || true
 }
 
+# collapse_paragraphs <file>: awk pre-collapse pass.
+# Joins consecutive non-empty lines into single-line paragraphs (separated by
+# blank lines in the source). Output format: file:start_line: joined-text.
+# start_line points to the paragraph's first line. For single-line paragraphs,
+# start_line == match line (no semantic change). For markdown-wrapped paragraphs,
+# the joined text restores the wrapped placeholder so regex matching works.
+# Substrate constraint: pcre2grep -M and ripgrep -U (the obvious multiline-grep
+# tools) are unavailable on the operator's Intel Mac BSD grep substrate;
+# awk pre-collapse is the POSIX-portable feasible approach. See ADR-0029
+# Substrate-State Catches Resolved (catch #1 + Block A follow-up).
+collapse_paragraphs() {
+  local file="$1"
+  awk -v f="$file" '
+    BEGIN { para=""; start=0 }
+    /^[[:space:]]*$/ {
+      if (para != "") print f ":" start ": " para;
+      para=""; start=0; next
+    }
+    {
+      if (para == "") { para=$0; start=NR }
+      else { para=para " " $0 }
+    }
+    END { if (para != "") print f ":" start ": " para }
+  ' "$file"
+}
+
+# cascade_grep_multiline <pattern>: multiline-aware grep over SEARCH_PATHS.
+# Iterates files via collapse_paragraphs (line-wrap-aware) then filters
+# paragraphs by pattern. Output: file:start_line: matched-paragraph-text.
+cascade_grep_multiline() {
+  local pattern="$1"
+  for path in "${SEARCH_PATHS[@]}"; do
+    if [ -f "$path" ]; then
+      collapse_paragraphs "$path" | grep -E "$pattern" 2>/dev/null || true
+    elif [ -d "$path" ]; then
+      find "$path" -type f \( -name "*.md" -o -name "*.txt" \) 2>/dev/null | while IFS= read -r file; do
+        collapse_paragraphs "$file" | grep -E "$pattern" 2>/dev/null || true
+      done
+    fi
+  done
+}
+
 grep_adr() {
   local n=$1
   local n_padded
@@ -117,10 +159,10 @@ grep_rule() {
 }
 
 grep_hash() {
-  section "Post-commit-hash placeholders ('this commit' / 'forward: ADR-N' / 'sub-phase X forward')"
-  cascade_grep "this commit|forward: ADR-[0-9]+|sub-phase [A-Z] forward|sub-phase [0-9]+ forward"
+  section "Post-commit-hash placeholders (multiline-aware: 'this commit' / 'forward: ADR-N' / 'sub-phase X forward')"
+  cascade_grep_multiline "this commit|forward: ADR-[0-9]+|sub-phase [A-Z] forward|sub-phase [0-9]+ forward"
   echo ""
-  section "Arc-hash chain candidates (lines with 3+ short-hash tokens)"
+  section "Arc-hash chain candidates (lines with 3+ short-hash tokens; line-bounded — inline tokens)"
   cascade_grep "[0-9a-f]{7}.*[0-9a-f]{7}.*[0-9a-f]{7}" | head -20
 }
 
@@ -159,6 +201,20 @@ self_test() {
     printf '%sPASS%s  "this commit" placeholders found (canonical-record + section-12-progress)\n' "$GREEN" "$RESET"
   else
     printf '%sFAIL%s  expected "this commit" placeholder in canonical-record §6 J-entry + section-12-progress row 33\n' "$RED" "$RESET"
+    fail=1
+  fi
+
+  # Canary 4: multiline-aware detection of line-wrapped "this commit".
+  # ADR-0029 line 188-189 has "CLOSED at this\ncommit" — the permanent
+  # arc-closure placeholder per sub-phase J Decision 3 (stable across
+  # future arcs; won't be backfilled). Block A regression-prevention
+  # canary for catch #1 (sub-phase 5 of the SUBSTRATE-BUILD-OPTIMIZATIONS
+  # arc). The line-bounded `grep -nE "this commit"` regex would NOT
+  # match this wrapped placeholder; cascade_grep_multiline must.
+  if got=$(collapse_paragraphs docs/architecture/decisions/0029-substrate-build-optimizations.md | grep -E "this commit" 2>/dev/null) && [ -n "$got" ]; then
+    printf '%sPASS%s  multiline-aware "this commit" detection at ADR-0029 (catch #1 regression-prevention)\n' "$GREEN" "$RESET"
+  else
+    printf '%sFAIL%s  expected multiline-aware detection of line-wrapped "this commit" at ADR-0029 (catch #1 regressed)\n' "$RED" "$RESET"
     fail=1
   fi
 

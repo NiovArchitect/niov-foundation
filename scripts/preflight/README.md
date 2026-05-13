@@ -78,6 +78,36 @@ Output is `file:line: matched-pattern` — one match per line; greppable; pipeab
 into `less` or `awk` for filtering. The script always exits 0 (advisory; no fail
 mode), except `--self-test`, which exits 1 on a canary assertion failure.
 
+## Multiline-aware `hash` subcommand
+
+The `hash` subcommand uses **multiline-aware grep** to catch placeholders
+that wrap across line boundaries — common in markdown documents where
+80-character line-wrapping splits `this commit` into `this\ncommit` across
+two lines.
+
+**Implementation.** An `awk` pre-collapse pass joins consecutive non-empty
+lines into single-line paragraphs (paragraphs separated by blank lines in the
+source) before regex matching. Output format:
+
+```
+file:start_line: matched-paragraph-text
+```
+
+where `start_line` points to the paragraph's first line. For single-line
+paragraphs, `start_line` == match line (no semantic change for non-wrapped
+matches). For wrapped paragraphs, the reviewer reads from `start_line` to
+find the matched placeholder within the paragraph.
+
+**Substrate-state constraint** (informs the awk-pre-collapse choice).
+`pcre2grep -M` and `ripgrep -U` (the obvious multiline-grep tools) are
+unavailable on the operator's Intel Mac BSD grep substrate
+(BSD grep 2.6.0-FreeBSD; `grep -P` returns `invalid option`). The awk
+pre-collapse pass is the POSIX-portable feasible implementation. See
+ADR-0029 Substrate-State Catches Resolved (catch #1 + Block A follow-up).
+
+The arc-hash chain section of the `hash` subcommand remains line-bounded
+(`cascade_grep`) — arc-hash chains are inline tokens, not wrap targets.
+
 ## `--self-test`
 
 The self-test runs canary assertions against the current repo state. The
@@ -89,6 +119,11 @@ canaries are substrate-state invariants at HEAD:
    `docs/reference/section-12-progress.md` row 33 (per sub-phase J Decision 3 —
    the permanent J-hash placeholders that keep the dual-control arc at exactly
    10 commits).
+4. **Multiline-aware `this commit` detection** at `ADR-0029` line 188-189
+   (the permanent `CLOSED at this\ncommit` arc-closure placeholder per
+   sub-phase J Decision 3, sub-phase 5 of the SUBSTRATE-BUILD-OPTIMIZATIONS
+   arc). Regression-prevention canary for catch #1 — a future regression
+   where the multiline pre-collapse breaks would fail this canary.
 
 A self-test failure means either:
 
@@ -96,8 +131,9 @@ A self-test failure means either:
 - **(b) the substrate drifted** from the canonical state — surface per RULE 13.
 
 Either way it is a substrate-state observation worth surfacing. The self-test
-is intentionally narrow (3 canaries) — broad enough to catch a script bug
-across the three subcommands; not a substitute for human review.
+is intentionally narrow (4 canaries) — broad enough to catch a script bug
+across the three subcommands + the multiline-aware capability; not a
+substitute for human review.
 
 ## How to extend
 
