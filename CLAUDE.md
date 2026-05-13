@@ -579,6 +579,17 @@ Practical guidance for an agent starting work:
   bcrypt) is the canonical worked example — post-quantum ready
   by primitive selection with zero Shor's-vulnerable crypto in
   production.
+- **Use plain language at the authorization tier** (the
+  strategy-tier prose discipline; ADR-0029 Optimization 3).
+  Where Claude Code speaks to the operator about engineering
+  decisions, state the substrate-state observation directly;
+  drop the recursive register-canonical phrasing
+  ("substrate-state-observation register canonical at the
+  substrate-state register"). The engineering-tier pre-flight
+  discipline (pre-flight reports, catch surfacings, commit
+  bodies) stays full-fidelity — this addresses
+  authorization-tier prose only. Behavioral constraint, not
+  hook-enforced.
 
 For commits, use the section-prefix convention observed in
 `git log`:

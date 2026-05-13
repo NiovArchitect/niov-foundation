@@ -94,15 +94,18 @@ engineering decisions. Drop the recursive register-canonical phrasing; state the
 substrate-state observation directly. The substrate-honest pre-flight discipline
 at the *engineering* tier (the pre-flight reports, the catch surfacings, the
 commit bodies) stays full-fidelity — this addresses authorization-tier prose
-only. **Substrate placement is deferred to the sub-phase-4 pre-flight**: a new
-RULE (RULE 21 — same shape as RULE 12/13/18, citable, keeps the discipline-set
-coherent) versus a non-RULE CLAUDE.md §-guidance subsection (a "new pointer /
-clarification" minor amendment). Both preserve the substantive substrate; the
-choice benefits from lived experience after sub-phases 2-3 land — by then the
-session work will have shown whether the discipline reads better as a numbered
-RULE or as operating guidance. (If RULE 21: per CLAUDE.md §11 the sub-phase-4
-commit lands the RULE-21 amendment + a RULE-14 back-cite to this ADR, under
-Founder authorization per RULE 20.)
+only. **Substrate placement: CLAUDE.md §7 prose-discipline bullet (Option B),
+decided at sub-phase 4 pre-flight (`[SUBSTRATE-BUILD-PROSE-GUIDANCE]`, this
+commit).** Rationale: failure-mode-category distinction — RULES 12/13/18 govern
+substrate-correctness failures (high blast radius: silent drift, scope
+undercount, spec-vs-substrate incoherence); the prose discipline governs
+cosmetic-quality failures (low blast radius: recursive phrasing accretion).
+Keeping the weight-class boundary clean preserves RULE-list coherence. Lived
+experience from sub-phases 2-3 confirmed behavioral tractability — strategy-tier
+prose stayed reasonable without RULE-tier enforcement. Lighter cascade (3 files
+MOD vs 6-8 files for Option A) preserves sub-phase 5
+`[SUBSTRATE-BUILD-ONBOARDING-CASCADE]` scope cleanly (Option A would have
+anticipated the onboarding-doc updates sub-phase 5 owns).
 
 **Sub-phase 5 — Onboarding cascade**. `onboarding.md` (AI-tool sessions) and
 `onboarding-for-engineers.md` (human engineers) gain references to the new
@@ -176,10 +179,16 @@ prose discipline per sub-phase 4's resolution.
   + wrapper + `scripts/preflight/README.md` + smoke test.
 - **Sub-phase 3 `[SUBSTRATE-BUILD-COMMIT-TEMPLATES]`** — the 3 commit-class templates
   + `docs/contributing/templates/README.md`.
-- **Sub-phase 4 `[SUBSTRATE-BUILD-PROSE-GUIDANCE]`** — the substrate-placement decision
-  (RULE 21 vs §-guidance) + the substrate text + (if RULE 21) the RULE-21 amendment
-  cascade.
-- **Sub-phase 5 `[SUBSTRATE-BUILD-ONBOARDING-CASCADE]`** — the onboarding-doc updates.
+- **Sub-phase 4 `[SUBSTRATE-BUILD-PROSE-GUIDANCE]`** — CLOSED at this commit.
+  Optimization 3 substrate placement resolved to **CLAUDE.md §7 prose-discipline
+  bullet (Option B)** per the failure-mode-category distinction (RULES govern
+  substrate-correctness; the prose discipline governs cosmetic-quality), the
+  lived-experience evidence from sub-phases 2-3, and the lighter-cascade
+  preservation of sub-phase 5's scope.
+- **Sub-phase 5 `[SUBSTRATE-BUILD-ONBOARDING-CASCADE]`** — the onboarding-doc
+  updates; also the post-commit-hash backfill venue for the sub-phase-4 `this
+  commit` placeholders in this ADR and `docs/contributing/templates/README.md`
+  line 130 (the first worked example of `POST-COMMIT-HASH-CASCADE.template.md`).
 - **Potential ADR-0030** — if Sub-box 2 Phase 2 (the Elixir/BEAM mini-arc) surfaces
   new substrate-build patterns (a dual-runtime cascade convention; an Elixir-tier
   pre-flight discipline), a follow-up ADR formalizes them.
@@ -200,6 +209,22 @@ known, and the substrate-build optimizations in this ADR aim to reduce friction
 on the catches that do still surface in future *engineering* arcs (where the
 substrate is novel and the cascade scope is genuinely uncertain).
 
+Sub-phase 4: **zero new catches at pre-flight.** The cascade landscape for both
+Q-A options (Option A: RULE 21 + full RULE-cascade; Option B: §7 bullet + light
+cascade) was grep-clean — `cascade-grep.sh rule 21` returned only forward-references
+in `docs/contributing/templates/README.md` and this ADR; no false positives. The
+substrate text was already drafted (this ADR's Decision § had the verbatim
+content); the placement targets were concrete. The discipline-converges
+observation holds across 4 sub-phases of this arc — 1 pre-existing drift
+surfaced at sub-phase 3 (catch #1: `docs/contributing/README.md` Reading Order
++ Files lists stale-missing `onboarding.md` + `onboarding-for-engineers.md`,
+resolved same commit via Q-A:A-full); 1 additional pre-existing drift surfaced
+inline for awareness at sub-phase 3 (catch #1b: `docs/contributing/README.md`
+line 81 references `decisions/0001-0010`, stale at 29 ADRs canonical; deferred
+to sub-phase 5 or a follow-up); zero new catches across sub-phases 1, 2, 4.
+52-consecutive-commit substrate-honest pre-flight verification pattern
+operational (53 after this lands).
+
 Bidirectional citations (cited from):
 
 - ADR-0028 (Forward-Substrate: Elixir/BEAM Coordination Layer for Capsule
@@ -208,6 +233,11 @@ Bidirectional citations (cited from):
   "Substrate-build optimizations" Forward-Queue bullet; load-bearing (this ADR
   fulfills that forward-queue commitment). ADR-0028's "(cited from)" block
   back-cites this ADR.
+- CLAUDE.md §7 (Operating in This Repo; the prose-discipline bullet — landed at
+  sub-phase 4 `[SUBSTRATE-BUILD-PROSE-GUIDANCE]`, this commit) — load-bearing
+  citation: the §7 bullet is the substrate placement of Optimization 3 resolved
+  at sub-phase 4. The bullet cites this ADR as `ADR-0029 Optimization 3`; the
+  citation graph closes across the §3 RULES / §7 guidance boundary.
 - ADR-0020 (Two-Register IP Discipline) — referenced in this ADR's Context for
   the patent-implementation-record framing the substrate-honest discipline serves;
   prose-mention, not a load-bearing dependency → no formal "(cited from)" back-cite

@@ -127,7 +127,8 @@ being the specific pattern these templates pre-empt.
 Sub-phases 4-5 of the SUBSTRATE-BUILD-OPTIMIZATIONS arc add:
 
 - `[SUBSTRATE-BUILD-PROSE-GUIDANCE]` — strategy-tier prose discipline
-  (RULE 21 vs §-guidance, decided at the sub-phase-4 pre-flight).
+  (CLAUDE.md §7 bullet per ADR-0029 Optimization 3, decided at
+  sub-phase 4 → this commit).
 - `[SUBSTRATE-BUILD-ONBOARDING-CASCADE]` — `onboarding.md` +
   `onboarding-for-engineers.md` references to the templates and
   cascade-grep tool.
