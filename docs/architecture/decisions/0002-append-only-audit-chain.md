@@ -118,3 +118,13 @@ Bidirectional citations (cited from):
   ADR
 - ADR-0006 (cross-org leak prevention; cites this ADR for the
   audit-substrate context that chainKey priority builds on)
+- ADR-0026 (dual-control middleware pattern; landed at sub-phase H
+  `[SEC-DUAL-CONTROL-ADR]`) — the `requireDualControl` Fastify
+  preHandler writes its Zone U1 audit-event sequence
+  (`DUAL_CONTROL_VERIFICATION_PRE` → `DUAL_CONTROL_ESCALATION_LOOKUP`
+  → `DUAL_CONTROL_APPROVAL_VERIFIED` → `DUAL_CONTROL_HANDLER_DELEGATED`
+  | `DUAL_CONTROL_HANDLER_DENIED`, plus the §4-adjacent
+  `DUAL_CONTROL_TRANSIENT_FAILURE` failure-mode marker) into this
+  append-only chain; the BEFORE DELETE trigger here is the
+  immutability the event-sourced-audit BEAM-compatibility pattern
+  (ADR-0026 §Decision pattern 4) relies on.

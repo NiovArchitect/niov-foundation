@@ -41,8 +41,8 @@ citation block, ISO-dated Status). The template at
 `decisions/0000-template.md` includes both the structure and
 the "How To Use This Template" guidance for new ADRs.
 
-ADR catalog as of [DOCS-CATALOG-REFRESH-CATALOGS] (2026-05-12;
-25 ADRs):
+ADR catalog as of [SEC-DUAL-CONTROL-ADR] (2026-05-12;
+26 ADRs):
 
 - **ADR-0001** — Three-wallet architecture (foundational)
 - **ADR-0002** — Append-only audit chain with BEFORE DELETE trigger (foundational)
@@ -69,6 +69,7 @@ ADR catalog as of [DOCS-CATALOG-REFRESH-CATALOGS] (2026-05-12;
 - **ADR-0023** — Security Headers Posture (security-headers register; the `@fastify/helmet` posture)
 - **ADR-0024** — Pre-Commit Hook Posture (git-hook-tier enforcement register; husky pre-commit running the typecheck baseline + the RULE 16 no-console anchor + the ADR-0025 db-push guard)
 - **ADR-0025** — Schema-Push-Target Discipline (schema-push-target register; the `prisma db push` explicit-env-target rule + the wrapper + the pre-commit db-push guard; the [D-2D-D10-4] production-schema-push trap)
+- **ADR-0026** — Dual-Control Middleware Pattern + Privileged Endpoint Registry + Per-Route Binding Discipline (dual-control register; the Sub-box 2 Phase 1 architectural bundle — the `requireDualControl` Fastify preHandler + the `PRIVILEGED_ENDPOINTS` runtime registry + the `preHandler` binding contract + the 6 BEAM-compatibility patterns; the operational companion is `docs/architecture/dual-control-operations-canonical-record.md`)
 
 ADRs are sequentially numbered. Gaps are not closed when ADRs
 are superseded or deprecated — a retired ADR keeps its number
