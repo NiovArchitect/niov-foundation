@@ -190,6 +190,27 @@ jobs:
   elixir:
     name: Elixir tier (compile + test)
     runs-on: ubuntu-latest
+    # Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per ADR-0033
+    # §Decision Q-PG-TEST + D-5BII-EXEC-2: Postgres service block for
+    # the Elixir tier; postgres:16.4-alpine matches ADR-0015 §Decision E
+    # pin used by the TS unit tier. Port-map 5433:5432 mirrors the local
+    # Colima container convention so config/test.exs's hardcoded
+    # localhost:5433 URL works in both registers without env-var
+    # plumbing.
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: foundation_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -44,12 +44,16 @@ describe("SYSTEM_PRINCIPALS -- 12C.0 Item 7 frozen-config anchor", () => {
     expect(Object.isFrozen(SYSTEM_PRINCIPALS)).toBe(true);
   });
 
-  it("enumerates the four 12C.0 principals", () => {
+  it("enumerates the five principals (4 from 12C.0 Item 7 + COSMP_ROUTER from sub-phase 5b-ii ADR-0033)", () => {
     expect(SYSTEM_PRINCIPALS).toEqual({
       SCHEDULER: "__niov_system_scheduler__",
       BOOT_VALIDATOR: "__niov_system_boot_validator__",
       COMPLIANCE_SEEDER: "__niov_system_compliance_seeder__",
       FEEDBACK_LOOP: "__niov_system_feedback_loop__",
+      // Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per
+      // ADR-0033 §Decision 4d (D-5BII-EXEC-3): Elixir/BEAM register
+      // subsystem attribution for system-initiated COSMP ops.
+      COSMP_ROUTER: "__niov_system_cosmp_router__",
     });
   });
 });

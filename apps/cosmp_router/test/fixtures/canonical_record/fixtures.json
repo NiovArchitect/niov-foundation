@@ -1,0 +1,224 @@
+[
+  {
+    "description": "minimal: all-null optionals + empty details",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000001",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {},
+      "ip_address": null,
+      "timestamp": "2026-01-01T12:00:00.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000001|TEST_EVENT|||||SUCCESS||{}||2026-01-01T12:00:00.000Z|",
+    "expected_hash": "15a7c78263fc141d4976fb26e873b8fc504454808155e9863c268cbc5e7dd654"
+  },
+  {
+    "description": "fully-populated: every field non-null + flat details",
+    "input": {
+      "audit_id": "11111111-1111-1111-1111-111111111111",
+      "event_type": "ENTITY_REGISTERED",
+      "actor_entity_id": "22222222-2222-2222-2222-222222222222",
+      "target_entity_id": "33333333-3333-3333-3333-333333333333",
+      "target_capsule_id": "44444444-4444-4444-4444-444444444444",
+      "session_id": "55555555-5555-5555-5555-555555555555",
+      "outcome": "SUCCESS",
+      "denial_reason": "n/a",
+      "details": {
+        "reason": "test",
+        "count": 42
+      },
+      "ip_address": "10.0.0.1",
+      "timestamp": "2026-05-13T22:28:40.000Z",
+      "previous_event_hash": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    },
+    "canonical_input": "11111111-1111-1111-1111-111111111111|ENTITY_REGISTERED|22222222-2222-2222-2222-222222222222|33333333-3333-3333-3333-333333333333|44444444-4444-4444-4444-444444444444|55555555-5555-5555-5555-555555555555|SUCCESS|n/a|{\"count\":42,\"reason\":\"test\"}|10.0.0.1|2026-05-13T22:28:40.000Z|abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    "expected_hash": "6d87a75761d0f94eeec1c0f769df1b8cf83f6881ce2be218216cbbac7a4879b4"
+  },
+  {
+    "description": "details with sorted-key invariant: keys in order Z,A,M",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000002",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "z": 1,
+        "a": 2,
+        "m": 3
+      },
+      "ip_address": null,
+      "timestamp": "2026-01-01T12:00:00.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000002|TEST_EVENT|||||SUCCESS||{\"a\":2,\"m\":3,\"z\":1}||2026-01-01T12:00:00.000Z|",
+    "expected_hash": "e5f49c3cd744157eeda6ac66f04c798a8cfee0af9cd425ace45c9211b1a52390"
+  },
+  {
+    "description": "details nested object: sorted recursively",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000003",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "outer": {
+          "z": "last",
+          "a": "first"
+        },
+        "scalar": 99
+      },
+      "ip_address": null,
+      "timestamp": "2026-01-01T12:00:00.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000003|TEST_EVENT|||||SUCCESS||{\"outer\":{\"a\":\"first\",\"z\":\"last\"},\"scalar\":99}||2026-01-01T12:00:00.000Z|",
+    "expected_hash": "65080c2381c7c6798db34c52152a108bb77d7b6623d5e93b07e8113a18b8ff60"
+  },
+  {
+    "description": "details with array of objects (no sorting; preserve order)",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000004",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "items": [
+          {
+            "b": 2
+          },
+          {
+            "a": 1
+          }
+        ]
+      },
+      "ip_address": null,
+      "timestamp": "2026-01-01T12:00:00.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000004|TEST_EVENT|||||SUCCESS||{\"items\":[{\"b\":2},{\"a\":1}]}||2026-01-01T12:00:00.000Z|",
+    "expected_hash": "dd7812c15fb514cc9e94ed990cf8c8a1970ed7d59d2505aab2e7b1bc6696ed0b"
+  },
+  {
+    "description": "unicode: details contains UTF-8 strings + emoji",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000005",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "name": "café",
+        "flag": "🇺🇸",
+        "chinese": "你好"
+      },
+      "ip_address": null,
+      "timestamp": "2026-01-01T12:00:00.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000005|TEST_EVENT|||||SUCCESS||{\"chinese\":\"你好\",\"flag\":\"🇺🇸\",\"name\":\"café\"}||2026-01-01T12:00:00.000Z|",
+    "expected_hash": "2b211a581a1472b973660e00d25bee76f5a3da6b54bc80a7c9c2e4478e8c5c12"
+  },
+  {
+    "description": "escape sequences: details contains quotes + backslashes + newlines",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000006",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "quoted": "He said \"hi\"",
+        "path": "C:\\foo\\bar",
+        "line": "a\nb"
+      },
+      "ip_address": null,
+      "timestamp": "2026-01-01T12:00:00.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000006|TEST_EVENT|||||SUCCESS||{\"line\":\"a\\nb\",\"path\":\"C:\\\\foo\\\\bar\",\"quoted\":\"He said \\\"hi\\\"\"}||2026-01-01T12:00:00.000Z|",
+    "expected_hash": "b5dfb34b2219035bac223c3ea4ffa1e2b3248fdab55f4ca240c5ef07324c8988"
+  },
+  {
+    "description": "timestamp precision boundary: exact-second (no millis)",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000007",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {},
+      "ip_address": null,
+      "timestamp": "2026-05-13T22:28:40.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000007|TEST_EVENT|||||SUCCESS||{}||2026-05-13T22:28:40.000Z|",
+    "expected_hash": "dadfd14ec7195d8b17ce553f4af6e66c750d35fba6876c8abcff0785aa292f57"
+  },
+  {
+    "description": "timestamp precision boundary: with millis (567)",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000008",
+      "event_type": "TEST_EVENT",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {},
+      "ip_address": null,
+      "timestamp": "2026-05-13T22:28:40.567Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000008|TEST_EVENT|||||SUCCESS||{}||2026-05-13T22:28:40.567Z|",
+    "expected_hash": "ebe7b7d031997799505a458e9307d674d4b3227c489e654dab3b48219c7bf133"
+  },
+  {
+    "description": "denial_reason non-null + outcome FAILURE",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-000000000009",
+      "event_type": "LOGIN_FAILED",
+      "actor_entity_id": "22222222-2222-2222-2222-222222222222",
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "FAILURE",
+      "denial_reason": "invalid_password",
+      "details": {
+        "attempt_count": 3
+      },
+      "ip_address": "192.168.1.1",
+      "timestamp": "2026-05-13T22:28:40.000Z",
+      "previous_event_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-000000000009|LOGIN_FAILED|22222222-2222-2222-2222-222222222222||||FAILURE|invalid_password|{\"attempt_count\":3}|192.168.1.1|2026-05-13T22:28:40.000Z|",
+    "expected_hash": "ab63058cbce73cd0c3a6bc995929dada315ffd5ec7d5fcff2514d5fd9709fa5d"
+  }
+]

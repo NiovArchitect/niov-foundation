@@ -41,16 +41,26 @@ defmodule CosmpRouter.MixProject do
     ]
   end
 
-  # Sub-phase 5b-i [BEAM-COSMP-INTEROP-GRPC]: gRPC deps land per ADR-0032
-  # §Decision gRPC library choice (Q-M). :ecto + :postgrex deferred to
-  # sub-phase 5b-ii per Q-R (Persistence layer); :telemetry_metrics +
-  # :telemetry_poller at sub-phase 11. Substrate-honest discipline: deps
-  # land with their consumers per ADR-0016 Pin-and-Optimize Framework.
+  # Dep landing lineage:
+  # - Sub-phase 5b-i [BEAM-COSMP-INTEROP-GRPC]: :grpc + :protobuf per
+  #   ADR-0032 §Decision Q-M (gRPC interop substrate)
+  # - Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] (this commit):
+  #   :ecto_sql + :postgrex per ADR-0033 §Decision Q-PERSISTENCE-DEPS
+  #   (durable persistence + audit-chain + idempotency substrate)
+  # - Sub-phase 11 [BEAM-OBSERVABILITY]: :telemetry_metrics +
+  #   :telemetry_poller forthcoming
+  # Substrate-honest discipline: deps land with their consumers per
+  # ADR-0016 Pin-and-Optimize Framework.
   defp deps do
     [
-      # gRPC server + transport (canonical Elixir gRPC stack per Q-M)
+      # gRPC server + transport (canonical Elixir gRPC stack per
+      # ADR-0032 §Decision Q-M)
       {:grpc, "~> 0.10"},
-      {:protobuf, "~> 0.14"}
+      {:protobuf, "~> 0.14"},
+      # Persistence + audit-chain + idempotency substrate (canonical
+      # Elixir Postgres stack per ADR-0033 §Decision Q-PERSISTENCE-DEPS)
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, "~> 0.20"}
     ]
   end
 end

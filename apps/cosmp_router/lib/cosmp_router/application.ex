@@ -8,18 +8,20 @@ defmodule CosmpRouter.Application do
   worker crash MUST NOT cascade to drop other in-flight COSMP
   operations.
 
-  ## Sub-phase 5b-i status
+  ## Sub-phase 5b-ii status
 
-  Children list contains 3 workers per ADR-0031 §Decision Supervision
+  Children list contains 4 workers per ADR-0031 §Decision Supervision
   tree integration + ADR-0032 §Decision Connection management +
-  ADR-0031 Q-T ETS-backed storage (sub-phase 5a authorization):
+  ADR-0033 §Decision 5 (Storage facade) + 1 (Ecto.Repo):
 
-  1. `CosmpRouter.Storage.ETS` — ETS-backed capsule store (starts
-     first; Router `init/1` depends on the named table; sub-phase
-     5b-ii layers Postgres source-of-truth on top per ADR-0033
-     forthcoming)
-  2. `CosmpRouter.Router` — routing GenServer (sub-phase 4b)
-  3. `GRPC.Server.Supervisor` — gRPC HTTP/2 listener via
+  1. `CosmpRouter.Repo` — durable Postgres substrate (starts first;
+     all downstream workers may depend on Repo connectivity per
+     ADR-0033 §Decision 1 + §Decision 5 facade)
+  2. `CosmpRouter.Storage.ETS` — ETS-backed hot-tier cache per
+     ADR-0033 §Decision 5 Storage facade; preserved unchanged from
+     sub-phase 5b-i; Router `init/1` depends on the named table
+  3. `CosmpRouter.Router` — routing GenServer (sub-phase 4b)
+  4. `GRPC.Server.Supervisor` — gRPC HTTP/2 listener via
      `CosmpRouter.GRPC.Endpoint` (sub-phase 5b-i; port configurable
      via `:cosmp_router, :grpc_port` app env; default 50051)
 
@@ -44,8 +46,15 @@ defmodule CosmpRouter.Application do
 
     children =
       [
-        # Sub-phase 5b-i: ETS-backed storage (starts first; canonical
-        # named table per CosmpRouter.Storage.ETS module).
+        # Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per
+        # ADR-0033 §Decision 1: Ecto.Repo starts first; all
+        # downstream workers may depend on Repo connectivity for
+        # Postgres source-of-truth + audit-chain participation.
+        CosmpRouter.Repo,
+        # Sub-phase 5b-i: ETS-backed hot-tier (canonical named
+        # table per CosmpRouter.Storage.ETS module; reframed as
+        # hot-tier per CosmpRouter.Storage facade per ADR-0033
+        # §Decision 5).
         {CosmpRouter.Storage.ETS, []},
         # Sub-phase 4b: COSMP routing GenServer.
         {CosmpRouter.Router, []}

@@ -83,6 +83,12 @@ export {
   AUDIT_EVENT_TYPE_VALUES,
   isKnownAuditEventType,
   SYSTEM_PRINCIPALS,
+  // Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per ADR-0033
+  // §Decision 4: cross-language byte-equivalence primitives the
+  // scripts/generate-canonical-fixtures.ts fixture generator imports
+  // for the Elixir register's port at CosmpRouter.Audit.
+  canonicalRecord,
+  canonicalJson,
 } from "./queries/audit.js";
 
 export type {

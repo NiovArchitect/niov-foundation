@@ -5,15 +5,18 @@ defmodule CosmpRouter.Storage.ETS do
 
   ## Substrate-state register
 
-  Sub-phase 5b-i: production hot-tier cache. Capsule data lives in
-  this ETS table; lookups + writes are O(1); concurrent reads are
-  lock-free via ETS `:read_concurrency`.
+  Sub-phase 5b-i: introduced as the primary capsule store. Capsule
+  data lived in this ETS table; lookups + writes O(1); concurrent
+  reads lock-free via ETS `:read_concurrency`.
 
-  Sub-phase 5b-ii (forthcoming per Q-S → ADR-0033): Postgres
-  source-of-truth layered on top. ETS becomes write-through cache;
-  cache invalidation + reconciliation logic per ADR-0026 §5
-  Pattern 3 instantiation. This module's API stays stable across
-  the 5b-i → 5b-ii transition.
+  Sub-phase 5b-ii (per ADR-0033 §Decision 5; landed at this commit):
+  reframed as **hot-tier cache** behind the `CosmpRouter.Storage`
+  facade. Postgres source-of-truth lives at
+  `CosmpRouter.Storage.Postgres`; ETS sits in front for sub-millisecond
+  reads. Cache invalidation + reconciliation orchestrated by the
+  facade per ADR-0026 §5 Pattern 3 instantiation. This module's API
+  stays stable; callers should prefer `CosmpRouter.Storage` (the
+  facade) over direct `Storage.ETS` calls.
 
   ## Patent-implementation evidence register (ADR-0020 Register 2)
 
@@ -42,10 +45,12 @@ defmodule CosmpRouter.Storage.ETS do
   - ADR-0031 (BEAM Routing Substrate Architecture) §Decision Q-T
     in-memory state strategy (sub-phase 5a authorization)
   - ADR-0026 (Dual-Control Middleware Pattern) §5 Pattern 3
-    (state reconstructible from durable storage; forward-queued to
-    sub-phase 5b-ii Postgres reconciliation)
-  - ADR-0033 (BEAM Persistence + Idempotency Architecture;
-    forthcoming at sub-phase 5b-ii per Q-S)
+    (state reconstructible from durable storage; instantiated at
+    sub-phase 5b-ii via the `CosmpRouter.Storage` facade reading
+    Postgres on ETS cache miss)
+  - ADR-0033 (BEAM Persistence + Idempotency + Audit-Chain
+    Cryptographic Substrate Architecture; landed at sub-phase 5b-ii)
+    §Decision 5 (Storage facade)
   """
 
   use GenServer
@@ -123,8 +128,8 @@ defmodule CosmpRouter.Storage.ETS do
     # Named, public, read-concurrent ETS table. Owner is this GenServer;
     # table survives until owner crashes (at which point supervisor
     # restart per :one_for_one strategy creates a fresh table — ETS
-    # data is hot-tier ephemeral until sub-phase 5b-ii Postgres
-    # reconciliation lands).
+    # data is hot-tier ephemeral; Postgres reconciliation via the
+    # `CosmpRouter.Storage` facade at next read per ADR-0033 §Decision 5).
     :ets.new(@table, [
       :set,
       :public,

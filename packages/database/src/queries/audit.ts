@@ -237,6 +237,12 @@ export const SYSTEM_PRINCIPALS = Object.freeze({
   BOOT_VALIDATOR: "__niov_system_boot_validator__",
   COMPLIANCE_SEEDER: "__niov_system_compliance_seeder__",
   FEEDBACK_LOOP: "__niov_system_feedback_loop__",
+  // Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per ADR-0033
+  // §Decision 4d (D-5BII-EXEC-3): Elixir/BEAM register subsystem
+  // attribution for system-initiated COSMP ops emitted from
+  // CosmpRouter.Audit. Matched constant in
+  // apps/cosmp_router/lib/cosmp_router/audit.ex @system_principals.
+  COSMP_ROUTER: "__niov_system_cosmp_router__",
 } as const);
 
 export type SystemPrincipal =
@@ -249,7 +255,12 @@ export type SystemPrincipal =
 // WHY: The default JSON.stringify orders object keys by insertion,
 //      which would change the hash even when the data is identical.
 //      Sorting keys recursively gives us a stable canonical form.
-function canonicalJson(value: unknown): string {
+// EXPORTED at sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per
+// ADR-0033 §Decision 4b: scripts/generate-canonical-fixtures.ts +
+// future cross-language audit-chain tooling import this for
+// byte-equivalence verification with Elixir register's port at
+// apps/cosmp_router/lib/cosmp_router/audit.ex canonical_json/1.
+export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
@@ -273,7 +284,10 @@ function canonicalJson(value: unknown): string {
 // WHY: Centralizing this here means the same logic runs at write time
 //      and at verify time, so a single bug cannot make the chain
 //      "valid" by mistake.
-function canonicalRecord(parts: {
+// EXPORTED at sub-phase 5b-ii per ADR-0033 §Decision 4a: same
+// rationale as canonicalJson — fixture generator + byte-equivalence
+// verification with Elixir port at CosmpRouter.Audit.canonical_record/1.
+export function canonicalRecord(parts: {
   audit_id: string;
   event_type: string;
   actor_entity_id: string | null;

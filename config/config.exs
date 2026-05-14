@@ -11,6 +11,12 @@
 
 import Config
 
+# Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per ADR-0033:
+# register CosmpRouter.Repo as the canonical Ecto repo for the
+# cosmp_router OTP app. Per-env connection details land in
+# config/{dev,test,runtime}.exs.
+config :cosmp_router, ecto_repos: [CosmpRouter.Repo]
+
 # Import env-specific config at the end (canonical Elixir pattern;
 # allows env-specific overrides of any umbrella-level config above).
 import_config "#{config_env()}.exs"

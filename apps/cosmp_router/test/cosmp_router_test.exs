@@ -38,15 +38,19 @@ defmodule CosmpRouterTest do
 
   test "supervision tree is introspectable" do
     children = Supervisor.which_children(CosmpRouter.Supervisor)
-    # Sub-phase 5b-i test env: 2 children (Storage.ETS + Router; gRPC
-    # server disabled per config/test.exs). Prod/dev env: 3 children
-    # (+ GRPC.Server.Supervisor).
+    # Sub-phase 5b-ii test env: 3 children (Repo + Storage.ETS +
+    # Router; gRPC server disabled per config/test.exs). Prod/dev
+    # env: 4 children (+ GRPC.Server.Supervisor). Repo was added at
+    # sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per ADR-0033
+    # §Decision 1 + §Decision 5 (Storage facade requires Postgres
+    # source-of-truth Repo connectivity).
     assert is_list(children)
-    assert length(children) == 2
+    assert length(children) == 3
 
     child_modules =
       Enum.map(children, fn {id, _pid, _type, _modules} -> id end)
 
+    assert CosmpRouter.Repo in child_modules
     assert CosmpRouter.Storage.ETS in child_modules
     assert CosmpRouter.Router in child_modules
   end
