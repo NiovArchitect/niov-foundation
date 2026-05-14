@@ -188,8 +188,9 @@ integration-test-tier substrate-state register (lineage: sub-phase
     (dedicated owner process surviving test process lifecycle).
     ADR-0034 Sub-decision 3 framing conflated the two scenarios;
     sub-phase 6b Phase 3 Step 3-e execution surfaced the
-    discrimination. ADR-0034 amendment forward-queued for separate
-    amendment commit post-sub-phase-6b CI green.
+    discrimination. **ADR-0034 amendment LANDED** at the
+    `[ADR-0034-SUB-DECISION-3-AMENDMENT]` commit post-sub-phase-6b
+    CI green: see ADR-0034 §Sub-decision 3-amendment.
 17. **D-OBSERVATION-VS-DECISION-DISCRIMINATION** (sub-phase 6b
     Phase 5 Phase 0 RULE 11 surface; commit at this register) —
     broader-community ADR canonical guidance for **decisions**
@@ -264,7 +265,7 @@ learned library). NIOV's RULE 14 bidirectional citation discipline
 exceeds broader-community canonical, providing substrate-coherence
 across the observation-cluster.
 
-### Sub-decision 2-amendment: ADR-0034 amendment forward-queued (sub-phase 6b)
+### Sub-decision 2-amendment: ADR-0034 amendment LANDED (post-sub-phase-6b)
 
 **D-SANDBOX-ALLOW-VS-START-OWNER-DISCRIMINATION** (16th canonical
 observation) surfaced at sub-phase 6b Phase 3 Step 3-e execution
@@ -278,17 +279,17 @@ vs sequential-multi-test scenarios. The canonical discrimination:
   for **sequential multi-test access to app-supervised GenServer**
   (dedicated owner process surviving test process lifecycle)
 
-**ADR-0034 amendment scope (forward-queued)**: amend ADR-0034
-Sub-decision 3 §Decision text to discriminate the two patterns at
-the canonical-pattern register. Forward-queued to a separate
-amendment commit post-sub-phase-6b CI green per RULE 20 (ADR
-modifications are Founder-authorized) + per
-D-SUBSTRATE-LANDING-PREEMPT principle (substantive substrate-
+**ADR-0034 amendment LANDED**: ADR-0034 §Sub-decision 3-amendment
+documents the discrimination at the canonical-pattern register at
+the `[ADR-0034-SUB-DECISION-3-AMENDMENT]` commit post-sub-phase-6b
+CI green per RULE 20 (ADR modifications are Founder-authorized) +
+per D-SUBSTRATE-LANDING-PREEMPT principle (substantive substrate-
 landing commits absorb forward-reference markers naturally; the
 amendment is substrate-coherent at its own register and warrants a
-dedicated commit). Sub-phase 6b commit lands the substrate-state
-resolution (`start_owner!/stop_owner` setup in grpc/server_test.exs)
-without modifying ADR-0034 text.
+dedicated commit). Sub-phase 6b commit landed the substrate-state
+resolution (`start_owner!/stop_owner` setup in grpc/server_test.exs);
+the `[ADR-0034-SUB-DECISION-3-AMENDMENT]` commit landed the ADR-text
+amendment + this forward-queue closure cascade.
 
 ### Sub-decision 3: `elixir-beam-best-practices.md` curated reference
 

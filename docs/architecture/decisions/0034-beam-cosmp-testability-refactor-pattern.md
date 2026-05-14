@@ -164,6 +164,85 @@ architectural refactor; canonical Ecto pattern; tests are
 if 6b surfaces issues, can refactor at 6b or defer to sub-phase 7+
 DBGI substrate work where testability discipline pattern reapplied.
 
+#### Sub-decision 3-amendment (sub-phase 6b Phase 3 Step 3-e): canonical Ecto v3 discrimination
+
+Sub-phase 6b Phase 3 Step 3-e execution surfaced substrate-state
+ground truth at the integration-tier execution register: the
+original Sub-decision 3 framing ("`Sandbox.allow` canonical Ecto
+pattern for app-supervised GenServer case") conflated single-test
+vs sequential-multi-test scenarios at substrate-state register.
+Both patterns are documented at Ecto.Adapters.SQL.Sandbox canonical
+docs but at DIFFERENT registers; the discrimination surfaces only
+when the sequential-multi-test scenario executes.
+
+**Canonical discrimination at canonical-pattern register**:
+
+- **`Sandbox.allow(Repo, self(), pid)`** is canonical for **single-
+  test cross-process access** — one test boundary; one Sandbox
+  owner; per-test isolation; the test process IS the Sandbox
+  owner. Suitable when an app-supervised GenServer accesses the
+  Repo within a single test only.
+- **`start_owner!(Repo, shared: true)` + `stop_owner(pid)`** is
+  canonical for **sequential multi-test access to app-supervised
+  GenServer within same test module** — a **dedicated owner
+  process** surviving the test process lifecycle; `shared: true`
+  grants the app-supervised GenServer access to the owner's
+  connection; `on_exit(fn -> stop_owner(pid) end)` cleanly tears
+  down at test boundary.
+
+**Substrate-state observation lineage**: see ADR-0035 §9
+**D-SANDBOX-ALLOW-VS-START-OWNER-DISCRIMINATION** (16th canonical
+substrate-build observation). Per-test `Sandbox.allow` surfaces
+`DBConnection.OwnershipError` on the second test in same module
+run because the app-supervised GenServer PID retains internal
+ownership state from the prior test; `start_owner!` resolves at
+substrate-coherent canonical register by introducing a dedicated
+owner process whose lifecycle is decoupled from individual test
+processes.
+
+**Resolution at sub-phase 6b Phase 3 Step 3-e**:
+`apps/cosmp_router/test/cosmp_router/grpc/server_test.exs` setup
+pattern rotated to `start_owner!/stop_owner` canonical Ecto v3
+register. Per-test instances (e.g., `router_test.exs`'s
+`start_router!/1` + `start_sandbox_owner!/0` helpers from
+`CosmpRouter.RouterTestHelpers`) continue to use canonical per-
+test pattern (each test spawns fresh Router + Storage.ETS
+instances; `start_sandbox_owner!/0` already wraps `start_owner!`
+internally per ADR-0034 Sub-decision 1 + 2). App-supervised access
+(grpc/server_test.exs against singleton `CosmpRouter.Router`) uses
+sequential-test canonical pattern at `setup` block:
+
+```elixir
+setup do
+  owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
+  on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+  # ... FK parents + test data
+end
+```
+
+**Cross-references**:
+
+- ADR-0035 §9 **D-SANDBOX-ALLOW-VS-START-OWNER-DISCRIMINATION**
+  16th canonical substrate-build observation (bidirectional
+  citation per RULE 14)
+- Ecto.Adapters.SQL.Sandbox canonical docs
+  (https://hexdocs.pm/ecto_sql/Ecto.Adapters.SQL.Sandbox.html) —
+  `start_owner!/2` semantics + canonical sequential-test pattern
+- `apps/cosmp_router/test/cosmp_router/grpc/server_test.exs` setup
+  block — canonical pattern instantiation at sub-phase 6b
+- `apps/cosmp_router/test/support/router_test_helpers.ex`
+  `start_sandbox_owner!/0` — canonical per-test pattern
+  instantiation (wraps `start_owner!` for per-test Router
+  instances)
+
+This amendment is **canonical-pattern register clarification**, NOT
+architectural-register supersession. ADR-0034 substantive
+architectural scope (testability refactor pattern + 5 sub-decisions)
+preserved at the canonical register. Founder authorization per
+RULE 20 explicit at this amendment's landing
+(`[ADR-0034-SUB-DECISION-3-AMENDMENT]` commit post-sub-phase-6b CI
+green).
+
 ### Sub-decision 4: ETS table name = GenServer name (same atom; :named_table semantics)
 
 `Storage.ETS.init/1` creates
