@@ -217,11 +217,16 @@ jobs:
     # `entities` + `wallets` tables — must exist before mix test.
     # Mirror the TS unit tier schema-push pattern: setup Node + npm
     # ci + Prisma generate + Prisma push + audit-trigger install
-    # BEFORE mix test. DATABASE_URL set at job level so npm-side
-    # Prisma scripts pick it up; mix test reads URL from
-    # config/test.exs (hardcoded same value).
+    # BEFORE mix test. DATABASE_URL + DIRECT_URL set at job level
+    # so npm-side Prisma scripts pick them up; mix test reads URL
+    # from config/test.exs (hardcoded same value). DIRECT_URL is
+    # required by prisma/schema.prisma:15 directUrl declaration
+    # (Supabase pooler/direct-connection split per ADR-0018);
+    # mirrors TS unit tier env block at L65-67 VERBATIM
+    # (D-CI-FRESH-3 mirror-from-canonical discipline).
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
     steps:
       - name: Checkout
         uses: actions/checkout@v6
