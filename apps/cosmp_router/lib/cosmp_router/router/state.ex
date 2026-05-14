@@ -5,6 +5,12 @@ defmodule CosmpRouter.Router.State do
 
   ## Fields
 
+  - `name` — GenServer registered name; defaults `CosmpRouter.Router`
+    in production; tests pass unique atom per ADR-0034 testability
+    refactor pattern (sub-phase 6a [BEAM-COSMP-TESTABILITY-REFACTOR])
+  - `storage_ets` — Storage.ETS instance name to thread through
+    Storage facade calls; defaults `CosmpRouter.Storage.ETS` in
+    production; tests pass unique atom per ADR-0034
   - `in_flight` — map tracking in-flight COSMP operations (op_id → metadata);
     populates as sub-phases 5b-ii / 6 add per-op tracking
   - `started_at` — monotonic time at GenServer init; observability signal
@@ -34,13 +40,21 @@ defmodule CosmpRouter.Router.State do
     layering without Router code change
   - ADR-0026 (Dual-Control Middleware Pattern) §5 Pattern 5 (idempotent
     verification keys; deferred consumer)
+  - ADR-0034 (BEAM COSMP Testability Refactor Pattern) §Decision 1+2
+    (name-configurability + storage_ets opt threading)
   """
 
   @type t :: %__MODULE__{
+          name: atom(),
+          storage_ets: atom(),
           in_flight: map(),
           started_at: integer() | nil,
           storage: module()
         }
 
-  defstruct in_flight: %{}, started_at: nil, storage: CosmpRouter.Storage.ETS
+  defstruct name: CosmpRouter.Router,
+            storage_ets: CosmpRouter.Storage.ETS,
+            in_flight: %{},
+            started_at: nil,
+            storage: CosmpRouter.Storage
 end

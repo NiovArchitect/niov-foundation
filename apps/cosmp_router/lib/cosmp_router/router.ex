@@ -69,17 +69,32 @@ defmodule CosmpRouter.Router do
 
   @doc """
   Start the COSMP routing GenServer. Registered under the
-  `CosmpRouter.Router` name for `Process.whereis/1` lookup.
+  `CosmpRouter.Router` name in production (default); tests pass
+  `:name` + `:storage_ets` opts for per-test instances per ADR-0034
+  testability-refactor pattern (sub-phase 6a).
+
+  ## Options
+
+  - `:name` — registered atom name; defaults `__MODULE__` (production
+    singleton)
+  - `:storage_ets` — Storage.ETS instance atom for facade threading;
+    defaults `CosmpRouter.Storage.ETS` (production singleton)
   """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   @impl true
   @spec init(keyword()) :: {:ok, State.t()}
-  def init(_opts) do
+  def init(opts) do
+    name = Keyword.get(opts, :name, __MODULE__)
+    storage_ets = Keyword.get(opts, :storage_ets, CosmpRouter.Storage.ETS)
+
     state = %State{
+      name: name,
+      storage_ets: storage_ets,
       in_flight: %{},
       started_at: System.monotonic_time(),
       storage: Storage
@@ -152,7 +167,8 @@ defmodule CosmpRouter.Router do
     # READ: Metadata-first capsule retrieval via Storage facade
     # (ETS-first; Postgres fallthrough on miss). Standalone audit
     # emission for read access tracking; no business mutation.
-    case Storage.get(req.capsule_id) do
+    # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
+    case Storage.get(req.capsule_id, ets: state.storage_ets) do
       {:ok, %Capsule{} = capsule} ->
         _ =
           Audit.write_audit_event(%{
@@ -194,7 +210,8 @@ defmodule CosmpRouter.Router do
              "WRITE",
              req.capsule_id,
              validated,
-             "COSMP_WRITE"
+             "COSMP_WRITE",
+             state.storage_ets
            ) do
       case result do
         {:ok, _} ->
@@ -215,7 +232,8 @@ defmodule CosmpRouter.Router do
     # SHARE: Permissioned scope grant across DMWs.
     # Composed-mode: read existing + update permissions + persist + audit
     # wrapped in Ecto.Multi; Idempotency around (capsule_id, grantee).
-    case Storage.get(req.capsule_id) do
+    # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
+    case Storage.get(req.capsule_id, ets: state.storage_ets) do
       {:ok, %Capsule{} = capsule} ->
         updated_perms = grant_permission(capsule.permissions, req.grantee)
         updated_capsule = %Capsule{capsule | permissions: updated_perms}
@@ -226,7 +244,8 @@ defmodule CosmpRouter.Router do
                "SHARE",
                req.capsule_id,
                updated_capsule,
-               "COSMP_SHARE"
+               "COSMP_SHARE",
+               state.storage_ets
              ) do
           {:ok, _} ->
             granted_to = Map.get(updated_capsule.permissions, :granted_to, [])
@@ -253,7 +272,8 @@ defmodule CosmpRouter.Router do
     # REVOKE: Capability revocation + downstream cascade marker.
     # Composed-mode: read existing + update permissions + persist + audit;
     # Idempotency around (capsule_id, grantee).
-    case Storage.get(req.capsule_id) do
+    # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
+    case Storage.get(req.capsule_id, ets: state.storage_ets) do
       {:ok, %Capsule{} = capsule} ->
         updated_perms = revoke_permission(capsule.permissions, req.grantee)
         updated_capsule = %Capsule{capsule | permissions: updated_perms}
@@ -264,7 +284,8 @@ defmodule CosmpRouter.Router do
                "REVOKE",
                req.capsule_id,
                updated_capsule,
-               "COSMP_REVOKE"
+               "COSMP_REVOKE",
+               state.storage_ets
              ) do
           {:ok, _} ->
             remaining = Map.get(updated_capsule.permissions, :granted_to, [])
@@ -322,13 +343,15 @@ defmodule CosmpRouter.Router do
 
   # WHAT: Idempotency-aware composed-mode write helper.
   # INPUT: idempotency_key (string) + scope (string) + capsule_id (string) +
-  #        capsule (%Capsule{}) + audit event_type (string).
+  #        capsule (%Capsule{}) + audit event_type (string) +
+  #        storage_ets (atom) — Storage.ETS instance for hot-tier warm
+  #        per ADR-0034 testability-refactor pattern.
   # OUTPUT: {:ok, result_map} on success/replay; {:error, %CosmpError{}} on
   #         transaction failure.
   # WHY: Centralizes the Idempotency.check → Multi(Storage.Postgres.put +
   #      Audit.write_audit_event/3) → Idempotency.record discipline shared
   #      across WRITE/SHARE/REVOKE per ADR-0033 §Decision 4e + §Decision 6.
-  defp write_or_replay(idempotency_key, scope, capsule_id, capsule, event_type) do
+  defp write_or_replay(idempotency_key, scope, capsule_id, capsule, event_type, storage_ets) do
     case Idempotency.check(idempotency_key, scope) do
       {:ok, cached} ->
         # Idempotency hit: return cached result; no business mutation,
@@ -364,8 +387,9 @@ defmodule CosmpRouter.Router do
             # idempotency cache is best-effort, not load-bearing for
             # the audit chain).
             _ = Idempotency.record(idempotency_key, scope, result)
-            # Warm ETS hot-tier post-Postgres-commit.
-            _ = CosmpRouter.Storage.ETS.put(capsule_id, capsule)
+            # Warm ETS hot-tier post-Postgres-commit; ETS instance per
+            # ADR-0034 testability-refactor pattern (state.storage_ets).
+            _ = CosmpRouter.Storage.ETS.put(storage_ets, capsule_id, capsule)
             {:ok, result}
 
           {:error, _step, reason, _changes} ->

@@ -25,6 +25,19 @@ defmodule CosmpRouter.Application do
      `CosmpRouter.GRPC.Endpoint` (sub-phase 5b-i; port configurable
      via `:cosmp_router, :grpc_port` app env; default 50051)
 
+  ## Sub-phase 6a testability discipline per ADR-0034
+
+  Production supervision tree uses default `__MODULE__` names for the
+  Storage.ETS + Router singletons (no children-list spec change at
+  this register since `Storage.ETS.start_link/1` + `Router.start_link/1`
+  default `:name` opts to `__MODULE__`). Tests bypass this supervision
+  tree entirely — they spawn per-test Storage.ETS + Router instances
+  with unique atoms via `start_supervised!` per
+  `CosmpRouter.RouterTestHelpers.start_router!/1` (sub-phase 6a
+  `[BEAM-COSMP-TESTABILITY-REFACTOR]` per ADR-0034 testability-
+  refactor pattern; D-WIDER-KNOWLEDGE-CHECK substrate-build discipline
+  canonical at the architectural register).
+
   ## References
 
   - ADR-0032 (BEAM gRPC Interop Architecture) §Decision Connection
@@ -33,6 +46,8 @@ defmodule CosmpRouter.Application do
     Supervision tree integration + Q-T ETS-backed state
   - ADR-0030 (Phase 2 Elixir/BEAM Implementation) §Decision sub-phase
     3 + 4b + 5b-i
+  - ADR-0034 (BEAM COSMP Testability Refactor Pattern) §Decision
+    sub-phase 6a name-configurability + Sub-decision 1-5
   - https://hexdocs.pm/elixir/Application.html
   - https://hexdocs.pm/elixir/Supervisor.html
   """

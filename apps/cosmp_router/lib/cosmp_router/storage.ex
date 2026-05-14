@@ -40,10 +40,18 @@ defmodule CosmpRouter.Storage do
   layer = persistence; audit layer = chain integrity; both
   orchestrated by the Router.
 
+  ## Per-test ETS instance opt threading
+
+  Sub-phase 6a `[BEAM-COSMP-TESTABILITY-REFACTOR]` per ADR-0034:
+  facade functions accept `:ets` opt to thread per-test Storage.ETS
+  instance atoms; production callers omit it (default
+  `CosmpRouter.Storage.ETS` singleton preserved).
+
   ## References
 
   - ADR-0033 §Decision 5 (Storage facade)
   - ADR-0026 §5 Pattern 3 (state reconstructible from durable storage)
+  - ADR-0034 §Decision Sub-decision 2 (facade :ets opt threading)
   - RULE 10 (NOTHING IS EVER DELETED; soft-delete only)
   """
 
@@ -53,9 +61,17 @@ defmodule CosmpRouter.Storage do
   Fetch a Capsule by capsule_id. ETS-first; on cache miss, Postgres
   query + ETS warm + return. Returns `{:ok, %Capsule{}}` or
   `{:error, :not_found}`.
+
+  ## Options
+
+  - `:ets` — Storage.ETS instance atom; defaults
+    `CosmpRouter.Storage.ETS` (production singleton); tests pass
+    per-test atom per ADR-0034.
   """
-  def get(capsule_id) when is_binary(capsule_id) do
-    case Storage.ETS.get(capsule_id) do
+  def get(capsule_id, opts \\ []) when is_binary(capsule_id) do
+    ets = Keyword.get(opts, :ets, Storage.ETS)
+
+    case Storage.ETS.get(ets, capsule_id) do
       {:ok, capsule} ->
         # Hot-tier hit; return without touching Postgres.
         {:ok, capsule}
@@ -65,7 +81,7 @@ defmodule CosmpRouter.Storage do
         case Storage.Postgres.get(capsule_id) do
           {:ok, capsule} = result ->
             # Warm ETS entry for next read; ignore ETS write result.
-            _ = Storage.ETS.put(capsule_id, capsule)
+            _ = Storage.ETS.put(ets, capsule_id, capsule)
             result
 
           {:error, :not_found} = result ->
@@ -83,13 +99,20 @@ defmodule CosmpRouter.Storage do
 
   Caller is responsible for composing this with audit emission per
   ADR-0033 §Decision 4e (`Audit.write_audit_event/3` Multi).
+
+  ## Options
+
+  - `:ets` — Storage.ETS instance atom; defaults
+    `CosmpRouter.Storage.ETS` (production singleton).
   """
-  def put(capsule_id, %Capsule{} = capsule) when is_binary(capsule_id) do
+  def put(capsule_id, %Capsule{} = capsule, opts \\ []) when is_binary(capsule_id) do
+    ets = Keyword.get(opts, :ets, Storage.ETS)
+
     case Storage.Postgres.put(capsule_id, capsule) do
       {:ok, _row} = result ->
         # Update ETS hot-tier post-commit; ETS write is best-effort,
         # source-of-truth is Postgres.
-        _ = Storage.ETS.put(capsule_id, capsule)
+        _ = Storage.ETS.put(ets, capsule_id, capsule)
         result
 
       {:error, _changeset} = result ->
@@ -101,11 +124,18 @@ defmodule CosmpRouter.Storage do
   @doc """
   Soft-delete a Capsule by capsule_id. Postgres soft-delete (sets
   deleted_at) authoritative; on success, ETS purge.
+
+  ## Options
+
+  - `:ets` — Storage.ETS instance atom; defaults
+    `CosmpRouter.Storage.ETS` (production singleton).
   """
-  def delete(capsule_id) when is_binary(capsule_id) do
+  def delete(capsule_id, opts \\ []) when is_binary(capsule_id) do
+    ets = Keyword.get(opts, :ets, Storage.ETS)
+
     case Storage.Postgres.delete(capsule_id) do
       {:ok, _row} = result ->
-        _ = Storage.ETS.delete(capsule_id)
+        _ = Storage.ETS.delete(ets, capsule_id)
         result
 
       {:error, _} = result ->
@@ -116,8 +146,14 @@ defmodule CosmpRouter.Storage do
   @doc """
   Test-only: flush the ETS hot-tier. Postgres source-of-truth NEVER
   touched. Production code MUST NOT call this.
+
+  ## Options
+
+  - `:ets` — Storage.ETS instance atom; defaults
+    `CosmpRouter.Storage.ETS` (production singleton).
   """
-  def clear do
-    Storage.ETS.clear()
+  def clear(opts \\ []) do
+    ets = Keyword.get(opts, :ets, Storage.ETS)
+    Storage.ETS.clear(ets)
   end
 end

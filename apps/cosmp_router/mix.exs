@@ -29,10 +29,18 @@ defmodule CosmpRouter.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
   end
+
+  # Sub-phase 6a [BEAM-COSMP-TESTABILITY-REFACTOR] per ADR-0034:
+  # compile test/support/ helpers only in :test env (canonical Elixir
+  # pattern; KV.Registry Mix-OTP tutorial + DockYard "Understanding
+  # Test Concurrency in Elixir").
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def application do
     [
