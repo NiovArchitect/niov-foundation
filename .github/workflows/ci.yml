@@ -211,9 +211,38 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+    # Sub-phase 5b-ii CI-FIX per ADR-0033 §Decision Q-PG-TEST: the
+    # Postgres service container above starts EMPTY (fresh-per-job).
+    # CosmpRouter.Storage.PostgresTest setup INSERTs into the
+    # `entities` + `wallets` tables — must exist before mix test.
+    # Mirror the TS unit tier schema-push pattern: setup Node + npm
+    # ci + Prisma generate + Prisma push + audit-trigger install
+    # BEFORE mix test. DATABASE_URL set at job level so npm-side
+    # Prisma scripts pick it up; mix test reads URL from
+    # config/test.exs (hardcoded same value).
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Setup Node.js (for Prisma schema push to test DB)
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install Foundation deps (Prisma + tsx)
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Push Prisma schema to test DB (fresh-per-job Postgres service)
+        run: npm run db:push
+
+      - name: Apply audit_events BEFORE DELETE trigger (ADR-0002)
+        run: npx tsx scripts/apply-audit-triggers.ts
 
       - name: Setup BEAM (Elixir + Erlang/OTP per .tool-versions)
         uses: erlef/setup-beam@v1
