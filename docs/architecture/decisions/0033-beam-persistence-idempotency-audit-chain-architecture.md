@@ -818,3 +818,64 @@ pre-execution).
 - **Audit-chain verification CLI tool** (Elixir-side `mix audit.verify
   --chain-key=...`) — forward-queued; MVP at this sub-phase is the
   test-tier `verify_audit_chain/1` function only.
+
+## Substrate-Coherence Catches Surfaced At Sub-Phase 6 Pre-Flight
+
+### AuditOutcome enum constraint + D-AUDIT-OUTCOME-ENUM substrate-build observation
+
+#### Postgres enum canonical
+
+The `AuditOutcome` enum at `packages/database/prisma/schema.prisma`
+accepts only three values:
+
+- `SUCCESS` — operation completed successfully
+- `DENIED` — operation rejected by policy (permission boundary)
+- `ERROR` — operation failed at runtime (system error)
+
+No `FAILURE` value exists. TS register canonical across 14 sites
+(`auth.service.ts` + `negotiate.service.ts` +
+`dual-control.middleware.ts`): PERMISSION_DENIED paths → `DENIED`;
+runtime-error paths → `ERROR`.
+
+#### Elixir register substrate-coherence (post-hotfix)
+
+`CosmpRouter.Router.emit_audit_failure/3` maps `err.kind` to
+outcome per the canonical convention:
+
+- `err.kind == :PERMISSION_DENIED` → `"DENIED"`
+- all other `err.kind` values → `"ERROR"` (default at case fallthrough)
+
+This preserves semantic distinction between policy-rejection and
+system-failure outcomes; patent-implementation evidence register
+strengthens at the cross-language consistency.
+
+#### D-AUDIT-OUTCOME-ENUM substrate-build observation
+
+Sub-phase 5b-iii Commit B.1 substrate landed with hardcoded
+`outcome: "FAILURE"` in `emit_audit_failure/3`. The unit-tier test
+suite excluded integration tests via `@tag :integration` (per
+D-5BIII-COMMITB-1-REFINED Sandbox + supervised-GenServer fragility
+resolution); integration-tier excluded leaves substrate-state
+register at the excluded tier unverified.
+
+Sub-phase 6 pre-flight ran `mix test --include integration` and
+surfaced the AuditOutcome enum constraint violation: `Postgrex.Error
+22P02 (invalid_text_representation) "invalid input value for enum
+AuditOutcome: FAILURE"`.
+
+Substrate-build discipline lesson canonical at this observation:
+**integration-test-tier catches substrate-coherence bugs that
+unit-tier excluded missed**. Future substantive substrate-landing
+commits that defer integration tests should treat the deferred
+tier as unverified substrate until the deferral resolution commit
+exercises that tier.
+
+This joins the substrate-build discipline cluster canonical at
+sub-phase 5b-iii arc-closure:
+
+- **D-CI-FRESH-1/2/3** (cross-environment register)
+- **D-IDEMPOTENCY-3** (substrate-landing-with-CI-MOD)
+- **D-5BIII-COMMITB-1/2/3-REFINED** (test-granularity-tier)
+- **D-SUBSTRATE-LANDING-PREEMPT** (forward-reference rotation)
+- **D-AUDIT-OUTCOME-ENUM** (NEW) — integration-test-tier catches
+  substrate-coherence bugs unit-tier excluded missed

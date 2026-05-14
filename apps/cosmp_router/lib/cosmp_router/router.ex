@@ -391,9 +391,23 @@ defmodule CosmpRouter.Router do
     # to string before passing into details so canonical_json/1 (which
     # has no atom clause; byte-equivalent with TS canonicalJson which
     # has no atom semantics) can serialize it.
+    #
+    # Outcome mapping per AuditOutcome enum (SUCCESS | DENIED | ERROR);
+    # TS-aligned with auth.service.ts + negotiate.service.ts +
+    # dual-control.middleware.ts canonical at 14 sites. Per
+    # D-AUDIT-OUTCOME-ENUM substrate-build observation (integration-
+    # test-tier surfaced this constraint at sub-phase 6 pre-flight;
+    # 5b-iii Commit B.1 substrate landed with FAILURE outcome that
+    # unit-tier exclusion missed).
+    outcome =
+      case err.kind do
+        :PERMISSION_DENIED -> "DENIED"
+        _ -> "ERROR"
+      end
+
     Audit.write_audit_event(%{
       event_type: event_type,
-      outcome: "FAILURE",
+      outcome: outcome,
       actor_entity_id: nil,
       target_capsule_id: Keyword.get(opts, :target_capsule_id),
       system_principal: Audit.system_principals()[:cosmp_router],
