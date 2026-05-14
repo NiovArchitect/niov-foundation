@@ -1,11 +1,16 @@
 defmodule DbgiSupervisorTest do
   @moduledoc """
-  Sub-phase 7 `[BEAM-DBGI-APP-SKELETON]` OTP app skeleton tests at
-  the substrate-coherent register; substantively expanded at
-  sub-phase 8 `[BEAM-DBGI-PROCESS-GROUPS]` register to verify
-  children list substantive substrate at canonical register
-  (`:pg` + Registry + DynamicSupervisor canonical per ADR-0028 §3
-  + ADR-0030 §DBGI at substantive register).
+  Sub-phase 7 `[BEAM-DBGI-APP-SKELETON]` OTP app skeleton tests
+  substantively expanded across sub-phases 8 + 9:
+
+  - Sub-phase 8 `[BEAM-DBGI-PROCESS-GROUPS]`: `:pg` + Registry +
+    DynamicSupervisor canonical per ADR-0028 §3 + ADR-0030 §DBGI
+  - Sub-phase 9 `[BEAM-DBGI-LIBCLUSTER]`: Cluster.Supervisor +
+    Phoenix.PubSub + Phoenix.Tracker canonical per ADR-0028 §3
+    "CRDT-backed state where the workload permits" + ADR-0030 §DBGI
+    sub-phase 9 amendment (LANDED this commit per
+    D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE 27th
+    canonical substrate-build observation candidate)
 
   Substantive DBGI integration tests forward-queued to sub-phase 10
   `[BEAM-DBGI-INTEGRATION-TESTS]` per ADR-0030 §DBGI canonical at
@@ -14,14 +19,13 @@ defmodule DbgiSupervisorTest do
 
   ## References
 
-  - ADR-0028 §3 (BEAM Coordination Layer — names canonical patterns
-    for DBGI substrate at substrate-architectural register)
-  - ADR-0030 §DBGI Supervisor Layer (sub-phases 7-10 canonical at
-    substrate-architectural register)
-  - ADR-0034 (BEAM COSMP Testability Refactor Pattern; testability
-    discipline forward-applied at sub-phase 10 integration-test register)
-  - ADR-0035 §9 D-PHASE-8-PG-VS-GPROC-DISCRIMINATION (21st canonical
-    substrate-build observation candidate)
+  - ADR-0028 §3 (BEAM Coordination Layer)
+  - ADR-0030 §DBGI Supervisor Layer (sub-phases 7-10; sub-phase 9
+    amendment LANDS this commit)
+  - ADR-0034 (BEAM COSMP Testability Refactor Pattern)
+  - ADR-0035 §9 (D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st +
+    D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE 27th +
+    D-PHASE-9-PG2-VS-PG-COEXISTENCE 28th observation candidates)
   """
 
   use ExUnit.Case, async: false
@@ -30,13 +34,18 @@ defmodule DbgiSupervisorTest do
     assert is_pid(Process.whereis(DbgiSupervisor.Supervisor))
   end
 
-  test "Supervisor children list substantively at sub-phase 8 canonical register" do
+  test "Supervisor children list substantively at sub-phase 9 canonical register" do
     children = Supervisor.which_children(DbgiSupervisor.Supervisor)
-    # Substantively 3 children at sub-phase 8 canonical register:
+    # Substantively 6 children at sub-phase 9 canonical register:
+    # Sub-phase 8 baseline (process-group substrate):
     # - DbgiSupervisor.PG (`:pg` namespaced scope; modern OTP 23+ canonical)
     # - DbgiSupervisor.Registry (per-DMW addressing canonical)
     # - DbgiSupervisor.DynamicSupervisor (per-DMW lifecycle canonical)
-    assert length(children) == 3
+    # Sub-phase 9 expansion (multi-region cluster substrate):
+    # - DbgiSupervisor.ClusterSupervisor (libcluster topology canonical)
+    # - DbgiSupervisor.PubSub (Phoenix.PubSub cross-node messaging canonical)
+    # - DbgiSupervisor.PresenceTracker (Phoenix.Tracker CRDT-backed presence canonical)
+    assert length(children) == 6
   end
 
   test ":pg scope substantively at canonical register" do
@@ -49,5 +58,17 @@ defmodule DbgiSupervisorTest do
 
   test "DbgiSupervisor.DynamicSupervisor substantively at canonical register" do
     assert is_pid(Process.whereis(DbgiSupervisor.DynamicSupervisor))
+  end
+
+  test "DbgiSupervisor.ClusterSupervisor substantively at canonical register" do
+    assert is_pid(Process.whereis(DbgiSupervisor.ClusterSupervisor))
+  end
+
+  test "DbgiSupervisor.PubSub substantively at canonical register" do
+    assert is_pid(Process.whereis(DbgiSupervisor.PubSub))
+  end
+
+  test "DbgiSupervisor.PresenceTracker substantively at canonical register" do
+    assert is_pid(Process.whereis(DbgiSupervisor.PresenceTracker))
   end
 end

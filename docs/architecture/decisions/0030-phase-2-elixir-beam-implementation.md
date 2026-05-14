@@ -163,6 +163,46 @@ The decomposition:
 9. **`[BEAM-DBGI-LIBCLUSTER]`** — multi-region clustering topology via
    `libcluster`; Phoenix.PubSub for cross-node coordination; cluster-formation
    strategy configurable per deployment-target (gossip / DNS / Kubernetes).
+
+   **Sub-phase 9 amendment (LANDED at this commit; ADR-0030 §DBGI
+   sub-phase 9 amendment commit)**: Phoenix.Tracker (CRDT-backed
+   presence) canonical at sub-phase 9 substantive scope per
+   **D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE** (ADR-0035
+   §9 27th canonical substrate-build observation candidate) +
+   PG2/`:pg` coexistence canonical at canonical-pattern register per
+   **D-PHASE-9-PG2-VS-PG-COEXISTENCE** (ADR-0035 §9 28th canonical).
+   Phoenix.Tracker substantively coherent with ADR-0028 §3 "CRDT-
+   backed state where the workload permits" canonical at substrate-
+   architectural register; ADR-0030 §DBGI sub-phase 9 L163-165 names
+   `libcluster` + `Phoenix.PubSub` substantively but NOT
+   `Phoenix.Tracker` explicitly — this amendment substantively closes
+   that canonical-pattern register gap. Phoenix.PubSub PG2 adapter
+   (`Phoenix.PubSub.PG2`) substantively coexists with modern `:pg`
+   substrate (sub-phase 8 `DbgiSupervisor.PG`) at distributed
+   process-group register — two distinct registers, two distinct
+   namespaces, no conflict at canonical-coherence register. Topology
+   configurable via `Application.get_env(:libcluster, :topologies)`
+   per ADR-0018 deployment-agnostic canonical; empty topology default
+   at `config/config.exs` umbrella register; `Cluster.Strategy.Epmd`
+   canonical at local-dev + test register; `Gossip` / `Kubernetes` /
+   `DNS` at production deployment-target register. This amendment is
+   **canonical-pattern register clarification**, NOT architectural-
+   register supersession (substantively analogous to ADR-0034
+   §Sub-decision 3-amendment register + ADR-0030 §DBGI sub-phase 8
+   amendment register at substantive register). Sub-phase 9
+   substantive landing: `DbgiSupervisor.ClusterSupervisor` (libcluster
+   topology supervisor) + `DbgiSupervisor.PubSub` (Phoenix.PubSub) +
+   `DbgiSupervisor.PresenceTracker` (Phoenix.Tracker behaviour module
+   with `track/4` + `untrack/3` + `list/1` + `handle_diff/2`
+   canonical API). 6 children at sub-phase 9 supervision tree (3
+   sub-phase 8 baseline + 3 sub-phase 9 expansion). Multi-node CRDT
+   replication + cross-cluster broadcast deferred to sub-phase 10
+   `[BEAM-DBGI-INTEGRATION-TESTS]` per ADR-0030 §DBGI canonical at
+   substrate-architectural register. See ADR-0035 §9
+   D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE 27th +
+   D-PHASE-9-PG2-VS-PG-COEXISTENCE 28th canonical substrate-build
+   observation candidates for the discrimination + coexistence lineage
+   at broader Erlang/OTP + Phoenix community register.
 10. **`[BEAM-DBGI-INTEGRATION-TESTS]`** — end-to-end tests covering process
     group join/leave + clustering formation + failover semantics across nodes.
 

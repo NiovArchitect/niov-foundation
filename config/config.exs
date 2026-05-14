@@ -17,6 +17,18 @@ import Config
 # config/{dev,test,runtime}.exs.
 config :cosmp_router, ecto_repos: [CosmpRouter.Repo]
 
+# Sub-phase 9 [BEAM-DBGI-LIBCLUSTER] per ADR-0028 §3 + ADR-0030 §DBGI
+# canonical: empty topology default at umbrella-level register;
+# deployment-target-specific topology configurable via
+# Application.get_env(:libcluster, :topologies) override at deploy-time
+# register per ADR-0018 deployment-agnostic canonical at substrate-
+# architectural register. Cluster.Strategy.Epmd canonical at local-dev
+# + test register; Cluster.Strategy.Gossip / Kubernetes / DNS at
+# production deployment-target register substantively configurable per
+# operator-deploy register.
+config :libcluster,
+  topologies: []
+
 # Import env-specific config at the end (canonical Elixir pattern;
 # allows env-specific overrides of any umbrella-level config above).
 import_config "#{config_env()}.exs"

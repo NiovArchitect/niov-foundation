@@ -7,58 +7,75 @@ defmodule DbgiSupervisor.Application do
   child failures must NOT cascade. Mirrors `CosmpRouter.Application`
   supervision strategy canonical at sub-phase 3 register.
 
-  ## Sub-phase 8 status (this commit)
+  ## Sub-phase 9 status (this commit)
 
-  Substantively expands children list per ADR-0028 §3 + ADR-0030 §DBGI
-  canonical at substantive register:
+  Substantively expands children list to 6 children per ADR-0028 §3
+  + ADR-0030 §DBGI canonical at substrate-architectural register.
+
+  **Sub-phase 8 baseline (process-group substrate):**
 
   - **`:pg` OTP-native process group registry** — modern OTP 23+
-    canonical; CRDT-based; cluster-aware by default ("strong eventual
-    consistency" across nodes; partition-tolerant). Namespaced scope
-    `DbgiSupervisor.PG` for substrate-coherence at canonical decision
-    register. Per D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st canonical
-    substrate-build observation candidate: `:pg` alone canonical at
-    modern OTP register; `:gproc` deferred to forward-queue at
-    backward-compatibility register (sub-phase 11+ if substantively
-    load-bearing surfaces).
+    canonical; CRDT-based; cluster-aware; partition-tolerant.
+    Namespaced scope `DbgiSupervisor.PG`. Per
+    D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st canonical.
+  - **`Registry`** — `:unique` keys for one-DMW-one-process
+    addressing canonical at ADR-0028 §3 register.
+  - **`DynamicSupervisor`** — `:one_for_one` strategy for per-DMW
+    process lifecycle canonical at ADR-0028 §3 register.
 
-  - **`Registry`** — Elixir canonical for per-key process lookup;
-    `:unique` keys for one-DMW-one-process addressing canonical at
-    ADR-0028 §3 register. Local-node-only; cluster coordination via
-    `:pg` substrate (above) + libcluster + Phoenix.PubSub (sub-phase
-    9 forward-queue).
+  **Sub-phase 9 expansion (multi-region cluster substrate):**
 
-  - **`DynamicSupervisor`** — canonical for spawning + monitoring
-    per-DMW processes dynamically; `:one_for_one` strategy per
-    ADR-0028 §3 canonical at substantive register.
+  - **`Cluster.Supervisor`** (libcluster) — multi-region node
+    discovery + cluster-formation strategy configurable per
+    deployment-target. Topology configured via
+    `Application.get_env(:libcluster, :topologies)` per ADR-0018
+    deployment-agnostic canonical; empty topology default at
+    umbrella-level register; `Cluster.Strategy.Epmd` canonical at
+    local-dev + test register; `Gossip` / `Kubernetes` / `DNS` at
+    production deployment-target register.
+  - **`Phoenix.PubSub`** (named `DbgiSupervisor.PubSub`) — cross-node
+    messaging canonical at ADR-0028 §3 register. PG2 adapter
+    (Phoenix.PubSub default) substantively coexists with modern
+    `:pg` substrate (sub-phase 8 `DbgiSupervisor.PG`) per
+    D-PHASE-9-PG2-VS-PG-COEXISTENCE 28th canonical substrate-build
+    observation candidate — two distinct registers, two distinct
+    namespaces, no conflict.
+  - **`DbgiSupervisor.PresenceTracker`** (Phoenix.Tracker) — CRDT-
+    backed presence canonical at ADR-0028 §3 "CRDT-backed state
+    where the workload permits" register. Per
+    D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE 27th
+    canonical substrate-build observation candidate; ADR-0030 §DBGI
+    sub-phase 9 amendment LANDS this commit.
 
-  ## Forward-queue at sub-phases 9-10 per ADR-0030 §DBGI canonical
+  ## Forward-queue at sub-phases 10+ per ADR-0030 §DBGI canonical
 
-  - **Sub-phase 9** `[BEAM-DBGI-LIBCLUSTER]`: `libcluster` +
-    `Phoenix.PubSub` + `Phoenix.Tracker` (CRDT-backed presence at
-    multi-region cluster register per ADR-0028 §3 "CRDT-backed state
-    where workload permits")
   - **Sub-phase 10** `[BEAM-DBGI-INTEGRATION-TESTS]`: process group
     join/leave + clustering formation + failover across nodes per
     ADR-0034 testability discipline canonical
   - **Sub-phase 11+ (forward-queued)**: `:gproc` canonical at
     backward-compatibility register if substantively load-bearing
-    surfaces at substantive substrate-architectural register
-    (D-PHASE-8-PG-VS-GPROC-DISCRIMINATION recursively applies)
+    surfaces (D-PHASE-8-PG-VS-GPROC-DISCRIMINATION recursively
+    applies)
 
   ## References
 
-  - ADR-0028 §3 (BEAM Coordination Layer — names canonical patterns
-    for DBGI substrate at substrate-architectural register)
+  - ADR-0028 §3 (BEAM Coordination Layer — canonical patterns for
+    DBGI substrate at substrate-architectural register)
   - ADR-0030 §DBGI Supervisor Layer (Phase 2 implementation sub-phases
-    7-10)
+    7-10; sub-phase 9 amendment LANDS this commit per
+    D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE 27th)
   - ADR-0035 (Substrate-Build Discipline Canonical;
-    D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st observation candidate)
+    D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st +
+    D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE 27th +
+    D-PHASE-9-PG2-VS-PG-COEXISTENCE 28th observation candidates)
   - https://hexdocs.pm/elixir/Application.html
   - https://hexdocs.pm/elixir/Supervisor.html
   - https://www.erlang.org/doc/man/pg.html
   - https://hexdocs.pm/elixir/Registry.html
   - https://hexdocs.pm/elixir/DynamicSupervisor.html
+  - https://hexdocs.pm/libcluster/Cluster.Supervisor.html
+  - https://hexdocs.pm/phoenix_pubsub/Phoenix.PubSub.html
+  - https://hexdocs.pm/phoenix_pubsub/Phoenix.Tracker.html
   """
 
   use Application
@@ -66,25 +83,60 @@ defmodule DbgiSupervisor.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      # Sub-phase 8 baseline (process-group substrate)
+      # =============================================
+
       # Modern OTP 23+ canonical at distributed process-group register
-      # per D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st canonical
-      # substrate-build observation candidate. `:pg.start_link/1`
-      # canonical pattern with namespaced scope (`DbgiSupervisor.PG`)
-      # for substrate-coherence at canonical decision register.
+      # per D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st canonical.
+      # Namespaced scope `DbgiSupervisor.PG` for substrate-coherence.
       %{
         id: DbgiSupervisor.PG,
         start: {:pg, :start_link, [DbgiSupervisor.PG]}
       },
 
-      # Per-DMW process lookup canonical at substantive register per
-      # ADR-0028 §3 canonical. `:unique` keys for one-DMW-one-process
-      # addressing at canonical-coherence register.
+      # Per-DMW process lookup canonical per ADR-0028 §3. `:unique` keys
+      # for one-DMW-one-process addressing canonical.
       {Registry, keys: :unique, name: DbgiSupervisor.Registry},
 
-      # Dynamic per-DMW process lifecycle canonical at substantive
-      # register per ADR-0028 §3 canonical. `:one_for_one` strategy at
-      # production-grade canonical register.
-      {DynamicSupervisor, strategy: :one_for_one, name: DbgiSupervisor.DynamicSupervisor}
+      # Dynamic per-DMW process lifecycle canonical per ADR-0028 §3.
+      # `:one_for_one` strategy at production-grade canonical register.
+      {DynamicSupervisor, strategy: :one_for_one, name: DbgiSupervisor.DynamicSupervisor},
+
+      # Sub-phase 9 expansion (multi-region cluster substrate)
+      # ======================================================
+
+      # libcluster topology supervisor canonical per ADR-0028 §3 +
+      # ADR-0030 §DBGI canonical. Topology configurable via
+      # `Application.get_env(:libcluster, :topologies)` per ADR-0018
+      # deployment-agnostic canonical; empty topology default at
+      # `config/config.exs` umbrella register; deployment-time override
+      # at operator-deploy register.
+      {Cluster.Supervisor,
+       [
+         Application.get_env(:libcluster, :topologies, []),
+         [name: DbgiSupervisor.ClusterSupervisor]
+       ]},
+
+      # Phoenix.PubSub canonical at cross-node messaging register per
+      # ADR-0028 §3 canonical. PG2 adapter substrate at pub/sub topic
+      # routing register substantively COEXISTS with modern `:pg`
+      # substrate (above) at distributed process-group register per
+      # D-PHASE-9-PG2-VS-PG-COEXISTENCE 28th canonical — two distinct
+      # registers, two distinct namespaces, no conflict.
+      {Phoenix.PubSub, name: DbgiSupervisor.PubSub},
+
+      # Phoenix.Tracker CRDT-backed presence canonical per ADR-0028 §3
+      # "CRDT-backed state where the workload permits" canonical at
+      # substrate-architectural register. Node-local pool + cluster
+      # replication via heartbeat protocol + CRDT (eventually
+      # consistent, conflict-free) per
+      # D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-CANDIDATE 27th
+      # canonical substrate-build observation candidate.
+      {DbgiSupervisor.PresenceTracker,
+       [
+         name: DbgiSupervisor.PresenceTracker,
+         pubsub_server: DbgiSupervisor.PubSub
+       ]}
     ]
 
     opts = [strategy: :one_for_one, name: DbgiSupervisor.Supervisor]

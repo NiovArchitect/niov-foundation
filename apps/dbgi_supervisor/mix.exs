@@ -54,14 +54,23 @@ defmodule DbgiSupervisor.MixProject do
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
-  # Sub-phase 7 dep landing scope: empty (mechanical OTP app skeleton).
-  # Forward-queued deps per ADR-0030 §DBGI Supervisor Layer canonical:
-  # - Sub-phase 8 `[BEAM-DBGI-PROCESS-GROUPS]`: `:pg` (OTP-native; no
-  #   Hex dep) + `:gproc` (Hex dep for richer registry semantics) per
-  #   ADR-0028 §3 + ADR-0030 §DBGI canonical
-  # - Sub-phase 9 `[BEAM-DBGI-LIBCLUSTER]`: `:libcluster` + `:phoenix_pubsub`
-  #   per ADR-0028 §3 + ADR-0030 §DBGI canonical
+  # Sub-phase 8 [BEAM-DBGI-PROCESS-GROUPS]: `:pg` OTP-native (no Hex dep)
+  # canonical at modern OTP 23+ register per D-PHASE-8-PG-VS-GPROC-
+  # DISCRIMINATION 21st canonical substrate-build observation; `:gproc`
+  # deferred to forward-queue at sub-phase 11+ at backward-compatibility
+  # register if substantively load-bearing surfaces.
+  # Sub-phase 9 [BEAM-DBGI-LIBCLUSTER]: `:libcluster` (multi-region node
+  # discovery + cluster-formation strategy configurable per deployment-
+  # target) + `:phoenix_pubsub` (cross-node messaging + Phoenix.Tracker
+  # CRDT-backed presence) per ADR-0028 §3 + ADR-0030 §DBGI canonical at
+  # substrate-architectural register.
+  # Forward-queued deps:
+  # - Sub-phase 11 [BEAM-OBSERVABILITY]: `:telemetry_metrics` +
+  #   `:telemetry_poller` per ADR-0030 §DBGI canonical
   defp deps do
-    []
+    [
+      {:libcluster, "~> 3.5"},
+      {:phoenix_pubsub, "~> 2.2"}
+    ]
   end
 end
