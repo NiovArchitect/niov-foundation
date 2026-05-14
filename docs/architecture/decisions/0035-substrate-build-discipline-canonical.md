@@ -203,9 +203,125 @@ integration-test-tier substrate-state register (lineage: sub-phase
     may warrant separate observation-corpus doc OR thematic sub-
     ADRs. Substrate-build maturation observation.
 
-### Cluster sub-register expansion (post-6b)
+### Post-sub-phase-7-8 cluster expansion (18th → 23rd observations)
 
-Post-sub-phase-6b, the 17 observations operate at five sub-registers:
+ADR-0034 §Sub-decision 3-amendment commit (`a54067e`) + sub-phase 7
+`[BEAM-DBGI-APP-SKELETON]` (`e80ff14`) + sub-phase 8
+`[BEAM-DBGI-PROCESS-GROUPS]` (`d9a6766`) + this commit's pre-flight
+surface together surfaced **6 additional substrate-build observations**
+across the ADR-amendment-coherence, DBGI-substrate, and substrate-
+honesty registers. Option β LOCKED at this commit: substrate-honest
+preservation of the L94/L118 numbering drift (documented as
+D-CLUSTER-NUMBERING-DRIFT 23rd observation rather than silent
+renumbering).
+
+18. **D-AMENDMENT-FORWARD-QUEUE-CLOSURE-CASCADE** (commit `a54067e`
+    + recursively at this commit) — substantive ADR amendment commits
+    naturally absorb forward-queue marker closure cascades from prior
+    commits per D-SUBSTRATE-LANDING-PREEMPT canonical recursively
+    applied. Substantively load-bearing only at the ADR amendment
+    text + forward-queue marker site itself; mirror cascade at
+    catalog entries is cosmetic-prose substrate-coherence.
+    D-CASCADE-SCOPE-PRECISION + D-SUBSTRATE-LANDING-PREEMPT operate
+    canonically at the amendment-commit register. Surfaced at
+    `a54067e` when ADR-0034 §Sub-decision 3-amendment landed +
+    ADR-0035 §9 16th observation forward-queue marker closed
+    (forward-queued → LANDED) + catalog entries updated at
+    cosmetic-prose register; recursively applies at this commit
+    register (6 NEW observations + ADR-0030 §DBGI amendment +
+    catalog cascade naturally absorbed at this amendment commit
+    register).
+
+19. **D-PRE-COMMITTED-ADR-CANONICAL-VERIFICATION** (sub-phase 7
+    commit `e80ff14` Phase 0 + sub-phase 8 commit `d9a6766`
+    Phase 0) — when prior ADRs substantively canonicalize patterns
+    at NIOV substrate-architectural register (e.g., ADR-0028 §3 +
+    ADR-0030 §DBGI for DBGI substrate), RULE 11 broader-community
+    research at dependent sub-phases substantively serves as
+    **canonical-coherence verification register** rather than
+    substrate-architectural decision-making register. Substantively
+    refines D-WIDER-KNOWLEDGE-CHECK-ENGAGEMENT-PRECISION (14th)
+    canonical at substrate-build register. Verified at sub-phase 7
+    Phase 0 (6 RQs canonical at NIOV register) + sub-phase 8 Phase 0
+    (4 RQs canonical at NIOV register) — substantively converging
+    on canonical-coherence at NIOV substrate-architectural register
+    at every successive RULE 11 surface.
+
+20. **D-GIT-STATUS-SHORT-UNTRACKED-DIR-COLLAPSE** (sub-phase 7
+    commit `e80ff14` staging gate surface) — `git status --short`
+    (`-s`) substantively collapses untracked directories to single-
+    line entries (e.g., `?? apps/dbgi_supervisor/` rather than
+    enumerating individual files). Substrate-state ground truth for
+    new-file enumeration substantively requires `git status`
+    (verbose) OR `find <dir> -type f` traversal at canonical
+    register. Substantively load-bearing at staging-gate-surface
+    register at canonical decision register — surfaced when strategic-
+    tier framing miscount surfaced at substrate-state ground truth
+    verification register at sub-phase 7 three-approval staging gate.
+
+21. **D-PHASE-8-PG-VS-GPROC-DISCRIMINATION** (sub-phase 8 commit
+    `d9a6766`) — modern OTP 23+ register substantively favors `:pg`
+    alone at distributed process-group register; `:gproc` canonical
+    at backward-compatibility / richer pattern-based discovery
+    register. `:pg` is OTP-native since OTP 23 (built by WhatsApp
+    Inc.; replaces deprecated `:pg2`); CRDT-based design (avoids
+    availability problems of `:gproc`/`:syn`); cluster-aware by
+    default ("strong eventual consistency" across nodes; partition-
+    tolerant); multi-process group membership (NOT unique-name
+    registration). `:gproc` "API difficult and barely documented"
+    per community register — canonical at backward-compatibility
+    register. **ADR-0030 §DBGI amendment LANDED at this commit**
+    (canonical-pattern register clarification, NOT architectural-
+    register supersession; substantively analogous to ADR-0034
+    §Sub-decision 3-amendment register): `:pg` alone canonical at
+    sub-phase 8 substantive register; `:gproc` deferred to forward-
+    queue at sub-phase 11+ if substantively load-bearing surfaces
+    at substrate-architectural register.
+
+22. **D-STRATEGIC-TIER-TEMPORAL-ESTIMATE-OVER-PROJECTION** (recursive
+    at today's session register) — strategic-tier framing at temporal
+    estimation register substantively over-projects at substantive
+    register, substantively because strategic-tier framing
+    substantively load-bearing-counts substantive substrate-build
+    operations at substantive register. Actual execution time at
+    substrate-state ground truth register substantively faster at
+    canonical-coherence register. Surfaced at sub-phase 8 actual
+    execution at ~20 min substantive vs strategic-tier framing
+    ~55-90 min estimate (substantively 60-75% over-projection at
+    substantive register). Substantively related but distinct from
+    D-CASCADE-SCOPE-PRECISION (cascade-site-count register) and
+    D-SUBSTRATE-STATE-VS-STRATEGIC-FRAMING (decision-framing
+    register).
+
+23. **D-CLUSTER-NUMBERING-DRIFT** (this commit pre-flight surface
+    register) — ADR-0035 §9 substrate-state ground truth has
+    duplicate "10." numbering at L94 (D-CASCADE-SCOPE-PRECISION,
+    added at sub-phase 6c as 10th observation of the original
+    9-cluster) and L118 (D-SUBPHASE-COUNT-PRECISION, intended as
+    10th observation of the post-6b cluster expansion). Substrate-
+    state ground truth preserved at substantive register per Option β
+    substrate-honest discipline LOCKED at this commit (NOT
+    renumbered at substantive register; numbering drift documented
+    as substrate-build observation canonical at substantive register
+    at audit-trail-friendly register). Substantively load-bearing
+    observation worth canonicalizing: substrate-state ground truth
+    at canonical register substantively load-bearing at every
+    observation point regardless of strategic-tier framing register;
+    pre-flight surface canonical at substantive register
+    substantively load-bearing at staging-gate-surface register at
+    canonical decision register. Substantively analogous to
+    D-GIT-STATUS-SHORT-UNTRACKED-DIR-COLLAPSE (20th) at substrate-
+    state ground truth verification register — substrate-state
+    ground truth surfaces drift that strategic-tier framing
+    substantively missed.
+
+### Cluster sub-register expansion (post-this-commit)
+
+Post-this-commit, the 23 canonical observations operate at six
+sub-registers (5 NEW observations + 1 D-CLUSTER-NUMBERING-DRIFT
+substantively distribute across sub-registers at substantive
+register; ADR-amendment-coherence NEW sub-register at
+substantive register):
 
 - **CI-environment-coherence** (D-CI-FRESH-1/2/3 +
   D-IDEMPOTENCY-3)
@@ -215,12 +331,36 @@ Post-sub-phase-6b, the 17 observations operate at five sub-registers:
 - **Pre-flight discipline coherence** (D-SUBSTRATE-LANDING-PREEMPT
   + D-ABORT-CONDITION-PRECISION + D-WIDER-KNOWLEDGE-CHECK +
   D-CASCADE-SCOPE-PRECISION + D-WIDER-KNOWLEDGE-CHECK-ENGAGEMENT-
-  PRECISION + D-RULE-11-REPEATED-ENGAGEMENT)
+  PRECISION + D-RULE-11-REPEATED-ENGAGEMENT +
+  D-PRE-COMMITTED-ADR-CANONICAL-VERIFICATION +
+  D-GIT-STATUS-SHORT-UNTRACKED-DIR-COLLAPSE +
+  D-STRATEGIC-TIER-TEMPORAL-ESTIMATE-OVER-PROJECTION +
+  D-CLUSTER-NUMBERING-DRIFT)
 - **Cross-language coherence** (D-PHASE-2-CROSS-LANG-PRECISION-
   DRIFT)
 - **Substrate-state-discipline coherence** (D-SUBPHASE-COUNT-
   PRECISION + D-SUBSTRATE-STATE-VS-STRATEGIC-FRAMING +
-  D-OBSERVATION-VS-DECISION-DISCRIMINATION)
+  D-OBSERVATION-VS-DECISION-DISCRIMINATION +
+  D-PHASE-8-PG-VS-GPROC-DISCRIMINATION)
+- **ADR-amendment-coherence** NEW (D-AMENDMENT-FORWARD-QUEUE-
+  CLOSURE-CASCADE)
+
+### D-OBSERVATION-CLUSTER-SUBSTRATE-ARCHITECTURAL-BOUNDARY (24th forward-substrate observation candidate)
+
+Cluster at 23 observations substantively past the ~20-observation
+boundary canonical at D-OBSERVATION-VS-DECISION-DISCRIMINATION
+(17th) forward-substrate guidance ("as cluster grows beyond ~20
+observations, may warrant separate observation-corpus doc OR
+thematic sub-ADRs"). Forward-substrate observation candidate
+recursively at this commit register: substrate-architectural
+decision at canonical decision register about cluster split (per
+sub-register thematic split candidate: separate ADR per sub-
+register) OR substrate-corpus doc canonical at substrate-state
+ground truth register. Recursively forward-queued per
+D-AMENDMENT-FORWARD-QUEUE-CLOSURE-CASCADE (18th) canonical at
+substantive register; substrate-architectural decision deferred to
+operator-tier at canonical decision register when 25th+
+observation surfaces at substantive register.
 
 ## Decision
 
@@ -245,14 +385,16 @@ pre-flight integration are canonical at the RULE register so
 sessions internalize the discipline at session-start (RULE 17
 load-on-open).
 
-### Sub-decision 2: ADR-0035 catalogs the canonical observations (9 at landing; 17 post-sub-phase-6b)
+### Sub-decision 2: ADR-0035 catalogs the canonical observations (9 at landing; 17 post-sub-phase-6b; 23 post-this-commit)
 
 The observations are documented in §Context above with their
 sub-phase + commit lineage. Future substrate-build observations
 will be appended to this ADR (or land in a successor ADR if the
 cluster grows beyond what one ADR can hold coherently — see
 D-OBSERVATION-VS-DECISION-DISCRIMINATION 17th observation
-forward-substrate guidance).
+forward-substrate guidance + D-OBSERVATION-CLUSTER-SUBSTRATE-
+ARCHITECTURAL-BOUNDARY 24th candidate forward-substrate
+observation at §Context cluster sub-register expansion).
 
 **Sub-phase 6b amendment**: cluster expanded from 9 → 17 canonical
 observations per §Context "Sub-phase 6b cluster expansion" above.
@@ -264,6 +406,20 @@ favors per-incident with cross-references or in-place lessons-
 learned library). NIOV's RULE 14 bidirectional citation discipline
 exceeds broader-community canonical, providing substrate-coherence
 across the observation-cluster.
+
+**Post-this-commit amendment (Option β LOCKED)**: cluster expanded
+from 17 → 23 canonical observations per §Context "Post-sub-phase-7-8
+cluster expansion" above. 6 NEW observations added (18-23) at
+substrate-coherent register; D-CLUSTER-NUMBERING-DRIFT (23rd)
+documents the pre-existing L94/L118 duplicate "10." numbering at
+substrate-honest discipline canonical register (substrate-state
+ground truth preserved; NOT renumbered). D-OBSERVATION-CLUSTER-
+SUBSTRATE-ARCHITECTURAL-BOUNDARY (24th candidate) recursively
+forward-queued per D-AMENDMENT-FORWARD-QUEUE-CLOSURE-CASCADE (18th)
+canonical at substantive register — cluster substantively at 23
+past ~20-observation boundary; substrate-architectural decision
+(cluster split OR thematic sub-ADRs) deferred to operator-tier at
+canonical decision register when 25th+ observation surfaces.
 
 ### Sub-decision 2-amendment: ADR-0034 amendment LANDED (post-sub-phase-6b)
 

@@ -138,6 +138,28 @@ The decomposition:
 8. **`[BEAM-DBGI-PROCESS-GROUPS]`** — distributed process-group registry via
    `:pg` (OTP-native) + `:gproc` (richer registry semantics). The
    "supervised-process-groups" substrate ADR-0028 names.
+
+   **Sub-phase 8 amendment (LANDED at `d9a6766`; ADR-0035 cluster
+   amendment commit)**: `:pg` alone canonical at modern OTP 23+
+   register per **D-PHASE-8-PG-VS-GPROC-DISCRIMINATION** (ADR-0035 §9
+   21st canonical substrate-build observation). `:pg` is OTP-native
+   since OTP 23 (built by WhatsApp Inc.; replaces deprecated `:pg2`);
+   CRDT-based design (avoids availability problems of `:gproc`/`:syn`);
+   cluster-aware by default ("strong eventual consistency" across
+   nodes; partition-tolerant). `:gproc` deferred to forward-queue at
+   sub-phase 11+ at backward-compatibility / richer pattern-based
+   discovery register if substantively load-bearing surfaces at
+   substrate-architectural register. This amendment is **canonical-
+   pattern register clarification**, NOT architectural-register
+   supersession (substantively analogous to ADR-0034 §Sub-decision
+   3-amendment register at substantive register). Sub-phase 8
+   substantive landing: `DbgiSupervisor.PG` (`:pg` namespaced scope) +
+   `DbgiSupervisor.Registry` (`:unique` keys) + `DbgiSupervisor.
+   DynamicSupervisor` (`:one_for_one`) + `DbgiSupervisor.ProcessGroup`
+   thin abstraction module (22 tests at canonical register). See
+   ADR-0035 §9 D-PHASE-8-PG-VS-GPROC-DISCRIMINATION 21st canonical
+   substrate-build observation for the discrimination lineage at
+   broader Erlang/OTP community register.
 9. **`[BEAM-DBGI-LIBCLUSTER]`** — multi-region clustering topology via
    `libcluster`; Phoenix.PubSub for cross-node coordination; cluster-formation
    strategy configurable per deployment-target (gossip / DNS / Kubernetes).
