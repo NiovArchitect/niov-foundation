@@ -29,12 +29,17 @@ defmodule NiovFoundationBeam.MixProject do
   end
 
   # Explicit Elixir-app enumeration (Q-COEXISTENCE Option X). Sub-phase
-  # 3 adds cosmp_router; sub-phase 7 of the Block B mini-arc will add
-  # dbgi_supervisor. Non-Elixir apps (apps/api/ Fastify+TypeScript)
-  # remain invisible to mix tooling. The map shape is
-  # %{app_name => path} per mix's apps_paths convention.
+  # 3 [BEAM-COSMP-APP-SKELETON] added cosmp_router; sub-phase 7
+  # [BEAM-DBGI-APP-SKELETON] adds dbgi_supervisor per ADR-0030 §DBGI
+  # Supervisor Layer canonical at substrate-architectural register.
+  # Non-Elixir apps (apps/api/ Fastify+TypeScript) remain invisible to
+  # mix tooling. The map shape is %{app_name => path} per mix's
+  # apps_paths convention.
   defp apps_paths do
-    %{cosmp_router: "apps/cosmp_router"}
+    %{
+      cosmp_router: "apps/cosmp_router",
+      dbgi_supervisor: "apps/dbgi_supervisor"
+    }
   end
 
   # Umbrella roots have no top-level deps initially; apps inherit their

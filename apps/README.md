@@ -66,6 +66,15 @@ values.
 - ADR-0016 (Pin-and-Optimize Framework) — the version-pinning authority
 - ADR-0025 (Schema-Push-Target Discipline) — Postgres schema authority
   preserved at TypeScript Prisma during Phase 2
-- The 13-sub-phase Block B mini-arc — substrate-build commits from
-  sub-phase 2 `[BEAM-MIX-WORKSPACE]` (this commit) through sub-phase 13
-  `[BEAM-ARC-CLOSURE]`.
+- The 19-sub-phase Block B mini-arc — substrate-build commits from
+  sub-phase 2 `[BEAM-MIX-WORKSPACE]` through sub-phase 13
+  `[BEAM-ARC-CLOSURE]` (expanded 13 → 14 at sub-phase 4a per Q-G
+  split — see ADR-0031; 14 → 15 at sub-phase 5a per Q-P split — see
+  ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R split — see ADR-0033;
+  16 → 17 at sub-phase 5b-iii per Q-NEW-SPLIT split — see ADR-0033
+  §Forward path; 17 → 18 at sub-phase 6a per Q-NEW-SPLIT-2 split —
+  see ADR-0034; 18 → 19 at sub-phase 6c per Q-NEW-SPLIT-3 split —
+  see ADR-0035). Cumulative-lineage cascade closure for this missed
+  site at sub-phase 7 commit per D-SUBSTRATE-LANDING-PREEMPT
+  canonical + D-CASCADE-SCOPE-PRECISION substrate-build observation
+  recursively applied at substrate-state ground truth register.
