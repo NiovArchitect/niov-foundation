@@ -720,8 +720,10 @@ problem already solved by shell + CI conventions. Skipped.
   ADR-0028's commitment-to-ship for the persistence + audit-chain
   substrate
 - **ADR-0030** (Phase 2 Elixir/BEAM Implementation) — **load-bearing**:
-  the 16-sub-phase Block B mini-arc ports ADR-0030 §Decision; this ADR
-  lands at sub-phase 5b-ii of that arc per Q-R split
+  the 17-sub-phase Block B mini-arc ports ADR-0030 §Decision; this ADR
+  lands at sub-phase 5b-ii of that arc per Q-R split + Q-NEW-SPLIT
+  16 → 17 expansion at sub-phase 5b-iii (this ADR's substrate landed
+  across sub-phases 5b-ii + 5b-iii Commit A + Commit B.1 + Commit B.2)
 - **ADR-0031** (BEAM Routing Substrate Architecture) — **load-bearing**:
   Q-D explicitly forward-queued the idempotency strategy to sub-phase
   5b-ii / 6; this ADR resolves Q-D
@@ -776,12 +778,32 @@ problem already solved by shell + CI conventions. Skipped.
 
 | Sub-phase | Subject | This ADR's instantiation |
 |-----------|---------|---------------------------|
-| 5b-ii | `[BEAM-COSMP-INTEROP-PERSISTENCE]` (this commit) | Repo + schemas + Translator + Audit primitive + Storage facade + Idempotency layer + ADR-0033 land |
-| 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | End-to-end COSMP op flow tests against live Postgres + audit-chain verification across language boundary; ADR-0026 §5 Patterns 3 + 5 fully instantiated |
+| 5b-ii | `[BEAM-COSMP-INTEROP-PERSISTENCE]` (LANDED `3df3805` + CI-FIX `edc330f` + CI-FIX-2 `c527bdb`) | Repo + schemas + Translator + Audit primitive (byte-equivalent canonical_record + sha256_hex) + Storage facade + ADR-0033 §Decision 1-5 substrate; CI Postgres service + Prisma push step |
+| 5b-iii Commit A | `[BEAM-COSMP-INTEROP-INTEGRATION-IDEMPOTENCY]` (LANDED `fd982be`) | Idempotency layer per §Decision 6; Elixir-owned migration first instantiation (D-5BII-EXEC-5 Option β); ADR-0026 §5 Pattern 4 + Pattern 5 substrate |
+| 5b-iii Commit B.1 | `[BEAM-COSMP-INTEROP-INTEGRATION-ROUTER]` (LANDED `73ec21d`) | Router 7-op composed-mode WRITE/SHARE/REVOKE via Ecto.Multi + standalone READ/AUDIT/AUTHENTICATE/NEGOTIATE; Translator integration replacing in-memory `Capsule.audit` array; all 6 BEAM-compatibility patterns now fully instantiated at Router register |
+| 5b-iii Commit B.2 | `[BEAM-COSMP-INTEROP-INTEGRATION-CASCADE]` (this commit) | Q-NEW-SPLIT canonicalization (Block B 16 → 17 sub-phases); 12-site cumulative-lineage cascade; 5-site forward-ref rotation (2 `(forthcoming)` + 3 D-CASCADE-6); sub-phase 5b-iii arc-closure framing |
+| 6 | `[BEAM-COSMP-INTEGRATION-TESTS]` | End-to-end COSMP op flow tests against live Postgres + audit-chain verification across language boundary; 9 router_test.exs deferred + 11 grpc/server_test.exs deferred per D-5BIII-COMMITB-1-REFINED Sandbox + supervised-GenServer fragility resolution (shared-mode Sandbox OR per-test Router restart pattern) |
 | 7-10 | DBGI sub-phases | Sibling DBGI substrate; this ADR's audit primitive likely reused for DBGI audit emissions |
 | 11 | `[BEAM-OBSERVABILITY]` | `:telemetry_metrics` for Repo query latency + audit-chain verification metrics |
 | 12 | `[BEAM-CANONICAL-RECORD]` | `beam-coordination-canonical-record.md` documents this ADR's Translator pattern + dual-mode audit operationally |
 | 13 | `[BEAM-ARC-CLOSURE]` | Onboarding cascade + section-12-progress.md row 35 + ADR-0028 forward → landed; ADR-0033 substrate-honest discipline lessons fold into engineer onboarding doc |
+
+**Sub-phase 5b-iii arc-closure register:** ADR-0033 substantively
+landed across 4 commits (5b-ii + 5b-iii Commit A + Commit B.1 +
+Commit B.2). Substrate-build discipline cluster canonical at this
+closure register: **D-CI-FRESH-1** (CI services fresh-per-job) +
+**D-CI-FRESH-2** (per-job container instances) + **D-CI-FRESH-3**
+(mirror canonical workflow blocks VERBATIM) + **D-IDEMPOTENCY-3**
+(substrate landing commit includes its CI register MOD;
+substantive-substrate-landing commits include their consumer-tier
+CI dependencies) + **D-5BIII-COMMITB-1-REFINED** (Sandbox +
+supervised-GenServer fragile at cross-process AND cross-test-cycle
+boundaries; integration-test-tier complexity) +
+**D-SUBSTRATE-LANDING-PREEMPT** (substantive substrate-landing
+commits often eliminate forward-reference markers naturally as
+part of substantive prose update; isolated forward-ref-rotation
+commits afterward should re-grep substrate-state ground truth
+pre-execution).
 
 **Forward-substrate items deferred from this ADR:**
 

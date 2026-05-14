@@ -27,8 +27,11 @@ defmodule CosmpRouter.GRPC.Server do
   All 7 RPCs implemented; full 7-op bridge per Q-N (production
   live-grade; no `:not_implemented` stubs cross gRPC boundary).
   Router fills all 7 `handle_call` bodies against ETS-backed storage
-  per Q-T. Sub-phase 5b-ii layers Postgres source-of-truth on top
-  per ADR-0033 (forthcoming).
+  per Q-T. Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] layered
+  Postgres source-of-truth on top per ADR-0033 §Decision 5
+  (Storage facade); Router consumer integration at sub-phase 5b-iii
+  Commit B.1 [BEAM-COSMP-INTEROP-INTEGRATION-ROUTER] per ADR-0033
+  §Decision 4e (composed-mode discipline).
 
   ## References
 

@@ -8,16 +8,23 @@ defmodule CosmpRouter.Router.State do
   - `in_flight` — map tracking in-flight COSMP operations (op_id → metadata);
     populates as sub-phases 5b-ii / 6 add per-op tracking
   - `started_at` — monotonic time at GenServer init; observability signal
-  - `storage` — module reference to the storage backend (default
-    `CosmpRouter.Storage.ETS`; sub-phase 5b-ii layers Postgres on top
-    per ADR-0033 forthcoming; module pointer abstraction supports
-    future tier transition without Router-internal refactor)
+  - `storage` — module reference to the storage backend; rotated
+    sub-phase 5b-iii Commit B.1 from `CosmpRouter.Storage.ETS`
+    (5b-i hot-tier-only) to `CosmpRouter.Storage` (the facade per
+    ADR-0033 §Decision 5; ETS-first read with Postgres source-of-
+    truth fallthrough); module pointer abstraction supported the
+    tier transition without Router-internal refactor
 
-  ## Deferred per ADR-0031 Q-D + ADR-0033 (forthcoming)
+  ## Per ADR-0031 Q-D + ADR-0033 §Decision 6 (Idempotency layer)
 
-  `idempotency_table` lands at sub-phase 5b-ii / 6 with the
-  idempotency strategy decision (ETS hot-tier + Postgres durable
-  layer per ADR-0026 §5 Pattern 5 instantiation).
+  `idempotency_keys` table landed at sub-phase 5b-iii Commit A
+  `[BEAM-COSMP-INTEROP-INTEGRATION-IDEMPOTENCY]` (Elixir-owned DDL
+  boundary first instantiation per D-5BII-EXEC-5 hybrid Option β);
+  Router consumer integration at sub-phase 5b-iii Commit B.1
+  `[BEAM-COSMP-INTEROP-INTEGRATION-ROUTER]` per ADR-0026 §5 Pattern 5
+  (idempotent verification keys) instantiated via
+  `CosmpRouter.Idempotency.check/2` + `record/3` wrapping
+  WRITE/SHARE/REVOKE.
 
   ## References
 
