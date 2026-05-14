@@ -8,5 +8,11 @@
 # out — Sandbox.checkout is only called from setup blocks of tests
 # that exercise CosmpRouter.Repo / Storage.Postgres / write_audit_event.
 
-ExUnit.start()
+# Sub-phase 5b-iii Commit B.1 [BEAM-COSMP-INTEROP-INTEGRATION-ROUTER]:
+# exclude :integration tag by default. DB-touching Router tests
+# (composed-mode WRITE/SHARE/REVOKE/READ/AUDIT) are deferred to
+# sub-phase 6 [BEAM-COSMP-INTEGRATION-TESTS] canonical home per
+# test-granularity-tier coherence. Tag opt-in via:
+#   mix test --include integration
+ExUnit.start(exclude: [:integration])
 Ecto.Adapters.SQL.Sandbox.mode(CosmpRouter.Repo, :manual)

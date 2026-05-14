@@ -14,6 +14,17 @@ defmodule CosmpRouter.GRPC.ServerTest do
 
   use ExUnit.Case, async: false
 
+  # Sub-phase 5b-iii Commit B.1 [BEAM-COSMP-INTEROP-INTEGRATION-ROUTER]:
+  # All gRPC server handlers route through the Router GenServer which
+  # post-refactor performs Postgres + audit_events + idempotency_keys
+  # operations from a different process than the test. Per
+  # D-5BIII-COMMITB-1 substrate-build observation (Sandbox cross-
+  # process gap), every server_test.exs case is now integration-test-
+  # tier by definition (cross-process DB interaction). Deferred in
+  # full to sub-phase 6 [BEAM-COSMP-INTEGRATION-TESTS] canonical home.
+  # Opt-in via: mix test --include integration
+  @moduletag :integration
+
   alias CosmpRouter.GRPC.Server
   alias CosmpRouter.Proto
   alias CosmpRouter.Storage.ETS, as: Storage

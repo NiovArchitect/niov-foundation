@@ -18,12 +18,24 @@ defmodule CosmpRouter.Capsule do
   per ADR-0031 Q-J — patent-implementation evidence register strengthens
   when struct field order matches patent canonical ordering exactly.
 
-  ## Sub-phase 4b status — placeholder only
+  ## Sub-phase substrate landing lineage (D-CASCADE-7 semantic split)
 
-  No validation logic at sub-phase 4b per ADR-0031 Q-B Option A.
-  Full validation + persistence integration arrives at sub-phase 5b-i
-  `[BEAM-COSMP-INTEROP-GRPC]` when gRPC interop populates Capsules from
-  external payloads.
+  - Sub-phase 4b `[BEAM-COSMP-GENSERVER-CODE]` — placeholder per
+    ADR-0031 Q-B Option A; struct-only; no validation logic
+  - Sub-phase 5b-i `[BEAM-COSMP-INTEROP-GRPC]` — validation primitives
+    land via `CosmpRouter.Capsule.Validator`; gRPC interop populates
+    Capsules from external payloads
+  - Sub-phase 5b-ii `[BEAM-COSMP-INTEROP-PERSISTENCE]` — persistence
+    substrate lands via `CosmpRouter.MemoryCapsule` (Ecto schema) +
+    `CosmpRouter.Capsule.Translator` (pack/unpack 7-layer ↔ 30-field
+    projection) per ADR-0033 §Decision 3a-3b
+  - Sub-phase 5b-iii Commit B.1 `[BEAM-COSMP-INTEROP-INTEGRATION-ROUTER]`
+    — composed-mode integration at Router register: WRITE/SHARE/REVOKE
+    use Ecto.Multi wrapping Storage.put + Audit.write_audit_event/3 +
+    Idempotency.check/record per ADR-0033 §Decision 4e + RULE 4 atomic
+    compound; in-memory `audit` array semantics REPLACED with Postgres
+    `audit_events` emission (caller queries audit_chain_for_capsule/1
+    on-demand)
 
   ## References
 
