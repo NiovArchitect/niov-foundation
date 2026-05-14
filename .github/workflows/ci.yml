@@ -292,4 +292,13 @@ jobs:
           MIX_ENV: test
 
       - name: Test
-        run: mix test
+        # Per ADR-0035 substrate-build discipline canonical: --include
+        # integration flag is canonical-discipline marker. At sub-phase
+        # 6b register all tests are default-suite (no :integration-tagged
+        # tests remain post-router_test.exs + grpc/server_test.exs
+        # substrate-state-coherent rewrite per ADR-0034 Sub-decision 3
+        # canonical). Flag is no-op at behavioral register but substrate-
+        # coherent for future Elixir/BEAM substrate at sub-phases 7-13
+        # DBGI where expensive-test-tier :integration-tagged tests may
+        # surface (observability, libcluster multi-region, etc.).
+        run: mix test --include integration

@@ -56,7 +56,7 @@ defmodule CosmpRouter.MemoryCapsule do
     field :payload_size_tokens, :integer
     field :tokens, :integer, default: 0
     field :tokens_tokenizer, :string, default: "anthropic"
-    field :commitment_date, :utc_datetime
+    field :commitment_date, :utc_datetime_usec
 
     # Storage register
     field :storage_location, :string
@@ -86,11 +86,34 @@ defmodule CosmpRouter.MemoryCapsule do
     field :previous_version, :integer
 
     # Patent layer 5 (Time)
-    field :created_at, :utc_datetime, autogenerate: {DateTime, :utc_now, []}
-    field :last_accessed_at, :utc_datetime
-    field :last_updated_at, :utc_datetime
-    field :expires_at, :utc_datetime
-    field :deleted_at, :utc_datetime
+    #
+    # All DateTime fields use `:utc_datetime_usec` (microsecond
+    # precision at Elixir register), mirroring `AuditEvent.timestamp`
+    # canonical at the same Postgres-shared-DDL register. Prisma owns
+    # the table DDL (per ADR-0025 + ADR-0033 §Decision 7) and produces
+    # `TIMESTAMP(3)` (millisecond precision) — Postgres silently
+    # truncates the microseconds on column write.
+    #
+    # Per D-PHASE-2-CROSS-LANG-PRECISION-DRIFT substrate-build
+    # observation (canonical at ADR-0035, surfaced at sub-phase 6b
+    # integration-tier execution): the canonical NIOV pattern matches
+    # `Audit.write_audit_event/1` substrate at `audit.ex:297-301` —
+    # Elixir holds microsecond precision; `canonical_record/1`
+    # truncates to millisecond at hash time for byte-equivalence with
+    # the TS register (ADR-0033 §D-5BII-EXEC-2 + §Decision 4a). No
+    # autogenerate-side truncation; full microsecond at the schema
+    # register.
+    field :created_at, :utc_datetime_usec, autogenerate: {DateTime, :utc_now, []}
+    field :last_accessed_at, :utc_datetime_usec
+    # `last_updated_at` autogenerates on insert mirroring `created_at`.
+    # Prisma's canonical `@updatedAt` semantic auto-updates on every
+    # write; this Ecto autogenerate covers the insert boundary so
+    # NOT NULL is satisfied when `Translator.pack/1` returns nil for
+    # this field (Proto-routed WRITE with `time: nil`). Mutation-time
+    # updates land via explicit changeset (no Ecto auto-touch).
+    field :last_updated_at, :utc_datetime_usec, autogenerate: {DateTime, :utc_now, []}
+    field :expires_at, :utc_datetime_usec
+    field :deleted_at, :utc_datetime_usec
   end
 
   @doc """

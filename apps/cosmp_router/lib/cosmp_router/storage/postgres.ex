@@ -48,7 +48,18 @@ defmodule CosmpRouter.Storage.Postgres do
   decided by `Repo.get/2` lookup on `capsule_id`.
   """
   def put(capsule_id, %CosmpRouter.Capsule{} = capsule) when is_binary(capsule_id) do
-    attrs = Translator.pack(capsule) |> Map.put(:capsule_id, capsule_id)
+    # Drop nil-valued keys before changeset construction so Ecto
+    # schema autogenerate fires for time fields (`created_at`,
+    # `last_updated_at`) when `Translator.pack/1` returns nil (e.g.,
+    # Proto-routed WRITE with `time: nil`). Explicit nil in a
+    # changeset bypasses autogenerate per Ecto canonical; dropping
+    # the key restores autogenerate-on-insert semantics.
+    attrs =
+      capsule
+      |> Translator.pack()
+      |> Map.put(:capsule_id, capsule_id)
+      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+      |> Map.new()
 
     case Repo.get(MemoryCapsule, capsule_id) do
       nil ->
@@ -69,9 +80,27 @@ defmodule CosmpRouter.Storage.Postgres do
   Fetch a Capsule by capsule_id; returns `{:ok, %CosmpRouter.Capsule{}}`
   via Translator.unpack/1, or `{:error, :not_found}` if no row OR
   if soft-deleted (deleted_at is not nil per RULE 10).
+
+  ## D-PHASE-1-UUID-CAST resolution (sub-phase 6b per ADR-0034)
+
+  Non-UUID-format `capsule_id` (e.g., test input `"does-not-exist"`)
+  is treated as `:not_found` at the Storage facade boundary —
+  graceful degradation per ADR-0033 §Decision 5. Without the
+  `Ecto.UUID.cast/1` guard, `Repo.get/2` raises
+  `Ecto.Query.CastError` when the binary doesn't parse as a UUID.
+  Storage substrate must be robust to input variety at the facade
+  layer; consumers passing non-UUID format see `:not_found` rather
+  than a runtime exception.
   """
   def get(capsule_id) when is_binary(capsule_id) do
-    case Repo.get(MemoryCapsule, capsule_id) do
+    case Ecto.UUID.cast(capsule_id) do
+      {:ok, uuid} -> get_by_uuid(uuid)
+      :error -> {:error, :not_found}
+    end
+  end
+
+  defp get_by_uuid(uuid) do
+    case Repo.get(MemoryCapsule, uuid) do
       nil ->
         {:error, :not_found}
 
@@ -100,7 +129,13 @@ defmodule CosmpRouter.Storage.Postgres do
         {:error, :not_found}
 
       %MemoryCapsule{} = row ->
-        deleted_at = DateTime.utc_now() |> DateTime.truncate(:second)
+        # Microsecond-precision DateTime per ADR-0033 §D-5BII-EXEC-2
+        # cross-language canonical (D-PHASE-2-CROSS-LANG-PRECISION-DRIFT
+        # resolution at sub-phase 6b). Schema field `deleted_at` is
+        # `:utc_datetime_usec`; full microsecond avoids ArgumentError
+        # on dump. Postgres TIMESTAMP(3) truncates to millisecond on
+        # column write per Prisma DDL register.
+        deleted_at = DateTime.utc_now()
 
         row
         |> Ecto.Changeset.change(deleted_at: deleted_at)

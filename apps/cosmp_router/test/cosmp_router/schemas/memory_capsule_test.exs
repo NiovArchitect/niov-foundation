@@ -93,10 +93,15 @@ defmodule CosmpRouter.MemoryCapsuleTest do
     assert MemoryCapsule.__schema__(:type, :topic_tags) == {:array, :string}
   end
 
-  test "patent layer 5 (Time) fields are utc_datetime" do
+  test "patent layer 5 (Time) fields are utc_datetime_usec" do
+    # Per sub-phase 6b D-PHASE-2-CROSS-LANG-PRECISION-DRIFT resolution
+    # (Option F): all DateTime fields use `:utc_datetime_usec` (Elixir
+    # microsecond precision) mirroring `AuditEvent.timestamp` canonical
+    # at the Postgres-shared-DDL register. Postgres TIMESTAMP(3) per
+    # Prisma DDL truncates microseconds on column write.
     for time_field <- [:created_at, :last_accessed_at, :last_updated_at, :expires_at, :deleted_at] do
-      assert MemoryCapsule.__schema__(:type, time_field) == :utc_datetime,
-             "Time-layer field #{time_field} should be :utc_datetime"
+      assert MemoryCapsule.__schema__(:type, time_field) == :utc_datetime_usec,
+             "Time-layer field #{time_field} should be :utc_datetime_usec"
     end
   end
 

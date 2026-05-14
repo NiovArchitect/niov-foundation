@@ -258,6 +258,46 @@ defaults to **microsecond precision** (e.g.,
 logical timestamps produce different canonical strings → divergent
 hashes → cross-language verifyAuditChain breaks.
 
+#### 4a-amendment (sub-phase 6b): Cross-language precision register extends to MemoryCapsule schema
+
+The D-5BII-EXEC-2 millisecond canonical originally landed at the
+audit-chain register only (`canonical_record/1` hash-time truncation
+above). Sub-phase 6b integration-tier execution surfaced
+**D-PHASE-2-CROSS-LANG-PRECISION-DRIFT** (ADR-0035 §9 12th
+substrate-build observation): the `MemoryCapsule` Ecto schema declared
+DateTime fields as `:utc_datetime` (Elixir second precision) while
+Prisma's DDL produces `TIMESTAMP(3)` (millisecond precision) — a
+register-level drift between Elixir Ecto schema register and the
+cross-language Prisma-canonical column register.
+
+**Resolution (Option F LOCKED at sub-phase 6b)**: all six DateTime
+fields in `MemoryCapsule` rotated to `:utc_datetime_usec` (Elixir
+microsecond precision); the `created_at` + `last_updated_at`
+autogenerate uses `{DateTime, :utc_now, []}` (full microsecond per
+the canonical NIOV pattern mirroring `AuditEvent.timestamp` at
+`audit.ex:297-301`). The three-register-coherent substrate-state
+discrimination canonical:
+
+- **Elixir register** — `:utc_datetime_usec` (microsecond precision;
+  full `DateTime.utc_now()` no truncation)
+- **canonical_record register** — `DateTime.truncate(:millisecond)`
+  at hash-time only (this section's load-bearing guidance; preserves
+  byte-equivalence with TS `Date.toISOString()`)
+- **Postgres column register** — `TIMESTAMP(3)` per Prisma DDL
+  (silently truncates microsecond input to millisecond on column
+  write; reads back as `.NNN000` zero-padded microseconds)
+
+The audit-chain register's `DateTime.truncate(:millisecond)` is
+preserved unchanged at the canonical-record hash-time boundary;
+production code at `Storage.Postgres.delete/1` + `MemoryCapsule`
+schema autogenerate uses full microsecond `DateTime.utc_now()` per
+the canonical NIOV pattern (the column register handles truncation).
+
+See **ADR-0035 §9 D-PHASE-2-CROSS-LANG-PRECISION-DRIFT** for the
+substrate-build observation lineage + ADR-0035 §9
+D-SUBSTRATE-STATE-VS-STRATEGIC-FRAMING for the strategic-tier-vs-
+substrate-state discrimination lineage.
+
 #### 4b. `canonical_json/1` byte-equivalence
 
 The TypeScript implementation (audit.ts:252-268) recursively

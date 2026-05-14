@@ -108,6 +108,119 @@ The 9 observations operate at three sub-registers:
   PREEMPT + D-ABORT-CONDITION-PRECISION + D-WIDER-KNOWLEDGE-CHECK
   + D-CASCADE-SCOPE-PRECISION)
 
+### Sub-phase 6b cluster expansion (10th → 17th observations)
+
+Sub-phase 6b `[BEAM-COSMP-INTEGRATION-TESTS]` execution surfaced
+**8 additional substrate-build observations** across the
+integration-test-tier substrate-state register (lineage: sub-phase
+6c pre-flight + sub-phase 6b Phase 0/1/2/3/5 execution arcs).
+
+10. **D-SUBPHASE-COUNT-PRECISION** (sub-phase 6c pre-flight; commit
+    `6db538e` lineage) — sub-phase counts derive from the canonical
+    sub-phase identifier list (`1, 2, 3, 4a, 4b, 5a, 5b-i, 5b-ii,
+    5b-iii, 6a, 6b, 6c, 7, 8, 9, 10, 11, 12, 13` = 19), NOT from
+    commit count. Multi-commit sub-phases count as ONE sub-phase
+    (5b-iii's 3-commit arc = 1 sub-phase). Non-sub-phase commits
+    (hotfix `def66b9`, cascade-only `b9b41f7`, CI fixes `edc330f` +
+    `c527bdb`) DO NOT expand the sub-phase count. Surfaced when
+    framing the closed-sub-phase tally drifted across three
+    successive commits (post-hotfix, post-6a, post-6c).
+11. **D-WIDER-KNOWLEDGE-CHECK-ENGAGEMENT-PRECISION** (sub-phase 6b
+    Phase 0 surface; commit at this register) — RULE 11
+    broader-community pattern research applies at EVERY
+    architectural-coupling observation, not just the first one of a
+    session. Surfaced when discipline correction was applied at
+    Phase 0 of Q-PHASE-2-FK-PATTERN (substrate-internal grep
+    → broader-community research) and re-applied at Q-PHASE-2-UTC-
+    DATETIME-RESOLUTION + Q-PHASE-3-GRPC-TEST-PATTERN +
+    Q-PHASE-5-ADR-AMENDMENT-PATTERN.
+12. **D-PHASE-2-CROSS-LANG-PRECISION-DRIFT** (sub-phase 6b Phase 2;
+    commit at this register) — `MemoryCapsule` Ecto schema register
+    drifted from Prisma DDL `TIMESTAMP(3)` millisecond canonical +
+    ADR-0033 §D-5BII-EXEC-2 millisecond canonical. Three-register-
+    coherent resolution at sub-phase 6b Option F LOCKED: Elixir
+    `:utc_datetime_usec` + production microsecond `DateTime.utc_now()`
+    + Postgres TIMESTAMP(3) silent truncation on column write.
+    Cross-citation: ADR-0033 §4a-amendment.
+13. **D-SUBSTRATE-STATE-VS-STRATEGIC-FRAMING** (sub-phase 6b Phase 2
+    Option F resolution; commit at this register) — strategic-tier
+    framing isn't always canonical at substrate-state ground truth
+    register. Surfaced when Phase 2 execution caught the canonical
+    NIOV pattern (microsecond at Elixir + `canonical_record`
+    millisecond truncation at hash-time only) that strategic-tier
+    Option F framing initially missed (`[:millisecond]` autogenerate
+    truncation was the initial proposal; substrate-state ground
+    truth at `audit.ex:297-301` revealed the correct pattern).
+    Substrate-state register wins; strategic-tier framing iterates
+    toward substrate-state canonical.
+14. **D-RULE-11-REPEATED-ENGAGEMENT** (sub-phase 6b Phases 0/2/3/5;
+    commit at this register) — four successive RULE 11 surfaces in
+    one session converging on canonical-coherence at NIOV's existing
+    substrate-architectural register: Q-PHASE-2-FK-PATTERN (Proto +
+    Translator + Capsule canonical per Google Protobuf "Use
+    Different Messages For RPC APIs and Storage") +
+    Q-PHASE-2-UTC-DATETIME-RESOLUTION (`:utc_datetime_usec` + full
+    microsecond canonical per Ecto + Prisma TIMESTAMP(3)
+    cross-language register) + Q-PHASE-3-GRPC-TEST-PATTERN
+    (`Server.handler(req, nil)` direct call canonical per
+    elixir-grpc test suite) + Q-PHASE-5-ADR-AMENDMENT-PATTERN
+    (in-place §9 expansion canonical at observation-cluster
+    register; see also D-OBSERVATION-VS-DECISION-DISCRIMINATION
+    below). The discipline operates canonically when applied
+    consistently.
+15. **D-PHASE-3-ETS-NOT-TRANSACTIONAL** (sub-phase 6b Phase 3
+    pre-substantive surface; commit at this register) — ETS state
+    at the singleton `CosmpRouter.Storage.ETS` is NOT transactional
+    across tests. `Sandbox.checkout` wraps Postgres in transactions
+    rolled back at test end, but ETS state persists. Canonical
+    mitigation: UUID-per-test `Ecto.UUID.generate()` capsule_ids
+    avoid cross-test ETS state pollution at the capsule_id register.
+    Alternative: explicit `Storage.ETS.clear/1` in setup. NIOV
+    canonical: UUID-per-test (carried from router_test.exs canonical
+    at sub-phase 6b Phase 2).
+16. **D-SANDBOX-ALLOW-VS-START-OWNER-DISCRIMINATION** (sub-phase 6b
+    Phase 3 Step 3-e execution; commit at this register) —
+    `Sandbox.allow` canonical Ecto pattern holds for **single-test
+    cross-process access** (one test, app-supervised GenServer
+    accesses Repo); for **sequential multi-test runs within same
+    test module** against a singleton supervised GenServer,
+    `start_owner!/stop_owner` canonical Ecto v3 pattern required
+    (dedicated owner process surviving test process lifecycle).
+    ADR-0034 Sub-decision 3 framing conflated the two scenarios;
+    sub-phase 6b Phase 3 Step 3-e execution surfaced the
+    discrimination. ADR-0034 amendment forward-queued for separate
+    amendment commit post-sub-phase-6b CI green.
+17. **D-OBSERVATION-VS-DECISION-DISCRIMINATION** (sub-phase 6b
+    Phase 5 Phase 0 RULE 11 surface; commit at this register) —
+    broader-community ADR canonical guidance for **decisions**
+    favors multiple smaller ADRs (Henderson); canonical for
+    **observations** at scale uses per-incident with cross-references
+    (Google SRE postmortem culture). NIOV's ADR-0035 is an
+    observation-cluster (lessons-learned library register); in-place
+    §9 expansion is canonical at the observation register. Forward-
+    substrate observation: as cluster grows beyond ~20 observations,
+    may warrant separate observation-corpus doc OR thematic sub-
+    ADRs. Substrate-build maturation observation.
+
+### Cluster sub-register expansion (post-6b)
+
+Post-sub-phase-6b, the 17 observations operate at five sub-registers:
+
+- **CI-environment-coherence** (D-CI-FRESH-1/2/3 +
+  D-IDEMPOTENCY-3)
+- **Test-granularity coherence** (D-5BIII-COMMITB-1/2/3-REFINED +
+  D-AUDIT-OUTCOME-ENUM + D-PHASE-3-ETS-NOT-TRANSACTIONAL +
+  D-SANDBOX-ALLOW-VS-START-OWNER-DISCRIMINATION)
+- **Pre-flight discipline coherence** (D-SUBSTRATE-LANDING-PREEMPT
+  + D-ABORT-CONDITION-PRECISION + D-WIDER-KNOWLEDGE-CHECK +
+  D-CASCADE-SCOPE-PRECISION + D-WIDER-KNOWLEDGE-CHECK-ENGAGEMENT-
+  PRECISION + D-RULE-11-REPEATED-ENGAGEMENT)
+- **Cross-language coherence** (D-PHASE-2-CROSS-LANG-PRECISION-
+  DRIFT)
+- **Substrate-state-discipline coherence** (D-SUBPHASE-COUNT-
+  PRECISION + D-SUBSTRATE-STATE-VS-STRATEGIC-FRAMING +
+  D-OBSERVATION-VS-DECISION-DISCRIMINATION)
+
 ## Decision
 
 NIOV Labs canonicalizes the 9 substrate-build discipline
@@ -131,12 +244,51 @@ pre-flight integration are canonical at the RULE register so
 sessions internalize the discipline at session-start (RULE 17
 load-on-open).
 
-### Sub-decision 2: ADR-0035 catalogs the 9 observations
+### Sub-decision 2: ADR-0035 catalogs the canonical observations (9 at landing; 17 post-sub-phase-6b)
 
-The 9 observations are documented in §Context above with their
+The observations are documented in §Context above with their
 sub-phase + commit lineage. Future substrate-build observations
 will be appended to this ADR (or land in a successor ADR if the
-cluster grows beyond what one ADR can hold coherently).
+cluster grows beyond what one ADR can hold coherently — see
+D-OBSERVATION-VS-DECISION-DISCRIMINATION 17th observation
+forward-substrate guidance).
+
+**Sub-phase 6b amendment**: cluster expanded from 9 → 17 canonical
+observations per §Context "Sub-phase 6b cluster expansion" above.
+The in-place §Context expansion is substrate-coherent at the
+observation-cluster register per D-OBSERVATION-VS-DECISION-
+DISCRIMINATION canonical (broader-community ADR canonical for
+decisions favors multiple smaller ADRs; canonical for observations
+favors per-incident with cross-references or in-place lessons-
+learned library). NIOV's RULE 14 bidirectional citation discipline
+exceeds broader-community canonical, providing substrate-coherence
+across the observation-cluster.
+
+### Sub-decision 2-amendment: ADR-0034 amendment forward-queued (sub-phase 6b)
+
+**D-SANDBOX-ALLOW-VS-START-OWNER-DISCRIMINATION** (16th canonical
+observation) surfaced at sub-phase 6b Phase 3 Step 3-e execution
+that ADR-0034 Sub-decision 3 framing ("Sandbox.allow canonical Ecto
+pattern for app-supervised GenServer case") conflated single-test
+vs sequential-multi-test scenarios. The canonical discrimination:
+
+- `Sandbox.allow(Repo, self(), pid)` is canonical for **single-test
+  cross-process access** (one test boundary; one Sandbox owner)
+- `start_owner!(Repo, shared: true)` + `stop_owner(pid)` is canonical
+  for **sequential multi-test access to app-supervised GenServer**
+  (dedicated owner process surviving test process lifecycle)
+
+**ADR-0034 amendment scope (forward-queued)**: amend ADR-0034
+Sub-decision 3 §Decision text to discriminate the two patterns at
+the canonical-pattern register. Forward-queued to a separate
+amendment commit post-sub-phase-6b CI green per RULE 20 (ADR
+modifications are Founder-authorized) + per
+D-SUBSTRATE-LANDING-PREEMPT principle (substantive substrate-
+landing commits absorb forward-reference markers naturally; the
+amendment is substrate-coherent at its own register and warrants a
+dedicated commit). Sub-phase 6b commit lands the substrate-state
+resolution (`start_owner!/stop_owner` setup in grpc/server_test.exs)
+without modifying ADR-0034 text.
 
 ### Sub-decision 3: `elixir-beam-best-practices.md` curated reference
 

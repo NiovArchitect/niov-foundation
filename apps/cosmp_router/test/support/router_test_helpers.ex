@@ -47,7 +47,9 @@ defmodule CosmpRouter.RouterTestHelpers do
   - Elixir Mix-OTP "ETS" tutorial (KV.Registry name-configurability canonical)
   """
 
-  alias CosmpRouter.{Repo, Router, Storage}
+  alias CosmpRouter.{AuditEvent, IdempotencyKey, Proto, Repo, Router, Storage}
+
+  import Ecto.Query, only: [from: 2]
 
   @doc """
   Start per-test Router + Storage.ETS instances with unique atom names.
@@ -102,6 +104,18 @@ defmodule CosmpRouter.RouterTestHelpers do
   5b-ii); inline UUID literals because Postgrex's parameterized $1
   path expects 16-byte binary for UUID type but the literal-cast path
   lets Postgres handle it directly.
+
+  ## When to use this vs `setup_router_fk!/0`
+
+  Use `setup_fk_parents!/0` (two distinct UUIDs) for **Storage.Postgres
+  register tests** (e.g., `postgres_test.exs`) where the Capsule is
+  constructed at the internal-domain register with separate
+  `wallet_id` + `entity_id` in `permissions`.
+
+  Use `setup_router_fk!/0` (single shared UUID) for **Router-via-Proto
+  register tests** where the Proto.Capsule is the wire format and
+  `Translator.pack/1` falls back `wallet_id = entity_id = owner`. See
+  D-PHASE-2-PROTO-PERMS-LOSSY substrate-state observation.
   """
   @spec setup_fk_parents!() :: {String.t(), String.t()}
   def setup_fk_parents! do
@@ -123,6 +137,63 @@ defmodule CosmpRouter.RouterTestHelpers do
     """)
 
     {entity_id, wallet_id}
+  end
+
+  @doc """
+  Router-via-Proto FK parent setup. Inserts `entities` + `wallets`
+  rows where `wallet_id` and `entity_id` share a single UUID matching
+  `Translator.pack/1` fallback semantics (`wallet_id = owner`;
+  `entity_id = owner`).
+
+  Returns the single shared UUID for use as `owner` in
+  `%Proto.Permissions{owner: uuid}`.
+
+  ## Why this exists (D-PHASE-2-PROTO-PERMS-LOSSY)
+
+  `Proto.Permissions` wire format only has `owner` + `granted_to`
+  fields (canonical per Google Protobuf "Use Different Messages For
+  RPC APIs and Storage" best practice — separate wire and storage
+  types with translation layer). Internal `CosmpRouter.Capsule`
+  preserves the 3-wallet architecture per ADR-0001;
+  `CosmpRouter.Capsule.Translator.pack/1` bridges the registers by
+  falling back `wallet_id = entity_id = owner` when the internal
+  permissions map only has `owner` (the Proto-derived form).
+
+  For Router tests that route through Proto:
+  `%Proto.WriteRequest{capsule: %Proto.Capsule{permissions:
+  %Proto.Permissions{owner: shared_uuid}}}` → `Translator.to_capsule`
+  → internal `%Capsule{permissions: %{owner: shared_uuid}}` →
+  `Translator.pack` → `MemoryCapsule{wallet_id: shared_uuid,
+  entity_id: shared_uuid}`. FK setup needs both `entities` and
+  `wallets` rows keyed by the shared UUID.
+
+  ## References
+
+  - ADR-0001 (Three-wallet architecture; internal register)
+  - ADR-0032 (BEAM gRPC Interop; wire format register)
+  - ADR-0033 §Decision 5 (Storage facade) + §Translator pack semantics
+  - Google Protobuf "Proto Best Practices" — separate API + storage
+    types via translation layer
+  """
+  @spec setup_router_fk!() :: String.t()
+  def setup_router_fk! do
+    shared_uuid = Ecto.UUID.generate()
+
+    Repo.query!("""
+      INSERT INTO entities
+        (entity_id, entity_type, display_name, public_key, created_at, updated_at)
+      VALUES
+        ('#{shared_uuid}'::uuid, 'PERSON', 'test entity', 'test_public_key', NOW(), NOW())
+    """)
+
+    Repo.query!("""
+      INSERT INTO wallets
+        (wallet_id, entity_id, wallet_type, niov_can_access_contents, created_at, updated_at)
+      VALUES
+        ('#{shared_uuid}'::uuid, '#{shared_uuid}'::uuid, 'PERSONAL', false, NOW(), NOW())
+    """)
+
+    shared_uuid
   end
 
   @doc """
@@ -154,8 +225,8 @@ defmodule CosmpRouter.RouterTestHelpers do
       ],
       relations: [],
       time: %{
-        created_at: DateTime.utc_now() |> DateTime.truncate(:second),
-        last_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        created_at: DateTime.utc_now(),
+        last_updated_at: DateTime.utc_now()
       },
       permissions: %{
         wallet_id: wallet_id,
@@ -163,5 +234,105 @@ defmodule CosmpRouter.RouterTestHelpers do
       },
       audit: []
     }
+  end
+
+  # ============================================================================
+  # Proto-routed test helpers (sub-phase 6b consumers: router_test.exs +
+  # grpc/server_test.exs + future Elixir/BEAM tests via Proto layer)
+  # ============================================================================
+
+  @doc """
+  Build a valid `%CosmpRouter.Proto.Capsule{}` for Proto-routed tests.
+  The `owner_uuid` is the single shared UUID from `setup_router_fk!/0`;
+  `Translator.pack/1` will fall back `wallet_id = entity_id = owner_uuid`
+  per D-PHASE-2-PROTO-PERMS-LOSSY substrate-state observation.
+
+  Pattern carried from sub-phase 6b router_test.exs canonical;
+  promoted to shared helper at Q-PHASE-3-DECISION-3 Option α.
+  """
+  @spec build_proto_capsule(String.t()) :: Proto.Capsule.t()
+  def build_proto_capsule(owner_uuid) do
+    %Proto.Capsule{
+      payload: "test-payload-bytes",
+      metadata: %{
+        "capsule_type" => "FOUNDATIONAL",
+        "content_hash" => "sha256:test",
+        "storage_location" => "test://#{Ecto.UUID.generate()}",
+        "payload_summary" => "test summary"
+      },
+      rules: [
+        %Proto.Rule{name: "decay_type", value: "TIME_BASED"}
+      ],
+      permissions: %Proto.Permissions{owner: owner_uuid, granted_to: []},
+      audit: []
+    }
+  end
+
+  @doc """
+  Count `audit_events` rows for a given `event_type` across all
+  capsule_ids (canonical assertion for standalone-audit-emission tests
+  where `target_capsule_id` may be nil).
+  """
+  @spec audit_count_for_event_type(String.t()) :: non_neg_integer()
+  def audit_count_for_event_type(event_type) do
+    Repo.aggregate(
+      from(a in AuditEvent, where: a.event_type == ^event_type),
+      :count,
+      :audit_id
+    )
+  end
+
+  @doc """
+  Count `audit_events` rows for a `target_capsule_id` filtered by
+  `event_type` (canonical assertion for composed-mode op tests + AUDIT
+  query verification).
+  """
+  @spec audit_count_for_capsule(String.t(), String.t()) :: non_neg_integer()
+  def audit_count_for_capsule(capsule_id, event_type) do
+    Repo.aggregate(
+      from(a in AuditEvent,
+        where: a.target_capsule_id == ^capsule_id and a.event_type == ^event_type
+      ),
+      :count,
+      :audit_id
+    )
+  end
+
+  @doc """
+  Return distinct `outcome` values for an `event_type` across all
+  capsule_ids (canonical assertion for DENIED-path verification).
+  """
+  @spec audit_outcomes_for_event_type(String.t()) :: [String.t()]
+  def audit_outcomes_for_event_type(event_type) do
+    Repo.all(from(a in AuditEvent, where: a.event_type == ^event_type, select: a.outcome))
+  end
+
+  @doc """
+  Return `outcome` values for a specific `target_capsule_id` filtered
+  by `event_type` (canonical assertion for SUCCESS-path verification
+  on composed-mode ops).
+  """
+  @spec audit_outcomes_for_capsule(String.t(), String.t()) :: [String.t()]
+  def audit_outcomes_for_capsule(capsule_id, event_type) do
+    Repo.all(
+      from(a in AuditEvent,
+        where: a.target_capsule_id == ^capsule_id and a.event_type == ^event_type,
+        select: a.outcome
+      )
+    )
+  end
+
+  @doc """
+  Verify an `idempotency_keys` row exists for a given key + scope
+  (canonical assertion for ADR-0026 §5 Pattern 5 idempotent
+  verification key recorded post-success).
+  """
+  @spec idempotency_key_exists?(String.t(), String.t()) :: boolean()
+  def idempotency_key_exists?(key, scope) do
+    Repo.exists?(
+      from(i in IdempotencyKey,
+        where: i.idempotency_key == ^key and i.scope == ^scope
+      )
+    )
   end
 end

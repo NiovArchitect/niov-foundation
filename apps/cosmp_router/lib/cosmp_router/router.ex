@@ -429,11 +429,30 @@ defmodule CosmpRouter.Router do
         _ -> "ERROR"
       end
 
+    # Guard non-UUID target_capsule_id at the audit-emission boundary
+    # (D-PHASE-1-UUID-CAST companion at the Router register): when
+    # caller passes a non-UUID-format string (e.g., test input
+    # "does-not-exist" that Storage.Postgres.get/1 mapped to
+    # :not_found gracefully), pass nil to AuditEvent.target_capsule_id
+    # rather than letting the Ecto.UUID changeset raise. Substrate-
+    # coherent with the facade-layer graceful-degradation pattern.
+    target_capsule_id =
+      case Keyword.get(opts, :target_capsule_id) do
+        nil ->
+          nil
+
+        capsule_id when is_binary(capsule_id) ->
+          case Ecto.UUID.cast(capsule_id) do
+            {:ok, uuid} -> uuid
+            :error -> nil
+          end
+      end
+
     Audit.write_audit_event(%{
       event_type: event_type,
       outcome: outcome,
       actor_entity_id: nil,
-      target_capsule_id: Keyword.get(opts, :target_capsule_id),
+      target_capsule_id: target_capsule_id,
       system_principal: Audit.system_principals()[:cosmp_router],
       denial_reason: err.message,
       details: %{kind: to_string(err.kind), message: err.message}

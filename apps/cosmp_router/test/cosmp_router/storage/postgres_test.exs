@@ -86,8 +86,8 @@ defmodule CosmpRouter.Storage.PostgresTest do
       ],
       relations: [],
       time: %{
-        created_at: DateTime.utc_now() |> DateTime.truncate(:second),
-        last_updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        created_at: DateTime.utc_now(),
+        last_updated_at: DateTime.utc_now()
       },
       permissions: %{
         wallet_id: wallet_id,
