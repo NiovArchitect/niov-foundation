@@ -276,5 +276,20 @@ jobs:
       - name: Compile (no warnings-as-errors at sub-phase 3)
         run: mix compile
 
+      # Sub-phase 5b-iii [BEAM-COSMP-INTEROP-INTEGRATION-IDEMPOTENCY]
+      # per ADR-0033 §Decision 6 (D-IDEMPOTENCY-3 substrate-build
+      # observation; D-CI-FRESH-1/2/3 cluster lesson applied at
+      # draft-time): run Elixir-owned migrations against the
+      # fresh-per-job Postgres service. The TS unit tier's
+      # `prisma db push` populates Prisma-owned shared tables only;
+      # Elixir-owned tables (idempotency_keys + future) are migrated
+      # separately by Ecto. MIX_ENV=test uses config/test.exs's
+      # hardcoded localhost:5433/foundation_test URL (matches the
+      # Postgres service block above).
+      - name: Run Ecto migrations (Elixir-owned tables; ADR-0033 §6)
+        run: cd apps/cosmp_router && mix ecto.migrate
+        env:
+          MIX_ENV: test
+
       - name: Test
         run: mix test
