@@ -9,7 +9,7 @@ A (`3b76c3d`) resolved the cascade-grep markdown-line-wrap limitation
 (catch #1). Substrate-build tools are operational; engineering substrate is
 canonical at 29 ADRs / 20 RULES / 139 commits / 56-consecutive-commit
 substrate-honest pre-flight pattern. This ADR documents the Phase 2
-implementation — the 17-sub-phase Block B arc (expanded 13 → 14 at sub-phase 4a per Q-G split — see ADR-0031; 14 → 15 at sub-phase 5a per Q-P split — see ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R split — see ADR-0033; 16 → 17 at sub-phase 5b-iii per Q-NEW-SPLIT split — see ADR-0033 §Forward path) that ships Elixir/BEAM substrate
+implementation — the 19-sub-phase Block B arc (expanded 13 → 14 at sub-phase 4a per Q-G split — see ADR-0031; 14 → 15 at sub-phase 5a per Q-P split — see ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R split — see ADR-0033; 16 → 17 at sub-phase 5b-iii per Q-NEW-SPLIT split — see ADR-0033 §Forward path; 17 → 18 at sub-phase 6a per Q-NEW-SPLIT-2 split — see ADR-0034; 18 → 19 at sub-phase 6c per Q-NEW-SPLIT-3 split — see ADR-0035) that ships Elixir/BEAM substrate
 as production Foundation services + canonicalizes the three-language stack
 (TypeScript + Elixir + Postgres; Python ML when it lands).
 
@@ -65,11 +65,13 @@ bridge is exercised, but the migration triggers gate the load-bearing shift.
 ## Decision
 
 NIOV Labs implements Phase 2 Elixir/BEAM coordination layer as the Block B
-17-sub-phase mini-arc of Day 9 (expanded 13 → 14 at sub-phase 4a per
+19-sub-phase mini-arc of Day 9 (expanded 13 → 14 at sub-phase 4a per
 Q-G split — see ADR-0031; 14 → 15 at sub-phase 5a per Q-P split — see
 ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R split — see ADR-0033;
 16 → 17 at sub-phase 5b-iii per Q-NEW-SPLIT split — see ADR-0033
-§Forward path). The decomposition:
+§Forward path; 17 → 18 at sub-phase 6a per Q-NEW-SPLIT-2 split — see
+ADR-0034; 18 → 19 at sub-phase 6c per Q-NEW-SPLIT-3 split — see ADR-0035).
+The decomposition:
 
 **COSMP Coordination Layer (6 sub-phases):**
 
@@ -249,11 +251,12 @@ the table directly for the substrate-architectural breadth claim.
 
 **Harder:**
 
-- **17-sub-phase mini-arc** (expanded 13 → 14 at sub-phase 4a per Q-G
+- **19-sub-phase mini-arc** (expanded 13 → 14 at sub-phase 4a per Q-G
   split — see ADR-0031; 14 → 15 at sub-phase 5a per Q-P split — see
   ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R split — see ADR-0033;
   16 → 17 at sub-phase 5b-iii per Q-NEW-SPLIT split — see ADR-0033
-  §Forward path).
+  §Forward path; 17 → 18 at sub-phase 6a per Q-NEW-SPLIT-2 split — see
+  ADR-0034; 18 → 19 at sub-phase 6c per Q-NEW-SPLIT-3 split — see ADR-0035).
   ~10-13 hours engineering at current velocity (the
   Block B arc). The substrate-build tools (cascade-grep multiline + templates)
   reduce token-cost-per-catch substantially but engineering time is real.
@@ -351,11 +354,13 @@ operational (58 after this commit lands).
   forward-queued the Phase 2 ship-commitment; this ADR is the implementation
   ADR fulfilling that commitment. ADR-0028's Forward Queue line 151-152
   (originally referenced "ADR-0029") and the `(cited from)` block both
-  back-cite this ADR. The Phase 2 mini-arc (17 sub-phases; expanded
+  back-cite this ADR. The Phase 2 mini-arc (19 sub-phases; expanded
   13 → 14 at sub-phase 4a per Q-G split — see ADR-0031; 14 → 15 at
   sub-phase 5a per Q-P split — see ADR-0032; 15 → 16 at sub-phase
   5b-i per Q-R split — see ADR-0033; 16 → 17 at sub-phase 5b-iii
-  per Q-NEW-SPLIT split — see ADR-0033 §Forward path) ports the 6
+  per Q-NEW-SPLIT split — see ADR-0033 §Forward path; 17 → 18 at
+  sub-phase 6a per Q-NEW-SPLIT-2 split — see ADR-0034; 18 → 19 at
+  sub-phase 6c per Q-NEW-SPLIT-3 split — see ADR-0035) ports the 6
   BEAM-compatibility patterns to production Elixir/BEAM.
 - ADR-0026 (Dual-Control Middleware Pattern + Privileged Endpoint Registry +
   Per-Route Binding Discipline; landed at sub-phase H `[SEC-DUAL-CONTROL-ADR]`

@@ -320,11 +320,13 @@ ADR-0020 two-register IP discipline.
 | 12 | `[BEAM-CANONICAL-RECORD]` | `beam-coordination-canonical-record.md` |
 | 13 | `[BEAM-ARC-CLOSURE]` | Onboarding cascade + section-12 row 35 + ADR-0028 forward → landed + ADR-0030 arc-closure |
 
-Block B count expansion: **17 sub-phases** (expanded 13 → 14 at
+Block B count expansion: **19 sub-phases** (expanded 13 → 14 at
 sub-phase 4a per Q-G split — see this ADR; 14 → 15 at sub-phase 5a
 per Q-P split — see ADR-0032; 15 → 16 at sub-phase 5b-i per Q-R
 split — see ADR-0033; 16 → 17 at sub-phase 5b-iii per Q-NEW-SPLIT
-split — see ADR-0033 §Forward path).
+split — see ADR-0033 §Forward path; 17 → 18 at sub-phase 6a per
+Q-NEW-SPLIT-2 split — see ADR-0034; 18 → 19 at sub-phase 6c per
+Q-NEW-SPLIT-3 split — see ADR-0035).
 
 Bidirectional citations (cited from):
 

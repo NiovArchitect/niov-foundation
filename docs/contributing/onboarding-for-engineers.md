@@ -16,7 +16,7 @@ codebase is also a patent-implementation record (ADR-0020 — see §5).
 
 ---
 
-## 1. The Substrate-Honest Pre-Flight Discipline (RULE 12 / 13 / 18)
+## 1. The Substrate-Honest Pre-Flight Discipline (RULE 11 / 12 / 13 / 18)
 
 Before you write or modify substrate — code, ADRs, reference docs, anything
 that cites or extends other parts of the repo — you **verify the actual
@@ -25,6 +25,22 @@ mental model of the repo; you `grep`, you `cat`, you confirm the cited config
 values, the cited paths, the cited function signatures, the existing test
 surface, before you draft.
 
+- **RULE 11 — Wider Knowledge Check for Elixir/BEAM Substrate.** When working
+  with Elixir or BEAM substrate (`apps/cosmp_router/`, future DBGI supervisor)
+  and substrate-state observations suggest architectural-register coupling
+  (non-deterministic test failures, supervised GenServer behavior across test
+  boundaries, ETS / Sandbox / DBConnection ownership questions), **research
+  broader Elixir/BEAM community canonical patterns BEFORE authorizing fixes**.
+  Local iteration at the Sandbox / ETS / GenServer API register on
+  observations pointing at architectural coupling is substrate-build
+  discipline failure — the right register for the fix is the architecture,
+  not the API. Required reading: `docs/contributing/elixir-beam-best-practices.md`
+  (the 6 canonical Elixir/BEAM sources + pattern catalog + when-to-use
+  checklist). The discipline emerged from sub-phase 6 pre-flight when three
+  Sandbox pattern probes worked in isolation but none resolved full-suite
+  cross-test-cycle cascade — operator-tier strategic call established
+  D-WIDER-KNOWLEDGE-CHECK canonical at substrate-build register; ADR-0034 +
+  ADR-0035 + RULE 11 substrate-bind the discipline.
 - **RULE 12 — Pre-Flight Grep Before Drafting.** Read the cited files. Run the
   cited greps. Confirm the cited config values. If your change references
   `foo.service.ts:142`, open it and check line 142 actually says what you
@@ -71,21 +87,24 @@ See ADR-0029 for the decision lineage; `scripts/preflight/README.md` and
 
 ---
 
-## 2. The 20 RULES + 29 ADRs as Canonical Reference
+## 2. The 20 RULES + 35 ADRs as Canonical Reference
 
 The authorization-tier substrate of the codebase lives in two places:
 
-- **`CLAUDE.md` §3 — the 20 RULES** (RULES 0-10 + 12-20; RULE 11 vacant). These
-  are the operational rules every session (human or AI) internalizes. Read all
-  of `CLAUDE.md` before your first contribution — it is the operational
-  rulebook, not optional context. The RULES you will reach for most often:
-  RULE 1 (build forward only — add, don't restructure working code), RULE 3
-  (every function/endpoint gets a test), RULE 4 (audit before response), RULE 6
-  (FILE/PURPOSE/CONNECTS-TO headers + WHAT/INPUT/OUTPUT/WHY JSDoc), RULE 9
-  (services connect through APIs — no cross-service DB reads), RULE 14
-  (bidirectional citation discipline), RULE 16 (no `console.*` in
-  `apps/api/src`), RULE 20 (Rule-Modification Authority — see §3).
-- **`docs/architecture/decisions/` — the 29 ADRs** (`0001-…` through `0029-…`,
+- **`CLAUDE.md` §3 — the 20 RULES** (RULES 0-20; RULE 11 substantively filled
+  at sub-phase 6c per ADR-0035). These are the operational rules every session
+  (human or AI) internalizes. Read all of `CLAUDE.md` before your first
+  contribution — it is the operational rulebook, not optional context. The
+  RULES you will reach for most often: RULE 1 (build forward only — add, don't
+  restructure working code), RULE 3 (every function/endpoint gets a test),
+  RULE 4 (audit before response), RULE 6 (FILE/PURPOSE/CONNECTS-TO headers +
+  WHAT/INPUT/OUTPUT/WHY JSDoc), RULE 9 (services connect through APIs — no
+  cross-service DB reads), **RULE 11 (Wider Knowledge Check for Elixir/BEAM
+  Substrate — when working on `apps/cosmp_router/` or DBGI substrate, see
+  `docs/contributing/elixir-beam-best-practices.md`)**, RULE 14 (bidirectional
+  citation discipline), RULE 16 (no `console.*` in `apps/api/src`), RULE 20
+  (Rule-Modification Authority — see §3).
+- **`docs/architecture/decisions/` — the 35 ADRs** (`0001-…` through `0035-…`,
   plus `0000-template.md`). Michael Nygard format with niov-foundation
   extensions (Easier/Harder consequence split, bidirectional-citation block,
   ISO-dated Status). `docs/architecture/README.md` is the navigable catalog;
@@ -201,7 +220,7 @@ Two things follow for a contributor:
 ## 6. Recommended Reading Order
 
 1. **`CLAUDE.md`** — the operational rulebook (the 20 RULES; read all of it).
-2. **`docs/architecture/README.md`** — the ADR catalog (29 ADRs) + the ADR
+2. **`docs/architecture/README.md`** — the ADR catalog (35 ADRs) + the ADR
    Lifecycle discipline.
 3. **`docs/architecture/decisions/0001-…` onward** — at minimum ADR-0001
    (three-wallet architecture), ADR-0002 (append-only audit chain), ADR-0004
@@ -225,6 +244,15 @@ Two things follow for a contributor:
    arc). Use the appropriate template at draft time for any commit that lands
    or modifies an ADR / RULE / arc-progress reference; run cascade-grep before
    authorization to surface the actual cascade landscape.
+10. **`docs/contributing/elixir-beam-best-practices.md`** — required reading
+    when your work touches Elixir/BEAM substrate (`apps/cosmp_router/`, future
+    DBGI supervisor). Covers RULE 11 (Wider Knowledge Check for Elixir/BEAM
+    Substrate) + the 6 canonical Elixir/BEAM sources (Ecto.Adapters.SQL.Sandbox,
+    Sean Lewis Concurrent Testing, DockYard Test Concurrency, KV.Registry
+    Mix-OTP, Thoughtbot dynamic names, Elixir Forum) + the pattern catalog NIOV
+    uses + the when-you-hit-a-problem checklist. See ADR-0034 (canonical Elixir
+    testability pattern) + ADR-0035 (9 substrate-build discipline observations
+    canonical at substrate-build register) for decision lineage.
 
 When in doubt: read the cited reference; cite ADRs by number; surface
 substrate-state observations rather than guessing; and a RULE/ADR change is the

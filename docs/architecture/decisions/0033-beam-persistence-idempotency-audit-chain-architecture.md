@@ -720,10 +720,12 @@ problem already solved by shell + CI conventions. Skipped.
   ADR-0028's commitment-to-ship for the persistence + audit-chain
   substrate
 - **ADR-0030** (Phase 2 Elixir/BEAM Implementation) — **load-bearing**:
-  the 17-sub-phase Block B mini-arc ports ADR-0030 §Decision; this ADR
+  the 19-sub-phase Block B mini-arc ports ADR-0030 §Decision; this ADR
   lands at sub-phase 5b-ii of that arc per Q-R split + Q-NEW-SPLIT
-  16 → 17 expansion at sub-phase 5b-iii (this ADR's substrate landed
-  across sub-phases 5b-ii + 5b-iii Commit A + Commit B.1 + Commit B.2)
+  16 → 17 expansion at sub-phase 5b-iii + Q-NEW-SPLIT-2 17 → 18 at
+  sub-phase 6a (see ADR-0034) + Q-NEW-SPLIT-3 18 → 19 at sub-phase 6c
+  (see ADR-0035) (this ADR's substrate landed across sub-phases 5b-ii +
+  5b-iii Commit A + Commit B.1 + Commit B.2)
 - **ADR-0031** (BEAM Routing Substrate Architecture) — **load-bearing**:
   Q-D explicitly forward-queued the idempotency strategy to sub-phase
   5b-ii / 6; this ADR resolves Q-D
