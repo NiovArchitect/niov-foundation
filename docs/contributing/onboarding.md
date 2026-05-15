@@ -45,6 +45,16 @@ In this order, before any code or doc work:
    per ADR-0022, `RELEVANCE_FORGET_FLOOR` behavioral lock per
    ADR-0022) + the "Anchor Mechanisms" taxonomy (`Object.freeze`
    / value-pin / behavioral-lock).
+5. **`docs/architecture/beam-coordination-canonical-record.md`**
+   — the BEAM coordination canonical record (sub-phase 12; Block
+   B Phase 2 BEAM mini-arc CLOSED at 19/19 sub-phases at sub-
+   phase 13). Implementation-facing companion to ADR-0028 +
+   ADR-0030; documents the Elixir/BEAM substrate at
+   `apps/cosmp_router/` (COSMP coordination) and
+   `apps/dbgi_supervisor/` (DBGI process-group + cluster). Load
+   when work touches Elixir/BEAM substrate; pair with
+   `docs/contributing/elixir-beam-best-practices.md` (RULE 11
+   wider-knowledge-check canonical sources).
 
 After this entry sequence, individual ADRs and contributing
 guides become readable in any order driven by the current task.

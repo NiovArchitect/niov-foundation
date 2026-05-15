@@ -26,7 +26,7 @@ values, the cited paths, the cited function signatures, the existing test
 surface, before you draft.
 
 - **RULE 11 — Wider Knowledge Check for Elixir/BEAM Substrate.** When working
-  with Elixir or BEAM substrate (`apps/cosmp_router/`, future DBGI supervisor)
+  with Elixir or BEAM substrate (`apps/cosmp_router/`, `apps/dbgi_supervisor/`)
   and substrate-state observations suggest architectural-register coupling
   (non-deterministic test failures, supervised GenServer behavior across test
   boundaries, ETS / Sandbox / DBConnection ownership questions), **research
@@ -100,8 +100,10 @@ The authorization-tier substrate of the codebase lives in two places:
   RULE 4 (audit before response), RULE 6 (FILE/PURPOSE/CONNECTS-TO headers +
   WHAT/INPUT/OUTPUT/WHY JSDoc), RULE 9 (services connect through APIs — no
   cross-service DB reads), **RULE 11 (Wider Knowledge Check for Elixir/BEAM
-  Substrate — when working on `apps/cosmp_router/` or DBGI substrate, see
-  `docs/contributing/elixir-beam-best-practices.md`)**, RULE 14 (bidirectional
+  Substrate — when working on `apps/cosmp_router/` or `apps/dbgi_supervisor/`,
+  see `docs/contributing/elixir-beam-best-practices.md` + the BEAM
+  coordination canonical record at
+  `docs/architecture/beam-coordination-canonical-record.md`)**, RULE 14 (bidirectional
   citation discipline), RULE 16 (no `console.*` in `apps/api/src`), RULE 20
   (Rule-Modification Authority — see §3).
 - **`docs/architecture/decisions/` — the 35 ADRs** (`0001-…` through `0035-…`,
@@ -245,14 +247,27 @@ Two things follow for a contributor:
    or modifies an ADR / RULE / arc-progress reference; run cascade-grep before
    authorization to surface the actual cascade landscape.
 10. **`docs/contributing/elixir-beam-best-practices.md`** — required reading
-    when your work touches Elixir/BEAM substrate (`apps/cosmp_router/`, future
-    DBGI supervisor). Covers RULE 11 (Wider Knowledge Check for Elixir/BEAM
-    Substrate) + the 6 canonical Elixir/BEAM sources (Ecto.Adapters.SQL.Sandbox,
-    Sean Lewis Concurrent Testing, DockYard Test Concurrency, KV.Registry
-    Mix-OTP, Thoughtbot dynamic names, Elixir Forum) + the pattern catalog NIOV
-    uses + the when-you-hit-a-problem checklist. See ADR-0034 (canonical Elixir
-    testability pattern) + ADR-0035 (9 substrate-build discipline observations
-    canonical at substrate-build register) for decision lineage.
+    when your work touches Elixir/BEAM substrate (`apps/cosmp_router/`,
+    `apps/dbgi_supervisor/`). Covers RULE 11 (Wider Knowledge Check for
+    Elixir/BEAM Substrate) + the 6 canonical Elixir/BEAM sources
+    (Ecto.Adapters.SQL.Sandbox, Sean Lewis Concurrent Testing, DockYard Test
+    Concurrency, KV.Registry Mix-OTP, Thoughtbot dynamic names, Elixir Forum)
+    + the pattern catalog NIOV uses + the when-you-hit-a-problem checklist.
+    See ADR-0034 (canonical Elixir testability pattern) + ADR-0035 (9
+    substrate-build discipline observations canonical at substrate-build
+    register) for decision lineage.
+11. **`docs/architecture/beam-coordination-canonical-record.md`** — the BEAM
+    coordination canonical record (sub-phase 12 `[BEAM-CANONICAL-RECORD]`
+    `54ef59c`). Implementation-facing companion to ADR-0028 and ADR-0030;
+    documents the cosmp_router GenServer dispatch flow, the dbgi_supervisor
+    process-group + cluster substrate, the audit-chain cryptographic
+    substrate, the 6 BEAM-compatibility patterns instantiated at production
+    Elixir (with file:line evidence), the multi-node integration substrate,
+    the no-identity-label observability discipline, and the substrate-honest
+    engineering discipline that produced the Block B Phase 2 BEAM mini-arc
+    (CLOSED at 19/19 sub-phases at sub-phase 13 `[BEAM-ARC-CLOSURE]`).
+    Distinguishes implementation-proven facts from ADR-canonical-but-not-yet-
+    implemented from FORWARD-LOOKING architectural direction.
 
 When in doubt: read the cited reference; cite ADRs by number; surface
 substrate-state observations rather than guessing; and a RULE/ADR change is the

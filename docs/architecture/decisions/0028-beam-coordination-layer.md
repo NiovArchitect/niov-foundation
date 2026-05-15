@@ -148,6 +148,18 @@ coordination tier).
   supervision + OtzarComm + DBGI substrate); sub-phases 7-8 (observability +
   production readiness). The exact sub-phase decomposition is fixed at the Phase 2
   pre-flight.
+
+  **LANDED (sub-phase 13 closure update; append-only):** the Sub-box 2 Phase 2
+  mini-arc substantively LANDED at 19 sub-phases (substantively expanded from
+  the 6-8-commit estimate per ADR-0034 + ADR-0035 sub-phase splits per Q-NEW-
+  SPLIT-2 + Q-NEW-SPLIT-3). The arc closed at 19/19 sub-phases between commits
+  `5712a2b` (sub-phase 4b `[BEAM-COSMP-GENSERVER-CODE]` parent) and this commit
+  (sub-phase 13 `[BEAM-ARC-CLOSURE]`). Forward-looking items remaining
+  (per-capsule supervised Elixir process; OtzarComm message routing at scale;
+  Python ML substrate; multi-region production topology; migration triggers;
+  `:gproc` backward-compatibility; partition-tolerance expansion) are
+  documented at `docs/architecture/beam-coordination-canonical-record.md` §11
+  Forward paths.
 - **ADR-0030** — Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
   DBGI Supervisor + Three-Language Stack Canonicalization (LANDED at Block B
   sub-phase 1 `[BEAM-PHASE-2-ADR]`; documents Phase 2 implementation; the
@@ -159,10 +171,25 @@ coordination tier).
 - **A future BEAM-coordination-layer canonical-record-analog doc** — mirroring
   `docs/architecture/dual-control-operations-canonical-record.md` but for the BEAM
   coordination substrate (the operational companion to the Phase 2 ADR set).
+
+  **LANDED (sub-phase 13 closure update; append-only):** `docs/architecture/
+  beam-coordination-canonical-record.md` substantively LANDED at commit
+  `54ef59c` per sub-phase 12 `[BEAM-CANONICAL-RECORD]`. 12-section structure;
+  34 file:line evidence cites for the 6 BEAM-compatibility patterns at §5;
+  12 FORWARD-LOOKING markers placed locally per substrate-honest discipline.
 - **`onboarding-for-engineers.md` gains a Phase-2 / BEAM section** when Phase 2
   contributors onboard — Elixir + OTP + the dual-runtime substrate; Phase 2
   contributors operate under RULE 20 + the contributor-governance discipline
   (ADR-0027).
+
+  **LANDED (sub-phase 13 closure update; append-only):** `docs/contributing/
+  onboarding-for-engineers.md` BEAM/Elixir section substantively LANDED across
+  sub-phase 6c (commit `6db538e` per ADR-0035 Sub-decision 4 onboarding
+  cascade — §1 pre-flight discipline integration + §2 RULE 11 canonical + §6
+  recommended reading) and this commit (sub-phase 13 closure: "future DBGI
+  supervisor" → "DBGI supervisor at `apps/dbgi_supervisor/`" conversion +
+  `beam-coordination-canonical-record.md` reference at §6 + Block B Phase 2
+  BEAM mini-arc CLOSED at 19/19 sub-phases note).
 - **The J-hash of this commit** lives in the commit body — the "this commit"
   placeholders in the canonical-record §6 J-entry, the `section-12-progress.md`
   Sub-box 2 row, and the CLAUDE.md §5 ADR-0026 jump-table line's arc-hash chain

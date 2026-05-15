@@ -367,6 +367,10 @@ renumbering).
     substantively has no cross-node parallel — Registry process-local
     at canonical OTP register substantively at substantive register.
 
+    *(Cited at `docs/architecture/beam-coordination-canonical-record.md`
+    §8 + §10 per RULE 14 bidirectional citation; back-cite landed at
+    sub-phase 13 closure.)*
+
 33. **D-PHASE-10-PARTITION-SURVIVAL-CANONICAL** (sub-phase 10 RULE
     11 broader-community research gate canonical at substantive
     register) — `:peer.start_link` with `connection: 0` + `peer_down:
@@ -471,6 +475,10 @@ renumbering).
     ground truth preservation register — substrate-state ground
     truth at canonical register substantively load-bearing at audit-
     trail-friendly register substantively at substantive register.
+
+    *(Cited at `docs/architecture/beam-coordination-canonical-record.md`
+    §8 + §10 per RULE 14 bidirectional citation; back-cite landed at
+    sub-phase 13 closure.)*
 
 34. **D-PHASE-11-NO-IDENTITY-LABEL-DISCIPLINE** (sub-phase 11
     `[BEAM-OBSERVABILITY]` substrate-build register substantively at
@@ -615,6 +623,12 @@ renumbering).
     + prior Option β substrate-honest discipline canonical at
     substantive register substantively at substantive register
     decisions).
+
+    *(Cited at `docs/architecture/beam-coordination-canonical-record.md`
+    §7 + §9 per RULE 14 bidirectional citation; the no-identity-label
+    discipline is the canonical observability/privacy/governance boundary
+    at the BEAM coordination substrate. Back-cite landed at sub-phase 13
+    closure.)*
 
 ### Cluster sub-register expansion (post-this-commit)
 

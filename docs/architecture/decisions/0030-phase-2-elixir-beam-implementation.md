@@ -535,6 +535,69 @@ The decomposition:
     for sub-phase 13's own hash per sub-phase J Decision 3 precedent (keeps
     arc at exactly 13 commits).
 
+    **Sub-phase 13 amendment (LANDED at this commit; ADR-0030 §DBGI sub-phase
+    13 amendment commit)**: arc-closure cascade substantively LANDED at this
+    commit register substantively per Q1-Q10 LOCKED operator-tier authorization
+    at canonical decision register substantively at substantive register
+    canonical at sub-phase 13 pre-flight register substantively. 6 MOD paths
+    canonical at substantive register substantively per Q1 LOCKED Option α
+    (onboarding.md + onboarding-for-engineers.md + section-12-progress.md +
+    this ADR-0030 + ADR-0028 + ADR-0035). Closure facts canonical at
+    substantive register substantively:
+    - **onboarding cascade LANDED** canonical at substantive register
+      substantively per Q5 + Q6 LOCKED Option α — `onboarding.md` §2 gains
+      light BEAM canonical-record reference canonical at substantive register
+      substantively + `onboarding-for-engineers.md` §1 + §2 + §6 converts
+      "future DBGI supervisor" to LANDED at `apps/dbgi_supervisor/` canonical
+      at substantive register substantively + adds `beam-coordination-
+      canonical-record.md` reference at §6 register substantively.
+    - **section-12-progress row updated** canonical at substantive register
+      substantively per Q7 LOCKED Option α — row L35 split canonical at
+      substantive register substantively into "Sub-box 2 Phase 2 (Block B /
+      BEAM mini-arc) CLOSED at 19/19 sub-phases" + "Sub-boxes 3-9 QUEUED"
+      canonical at substrate-honest historical register substantively.
+    - **ADR-0028 Forward Queue forward → landed conversions LANDED** canonical
+      at substantive register substantively per Q2 LOCKED Option α — items
+      1 (Sub-box 2 Phase 2 mini-arc) + 3 (canonical-record-analog doc) + 4
+      (onboarding-for-engineers BEAM section) marked LANDED canonical at
+      append-only register substantively (historical forward-queue text
+      preserved canonical at substantive register substantively).
+    - **ADR-0035 §9 30th-34th back-citations LANDED** canonical at substantive
+      register substantively per Q4 LOCKED Option α — concise per-observation
+      back-cites to `beam-coordination-canonical-record.md` canonical at
+      substantive register substantively per RULE 14 bidirectional citation
+      discipline canonical at substantive register substantively.
+    - **Block B Phase 2 mini-arc CLOSED at 19/19** canonical at substantive
+      register substantively (closed sub-phases {1, 2, 3, 4a, 4b, 5a, 5b-i,
+      5b-ii, 5b-iii, 6a, 6b, 6c, 7, 8, 9, 10, 11, 12, **13**} = 19 canonical
+      at substantive register substantively per D-SUBPHASE-COUNT-PRECISION
+      canonical at ADR-0035 §9 10th register substantively).
+    - **Remaining forward-looking items preserved** canonical at substantive
+      register substantively per Sub-phase 12 claim discipline canonical
+      (per-capsule supervised Elixir process; OtzarComm message routing at
+      scale; Python ML substrate; multi-region production topology; migration
+      triggers; `:gproc` backward-compatibility; partition-tolerance
+      expansion; Federation Cloud + cohort + depersonalization; robotics/
+      machinery EntityType extension — documented at `beam-coordination-
+      canonical-record.md` §11 Forward paths canonical at substantive register
+      substantively).
+
+    Docs-only commit canonical at substantive register substantively per Q10
+    LOCKED Option α; no production code, test code, dependency, or runtime
+    substrate changed canonical at substantive register substantively. Local
+    test rerun not required before commit because baselines are preserved by
+    construction canonical at substantive register substantively (TS 12 +
+    dbgi 42/0 + 19 excluded + dbgi integration 19/0 + cosmp 123/0). CI watch
+    remains required after push and remains substrate-state ground truth
+    canonical at substantive register substantively. This amendment is
+    **canonical-pattern register clarification**, NOT architectural-register
+    supersession (substantively analogous to ADR-0030 §DBGI sub-phase 8 + 9
+    + 10 + 11 + 12 amendment register at substantive register canonical at
+    substantive register substantively).
+
+    **Block B Phase 2 mini-arc CLOSED at 19/19 sub-phases at this commit
+    register substantively canonical at substantive register substantively.**
+
 ## Implementation Detail
 
 ### Mix umbrella workspace structure
