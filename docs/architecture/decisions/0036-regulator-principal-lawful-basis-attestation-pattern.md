@@ -364,3 +364,4 @@ Land Entity/MemoryCapsule/AuditEvent/OrgSettings jurisdiction tagging + `assertJ
 - ADR-0035 §9 35th D-CAR-SUB-BOX-NUMBERING-DRIFT canonical at this commit cites ADR-0036 (the substrate-build observation lineage canonical at substantive register)
 - `docs/reference/section-12-progress.md` Sub-box 3 row (forward-queued for Sub-box 3 closure cascade at sub-phase 7) + CAR Sub-box 2 QUEUED row addition at this commit
 - `docs/COMPLIANCE_ARCHITECTURE_REVIEW.md` Sub-box 3 status row (forward → CLOSED at sub-phase 7 closure cascade)
+- ADR-0037 cites ADR-0036 §Substrate-Honest Distinctions canonical at substantive register substantively because CAR Sub-box 2 was explicitly preserved as QUEUED at Sub-box 3 closure; ADR-0037 closes the previously preserved QUEUED reference at sub-phase 1 [CAR-SUB-BOX-2-ADR] commit per RULE 14 bidirectional citation discipline
