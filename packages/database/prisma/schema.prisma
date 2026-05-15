@@ -33,6 +33,14 @@ model Entity {
   created_at           DateTime      @default(now())
   updated_at           DateTime      @updatedAt
   deleted_at           DateTime?
+  // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
+  // Sub-decision 2: data-tier jurisdictional anchor for the entity.
+  // Single-String per Sub-decision 1 (matches LawfulBasis.jurisdiction_invoked
+  // precedent). Nullable; defaulted at service-tier per Sub-decision 5
+  // (Prisma cannot perform cross-row defaults from
+  // OrgSettings.default_jurisdiction; cascade lands at sub-phase 3
+  // [CAR-SUB-BOX-2-SERVICES] register substantively).
+  jurisdiction         String?
 
   wallet   Wallet?
   capsules MemoryCapsule[]
@@ -53,6 +61,7 @@ model Entity {
   @@index([entity_type])
   @@index([status])
   @@index([deleted_at])
+  @@index([jurisdiction])
   @@map("entities")
 }
 
@@ -151,6 +160,14 @@ model MemoryCapsule {
   last_updated_at  DateTime  @updatedAt
   expires_at       DateTime?
   deleted_at       DateTime?
+  // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
+  // Sub-decision 2: data-tier jurisdictional anchor for the capsule.
+  // Defaulted at service-tier per Sub-decision 5 (cascade: explicit
+  // input → owner Entity.jurisdiction → OrgSettings.default_jurisdiction
+  // → null; cascade lands at sub-phase 3 register substantively).
+  // Immutable after creation per Sub-decision 4 (cross-region transfer
+  // is forward-queued explicit workflow with own audit semantics).
+  jurisdiction      String?
 
   wallet      Wallet       @relation(fields: [wallet_id], references: [wallet_id], onDelete: Cascade)
   entity      Entity       @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
@@ -163,6 +180,7 @@ model MemoryCapsule {
   @@index([decay_type])
   @@index([storage_tier])
   @@index([deleted_at])
+  @@index([jurisdiction])
   @@index([topic_tags], type: Gin)
   @@map("memory_capsules")
 }
@@ -290,6 +308,16 @@ model AuditEvent {
   // of truth per Q1 LOCKED Option α-1).
   lawful_basis_id         String?      @db.Uuid
   lawful_basis_chain_hash String?
+  // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
+  // Sub-decisions 2 + 3: row-metadata-only jurisdictional anchor for
+  // the audit event. NOT extended into canonical_record/1 — preserves
+  // Sub-box 3 sub-phase 4 14-field byte-equivalence + 12 fixture
+  // pairs + cosmp_router default tier 137/0 unchanged. Defaulted at
+  // service-tier per Sub-decision 5 (operation context: capsule.jurisdiction
+  // OR actor.entity.jurisdiction OR LawfulBasis.jurisdiction_invoked
+  // at REGULATOR flows OR null; cascade lands at sub-phase 3
+  // [CAR-SUB-BOX-2-SERVICES] register substantively).
+  jurisdiction            String?
 
   @@index([actor_entity_id])
   @@index([target_entity_id])
@@ -298,6 +326,7 @@ model AuditEvent {
   @@index([timestamp])
   @@index([actor_entity_id, timestamp])
   @@index([lawful_basis_id])
+  @@index([jurisdiction])
   @@map("audit_events")
 }
 
@@ -791,6 +820,13 @@ model OrgSettings {
   federated_learning      Boolean  @default(true)
   track_external_entities Boolean  @default(true)
   industry                String?
+  // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
+  // Sub-decision 2: organization-default jurisdictional anchor.
+  // Operator-set explicit input only per Sub-decision 5 (no cascade
+  // — this IS the cascade source). Single-row-per-org via PK
+  // (org_entity_id); no index needed at canonical scale per
+  // ADR-0037 Sub-decision 2.
+  default_jurisdiction    String?
   updated_at              DateTime @updatedAt
 
   @@map("org_settings")

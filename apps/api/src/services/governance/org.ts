@@ -42,6 +42,14 @@ export const ORG_SETTINGS_DEFAULTS = Object.freeze({
   federated_learning: true,
   track_external_entities: true,
   industry: null as string | null,
+  // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
+  // Sub-decisions 2 + 5: organization-default jurisdictional anchor.
+  // Operator-set explicit input only (no cascade — this IS the
+  // cascade source for Entity.jurisdiction + MemoryCapsule.jurisdiction
+  // defaulting at sub-phase 3 [CAR-SUB-BOX-2-SERVICES] register
+  // substantively). Defaults to null so existing orgs without
+  // operator-set jurisdiction observe no behavior change.
+  default_jurisdiction: null as string | null,
 }) satisfies Omit<OrgSettings, "org_entity_id" | "updated_at">;
 
 // WHAT: The shape returned by getOrgSettingsOrDefaults -- the row
@@ -66,6 +74,12 @@ export interface MergedOrgSettings {
   federated_learning: boolean;
   track_external_entities: boolean;
   industry: string | null;
+  // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
+  // Sub-decision 2: mirror the OrgSettings.default_jurisdiction column
+  // at the manually-defined merged-shape interface so callers consuming
+  // MergedOrgSettings via getOrgSettingsOrDefaults observe the
+  // jurisdictional anchor consistently with the schema substrate.
+  default_jurisdiction: string | null;
 }
 
 // WHAT: Walk up EntityMembership from one entity, looking for a
@@ -158,5 +172,6 @@ export async function getOrgSettingsOrDefaults(
     federated_learning: row.federated_learning,
     track_external_entities: row.track_external_entities,
     industry: row.industry,
+    default_jurisdiction: row.default_jurisdiction,
   };
 }
