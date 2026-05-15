@@ -365,3 +365,12 @@ Bidirectional citations (cited from):
   5 (idempotent verification keys) **forward-queue to sub-phases 5/6** with
   their consumers (gRPC interop + Postgres integration). ADR-0031 §Decision
   documents the per-pattern instantiation register.
+- ADR-0036 (REGULATOR Principal + Lawful-Basis Attestation Pattern;
+  Proposed 2026-05-15; Sub-box 3 sub-phase 1) — **load-bearing**: ADR-0036
+  Sub-decision 6 cites this ADR's `requireDualControl` Fastify preHandler
+  + `PRIVILEGED_ENDPOINTS` runtime registry + per-route binding discipline
+  for binding to the regulator-grant route (`POST /api/v1/regulator/grant`)
+  at sub-phase 5 `[SUB-BOX-3-ROUTES]` register. Regulator-grant routes
+  inherit this ADR's substrate; no new dual-control primitive needed.
+  Regulator access cannot bypass dual-control where required per ADR-0036
+  Sub-decision 6 + §Consequences canonical at substantive register.

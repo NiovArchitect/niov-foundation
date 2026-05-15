@@ -857,3 +857,16 @@ Bidirectional citations (cited from):
   contexts (especially CNSA 2.0, NSM-10, EU NIS2,
   3PAO assessment, FedRAMP High audit, CMMC Level 5
   contexts).
+- ADR-0036 (REGULATOR Principal + Lawful-Basis
+  Attestation Pattern; Proposed 2026-05-15; Sub-box 3
+  sub-phase 1) — **load-bearing**: ADR-0036
+  Sub-decision 5 cites this ADR's SHA-256 cryptographic
+  binding posture for the `lawful_basis_chain_hash`
+  content-commitment hash + `canonical_record/1`
+  AuditEvent.event_hash chain link. The hybrid binding
+  (`lawful_basis_id` + `lawful_basis_chain_hash` per
+  Q2 LOCKED Option γ) substantively extends this ADR's
+  SHA-256 canonical for chain links into regulatory-
+  access territory; post-quantum-ready by primitive
+  selection canonical preserved at substantive
+  register substantively.

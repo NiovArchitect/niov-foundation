@@ -298,3 +298,14 @@ Bidirectional citations (cited from):
   against rogue-engineer/rogue-AI modifications of the authorization-tier
   substrate (RULES + ADRs). ADR-0027's Context + §Decision + Bidirectional-
   citations cite this ADR for the discipline RULE 20 preserves.
+- ADR-0036 (REGULATOR Principal + Lawful-Basis Attestation Pattern;
+  Proposed 2026-05-15; Sub-box 3 sub-phase 1) — **load-bearing**: ADR-0036
+  §12 Patent-Implementation Evidence cites this ADR's Register-2
+  discipline canonical at substantive register. ADR-0036 substantively
+  lands Register-2 evidence for Family 1 per CAR §Recommended Sequencing
+  (lawful-basis cryptographically linked to COSMP audit chain per CAR §2.2
+  PATENT-RELEVANT under Discipline B; extends US 12,164,537 + US 12,399,904).
+  The hybrid binding (`lawful_basis_id` + `lawful_basis_chain_hash` per
+  Q2 LOCKED Option γ) preserves the binding strength canonical at
+  substantive register substantively per the substrate-honest discipline
+  this ADR canonicalizes.

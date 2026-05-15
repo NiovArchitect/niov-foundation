@@ -921,3 +921,17 @@ sub-phase 5b-iii arc-closure:
 - **D-SUBSTRATE-LANDING-PREEMPT** (forward-reference rotation)
 - **D-AUDIT-OUTCOME-ENUM** (NEW) — integration-test-tier catches
   substrate-coherence bugs unit-tier excluded missed
+
+**Bidirectional citation (cited from):**
+
+- ADR-0036 (REGULATOR Principal + Lawful-Basis Attestation Pattern;
+  Proposed 2026-05-15; Sub-box 3 sub-phase 1) — **load-bearing**:
+  ADR-0036 Sub-decision 5 cites this ADR's §4a `canonical_record/1`
+  TS↔Elixir byte-equivalence canonical + D-5BII-EXEC-2 millisecond-
+  precision discipline + 10 fixture pairs canonical. ADR-0036 extends
+  `canonical_record/1` from 12 → 14 fields (adding `lawful_basis_id` +
+  `lawful_basis_chain_hash` per Q2 LOCKED Option γ hybrid binding) at
+  sub-phase 4 `[SUB-BOX-3-AUDIT-CHAIN]` register; byte-equivalence at
+  both TS (`packages/database/src/queries/audit.ts`) and Elixir
+  (`apps/cosmp_router/lib/cosmp_router/audit.ex`) registers preserved
+  per the substrate-honest discipline this ADR canonicalizes.

@@ -630,6 +630,69 @@ renumbering).
     at the BEAM coordination substrate. Back-cite landed at sub-phase 13
     closure.)*
 
+35. **D-CAR-SUB-BOX-NUMBERING-DRIFT** (Sub-box 3 pre-flight surface
+    register at ADR-0036 sub-phase 1 commit) — `docs/COMPLIANCE_
+    ARCHITECTURE_REVIEW.md` §Recommended Sequencing canonicalizes the
+    Section 12.5 sub-box enumeration: Sub-box 1 (EscalationRequest +
+    dual-control middleware per CAR 1.5) + Sub-box 2 (Jurisdiction
+    Tagging per CAR 1.6 + 2.4) + Sub-box 3 (REGULATOR + Lawful-Basis
+    per CAR 2.1 + 2.2) + Sub-boxes 4-9. The progress tracker
+    (`docs/reference/section-12-progress.md`) substantively uses
+    different sub-box numbering at the L33-L35 row register:
+    "Sub-box 2 Phase 1" = ADR-0026 dual-control middleware
+    enhancement (NOT CAR Sub-box 2); "Sub-box 2 Phase 2" = ADR-0028
+    Block B BEAM mini-arc (NOT CAR Sub-box 2). CAR Sub-box 2
+    (Jurisdiction Tagging at Entity / MemoryCapsule / AuditEvent /
+    OrgSettings + `assertJurisdictionalScope()` runtime check) is
+    NOT yet landed at canonical register substantively at HEAD
+    `a52d6d8`; the progress tracker's "Sub-box 2" rows substantively
+    cover different work scopes.
+
+    **Substrate-build implication at canonical register
+    substantively**: future operators reading the progress tracker
+    rows "Sub-box 2 Phase 1 CLOSED" + "Sub-box 2 Phase 2 CLOSED"
+    could substantively conclude that CAR Sub-box 2 is closed —
+    incorrect at canonical register substantively. Sub-box 3
+    pre-flight at canonical decision register surfaced this drift
+    at substrate-state ground truth register canonical at
+    substantive register. ADR-0036 Sub-decision 13 Substrate-Honest
+    Distinctions explicitly canonicalizes the drift at substantive
+    register; section-12-progress.md gains a "CAR Sub-box 2 —
+    Jurisdiction Tagging — QUEUED" row at this commit per Q6 LOCKED
+    operator-tier authorization canonical at substantive register.
+    Substantively analogous to D-CLUSTER-NUMBERING-DRIFT (23rd) at
+    substrate-state ground truth preservation register canonical at
+    substantive register — substrate-state ground truth at canonical
+    register substantively load-bearing at audit-trail-friendly
+    register substantively at substantive register; pre-flight
+    surface canonical at substantive register substantively
+    load-bearing at staging-gate-surface register at canonical
+    decision register substantively at substantive register.
+
+    **Substrate-coherent resolution at canonical register
+    substantively** per operator-tier authorization at canonical
+    decision register substantively per Q5 + Q6 LOCKED canonical at
+    substantive register: PRESERVE both numbering canonicals at
+    substrate-state ground truth register substantively (Option β
+    substrate-honest discipline canonical at substantive register
+    substantively analogous to D-CLUSTER-NUMBERING-DRIFT 23rd
+    resolution canonical); ADD section-12-progress.md row
+    explicitly canonicalizing "CAR Sub-box 2 — QUEUED" status at
+    substantive register canonical at substantive register;
+    PROMOTE D-CAR-SUB-BOX-NUMBERING-DRIFT 35th canonical at
+    ADR-0035 §9 numbered cluster at substantive register at this
+    commit. Substantively NOT renumber progress tracker rows at
+    substantive register canonical at substantive register per
+    substrate-honest historical preservation discipline canonical
+    at substantive register substantively.
+
+    *(Cited at `docs/architecture/decisions/0036-regulator-
+    principal-lawful-basis-attestation-pattern.md` §Context and
+    §11 Implementation Detail + `docs/reference/section-12-
+    progress.md` CAR Sub-box 2 + CAR Sub-box 3 rows per RULE 14
+    bidirectional citation. Back-cite landed at ADR-0036 sub-phase
+    1 commit substantively at substantive register.)*
+
 ### Cluster sub-register expansion (post-this-commit)
 
 Post-this-commit, the 23 canonical observations operate at six
