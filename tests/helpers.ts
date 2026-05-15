@@ -46,6 +46,33 @@ export function makeEntityInput(
   };
 }
 
+// WHAT: Build a CreateEntityInput object for a REGULATOR fixture with
+//        safe random values. REGULATOR is DISTINCT FROM GOVERNMENT
+//        per ADR-0036 Sub-decision 1; this helper exists so tests do
+//        not accidentally use GOVERNMENT for regulator-access flows.
+// INPUT: An optional partial override; entity_type override to anything
+//        other than REGULATOR is rejected at the type level.
+// OUTPUT: A CreateEntityInput with entity_type pinned to REGULATOR.
+// WHY: REGULATOR test setup needs entity_type === "REGULATOR" + regulator-
+//      specific TAR fields populated separately via updateTARPermissions
+//      (or via direct prisma.tokenAttributeRepository.update). This
+//      helper produces a consistent REGULATOR entity input; tests
+//      populate regulator_jurisdiction / regulator_authority_scope /
+//      regulator_credentialed_by on the auto-created TAR per their
+//      validation needs.
+export function makeRegulatorEntityInput(
+  overrides: Omit<Partial<CreateEntityInput>, "entity_type"> = {},
+): CreateEntityInput {
+  const id = randomUUID();
+  return {
+    entity_type: "REGULATOR" satisfies EntityType,
+    display_name: `${TEST_PREFIX}regulator_${id}`,
+    public_key: `regulator_pk_${id}`,
+    email: `${TEST_PREFIX}regulator_${id}@niov.test`,
+    ...overrides,
+  };
+}
+
 // WHAT: Build a CreateCapsuleInput object with safe defaults.
 // INPUT: The wallet_id and entity_id the capsule belongs to, plus an
 //        optional partial override for any other field.

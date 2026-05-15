@@ -191,5 +191,41 @@ export type {
   EscalationRequest,
   EscalationStatus,
   EscalationType,
+  // CAR Sub-box 3 — REGULATOR + Lawful-Basis (ADR-0036) tables.
+  LawfulBasis,
+  LawfulBasisType,
   Prisma,
 } from "@prisma/client";
+
+// CAR Sub-box 3 sub-phase 3 [SUB-BOX-3-SERVICES] per ADR-0036:
+// LawfulBasis canonical hash + create + audit_id backfill + validity
+// helpers. See packages/database/src/queries/lawful-basis.ts.
+export {
+  canonicalLawfulBasisContent,
+  computeLawfulBasisChainHash,
+  createLawfulBasis,
+  createLawfulBasisInTx,
+  linkLawfulBasisToAuditEventInTx,
+  isLawfulBasisActive,
+  getLawfulBasisById,
+} from "./queries/lawful-basis.js";
+
+export type {
+  LawfulBasisHashableFields,
+  CreateLawfulBasisInput,
+} from "./queries/lawful-basis.js";
+
+// CAR Sub-box 3 sub-phase 3 [SUB-BOX-3-SERVICES] per ADR-0036:
+// REGULATOR principal validation + lookup. See packages/database/
+// src/queries/regulator.ts. REGULATOR is DISTINCT from GOVERNMENT
+// per ADR-0036 Sub-decision 1 (CAR §2.1 correctness-hazard guard).
+export {
+  validateRegulatorAccess,
+  getRegulatorEntityById,
+} from "./queries/regulator.js";
+
+export type {
+  EntityWithTar,
+  RegulatorAccessRequest,
+  RegulatorValidationResult,
+} from "./queries/regulator.js";
