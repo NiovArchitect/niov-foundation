@@ -91,7 +91,12 @@ function assertCeiling(level: number): void {
 // WHY: Rule 0 -- AI agents and devices always start lower than humans.
 //      Centralizing the table here means policy changes happen in one
 //      place. ROBOT is intentionally absent because EntityType has no
-//      ROBOT value yet.
+//      ROBOT value yet. REGULATOR has no inherent clearance ceiling
+//      (default 0) per ADR-0036 Sub-decision 1; access is governed by
+//      LawfulBasis scope (Sub-decision 3-5) + regulator authority scope
+//      (Sub-decision 2) + credentialing-authority verification
+//      (Sub-decision 7) + dual-control gate on grant routes
+//      (Sub-decision 6).
 const DEFAULT_CEILING_BY_TYPE: Record<EntityType, number> = {
   PERSON: 6,
   COMPANY: 4,
@@ -99,6 +104,7 @@ const DEFAULT_CEILING_BY_TYPE: Record<EntityType, number> = {
   APPLICATION: 2,
   AI_AGENT: 2,
   DEVICE: 1,
+  REGULATOR: 0,
 };
 
 // WHAT: Pick the default clearance_ceiling for a fresh TAR.

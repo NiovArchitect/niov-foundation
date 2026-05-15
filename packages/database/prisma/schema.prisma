@@ -198,6 +198,14 @@ model TokenAttributeRepository {
   monetization_role     MonetizationRole @default(NEITHER)
   compliance_frameworks String[]
 
+  // Regulator-specific fields per ADR-0036 Sub-decision 2; populated
+  // at REGULATOR onboarding per ADR-0036 Sub-decision 7 credentialing-
+  // authority pattern. Default empty array / null for non-REGULATOR
+  // entities; canonical at substantive register substantively.
+  regulator_jurisdiction    String[] @default([])
+  regulator_authority_scope String[] @default([])
+  regulator_credentialed_by String?
+
   tar_version Int       @default(1)
   tar_hash    String
   status      TARStatus @default(ACTIVE)
@@ -347,6 +355,7 @@ enum EntityType {
   DEVICE
   APPLICATION
   GOVERNMENT
+  REGULATOR /// External regulatory authority distinct from GOVERNMENT (tenant-internal). Per ADR-0036 Sub-decision 1; CAR §2.1 RED → GREEN at Sub-box 3 closure. Authentication via credentialing-authority pattern (Sub-decision 7); access requires LawfulBasis (Sub-decision 3-5); regulator-grant routes gated by requireDualControl (Sub-decision 6).
 }
 
 enum EntityStatus {
@@ -487,6 +496,22 @@ enum EscalationType {
   AUTHORIZATION_FAILURE
   COMPLIANCE_GATE
   DUAL_CONTROL_REQUIRED /// Privileged-operation second-approver gate per ADR-0026; distinct from HUMAN_REVIEW_REQUIRED (AI-uncertainty trigger).
+}
+
+// LawfulBasisType enumerates the categories of legal authority under
+// which a REGULATOR entity (per EntityType.REGULATOR + ADR-0036
+// Sub-decision 1) accesses tenant data via COSMP read/share flows.
+// Each LawfulBasis row carries one basis_type; basis_reference is the
+// citation per type (subpoena ID / case number / treaty article / etc.).
+// Per ADR-0036 Sub-decision 3 + CAR §2.2 verbatim canonical at substantive
+// register.
+enum LawfulBasisType {
+  SUBPOENA
+  REGULATORY_AUTHORITY
+  COURT_ORDER
+  DPA_REQUEST
+  MLAT_REQUEST
+  CONSENT_OF_DATA_SUBJECT
 }
 
 // A Hive is a many-entity collective. Members contribute capsules;
@@ -1131,4 +1156,50 @@ model EscalationRequest {
   @@index([created_at])
   @@index([escalation_type])
   @@map("escalation_requests")
+}
+
+// A LawfulBasis row is a structured attestation of the legal authority
+// under which a REGULATOR entity (per EntityType.REGULATOR + ADR-0036
+// Sub-decision 1) accesses tenant data via COSMP read/share flows. Each
+// regulator access carries exactly one LawfulBasis row. The chain_hash
+// field is included in the AuditEvent canonical_record/1 (per ADR-0036
+// Sub-decision 5; sub-phase 4 audit-chain extension at TS+Elixir
+// byte-equivalence per ADR-0033) so that lawful-basis content tampering
+// invalidates AuditEvent.event_hash and breaks chain verification per
+// ADR-0002 BEFORE DELETE trigger canonical at substantive register
+// substantively.
+//
+// audit_id is nullable at row creation per ADR-0036 Sub-decision 5
+// (filled after the access AuditEvent is written; avoids circular write-
+// order dependency). chain_hash is computed at LawfulBasis row creation
+// from canonical content (basis_type | basis_reference | jurisdiction_
+// invoked | valid_from-ISO | valid_until-ISO via SHA-256) BEFORE the
+// AuditEvent that references it is written.
+//
+// Time-boundedness invariant per ADR-0036 Sub-decision 3 + CAR §2.2:
+// valid_until is NOT NULL (no perpetual lawful basis); expired-basis
+// detection canonical at sub-phase 6 enforcement register.
+//
+// Patent-implementation evidence per ADR-0020 Register-2 + CAR §2.2
+// Family 1 (extends US 12,164,537 + US 12,399,904 into regulatory-
+// access territory).
+model LawfulBasis {
+  basis_id             String          @id @default(uuid()) @db.Uuid
+  basis_type           LawfulBasisType
+  basis_reference      String
+  jurisdiction_invoked String
+  valid_from           DateTime
+  valid_until          DateTime
+  audit_id             String?         @db.Uuid
+  chain_hash           String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([basis_type])
+  @@index([jurisdiction_invoked])
+  @@index([valid_until])
+  @@index([audit_id])
+  @@index([created_at])
+  @@map("lawful_bases")
 }

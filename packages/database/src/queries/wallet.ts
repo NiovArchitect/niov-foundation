@@ -46,6 +46,13 @@ export function defaultWalletTypeFor(entityType: EntityType): WalletType {
     case "AI_AGENT":
     case "APPLICATION":
     case "GOVERNMENT":
+    case "REGULATOR":
+      // REGULATOR per ADR-0036 Sub-decision 1 is an external authority
+      // distinct from GOVERNMENT; ENTERPRISE wallet preserves Entity
+      // creation flow at canonical register. REGULATOR-specific access
+      // is governed by LawfulBasis + credentialing + dual-control;
+      // REGULATOR substantively does not own DMW capsules at the
+      // current schema register substantively.
       return "ENTERPRISE";
   }
 }
