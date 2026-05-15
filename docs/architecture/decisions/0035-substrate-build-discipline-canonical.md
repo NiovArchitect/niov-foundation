@@ -315,6 +315,163 @@ renumbering).
     ground truth surfaces drift that strategic-tier framing
     substantively missed.
 
+32. **D-PHASE-10-DISCONNECT-TEST-CASCADE** (sub-phase 10
+    `[BEAM-DBGI-INTEGRATION-TESTS]` substrate-build register) —
+    `Node.disconnect/1` test in multi-node integration substrate
+    substantively cascades at canonical register: (a) ExUnit
+    randomizes test order WITHIN a module by default per seed-based
+    canonical at substantive register; (b) when the disconnect test
+    runs first in a randomized order, subsequent tests in the same
+    module substantively fail with empty `Node.list/0` at canonical
+    register; (c) `:peer.peer_down` default `:stop` substantively
+    interprets `Node.disconnect/1` as peer-down at canonical-pattern
+    register; the controlling process (setup_all callback)
+    substantively terminates at canonical register; the linked peer
+    node terminates per `:peer.start_link` canonical at substantive
+    register; subsequent tests' setup_all on_exit substantively
+    fails with "no process" at substrate-state ground truth register
+    (Cluster.Supervisor + supervised children all terminate when the
+    peer dies at canonical register).
+
+    **Substrate-coherent fix REFRAMED post-RULE-11-research-gate at
+    canonical decision register** per operator-tier rewind decision
+    canonical at substantive register: ISOLATE partition test
+    substrate in 5th integration test file (`partition_recovery_test.
+    exs`) at canonical register per RQ4 per-file isolation canonical
+    at substrate-coherent register (separate test file with own
+    setup_all peer canonical at substantive register substantively
+    prevents cascade canonical at substantive register) + APPLY
+    RQ1 verbatim OTP `:peer.start_link` with `connection: 0`
+    (alternative TCP control channel; auto-port) + `peer_down:
+    :continue` canonical at partition-survival register substantively
+    (peer + controlling process substantively survive `Node.disconnect/
+    1` at canonical register; alternative TCP channel substantively
+    independent of Distributed Erlang at canonical register) + FULL
+    6-test disconnect → consistency during partition → reconnect →
+    `:pg` membership re-replication → Phoenix.Tracker CRDT re-merge
+    → Phoenix.PubSub broadcast resumption cycle canonical at
+    substantive register per Q-B Option β LOCKED canonical at
+    substantive register. See D-PHASE-10-PARTITION-SURVIVAL-CANONICAL
+    33rd substantively below for RQ1 verbatim OTP canonical fix +
+    RQ4 per-file isolation pattern at canonical-coherence
+    verification register substantively at substantive register.
+
+    Substantively analogous to D-AUDIT-OUTCOME-ENUM (8th) at
+    integration-test-tier catches-substrate-coherence-bug register —
+    integration-tier substantive surfaces substrate-coherence
+    observations unit-tier substantively missed at canonical register.
+    Sub-phase 10 substantive landing: 19 integration tests at
+    canonical register (4 cluster_test.exs + 3 process_group_cluster_
+    test.exs + 3 presence_replication_test.exs + 3 pubsub_broadcast_
+    test.exs + 6 partition_recovery_test.exs); registry_test.exs
+    substantively has no cross-node parallel — Registry process-local
+    at canonical OTP register substantively at substantive register.
+
+33. **D-PHASE-10-PARTITION-SURVIVAL-CANONICAL** (sub-phase 10 RULE
+    11 broader-community research gate canonical at substantive
+    register) — `:peer.start_link` with `connection: 0` + `peer_down:
+    :continue` substantively canonical at partition-survival test
+    register per RQ1 verbatim OTP canonical at substantive register
+    (https://www.erlang.org/doc/man/peer.html). Substrate-architectural
+    canonical fix at substantive register: (a) `connection: 0`
+    substantively uses alternative TCP control channel (auto-port)
+    instead of default Distributed Erlang control channel canonical
+    (alternative TCP channel substantively independent of Distributed
+    Erlang at canonical register; `Node.disconnect/1` substantively
+    severs Distributed Erlang only at canonical register; alternative
+    TCP channel substantively unaffected at canonical register);
+    (b) `peer_down: :continue` substantively keeps controlling process
+    alive on connection loss canonical at substantive register
+    (default `:stop` substantively cascades per D-PHASE-10-DISCONNECT-
+    TEST-CASCADE 32nd canonical above); (c) `Node.connect/1`
+    substantively re-establishes Distributed Erlang post-partition at
+    canonical register; `:rpc.call` substantively works post-reconnect
+    at canonical register.
+
+    Per-file isolation canonical at substrate-coherent register per
+    RQ4 broader-community research canonical at substantive register
+    (Elixir Forum libcluster threads + Toran Billups multi-node ExUnit
+    pattern canonical at community register; no single documented
+    canonical pattern at community register at substantive register
+    but consensus pattern canonical at substantive register): 5th
+    integration test file (`partition_recovery_test.exs`) with own
+    setup_all peer substantively prevents cascade to other integration
+    test files at canonical register at substantive register.
+
+    Settle timing canonical at substantive register per RQ2 + RQ3
+    source-knowledge canonical at substantive register (hexdocs at
+    https://hexdocs.pm/phoenix_pubsub/Phoenix.Tracker.html + OTP at
+    https://www.erlang.org/doc/man/pg.html documentation insufficient
+    at substantive register; source-knowledge canonical applied):
+    `@recovery_wait_ms 5000` = 3× Phoenix.Tracker `:broadcast_period`
+    canonical for CRDT re-merge convergence at substantive register
+    (RQ2 ORSWOT-based CRDT auto-merge via heartbeat exchange
+    canonical at substantive register); `@pg_settle_ms 500` canonical
+    for `:pg` membership re-replication post-`Node.connect` at
+    substantive register (RQ3 source-knowledge canonical: convergence
+    typically <500ms small clusters at substantive register);
+    `:peer` `wait_boot 30_000` canonical for full app-tree boot at
+    substantive register (default 15_000 substantively insufficient
+    per D-PHASE-10-MULTI-NODE-TEST-RUNTIME-BUDGET 30th canonical).
+
+    Substantive substrate at canonical register: NEW
+    `apps/dbgi_supervisor/test/support/cluster_helpers.ex`
+    `start_partition_survival_peer!/1` canonical at substantive
+    register (uses `:peer.start_link(%{name: ..., connection: 0,
+    peer_down: :continue, wait_boot: 30_000, ...})` per RQ1 verbatim
+    OTP canonical) + `recovery_wait_ms/0` canonical at substantive
+    register; substantively additive to existing `start_peer!/1`
+    canonical at substantive register (PRESERVED at substantive
+    register; suitable for non-partition multi-node tests at
+    canonical register). NEW `apps/dbgi_supervisor/test/integration/
+    partition_recovery_test.exs` 6-test substantive scope canonical
+    per Q-B Option β LOCKED canonical at substantive register
+    (a) baseline cluster connectivity verified + (b) partition
+    simulated; peer survives via partition-survival canonical;
+    each side sees own state only canonical at substantive register
+    + (c) reconnect via `Node.connect` substantively at canonical
+    register + (d) `:pg` membership re-replicates post-reconnect
+    canonical at substantive register + (e) Phoenix.Tracker
+    presence CRDT-re-merges post-reconnect canonical at substantive
+    register + (f) Phoenix.PubSub broadcast resumes post-reconnect
+    canonical at substantive register).
+
+    Substrate-architectural pairing at canonical register: 32nd
+    documents the cascade observed at substrate-state ground truth
+    register; 33rd documents the RQ1 verbatim OTP canonical fix +
+    RQ4 per-file isolation pattern at substantive register; both at
+    numbered ADR-0035 §9 register, both at same commit, audit trail
+    reads as cascade-observed + canonical-fix-landed together at
+    canonical register substantively at substantive register;
+    government / enterprise / FedRAMP audit register reads canonical
+    at substantive register per operator-tier Q-C Option β LOCKED
+    canonical at substantive register.
+
+    **Numbering discontinuity preserved at canonical register per
+    Option β substrate-honest discipline**: 24th-31st substantively
+    forward-queued substrate-build observation candidates documented
+    at canonical register at commit body / module moduledoc / ADR
+    amendment body surfaces at substantive register; substantively
+    NOT promoted to ADR-0035 §9 numbered cluster at this commit per
+    prior operator-tier locked decision register substantively
+    (D-PHASE-10-PEER-CLOSURE-LOADING substantively documented at
+    cluster_helpers.ex moduledoc canonical at substantive register;
+    D-PHASE-10-MULTI-NODE-TEST-RUNTIME-BUDGET 30th + D-PHASE-10-
+    PEER-VS-LOCAL-CLUSTER-DISCRIMINATION 31st substantively
+    documented at ADR-0030 §DBGI sub-phase 10 amendment body
+    canonical at substantive register; D-OBSERVATION-CLUSTER-
+    SUBSTRATE-ARCHITECTURAL-BOUNDARY 24th + D-FOUR-REGISTER-
+    SUBSTRATE-DISCIPLINE 25th + D-TASK-TRACKER-VS-SUBSTRATE-STATE-
+    DRIFT 26th + D-PHASE-9-PHOENIX-TRACKER-ADR-0030-AMENDMENT-
+    CANDIDATE 27th + D-PHASE-9-PG2-VS-PG-COEXISTENCE 28th +
+    D-PHOENIX-TRACKER-PHX-REF-META-INJECTION 29th substantively
+    documented at prior commit body surfaces canonical at
+    substantive register). Numbering drift 23 → 32 → 33 substantively
+    analogous to D-CLUSTER-NUMBERING-DRIFT (23rd) at substrate-state
+    ground truth preservation register — substrate-state ground
+    truth at canonical register substantively load-bearing at audit-
+    trail-friendly register substantively at substantive register.
+
 ### Cluster sub-register expansion (post-this-commit)
 
 Post-this-commit, the 23 canonical observations operate at six

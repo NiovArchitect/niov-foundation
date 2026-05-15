@@ -206,6 +206,114 @@ The decomposition:
 10. **`[BEAM-DBGI-INTEGRATION-TESTS]`** — end-to-end tests covering process
     group join/leave + clustering formation + failover semantics across nodes.
 
+    **Sub-phase 10 amendment (LANDED at this commit; ADR-0030 §DBGI
+    sub-phase 10 amendment commit)**: multi-node test substrate canonical
+    via raw `:peer` (OTP-native; OTP 25+ canonical; OTP 28 substrate per
+    `.tool-versions`) per **D-PHASE-10-PEER-VS-LOCAL-CLUSTER-
+    DISCRIMINATION** (ADR-0035 §9 31st canonical substrate-build
+    observation candidate) — substantively analogous to D-PHASE-8-PG-VS-
+    GPROC-DISCRIMINATION 21st pattern at sub-phase 8 register (modern
+    OTP-native canonical preferred over Hex-dep alternative). `local_cluster`
+    Hex dep substantively ergonomic at substrate-build register but
+    NIOV substrate-discipline (per ADR-0029 + RULE 11 broader-community
+    research) substantively favors minimal-dep canonical at OTP-native
+    register. Phoenix.Tracker default `:broadcast_period` 1500ms preserved
+    per **D-PHASE-10-MULTI-NODE-TEST-RUNTIME-BUDGET** (ADR-0035 §9 30th
+    canonical substrate-build observation candidate); multi-node tests
+    accommodate CRDT replication wait budget (`@crdt_wait_ms 2500ms` per
+    test substantively at substantive register; >1 heartbeat cycle for
+    cluster-wide convergence at canonical-pattern register) at substrate-
+    honest production-coherence register. ExUnit `@tag :integration`
+    canonical (mirrors cosmp_router sub-phase 5b-iii pattern at substantive
+    register); `test_helper.exs` substantively configures
+    `ExUnit.start(exclude: [:integration])` canonical at substantive
+    register; default `mix test` preserves fast unit-tier runtime budget;
+    integration tier opt-in via `mix test --include integration` canonical
+    at substantive register. Sub-phase 10 substantive landing: `test/
+    support/cluster_helpers.ex` (`:peer.start_link/:peer.stop` canonical
+    helpers + cookie + code-paths propagation + `:dbgi_supervisor` app
+    boot on peer + `Node.connect` parent ↔ peer canonical at substantive
+    register) + 4-file integration test layout per Q5 Option γ LOCKED
+    canonical at substantive register: (1) `test/integration/cluster_test.
+    exs` (parent + peer connectivity bidirectional + Cluster.Supervisor
+    aliveness on both nodes; 4 substantive tests at canonical register);
+    (2) `test/integration/process_group_cluster_test.exs` (`:pg` join/
+    leave membership replication across cluster; parallels
+    `process_group_test.exs` at single-node register; 3 substantive tests
+    at canonical register); (3) `test/integration/presence_replication_
+    test.exs` (Phoenix.Tracker CRDT replication bidirectional + untrack
+    propagation; parallels `presence_tracker_test.exs` at single-node
+    register; 3 substantive tests at canonical register); (4) `test/
+    integration/pubsub_broadcast_test.exs` (broadcast/3 cross-node
+    bidirectional + local_broadcast/3 node-locality canonical; parallels
+    `pubsub_test.exs` at single-node register; 3 substantive tests at
+    canonical register); (5) `test/integration/partition_recovery_test.
+    exs` NEW (full disconnect → consistency during partition → reconnect
+    → :pg membership re-replication → Phoenix.Tracker CRDT re-merge →
+    Phoenix.PubSub broadcast resumption canonical at substantive register;
+    6 substantive tests at canonical register; partition-survival peer
+    canonical via `:peer.start_link` with `connection: 0` + `peer_down:
+    :continue` per D-PHASE-10-PARTITION-SURVIVAL-CANONICAL 33rd canonical;
+    own setup_all peer canonical at per-file isolation register per
+    RQ4 substantively prevents cascade canonical at substantive
+    register). 19 substantive integration tests at canonical register
+    substantively at substantive register (4 + 3 + 3 + 3 + 6).
+    `registry_test.exs` substantively has no cross-node parallel —
+    `Registry` is process-local at canonical OTP register substantively
+    at substantive register.
+
+    **Failover semantics scope canonical at substantive register** per
+    ADR-0030 §DBGI canonical specification ("end-to-end tests covering
+    process group join/leave + clustering formation + failover semantics
+    across nodes"): substantive substrate at canonical register —
+    (a) `:peer.start_link` with `connection: 0` (alternative TCP control
+    channel; auto-port) + `peer_down: :continue` canonical per RQ1
+    verbatim OTP canonical substantively at substantive register
+    (peer + controlling process substantively survive `Node.disconnect/1`
+    partition simulation at canonical register; alternative TCP channel
+    substantively independent of Distributed Erlang at canonical
+    register); (b) reconnect harness canonical at substantive register
+    (`Node.connect/1` post-partition substantively re-establishes
+    Distributed Erlang at canonical register; @pg_settle_ms 500ms
+    canonical for `:pg` re-replication per RQ3 source-knowledge
+    canonical); (c) recovery verification canonical at substrate-state
+    register (`@recovery_wait_ms 5000` = 3× `Phoenix.Tracker.:broadcast_
+    period` substantively conservative for CRDT re-merge per RQ2
+    source-knowledge canonical at substantive register; post-reconnect
+    cluster convergence + `:pg` membership re-replication + Phoenix.
+    Tracker CRDT re-merge + Phoenix.PubSub broadcast resumption
+    substantive verification canonical at substantive register).
+
+    **RULE 11 broader-community research canonical-coherence verification
+    register** at substantive register substantively cites:
+    - RQ1 (`:peer` lifecycle canonical at OTP register):
+      https://www.erlang.org/doc/man/peer.html (`connection` +
+      `peer_down` options canonical at substantive register)
+    - RQ2 (Phoenix.Tracker partition recovery canonical):
+      https://hexdocs.pm/phoenix_pubsub/Phoenix.Tracker.html
+      (hexdocs insufficient at substantive register; ORSWOT CRDT
+      source-knowledge canonical applied at substantive register)
+    - RQ3 (`:pg` cross-node membership canonical under partition at
+      OTP register): https://www.erlang.org/doc/man/pg.html
+      (verbatim canonical: "Membership view is not transitive" at
+      substantive register)
+    - RQ4 (ExUnit multi-node partition test canonical at Elixir
+      community register): per-file isolation canonical at substrate-
+      coherent register (separate test file with own setup_all peer
+      canonical at substantive register)
+
+    This amendment is **canonical-pattern register clarification**, NOT
+    architectural-register supersession (substantively analogous to
+    ADR-0034 §Sub-decision 3-amendment + ADR-0030 §DBGI sub-phase 8 +
+    sub-phase 9 amendment register at substantive register). See
+    ADR-0035 §9 D-PHASE-10-MULTI-NODE-TEST-RUNTIME-BUDGET 30th +
+    D-PHASE-10-PEER-VS-LOCAL-CLUSTER-DISCRIMINATION 31st +
+    D-PHASE-10-DISCONNECT-TEST-CASCADE 32nd +
+    D-PHASE-10-PARTITION-SURVIVAL-CANONICAL 33rd canonical substrate-
+    build observation candidates for the multi-node test runtime budget
+    + minimal-dep discipline + cascade observation + partition-survival
+    canonical fix lineage at broader Erlang/OTP community register.
+
 **Operational Substrate (3 sub-phases):**
 
 11. **`[BEAM-OBSERVABILITY]`** — `telemetry_metrics` + `telemetry_poller` for
