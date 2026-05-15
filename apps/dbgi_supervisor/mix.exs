@@ -43,7 +43,10 @@ defmodule DbgiSupervisor.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
+      # Sub-phase 11 [BEAM-OBSERVABILITY]: :telemetry + :logger_json
+      # apps started canonical at substantive register per ADR-0030
+      # §DBGI sub-phase 11 amendment canonical.
+      extra_applications: [:logger, :telemetry, :logger_json],
       mod: {DbgiSupervisor.Application, []}
     ]
   end
@@ -59,18 +62,25 @@ defmodule DbgiSupervisor.MixProject do
   # DISCRIMINATION 21st canonical substrate-build observation; `:gproc`
   # deferred to forward-queue at sub-phase 11+ at backward-compatibility
   # register if substantively load-bearing surfaces.
-  # Sub-phase 9 [BEAM-DBGI-LIBCLUSTER]: `:libcluster` (multi-region node
-  # discovery + cluster-formation strategy configurable per deployment-
-  # target) + `:phoenix_pubsub` (cross-node messaging + Phoenix.Tracker
-  # CRDT-backed presence) per ADR-0028 §3 + ADR-0030 §DBGI canonical at
-  # substrate-architectural register.
-  # Forward-queued deps:
-  # - Sub-phase 11 [BEAM-OBSERVABILITY]: `:telemetry_metrics` +
-  #   `:telemetry_poller` per ADR-0030 §DBGI canonical
+  # Sub-phase 9 [BEAM-DBGI-LIBCLUSTER]: `:libcluster` + `:phoenix_pubsub`
+  # per ADR-0028 §3 + ADR-0030 §DBGI canonical.
+  # Sub-phase 11 [BEAM-OBSERVABILITY] (this commit): `:telemetry_metrics`
+  # + `:telemetry_poller` + `:telemetry_metrics_prometheus` + `:logger_json`
+  # per ADR-0030 §DBGI sub-phase 11 canonical at substantive register
+  # (telemetry + Prometheus bridge + structured JSON logging substrate
+  # canonical at substantive register substantively per Q1/Q2/Q5 LOCKED
+  # operator-tier authorization at canonical decision register).
   defp deps do
     [
       {:libcluster, "~> 3.5"},
-      {:phoenix_pubsub, "~> 2.2"}
+      {:phoenix_pubsub, "~> 2.2"},
+      # Sub-phase 11 observability substrate canonical at substantive
+      # register substantively per ADR-0030 §DBGI sub-phase 11
+      # amendment canonical at substantive register:
+      {:telemetry_metrics, "~> 1.1"},
+      {:telemetry_poller, "~> 1.3"},
+      {:telemetry_metrics_prometheus, "~> 1.1"},
+      {:logger_json, "~> 7.0"}
     ]
   end
 end

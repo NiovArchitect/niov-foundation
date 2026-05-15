@@ -111,230 +111,244 @@ defmodule CosmpRouter.Router do
 
   @impl true
   def handle_call({:authenticate, %Proto.AuthenticateRequest{} = req}, _from, state) do
-    # AUTHENTICATE: DMW/principal identity verification.
-    # Standalone audit emission per ADR-0033 §Decision 4e (no business
-    # mutation; auth ops always audit per RULE 4).
-    with {:ok, _capsule} <- validate_request_capsule(req.capsule),
-         :ok <- validate_principal_id(req.principal_id) do
-      _ =
-        Audit.write_audit_event(%{
-          event_type: "COSMP_AUTHENTICATE",
-          outcome: "SUCCESS",
-          actor_entity_id: nil,
-          system_principal: Audit.system_principals()[:cosmp_router],
-          details: %{principal_id: req.principal_id}
-        })
+    instrument_op(:authenticate, fn ->
+      # AUTHENTICATE: DMW/principal identity verification.
+      # Standalone audit emission per ADR-0033 §Decision 4e (no business
+      # mutation; auth ops always audit per RULE 4).
+      with {:ok, _capsule} <- validate_request_capsule(req.capsule),
+           :ok <- validate_principal_id(req.principal_id) do
+        _ =
+          Audit.write_audit_event(%{
+            event_type: "COSMP_AUTHENTICATE",
+            outcome: "SUCCESS",
+            actor_entity_id: nil,
+            system_principal: Audit.system_principals()[:cosmp_router],
+            details: %{principal_id: req.principal_id}
+          })
 
-      {:reply,
-       {:ok,
-        %Proto.AuthenticateSuccess{
-          authenticated: true,
-          principal_id: req.principal_id
-        }}, state}
-    else
-      {:error, %Proto.CosmpError{} = err} ->
-        emit_audit_failure("COSMP_AUTHENTICATE", err)
-        {:reply, {:error, err}, state}
-    end
+        {:reply,
+         {:ok,
+          %Proto.AuthenticateSuccess{
+            authenticated: true,
+            principal_id: req.principal_id
+          }}, state}
+      else
+        {:error, %Proto.CosmpError{} = err} ->
+          emit_audit_failure("COSMP_AUTHENTICATE", err)
+          {:reply, {:error, err}, state}
+      end
+    end)
   end
 
   def handle_call({:negotiate, %Proto.NegotiateRequest{} = req}, _from, state) do
-    # NEGOTIATE: Cross-DMW capability + scope agreement.
-    # Standalone audit emission; result is negotiation outcome.
-    with {:ok, _capsule} <- validate_request_capsule(req.capsule) do
-      _ =
-        Audit.write_audit_event(%{
-          event_type: "COSMP_NEGOTIATE",
-          outcome: "SUCCESS",
-          actor_entity_id: nil,
-          system_principal: Audit.system_principals()[:cosmp_router],
-          details: %{requested_scopes: req.requested_scopes || []}
-        })
+    instrument_op(:negotiate, fn ->
+      # NEGOTIATE: Cross-DMW capability + scope agreement.
+      # Standalone audit emission; result is negotiation outcome.
+      with {:ok, _capsule} <- validate_request_capsule(req.capsule) do
+        _ =
+          Audit.write_audit_event(%{
+            event_type: "COSMP_NEGOTIATE",
+            outcome: "SUCCESS",
+            actor_entity_id: nil,
+            system_principal: Audit.system_principals()[:cosmp_router],
+            details: %{requested_scopes: req.requested_scopes || []}
+          })
 
-      {:reply,
-       {:ok,
-        %Proto.NegotiateSuccess{
-          granted_scopes: req.requested_scopes || []
-        }}, state}
-    else
-      {:error, %Proto.CosmpError{} = err} ->
-        emit_audit_failure("COSMP_NEGOTIATE", err)
-        {:reply, {:error, err}, state}
-    end
+        {:reply,
+         {:ok,
+          %Proto.NegotiateSuccess{
+            granted_scopes: req.requested_scopes || []
+          }}, state}
+      else
+        {:error, %Proto.CosmpError{} = err} ->
+          emit_audit_failure("COSMP_NEGOTIATE", err)
+          {:reply, {:error, err}, state}
+      end
+    end)
   end
 
   def handle_call({:read, %Proto.ReadRequest{} = req}, _from, state) do
-    # READ: Metadata-first capsule retrieval via Storage facade
-    # (ETS-first; Postgres fallthrough on miss). Standalone audit
-    # emission for read access tracking; no business mutation.
-    # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
-    case Storage.get(req.capsule_id, ets: state.storage_ets) do
-      {:ok, %Capsule{} = capsule} ->
-        _ =
-          Audit.write_audit_event(%{
-            event_type: "COSMP_READ",
-            outcome: "SUCCESS",
-            actor_entity_id: nil,
-            target_capsule_id: req.capsule_id,
-            system_principal: Audit.system_principals()[:cosmp_router],
-            details: %{capsule_id: req.capsule_id}
-          })
+    instrument_op(:read, fn ->
+      # READ: Metadata-first capsule retrieval via Storage facade
+      # (ETS-first; Postgres fallthrough on miss). Standalone audit
+      # emission for read access tracking; no business mutation.
+      # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
+      case Storage.get(req.capsule_id, ets: state.storage_ets) do
+        {:ok, %Capsule{} = capsule} ->
+          _ =
+            Audit.write_audit_event(%{
+              event_type: "COSMP_READ",
+              outcome: "SUCCESS",
+              actor_entity_id: nil,
+              target_capsule_id: req.capsule_id,
+              system_principal: Audit.system_principals()[:cosmp_router],
+              details: %{capsule_id: req.capsule_id}
+            })
 
-        proto_capsule = Translator.from_capsule(capsule)
-        {:reply, {:ok, proto_capsule}, state}
+          proto_capsule = Translator.from_capsule(capsule)
+          {:reply, {:ok, proto_capsule}, state}
 
-      {:error, :not_found} ->
-        err =
-          Translator.error(
-            :CAPSULE_NOT_FOUND,
-            "Capsule #{req.capsule_id} not found in storage"
-          )
+        {:error, :not_found} ->
+          err =
+            Translator.error(
+              :CAPSULE_NOT_FOUND,
+              "Capsule #{req.capsule_id} not found in storage"
+            )
 
-        emit_audit_failure("COSMP_READ", err, target_capsule_id: req.capsule_id)
-        {:reply, {:error, err}, state}
-    end
+          emit_audit_failure("COSMP_READ", err, target_capsule_id: req.capsule_id)
+          {:reply, {:error, err}, state}
+      end
+    end)
   end
 
   def handle_call({:write, %Proto.WriteRequest{} = req}, _from, state) do
-    # WRITE: Append-only capsule write with audit-chain.
-    # Composed-mode per ADR-0033 §Decision 4e + RULE 4: Storage.Postgres.put
-    # + Audit.write_audit_event/3 wrapped in Ecto.Multi (atomic rollback);
-    # Idempotency.check/2 at entry + Idempotency.record/3 post-success.
-    capsule = Translator.to_capsule(req.capsule || %Proto.Capsule{})
+    instrument_op(:write, fn ->
+      # WRITE: Append-only capsule write with audit-chain.
+      # Composed-mode per ADR-0033 §Decision 4e + RULE 4: Storage.Postgres.put
+      # + Audit.write_audit_event/3 wrapped in Ecto.Multi (atomic rollback);
+      # Idempotency.check/2 at entry + Idempotency.record/3 post-success.
+      capsule = Translator.to_capsule(req.capsule || %Proto.Capsule{})
 
-    with {:ok, validated} <- Validator.validate(capsule),
-         idempotency_key <- "write:#{req.capsule_id}:v#{capsule_version(validated)}",
-         result <-
-           write_or_replay(
-             idempotency_key,
-             "WRITE",
-             req.capsule_id,
-             validated,
-             "COSMP_WRITE",
-             state.storage_ets
-           ) do
-      case result do
-        {:ok, _} ->
-          {:reply,
-           {:ok, %Proto.WriteSuccess{capsule_id: req.capsule_id}}, state}
+      with {:ok, validated} <- Validator.validate(capsule),
+           idempotency_key <- "write:#{req.capsule_id}:v#{capsule_version(validated)}",
+           result <-
+             write_or_replay(
+               idempotency_key,
+               "WRITE",
+               req.capsule_id,
+               validated,
+               "COSMP_WRITE",
+               state.storage_ets
+             ) do
+        case result do
+          {:ok, _} ->
+            {:reply,
+             {:ok, %Proto.WriteSuccess{capsule_id: req.capsule_id}}, state}
 
+          {:error, %Proto.CosmpError{} = err} ->
+            {:reply, {:error, err}, state}
+        end
+      else
         {:error, %Proto.CosmpError{} = err} ->
+          emit_audit_failure("COSMP_WRITE", err, target_capsule_id: req.capsule_id)
           {:reply, {:error, err}, state}
       end
-    else
-      {:error, %Proto.CosmpError{} = err} ->
-        emit_audit_failure("COSMP_WRITE", err, target_capsule_id: req.capsule_id)
-        {:reply, {:error, err}, state}
-    end
+    end)
   end
 
   def handle_call({:share, %Proto.ShareRequest{} = req}, _from, state) do
-    # SHARE: Permissioned scope grant across DMWs.
-    # Composed-mode: read existing + update permissions + persist + audit
-    # wrapped in Ecto.Multi; Idempotency around (capsule_id, grantee).
-    # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
-    case Storage.get(req.capsule_id, ets: state.storage_ets) do
-      {:ok, %Capsule{} = capsule} ->
-        updated_perms = grant_permission(capsule.permissions, req.grantee)
-        updated_capsule = %Capsule{capsule | permissions: updated_perms}
-        idempotency_key = "share:#{req.capsule_id}:#{req.grantee}"
+    instrument_op(:share, fn ->
+      # SHARE: Permissioned scope grant across DMWs.
+      # Composed-mode: read existing + update permissions + persist + audit
+      # wrapped in Ecto.Multi; Idempotency around (capsule_id, grantee).
+      # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
+      case Storage.get(req.capsule_id, ets: state.storage_ets) do
+        {:ok, %Capsule{} = capsule} ->
+          updated_perms = grant_permission(capsule.permissions, req.grantee)
+          updated_capsule = %Capsule{capsule | permissions: updated_perms}
+          idempotency_key = "share:#{req.capsule_id}:#{req.grantee}"
 
-        case write_or_replay(
-               idempotency_key,
-               "SHARE",
-               req.capsule_id,
-               updated_capsule,
-               "COSMP_SHARE",
-               state.storage_ets
-             ) do
-          {:ok, _} ->
-            granted_to = Map.get(updated_capsule.permissions, :granted_to, [])
+          case write_or_replay(
+                 idempotency_key,
+                 "SHARE",
+                 req.capsule_id,
+                 updated_capsule,
+                 "COSMP_SHARE",
+                 state.storage_ets
+               ) do
+            {:ok, _} ->
+              granted_to = Map.get(updated_capsule.permissions, :granted_to, [])
 
-            {:reply,
-             {:ok,
-              %Proto.ShareSuccess{
-                capsule_id: req.capsule_id,
-                granted_to: granted_to
-              }}, state}
+              {:reply,
+               {:ok,
+                %Proto.ShareSuccess{
+                  capsule_id: req.capsule_id,
+                  granted_to: granted_to
+                }}, state}
 
-          {:error, %Proto.CosmpError{} = err} ->
-            {:reply, {:error, err}, state}
-        end
+            {:error, %Proto.CosmpError{} = err} ->
+              {:reply, {:error, err}, state}
+          end
 
-      {:error, :not_found} ->
-        err = Translator.error(:CAPSULE_NOT_FOUND, "Capsule #{req.capsule_id} not found")
-        emit_audit_failure("COSMP_SHARE", err, target_capsule_id: req.capsule_id)
-        {:reply, {:error, err}, state}
-    end
+        {:error, :not_found} ->
+          err = Translator.error(:CAPSULE_NOT_FOUND, "Capsule #{req.capsule_id} not found")
+          emit_audit_failure("COSMP_SHARE", err, target_capsule_id: req.capsule_id)
+          {:reply, {:error, err}, state}
+      end
+    end)
   end
 
   def handle_call({:revoke, %Proto.RevokeRequest{} = req}, _from, state) do
-    # REVOKE: Capability revocation + downstream cascade marker.
-    # Composed-mode: read existing + update permissions + persist + audit;
-    # Idempotency around (capsule_id, grantee).
-    # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
-    case Storage.get(req.capsule_id, ets: state.storage_ets) do
-      {:ok, %Capsule{} = capsule} ->
-        updated_perms = revoke_permission(capsule.permissions, req.grantee)
-        updated_capsule = %Capsule{capsule | permissions: updated_perms}
-        idempotency_key = "revoke:#{req.capsule_id}:#{req.grantee}"
+    instrument_op(:revoke, fn ->
+      # REVOKE: Capability revocation + downstream cascade marker.
+      # Composed-mode: read existing + update permissions + persist + audit;
+      # Idempotency around (capsule_id, grantee).
+      # Storage.get/2 :ets opt threads state.storage_ets per ADR-0034.
+      case Storage.get(req.capsule_id, ets: state.storage_ets) do
+        {:ok, %Capsule{} = capsule} ->
+          updated_perms = revoke_permission(capsule.permissions, req.grantee)
+          updated_capsule = %Capsule{capsule | permissions: updated_perms}
+          idempotency_key = "revoke:#{req.capsule_id}:#{req.grantee}"
 
-        case write_or_replay(
-               idempotency_key,
-               "REVOKE",
-               req.capsule_id,
-               updated_capsule,
-               "COSMP_REVOKE",
-               state.storage_ets
-             ) do
-          {:ok, _} ->
-            remaining = Map.get(updated_capsule.permissions, :granted_to, [])
+          case write_or_replay(
+                 idempotency_key,
+                 "REVOKE",
+                 req.capsule_id,
+                 updated_capsule,
+                 "COSMP_REVOKE",
+                 state.storage_ets
+               ) do
+            {:ok, _} ->
+              remaining = Map.get(updated_capsule.permissions, :granted_to, [])
 
-            {:reply,
-             {:ok,
-              %Proto.RevokeSuccess{
-                capsule_id: req.capsule_id,
-                remaining_grantees: remaining
-              }}, state}
+              {:reply,
+               {:ok,
+                %Proto.RevokeSuccess{
+                  capsule_id: req.capsule_id,
+                  remaining_grantees: remaining
+                }}, state}
 
-          {:error, %Proto.CosmpError{} = err} ->
-            {:reply, {:error, err}, state}
-        end
+            {:error, %Proto.CosmpError{} = err} ->
+              {:reply, {:error, err}, state}
+          end
 
-      {:error, :not_found} ->
-        err = Translator.error(:CAPSULE_NOT_FOUND, "Capsule #{req.capsule_id} not found")
-        emit_audit_failure("COSMP_REVOKE", err, target_capsule_id: req.capsule_id)
-        {:reply, {:error, err}, state}
-    end
+        {:error, :not_found} ->
+          err = Translator.error(:CAPSULE_NOT_FOUND, "Capsule #{req.capsule_id} not found")
+          emit_audit_failure("COSMP_REVOKE", err, target_capsule_id: req.capsule_id)
+          {:reply, {:error, err}, state}
+      end
+    end)
   end
 
   def handle_call({:audit, %Proto.AuditRequest{} = req}, _from, state) do
-    # AUDIT: Append-only audit log query (per ADR-0033 §Decision 4f
-    # via verify_audit_chain; D-CASCADE-7 semantic: audit chain
-    # queried on-demand from Postgres audit_events table, not from
-    # in-memory Capsule.audit array).
-    rows = CosmpRouter.Storage.Postgres.audit_chain_for_capsule(req.capsule_id)
+    instrument_op(:audit, fn ->
+      # AUDIT: Append-only audit log query (per ADR-0033 §Decision 4f
+      # via verify_audit_chain; D-CASCADE-7 semantic: audit chain
+      # queried on-demand from Postgres audit_events table, not from
+      # in-memory Capsule.audit array).
+      rows = CosmpRouter.Storage.Postgres.audit_chain_for_capsule(req.capsule_id)
 
-    _ =
-      Audit.write_audit_event(%{
-        event_type: "COSMP_AUDIT",
-        outcome: "SUCCESS",
-        actor_entity_id: nil,
-        target_capsule_id: req.capsule_id,
-        system_principal: Audit.system_principals()[:cosmp_router],
-        details: %{capsule_id: req.capsule_id, entry_count: length(rows)}
-      })
+      _ =
+        Audit.write_audit_event(%{
+          event_type: "COSMP_AUDIT",
+          outcome: "SUCCESS",
+          actor_entity_id: nil,
+          target_capsule_id: req.capsule_id,
+          system_principal: Audit.system_principals()[:cosmp_router],
+          details: %{capsule_id: req.capsule_id, entry_count: length(rows)}
+        })
 
-    entries =
-      Enum.map(rows, fn row ->
-        %Proto.AuditEntry{
-          event_type: row.event_type,
-          actor: row.actor_entity_id || "",
-          timestamp: DateTime.to_unix(row.timestamp, :millisecond)
-        }
-      end)
+      entries =
+        Enum.map(rows, fn row ->
+          %Proto.AuditEntry{
+            event_type: row.event_type,
+            actor: row.actor_entity_id || "",
+            timestamp: DateTime.to_unix(row.timestamp, :millisecond)
+          }
+        end)
 
-    {:reply, {:ok, %Proto.AuditSuccess{entries: entries}}, state}
+      {:reply, {:ok, %Proto.AuditSuccess{entries: entries}}, state}
+    end)
   end
 
   # ============================================================================
@@ -507,4 +521,39 @@ defmodule CosmpRouter.Router do
   defp capsule_version(%Capsule{metadata: %{version: v}}) when is_integer(v), do: v
   defp capsule_version(%Capsule{metadata: %{"version" => v}}) when is_integer(v), do: v
   defp capsule_version(_), do: 1
+
+  # ============================================================================
+  # Sub-phase 11 [BEAM-OBSERVABILITY] instrumentation helper
+  # ============================================================================
+  #
+  # WHAT: Wraps a COSMP op handle_call body with `:telemetry.span/3`
+  #       canonical at substantive register; emits :start + :stop
+  #       events with op_name + status_class metadata canonical.
+  # INPUT: op_name (atom; one of :authenticate / :negotiate / :read /
+  #        :write / :share / :revoke / :audit — public per patent
+  #        US 12,517,919); fun (zero-arity returning {:reply, term, state}).
+  # OUTPUT: {:reply, term, state} (passes through fun result).
+  # WHY: Per ADR-0030 §DBGI sub-phase 11 amendment + Q4 LOCKED canonical
+  #      at substantive register substantively per D-PHASE-11-NO-IDENTITY-
+  #      LABEL-DISCIPLINE substrate-build observation candidate at
+  #      substantive register. Event metadata constrained to op_name +
+  #      status_class (low-cardinality + non-identity-bearing); NO
+  #      capsule_id, entity_id, principal_id, or other identity-bearing
+  #      fields at canonical register substantively at substantive
+  #      register.
+  defp instrument_op(op_name, fun) when is_atom(op_name) and is_function(fun, 0) do
+    :telemetry.span(
+      [:cosmp_router, :op],
+      %{op_name: op_name},
+      fn ->
+        result = fun.()
+        status_class = classify_reply(result)
+        {result, %{op_name: op_name, status_class: status_class}}
+      end
+    )
+  end
+
+  defp classify_reply({:reply, {:ok, _}, _}), do: :ok
+  defp classify_reply({:reply, {:error, _}, _}), do: :error
+  defp classify_reply(_), do: :unknown
 end

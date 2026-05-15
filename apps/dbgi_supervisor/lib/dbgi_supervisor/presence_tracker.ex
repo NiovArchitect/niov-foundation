@@ -68,6 +68,28 @@ defmodule DbgiSupervisor.PresenceTracker do
     # consumers. Substantive consumer logic (e.g., DMW presence routing,
     # cross-region failover) forward-queued to sub-phase 10+ per
     # ADR-0030 §DBGI canonical at substrate-architectural register.
+    #
+    # Sub-phase 11 instrumentation canonical at substantive register
+    # per ADR-0030 §DBGI sub-phase 11 amendment + Q4 LOCKED canonical
+    # at substantive register substantively. Event measurement
+    # constrained to count + diff_size canonical at substantive
+    # register substantively (NO topic + NO keys + NO meta at
+    # canonical register per privacy discipline canonical at
+    # substantive register substantively per D-PHASE-11-NO-IDENTITY-
+    # LABEL-DISCIPLINE substrate-build observation candidate
+    # canonical at substantive register substantively).
+    diff_size =
+      diff
+      |> Enum.reduce(0, fn {_topic, {joins, leaves}}, acc ->
+        acc + length(joins) + length(leaves)
+      end)
+
+    :telemetry.execute(
+      [:dbgi_supervisor, :tracker, :diff],
+      %{count: 1, diff_size: diff_size},
+      %{}
+    )
+
     for {topic, {joins, leaves}} <- diff do
       for {key, meta} <- joins do
         Phoenix.PubSub.direct_broadcast(

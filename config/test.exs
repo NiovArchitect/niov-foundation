@@ -28,3 +28,15 @@ config :cosmp_router, CosmpRouter.Repo,
   pool_size: 10,
   prepare: :unnamed,
   log: false
+
+# Sub-phase 11 [BEAM-OBSERVABILITY]: disable Telemetry supervisors in
+# test env to avoid Prometheus HTTP endpoint port binding canonical
+# at substantive register substantively (port 9568 cosmp_router +
+# port 9569 dbgi_supervisor); prevents CI parallel test conflicts +
+# RULE 15 single-cycle discipline coherence canonical at substantive
+# register substantively. Telemetry behavior tested via direct
+# Telemetry.Metrics + :telemetry.attach handlers at unit-tier
+# canonical at substantive register substantively without supervisor
+# startup.
+config :cosmp_router, start_telemetry: false
+config :dbgi_supervisor, start_telemetry: false

@@ -45,18 +45,24 @@ defmodule CosmpRouter.MixProject do
   def application do
     [
       mod: {CosmpRouter.Application, []},
-      extra_applications: [:logger]
+      # Sub-phase 11 [BEAM-OBSERVABILITY]: :telemetry + :logger_json
+      # apps started canonical at substantive register per
+      # ADR-0030 §DBGI sub-phase 11 amendment canonical.
+      extra_applications: [:logger, :telemetry, :logger_json]
     ]
   end
 
   # Dep landing lineage:
   # - Sub-phase 5b-i [BEAM-COSMP-INTEROP-GRPC]: :grpc + :protobuf per
   #   ADR-0032 §Decision Q-M (gRPC interop substrate)
-  # - Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] (this commit):
-  #   :ecto_sql + :postgrex per ADR-0033 §Decision Q-PERSISTENCE-DEPS
-  #   (durable persistence + audit-chain + idempotency substrate)
-  # - Sub-phase 11 [BEAM-OBSERVABILITY]: :telemetry_metrics +
-  #   :telemetry_poller forthcoming
+  # - Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE]: :ecto_sql +
+  #   :postgrex per ADR-0033 §Decision Q-PERSISTENCE-DEPS (durable
+  #   persistence + audit-chain + idempotency substrate)
+  # - Sub-phase 11 [BEAM-OBSERVABILITY] (this commit): :telemetry_metrics
+  #   + :telemetry_poller + :telemetry_metrics_prometheus + :logger_json
+  #   per ADR-0030 §DBGI sub-phase 11 canonical at substantive register
+  #   (telemetry + Prometheus bridge + structured JSON logging
+  #   substrate at canonical register substantively).
   # Substrate-honest discipline: deps land with their consumers per
   # ADR-0016 Pin-and-Optimize Framework.
   defp deps do
@@ -68,7 +74,27 @@ defmodule CosmpRouter.MixProject do
       # Persistence + audit-chain + idempotency substrate (canonical
       # Elixir Postgres stack per ADR-0033 §Decision Q-PERSISTENCE-DEPS)
       {:ecto_sql, "~> 3.13"},
-      {:postgrex, "~> 0.20"}
+      {:postgrex, "~> 0.20"},
+      # Sub-phase 11 observability substrate canonical (ADR-0030 §DBGI
+      # sub-phase 11 + Q1/Q2/Q5 LOCKED operator-tier authorization
+      # canonical at substantive register substantively):
+      # - :telemetry_metrics (1.x BEAM Community canonical metrics-
+      #   definition layer)
+      # - :telemetry_poller (1.x BEAM Community canonical VM stats
+      #   periodic poll layer)
+      # - :telemetry_metrics_prometheus (1.x BEAM Community canonical
+      #   Prometheus bridge per Q-A LOCKED + verification gate
+      #   canonical at substantive register; staleness 4-year per
+      #   D-PHASE-11-PROMETHEUS-BRIDGE-STALENESS substrate-build
+      #   observation candidate forward-queued at substantive register)
+      # - :logger_json (7.x SIEM-friendly JSON Logger formatter per
+      #   Q5 LOCKED + compatibility gate PASSED canonical at
+      #   substantive register; analogous to TS pino canonical at
+      #   STRUCTURED_LOGGING_SCHEMA.md substantive register)
+      {:telemetry_metrics, "~> 1.1"},
+      {:telemetry_poller, "~> 1.3"},
+      {:telemetry_metrics_prometheus, "~> 1.1"},
+      {:logger_json, "~> 7.0"}
     ]
   end
 end

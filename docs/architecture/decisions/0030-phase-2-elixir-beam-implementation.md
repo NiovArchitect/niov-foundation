@@ -320,6 +320,164 @@ The decomposition:
     both apps; structured logging via Logger backends; metrics exposed via a
     `prometheus_metrics` scrape endpoint. Operational hardening — the BEAM
     apps observable like the TypeScript API is.
+
+    **Sub-phase 11 amendment (LANDED at this commit; ADR-0030 §DBGI
+    sub-phase 11 amendment commit)**: Substantive scope locked per
+    operator-tier authorization at canonical decision register
+    substantively at substantive register at the Sub-phase 11
+    pre-flight register substantively (Q1-Q8 LOCKED canonical at
+    substantive register substantively).
+
+    **Dependency selection canonical at substantive register**:
+    - `:telemetry_metrics ~> 1.1` (BEAM Community canonical metrics
+      definition layer; 1.1.0 / 2025-01-24 recent canonical)
+    - `:telemetry_poller ~> 1.3` (BEAM Community canonical VM stats
+      periodic poll layer; 1.3.0 / 2025-07-09 recent canonical)
+    - `:telemetry_metrics_prometheus ~> 1.1` per Q2 LOCKED canonical
+      at substantive register substantively (BEAM Community canonical
+      Prometheus bridge; 1.1.0 / 2021-07-20; staleness 4-year
+      documented as **D-PHASE-11-PROMETHEUS-BRIDGE-STALENESS**
+      substrate-build observation candidate forward-queued at
+      substantive register substantively per Q-D Option α LOCKED
+      canonical at substantive register substantively; pairs cleanly
+      with `:telemetry_metrics 1.1.0`; verification gate substantively
+      PASSED at canonical register substantively at substantive
+      register at this commit)
+    - `:logger_json ~> 7.0` per Q5 LOCKED canonical at substantive
+      register substantively (7.0.4 / 2025-07-14 actively maintained;
+      MIT licensed; SIEM-friendly at canonical register substantively
+      at substantive register; analogous to TS pino canonical per
+      STRUCTURED_LOGGING_SCHEMA.md substantive register at substantive
+      register)
+
+    **Telemetry event naming canonical at substantive register** per
+    Q3 LOCKED Option α canonical at substantive register substantively
+    (component-namespaced canonical at substantive register
+    substantively per BEAM Community canonical at substantive
+    register substantively): `[:cosmp_router, :op, :start | :stop |
+    :exception]` (via `:telemetry.span/3` canonical) +
+    `[:cosmp_router, :storage, :put | :get | :delete]` (count +
+    duration) + `[:cosmp_router, :audit, :write]` (count + duration;
+    NO entity_id) + `[:cosmp_router, :idempotency, :hit | :miss |
+    :record]` + `[:dbgi_supervisor, :process_group, :stop]` (count +
+    duration + event_type + outcome metadata; NO group keys) +
+    `[:dbgi_supervisor, :tracker, :diff]` (count + diff_size; NO
+    Tracker keys + NO Tracker meta per privacy discipline canonical
+    at substantive register substantively) + `[:dbgi_supervisor,
+    :cluster, :event | :size]` (event_type + node_count; NO raw
+    node names per Q4 LOCKED canonical at substantive register
+    substantively).
+
+    **Privacy + cardinality discipline canonical at substantive
+    register** per Q4 LOCKED Option β operator-tier authorization at
+    canonical decision register substantively at substantive register
+    + **D-PHASE-11-NO-IDENTITY-LABEL-DISCIPLINE** substrate-build
+    observation 34th canonical promoted at ADR-0035 §9 at this commit
+    register substantively per Q8-B Option β LOCKED canonical at
+    substantive register substantively:
+
+    *ALLOWED tags canonical at substantive register substantively*:
+    `op_name` (COSMP enum public per patent US 12,517,919) +
+    `status_class` (ok/error) + `exception_class` (low-cardinality
+    exception category) + `storage_op` (put/get/delete) +
+    `tracker_event` (join/leave) + `event_type` (join/leave or
+    node_join/node_leave) + `outcome` (success/failure) +
+    `app` + `component` (fixed substrate values).
+
+    *FORBIDDEN tags canonical at substantive register substantively*:
+    `entity_id` + `capsule_id` + `dmw_id` + `wallet_id` + `tenant_id`
+    + `task_id` + `topic_tag` + `actor_principal_email` +
+    `customer_name` + `org_name` + `government_agency_name` +
+    `business_name` + raw `node` names + `hostname` + `ip_address`
+    + `request_id` (if externally-traceable) + `tracker_key` +
+    `tracker_meta` + `pg_member_id` + capsule payloads + raw task
+    context + `document_name` + `file_path` (if customer/org-bearing)
+    + proprietary context + free-text capsule content + ANY
+    reconstructable lineage at canonical register substantively at
+    substantive register.
+
+    **Metric type selection canonical at substantive register**:
+    `counter` (count metrics) + `distribution` with histogram
+    buckets `[1, 5, 10, 50, 100, 500, 1000, 5000]` ms canonical at
+    substantive register substantively (duration histograms;
+    `distribution` chosen over `summary` per
+    TelemetryMetricsPrometheus canonical at substantive register
+    substantively — bridge substantively drops `summary` at
+    Prometheus exposition format register substantively;
+    `distribution` canonical at Prometheus histogram register
+    substantively at substantive register) + `last_value` (gauges
+    via `:telemetry_poller` canonical at VM stats register
+    substantively).
+
+    **Prometheus endpoint canonical at substantive register** per Q6
+    LOCKED operator-tier authorization at canonical decision register
+    substantively at substantive register substantively at substantive
+    register: localhost-only bind by default canonical at substantive
+    register substantively (port 9568 cosmp_router + port 9569
+    dbgi_supervisor canonical at substantive register substantively
+    at distinct ports register to avoid port conflict canonical at
+    substantive register substantively); `Application.get_env`
+    override canonical per ADR-0018 deployment-agnostic posture
+    canonical at substantive register substantively at deployment-
+    target register. Production network exposure + authentication
+    substantively delegated to deployment/network layer canonical at
+    substantive register substantively (Prometheus convention canonical
+    at substantive register substantively).
+
+    **Structured Logger config canonical at substantive register** per
+    Q5 LOCKED canonical at substantive register substantively:
+    `:logger_json` Basic formatter at `:default_handler` register
+    canonical at substantive register substantively (Elixir 1.19+
+    new-logger discipline at canonical register substantively;
+    per-handler formatter args canonical at substantive register
+    substantively; allow-listed metadata at canonical register
+    substantively — app + component + op_name + status_class +
+    storage_op + tracker_event + event_type + outcome + duration_ms
+    + node_role; SIEM-friendly JSON canonical at substantive register
+    substantively analogous to TS pino canonical per
+    STRUCTURED_LOGGING_SCHEMA.md substantive register at canonical
+    register substantively).
+
+    **Test scope canonical at substantive register** per Q7 LOCKED
+    Option α canonical at substantive register substantively: Telemetry
+    emission via `:telemetry.attach/4` canonical at substantive register
+    substantively (synchronous in caller per `:telemetry.execute`
+    canonical at substantive register substantively — NOT mailbox-
+    fragile per D-PHASE-10-CI-PRESENCE-TRACKER-TIMING-CASCADE
+    substrate-build observation candidate canonical at substantive
+    register substantively at substantive register) + Telemetry.Metrics
+    registration tests canonical at substantive register substantively
+    + label allow-list / forbidden-list enforcement tests canonical at
+    substantive register substantively per
+    **D-PHASE-11-NO-IDENTITY-LABEL-DISCIPLINE** 34th canonical at
+    substantive register substantively + structured Logger sanity
+    canonical at substantive register substantively. NO timing-fragile
+    tests canonical at substantive register substantively (sub-phase
+    10 lesson preserved canonical at substantive register substantively).
+
+    **Test env Telemetry supervisor disabled** canonical at substantive
+    register substantively (`:start_telemetry false` in `config/
+    test.exs`) to avoid Prometheus HTTP endpoint port binding canonical
+    at substantive register substantively (port 9568 + port 9569
+    canonical at substantive register substantively); telemetry
+    behavior tested via direct `:telemetry.attach/4` handlers + direct
+    `Telemetry.metrics/0` definition introspection canonical at
+    substantive register substantively at unit-tier register canonical
+    at substantive register substantively.
+
+    This amendment is **canonical-pattern register clarification**, NOT
+    architectural-register supersession (substantively analogous to
+    ADR-0034 §Sub-decision 3-amendment + ADR-0030 §DBGI sub-phase 8 +
+    sub-phase 9 + sub-phase 10 amendment register at substantive
+    register). See ADR-0035 §9
+    **D-PHASE-11-NO-IDENTITY-LABEL-DISCIPLINE 34th canonical** promoted
+    at this commit substantively at substantive register +
+    **D-PHASE-11-PROMETHEUS-BRIDGE-STALENESS** substrate-build
+    observation candidate forward-queued canonical at substantive
+    register substantively per Q-D Option α LOCKED canonical at
+    substantive register substantively for the broader Elixir/OTP +
+    BEAM Community observability ecosystem lineage at canonical
+    register substantively at substantive register.
 12. **`[BEAM-CANONICAL-RECORD]`** — NEW
     `docs/architecture/beam-coordination-canonical-record.md` (analogous to
     `dual-control-operations-canonical-record.md`). Documents operational

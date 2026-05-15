@@ -472,6 +472,150 @@ renumbering).
     truth at canonical register substantively load-bearing at audit-
     trail-friendly register substantively at substantive register.
 
+34. **D-PHASE-11-NO-IDENTITY-LABEL-DISCIPLINE** (sub-phase 11
+    `[BEAM-OBSERVABILITY]` substrate-build register substantively at
+    substantive register) — Foundation observability discipline
+    canonical at substantive register substantively substantively
+    forbids ALL identity-bearing labels + ALL high-cardinality labels
+    at telemetry events + metrics tags + structured Logger metadata
+    canonical at substantive register substantively. Observability
+    substrate at NIOV Foundation substantively serves compliance +
+    governance + sovereignty + privacy boundary discipline canonical
+    at substantive register substantively at substantive register
+    (NOT generic telemetry canonical at substantive register
+    substantively); observability output substantively must report
+    system behavior + timing + counts + lifecycle events +
+    success/failure classes + queue/process/supervision state +
+    depersonalized operational signals canonical at substantive
+    register substantively at substantive register; substantively
+    must NOT emit memory capsule contents + raw task context +
+    user identity + business identity + government identity +
+    customer names + proprietary documents + entity identifiers +
+    PII + Business Identifiable Information + reconstructable
+    lineage back to a DMW or task canonical at substantive register
+    substantively.
+
+    **ALLOWED tags canonical at substantive register substantively**
+    per Q4 LOCKED Option β operator-tier authorization at canonical
+    decision register substantively at substantive register: `op_name`
+    (COSMP enum AUTHENTICATE/NEGOTIATE/READ/WRITE/SHARE/REVOKE/AUDIT
+    public per patent US 12,517,919) + `status_class` (ok/error) +
+    `exception_class` (low-cardinality exception category) +
+    `storage_op` (put/get/delete) + `tracker_event` (join/leave) +
+    `event_type` (join/leave or node_join/node_leave) + `outcome`
+    (success/failure) + `process_group_name` (fixed substrate value
+    only — DbgiSupervisor.PG canonical at substantive register
+    substantively; NOT user/org/entity-defined) + `node_role` /
+    `node_class` / `cluster_role` (normalized low-cardinality
+    infrastructure category canonical at substantive register
+    substantively) + `app` + `component` + `environment` (only if
+    non-customer-identifying canonical at substantive register
+    substantively).
+
+    **FORBIDDEN tags canonical at substantive register substantively**:
+    `entity_id` + `capsule_id` + `dmw_id` + `wallet_id` + `tenant_id`
+    + `task_id` + `topic_tag` + `actor_principal_email` +
+    `customer_name` + `org_name` + `government_agency_name` +
+    `business_name` + raw `node` names (raw BEAM node names may be
+    customer/org/deployment-encoding canonical at substantive register
+    substantively at substantive register; use normalized `node_role`
+    / `node_class` / `cluster_role` canonical at substantive register
+    substantively at substantive register) + `hostname` + `ip_address`
+    + `request_id` (if externally-traceable to customer/task/user) +
+    Phoenix.Tracker keys + Phoenix.Tracker meta maps + `:pg` member
+    identifiers + capsule payloads + raw task context + document
+    names + file paths containing customer/org identifiers +
+    proprietary context + any free text from memory capsules + any
+    reconstructable lineage back to a DMW, task, customer, entity, or
+    memory capsule canonical at substantive register substantively at
+    substantive register.
+
+    **Substantive substrate at canonical register substantively** at
+    sub-phase 11 substantive landing: NEW `apps/cosmp_router/lib/
+    cosmp_router/telemetry.ex` + NEW `apps/dbgi_supervisor/lib/
+    dbgi_supervisor/telemetry.ex` Telemetry.Metrics + :telemetry_poller
+    supervisor canonical at substantive register substantively (NO
+    identity-bearing tags at canonical register substantively at
+    substantive register at metric definitions canonical at
+    substantive register substantively); instrumented call sites at
+    `apps/cosmp_router/lib/cosmp_router/router.ex` (7 COSMP ops
+    AUTHENTICATE/NEGOTIATE/READ/WRITE/SHARE/REVOKE/AUDIT via
+    `:telemetry.span/3` canonical with op_name + status_class metadata
+    canonical at substantive register substantively — NO capsule_id +
+    NO principal_id + NO grantee + NO entity_id in event metadata
+    canonical at substantive register substantively at substantive
+    register), `apps/dbgi_supervisor/lib/dbgi_supervisor/process_group.
+    ex` (join/leave with event_type + outcome metadata canonical at
+    substantive register substantively — NO group keys at canonical
+    register substantively at substantive register), `apps/
+    dbgi_supervisor/lib/dbgi_supervisor/presence_tracker.ex`
+    (handle_diff with count + diff_size measurement canonical at
+    substantive register substantively — NO topic + NO Tracker keys
+    + NO Tracker meta at canonical register substantively at
+    substantive register); `config/config.exs` Logger config canonical
+    at substantive register substantively (`:logger_json` Basic
+    formatter at `:default_handler` register canonical at substantive
+    register substantively per Elixir 1.19+ new-logger discipline
+    canonical at substantive register substantively; allow-listed
+    metadata canonical at substantive register substantively).
+
+    **Test enforcement canonical at substantive register
+    substantively** at unit-tier register substantively at substantive
+    register: NEW `apps/cosmp_router/test/cosmp_router/telemetry_test.
+    exs` + NEW `apps/dbgi_supervisor/test/dbgi_supervisor/telemetry_
+    test.exs` substantively at substantive register substantively
+    enforce: (1) Telemetry.Metrics definitions canonical at substantive
+    register substantively + (2) FORBIDDEN identity-bearing tags NOT
+    present at metric definitions canonical at substantive register
+    substantively + (3) ALLOWED tags only at metric definitions
+    canonical at substantive register substantively + (4) telemetry
+    event metadata constrained to allow-list canonical at substantive
+    register substantively (NO identity-bearing keys at event
+    metadata register canonical at substantive register substantively
+    at substantive register).
+
+    **Substrate-architectural register canonical at substantive
+    register substantively**: observability discipline at NIOV
+    Foundation substantively NOT generic telemetry canonical at
+    substantive register substantively at substantive register;
+    substantively a compliance + governance + sovereignty + privacy
+    boundary canonical at substantive register substantively at
+    substantive register; FedRAMP / IL4-6 / CMMC / SOC 2 audit-grade
+    canonical at substantive register substantively at substantive
+    register; government / enterprise / patent-implementation evidence
+    register at substantive register canonical at substantive register
+    substantively. Substantively analogous to ADR-0002 (append-only
+    audit chain) canonical at compliance-substrate register
+    substantively at substantive register + ADR-0019 (cryptographic-
+    suite posture) canonical at substrate-cryptographic-resilience
+    register substantively at substantive register — observability
+    canonical at substantive register substantively substantively
+    extends compliance substrate canonical at substantive register
+    substantively at substantive register at telemetry/metrics/logging
+    register canonical at substantive register substantively at
+    substantive register.
+
+    Numbering drift 23 → 32 → 33 → 34 substantively continues per
+    Option β substrate-honest discipline canonical at substantive
+    register substantively at substantive register (24th-31st
+    forward-queued canonical at substantive register substantively at
+    substantive register at commit body / module moduledoc / ADR
+    amendment body surfaces canonical at substantive register
+    substantively at substantive register).
+    **D-PHASE-10-PEER-CLOSURE-LOADING + D-PHASE-10-MULTI-NODE-TEST-
+    RUNTIME-BUDGET 30th + D-PHASE-10-PEER-VS-LOCAL-CLUSTER-
+    DISCRIMINATION 31st + D-PHASE-10-CI-PRESENCE-TRACKER-TIMING-
+    CASCADE + D-PHASE-11-PROMETHEUS-BRIDGE-STALENESS** canonical at
+    substantive register substantively at substantive register
+    substantively remain forward-queued canonical at substantive
+    register substantively (NOT promoted to ADR-0035 §9 numbered
+    cluster at this commit register substantively at substantive
+    register per Q-D Option α LOCKED operator-tier authorization at
+    canonical decision register substantively at substantive register
+    + prior Option β substrate-honest discipline canonical at
+    substantive register substantively at substantive register
+    decisions).
+
 ### Cluster sub-register expansion (post-this-commit)
 
 Post-this-commit, the 23 canonical observations operate at six

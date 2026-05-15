@@ -139,6 +139,19 @@ defmodule DbgiSupervisor.Application do
        ]}
     ]
 
+    # Sub-phase 11 [BEAM-OBSERVABILITY] expansion (telemetry + metrics
+    # + Prometheus bridge) canonical at substantive register per
+    # ADR-0030 §DBGI sub-phase 11 amendment canonical at substantive
+    # register substantively. Disabled in test env via
+    # :start_telemetry app env to avoid port binding canonical at
+    # substantive register substantively.
+    children =
+      if Application.get_env(:dbgi_supervisor, :start_telemetry, true) do
+        children ++ [{DbgiSupervisor.Telemetry, []}]
+      else
+        children
+      end
+
     opts = [strategy: :one_for_one, name: DbgiSupervisor.Supervisor]
     Supervisor.start_link(children, opts)
   end

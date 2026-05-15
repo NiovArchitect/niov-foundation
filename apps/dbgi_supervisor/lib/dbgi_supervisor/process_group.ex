@@ -57,7 +57,24 @@ defmodule DbgiSupervisor.ProcessGroup do
   """
   @spec join(term(), pid()) :: :ok
   def join(group, pid \\ self()) do
-    :pg.join(@scope, group, pid)
+    # Sub-phase 11 instrumentation canonical at substantive register
+    # per ADR-0030 §DBGI sub-phase 11 amendment + Q4 LOCKED canonical
+    # at substantive register substantively. Event metadata
+    # constrained to event_type + outcome canonical at substantive
+    # register substantively (NO group keys at canonical register
+    # per privacy discipline canonical at substantive register
+    # substantively).
+    start = System.monotonic_time()
+    result = :pg.join(@scope, group, pid)
+    duration_ms = System.convert_time_unit(System.monotonic_time() - start, :native, :millisecond)
+
+    :telemetry.execute(
+      [:dbgi_supervisor, :process_group, :stop],
+      %{count: 1, duration_ms: duration_ms},
+      %{event_type: :join, outcome: :success}
+    )
+
+    result
   end
 
   @doc """
@@ -67,7 +84,19 @@ defmodule DbgiSupervisor.ProcessGroup do
   """
   @spec leave(term(), pid()) :: :ok | :not_joined
   def leave(group, pid \\ self()) do
-    :pg.leave(@scope, group, pid)
+    start = System.monotonic_time()
+    result = :pg.leave(@scope, group, pid)
+    duration_ms = System.convert_time_unit(System.monotonic_time() - start, :native, :millisecond)
+
+    outcome = if result == :ok, do: :success, else: :failure
+
+    :telemetry.execute(
+      [:dbgi_supervisor, :process_group, :stop],
+      %{count: 1, duration_ms: duration_ms},
+      %{event_type: :leave, outcome: outcome}
+    )
+
+    result
   end
 
   @doc """

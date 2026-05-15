@@ -59,6 +59,8 @@ defmodule CosmpRouter.Application do
     grpc_port = Application.get_env(:cosmp_router, :grpc_port, 50_051)
     start_grpc = Application.get_env(:cosmp_router, :start_grpc_server, true)
 
+    start_telemetry = Application.get_env(:cosmp_router, :start_telemetry, true)
+
     children =
       [
         # Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per
@@ -74,6 +76,21 @@ defmodule CosmpRouter.Application do
         # Sub-phase 4b: COSMP routing GenServer.
         {CosmpRouter.Router, []}
       ] ++
+        if start_telemetry do
+          # Sub-phase 11 [BEAM-OBSERVABILITY] per ADR-0030 §DBGI
+          # sub-phase 11 amendment canonical at substantive register
+          # substantively: Telemetry supervisor canonical at
+          # substantive register (Telemetry.Metrics definitions +
+          # :telemetry_poller VM stats + TelemetryMetricsPrometheus
+          # localhost-bound HTTP scrape endpoint at port 9568 default
+          # canonical at substantive register substantively per Q6
+          # LOCKED canonical at substantive register). Disabled in
+          # test env via :start_telemetry app env to avoid port
+          # binding canonical at substantive register substantively.
+          [{CosmpRouter.Telemetry, []}]
+        else
+          []
+        end ++
         if start_grpc do
           [
             # Sub-phase 5b-i: gRPC HTTP/2 listener.
