@@ -150,7 +150,11 @@ defmodule CosmpRouter.Audit.CanonicalRecordTest do
       details: raw["details"],
       ip_address: raw["ip_address"],
       timestamp: timestamp,
-      previous_event_hash: raw["previous_event_hash"]
+      previous_event_hash: raw["previous_event_hash"],
+      # CAR Sub-box 3 sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per
+      # ADR-0036 Sub-decision 5: positions 13 + 14 of canonical_record/1.
+      lawful_basis_id: raw["lawful_basis_id"],
+      lawful_basis_chain_hash: raw["lawful_basis_chain_hash"]
     }
   end
 end

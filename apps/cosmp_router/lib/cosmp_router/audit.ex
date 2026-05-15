@@ -118,9 +118,10 @@ defmodule CosmpRouter.Audit do
   end
 
   @doc """
-  Canonical 12-field pipe-joined record string for hashing per ADR-0033
-  §Decision 4a. Mirrors TypeScript `audit.ts:276-303` `canonicalRecord`
-  byte-for-byte.
+  Canonical 14-field pipe-joined record string for hashing per ADR-0033
+  §Decision 4a (extended at sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION]
+  per ADR-0036 Sub-decision 5 hybrid binding from 12 → 14 fields).
+  Mirrors TypeScript `audit.ts:276-303` `canonicalRecord` byte-for-byte.
 
   ## Field order (load-bearing; do NOT reorder)
 
@@ -136,6 +137,8 @@ defmodule CosmpRouter.Audit do
   10. ip_address (or "" if nil)
   11. timestamp truncated to millisecond + ISO 8601
   12. previous_event_hash (or "" if nil)
+  13. lawful_basis_id (or "" if nil) — ADR-0036 Sub-decision 5
+  14. lawful_basis_chain_hash (or "" if nil) — ADR-0036 Sub-decision 5
 
   Joined with "|" delimiter. ANY field-order or delimiter change breaks
   cross-language hash equivalence.
@@ -153,7 +156,9 @@ defmodule CosmpRouter.Audit do
       canonical_json(parts.details),
       parts[:ip_address] || "",
       iso8601_millisecond(parts.timestamp),
-      parts[:previous_event_hash] || ""
+      parts[:previous_event_hash] || "",
+      parts[:lawful_basis_id] || "",
+      parts[:lawful_basis_chain_hash] || ""
     ]
     |> Enum.join("|")
   end
@@ -322,7 +327,9 @@ defmodule CosmpRouter.Audit do
           details: details,
           ip_address: input[:ip_address],
           timestamp: timestamp,
-          previous_event_hash: previous_event_hash
+          previous_event_hash: previous_event_hash,
+          lawful_basis_id: input[:lawful_basis_id],
+          lawful_basis_chain_hash: input[:lawful_basis_chain_hash]
         })
       )
 
@@ -339,7 +346,9 @@ defmodule CosmpRouter.Audit do
       ip_address: input[:ip_address],
       timestamp: timestamp,
       previous_event_hash: previous_event_hash,
-      event_hash: event_hash
+      event_hash: event_hash,
+      lawful_basis_id: input[:lawful_basis_id],
+      lawful_basis_chain_hash: input[:lawful_basis_chain_hash]
     }
     |> Repo.insert()
   end
@@ -436,7 +445,9 @@ defmodule CosmpRouter.Audit do
             details: row.details,
             ip_address: row.ip_address,
             timestamp: row.timestamp,
-            previous_event_hash: row.previous_event_hash
+            previous_event_hash: row.previous_event_hash,
+            lawful_basis_id: row.lawful_basis_id,
+            lawful_basis_chain_hash: row.lawful_basis_chain_hash
           })
         )
 

@@ -38,6 +38,10 @@ interface FixtureInput {
   ip_address: string | null;
   timestamp: Date;
   previous_event_hash: string | null;
+  // CAR Sub-box 3 sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per
+  // ADR-0036 Sub-decision 5: canonical_record/1 positions 13 + 14.
+  lawful_basis_id: string | null;
+  lawful_basis_chain_hash: string | null;
 }
 
 interface FixtureCase {
@@ -47,6 +51,15 @@ interface FixtureCase {
 
 // 8-12 representative AuditEvent shapes per D-5BII-EXEC-4 spec:
 // nullable fields, edge cases, timestamp precision boundary, unicode.
+//
+// CAR Sub-box 3 sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per
+// ADR-0036 Sub-decision 5: every fixture carries lawful_basis_id +
+// lawful_basis_chain_hash (positions 13 + 14 of canonical_record/1).
+// Fixtures #1-10 keep both at null (absent-default coverage proves
+// the empty-string canonicalization for non-lawful-basis emissions).
+// Fixtures #11-12 populate both (proves the cryptographic-binding
+// extension for REGULATOR-actor emissions per ADR-0036 §Patent-
+// Implementation Evidence).
 const fixtureCases: FixtureCase[] = [
   {
     description: "minimal: all-null optionals + empty details",
@@ -63,6 +76,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-01-01T12:00:00.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -81,6 +96,8 @@ const fixtureCases: FixtureCase[] = [
       timestamp: new Date("2026-05-13T22:28:40.000Z"),
       previous_event_hash:
         "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -98,6 +115,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-01-01T12:00:00.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -118,6 +137,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-01-01T12:00:00.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -135,6 +156,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-01-01T12:00:00.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -152,6 +175,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-01-01T12:00:00.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -169,6 +194,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-01-01T12:00:00.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -186,6 +213,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-05-13T22:28:40.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -203,6 +232,8 @@ const fixtureCases: FixtureCase[] = [
       ip_address: null,
       timestamp: new Date("2026-05-13T22:28:40.567Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
     },
   },
   {
@@ -220,6 +251,56 @@ const fixtureCases: FixtureCase[] = [
       ip_address: "192.168.1.1",
       timestamp: new Date("2026-05-13T22:28:40.000Z"),
       previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
+    },
+  },
+  {
+    // Sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] NEW per ADR-0036
+    // Sub-decision 5: lawful-basis populated minimal case.
+    description:
+      "lawful-basis populated — minimal REGULATOR_ACCESS_GRANTED with chain hash binding",
+    input: {
+      audit_id: "00000000-0000-0000-0000-00000000000a",
+      event_type: "REGULATOR_ACCESS_GRANTED",
+      actor_entity_id: null,
+      target_entity_id: null,
+      target_capsule_id: null,
+      session_id: null,
+      outcome: "SUCCESS",
+      denial_reason: null,
+      details: {},
+      ip_address: null,
+      timestamp: new Date("2026-05-15T10:00:00.000Z"),
+      previous_event_hash: null,
+      lawful_basis_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      lawful_basis_chain_hash:
+        "1111111111111111111111111111111111111111111111111111111111111111",
+    },
+  },
+  {
+    // Sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] NEW per ADR-0036
+    // Sub-decision 5: lawful-basis populated fully-populated case
+    // (every AuditEvent field set + lawful-basis present).
+    description:
+      "lawful-basis populated — fully-populated REGULATOR_ACCESS_GRANTED + flat details + previous chain link",
+    input: {
+      audit_id: "00000000-0000-0000-0000-00000000000b",
+      event_type: "REGULATOR_ACCESS_GRANTED",
+      actor_entity_id: "66666666-6666-6666-6666-666666666666",
+      target_entity_id: "77777777-7777-7777-7777-777777777777",
+      target_capsule_id: "88888888-8888-8888-8888-888888888888",
+      session_id: "99999999-9999-9999-9999-999999999999",
+      outcome: "SUCCESS",
+      denial_reason: null,
+      details: { jurisdiction: "US-FEDERAL", scope: "SECURITIES_EXAMINATION" },
+      ip_address: "10.0.0.42",
+      timestamp: new Date("2026-05-15T11:30:45.123Z"),
+      previous_event_hash:
+        "feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface",
+      lawful_basis_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      lawful_basis_chain_hash:
+        "2222222222222222222222222222222222222222222222222222222222222222",
     },
   },
 ];

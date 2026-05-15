@@ -153,6 +153,13 @@ export interface WriteAuditEventInput {
   // system_principal are absent, chainKey selection falls back to
   // the legacy SYSTEM_CHAIN_KEY (DRIFT 12 backwards-compat anchor).
   system_principal?: SystemPrincipal | null;
+  // CAR Sub-box 3 sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per
+  // ADR-0036 Sub-decision 5 hybrid binding. Top-level canonical_record/1
+  // positions 13 + 14. Persisted on the AuditEvent row; verifyAuditChain
+  // reads them from the row to recompute the canonical record. Default
+  // "" at canonical hash time when nullish.
+  lawful_basis_id?: string | null;
+  lawful_basis_chain_hash?: string | null;
 }
 
 // WHAT: Filters queryAuditEvents accepts.
@@ -300,6 +307,10 @@ export function canonicalRecord(parts: {
   ip_address: string | null;
   timestamp: Date;
   previous_event_hash: string | null;
+  // CAR Sub-box 3 sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per
+  // ADR-0036 Sub-decision 5 hybrid binding. Positions 13 + 14.
+  lawful_basis_id: string | null;
+  lawful_basis_chain_hash: string | null;
 }): string {
   return [
     parts.audit_id,
@@ -314,6 +325,8 @@ export function canonicalRecord(parts: {
     parts.ip_address ?? "",
     parts.timestamp.toISOString(),
     parts.previous_event_hash ?? "",
+    parts.lawful_basis_id ?? "",
+    parts.lawful_basis_chain_hash ?? "",
   ].join("|");
 }
 
@@ -426,6 +439,8 @@ async function writeAuditEventInTx(
       ip_address: input.ip_address ?? null,
       timestamp,
       previous_event_hash,
+      lawful_basis_id: input.lawful_basis_id ?? null,
+      lawful_basis_chain_hash: input.lawful_basis_chain_hash ?? null,
     }),
   );
 
@@ -444,6 +459,8 @@ async function writeAuditEventInTx(
       timestamp,
       previous_event_hash,
       event_hash,
+      lawful_basis_id: input.lawful_basis_id ?? null,
+      lawful_basis_chain_hash: input.lawful_basis_chain_hash ?? null,
     },
   });
 }
@@ -556,6 +573,8 @@ export async function verifyAuditChain(
         ip_address: e.ip_address,
         timestamp: e.timestamp,
         previous_event_hash: e.previous_event_hash,
+        lawful_basis_id: e.lawful_basis_id,
+        lawful_basis_chain_hash: e.lawful_basis_chain_hash,
       }),
     );
     if (recomputed !== e.event_hash) {

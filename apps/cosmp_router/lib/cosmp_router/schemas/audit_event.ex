@@ -48,6 +48,13 @@ defmodule CosmpRouter.AuditEvent do
     field :timestamp, :utc_datetime_usec, default: nil
     field :previous_event_hash, :string
     field :event_hash, :string
+    # CAR Sub-box 3 sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per
+    # ADR-0036 Sub-decision 5 hybrid binding. lawful_basis_id +
+    # lawful_basis_chain_hash are top-level canonical_record/1
+    # positions 13 + 14. Nullable; non-lawful-basis emissions
+    # canonicalize the empty string at the audit primitive register.
+    field :lawful_basis_id, Ecto.UUID
+    field :lawful_basis_chain_hash, :string
   end
 
   @doc """

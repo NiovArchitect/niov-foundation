@@ -13,10 +13,12 @@
       "details": {},
       "ip_address": null,
       "timestamp": "2026-01-01T12:00:00.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000001|TEST_EVENT|||||SUCCESS||{}||2026-01-01T12:00:00.000Z|",
-    "expected_hash": "15a7c78263fc141d4976fb26e873b8fc504454808155e9863c268cbc5e7dd654"
+    "canonical_input": "00000000-0000-0000-0000-000000000001|TEST_EVENT|||||SUCCESS||{}||2026-01-01T12:00:00.000Z|||",
+    "expected_hash": "86a149d8587ac26f199bd1a742a256d111fe060a19c04e74bf709bac5e10fe8f"
   },
   {
     "description": "fully-populated: every field non-null + flat details",
@@ -35,10 +37,12 @@
       },
       "ip_address": "10.0.0.1",
       "timestamp": "2026-05-13T22:28:40.000Z",
-      "previous_event_hash": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+      "previous_event_hash": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "11111111-1111-1111-1111-111111111111|ENTITY_REGISTERED|22222222-2222-2222-2222-222222222222|33333333-3333-3333-3333-333333333333|44444444-4444-4444-4444-444444444444|55555555-5555-5555-5555-555555555555|SUCCESS|n/a|{\"count\":42,\"reason\":\"test\"}|10.0.0.1|2026-05-13T22:28:40.000Z|abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-    "expected_hash": "6d87a75761d0f94eeec1c0f769df1b8cf83f6881ce2be218216cbbac7a4879b4"
+    "canonical_input": "11111111-1111-1111-1111-111111111111|ENTITY_REGISTERED|22222222-2222-2222-2222-222222222222|33333333-3333-3333-3333-333333333333|44444444-4444-4444-4444-444444444444|55555555-5555-5555-5555-555555555555|SUCCESS|n/a|{\"count\":42,\"reason\":\"test\"}|10.0.0.1|2026-05-13T22:28:40.000Z|abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789||",
+    "expected_hash": "5a044fff1784f3b98a12c21edf1790293307a66298382d57db6e90b601c12768"
   },
   {
     "description": "details with sorted-key invariant: keys in order Z,A,M",
@@ -58,10 +62,12 @@
       },
       "ip_address": null,
       "timestamp": "2026-01-01T12:00:00.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000002|TEST_EVENT|||||SUCCESS||{\"a\":2,\"m\":3,\"z\":1}||2026-01-01T12:00:00.000Z|",
-    "expected_hash": "e5f49c3cd744157eeda6ac66f04c798a8cfee0af9cd425ace45c9211b1a52390"
+    "canonical_input": "00000000-0000-0000-0000-000000000002|TEST_EVENT|||||SUCCESS||{\"a\":2,\"m\":3,\"z\":1}||2026-01-01T12:00:00.000Z|||",
+    "expected_hash": "fd3cf3bc7caeb62ddf1f82ee0e9778a3919c64a084d8ed85d7c5354eaa9d0344"
   },
   {
     "description": "details nested object: sorted recursively",
@@ -83,10 +89,12 @@
       },
       "ip_address": null,
       "timestamp": "2026-01-01T12:00:00.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000003|TEST_EVENT|||||SUCCESS||{\"outer\":{\"a\":\"first\",\"z\":\"last\"},\"scalar\":99}||2026-01-01T12:00:00.000Z|",
-    "expected_hash": "65080c2381c7c6798db34c52152a108bb77d7b6623d5e93b07e8113a18b8ff60"
+    "canonical_input": "00000000-0000-0000-0000-000000000003|TEST_EVENT|||||SUCCESS||{\"outer\":{\"a\":\"first\",\"z\":\"last\"},\"scalar\":99}||2026-01-01T12:00:00.000Z|||",
+    "expected_hash": "ccc54bb7235430430da3ac7db059a7e552bb06a3eb137c0d72942bb390f47c0f"
   },
   {
     "description": "details with array of objects (no sorting; preserve order)",
@@ -111,10 +119,12 @@
       },
       "ip_address": null,
       "timestamp": "2026-01-01T12:00:00.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000004|TEST_EVENT|||||SUCCESS||{\"items\":[{\"b\":2},{\"a\":1}]}||2026-01-01T12:00:00.000Z|",
-    "expected_hash": "dd7812c15fb514cc9e94ed990cf8c8a1970ed7d59d2505aab2e7b1bc6696ed0b"
+    "canonical_input": "00000000-0000-0000-0000-000000000004|TEST_EVENT|||||SUCCESS||{\"items\":[{\"b\":2},{\"a\":1}]}||2026-01-01T12:00:00.000Z|||",
+    "expected_hash": "e4289e2ab86f4d7ff85b75e808a18f6a225e3a7c7dcc4376d71111e85aa85d6c"
   },
   {
     "description": "unicode: details contains UTF-8 strings + emoji",
@@ -134,10 +144,12 @@
       },
       "ip_address": null,
       "timestamp": "2026-01-01T12:00:00.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000005|TEST_EVENT|||||SUCCESS||{\"chinese\":\"你好\",\"flag\":\"🇺🇸\",\"name\":\"café\"}||2026-01-01T12:00:00.000Z|",
-    "expected_hash": "2b211a581a1472b973660e00d25bee76f5a3da6b54bc80a7c9c2e4478e8c5c12"
+    "canonical_input": "00000000-0000-0000-0000-000000000005|TEST_EVENT|||||SUCCESS||{\"chinese\":\"你好\",\"flag\":\"🇺🇸\",\"name\":\"café\"}||2026-01-01T12:00:00.000Z|||",
+    "expected_hash": "1d2debdde0ce31b9478d822a148352decc4a8787fbdaeba0d27669b7f06dbfd6"
   },
   {
     "description": "escape sequences: details contains quotes + backslashes + newlines",
@@ -157,10 +169,12 @@
       },
       "ip_address": null,
       "timestamp": "2026-01-01T12:00:00.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000006|TEST_EVENT|||||SUCCESS||{\"line\":\"a\\nb\",\"path\":\"C:\\\\foo\\\\bar\",\"quoted\":\"He said \\\"hi\\\"\"}||2026-01-01T12:00:00.000Z|",
-    "expected_hash": "b5dfb34b2219035bac223c3ea4ffa1e2b3248fdab55f4ca240c5ef07324c8988"
+    "canonical_input": "00000000-0000-0000-0000-000000000006|TEST_EVENT|||||SUCCESS||{\"line\":\"a\\nb\",\"path\":\"C:\\\\foo\\\\bar\",\"quoted\":\"He said \\\"hi\\\"\"}||2026-01-01T12:00:00.000Z|||",
+    "expected_hash": "9e27d5a80c0da2a75ebd022aaf691ff8cb8024a7ee253bc496867de7fd4d56c8"
   },
   {
     "description": "timestamp precision boundary: exact-second (no millis)",
@@ -176,10 +190,12 @@
       "details": {},
       "ip_address": null,
       "timestamp": "2026-05-13T22:28:40.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000007|TEST_EVENT|||||SUCCESS||{}||2026-05-13T22:28:40.000Z|",
-    "expected_hash": "dadfd14ec7195d8b17ce553f4af6e66c750d35fba6876c8abcff0785aa292f57"
+    "canonical_input": "00000000-0000-0000-0000-000000000007|TEST_EVENT|||||SUCCESS||{}||2026-05-13T22:28:40.000Z|||",
+    "expected_hash": "c2561065aca4fbc811ee1f2e630f2167f1456e9fe301d6ccd403e28db34d1283"
   },
   {
     "description": "timestamp precision boundary: with millis (567)",
@@ -195,10 +211,12 @@
       "details": {},
       "ip_address": null,
       "timestamp": "2026-05-13T22:28:40.567Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000008|TEST_EVENT|||||SUCCESS||{}||2026-05-13T22:28:40.567Z|",
-    "expected_hash": "ebe7b7d031997799505a458e9307d674d4b3227c489e654dab3b48219c7bf133"
+    "canonical_input": "00000000-0000-0000-0000-000000000008|TEST_EVENT|||||SUCCESS||{}||2026-05-13T22:28:40.567Z|||",
+    "expected_hash": "1488b062ba48b0a93383bb4147a524f1054380fad914604e375a6924108b7523"
   },
   {
     "description": "denial_reason non-null + outcome FAILURE",
@@ -216,9 +234,56 @@
       },
       "ip_address": "192.168.1.1",
       "timestamp": "2026-05-13T22:28:40.000Z",
-      "previous_event_hash": null
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
     },
-    "canonical_input": "00000000-0000-0000-0000-000000000009|LOGIN_FAILED|22222222-2222-2222-2222-222222222222||||FAILURE|invalid_password|{\"attempt_count\":3}|192.168.1.1|2026-05-13T22:28:40.000Z|",
-    "expected_hash": "ab63058cbce73cd0c3a6bc995929dada315ffd5ec7d5fcff2514d5fd9709fa5d"
+    "canonical_input": "00000000-0000-0000-0000-000000000009|LOGIN_FAILED|22222222-2222-2222-2222-222222222222||||FAILURE|invalid_password|{\"attempt_count\":3}|192.168.1.1|2026-05-13T22:28:40.000Z|||",
+    "expected_hash": "ad3302ea9175766f138c3525c8af2a88c7e0f373e8c58ee19c3e18b877d4d24e"
+  },
+  {
+    "description": "lawful-basis populated — minimal REGULATOR_ACCESS_GRANTED with chain hash binding",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-00000000000a",
+      "event_type": "REGULATOR_ACCESS_GRANTED",
+      "actor_entity_id": null,
+      "target_entity_id": null,
+      "target_capsule_id": null,
+      "session_id": null,
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {},
+      "ip_address": null,
+      "timestamp": "2026-05-15T10:00:00.000Z",
+      "previous_event_hash": null,
+      "lawful_basis_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "lawful_basis_chain_hash": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "canonical_input": "00000000-0000-0000-0000-00000000000a|REGULATOR_ACCESS_GRANTED|||||SUCCESS||{}||2026-05-15T10:00:00.000Z||aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa|1111111111111111111111111111111111111111111111111111111111111111",
+    "expected_hash": "da580563e5f826cbd9e1d8b94d87d331727a3896f748dde8bd357247b14eb222"
+  },
+  {
+    "description": "lawful-basis populated — fully-populated REGULATOR_ACCESS_GRANTED + flat details + previous chain link",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-00000000000b",
+      "event_type": "REGULATOR_ACCESS_GRANTED",
+      "actor_entity_id": "66666666-6666-6666-6666-666666666666",
+      "target_entity_id": "77777777-7777-7777-7777-777777777777",
+      "target_capsule_id": "88888888-8888-8888-8888-888888888888",
+      "session_id": "99999999-9999-9999-9999-999999999999",
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "jurisdiction": "US-FEDERAL",
+        "scope": "SECURITIES_EXAMINATION"
+      },
+      "ip_address": "10.0.0.42",
+      "timestamp": "2026-05-15T11:30:45.123Z",
+      "previous_event_hash": "feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface",
+      "lawful_basis_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "lawful_basis_chain_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "canonical_input": "00000000-0000-0000-0000-00000000000b|REGULATOR_ACCESS_GRANTED|66666666-6666-6666-6666-666666666666|77777777-7777-7777-7777-777777777777|88888888-8888-8888-8888-888888888888|99999999-9999-9999-9999-999999999999|SUCCESS||{\"jurisdiction\":\"US-FEDERAL\",\"scope\":\"SECURITIES_EXAMINATION\"}|10.0.0.42|2026-05-15T11:30:45.123Z|feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface|bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb|2222222222222222222222222222222222222222222222222222222222222222",
+    "expected_hash": "bf2aeaaecebcfd8126dce115d3c9149306fb9236f9689fd3c2e55fc4ff0b2f2c"
   }
 ]

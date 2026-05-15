@@ -267,19 +267,29 @@ model Session {
 // DELETE trigger installed by applyAuditEventTriggers. Tampering with
 // existing rows requires DDL-level privileges to disable that trigger.
 model AuditEvent {
-  audit_id            String       @id @default(uuid()) @db.Uuid
-  event_type          String
-  actor_entity_id     String?      @db.Uuid
-  target_entity_id    String?      @db.Uuid
-  target_capsule_id   String?      @db.Uuid
-  session_id          String?      @db.Uuid
-  outcome             AuditOutcome
-  denial_reason       String?
-  details             Json         @default("{}")
-  ip_address          String?
-  timestamp           DateTime     @default(now())
-  previous_event_hash String?
-  event_hash          String
+  audit_id                String       @id @default(uuid()) @db.Uuid
+  event_type              String
+  actor_entity_id         String?      @db.Uuid
+  target_entity_id        String?      @db.Uuid
+  target_capsule_id       String?      @db.Uuid
+  session_id              String?      @db.Uuid
+  outcome                 AuditOutcome
+  denial_reason           String?
+  details                 Json         @default("{}")
+  ip_address              String?
+  timestamp               DateTime     @default(now())
+  previous_event_hash     String?
+  event_hash              String
+  // CAR Sub-box 3 sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per
+  // ADR-0036 Sub-decision 5 hybrid binding: lawful_basis_id + lawful_basis_chain_hash
+  // are top-level canonical_record/1 positions 13 and 14. Nullable
+  // because the vast majority of AuditEvent rows are NOT lawful-basis-
+  // bound; non-lawful-basis emissions canonicalize the empty string.
+  // verifyAuditChain reads these from the persisted row to recompute
+  // the canonical_record (no derivation from details; no second source
+  // of truth per Q1 LOCKED Option α-1).
+  lawful_basis_id         String?      @db.Uuid
+  lawful_basis_chain_hash String?
 
   @@index([actor_entity_id])
   @@index([target_entity_id])
@@ -287,6 +297,7 @@ model AuditEvent {
   @@index([event_type])
   @@index([timestamp])
   @@index([actor_entity_id, timestamp])
+  @@index([lawful_basis_id])
   @@map("audit_events")
 }
 

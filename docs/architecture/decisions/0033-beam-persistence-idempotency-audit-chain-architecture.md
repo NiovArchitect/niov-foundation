@@ -207,6 +207,9 @@ audit primitive at `packages/database/src/queries/audit.ts` byte-for-byte.
 
 #### 4a. `canonical_record/1` byte-equivalence
 
+> **Amendment note (sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION] per ADR-0036 Sub-decision 5):**
+> The 12-field canonical_record/1 documented below is the contemporaneous shape at sub-phase 5b-ii landing register. Sub-phase 4 of the CAR Sub-box 3 mini-arc extends canonical_record/1 from 12 → 14 fields by appending two top-level positions: `lawful_basis_id` (position 13) and `lawful_basis_chain_hash` (position 14). Both default to the empty string `""` when absent, preserving the byte-equivalence discipline canonical at this section. The 12-field code blocks below remain authoritative for the original substrate-coherence rationale; the 14-field shape is canonical at the audit-chain register substantively from sub-phase 4 commit onward. See ADR-0036 §Sub-decision 5 for the hybrid binding rationale and the deployment-state precondition under which the extension preserves chain-verification coherence.
+
 The TypeScript implementation:
 
 ```typescript

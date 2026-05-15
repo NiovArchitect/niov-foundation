@@ -167,7 +167,7 @@ defmodule CosmpRouter.AuditTest do
   end
 
   describe "canonical_record/1 shape" do
-    test "produces 12-field pipe-joined string" do
+    test "produces 14-field pipe-joined string (12 base + 2 lawful-basis per ADR-0036 Sub-decision 5)" do
       timestamp = ~U[2026-01-01 12:00:00.000Z]
 
       record =
@@ -183,11 +183,13 @@ defmodule CosmpRouter.AuditTest do
           details: %{},
           ip_address: nil,
           timestamp: timestamp,
-          previous_event_hash: nil
+          previous_event_hash: nil,
+          lawful_basis_id: nil,
+          lawful_basis_chain_hash: nil
         })
 
       parts = String.split(record, "|")
-      assert length(parts) == 12
+      assert length(parts) == 14
 
       # Field-order spot check
       [audit_id, event_type | _] = parts
@@ -195,7 +197,7 @@ defmodule CosmpRouter.AuditTest do
       assert event_type == "TEST_EVENT"
     end
 
-    test "nil optional fields render as empty string" do
+    test "nil optional fields render as empty string (14-field shape with lawful-basis absent defaults)" do
       timestamp = ~U[2026-01-01 12:00:00.000Z]
 
       record =
@@ -211,13 +213,48 @@ defmodule CosmpRouter.AuditTest do
           details: %{},
           ip_address: nil,
           timestamp: timestamp,
-          previous_event_hash: nil
+          previous_event_hash: nil,
+          lawful_basis_id: nil,
+          lawful_basis_chain_hash: nil
         })
 
       # TS Date.toISOString() always emits millisecond precision
       # (.000Z for exact seconds); Elixir DateTime.truncate(:millisecond)
       # |> to_iso8601() mirrors this byte-for-byte per ADR-0033 §4a.
-      assert record == "id|T|||||SUCCESS||{}||2026-01-01T12:00:00.000Z|"
+      # Sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN-EXTENSION]: trailing "||" is
+      # the empty-default pair for positions 13 + 14 (lawful_basis_id +
+      # lawful_basis_chain_hash) per ADR-0036 Sub-decision 5.
+      assert record == "id|T|||||SUCCESS||{}||2026-01-01T12:00:00.000Z|||"
+    end
+
+    test "populated lawful-basis fields render at positions 13 + 14" do
+      timestamp = ~U[2026-01-01 12:00:00.000Z]
+
+      record =
+        Audit.canonical_record(%{
+          audit_id: "id",
+          event_type: "REGULATOR_ACCESS_GRANTED",
+          actor_entity_id: nil,
+          target_entity_id: nil,
+          target_capsule_id: nil,
+          session_id: nil,
+          outcome: "SUCCESS",
+          denial_reason: nil,
+          details: %{},
+          ip_address: nil,
+          timestamp: timestamp,
+          previous_event_hash: nil,
+          lawful_basis_id: "11111111-1111-1111-1111-111111111111",
+          lawful_basis_chain_hash:
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        })
+
+      parts = String.split(record, "|")
+      assert length(parts) == 14
+      assert Enum.at(parts, 12) == "11111111-1111-1111-1111-111111111111"
+
+      assert Enum.at(parts, 13) ==
+               "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     end
   end
 end
