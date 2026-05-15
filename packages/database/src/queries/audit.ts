@@ -71,7 +71,24 @@ export type AuditEventType =
   // they sit alongside HIVE_AGGREGATE_BUILT in the operational
   // event class.
   | "FEEDBACK_LOOP_EXECUTED"
-  | "FEEDBACK_LOOP_FAILED";
+  | "FEEDBACK_LOOP_FAILED"
+  // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+  // Sub-decision 4 hybrid-binding event_type literals. Emitted by
+  // apps/api/src/routes/regulator.routes.ts when a tenant admin
+  // grants or revokes regulator access (dual-control gated per
+  // ADR-0036 Sub-decision 6 + ADR-0026). Each row carries
+  // lawful_basis_id + lawful_basis_chain_hash at canonical_record/1
+  // positions 13 + 14 per sub-phase 4 [SUB-BOX-3-AUDIT-CHAIN]
+  // extension, so tampering with the LawfulBasis content invalidates
+  // the AuditEvent event_hash and breaks chain verification per the
+  // patent-implementation evidence binding (CAR §2.2 Family 1).
+  // REGULATOR_ACCESS_EXPIRED is reserved at sub-phase 5 but NOT
+  // emitted -- expiration handling is forward-queued to sub-phase 6
+  // enforcement / scheduler tier per Q3 LOCKED Option α (would use
+  // existing SYSTEM_PRINCIPALS.SCHEDULER per Q7 LOCKED Option α).
+  | "REGULATOR_ACCESS_GRANTED"
+  | "REGULATOR_ACCESS_REVOKED"
+  | "REGULATOR_ACCESS_EXPIRED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -120,6 +137,11 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   // 12C.0 Item 7
   "FEEDBACK_LOOP_EXECUTED",
   "FEEDBACK_LOOP_FAILED",
+  // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+  // Sub-decision 4. EXPIRED reserved; not emitted at sub-phase 5.
+  "REGULATOR_ACCESS_GRANTED",
+  "REGULATOR_ACCESS_REVOKED",
+  "REGULATOR_ACCESS_EXPIRED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

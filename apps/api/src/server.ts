@@ -68,6 +68,10 @@ import { registerPlatformRoutes } from "./routes/platform.routes.js";
 import { registerOrgRoutes } from "./routes/org.routes.js";
 import { registerEscalationRoutes } from "./routes/escalation.routes.js";
 import { registerAuthAdminRoutes } from "./routes/auth-admin.routes.js";
+// CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+// Sub-decisions 6 + 7: tenant admin governance routes for REGULATOR
+// access grant + revoke (dual-control gated; can_admin_niov tier).
+import { registerRegulatorRoutes } from "./routes/regulator.routes.js";
 import { makeDefaultNonceStore, type NonceStore } from "./redis.js";
 import { MemoryContentStore, type ContentStore } from "./content-store.js";
 
@@ -324,6 +328,7 @@ export async function buildApp(
   await registerOrgRoutes(app, authService);
   await registerEscalationRoutes(app, authService);
   await registerAuthAdminRoutes(app, authService, jwtSecret);
+  await registerRegulatorRoutes(app, authService);
   await registerOtzarRoutes(app, otzarService);
   await registerOtzarObservationRoutes(app, observationService, authService);
 

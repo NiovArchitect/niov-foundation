@@ -54,7 +54,16 @@
  *      events), not raw route strings.
  */
 export type EscalationActionDescriptor = {
-  type: "PLATFORM_MONETIZATION_CONFIG_UPDATE" | "PLATFORM_ORG_CREATION";
+  type:
+    | "PLATFORM_MONETIZATION_CONFIG_UPDATE"
+    | "PLATFORM_ORG_CREATION"
+    // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+    // Sub-decision 6 dual-control binding for regulator access
+    // grant + revoke routes. Both routes are can_admin_niov-tier
+    // (preserves the Tension 3 Category (1) invariant per Q8 LOCKED
+    // Option α canonical at substantive register substantively).
+    | "REGULATOR_ACCESS_GRANT"
+    | "REGULATOR_ACCESS_REVOKE";
   metadata?: Record<string, unknown>;
 };
 
@@ -105,6 +114,34 @@ export const PRIVILEGED_ENDPOINTS: readonly PrivilegedEndpoint[] = [
     route: "/api/v1/platform/orgs",
     authTier: "can_admin_niov",
     actionDescriptor: { type: "PLATFORM_ORG_CREATION" },
+  },
+  {
+    // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+    // Sub-decisions 6 + 7. Operation C -- REGULATOR access grant: tenant
+    // admin grants an external REGULATOR principal time-bounded access
+    // under a documented LawfulBasis (subpoena / regulatory authority /
+    // court order / DPA request / MLAT / consent-of-data-subject).
+    // Atomic transaction: createLawfulBasisInTx + writeAuditEvent
+    // (REGULATOR_ACCESS_GRANTED) + linkLawfulBasisToAuditEventInTx.
+    // Bound at apps/api/src/routes/regulator.routes.ts.
+    method: "POST",
+    route: "/api/v1/regulator/access-grants",
+    authTier: "can_admin_niov",
+    actionDescriptor: { type: "REGULATOR_ACCESS_GRANT" },
+  },
+  {
+    // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+    // Sub-decision 6. Operation D -- REGULATOR access revoke: tenant
+    // admin revokes a previously-granted lawful basis before its
+    // valid_until. Audit-event-only revocation model per Q-D answer
+    // (no durable RegulatorAccessGrant table at sub-phase 5; revoke
+    // resolves regulator_entity_id via LawfulBasis.audit_id ->
+    // AuditEvent.target_entity_id chain). REGULATOR_ACCESS_EXPIRED
+    // (scheduler-emitted) is forward-queued; not bound here.
+    method: "POST",
+    route: "/api/v1/regulator/access-revocations",
+    authTier: "can_admin_niov",
+    actionDescriptor: { type: "REGULATOR_ACCESS_REVOKE" },
   },
 ] as const;
 

@@ -22,14 +22,20 @@ import {
 } from "@niov/api";
 
 describe("PRIVILEGED_ENDPOINTS registry", () => {
-  it("contains exactly 2 LIVE Category (1) entries", () => {
+  it("contains exactly 4 LIVE Category (1) entries (Operations A + B + C + D)", () => {
     // Substrate-state verification: the runtime registry consumes ONLY
-    // the LIVE entries per the three-artifact substrate split. The 4
-    // forward-substrate operations, 1 DB-tier operation, and 1
-    // RULE-10-retired operation are at the canonical-record doc, NOT
-    // here. Future LIVE entries land here when their target sub-phase
-    // ships (per the canonical-record doc forward paths).
-    expect(PRIVILEGED_ENDPOINTS).toHaveLength(2);
+    // the LIVE entries per the three-artifact substrate split. Future
+    // LIVE entries land here when their target sub-phase ships.
+    //
+    // Sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036 Sub-decision 6:
+    // count grew 2 -> 4 with the addition of REGULATOR_ACCESS_GRANT
+    // (Operation C; POST /api/v1/regulator/access-grants) and
+    // REGULATOR_ACCESS_REVOKE (Operation D;
+    // POST /api/v1/regulator/access-revocations). Both are
+    // can_admin_niov-tier per Q8 LOCKED Option α (preserves the
+    // Tension 3 Category (1) invariant canonical at substantive
+    // register substantively).
+    expect(PRIVILEGED_ENDPOINTS).toHaveLength(4);
   });
 
   it("has no duplicate (method, route) entries", () => {
@@ -66,6 +72,34 @@ describe("isPrivilegedEndpoint type guard", () => {
     const entry = isPrivilegedEndpoint("POST", "/api/v1/platform/orgs");
     expect(entry).toBeDefined();
     expect(entry?.actionDescriptor.type).toBe("PLATFORM_ORG_CREATION");
+  });
+
+  it("returns the matching entry for POST /api/v1/regulator/access-grants (Operation C)", () => {
+    // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+    // Sub-decisions 6 + 7. REGULATOR_ACCESS_GRANT is can_admin_niov-tier
+    // (preserves Tension 3 Category (1) invariant per Q8 LOCKED Option α).
+    const entry = isPrivilegedEndpoint(
+      "POST",
+      "/api/v1/regulator/access-grants",
+    );
+    expect(entry).toBeDefined();
+    expect(entry?.actionDescriptor.type).toBe("REGULATOR_ACCESS_GRANT");
+    expect(entry?.authTier).toBe("can_admin_niov");
+  });
+
+  it("returns the matching entry for POST /api/v1/regulator/access-revocations (Operation D)", () => {
+    // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
+    // Sub-decision 6. REGULATOR_ACCESS_REVOKE is can_admin_niov-tier.
+    // Audit-event-only revocation model per Q-D answer; revoke resolves
+    // regulator_entity_id via LawfulBasis.audit_id chain (no durable
+    // RegulatorAccessGrant table at sub-phase 5).
+    const entry = isPrivilegedEndpoint(
+      "POST",
+      "/api/v1/regulator/access-revocations",
+    );
+    expect(entry).toBeDefined();
+    expect(entry?.actionDescriptor.type).toBe("REGULATOR_ACCESS_REVOKE");
+    expect(entry?.authTier).toBe("can_admin_niov");
   });
 
   it("returns undefined for an unregistered route", () => {
