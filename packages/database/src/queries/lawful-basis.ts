@@ -206,3 +206,164 @@ export async function getLawfulBasisById(
 ): Promise<LawfulBasis | null> {
   return prisma.lawfulBasis.findUnique({ where: { basis_id } });
 }
+
+// WHAT: Discriminated result of getActiveLawfulBasisForRegulator.
+// INPUT: Used as a return type only.
+// OUTPUT: None -- this is a type, not a value.
+// WHY: 9 rejection reasons map to operator-locked Sub-phase 6
+//      enforcement error taxonomy; ok branch carries the validated
+//      LawfulBasis row so the caller does not need a second fetch.
+export type ActiveLawfulBasisResult =
+  | { ok: true; basis: LawfulBasis }
+  | {
+      ok: false;
+      code:
+        | "LAWFUL_BASIS_NOT_FOUND"
+        | "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT"
+        | "LAWFUL_BASIS_NOT_YET_VALID"
+        | "LAWFUL_BASIS_EXPIRED"
+        | "LAWFUL_BASIS_REVOKED"
+        | "LAWFUL_BASIS_HASH_MISMATCH"
+        | "REGULATOR_TARGET_MISMATCH"
+        | "INTERNAL_ENFORCEMENT_ERROR";
+    };
+
+// WHAT: Resolve whether a LawfulBasis is active for a specific
+//        REGULATOR entity at the current moment, performing the full
+//        9-condition cryptographic + lifecycle check per ADR-0036
+//        Sub-decision 5 hybrid binding + Sub-phase 6 enforcement
+//        substrate.
+// INPUT: basis_id (UUID; the lawful basis to check) +
+//        regulator_entity_id (UUID; the REGULATOR actor whose access
+//        is being authorized).
+// OUTPUT: ActiveLawfulBasisResult discriminated union.
+// WHY: CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+//      ADR-0036 Sub-decision 5 + Sub-decision 6. Centralizes the
+//      active-grant query for COSMP READ / SHARE / REVOKE
+//      enforcement so each call site does not duplicate the
+//      multi-step check.
+//
+//      Substrate-honest scalability discipline canonical at
+//      substantive register substantively (per Sub-phase 6
+//      Whole-COSMP scalability and orchestration alignment + the 6
+//      BEAM-compatibility patterns from ADR-0026 §5):
+//        - 3 indexed point-lookups; NO scans over capsules / entities
+//          / permissions
+//        - NO advisory lock; NO global lock; NO shared mutable state
+//        - NO capsule content read for authorization
+//        - read-only Postgres SELECTs; many parallel callers can
+//          query the same basis_id concurrently via MVCC without
+//          contention
+//        - revocation + expiry fail closed for new checks; per-call
+//          read of current Postgres state, no cross-request cache
+//        - pure-function-style discriminated outcome → portable to
+//          a future Elixir Broadway pipeline per ADR-0028
+//          forward-substrate
+//      Indexes utilized:
+//        - lawful_bases primary key (Step 1)
+//        - audit_events primary key (Step 2)
+//        - audit_events @@index([lawful_basis_id]) per Sub-phase 4
+//          (Step 3)
+//
+//      9 conditions checked (per operator-LOCKED implementation
+//      requirement at Sub-phase 6 §1):
+//        1. LawfulBasis exists
+//        2. LawfulBasis.audit_id is not null
+//        3. now >= valid_from
+//        4. now < valid_until
+//        5. Grant AuditEvent exists by LawfulBasis.audit_id
+//        6. Grant AuditEvent.event_type === REGULATOR_ACCESS_GRANTED
+//        7. Grant AuditEvent.lawful_basis_id === basis_id
+//        8. Grant AuditEvent.lawful_basis_chain_hash ===
+//           LawfulBasis.chain_hash (tamper detection)
+//        9. Grant AuditEvent.target_entity_id ===
+//           regulator_entity_id (REGULATOR-binding from Sub-phase 5
+//           grant flow per Q4 LOCKED Option α actor model)
+//        + No REGULATOR_ACCESS_REVOKED AuditEvent for the same
+//          lawful_basis_id (Step 3)
+export async function getActiveLawfulBasisForRegulator(
+  basis_id: string,
+  regulator_entity_id: string,
+): Promise<ActiveLawfulBasisResult> {
+  // Step 1: PK lookup on lawful_bases (O(1) via lawful_bases_pkey).
+  const basis = await prisma.lawfulBasis.findUnique({ where: { basis_id } });
+  if (basis === null) {
+    return { ok: false, code: "LAWFUL_BASIS_NOT_FOUND" };
+  }
+  if (basis.audit_id === null) {
+    // Defensive: should not happen post-Sub-phase-5 atomic grant
+    // transaction (createLawfulBasisInTx + writeAuditEvent +
+    // linkLawfulBasisToAuditEventInTx in one Prisma transaction). If
+    // observed, the grant chain integrity is broken at the row
+    // register and the basis cannot be cryptographically linked back
+    // to its grant audit event.
+    return { ok: false, code: "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT" };
+  }
+
+  const now = new Date();
+  if (now.getTime() < basis.valid_from.getTime()) {
+    return { ok: false, code: "LAWFUL_BASIS_NOT_YET_VALID" };
+  }
+  if (now.getTime() >= basis.valid_until.getTime()) {
+    return { ok: false, code: "LAWFUL_BASIS_EXPIRED" };
+  }
+
+  // Step 2: PK lookup on audit_events (O(1) via audit_events_pkey).
+  const grantEvent = await prisma.auditEvent.findUnique({
+    where: { audit_id: basis.audit_id },
+    select: {
+      audit_id: true,
+      event_type: true,
+      lawful_basis_id: true,
+      lawful_basis_chain_hash: true,
+      target_entity_id: true,
+    },
+  });
+  if (grantEvent === null) {
+    // Defensive: LawfulBasis.audit_id pointed at a non-existent
+    // audit row. Should not happen given Sub-phase 5 atomic
+    // transaction; treat as enforcement-time integrity failure.
+    return { ok: false, code: "INTERNAL_ENFORCEMENT_ERROR" };
+  }
+
+  if (grantEvent.event_type !== "REGULATOR_ACCESS_GRANTED") {
+    // The audit event linked from the LawfulBasis is not a grant
+    // event. Either substrate corruption or an unexpected audit
+    // event_type was wired into the linker. Fail closed.
+    return { ok: false, code: "INTERNAL_ENFORCEMENT_ERROR" };
+  }
+  if (grantEvent.lawful_basis_id !== basis_id) {
+    return { ok: false, code: "INTERNAL_ENFORCEMENT_ERROR" };
+  }
+  if (grantEvent.lawful_basis_chain_hash !== basis.chain_hash) {
+    // Tamper detection: the LawfulBasis row's content has been
+    // mutated AFTER the original grant (chain_hash in the row
+    // diverges from the chain_hash captured into the immutable
+    // audit event). Per ADR-0036 Sub-decision 5 hybrid-binding, this
+    // invalidates the grant.
+    return { ok: false, code: "LAWFUL_BASIS_HASH_MISMATCH" };
+  }
+  if (grantEvent.target_entity_id !== regulator_entity_id) {
+    // The regulator currently asserting access does not match the
+    // regulator the lawful basis was granted to. Per Q4 LOCKED
+    // Option α actor model: grant AuditEvent.target_entity_id IS
+    // the regulator entity_id.
+    return { ok: false, code: "REGULATOR_TARGET_MISMATCH" };
+  }
+
+  // Step 3: indexed lookup on audit_events.lawful_basis_id (uses
+  // @@index([lawful_basis_id]) from Sub-phase 4). Bounded by LIMIT 1
+  // via findFirst.
+  const revokeEvent = await prisma.auditEvent.findFirst({
+    where: {
+      event_type: "REGULATOR_ACCESS_REVOKED",
+      lawful_basis_id: basis_id,
+    },
+    select: { audit_id: true },
+  });
+  if (revokeEvent !== null) {
+    return { ok: false, code: "LAWFUL_BASIS_REVOKED" };
+  }
+
+  return { ok: true, basis };
+}

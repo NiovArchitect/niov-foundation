@@ -62,11 +62,19 @@ export async function registerCosmpRoutes(
     }
     const token = header.slice("Bearer ".length).trim();
 
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // Q8 LOCKED Option α: REGULATOR actor flows must supply the
+    // X-Lawful-Basis-Id header (mirrors X-Declaration-Token + X-
+    // Metadata-Fingerprint header pattern). Non-REGULATOR flows leave
+    // this absent; existing behavior preserved.
+    const lawfulBasisId = headerString(
+      request.headers["x-lawful-basis-id"],
+    );
     const result = await negotiateService.negotiate(
       token,
       body.capsule_id,
       body.requested_scope,
-      { ip_address: request.ip ?? null },
+      { ip_address: request.ip ?? null, lawful_basis_id: lawfulBasisId },
     );
 
     if (!result.ok) {
@@ -171,8 +179,14 @@ export async function registerCosmpRoutes(
           }
         }
       }
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+      // Q8 LOCKED Option α.
+      const lawfulBasisId = headerString(
+        request.headers["x-lawful-basis-id"],
+      );
       const result = await shareService.share(sessionToken, body, {
         ip_address: request.ip ?? null,
+        lawful_basis_id: lawfulBasisId,
       });
       if (!result.ok) {
         return reply.code(statusForCode(result.code)).send(result);
@@ -203,10 +217,15 @@ export async function registerCosmpRoutes(
           message: "Missing bearer token",
         });
       }
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+      // Q8 LOCKED Option α.
+      const lawfulBasisId = headerString(
+        request.headers["x-lawful-basis-id"],
+      );
       const result = await shareService.revoke(
         sessionToken,
         request.params.bridgeId,
-        { ip_address: request.ip ?? null },
+        { ip_address: request.ip ?? null, lawful_basis_id: lawfulBasisId },
       );
       if (!result.ok) {
         return reply.code(statusForCode(result.code)).send(result);
@@ -280,12 +299,19 @@ export async function registerCosmpRoutes(
         });
       }
 
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+      // Q4 LOCKED Option α + Q8 LOCKED Option α: TOCTOU re-check at
+      // readContent entry consumes the X-Lawful-Basis-Id header for
+      // REGULATOR actors; non-REGULATOR flows ignore it.
+      const lawfulBasisId = headerString(
+        request.headers["x-lawful-basis-id"],
+      );
       const result = await readService.readContent(
         sessionToken,
         request.params.id,
         declarationToken,
         fingerprint,
-        { ip_address: request.ip ?? null },
+        { ip_address: request.ip ?? null, lawful_basis_id: lawfulBasisId },
       );
 
       if (!result.ok) {
@@ -368,6 +394,16 @@ function statusForCode(code: string): number {
     case "CAPSULES_NOT_OWNED":
     case "NOT_GRANTOR":
     case "CLEARANCE_INSUFFICIENT_FOR_CAPSULES":
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // ADR-0036 Sub-decision 5 + 6: REGULATOR-actor lawful-basis
+    // enforcement denials. 403 covers caller-correctable enforcement
+    // refusals (basis required / regulator scope / regulator
+    // jurisdiction / hash mismatch / generic regulator denial).
+    case "REGULATOR_LAWFUL_BASIS_REQUIRED":
+    case "LAWFUL_BASIS_HASH_MISMATCH":
+    case "REGULATOR_SCOPE_NOT_AUTHORIZED":
+    case "REGULATOR_JURISDICTION_NOT_AUTHORIZED":
+    case "REGULATOR_ACCESS_DENIED":
       return 403;
     case "CAPSULE_NOT_FOUND":
     case "CONTENT_NOT_FOUND":
@@ -375,14 +411,23 @@ function statusForCode(code: string): number {
     case "GRANTEE_NO_TAR":
     case "CAPSULES_NOT_FOUND":
     case "BRIDGE_NOT_FOUND":
+    case "LAWFUL_BASIS_NOT_FOUND":
       return 404;
     case "METADATA_FINGERPRINT_MISMATCH":
       return 409;
     case "CAPSULE_DATA_INVALID":
     case "INVALID_REQUEST":
+    // 422 covers basis-lifecycle / TAR validation failures that
+    // surface state inconsistency rather than auth-tier rejection.
+    case "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT":
+    case "LAWFUL_BASIS_NOT_YET_VALID":
+    case "LAWFUL_BASIS_EXPIRED":
+    case "LAWFUL_BASIS_REVOKED":
       return 422;
     case "COMPLIANCE_CHECK_FAILED":
       return 451;
+    case "INTERNAL_ENFORCEMENT_ERROR":
+      return 500;
     default:
       return 400;
   }

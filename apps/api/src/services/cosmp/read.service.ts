@@ -16,17 +16,20 @@ import { CRYPTO_CONFIG } from "@niov/auth";
 import {
   getCapsuleMetadata,
   getCapsuleWithContent,
+  getEntityById,
   incrementAccessCount,
   prisma,
   writeAuditEvent,
   type AccessScope,
   type CapsuleMetadata,
+  type LawfulBasis,
 } from "@niov/database";
 import { logger } from "../../logger.js";
 import type { ContentStore } from "../../content-store.js";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
 import type { AccessDeclarationPayload } from "./negotiate.service.js";
+import { enforceRegulatorCOSMPAccess } from "./regulator-enforcement.js";
 
 // WHAT: Maximum approximate token count returned to a SUMMARY
 //        scope.
@@ -83,7 +86,22 @@ export interface ReadFailure {
     | "CLEARANCE_INSUFFICIENT"
     | "METADATA_FINGERPRINT_MISMATCH"
     | "SCOPE_INSUFFICIENT_FOR_CONTENT"
-    | "CONTENT_NOT_FOUND";
+    | "CONTENT_NOT_FOUND"
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // Q4 LOCKED Option α: TOCTOU re-check at readContent entry for
+    // REGULATOR actors. readMetadata unchanged at sub-phase 6
+    // register substantively.
+    | "REGULATOR_LAWFUL_BASIS_REQUIRED"
+    | "LAWFUL_BASIS_NOT_FOUND"
+    | "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT"
+    | "LAWFUL_BASIS_NOT_YET_VALID"
+    | "LAWFUL_BASIS_EXPIRED"
+    | "LAWFUL_BASIS_REVOKED"
+    | "LAWFUL_BASIS_HASH_MISMATCH"
+    | "REGULATOR_SCOPE_NOT_AUTHORIZED"
+    | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
+    | "REGULATOR_ACCESS_DENIED"
+    | "INTERNAL_ENFORCEMENT_ERROR";
   message: string;
 }
 
@@ -327,7 +345,15 @@ export class ReadService {
     capsuleId: string,
     declarationToken: string,
     metadataFingerprint: string,
-    context: { ip_address?: string | null } = {},
+    context: {
+      ip_address?: string | null;
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+      // Q4 LOCKED Option α + Q8 LOCKED Option α: REGULATOR actor
+      // flows must supply the X-Lawful-Basis-Id header, propagated
+      // here. Non-REGULATOR flows leave this null/undefined; existing
+      // behavior preserved.
+      lawful_basis_id?: string | null;
+    } = {},
   ): Promise<ReadContentSuccess | ReadFailure> {
     const session = await this.authService.validateSession(
       sessionToken,
@@ -342,6 +368,45 @@ export class ReadService {
         context.ip_address ?? null,
       );
       return { ok: false, code: session.code, message: "Read denied" };
+    }
+
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // Q4 LOCKED Option α: TOCTOU re-check at readContent entry --
+    // basis may have been revoked OR expired between NEGOTIATE
+    // (declaration_token issued) and readContent (now, up to
+    // DECLARATION_TTL_SECONDS later). Per Sub-phase 6 §18 Whole-
+    // COSMP scalability discipline: 3 indexed point-lookups per
+    // re-check; no scans; no global lock; capsule content NOT
+    // loaded for authorization (capsule fetch happens AFTER the
+    // re-check passes).
+    let validatedRegulatorBasis: LawfulBasis | null = null;
+    const requester = await getEntityById(session.entity_id);
+    if (requester !== null && requester.entity_type === "REGULATOR") {
+      const enforcement = await enforceRegulatorCOSMPAccess({
+        requester,
+        lawful_basis_id: context.lawful_basis_id,
+      });
+      if (!enforcement.ok) {
+        await this.auditDenial(
+          "CAPSULE_CONTENT_READ",
+          capsuleId,
+          session.entity_id,
+          enforcement.code,
+          context.ip_address ?? null,
+          {
+            lawful_basis_id:
+              typeof context.lawful_basis_id === "string"
+                ? context.lawful_basis_id
+                : null,
+          },
+        );
+        return {
+          ok: false,
+          code: enforcement.code,
+          message: "REGULATOR readContent denied at lawful-basis re-check",
+        };
+      }
+      validatedRegulatorBasis = enforcement.basis;
     }
 
     const declarationCheck = await this.validateDeclaration(
@@ -467,6 +532,13 @@ export class ReadService {
       target_entity_id: fullCapsule.entity_id,
       session_id: session.session_id,
       ip_address: context.ip_address ?? null,
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT]: when
+      // REGULATOR enforcement validated a basis at the readContent
+      // re-check, carry the binding into canonical_record positions
+      // 13 + 14 per ADR-0036 Sub-decision 5.
+      lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+      lawful_basis_chain_hash:
+        validatedRegulatorBasis?.chain_hash ?? null,
       details: {
         declaration_id: declarationCheck.declaration.declaration_id,
         granted_scope: granted,
@@ -585,6 +657,12 @@ export class ReadService {
     actorEntityId: string | null,
     denialReason: string,
     ipAddress: string | null,
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // ADR-0036 Sub-decision 5: optional extras carry the
+    // lawful_basis_id at the canonical_record/1 position 13 column
+    // for REGULATOR-actor denials. Other callers omit this; the row
+    // column stays null (existing behavior preserved).
+    extras: { lawful_basis_id?: string | null } = {},
   ): Promise<void> {
     await writeAuditEvent({
       event_type: eventType,
@@ -593,6 +671,7 @@ export class ReadService {
       target_capsule_id: capsuleId,
       ip_address: ipAddress,
       denial_reason: denialReason,
+      lawful_basis_id: extras.lawful_basis_id ?? null,
     });
   }
 

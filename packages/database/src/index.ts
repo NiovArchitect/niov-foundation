@@ -208,11 +208,18 @@ export {
   linkLawfulBasisToAuditEventInTx,
   isLawfulBasisActive,
   getLawfulBasisById,
+  // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+  // ADR-0036 Sub-decision 5 + 6: 9-condition active-grant resolver
+  // for REGULATOR-actor COSMP READ / SHARE / REVOKE enforcement.
+  // 3 indexed point-lookups; substrate-coherent at high-concurrency
+  // register substantively per Whole-COSMP scalability discipline.
+  getActiveLawfulBasisForRegulator,
 } from "./queries/lawful-basis.js";
 
 export type {
   LawfulBasisHashableFields,
   CreateLawfulBasisInput,
+  ActiveLawfulBasisResult,
 } from "./queries/lawful-basis.js";
 
 // CAR Sub-box 3 sub-phase 3 [SUB-BOX-3-SERVICES] per ADR-0036:

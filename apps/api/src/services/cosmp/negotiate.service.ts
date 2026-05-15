@@ -18,12 +18,14 @@ import {
   writeAuditEvent,
   type AccessScope,
   type CapsuleMetadata,
+  type LawfulBasis,
   type Permission,
 } from "@niov/database";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
 import type { ComplianceService } from "../compliance/compliance.service.js";
 import { createGateEscalationForCaller } from "../governance/escalation.service.js";
+import { enforceRegulatorCOSMPAccess } from "./regulator-enforcement.js";
 import { logger } from "../../logger.js";
 
 // WHAT: How long an access declaration is valid for, in seconds.
@@ -65,7 +67,22 @@ export interface NegotiateFailure {
     | "OPERATION_NOT_PERMITTED"
     | "ACCESS_DENIED"
     | "NO_PERMISSION"
-    | "COMPLIANCE_CHECK_FAILED";
+    | "COMPLIANCE_CHECK_FAILED"
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // ADR-0036 Sub-decision 5 + 6: REGULATOR-actor lawful-basis
+    // enforcement codes. Emitted by the regulator-enforcement helper
+    // before the existing 8-step NEGOTIATE flow runs.
+    | "REGULATOR_LAWFUL_BASIS_REQUIRED"
+    | "LAWFUL_BASIS_NOT_FOUND"
+    | "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT"
+    | "LAWFUL_BASIS_NOT_YET_VALID"
+    | "LAWFUL_BASIS_EXPIRED"
+    | "LAWFUL_BASIS_REVOKED"
+    | "LAWFUL_BASIS_HASH_MISMATCH"
+    | "REGULATOR_SCOPE_NOT_AUTHORIZED"
+    | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
+    | "REGULATOR_ACCESS_DENIED"
+    | "INTERNAL_ENFORCEMENT_ERROR";
   message: string;
   failing_framework?: string;
 }
@@ -160,7 +177,14 @@ export class NegotiateService {
     sessionToken: string,
     targetCapsuleId: string,
     requestedScope: AccessScope,
-    context: { ip_address?: string | null } = {},
+    context: {
+      ip_address?: string | null;
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+      // Q8 LOCKED Option α: REGULATOR actor flows must supply the
+      // X-Lawful-Basis-Id header, propagated here. Non-REGULATOR
+      // flows leave this null/undefined; existing behavior preserved.
+      lawful_basis_id?: string | null;
+    } = {},
   ): Promise<NegotiateSuccess | NegotiateFailure> {
     // STEP 1 -- validate session
     const validation = await this.authService.validateSession(
@@ -196,6 +220,50 @@ export class NegotiateService {
       return accessDenied();
     }
     const restrictedClass = isRestrictedAiClass(requester.entity_type);
+
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // ADR-0036 Sub-decision 5 + 6 + Q4 LOCKED Option α start-check:
+    // when actor is REGULATOR, lawful-basis enforcement runs BEFORE
+    // any capsule metadata fetch. This ensures a REGULATOR without
+    // an active lawful basis never even probes capsule existence.
+    // Substrate-honest scalability discipline canonical at
+    // substantive register substantively per Sub-phase 6 §18
+    // Whole-COSMP scalability and orchestration alignment: 3
+    // indexed point-lookups per check; no scans; no global lock;
+    // many parallel REGULATOR DMW workers can invoke this branch
+    // concurrently without contention.
+    let validatedRegulatorBasis: LawfulBasis | null = null;
+    if (requester.entity_type === "REGULATOR") {
+      const enforcement = await enforceRegulatorCOSMPAccess({
+        requester,
+        lawful_basis_id: context.lawful_basis_id,
+      });
+      if (!enforcement.ok) {
+        await writeAuditEvent({
+          event_type: "NEGOTIATE",
+          outcome: "DENIED",
+          actor_entity_id: validation.entity_id,
+          target_capsule_id: targetCapsuleId,
+          session_id: validation.session_id,
+          denial_reason: enforcement.code,
+          ip_address: context.ip_address ?? null,
+          // Carry lawful_basis_id at the top-level audit column when
+          // known (per Sub-phase 4 substrate). For REGULATOR_LAWFUL_BASIS_REQUIRED
+          // the caller did not provide an id, so the field stays null.
+          lawful_basis_id:
+            typeof context.lawful_basis_id === "string"
+              ? context.lawful_basis_id
+              : null,
+          details: { entity_type: requester.entity_type },
+        });
+        return {
+          ok: false,
+          code: enforcement.code,
+          message: "REGULATOR access denied at lawful-basis enforcement",
+        };
+      }
+      validatedRegulatorBasis = enforcement.basis;
+    }
 
     // STEP 2 -- load capsule metadata
     const metadata = await getCapsuleMetadata(targetCapsuleId);
@@ -246,6 +314,11 @@ export class NegotiateService {
         target_entity_id: metadata.entity_id,
         session_id: validation.session_id,
         ip_address: context.ip_address ?? null,
+        // Sub-phase 6: when REGULATOR enforcement validated a basis,
+        // carry the binding into the canonical_record positions 13 + 14.
+        lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+        lawful_basis_chain_hash:
+          validatedRegulatorBasis?.chain_hash ?? null,
         details: {
           entity_type: requester.entity_type,
           declaration_id,
@@ -443,6 +516,12 @@ export class NegotiateService {
       target_entity_id: metadata.entity_id,
       session_id: validation.session_id,
       ip_address: context.ip_address ?? null,
+      // Sub-phase 6: when REGULATOR enforcement validated a basis at
+      // the start-check, carry the binding into canonical_record
+      // positions 13 + 14 per ADR-0036 Sub-decision 5.
+      lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+      lawful_basis_chain_hash:
+        validatedRegulatorBasis?.chain_hash ?? null,
       details: {
         entity_type: requester.entity_type,
         declaration_id,

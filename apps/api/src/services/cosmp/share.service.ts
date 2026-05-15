@@ -20,8 +20,10 @@ import {
   writeAuditEvent,
   type AccessScope,
   type DurationType,
+  type LawfulBasis,
 } from "@niov/database";
 import type { AuthService } from "../auth.service.js";
+import { enforceRegulatorCOSMPAccess } from "./regulator-enforcement.js";
 
 // WHAT: One per-capsule grant inside a SHARE request.
 // INPUT: Used as a parameter type only.
@@ -90,7 +92,20 @@ export interface ShareFailure {
     | "GRANTEE_NO_TAR"
     | "CAPSULES_NOT_OWNED"
     | "CAPSULES_NOT_FOUND"
-    | "CLEARANCE_INSUFFICIENT_FOR_CAPSULES";
+    | "CLEARANCE_INSUFFICIENT_FOR_CAPSULES"
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // Q4 LOCKED Option α start-check + ADR-0036 Sub-decision 5 + 6.
+    | "REGULATOR_LAWFUL_BASIS_REQUIRED"
+    | "LAWFUL_BASIS_NOT_FOUND"
+    | "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT"
+    | "LAWFUL_BASIS_NOT_YET_VALID"
+    | "LAWFUL_BASIS_EXPIRED"
+    | "LAWFUL_BASIS_REVOKED"
+    | "LAWFUL_BASIS_HASH_MISMATCH"
+    | "REGULATOR_SCOPE_NOT_AUTHORIZED"
+    | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
+    | "REGULATOR_ACCESS_DENIED"
+    | "INTERNAL_ENFORCEMENT_ERROR";
   message: string;
   details?: {
     failed_capsules?: string[];
@@ -128,7 +143,20 @@ export interface RevokeFailure {
     | "SESSION_INVALIDATED"
     | "OPERATION_NOT_PERMITTED"
     | "BRIDGE_NOT_FOUND"
-    | "NOT_GRANTOR";
+    | "NOT_GRANTOR"
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // Q4 LOCKED Option α start-check + ADR-0036 Sub-decision 5 + 6.
+    | "REGULATOR_LAWFUL_BASIS_REQUIRED"
+    | "LAWFUL_BASIS_NOT_FOUND"
+    | "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT"
+    | "LAWFUL_BASIS_NOT_YET_VALID"
+    | "LAWFUL_BASIS_EXPIRED"
+    | "LAWFUL_BASIS_REVOKED"
+    | "LAWFUL_BASIS_HASH_MISMATCH"
+    | "REGULATOR_SCOPE_NOT_AUTHORIZED"
+    | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
+    | "REGULATOR_ACCESS_DENIED"
+    | "INTERNAL_ENFORCEMENT_ERROR";
   message: string;
 }
 
@@ -153,7 +181,14 @@ export class ShareService {
   async share(
     sessionToken: string,
     request: ShareRequest,
-    context: { ip_address?: string | null } = {},
+    context: {
+      ip_address?: string | null;
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+      // Q8 LOCKED Option α: REGULATOR actor flows must supply the
+      // X-Lawful-Basis-Id header, propagated here. Non-REGULATOR
+      // flows leave this null/undefined; existing behavior preserved.
+      lawful_basis_id?: string | null;
+    } = {},
   ): Promise<ShareSuccess | ShareFailure> {
     if (
       !request ||
@@ -180,6 +215,43 @@ export class ShareService {
         details: { via: "SHARE" },
       });
       return { ok: false, code: session.code, message: "Share denied" };
+    }
+
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // Q4 LOCKED Option α start-check: when actor is REGULATOR, lawful-
+    // basis enforcement runs BEFORE grantee lookup / capsule ownership
+    // checks. Non-REGULATOR behavior unchanged. 3 indexed point-lookups;
+    // no scans; no global lock per Sub-phase 6 §18 Whole-COSMP
+    // scalability discipline canonical at substantive register
+    // substantively.
+    let validatedRegulatorBasis: LawfulBasis | null = null;
+    const requester = await getEntityById(session.entity_id);
+    if (requester !== null && requester.entity_type === "REGULATOR") {
+      const enforcement = await enforceRegulatorCOSMPAccess({
+        requester,
+        lawful_basis_id: context.lawful_basis_id,
+      });
+      if (!enforcement.ok) {
+        await writeAuditEvent({
+          event_type: "PERMISSION_CREATED",
+          outcome: "DENIED",
+          actor_entity_id: session.entity_id,
+          session_id: session.session_id,
+          denial_reason: enforcement.code,
+          ip_address: context.ip_address ?? null,
+          lawful_basis_id:
+            typeof context.lawful_basis_id === "string"
+              ? context.lawful_basis_id
+              : null,
+          details: { via: "SHARE", entity_type: requester.entity_type },
+        });
+        return {
+          ok: false,
+          code: enforcement.code,
+          message: "REGULATOR share denied at lawful-basis enforcement",
+        };
+      }
+      validatedRegulatorBasis = enforcement.basis;
     }
 
     // Look up the grantee + their TAR for the clearance check.
@@ -325,6 +397,13 @@ export class ShareService {
       target_entity_id: grantee.entity_id,
       session_id: session.session_id,
       ip_address: context.ip_address ?? null,
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT]: when
+      // REGULATOR enforcement validated a basis at the start-check,
+      // carry the binding into canonical_record positions 13 + 14
+      // per ADR-0036 Sub-decision 5.
+      lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+      lawful_basis_chain_hash:
+        validatedRegulatorBasis?.chain_hash ?? null,
       details: {
         via: "SHARE",
         bridge_id: bridgeId,
@@ -351,7 +430,14 @@ export class ShareService {
   async revoke(
     sessionToken: string,
     bridgeId: string,
-    context: { ip_address?: string | null } = {},
+    context: {
+      ip_address?: string | null;
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+      // Q8 LOCKED Option α: REGULATOR actor flows must supply the
+      // X-Lawful-Basis-Id header, propagated here. Non-REGULATOR
+      // flows leave this null/undefined; existing behavior preserved.
+      lawful_basis_id?: string | null;
+    } = {},
   ): Promise<RevokeSuccess | RevokeFailure> {
     const session = await this.authService.validateSession(
       sessionToken,
@@ -366,6 +452,40 @@ export class ShareService {
         details: { via: "REVOKE", bridge_id: bridgeId },
       });
       return { ok: false, code: session.code, message: "Revoke denied" };
+    }
+
+    // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
+    // Q4 LOCKED Option α start-check: when actor is REGULATOR, lawful-
+    // basis enforcement runs BEFORE bridge ownership check. Non-
+    // REGULATOR behavior unchanged.
+    let validatedRegulatorBasis: LawfulBasis | null = null;
+    const requester = await getEntityById(session.entity_id);
+    if (requester !== null && requester.entity_type === "REGULATOR") {
+      const enforcement = await enforceRegulatorCOSMPAccess({
+        requester,
+        lawful_basis_id: context.lawful_basis_id,
+      });
+      if (!enforcement.ok) {
+        await writeAuditEvent({
+          event_type: "PERMISSION_REVOKED",
+          outcome: "DENIED",
+          actor_entity_id: session.entity_id,
+          session_id: session.session_id,
+          denial_reason: enforcement.code,
+          ip_address: context.ip_address ?? null,
+          lawful_basis_id:
+            typeof context.lawful_basis_id === "string"
+              ? context.lawful_basis_id
+              : null,
+          details: { via: "REVOKE", bridge_id: bridgeId, entity_type: requester.entity_type },
+        });
+        return {
+          ok: false,
+          code: enforcement.code,
+          message: "REGULATOR revoke denied at lawful-basis enforcement",
+        };
+      }
+      validatedRegulatorBasis = enforcement.basis;
     }
 
     const permissions = await prisma.permission.findMany({
@@ -426,6 +546,13 @@ export class ShareService {
       target_entity_id: granteeId,
       session_id: session.session_id,
       ip_address: context.ip_address ?? null,
+      // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT]: when
+      // REGULATOR enforcement validated a basis at the start-check,
+      // carry the binding into canonical_record positions 13 + 14
+      // per ADR-0036 Sub-decision 5.
+      lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+      lawful_basis_chain_hash:
+        validatedRegulatorBasis?.chain_hash ?? null,
       details: {
         via: "REVOKE",
         bridge_id: bridgeId,
