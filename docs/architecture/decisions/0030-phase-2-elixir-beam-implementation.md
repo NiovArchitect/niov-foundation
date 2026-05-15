@@ -483,6 +483,50 @@ The decomposition:
     `dual-control-operations-canonical-record.md`). Documents operational
     discipline + the 6 BEAM patterns instantiated in Elixir + the §-structure
     operational companion to ADR-0030.
+
+    **Sub-phase 12 amendment (LANDED at this commit; ADR-0030 §DBGI sub-phase
+    12 amendment commit)**: NEW `docs/architecture/beam-coordination-
+    canonical-record.md` substantively LANDED canonical at substantive
+    register substantively per Q1 LOCKED operator-tier authorization at
+    canonical decision register substantively at substantive register
+    canonical at sub-phase 12 pre-flight register substantively. 12-section
+    structure canonical at substantive register substantively per Q2 LOCKED
+    Option α (12 §s vs dual-control canonical-record 8 §s; expanded scope
+    canonical at substantive register substantively for observability +
+    multi-node + privacy + method/process discipline coverage canonical at
+    substantive register substantively). Forward-looking marker discipline
+    canonical at substantive register substantively per Q3 LOCKED Option α
+    (explicit `(FORWARD-LOOKING)` marker at each forward-looking claim
+    canonical at substantive register substantively at canonical-coherence
+    register; substrate-honest canonical at substantive register
+    substantively per ADR-0020 Register-2 patent-implementation evidence
+    discipline canonical at substantive register). Substrate-canonical
+    framing canonical at substantive register substantively per Q4 LOCKED
+    Option β (Federation Cloud + cohort + depersonalization + robotics/
+    machinery substantively reframed as FORWARD-LOOKING canonical at
+    substantive register substantively at canonical register substantively;
+    operator's framing preserved at vision register substantively but
+    NOT promoted to implementation-proven canonical register substantively).
+    File:line evidence cites canonical at substantive register substantively
+    per Q7 LOCKED Option α (each of 6 BEAM-compatibility patterns at §5
+    cites specific file:line evidence canonical at substantive register
+    substantively at substantive register; evidence-load-bearing canonical
+    at substantive register substantively at canonical-coherence register
+    substantively). External canonical sources cited canonical at
+    substantive register substantively per Q8 LOCKED Option α (Erlang/OTP
+    + Elixir + Phoenix.PubSub + Phoenix.Tracker + Telemetry + Prometheus
+    canonical sources cited canonical at substantive register substantively
+    where load-bearing canonical at substantive register substantively).
+    NO new substrate-build observation candidate at ADR-0035 §9 at this
+    commit canonical at substantive register substantively per Q6 LOCKED
+    Option α (sub-phase 12 substantively documentation register at
+    substantive register canonical at substantive register substantively;
+    NO code substrate change at canonical register substantively at
+    canonical-coherence register substantively). This amendment is
+    **canonical-pattern register clarification**, NOT architectural-register
+    supersession (substantively analogous to ADR-0030 §DBGI sub-phase 8
+    + sub-phase 9 + sub-phase 10 + sub-phase 11 amendment register at
+    substantive register).
 13. **`[BEAM-ARC-CLOSURE]`** — onboarding cascade (`onboarding.md` +
     `onboarding-for-engineers.md` gain Elixir/BEAM section);
     `section-12-progress.md` row 35 (SUBSTRATE-BUILD-OPTIMIZATIONS-style row
