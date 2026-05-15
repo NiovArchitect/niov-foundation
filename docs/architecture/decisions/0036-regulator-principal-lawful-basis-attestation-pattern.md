@@ -2,9 +2,59 @@
 
 ## Status
 
-Proposed 2026-05-15
+**Accepted 2026-05-15** at sub-phase 7 `[SUB-BOX-3-CLOSURE]` per ADR-0036 §Implementation Detail. The 7-sub-phase Sub-box 3 mini-arc landed across the lineage `4981d3a → db6e0d7 → d0b5c64 → f9d0694 → 71af2c6 → d6f9e18 → this commit`. The original Proposed status is preserved in the ADR amendment trail at §Post-Closure Implementation Lineage below.
 
-Transitions to **Accepted** at the Sub-box 3 mini-arc closure commit (sub-phase 7 `[SUB-BOX-3-CLOSURE]` per ADR-0036 §11 Implementation Detail). This sub-phase 1 commit lands the decision substrate; sub-phases 2-7 implement.
+## Post-Closure Implementation Lineage
+
+The 7-sub-phase Sub-box 3 mini-arc canonical at substantive register substantively per ADR-0036 §Implementation Detail (sub-phase 1 ADR landing → sub-phase 7 closure cascade); each sub-phase has its own commit hash + atomic test+CI verification per substrate-honest substrate-build discipline canonical at substantive register substantively:
+
+| Sub-phase | Commit | Subject |
+|---|---|---|
+| 1 | `4981d3a` | `[SUB-BOX-3-ADR]` ADR-0036 (this document) + ADR-0035 §9 35th D-CAR-SUB-BOX-NUMBERING-DRIFT promotion + RULE 14 back-cites to ADR-0019/0020/0026/0033 |
+| 2 | `db6e0d7` | `[SUB-BOX-3-SCHEMA]` EntityType.REGULATOR + 3 TAR fields (regulator_jurisdiction + regulator_authority_scope + regulator_credentialed_by) + LawfulBasisType enum (6 values) + LawfulBasis Prisma model |
+| 3 | `d0b5c64` | `[SUB-BOX-3-SERVICES]` LawfulBasis canonical hash helpers + REGULATOR validation (32 unit tests) |
+| 4 | `f9d0694` | `[SUB-BOX-3-AUDIT-CHAIN]` canonical_record/1 12 → 14 fields at TS + Elixir registers + LawfulBasis Elixir mirror + 12 fixture pairs + AuditEvent row schema +2 columns |
+| 5 | `71af2c6` | `[SUB-BOX-3-ROUTES]` REGULATOR grant + revoke routes + dual-control binding + 3 event_type literals (REGULATOR_ACCESS_GRANTED + REVOKED + EXPIRED-reserved) (23 integration tests) |
+| 6 | `d6f9e18` | `[SUB-BOX-3-COSMP-ENFORCEMENT]` REGULATOR lawful-basis enforcement at NEGOTIATE / readContent (TOCTOU) / SHARE / REVOKE entry points (18 integration tests) |
+| 7 | this commit | `[SUB-BOX-3-CLOSURE]` arc-closure cascade (this document Status: Proposed → Accepted; section-12-progress.md Sub-box 3 row CLOSED; architecture/README + CLAUDE.md ADR catalog ADR-0036 entry; CURRENT_BUILD_STATE.md minimum-touch entry; dual-control canonical-record post-closure amendment note) |
+
+Sub-decision resolution status (all 8 RESOLVED at substrate-state ground truth canonical at substantive register substantively):
+
+| Sub-decision | Status | Lineage |
+|---|---|---|
+| 1 (REGULATOR EntityType distinct from GOVERNMENT) | landed | sub-phase 2 schema + sub-phase 3 service guard + sub-phase 5 route guard + sub-phase 6 COSMP enforcement guard |
+| 2 (Regulator-specific TAR fields) | landed | sub-phase 2 schema + sub-phase 3 helper consumption + sub-phase 6 enforcement consumption |
+| 3 (LawfulBasis Prisma model + LawfulBasisType enum) | landed | sub-phase 2 schema; canonical at substantive register substantively |
+| 4 (3 AuditEvent event_type literals: REGULATOR_ACCESS_GRANTED + REVOKED + EXPIRED) | landed | sub-phase 5 (deferred from sub-phase 4 per Q1-Q9 LOCKED at sub-phase 4; substrate-coherent landing at sub-phase 5 register where the routes that emit these events also land) |
+| 5 (Hybrid lawful-basis cryptographic binding: lawful_basis_id + lawful_basis_chain_hash at canonical_record/1 positions 13 + 14) | landed | sub-phase 4 canonical-record extension + sub-phase 6 COSMP audit-emission consumption |
+| 6 (Dual-control binding for regulator-grant routes) | landed | sub-phase 5 routes + sub-phase 6 COSMP enforcement consumption |
+| 7 (REGULATOR authentication credentialing pattern) | landed | sub-phase 3 helpers + sub-phase 5 grant route validation; National PKI + EU eIDAS forward-queued per Sub-decision 7 §Forward-queued |
+| 8 (SYSTEM_PRINCIPAL extension) | resolved | sub-phase 5 commit body — Option β: NO new SYSTEM_PRINCIPAL; SYSTEM_PRINCIPALS frozen-anchor count remains 5; future REGULATOR_ACCESS_EXPIRED uses existing SCHEDULER per Q7 LOCKED Option α |
+
+**Forward-queued items preserved at substrate-state ground truth register substantively** (12 items canonical at substantive register substantively per operator's Sub-phase 7 closure preservation list):
+
+1. CAR Sub-box 2 Jurisdiction Tagging (`Entity.jurisdiction` + `MemoryCapsule.jurisdiction` + `AuditEvent.jurisdiction` + `OrgSettings.default_jurisdiction` + `assertJurisdictionalScope()`) — QUEUED per CAR §Recommended Sequencing; independent future mini-arc
+2. Per-target-entity LawfulBasis binding (D-LAWFUL-BASIS-IS-AUTHORITY-TIER-NOT-PER-TARGET; would require Sub-phase 5 amendment + LawfulBasis schema extension)
+3. Operation-type scope vocabulary unification (D-OPERATION-SCOPE-VOCABULARY-GAP; CAPSULE_READ / CAPSULE_SHARE / CAPSULE_REVOKE constants; would require multi-scope grants)
+4. REGULATOR_ACCESS_EXPIRED scheduler emission using existing SYSTEM_PRINCIPALS.SCHEDULER (literal reserved at sub-phase 5; not emitted)
+5. Full BEAM/Broadway/GenStage high-volume orchestration tier per ADR-0028 forward-substrate
+6. Full DMW-to-DMW / agent-to-agent orchestration substrate
+7. Per-DMW backpressure / partitioning / throughput controls
+8. Streaming capsule push/pull semantics with provenance attribution per chunk
+9. Per-capsule jurisdiction enforcement (depends on CAR Sub-box 2)
+10. Real-time credentialing-authority registry / CRL / National PKI / EU eIDAS integration per Sub-decision 7 §Forward-queued
+11. Active-grant materialized view OR cached-active-grant table only if future query density proves need (sub-phase 6 substrate uses per-request indexed point-lookup; sufficient at canonical scale)
+12. DMW whole-system architecture ADR if later needed (sub-phase 6 operator clarification canonicalizes whole-COSMP framing as architectural intent; future canonicalization at substantive register substantively if substrate justifies)
+
+**5 forward-queued substrate-build observations** (commit-body-only canonical at substantive register substantively per Q-NEW-9 LOCKED at sub-phase 6; NOT promoted to ADR-0035 §9 per Q-NEW-3 LOCKED at sub-phase 7):
+
+- D-LAWFUL-BASIS-IS-AUTHORITY-TIER-NOT-PER-TARGET
+- D-OPERATION-SCOPE-VOCABULARY-GAP
+- D-NO-CENTRALIZED-ENFORCEMENT-BOTTLENECK-AT-TS-REGISTER
+- D-COSMP-IS-ORCHESTRATION-NOT-SINGLE-REQUEST-RESPONSE-LAYER
+- D-SUB-PHASE-6-IS-ENFORCEMENT-SLICE-NOT-FULL-ORCHESTRATION
+
+**Whole-COSMP scalability and orchestration alignment** (per Sub-phase 6 commit-body §Whole-COSMP scalability and orchestration alignment): sub-phase 6 implemented per-request indexed point-lookups + no global locks + no unbounded scans + no capsule-content authorization + no cross-request cache + revocation/expiry fail-closed + readContent TOCTOU re-check at the TS COSMP route/service tier. Whole-COSMP high-concurrency orchestration substrate (BEAM/Broadway/GenStage; per-capsule supervision; cross-DMW coordination; per-DMW backpressure; streaming capsule semantics; billion-scale operation under live concurrent load) remains architectural intent / forward-substrate per ADR-0028 + the 6 BEAM-compatibility patterns from ADR-0026 §5; NOT implemented at sub-phase 6.
 
 ## Date
 

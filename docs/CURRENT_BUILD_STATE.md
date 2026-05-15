@@ -5,11 +5,69 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-11 ([DOCS-BUILD-STATE-REFRESH]
-post-Track A + RAA 12.8 canonicalization; 18-commit staleness
-window closed; substrate-truth canonical at refresh register
-per RULE 13 substrate-honest discipline + fourteen-consecutive-
-commit substrate-honest pre-flight verification pattern).
+**Last updated:** 2026-05-15 ([SUB-BOX-3-CLOSURE] minimum-touch
+update per Sub-phase 7 Q-NEW-1 LOCKED Option α — adds the CAR
+Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036) closure entry
+canonical at substantive register substantively without
+performing a broader staleness refresh. Substrate-honest scope:
+Sub-box 1 + Sub-box 2 Phase 1 + Block B Phase 2 + ADRs 0023-0035
+remain stale at this entry register; broader refresh forward-queued
+as a separate substrate-honest mini-arc canonical at substantive
+register substantively when substrate justifies. Prior `**Last
+updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH] post-Track A
++ RAA 12.8 canonicalization).
+
+## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
+
+CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
+(this commit) per ADR-0036 §Implementation Detail. 7-sub-phase
+lineage: `4981d3a → db6e0d7 → d0b5c64 → f9d0694 → 71af2c6 →
+d6f9e18 → this commit`. ADR-0036 Status: Accepted. ADR-0036
+Sub-decisions 1-8 all RESOLVED.
+
+The REGULATOR principal class distinct from GOVERNMENT +
+LawfulBasis Prisma model + LawfulBasisType enum (6 values:
+SUBPOENA + REGULATORY_AUTHORITY + COURT_ORDER + DPA_REQUEST +
+MLAT_REQUEST + CONSENT_OF_DATA_SUBJECT) + 3 AuditEvent event_type
+literals (REGULATOR_ACCESS_GRANTED + REGULATOR_ACCESS_REVOKED +
+REGULATOR_ACCESS_EXPIRED-reserved) + canonical_record/1 12 → 14
+fields at TS + Elixir registers (positions 13 + 14 =
+lawful_basis_id + lawful_basis_chain_hash) + LawfulBasis Elixir
+mirror + 12 byte-equivalence fixture pairs + dual-control-gated
+REGULATOR grant + revoke routes (can_admin_niov-tier;
+PRIVILEGED_ENDPOINTS Operations C + D) + REGULATOR lawful-basis
+enforcement at COSMP NEGOTIATE / readContent (TOCTOU re-check) /
+SHARE / REVOKE entry points (per-request indexed point-lookups;
+no global lock; no unbounded capsule scans; no capsule-content
+authorization reads; no cross-request cache; revocation + expiry
+fail-closed for new checks) all LANDED.
+
+NO new SYSTEM_PRINCIPAL added (Sub-decision 8 RESOLVED at
+sub-phase 5 commit body — Option β; SYSTEM_PRINCIPALS
+frozen-anchor count remains 5). Patent-relevant per CAR §2.2
+Family 1; extends US 12,164,537 (COSMP) + US 12,399,904 (DMW)
+into regulatory-access territory.
+
+CAR Sub-box 2 Jurisdiction Tagging remains QUEUED (distinct
+substrate per ADR-0036 §Substrate-Honest Distinctions;
+`Entity.jurisdiction` + `MemoryCapsule.jurisdiction` +
+`AuditEvent.jurisdiction` + `OrgSettings.default_jurisdiction`
++ `assertJurisdictionalScope()` NOT landed). Whole-COSMP
+high-concurrency orchestration substrate (BEAM/Broadway/GenStage
+backpressure; per-capsule supervision; cross-DMW coordination
+layer; per-DMW throughput controls; streaming capsule push/pull
+semantics; billion-scale operation under live concurrent load)
+remains architectural intent / forward-substrate per ADR-0028 +
+the 6 BEAM-compatibility patterns from ADR-0026 §5; NOT
+implemented at sub-phase 6 / 7.
+
+Full sub-phase narrative + 12 forward-queued items + 5
+substrate-build observations canonical at
+`docs/reference/section-12-progress.md` Sub-box 3 row
+substantively at substantive register substantively. Full
+ADR-0036 §Post-Closure Implementation Lineage canonical at the
+ADR register substantively per Q-NEW-4 LOCKED Option α at
+sub-phase 7.
 
 ---
 
