@@ -79,10 +79,15 @@ defmodule DbgiSupervisor.PresenceTrackerTest do
       :ok = Phoenix.PubSub.subscribe(DbgiSupervisor.PubSub, topic)
 
       {:ok, _ref} = PresenceTracker.track(self(), topic, "diff_key", %{role: "test"})
-      assert_receive {:join, "diff_key", %{role: "test"}}, 1000
+      # Phoenix.Tracker handle_diff governed by `:broadcast_period`
+      # 1500ms canonical at substantive register; 3000ms = 2× canonical
+      # at CI-substrate-coherent register per D-PHASE-10-CI-PRESENCE-
+      # TRACKER-TIMING-CASCADE substrate-build observation candidate
+      # at substantive register.
+      assert_receive {:join, "diff_key", %{role: "test"}}, 3000
 
       :ok = PresenceTracker.untrack(self(), topic, "diff_key")
-      assert_receive {:leave, "diff_key", %{role: "test"}}, 1000
+      assert_receive {:leave, "diff_key", %{role: "test"}}, 3000
     end
   end
 
