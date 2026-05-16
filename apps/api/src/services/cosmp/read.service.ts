@@ -29,6 +29,7 @@ import type { ContentStore } from "../../content-store.js";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
 import type { AccessDeclarationPayload } from "./negotiate.service.js";
+import { assertJurisdictionalScope } from "./jurisdiction-enforcement.js";
 import { enforceRegulatorCOSMPAccess } from "./regulator-enforcement.js";
 
 // WHAT: Maximum approximate token count returned to a SUMMARY
@@ -101,7 +102,16 @@ export interface ReadFailure {
     | "REGULATOR_SCOPE_NOT_AUTHORIZED"
     | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
     | "REGULATOR_ACCESS_DENIED"
-    | "INTERNAL_ENFORCEMENT_ERROR";
+    | "INTERNAL_ENFORCEMENT_ERROR"
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 readContent TOCTOU re-check. readMetadata
+    // is NOT enforced per Sub-decision 7 (stays light); readContent
+    // re-checks jurisdiction before contentStore.read so a
+    // jurisdiction-drifted actor cannot pass a fresh enforcement gate.
+    | "ACTOR_JURISDICTION_MISSING"
+    | "TARGET_JURISDICTION_MISSING"
+    | "CROSS_JURISDICTION_ACCESS_DENIED"
+    | "JURISDICTION_NOT_AUTHORIZED";
   message: string;
 }
 
@@ -370,6 +380,16 @@ export class ReadService {
       return { ok: false, code: session.code, message: "Read denied" };
     }
 
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // Q1 LOCKED Option α: hoist requester Entity fetch to unconditional
+    // after validateSession. Reused for both the existing Sub-box 3
+    // sub-phase 6 REGULATOR check below AND the NEW jurisdiction TOCTOU
+    // re-check after fingerprint/clearance gates. ONE indexed PK lookup
+    // per readContent (existing pattern; substrate-coherent with
+    // Sub-phase 6 §18 Whole-COSMP scalability discipline canonical at
+    // substantive register substantively).
+    const requester = await getEntityById(session.entity_id);
+
     // CAR Sub-box 3 sub-phase 6 [SUB-BOX-3-COSMP-ENFORCEMENT] per
     // Q4 LOCKED Option α: TOCTOU re-check at readContent entry --
     // basis may have been revoked OR expired between NEGOTIATE
@@ -380,7 +400,6 @@ export class ReadService {
     // loaded for authorization (capsule fetch happens AFTER the
     // re-check passes).
     let validatedRegulatorBasis: LawfulBasis | null = null;
-    const requester = await getEntityById(session.entity_id);
     if (requester !== null && requester.entity_type === "REGULATOR") {
       const enforcement = await enforceRegulatorCOSMPAccess({
         requester,
@@ -496,6 +515,47 @@ export class ReadService {
       };
     }
 
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 readContent TOCTOU re-check: even though
+    // NEGOTIATE start-check already passed, actor.jurisdiction may have
+    // drifted between NEGOTIATE (declaration_token issued) and now (up
+    // to DECLARATION_TTL_SECONDS later). The capsule jurisdiction is
+    // immutable per Sub-decision 4 but the actor's is not; re-check
+    // closes the TOCTOU window. Pure-function helper; no DB read here
+    // (requester pre-fetched per Q1 hoist; fullCapsule pre-loaded at
+    // getCapsuleWithContent above). Runs BEFORE contentStore.read so
+    // a denied actor never observes capsule content.
+    if (requester !== null) {
+      const readJurisdiction = assertJurisdictionalScope({
+        actor: {
+          entity_id: requester.entity_id,
+          jurisdiction: requester.jurisdiction,
+        },
+        target: {
+          capsule: {
+            capsule_id: fullCapsule.capsule_id,
+            jurisdiction: fullCapsule.jurisdiction,
+          },
+        },
+        action: "READ",
+      });
+      if (!readJurisdiction.ok) {
+        await this.auditDenial(
+          "CAPSULE_CONTENT_READ",
+          capsuleId,
+          session.entity_id,
+          readJurisdiction.code,
+          context.ip_address ?? null,
+          { jurisdiction: fullCapsule.jurisdiction },
+        );
+        return {
+          ok: false,
+          code: readJurisdiction.code,
+          message: "readContent denied at jurisdiction-scope re-check",
+        };
+      }
+    }
+
     // Fetch the (mock for now) decrypted payload from storage.
     const rawContent = await this.contentStore.read(fullCapsule.storage_location);
     if (rawContent === null) {
@@ -539,6 +599,10 @@ export class ReadService {
       lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
       lawful_basis_chain_hash:
         validatedRegulatorBasis?.chain_hash ?? null,
+      // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
+      // AuditEvent jurisdiction cascade: capsule-scoped success event
+      // carries fullCapsule.jurisdiction at row-metadata register.
+      jurisdiction: fullCapsule.jurisdiction,
       details: {
         declaration_id: declarationCheck.declaration.declaration_id,
         granted_scope: granted,
@@ -662,7 +726,15 @@ export class ReadService {
     // lawful_basis_id at the canonical_record/1 position 13 column
     // for REGULATOR-actor denials. Other callers omit this; the row
     // column stays null (existing behavior preserved).
-    extras: { lawful_basis_id?: string | null } = {},
+    //
+    // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5: optional
+    // extras also carry jurisdiction at the row-metadata register for
+    // jurisdiction-denied audit rows. Non-jurisdiction denials omit
+    // this; the row column stays null (backward-compat preserved).
+    extras: {
+      lawful_basis_id?: string | null;
+      jurisdiction?: string | null;
+    } = {},
   ): Promise<void> {
     await writeAuditEvent({
       event_type: eventType,
@@ -672,6 +744,7 @@ export class ReadService {
       ip_address: ipAddress,
       denial_reason: denialReason,
       lawful_basis_id: extras.lawful_basis_id ?? null,
+      jurisdiction: extras.jurisdiction ?? null,
     });
   }
 

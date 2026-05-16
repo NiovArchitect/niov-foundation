@@ -404,6 +404,15 @@ function statusForCode(code: string): number {
     case "REGULATOR_SCOPE_NOT_AUTHORIZED":
     case "REGULATOR_JURISDICTION_NOT_AUTHORIZED":
     case "REGULATOR_ACCESS_DENIED":
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 6 + jurisdiction-enforcement.ts
+    // JurisdictionScopeStatus = 403. assertJurisdictionalScope
+    // failures land at the same caller-correctable enforcement-refusal
+    // tier as REGULATOR_* denials.
+    case "ACTOR_JURISDICTION_MISSING":
+    case "TARGET_JURISDICTION_MISSING":
+    case "CROSS_JURISDICTION_ACCESS_DENIED":
+    case "JURISDICTION_NOT_AUTHORIZED":
       return 403;
     case "CAPSULE_NOT_FOUND":
     case "CONTENT_NOT_FOUND":

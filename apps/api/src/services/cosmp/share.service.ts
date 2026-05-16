@@ -23,6 +23,7 @@ import {
   type LawfulBasis,
 } from "@niov/database";
 import type { AuthService } from "../auth.service.js";
+import { assertJurisdictionalScope } from "./jurisdiction-enforcement.js";
 import { enforceRegulatorCOSMPAccess } from "./regulator-enforcement.js";
 
 // WHAT: One per-capsule grant inside a SHARE request.
@@ -105,7 +106,15 @@ export interface ShareFailure {
     | "REGULATOR_SCOPE_NOT_AUTHORIZED"
     | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
     | "REGULATOR_ACCESS_DENIED"
-    | "INTERNAL_ENFORCEMENT_ERROR";
+    | "INTERNAL_ENFORCEMENT_ERROR"
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 SHARE/REVOKE start-check + Q5 LOCKED
+    // Option α (actor↔capsule only). Per-capsule jurisdiction check
+    // before permission creation/revocation.
+    | "ACTOR_JURISDICTION_MISSING"
+    | "TARGET_JURISDICTION_MISSING"
+    | "CROSS_JURISDICTION_ACCESS_DENIED"
+    | "JURISDICTION_NOT_AUTHORIZED";
   message: string;
   details?: {
     failed_capsules?: string[];
@@ -156,7 +165,15 @@ export interface RevokeFailure {
     | "REGULATOR_SCOPE_NOT_AUTHORIZED"
     | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
     | "REGULATOR_ACCESS_DENIED"
-    | "INTERNAL_ENFORCEMENT_ERROR";
+    | "INTERNAL_ENFORCEMENT_ERROR"
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 SHARE/REVOKE start-check + Q5 LOCKED
+    // Option α (actor↔capsule only). Per-capsule jurisdiction check
+    // before permission creation/revocation.
+    | "ACTOR_JURISDICTION_MISSING"
+    | "TARGET_JURISDICTION_MISSING"
+    | "CROSS_JURISDICTION_ACCESS_DENIED"
+    | "JURISDICTION_NOT_AUTHORIZED";
   message: string;
 }
 
@@ -356,6 +373,79 @@ export class ShareService {
       };
     }
 
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 SHARE start-check + Q5 LOCKED Option α
+    // (actor↔capsule only; grantee↔capsule deferred). Per-capsule
+    // jurisdiction check using already-fetched actor (requester) +
+    // capsules. Pure-function helper; ZERO additional DB reads. If
+    // ANY capsule fails, the entire share is denied (substrate-coherent
+    // with the existing CAPSULES_NOT_OWNED + CLEARANCE_INSUFFICIENT_FOR_CAPSULES
+    // bulk-denial pattern). Aggregate failure code carried at the
+    // first failing capsule's helper code; per-capsule jurisdictions
+    // surfaced in details for caller forensics.
+    if (requester !== null) {
+      const jurisdictionFailures: Array<{
+        capsule_id: string;
+        code: string;
+        actor_jurisdiction: string | null | undefined;
+        target_jurisdiction: string | null | undefined;
+      }> = [];
+      for (const c of capsules) {
+        const result = assertJurisdictionalScope({
+          actor: {
+            entity_id: requester.entity_id,
+            jurisdiction: requester.jurisdiction,
+          },
+          target: {
+            capsule: {
+              capsule_id: c.capsule_id,
+              jurisdiction: c.jurisdiction,
+            },
+          },
+          action: "SHARE",
+        });
+        if (!result.ok) {
+          jurisdictionFailures.push({
+            capsule_id: c.capsule_id,
+            code: result.code,
+            actor_jurisdiction: result.actor_jurisdiction,
+            target_jurisdiction: result.target_jurisdiction,
+          });
+        }
+      }
+      if (jurisdictionFailures.length > 0) {
+        const firstFailureCode = jurisdictionFailures[0]!.code as
+          | "ACTOR_JURISDICTION_MISSING"
+          | "TARGET_JURISDICTION_MISSING"
+          | "CROSS_JURISDICTION_ACCESS_DENIED"
+          | "JURISDICTION_NOT_AUTHORIZED";
+        await writeAuditEvent({
+          event_type: "PERMISSION_CREATED",
+          outcome: "DENIED",
+          actor_entity_id: session.entity_id,
+          target_entity_id: grantee.entity_id,
+          session_id: session.session_id,
+          denial_reason: firstFailureCode,
+          ip_address: context.ip_address ?? null,
+          // Per Q7 LOCKED Option α: bulk PERMISSION_CREATED denial
+          // row-level jurisdiction stays null; per-capsule details
+          // captured in the details JSON.
+          details: {
+            via: "SHARE",
+            jurisdiction_failures: jurisdictionFailures,
+          },
+        });
+        return {
+          ok: false,
+          code: firstFailureCode,
+          message: "SHARE denied at jurisdiction-scope enforcement",
+          details: {
+            failed_capsules: jurisdictionFailures.map((f) => f.capsule_id),
+          },
+        };
+      }
+    }
+
     // Mint the shared bridge_id.
     const bridgeId = randomUUID();
 
@@ -404,10 +494,19 @@ export class ShareService {
       lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
       lawful_basis_chain_hash:
         validatedRegulatorBasis?.chain_hash ?? null,
+      // CAR Sub-box 2 sub-phase 4 per Q7 LOCKED Option α: bulk
+      // PERMISSION_CREATED success row-level jurisdiction stays null
+      // (multi-capsule operation may span multiple jurisdictions);
+      // per-capsule jurisdictions captured in details.capsule_jurisdictions
+      // for compliance forensics.
       details: {
         via: "SHARE",
         bridge_id: bridgeId,
         capsule_ids: capsuleIds,
+        capsule_jurisdictions: capsules.map((c) => ({
+          capsule_id: c.capsule_id,
+          jurisdiction: c.jurisdiction,
+        })),
         permission_ids: permissionIds,
         write_reason: request.write_reason ?? null,
       },
@@ -526,6 +625,86 @@ export class ShareService {
 
     const granteeId = permissions[0]!.grantee_entity_id;
 
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 REVOKE start-check + Q3 LOCKED Option α
+    // (bounded capsule fetch). Bridge-scoped bulk query: returns at
+    // most one row per distinct capsule_id under this bridge_id (a
+    // bridge typically covers <100 capsules; SHARE bulks them under
+    // ONE bridge_id by design). Per-request indexed bulk-IN lookup;
+    // no scans; no global lock per Sub-phase 6 §18 Whole-COSMP
+    // scalability discipline canonical at substantive register
+    // substantively. Per-capsule jurisdiction check before
+    // revokeBridge so a jurisdiction-drifted actor cannot revoke
+    // permissions on a capsule outside their current jurisdictional
+    // anchor.
+    const revokeCapsuleIds = Array.from(
+      new Set(permissions.map((p) => p.capsule_id)),
+    );
+    const revokeCapsules = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: revokeCapsuleIds } },
+      select: { capsule_id: true, jurisdiction: true },
+    });
+    if (requester !== null) {
+      const revokeJurisdictionFailures: Array<{
+        capsule_id: string;
+        code: string;
+        actor_jurisdiction: string | null | undefined;
+        target_jurisdiction: string | null | undefined;
+      }> = [];
+      for (const c of revokeCapsules) {
+        const result = assertJurisdictionalScope({
+          actor: {
+            entity_id: requester.entity_id,
+            jurisdiction: requester.jurisdiction,
+          },
+          target: {
+            capsule: {
+              capsule_id: c.capsule_id,
+              jurisdiction: c.jurisdiction,
+            },
+          },
+          action: "REVOKE",
+        });
+        if (!result.ok) {
+          revokeJurisdictionFailures.push({
+            capsule_id: c.capsule_id,
+            code: result.code,
+            actor_jurisdiction: result.actor_jurisdiction,
+            target_jurisdiction: result.target_jurisdiction,
+          });
+        }
+      }
+      if (revokeJurisdictionFailures.length > 0) {
+        const firstFailureCode = revokeJurisdictionFailures[0]!.code as
+          | "ACTOR_JURISDICTION_MISSING"
+          | "TARGET_JURISDICTION_MISSING"
+          | "CROSS_JURISDICTION_ACCESS_DENIED"
+          | "JURISDICTION_NOT_AUTHORIZED";
+        await writeAuditEvent({
+          event_type: "PERMISSION_REVOKED",
+          outcome: "DENIED",
+          actor_entity_id: session.entity_id,
+          target_entity_id: granteeId,
+          session_id: session.session_id,
+          denial_reason: firstFailureCode,
+          ip_address: context.ip_address ?? null,
+          // Per Q7 LOCKED Option α: bulk PERMISSION_REVOKED denial
+          // row-level jurisdiction stays null; per-capsule failures
+          // captured in details JSON.
+          details: {
+            via: "REVOKE",
+            bridge_id: bridgeId,
+            jurisdiction_failures: revokeJurisdictionFailures,
+          },
+        });
+        return {
+          ok: false,
+          code: firstFailureCode,
+          message: "REVOKE denied at jurisdiction-scope enforcement",
+        };
+      }
+    }
+
     const count = await revokeBridge(bridgeId, session.entity_id);
 
     // Immediately invalidate the grantee's active sessions so any
@@ -553,10 +732,18 @@ export class ShareService {
       lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
       lawful_basis_chain_hash:
         validatedRegulatorBasis?.chain_hash ?? null,
+      // CAR Sub-box 2 sub-phase 4 per Q7 LOCKED Option α: bulk
+      // PERMISSION_REVOKED success row-level jurisdiction stays null
+      // (multi-capsule operation); per-capsule jurisdictions captured
+      // in details.capsule_jurisdictions for compliance forensics.
       details: {
         via: "REVOKE",
         bridge_id: bridgeId,
         revoked_count: count,
+        capsule_jurisdictions: revokeCapsules.map((c) => ({
+          capsule_id: c.capsule_id,
+          jurisdiction: c.jurisdiction,
+        })),
       },
     });
 

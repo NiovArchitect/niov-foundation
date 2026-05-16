@@ -25,6 +25,7 @@ import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
 import type { ComplianceService } from "../compliance/compliance.service.js";
 import { createGateEscalationForCaller } from "../governance/escalation.service.js";
+import { assertJurisdictionalScope } from "./jurisdiction-enforcement.js";
 import { enforceRegulatorCOSMPAccess } from "./regulator-enforcement.js";
 import { logger } from "../../logger.js";
 
@@ -82,7 +83,15 @@ export interface NegotiateFailure {
     | "REGULATOR_SCOPE_NOT_AUTHORIZED"
     | "REGULATOR_JURISDICTION_NOT_AUTHORIZED"
     | "REGULATOR_ACCESS_DENIED"
-    | "INTERNAL_ENFORCEMENT_ERROR";
+    | "INTERNAL_ENFORCEMENT_ERROR"
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 NEGOTIATE start-check. Emitted by the
+    // assertJurisdictionalScope helper before the owner shortcut + the
+    // existing 8-step NEGOTIATE flow runs.
+    | "ACTOR_JURISDICTION_MISSING"
+    | "TARGET_JURISDICTION_MISSING"
+    | "CROSS_JURISDICTION_ACCESS_DENIED"
+    | "JURISDICTION_NOT_AUTHORIZED";
   message: string;
   failing_framework?: string;
 }
@@ -280,6 +289,54 @@ export class NegotiateService {
       return accessDenied();
     }
 
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 + Q8 LOCKED Option α: jurisdiction
+    // start-check runs BEFORE the owner shortcut. Owner access does
+    // NOT bypass jurisdiction drift protection — MemoryCapsule.jurisdiction
+    // is immutable per Sub-decision 4, but Entity.jurisdiction CAN
+    // drift, so an owner whose Entity has been re-anchored cannot
+    // access their own capsule from the new jurisdiction without a
+    // sanctioned cross-region transfer workflow (forward-queued).
+    // Pure-function helper; no DB reads here (actor + target already
+    // pre-fetched per Sub-decision 6 design canonical at substantive
+    // register substantively).
+    const negotiateJurisdiction = assertJurisdictionalScope({
+      actor: {
+        entity_id: requester.entity_id,
+        jurisdiction: requester.jurisdiction,
+      },
+      target: {
+        capsule: {
+          capsule_id: metadata.capsule_id,
+          jurisdiction: metadata.jurisdiction,
+        },
+      },
+      action: "NEGOTIATE",
+    });
+    if (!negotiateJurisdiction.ok) {
+      await writeAuditEvent({
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: validation.entity_id,
+        target_capsule_id: targetCapsuleId,
+        target_entity_id: metadata.entity_id,
+        session_id: validation.session_id,
+        denial_reason: negotiateJurisdiction.code,
+        ip_address: context.ip_address ?? null,
+        jurisdiction: metadata.jurisdiction,
+        details: {
+          entity_type: requester.entity_type,
+          actor_jurisdiction: negotiateJurisdiction.actor_jurisdiction,
+          target_jurisdiction: negotiateJurisdiction.target_jurisdiction,
+        },
+      });
+      return {
+        ok: false,
+        code: negotiateJurisdiction.code,
+        message: "NEGOTIATE denied at jurisdiction-scope enforcement",
+      };
+    }
+
     // OWNER SHORTCUT (Section 4 addition): when the requester owns
     // the capsule, sovereignty grants them full access to their own
     // data. Skip ai_access_blocked, clearance, and permission checks
@@ -319,6 +376,10 @@ export class NegotiateService {
         lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
         lawful_basis_chain_hash:
           validatedRegulatorBasis?.chain_hash ?? null,
+        // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
+        // AuditEvent jurisdiction cascade: capsule-scoped success
+        // event carries metadata.jurisdiction at row-metadata register.
+        jurisdiction: metadata.jurisdiction,
         details: {
           entity_type: requester.entity_type,
           declaration_id,
@@ -522,6 +583,10 @@ export class NegotiateService {
       lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
       lawful_basis_chain_hash:
         validatedRegulatorBasis?.chain_hash ?? null,
+      // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
+      // AuditEvent jurisdiction cascade: capsule-scoped success event
+      // carries metadata.jurisdiction at row-metadata register.
+      jurisdiction: metadata.jurisdiction,
       details: {
         entity_type: requester.entity_type,
         declaration_id,

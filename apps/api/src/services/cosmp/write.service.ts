@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { sha256Hex, type ContentEncryption } from "@niov/auth";
 import {
+  getEntityById,
   prisma,
   writeAuditEvent,
   type CapsuleType,
@@ -23,6 +24,7 @@ import {
 import type { ContentStore } from "../../content-store.js";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
+import { assertJurisdictionalScope } from "./jurisdiction-enforcement.js";
 import type { AccessDeclarationPayload } from "./negotiate.service.js";
 
 // WHAT: How content size in tokens is approximated from raw chars.
@@ -120,7 +122,17 @@ export interface WriteFailure {
     | "ACCESS_DECLARATION_INVALID"
     | "ACCESS_DECLARATION_EXPIRED"
     | "ACCESS_DECLARATION_MISMATCH"
-    | "WRITE_NOT_PERMITTED";
+    | "WRITE_NOT_PERMITTED"
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 + Q6 LOCKED Option α: WRITE updateCapsule
+    // enforces actor↔existing capsule jurisdiction (capsule jurisdiction
+    // is immutable per Sub-decision 4 but the actor's CAN drift).
+    // createCapsule does NOT run assertJurisdictionalScope — it
+    // establishes the jurisdiction anchor via cascade per Sub-decision 5.
+    | "ACTOR_JURISDICTION_MISSING"
+    | "TARGET_JURISDICTION_MISSING"
+    | "CROSS_JURISDICTION_ACCESS_DENIED"
+    | "JURISDICTION_NOT_AUTHORIZED";
   message: string;
   errors?: string[];
 }
@@ -303,6 +315,18 @@ export class WriteService {
       };
     }
 
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 5 (cascade) + Q2 LOCKED Option α (inline
+    // cascade in WriteService — do NOT refactor to @niov/database
+    // createCapsule helper; preserves WriteService audit/control
+    // semantics). Owner-write means the capsule jurisdiction inherits
+    // from the requester Entity's jurisdiction at create-time. ONE
+    // bounded indexed PK lookup; no scans; capsule jurisdiction is
+    // then immutable per Sub-decision 4 (updateCapsule cannot change
+    // it; CapsuleUpdateInput has no jurisdiction field).
+    const requesterForCascade = await getEntityById(session.entity_id);
+    const cascadedJurisdiction = requesterForCascade?.jurisdiction ?? null;
+
     const capsuleId = randomUUID();
     const storageLocation = `niov://capsule/${capsuleId}`;
     const processed = processContentForStorage(input.content, this.encryption);
@@ -340,6 +364,10 @@ export class WriteService {
         expires_at: input.expires_at ?? null,
         ai_access_blocked: input.ai_access_blocked ?? false,
         requires_validation: input.requires_validation ?? false,
+        // CAR Sub-box 2 sub-phase 4 jurisdiction cascade per Q2
+        // LOCKED Option α — inherits from requester Entity at
+        // create-time; immutable thereafter per Sub-decision 4.
+        jurisdiction: cascadedJurisdiction,
 
         // Attribution (set once, never overwritten on update).
         created_by: session.entity_id,
@@ -356,6 +384,10 @@ export class WriteService {
       target_capsule_id: capsuleId,
       session_id: session.session_id,
       ip_address: context.ip_address ?? null,
+      // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
+      // AuditEvent jurisdiction cascade: capsule-scoped success event
+      // carries created.jurisdiction at row-metadata register.
+      jurisdiction: created.jurisdiction,
       details: {
         write_type: "OWNER",
         capsule_type: input.capsule_type,
@@ -423,6 +455,52 @@ export class WriteService {
         code: "CAPSULE_NOT_FOUND",
         message: "Capsule not found",
       };
+    }
+
+    // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] per
+    // ADR-0037 Sub-decision 7 + Q6 LOCKED Option α: WRITE updateCapsule
+    // enforces actor↔existing capsule jurisdiction. The capsule
+    // jurisdiction is the immutable anchor (Sub-decision 4); the
+    // actor's CAN drift, so an EU-DE-relocated US-FEDERAL data steward
+    // cannot mutate a US-FEDERAL capsule from the new jurisdiction
+    // without a sanctioned cross-region transfer workflow
+    // (forward-queued). Pure-function helper; ONE bounded indexed PK
+    // lookup for the requester (existing pattern; substrate-coherent
+    // with Sub-phase 6 §18 Whole-COSMP scalability discipline).
+    const requesterForUpdate = await getEntityById(session.entity_id);
+    if (requesterForUpdate !== null) {
+      const updateJurisdiction = assertJurisdictionalScope({
+        actor: {
+          entity_id: requesterForUpdate.entity_id,
+          jurisdiction: requesterForUpdate.jurisdiction,
+        },
+        target: {
+          capsule: {
+            capsule_id: existing.capsule_id,
+            jurisdiction: existing.jurisdiction,
+          },
+        },
+        action: "WRITE",
+      });
+      if (!updateJurisdiction.ok) {
+        await this.auditDenial(
+          "CAPSULE_UPDATED",
+          capsuleId,
+          session.entity_id,
+          updateJurisdiction.code,
+          context.ip_address ?? null,
+          {
+            actor_jurisdiction: updateJurisdiction.actor_jurisdiction,
+            target_jurisdiction: updateJurisdiction.target_jurisdiction,
+            jurisdiction: existing.jurisdiction,
+          },
+        );
+        return {
+          ok: false,
+          code: updateJurisdiction.code,
+          message: "updateCapsule denied at jurisdiction-scope enforcement",
+        };
+      }
     }
 
     const writeType: "OWNER" | "ATTRIBUTED" =
@@ -599,6 +677,11 @@ export class WriteService {
       target_capsule_id: capsuleId,
       session_id: session.session_id,
       ip_address: context.ip_address ?? null,
+      // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
+      // AuditEvent jurisdiction cascade: existing capsule jurisdiction
+      // is immutable per Sub-decision 4, so existing.jurisdiction is
+      // also the post-update jurisdiction.
+      jurisdiction: existing.jurisdiction,
       details: {
         write_type: writeType,
         previous_version: existing.version,
@@ -686,6 +769,17 @@ export class WriteService {
     ipAddress: string | null,
     extraDetails: Record<string, unknown> = {},
   ): Promise<void> {
+    // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5: when the
+    // caller surfaces a jurisdiction key inside extraDetails, hoist it
+    // to the row-metadata column so jurisdiction-denied rows are
+    // queryable via the @@index([jurisdiction]) anchor. Non-jurisdiction
+    // denials omit the key; the row column stays null
+    // (backward-compat preserved).
+    const jurisdictionFromExtras =
+      typeof extraDetails.jurisdiction === "string" ||
+      extraDetails.jurisdiction === null
+        ? (extraDetails.jurisdiction as string | null)
+        : null;
     await writeAuditEvent({
       event_type: eventType,
       outcome: "DENIED",
@@ -693,6 +787,7 @@ export class WriteService {
       target_capsule_id: capsuleId,
       ip_address: ipAddress,
       denial_reason: denialReason,
+      jurisdiction: jurisdictionFromExtras,
       details: extraDetails,
     });
   }

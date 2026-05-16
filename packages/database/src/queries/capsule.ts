@@ -270,6 +270,13 @@ export async function getCapsuleMetadata(
         last_updated_at: true,
         expires_at: true,
         deleted_at: true,
+        // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT]
+        // per ADR-0037 Sub-decision 7 + Q4 LOCKED Option α: NEGOTIATE
+        // start-check needs target capsule jurisdiction at runtime.
+        // Minimum-touch select extension; pre-existing missing fields
+        // (tokens, tokens_tokenizer, commitment_date, +6 more) remain
+        // forward-queued per D-COSMP-METADATA-SELECT-CLAUSE-DRIFT.
+        jurisdiction: true,
       },
     });
 
