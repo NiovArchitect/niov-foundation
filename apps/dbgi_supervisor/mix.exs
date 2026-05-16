@@ -80,7 +80,14 @@ defmodule DbgiSupervisor.MixProject do
       {:telemetry_metrics, "~> 1.1"},
       {:telemetry_poller, "~> 1.3"},
       {:telemetry_metrics_prometheus, "~> 1.1"},
-      {:logger_json, "~> 7.0"}
+      {:logger_json, "~> 7.0"},
+      # Sub-arc 1 sub-phase b Commit B.3 [BEAM-DBGI-HORDE-SUBSTRATE] per
+      # ADR-0039 §Decision Sub-decision 1: Horde Registry + Horde
+      # DynamicSupervisor for distributed cluster substrate at canonical-
+      # knowledge register substantively. CRDT-based distributed registry
+      # + handoff on node failure canonical at hive-scale dispatch
+      # register substantively per ADR-0039.
+      {:horde, "~> 0.9"}
     ]
   end
 end

@@ -134,4 +134,93 @@ defmodule DbgiSupervisor do
         :error
     end
   end
+
+  # =========================================================================
+  # Horde-distributed DMWWorker Public API per ADR-0039 §Decision Sub-decision 1
+  # =========================================================================
+
+  @doc """
+  Start a DMWWorker for the given entity_id + wallet_type via Horde
+  distributed substrate per ADR-0039 §Decision Sub-decision 1.
+
+  Lazy-spawned via `DbgiSupervisor.HordeDynamicSupervisor`; registered
+  via `Horde.Registry` at `DbgiSupervisor.HordeRegistry`. Per ADR-0039
+  §Decision Sub-decision 1, the spawn bypasses
+  `DbgiSupervisor.DMWWorker.start_link/1` (which registers via the
+  single-node Registry) and uses `GenServer.start_link/3` directly with
+  a Horde-via name registration. DMWWorker's `init/1`, `handle_call`,
+  and `terminate/2` callbacks run unchanged at sub-phase a substrate
+  register, preserving Phoenix.Tracker presence + tier metadata canonical
+  per ADR-0038 Sub-decisions 3 + 5.
+
+  Returns `{:ok, pid}` on success or `{:ok, pid}` if a DMWWorker for
+  that entity_id is already registered (lazy-spawn idempotent).
+
+  ## ENTERPRISE-only at sub-phase b register
+
+  Per ADR-0039 §Decision Sub-decision 8, this Horde path fires for
+  ENTERPRISE wallets only at sub-phase b register substantively.
+  PERSONAL/AI_AGENT/DEVICE tier dispatch uses `start_dmw_worker/2`
+  single-node path at sub-phase a substrate register.
+
+  ## References
+
+  - ADR-0039 §Decision Sub-decision 1 (per-DMW GenServer via Horde)
+  - ADR-0039 §Decision Sub-decision 7 (tier-routed dispatch shim)
+  - ADR-0039 §Decision Sub-decision 8 (ENTERPRISE-only scope)
+  - ADR-0038 Sub-decisions 1-5 (DMWWorker substrate canonical at
+    sub-phase a runtime register)
+  """
+  @spec start_dmw_worker_horde(entity_id(), wallet_type()) ::
+          {:ok, pid()} | {:error, term()}
+  def start_dmw_worker_horde(entity_id, wallet_type)
+      when wallet_type in [:personal, :enterprise, :device] do
+    case whereis_dmw_worker_horde(entity_id) do
+      {:ok, pid} ->
+        {:ok, pid}
+
+      :error ->
+        child_spec = %{
+          id: {DbgiSupervisor.DMWWorker, entity_id},
+          start:
+            {GenServer, :start_link,
+             [
+               DbgiSupervisor.DMWWorker,
+               [entity_id: entity_id, wallet_type: wallet_type],
+               [name: {:via, Horde.Registry, {DbgiSupervisor.HordeRegistry, entity_id}}]
+             ]},
+          restart: :transient,
+          type: :worker
+        }
+
+        case Horde.DynamicSupervisor.start_child(
+               DbgiSupervisor.HordeDynamicSupervisor,
+               child_spec
+             ) do
+          {:ok, pid} -> {:ok, pid}
+          {:error, {:already_started, pid}} -> {:ok, pid}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  @doc """
+  Look up the DMWWorker pid for the given entity_id via Horde.Registry
+  per ADR-0039 §Decision Sub-decision 1.
+
+  Returns `{:ok, pid}` or `:error` if no DMWWorker is registered for
+  that entity_id in Horde.Registry. Mirrors `whereis_dmw_worker/1`
+  return shape for API symmetry at single-node + Horde registers.
+
+  ## References
+
+  - ADR-0039 §Decision Sub-decision 1 (Horde Registry lookup)
+  """
+  @spec whereis_dmw_worker_horde(entity_id()) :: {:ok, pid()} | :error
+  def whereis_dmw_worker_horde(entity_id) do
+    case Horde.Registry.lookup(DbgiSupervisor.HordeRegistry, entity_id) do
+      [{pid, _meta}] -> {:ok, pid}
+      [] -> :error
+    end
+  end
 end
