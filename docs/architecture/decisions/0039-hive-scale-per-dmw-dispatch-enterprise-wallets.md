@@ -100,9 +100,11 @@ DynamicSupervisor as supervised children alongside existing single-
 node Registry plus DynamicSupervisor at backward-compat register
 substantively. Single-node Registry plus DynamicSupervisor stays
 canonical at sub-phase a substrate register substantively at backward-
-compat register substantively for PERSONAL and AI_AGENT and DEVICE
-tier substantively at sub-phase c plus sub-phase d register
-substantively.
+compat register substantively for PERSONAL (including AI_AGENT
+entities per TS-side defaultWalletTypeFor/1 mapping AI_AGENT EntityType
+to PERSONAL WalletType at canonical-state register substantively) and
+DEVICE WalletType tier substantively at sub-phase c plus sub-phase d
+register substantively.
 
 Members configuration substantively canonical at canonical-knowledge
 register per hexdocs.pm/horde/libcluster.html "Automatic Cluster
@@ -184,24 +186,55 @@ substantively.
 ### Sub-decision 4: NEW CosmpRouter.WalletLookup module
 
 NEW module at apps/cosmp_router/lib/cosmp_router/wallet_lookup.ex
-substantively provides wallet_type lookup by entity_id at canonical-
+substantively provides wallet_type lookup by entity_id FK at canonical-
 architectural register substantively. Single public function at
 canonical-prose register substantively:
 
   CosmpRouter.WalletLookup.wallet_type_for(entity_id) ::
-    {:ok, :personal | :enterprise | :ai_agent | :device} |
-    {:error, :not_found}
+    {:ok, :personal | :enterprise | :device} |
+    {:error, :not_found | :invalid_wallet_type}
 
-Implementation substantively queries the entities table via Ecto by
-entity_id at canonical-architectural register substantively selecting
-wallet_type only at canonical-knowledge register substantively at per-
-request indexed point-lookup register substantively. Per-request
+Implementation substantively queries the wallets table via Ecto by
+entity_id FK at per-request indexed point-lookup register
+substantively per ADR-0036 selecting wallet_type only at
+canonical-knowledge register substantively. The wallets table is
+Prisma-owned at canonical-execution register substantively per ADR-0033
+cross-language data ownership; cosmp_router substantively reads via a
+read-only Ecto projection at CosmpRouter.Wallet at
+canonical-architectural register substantively without owning
+migrations at canonical-coherence register substantively. Per-request
 indexed point-lookup pattern substantively inherited from ADR-0036
 REGULATOR per-request indexed point-lookup discipline at canonical-
-coherence register substantively. No caching at sub-phase b register
-substantively; ETS read-cache substrate substantively at Sub-decision
-5 register substantively delivers caching at canonical-coherence
-register substantively.
+coherence register substantively (entity_id is @unique on the wallets
+table at Prisma register substantively enforcing 1:1 entity:wallet
+cardinality at substrate-state ground truth register). No caching at
+sub-phase b register substantively; ETS read-cache substrate
+substantively at Sub-decision 5 register substantively delivers
+caching at canonical-coherence register substantively.
+
+WalletType return shape canonical at 3-tier per ADR-0038 Sub-decision 3
+substantively: {:ok, :personal | :enterprise | :device} canonical at
+canonical-knowledge register substantively per Prisma WalletType enum
+canonical at packages/database/prisma/schema.prisma at substrate-state
+ground truth register substantively (PERSONAL plus ENTERPRISE plus
+DEVICE; no AI_AGENT WalletType value at canonical-state register
+substantively). AI_AGENT substantively is an EntityType (not a
+WalletType) at canonical-honest register substantively per Prisma
+schema canonical; AI_AGENT entities substantively map to PERSONAL
+wallet_type at INSERT register substantively per TS-side
+defaultWalletTypeFor/1 canonical at canonical-coherence register
+substantively. The lookup substantively returns the wallet_type column
+directly canonical at canonical-knowledge register substantively
+without EntityType inspection at canonical-execution register
+substantively. Sub-arc 1 sub-phase c PERSONAL promote-on-activity
+substrate substantively includes AI_AGENT entities at canonical-state
+register substantively without additional WalletType tier at
+canonical-architectural register substantively. Substrate-honest drift
+guard at canonical-honest register substantively returns
+{:error, :invalid_wallet_type} on unexpected DB enum value (Prisma
+schema drift guard between Prisma + Ecto registers per ADR-0033
+cross-language data ownership canonical at canonical-coherence
+register substantively).
 
 ### Sub-decision 5: ETS read-optimized cache at per-node register
 
