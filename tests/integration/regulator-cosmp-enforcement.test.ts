@@ -991,3 +991,362 @@ describe("H. Substrate-honest negative tests", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// I. CAR Sub-box 2 sub-phase 5 — LawfulBasis ↔ Capsule jurisdiction match
+// ---------------------------------------------------------------------------
+//
+// PURPOSE: Sub-phase 5 [CAR-SUB-BOX-2-REGULATOR-INTEGRATION] per ADR-0037
+// Sub-decision 8 + Q1 LOCKED Option α (basis-authoritative). For REGULATOR
+// actors with a validated lawful basis, actor.jurisdiction at the
+// jurisdiction-enforcement helper is substituted with
+// validatedRegulatorBasis.jurisdiction_invoked. REGULATOR Entity.jurisdiction
+// is NOT required to match capsule.jurisdiction. Sub-phase 5 augments the
+// Sub-box 3 sub-phase 6 substrate WITHOUT changing the active-basis +
+// TAR-jurisdiction model.
+
+describe("I. CAR Sub-box 2 Sub-phase 5 — LawfulBasis ↔ Capsule jurisdiction match", () => {
+  it("REGULATOR NEGOTIATE allowed when basis.jurisdiction_invoked === capsule.jurisdiction (basis-authoritative match)", async () => {
+    const admin = await makePersonAndLogin({ can_admin_niov: true });
+    const reg = await makeRegulatorAndLogin({});
+    const granted = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "US-FEDERAL",
+    });
+    // Capsule explicitly tagged US-FEDERAL (matches basis).
+    const wallet = await getWalletByEntityId(reg.entityId);
+    if (wallet === null) throw new Error("regulator wallet missing");
+    const capsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "US-FEDERAL",
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: NEGOTIATE_ROUTE,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      payload: {
+        capsule_id: capsule.capsule_id,
+        requested_scope: "METADATA_ONLY",
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("REGULATOR NEGOTIATE denied 403 CROSS_JURISDICTION_ACCESS_DENIED when basis.jurisdiction_invoked !== capsule.jurisdiction", async () => {
+    const admin = await makePersonAndLogin({ can_admin_niov: true });
+    const reg = await makeRegulatorAndLogin({});
+    const granted = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "US-FEDERAL",
+    });
+    // Capsule tagged EU-DE (mismatch with basis).
+    const wallet = await getWalletByEntityId(reg.entityId);
+    if (wallet === null) throw new Error("regulator wallet missing");
+    const capsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "EU-DE",
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: NEGOTIATE_ROUTE,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      payload: {
+        capsule_id: capsule.capsule_id,
+        requested_scope: "METADATA_ONLY",
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(res.statusCode).toBe(403);
+    expect((res.json() as { code: string }).code).toBe(
+      "CROSS_JURISDICTION_ACCESS_DENIED",
+    );
+  });
+
+  it("REGULATOR readContent happy path: matching basis + capsule jurisdiction passes the TOCTOU re-check (sub-phase 5 substitution does not false-positive)", async () => {
+    const admin = await makePersonAndLogin({ can_admin_niov: true });
+    const reg = await makeRegulatorAndLogin({});
+    const granted = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "US-FEDERAL",
+    });
+    const wallet = await getWalletByEntityId(reg.entityId);
+    if (wallet === null) throw new Error("regulator wallet missing");
+    const capsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "US-FEDERAL",
+      }),
+    );
+    // STEP 1: NEGOTIATE successfully
+    const negRes = await app.inject({
+      method: "POST",
+      url: NEGOTIATE_ROUTE,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      payload: { capsule_id: capsule.capsule_id, requested_scope: "FULL" },
+      remoteAddress: reg.ip,
+    });
+    expect(negRes.statusCode).toBe(200);
+    const negBody = negRes.json() as { declaration_token: string };
+    // STEP 2: readMetadata to obtain fingerprint
+    const metaRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/cosmp/capsule/${capsule.capsule_id}/metadata`,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-declaration-token": negBody.declaration_token,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(metaRes.statusCode).toBe(200);
+    const fp = (metaRes.json() as { metadata_fingerprint: string })
+      .metadata_fingerprint;
+    // STEP 3: readContent — jurisdiction TOCTOU re-check must NOT
+    // false-positive when basis matches capsule. May fail at
+    // contentStore lookup (CONTENT_NOT_FOUND) since the test fixture
+    // doesn't seed contentStore, but the jurisdiction check itself
+    // must pass — confirmed by absence of CROSS_JURISDICTION_ACCESS_DENIED.
+    const contentRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/cosmp/capsule/${capsule.capsule_id}/content`,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-declaration-token": negBody.declaration_token,
+        "x-metadata-fingerprint": fp,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      remoteAddress: reg.ip,
+    });
+    const body = contentRes.json() as { code?: string };
+    // The substantive assertion: jurisdiction did NOT reject readContent.
+    // CONTENT_NOT_FOUND (404) is acceptable; CROSS_JURISDICTION_ACCESS_DENIED
+    // would mean the substitution false-positived.
+    expect(body.code).not.toBe("CROSS_JURISDICTION_ACCESS_DENIED");
+  });
+
+  it("REGULATOR SHARE denied 403 when one capsule jurisdiction mismatches basis.jurisdiction_invoked (failed_capsules detail)", async () => {
+    const admin = await makePersonAndLogin({ can_admin_niov: true });
+    const reg = await makeRegulatorAndLogin({});
+    const granted = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "US-FEDERAL",
+    });
+    const wallet = await getWalletByEntityId(reg.entityId);
+    if (wallet === null) throw new Error("regulator wallet missing");
+    const okCapsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "US-FEDERAL",
+      }),
+    );
+    const badCapsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "EU-DE",
+      }),
+    );
+    const grantee = await createEntity(makeEntityInput());
+    const res = await app.inject({
+      method: "POST",
+      url: SHARE_ROUTE,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      payload: {
+        grantee_entity_id: grantee.entity_id,
+        capsule_grants: [
+          { capsule_id: okCapsule.capsule_id, scope: "METADATA_ONLY" },
+          { capsule_id: badCapsule.capsule_id, scope: "METADATA_ONLY" },
+        ],
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(res.statusCode).toBe(403);
+    const body = res.json() as {
+      code: string;
+      details?: { failed_capsules?: string[] };
+    };
+    expect(body.code).toBe("CROSS_JURISDICTION_ACCESS_DENIED");
+    expect(body.details?.failed_capsules).toContain(badCapsule.capsule_id);
+  });
+
+  it("REGULATOR REVOKE denied 403 when revoke-time basis jurisdiction mismatches bridge capsule jurisdiction", async () => {
+    // SHARE with basis A (US-FEDERAL, capsule US-FEDERAL) — bridge created.
+    // REVOKE with basis B (EU-DE) for same regulator — basis-authoritative
+    // actor jurisdiction at REVOKE is EU-DE, capsule is US-FEDERAL → denied.
+    const admin = await makePersonAndLogin({ can_admin_niov: true });
+    const reg = await makeRegulatorAndLogin({
+      jurisdictions: ["US-FEDERAL", "EU-DE"],
+    });
+    const basisA = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "US-FEDERAL",
+    });
+    const basisB = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "EU-DE",
+    });
+    const wallet = await getWalletByEntityId(reg.entityId);
+    if (wallet === null) throw new Error("regulator wallet missing");
+    const capsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "US-FEDERAL",
+      }),
+    );
+    const grantee = await createEntity(makeEntityInput());
+    // SHARE with basis A → success; bridge has capsule (US-FEDERAL).
+    const shareRes = await app.inject({
+      method: "POST",
+      url: SHARE_ROUTE,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-lawful-basis-id": basisA.basis_id,
+      },
+      payload: {
+        grantee_entity_id: grantee.entity_id,
+        capsule_grants: [
+          { capsule_id: capsule.capsule_id, scope: "METADATA_ONLY" },
+        ],
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(shareRes.statusCode).toBe(201);
+    const bridgeId = (shareRes.json() as { bridge_id: string }).bridge_id;
+    createdBridgeIds.push(bridgeId);
+    // Re-login because SHARE invalidates session.
+    const freshLogin = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: (
+          await prisma.entity.findUnique({ where: { entity_id: reg.entityId } })
+        )?.email,
+        password: "regulator-correct-horse",
+        requested_operations: ["read", "share"],
+      },
+      remoteAddress: reg.ip,
+    });
+    const freshToken = (freshLogin.json() as { token: string }).token;
+    // REVOKE with basis B (EU-DE) → denied because substituted actor =
+    // EU-DE, capsule = US-FEDERAL.
+    const revRes = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/cosmp/share/${bridgeId}`,
+      headers: {
+        authorization: `Bearer ${freshToken}`,
+        "x-lawful-basis-id": basisB.basis_id,
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(revRes.statusCode).toBe(403);
+    expect((revRes.json() as { code: string }).code).toBe(
+      "CROSS_JURISDICTION_ACCESS_DENIED",
+    );
+  });
+
+  it("REGULATOR Entity.jurisdiction null does NOT block access when basis.jurisdiction_invoked === capsule.jurisdiction (Q1 basis-authoritative)", async () => {
+    // makeRegulatorAndLogin does NOT set Entity.jurisdiction by default,
+    // so it stays null. The basis-authoritative substitution at the
+    // helper call site means the substituted actor.jurisdiction is the
+    // basis.jurisdiction_invoked, not the (null) Entity.jurisdiction.
+    const admin = await makePersonAndLogin({ can_admin_niov: true });
+    const reg = await makeRegulatorAndLogin({});
+    // Substrate-honest assertion: REGULATOR Entity.jurisdiction is null.
+    const regEntity = await prisma.entity.findUnique({
+      where: { entity_id: reg.entityId },
+    });
+    expect(regEntity?.jurisdiction).toBeNull();
+    const granted = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "US-FEDERAL",
+    });
+    const wallet = await getWalletByEntityId(reg.entityId);
+    if (wallet === null) throw new Error("regulator wallet missing");
+    const capsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "US-FEDERAL",
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: NEGOTIATE_ROUTE,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      payload: {
+        capsule_id: capsule.capsule_id,
+        requested_scope: "METADATA_ONLY",
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("REGULATOR denial audit row carries lawful_basis_id + lawful_basis_chain_hash + capsule jurisdiction + details.lawful_basis_jurisdiction (Q3 audit enrichment)", async () => {
+    const admin = await makePersonAndLogin({ can_admin_niov: true });
+    const reg = await makeRegulatorAndLogin({});
+    const granted = await landGrant(admin, reg.entityId, {
+      jurisdiction_invoked: "US-FEDERAL",
+    });
+    const wallet = await getWalletByEntityId(reg.entityId);
+    if (wallet === null) throw new Error("regulator wallet missing");
+    const capsule = await createCapsule(
+      makeCapsuleInput(wallet.wallet_id, reg.entityId, {
+        clearance_required: 0,
+        jurisdiction: "EU-DE",
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: NEGOTIATE_ROUTE,
+      headers: {
+        authorization: `Bearer ${reg.token}`,
+        "x-lawful-basis-id": granted.basis_id,
+      },
+      payload: {
+        capsule_id: capsule.capsule_id,
+        requested_scope: "METADATA_ONLY",
+      },
+      remoteAddress: reg.ip,
+    });
+    expect(res.statusCode).toBe(403);
+    // Look up the denial audit row and verify the enriched fields.
+    const deniedRow = await prisma.auditEvent.findFirst({
+      where: {
+        event_type: "NEGOTIATE",
+        outcome: "DENIED",
+        actor_entity_id: reg.entityId,
+        target_capsule_id: capsule.capsule_id,
+        denial_reason: "CROSS_JURISDICTION_ACCESS_DENIED",
+      },
+      orderBy: { timestamp: "desc" },
+    });
+    expect(deniedRow).not.toBeNull();
+    expect(deniedRow?.lawful_basis_id).toBe(granted.basis_id);
+    const basisRow = await prisma.lawfulBasis.findUnique({
+      where: { basis_id: granted.basis_id },
+    });
+    expect(deniedRow?.lawful_basis_chain_hash).toBe(basisRow?.chain_hash);
+    // Row-level jurisdiction = capsule jurisdiction (per Sub-phase 4 +
+    // Sub-phase 5 audit propagation).
+    expect(deniedRow?.jurisdiction).toBe("EU-DE");
+    // details should include lawful_basis_jurisdiction = basis jurisdiction.
+    const details = (deniedRow?.details ?? {}) as Record<string, unknown>;
+    expect(details.lawful_basis_jurisdiction).toBe("US-FEDERAL");
+    expect(details.actor_jurisdiction).toBe("US-FEDERAL");
+    expect(details.target_jurisdiction).toBe("EU-DE");
+  });
+});

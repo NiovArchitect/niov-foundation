@@ -300,10 +300,33 @@ export class NegotiateService {
     // Pure-function helper; no DB reads here (actor + target already
     // pre-fetched per Sub-decision 6 design canonical at substantive
     // register substantively).
+    //
+    // CAR Sub-box 2 sub-phase 5 [CAR-SUB-BOX-2-REGULATOR-INTEGRATION]
+    // per ADR-0037 Sub-decision 8 + Q1 LOCKED Option α (basis-
+    // authoritative) + Q-RULE-13-REGULATOR-NULL-CAPSULE-POLICY LOCKED
+    // Option α (null-capsule guard): for REGULATOR actors with a
+    // validated lawful basis AND a non-null capsule jurisdiction, the
+    // basis is the actor's jurisdictional authority for this access.
+    // Substitute actor.jurisdiction with
+    // validatedRegulatorBasis.jurisdiction_invoked at the helper call
+    // site. REGULATOR Entity.jurisdiction is NOT required to match
+    // capsule.jurisdiction. NULL capsule jurisdiction preserves
+    // null/null backward-compat from Sub-phase 3 + 4 — substitution
+    // would otherwise flip null/null into substituted/null =
+    // TARGET_JURISDICTION_MISSING (breaks legacy fixtures). NO change
+    // to assertJurisdictionalScope helper. NO change to
+    // regulator-enforcement.ts (active-basis + TAR-jurisdiction
+    // substrate preserved upstream).
+    const negotiateActorJurisdiction =
+      requester.entity_type === "REGULATOR" &&
+      validatedRegulatorBasis !== null &&
+      metadata.jurisdiction !== null
+        ? validatedRegulatorBasis.jurisdiction_invoked
+        : requester.jurisdiction;
     const negotiateJurisdiction = assertJurisdictionalScope({
       actor: {
         entity_id: requester.entity_id,
-        jurisdiction: requester.jurisdiction,
+        jurisdiction: negotiateActorJurisdiction,
       },
       target: {
         capsule: {
@@ -324,10 +347,21 @@ export class NegotiateService {
         denial_reason: negotiateJurisdiction.code,
         ip_address: context.ip_address ?? null,
         jurisdiction: metadata.jurisdiction,
+        // Sub-phase 5 per Q3 LOCKED Option α: enrich denial audit
+        // with lawful basis fields when the denial is at REGULATOR
+        // basis-vs-capsule register. lawful_basis_id +
+        // lawful_basis_chain_hash carried at top-level (sub-phase 6
+        // of Sub-box 3 substrate); lawful_basis_jurisdiction in
+        // details for forensic reconstruction.
+        lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+        lawful_basis_chain_hash:
+          validatedRegulatorBasis?.chain_hash ?? null,
         details: {
           entity_type: requester.entity_type,
           actor_jurisdiction: negotiateJurisdiction.actor_jurisdiction,
           target_jurisdiction: negotiateJurisdiction.target_jurisdiction,
+          lawful_basis_jurisdiction:
+            validatedRegulatorBasis?.jurisdiction_invoked ?? null,
         },
       });
       return {

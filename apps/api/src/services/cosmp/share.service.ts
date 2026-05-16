@@ -383,6 +383,16 @@ export class ShareService {
     // bulk-denial pattern). Aggregate failure code carried at the
     // first failing capsule's helper code; per-capsule jurisdictions
     // surfaced in details for caller forensics.
+    //
+    // CAR Sub-box 2 sub-phase 5 [CAR-SUB-BOX-2-REGULATOR-INTEGRATION]
+    // per ADR-0037 Sub-decision 8 + Q1 LOCKED Option α (basis-
+    // authoritative) + Q-RULE-13-REGULATOR-NULL-CAPSULE-POLICY LOCKED
+    // Option α (null-capsule guard): for REGULATOR actors with a
+    // validated lawful basis AND a non-null capsule jurisdiction, use
+    // validatedRegulatorBasis.jurisdiction_invoked as the actor
+    // jurisdiction at that capsule's helper call. NULL capsule
+    // jurisdiction preserves null/null backward-compat — per-capsule
+    // substitution decision because the guard depends on c.jurisdiction.
     if (requester !== null) {
       const jurisdictionFailures: Array<{
         capsule_id: string;
@@ -391,10 +401,16 @@ export class ShareService {
         target_jurisdiction: string | null | undefined;
       }> = [];
       for (const c of capsules) {
+        const shareActorJurisdiction =
+          requester.entity_type === "REGULATOR" &&
+          validatedRegulatorBasis !== null &&
+          c.jurisdiction !== null
+            ? validatedRegulatorBasis.jurisdiction_invoked
+            : requester.jurisdiction;
         const result = assertJurisdictionalScope({
           actor: {
             entity_id: requester.entity_id,
-            jurisdiction: requester.jurisdiction,
+            jurisdiction: shareActorJurisdiction,
           },
           target: {
             capsule: {
@@ -427,12 +443,21 @@ export class ShareService {
           session_id: session.session_id,
           denial_reason: firstFailureCode,
           ip_address: context.ip_address ?? null,
+          // Sub-phase 5 per Q3 LOCKED Option α: enrich denial audit
+          // with lawful_basis_id + lawful_basis_chain_hash at top-
+          // level when REGULATOR; lawful_basis_jurisdiction surfaced
+          // in details.jurisdiction_failures discriminator below.
+          lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+          lawful_basis_chain_hash:
+            validatedRegulatorBasis?.chain_hash ?? null,
           // Per Q7 LOCKED Option α: bulk PERMISSION_CREATED denial
           // row-level jurisdiction stays null; per-capsule details
           // captured in the details JSON.
           details: {
             via: "SHARE",
             jurisdiction_failures: jurisdictionFailures,
+            lawful_basis_jurisdiction:
+              validatedRegulatorBasis?.jurisdiction_invoked ?? null,
           },
         });
         return {
@@ -645,6 +670,11 @@ export class ShareService {
       select: { capsule_id: true, jurisdiction: true },
     });
     if (requester !== null) {
+      // CAR Sub-box 2 sub-phase 5 [CAR-SUB-BOX-2-REGULATOR-INTEGRATION]
+      // per Q1 LOCKED Option α (basis-authoritative) +
+      // Q-RULE-13-REGULATOR-NULL-CAPSULE-POLICY LOCKED Option α:
+      // same pattern as SHARE per-capsule loop above. Per-capsule
+      // substitution decision because guard depends on c.jurisdiction.
       const revokeJurisdictionFailures: Array<{
         capsule_id: string;
         code: string;
@@ -652,10 +682,16 @@ export class ShareService {
         target_jurisdiction: string | null | undefined;
       }> = [];
       for (const c of revokeCapsules) {
+        const revokeActorJurisdiction =
+          requester.entity_type === "REGULATOR" &&
+          validatedRegulatorBasis !== null &&
+          c.jurisdiction !== null
+            ? validatedRegulatorBasis.jurisdiction_invoked
+            : requester.jurisdiction;
         const result = assertJurisdictionalScope({
           actor: {
             entity_id: requester.entity_id,
-            jurisdiction: requester.jurisdiction,
+            jurisdiction: revokeActorJurisdiction,
           },
           target: {
             capsule: {
@@ -688,6 +724,12 @@ export class ShareService {
           session_id: session.session_id,
           denial_reason: firstFailureCode,
           ip_address: context.ip_address ?? null,
+          // Sub-phase 5 per Q3 LOCKED Option α: enrich denial audit
+          // with lawful basis fields when REGULATOR;
+          // lawful_basis_jurisdiction surfaced in details.
+          lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+          lawful_basis_chain_hash:
+            validatedRegulatorBasis?.chain_hash ?? null,
           // Per Q7 LOCKED Option α: bulk PERMISSION_REVOKED denial
           // row-level jurisdiction stays null; per-capsule failures
           // captured in details JSON.
@@ -695,6 +737,8 @@ export class ShareService {
             via: "REVOKE",
             bridge_id: bridgeId,
             jurisdiction_failures: revokeJurisdictionFailures,
+            lawful_basis_jurisdiction:
+              validatedRegulatorBasis?.jurisdiction_invoked ?? null,
           },
         });
         return {

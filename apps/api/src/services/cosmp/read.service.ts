@@ -526,10 +526,22 @@ export class ReadService {
     // getCapsuleWithContent above). Runs BEFORE contentStore.read so
     // a denied actor never observes capsule content.
     if (requester !== null) {
+      // CAR Sub-box 2 sub-phase 5 [CAR-SUB-BOX-2-REGULATOR-INTEGRATION]
+      // per ADR-0037 Sub-decision 8 + Q1 LOCKED Option α (basis-
+      // authoritative) + Q-RULE-13-REGULATOR-NULL-CAPSULE-POLICY
+      // LOCKED Option α (null-capsule guard): substitution applies
+      // ONLY when capsule jurisdiction is non-null; null capsule
+      // preserves null/null backward-compat from Sub-phase 3 + 4.
+      const readActorJurisdiction =
+        requester.entity_type === "REGULATOR" &&
+        validatedRegulatorBasis !== null &&
+        fullCapsule.jurisdiction !== null
+          ? validatedRegulatorBasis.jurisdiction_invoked
+          : requester.jurisdiction;
       const readJurisdiction = assertJurisdictionalScope({
         actor: {
           entity_id: requester.entity_id,
-          jurisdiction: requester.jurisdiction,
+          jurisdiction: readActorJurisdiction,
         },
         target: {
           capsule: {
@@ -540,13 +552,22 @@ export class ReadService {
         action: "READ",
       });
       if (!readJurisdiction.ok) {
+        // Sub-phase 5 per Q3 LOCKED Option α: enrich denial audit
+        // for REGULATOR-actor jurisdiction mismatch. lawful_basis_id
+        // is carried via the existing auditDenial extras; jurisdiction
+        // detail surfaces the basis-authoritative actor and the
+        // capsule target. Non-REGULATOR denials omit the lawful basis
+        // fields (validatedRegulatorBasis is null).
         await this.auditDenial(
           "CAPSULE_CONTENT_READ",
           capsuleId,
           session.entity_id,
           readJurisdiction.code,
           context.ip_address ?? null,
-          { jurisdiction: fullCapsule.jurisdiction },
+          {
+            jurisdiction: fullCapsule.jurisdiction,
+            lawful_basis_id: validatedRegulatorBasis?.basis_id ?? null,
+          },
         );
         return {
           ok: false,
