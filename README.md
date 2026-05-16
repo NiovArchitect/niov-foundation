@@ -75,7 +75,7 @@ payload, which means the substrate knows what it has before it
 decrypts anything, which is what makes scale and access control work
 together.
 
-**COSMP Protocol.** Seven operations govern every exchange between
+**COSM Protocol (COSMP).** Seven operations govern every exchange between
 wallets: AUTHENTICATE, NEGOTIATE, READ, WRITE, SHARE, REVOKE, AUDIT.
 The protocol enforces dual-control on privileged operations.
 Jurisdiction is tagged on every entity, capsule, and audit event.
