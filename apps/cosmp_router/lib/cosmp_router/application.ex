@@ -73,6 +73,11 @@ defmodule CosmpRouter.Application do
         # hot-tier per CosmpRouter.Storage facade per ADR-0033
         # §Decision 5).
         {CosmpRouter.Storage.ETS, []},
+        # Sub-arc 1 sub-phase b Commit B.5 [BEAM-DBGI-WALLET-CACHE-ETS]
+        # per ADR-0039 Sub-decision 5: ETS read-optimized cache for
+        # wallet_type lookup at per-node register; cache-miss delegates
+        # to CosmpRouter.WalletLookup at canonical-coherence register.
+        {CosmpRouter.WalletCache, []},
         # Sub-phase 4b: COSMP routing GenServer.
         {CosmpRouter.Router, []}
       ] ++
