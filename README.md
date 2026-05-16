@@ -244,7 +244,7 @@ The implementation is the evidence.
 
 Substrate landed and verified at the current commit on origin/main:
 
-- COSMP protocol primitives with the seven operations, dual-control
+- COSMP primitives with the seven operations, dual-control
   middleware, append-only cryptographic audit chain.
 - Decentralized Memory Wallet substrate with capsule lifecycle,
   permissions, and provenance.
@@ -308,7 +308,7 @@ COSMP operation, not the LLM token.
 
 Tokens are consumed and gone. Capsules persist and keep generating
 value every time they're read, shared, audited, or contribute to a
-hive decision. Monetization fires at the COSMP protocol layer, which
+hive decision. Monetization fires at the COSMP layer, which
 means applications cannot suppress it and pricing aligns with the
 value the substrate actually carries.
 
