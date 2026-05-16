@@ -41,4 +41,97 @@ defmodule DbgiSupervisor do
   - ADR-0035 (Substrate-Build Discipline Canonical; substantively
     load-bearing at DBGI substrate-build register)
   """
+
+  # DMWWorker Public API per ADR-0038
+
+  @type wallet_type :: :personal | :enterprise | :device
+  @type entity_id :: String.t() | atom()
+
+  @doc """
+  Start a DMWWorker for the given entity_id + wallet_type.
+
+  Lazy-spawned via `DbgiSupervisor.DynamicSupervisor` per ADR-0038
+  Sub-decision 4. Returns `{:ok, pid}` on success or
+  `{:error, {:already_started, pid}}` if a DMWWorker for that entity_id
+  already exists.
+
+  ## Examples
+
+      iex> DbgiSupervisor.start_dmw_worker("entity_abc", :enterprise)
+      {:ok, #PID<...>}
+
+      iex> DbgiSupervisor.start_dmw_worker("entity_abc", :enterprise)
+      {:error, {:already_started, #PID<...>}}
+
+  ## References
+
+  - ADR-0038 Sub-decision 1 (module location)
+  - ADR-0038 Sub-decision 2 (identity addressing)
+  - ADR-0038 Sub-decision 4 (lifecycle pattern: lazy-spawn)
+  """
+  @spec start_dmw_worker(entity_id(), wallet_type()) ::
+          DynamicSupervisor.on_start_child()
+  def start_dmw_worker(entity_id, wallet_type)
+      when wallet_type in [:personal, :enterprise, :device] do
+    DynamicSupervisor.start_child(
+      DbgiSupervisor.DynamicSupervisor,
+      {DbgiSupervisor.DMWWorker, [entity_id: entity_id, wallet_type: wallet_type]}
+    )
+  end
+
+  @doc """
+  Look up the DMWWorker pid for the given entity_id via Registry.
+
+  Returns `{:ok, pid}` or `:error` if no DMWWorker is running for
+  that entity_id.
+
+  ## Examples
+
+      iex> DbgiSupervisor.whereis_dmw_worker("entity_abc")
+      {:ok, #PID<...>}
+
+      iex> DbgiSupervisor.whereis_dmw_worker("nonexistent")
+      :error
+
+  ## References
+
+  - ADR-0038 Sub-decision 2 (Registry-keyed identity addressing)
+  """
+  @spec whereis_dmw_worker(entity_id()) :: {:ok, pid()} | :error
+  def whereis_dmw_worker(entity_id) do
+    case Registry.lookup(DbgiSupervisor.Registry, entity_id) do
+      [{pid, _meta}] -> {:ok, pid}
+      [] -> :error
+    end
+  end
+
+  @doc """
+  Stop the DMWWorker for the given entity_id.
+
+  Terminates the DMWWorker via DynamicSupervisor; Phoenix.Tracker
+  untracks presence in DMWWorker.terminate/2 per ADR-0038
+  Sub-decision 5.
+
+  Returns `:ok` on success or `:error` if no DMWWorker is running for
+  that entity_id.
+
+  ## References
+
+  - ADR-0038 Sub-decision 4 (lifecycle pattern; `:transient` restart
+    policy means clean stop does not trigger restart)
+  - ADR-0038 Sub-decision 5 (state cleanup via terminate/2)
+  """
+  @spec stop_dmw_worker(entity_id()) :: :ok | :error
+  def stop_dmw_worker(entity_id) do
+    case whereis_dmw_worker(entity_id) do
+      {:ok, pid} ->
+        DynamicSupervisor.terminate_child(
+          DbgiSupervisor.DynamicSupervisor,
+          pid
+        )
+
+      :error ->
+        :error
+    end
+  end
 end
