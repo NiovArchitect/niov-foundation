@@ -163,7 +163,7 @@ substantively per Q-NEW-2 LOCKED Option α at sub-phase 6.
 
 ---
 
-## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase a (DMWWorker per ADR-0038): IN FLIGHT 2026-05-15
+## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase a (DMWWorker per ADR-0038): CLOSED 2026-05-15
 
 Phase 3 (Dynamic Memory Accuracy at Scale) sub-arc 1 sub-phase a
 Commit 1 of 3 LANDED at this commit per SYNTHESIS-SUB-PHASE-A-
@@ -267,6 +267,44 @@ canonical at `docs/architecture/decisions/0038-dmw-worker-per-dmw-supervised-pro
 ADR register substantively. Full section-12-progress.md row
 canonical at `docs/reference/section-12-progress.md` Phase 3 row
 substantively at substantive register.
+
+## Sub-Arc 1 Sub-Phase a closure update (2026-05-15)
+
+3-commit decomposition LANDED. ADR-0038 Status: Proposed -> Accepted
+at this commit. All 8 sub-decisions RESOLVED.
+
+**3-commit mini-arc lineage:**
+
+- Commit 1 `[BEAM-DBGI-DMWWORKER-ADR]` `3b431bf` (docs-only)
+- Commit 2 `[BEAM-DBGI-DMWWORKER-CODE]` `56e0eaa` (substantive code:
+  DMWWorker module 160 lines + public API +93 lines + 13 tests
+  171 lines)
+- Commit 3 `[BEAM-DBGI-DMWWORKER-CLOSURE]` this commit (docs-only
+  closure cascade)
+
+**Verification matrix at closure:**
+
+- Elixir compile clean
+- DMWWorker targeted tests 13/0
+- Full dbgi_supervisor default tier 55/0 (42 baseline preserved)
+- CI green at Commits 1 + 2
+
+**Substrate-state ground truth at sub-phase a closure:**
+
+DMWWorker substrate is canonical at runtime register. Per-DMW
+supervised process substrate that the BEAM scaffolding has been wired
+for now exists at runtime. The architectural target named in the
+README and monetization essay (hundreds to thousands of parallel
+COSMP operations per DMW for the workloads that need it) does NOT
+yet deliver at runtime because cosmp_router single-GenServer pattern
+remains the serialization bottleneck.
+
+**Forward-substrate to sub-arc 1 sub-phase b:**
+
+cosmp_router re-wire to dispatch through per-entity DMWWorkers +
+ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
+promote-on-activity tier promotion substrate + DEVICE cold-shard
+mapping with K=128-1024 consistent-hash shards.
 
 ---
 

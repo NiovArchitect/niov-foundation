@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed 2026-05-15
+Accepted 2026-05-15 (landed at sub-arc 1 sub-phase a Commit 3 of 3
+`[BEAM-DBGI-DMWWORKER-CLOSURE]`; 3-commit mini-arc lineage
+`3b431bf` -> `56e0eaa` -> this commit)
 
 ## Context
 
@@ -149,3 +151,99 @@ stop-then-restart resilience.
   ADR-0038; per-capsule granularity at finer-grained register remains
   forward-substrate. ADR-0028 §Bidirectional citations (cited from)
   sub-block back-cites ADR-0038 at the sub-block append-only register.
+
+## Post-Closure Implementation Lineage
+
+DMWWorker mini-arc closed at Commit 3 of 3
+`[BEAM-DBGI-DMWWORKER-CLOSURE]` (this commit). All 8 sub-decisions
+RESOLVED:
+
+- Sub-decision 1 (module location at
+  `apps/dbgi_supervisor/lib/dbgi_supervisor/dmw_worker.ex`):
+  RESOLVED at Commit 2 `56e0eaa` (160 lines).
+
+- Sub-decision 2 (identity addressing by entity_id via
+  `{:via, Registry, {DbgiSupervisor.Registry, entity_id}}` Registry
+  key + `"dmw:#{entity_id}"` Phoenix.Tracker topic): RESOLVED at
+  Commit 2 `56e0eaa` (via_tuple/1 + topic_for/1 private helpers).
+
+- Sub-decision 3 (tier dispatch axis on WalletType 3-tier):
+  RESOLVED at Commit 2 `56e0eaa` (tier_for/1 public function;
+  `:personal` -> `:promote_on_activity`, `:enterprise` ->
+  `:always_hot`, `:device` -> `:always_cold_shard`).
+
+- Sub-decision 4 (lazy-spawn lifecycle on first COSMP operation):
+  RESOLVED at Commit 2 `56e0eaa` (`DbgiSupervisor.start_dmw_worker/2`
+  public API entry point; DynamicSupervisor child_spec with
+  `:transient` restart policy).
+
+- Sub-decision 5 (stateless plus Phoenix.Tracker presence only):
+  RESOLVED at Commit 2 `56e0eaa` (init/1 calls PresenceTracker.track;
+  terminate/2 calls PresenceTracker.untrack; state map contains
+  entity_id + wallet_type + tier only).
+
+- Sub-decision 6 (DMWWorker vs cosmp_router separate-layer):
+  RESOLVED at Commit 2 `56e0eaa` (DMWWorker is dbgi-tier supervised
+  process; cosmp_router single-GenServer pattern unchanged at sub-phase
+  a; cosmp_router re-wire forward-substrate to sub-arc 1 sub-phase b
+  and beyond).
+
+- Sub-decision 7 (6 BEAM-compatibility patterns from ADR-0026 §5
+  preserved): RESOLVED at Commit 2 `56e0eaa` (preserved by
+  construction: pure-function tier_for/1 + topic_for/1 + via_tuple/1;
+  no global state; GenServer mailbox isolation; supervised lifecycle;
+  Phoenix.Tracker CRDT presence; Registry-keyed addressing).
+
+- Sub-decision 8 (testability per ADR-0034): RESOLVED at Commit 2
+  `56e0eaa` (13 unit tests across 3 describe blocks: 7 lifecycle + 2
+  Phoenix.Tracker presence + 4 tier dispatch with error path).
+
+**3-commit mini-arc lineage:**
+
+- Commit 1 `[BEAM-DBGI-DMWWORKER-ADR]` `3b431bf` (docs-only): ADR-0038
+  NEW (Status Proposed 2026-05-15) + ADR-0028 §Forward Queue NEW
+  append-only LANDED sub-paragraph + ADR-0028 §Bidirectional citations
+  (cited from) NEW entry + catalog refreshes across architecture/README
+  + CLAUDE + section-12-progress + CURRENT_BUILD_STATE.
+
+- Commit 2 `[BEAM-DBGI-DMWWORKER-CODE]` `56e0eaa` (substantive code):
+  NEW DMWWorker GenServer module + MOD DbgiSupervisor public API
+  (start_dmw_worker/2 + whereis_dmw_worker/1 + stop_dmw_worker/1) +
+  NEW DMWWorker tests (13 tests across 3 describe blocks).
+
+- Commit 3 `[BEAM-DBGI-DMWWORKER-CLOSURE]` (this commit; docs-only):
+  ADR-0038 Status Proposed -> Accepted + NEW Post-Closure
+  Implementation Lineage section + section-12-progress.md Phase 3 row
+  IN FLIGHT -> CLOSED + architecture/README + CLAUDE.md catalog
+  Status sentence refresh + CURRENT_BUILD_STATE.md Phase 3 H2 IN
+  FLIGHT -> CLOSED.
+
+**Verification matrix at closure:**
+
+- Elixir compile: clean (3 files compiled; no warnings on new code)
+- DMWWorker targeted tests: 13/0 (3.5s)
+- Full dbgi_supervisor default tier: 55/0 (5.9s; 42 baseline + 13 new;
+  19 integration excluded; no regression)
+- CI conclusion at Commit 1 (3b431bf): success across 4 jobs
+- CI conclusion at Commit 2 (56e0eaa): success across 4 jobs
+  (Typecheck strict 12-baseline + Unit 371 + Integration 111+1 skipped
+  + Elixir compile+test)
+- CI conclusion at Commit 3 (this commit): pending at this commit's
+  CI watch step
+
+**Forward-substrate at canonical-state register:**
+
+The DMWWorker substrate is canonical at runtime register at sub-phase
+a closure. The architectural target named in the README and
+monetization essay (hundreds to thousands of parallel COSMP operations
+per DMW for the workloads that need it) does not yet deliver at
+runtime because cosmp_router single-GenServer pattern remains the
+serialization bottleneck. Sub-arc 1 sub-phase b and beyond re-wire
+cosmp_router to dispatch through DMWWorkers, at which point the
+architectural target delivers at runtime.
+
+Sub-arc 1 sub-phase b candidates at canonical-architectural register:
+cosmp_router re-wire to dispatch through per-entity DMWWorkers;
+ENTERPRISE always-hot per-DMW process pool implementation; PERSONAL
+plus AI_AGENT promote-on-activity tier promotion substrate; DEVICE
+cold-shard mapping with K=128-1024 consistent-hash shards.
