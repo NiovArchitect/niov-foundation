@@ -136,24 +136,6 @@ defmodule DbgiSupervisor.Application do
        [
          name: DbgiSupervisor.PresenceTracker,
          pubsub_server: DbgiSupervisor.PubSub
-       ]},
-
-      # Sub-arc 1 sub-phase b Commit B.3 [BEAM-DBGI-HORDE-SUBSTRATE]
-      # ===========================================================
-      # Horde substrate per ADR-0039 §Decision Sub-decision 1: CRDT-based
-      # distributed Registry + DynamicSupervisor with handoff on node
-      # failure canonical at canonical-knowledge register substantively.
-      # ENTERPRISE tier hive-scale per-DMW dispatch substrate at sub-phase
-      # b register substantively. Existing single-node Registry +
-      # DynamicSupervisor (above) preserved unchanged at backward-compat
-      # register substantively for PERSONAL/AI_AGENT/DEVICE tier dispatch
-      # at sub-phase a substrate per ADR-0038.
-      {Horde.Registry, [name: DbgiSupervisor.HordeRegistry, keys: :unique]},
-      {Horde.DynamicSupervisor,
-       [
-         name: DbgiSupervisor.HordeDynamicSupervisor,
-         strategy: :one_for_one,
-         distribution_strategy: Horde.UniformDistribution
        ]}
     ]
 
