@@ -71,6 +71,98 @@ sub-phase 7.
 
 ---
 
+## CAR Sub-box 2 (Jurisdiction Tagging per ADR-0037): CLOSED 2026-05-15
+
+CAR Sub-box 2 mini-arc CLOSED at sub-phase 6 `[CAR-SUB-BOX-2-CLOSURE]`
+(this commit) per ADR-0037 §Implementation Detail. 6-sub-phase
+lineage: `c72fabd → 93f96ec → 3fab20d → 6efdf44 → 7faf2ac → this
+commit`. ADR-0037 Status: Accepted. ADR-0037 Sub-decisions 1-9 all
+RESOLVED.
+
+The data-tier jurisdiction-tagging substrate for CAR §1.6 Regional /
+Sovereignty Boundaries + §2.4 Jurisdictional Scope LANDED:
+`Entity.jurisdiction` + `MemoryCapsule.jurisdiction` +
+`AuditEvent.jurisdiction` + `OrgSettings.default_jurisdiction`
+schema fields (all `String?` nullable) + 3 B-tree indexes (entities
++ memory_capsules + audit_events) + `assertJurisdictionalScope`
+pure-function helper at
+`apps/api/src/services/cosmp/jurisdiction-enforcement.ts` +
+service-tier defaulting cascade at `createEntity` (passthrough) +
+`createCapsule` (owner Entity cascade) + `writeAuditEvent` (row
+metadata passthrough) + COSMP enforcement at NEGOTIATE start-check
+(before owner shortcut) + readContent TOCTOU re-check (before
+content load) + SHARE per-capsule + REVOKE bounded-bridge fetch +
+per-capsule + WRITE create-time cascade + WRITE update-time
+actor↔existing capsule jurisdiction enforcement + REGULATOR
+`LawfulBasis.jurisdiction_invoked` ↔ `MemoryCapsule.jurisdiction`
+match via basis-authoritative actor substitution (with null-capsule
+backward-compat guard preserving Sub-phase 3/4 null/null
+boundary).
+
+Preserved substrate-coherence boundaries: AuditEvent.jurisdiction
+remains row metadata only (NOT in canonical_record/1);
+canonical_record/1 remains 14 fields; Elixir audit-chain UNCHANGED;
+12 fixture pairs UNCHANGED; cosmp_router default tier 137/0
+PRESERVED.
+
+Test substrate at closure: TypeScript baseline 12 preserved; unit
+tier 508/508; integration tier 198 + 1 skipped (171 baseline + 20
+sub-phase 4 jurisdiction-COSMP-enforcement + 7 sub-phase 5 REGULATOR
+Section I); cosmp_router default tier 137/0; CI green at every
+sub-phase landing.
+
+Downstream CAR Sub-boxes dependency-unblocked at substrate-state
+ground truth register substantively: Sub-box 4 (DecisionRecord +
+DataSubjectReference + Agent Attestation); Sub-box 5
+(jurisdiction-aware deletion variants + GDPR Article 17
+pseudonymization); Sub-box 8 (Cross-Tenant Compliance Benchmarking
++ meta-jurisdiction aggregates); Sub-box 9 (Capsule Compliance
+Provenance).
+
+5 substrate-build observations forward-queued in commit-body-only
+register per Q-NEW-9 LOCKED at sub-phase 1 + subsequent sub-phase
+LOCKs (D-SCHEMA-DEFAULT-CONSTANT-COHERENCE-DRIFT +
+D-INTERNAL-HELPER-UNIT-TEST-IMPORT-CONVENTION +
+D-COSMP-METADATA-SELECT-CLAUSE-DRIFT +
+D-REGULATOR-ACTOR-JURISDICTION-POLICY-DECISION +
+D-REGULATOR-NULL-CAPSULE-BACKWARD-COMPAT-BOUNDARY); NOT promoted to
+ADR-0035 §9 numbered cluster.
+
+Forward-queued items preserved per ADR-0037 §Forward Queue: physical
+data residency enforcement; legal transfer determination engine
+(Schrems II / GDPR Article 44-50); real-time country/legal rules
+engine; cross-region capsule transfer workflow; multi-jurisdiction
+capsule support; canonical_record/1 jurisdiction binding
+(cryptographic) if future evidence justifies; Cross-Tenant
+Compliance Benchmarking patent-relevance analysis per CAR §1.6
+forward path; AuditEvent.jurisdiction automatic operation-context
+propagation refinement; GLOBAL wildcard / jurisdiction vocabulary
+lock; grantee↔capsule or grantee↔actor jurisdiction checks for
+SHARE if future policy requires; full `getCapsuleMetadata`
+projection repair.
+
+NOT claimed: legal compliance certification; physical data residency
+enforcement; full FedRAMP / CMMC / GDPR certification; legal
+transfer determination; real-time country/legal rules engine;
+multi-jurisdiction capsule support; cross-region transfer
+workflow; canonical_record/1 jurisdiction binding (cryptographic);
+per-target LawfulBasis binding; grantee jurisdiction checks at
+SHARE; GLOBAL wildcard; Sub-boxes 4 / 5 / 8 / 9 implementation;
+full DMW-to-DMW orchestration; BEAM/Broadway high-volume
+orchestration in this mini-arc; Federation Cloud monetization;
+external PKI / EU eIDAS / national registry integration; direct
+patent relevance. Patent relevance: NONE directly per CAR §1.6
+verbatim ("region tagging is conventional").
+
+Full sub-phase narrative + verification matrix + downstream
+unblocked statement canonical at
+`docs/reference/section-12-progress.md` CAR Sub-box 2 row
+substantively at substantive register substantively. Full ADR-0037
+§Post-Closure Implementation Lineage canonical at the ADR register
+substantively per Q-NEW-2 LOCKED Option α at sub-phase 6.
+
+---
+
 ## Section 1 — One-paragraph summary
 
 NIOV Foundation is the **AI Memory Governance Substrate** — the

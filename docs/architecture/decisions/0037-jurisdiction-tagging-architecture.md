@@ -2,9 +2,9 @@
 
 ## Status
 
-Proposed 2026-05-15
+Accepted 2026-05-15
 
-Transitions to **Accepted** at the CAR Sub-box 2 mini-arc closure commit (sub-phase 6 `[CAR-SUB-BOX-2-CLOSURE]` per ADR-0037 §Implementation Detail). This sub-phase 1 commit lands the decision substrate; sub-phases 2-6 implement.
+CAR Sub-box 2 mini-arc CLOSED at sub-phase 6 `[CAR-SUB-BOX-2-CLOSURE]`. The substrate landed across the 6-sub-phase mini-arc per §Post-Closure Implementation Lineage below; all 9 sub-decisions RESOLVED at substrate-state ground truth canonical at substantive register substantively.
 
 ## Date
 
@@ -303,6 +303,79 @@ ADR-0037 lands at substrate-state ground truth canonical at substantive register
 - **canonical_record/1 jurisdiction binding**: cryptographic binding of jurisdiction at canonical_record/1 position 15 per Alternative B if future substrate justifies
 - **Cross-Tenant Compliance Benchmarking patent-relevance analysis**: per CAR §1.6 forward path; "intersection of jurisdictional tagging with COSMP capsule provenance + cross-tenant hive intelligence is potentially patent-relevant"; future ADR if substrate justifies
 - **AuditEvent.jurisdiction automatic operation-context propagation**: if sub-phase 3 of Sub-box 2 service-tier defaulting does not fully wire propagation from operation context (capsule.jurisdiction OR actor.entity.jurisdiction OR LawfulBasis.jurisdiction_invoked); refinement at sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] register substantively
+
+## Post-Closure Implementation Lineage
+
+CAR Sub-box 2 mini-arc closed at sub-phase 6 `[CAR-SUB-BOX-2-CLOSURE]` (this commit). All 9 sub-decisions RESOLVED:
+
+- **Sub-decision 1** (single-String jurisdiction representation) — landed at sub-phase 2 `[CAR-SUB-BOX-2-SCHEMA]` `93f96ec`.
+- **Sub-decision 2** (4 jurisdiction columns + 3 B-tree indexes at `entities` + `memory_capsules` + `audit_events`) — landed at sub-phase 2 `93f96ec`.
+- **Sub-decision 3** (AuditEvent.jurisdiction row metadata only; canonical_record/1 preserved at 14 fields) — landed at sub-phase 2 + sub-phase 3 + verified at sub-phase 4 `[CAR-SUB-BOX-2-COSMP-ENFORCEMENT]` `6efdf44` (Section F.3 test confirms `event_hash` invariance when jurisdiction column differs).
+- **Sub-decision 4** (MemoryCapsule.jurisdiction immutable after creation) — landed at sub-phase 3 `[CAR-SUB-BOX-2-SERVICES]` `3fab20d` (`CapsuleUpdateInput` has no jurisdiction field; immutability preserved by absence per RULE 18 substrate-coherence) + verified at sub-phase 4 (Section E.3 test).
+- **Sub-decision 5** (service-tier defaulting cascade at `createEntity` + `createCapsule` + `writeAuditEvent` helpers) — landed at sub-phase 3 `3fab20d` (passthrough + owner Entity cascade + row metadata passthrough respectively) + sub-phase 4 (WriteService inline createCapsule cascade per Q2 LOCKED Option α — preserves WriteService audit/control semantics over @niov/database helper refactor).
+- **Sub-decision 6** (NEW `assertJurisdictionalScope` pure-function helper at `apps/api/src/services/cosmp/jurisdiction-enforcement.ts`) — landed at sub-phase 3 `3fab20d`. Pure-function discriminated outcome; 6 BEAM-compatibility patterns from ADR-0026 §5 preserved by construction; portable to future Elixir Broadway pipeline per ADR-0028 forward-substrate.
+- **Sub-decision 7** (COSMP enforcement matrix: NEGOTIATE start-check + readContent TOCTOU re-check + SHARE start-check + REVOKE start-check + WRITE create-time defaulting + WRITE update-time immutability enforcement) — landed at sub-phase 4 `6efdf44`. NEGOTIATE start-check runs BEFORE owner shortcut per Q8 LOCKED Option α (jurisdiction drift protection); readContent jurisdiction check runs BEFORE `contentStore.read` (no capsule content load before authorization per Sub-phase 6 §18 Whole-COSMP scalability discipline); SHARE per-capsule actor↔capsule only per Q5 LOCKED Option α (grantee jurisdiction checks forward-queued); REVOKE bounded-bridge capsule fetch per Q3 LOCKED Option α; WRITE update enforces actor↔existing jurisdiction per Q6 LOCKED Option α. `readMetadata` explicitly NOT enforced per Sub-decision 7 design (stays light; mirrors Sub-box 3 sub-phase 6 Q4 LOCKED Option α precedent).
+- **Sub-decision 8** (REGULATOR LawfulBasis.jurisdiction_invoked ↔ MemoryCapsule.jurisdiction match) — landed at sub-phase 5 `[CAR-SUB-BOX-2-REGULATOR-INTEGRATION]` `7faf2ac` via basis-authoritative substitution at the 4 sub-phase-4 helper call sites (per Q1 LOCKED Option α). Null-capsule guard preserves Sub-phase 3/4 null/null backward compatibility (per Q-RULE-13-REGULATOR-NULL-CAPSULE-POLICY LOCKED Option α): substitution applies only when target capsule jurisdiction is non-null. NO change to `assertJurisdictionalScope` helper; NO change to `regulator-enforcement.ts` (active-basis + TAR-jurisdiction substrate preserved upstream).
+- **Sub-decision 9** (dependency relationships — CAR Sub-box 2 ENABLES Sub-boxes 4 / 5 / 8 / 9) — RESOLVED at closure register substantively. Sub-boxes 4 / 5 / 8 / 9 are now dependency-unblocked at substrate-state ground truth canonical at substantive register substantively per CAR Bucket B Sub-box 2 Downstream Consumers enumeration.
+
+**6-sub-phase mini-arc commit lineage**:
+
+- Sub-phase 1 `[CAR-SUB-BOX-2-ADR]` — `c72fabd` — ADR-0037 lands as Proposed; CAR Sub-box 2 row IN FLIGHT; ADR-0036 §References RULE 14 back-cite landed; docs-only.
+- Sub-phase 2 `[CAR-SUB-BOX-2-SCHEMA]` — `93f96ec` — Prisma schema +4 nullable jurisdiction columns (Entity / MemoryCapsule / AuditEvent / OrgSettings) + 3 B-tree indexes; `ORG_SETTINGS_DEFAULTS` + `MergedOrgSettings` + `getOrgSettingsOrDefaults` substrate-coherence amendment per Q-RULE-13-ORG-SETTINGS-DEFAULTS LOCKED Option α (path scope expansion 1 → 2).
+- Sub-phase 3 `[CAR-SUB-BOX-2-SERVICES]` — `3fab20d` — NEW `apps/api/src/services/cosmp/jurisdiction-enforcement.ts` + `CreateEntityInput.jurisdiction` passthrough + `CreateCapsuleInput.jurisdiction` owner Entity cascade + `WriteAuditEventInput.jurisdiction` row-metadata passthrough + NEW `tests/unit/jurisdiction.test.ts` (17 tests) + narrow `@niov/api` re-export per Q-RULE-13-INTERNAL-HELPER-TEST-IMPORT LOCKED Option α (path scope expansion 5 → 6).
+- Sub-phase 4 `[CAR-SUB-BOX-2-COSMP-ENFORCEMENT]` — `6efdf44` — NEGOTIATE start-check + readContent TOCTOU re-check + SHARE per-capsule + REVOKE bounded-bridge fetch + WRITE create cascade + WRITE update enforcement + `getCapsuleMetadata` select extension (jurisdiction only; full projection repair forward-queued per D-COSMP-METADATA-SELECT-CLAUSE-DRIFT) + 4 jurisdiction codes mapped to HTTP 403 at `cosmp.routes.ts` statusForCode + NEW `tests/integration/jurisdiction-cosmp-enforcement.test.ts` (20 tests).
+- Sub-phase 5 `[CAR-SUB-BOX-2-REGULATOR-INTEGRATION]` — `7faf2ac` — basis-authoritative actor jurisdiction substitution for REGULATOR actors at 4 helper call sites + null-capsule backward-compat guard + REGULATOR jurisdiction-denial audit enrichment (lawful_basis_id + lawful_basis_chain_hash + lawful_basis_jurisdiction details) + Section I (7 integration tests) appended to `tests/integration/regulator-cosmp-enforcement.test.ts`.
+- Sub-phase 6 `[CAR-SUB-BOX-2-CLOSURE]` — this commit — docs-only closure cascade: ADR-0037 Status Proposed → Accepted + this Post-Closure Implementation Lineage section + `docs/reference/section-12-progress.md` CAR Sub-box 2 row CLOSED + `docs/architecture/README.md` + `CLAUDE.md` ADR catalog ADR-0037 entry minimum-touch + `docs/CURRENT_BUILD_STATE.md` minimum-touch closure entry.
+
+**Verification matrix at closure**:
+
+- TypeScript baseline: 12 (preserved at every sub-phase landing; Sub-phase 4 surfaced substrate improvement at `getCapsuleMetadata` missing-fields list — jurisdiction removed from the list — without count drift).
+- Unit tier: 508/508 PASS.
+- Integration tier: 198 + 1 skipped PASS (171 pre-Sub-box-2 + 20 sub-phase 4 jurisdiction-COSMP-enforcement + 7 sub-phase 5 REGULATOR Section I).
+- Elixir `cosmp_router` default tier: 137/0 PASS (canonical_record/1 14-field byte-equivalence + 12 fixture pairs UNCHANGED across all 6 sub-phases).
+- CI green at every sub-phase landing (commits `c72fabd` + `93f96ec` + `3fab20d` + `6efdf44` + `7faf2ac` + this commit).
+
+**Substrate-build observations forward-queued (commit-body-only register; NOT promoted to ADR-0035 §9 per Q-NEW-9 sub-phase 1 LOCK + subsequent sub-phase LOCKs)**:
+
+1. **D-SCHEMA-DEFAULT-CONSTANT-COHERENCE-DRIFT** (sub-phase 2) — adding a nullable column to a Prisma model with a `satisfies Omit<Model, ...>` frozen-defaults anchor in service code triggers TS baseline drift unless the defaults constant + interface + row-mapping constructor are all updated together. Surfaced via Q-RULE-13-ORG-SETTINGS-DEFAULTS at sub-phase 2; resolved by 3-site coherence MOD in same file.
+2. **D-INTERNAL-HELPER-UNIT-TEST-IMPORT-CONVENTION** (sub-phase 3) — pre-flight source maps for new internal helpers under `apps/api/src/services/cosmp/*` must surface whether the helper will be directly unit-tested. If yes, either export via the workspace package or explicitly lock a deep-import exception. The Sub-box 3 `regulator-enforcement.ts` precedent was indirectly tested only; the Sub-box 2 `jurisdiction-enforcement.ts` helper required direct pure-function tests.
+3. **D-COSMP-METADATA-SELECT-CLAUSE-DRIFT** (sub-phase 4) — `getCapsuleMetadata` at `packages/database/src/queries/capsule.ts` has an explicit `select` clause that still omits fields expected by the `CapsuleMetadata = Omit<MemoryCapsule, "storage_location">` type (tokens / tokens_tokenizer / commitment_date / created_by / +5 more). Sub-phase 4 added only `jurisdiction: true` because NEGOTIATE needs it for enforcement. Full metadata projection repair remains forward-queued.
+4. **D-REGULATOR-ACTOR-JURISDICTION-POLICY-DECISION** (sub-phase 5) — for REGULATOR actor COSMP access, validated `LawfulBasis.jurisdiction_invoked` acts as the actor's jurisdictional authority for data-tier jurisdiction enforcement. REGULATOR Entity.jurisdiction is not required to match the capsule jurisdiction when a valid lawful basis is present. Surfaced as substrate design decision at sub-phase 5 Q1.
+5. **D-REGULATOR-NULL-CAPSULE-BACKWARD-COMPAT-BOUNDARY** (sub-phase 5 RULE 13 refinement) — basis-authoritative REGULATOR jurisdiction substitution must respect the null/null backward-compat boundary established in Sub-phase 3 and Sub-phase 4. Substitution applies when target capsule jurisdiction is non-null; null capsule jurisdiction preserves legacy null/null behavior so existing Sub-box 3 REGULATOR fixtures with null capsule jurisdiction remain green.
+
+**Forward queue restated at closure register** (from §Forward Queue above; preserved verbatim):
+
+- Physical data residency enforcement (multi-region storage placement)
+- Legal transfer determination engine (Schrems II / GDPR Article 44-50 runtime evaluation)
+- Real-time country/legal rules engine
+- Cross-region capsule transfer workflow
+- Multi-jurisdiction capsule support (one capsule with multiple jurisdictional anchors)
+- canonical_record/1 jurisdiction binding (cryptographic) if future evidence requires
+- Cross-Tenant Compliance Benchmarking patent-relevance analysis
+- AuditEvent.jurisdiction automatic operation-context propagation refinement
+- GLOBAL wildcard / jurisdiction vocabulary lock
+- Grantee↔capsule or grantee↔actor jurisdiction checks for SHARE if future policy requires
+- Full `getCapsuleMetadata` projection repair (D-COSMP-METADATA-SELECT-CLAUSE-DRIFT)
+
+**What CAR Sub-box 2 substrate does NOT claim** (preserved from §Substrate-Honest Distinctions):
+
+- Legal compliance certification
+- Physical data residency enforcement (multi-region storage placement)
+- Full FedRAMP / CMMC / GDPR compliance certification
+- Legal transfer determination
+- Real-time country/legal rules engine
+- Multi-jurisdiction capsule support
+- Cross-region transfer workflow
+- canonical_record/1 jurisdiction binding (cryptographic)
+- Per-target LawfulBasis binding
+- Grantee jurisdiction checks at SHARE
+- GLOBAL wildcard support
+- Sub-boxes 4 / 5 / 8 / 9 implementation
+- Full DMW-to-DMW orchestration
+- BEAM / Broadway high-volume orchestration in this mini-arc
+- Federation Cloud monetization
+- External PKI / EU eIDAS / national registry integration
+- Direct patent relevance
 
 ## References
 
