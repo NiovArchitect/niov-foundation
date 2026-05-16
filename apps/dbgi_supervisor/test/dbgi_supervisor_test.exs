@@ -34,18 +34,21 @@ defmodule DbgiSupervisorTest do
     assert is_pid(Process.whereis(DbgiSupervisor.Supervisor))
   end
 
-  test "Supervisor children list substantively at sub-phase 9 canonical register" do
+  test "Supervisor children list substantively at sub-arc 1 sub-phase b canonical register" do
     children = Supervisor.which_children(DbgiSupervisor.Supervisor)
-    # Substantively 6 children at sub-phase 9 canonical register:
+    # Substantively 8 children at sub-arc 1 sub-phase b canonical register:
     # Sub-phase 8 baseline (process-group substrate):
     # - DbgiSupervisor.PG (`:pg` namespaced scope; modern OTP 23+ canonical)
     # - DbgiSupervisor.Registry (per-DMW addressing canonical)
-    # - DbgiSupervisor.DynamicSupervisor (per-DMW lifecycle canonical)
-    # Sub-phase 9 expansion (multi-region cluster substrate):
+    # - DbgiSupervisor.DynamicSupervisor (per-DMW spawn canonical)
+    # Sub-phase 9 baseline (cluster + pubsub + presence substrate):
     # - DbgiSupervisor.ClusterSupervisor (libcluster topology canonical)
     # - DbgiSupervisor.PubSub (Phoenix.PubSub cross-node messaging canonical)
     # - DbgiSupervisor.PresenceTracker (Phoenix.Tracker CRDT-backed presence canonical)
-    assert length(children) == 6
+    # Sub-arc 1 sub-phase b Commit B.3 [BEAM-DBGI-HORDE-SUBSTRATE-REDRAFT] per ADR-0039:
+    # - DbgiSupervisor.HordeRegistry (CRDT-based distributed Registry; members: :auto)
+    # - DbgiSupervisor.HordeDynamicSupervisor (distributed DynamicSupervisor; members: :auto)
+    assert length(children) == 8
   end
 
   test ":pg scope substantively at canonical register" do

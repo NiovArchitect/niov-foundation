@@ -80,7 +80,12 @@ defmodule DbgiSupervisor.MixProject do
       {:telemetry_metrics, "~> 1.1"},
       {:telemetry_poller, "~> 1.3"},
       {:telemetry_metrics_prometheus, "~> 1.1"},
-      {:logger_json, "~> 7.0"}
+      {:logger_json, "~> 7.0"},
+      # Sub-arc 1 sub-phase b Commit B.3 [BEAM-DBGI-HORDE-SUBSTRATE-REDRAFT]
+      # per ADR-0039 Sub-decision 1: distributed Registry + DynamicSupervisor
+      # with members: :auto canonical at libcluster-integrated register per
+      # hexdocs.pm/horde/libcluster.html "Automatic Cluster Membership".
+      {:horde, "~> 0.9"}
     ]
   end
 end

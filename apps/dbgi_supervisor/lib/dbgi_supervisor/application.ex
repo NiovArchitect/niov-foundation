@@ -136,6 +136,35 @@ defmodule DbgiSupervisor.Application do
        [
          name: DbgiSupervisor.PresenceTracker,
          pubsub_server: DbgiSupervisor.PubSub
+       ]},
+
+      # Sub-arc 1 sub-phase b Commit B.3 [BEAM-DBGI-HORDE-SUBSTRATE-REDRAFT]
+      # ===================================================================
+      # Horde substrate per ADR-0039 Sub-decision 1: CRDT-based distributed
+      # Registry + DynamicSupervisor with members: :auto canonical at
+      # libcluster-integrated register per canonical Horde 0.10 docs guide.
+      #
+      # members: :auto canonical at canonical-knowledge register per
+      # hexdocs.pm/horde/libcluster.html "Automatic Cluster Membership":
+      # all visible nodes auto-added; :nodeup/:nodedown events auto-managed.
+      # Substrate-coherent at canonical-coherence register with existing
+      # libcluster ClusterSupervisor at sub-phase 8 substrate register.
+      #
+      # Existing single-node Registry + DynamicSupervisor (above) preserved
+      # at backward-compat register for PERSONAL/AI_AGENT/DEVICE tier
+      # dispatch at sub-phase a substrate per ADR-0038.
+      {Horde.Registry,
+       [
+         name: DbgiSupervisor.HordeRegistry,
+         keys: :unique,
+         members: :auto
+       ]},
+      {Horde.DynamicSupervisor,
+       [
+         name: DbgiSupervisor.HordeDynamicSupervisor,
+         strategy: :one_for_one,
+         distribution_strategy: Horde.UniformDistribution,
+         members: :auto
        ]}
     ]
 

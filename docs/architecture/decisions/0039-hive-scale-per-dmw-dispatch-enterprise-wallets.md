@@ -104,6 +104,28 @@ compat register substantively for PERSONAL and AI_AGENT and DEVICE
 tier substantively at sub-phase c plus sub-phase d register
 substantively.
 
+Members configuration substantively canonical at canonical-knowledge
+register per hexdocs.pm/horde/libcluster.html "Automatic Cluster
+Membership" guide: both Horde.Registry and Horde.DynamicSupervisor
+use members: :auto at startup configuration substantively. The
+:auto mode substantively delegates cluster membership to libcluster
+ClusterSupervisor canonical at sub-phase 8 substrate register
+substantively at DbgiSupervisor.Application supervised children
+canonical at canonical-architectural register substantively. All
+visible nodes substantively auto-added at canonical-knowledge
+register substantively; :nodeup and :nodedown events substantively
+auto-managed at canonical-coherence register substantively;
+distribution-mode transitions substantively handled automatically at
+canonical-knowledge register substantively per RULE 11
+D-WIDER-KNOWLEDGE-CHECK research arc canonical at canonical-knowledge
+register substantively. Static members lists at child-spec
+construction time substantively rejected at canonical-honest register
+substantively per D-HORDE-STATIC-MEMBERS-DISTRIBUTION-MODE-DRIFT
+substrate-build observation forward-queued at substrate-honest
+register substantively (Node.self() captured at module-load time
+substantively goes stale across BEAM distribution mode transitions
+at canonical-state register substantively).
+
 ### Sub-decision 2: cosmp_router pure-module refactor at single-source-of-truth register
 
 cosmp_router single-GenServer pattern at HEAD 866e328 substantively

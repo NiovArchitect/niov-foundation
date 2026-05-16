@@ -134,4 +134,114 @@ defmodule DbgiSupervisor do
         :error
     end
   end
+
+  # ==========================================================================
+  # Horde-distributed DMWWorker Public API per ADR-0039 Sub-decision 1
+  # ==========================================================================
+  #
+  # ADR-0034 testability-refactor pattern: registry and supervisor names
+  # are configurable via opts keyword, defaulting to application-level
+  # Horde instances. Tests pass isolated names per ADR-0034 substrate.
+
+  @default_horde_registry DbgiSupervisor.HordeRegistry
+  @default_horde_supervisor DbgiSupervisor.HordeDynamicSupervisor
+
+  @doc """
+  Start a DMWWorker for the given entity_id + wallet_type via Horde
+  distributed substrate per ADR-0039 Sub-decision 1.
+
+  Lazy-spawned via Horde.DynamicSupervisor; registered via Horde.Registry.
+  Bypasses DMWWorker.start_link/1 (which registers via the single-node
+  Registry) and uses GenServer.start_link/3 directly with a Horde-via
+  name registration. DMWWorker init/1, handle_call, and terminate/2
+  callbacks run unchanged at sub-phase a substrate register, preserving
+  Phoenix.Tracker presence + tier metadata canonical per ADR-0038
+  Sub-decisions 3 + 5.
+
+  Returns `{:ok, pid}` on success or `{:ok, pid}` if a DMWWorker for
+  that entity_id is already registered (lazy-spawn idempotent).
+
+  ## Options
+
+  - `:registry` (default `DbgiSupervisor.HordeRegistry`): Horde.Registry
+    name. Tests pass isolated names per ADR-0034.
+  - `:supervisor` (default `DbgiSupervisor.HordeDynamicSupervisor`):
+    Horde.DynamicSupervisor name. Tests pass isolated names per ADR-0034.
+
+  ## ENTERPRISE-only at sub-phase b register
+
+  Per ADR-0039 Sub-decision 8, this Horde path fires for ENTERPRISE
+  wallets only at sub-phase b register. PERSONAL/AI_AGENT/DEVICE tier
+  dispatch uses start_dmw_worker/2 single-node path at sub-phase a
+  substrate register.
+
+  ## References
+
+  - ADR-0039 Sub-decision 1 (per-DMW GenServer via Horde, members: :auto)
+  - ADR-0039 Sub-decision 7 (tier-routed dispatch shim)
+  - ADR-0039 Sub-decision 8 (ENTERPRISE-only scope)
+  - ADR-0034 (BEAM testability discipline; name-configurable substrate)
+  - ADR-0038 Sub-decisions 1-5 (DMWWorker substrate canonical at sub-phase
+    a runtime register)
+  """
+  @spec start_dmw_worker_horde(entity_id(), wallet_type(), keyword()) ::
+          {:ok, pid()} | {:error, term()}
+  def start_dmw_worker_horde(entity_id, wallet_type, opts \\ [])
+      when wallet_type in [:personal, :enterprise, :device] do
+    registry = Keyword.get(opts, :registry, @default_horde_registry)
+    supervisor = Keyword.get(opts, :supervisor, @default_horde_supervisor)
+
+    case whereis_dmw_worker_horde(entity_id, registry: registry) do
+      {:ok, pid} ->
+        {:ok, pid}
+
+      :error ->
+        child_spec = %{
+          id: {DbgiSupervisor.DMWWorker, entity_id},
+          start:
+            {GenServer, :start_link,
+             [
+               DbgiSupervisor.DMWWorker,
+               [entity_id: entity_id, wallet_type: wallet_type],
+               [name: {:via, Horde.Registry, {registry, entity_id}}]
+             ]},
+          restart: :transient,
+          type: :worker
+        }
+
+        case Horde.DynamicSupervisor.start_child(supervisor, child_spec) do
+          {:ok, pid} -> {:ok, pid}
+          {:error, {:already_started, pid}} -> {:ok, pid}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  @doc """
+  Look up the DMWWorker pid for the given entity_id via Horde.Registry
+  per ADR-0039 Sub-decision 1.
+
+  Returns `{:ok, pid}` or `:error` if no DMWWorker is registered for
+  that entity_id in Horde.Registry. Mirrors whereis_dmw_worker/1
+  return shape for API symmetry at single-node + Horde registers.
+
+  ## Options
+
+  - `:registry` (default `DbgiSupervisor.HordeRegistry`): Horde.Registry
+    name. Tests pass isolated names per ADR-0034.
+
+  ## References
+
+  - ADR-0039 Sub-decision 1 (Horde Registry lookup, members: :auto)
+  - ADR-0034 (BEAM testability discipline)
+  """
+  @spec whereis_dmw_worker_horde(entity_id(), keyword()) :: {:ok, pid()} | :error
+  def whereis_dmw_worker_horde(entity_id, opts \\ []) do
+    registry = Keyword.get(opts, :registry, @default_horde_registry)
+
+    case Horde.Registry.lookup(registry, entity_id) do
+      [{pid, _meta}] -> {:ok, pid}
+      [] -> :error
+    end
+  end
 end
