@@ -306,6 +306,88 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase b (Hive-Scale Per-DMW Dispatch ENTERPRISE per ADR-0039): IN FLIGHT 2026-05-16
+
+Phase 3 (Dynamic Memory Accuracy at Scale) sub-arc 1 sub-phase b
+Commit 1 of 7 LANDED at this commit per ADR-0039 §Decision
+Sub-decision 9 7-commit mini-arc decomposition. ADR-0039 NEW (Hive-
+Scale Per-DMW Dispatch Substrate for ENTERPRISE Wallets; Status
+Proposed 2026-05-16) lands the substrate-architectural canonical for
+hive-scale per-DMW dispatch substrate that delivers per-DMW
+parallelism at hive scale at runtime for ENTERPRISE wallets at
+sub-phase b closure.
+
+13 sub-decisions all locked at α-default per Q-A through Q-G at
+canonical-knowledge register substantively informed by 5 rounds of
+research at canonical Elixir/BEAM register substantively:
+
+- Sub-decision 1: per-DMW GenServer via Horde Registry + Horde
+  DynamicSupervisor (Discord precedent; CRDT-based distributed
+  Registry + handoff on node failure).
+- Sub-decision 2: cosmp_router pure-module refactor at single-source-
+  of-truth register (NEW `CosmpRouter.Operations` module; Elixir
+  anti-pattern resolution).
+- Sub-decision 3: DMWWorker COSMP op handlers invoking
+  `CosmpRouter.Operations` primitives at module-level register.
+- Sub-decision 4: NEW `CosmpRouter.WalletLookup` module (per-request
+  indexed point-lookup inherited from ADR-0036).
+- Sub-decision 5: NEW ETS read-optimized cache at
+  `apps/cosmp_router/lib/cosmp_router/wallet_cache.ex`
+  (read_concurrency + write_concurrency + decentralized_counters).
+- Sub-decision 6: COSMP protobuf envelope extension with optional
+  entity_id field across 7 op request messages.
+- Sub-decision 7: tier-routed dispatch shim at `grpc/server.ex`
+  (ENTERPRISE through DMWWorker via Horde Registry;
+  PERSONAL/AI_AGENT/DEVICE through cosmp_router unchanged).
+- Sub-decision 8: ENTERPRISE-only scope at sub-phase b register.
+- Sub-decision 9: 7-commit mini-arc decomposition.
+- Sub-decision 10: 6 BEAM-compatibility patterns from ADR-0026 §5
+  preserved by construction.
+- Sub-decision 11: Elixir anti-pattern compliance at canonical-
+  knowledge register.
+- Sub-decision 12: testability per ADR-0034.
+- Sub-decision 13: patent-implementation evidence at canonical
+  decision register.
+
+7-commit decomposition per ADR-0039 §Decision Sub-decision 9:
+
+- Commit B.1 `[BEAM-DBGI-HIVE-DISPATCH-ADR]` (this commit) --
+  docs-only ADR-0039 NEW + ADR-0028 amendments + catalog refreshes.
+- Commit B.2 `[BEAM-COSMP-OPERATIONS-PURE-MODULE]` (forward-substrate)
+  -- NEW `apps/cosmp_router/lib/cosmp_router/operations.ex` + MOD
+  `apps/cosmp_router/lib/cosmp_router/router.ex` + NEW unit tests.
+- Commit B.3 `[BEAM-DBGI-HORDE-SUBSTRATE]` (forward-substrate) --
+  NEW Horde Registry + Horde DynamicSupervisor supervised children
+  at DbgiSupervisor + Horde dependency at mix.exs + NEW public API +
+  NEW unit tests.
+- Commit B.4 `[BEAM-DBGI-WALLET-LOOKUP-CODE]` (forward-substrate) --
+  NEW `apps/cosmp_router/lib/cosmp_router/wallet_lookup.ex` + NEW
+  unit tests.
+- Commit B.5 `[BEAM-DBGI-WALLET-CACHE-ETS]` (forward-substrate) --
+  NEW `apps/cosmp_router/lib/cosmp_router/wallet_cache.ex` +
+  supervised ETS table + NEW unit tests.
+- Commit B.6 `[BEAM-DBGI-HIVE-DISPATCH-INTEGRATION]`
+  (forward-substrate) -- MOD `apps/cosmp_router/proto/cosmp.proto` +
+  MOD `apps/api/src/services/cosmp-client.ts` + MOD
+  `apps/dbgi_supervisor/lib/dbgi_supervisor/dmw_worker.ex` with 7
+  COSMP op handle_call clauses + MOD
+  `apps/cosmp_router/lib/cosmp_router/grpc/server.ex` with tier-
+  routed dispatch shim + NEW integration tests.
+- Commit B.7 `[BEAM-DBGI-HIVE-DISPATCH-CLOSURE]` (forward-substrate)
+  -- docs-only closure cascade.
+
+Substrate-state ground truth register: sub-phase b mini-arc IN
+FLIGHT at this commit; cosmp_router single-GenServer pattern at HEAD
+866e328 substantively refactors at Commit B.2 register to pure-
+module primitives at single-source-of-truth register; per-DMW
+parallelism at hive scale for ENTERPRISE tier delivers at runtime
+at Commit B.6 closure register; sub-phase b mini-arc closes at
+Commit B.7 closure cascade. Phoenix.PubSub hive fanout substrate +
+Broadway pipeline at high-throughput register + hive algorithm at
+weighting architecture per Entry #28 substantively forward-substrate
+at sub-phase c + sub-phase d + sub-arc 2 register substantively at
+canonical-state register substantively.
+
 ---
 
 ## Section 1 — One-paragraph summary

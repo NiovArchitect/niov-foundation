@@ -172,6 +172,35 @@ coordination tier).
   `:gproc` backward-compatibility; partition-tolerance expansion;
   per-capsule granularity at finer-grained register) remain forward-
   substrate.
+
+  **LANDED (sub-arc 1 sub-phase b ENTERPRISE hive-scale dispatch
+  update; append-only):** the per-DMW COSMP execution forward-looking
+  substrate canonical at sub-arc 1 sub-phase a closure register
+  substantively progresses at ENTERPRISE tier per ADR-0039 (Hive-
+  Scale Per-DMW Dispatch Substrate for ENTERPRISE Wallets; landed at
+  sub-arc 1 sub-phase b mini-arc). The architectural target named in
+  the README and monetization essay (hundreds to thousands of
+  parallel COSMP operations per DMW for the workloads that need it;
+  hive intelligence across millions of memory capsules with push and
+  pull dataflow in real time and no parallel action bottleneck)
+  delivers at runtime for ENTERPRISE tier at sub-phase b closure.
+  Horde Registry plus Horde DynamicSupervisor canonical at canonical-
+  knowledge register substantively at distributed cluster register
+  substantively delivers at sub-phase b register substantively;
+  cosmp_router pure-module refactor at single-source-of-truth
+  register substantively resolves the GenServer-wrapping-stateless-
+  logic anti-pattern at canonical Elixir hexdocs register
+  substantively; ETS read-optimized cache substrate substantively at
+  per-node register substantively delivers high-throughput wallet_type
+  lookup at canonical-coherence register substantively. PERSONAL plus
+  AI_AGENT promote-on-activity substrate remains forward-substrate to
+  sub-arc 1 sub-phase c; DEVICE always-cold shard-mapped substrate
+  remains forward-substrate to sub-arc 1 sub-phase d and beyond;
+  Phoenix.PubSub hive fanout substrate plus Broadway pipeline at high-
+  throughput register plus hive algorithm at weighting architecture
+  register substantively per Entry #28 substantively remain forward-
+  substrate at sub-phase c plus sub-phase d plus sub-arc 2 register
+  substantively at canonical-state register substantively.
 - **ADR-0030** — Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
   DBGI Supervisor + Three-Language Stack Canonicalization (LANDED at Block B
   sub-phase 1 `[BEAM-PHASE-2-ADR]`; documents Phase 2 implementation; the
@@ -310,3 +339,16 @@ Bidirectional citations (cited from):
   Layer) + §Forward Queue (the per-capsule supervised Elixir process
   forward-substrate item this ADR enumerated at sub-phase 13 closure
   LANDED sub-paragraph).
+- ADR-0039 (Hive-Scale Per-DMW Dispatch Substrate for ENTERPRISE
+  Wallets; landed at sub-arc 1 sub-phase b mini-arc) — load-bearing:
+  ADR-0039 substantively progresses the per-DMW COSMP execution
+  forward-queue item at ENTERPRISE tier per the §Forward Queue
+  amendment above at canonical-coherence register substantively.
+  ADR-0039 cites this ADR §3 (BEAM Coordination Layer) + §Forward
+  Queue (the per-capsule supervised Elixir process forward-substrate
+  item this ADR enumerated at sub-phase 13 closure LANDED sub-
+  paragraph; per-DMW granularity progress canonical at ADR-0038;
+  ENTERPRISE tier hive-scale COSMP execution progress canonical at
+  ADR-0039 per Horde plus cosmp_router pure-module refactor plus
+  DMWWorker COSMP handlers plus ETS read-cache substrate at canonical-
+  knowledge register substantively).
