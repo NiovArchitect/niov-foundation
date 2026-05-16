@@ -160,6 +160,18 @@ coordination tier).
   `:gproc` backward-compatibility; partition-tolerance expansion) are
   documented at `docs/architecture/beam-coordination-canonical-record.md` §11
   Forward paths.
+
+  **LANDED (sub-arc 1 sub-phase a closure update; append-only):** the
+  per-capsule supervised Elixir process forward-looking item enumerated
+  above substantively progresses at per-DMW granularity per ADR-0038
+  (DMW Worker per-DMW Supervised Process; landed at sub-arc 1 sub-phase
+  a `[BEAM-DBGI-DMWWORKER-ADR]` Commit 1 of 3; Commit 2 substantive
+  code + Commit 3 closure forward-substrate). The remaining forward-
+  looking items (OtzarComm message routing at scale; Python ML
+  substrate; multi-region production topology; migration triggers;
+  `:gproc` backward-compatibility; partition-tolerance expansion;
+  per-capsule granularity at finer-grained register) remain forward-
+  substrate.
 - **ADR-0030** — Phase 2 Elixir/BEAM Implementation: Mix Umbrella + COSMP Router +
   DBGI Supervisor + Three-Language Stack Canonicalization (LANDED at Block B
   sub-phase 1 `[BEAM-PHASE-2-ADR]`; documents Phase 2 implementation; the
@@ -290,3 +302,11 @@ Bidirectional citations (cited from):
   + gRPC interop + observability + canonical-record-analog doc). The "Forward
   Queue → ADR-0029" pre-existing entry was reframed at sub-phase 1 to point at
   ADR-0030 (catch #1; see ADR-0030 Substrate-State Catches Resolved §).
+- ADR-0038 (DMW Worker per-DMW Supervised Process; landed at sub-arc 1
+  sub-phase a `[BEAM-DBGI-DMWWORKER-ADR]` Commit 1 of 3) — load-bearing:
+  ADR-0038 substantively closes the per-capsule supervised Elixir
+  process forward-queue item at per-DMW granularity per the §Forward
+  Queue amendment above. ADR-0038 cites this ADR §3 (BEAM Coordination
+  Layer) + §Forward Queue (the per-capsule supervised Elixir process
+  forward-substrate item this ADR enumerated at sub-phase 13 closure
+  LANDED sub-paragraph).

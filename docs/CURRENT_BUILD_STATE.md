@@ -163,6 +163,113 @@ substantively per Q-NEW-2 LOCKED Option α at sub-phase 6.
 
 ---
 
+## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase a (DMWWorker per ADR-0038): IN FLIGHT 2026-05-15
+
+Phase 3 (Dynamic Memory Accuracy at Scale) sub-arc 1 sub-phase a
+Commit 1 of 3 LANDED at this commit per SYNTHESIS-SUB-PHASE-A-
+DECOMPOSITION. ADR-0038 NEW (DMW Worker per-DMW Supervised Process;
+Status Proposed 2026-05-15) lands the substrate-architectural
+canonical for the DMWWorker GenServer module that uses the BEAM
+scaffolding LANDED at sub-phases 8-11 (:pg + Registry +
+DynamicSupervisor + Cluster.Supervisor + Phoenix.PubSub +
+Phoenix.Tracker + Telemetry).
+
+8 sub-decisions all locked at α-default per Q-A through Q-G:
+
+- Sub-decision 1: module location at
+  `apps/dbgi_supervisor/lib/dbgi_supervisor/dmw_worker.ex`.
+- Sub-decision 2: identity addressing by entity_id via
+  `{:via, Registry, {DbgiSupervisor.Registry, entity_id}}` Registry
+  key + `"dmw:#{entity_id}"` Phoenix.Tracker topic.
+- Sub-decision 3: tier dispatch axis on WalletType 3-tier
+  (PERSONAL + ENTERPRISE + DEVICE) right-sized for sub-phase a.
+- Sub-decision 4: lifecycle pattern lazy-spawn on first COSMP
+  operation against the wallet's entity_id (consumer-tier-cost
+  framing preserved; idle wallets cost nothing at memory-footprint
+  register).
+- Sub-decision 5: state stateless plus Phoenix.Tracker presence only
+  at sub-phase a (ETS cache substrate forward-substrate).
+- Sub-decision 6: DMWWorker vs cosmp_router relationship
+  separate-layer (DMWWorker runs dbgi-tier lifecycle and
+  coordination substrate; cosmp_router stays as single-GenServer
+  COSMP-op dispatcher at sub-phase a; re-wire forward-substrate to
+  sub-arc 1 sub-phase b and beyond).
+- Sub-decision 7: 6 BEAM-compatibility patterns from ADR-0026 §5
+  preserved by construction.
+- Sub-decision 8: testability per ADR-0034 (name-configurable
+  substrate + start_supervised! patterns; tests exercise spawn via
+  DynamicSupervisor + Registry lookup + Phoenix.Tracker presence on
+  init + presence absence on terminate + tier-differentiated
+  behavior + parallel DMWWorkers for distinct entity_ids +
+  stop-then-restart resilience).
+
+Hybrid hot/cold framing canonical at substantive register:
+ENTERPRISE wallets run always-hot per-DMW supervised process +
+PERSONAL and AI_AGENT wallets promote-on-activity from cold shard
+substrate to hot per-DMW substrate + DEVICE wallets run always-cold
+shard-mapped substrate.
+
+ADR-0028 §Forward Queue NEW append-only LANDED sub-paragraph
+(sub-arc 1 sub-phase a closure update; preserves existing sub-phase
+13 LANDED sub-paragraph unchanged at chronology-preservation
+register) marks per-capsule supervised Elixir process forward-queue
+item as substantively progressed at per-DMW granularity per
+ADR-0038. Per-capsule granularity at finer-grained register and
+remaining forward-looking items (OtzarComm message routing at
+scale; Python ML substrate; multi-region production topology;
+migration triggers; `:gproc` backward-compatibility;
+partition-tolerance expansion) remain forward-substrate.
+
+ADR-0028 §Bidirectional citations (cited from) NEW entry (RULE 14
+back-citation) appends to existing sub-block at lines 250+ matching
+the existing entry format (bulleted with em-dash separator at
+ADR-substrate canonical-coherence register; ADR-0028 pre-existing
+em-dash convention preserved at chronology-preservation register).
+
+3-commit decomposition per SYNTHESIS-SUB-PHASE-A-DECOMPOSITION:
+
+- Commit 1 `[BEAM-DBGI-DMWWORKER-ADR]` (this commit) -- docs-only
+  ADR-0038 NEW + ADR-0028 amendments + catalog refreshes.
+- Commit 2 `[BEAM-DBGI-DMWWORKER-CODE]` (forward-substrate) --
+  substantive code at canonical-execution register substantively:
+  NEW `apps/dbgi_supervisor/lib/dbgi_supervisor/dmw_worker.ex` +
+  DynamicSupervisor wiring + Registry integration + Phoenix.Tracker
+  integration + tier dispatch + tests at
+  `apps/dbgi_supervisor/test/dbgi_supervisor/dmw_worker_test.exs`.
+- Commit 3 `[BEAM-DBGI-DMWWORKER-CLOSURE]` (forward-substrate) --
+  docs-only closure cascade: ADR-0038 Status Proposed → Accepted +
+  NEW Post-Closure Implementation Lineage section + this section
+  CLOSED + section-12-progress.md row CLOSED + architecture/README
+  + CLAUDE.md ADR catalog ADR-0038 entry refresh + ADR-0028 second
+  amendment if any.
+
+Substrate-state ground truth register: sub-phase a delivers the
+per-DMW supervised process substrate that the scaffolding has been
+wired for. cosmp_router re-wire forward-substrate to sub-arc 1
+sub-phase b and beyond; the architectural target named in the
+README and monetization essay (hundreds to thousands of parallel
+COSMP operations for the workloads that need it) does not deliver
+at runtime until sub-arc 1 sub-phase b and beyond complete.
+
+7 substrate-build observations forward-queued at commit-body-only
+register substantively per Option β substrate-honest discipline:
+D-AUTHORIZATION-PASTE-PROSE-VS-SCOPE-DISTINCTION +
+D-ADR-CATALOG-ENTRY-CHRONOLOGY-RESIDUAL +
+D-PUSH-RECONCILIATION-MID-COMMIT +
+D-OPERATOR-CORRECTION-EXTENSION-DISCIPLINE +
+D-OPERATOR-FRAMING-REALIGNMENT-DISCIPLINE +
+D-SUBSTANTIVE-CASCADE-PROSE-DRIFT +
+D-ADR-AMENDMENT-PATTERN-VARIANCE-DISCIPLINE (NEW canonical at this
+commit). NOT promoted to ADR-0035 §9 numbered cluster.
+
+Full sub-phase narrative + substrate-architectural framing
+canonical at `docs/architecture/decisions/0038-dmw-worker-per-dmw-supervised-process.md`
+ADR register substantively. Full section-12-progress.md row
+canonical at `docs/reference/section-12-progress.md` Phase 3 row
+substantively at substantive register.
+
+---
+
 ## Section 1 — One-paragraph summary
 
 NIOV Foundation is the **AI Memory Governance Substrate** — the
