@@ -76,6 +76,20 @@ export type {
   RevokeFailure,
 } from "./services/cosmp/share.service.js";
 
+// CAR Sub-box 2 sub-phase 3 [CAR-SUB-BOX-2-SERVICES] per ADR-0037
+// + Q-RULE-13-INTERNAL-HELPER-TEST-IMPORT LOCKED Option α: narrow
+// re-export of the assertJurisdictionalScope pure helper so unit
+// tests can follow the established @niov/api workspace import
+// convention. The helper is a pure-function discriminated outcome
+// (no Prisma access, no I/O); higher COSMP services consume it
+// via direct relative import inside apps/api/src.
+export { assertJurisdictionalScope } from "./services/cosmp/jurisdiction-enforcement.js";
+export type {
+  AssertJurisdictionalScopeInput,
+  JurisdictionScopeCode,
+  JurisdictionScopeResult,
+} from "./services/cosmp/jurisdiction-enforcement.js";
+
 // ───────────────────────────────────────────────────────────────
 // gRPC client for the Elixir CosmpRouter routing layer (sub-phase
 // 5b-i [BEAM-COSMP-INTEROP-GRPC]).

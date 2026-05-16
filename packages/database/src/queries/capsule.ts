@@ -99,6 +99,19 @@ export interface CreateCapsuleInput {
   requires_validation?: boolean;
 
   actor_id?: string | null;
+
+  // CAR Sub-box 2 sub-phase 3 [CAR-SUB-BOX-2-SERVICES] per ADR-0037
+  // Sub-decisions 2 + 5 + Q-NEW-2 LOCKED Option α (owner Entity
+  // cascade). Optional jurisdictional anchor for the capsule. If
+  // omitted, createCapsule fetches owner Entity.jurisdiction via one
+  // bounded indexed PK lookup inside the existing withAudit
+  // transaction; if the owner has no jurisdiction either, persists
+  // null. Immutable after creation per ADR-0037 Sub-decision 4
+  // (cross-region transfer is forward-queued explicit workflow with
+  // own audit semantics; runtime immutability enforcement lands at
+  // sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] register
+  // substantively).
+  jurisdiction?: string | null;
 }
 
 // WHAT: A capsule record with the storage_location field stripped out.
@@ -164,6 +177,24 @@ export async function createCapsule(
       },
     },
     async (tx) => {
+      // CAR Sub-box 2 sub-phase 3 [CAR-SUB-BOX-2-SERVICES] per
+      // ADR-0037 Sub-decision 5 (cascade) + Q-NEW-2 LOCKED Option α
+      // (owner Entity cascade): if the caller supplied an explicit
+      // jurisdiction, use it; otherwise fall back to owner Entity's
+      // jurisdiction via one bounded indexed PK lookup. NO capsule
+      // content read; NO unbounded scan; NO OrgSettings cascade
+      // (createCapsule does not know org_entity_id at this register).
+      let resolvedJurisdiction: string | null;
+      if (input.jurisdiction !== undefined) {
+        resolvedJurisdiction = input.jurisdiction;
+      } else {
+        const owner = await tx.entity.findUnique({
+          where: { entity_id: input.entity_id },
+          select: { jurisdiction: true },
+        });
+        resolvedJurisdiction = owner?.jurisdiction ?? null;
+      }
+
       return tx.memoryCapsule.create({
         data: {
           capsule_id: newCapsuleId,
@@ -190,6 +221,7 @@ export async function createCapsule(
           expires_at: input.expires_at ?? null,
           ai_access_blocked: input.ai_access_blocked ?? false,
           requires_validation: input.requires_validation ?? false,
+          jurisdiction: resolvedJurisdiction,
         },
       });
     },

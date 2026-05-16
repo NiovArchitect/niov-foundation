@@ -182,6 +182,19 @@ export interface WriteAuditEventInput {
   // "" at canonical hash time when nullish.
   lawful_basis_id?: string | null;
   lawful_basis_chain_hash?: string | null;
+  // CAR Sub-box 2 sub-phase 3 [CAR-SUB-BOX-2-SERVICES] per ADR-0037
+  // Sub-decisions 2 + 3 + 5 + Q-NEW-3 LOCKED Option α (passthrough
+  // only). Optional jurisdictional anchor for the audit event row.
+  // ROW METADATA ONLY — NOT included in canonicalRecord(...) call
+  // below; preserves Sub-box 3 sub-phase 4 14-field canonical_record/1
+  // byte-equivalence + 12 fixture pairs + cosmp_router default tier
+  // 137/0 substrate canonical at substantive register substantively.
+  // Operation-context defaulting (capsule.jurisdiction OR
+  // actor.entity.jurisdiction OR LawfulBasis.jurisdiction_invoked)
+  // lands at sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT] register
+  // substantively where COSMP services pass operation-derived
+  // jurisdiction explicitly.
+  jurisdiction?: string | null;
 }
 
 // WHAT: Filters queryAuditEvents accepts.
@@ -483,6 +496,12 @@ async function writeAuditEventInTx(
       event_hash,
       lawful_basis_id: input.lawful_basis_id ?? null,
       lawful_basis_chain_hash: input.lawful_basis_chain_hash ?? null,
+      // CAR Sub-box 2 sub-phase 3 [CAR-SUB-BOX-2-SERVICES] per
+      // ADR-0037 Sub-decision 3: row metadata only; NOT in
+      // canonicalRecord above (preserves Sub-box 3 sub-phase 4
+      // 14-field byte-equivalence canonical at substantive register
+      // substantively).
+      jurisdiction: input.jurisdiction ?? null,
     },
   });
 }

@@ -58,6 +58,18 @@ export interface CreateEntityInput {
   // before storing. Tests + register flows use this; system-created
   // entities (devices, AI agents) usually leave it null.
   password?: string;
+  // CAR Sub-box 2 sub-phase 3 [CAR-SUB-BOX-2-SERVICES] per ADR-0037
+  // Sub-decisions 2 + 5 + Q-NEW-1 LOCKED Option α (passthrough only).
+  // Optional jurisdictional anchor for the entity. createEntity does
+  // NOT perform org-context lookup (createEntity is org-agnostic; a
+  // brand-new entity may have no parent org chain yet — e.g., the
+  // very first PERSON in a fresh deployment). Higher layers that
+  // know org context (e.g., dandelion.service.ts:executePhase0;
+  // org.routes.ts:POST /platform/orgs) may resolve OrgSettings.default_jurisdiction
+  // and pass it explicitly here. Defaults to null when omitted
+  // (substrate-coherent with backward-compat; existing entities
+  // pre-Sub-box-2 have NULL jurisdiction).
+  jurisdiction?: string | null;
 }
 
 // WHAT: The filters listEntities understands.
@@ -135,6 +147,7 @@ export async function createEntity(
           password_hash: passwordHash,
           status: input.status ?? "ACTIVE",
           clearance_level: clearance,
+          jurisdiction: input.jurisdiction ?? null,
         },
       });
 
