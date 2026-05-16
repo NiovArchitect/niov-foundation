@@ -42,7 +42,7 @@ citation block, ISO-dated Status). The template at
 the "How To Use This Template" guidance for new ADRs.
 
 ADR catalog as of [BEAM-COSMP-INTEROP-ADR] (2026-05-13;
-32 ADRs):
+37 ADRs):
 
 - **ADR-0001** — Three-wallet architecture (foundational)
 - **ADR-0002** — Append-only audit chain with BEFORE DELETE trigger (foundational)

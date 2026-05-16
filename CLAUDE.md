@@ -442,7 +442,7 @@ authoritative locations:
   per ADR-0022, `RELEVANCE_FORGET_FLOOR` behavioral lock per
   ADR-0022) — plus the "Anchor Mechanisms" taxonomy (`Object.freeze`
   / value-pin / behavioral-lock)
-- `docs/architecture/decisions/` — the 32 ADRs with
+- `docs/architecture/decisions/` — the 37 ADRs with
   Decision / Consequences / Alternatives in Michael Nygard
   format
 

@@ -87,7 +87,7 @@ See ADR-0029 for the decision lineage; `scripts/preflight/README.md` and
 
 ---
 
-## 2. The 20 RULES + 35 ADRs as Canonical Reference
+## 2. The 20 RULES + 37 ADRs as Canonical Reference
 
 The authorization-tier substrate of the codebase lives in two places:
 
@@ -106,7 +106,7 @@ The authorization-tier substrate of the codebase lives in two places:
   `docs/architecture/beam-coordination-canonical-record.md`)**, RULE 14 (bidirectional
   citation discipline), RULE 16 (no `console.*` in `apps/api/src`), RULE 20
   (Rule-Modification Authority — see §3).
-- **`docs/architecture/decisions/` — the 35 ADRs** (`0001-…` through `0035-…`,
+- **`docs/architecture/decisions/` — the 37 ADRs** (`0001-…` through `0037-…`,
   plus `0000-template.md`). Michael Nygard format with niov-foundation
   extensions (Easier/Harder consequence split, bidirectional-citation block,
   ISO-dated Status). `docs/architecture/README.md` is the navigable catalog;
@@ -222,7 +222,7 @@ Two things follow for a contributor:
 ## 6. Recommended Reading Order
 
 1. **`CLAUDE.md`** — the operational rulebook (the 20 RULES; read all of it).
-2. **`docs/architecture/README.md`** — the ADR catalog (35 ADRs) + the ADR
+2. **`docs/architecture/README.md`** — the ADR catalog (37 ADRs) + the ADR
    Lifecycle discipline.
 3. **`docs/architecture/decisions/0001-…` onward** — at minimum ADR-0001
    (three-wallet architecture), ADR-0002 (append-only audit chain), ADR-0004

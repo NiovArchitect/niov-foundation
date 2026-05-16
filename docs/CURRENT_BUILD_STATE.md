@@ -481,15 +481,24 @@ scoring-formula vs substrate-discipline-canonical).
 
 | Tier | Count | Last verified |
 |---|---|---|
-| Unit | 371 | CI run 25611252522 (2026-05-10) |
-| Integration | 111 + 1 skipped | CI run 25611252522 (2026-05-10) |
+| TypeScript unit | 508 / 508 | verified at HEAD c1ee061 pre-flight surface; CI run reference forward-queued at substrate-state register |
+| TypeScript integration | 198 + 1 skipped | verified at HEAD c1ee061 pre-flight surface; CI run reference forward-queued at substrate-state register |
+| Elixir cosmp_router default | 137 / 0 | verified at HEAD c1ee061 pre-flight surface; CI run reference forward-queued at substrate-state register |
+| Elixir dbgi_supervisor default | 42 / 0 (19 excluded) | verified at HEAD c1ee061 pre-flight surface; CI run reference forward-queued at substrate-state register |
+| Elixir dbgi_supervisor integration | 19 / 0 | verified at HEAD c1ee061 pre-flight surface; CI run reference forward-queued at substrate-state register |
 | LLM-required nightly | (verify count when nightly runs) | (verify) |
-| **Total** | **483** | CI run 25611252522 (2026-05-10) |
+| **Total** | **904 + 1 skipped** | verified at HEAD c1ee061 pre-flight surface; CI green at every substrate landing on origin/main |
 
 Test count timeline reference: see
 `docs/reconciliation/2026-05-08-build-reconciliation.md` Section 5
 (311 → 482 across Sections 9, 10, 11, 12B Foundation, and Track A
-Gate substrate work).
+Gate substrate work). Subsequent growth landed across BEAM Phase 2
+(sub-phases 10-13), CAR Sub-box 3 mini-arc (7 sub-phases adding
+REGULATOR + LawfulBasis + audit chain canonical_record/1 12→14
+extension + 23 + 18 integration tests + 32 unit tests), and CAR
+Sub-box 2 mini-arc (6 sub-phases adding jurisdiction tagging +
+service helpers + COSMP enforcement + REGULATOR integration + 17
+unit + 20 + 7 integration tests).
 
 ---
 
