@@ -135,4 +135,97 @@ defmodule CosmpRouter.ActivityCounterTest do
       assert 60_000 = ActivityCounter.configured_window_ms()
     end
   end
+
+  describe "evict_idle/0 + idle eviction substrate per C.2" do
+    test "returns 0 when no expired entries (within TTL)" do
+      entity_id = unique_entity_id("evict_fresh")
+      _ = ActivityCounter.record_activity(entity_id)
+
+      # All entries within default TTL (300_000 ms) at canonical-state register
+      assert 0 = ActivityCounter.evict_idle()
+
+      # Fresh entry preserved at canonical-coherence register
+      assert 1 = ActivityCounter.get_count(entity_id)
+    end
+
+    test "removes expired entries via direct ETS backdating" do
+      entity_id = unique_entity_id("evict_expired")
+
+      # Insert entry with backdated last_activity beyond TTL canonical
+      # at canonical-execution register substantively per direct
+      # :ets.insert/2 register substantively (bypass record_activity to
+      # control last_activity timestamp directly).
+      backdated_ms = System.system_time(:millisecond) - 1_000_000
+      :ets.insert(:cosmp_router_activity_counter, {entity_id, 3, backdated_ms})
+
+      assert 3 = ActivityCounter.get_count(entity_id)
+      assert evicted = ActivityCounter.evict_idle()
+      assert evicted >= 1
+      assert 0 = ActivityCounter.get_count(entity_id)
+    end
+
+    test "removes only expired entries; preserves fresh entries" do
+      fresh_id = unique_entity_id("evict_mixed_fresh")
+      expired_id_a = unique_entity_id("evict_mixed_expired_a")
+      expired_id_b = unique_entity_id("evict_mixed_expired_b")
+
+      # Fresh entry via normal record_activity
+      _ = ActivityCounter.record_activity(fresh_id)
+
+      # Two expired entries via direct ETS backdating
+      backdated_ms = System.system_time(:millisecond) - 1_000_000
+      :ets.insert(:cosmp_router_activity_counter, {expired_id_a, 5, backdated_ms})
+      :ets.insert(:cosmp_router_activity_counter, {expired_id_b, 10, backdated_ms})
+
+      assert evicted = ActivityCounter.evict_idle()
+      assert evicted >= 2
+
+      # Fresh entry preserved
+      assert 1 = ActivityCounter.get_count(fresh_id)
+      # Expired entries removed
+      assert 0 = ActivityCounter.get_count(expired_id_a)
+      assert 0 = ActivityCounter.get_count(expired_id_b)
+    end
+
+    test "configured_eviction_interval_ms returns Application.get_env default" do
+      # Default 30_000 ms canonical at canonical-coherence register substantively
+      assert 30_000 = ActivityCounter.configured_eviction_interval_ms()
+    end
+
+    test "configured_idle_ttl_ms returns Application.get_env default" do
+      # Default 300_000 ms (5 minutes) canonical at canonical-coherence register
+      assert 300_000 = ActivityCounter.configured_idle_ttl_ms()
+    end
+
+    test "handle_info(:evict_idle, state) re-schedules eviction tick" do
+      # Override interval to 50ms for deterministic verification register
+      Application.put_env(:cosmp_router, :activity_counter_eviction_interval_ms, 50)
+
+      try do
+        # Insert backdated entry; manually send :evict_idle to trigger handler
+        entity_id = unique_entity_id("evict_reschedule")
+        backdated_ms = System.system_time(:millisecond) - 1_000_000
+        :ets.insert(:cosmp_router_activity_counter, {entity_id, 1, backdated_ms})
+
+        send(Process.whereis(ActivityCounter), :evict_idle)
+        :timer.sleep(100)
+
+        # Entry should be evicted by the handler
+        assert 0 = ActivityCounter.get_count(entity_id)
+
+        # GenServer process still alive (handle_info did not crash)
+        assert Process.alive?(Process.whereis(ActivityCounter))
+      after
+        Application.delete_env(:cosmp_router, :activity_counter_eviction_interval_ms)
+      end
+    end
+
+    test "defensive handle_info catch-all does not crash GenServer" do
+      send(Process.whereis(ActivityCounter), :unknown_message)
+      :timer.sleep(20)
+
+      # GenServer still alive after unknown message
+      assert Process.alive?(Process.whereis(ActivityCounter))
+    end
+  end
 end

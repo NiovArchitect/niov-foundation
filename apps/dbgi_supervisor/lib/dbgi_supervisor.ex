@@ -244,4 +244,59 @@ defmodule DbgiSupervisor do
       [] -> :error
     end
   end
+
+  @doc """
+  Stop a DMWWorker spawned via Horde substrate per ADR-0039 §Sub-decision 8
+  amendment forward-substrate at C.4 commit register substantively.
+  Symmetric with `start_dmw_worker_horde/3` + `whereis_dmw_worker_horde/2`
+  per Horde-API trio discipline canonical at substrate-architectural
+  register substantively.
+
+  Looks up the worker pid via `Horde.Registry.lookup/2`; if found,
+  terminates via `Horde.DynamicSupervisor.terminate_child/2` per official
+  Horde docs guide reference at canonical-knowledge register substantively.
+  CRDT-coordinated termination canonical at distributed cluster register
+  substantively.
+
+  Idempotent at canonical-coherence register substantively: calling stop
+  on non-existent worker returns `:ok` at canonical-state register
+  substantively (no crash; no raise) per canonical OTP discipline.
+
+  ## Options
+
+  - `:registry` - Horde.Registry name (defaults to
+    `DbgiSupervisor.HordeRegistry`) per ADR-0034 testability discipline
+  - `:supervisor` - Horde.DynamicSupervisor name (defaults to
+    `DbgiSupervisor.HordeDynamicSupervisor`) per ADR-0034 testability
+    discipline
+
+  ## Examples
+
+      iex> DbgiSupervisor.stop_dmw_worker_horde("entity-123")
+      :ok
+
+      iex> DbgiSupervisor.stop_dmw_worker_horde("non-existent")
+      :ok
+
+  ## References
+
+  - ADR-0039 §Sub-decision 8 amendment forward-substrate at C.4 commit
+    register substantively
+  - ADR-0034 (BEAM testability discipline; name-configurable substrate)
+  - RULE 21 (pre-authorization research arc canonical per 67f6112 commit)
+  """
+  @spec stop_dmw_worker_horde(entity_id(), keyword()) :: :ok
+  def stop_dmw_worker_horde(entity_id, opts \\ []) when is_binary(entity_id) do
+    registry = Keyword.get(opts, :registry, @default_horde_registry)
+    supervisor = Keyword.get(opts, :supervisor, @default_horde_supervisor)
+
+    case Horde.Registry.lookup(registry, entity_id) do
+      [{pid, _value}] when is_pid(pid) ->
+        _ = Horde.DynamicSupervisor.terminate_child(supervisor, pid)
+        :ok
+
+      [] ->
+        :ok
+    end
+  end
 end

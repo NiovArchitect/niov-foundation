@@ -176,4 +176,88 @@ defmodule DbgiSupervisor.HordeSubstrateTest do
       assert state.wallet_type == :enterprise
     end
   end
+
+  describe "stop_dmw_worker_horde/2 per sub-arc 1 sub-phase c C.2 Option α" do
+    test "returns :ok for non-existent entity_id (idempotent)", %{registry: reg, supervisor: sup} do
+      entity_id = "ent-stop-nonexistent-#{System.unique_integer([:positive])}"
+
+      assert :ok =
+               DbgiSupervisor.stop_dmw_worker_horde(entity_id,
+                 registry: reg,
+                 supervisor: sup
+               )
+    end
+
+    test "terminates existing DMWWorker + clears Horde.Registry",
+         %{registry: reg, supervisor: sup} do
+      entity_id = "ent-stop-existing-#{System.unique_integer([:positive])}"
+
+      assert {:ok, pid} =
+               DbgiSupervisor.start_dmw_worker_horde(entity_id, :enterprise,
+                 registry: reg,
+                 supervisor: sup
+               )
+
+      assert {:ok, ^pid} =
+               DbgiSupervisor.whereis_dmw_worker_horde(entity_id, registry: reg)
+
+      assert :ok =
+               DbgiSupervisor.stop_dmw_worker_horde(entity_id,
+                 registry: reg,
+                 supervisor: sup
+               )
+
+      # CRDT-coordinated termination canonical at canonical-execution
+      # register substantively; allow eventual consistency settle.
+      :timer.sleep(50)
+
+      assert :error =
+               DbgiSupervisor.whereis_dmw_worker_horde(entity_id, registry: reg)
+    end
+
+    test "idempotent on second call after termination",
+         %{registry: reg, supervisor: sup} do
+      entity_id = "ent-stop-idempotent-#{System.unique_integer([:positive])}"
+
+      assert {:ok, _pid} =
+               DbgiSupervisor.start_dmw_worker_horde(entity_id, :enterprise,
+                 registry: reg,
+                 supervisor: sup
+               )
+
+      assert :ok =
+               DbgiSupervisor.stop_dmw_worker_horde(entity_id,
+                 registry: reg,
+                 supervisor: sup
+               )
+
+      :timer.sleep(50)
+
+      # Second stop on already-terminated worker returns :ok
+      assert :ok =
+               DbgiSupervisor.stop_dmw_worker_horde(entity_id,
+                 registry: reg,
+                 supervisor: sup
+               )
+    end
+
+    test "honors custom registry + supervisor opts per ADR-0034",
+         %{registry: reg, supervisor: sup} do
+      entity_id = "ent-stop-opts-#{System.unique_integer([:positive])}"
+
+      assert {:ok, _pid} =
+               DbgiSupervisor.start_dmw_worker_horde(entity_id, :enterprise,
+                 registry: reg,
+                 supervisor: sup
+               )
+
+      # Pass the same isolated test instances; substrate-coherent at
+      # ADR-0034 testability discipline register substantively.
+      assert :ok =
+               DbgiSupervisor.stop_dmw_worker_horde(entity_id,
+                 registry: reg,
+                 supervisor: sup
+               )
+    end
+  end
 end

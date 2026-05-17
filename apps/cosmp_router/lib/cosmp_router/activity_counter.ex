@@ -75,6 +75,12 @@ defmodule CosmpRouter.ActivityCounter do
   @default_threshold 5
   @default_window_ms 60_000
 
+  # Sub-arc 1 sub-phase c Commit C.2 [BEAM-DBGI-PROMOTE-IDLE-EVICTION]
+  # Defaults at Application.get_env-overridable register substantively
+  # per ADR-0034 testability discipline canonical.
+  @default_eviction_interval_ms 30_000
+  @default_idle_ttl_ms 300_000
+
   # Public API
 
   @doc """
@@ -187,6 +193,51 @@ defmodule CosmpRouter.ActivityCounter do
     Application.get_env(:cosmp_router, :activity_counter_window_ms, @default_window_ms)
   end
 
+  @doc """
+  Configured eviction tick interval (ms) canonical at Application.get_env
+  register substantively per ADR-0034 testability discipline canonical.
+  Sub-arc 1 sub-phase c Commit C.2 [BEAM-DBGI-PROMOTE-IDLE-EVICTION].
+  """
+  @spec configured_eviction_interval_ms() :: pos_integer()
+  def configured_eviction_interval_ms do
+    Application.get_env(
+      :cosmp_router,
+      :activity_counter_eviction_interval_ms,
+      @default_eviction_interval_ms
+    )
+  end
+
+  @doc """
+  Configured idle TTL (ms) canonical at Application.get_env register
+  substantively per ADR-0034 testability discipline canonical. Entries
+  with last_activity older than this TTL canonical at canonical-state
+  register substantively get evicted at eviction tick register
+  substantively (DMWWorker for evicted entity_id stops canonical at
+  canonical-execution register substantively).
+  """
+  @spec configured_idle_ttl_ms() :: pos_integer()
+  def configured_idle_ttl_ms do
+    Application.get_env(
+      :cosmp_router,
+      :activity_counter_idle_ttl_ms,
+      @default_idle_ttl_ms
+    )
+  end
+
+  @doc """
+  Manually trigger idle eviction at canonical-execution register
+  substantively. Used at test register substantively for deterministic
+  eviction verification canonical at canonical-coherence register
+  substantively per ADR-0034 testability discipline canonical (avoid
+  waiting for periodic tick at canonical-execution register substantively).
+  Returns count of evicted entries canonical at canonical-coherence
+  register substantively.
+  """
+  @spec evict_idle() :: non_neg_integer()
+  def evict_idle do
+    evict_idle_entries()
+  end
+
   # GenServer callbacks
 
   @impl true
@@ -204,14 +255,82 @@ defmodule CosmpRouter.ActivityCounter do
       decentralized_counters: true
     ])
 
+    # Sub-arc 1 sub-phase c Commit C.2 [BEAM-DBGI-PROMOTE-IDLE-EVICTION]
+    # Schedule first eviction tick canonical at canonical-execution
+    # register substantively per canonical Elixir periodic-task pattern at
+    # GenServer register substantively (hexdocs.pm/elixir/1.12/GenServer.html
+    # canonical at official Elixir GenServer reference register substantively
+    # per RULE 21 research arc canonical at canonical-knowledge register
+    # substantively).
+    schedule_eviction()
+
     Logger.info("CosmpRouter.ActivityCounter started; table=#{@table_name}")
 
     {:ok, %{table: @table_name}}
   end
 
   @impl true
+  def handle_info(:evict_idle, state) do
+    evict_idle_entries()
+    schedule_eviction()
+    {:noreply, state}
+  end
+
+  # Defensive catch-all clause canonical per oneuptime.com production
+  # GenServer reference register substantively at canonical-coherence
+  # register substantively ("Always handle unknown messages to avoid
+  # crashing" canonical at canonical-execution register substantively).
+  def handle_info(_unknown, state) do
+    {:noreply, state}
+  end
+
+  @impl true
   def terminate(_reason, _state) do
     # ETS table is owned by this GenServer; terminate releases the table.
     :ok
+  end
+
+  # Private periodic-task helpers per José Valim canonical Periodic.Safter
+  # pattern register substantively (medium.com/@efexen reference canonical
+  # at canonical-knowledge register substantively).
+
+  defp schedule_eviction do
+    Process.send_after(self(), :evict_idle, configured_eviction_interval_ms())
+  end
+
+  # Iterate ETS via :ets.select/2 match spec canonical at canonical-
+  # execution register substantively per erlang.org/doc/apps/stdlib/ets.html
+  # canonical at official ETS reference register substantively; identify
+  # entries with last_activity < cutoff register substantively; for each
+  # entry: stop DMWWorker via DbgiSupervisor.stop_dmw_worker_horde/1 at
+  # cross-app boundary register substantively + delete ETS entry at
+  # canonical-state register substantively.
+  defp evict_idle_entries do
+    now = System.system_time(:millisecond)
+    ttl = configured_idle_ttl_ms()
+    cutoff = now - ttl
+
+    expired =
+      :ets.select(@table_name, [
+        {
+          {:"$1", :"$2", :"$3"},
+          [{:<, :"$3", cutoff}],
+          [{{:"$1", :"$2", :"$3"}}]
+        }
+      ])
+
+    Enum.each(expired, fn {entity_id, _count, _last_activity} ->
+      # Stop DMWWorker at canonical-execution register substantively per
+      # DbgiSupervisor.stop_dmw_worker_horde/1 canonical at canonical-
+      # coherence register substantively (NEW at sub-arc 1 sub-phase c
+      # C.2 per Option α scope expansion). Idempotent at canonical-state
+      # register substantively (stopping non-existent worker is safe).
+      _ = DbgiSupervisor.stop_dmw_worker_horde(entity_id)
+
+      # Delete ETS entry at canonical-state register substantively
+      _ = :ets.delete(@table_name, entity_id)
+    end)
+
+    length(expired)
   end
 end
