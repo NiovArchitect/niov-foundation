@@ -306,6 +306,119 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17
+
+**Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
+
+Current HEAD at CL.1: this commit.
+Lineage: `3eaad71` (sub-arc 1 sub-phase d closure register substantively) → this commit.
+
+**CL.1 docs-only umbrella commit canonical at canonical-prose register
+substantively LOCKS the ADR-0041 architectural substrate. CL.1 does
+NOT close Sub-arc 2. Sub-arc 2 remains IN FLIGHT pending per-gap ADR
+mini-arcs and later Sub-arc 2 closure cascade register substantively
+per Founder CL.1 scope patch at
+`[BEAM-CAPSULE-LAYER-ADR-CL1-SCOPE-PATCH]` register substantively.**
+
+Sub-arc 2 canonicalizes capsule layer substrate umbrella per ADR-0041
+(NEW Proposed 2026-05-17). The umbrella ADR locks 4-gap inventory +
+per-gap forward-substrate ADRs (ADR-0042 Gap 1 + ADR-0043 Gap 3 +
+ADR-0044 Gap 4 + ADR-0045 Gap 5 + optional ADR-0046 AI_AGENT capsule
+routing) + cross-cutting decisions (AI_AGENT EntityType-discriminated
+routing per Founder Q-J LOCK + weighting per Entry #28 reference +
+RULE 0 governance per Founder RULE 0 continuity patch).
+
+**Per-gap mini-arc forward-substrate canonical at canonical-state
+register substantively (per-gap mini-arc total commit count NOT
+locked at this register substantively):**
+
+- ADR-0042 Gap 1 Mutation Discrimination mini-arc (forward-substrate)
+- ADR-0043 Gap 3 pgvector Embedding mini-arc (forward-substrate)
+- ADR-0044 Gap 4 Decay Execution Formalization mini-arc
+  (forward-substrate)
+- ADR-0045 Gap 5 Capsule-Level Staleness Detection mini-arc
+  (forward-substrate)
+- optional ADR-0046 AI_AGENT EntityType-Discriminated Capsule
+  Routing mini-arc (forward-substrate; if ADR-0041 §Sub-decision 1
+  + ADR-0042 prose determines separate ADR warranted at canonical-
+  coherence register substantively)
+- Sub-arc 2 closure cascade register substantively at Sub-arc 2
+  closure register substantively
+
+**Runtime substrate at IN FLIGHT register substantively (CL.1 docs-only
+preserves D.4 baseline at canonical-coherence register substantively):**
+
+- MemoryCapsule Prisma schema canonical at packages/database/prisma/schema.prisma:95
+  (27 fields including capsule_type, decay_type, decay_rate, version,
+  content_hash, storage_tier; NOT greenfield)
+- COSMP TypeScript services at apps/api/src/services/cosmp/ exist
+  (negotiate, read, share, write, jurisdiction-enforcement,
+  regulator-enforcement)
+- Elixir capsule substrate at apps/cosmp_router/lib/cosmp_router/capsule/
+  + capsule.ex + schemas/memory_capsule.ex per ADR-0031 7-layer +
+  ADR-0033 cross-language data ownership
+- Gap 1 (ADD/UPDATE/MERGE/NOOP mutation discrimination): GREENFIELD
+  at MutationType/code register; version + previous_version +
+  content_hash anchor substrate exists
+- Gap 3 (pgvector embedding): GREENFIELD at code/schema register;
+  only TODO comments at apps/api/src/services/otzar/priming.ts:150,158
+- Gap 4 (decay execution): PARTIAL; lazy-at-read at
+  apps/api/src/services/coe/coe.service.ts:235 + L387 forget-floor
+  + L524 Loop 1 hook exist; scheduler/recompute substrate GREENFIELD
+- Gap 5 (capsule-level staleness): GREENFIELD at capsule register;
+  feedback-loop staleness exists separately at
+  apps/api/src/services/feedback/feedback.service.ts:169 (stale_loops
+  substrate) and MUST NOT be conflated per Founder Q-I LOCK
+- AI_AGENT EntityType-discriminated capsule routing: PARTIAL;
+  EntityType enum + AI_AGENT detection at
+  apps/api/src/services/cosmp/negotiate.service.ts:143; capsule-
+  routing branch greenfield
+- Weighting per Entry #28: document-register only; combined_score
+  canonical at ADR-0022 (0.45/0.35/0.20 coefficients)
+
+**Founder Q-locks LOCKED at `[BEAM-CAPSULE-LAYER-QLOCK]` +
+`[BEAM-CAPSULE-LAYER-ADR-RULE0-PATCH]` +
+`[BEAM-CAPSULE-LAYER-ADR-CL1-SCOPE-PATCH]` register substantively:**
+
+- Q-A: Option B umbrella + per-gap ADR strategy
+- Q-B: ADR-0041 docs-only umbrella
+- Q-C: per-gap ADR sequence (ADR-0042 Gap 1 + ADR-0043 Gap 3 +
+  ADR-0044 Gap 4 + ADR-0045 Gap 5 + optional ADR-0046)
+- Q-D: CL.0 substrate-state inventory (4-gap status locks)
+- Q-E: HNSW + cosine recommended default for pgvector
+- Q-F: text-embedding-3-small at 1536 dimensions recommended default
+- Q-G: ADD/UPDATE/MERGE/NOOP NIOV-domain MutationType semantics
+- Q-H: lazy-at-read decay execution recommended default
+- Q-I: capsule-level staleness distinct from feedback-loop staleness
+- Q-J: EntityType-discriminated capsule routing (AI_AGENT remains
+  EntityType not WalletType; maps to PERSONAL wallet_type for storage)
+- Q-K: CL.1 docs-only umbrella commit
+- Q-L: `[BEAM-CAPSULE-LAYER-ADR]` tag
+- RULE 0 continuity patch: verified at every preflight at canonical-
+  rule register substantively for forward-substrate authorization
+  pastes
+- CL.1 scope patch: CL.1 LOCKS umbrella only; Sub-arc 2 remains
+  IN FLIGHT; per-gap implementation forward-substrate; final
+  closure requires later closure cascade
+
+References canonical at canonical-coherence register substantively:
+ADR-0041 (Capsule Layer Substrate Umbrella; Proposed at this commit
+per §Status); ADR-0033 (cross-language data ownership; EntityType vs
+WalletType canonical at canonical-knowledge register substantively);
+ADR-0022 combined_score formula (anchor for weighting per Entry #28
+forward-substrate); ADR-0034 (BEAM testability discipline); ADR-0025
+(Schema-Push-Target Discipline; Prisma migration discipline);
+ADR-0035 26th + 27th + 28th observations canonical at substrate-
+architectural register substantively; ADR-0040 DEVICE Cold-Shard
+Substrate (sub-arc 1 sub-phase d closure register substantively);
+RULE 0 (Humans Always Sovereign canonical at canonical-rule register
+substantively per CLAUDE.md L134); RULE 11 (Elixir/BEAM iteration-
+loop research); RULE 13 (substrate-honest pre-flight surface); RULE
+20 (founder authorization); RULE 21 (pre-authorization research arc
+canonical per `67f6112` commit).
+
+---
+
 ## Phase 3 Sub-Arc 1 Sub-Phase d -- DEVICE Cold-Shard Substrate CLOSED 2026-05-17
 
 Status: CLOSED 2026-05-17 at D.4 `[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]`.
