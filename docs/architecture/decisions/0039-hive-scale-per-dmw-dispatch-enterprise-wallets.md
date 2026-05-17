@@ -2,7 +2,10 @@
 
 ## Status
 
-Proposed 2026-05-16
+Accepted 2026-05-17 (closed at sub-arc 1 sub-phase b Commit 7 of 7
+`[BEAM-DBGI-HIVE-DISPATCH-CLOSURE]`; 10-commit substantive lineage +
+1 revert + 1 redraft + 1 RULE 21 promotion mid-arc per
+Post-Closure Implementation Lineage section below)
 
 ## Context
 
@@ -600,6 +603,148 @@ parallel build at "blockchain-only" claim register substantively.
   target at canonical-knowledge register substantively substantively
   delivers across sub-phase b through sub-arc 2 register substantively
   at canonical-coherence register substantively.
+
+## Post-Closure Implementation Lineage
+
+ADR-0039 substrate canonical at canonical-execution register
+substantively per B.1 through B.6.3 commit lineage on origin/main at
+sub-arc 1 sub-phase b register substantively. 10 substantive commits
++ 1 revert + 1 redraft + 1 RULE 21 promotion mid-arc canonical at
+patent-implementation evidence register substantively per ADR-0020
+two-register IP discipline canonical.
+
+**Commit lineage:**
+
+1. B.1 `a0ed2c5` [BEAM-DBGI-HIVE-DISPATCH-ADR] -- ADR-0039 NEW
+   landing canonical at substrate-architectural register substantively
+   with 13 sub-decisions per Option α Path (e) Hive substrate canonical
+   at canonical-knowledge register substantively.
+
+2. B.2 `9069430` [BEAM-COSMP-OPERATIONS-PURE-MODULE] -- NEW
+   CosmpRouter.Operations pure-module with 7 COSMP primitives canonical
+   at single-source-of-truth register substantively; Elixir anti-pattern
+   resolution per Sub-decision 11; 137 -> 152 cosmp_router test surface.
+
+3. B.3 (original) `eb6daee` [BEAM-DBGI-HORDE-SUBSTRATE] -- Horde
+   Registry + DynamicSupervisor + dependency + public API canonical
+   at canonical-execution register; CI-RED at integration tier
+   (`:peer.start` Node.self() drift; Horde members config gap).
+
+4. B.3 revert `7709993` [BEAM-DBGI-HORDE-SUBSTRATE-REVERT] -- Clean
+   rollback per RULE 11 research arc canonical at canonical-knowledge
+   register substantively.
+
+5. B.3 redraft `4c52271` [BEAM-DBGI-HORDE-SUBSTRATE-REDRAFT] --
+   Canonical `members: :auto` pattern per hexdocs.pm/horde/libcluster
+   research arc + ADR-0034 per-test isolated Horde instances + ADR-0039
+   Sub-decision 1 amendment; 55 -> 63 dbgi_supervisor test surface.
+
+6. B.4 `768736b` [BEAM-DBGI-WALLET-LOOKUP-CODE] -- NEW Wallet Ecto
+   schema (read-only projection on Prisma-owned wallets table per
+   ADR-0033 cross-language data ownership) + WalletLookup module +
+   ADR-0039 Sub-decision 4 substrate-architectural correction
+   (entities -> wallets table per substrate-state ground truth);
+   WalletType 3-tier {personal, enterprise, device} canonical; 152
+   -> 158 cosmp_router test surface.
+
+7. B.5 `24d3b52` [BEAM-DBGI-WALLET-CACHE-ETS] -- NEW WalletCache
+   GenServer + ETS read-optimized cache (read_concurrency +
+   write_concurrency + decentralized_counters) + supervision tree
+   integration + cosmp_router_test.exs children-count amendment per
+   D-SUPERVISION-TREE-EXPANSION-TEST-COHERENCE-DRIFT canonical
+   recurrence; 158 -> 166 cosmp_router test surface.
+
+8. B.6.1 `57b9f8d` [BEAM-COSMP-PROTO-ENTITY-ID] -- NEW entity_id field
+   on 7 protobuf request messages + hand-written .pb.ex mirror per
+   ADR-0032 Q-U Option B; proto3 backward-compat field-addition
+   canonical at canonical-knowledge register substantively per RULE 21
+   research arc; baseline preserved by construction.
+
+9. B.6.2 `eb6482d` [BEAM-COSMP-TS-CLIENT-ENTITY-ID] -- entity_id?:
+   string optional field on 7 TypeScript RpcRequest interfaces per
+   Q-V parallel-path discipline canonical at canonical-knowledge
+   register; TypeScript strict 12-error baseline preserved per ADR-0024
+   pre-commit hook gate canonical.
+
+10. RULE 21 promotion mid-arc `67f6112`
+    [OPS-RULE-21-PRE-AUTHORIZATION-RESEARCH-ARC-CANONICAL] -- NEW
+    RULE 21 at CLAUDE.md register substantively + ADR-0035 sub-arc 1
+    sub-phase b cluster expansion 25th observation canonical at
+    substrate-architectural register substantively; pre-authorization
+    research arc discipline canonical at canonical-rule register
+    substantively for forward-substrate substrate-architectural pastes
+    per 5 canonical recurrence sites at sub-arc 1 sub-phase b register
+    substantively.
+
+11. B.6.3 `3242c17` [BEAM-COSMP-HIVE-DISPATCH-INTEGRATION] -- Option ζ
+    Adapter Pattern + tier-routed dispatch + integration tests
+    canonical at canonical-architectural register substantively. NEW
+    DbgiSupervisor.CosmpExecution behaviour module + DMWWorker 7
+    handle_call clauses + state struct storage_ets extension +
+    CosmpRouter.Operations @behaviour + 7 @impl declarations +
+    cosmp_router/application.ex Application.put_env at boot +
+    cosmp_router/mix.exs `:dbgi_supervisor` in_umbrella +
+    extra_applications + grpc/server.ex tier-routed dispatch shim + 6
+    NEW tier_routed_dispatch tests; 166 -> 172 cosmp_router test
+    surface; cycle breakage canonical per ADR-0039 Sub-decision 3
+    amendment register substantively.
+
+12. B.7 this commit [BEAM-DBGI-HIVE-DISPATCH-CLOSURE] -- closure
+    cascade canonical at canonical-state register substantively
+    (ADR-0039 Status Proposed -> Accepted + this Post-Closure
+    Implementation Lineage section + section-12-progress Phase 3 row
+    update + architecture/README catalog refresh + CLAUDE.md catalog
+    refresh + CURRENT_BUILD_STATE update).
+
+**Substrate-state ground truth at canonical-coherence register
+substantively at closure register substantively:**
+
+- Hive-scale per-DMW dispatch substrate for ENTERPRISE wallets
+  canonical at runtime register substantively. The architectural
+  target named at README + monetization essay register substantively
+  (hundreds to thousands of parallel COSMP operations per DMW for the
+  workloads that need it) delivers at runtime for ENTERPRISE tier
+  canonical at canonical-execution register substantively.
+- PERSONAL + DEVICE tier fallback to CosmpRouter.Router canonical at
+  sub-phase a substrate register substantively (forward-substrate to
+  per-DMW promotion canonical at sub-phase c + sub-phase d register
+  substantively).
+- Test surface canonical at canonical-execution register
+  substantively: cosmp_router 172/0 + 1 skipped (166 baseline + 6 NEW
+  tier_routed_dispatch); dbgi_supervisor 63/0 default + 82/0
+  integration.
+- Cycle breakage canonical at canonical-architectural register
+  substantively: cosmp_router -> dbgi_supervisor (compile-time
+  in_umbrella + runtime extra_applications) + dbgi_supervisor ->
+  cosmp_router (NO compile-time dep; runtime via Application.get_env
+  canonical at canonical-state register substantively) per Option ζ
+  Adapter Pattern canonical at Elixir community register substantively
+  per RULE 21 research arc canonical at canonical-knowledge register
+  substantively.
+
+**Substrate-build observations forward-queued from B.6.3 register
+substantively for forward-substrate at sub-phase c + sub-phase d +
+sub-arc 2 + sub-arc 3 register substantively:**
+
+- D-ADAPTER-PATTERN-CYCLE-BREAKAGE canonical at canonical-coherence
+  register substantively
+- D-CROSS-APP-HORDE-VIA-TUPLE-DISPATCH-CANONICAL canonical at
+  canonical-coherence register substantively
+- D-APPLICATION-PUT-ENV-AT-BOOT-DISCIPLINE canonical at canonical-
+  coherence register substantively
+- D-EXTRA-APPLICATIONS-REQUIRED-FOR-UMBRELLA-RUNTIME-DEP canonical
+  at canonical-coherence register substantively (NEW canonical at
+  B.6.3 mid-execution register substantively; pre-flight Step 1
+  substrate-state ground truth check did NOT catch this requirement;
+  recurrence at sub-phase c register substantively qualifies for
+  ADR-0035 chronological cluster expansion 26th observation promotion
+  per Option β substrate-honest discipline)
+- D-IN-UMBRELLA-BEHAVIOUR-COMPILE-WARNING-SPURIOUS canonical at
+  canonical-coherence register substantively
+
+Sub-arc 1 sub-phase b closure substrate canonical at canonical-state
+register substantively at this commit register substantively per B.7
+`[BEAM-DBGI-HIVE-DISPATCH-CLOSURE]` register substantively.
 
 ## Bidirectional Citation
 

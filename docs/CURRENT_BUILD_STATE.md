@@ -306,6 +306,65 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase b (Hive-Scale Per-DMW Dispatch ENTERPRISE per ADR-0039): CLOSED 2026-05-17
+
+Sub-arc 1 sub-phase b mini-arc CLOSED at HEAD parent `3242c17` (B.6.3)
++ this B.7 closure commit canonical at canonical-state register
+substantively per ADR-0039 §Post-Closure Implementation Lineage
+canonical. 10 substantive commits + 1 revert + 1 redraft + 1 RULE 21
+promotion mid-arc canonical at patent-implementation evidence register
+substantively per ADR-0020 two-register IP discipline canonical.
+
+**Substrate-state ground truth at closure register substantively:**
+
+- Hive-scale per-DMW dispatch substrate for ENTERPRISE wallets
+  canonical at runtime register substantively. The architectural
+  target named at README + monetization essay register substantively
+  delivers at runtime for ENTERPRISE tier canonical at canonical-
+  execution register substantively.
+- PERSONAL + DEVICE tier fallback to CosmpRouter.Router canonical at
+  sub-phase a substrate register substantively.
+- Test surface: cosmp_router 172/0 + 1 skipped (166 baseline + 6 NEW
+  tier_routed_dispatch); dbgi_supervisor 63/0 default + 82/0
+  integration.
+- Cycle breakage canonical at canonical-architectural register
+  substantively per Option ζ Adapter Pattern (cosmp_router ->
+  dbgi_supervisor compile-time in_umbrella + runtime
+  extra_applications; dbgi_supervisor -> cosmp_router NO compile-time
+  dep; runtime via Application.get_env).
+- RULE 21 promoted to canonical at CLAUDE.md register substantively
+  mid-arc (commit `67f6112`); pre-authorization research arc
+  discipline canonical at canonical-rule register substantively for
+  forward-substrate substrate-architectural pastes.
+
+**Forward-substrate canonical at canonical-state register
+substantively:**
+
+- Sub-arc 1 sub-phase c: PERSONAL + AI_AGENT promote-on-activity
+  substrate canonical at canonical-state register substantively
+  (tier promotion from cold shard substrate to per-DMW canonical at
+  ENTERPRISE register substantively when activity threshold crossed).
+- Sub-arc 1 sub-phase d: DEVICE cold-shard substrate canonical at
+  canonical-state register substantively (always-cold shard-mapped
+  per ADR-0038 Sub-decision 3 tier 3 register substantively).
+- Sub-arc 2: capsule layer Gaps 1+3+4+5 (ADD/UPDATE/MERGE/NOOP
+  mutation discrimination + pgvector embedding + decay execution +
+  staleness detection + weighting architecture per Entry #28).
+- Sub-arc 3: benchmark + bi-temporal + tier automation canonical at
+  canonical-state register substantively.
+
+References canonical at canonical-coherence register substantively:
+ADR-0039 (Accepted at this commit register substantively); ADR-0033
+(cross-language data ownership); ADR-0034 (BEAM testability
+discipline); ADR-0035 (substrate-build discipline; sub-arc 1
+sub-phase b cluster expansion 25th observation per RULE 21 promotion
+commit); ADR-0038 (DMWWorker substrate canonical at sub-phase a
+runtime register); RULE 11 (Elixir/BEAM iteration-loop research);
+RULE 20 (founder authorization); RULE 21 (pre-authorization research
+arc canonical per `67f6112` commit).
+
+---
+
 ## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase b (Hive-Scale Per-DMW Dispatch ENTERPRISE per ADR-0039): IN FLIGHT 2026-05-16
 
 Phase 3 (Dynamic Memory Accuracy at Scale) sub-arc 1 sub-phase b
