@@ -54,7 +54,7 @@ defmodule CosmpRouter.GRPC.Server do
   @spec authenticate(Proto.AuthenticateRequest.t(), GRPC.Server.Stream.t()) ::
           Proto.AuthenticateResponse.t()
   def authenticate(%Proto.AuthenticateRequest{} = req, _stream) do
-    case GenServer.call(CosmpRouter.Router, {:authenticate, req}) do
+    case dispatch_tier_routed(:authenticate, req) do
       {:ok, %Proto.AuthenticateSuccess{} = success} ->
         %Proto.AuthenticateResponse{result: {:success, success}}
 
@@ -70,7 +70,7 @@ defmodule CosmpRouter.GRPC.Server do
   @spec negotiate(Proto.NegotiateRequest.t(), GRPC.Server.Stream.t()) ::
           Proto.NegotiateResponse.t()
   def negotiate(%Proto.NegotiateRequest{} = req, _stream) do
-    case GenServer.call(CosmpRouter.Router, {:negotiate, req}) do
+    case dispatch_tier_routed(:negotiate, req) do
       {:ok, %Proto.NegotiateSuccess{} = success} ->
         %Proto.NegotiateResponse{result: {:success, success}}
 
@@ -86,7 +86,7 @@ defmodule CosmpRouter.GRPC.Server do
   @spec read(Proto.ReadRequest.t(), GRPC.Server.Stream.t()) ::
           Proto.ReadResponse.t()
   def read(%Proto.ReadRequest{} = req, _stream) do
-    case GenServer.call(CosmpRouter.Router, {:read, req}) do
+    case dispatch_tier_routed(:read, req) do
       {:ok, %Proto.Capsule{} = capsule} ->
         %Proto.ReadResponse{result: {:capsule, capsule}}
 
@@ -102,7 +102,7 @@ defmodule CosmpRouter.GRPC.Server do
   @spec write(Proto.WriteRequest.t(), GRPC.Server.Stream.t()) ::
           Proto.WriteResponse.t()
   def write(%Proto.WriteRequest{} = req, _stream) do
-    case GenServer.call(CosmpRouter.Router, {:write, req}) do
+    case dispatch_tier_routed(:write, req) do
       {:ok, %Proto.WriteSuccess{} = success} ->
         %Proto.WriteResponse{result: {:success, success}}
 
@@ -118,7 +118,7 @@ defmodule CosmpRouter.GRPC.Server do
   @spec share(Proto.ShareRequest.t(), GRPC.Server.Stream.t()) ::
           Proto.ShareResponse.t()
   def share(%Proto.ShareRequest{} = req, _stream) do
-    case GenServer.call(CosmpRouter.Router, {:share, req}) do
+    case dispatch_tier_routed(:share, req) do
       {:ok, %Proto.ShareSuccess{} = success} ->
         %Proto.ShareResponse{result: {:success, success}}
 
@@ -134,7 +134,7 @@ defmodule CosmpRouter.GRPC.Server do
   @spec revoke(Proto.RevokeRequest.t(), GRPC.Server.Stream.t()) ::
           Proto.RevokeResponse.t()
   def revoke(%Proto.RevokeRequest{} = req, _stream) do
-    case GenServer.call(CosmpRouter.Router, {:revoke, req}) do
+    case dispatch_tier_routed(:revoke, req) do
       {:ok, %Proto.RevokeSuccess{} = success} ->
         %Proto.RevokeResponse{result: {:success, success}}
 
@@ -150,12 +150,75 @@ defmodule CosmpRouter.GRPC.Server do
   @spec audit(Proto.AuditRequest.t(), GRPC.Server.Stream.t()) ::
           Proto.AuditResponse.t()
   def audit(%Proto.AuditRequest{} = req, _stream) do
-    case GenServer.call(CosmpRouter.Router, {:audit, req}) do
+    case dispatch_tier_routed(:audit, req) do
       {:ok, %Proto.AuditSuccess{} = success} ->
         %Proto.AuditResponse{result: {:success, success}}
 
       {:error, %Proto.CosmpError{} = error} ->
         %Proto.AuditResponse{result: {:error, error}}
+    end
+  end
+
+  # ============================================================================
+  # Sub-arc 1 sub-phase b Commit B.6.3 [BEAM-COSMP-HIVE-DISPATCH-INTEGRATION]
+  # Tier-routed dispatch shim per ADR-0039 Sub-decision 7 + Option ζ Adapter
+  # Pattern canonical at canonical-knowledge register substantively per RULE
+  # 21 research arc canonical at 67f6112 commit substantively.
+  # ============================================================================
+  #
+  # Reads entity_id from request; resolves wallet_type via WalletCache;
+  # branches:
+  # - empty/nil entity_id: fallback to CosmpRouter.Router (backward-compat)
+  # - {:ok, :enterprise}: dispatch through DMWWorker via Horde via-tuple
+  #   (lazy-spawn if not registered; then GenServer.call to the worker)
+  # - {:ok, :personal | :device}: fallback to CosmpRouter.Router (sub-phase
+  #   a substrate; forward-substrate to PERSONAL/DEVICE per-DMW promotion
+  #   at sub-phase c + sub-phase d)
+  # - {:error, _}: fallback to CosmpRouter.Router (unknown entity)
+  defp dispatch_tier_routed(op_name, request) do
+    case extract_entity_id(request) do
+      nil ->
+        GenServer.call(CosmpRouter.Router, {op_name, request})
+
+      "" ->
+        GenServer.call(CosmpRouter.Router, {op_name, request})
+
+      entity_id when is_binary(entity_id) ->
+        case CosmpRouter.WalletCache.wallet_type_for(entity_id) do
+          {:ok, :enterprise} ->
+            dispatch_enterprise(op_name, entity_id, request)
+
+          {:ok, _other_tier} ->
+            GenServer.call(CosmpRouter.Router, {op_name, request})
+
+          {:error, _reason} ->
+            GenServer.call(CosmpRouter.Router, {op_name, request})
+        end
+    end
+  end
+
+  defp dispatch_enterprise(op_name, entity_id, request) do
+    case DbgiSupervisor.start_dmw_worker_horde(entity_id, :enterprise) do
+      {:ok, _pid} ->
+        GenServer.call(
+          {:via, Horde.Registry, {DbgiSupervisor.HordeRegistry, entity_id}},
+          {:cosmp_op, op_name, request}
+        )
+
+      {:error, reason} ->
+        {:error,
+         %Proto.CosmpError{
+           kind: :INTERNAL,
+           message: "DMW spawn failed: #{inspect(reason)}",
+           details: %{}
+         }}
+    end
+  end
+
+  defp extract_entity_id(request) do
+    case request do
+      %{entity_id: entity_id} -> entity_id
+      _ -> nil
     end
   end
 end

@@ -48,7 +48,15 @@ defmodule CosmpRouter.MixProject do
       # Sub-phase 11 [BEAM-OBSERVABILITY]: :telemetry + :logger_json
       # apps started canonical at substantive register per
       # ADR-0030 §DBGI sub-phase 11 amendment canonical.
-      extra_applications: [:logger, :telemetry, :logger_json]
+      # Sub-arc 1 sub-phase b Commit B.6.3 [BEAM-COSMP-HIVE-DISPATCH-INTEGRATION]:
+      # :dbgi_supervisor added at extra_applications register per ADR-0039
+      # Sub-decision 3 Option ζ Adapter Pattern canonical at canonical-
+      # knowledge register substantively (cosmp_router dispatches through
+      # DbgiSupervisor.start_dmw_worker_horde/2 + Horde.Registry at runtime
+      # register substantively; module must be loaded at code path register
+      # AND application must be started for DbgiSupervisor.HordeRegistry +
+      # DMWWorker supervision tree to be available at test register).
+      extra_applications: [:logger, :telemetry, :logger_json, :dbgi_supervisor]
     ]
   end
 

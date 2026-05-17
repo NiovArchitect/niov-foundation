@@ -168,6 +168,33 @@ substantively.
 
 ### Sub-decision 3: DMWWorker COSMP op handlers invoking primitives
 
+Substrate-architectural canonical at canonical-architectural register
+substantively per Option ζ Adapter Pattern canonical at Elixir community
+canonical-knowledge register substantively (hexdocs.pm/elixir/typespecs.html
+Behaviours + aaronrenner.io/2023/07/22 production adapter pattern reference
++ dev.to/dcdourado/dependency-inversion-on-elixir-using-ports-and-adapters-
+design-pattern canonical at Ports and Adapters reference register
+substantively per RULE 21 research arc canonical at canonical-knowledge
+register substantively per 67f6112 commit substantively):
+DbgiSupervisor.CosmpExecution behaviour module canonical at substrate-
+architectural register substantively in dbgi_supervisor declares the 7
+COSMP op callbacks at canonical-prose register substantively;
+CosmpRouter.Operations module canonical at canonical-execution register
+substantively in cosmp_router implements the behaviour via @behaviour
+declaration canonical at canonical-coherence register substantively;
+runtime configuration via Application.put_env at cosmp_router/application.ex
+start/2 callback canonical at boot register substantively registers
+CosmpRouter.Operations as the adapter at canonical-state register
+substantively. DMWWorker dispatches via
+DbgiSupervisor.CosmpExecution.adapter/0 facade canonical at canonical-
+knowledge register substantively which resolves at runtime via
+Application.get_env at canonical-execution register substantively. Cycle
+breakage canonical at canonical-architectural register substantively:
+cosmp_router -> dbgi_supervisor (compile-time in_umbrella dep canonical)
+canonical at canonical-coherence register substantively; dbgi_supervisor
+-> cosmp_router (NO compile-time dep; runtime via app env canonical at
+canonical-state register substantively).
+
 DMWWorker substrate at sub-phase a register substantively extends at
 sub-phase b register substantively with 7 COSMP op handle_call clauses
 at canonical-architectural register substantively. Each handler

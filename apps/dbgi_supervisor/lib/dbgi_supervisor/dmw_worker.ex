@@ -48,7 +48,8 @@ defmodule DbgiSupervisor.DMWWorker do
   @type state :: %{
           entity_id: entity_id(),
           wallet_type: wallet_type(),
-          tier: tier()
+          tier: tier(),
+          storage_ets: atom()
         }
 
   # Public API
@@ -92,6 +93,24 @@ defmodule DbgiSupervisor.DMWWorker do
     entity_id = Keyword.fetch!(opts, :entity_id)
     wallet_type = Keyword.fetch!(opts, :wallet_type)
 
+    # storage_ets resolved at runtime via Application.get_env per
+    # ADR-0034 testability discipline + Adapter Pattern canonical at
+    # Elixir community register substantively per RULE 21 research
+    # arc canonical at canonical-knowledge register substantively per
+    # 67f6112 commit substantively. Runtime resolution avoids
+    # compile-time dependency from dbgi_supervisor on
+    # CosmpRouter.Storage.ETS canonical at canonical-coherence
+    # register substantively (cycle breakage canonical per
+    # ADR-0039 Sub-decision 3 amendment register substantively).
+    default_storage_ets =
+      Application.get_env(
+        :cosmp_router,
+        :storage_ets,
+        :"Elixir.CosmpRouter.Storage.ETS"
+      )
+
+    storage_ets = Keyword.get(opts, :storage_ets, default_storage_ets)
+
     case tier_for(wallet_type) do
       {:ok, tier} ->
         {:ok, _ref} =
@@ -102,7 +121,13 @@ defmodule DbgiSupervisor.DMWWorker do
             %{wallet_type: wallet_type, node: node()}
           )
 
-        {:ok, %{entity_id: entity_id, wallet_type: wallet_type, tier: tier}}
+        {:ok,
+         %{
+           entity_id: entity_id,
+           wallet_type: wallet_type,
+           tier: tier,
+           storage_ets: storage_ets
+         }}
 
       {:error, reason} ->
         {:stop, reason}
@@ -110,14 +135,57 @@ defmodule DbgiSupervisor.DMWWorker do
   end
 
   @impl true
-  @spec handle_call(:get_state | :get_tier, GenServer.from(), state()) ::
-          {:reply, term(), state()}
   def handle_call(:get_state, _from, state) do
     {:reply, state, state}
   end
 
   def handle_call(:get_tier, _from, state) do
     {:reply, state.tier, state}
+  end
+
+  # Sub-arc 1 sub-phase b Commit B.6.3 [BEAM-COSMP-HIVE-DISPATCH-INTEGRATION]
+  # ========================================================================
+  # 7 COSMP op handle_call clauses canonical at canonical-architectural
+  # register substantively per ADR-0039 Sub-decision 3 + Option ζ Adapter
+  # Pattern canonical at canonical-knowledge register substantively per
+  # RULE 21 research arc. Each clause dispatches via
+  # DbgiSupervisor.CosmpExecution.adapter/0 facade canonical at runtime-
+  # resolution register substantively (CosmpRouter.Operations registered
+  # at cosmp_router/application.ex start/2 boot register substantively).
+
+  def handle_call({:cosmp_op, :authenticate, request}, _from, state) do
+    response = DbgiSupervisor.CosmpExecution.adapter().authenticate(request, state)
+    {:reply, response, state}
+  end
+
+  def handle_call({:cosmp_op, :negotiate, request}, _from, state) do
+    response = DbgiSupervisor.CosmpExecution.adapter().negotiate(request, state)
+    {:reply, response, state}
+  end
+
+  def handle_call({:cosmp_op, :read, request}, _from, state) do
+    response = DbgiSupervisor.CosmpExecution.adapter().read(request, state)
+    {:reply, response, state}
+  end
+
+  def handle_call({:cosmp_op, :write, request}, _from, state) do
+    response = DbgiSupervisor.CosmpExecution.adapter().write(request, state)
+    {:reply, response, state}
+  end
+
+  def handle_call({:cosmp_op, :share, request}, _from, state) do
+    response = DbgiSupervisor.CosmpExecution.adapter().share(request, state)
+    {:reply, response, state}
+  end
+
+  def handle_call({:cosmp_op, :revoke, request}, _from, state) do
+    response = DbgiSupervisor.CosmpExecution.adapter().revoke(request, state)
+    {:reply, response, state}
+  end
+
+  def handle_call({:cosmp_op, :audit, request}, _from, state) do
+    response = DbgiSupervisor.CosmpExecution.adapter().audit(request, state)
+    {:reply, response, state}
   end
 
   @impl true

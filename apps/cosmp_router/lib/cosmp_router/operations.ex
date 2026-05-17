@@ -61,6 +61,8 @@ defmodule CosmpRouter.Operations do
   - US 12,517,919 (COSMP Protocol patent)
   """
 
+  @behaviour DbgiSupervisor.CosmpExecution
+
   alias CosmpRouter.{Audit, Capsule, Idempotency, Repo, Storage}
   alias CosmpRouter.Capsule.Validator
   alias CosmpRouter.GRPC.Translator
@@ -72,6 +74,7 @@ defmodule CosmpRouter.Operations do
   # 7 COSMP op primitives per US 12,517,919
   # ============================================================================
 
+  @impl DbgiSupervisor.CosmpExecution
   @spec authenticate(Proto.AuthenticateRequest.t(), map()) :: op_reply()
   def authenticate(%Proto.AuthenticateRequest{} = req, _state) do
     with {:ok, _capsule} <- validate_request_capsule(req.capsule),
@@ -97,6 +100,7 @@ defmodule CosmpRouter.Operations do
     end
   end
 
+  @impl DbgiSupervisor.CosmpExecution
   @spec negotiate(Proto.NegotiateRequest.t(), map()) :: op_reply()
   def negotiate(%Proto.NegotiateRequest{} = req, _state) do
     with {:ok, _capsule} <- validate_request_capsule(req.capsule) do
@@ -120,6 +124,7 @@ defmodule CosmpRouter.Operations do
     end
   end
 
+  @impl DbgiSupervisor.CosmpExecution
   @spec read(Proto.ReadRequest.t(), map()) :: op_reply()
   def read(%Proto.ReadRequest{} = req, state) do
     case Storage.get(req.capsule_id, ets: state.storage_ets) do
@@ -149,6 +154,7 @@ defmodule CosmpRouter.Operations do
     end
   end
 
+  @impl DbgiSupervisor.CosmpExecution
   @spec write(Proto.WriteRequest.t(), map()) :: op_reply()
   def write(%Proto.WriteRequest{} = req, state) do
     capsule = Translator.to_capsule(req.capsule || %Proto.Capsule{})
@@ -178,6 +184,7 @@ defmodule CosmpRouter.Operations do
     end
   end
 
+  @impl DbgiSupervisor.CosmpExecution
   @spec share(Proto.ShareRequest.t(), map()) :: op_reply()
   def share(%Proto.ShareRequest{} = req, state) do
     case Storage.get(req.capsule_id, ets: state.storage_ets) do
@@ -214,6 +221,7 @@ defmodule CosmpRouter.Operations do
     end
   end
 
+  @impl DbgiSupervisor.CosmpExecution
   @spec revoke(Proto.RevokeRequest.t(), map()) :: op_reply()
   def revoke(%Proto.RevokeRequest{} = req, state) do
     case Storage.get(req.capsule_id, ets: state.storage_ets) do
@@ -250,6 +258,7 @@ defmodule CosmpRouter.Operations do
     end
   end
 
+  @impl DbgiSupervisor.CosmpExecution
   @spec audit(Proto.AuditRequest.t(), map()) :: op_reply()
   def audit(%Proto.AuditRequest{} = req, _state) do
     rows = CosmpRouter.Storage.Postgres.audit_chain_for_capsule(req.capsule_id)

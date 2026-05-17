@@ -56,6 +56,18 @@ defmodule CosmpRouter.Application do
 
   @impl true
   def start(_type, _args) do
+    # Sub-arc 1 sub-phase b Commit B.6.3 [BEAM-COSMP-HIVE-DISPATCH-INTEGRATION]
+    # Register CosmpRouter.Operations as the DbgiSupervisor.CosmpExecution
+    # adapter at application boot per ADR-0039 Sub-decision 3 + ADR-0033
+    # Q-V parallel-path canonical at canonical-execution register
+    # substantively per RULE 21 research arc canonical at canonical-
+    # knowledge register substantively per 67f6112 commit. Adapter
+    # Pattern canonical at Elixir community register substantively breaks
+    # the bidirectional umbrella dependency cycle (dbgi_supervisor stays
+    # unidirectionally upstream of cosmp_router at compile-time; runtime
+    # binding via Application.put_env at canonical-state register).
+    Application.put_env(:dbgi_supervisor, :cosmp_executor, CosmpRouter.Operations)
+
     grpc_port = Application.get_env(:cosmp_router, :grpc_port, 50_051)
     start_grpc = Application.get_env(:cosmp_router, :start_grpc_server, true)
 
