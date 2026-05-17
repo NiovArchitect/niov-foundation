@@ -67,6 +67,14 @@ export interface CosmpError {
 export interface AuthenticateRpcRequest {
   capsule: CapsuleProto;
   principal_id: string;
+  /**
+   * Sub-arc 1 sub-phase b Commit B.6.2 [BEAM-COSMP-TS-CLIENT-ENTITY-ID]
+   * Entity ID for tier-routed dispatch per ADR-0039 Sub-decision 6.
+   * Optional at TS register; server-side empty-string fallback dispatches
+   * to non-tier-routed Router path at backward-compat register per
+   * ADR-0039 Sub-decision 7.
+   */
+  entity_id?: string;
 }
 
 export interface AuthenticateRpcResponse {
@@ -77,6 +85,7 @@ export interface AuthenticateRpcResponse {
 export interface NegotiateRpcRequest {
   capsule: CapsuleProto;
   requested_scopes: string[];
+  entity_id?: string; // per ADR-0039 Sub-decision 6 (see AuthenticateRpcRequest)
 }
 
 export interface NegotiateRpcResponse {
@@ -86,6 +95,7 @@ export interface NegotiateRpcResponse {
 
 export interface ReadRpcRequest {
   capsule_id: string;
+  entity_id?: string; // per ADR-0039 Sub-decision 6 (see AuthenticateRpcRequest)
 }
 
 export interface ReadRpcResponse {
@@ -96,6 +106,7 @@ export interface ReadRpcResponse {
 export interface WriteRpcRequest {
   capsule_id: string;
   capsule: CapsuleProto;
+  entity_id?: string; // per ADR-0039 Sub-decision 6 (see AuthenticateRpcRequest)
 }
 
 export interface WriteRpcResponse {
@@ -106,6 +117,7 @@ export interface WriteRpcResponse {
 export interface ShareRpcRequest {
   capsule_id: string;
   grantee: string;
+  entity_id?: string; // per ADR-0039 Sub-decision 6 (see AuthenticateRpcRequest)
 }
 
 export interface ShareRpcResponse {
@@ -116,6 +128,7 @@ export interface ShareRpcResponse {
 export interface RevokeRpcRequest {
   capsule_id: string;
   grantee: string;
+  entity_id?: string; // per ADR-0039 Sub-decision 6 (see AuthenticateRpcRequest)
 }
 
 export interface RevokeRpcResponse {
@@ -125,6 +138,7 @@ export interface RevokeRpcResponse {
 
 export interface AuditRpcRequest {
   capsule_id: string;
+  entity_id?: string; // per ADR-0039 Sub-decision 6 (see AuthenticateRpcRequest)
 }
 
 export interface AuditRpcResponse {
