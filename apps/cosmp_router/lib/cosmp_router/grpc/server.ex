@@ -171,6 +171,16 @@ defmodule CosmpRouter.GRPC.Server do
   # C.4 commit register substantively: record_activity at ActivityCounter +
   # should_promote? threshold check; if crossed dispatch_promoted (DMWWorker
   # via-tuple); else Router fallback canonical at backward-compat register.
+  #
+  # Sub-arc 1 sub-phase d Commit D.3 [BEAM-DBGI-DEVICE-SHARD-DISPATCH-INTEGRATION]
+  # DEVICE branch wired canonical at canonical-execution register substantively
+  # per ADR-0040 §Sub-decision 5 register substantively: explicit {:ok, :device}
+  # branch BEFORE {:ok, _other_tier} catch-all; dispatch_device_shard/3
+  # canonicalizes deterministic shard assignment via CosmpRouter.DeviceShard.
+  # DEVICE remains cold canonical at substrate-architectural register
+  # substantively (NO DMWWorker spawn; NO always-hot per-DMW process; pure
+  # dispatch routing through Router fallback per ADR-0040 §Sub-decision 5 +
+  # Founder Q-B LOCKED pure-stateless-substrate disposition register).
   # ============================================================================
   #
   # Reads entity_id from request; resolves wallet_type via WalletCache;
@@ -181,8 +191,10 @@ defmodule CosmpRouter.GRPC.Server do
   # - {:ok, :personal}: promote-on-activity dispatch per C.3 substrate
   #   (record_activity + threshold check; below = Router; at-or-above =
   #   DMWWorker via Horde via-tuple)
-  # - {:ok, :device}: fallback to CosmpRouter.Router (DEVICE cold-shard
-  #   substrate forward-substrate at sub-phase d register)
+  # - {:ok, :device}: DEVICE cold-shard dispatch per D.3 substrate (assigns
+  #   deterministic shard_id via CosmpRouter.DeviceShard; delegates to Router
+  #   with existing request shape; NO DMWWorker spawn; NO per-DMW process)
+  # - {:ok, _other_tier}: fallback to CosmpRouter.Router (unknown WalletType)
   # - {:error, _}: fallback to CosmpRouter.Router (unknown entity)
   defp dispatch_tier_routed(op_name, request) do
     case extract_entity_id(request) do
@@ -199,6 +211,9 @@ defmodule CosmpRouter.GRPC.Server do
 
           {:ok, :personal} ->
             dispatch_with_promote_check(op_name, entity_id, :personal, request)
+
+          {:ok, :device} ->
+            dispatch_device_shard(op_name, entity_id, request)
 
           {:ok, _other_tier} ->
             GenServer.call(CosmpRouter.Router, {op_name, request})
@@ -264,6 +279,25 @@ defmodule CosmpRouter.GRPC.Server do
            details: %{}
          }}
     end
+  end
+
+  # Sub-arc 1 sub-phase d Commit D.3 [BEAM-DBGI-DEVICE-SHARD-DISPATCH-INTEGRATION]
+  # DEVICE cold-shard dispatch per ADR-0040 §Sub-decision 5 register
+  # substantively. Computes deterministic shard_id via
+  # CosmpRouter.DeviceShard.assign_shard/1 (canonicalizes DEVICE shard
+  # assignment at canonical-execution register substantively per ADR-0040
+  # §Sub-decision 1 Jump Consistent Hash) and delegates to CosmpRouter.Router
+  # via existing request shape canonical at canonical-coherence register
+  # substantively. DEVICE remains cold per Founder Q-B LOCKED pure-stateless-
+  # substrate disposition: NO DMWWorker spawn; NO always-hot per-DMW process;
+  # NO protobuf change; NO ETS; NO supervised child. Shard_id is not yet
+  # exposed in the request envelope; shard-aware Router dispatch + per-shard
+  # observability remain forward-substrate per ADR-0040 §Consequences register
+  # substantively.
+  defp dispatch_device_shard(op_name, entity_id, request) do
+    _shard_id = CosmpRouter.DeviceShard.assign_shard(entity_id)
+
+    GenServer.call(CosmpRouter.Router, {op_name, request})
   end
 
   defp extract_entity_id(request) do
