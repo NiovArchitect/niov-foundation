@@ -124,6 +124,8 @@ defmodule CosmpRouter.Proto.AuthenticateRequest do
 
   field :capsule, 1, type: CosmpRouter.Proto.Capsule
   field :principal_id, 2, type: :string, json_name: "principalId"
+  # entity_id per ADR-0039 Sub-decision 6 (tier-routed dispatch)
+  field :entity_id, 3, type: :string, json_name: "entityId"
 end
 
 defmodule CosmpRouter.Proto.AuthenticateSuccess do
@@ -154,6 +156,7 @@ defmodule CosmpRouter.Proto.NegotiateRequest do
 
   field :capsule, 1, type: CosmpRouter.Proto.Capsule
   field :requested_scopes, 2, repeated: true, type: :string, json_name: "requestedScopes"
+  field :entity_id, 3, type: :string, json_name: "entityId"
 end
 
 defmodule CosmpRouter.Proto.NegotiateSuccess do
@@ -182,6 +185,7 @@ defmodule CosmpRouter.Proto.ReadRequest do
   use Protobuf, syntax: :proto3
 
   field :capsule_id, 1, type: :string, json_name: "capsuleId"
+  field :entity_id, 2, type: :string, json_name: "entityId"
 end
 
 defmodule CosmpRouter.Proto.ReadResponse do
@@ -204,6 +208,7 @@ defmodule CosmpRouter.Proto.WriteRequest do
 
   field :capsule_id, 1, type: :string, json_name: "capsuleId"
   field :capsule, 2, type: CosmpRouter.Proto.Capsule
+  field :entity_id, 3, type: :string, json_name: "entityId"
 end
 
 defmodule CosmpRouter.Proto.WriteSuccess do
@@ -233,6 +238,7 @@ defmodule CosmpRouter.Proto.ShareRequest do
 
   field :capsule_id, 1, type: :string, json_name: "capsuleId"
   field :grantee, 2, type: :string
+  field :entity_id, 3, type: :string, json_name: "entityId"
 end
 
 defmodule CosmpRouter.Proto.ShareSuccess do
@@ -263,6 +269,7 @@ defmodule CosmpRouter.Proto.RevokeRequest do
 
   field :capsule_id, 1, type: :string, json_name: "capsuleId"
   field :grantee, 2, type: :string
+  field :entity_id, 3, type: :string, json_name: "entityId"
 end
 
 defmodule CosmpRouter.Proto.RevokeSuccess do
@@ -292,6 +299,7 @@ defmodule CosmpRouter.Proto.AuditRequest do
   use Protobuf, syntax: :proto3
 
   field :capsule_id, 1, type: :string, json_name: "capsuleId"
+  field :entity_id, 2, type: :string, json_name: "entityId"
 end
 
 defmodule CosmpRouter.Proto.AuditSuccess do

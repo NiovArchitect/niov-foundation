@@ -114,6 +114,11 @@ service CosmpRouter {
 message AuthenticateRequest {
   Capsule capsule = 1;
   string principal_id = 2;
+  // Sub-arc 1 sub-phase b Commit B.6.1 [BEAM-COSMP-PROTO-ENTITY-ID]
+  // Entity ID for tier-routed dispatch per ADR-0039 Sub-decision 6.
+  // Empty string fallback dispatches to non-tier-routed Router path
+  // at backward-compat register per ADR-0039 Sub-decision 7.
+  string entity_id = 3;
 }
 
 message AuthenticateResponse {
@@ -135,6 +140,7 @@ message AuthenticateSuccess {
 message NegotiateRequest {
   Capsule capsule = 1;
   repeated string requested_scopes = 2;
+  string entity_id = 3;  // per ADR-0039 Sub-decision 6 (see AuthenticateRequest)
 }
 
 message NegotiateResponse {
@@ -154,6 +160,7 @@ message NegotiateSuccess {
 
 message ReadRequest {
   string capsule_id = 1;
+  string entity_id = 2;  // per ADR-0039 Sub-decision 6 (see AuthenticateRequest)
 }
 
 message ReadResponse {
@@ -170,6 +177,7 @@ message ReadResponse {
 message WriteRequest {
   string capsule_id = 1;
   Capsule capsule = 2;
+  string entity_id = 3;  // per ADR-0039 Sub-decision 6 (see AuthenticateRequest)
 }
 
 message WriteResponse {
@@ -190,6 +198,7 @@ message WriteSuccess {
 message ShareRequest {
   string capsule_id = 1;
   string grantee = 2;
+  string entity_id = 3;  // per ADR-0039 Sub-decision 6 (see AuthenticateRequest)
 }
 
 message ShareResponse {
@@ -211,6 +220,7 @@ message ShareSuccess {
 message RevokeRequest {
   string capsule_id = 1;
   string grantee = 2;
+  string entity_id = 3;  // per ADR-0039 Sub-decision 6 (see AuthenticateRequest)
 }
 
 message RevokeResponse {
@@ -231,6 +241,7 @@ message RevokeSuccess {
 
 message AuditRequest {
   string capsule_id = 1;
+  string entity_id = 2;  // per ADR-0039 Sub-decision 6 (see AuthenticateRequest)
 }
 
 message AuditResponse {
