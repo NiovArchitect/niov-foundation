@@ -17,6 +17,13 @@ import Config
 # config/{dev,test,runtime}.exs.
 config :cosmp_router, ecto_repos: [CosmpRouter.Repo]
 
+# Sub-arc 1 sub-phase d Commit D.2 [BEAM-DBGI-DEVICE-SHARD-MODULE] per
+# ADR-0040 Sub-decision 4 canonical: DEVICE cold-shard count default at
+# canonical-state register substantively. Valid range 128..1024 per
+# ADR-0038 Forward Queue line 249. Pure stateless module substrate per
+# ADR-0040 Sub-decision 2 (no GenServer; no ETS; no supervised child).
+config :cosmp_router, CosmpRouter.DeviceShard, shard_count: 256
+
 # Sub-phase 9 [BEAM-DBGI-LIBCLUSTER] per ADR-0028 §3 + ADR-0030 §DBGI
 # canonical: empty topology default at umbrella-level register;
 # deployment-target-specific topology configurable via
