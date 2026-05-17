@@ -38,9 +38,9 @@ defmodule CosmpRouterTest do
 
   test "supervision tree is introspectable" do
     children = Supervisor.which_children(CosmpRouter.Supervisor)
-    # Sub-arc 1 sub-phase b test env: 4 children (Repo + Storage.ETS +
-    # WalletCache + Router; gRPC server disabled per config/test.exs).
-    # Prod/dev env: 5 children (+ GRPC.Server.Supervisor).
+    # Sub-arc 1 sub-phase c test env: 5 children (Repo + Storage.ETS +
+    # WalletCache + ActivityCounter + Router; gRPC server disabled per
+    # config/test.exs). Prod/dev env: 6 children (+ GRPC.Server.Supervisor).
     # Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE]: Repo added per
     # ADR-0033 §Decision 1 + §Decision 5 (Storage facade requires
     # Postgres source-of-truth Repo connectivity).
@@ -48,8 +48,14 @@ defmodule CosmpRouterTest do
     # CosmpRouter.WalletCache added per ADR-0039 Sub-decision 5 (ETS
     # read-optimized wallet_type cache; cache miss delegates to
     # CosmpRouter.WalletLookup per B.4 substrate).
+    # Sub-arc 1 sub-phase c Commit C.1 [BEAM-DBGI-PROMOTE-ACTIVITY-COUNTER]:
+    # CosmpRouter.ActivityCounter added per ADR-0039 §Sub-decision 8
+    # amendment forward-substrate at C.4 (ETS atomic-counter substrate
+    # at promote-on-activity register; PERSONAL + AI_AGENT tier promotion
+    # canonical at canonical-state register substantively per RULE 21
+    # research arc).
     assert is_list(children)
-    assert length(children) == 4
+    assert length(children) == 5
 
     child_modules =
       Enum.map(children, fn {id, _pid, _type, _modules} -> id end)
@@ -57,6 +63,7 @@ defmodule CosmpRouterTest do
     assert CosmpRouter.Repo in child_modules
     assert CosmpRouter.Storage.ETS in child_modules
     assert CosmpRouter.WalletCache in child_modules
+    assert CosmpRouter.ActivityCounter in child_modules
     assert CosmpRouter.Router in child_modules
   end
 end

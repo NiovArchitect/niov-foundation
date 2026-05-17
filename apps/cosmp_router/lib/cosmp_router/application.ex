@@ -90,6 +90,14 @@ defmodule CosmpRouter.Application do
         # wallet_type lookup at per-node register; cache-miss delegates
         # to CosmpRouter.WalletLookup at canonical-coherence register.
         {CosmpRouter.WalletCache, []},
+        # Sub-arc 1 sub-phase c Commit C.1 [BEAM-DBGI-PROMOTE-ACTIVITY-COUNTER]
+        # per ADR-0039 §Sub-decision 8 amendment forward-substrate at C.4
+        # commit register substantively per RULE 21 research arc canonical
+        # at canonical-knowledge register substantively: ETS atomic-counter
+        # substrate at promote-on-activity register substantively for
+        # PERSONAL + AI_AGENT tier promotion canonical at canonical-state
+        # register substantively.
+        {CosmpRouter.ActivityCounter, []},
         # Sub-phase 4b: COSMP routing GenServer.
         {CosmpRouter.Router, []}
       ] ++
