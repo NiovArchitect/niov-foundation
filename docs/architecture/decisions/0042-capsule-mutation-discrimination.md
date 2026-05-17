@@ -163,3 +163,144 @@ External substrate citations:
 This ADR cites ADR-0041 (parent umbrella) at Sub-decision Q-μ G1.6 closure substantively + §References register substantively. ADR-0041 §Sub-decision 2 already references ADR-0042 forward-substrate; no append-only back-citation amendment fires at G1.1 absent substrate-state evidence at the Step 1 register substantively. If substrate-state evidence surfaces at G1.6 closure cascade that warrants an ADR-0041 cross-citation amendment substantively, that amendment fires at G1.6 register substantively per the ADR-0035 §Amendment Pattern discipline canonical.
 
 This ADR cites ADR-0033 substantively at Sub-decisions Q-α + Q-ζ + Q-ι + §References register substantively. ADR-0033 §Forward Queue substantively does not currently reference Gap 1 forward-substrate; no append-only back-citation amendment fires at G1.1 absent substrate-state evidence. If G1.4 conditional Elixir support-port substantively fires and surfaces substrate-state evidence at the canonical_record/1 register substantively that warrants an ADR-0033 cross-citation amendment substantively, that amendment fires at G1.4 register substantively per the ADR-0035 §Amendment Pattern discipline canonical.
+
+## G1.2 RULE 13 Substrate-State Correction
+
+Status: Active
+Date: 2026-05-17
+Trigger: G1.2 substantive landing per `[CAPSULE-MUTATION-PRISMA-MIGRATION]`
+commit. Section-class is RULE 13 substrate-state correction, NOT formal
+"Amendment 1" — no Proposed-ADR amendment precedent exists in the repo
+at G1.2 land time per RULE 13 pre-flight grep on
+`docs/architecture/decisions/*.md` (only ADR-0039 carries an `## Amendment 1`
+H2, and ADR-0039 was Accepted at sub-arc 1 sub-phase b closure before its
+Amendment 1 landed at sub-arc 1 sub-phase c per ADR-0039 `## Amendment 1`
+Status: Active / Date: 2026-05-17). The "G1.2 RULE 13 Substrate-State
+Correction" wording preserves substrate-honest framing for a still-Proposed
+ADR receiving its first substantive code companion commit per Founder
+disposition at `[CAPSULE-MUTATION-G1.2-REDRAFT-REQUEST]`.
+
+### Correction 1 — Sub-decision Q-α: substantive Prisma DDL paste shape
+
+§Sub-decision Q-α architectural lock at G1.1 canonicalized MutationType
+enum location (Prisma-owned at TypeScript canonical register per
+ADR-0033 cross-language data ownership) but did not paste the literal
+4-line Prisma DDL body. G1.2 lands the body at
+`packages/database/prisma/schema.prisma` immediately after the
+`LawfulBasisType` enum:
+
+```prisma
+enum MutationType {
+  ADD
+  UPDATE
+  MERGE
+  NOOP
+}
+```
+
+Four enum values match the §Decision header literal set (ADD / UPDATE /
+MERGE / NOOP) per Founder Q-α LOCKED Option α at
+`[BEAM-CAPSULE-MUTATION-QLOCK]`. No additional enum values landed; no
+value reordering; no comment header on the enum block (matches existing
+enum convention at schema.prisma L391-548 — no existing enum carries a
+comment header).
+
+### Correction 2 — Sub-decision Q-β: substantive field placement
+
+§Sub-decision Q-β architectural lock at G1.1 canonicalized nullable
+`mutation_type MutationType?` column adjacent to `version` +
+`previous_version` + `content_hash` mutation-anchor cluster. G1.2 lands
+the field at `packages/database/prisma/schema.prisma` on a new line
+immediately after `previous_version Int?` (current L156, post-edit L156
+unchanged + L157 NEW). Placement preserves mutation-anchor-cluster
+colocation per Sub-decision Q-β intent. Nullable per Sub-decision Q-β
+ensures pre-G1.2 historical rows tolerate the new column with NULL
+default; no backfill landed at G1.2.
+
+### Correction 3 — Sub-decision Q-γ: substantive audit literal append count
+
+§Sub-decision Q-γ architectural lock at G1.1 canonicalized 4 NEW
+append-only `CAPSULE_MUTATION_*` literals extending the existing
+36-literal `AUDIT_EVENT_TYPE_VALUES` set per RULE 10
+nothing-is-ever-deleted. G1.2 lands the literals at
+`packages/database/src/queries/audit.ts` at two locations: the
+`AuditEventType` union (L24-L91 pre-edit, terminating semicolon
+migrated from L91 to the new last literal post-edit) and the
+`AUDIT_EVENT_TYPE_VALUES` array (L104-L145 pre-edit, last literal at
+L144 pre-edit; new literals append before the closing `]` at L145
+post-edit). Substrate-state ground truth verified at pre-flight per
+RULE 13: 36 literals → 40 literals across both surfaces; the
+`isKnownAuditEventType` type guard at L147 continues to derive
+correctness from the union/values pair without separate change.
+
+### Correction 4 — Schema sync via ADR-0025 schema-push-target discipline
+
+§Sub-decision Q-θ + Q-μ context paragraph references "G1.2 substantive
+Prisma migration." G1.2 executes schema sync via `npm run db:push:test`
+per ADR-0025 schema-push-target discipline canonical at Foundation
+substrate. **G1.2 does NOT use `prisma migrate dev` or `prisma migrate
+deploy`.** `packages/database/prisma/migrations/` directory remains
+absent at G1.2 close; no migration file is created. This is the
+substrate-honest reading of "Prisma migration" in the original
+architectural lock — Foundation has never used Prisma Migrate; the
+schema-push-target discipline at ADR-0025 + pre-commit guard at
+`.husky/pre-commit` (per ADR-0024) is the canonical sync pathway.
+Phrasing in Sub-decision Q-θ + Q-μ continues to reference "G1.2
+substantive Prisma migration" as the mini-arc anchor name per Founder
+authorization at `[BEAM-CAPSULE-MUTATION-QLOCK]`; the implementation
+uses `db:push:test` exclusively.
+
+### Correction 5 — Conditional G1.4 disposition surfaced at G1.2 close
+
+§Sub-decision Q-ι + Q-μ architectural lock at G1.1 designated G1.4
+`[CAPSULE-MUTATION-ELIXIR-AUDIT]` as a CONDITIONAL mini-arc that fires
+only if G1.4 pre-flight grep proves substantive Elixir change needed
+at the `canonical_record/1` field-projection register per ADR-0033.
+G1.2 verification includes Elixir baseline runs (`mix compile --force`
++ per-app `mix test`) that empirically verify whether the
+`CosmpRouter.MemoryCapsule` Ecto schema mirror tolerates the new
+`mutation_type MutationType?` column without substantive change.
+**Disposition at G1.2 close:** if baselines hold (`cosmp_router`
+218/0/1 skipped + `dbgi_supervisor` 67/0/19 excluded), G1.4 remains
+forward-substrate as a deferred/optional mini-arc and the schema
+additive is verified as backward-compatible at the Ecto register. If
+either baseline drifts, G1.4 transitions from conditional to mandatory
+per Sub-decision Q-ι disposition and the drift is surfaced inline per
+RULE 13 with a separate Founder disposition required before commit
+authorization.
+
+### Correction 6 — Substrate-state delta at G1.2 close
+
+| File | Pre-G1.2 LOC | Post-G1.2 LOC | Delta |
+|---|---|---|---|
+| `packages/database/prisma/schema.prisma` | 1252 | ~1259 (5-line enum + 1 field line + 1 blank) | +7 |
+| `packages/database/src/queries/audit.ts` | 650 | ~661 (4 union literals + 7-line comment + 4 array literals + 2-line comment) | +11 |
+| `docs/architecture/decisions/0042-capsule-mutation-discrimination.md` | 165 | ~290 (this correction section) | +~125 |
+
+(Exact post-edit LOC verified by `wc -l` at G1.2 close per RULE 13.)
+
+### G1.2 close authorization lineage
+
+Founder authorization explicit at G1.2 substantive landing per RULE 20
+at `[CAPSULE-MUTATION-G1.2-EXECUTION-AUTHORIZATION-PASTE-V2]`. Crash
+recovery preceded execution per
+`[CAPSULE-MUTATION-G1.2-CRASH-RECOVERY-PREFLIGHT]` Path A clean-tree
+disposition (HEAD `2cb0028`). Pre-flight RULE 12 + RULE 13 + RULE 21
+substrate-state ground truth verification preceded paste authoring per
+`[CAPSULE-MUTATION-G1.2-REDRAFT-REQUEST]`. Verification-section patch
+landed per `[CAPSULE-MUTATION-G1.2-EXECUTION-VERIFY-PATCH]` (canonical
+typecheck command + Elixir baseline runs added; framing corrected —
+G1.2 adds no new tests but existing verification baselines still run
+before commit authorization). Code-fence + prose-duplicate patches
+landed per `[CAPSULE-MUTATION-G1.2-EXECUTION-PASTE-FINAL-PATCH-V2]`
+(nested markdown fence handling fixed via 4-backtick outer wrapper;
+duplicated "register substantively" phrasing consolidated; markdown
+fence balance verification gate added as Gate 20).
+
+§Sub-decision Q-α + Q-β + Q-γ + Q-θ + Q-μ architectural locks at G1.1
+remain unchanged; this correction section documents G1.2 implementation
+choices that ground each architectural lock in actual repo substrate
+per RULE 13. Gap 1 closure remains forward-substrate to G1.3
+(write.service.ts discriminateMutation) + conditional G1.4 (Elixir
+support per Correction 5 disposition) + G1.5 (tests) + G1.6 (closure
+cascade) per §Status G1.1 scope paragraph.

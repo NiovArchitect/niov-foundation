@@ -88,7 +88,18 @@ export type AuditEventType =
   // existing SYSTEM_PRINCIPALS.SCHEDULER per Q7 LOCKED Option α).
   | "REGULATOR_ACCESS_GRANTED"
   | "REGULATOR_ACCESS_REVOKED"
-  | "REGULATOR_ACCESS_EXPIRED";
+  | "REGULATOR_ACCESS_EXPIRED"
+  // Phase 3 Sub-arc 2 Gap 1 [CAPSULE-MUTATION-PRISMA-MIGRATION] per
+  // ADR-0042 Sub-decision Q-γ. 4 NEW append-only literals extending
+  // the 36-literal set to 40 per RULE 10. Emission is forward-substrate
+  // to G1.3 [CAPSULE-MUTATION-WRITE-SERVICE] at write.service.ts
+  // discriminateMutation boundary; G1.2 lands the literal substrate
+  // only. Each literal carries mutation-class semantic weight at the
+  // audit register per ADR-0042 Decision.
+  | "CAPSULE_MUTATION_ADD"
+  | "CAPSULE_MUTATION_UPDATE"
+  | "CAPSULE_MUTATION_MERGE"
+  | "CAPSULE_MUTATION_NOOP";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -142,6 +153,12 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "REGULATOR_ACCESS_GRANTED",
   "REGULATOR_ACCESS_REVOKED",
   "REGULATOR_ACCESS_EXPIRED",
+  // Phase 3 Sub-arc 2 Gap 1 [CAPSULE-MUTATION-PRISMA-MIGRATION] per
+  // ADR-0042 Sub-decision Q-γ. 4 NEW append-only literals (36 → 40).
+  "CAPSULE_MUTATION_ADD",
+  "CAPSULE_MUTATION_UPDATE",
+  "CAPSULE_MUTATION_MERGE",
+  "CAPSULE_MUTATION_NOOP",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

@@ -154,6 +154,7 @@ model MemoryCapsule {
   updated_by         String?  @db.Uuid
   updated_session_id String?  @db.Uuid
   previous_version   Int?
+  mutation_type      MutationType?
 
   created_at       DateTime  @default(now())
   last_accessed_at DateTime?
@@ -552,6 +553,13 @@ enum LawfulBasisType {
   DPA_REQUEST
   MLAT_REQUEST
   CONSENT_OF_DATA_SUBJECT
+}
+
+enum MutationType {
+  ADD
+  UPDATE
+  MERGE
+  NOOP
 }
 
 // A Hive is a many-entity collective. Members contribute capsules;
