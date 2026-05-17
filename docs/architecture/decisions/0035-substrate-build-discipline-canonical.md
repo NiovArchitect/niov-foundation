@@ -740,6 +740,88 @@ substantive register; substrate-architectural decision deferred to
 operator-tier at canonical decision register when 25th+
 observation surfaces at substantive register.
 
+### Sub-arc 1 sub-phase b cluster expansion (25th observation)
+
+D-PRE-AUTHORIZATION-RESEARCH-ARC promoted from forward-queued
+substrate-build observation at commit-body-only register
+substantively to canonical RULE 21 at CLAUDE.md register
+substantively per `[OPS-RULE-21-PRE-AUTHORIZATION-RESEARCH-ARC-
+CANONICAL]` commit at sub-arc 1 sub-phase b register substantively
+per RULE 20 Founder authorization 2026-05-16.
+
+**5 canonical recurrence sites at canonical-evidence register
+substantively:**
+
+1. B.3 revert register substantively (canonical Horde 0.10 docs
+   guide research arc canonical at canonical-knowledge register
+   substantively prior to B.3 redraft authorization; external
+   library version semantics outside RULE 11 narrow Elixir/BEAM
+   scope)
+
+2. B.6.1 register substantively (canonical Protocol Buffers
+   Language Guide proto3 backward-compat research arc canonical
+   at canonical-knowledge register substantively prior to wire-
+   format authorization; wire-format conventions outside RULE 11
+   scope)
+
+3. B.6.2 register substantively (TypeScript optional field
+   semantics + strict-mode interaction research arc canonical at
+   canonical-knowledge register substantively prior to TS interface
+   authorization; cross-language strict-mode outside RULE 11 scope)
+
+4. B.6.3 pre-flight register substantively (canonical Elixir
+   umbrella circular-dependency research arc canonical at
+   canonical-knowledge register substantively prior to substrate-
+   architectural option lock; pre-flight RULE 13 surface canonical
+   at canonical-honest register substantively caught circular dep
+   that would have crashed compile-time discipline at canonical-
+   execution register substantively; cross-app umbrella dependency
+   analysis outside RULE 11 iteration-loop scope)
+
+5. Cross-cutting register substantively (operator-tier
+   authorization of RULE 21 pre-authorization research arc pattern
+   as canonical discipline at substrate-architectural authorization
+   register substantively)
+
+**Distinction from existing RULE 11 at canonical-rule register
+substantively:**
+
+- RULE 11 trigger: non-deterministic test failures; supervised
+  GenServer behavior across test boundaries; ETS/Sandbox/DBConnection
+  ownership; cross-test-cycle state contamination; local iteration-
+  loop stall canonical at Elixir/BEAM substrate register
+  substantively
+
+- RULE 21 trigger: external library version semantics; wire-format
+  conventions; cross-app umbrella dependencies; cross-language
+  strict-mode interactions; substrate-state ground truth
+  verification at PRE-AUTHORIZATION register substantively
+
+- Remediation paths distinct: RULE 11 fires AFTER iteration-loop
+  stall (move from local debugging to wider Elixir/BEAM community
+  research); RULE 21 fires BEFORE authorization paste drafted
+  (research arc embedded in paste body at canonical-prose register
+  substantively before code writes begin)
+
+**Recursive evidence at canonical-honest register substantively:**
+D-PASTE-AUTHORING-FAILED-TO-GREP-CANONICAL-STATE-BEFORE-PREMISE-
+LOCK observation surfaced at this commit's own pre-flight register
+substantively: paste-authoring register at Claude register
+substantively failed to grep CLAUDE.md canonical RULE 11 state +
+ADR-0035 actual section structure BEFORE drafting prior paste
+premise. Pre-flight RULE 13 surface canonical at canonical-honest
+register caught both variances. The very rule being landed
+evidences its own value at canonical-knowledge register
+substantively. Pattern preservation at canonical-coherence
+register substantively for forward-substrate paste-authoring
+register at sub-arc 1 sub-phase c + sub-phase d + sub-arc 2 +
+sub-arc 3 register substantively.
+
+**Bidirectional citation per ADR-0020:** CLAUDE.md RULE 21
+canonical at operator-facing register substantively; ADR-0035
+Sub-arc 1 sub-phase b cluster expansion 25th observation
+canonical at substrate-architectural register substantively.
+
 ## Decision
 
 NIOV Labs canonicalizes the 9 substrate-build discipline

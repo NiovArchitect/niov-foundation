@@ -2,10 +2,12 @@
 
 Authoritative operational rules for Claude Code sessions in
 `niov-foundation`. Read this entire file before every action.
-The 11 preserved RULES (0-10) and RULES 12-20 — added
+The 11 preserved RULES (0-10) and RULES 12-21 -- added
 incrementally since Section 12C.0.5 (12-16 in the 12C.0.5 batch;
 17 from RAA 12.7; 18 from Gate 9; 19 from ADR-0020; 20 from
-ADR-0027) — define what every session in this repo internalizes;
+ADR-0027; 21 from ADR-0035 sub-arc 1 sub-phase b cluster
+expansion 25th observation) -- define what every session in this
+repo internalizes;
 the rest of the file provides the project context those rules
 operate against.
 
@@ -122,8 +124,12 @@ from Gate 9; RULE 19 from ADR-0020; RULE 20 from ADR-0027. RULE
 `[BEAM-WIDER-KNOWLEDGE-CHECK-DISCIPLINE]` (2026-05-14) when it
 was filled with the D-WIDER-KNOWLEDGE-CHECK substrate-build
 discipline (Elixir/BEAM canonical-pattern research at pre-flight)
-per ADR-0035 Founder-authorized creation. 20 RULES canonical
-(0-20 with RULE 11 newly filled).
+per ADR-0035 Founder-authorized creation. 21 RULES canonical
+(0-21 with RULE 21 newly added per Founder authorization
+2026-05-16 sub-arc 1 sub-phase b register substantively per
+[OPS-RULE-21-PRE-AUTHORIZATION-RESEARCH-ARC-CANONICAL] commit
++ ADR-0035 sub-arc 1 sub-phase b cluster expansion 25th
+observation register substantively).
 
 ### RULE 0 -- HUMANS ARE ALWAYS SOVEREIGN (THE FOUNDATION RULE)
 
@@ -424,6 +430,79 @@ beneficial enough at the substrate-state register to warrant
 formal RULE-tier promotion. Until that ADR lands, RULE
 additions/modifications remain Founder-only per the authority
 half above.
+
+### RULE 21 -- PRE-AUTHORIZATION RESEARCH ARC FOR SUBSTRATE-ARCHITECTURAL PASTES
+
+Substrate-architectural authorization pastes touching external
+libraries, new substrate patterns, cross-application boundaries,
+cross-language boundaries, or wire-format changes substantively
+require canonical research arc landed at canonical-knowledge
+register BEFORE authorization fires at canonical-execution
+register substantively. Distinct from RULE 11 (Elixir/BEAM
+test-substrate iteration-loop research) at canonical-rule
+register substantively: RULE 21 fires at PRE-AUTHORIZATION
+register substantively (paste-authoring + initial pre-flight);
+RULE 11 fires at ITERATION-LOOP register substantively (local
+debugging stalls + non-deterministic test failures). Both rules
+canonical at distinct triggers + distinct remediation paths.
+
+**Trigger conditions:**
+
+- External library version semantics (e.g., Horde 0.10 members
+  config; Protocol Buffers proto3 backward-compat field-addition)
+- Wire-format conventions across language boundaries (e.g.,
+  protobuf field numbering; gRPC schema evolution)
+- Cross-application umbrella dependencies (e.g., circular
+  dependency rejection; callback behavior pattern selection)
+- Cross-language strict-mode interactions (e.g., TypeScript
+  exactOptionalPropertyTypes; Ecto cross-language schema dual
+  ownership at ADR-0033 register)
+- Substrate-state ground truth verification (column ownership;
+  enum values; actual canonical paths vs assumed paths; actual
+  canonical document structure vs assumed structure)
+
+**Required discipline at paste-authoring register substantively:**
+
+- Claude (paste-authoring register) does web-fetch + web-search
+  on canonical authoritative source BEFORE drafting authorization
+  paste body
+- Evidence citations (URLs + canonical doc names + commit SHA
+  where applicable) embedded in authorization paste body at
+  canonical-prose register substantively
+- Substrate-state ground truth grep on actual repo state
+  canonical at pre-flight Step 1 register substantively BEFORE
+  any writes fire at canonical-execution register
+- Actual canonical document structure (sub-section headings,
+  file paths, module names, function signatures) verified by
+  grep BEFORE drafting paste references at canonical-prose
+  register
+
+**Substrate-build observation lineage:** 5 canonical recurrence
+sites at sub-arc 1 sub-phase b register substantively (B.3 revert
+register substantively + B.6.1 register substantively + B.6.2
+register substantively + B.6.3 pre-flight register substantively
++ cross-cutting register substantively); promoted from forward-
+queued substrate-build observation at commit-body-only register
+substantively to canonical RULE per Option β substrate-honest
+discipline; ADR-0035 sub-arc 1 sub-phase b cluster expansion
+sub-section NEW at this RULE's substantive landing canonical at
+substrate-architectural register substantively with 25th
+observation entry.
+
+**Substrate-honest cost-benefit:** research arc adds approximately
+5-15 minutes per substrate-architectural paste at incremental cost
+register substantively; prevents fix-forward cascade canonical at
+canonical-execution register per D-FIX-FORWARD-PATTERN-LIMIT-AT-
+N-EQUALS-2 forward-queued at B.3 revert register substantively.
+Net substrate at canonical-coherence register substantively
+positive at canonical-execution + canonical-knowledge + canonical-
+state register.
+
+**Founder authorization per RULE 20:** explicit at this RULE's
+substantive landing (2026-05-16; sub-arc 1 sub-phase b register
+substantively per `[OPS-RULE-21-PRE-AUTHORIZATION-RESEARCH-ARC-
+CANONICAL]` per ADR-0035 sub-arc 1 sub-phase b cluster expansion
+sub-section register substantively).
 
 ## 4. Architectural Vocabulary
 
