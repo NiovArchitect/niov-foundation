@@ -164,6 +164,13 @@ defmodule CosmpRouter.GRPC.Server do
   # Tier-routed dispatch shim per ADR-0039 Sub-decision 7 + Option ζ Adapter
   # Pattern canonical at canonical-knowledge register substantively per RULE
   # 21 research arc canonical at 67f6112 commit substantively.
+  #
+  # Sub-arc 1 sub-phase c Commit C.3 [BEAM-DBGI-PROMOTE-TIER-ROUTED-DISPATCH]
+  # PERSONAL branch extended canonical at canonical-execution register
+  # substantively per ADR-0039 §Sub-decision 8 amendment forward-substrate at
+  # C.4 commit register substantively: record_activity at ActivityCounter +
+  # should_promote? threshold check; if crossed dispatch_promoted (DMWWorker
+  # via-tuple); else Router fallback canonical at backward-compat register.
   # ============================================================================
   #
   # Reads entity_id from request; resolves wallet_type via WalletCache;
@@ -171,9 +178,11 @@ defmodule CosmpRouter.GRPC.Server do
   # - empty/nil entity_id: fallback to CosmpRouter.Router (backward-compat)
   # - {:ok, :enterprise}: dispatch through DMWWorker via Horde via-tuple
   #   (lazy-spawn if not registered; then GenServer.call to the worker)
-  # - {:ok, :personal | :device}: fallback to CosmpRouter.Router (sub-phase
-  #   a substrate; forward-substrate to PERSONAL/DEVICE per-DMW promotion
-  #   at sub-phase c + sub-phase d)
+  # - {:ok, :personal}: promote-on-activity dispatch per C.3 substrate
+  #   (record_activity + threshold check; below = Router; at-or-above =
+  #   DMWWorker via Horde via-tuple)
+  # - {:ok, :device}: fallback to CosmpRouter.Router (DEVICE cold-shard
+  #   substrate forward-substrate at sub-phase d register)
   # - {:error, _}: fallback to CosmpRouter.Router (unknown entity)
   defp dispatch_tier_routed(op_name, request) do
     case extract_entity_id(request) do
@@ -187,6 +196,9 @@ defmodule CosmpRouter.GRPC.Server do
         case CosmpRouter.WalletCache.wallet_type_for(entity_id) do
           {:ok, :enterprise} ->
             dispatch_enterprise(op_name, entity_id, request)
+
+          {:ok, :personal} ->
+            dispatch_with_promote_check(op_name, entity_id, :personal, request)
 
           {:ok, _other_tier} ->
             GenServer.call(CosmpRouter.Router, {op_name, request})
@@ -210,6 +222,45 @@ defmodule CosmpRouter.GRPC.Server do
          %Proto.CosmpError{
            kind: :INTERNAL,
            message: "DMW spawn failed: #{inspect(reason)}",
+           details: %{}
+         }}
+    end
+  end
+
+  # Sub-arc 1 sub-phase c Commit C.3 [BEAM-DBGI-PROMOTE-TIER-ROUTED-DISPATCH]
+  # Promote-on-activity gate: records activity in ActivityCounter ETS; if
+  # threshold crossed (configured default 5), lazy-spawns DMWWorker via
+  # dispatch_promoted (same Horde via-tuple shape as dispatch_enterprise);
+  # else dispatches through CosmpRouter.Router (backward-compat fallback).
+  defp dispatch_with_promote_check(op_name, entity_id, wallet_type, request) do
+    _ = CosmpRouter.ActivityCounter.record_activity(entity_id)
+
+    if CosmpRouter.ActivityCounter.should_promote?(entity_id) do
+      dispatch_promoted(op_name, entity_id, wallet_type, request)
+    else
+      GenServer.call(CosmpRouter.Router, {op_name, request})
+    end
+  end
+
+  # Sub-arc 1 sub-phase c Commit C.3 [BEAM-DBGI-PROMOTE-TIER-ROUTED-DISPATCH]
+  # Mirrors dispatch_enterprise/3 substrate-architectural shape; lazy-spawns
+  # DMWWorker via DbgiSupervisor.start_dmw_worker_horde/3 with the resolved
+  # wallet_type and dispatches via Horde via-tuple. Forward-substrate to
+  # AI_AGENT branch at C.4 ADR amendment register per ADR-0039 §Sub-decision
+  # 8 amendment forward-substrate.
+  defp dispatch_promoted(op_name, entity_id, wallet_type, request) do
+    case DbgiSupervisor.start_dmw_worker_horde(entity_id, wallet_type) do
+      {:ok, _pid} ->
+        GenServer.call(
+          {:via, Horde.Registry, {DbgiSupervisor.HordeRegistry, entity_id}},
+          {:cosmp_op, op_name, request}
+        )
+
+      {:error, reason} ->
+        {:error,
+         %Proto.CosmpError{
+           kind: :INTERNAL,
+           message: "DMW promote-on-activity spawn failed: #{inspect(reason)}",
            details: %{}
          }}
     end
