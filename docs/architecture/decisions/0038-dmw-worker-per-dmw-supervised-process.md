@@ -247,3 +247,26 @@ cosmp_router re-wire to dispatch through per-entity DMWWorkers;
 ENTERPRISE always-hot per-DMW process pool implementation; PERSONAL
 plus AI_AGENT promote-on-activity tier promotion substrate; DEVICE
 cold-shard mapping with K=128-1024 consistent-hash shards.
+
+**LANDED/CLOSED (sub-arc 1 sub-phase d closure update; append-only):**
+DEVICE cold-shard mapping with K=128-1024 consistent-hash shards is
+implemented via `CosmpRouter.DeviceShard` pure Jump Consistent Hash
+module (Lamping-Veach 2014; no GenServer; no ETS hot path; no
+supervised child) and wired into `CosmpRouter.GRPC.Server` via explicit
+`{:ok, :device}` dispatch branch + `dispatch_device_shard/3` helper.
+Runtime lineage: D.1 `353c618` ADR-0040 architecture lock + D.0 Rule
+21 research arc embedded, D.2 `6e19f61` DeviceShard pure module + 15
+unit tests, D.3 `28a5abc` explicit DEVICE dispatch branch + 7
+integration tests, D.4 this commit docs-only closure cascade. ADR-0040
+canonical at substrate-architectural register substantively; ADR-0040
+§Post-Closure Implementation Lineage canonical at canonical-prose
+register substantively. DEVICE remains cold: no DMWWorker spawn for
+DEVICE, no per-device GenServer, no ETS hot path, no supervised child.
+AI_AGENT remains outside DEVICE lane and maps to PERSONAL wallet_type
+at INSERT register substantively per TS-side `defaultWalletTypeFor/1`
+helper canonical at `packages/database/src/queries/wallet.ts` register
+substantively. This `cold-shard mapping with K=128-1024 consistent-
+hash shards` forward-substrate item is CLOSED at canonical-state
+register substantively at sub-arc 1 sub-phase d closure register
+substantively per ADR-0040 §Sub-decision 7 4-commit mini-arc
+decomposition.

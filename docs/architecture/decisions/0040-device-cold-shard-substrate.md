@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed 2026-05-17
+Accepted 2026-05-17 (closed at sub-arc 1 sub-phase d Commit 4 of 4
+`[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]`; 4-commit lineage per
+§Post-Closure Implementation Lineage section below)
 
 Author: niovarchitect (NIOV Labs Founder; patent-holder per US 12,517,919 + US 12,164,537 + US 12,399,904)
 
@@ -622,3 +624,142 @@ no "Manager" suffix).
   substantively. CURRENT_BUILD_STATE.md sub-phase d H2 section
   canonical at canonical-state register substantively at D.4 closure
   cascade register substantively.
+
+## Post-Closure Implementation Lineage
+
+Sub-arc 1 sub-phase d closed on 2026-05-17 at
+`[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]` Commit D.4 of 4.
+
+### D.1 — ADR-0040 architecture lock
+
+Commit `353c618` `[BEAM-DBGI-DEVICE-COLDSHARD-ADR]` landed ADR-0040 as
+Proposed, embedded the D.0 Rule 21 research arc, added the
+section-12-progress.md sub-phase d IN FLIGHT row, and refreshed
+ADR-0040 catalog entries in docs/architecture/README.md and CLAUDE.md.
+
+D.1 locked:
+
+- Jump Consistent Hash
+- pure stateless module + config
+- module name `CosmpRouter.DeviceShard`
+- K default 256 and valid range [128, 1024]
+- no GenServer
+- no ETS hot path
+- no supervised child
+- explicit `:device` dispatch integration forward-substrate to D.3
+- AI_AGENT remains at PERSONAL branch
+
+### D.2 — DeviceShard pure module
+
+Commit `6e19f61` `[BEAM-DBGI-DEVICE-SHARD-MODULE]` landed:
+
+- NEW `apps/cosmp_router/lib/cosmp_router/device_shard.ex`
+- NEW `apps/cosmp_router/test/cosmp_router/device_shard_test.exs`
+- MOD `config/config.exs`
+
+D.2 implemented the pure `CosmpRouter.DeviceShard` module with:
+
+- SHA-256 first-8-byte stable 64-bit key derivation
+- Lamping-Veach Jump Consistent Hash
+- `import Bitwise`
+- 64-bit unsigned wrap via modulo `2^64`
+- return of bucket `b`, not overshot `j`
+- `assign_shard/1`
+- `assign_shard/2`
+- `configured_shard_count/0`
+- `valid_shard_count?/1`
+- `validate_shard_count!/1`
+- default `shard_count: 256`
+- 15 unit tests
+
+D.2 preserved:
+
+- no GenServer
+- no ETS
+- no supervised child
+- no dispatch integration yet
+- no AI_AGENT change
+
+### D.3 — DEVICE dispatch integration
+
+Commit `28a5abc` `[BEAM-DBGI-DEVICE-SHARD-DISPATCH-INTEGRATION]`
+landed:
+
+- MOD `apps/cosmp_router/lib/cosmp_router/grpc/server.ex`
+- NEW `apps/cosmp_router/test/cosmp_router/grpc/device_shard_dispatch_test.exs`
+
+D.3 implemented:
+
+- explicit `{:ok, :device}` branch before `{:ok, _other_tier}`
+- private `dispatch_device_shard/3`
+- deterministic `CosmpRouter.DeviceShard.assign_shard(entity_id)`
+  invocation
+- preservation of existing Router request shape
+- 7 integration tests proving DEVICE touches DeviceShard and no longer
+  rides `_other_tier`
+
+D.3 preserved:
+
+- ENTERPRISE DMWWorker branch
+- PERSONAL promote-on-activity branch
+- missing entity_id fallback
+- WalletLookup/WalletCache error fallback
+- no DMWWorker spawn for DEVICE
+- no per-device GenServer
+- no ETS
+- no supervised child
+- no protobuf change
+- no API client change
+- no AI_AGENT branch
+
+### D.4 — Closure cascade
+
+Commit D.4 `[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]` closes the sub-arc 1
+sub-phase d mini-arc.
+
+D.4 finalizes:
+
+- ADR-0040 Status Accepted
+- this Post-Closure Implementation Lineage
+- section-12-progress.md sub-phase d CLOSED row
+- CURRENT_BUILD_STATE.md sub-phase d closure section
+- ADR-0040 catalog refreshes in docs/architecture/README.md and
+  CLAUDE.md
+- ADR-0038 Forward Queue K=128-1024 DEVICE cold-shard item final
+  closure
+- ADR-0035 28th observation
+  D-PASTE-AUTHORING-FAILED-TO-GREP-DISPATCH-HELPER-ARG-ORDER promotion
+  (recurrence-7 of 27th observation pattern; surfaced at D.3 register
+  substantively per RULE 13 substrate-honest inline discipline
+  canonical at canonical-rule register substantively)
+
+### Final runtime state
+
+At closure, DEVICE cold-shard substrate is live at canonical-execution
+register substantively:
+
+- DEVICE wallet_type resolves through existing
+  `CosmpRouter.WalletCache.wallet_type_for/1`
+- `grpc/server.ex` dispatches `{:ok, :device}` through
+  `dispatch_device_shard/3`
+- `dispatch_device_shard/3` computes deterministic shard assignment
+  through `CosmpRouter.DeviceShard.assign_shard/1`
+- Router message shape remains unchanged
+- DEVICE remains cold
+- no DEVICE DMWWorker is spawned
+- no per-device GenServer is introduced
+- no ETS hot path is introduced
+- no supervised child is added
+- AI_AGENT remains outside DEVICE lane
+
+### Final test surface
+
+At D.3 closure baseline:
+
+- `CosmpRouter.DeviceShardTest`: 15/0
+- `CosmpRouter.GRPC.DeviceShardDispatchTest`: 7/0
+- `cosmp_router` default: 218/0 + 1 skipped
+- `dbgi_supervisor` default: 67/0 (19 excluded)
+- CI green across all 4 jobs at D.1, D.2, and D.3
+
+D.4 is docs-only and does not alter runtime test surface.

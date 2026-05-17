@@ -1023,6 +1023,105 @@ canonical at canonical-coherence register substantively; ADR-0035 sub-
 arc 1 sub-phase c cluster expansion 27th observation canonical at
 substrate-architectural register substantively.
 
+### Sub-arc 1 sub-phase d cluster expansion (28th observation)
+
+D-PASTE-AUTHORIZATION-FAILED-TO-GREP-DISPATCH-HELPER-ARG-ORDER
+promoted from forward-queued substrate-build observation at commit-
+body-only register substantively (surfaced at D.3 register
+substantively per `28a5abc` commit body substantively) to ADR-0035
+cluster expansion canonical at substrate-architectural register
+substantively per Option β substrate-honest discipline at
+recurrence-7 register substantively per
+`[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]` commit at sub-arc 1 sub-phase
+d register substantively per RULE 20 Founder authorization 2026-05-17.
+
+**Pattern canonical at canonical-prose register substantively:**
+
+Authorization paste includes example code with helper function call
+canonical at canonical-prose register substantively whose argument
+order substantively differs from the substrate-state ground truth
+canonical at substrate-state register substantively (existing helpers
+in the same module use a different argument-order convention canonical
+at canonical-execution register substantively); paste-authoring at
+operator-tier register substantively does not grep existing helpers
+in the target module before drafting the example canonical at
+canonical-prose register substantively. Pre-flight Step 1 register
+substantively catches the drift canonical at canonical-honest register
+substantively per RULE 13 inline-surface discipline canonical at
+canonical-rule register substantively + Founder explicit "adjusted to
+actual code style found in Step 1" guidance canonical at canonical-
+decision register substantively pre-authorizes the substrate-coherent
+correction at canonical-execution register substantively.
+
+**Recurrence-7 site canonical at canonical-evidence register
+substantively (sub-arc 1 sub-phase d D.3 register substantively):**
+
+D.3 authorization paste Step 3 example code at canonical-prose
+register substantively used `dispatch_device_shard(entity_id, operation, request)`
+argument order canonical at canonical-prose register substantively;
+substrate-state ground truth canonical at substrate-state register
+substantively at `apps/cosmp_router/lib/cosmp_router/grpc/server.ex`
+register substantively showed existing `dispatch_enterprise/3` +
+`dispatch_with_promote_check/4` helpers use
+`(op_name, entity_id, request)` argument order canonical at canonical-
+execution register substantively (op_name FIRST). Adjusted
+`dispatch_device_shard/3` signature canonical at canonical-coherence
+register substantively per Founder explicit guidance "Expected branch
+shape, adjusted to actual code style found in Step 1" register
+substantively. Additional substrate-state correction at canonical-
+honest register substantively: D.3 paste Step 3 example referenced
+`WalletLookup.wallet_type_for_entity(entity_id)`; substrate-state
+ground truth at grpc/server.ex:187 canonical at substrate-state
+register substantively showed actual call is
+`CosmpRouter.WalletCache.wallet_type_for(entity_id)` register
+substantively; preserved existing call at canonical-coherence
+register substantively.
+
+**Distinction from 27th observation D-PASTE-AUTHORING-FAILED-TO-GREP-
+CANONICAL-STATE-BEFORE-PREMISE-LOCK canonical at substrate-
+architectural register substantively:**
+
+27th observation register substantively canonical at structural
+state register substantively (canonical paths + ADR section names +
+H2-vs-H3 heading levels + RULE numbering); 28th observation register
+substantively canonical at function-signature register substantively
+(helper argument order + sibling-function call-target name).
+Recurrence-7 of 28th observation register substantively is the
+specialized recurrence of the broader paste-authoring failed-to-grep
+pattern at function-signature granularity register substantively;
+27th observation register substantively is the broader pattern
+canonical at structural-state granularity register substantively.
+
+Both observations canonical at canonical-coherence register
+substantively; remediation discipline canonical at canonical-rule
+register substantively per RULE 21 D-PRE-AUTHORIZATION-RESEARCH-ARC
+canonical at canonical-rule register substantively per `67f6112`
+commit register substantively + RULE 13 inline-surface canonical
+canonical at canonical-rule register substantively.
+
+**Substrate-honest disposition canonical at canonical-coherence
+register substantively:**
+
+Pre-paste-draft register substantively at paste-authoring register
+substantively MUST grep sibling helper functions in the target module
+canonical at canonical-coherence register substantively at Step 1
+pre-flight register substantively whenever dispatch helper code
+canonical at canonical-prose register substantively is drafted in
+authorization paste register substantively. Pattern preservation
+canonical at canonical-coherence register substantively for forward-
+substrate paste-authoring register at sub-arc 2 + sub-arc 3 register
+substantively (particularly dispatch helper + router helper +
+operations helper drafting registers).
+
+**Bidirectional citation per ADR-0020:** D.3 `28a5abc` commit body
+canonical at canonical-coherence register substantively at register
+substantively + `apps/cosmp_router/lib/cosmp_router/grpc/server.ex`
+register substantively at canonical-execution register substantively
++ sub-phase d row register substantively at section-12-progress.md
+canonical at canonical-coherence register substantively; ADR-0035
+sub-arc 1 sub-phase d cluster expansion 28th observation canonical at
+substrate-architectural register substantively.
+
 ## Decision
 
 NIOV Labs canonicalizes the 9 substrate-build discipline

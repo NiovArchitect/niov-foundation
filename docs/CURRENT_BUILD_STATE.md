@@ -306,6 +306,107 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3 Sub-Arc 1 Sub-Phase d -- DEVICE Cold-Shard Substrate CLOSED 2026-05-17
+
+Status: CLOSED 2026-05-17 at D.4 `[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]`.
+
+Current HEAD at closure: this commit.
+Lineage: `353c618` → `6e19f61` → `28a5abc` → this commit.
+
+Sub-phase d implemented DEVICE cold-shard dispatch per ADR-0040. The
+implementation uses a pure stateless `CosmpRouter.DeviceShard` module
+implementing Jump Consistent Hash (Lamping-Veach 2014) and wires
+DEVICE wallet_type dispatch through an explicit branch in
+`CosmpRouter.GRPC.Server`.
+
+**Runtime substrate at closure register substantively:**
+
+- `CosmpRouter.DeviceShard` is pure and stateless.
+- `CosmpRouter.DeviceShard.assign_shard/1` uses configured K default
+  256.
+- Valid K range is 128..1024.
+- `grpc/server.ex` has explicit `{:ok, :device}` branch BEFORE
+  `{:ok, _other_tier}`.
+- `dispatch_device_shard/3` computes deterministic shard assignment
+  and preserves Router request shape.
+- DEVICE remains cold.
+- DEVICE does NOT spawn DMWWorker.
+- DEVICE does NOT create per-device GenServer.
+- DEVICE does NOT use ETS hot path.
+- DEVICE does NOT add supervised child.
+- AI_AGENT remains outside DEVICE lane and maps to PERSONAL
+  wallet_type at INSERT register per TS-side `defaultWalletTypeFor/1`
+  helper canonical at `packages/database/src/queries/wallet.ts`
+  register substantively.
+
+**4-commit decomposition LANDED canonical at canonical-state register
+substantively:**
+
+- D.1 `353c618` `[BEAM-DBGI-DEVICE-COLDSHARD-ADR]` — docs-only
+  (ADR-0040 NEW Proposed + D.0 Rule 21 research arc embedded + this
+  row IN FLIGHT + catalog refreshes; 4-paths +628 insertions).
+- D.2 `6e19f61` `[BEAM-DBGI-DEVICE-SHARD-MODULE]` — substantive code
+  (NEW `apps/cosmp_router/lib/cosmp_router/device_shard.ex` 122 lines
+  + NEW `apps/cosmp_router/test/cosmp_router/device_shard_test.exs`
+  182 lines + MOD `config/config.exs` +7 lines; 15 NEW unit tests;
+  Bitwise import + SHA-256 64-bit key + canonical Lamping-Veach Jump
+  Hash + return bucket b not overshot j + fail-fast validation).
+- D.3 `28a5abc` `[BEAM-DBGI-DEVICE-SHARD-DISPATCH-INTEGRATION]` —
+  substantive code (MOD `apps/cosmp_router/lib/cosmp_router/grpc/server.ex`
+  +36/-2 + NEW `apps/cosmp_router/test/cosmp_router/grpc/device_shard_dispatch_test.exs`
+  233 lines; explicit `{:ok, :device}` branch + dispatch_device_shard/3
+  helper + 7 NEW integration tests with discriminator pattern proving
+  DEVICE no longer rides `_other_tier` catch-all).
+- D.4 this commit `[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]` — docs-only
+  closure cascade (ADR-0040 Status Accepted + Post-Closure
+  Implementation Lineage + this section NEW + section-12-progress.md
+  CLOSED row + architecture/README + CLAUDE.md ADR-0040 catalog
+  refresh + ADR-0038 Forward Queue closure + ADR-0035 28th observation
+  promotion).
+
+**Final test surface canonical at canonical-coherence register
+substantively:**
+
+- `CosmpRouter.DeviceShardTest`: 15/0
+- `CosmpRouter.GRPC.DeviceShardDispatchTest`: 7/0
+- `cosmp_router` default: 218/0 + 1 skipped
+- `dbgi_supervisor` default: 67/0 (19 excluded)
+- CI green across all 4 jobs at D.1 + D.2 + D.3 + D.4
+
+**ADR-0038 §Forward Queue K=128-1024 DEVICE cold-shard item: CLOSED**
+at canonical-state register substantively at this commit register
+substantively per ADR-0040 §Sub-decision 7.
+
+**Forward-substrate at canonical-state register substantively:**
+
+- D.4 closes sub-arc 1 sub-phase d.
+- Sub-arc 2 capsule layer Gaps 1+3+4+5 (ADD/UPDATE/MERGE/NOOP mutation
+  discrimination + pgvector embedding + decay execution + staleness
+  detection + weighting architecture per Entry #28; AI_AGENT
+  EntityType-discriminated capsule routing forward-substrate at this
+  register).
+- Sub-arc 3 benchmark + bi-temporal + tier automation.
+- Optional DEVICE shard observability/per-shard metrics remain
+  forward-substrate at sub-arc 3 register substantively if later
+  required.
+
+References canonical at canonical-coherence register substantively:
+ADR-0040 (DEVICE Cold-Shard Substrate; Accepted at this commit per
+Post-Closure Implementation Lineage); ADR-0038 §Sub-decision 3 +
+§Forward Queue line 249 (K=128-1024 consistent-hash shards target
+LANDED at D.2 + D.3 + CLOSED at D.4 register substantively); ADR-0039
+§Sub-decision 7 + Sub-decision 8 + Amendment 1 (DEVICE Router fallback
+at sub-phase c register substantively superseded at sub-phase d
+register substantively per ADR-0040 substrate); ADR-0034 (BEAM
+testability discipline); ADR-0035 (substrate-build discipline; 28th
+observation D-PASTE-AUTHORIZATION-FAILED-TO-GREP-DISPATCH-HELPER-ARG-
+ORDER promoted at this commit register substantively); RULE 11
+(Elixir/BEAM iteration-loop research); RULE 13 (substrate-honest
+pre-flight surface); RULE 20 (founder authorization); RULE 21
+(pre-authorization research arc canonical per `67f6112` commit).
+
+---
+
 ## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase c (PERSONAL Promote-on-Activity per ADR-0039 Amendment 1): CLOSED 2026-05-17
 
 Sub-arc 1 sub-phase c mini-arc CLOSED at HEAD parent `b7fa258` (C.4) +
