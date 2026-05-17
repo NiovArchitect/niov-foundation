@@ -306,6 +306,103 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase c (PERSONAL Promote-on-Activity per ADR-0039 Amendment 1): CLOSED 2026-05-17
+
+Sub-arc 1 sub-phase c mini-arc CLOSED at HEAD parent `b7fa258` (C.4) +
+this C.5 closure commit canonical at canonical-state register
+substantively per ADR-0039 Amendment 1 canonical at canonical-prose
+register substantively per ADR-0011 §Amendment canonical convention.
+5-commit mini-arc decomposition canonical at operator decision register
+substantively canonical at patent-implementation evidence register
+substantively per ADR-0020 two-register IP discipline canonical.
+
+**Substrate-state ground truth at closure register substantively:**
+
+- PERSONAL promote-on-activity substrate canonical at canonical-
+  execution register substantively. PERSONAL entities promote to per-
+  DMW DMWWorker via Horde Registry canonical at canonical-execution
+  register substantively when ActivityCounter threshold crossed (default
+  5 activities canonical at canonical-state register substantively per
+  ADR-0034 testability discipline canonical).
+- Idle eviction periodic task canonical at canonical-execution register
+  substantively releases DMWWorker resources canonical at canonical-
+  state register substantively when entity inactivity exceeds configured
+  idle TTL (default 5 minutes canonical at canonical-state register
+  substantively).
+- DEVICE tier preserves sub-phase a Router fallback canonical at
+  backward-compat register substantively per ADR-0038 Sub-decision 3
+  tier 3 register substantively (forward-substrate to sub-phase d cold-
+  shard substrate canonical at canonical-architectural register
+  substantively).
+- AI_AGENT disposition forward-substrate at sub-arc 2 capsule layer
+  canonical at canonical-coherence register substantively per
+  D-AI-AGENT-ENTITY-TYPE-vs-WALLET-TYPE-DISCRIMINATION-DRIFT observation
+  canonical at C.3 commit body register substantively (AI_AGENT
+  canonical at EntityType register substantively per ADR-0033 cross-
+  language data ownership register substantively NOT WalletType
+  register; Prisma WalletType enum enumerates PERSONAL + ENTERPRISE +
+  DEVICE only canonical at canonical-coherence register substantively;
+  DbgiSupervisor.start_dmw_worker_horde/3 guard rejects :ai_agent at
+  substrate-state register substantively).
+- Test surface: cosmp_router 196/0 + 1 skipped (172 baseline at B.7 +
+  11 NEW ActivityCounter at C.1 + 11 NEW eviction at C.2 + 6 NEW
+  promote_on_activity at C.3 absolute reconciled per actual count) +
+  dbgi_supervisor 67/0 default (19 excluded) + 86/0 integration
+  baseline preserved at canonical-coherence register substantively
+  (C.4 + C.5 docs-only commits register substantively).
+- ADR-0039 Amendment 1 canonical at canonical-prose register
+  substantively (H2 Amendment subsection per ADR-0011 canonical
+  precedent at canonical-knowledge register substantively; preserves
+  Accepted §Sub-decision 8 body audit trail at canonical-honest
+  register substantively per ADR-0020 two-register IP discipline
+  canonical).
+- ADR-0035 cluster expansion 26th + 27th observations promoted at this
+  closure commit canonical at substrate-architectural register
+  substantively (26th: D-SUPERVISION-TREE-EXPANSION-TEST-COHERENCE-
+  DRIFT recurrence-3 across B.3 redraft + B.5 + C.1 supervision tree
+  expansion; 27th: D-PASTE-AUTHORING-FAILED-TO-GREP-CANONICAL-STATE-
+  BEFORE-PREMISE-LOCK recurrence-6 across RULE 21 promotion paste +
+  stop_dmw_worker_horde + carried context + D-DEVICE-SKIPS-PROMOTE-
+  CHECK + ADR-0039 H3-vs-H2 amendment structural assumption + C.5
+  path discovery).
+
+**Forward-substrate canonical at canonical-state register
+substantively:**
+
+- Sub-arc 1 sub-phase d: DEVICE cold-shard substrate canonical at
+  canonical-state register substantively (always-cold shard-mapped per
+  ADR-0038 Sub-decision 3 tier 3 register substantively; K=128-1024
+  consistent-hash shards forward-substrate at substrate-architectural
+  register substantively).
+- Sub-arc 2: capsule layer Gaps 1+3+4+5 (ADD/UPDATE/MERGE/NOOP mutation
+  discrimination + pgvector embedding + decay execution + staleness
+  detection + weighting architecture per Entry #28; AI_AGENT EntityType-
+  discriminated dispatch substrate canonical at canonical-coherence
+  register substantively forward-substrate at this register
+  substantively).
+- Sub-arc 3: benchmark + bi-temporal + tier automation canonical at
+  canonical-state register substantively.
+
+References canonical at canonical-coherence register substantively:
+ADR-0039 (Accepted at B.7 closure register substantively per `3242c17`
++ Amendment 1 canonical at this mini-arc register substantively per
+C.4 `b7fa258`); ADR-0011 (Amendment precedent canonical at canonical-
+prose register substantively per H2 Amendment subsection convention);
+ADR-0020 (two-register IP discipline canonical at canonical-
+architectural register substantively); ADR-0033 (cross-language data
+ownership; EntityType vs WalletType canonical at canonical-knowledge
+register substantively); ADR-0034 (BEAM testability discipline);
+ADR-0035 (substrate-build discipline; sub-arc 1 sub-phase c cluster
+expansion 26th + 27th observations canonical at substrate-architectural
+register substantively at this C.5 closure commit register
+substantively); ADR-0038 (DMWWorker substrate canonical at sub-phase a
+runtime register substantively); RULE 11 (Elixir/BEAM iteration-loop
+research); RULE 13 (substrate-honest pre-flight surface); RULE 20
+(founder authorization); RULE 21 (pre-authorization research arc
+canonical per `67f6112` commit).
+
+---
+
 ## Phase 3: Dynamic Memory Accuracy at Scale -- Sub-Arc 1 Sub-Phase b (Hive-Scale Per-DMW Dispatch ENTERPRISE per ADR-0039): CLOSED 2026-05-17
 
 Sub-arc 1 sub-phase b mini-arc CLOSED at HEAD parent `3242c17` (B.6.3)

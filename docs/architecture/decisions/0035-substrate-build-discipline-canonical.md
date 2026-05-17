@@ -822,6 +822,207 @@ canonical at operator-facing register substantively; ADR-0035
 Sub-arc 1 sub-phase b cluster expansion 25th observation
 canonical at substrate-architectural register substantively.
 
+### Sub-arc 1 sub-phase c cluster expansion (26th observation)
+
+D-SUPERVISION-TREE-EXPANSION-TEST-COHERENCE-DRIFT promoted from
+forward-queued substrate-build observation at commit-body-only
+register substantively (carried across B.3 redraft + B.5 + C.1
+register substantively) to ADR-0035 cluster expansion canonical at
+substrate-architectural register substantively per Option β
+substrate-honest discipline at recurrence-3 register substantively
+per `[BEAM-DBGI-PROMOTE-ON-ACTIVITY-CLOSURE]` commit at sub-arc 1
+sub-phase c register substantively per RULE 20 Founder authorization
+2026-05-17.
+
+**Pattern canonical at canonical-prose register substantively:**
+
+NEW Application supervision tree child registration canonical at
+canonical-execution register substantively requires test fixture
+children-count assertion amendment canonical at canonical-coherence
+register substantively. Otherwise, NEW supervised child canonical at
+canonical-execution register substantively breaks existing test
+fixture canonical at substrate-state register substantively (canonical
+test exemplar: cosmp_router_test.exs supervision tree children-count
+assertion + child-module name assertions register substantively).
+
+**3 canonical recurrence sites at canonical-evidence register
+substantively:**
+
+1. B.3 redraft register substantively (Horde Registry + Horde
+   DynamicSupervisor substrate landing at supervision tree register
+   substantively per ADR-0039 Sub-decision 1; canonical pattern
+   emerged at supervision tree expansion register substantively;
+   recurrence-1 register substantively)
+
+2. B.5 register substantively (CosmpRouter.WalletCache supervision
+   tree landing per ADR-0039 Sub-decision 5; ETS read-optimized cache
+   substrate canonical at canonical-coherence register substantively;
+   recurrence-2 register substantively)
+
+3. C.1 register substantively (CosmpRouter.ActivityCounter supervision
+   tree landing per ADR-0039 Amendment 1 substrate register
+   substantively; ETS atomic-counter substrate canonical at canonical-
+   coherence register substantively; recurrence-3 register
+   substantively at substrate-build promotion threshold register
+   substantively per Option β discipline canonical)
+
+**Substrate-honest disposition canonical at canonical-coherence
+register substantively:**
+
+Pre-paste-draft register substantively at paste-authoring register
+substantively MUST include cosmp_router_test.exs children-count
+assertion grep canonical at canonical-coherence register substantively
+at Step 1 pre-flight register substantively whenever supervision tree
+expansion register substantively is involved. Pattern preservation
+forward-substrate canonical at canonical-coherence register
+substantively for sub-phase d + sub-arc 2 + sub-arc 3 register
+substantively.
+
+**Distinction from RULE 21 D-PRE-AUTHORIZATION-RESEARCH-ARC canonical
+at canonical-rule register substantively:**
+
+RULE 21 fires at PRE-AUTHORIZATION register substantively for
+substrate-architectural pastes; D-SUPERVISION-TREE-EXPANSION-TEST-
+COHERENCE-DRIFT fires at IMPLEMENTATION register substantively when
+supervision tree child added at canonical-execution register
+substantively. Both disciplines canonical at canonical-coherence
+register substantively; RULE 21 applies broader (cross-cutting
+substrate-architectural pastes) + D-SUPERVISION-TREE-EXPANSION
+applies narrower (supervision tree expansion specifically).
+
+**Bidirectional citation per ADR-0020:** ADR-0039 Amendment 1 §C.1
+register substantively + sub-phase c row register substantively at
+section-12-progress.md canonical at canonical-coherence register
+substantively; ADR-0035 sub-arc 1 sub-phase c cluster expansion 26th
+observation canonical at substrate-architectural register
+substantively.
+
+### Sub-arc 1 sub-phase c cluster expansion (27th observation)
+
+D-PASTE-AUTHORING-FAILED-TO-GREP-CANONICAL-STATE-BEFORE-PREMISE-LOCK
+promoted from forward-queued substrate-build observation at commit-
+body-only register substantively (carried across RULE 21 promotion
+paste + C.2 + C.3 + C.4 + C.5 register substantively at recurrence-6
+register substantively) to ADR-0035 cluster expansion canonical at
+substrate-architectural register substantively per Option β substrate-
+honest discipline per `[BEAM-DBGI-PROMOTE-ON-ACTIVITY-CLOSURE]` commit
+at sub-arc 1 sub-phase c register substantively per RULE 20 Founder
+authorization 2026-05-17.
+
+**Pattern canonical at canonical-prose register substantively:**
+
+Authorization paste authored at operator-tier register substantively
+premises (function existence + structural levels + prose patterns +
+canonical paths + ADR section names) without explicit substrate-state
+grep verification at paste-authoring register substantively. Pre-flight
+Step 1 register substantively catches the drift canonical at canonical-
+honest register substantively per RULE 21 D-PRE-AUTHORIZATION-RESEARCH-
+ARC discipline canonical at canonical-rule register substantively, but
+the recurrence pattern register substantively indicates pre-paste-draft
+discipline canonical at canonical-coherence register substantively
+needs extension beyond RULE 21 canonical at canonical-rule register
+substantively.
+
+**6 canonical recurrence sites at canonical-evidence register
+substantively:**
+
+1. RULE 11 vacant assumption (RULE 21 promotion paste register
+   substantively; recurrence-1 register substantively per `67f6112`
+   commit register substantively)
+
+2. ADR-0035 §9 numbered cluster structure assumption (RULE 21
+   promotion paste register substantively; recurrence-2 register
+   substantively per `67f6112` commit register substantively;
+   substrate-state ground truth was chronological cluster-expansion
+   sub-headings)
+
+3. DbgiSupervisor.stop_dmw_worker_horde existence assumption (C.2
+   paste register substantively; recurrence-3 register substantively
+   per `1dd1d64` commit register substantively; substrate-state
+   ground truth was single-node `stop_dmw_worker/1` only)
+
+4. Carried context register substantively (recurrence-4 register
+   substantively at cross-cutting paste-authoring register
+   substantively)
+
+5. D-DEVICE-SKIPS-PROMOTE-CHECK Test 6 framing assumption (C.3 paste
+   register substantively; recurrence-5 register substantively per
+   `18300c3` commit register substantively; substrate-state ground
+   truth was DEVICE bypasses dispatch_with_promote_check entirely at
+   {:ok, _other_tier} branch register substantively)
+
+6. ADR-0039 H3-vs-H2 amendment subsection structural assumption (C.4
+   paste register substantively; recurrence-6 register substantively
+   per `b7fa258` commit register substantively; substrate-state ground
+   truth was ADR-0011 §Amendment canonical at H2 register substantively
+   NOT H3 register substantively + Post-Closure Implementation Lineage
+   canonical at H2 register substantively NOT H3 register substantively)
+
+**Recursive evidence at canonical-honest register substantively:**
+C.5 closure cascade paste itself premised `docs/section-12-progress.md`
+path register substantively (substrate-state ground truth was
+`docs/reference/section-12-progress.md`) + `CURRENT_BUILD_STATE.md`
+root path register substantively (substrate-state ground truth was
+`docs/CURRENT_BUILD_STATE.md`). Pre-flight RULE 13 surface canonical
+at canonical-honest register substantively caught both variances at
+canonical-execution register substantively per `bdpqf7s8t` pre-flight
+register substantively. The very promotion paste evidences its own
+recurrence at canonical-knowledge register substantively at canonical-
+coherence register substantively.
+
+**Substrate-honest disposition canonical at canonical-coherence
+register substantively:**
+
+Pre-paste-draft register substantively at paste-authoring register
+substantively MUST defer ALL canonical function references + ALL
+structural section names + ALL prose pattern assumptions + ALL
+canonical paths + ALL ADR section names + ALL line numbers to Step 1
+pre-flight verification register substantively canonical at canonical-
+honest register substantively. Paste body register substantively uses
+placeholder names at NEED-VERIFICATION register substantively that
+Claude Code MUST verify at canonical-honest register substantively at
+Step 1 register substantively BEFORE writes fire at canonical-
+execution register substantively. Pattern preservation canonical at
+canonical-coherence register substantively for forward-substrate
+paste-authoring register at sub-phase d + sub-arc 2 + sub-arc 3
+register substantively. RULE 21 D-PRE-AUTHORIZATION-RESEARCH-ARC
+canonical discipline canonical at canonical-rule register
+substantively at canonical-coherence register substantively now
+operates at canonical-execution register substantively but the
+recurrence frequency canonical at canonical-honest register
+substantively indicates STRUCTURAL rather than ATTENTION-DRIVEN
+causation register substantively — paste-authoring register
+substantively at Claude register substantively does NOT have substrate-
+state ground truth context at paste-drafting register substantively
+without explicit grep verification at paste-authoring register
+substantively.
+
+**Distinction from RULE 21 D-PRE-AUTHORIZATION-RESEARCH-ARC canonical
+at canonical-rule register substantively:**
+
+RULE 21 fires at PRE-AUTHORIZATION register substantively for
+substrate-architectural pastes triggered by external library version
+semantics + wire-format conventions + cross-app umbrella dependencies +
+cross-language strict-mode interactions + substrate-state ground truth
+verification. D-PASTE-AUTHORING-FAILED-TO-GREP-CANONICAL-STATE-BEFORE-
+PREMISE-LOCK fires at IMPLEMENTATION register substantively at the
+authorization-paste-drafting register substantively itself — Claude
+register substantively at paste-authoring register substantively
+drafts paste premises without grep verification of substrate-state
+ground truth canonical at canonical-honest register substantively. Both
+disciplines canonical at canonical-coherence register substantively;
+RULE 21 is the PRE-AUTHORIZATION canonical rule + D-PASTE-AUTHORING-
+FAILED-TO-GREP is the PASTE-DRAFTING canonical observation that RULE 21
+operationalization-incomplete at paste-authoring register substantively.
+
+**Bidirectional citation per ADR-0020:** RULE 21 canonical at
+operator-facing register substantively per `67f6112` commit
+substantively + ADR-0039 Amendment 1 §C.4 paste register substantively
++ sub-phase c row register substantively at section-12-progress.md
+canonical at canonical-coherence register substantively; ADR-0035 sub-
+arc 1 sub-phase c cluster expansion 27th observation canonical at
+substrate-architectural register substantively.
+
 ## Decision
 
 NIOV Labs canonicalizes the 9 substrate-build discipline
