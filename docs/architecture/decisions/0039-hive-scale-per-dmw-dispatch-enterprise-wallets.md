@@ -761,3 +761,162 @@ register substantively at this commit register substantively per B.7
   pipeline plus hive algorithm at weighting architecture per Entry #28
   substantively at forward-substrate register substantively at sub-
   phase c plus sub-phase d plus sub-arc 2 register substantively.
+
+## Amendment 1: Sub-arc 1 sub-phase c — §Sub-decision 8 scope widened to PERSONAL-promoted
+
+Status: Active
+Date: 2026-05-17
+Trigger: Sub-arc 1 sub-phase c PERSONAL promote-on-activity substrate
+per Commits C.1 d09b80b plus C.2 1dd1d64 plus C.3 18300c3 at canonical-
+state register substantively.
+
+Canonical amendment convention canonical at canonical-prose register
+substantively per ADR-0011 §Amendment precedent register substantively
+(H2 Amendment subsection register substantively placed after H2
+Bidirectional Citation section register substantively preserves
+Accepted §Sub-decision 8 body at canonical-honest register
+substantively per ADR-0020 two-register IP discipline canonical) plus
+ADR-0035 substrate-build discipline canonical at canonical-knowledge
+register substantively.
+
+### Context
+
+Substrate-state ground truth canonical at canonical-coherence register
+substantively at sub-arc 1 sub-phase c register substantively
+demonstrated that the architectural shape canonical at §Sub-decision 8
+register substantively (lazy-spawn DMWWorker per entity_id at hive
+scale register substantively) generalizes beyond ENTERPRISE tier
+canonical at canonical-execution register substantively to PERSONAL-
+promoted entities canonical at canonical-coherence register
+substantively via activity-threshold-triggered promotion canonical at
+substrate-architectural register substantively per ADR-0034 testability
+discipline canonical.
+
+### Original scope (§Sub-decision 8 Accepted at B.7 closure)
+
+Per-DMW dispatch substrate canonical at canonical-execution register
+substantively scoped to ENTERPRISE wallet_type only at canonical-state
+register substantively. PERSONAL plus DEVICE tiers canonical at sub-
+phase a substrate register substantively (CosmpRouter.Router fallback
+canonical at backward-compat register substantively). PERSONAL plus
+AI_AGENT promote-on-activity substrate substantively at canonical-
+architectural register substantively at forward-substrate register
+substantively to sub-arc 1 sub-phase c register substantively. DEVICE
+always-cold shard-mapped substrate substantively at canonical-
+architectural register substantively at forward-substrate register
+substantively to sub-arc 1 sub-phase d register substantively and
+beyond at canonical-state register substantively.
+
+### Amended scope canonical at canonical-coherence register substantively
+
+Per-DMW dispatch substrate canonical at canonical-execution register
+substantively applies at three discriminated registers canonical at
+canonical-coherence register substantively:
+
+1. **ENTERPRISE tier:** ALWAYS dispatches through per-DMW substrate
+   canonical at canonical-execution register substantively (no
+   threshold check at canonical-decision register substantively;
+   immediate lazy-spawn canonical at substrate-architectural register
+   substantively per B.6.3 commit register substantively).
+
+2. **PERSONAL tier (NEW canonical at C.3 register substantively):**
+   Dispatches through per-DMW substrate canonical at canonical-
+   execution register substantively ONLY when ActivityCounter
+   threshold crossed canonical at canonical-coherence register
+   substantively (default 5 activities canonical at canonical-state
+   register substantively per ADR-0034 testability discipline
+   canonical). Below threshold canonical at canonical-decision
+   register substantively dispatches through CosmpRouter.Router
+   canonical at backward-compat register substantively per sub-phase a
+   substrate register substantively. Idle eviction canonical at
+   canonical-execution register substantively per C.2 substrate
+   register substantively releases DMWWorker resources canonical at
+   canonical-state register substantively when entity inactivity
+   exceeds configured idle TTL canonical at canonical-coherence
+   register substantively (default 5 minutes canonical at canonical-
+   state register substantively).
+
+3. **DEVICE tier:** ALWAYS dispatches through CosmpRouter.Router
+   canonical at backward-compat register substantively per ADR-0038
+   Sub-decision 3 tier 3 register substantively (cold-shard substrate
+   forward-substrate at sub-phase d register substantively). DEVICE
+   entities canonical at substrate-state register substantively do NOT
+   touch ActivityCounter canonical at canonical-coherence register
+   substantively per D-DEVICE-SKIPS-PROMOTE-CHECK-AT-SUBSTRATE-STATE
+   observation canonical at C.3 commit body register substantively.
+
+### AI_AGENT disposition canonical at canonical decision register substantively forward-substrate
+
+AI_AGENT canonical at EntityType register substantively per ADR-0033
+cross-language data ownership reference canonical at canonical-
+knowledge register substantively plus operator memory entry canonical
+at decision register substantively NOT WalletType register
+substantively at substrate-state register substantively. Prisma
+WalletType enum canonical at substrate-state register substantively
+enumerates PERSONAL plus ENTERPRISE plus DEVICE only canonical at
+canonical-coherence register substantively. DbgiSupervisor.start_dmw_worker_horde/3
+guard canonical at substrate-state register substantively rejects
+:ai_agent at canonical-state register substantively per substrate-
+state ground truth canonical at C.3 Step 1 pre-flight register
+substantively.
+
+Promote-on-activity substrate canonical at canonical-execution register
+substantively for AI_AGENT entities canonical at canonical-coherence
+register substantively requires EntityType discrimination canonical at
+canonical-architectural register substantively beyond
+WalletCache.wallet_type_for/1 canonical at canonical-knowledge register
+substantively (which canonical at substrate-state register
+substantively resolves WalletType per entity_id register substantively
+NOT EntityType register substantively). Substrate-architectural shape
+canonical at canonical-coherence register substantively forward-
+substrate at sub-arc 2 capsule layer register substantively
+(EntityType-discriminated capsule routing canonical at canonical-
+execution register substantively per operator memory entry weighting
+architecture substantively).
+
+### Implementation lineage canonical at patent-implementation evidence register substantively
+
+Cryptographically-timestamped commit lineage canonical at substrate-
+architectural register substantively per ADR-0020 two-register IP
+discipline canonical:
+
+- C.1 d09b80b [BEAM-DBGI-PROMOTE-ACTIVITY-COUNTER] — NEW
+  CosmpRouter.ActivityCounter ETS substrate at substrate-architectural
+  register substantively (atomic counter canonical at canonical-
+  coherence register substantively per dockyard.com production rate-
+  limiter pattern register substantively)
+- C.2 1dd1d64 [BEAM-DBGI-PROMOTE-IDLE-EVICTION] — NEW
+  DbgiSupervisor.stop_dmw_worker_horde/2 public API plus idle eviction
+  periodic task canonical at canonical-execution register substantively
+  (Horde-API trio symmetry canonical at substrate-architectural
+  register substantively)
+- C.3 18300c3 [BEAM-DBGI-PROMOTE-TIER-ROUTED-DISPATCH] — MOD
+  grpc/server.ex dispatch_tier_routed PERSONAL branch promote-on-
+  activity dispatch plus dispatch_with_promote_check/4 plus
+  dispatch_promoted/4 private helpers canonical at canonical-
+  execution register substantively
+
+### References canonical at canonical-coherence register substantively
+
+- ADR-0011 §Amendment (canonical amendment convention precedent;
+  H2 Amendment subsection at canonical-prose register substantively)
+- ADR-0020 (two-register IP discipline canonical at canonical-
+  architectural register substantively; amendment preserves Accepted
+  body audit trail at canonical-honest register substantively)
+- ADR-0033 (cross-language data ownership; EntityType vs WalletType
+  canonical at canonical-knowledge register substantively)
+- ADR-0034 (BEAM testability discipline; name-configurable substrate
+  plus Application.get_env-resolved defaults canonical at canonical-
+  knowledge register substantively)
+- ADR-0035 (substrate-build discipline; D-AI-AGENT-ENTITY-TYPE-vs-
+  WALLET-TYPE-DISCRIMINATION-DRIFT plus D-PROMOTE-ON-ACTIVITY-DISPATCH-
+  CANONICAL plus D-DEVICE-SKIPS-PROMOTE-CHECK-AT-SUBSTRATE-STATE
+  observations forward-queued at commit-body-only register
+  substantively; cluster expansion 26th plus 27th observation
+  promotion forward-substrate at C.5 closure cascade commit register
+  substantively)
+- ADR-0038 (DMWWorker substrate canonical at sub-phase a runtime
+  register substantively; tier 3 DEVICE preservation register
+  substantively)
+- RULE 21 (pre-authorization research arc canonical at canonical-rule
+  register substantively per 67f6112 commit substantively)
