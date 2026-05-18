@@ -32,6 +32,7 @@ import type { MutationType } from "@prisma/client";
 import type { ContentStore } from "../../content-store.js";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
+import type { EmbeddingProvider, EmbeddingResult } from "../embedding/embedding.service.js";
 import { assertJurisdictionalScope } from "./jurisdiction-enforcement.js";
 import type { AccessDeclarationPayload } from "./negotiate.service.js";
 
@@ -520,6 +521,7 @@ export class WriteService {
     private readonly contentStore: ContentStore,
     private readonly encryption: ContentEncryption,
     private readonly jwtSecret: string,
+    private readonly embeddingProvider: EmbeddingProvider,
   ) {}
 
   // WHAT: Create a brand-new MemoryCapsule owned by the session's
@@ -611,6 +613,25 @@ export class WriteService {
     // does not leave a dangling row pointing to nothing.
     await this.contentStore.write(storageLocation, processed.ciphertext);
 
+    // G3.5 [CAPSULE-EMBEDDING-WRITE-INTEGRATION] per ADR-0043
+    // §Sub-decision 11 (Q-G3-κ) + Q-G3.5-α LOCK: generate the
+    // semantic embedding BEFORE the transaction so a provider
+    // outage degrades gracefully (capsule write still succeeds;
+    // embedding column remains NULL; G3.7 lazy backfill catches
+    // missing embeddings). RULE 0 + Q-G3-ζ + Q-G3.5-η: vectors
+    // are server-side substrate only; audit details record
+    // generation outcome metadata but NEVER the vector itself.
+    const embeddingResult: EmbeddingResult = await this.embeddingProvider
+      .generateEmbedding(
+        { text: input.content },
+        { fixtureKey: capsuleId },
+      )
+      .catch((err): EmbeddingResult => ({
+        ok: false,
+        error_class: "PROVIDER_ERROR",
+        message: err instanceof Error ? err.message : String(err),
+      }));
+
     const decayType: DecayType = input.decay_type ?? "TIME_BASED";
     const storageTier: StorageTier =
       decayType === "FOUNDATIONAL" ? "HOT" : input.storage_tier ?? "WARM";
@@ -666,6 +687,23 @@ export class WriteService {
         },
       });
 
+      // G3.5 per ADR-0043 §Sub-decision 11 + Q-G3.5-γ LOCK: persist
+      // the embedding via inline raw SQL inside the transaction.
+      // Prisma generated client cannot project the pgvector column
+      // (Unsupported("vector(1536)") per ADR-0043 §G3.3 + Q-G3-β);
+      // $executeRawUnsafe with positional $1/$2 bindings + explicit
+      // ::vector(1536) cast is the canonical path. Degrade path
+      // (embeddingResult.ok === false) skips this write — the row's
+      // embedding column stays NULL per Q-G3.5-α.
+      if (embeddingResult.ok) {
+        const vectorLiteral = `[${embeddingResult.vector.join(",")}]`;
+        await tx.$executeRawUnsafe(
+          `UPDATE memory_capsules SET embedding = $1::vector(1536) WHERE capsule_id = $2::uuid`,
+          vectorLiteral,
+          capsuleId,
+        );
+      }
+
       // G1.3 per ADR-0042 §Sub-decision Q-γ Disposition Q-γ.1 LOCKED
       // clean transition: createCapsule SUCCESS emits the discriminated
       // CAPSULE_MUTATION_ADD literal. The legacy CAPSULE_CREATED literal
@@ -696,6 +734,22 @@ export class WriteService {
           content_hash: processed.content_hash,
           payload_size_tokens: processed.payload_size_tokens,
           write_reason: input.write_reason ?? null,
+          // G3.5 per ADR-0043 + Q-G3.5-η LOCK: outcome metadata only
+          // (provider success/failure summary). No raw vector or
+          // derived per-dimension content in audit details per
+          // Q-G3-ζ + RULE 0 inversion-attack disposition (RS-5).
+          ...(embeddingResult.ok
+            ? {
+                embedding_generated: true,
+                embedding_model: embeddingResult.model,
+                embedding_dimensions: embeddingResult.dimensions,
+                embedding_tokens_used: embeddingResult.tokens_used,
+              }
+            : {
+                embedding_generated: false,
+                embedding_failure_class: embeddingResult.error_class,
+                embedding_failure_message: embeddingResult.message,
+              }),
         },
       }, tx);
 
@@ -1100,12 +1154,31 @@ export class WriteService {
           tokens_tokenizer: string;
         }
       | null = null;
+    // G3.5 per ADR-0043 §Sub-decision 11 + Q-G3.5-α/β LOCKS:
+    // embeddingResult is generated ONLY for the UPDATE branch
+    // (Q-G3-ι matrix: ADD generate / UPDATE regenerate /
+    // MERGE preserve / NOOP preserve). MERGE skips the provider
+    // because content_hash is unchanged (Q-G3.5-β); NOOP skips
+    // all side effects. Provider failure degrades gracefully
+    // per Q-G3.5-α (capsule write still succeeds; embedding
+    // column preserves prior value).
+    let embeddingResult: EmbeddingResult | null = null;
     if (decision.mutationType === "UPDATE") {
       processed = processContentForStorage(input.content!, this.encryption);
       await this.contentStore.write(
         existing.storage_location,
         processed.ciphertext,
       );
+      embeddingResult = await this.embeddingProvider
+        .generateEmbedding(
+          { text: input.content! },
+          { fixtureKey: capsuleId },
+        )
+        .catch((err): EmbeddingResult => ({
+          ok: false,
+          error_class: "PROVIDER_ERROR",
+          message: err instanceof Error ? err.message : String(err),
+        }));
     }
 
     // G1.3 per Q-G1.3-λ + V4 Patch 1 + V5 Patch 1: DB mutation +
@@ -1241,6 +1314,27 @@ export class WriteService {
           });
         }
 
+        // G3.5 per ADR-0043 + Q-G3.5-γ LOCK: persist embedding via
+        // inline raw SQL inside the transaction for the UPDATE
+        // branch. MERGE/NOOP do NOT reach this block in
+        // embedding-mutating form (MERGE has embeddingResult === null
+        // and skips per Q-G3.5-β; NOOP returns before this point).
+        // Degrade path (embeddingResult.ok === false) skips the SQL —
+        // the row's existing embedding column is preserved per
+        // Q-G3.5-α.
+        if (
+          decision.mutationType === "UPDATE" &&
+          embeddingResult !== null &&
+          embeddingResult.ok
+        ) {
+          const vectorLiteral = `[${embeddingResult.vector.join(",")}]`;
+          await tx.$executeRawUnsafe(
+            `UPDATE memory_capsules SET embedding = $1::vector(1536) WHERE capsule_id = $2::uuid`,
+            vectorLiteral,
+            capsuleId,
+          );
+        }
+
         // SUCCESS audit emission inside transaction. Atomic with the
         // DB mutation above; rollback discards both if any subsequent
         // op throws.
@@ -1261,6 +1355,37 @@ export class WriteService {
             // equals existing.jurisdiction.
             jurisdiction: existing.jurisdiction,
             details: {
+              // G3.5 per ADR-0043 + Q-G3.5-η LOCK: outcome metadata.
+              // MERGE records skip reason; UPDATE records success or
+              // degrade-failure metadata. No raw vector or derived
+              // per-dimension content in audit details per Q-G3-ζ +
+              // RULE 0. Spread is FIRST in details so the Gate 7
+              // (V3 STRICT) MERGE-anchor section scoped to the
+              // canonical decision.mutationType === "MERGE"
+              // expression in the event_type ternary above contains
+              // embedding_skip_reason BEFORE the content_hash
+              // UPDATE-discriminated field which acts as the next
+              // boundary marker.
+              ...(decision.mutationType === "MERGE"
+                ? {
+                    embedding_generated: false,
+                    embedding_skip_reason:
+                      "merge_metadata_only_content_unchanged",
+                  }
+                : embeddingResult !== null && embeddingResult.ok
+                  ? {
+                      embedding_generated: true,
+                      embedding_model: embeddingResult.model,
+                      embedding_dimensions: embeddingResult.dimensions,
+                      embedding_tokens_used: embeddingResult.tokens_used,
+                    }
+                  : embeddingResult !== null
+                    ? {
+                        embedding_generated: false,
+                        embedding_failure_class: embeddingResult.error_class,
+                        embedding_failure_message: embeddingResult.message,
+                      }
+                    : {}),
               mutation_type: decision.mutationType,
               write_type: writeType,
               previous_version: existing.version,

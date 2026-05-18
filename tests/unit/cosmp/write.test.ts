@@ -11,10 +11,13 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   AuthService,
+  FixtureBasedEmbeddingProvider,
   MemoryContentStore,
   MemoryNonceStore,
   NegotiateService,
   WriteService,
+  type EmbeddingProvider,
+  type EmbeddingResult,
   type LoginResult,
   type NegotiateSuccess,
 } from "@niov/api";
@@ -50,7 +53,7 @@ afterAll(async () => {
 // OUTPUT: All services + the underlying stores.
 // WHY: Each test gets a clean slate so state from one cannot leak
 //      into another.
-function makeServices() {
+function makeServices(embeddingProviderOverride?: EmbeddingProvider) {
   const sessionStore = new MemoryNonceStore();
   const declarationStore = new MemoryNonceStore();
   const contentStore = new MemoryContentStore();
@@ -64,14 +67,30 @@ function makeServices() {
     declarationStore,
     TEST_JWT_SECRET,
   );
+  // G3.5 per ADR-0043 + Q-G3.5-ε LOCK: tests inject the embedding
+  // provider. Default is FixtureBasedEmbeddingProvider so the
+  // pre-G3.5 26 baseline tests run unchanged; G3.5 E1-E9 tests
+  // pass a spy / mock override to control success vs degrade
+  // behavior per the mutation_type matrix (Q-G3-ι).
+  const embeddingProvider: EmbeddingProvider =
+    embeddingProviderOverride ?? new FixtureBasedEmbeddingProvider();
   const write = new WriteService(
     auth,
     declarationStore,
     contentStore,
     encryption,
     TEST_JWT_SECRET,
+    embeddingProvider,
   );
-  return { auth, negotiate, write, contentStore, declarationStore, encryption };
+  return {
+    auth,
+    negotiate,
+    write,
+    contentStore,
+    declarationStore,
+    encryption,
+    embeddingProvider,
+  };
 }
 
 // WHAT: Create a PERSON entity with a known password and log them in.
@@ -955,5 +974,378 @@ describe("G1.5 — mutation discrimination (Q-G1.5-α through Q-G1.5-η)", () =>
     // Different IVs per encrypt() call → different ciphertext →
     // different sha256(ciphertext) → different content_hash.
     expect(create1.content_hash).not.toBe(create2.content_hash);
+  });
+});
+
+// ===========================================================================
+// G3.5 — embedding write integration via mutation_type matrix per ADR-0043
+// §Sub-decision 11 (Q-G3-κ) + 12 Q-G3.5-α through Q-G3.5-λ LOCKS at
+// [CAPSULE-EMBEDDING-WRITE-G3.5-QLOCK]. E7 + E8 test titles are verbatim-
+// stable for Gate 24 Part B isolation (V3 verifier locates each block by
+// exact name and verifies the 4 degrade-proof conditions inside).
+// ===========================================================================
+
+// WHAT: Build a 1536-dim numeric vector for the spy provider success path.
+// INPUT: A seed string (used to vary the vector across invocations).
+// OUTPUT: number[] of length 1536 in the range (-1, 1).
+// WHY: E1-E6 + E9 need a deterministic non-null vector to assert the
+//      raw-SQL persistence + audit-metadata wiring without depending on
+//      FixtureBasedEmbeddingProvider's strict fixtureKey enforcement.
+function buildStubVector(seed: string): number[] {
+  const v: number[] = [];
+  for (let i = 0; i < 1536; i++) {
+    // Math.sin/cos hash blend keeps values in (-1, 1); seed varies the
+    // signature so duplicate-call detection works in E1.
+    v.push(Math.sin(i * 0.001 + seed.length * 0.01));
+  }
+  return v;
+}
+
+describe("G3.5 — embedding write integration (Q-G3.5 mutation_type matrix)", () => {
+  it("E1 createCapsule calls embeddingProvider.generateEmbedding once", async () => {
+    const generateEmbedding = vi.fn(
+      async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildStubVector("e1"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 7,
+      }),
+    );
+    const provider: EmbeddingProvider = { generateEmbedding };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+
+    const result = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e1"],
+      payload_summary: "summary",
+      content: "e1-content",
+    });
+    expect(result.ok).toBe(true);
+    expect(generateEmbedding).toHaveBeenCalledTimes(1);
+  });
+
+  it("E2 createCapsule audit metadata includes embedding_generated + model + dimensions + tokens_used on success", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildStubVector("e2"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 9,
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+
+    const result = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e2"],
+      payload_summary: "summary",
+      content: "e2-content",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: result.capsule_id,
+        event_type: "CAPSULE_MUTATION_ADD",
+        outcome: "SUCCESS",
+      },
+    });
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.embedding_generated).toBe(true);
+    expect(details.embedding_model).toBe("text-embedding-3-small");
+    expect(details.embedding_dimensions).toBe(1536);
+    expect(details.embedding_tokens_used).toBe(9);
+  });
+
+  it("E3 createCapsule audit details never contain raw vector or vector_hash", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildStubVector("e3"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 5,
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+
+    const result = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e3"],
+      payload_summary: "summary",
+      content: "e3-content-secret",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const auditRows = await prisma.auditEvent.findMany({
+      where: { target_capsule_id: result.capsule_id },
+    });
+    const serialized = JSON.stringify(auditRows.map((r) => r.details));
+    expect(serialized).not.toContain("vector_hash");
+    expect(serialized).not.toContain("embedding_sample");
+    expect(serialized).not.toContain("embedding_first_");
+    expect(serialized).not.toContain("vector_dim_");
+    // The vector itself (large number array) MUST NOT appear in
+    // serialized audit details.
+    expect(serialized).not.toMatch(/\[(-?\d+\.\d+,){10,}/);
+  });
+
+  it("E4 updateCapsule UPDATE calls embeddingProvider.generateEmbedding once", async () => {
+    const generateEmbedding = vi.fn(
+      async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildStubVector("e4"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 3,
+      }),
+    );
+    const provider: EmbeddingProvider = { generateEmbedding };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e4"],
+      payload_summary: "summary",
+      content: "e4-original",
+    });
+    if (!create.ok) throw new Error("create failed");
+    generateEmbedding.mockClear();
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "e4-new-content" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    // Exactly one call: the UPDATE branch.
+    expect(generateEmbedding).toHaveBeenCalledTimes(1);
+  });
+
+  it("E5 updateCapsule MERGE skips embeddingProvider and audits embedding_skip_reason", async () => {
+    const generateEmbedding = vi.fn(
+      async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildStubVector("e5"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 2,
+      }),
+    );
+    const provider: EmbeddingProvider = { generateEmbedding };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e5"],
+      payload_summary: "summary",
+      content: "e5-content",
+    });
+    if (!create.ok) throw new Error("create failed");
+    generateEmbedding.mockClear();
+
+    // MERGE: change a non-content field (decay_rate); content unchanged.
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { decay_rate: 0.42 },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    // MERGE branch must NOT call the provider.
+    expect(generateEmbedding).not.toHaveBeenCalled();
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_MERGE",
+        outcome: "SUCCESS",
+      },
+    });
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.embedding_generated).toBe(false);
+    expect(details.embedding_skip_reason).toBe(
+      "merge_metadata_only_content_unchanged",
+    );
+  });
+
+  it("E6 updateCapsule NOOP skips embeddingProvider entirely", async () => {
+    const generateEmbedding = vi.fn(
+      async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildStubVector("e6"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 4,
+      }),
+    );
+    const provider: EmbeddingProvider = { generateEmbedding };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e6"],
+      payload_summary: "e6-summary",
+      content: "e6-noop-content",
+    });
+    if (!create.ok) throw new Error("create failed");
+    generateEmbedding.mockClear();
+
+    // NOOP: same content + same payload_summary; content_hash unchanged;
+    // canonical_record unchanged.
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "e6-noop-content", payload_summary: "e6-summary" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    expect(generateEmbedding).not.toHaveBeenCalled();
+  });
+
+  it("E7 createCapsule continues when embedding generation fails", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: false,
+        error_class: "PROVIDER_ERROR",
+        message: "simulated upstream provider outage (E7)",
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+
+    const result = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e7"],
+      payload_summary: "summary",
+      content: "e7-content",
+    });
+    // Degrade-on-failure per Q-G3.5-α: capsule write SUCCEEDS even
+    // though the embedding provider returned ok: false.
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.capsule_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: result.capsule_id,
+        event_type: "CAPSULE_MUTATION_ADD",
+        outcome: "SUCCESS",
+      },
+    });
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.embedding_generated).toBe(false);
+    expect(details.embedding_failure_class).toBe("PROVIDER_ERROR");
+    expect(details.embedding_failure_message).toBe(
+      "simulated upstream provider outage (E7)",
+    );
+  });
+
+  it("E8 updateCapsule UPDATE continues when embedding generation fails", async () => {
+    const calls: Array<{ phase: string }> = [];
+    let phase: "create" | "update" = "create";
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => {
+        calls.push({ phase });
+        if (phase === "create") {
+          return {
+            ok: true,
+            vector: buildStubVector("e8-create"),
+            model: "text-embedding-3-small",
+            dimensions: 1536 as const,
+            tokens_used: 6,
+          };
+        }
+        return {
+          ok: false,
+          error_class: "RATE_LIMIT",
+          message: "simulated rate limit on UPDATE (E8)",
+        };
+      },
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e8"],
+      payload_summary: "summary",
+      content: "e8-original",
+    });
+    if (!create.ok) throw new Error("create failed");
+
+    phase = "update";
+    const result = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "e8-new-content" },
+      null,
+    );
+    // Degrade-on-failure per Q-G3.5-α: capsule UPDATE SUCCEEDS even
+    // though the embedding provider returned ok: false.
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_UPDATE",
+        outcome: "SUCCESS",
+      },
+    });
+    const details = audit?.details as Record<string, unknown>;
+    expect(details.embedding_generated).toBe(false);
+    expect(details.embedding_failure_class).toBe("RATE_LIMIT");
+    expect(details.embedding_failure_message).toBe(
+      "simulated rate limit on UPDATE (E8)",
+    );
+  });
+
+  it("E9 WriteSuccess response shape never contains vector or embedding fields", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildStubVector("e9"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 1,
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g3.5-e9"],
+      payload_summary: "summary",
+      content: "e9-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const responseKeys = Object.keys(create);
+    // No vector / embedding field at HTTP response shape boundary
+    // per Q-G3-ζ + Q-G3.5-η + RULE 0.
+    expect(responseKeys).not.toContain("vector");
+    expect(responseKeys).not.toContain("embedding");
+    expect(responseKeys).not.toContain("embedding_vector");
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "e9-updated" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+    const updateKeys = Object.keys(update);
+    expect(updateKeys).not.toContain("vector");
+    expect(updateKeys).not.toContain("embedding");
+    expect(updateKeys).not.toContain("embedding_vector");
   });
 });

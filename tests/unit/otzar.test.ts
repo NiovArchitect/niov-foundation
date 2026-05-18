@@ -22,6 +22,7 @@ import {
   formatPrimingContext,
   getPriming,
   HiveService,
+  FixtureBasedEmbeddingProvider,
   MemoryContentStore,
   MemoryKVCache,
   MemoryNonceStore,
@@ -111,6 +112,7 @@ function makeServices(opts: {
     contentStore,
     encryption,
     TEST_JWT_SECRET,
+    new FixtureBasedEmbeddingProvider(),
   );
   const coe = new COEService(auth, negotiate, read, encryption);
   const hive = new HiveService(auth, encryption, contentStore);

@@ -60,6 +60,7 @@ import { OtzarService } from "./services/otzar/otzar.service.js";
 import { ObservationService } from "./services/otzar/observation.service.js";
 import { makeDefaultKVCache } from "./services/otzar/cache.js";
 import { getLLMProvider, MockLLMProvider } from "./services/llm/llm.service.js";
+import { getEmbeddingProvider } from "./services/embedding/embedding.service.js";
 import { registerOtzarRoutes } from "./routes/otzar.routes.js";
 import { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
@@ -148,6 +149,7 @@ export async function buildApp(
     contentStore,
     contentEncryption,
     jwtSecret,
+    getEmbeddingProvider(),
   );
   const shareService = new ShareService(authService);
   const hiveService = new HiveService(

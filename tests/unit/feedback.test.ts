@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   AuthService,
   FeedbackService,
+  FixtureBasedEmbeddingProvider,
   HiveService,
   MemoryContentStore,
   MemoryNonceStore,
@@ -60,6 +61,7 @@ function makeServices() {
     contentStore,
     encryption,
     TEST_JWT_SECRET,
+    new FixtureBasedEmbeddingProvider(),
   );
   const hive = new HiveService(auth, encryption, contentStore);
   const rate = new MemoryRateLimitStore();

@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -524,6 +524,28 @@ References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q
 **Forward-substrate unchanged from G3.1+G3.2+G3.3 enumeration:** G3.5 write-integration via Q-G3-ι mutation_type matrix + G3.6 retrieval + COE integration disposition per Q-G3-δ + G3.7 conditional backfill + G3.8 conditional Elixir + G3.9 integration tests + G3.10 docs-only closure cascade.
 
 **Founder LOCKS preservation:** 12 Q-G3.4 sub-decisions / locks Q-G3.4-α through Q-G3.4-λ all LOCKED at `[CAPSULE-EMBEDDING-PROVIDER-G3.4-QLOCK]` register substantively per RULE 20; G3.4 execution authorization at `[CAPSULE-EMBEDDING-PROVIDER-G3.4-EXECUTE-VERIFY-AUTH]`.
+
+#### G3.5 LANDED — Write integration via mutation_type matrix (2026-05-17)
+
+**Status:** G3.5 `[CAPSULE-EMBEDDING-WRITE-INTEGRATION]` LANDED 2026-05-17 (single commit covering write integration + 9 new unit tests + 1 new integration test + ADR/state/catalog updates) per ADR-0043 §Sub-decision 9 (Q-G3-ι mutation_type matrix) + 12 Q-G3.5 sub-decisions / locks Q-G3.5-α through Q-G3.5-λ at `[CAPSULE-EMBEDDING-WRITE-G3.5-QLOCK]`. ADR-0043 Status preserved as `Proposed 2026-05-17`. G3.5 does NOT close Gap 3.
+
+**Substrate sites (10 authorized files):** 1 NEW integration test (`tests/integration/embedding-write.test.ts`) + 9 MOD: `apps/api/src/services/cosmp/write.service.ts` (6th constructor arg + EmbeddingProvider import + createCapsule provider call + raw-SQL persist inside tx + audit metadata; updateCapsule UPDATE branch provider call + raw-SQL persist inside tx; MERGE branch skip-reason audit metadata) + `apps/api/src/server.ts` (passes `getEmbeddingProvider()` 6th arg) + `tests/unit/cosmp/write.test.ts` (makeServices override + 9 NEW E1-E9 tests; E7 + E8 stable verbatim names for Gate 24 isolation) + `tests/unit/feedback.test.ts` (makeServices 6th arg) + ADR-0043 + section-12-progress + this CURRENT_BUILD_STATE + README + CLAUDE.md = 10.
+
+**Mutation matrix per Q-G3-ι + Q-G3.5-α/β LOCKS:** ADD (createCapsule) and UPDATE (updateCapsule UPDATE branch) call `embeddingProvider.generateEmbedding({ text: input.content }, { fixtureKey: capsuleId })` and persist via inline raw SQL when `ok: true`; MERGE skips the provider entirely (content_hash unchanged per Q-G3.5-β); NOOP skips the provider entirely (zero side effects per Q-G1.3-ζ). Provider failure → degrade gracefully per Q-G3.5-α: capsule write succeeds; embedding column preserves prior value (UPDATE) or stays NULL (ADD).
+
+**Inline raw SQL per Q-G3.5-γ LOCK:** `tx.$executeRawUnsafe('UPDATE memory_capsules SET embedding = $1::vector(1536) WHERE capsule_id = $2::uuid', vectorLiteral, capsuleId)` at 2 sites (createCapsule + updateCapsule UPDATE branch). `vectorLiteral = '[' + vector.join(',') + ']'` is the canonical pgvector text input form. No helper in `packages/database/src/queries/capsule.ts` per Q-G3.5-γ; raw SQL co-located with the call site. Prisma generated client cannot project `Unsupported("vector(1536)")` per ADR-0043 §G3.3 + RS-2 Prisma Issue #27857.
+
+**Audit metadata per Q-G3.5-η LOCK:** success path = `embedding_generated: true, embedding_model, embedding_dimensions, embedding_tokens_used`. Degrade path = `embedding_generated: false, embedding_failure_class, embedding_failure_message`. MERGE skip path = `embedding_generated: false, embedding_skip_reason: "merge_metadata_only_content_unchanged"`. NEVER vector content / `vector_hash` / `embedding_sample` / per-dimension stats per Q-G3-ζ + RULE 0 inversion-attack disposition (RS-5 Vec2Text + ALGEN + Zero2Text literature).
+
+**Privacy invariant per Q-G3-ζ + Q-G3.5-η + RULE 0:** vectors are server-side substrate only; the WriteSuccess response shape never contains a vector / embedding field (Tier 1 Gate 25 + I2 integration test verify); audit details never contain vector content (Tier 1 Gate 25 verifies); the structured logger in write.service.ts has no `vector`-mentioning log line (Tier 1 Gate 8 verifies).
+
+**Test substrate per Q-G3.5-ε + Q-G3.5-ζ + Q-G3.5-λ LOCKS:** `tests/unit/cosmp/write.test.ts` adds 9 NEW G3.5 tests E1-E9 covering provider call counts (E1/E4/E5/E6), audit metadata success shape (E2), no-vector-leak in audit (E3), degrade-policy behavior (E7 createCapsule degrade + E8 updateCapsule UPDATE degrade), and response-shape privacy (E9). E7 + E8 use the verbatim stable test names required by Gate 24 Part B for block isolation. The existing 26 G1.5 tests run unchanged via `FixtureBasedEmbeddingProvider` default in `makeServices()` per Q-G3.5-λ. `tests/unit/feedback.test.ts` `makeServices()` 6th-arg update is the only ripple per Q-G3.5-ε minimal-helper-update policy. NEW `tests/integration/embedding-write.test.ts` verifies DB persistence via raw SQL queryRaw round-trip (I1) + API-boundary no-vector (I2) + MERGE preservation byte-equal on `embedding::text` cast (I3). No real OpenAI calls in any test tier.
+
+**Scope boundaries preserved at G3.5:** ADR-0022 NOT amended (Q-G3-δ preserved); AUDIT_EVENT_TYPE_VALUES + `CAPSULE_SIMILARITY_SEARCH` NOT touched (Q-G3.5-ι deferred to G3.6); `read.service.ts` / `coe.service.ts` / cosmp routes NOT touched (G3.6 forward-substrate); embedding service itself NOT touched (G3.4 unchanged); schema.prisma / DB scripts / CI workflows / `docker-compose.test.yml` / `.husky/pre-commit` / `package.json` / lockfiles NOT touched; Elixir source NOT touched (Q-G3-θ β-A LOCK preserved; G3.8 forward-substrate); ADR-0011/0013/0014/0015/0016/0022/0025/0033/0034/0035/0041/0042 NOT amended; ADR-0043 Status preserved at `Proposed 2026-05-17`.
+
+**Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4 enumeration:** G3.6 `[CAPSULE-EMBEDDING-RETRIEVAL]` searchBySimilarity + `CAPSULE_SIMILARITY_SEARCH` audit literal + COE integration disposition per Q-G3-δ + G3.7 conditional backfill + G3.8 conditional Elixir per Q-G3-θ + G3.9 broader integration tests + G3.10 docs-only closure cascade.
+
+**Founder LOCKS preservation:** 12 Q-G3.5 sub-decisions / locks Q-G3.5-α through Q-G3.5-λ all LOCKED at `[CAPSULE-EMBEDDING-WRITE-G3.5-QLOCK]` register substantively per RULE 20; G3.5 execution authorization at `[CAPSULE-EMBEDDING-WRITE-G3.5-EXECUTE-VERIFY-AUTH]`.
 
 ---
 

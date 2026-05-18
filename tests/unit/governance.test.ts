@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   AuthService,
   createSystemPermission,
+  FixtureBasedEmbeddingProvider,
   getOrgEntityId,
   getOrgSettingsOrDefaults,
   MAX_ORG_HIERARCHY_DEPTH,
@@ -64,6 +65,7 @@ function makeServices() {
     contentStore,
     encryption,
     TEST_JWT_SECRET,
+    new FixtureBasedEmbeddingProvider(),
   );
   return { auth, write };
 }

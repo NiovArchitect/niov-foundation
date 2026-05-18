@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   AuthService,
   buildApp,
+  FixtureBasedEmbeddingProvider,
   HOLDER_SHARE,
   MAX_RETRIES,
   MemoryContentStore,
@@ -65,6 +66,7 @@ function makeServices() {
     contentStore,
     encryption,
     TEST_JWT_SECRET,
+    new FixtureBasedEmbeddingProvider(),
   );
   const monetization = new MonetizationService(auth);
   return { auth, write, monetization, sessionStore, declarationStore, contentStore };

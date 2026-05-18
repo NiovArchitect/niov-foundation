@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   AuthService,
   ComplianceService,
+  FixtureBasedEmbeddingProvider,
   MemoryContentStore,
   MemoryNonceStore,
   NegotiateService,
@@ -70,6 +71,7 @@ function makeServices() {
     contentStore,
     encryption,
     TEST_JWT_SECRET,
+    new FixtureBasedEmbeddingProvider(),
   );
   return { auth, compliance, negotiate, write, contentStore };
 }

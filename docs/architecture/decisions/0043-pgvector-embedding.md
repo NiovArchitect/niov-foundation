@@ -781,3 +781,146 @@ integration tests; G3.10 docs-only closure cascade.
 
 **Founder authorization explicit at G3.4 substantive landing per
 RULE 20 at `[CAPSULE-EMBEDDING-PROVIDER-G3.4-EXECUTE-VERIFY-AUTH]`.**
+
+## G3.5 Progress — Write Integration LANDED (2026-05-17)
+
+G3.5 `[CAPSULE-EMBEDDING-WRITE-INTEGRATION]` LANDS the write-path
+embedding integration per §Sub-decision 9 (Q-G3-ι mutation_type
+matrix) + 12 Q-G3.5 sub-decisions / locks Q-G3.5-α through Q-G3.5-λ
+at `[CAPSULE-EMBEDDING-WRITE-G3.5-QLOCK]`.
+
+**Failure policy — degrade gracefully per Q-G3.5-α LOCK (RULE 0):**
+embedding provider errors do NOT block the user write. The capsule
+row lands; the embedding column remains NULL on failure; audit
+metadata records the failure class + message for observability;
+G3.7 lazy backfill catches missing embeddings. The Founder
+disposition reasoning is that an OpenAI outage MUST NOT block
+human entities from exercising their RULE 0 sovereignty over
+their own memory.
+
+**MERGE skips provider regeneration per Q-G3.5-β LOCK:** when
+`discriminateMutation` returns `MERGE` (content_hash unchanged;
+metadata-only delta), the provider is NOT called and the
+existing embedding column is preserved by skipping the raw SQL
+write. The MERGE audit details record
+`embedding_generated: false` +
+`embedding_skip_reason: "merge_metadata_only_content_unchanged"`.
+
+**Inline raw SQL per Q-G3.5-γ LOCK:** Prisma generated client
+cannot project the `Unsupported("vector(1536)")` column (per
+§G3.3 + Q-G3-β + RS-2 Prisma Issue #27857). Embedding
+persistence runs inside the existing `prisma.$transaction` block
+via
+`tx.$executeRawUnsafe('UPDATE memory_capsules SET embedding = $1::vector(1536) WHERE capsule_id = $2::uuid', vectorLiteral, capsuleId)`
+at 2 substantive sites (`createCapsule` post-`tx.memoryCapsule.create`
++ `updateCapsule` UPDATE branch post-`tx.memoryCapsule.update`).
+The `vectorLiteral` = `'[' + vector.join(',') + ']'` is the
+canonical pgvector text input form. No new helper in
+`packages/database/src/queries/capsule.ts` per Q-G3.5-γ — the
+raw SQL is co-located with the call site.
+
+**6th constructor arg per Q-G3.5-δ LOCK:** `WriteService`
+constructor accepts `embeddingProvider: EmbeddingProvider` as
+the 6th positional arg. `apps/api/src/server.ts` passes
+`getEmbeddingProvider()` (returns `OpenAIEmbeddingProvider`
+default per Q-G3.4-β). No new env-var; no
+`PREFERRED_EMBEDDING` switching at G3.5.
+
+**Test injection per Q-G3.5-ε LOCK:** `tests/unit/cosmp/write.test.ts`
+`makeServices()` defaults to `FixtureBasedEmbeddingProvider` so
+the 26 baseline G1.5 tests run unchanged. The 9 NEW G3.5 tests
+E1-E9 inject custom mock providers via plain object `{ generateEmbedding: vi.fn().mockResolvedValue(...) }`
+to exercise success / MERGE-skip / NOOP-skip / degrade behavior.
+`tests/unit/feedback.test.ts` `makeServices()` updated
+identically with `FixtureBasedEmbeddingProvider` 6th arg.
+
+**Integration tests per Q-G3.5-ζ LOCK:** NEW
+`tests/integration/embedding-write.test.ts` exercises 3 substrate-
+state invariants — I1 createCapsule persists non-NULL embedding
+via `prisma.$queryRawUnsafe` round-trip; I2 HTTP response shape
+has no `vector` / `embedding` field at the API-boundary privacy
+register; I3 MERGE branch preserves the prior embedding column
+byte-equal across `embedding::text` cast read-back. No real
+OpenAI calls; `FixtureBasedEmbeddingProvider` only.
+
+**Audit metadata fields per Q-G3.5-η LOCK:**
+
+| mutation_type | Provider called | Embedding DB write | Audit metadata |
+|---|---|---|---|
+| ADD (createCapsule) | yes | yes on `ok: true`; skip on `ok: false` | success: `embedding_generated/embedding_model/embedding_dimensions/embedding_tokens_used`; degrade: `embedding_generated: false, embedding_failure_class, embedding_failure_message` |
+| UPDATE (updateCapsule UPDATE branch) | yes | yes on `ok: true`; skip on `ok: false` | identical to ADD |
+| MERGE (updateCapsule MERGE branch) | no | no (existing preserved) | `embedding_generated: false, embedding_skip_reason: "merge_metadata_only_content_unchanged"` |
+| NOOP (updateCapsule NOOP branch) | no | no | unchanged from G1.3 (no embedding fields added) |
+
+NEVER vector content / `vector_hash` / `embedding_sample` /
+per-dimension stats in audit details per Q-G3-ζ + RULE 0
+inversion-attack disposition (RS-5: Vec2Text + ALGEN + Zero2Text).
+
+**No CircuitBreaker wrapper at G3.5 per Q-G3.5-θ LOCK** — the
+graceful-degrade catch already absorbs single-call provider
+failures. Bursting backoff / circuit-breaker substrate remains
+forward-substrate if production rate-limit posture later
+requires it.
+
+**No `CAPSULE_SIMILARITY_SEARCH` audit literal at G3.5 per
+Q-G3.5-ι LOCK** — that literal is forward-substrate to G3.6
+retrieval per Q-γ.1 clean-transition pattern (add literal at
+the commit that first emits it).
+
+**Single G3.5 commit per Q-G3.5-κ LOCK:** code + tests +
+docs + state in one substantive landing commit. No code-only
++ doc-only split.
+
+**Minimal updates to existing 26 write.test.ts tests per
+Q-G3.5-λ LOCK:** only the `makeServices()` signature change
+ripples; existing test bodies are untouched (the new
+embeddingProvider param defaults to `FixtureBasedEmbeddingProvider`
+which provides deterministic vectors via opts.fixtureKey =
+capsuleId).
+
+**Scope boundaries preserved at G3.5:**
+
+- G3.5 does NOT close Gap 3 at canonical-state register
+  substantively; Gap 3 remains IN FLIGHT.
+- G3.5 does NOT add `searchBySimilarity` or COE integration
+  (forward-substrate to G3.6).
+- G3.5 does NOT add the `CAPSULE_SIMILARITY_SEARCH` audit
+  literal (forward-substrate to G3.6 per Q-G3.5-ι).
+- G3.5 does NOT amend ADR-0022 (Q-G3-δ LOCK preserved); the
+  `combined_score` formula at
+  `apps/api/src/services/coe/keywords.ts:87-93` remains
+  untouched.
+- G3.5 does NOT touch `schema.prisma`, DB scripts
+  (`apply-pgvector-extension.ts` / `apply-hnsw-index.ts` /
+  `test-db-up.sh` / `prisma-db-push-test.sh`), CI workflows,
+  `docker-compose.test.yml`, `.husky/pre-commit`, `package.json`,
+  lockfiles, the embedding service itself
+  (`apps/api/src/services/embedding/embedding.service.ts`
+  unchanged from G3.4), `read.service.ts`, `coe.service.ts`,
+  any cosmp route, Elixir source, or any other ADR (no
+  ADR-0011 / 0013 / 0014 / 0015 / 0016 / 0022 / 0025 / 0033 /
+  0034 / 0035 / 0041 / 0042 amendments).
+- ADR-0043 Status preserved at `Proposed 2026-05-17`.
+
+**Privacy invariant per Q-G3-ζ + Q-G3.5-η + RULE 0:** vectors
+remain server-side substrate only at G3.5 (write path) just as
+at G3.4 (provider). No HTTP/gRPC response carries vector
+content. No audit row carries vector content. No log line carries
+vector content. The boundary is enforced at three registers:
+(1) the `WriteSuccess` response interface omits any embedding
+field (Prisma's `Unsupported("vector(1536)")` typegen omits it
+automatically; the response shape never reaches it); (2) the
+audit-metadata schema records outcome metadata only (Tier 1
+Gate 25 verifies); (3) the structured logger has no `vector`-
+mentioning log call in write.service.ts (Tier 1 Gate 8 verifies).
+
+**Forward-substrate at G3.6-G3.10 register substantively
+(unchanged from G3.1 §Sub-decision 11 Q-G3-κ enumeration):**
+G3.6 `[CAPSULE-EMBEDDING-RETRIEVAL]` searchBySimilarity +
+`CAPSULE_SIMILARITY_SEARCH` audit literal + COE integration
+disposition per Q-G3-δ; G3.7 conditional backfill; G3.8
+conditional Elixir; G3.9 integration tests; G3.10 docs-only
+closure cascade.
+
+**Founder authorization explicit at G3.5 substantive landing per
+RULE 20 at `[CAPSULE-EMBEDDING-WRITE-G3.5-EXECUTE-VERIFY-AUTH]`.**

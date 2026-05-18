@@ -15,6 +15,7 @@ import {
   COEService,
   combinedScore,
   extractKeywords,
+  FixtureBasedEmbeddingProvider,
   MemoryContentStore,
   MemoryNonceStore,
   NegotiateService,
@@ -78,6 +79,7 @@ function makeServices() {
     contentStore,
     encryption,
     TEST_JWT_SECRET,
+    new FixtureBasedEmbeddingProvider(),
   );
   const coe = new COEService(auth, negotiate, read, encryption);
   return { auth, negotiate, read, write, coe, contentStore, declarationStore };
