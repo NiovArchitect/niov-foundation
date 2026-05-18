@@ -566,3 +566,115 @@ ADR-0043 Status preserved at `Proposed 2026-05-17` (the ADR remains
 Proposed; G3.10 closure cascade is the eventual Status transition
 to Accepted at canonical-state register substantively per
 §Sub-decision 11 Q-G3-κ).
+
+## G3.3 Progress — Schema + Extension + HNSW Index LANDED (2026-05-17)
+
+G3.3 `[CAPSULE-EMBEDDING-SCHEMA]` LANDS the Prisma `embedding
+Unsupported("vector(1536)")?` field per §Sub-decision 2 (Q-G3-β LOCK) +
+`previewFeatures = ["postgresqlExtensions"]` + `extensions = [vector]`
+per Q-G3.3-γ LOCK + NEW raw-SQL post-push scripts per Q-G3.3-ζ LOCK +
+5-step `test-db-up.sh` orchestration per Q-G3.3-θ LOCK + CI/nightly
+orchestration per Q-G3.3-η LOCK.
+
+**Schema substrate at G3.3 LANDED register:**
+
+- `packages/database/prisma/schema.prisma` generator block extended
+  with `previewFeatures = ["postgresqlExtensions"]`; datasource block
+  extended with `extensions = [vector]`.
+- MemoryCapsule nullable `embedding Unsupported("vector(1536)")?` field
+  placed immediately after `mutation_type` per Q-G3.3-δ LOCK (content-
+  derived sibling clustering with Gap-1 attribution chain + content_hash
+  + version).
+- Per RS-2 (Prisma Issue #27857), the generated TypeScript client OMITS
+  the `Unsupported(...)` field from the `MemoryCapsule` type. All 30+
+  existing `prisma.memoryCapsule.*` call sites continue to work
+  unchanged. Runtime vector access (forward-substrate G3.4-G3.6) uses
+  `prisma.$queryRaw` / `$executeRaw` only.
+
+**Extension substrate at G3.3 LANDED register:**
+
+- NEW `scripts/apply-pgvector-extension.ts` per Q-G3.3-ζ LOCK. Wraps
+  `CREATE EXTENSION IF NOT EXISTS vector;` for command-line invocation
+  via `prisma.$executeRawUnsafe`. Idempotent. MUST run BEFORE
+  `prisma db push` so the `vector` type is registered when Prisma
+  applies the `embedding` column ALTER TABLE.
+
+**HNSW index substrate at G3.3 LANDED register:**
+
+- NEW `scripts/apply-hnsw-index.ts` per Q-G3.3-ζ LOCK. Wraps:
+  `CREATE INDEX IF NOT EXISTS memory_capsules_embedding_hnsw_idx ON
+  memory_capsules USING hnsw (embedding vector_cosine_ops) WHERE
+  embedding IS NOT NULL AND deleted_at IS NULL;` — partial index per
+  Q-G3.3-β LOCK (skips legacy unembedded capsules + RULE 10 soft-
+  deleted rows); defaults `m = 16`, `ef_construction = 64` per
+  Q-G3.3-ε LOCK + RS-4 pgvector canonical defaults (no explicit WITH
+  clause). Idempotent. MUST run AFTER `prisma db push` so the
+  `embedding` column exists.
+
+**5-step `scripts/test-db-up.sh` bring-up per Q-G3.3-θ LOCK:**
+
+1. `docker compose up postgres`
+2. `npx tsx scripts/apply-pgvector-extension.ts` (extension; before db push)
+3. `bash scripts/prisma-db-push-test.sh` (schema push)
+4. `npx tsx scripts/apply-audit-triggers.ts` (audit triggers)
+5. `npx tsx scripts/apply-hnsw-index.ts` (HNSW index; after db push)
+
+**CI orchestration per Q-G3.3-η LOCK:**
+
+`.github/workflows/ci.yml` 3 service-bearing jobs (Unit + Integration +
+Elixir tiers) + `.github/workflows/nightly-real-llm.yml` real-LLM tier
+all run the same 4 substrate steps in canonical order: extension →
+prisma push → audit triggers → HNSW index.
+
+**Scope boundaries preserved at G3.3:**
+
+- G3.3 does NOT close Gap 3 at canonical-state register substantively;
+  Gap 3 remains IN FLIGHT.
+- G3.3 does NOT add the embedding provider (forward-substrate to G3.4).
+- G3.3 does NOT touch `write.service.ts` (forward-substrate to G3.5).
+- G3.3 does NOT add `searchBySimilarity` or COE integration (forward-
+  substrate to G3.6).
+- G3.3 does NOT touch any application code, tests, Elixir source,
+  `.husky/pre-commit`, `package.json`, `docker-compose.test.yml`, or
+  any other ADR (no ADR-0011/0013/0015/0016/0022/0025/0033/0034/0035/
+  0041/0042 amendments).
+- ADR-0022 NOT amended (Q-G3-δ LOCK preserved); the `combined_score`
+  formula at `apps/api/src/services/coe/keywords.ts:87-93` remains
+  untouched.
+- ADR-0041 NOT amended (parent umbrella unchanged).
+- ADR-0043 Status preserved at `Proposed 2026-05-17` (the ADR remains
+  Proposed through G3.4-G3.9; G3.10 closure cascade is the eventual
+  Status transition to Accepted).
+- Elixir Ecto schema at `apps/cosmp_router/lib/cosmp_router/schemas/
+  memory_capsule.ex` NOT updated (Q-G3-θ β-A LOCK preserved); Ecto
+  schema field_list stays at 30; DB has 31 columns; extra column is
+  invisible to Ecto via subset-only field discipline.
+
+**Substrate-state observation surfaced at G3.3 register substantively
+per Q-G3.3-λ LOCK (docs-only acknowledgment; NO ADR-0035 promotion
+at G3.3):**
+
+**D-G3.3-LOCAL-CONTAINER-DRIFT.** During G3.3.0 preflight (post-G3.2),
+`docker ps` showed the running local test DB container was still using
+the stale `postgres:16.4-alpine` image (started ~7 hours pre-G3.2);
+the docker-compose.test.yml declaration (G3.2 substrate) correctly
+specified `pgvector/pgvector:0.8.2-pg16-trixie`. CI uses fresh
+containers per job and was unaffected (G3.2 CI 4/4 success at run
+`26012726529` verified). G3.3 verification refreshed the local
+container per Q-G3.3-ι (β): `docker compose down` + `up -d postgres`
+re-pulled the pgvector image. Observation deferred to G3.10 closure
+cascade for potential ADR-0035 cluster expansion if recurrence is
+proven across future mini-arc cycles.
+
+**Forward-substrate at G3.4-G3.10 register substantively (unchanged
+from G3.1 §Sub-decision 11 Q-G3-κ enumeration):** G3.4
+`[CAPSULE-EMBEDDING-PROVIDER]` NEW `embedding.service.ts` +
+OpenAIEmbeddingProvider + FixtureBasedEmbeddingProvider; G3.5
+`[CAPSULE-EMBEDDING-WRITE-INTEGRATION]` write-service via Q-G3-ι
+mutation_type matrix; G3.6 `[CAPSULE-EMBEDDING-RETRIEVAL]`
+searchBySimilarity + CAPSULE_SIMILARITY_SEARCH audit literal + COE
+integration disposition per Q-G3-δ; G3.7 conditional backfill; G3.8
+conditional Elixir; G3.9 tests; G3.10 docs-only closure cascade.
+
+**Founder authorization explicit at G3.3 substantive landing per
+RULE 20 at `[CAPSULE-EMBEDDING-SCHEMA-G3.3-EXECUTE-VERIFY-AUTH]`.**

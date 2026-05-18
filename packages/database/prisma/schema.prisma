@@ -6,13 +6,15 @@
 //              query function under /packages/database/src/queries/.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
 }
 
 // An Entity is anyone or anything that can own intelligence inside the
@@ -155,6 +157,7 @@ model MemoryCapsule {
   updated_session_id String?  @db.Uuid
   previous_version   Int?
   mutation_type      MutationType?
+  embedding          Unsupported("vector(1536)")?
 
   created_at       DateTime  @default(now())
   last_accessed_at DateTime?

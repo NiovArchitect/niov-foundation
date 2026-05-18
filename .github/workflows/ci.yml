@@ -88,10 +88,14 @@ jobs:
       - run: npm ci
       - name: Generate Prisma client
         run: npm run db:generate
+      - name: Apply pgvector extension (G3.3 per ADR-0043; MUST run before db push so vector type is registered)
+        run: npx tsx scripts/apply-pgvector-extension.ts
       - name: Push schema to test database
         run: npm run db:push
       - name: Apply audit triggers
         run: npx tsx scripts/apply-audit-triggers.ts
+      - name: Apply HNSW index (G3.3 per ADR-0043; MUST run after db push so embedding column exists)
+        run: npx tsx scripts/apply-hnsw-index.ts
       - name: Run unit tests
         run: |
           set -o pipefail
@@ -152,10 +156,14 @@ jobs:
       - run: npm ci
       - name: Generate Prisma client
         run: npm run db:generate
+      - name: Apply pgvector extension (G3.3 per ADR-0043; MUST run before db push so vector type is registered)
+        run: npx tsx scripts/apply-pgvector-extension.ts
       - name: Push schema to test database
         run: npm run db:push
       - name: Apply audit triggers
         run: npx tsx scripts/apply-audit-triggers.ts
+      - name: Apply HNSW index (G3.3 per ADR-0043; MUST run after db push so embedding column exists)
+        run: npx tsx scripts/apply-hnsw-index.ts
       - name: Run integration tests
         run: |
           set -o pipefail
@@ -243,11 +251,17 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
+      - name: Apply pgvector extension (G3.3 per ADR-0043; MUST run before db push so vector type is registered)
+        run: npx tsx scripts/apply-pgvector-extension.ts
+
       - name: Push Prisma schema to test DB (fresh-per-job Postgres service)
         run: npm run db:push
 
       - name: Apply audit_events BEFORE DELETE trigger (ADR-0002)
         run: npx tsx scripts/apply-audit-triggers.ts
+
+      - name: Apply HNSW index (G3.3 per ADR-0043; MUST run after db push so embedding column exists)
+        run: npx tsx scripts/apply-hnsw-index.ts
 
       - name: Setup BEAM (Elixir + Erlang/OTP per .tool-versions)
         uses: erlef/setup-beam@v1

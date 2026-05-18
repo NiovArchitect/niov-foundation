@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -488,6 +488,24 @@ References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q
 **Forward-substrate unchanged from G3.1 §G3.3-G3.10 enumeration:** G3.3 substantive Prisma `embedding Unsupported("vector(1536)")?` field + `scripts/apply-pgvector-extension.ts` + `scripts/apply-hnsw-index.ts` + `scripts/test-db-up.sh` post-push integration; G3.4 embedding provider; G3.5 write-integration via mutation_type; G3.6 retrieval + COE integration disposition; G3.7 conditional backfill; G3.8 conditional Elixir; G3.9 tests; G3.10 docs-only closure cascade.
 
 **Founder LOCKS preservation:** 8 Q-G3.2 sub-decisions / locks Q-G3.2-α through Q-G3.2-θ all LOCKED at `[CAPSULE-EMBEDDING-INFRA-G3.2-QLOCK]` register substantively per RULE 20; G3.2 execution authorization at `[CAPSULE-EMBEDDING-INFRA-G3.2-EXECUTE-VERIFY-AUTH]`. CI label staleness (Unit tier `(371 tests)` / Integration tier `(111 tests + 1 skipped)`) KEPT DEFERRED per Q-G3.2-ζ; preserved forward-substrate from G1.6.
+
+#### G3.3 LANDED — Prisma schema + extension + HNSW index (2026-05-17)
+
+**Status:** G3.3 `[CAPSULE-EMBEDDING-SCHEMA]` LANDED 2026-05-17 (single docs + schema + scripts + CI/nightly orchestration commit) per ADR-0043 §Sub-decision 2 (Q-G3-β LOCK) + 12 Q-G3.3-α through Q-G3.3-λ LOCKS at `[CAPSULE-EMBEDDING-SCHEMA-G3.3-QLOCK]`. Prisma `embedding Unsupported("vector(1536)")?` field + `previewFeatures = ["postgresqlExtensions"]` + `extensions = [vector]` LANDED. ADR-0043 Status preserved as `Proposed 2026-05-17`. G3.3 does NOT close Gap 3.
+
+**Substrate sites (11 authorized files):** 1 Prisma schema MOD (`packages/database/prisma/schema.prisma`) + 2 NEW scripts (`scripts/apply-pgvector-extension.ts` + `scripts/apply-hnsw-index.ts`) + 1 test-db-up retrofit (`scripts/test-db-up.sh` 5-step) + 2 CI workflow files (`.github/workflows/ci.yml` 3 service-bearing jobs + `.github/workflows/nightly-real-llm.yml`) + 4 docs/state files (ADR-0043 + section-12-progress + this CURRENT_BUILD_STATE + README) + 1 CLAUDE.md mirror = 11.
+
+**HNSW index canonical:** `memory_capsules_embedding_hnsw_idx` USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL AND deleted_at IS NULL — partial per Q-G3.3-β LOCK; defaults `m = 16`, `ef_construction = 64` per Q-G3.3-ε LOCK + RS-4 pgvector canonical defaults (no explicit WITH clause).
+
+**5-step bring-up per Q-G3.3-θ LOCK:** docker compose up → apply-pgvector-extension.ts → prisma-db-push-test.sh → apply-audit-triggers.ts → apply-hnsw-index.ts. Extension MUST run before db push (vector type registration); HNSW MUST run after db push (column existence). CI/nightly orchestration mirrors the same ordering per Q-G3.3-η LOCK.
+
+**ADR-0022 NOT amended at G3.3** — Q-G3-δ LOCK preserved; combined_score formula at `apps/api/src/services/coe/keywords.ts:87-93` untouched. ADR-0011/0013/0015/0016/0025/0033/0034/0035/0041/0042 NOT amended either. ADR-0043 Status preserved at `Proposed 2026-05-17`.
+
+**Substrate-state observation surfaced docs-only per Q-G3.3-λ LOCK:** **D-G3.3-LOCAL-CONTAINER-DRIFT** — during G3.3.0 preflight (post-G3.2), the running local test DB container was stale on `postgres:16.4-alpine` (started ~7 hours pre-G3.2). CI uses fresh containers per job and was unaffected (G3.2 CI 4/4 green verified). G3.3 verification refreshed the local container per Q-G3.3-ι (β): `docker compose down` + `up -d postgres` re-pulled the pgvector image. ADR-0035 cluster expansion deferred to G3.10 closure cascade for potential promotion if recurrence is proven.
+
+**Forward-substrate unchanged from G3.1 + G3.2 enumeration:** G3.4 embedding provider + G3.5 write-integration via mutation_type + G3.6 retrieval + COE integration disposition per Q-G3-δ + G3.7 conditional backfill + G3.8 conditional Elixir per Q-G3-θ + G3.9 tests + G3.10 docs-only closure cascade.
+
+**Founder LOCKS preservation:** 12 Q-G3.3 sub-decisions / locks Q-G3.3-α through Q-G3.3-λ all LOCKED at `[CAPSULE-EMBEDDING-SCHEMA-G3.3-QLOCK]` register substantively per RULE 20; G3.3 execution authorization at `[CAPSULE-EMBEDDING-SCHEMA-G3.3-EXECUTE-VERIFY-AUTH]`. CI label staleness KEPT DEFERRED per Q-G3.2-ζ (preserved forward-substrate from G1.6 + G3.2). D-G3.3-LOCAL-CONTAINER-DRIFT surfaced docs-only; ADR-0035 promotion deferred to G3.10 per Q-G3.3-λ.
 
 ---
 
