@@ -17,6 +17,7 @@ import { NegotiateService } from "./services/cosmp/negotiate.service.js";
 import { ReadService } from "./services/cosmp/read.service.js";
 import { WriteService } from "./services/cosmp/write.service.js";
 import { ShareService } from "./services/cosmp/share.service.js";
+import { SimilarityService } from "./services/cosmp/similarity.service.js";
 import { COEService } from "./services/coe/coe.service.js";
 import { registerCoeRoutes } from "./routes/coe.routes.js";
 import { HiveService } from "./services/hive/hive.service.js";
@@ -60,7 +61,11 @@ import { OtzarService } from "./services/otzar/otzar.service.js";
 import { ObservationService } from "./services/otzar/observation.service.js";
 import { makeDefaultKVCache } from "./services/otzar/cache.js";
 import { getLLMProvider, MockLLMProvider } from "./services/llm/llm.service.js";
-import { getEmbeddingProvider } from "./services/embedding/embedding.service.js";
+import {
+  FixtureBasedEmbeddingProvider,
+  getEmbeddingProvider,
+  type EmbeddingProvider,
+} from "./services/embedding/embedding.service.js";
 import { registerOtzarRoutes } from "./routes/otzar.routes.js";
 import { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
@@ -94,6 +99,11 @@ export interface BuildAppConfig {
   // Section 11B test injection points -- production reads from env.
   otzarCache?: import("./services/otzar/cache.js").KVCache;
   otzarLLM?: import("./services/llm/llm.service.js").LLMProvider;
+  // ADR-0043 G3.6 (Q-G3.6-ζ test-injection): allow tests to override
+  // the embedding provider; mirrors otzarLLM pattern. Production
+  // omits and falls through to NODE_ENV-aware default (Fixture in
+  // test mode, OpenAI in production).
+  embeddingProvider?: EmbeddingProvider;
 }
 
 // WHAT: Construct a fully wired Fastify instance ready for inject()
@@ -143,13 +153,27 @@ export async function buildApp(
     jwtSecret,
     complianceService,
   );
+  // ADR-0043 G3.6 (Q-G3.6-ζ test-injection): single embedding
+  // provider instance shared by WriteService + SimilarityService.
+  // Test mode falls through to FixtureBasedEmbeddingProvider for
+  // deterministic CI behavior (no real OpenAI calls); production
+  // uses OpenAIEmbeddingProvider per Q-G3.4-β.
+  const embeddingProvider: EmbeddingProvider =
+    config.embeddingProvider ??
+    (process.env.NODE_ENV === "test"
+      ? new FixtureBasedEmbeddingProvider()
+      : getEmbeddingProvider());
   const writeService = new WriteService(
     authService,
     declarationStore,
     contentStore,
     contentEncryption,
     jwtSecret,
-    getEmbeddingProvider(),
+    embeddingProvider,
+  );
+  const similarityService = new SimilarityService(
+    authService,
+    embeddingProvider,
   );
   const shareService = new ShareService(authService);
   const hiveService = new HiveService(
@@ -320,6 +344,7 @@ export async function buildApp(
     writeService,
     shareService,
     monetizationService,
+    similarityService,
   );
   await registerCoeRoutes(app, coeService);
   await registerHiveRoutes(app, hiveService);

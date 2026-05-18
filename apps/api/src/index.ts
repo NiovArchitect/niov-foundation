@@ -453,3 +453,16 @@ export type {
   EmbeddingProvider,
   EmbeddingResult,
 } from "./services/embedding/embedding.service.js";
+
+// ADR-0043 G3.6 (Q-G3.6-α α-1): standalone similarity retrieval
+// service. RULE 0 SQL-tier filters + HNSW iterative scan posture.
+// Companion route POST /api/v1/cosmp/search registered in
+// cosmp.routes.ts; production wiring at server.ts.
+export { SimilarityService } from "./services/cosmp/similarity.service.js";
+export type {
+  SimilaritySearchInput,
+  SimilarityMatch,
+  SimilaritySuccess,
+  SimilarityDegraded,
+  SimilarityFailure,
+} from "./services/cosmp/similarity.service.js";

@@ -924,3 +924,182 @@ closure cascade.
 
 **Founder authorization explicit at G3.5 substantive landing per
 RULE 20 at `[CAPSULE-EMBEDDING-WRITE-G3.5-EXECUTE-VERIFY-AUTH]`.**
+
+## G3.6 Progress — Retrieval Service + Route + Audit Literal LANDED (2026-05-18)
+
+G3.6 `[CAPSULE-EMBEDDING-RETRIEVAL]` LANDS the standalone similarity
+retrieval API per §Sub-decision 11 (Q-G3-κ) + 10 Q-G3.6 LOCKS at
+`[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-QLOCK]`.
+
+**Service location per Q-G3.6-α α-1**: NEW
+`apps/api/src/services/cosmp/similarity.service.ts`. Clean separation
+from read.service.ts; explicit dependency injection per Q-G3.6-ζ
+(AuthService + EmbeddingProvider; no production defaults).
+
+**Route per Q-G3.6-β β-1**: NEW `POST /api/v1/cosmp/search` registered
+in `apps/api/src/routes/cosmp.routes.ts`. Mirrors existing route
+auth pattern (`bearerFrom(request.headers.authorization)` + return
+401 on missing token). 422 mapping added for `QUERY_INVALID` +
+`TOPK_OUT_OF_RANGE` + `WALLET_MISSING` (caller-bug class) at
+`statusForCode`.
+
+**Raw SQL with 6 RULE 0 SQL-tier privacy filters per Q-G3.6-γ**:
+
+```sql
+SELECT capsule_id, capsule_type, payload_summary
+FROM memory_capsules
+WHERE wallet_id = $2::uuid
+  AND deleted_at IS NULL
+  AND ai_access_blocked = false
+  AND requires_validation = false
+  AND clearance_required <= $3
+  AND embedding IS NOT NULL
+ORDER BY embedding <=> $1::vector(1536) ASC
+LIMIT $4
+```
+
+All 6 privacy filters fire BEFORE ranking (no post-fetch privacy
+filtering; the filter set is mandatory at the SQL tier so the
+HNSW iterative scan can backfill candidates that would otherwise be
+discarded post-filter).
+
+**HNSW iterative scan posture per Q-G3.6-γ.2**: each query runs inside
+`prisma.$transaction` with two SET LOCAL statements applied first:
+
+```ts
+await tx.$executeRawUnsafe("SET LOCAL hnsw.iterative_scan = strict_order");
+await tx.$executeRawUnsafe("SET LOCAL hnsw.ef_search = 100");
+```
+
+RULE 21 research arc citation: pgvector's HNSW index applies WHERE
+filters AFTER the index scan (default `hnsw.ef_search = 40`). Without
+iterative scan, privacy-first filter selectivity can cause topK
+matches to fall below requested LIMIT even when matching capsules
+exist. Iterative scan (canonical remediation in pgvector 0.8.0+; our
+pinned image is `pgvector/pgvector:0.8.2-pg16-trixie`) keeps scanning
+the index until enough matches accumulate or `hnsw.max_scan_tuples`
+(default 20,000) caps the work. `strict_order` mode preserves exact
+distance ordering at the cost of some recall — chosen for
+audit-trail determinism over `relaxed_order`.
+
+**Response shape per Q-G3.6-γ.1**: matches[] return capsule_id +
+capsule_type + payload_summary only. NO vector / NO distance / NO
+embedding fields. Prisma's `Unsupported("vector(1536)")` typegen
+omits the embedding column from the generated client by
+construction; the response shape never accesses it. Tier 1 Gate 9
+scans interface bodies; Gate 11 scans the route handler body for
+forbidden response keys.
+
+**NEW audit literal per Q-G3.6-δ + Q-γ.1 clean-transition**:
+`CAPSULE_SIMILARITY_SEARCH` appended to AUDIT_EVENT_TYPE_VALUES in
+`packages/database/src/queries/audit.ts` (both type union AND array
+constant). No removal of existing literals (RULE 10).
+
+**V2 Correction 5 — neutral `emitSimilarityAudit(outcome, ...)`
+helper**: single audit-emission helper with explicit `outcome`
+discriminator. Provider failure per Q-G3.6-θ is **degraded SUCCESS**
+(NEVER DENIED) with `embedding_generated: false +
+embedding_failure_class + embedding_failure_message + result_count:
+0`. Empty result per Q-G3.6-ι is **SUCCESS** (NEVER DENIED) with
+`result_count: 0 + filters_applied + embedding_generated: true`. Only
+auth/session/permission/caller-bug failures (SESSION_INVALID /
+SESSION_EXPIRED / SESSION_REVOKED / SESSION_INVALIDATED /
+OPERATION_NOT_PERMITTED / QUERY_INVALID / TOPK_OUT_OF_RANGE /
+WALLET_MISSING) emit `outcome: "DENIED"`.
+
+**Audit metadata schema per Q-G3.6-δ**:
+
+| Field | Type | Path |
+|---|---|---|
+| `query_length` | number | always |
+| `topK` | number | always |
+| `minSimilarity` | number \| null | always |
+| `result_count` | number | always |
+| `filters_applied` | string[] | always (`[]` in degraded path; 6-tag array in SUCCESS path) |
+| `embedding_generated` | boolean | always |
+| `embedding_failure_class` | string | degraded path only |
+| `embedding_failure_message` | string | degraded path only |
+
+**Audit metadata FORBIDDEN fields (NEVER appear in any code path)**:
+raw query text, truncated query, query keywords, `query_keywords_redacted`,
+query vector, result vectors, vector_hash, embedding_sample,
+embedding_first_*, vector_dim_*, per_result_distance distribution,
+per-dimension stats, cosine_distance, distances.
+
+**topK enforcement per Q-G3.6-η**: default 10; maximum 50; integers
+in `[1, 50]` only; out-of-range requests are rejected with
+`TOPK_OUT_OF_RANGE` (HTTP 422) and emit a DENIED audit row. No
+silent clamping.
+
+**Tests per Q-G3.6-ζ + Q-G3.5-ε pattern**:
+- NEW `tests/unit/cosmp/similarity.test.ts` 12 unit tests S1-S12
+  with stable verbatim names. S3+S4+S5+S6+S7+S8+S9+S11 named-block
+  isolation per Tier 1 Gate 15. Tests use real test DB (containerized
+  Postgres) to verify SQL-tier filters; embedding provider is either
+  FixtureBasedEmbeddingProvider (deterministic vector) or in-test
+  mock object (degraded path proof).
+- NEW `tests/integration/similarity-search.test.ts` 4 integration
+  tests J1-J4. J1 named-block isolation per Tier 1 Gate 16 (V2
+  Correction 4): asserts HTTP response body contains no `vector` /
+  `embedding` / `distance` / `cosine_distance` field. J2 cross-wallet
+  denial via real DB. J3 audit row persistence with allowed fields +
+  forbidden tokens absent. J4 HNSW iterative scan substrate proof
+  (1 capsule passing all filters + 3 failing one each; passing
+  capsule must surface).
+
+**COE integration DEFERRED past G3.6 per Q-G3.6-ε**:
+`apps/api/src/services/coe/**` UNTOUCHED. `keywords.ts` UNTOUCHED.
+ADR-0022 UNTOUCHED. Paths (a) replace_tagOverlap and (b)
+4th_coefficient REQUIRE Founder-authorized ADR-0022 amendment per
+RULE 20; paths (c) rerank post-fetch and (d) prefilter remain
+candidate dispositions for a future commit AFTER G3.6 standalone
+substrate proves out under CI. G3.6 is the standalone retrieval API
+landing; integration is a separate question.
+
+**Scope boundaries preserved at G3.6**:
+
+- G3.6 does NOT close Gap 3 at canonical-state register substantively;
+  Gap 3 remains IN FLIGHT pending G3.7 (conditional backfill) + G3.8
+  (conditional Elixir) + G3.9 (broader integration tests) + G3.10
+  (docs-only closure cascade).
+- G3.6 does NOT touch `apps/api/src/services/cosmp/write.service.ts`,
+  `read.service.ts`, `negotiate.service.ts`, `share.service.ts`,
+  `jurisdiction-enforcement.ts`, or `regulator-enforcement.ts`.
+- G3.6 does NOT touch `apps/api/src/services/embedding/embedding.service.ts`
+  (G3.4 substrate unchanged).
+- G3.6 does NOT touch `apps/api/src/services/coe/**` (Q-G3.6-ε).
+- G3.6 does NOT touch `apps/api/src/services/coe/keywords.ts`
+  (Q-G3-δ + Q-G3.6-ε both preserved).
+- G3.6 does NOT amend ADR-0011/0013/0014/0015/0016/0022/0025/0033/
+  0034/0035/0041/0042.
+- G3.6 does NOT touch `schema.prisma`, DB scripts
+  (`apply-pgvector-extension.ts` / `apply-hnsw-index.ts` /
+  `test-db-up.sh` / `prisma-db-push-test.sh`), CI workflows,
+  `docker-compose.test.yml`, `.husky/pre-commit`, `package.json`,
+  or lockfiles.
+- G3.6 does NOT touch `apps/cosmp_router/**` or
+  `apps/dbgi_supervisor/**` (Q-G3-θ β-A preserved).
+- G3.6 does NOT add a `CircuitBreaker` wrapper (provider-failure
+  degrade catch absorbs single-call failures).
+- ADR-0043 Status preserved at `Proposed 2026-05-17`.
+
+**Privacy invariant per Q-G3-ζ + Q-G3.6-γ.1 + RULE 0**: vectors and
+distances are server-side substrate only. WriteSuccess and
+SimilaritySuccess response shapes omit any embedding/vector/distance
+field by construction. Audit-metadata schema records outcome metadata
+only; Tier 1 Gate 14 verifies inside `emitSimilarityAudit({ ...details: {...} })`
+balanced-brace bodies that forbidden tokens do not appear. Structured
+logger in similarity.service.ts has no `vector`-mentioning log line
+(Tier 1 Gate 8 verifies).
+
+**Forward-substrate at G3.7-G3.10 register substantively (unchanged
+from G3.1 §Sub-decision 11 Q-G3-κ enumeration)**: G3.7
+`[CAPSULE-EMBEDDING-BACKFILL]` conditional (lazy-on-first-read default
+per Q-G3-ε; bulk-backfill script forward-substrate only); G3.8
+`[CAPSULE-EMBEDDING-ELIXIR]` conditional (default skip per Q-G3-θ
+β-A); G3.9 broader integration tests; G3.10
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes
+Gap 3 at canonical-state register substantively).
+
+**Founder authorization explicit at G3.6 substantive landing per
+RULE 20 at `[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-EXECUTE-VERIFY-AUTH]`.**

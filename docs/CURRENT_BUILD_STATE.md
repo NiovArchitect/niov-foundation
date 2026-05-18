@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -546,6 +546,34 @@ References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q
 **Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4 enumeration:** G3.6 `[CAPSULE-EMBEDDING-RETRIEVAL]` searchBySimilarity + `CAPSULE_SIMILARITY_SEARCH` audit literal + COE integration disposition per Q-G3-δ + G3.7 conditional backfill + G3.8 conditional Elixir per Q-G3-θ + G3.9 broader integration tests + G3.10 docs-only closure cascade.
 
 **Founder LOCKS preservation:** 12 Q-G3.5 sub-decisions / locks Q-G3.5-α through Q-G3.5-λ all LOCKED at `[CAPSULE-EMBEDDING-WRITE-G3.5-QLOCK]` register substantively per RULE 20; G3.5 execution authorization at `[CAPSULE-EMBEDDING-WRITE-G3.5-EXECUTE-VERIFY-AUTH]`.
+
+#### G3.6 LANDED — Similarity retrieval service + route + audit literal (2026-05-18)
+
+**Status:** G3.6 `[CAPSULE-EMBEDDING-RETRIEVAL]` LANDED 2026-05-18 (single commit covering service + route + audit literal + tests + ADR/state/catalog updates) per ADR-0043 §Sub-decision 11 + 10 Q-G3.6 sub-decisions / locks Q-G3.6-α through Q-G3.6-κ at `[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-QLOCK]`. ADR-0043 Status preserved as `Proposed 2026-05-17`. G3.6 does NOT close Gap 3.
+
+**Substrate sites (12 authorized files):** 3 NEW + 9 MOD. NEW: `apps/api/src/services/cosmp/similarity.service.ts` + `tests/unit/cosmp/similarity.test.ts` + `tests/integration/similarity-search.test.ts`. MOD: `apps/api/src/index.ts` (barrel re-export) + `apps/api/src/server.ts` (instantiation + wire) + `apps/api/src/routes/cosmp.routes.ts` (extend `registerCosmpRoutes` signature + NEW POST /api/v1/cosmp/search route + 3 new 422 mappings at `statusForCode`) + `packages/database/src/queries/audit.ts` (append `CAPSULE_SIMILARITY_SEARCH` literal) + ADR-0043 + section-12-progress + this CURRENT_BUILD_STATE + README + CLAUDE.md = 12.
+
+**RULE 0 SQL-tier filter set per Q-G3.6-γ (6 mandatory filters before ranking):** `wallet_id = $::uuid` + `deleted_at IS NULL` + `ai_access_blocked = false` + `requires_validation = false` + `clearance_required <= $session.clearance_ceiling` + `embedding IS NOT NULL`. All 6 filters fire at the SQL tier; no post-fetch privacy filtering. `ai_access_blocked` and `requires_validation` are NEW enforcement responsibilities at READ tier (G3.6 bypasses NEGOTIATE; previously only enforced at negotiate.service.ts).
+
+**HNSW iterative scan posture per Q-G3.6-γ.2:** `SET LOCAL hnsw.iterative_scan = strict_order` + `SET LOCAL hnsw.ef_search = 100` applied per-query inside `prisma.$transaction`. RULE 21 research arc citation: pgvector's HNSW index applies WHERE filters AFTER index scan (default ef_search=40); iterative scan (pgvector 0.8.0+; our pinned 0.8.2) keeps scanning until enough matches accumulate or `hnsw.max_scan_tuples` (default 20,000) caps work. `strict_order` mode preserves exact distance ordering at the cost of some recall — chosen for audit-trail determinism.
+
+**Audit metadata schema per Q-G3.6-δ.** ALLOWED fields: `query_length`, `topK`, `minSimilarity`, `result_count`, `filters_applied`, `embedding_generated`, plus `embedding_failure_class` + `embedding_failure_message` in degraded path. FORBIDDEN fields (NEVER appear in any code path): raw query text, truncated query, query keywords, `query_keywords_redacted`, query vector, result vectors, vector_hash, embedding_sample, embedding_first_*, vector_dim_*, per_result_distance distribution, per-dimension stats, cosine_distance, distances.
+
+**Privacy invariant per Q-G3-ζ + Q-G3.6-γ.1 + RULE 0:** vectors and distances are server-side substrate only. SimilarityMatch + SimilaritySuccess + SimilarityDegraded response shapes omit any vector / embedding / distance field by construction. HTTP route handler returns the service result verbatim — no inline injection of forbidden fields. Tier 1 Gate 9 scans interface bodies; Gate 11 scans the route handler body; Gate 14 scans the audit details object body inside every `emitSimilarityAudit({ ...details: {...} })` call site.
+
+**V2 Correction 5 — neutral `emitSimilarityAudit(outcome, ...)` helper:** single helper for all CAPSULE_SIMILARITY_SEARCH emissions; outcome param discriminates SUCCESS vs DENIED. Provider failure per Q-G3.6-θ is **degraded SUCCESS** with `embedding_generated: false` + `embedding_failure_class` + `embedding_failure_message` + `result_count: 0` (NEVER DENIED). Empty result per Q-G3.6-ι is **SUCCESS** with `result_count: 0` (NEVER DENIED). Only auth/session/permission/caller-bug failures (SESSION_*, OPERATION_NOT_PERMITTED, QUERY_INVALID, TOPK_OUT_OF_RANGE, WALLET_MISSING) emit `outcome: "DENIED"`.
+
+**topK ceiling per Q-G3.6-η:** default 10; max 50; integers in [1, 50] only; out-of-range requests rejected with `TOPK_OUT_OF_RANGE` (HTTP 422) and emit DENIED audit row. No silent clamping.
+
+**COE integration DEFERRED past G3.6 per Q-G3.6-ε:** `apps/api/src/services/coe/**` + `apps/api/src/services/coe/keywords.ts` + ADR-0022 ALL UNTOUCHED. Paths (a) replace_tagOverlap + (b) 4th_coefficient REQUIRE Founder-authorized ADR-0022 amendment per RULE 20 + coordinated test update at `tests/unit/coe.test.ts:132-136`. Paths (c) rerank post-fetch + (d) prefilter remain candidate dispositions for a future commit.
+
+**Test substrate per Q-G3.6-ζ:** NEW `tests/unit/cosmp/similarity.test.ts` 12 unit tests S1-S12 with stable verbatim names. S3+S4+S5+S6+S7+S8+S9+S11 named-block isolation per Tier 1 Gate 15 (privacy-critical structural conditions verified inside each balanced-brace block). NEW `tests/integration/similarity-search.test.ts` 4 integration tests J1-J4 (J1 named-block isolation per Tier 1 Gate 16 / V2 Correction 4 — HTTP response body asserts no vector / embedding / distance fields). All tests use FixtureBasedEmbeddingProvider or in-test mock providers; no real OpenAI calls.
+
+**Scope boundaries preserved:** ADR-0022 NOT amended (Q-G3-δ + Q-G3.6-ε); `apps/api/src/services/coe/**` NOT touched; `apps/api/src/services/coe/keywords.ts` NOT touched; `read.service.ts` / `write.service.ts` / `negotiate.service.ts` / `share.service.ts` / `jurisdiction-enforcement.ts` / `regulator-enforcement.ts` NOT touched; `embedding.service.ts` (G3.4) NOT touched; schema.prisma / DB scripts / CI workflows / `docker-compose.test.yml` / `.husky/pre-commit` / `package.json` / lockfiles NOT touched; Elixir source NOT touched (Q-G3-θ β-A); ADR-0011/0013/0014/0015/0016/0022/0025/0033/0034/0035/0041/0042 NOT amended; ADR-0043 Status preserved at `Proposed 2026-05-17`.
+
+**Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4+G3.5 enumeration:** G3.7 `[CAPSULE-EMBEDDING-BACKFILL]` conditional (lazy-on-first-read default per Q-G3-ε); G3.8 `[CAPSULE-EMBEDDING-ELIXIR]` conditional (default skip per Q-G3-θ β-A); G3.9 broader integration tests; G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes Gap 3 at canonical-state register substantively).
+
+**Founder LOCKS preservation:** 10 Q-G3.6 sub-decisions / locks Q-G3.6-α through Q-G3.6-κ all LOCKED at `[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-QLOCK]` register substantively per RULE 20; G3.6 execution authorization at `[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-EXECUTE-VERIFY-AUTH]`.
 
 ---
 

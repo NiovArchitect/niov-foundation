@@ -99,7 +99,17 @@ export type AuditEventType =
   | "CAPSULE_MUTATION_ADD"
   | "CAPSULE_MUTATION_UPDATE"
   | "CAPSULE_MUTATION_MERGE"
-  | "CAPSULE_MUTATION_NOOP";
+  | "CAPSULE_MUTATION_NOOP"
+  // Phase 3 Sub-arc 2 Gap 3 [CAPSULE-EMBEDDING-RETRIEVAL] per ADR-0043
+  // §Sub-decision 7 (Q-G3-η) + Q-G3.6-δ + Q-γ.1 clean-transition:
+  // 1 NEW append-only literal for similarity retrieval emitted by
+  // SimilarityService.emitSimilarityAudit. Audit details schema is
+  // outcome-only (query_length / topK / minSimilarity / result_count
+  // / filters_applied / embedding_generated +
+  // embedding_failure_class / embedding_failure_message in degraded
+  // path). NEVER raw query text, query keywords, query vectors, or
+  // per-result distance distribution per RULE 0 + Q-G3-ζ.
+  | "CAPSULE_SIMILARITY_SEARCH";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -159,6 +169,10 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CAPSULE_MUTATION_UPDATE",
   "CAPSULE_MUTATION_MERGE",
   "CAPSULE_MUTATION_NOOP",
+  // Phase 3 Sub-arc 2 Gap 3 [CAPSULE-EMBEDDING-RETRIEVAL] per ADR-0043
+  // §G3.6 + Q-G3.6-δ. Append-only per Q-γ.1 clean-transition (no
+  // removal of existing literals; new literal appended).
+  "CAPSULE_SIMILARITY_SEARCH",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

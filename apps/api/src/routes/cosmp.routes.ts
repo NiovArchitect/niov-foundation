@@ -17,6 +17,10 @@ import type {
   ShareService,
 } from "../services/cosmp/share.service.js";
 import type { MonetizationService } from "../services/monetization/monetization.service.js";
+import type {
+  SimilarityService,
+  SimilaritySearchInput,
+} from "../services/cosmp/similarity.service.js";
 import type { AccessScope } from "@niov/database";
 
 // WHAT: Register the COSMP routes on a Fastify instance.
@@ -31,6 +35,7 @@ export async function registerCosmpRoutes(
   writeService: WriteService,
   shareService: ShareService,
   monetizationService: MonetizationService,
+  similarityService: SimilarityService,
 ): Promise<void> {
   app.post<{
     Body: {
@@ -343,6 +348,40 @@ export async function registerCosmpRoutes(
       });
     },
   );
+
+  // ADR-0043 G3.6 (Q-G3.6-β β-1): standalone similarity retrieval
+  // route. RULE 0 SQL-tier filters + HNSW iterative scan posture +
+  // audit emission BEFORE response per RULE 4. Q-G3.6-γ.1: response
+  // body carries capsule identifiers and minimal non-vector metadata
+  // only -- the handler does NOT inject vector, embedding, or
+  // distance fields into the returned shape.
+  app.post<{ Body: SimilaritySearchInput }>(
+    "/api/v1/cosmp/search",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await similarityService.searchBySimilarity(
+        sessionToken,
+        request.body,
+        { ip_address: request.ip ?? null },
+      );
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      // Return the service result verbatim. SimilarityService
+      // response shape (SimilaritySuccess / SimilarityDegraded)
+      // omits vector / embedding / distance fields by construction
+      // per Q-G3.6-γ.1; Tier 1 Gate 9 + Gate 11 verify the
+      // interface body + handler body are clean of forbidden tokens.
+      return reply.code(200).send(result);
+    },
+  );
 }
 
 // WHAT: Pull a string out of a header that Node's typings sometimes
@@ -438,6 +477,14 @@ function statusForCode(code: string): number {
     case "LAWFUL_BASIS_NOT_YET_VALID":
     case "LAWFUL_BASIS_EXPIRED":
     case "LAWFUL_BASIS_REVOKED":
+    // ADR-0043 G3.6 (Q-G3.6-η + V2 Correction 5): similarity-search
+    // caller-bug failures land at 422 (state inconsistency / shape
+    // violation in caller input), not 401/403. Provider failure and
+    // empty result are SUCCESS-shaped per Q-G3.6-θ + Q-G3.6-ι and
+    // never reach this map.
+    case "QUERY_INVALID":
+    case "TOPK_OUT_OF_RANGE":
+    case "WALLET_MISSING":
       return 422;
     case "COMPLIANCE_CHECK_FAILED":
       return 451;
