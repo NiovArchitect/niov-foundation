@@ -803,7 +803,7 @@ describe("E. WRITE — create cascade + update enforcement (Q2 + Q6 LOCKED Optio
 // ---------------------------------------------------------------------------
 
 describe("F. AuditEvent — jurisdiction propagation + canonical hash invariance", () => {
-  it("capsule-scoped success events persist jurisdiction at the row column (NEGOTIATE + CAPSULE_CREATED + CAPSULE_CONTENT_READ)", async () => {
+  it("capsule-scoped success events persist jurisdiction at the row column (NEGOTIATE + CAPSULE_MUTATION_ADD + CAPSULE_CONTENT_READ)", async () => {
     const owner = await makeUser(app, "US-FEDERAL", ["read", "write", "share"]);
     const create = await app.inject({
       method: "POST",
@@ -817,11 +817,11 @@ describe("F. AuditEvent — jurisdiction propagation + canonical hash invariance
       },
     });
     const capsuleId = (create.json() as { capsule_id: string }).capsule_id;
-    // CAPSULE_CREATED audit row should carry jurisdiction.
+    // CAPSULE_MUTATION_ADD audit row should carry jurisdiction.
     const createdRow = await prisma.auditEvent.findFirst({
       where: {
         target_capsule_id: capsuleId,
-        event_type: "CAPSULE_CREATED",
+        event_type: "CAPSULE_MUTATION_ADD",
         outcome: "SUCCESS",
       },
     });
@@ -886,7 +886,7 @@ describe("F. AuditEvent — jurisdiction propagation + canonical hash invariance
   });
 
   it("event_hash is unaffected by jurisdiction column (canonical_record/1 14-field invariant preserved)", async () => {
-    // Two CAPSULE_CREATED events with DIFFERENT jurisdictions but
+    // Two CAPSULE_MUTATION_ADD events with DIFFERENT jurisdictions but
     // otherwise comparable inputs must produce VALID event_hash values.
     // canonical_record/1 does NOT include jurisdiction (Sub-decision 3),
     // so adding the jurisdiction column has zero impact on chain
@@ -918,10 +918,10 @@ describe("F. AuditEvent — jurisdiction propagation + canonical hash invariance
     const capsuleA = (createA.json() as { capsule_id: string }).capsule_id;
     const capsuleB = (createB.json() as { capsule_id: string }).capsule_id;
     const rowA = await prisma.auditEvent.findFirst({
-      where: { target_capsule_id: capsuleA, event_type: "CAPSULE_CREATED" },
+      where: { target_capsule_id: capsuleA, event_type: "CAPSULE_MUTATION_ADD" },
     });
     const rowB = await prisma.auditEvent.findFirst({
-      where: { target_capsule_id: capsuleB, event_type: "CAPSULE_CREATED" },
+      where: { target_capsule_id: capsuleB, event_type: "CAPSULE_MUTATION_ADD" },
     });
     expect(rowA?.event_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(rowB?.event_hash).toMatch(/^[0-9a-f]{64}$/);
