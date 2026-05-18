@@ -306,6 +306,131 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3 Sub-Arc 2 Gap 4 -- Decay Execution Formalization IN FLIGHT 2026-05-18 at G4.1 -- ADR-0044 NEW Proposed; G4.2-G4.4 forward-substrate
+
+**Status: IN FLIGHT** at G4.1 `[BEAM-CAPSULE-DECAY-ADR]`.
+
+Current HEAD at G4.1: this commit.
+Lineage: `e60122c` (PR.4 hardening closure register substantively) → this commit.
+
+Phase 3 Sub-arc 2 Gap 4 (Decay Execution Formalization) IN FLIGHT at
+G4.1 docs-only ADR creation commit register substantively per Founder
+Q-G4-α α-1 LOCK + Q-G4-μ μ-2 LOCK at `[BEAM-CAPSULE-DECAY-G4-QLOCK]`
+register substantively. **Governing RULES**: RULE 0 + RULE 11 +
+RULE 12 + RULE 13 + RULE 20 + RULE 21 canonical per Founder QLOCK
+Mode section.
+
+ADR-0044 NEW (Decay Execution Formalization; Status Proposed
+2026-05-18) canonical at canonical-prose register substantively.
+**G4.1 LOCKS architectural canonicalization of existing lazy-at-read
+decay substrate at canonical-execution register substantively per
+ADR-0041 §Sub-decision 4 Q-H LOCK.** 12 Q-G4 sub-decisions LOCKED at
+`[BEAM-CAPSULE-DECAY-G4-QLOCK]` per RULE 20.
+
+**4-phase mini-arc decomposition per Q-G4-μ μ-2 LOCK**:
+
+- **G4.1** `[BEAM-CAPSULE-DECAY-ADR]` this commit docs-only ADR-0044
+  NEW Proposed + 4 docs MOD + 1 NEW ADR file
+- **G4.2** `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` docs-only or
+  minimal verification forward-substrate (resolves O-G4.1-1 + O-G4.1-2
+  disposition)
+- **G4.3** `[BEAM-CAPSULE-DECAY-IMPL]` conditional code-tier landing
+  SKIP-by-default unless G4.2 proves required implementation
+  forward-substrate
+- **G4.4** `[BEAM-CAPSULE-DECAY-CLOSURE]` docs-only closure cascade +
+  ADR-0044 Status Proposed → Accepted forward-substrate
+
+**2 substrate-state observations surfaced per RULE 13** (require G4.2
+disposition per Founder Q-G4-γ γ-5 LOCK):
+
+- **O-G4.1-1**: `expires_at` TTL field exists at Prisma `MemoryCapsule:165`
+  but no service-tier enforcement found at COE register substantively
+- **O-G4.1-2**: DecayType enum 5 values (FOUNDATIONAL / TIME_BASED /
+  ACCESS_BASED / PERMANENT / SESSION_ONLY) but only FOUNDATIONAL has
+  explicit substrate behavior at COE register
+
+**Sub-arc 2 status field remains IN FLIGHT** per Q-PR-δ + Q-PR-μ +
+Q-G4-α + Q-G4-μ LOCK throughout G4.1-G4.4. Sub-arc 2 closure cascade
+forward-substrate pending Gap 4 (this mini-arc) + Gap 5 (ADR-0045
+reserved) + optional Gap 6 (ADR-0046 reserved) + later Sub-arc 2
+closure cascade per ADR-0041 CL.1 scope patch register substantively.
+
+ADR-0043 + ADR-0047 Status preserved as Accepted 2026-05-18 throughout
+G4 mini-arc per Q-G4-η η-1 LOCK no-code-changes discipline. ADR-0022 +
+ADR-0033 + ADR-0035 substantive bodies UNTOUCHED at G4.1 per Q-G4-θ +
+Q-G4-κ + Q-G4-η LOCK.
+
+#### G4.1 LANDED — ADR-0044 NEW Proposed (2026-05-18)
+
+**Status:** G4.1 `[BEAM-CAPSULE-DECAY-ADR]` LANDED 2026-05-18 (docs-
+only ADR creation; 4 MOD + 1 NEW) per Founder Q-G4-α α-1 LOCK +
+Q-G4-μ μ-2 LOCK at `[BEAM-CAPSULE-DECAY-G4-QLOCK]` +
+`[BEAM-CAPSULE-DECAY-ADR-G4.1-EXECUTE-VERIFY-AUTH]` register
+substantively. ADR-0044 NEW (Decay Execution Formalization; Status
+Proposed 2026-05-18). G4.1 does NOT close Gap 4; G4.4 closure cascade
+flips ADR-0044 Status → Accepted at canonical-state register
+substantively.
+
+**Substrate sites (5 authorized files; 4 MOD + 1 NEW):** NEW
+`docs/architecture/decisions/0044-decay-execution-formalization.md`
++ MOD `docs/architecture/README.md` (NEW ADR-0044 catalog entry) +
+MOD `CLAUDE.md` (NEW ADR-0044 catalog entry mirror) + MOD
+`docs/reference/section-12-progress.md` (NEW G4 IN FLIGHT row) +
+MOD this `docs/CURRENT_BUILD_STATE.md` (NEW H2 + this G4.1 H4).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (Humans Always Sovereign; decay never deletes; FOUNDATIONAL
+bypass + explicit-recall bypass + soft-delete-only discipline) +
+RULE 11 (Prisma/Ecto cross-language ownership boundary preserved per
+ADR-0033; TypeScript owns scoring/decay; BEAM observes via Translator
+round-trip only) + RULE 12 (pre-flight grep; repo-evidence grounded)
++ RULE 13 (substrate traps surfaced inline) + RULE 20 (Founder
+authorization required) + RULE 21 (research arc canonical at
+canonical-knowledge register substantively).
+
+**Substrate canonicalized at canonical-execution register substantively
+per Q-G4-ι ι-1 LOCK**: COE forget-floor filter at
+`coe.service.ts:44` (RELEVANCE_FORGET_FLOOR = 0.2) + `:235-238`
+(forget-floor gate with FOUNDATIONAL bypass) + `:524-545` (Loop 1
+hook); feedback constants at `feedback.service.ts:91-104` (5
+RELEVANCE_* constants per ADR-0022 §Amendment 1); read-path
+`last_accessed_at` touch at `read.service.ts:328-335`; async
+`access_count` increment at `read.service.ts:772-788`; write-path
+`decay_type` / `decay_rate` persistence at `write.service.ts:60-61` +
+`:635-637` + `:661-662`; ADR-0022 combined_score recency at
+`keywords.ts:74-92`; BEAM Translator round-trip preservation at
+`apps/cosmp_router/lib/cosmp_router/capsule/translator.ex`.
+
+**RULE 21 research arc embedded at ADR-0044 §Context register
+substantively**: RS-1 Mem0 ranking-time decay (April 2026 algorithm;
+1.5×/0.3× fresh-stale spread; ADD-only extraction) + RS-2 Ebbinghaus
+1885 forgetting curve / SM-2 (1987) / FSRS (2022; power-law; 99.5%
+outperforms SM-2) + RS-3 LRU/LFU/ARC cache eviction (analogy only
+per Founder QLOCK RS-3 explicit clause; NOT deletion policy per RULE 0
++ RULE 10) + RS-4 RAG temporal weighting (alpha-blend
+`α·cos(q,d) + (1-α)·0.5^(age/h)` + multi-factor formulas; arXiv
+2509.19376 + 2510.16715) + RS-5 Oban + Quantum BEAM scheduler context
+(future-substrate ONLY per Q-G4-κ κ-1 LOCK; NO hex-dep additions at
+G4.1).
+
+**Forbidden / preserved boundaries enumerated**: no apps/** /
+tests/** / packages/** / scripts/** changes; no schema.prisma; no
+CI workflows; no package.json / lockfile changes; no vitest config
+changes; no docker-compose / .husky changes; no mix.exs / mix.lock;
+no audit.ts changes; no new audit literals at G4.1; no ADR-0022
+amendment; no ADR-0033 amendment; no ADR-0035 modification at G4.1;
+no ADR-0043 Status change; no ADR-0047 Status change;
+no ADR-0045 / ADR-0046 renumbering; Gap 4/5/6 reservations
+preserved at ADR-0041 umbrella; no production-affecting actions;
+no Elixir vector access; no Elixir decay computation at G4.1; no
+secret exposure.
+
+**Founder LOCKS preservation:** Q-G4-α through Q-G4-μ LOCKED at
+`[BEAM-CAPSULE-DECAY-G4-QLOCK]` register substantively per RULE 20;
+G4.1 execution authorization at `[BEAM-CAPSULE-DECAY-ADR-G4.1-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## Post-Gap-3 Production-Readiness Hardening Mini-Arc CLOSED 2026-05-18 at PR.4 -- PR.1+PR.2+PR.3+PR.4 LANDED; ADR-0047 Accepted
 
 **Status: CLOSED** at PR.4 `[PR-HARDENING-RUNBOOK-CLOSURE]`.
