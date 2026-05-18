@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18; G3.7 conditional backfill SKIPPED 2026-05-18
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18; G3.7 conditional backfill SKIPPED 2026-05-18; G3.8 Elixir-boundary contract LANDED 2026-05-18
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -594,6 +594,32 @@ References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q
 **Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4+G3.5+G3.6 enumeration:** G3.8 `[CAPSULE-EMBEDDING-ELIXIR]` conditional (default β-A skip per Q-G3-θ); G3.9 broader integration tests; G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes Gap 3 at canonical-state register substantively).
 
 **Founder LOCKS preservation:** Q-G3.7-α α-1 + Q-G3.7-η LOCKED at `[CAPSULE-EMBEDDING-BACKFILL-G3.7-QLOCK]` register substantively per RULE 20; G3.7 execution authorization at `[CAPSULE-EMBEDDING-BACKFILL-G3.7-EXECUTE-VERIFY-AUTH]`.
+
+#### G3.8 LANDED — Elixir-boundary contract for embedding column (2026-05-18)
+
+**Status:** G3.8 `[CAPSULE-EMBEDDING-ELIXIR]` LANDED 2026-05-18 (substantive Elixir-boundary contract landing; **NOT a SKIP**) per Q-G3.8-α α-2 LOCK + Q-G3.8-β/γ/δ/ε at `[CAPSULE-EMBEDDING-ELIXIR-G3.8-QLOCK]`. ADR-0043 Status preserved as `Proposed 2026-05-17`. G3.8 does NOT close Gap 3.
+
+**Substrate sites (7 authorized files; 7 MOD + 0 NEW):** 2 Elixir MOD (`apps/cosmp_router/lib/cosmp_router/schemas/memory_capsule.ex` moduledoc extension + `apps/cosmp_router/test/cosmp_router/schemas/memory_capsule_test.exs` NEW explicit named test) + 5 docs MOD (ADR-0043 G3.8 substantive H2 + section-12-progress Sub-arc 2 row inline + this CURRENT_BUILD_STATE H2 visibility + this G3.8 H4 + README + CLAUDE.md).
+
+**Consumer-driven framing.** Foundation production readiness DELIBERATELY EXCLUDES Elixir-side vector access at HEAD `ee0b01b`. Architectural decision per ADR-0033 §Decision 7 cross-language data-ownership boundary + Q-G3-θ β-A LOCK + ADR-0028 / ADR-0030 / ADR-0039 BEAM coordination layer scope — NOT a not-yet state. TypeScript/Prisma own vector write (G3.5 WriteService inline raw SQL `$executeRawUnsafe`) + retrieval (G3.6 SimilarityService raw SQL pgvector cosine with HNSW iterative scan). BEAM/COSMP coordination (cosmp_router 7-RPC service surface + DMW worker per-DMW dispatch + DBGI supervisor) operates over 7 COSMP ops (Authenticate / Negotiate / Read / Write / Share / Revoke / Audit) + MemoryCapsule lifecycle/routing — **NOT embedding distance**.
+
+**Q-G3.8 sub-decisions enumerated.** Q-G3.8-α α-2 LOCK (Elixir-boundary-doc guardrail with explicit named test); Q-G3.8-β LOCK (verbatim stable test title + canonical `refute :embedding in MemoryCapsule.__schema__(:fields)` form); Q-G3.8-γ LOCK (moduledoc note with 8 required content elements); Q-G3.8-δ LOCK (forward-substrate language: real consumer + Founder authorization + ADR-0033 amendment + `pgvector` canonical Hex name reconciliation + RULE 0 safeguards + Prisma DDL ownership); Q-G3.8-ε LOCK (7 MOD + 0 NEW scope).
+
+**Substrate-enforced boundary contract.** Pre-existing field-set parity test at memory_capsule_test.exs L76-88 enforces "extra == []" at SUBSTRATE register (any field added to schema not in `@expected_fields` fails). NEW explicit named test (verbatim title `embedding column is Prisma-owned and intentionally absent from Ecto schema per Q-G3-θ β-A LOCK + ADR-0043 §Sub-decision 8`) converts the implicit substrate-state enforcement into an EXPLICIT NAMED CONTRACT contributors can grep for, anchored on the `:embedding` atom specifically.
+
+**Moduledoc boundary paragraph.** Extended at memory_capsule.ex with H2 section "Embedding column boundary (G3.8 / Q-G3-θ β-A LOCK)" containing all 8 required content elements per Q-G3.8-γ: Prisma-owned + intentionally not Ecto-visible + 4 forward-substrate conditions (proven consumer + Founder authorization + ADR-0033 amendment + RULE 0 safeguards) + Q-G3-θ β-A current state + test anchor reference + D-PGVECTOR-EX naming reconciliation note.
+
+**Forbidden / preserved boundaries enumerated:** no `mix.exs` / `mix.lock` changes; no `pgvector` / `pgvector_ex` dep; no Ecto vector field; no Translator pack/unpack extension; no protobuf / gRPC vector extension; no ADR-0033 amendment at G3.8 (cross-language data-ownership boundary preserved); ADR-0022 + ADR-0011/0013/0014/0015/0016/0025/0034/0035/0041/0042 ALL UNTOUCHED; `apps/api/**` UNTOUCHED; `apps/dbgi_supervisor/**` UNTOUCHED; all other `apps/cosmp_router/**` paths beyond the 2 authorized Elixir files UNTOUCHED; ADR-0043 Status preserved.
+
+**3 RULE 13 forward-queued observations** (commit-body-only register substantively; NOT promoted to ADR-0035 §9 cluster at G3.8): D-PGVECTOR-EX-HEX-PACKAGE-NAME-DRIFT-AT-Q-G3-θ (canonical Hex package is `pgvector`, not `pgvector_ex` as Q-G3-θ wording says); D-ELIXIR-VECTOR-CONSUMER-DELIBERATELY-EXCLUDED-AT-FOUNDATION-PRODUCTION-READINESS (architectural decision, not not-yet state); D-IMPLICIT-VS-EXPLICIT-BOUNDARY-CONTRACT-AT-Q-G3-θ-G3.3-DEFERRAL (Q-G3-θ §G3.3 deferral language anticipated moduledoc note; G3.8 is the substrate-coherent landing point 6 commits later).
+
+**G1.4 + G3.7 SKIP precedent comparison.** G3.8 mirrors the docs-only + minimal-Elixir-touch discipline of G1.4 (`3505fde` `[CAPSULE-MUTATION-ELIXIR-AUDIT]`) and G3.7 (`ee0b01b` `[CAPSULE-EMBEDDING-BACKFILL]`) but is SUBSTANTIVE LANDING (boundary contract LANDED) NOT a SKIP per Founder reframing. The reframing is substrate-coherent: a SKIP record alone is too passive for Foundation API production-bound surfaces; the boundary contract must be explicit and test-enforced at the Elixir register.
+
+**Test surface at closure.** Cosmp_router default tier baseline 218 → 219 (1 NEW explicit named test added; all pre-existing tests preserved). No other test tier impact.
+
+**Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4+G3.5+G3.6+G3.7 enumeration:** G3.9 broader integration tests; G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes Gap 3 at canonical-state register substantively).
+
+**Founder LOCKS preservation:** Q-G3.8-α α-2 + Q-G3.8-β + Q-G3.8-γ + Q-G3.8-δ + Q-G3.8-ε LOCKED at `[CAPSULE-EMBEDDING-ELIXIR-G3.8-QLOCK]` register substantively per RULE 20; G3.8 execution authorization at `[CAPSULE-EMBEDDING-ELIXIR-G3.8-EXECUTE-VERIFY-AUTH]`.
 
 ---
 

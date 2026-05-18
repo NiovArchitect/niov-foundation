@@ -118,4 +118,23 @@ defmodule CosmpRouter.MemoryCapsuleTest do
              "FK field #{uuid_field} should be Ecto.UUID"
     end
   end
+
+  # ADR-0043 G3.8 (Q-G3-θ β-A LOCK + Q-G3.8-α α-2 + Q-G3.8-β LOCK):
+  # explicit named test anchoring the Elixir-boundary contract for the
+  # Prisma-owned `embedding` pgvector(1536) column. The pre-existing
+  # field-set parity test above ("field set matches expected ...")
+  # enforces `extra == []` at the SUBSTRATE register; THIS test makes
+  # the embedding-column boundary EXPLICIT and contributor-grep-able.
+  # See `apps/cosmp_router/lib/cosmp_router/schemas/memory_capsule.ex`
+  # moduledoc "Embedding column boundary (G3.8 / Q-G3-θ β-A LOCK)" for
+  # the full contract.
+  test "embedding column is Prisma-owned and intentionally absent from Ecto schema per Q-G3-θ β-A LOCK + ADR-0043 §Sub-decision 8" do
+    # ADR-0043 G3.8 (Q-G3-θ β-A LOCK): the `embedding` pgvector(1536)
+    # column at memory_capsules.embedding is intentionally absent from
+    # this Ecto schema. Prisma owns DDL + TypeScript owns read/write
+    # queries (G3.5 WriteService + G3.6 SimilarityService). NO Ecto
+    # vector field without proven Elixir consumer + Founder
+    # authorization + ADR-0033 amendment + RULE 0 safeguards.
+    refute :embedding in MemoryCapsule.__schema__(:fields)
+  end
 end

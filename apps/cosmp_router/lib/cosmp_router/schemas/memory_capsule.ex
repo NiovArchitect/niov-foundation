@@ -29,6 +29,74 @@ defmodule CosmpRouter.MemoryCapsule do
   - `packages/database/prisma/schema.prisma:86-167` (canonical schema)
   - US 12,517,919 (COSMP Protocol; 7-layer Capsule semantic preserved
     via Translator unpack at runtime register)
+
+  ## Embedding column boundary (G3.8 / Q-G3-θ β-A LOCK)
+
+  The `memory_capsules.embedding` column (`pgvector(1536)` per ADR-0043
+  §G3.3 LANDED at commit `bcba7d1`) is **Prisma-owned and TypeScript /
+  Prisma-managed**. It is **intentionally not Ecto-visible** at this
+  schema register.
+
+  Foundation production readiness at HEAD `ee0b01b` deliberately
+  excludes Elixir-side vector access:
+
+  - TypeScript `WriteService` (G3.5) generates and persists embeddings
+    at create-time + UPDATE-time via inline raw SQL
+    `tx.$executeRawUnsafe('UPDATE memory_capsules SET embedding =
+    $1::vector(1536) WHERE capsule_id = $2::uuid', vectorLiteral,
+    capsuleId)`.
+  - TypeScript `SimilarityService` (G3.6) reads embeddings via raw SQL
+    pgvector cosine query with 6 RULE 0 SQL-tier privacy filters
+    (wallet_id + deleted_at + ai_access_blocked + requires_validation +
+    clearance_required + embedding IS NOT NULL) + HNSW iterative scan
+    posture.
+  - BEAM / COSMP coordination layer (`cosmp_router` 7-RPC service
+    surface + `dbgi_supervisor` per-DMW supervised processes) operates
+    over the 7 COSMP ops (Authenticate / Negotiate / Read / Write /
+    Share / Revoke / Audit) + MemoryCapsule lifecycle/routing — **NOT
+    embedding distance**.
+
+  ### No `:embedding` field without Founder authorization
+
+  NO `:embedding` field should be added to this Ecto schema without:
+
+  1. A proven Elixir/BEAM production consumer (e.g., BEAM-side
+     semantic routing; AI_AGENT EntityType-discriminated capsule
+     routing per ADR-0041 §Sub-decision 6; hive-scale semantic
+     clustering per ADR-0028 §Forward Queue).
+  2. Explicit Founder authorization per RULE 20.
+  3. ADR-0033 §Decision 7 cross-language data-ownership boundary
+     amendment OR explicit cross-language ownership authorization at
+     the boundary register.
+  4. RULE 0 safeguards across every BEAM surface:
+     - struct serialization (Jason / Phoenix encoders) MUST NOT
+       expose embedding by default
+     - Logger / structured logging MUST NOT log embedding content
+     - telemetry events MUST NOT include vector data
+     - gRPC envelopes MUST NOT include embedding field
+     - tests must verify each of the above
+
+  ### Forward-substrate naming reconciliation
+
+  Q-G3-θ prose at ADR-0043 L289 references a hypothetical hex
+  dep `pgvector_ex`; the canonical Hex package appears to be
+  `pgvector` (no `_ex` suffix). This observation is forward-queued
+  at commit-body-only register substantively as
+  `D-PGVECTOR-EX-HEX-PACKAGE-NAME-DRIFT-AT-Q-G3-θ` and requires
+  reconciliation only if/when future Elixir vector implementation is
+  Founder-authorized.
+
+  ### Test anchor
+
+  The local guardrail for this contract is the explicit named test in
+  `apps/cosmp_router/test/cosmp_router/schemas/memory_capsule_test.exs`
+  titled "embedding column is Prisma-owned and intentionally absent
+  from Ecto schema per Q-G3-θ β-A LOCK + ADR-0043 §Sub-decision 8"
+  which asserts `:embedding not in MemoryCapsule.__schema__(:fields)`
+  via `refute`. Combined with the pre-existing field-set parity test
+  ("field set matches expected (Prisma parity at sub-phase 5b-ii
+  landing)") that enforces `extra == []`, the boundary is durably
+  substrate-enforced at the Ecto test tier.
   """
 
   use Ecto.Schema

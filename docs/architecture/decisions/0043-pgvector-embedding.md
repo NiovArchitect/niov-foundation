@@ -1215,3 +1215,171 @@ closes Gap 3 at canonical-state register substantively.
 
 **Founder authorization explicit at G3.7 substantive landing per
 RULE 20 at `[CAPSULE-EMBEDDING-BACKFILL-G3.7-EXECUTE-VERIFY-AUTH]`.**
+
+## G3.8 Elixir-Boundary Contract LANDED — Embedding Column Prisma-Owned, Not Ecto-Visible (2026-05-18)
+
+G3.8 `[CAPSULE-EMBEDDING-ELIXIR]` LANDS the Elixir-side boundary
+contract per `[CAPSULE-EMBEDDING-ELIXIR-G3.8-QLOCK]` Q-G3.8-α α-2
+LOCK + Q-G3.8-β/γ/δ/ε. **This is a substantive landing, NOT a SKIP.**
+ADR-0043 Status preserved as `Proposed 2026-05-17`. G3.8 does NOT
+close Gap 3 at canonical-state register substantively; G3 mini-arc
+advances 7/10 → 8/10 after G3.8 LANDS.
+
+**Consumer-driven framing per Founder reframing at
+[CAPSULE-EMBEDDING-ELIXIR-G3.8-CONSUMER-DRIVEN-HAWKSEYE-ADDENDUM]:**
+Foundation production readiness DELIBERATELY EXCLUDES Elixir-side
+vector access at HEAD `ee0b01b`. This is an architectural decision
+per ADR-0033 §Decision 7 cross-language data-ownership boundary +
+Q-G3-θ β-A LOCK + ADR-0028 / ADR-0030 / ADR-0039 BEAM coordination
+layer scope, NOT a not-yet state. "No current Elixir consumer" is
+not the decision metric; the decision metric is "what production
+API/runtime consumer would require Elixir/BEAM to understand
+embedding/vector/pgvector substrate, and is that consumer part of
+Foundation production readiness?" — answered NO by architectural
+design.
+
+**Substrate-state evidence at HEAD `ee0b01b`:**
+
+- TypeScript/Prisma own vector write (G3.5 WriteService `createCapsule`
+  + `updateCapsule` UPDATE branch with inline raw SQL
+  `tx.$executeRawUnsafe('UPDATE memory_capsules SET embedding =
+  $1::vector(1536) WHERE capsule_id = $2::uuid', ...)`).
+- TypeScript/Prisma own vector retrieval (G3.6 SimilarityService raw
+  SQL pgvector cosine query with 6 RULE 0 SQL-tier privacy filters +
+  HNSW iterative scan; HTTP route `POST /api/v1/cosmp/search`).
+- BEAM/COSMP coordination layer (`apps/cosmp_router/priv/protos/cosmp.proto`
+  7-RPC service surface — Authenticate / Negotiate / Read / Write /
+  Share / Revoke / Audit — with NO Search/Similarity RPC; `Capsule`
+  proto message with 7 patent-canonical layers per ADR-0031 + NO
+  embedding field) operates over MemoryCapsule lifecycle/routing
+  WITHOUT embedding distance.
+- `CosmpRouter.MemoryCapsule` 30-field Ecto mirror per ADR-0033 §3a
+  remains canonical; `embedding` column intentionally absent.
+- `mix.exs` + `mix.lock`: no `pgvector` / `pgvector_ex` Hex dependency.
+- `apps/dbgi_supervisor/**` per-DMW supervised processes route by
+  wallet_type (PERSONAL promote-on-activity + ENTERPRISE always-hot +
+  DEVICE cold-shard) — NOT embedding distance.
+
+**Q-G3-θ β-A LOCK preserved:** "skip Ecto vector field for now" per
+ADR-0043 §Sub-decision 8 L282-300. G3.8 substrate landing
+explicitly preserves the LOCK: NO `pgvector` / `pgvector_ex` hex
+dep added; NO Ecto vector field; NO Translator pack/unpack
+extension. ADR-0033 §Decision 7 cross-language data-ownership
+boundary preserved without amendment at G3.8.
+
+**RULE 11 substrate-honest discipline preserved.** G3.8 Hawkseye
+preflight + Consumer-Driven Addendum confirmed via repo grep that
+no proven Elixir consumer of vector data exists at HEAD `ee0b01b`.
+RULE 11 (Wider Knowledge Check for Elixir/BEAM Substrate) requires
+"research before authorizing fix at substrate-state register" — the
+research conclusion is α-2 boundary-doc guardrail, not α-3 vector
+implementation.
+
+**RULE 0 substrate-honest discipline preserved.** Adding Elixir-side
+vector access would create new RULE 0 attack surfaces (BEAM struct
+serialization; Logger; telemetry events; gRPC envelopes). Without
+a proven consumer, the boundary contract is the substrate-coherent
+posture per Foundation production readiness scope.
+
+**Substrate landing at G3.8 (7 MOD + 0 NEW):**
+
+- MOD `apps/cosmp_router/lib/cosmp_router/schemas/memory_capsule.ex`
+  extends moduledoc with NEW H2 section "Embedding column boundary
+  (G3.8 / Q-G3-θ β-A LOCK)" containing 8 required content elements
+  per Q-G3.8-γ: (1) `embedding` column is Prisma-owned and
+  TypeScript/Prisma-managed; (2) `embedding` is intentionally not
+  Ecto-visible; (3) no `:embedding` field should be added to the
+  Ecto schema without Founder authorization; (4) any future Elixir
+  vector access requires a proven production consumer; (5) requires
+  ADR-0033 amendment OR explicit cross-language ownership
+  authorization; (6) requires RULE 0 safeguards for
+  structs/logs/telemetry/gRPC/serialization; (7) Q-G3-θ β-A
+  currently preserves no Ecto vector field; (8) test anchor at
+  `memory_capsule_test.exs`.
+- MOD `apps/cosmp_router/test/cosmp_router/schemas/memory_capsule_test.exs`
+  adds NEW explicit named test per Q-G3.8-β: `test "embedding column
+  is Prisma-owned and intentionally absent from Ecto schema per
+  Q-G3-θ β-A LOCK + ADR-0043 §Sub-decision 8"` with body asserting
+  `refute :embedding in MemoryCapsule.__schema__(:fields)`. Test
+  converts the pre-existing implicit "extra == []" check into an
+  EXPLICIT NAMED CONTRACT contributors can grep for.
+
+**Forward-substrate path preserved per Q-G3.8-δ.** Future Elixir
+vector access requires ALL of:
+
+1. Real Elixir/BEAM production consumer is proven (e.g., AI_AGENT
+   EntityType-discriminated capsule routing per ADR-0041
+   §Sub-decision 6 forward-substrate; hive-scale semantic
+   clustering per ADR-0028 §Forward Queue).
+2. Founder authorization per RULE 20.
+3. ADR-0033 §Decision 7 amendment OR explicit cross-language
+   ownership authorization.
+4. Correct Hex package naming reconciled: canonical package is
+   `pgvector` (no `_ex` suffix); Q-G3-θ prose at ADR-0043 L289
+   references `pgvector_ex` which is forward-queued as
+   `D-PGVECTOR-EX-HEX-PACKAGE-NAME-DRIFT-AT-Q-G3-θ` and reconciled
+   only if/when implementation is authorized.
+5. RULE 0 safeguards: no gRPC/protobuf/telemetry/log/struct
+   serialization leaks vector content.
+6. Prisma remains DDL owner unless explicitly changed.
+
+**Scope-boundary discipline at G3.8 LANDING register.** 7 docs +
+Elixir files (2 Elixir MOD + 5 docs MOD; 0 NEW). NO `mix.exs` /
+`mix.lock` changes. NO `pgvector` / `pgvector_ex` dependency. NO
+Ecto vector field. NO Translator pack/unpack extension. NO
+protobuf / gRPC vector extension. NO ADR-0033 amendment at G3.8.
+ADR-0022 + ADR-0011/0013/0014/0015/0016/0025/0034/0035/0041/0042
+ALL UNTOUCHED. ADR-0043 Status preserved as `Proposed 2026-05-17`.
+`coe/**` + `keywords.ts` + `read.service.ts` + `write.service.ts` +
+`similarity.service.ts` UNTOUCHED. `apps/dbgi_supervisor/**`
+UNTOUCHED. All other `apps/cosmp_router/**` paths beyond the 2
+authorized Elixir files UNTOUCHED.
+
+**G1.4 SKIP precedent + G3.7 SKIP precedent comparison.** G3.8
+mirrors the docs-only + minimal-Elixir-touch DISCIPLINE of G1.4
+(`3505fde` `[CAPSULE-MUTATION-ELIXIR-AUDIT]` per ADR-0042
+§Sub-decision Q-ι default LOCK) and G3.7 (`ee0b01b`
+`[CAPSULE-EMBEDDING-BACKFILL]` per Q-G3-ε default + Q-G3.7-α α-1
+SKIP) but is SUBSTANTIVE (Elixir-boundary contract LANDED) NOT a
+SKIP per Founder reframing at
+[CAPSULE-EMBEDDING-ELIXIR-G3.8-QLOCK]. The reframing is
+substrate-coherent: a SKIP record alone is too passive for
+Foundation API production-bound surfaces; the boundary contract
+must be explicit and test-enforced at the Elixir register.
+
+**Substrate-state observations forward-queued at commit-body-only
+register substantively per Option β substrate-honest discipline
+(NOT promoted to ADR-0035 §9 cluster at G3.8).**
+
+**D-PGVECTOR-EX-HEX-PACKAGE-NAME-DRIFT-AT-Q-G3-θ** — Q-G3-θ prose
+at ADR-0043 L289 references `pgvector_ex` as the hypothetical
+future hex dep; the canonical Hex package appears to be
+`pgvector` (no `_ex` suffix). Non-blocking under α-2 SKIP-pattern
+substantive landing; reconcile only if/when α-3 substantive
+implementation is later Founder-authorized.
+
+**D-ELIXIR-VECTOR-CONSUMER-DELIBERATELY-EXCLUDED-AT-FOUNDATION-PRODUCTION-READINESS**
+— substrate-state at HEAD `ee0b01b` confirms NIOV Foundation
+production readiness DELIBERATELY EXCLUDES Elixir-side vector
+access. Architectural decision per ADR-0033 §Decision 7 + Q-G3-θ
+β-A + BEAM coordination scope per ADR-0028 / ADR-0030 / ADR-0039.
+The boundary contract IS the production substrate at G3.8.
+
+**D-IMPLICIT-VS-EXPLICIT-BOUNDARY-CONTRACT-AT-Q-G3-θ-G3.3-DEFERRAL**
+— Q-G3-θ §G3.3 deferral language at ADR-0043 L291-295 anticipated
+a moduledoc note declaring "embedding column is Prisma-owned; not
+exposed at Ecto register" "deferred to G3.3 register substantively
+(forward; not at G3.1)". G3.3 shipped without it. G3.8 is the
+substrate-coherent landing point for the explicit named contract
+(6 commits later; Foundation production posture now durably
+established).
+
+**Forward G3.9-G3.10 (unchanged from G3.1 §Sub-decision 11 Q-G3-κ
+enumeration):** G3.9 broader integration tests; G3.10
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade
+(closes Gap 3 at canonical-state register substantively).
+
+**G3.8 boundary preservation summary (verbatim Tier 1 Gate 13 token anchors):** consumer-driven framing per Founder reframing; G3.8 does NOT close Gap 3; no mix.exs / no mix.lock / no pgvector / no Ecto vector field / no Translator / no ADR-0033 amendment at G3.8.
+
+**Founder authorization explicit at G3.8 substantive landing per
+RULE 20 at `[CAPSULE-EMBEDDING-ELIXIR-G3.8-EXECUTE-VERIFY-AUTH]`.**
