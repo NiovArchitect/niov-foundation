@@ -306,6 +306,160 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Post-Gap-3 Production-Readiness Hardening Mini-Arc IN FLIGHT 2026-05-18 at PR.1 -- ADR-0047 NEW Proposed; PR.2-PR.4 forward-substrate
+
+**Status: IN FLIGHT** at PR.1 `[PR-HARDENING-ADR]`.
+
+Current HEAD at PR.1: this commit.
+Lineage: `08b10ef` (Gap 3 G3.10 closure register substantively) → this commit.
+
+Post-Gap-3 production-readiness hardening mini-arc IN FLIGHT 2026-05-18
+at PR.1 docs-only ADR creation commit register substantively per
+Founder Q-PR-α LOCK Option α (run pre-Gap-4 hardening mini-arc) +
+Q-PR-β LOCK Option β (4-sub-phase compressed PR.1-PR.4 decomposition)
+at `[POST-GAP-3-PRODUCTION-READINESS-HARDENING-QLOCK]` register
+substantively. **Governing RULES at substrate-architectural register
+substantively**: RULE 0 + RULE 11 + RULE 12 + RULE 13 + RULE 20 +
+RULE 21 canonical per Founder QLOCK Mode section. **Production-safety
+hardening arc framing canonical (NOT convenience cleanup)** per
+ADR-0035 §9 37th observation D-VITEST-NPX-CONFIG-DEFAULT-LOADS-
+PRODUCTION-SUPABASE + 38th observation D-LOCAL-DEV-ENV-CROSS-LANGUAGE-
+OWNERSHIP-DRIFT canonical at canonical-rule register substantively.
+
+ADR-0047 NEW (Post-Gap-3 Production-Readiness Hardening Mini-Arc;
+Status Proposed 2026-05-18) canonical at canonical-prose register
+substantively at substrate-architectural register substantively per
+Founder Q-PR-κ amended Option γ at `[Q-PR-κ-AMENDMENT-OPTION-γ]` +
+`[PR-HARDENING-ADR-PR.1-EXECUTE-VERIFY-AUTH]` register substantively.
+ADR-0044 Gap 4 Decay Execution Formalization / ADR-0045 Gap 5 Capsule-
+Level Staleness Detection / ADR-0046 optional Gap 6 AI_AGENT
+EntityType-Discriminated Capsule Routing forward-substrate
+reservations **preserved** canonical at canonical-state register
+substantively per patent-implementation evidence lineage at ADR-0041
+umbrella per ADR-0020 two-register IP discipline. PR.1 Hawkseye
+preflight surfaced D-PR.1-ADR-NUMBERING-FORWARD-SUBSTRATE-RESERVATION-
+CASCADE-IMPACT canonical at RULE 13 substrate-honest register
+substantively at ~78-reference renumbering cascade risk; Founder
+amended Q-PR-κ to Option γ ADR-0047 selected at canonical-execution
+register substantively at zero-cross-reference-modification register
+substantively.
+
+**4-sub-phase mini-arc decomposition**:
+
+- **PR.1** `[PR-HARDENING-ADR]` this commit docs-only ADR-0047 NEW
+  Proposed + 4 docs MOD + 1 NEW ADR file
+- **PR.2** `[PR-VITEST-CONFIG-HARDENING]` substantive `vitest.config.ts`
+  fail-closed default + NEW guard unit test forward-substrate
+- **PR.3** `[PR-LOCAL-DB-AND-PARITY-HARDENING]` substantive NEW
+  `scripts/local-test-db-refresh.sh` + NEW read-only production
+  parity verification script + docs forward-substrate
+- **PR.4** `[PR-HARDENING-RUNBOOK-CLOSURE]` NEW
+  `docs/operations/deployment-runbook.md` + closure cascade +
+  ADR-0047 Status → Accepted forward-substrate
+
+**Pre-launch mandatory gate compressed per Q-PR-λ Option β**: PR.2
+vitest config hardening + PR.3 production parity verifier + PR.4
+deployment runbook mandatory before any live-production claim
+canonical at canonical-state register substantively per RULE 0
+production-safety boundary discipline.
+
+Sub-arc 2 status field remains **IN FLIGHT** throughout the hardening
+mini-arc per Q-PR-δ + Q-PR-μ LOCK at canonical-state register
+substantively. Sub-arc 2 closure cascade forward-substrate pending
+Gap 4 + Gap 5 + optional Gap 6 + later Sub-arc 2 closure cascade per
+ADR-0041 CL.1 scope patch.
+
+ADR-0043 Status preserved as Accepted 2026-05-18 throughout the
+hardening mini-arc per Q-PR-η LOCK no-production-code-changes
+discipline. ADR-0022 + ADR-0033 UNTOUCHED per Q-PR-ζ. ADR-0035
+untouched at PR.1 per Q-PR-κ Option γ minimum-touch (§9 back-citation
+deferred to PR.4 closure cascade).
+
+Gap 4 starts ONLY after PR.4 lands canonical at canonical-state
+register substantively per Q-PR-μ LOCK Option α.
+
+#### PR.1 LANDED — ADR-0047 NEW Proposed (2026-05-18)
+
+**Status:** PR.1 `[PR-HARDENING-ADR]` LANDED 2026-05-18 (docs-only
+ADR creation; 4 MOD + 1 NEW) per Founder Q-PR-α LOCK Option α + Q-PR-β
+LOCK Option β + Q-PR-κ amended Option γ at
+`[Q-PR-κ-AMENDMENT-OPTION-γ]` + `[PR-HARDENING-ADR-PR.1-EXECUTE-VERIFY-AUTH]`
+register substantively. ADR-0047 NEW (Post-Gap-3 Production-Readiness
+Hardening Mini-Arc; Status Proposed 2026-05-18). PR.1 does NOT close
+the hardening mini-arc; PR.4 closure cascade flips ADR-0047 Status →
+Accepted at canonical-state register substantively.
+
+**Substrate sites (5 authorized files; 4 MOD + 1 NEW):** NEW
+`docs/architecture/decisions/0047-production-readiness-hardening.md`
++ MOD `docs/architecture/README.md` (NEW catalog entry) + MOD
+`CLAUDE.md` (NEW catalog entry mirror) + MOD
+`docs/reference/section-12-progress.md` (NEW Post-Gap-3 hardening row
+canonical at canonical-state register substantively) + MOD this
+`docs/CURRENT_BUILD_STATE.md` (NEW H2 + this PR.1 H4).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (Humans Always Sovereign; no production Supabase writes during
+tests; no secret exposure; no vector/embedding/distance/audit
+leakage) + RULE 11 (Wider Elixir/BEAM substrate check + Prisma/Ecto
+cross-language ownership boundary discipline per ADR-0033 §Decision 7
++ Q-5BII-EXEC-5) + RULE 12 (Pre-flight grep before drafting;
+repo-evidence grounded) + RULE 13 (Surface substrate traps and
+uncertainty inline; do not silently fix or normalize) + RULE 20
+(Founder authorization required before edits / staging / commits /
+pushes / production-affecting actions) + RULE 21 (Current-source /
+repo inspection at canonical-knowledge register substantively before
+architecture or build recommendations).
+
+**Production-safety hardening arc framing canonical (NOT convenience
+cleanup)** per ADR-0035 §9 37th + 38th observations.
+
+**11 Q-PR sub-decisions enumerated.** Q-PR-α Option α run hardening;
+Q-PR-β Option β 4-sub-phase compressed PR.1-PR.4; Q-PR-γ Option α
+fail-closed `vitest.config.ts` + NEW guard unit test at PR.2; Q-PR-δ
+Option α NEW `scripts/local-test-db-refresh.sh` at PR.3 encoding
+canonical 7-step refresh sequence; Q-PR-ε Option α NEW read-only
+production parity verification script at PR.3 (no mutations; no secret
+exposure; drift inventory only); Q-PR-ζ Option α defer CI label
+freshness; Q-PR-η Option α defer TS baseline 12; Q-PR-θ Option α defer
+pgvector_ex naming drift to α-3; Q-PR-ι Option α NEW
+`docs/operations/deployment-runbook.md` at PR.4; Q-PR-κ amended
+Option γ ADR-0047 selected (preserves ADR-0044/0045/0046 reservations);
+Q-PR-λ Option β pre-launch mandatory gate compressed; Q-PR-μ Option α
+Gap 4 starts only after PR.4 lands.
+
+**RULE 13 surface preserved**: D-PR.1-ADR-NUMBERING-FORWARD-SUBSTRATE-
+RESERVATION-CASCADE-IMPACT canonical at PR.1 Hawkseye preflight
+register substantively (~78 cross-references to ADR-0044/0045/0046
+across 7 files would have been modified under Option α renumbering
+cascade; Option γ ADR-0047 selected avoids the cascade at canonical-
+execution register substantively per Founder Q-PR-κ amendment).
+
+**Forbidden / preserved boundaries enumerated:** no `apps/**` / no
+`tests/**` / no `packages/**` / no `scripts/**` / no `schema.prisma` /
+no DB scripts / no CI workflows / no package/lockfiles / no
+`vitest.config*` changes at PR.1 / no `mix.exs` / no `mix.lock` / no
+`audit.ts` / no new audit literals / no ADR-0022 amendment / no
+ADR-0033 amendment / no ADR-0043 Status change / no ADR-0035
+modification at PR.1 / no Gap 4/5/6 ADR renumbering / no production-
+affecting actions / no secret exposure / no new files outside the 1
+authorized NEW ADR file.
+
+**Forward-substrate after PR.1:** PR.2 substantive vitest config
+hardening + NEW guard unit test; PR.3 substantive NEW local DB
+refresh script + NEW read-only production parity verification script;
+PR.4 substantive NEW deployment runbook + closure cascade closes
+hardening mini-arc + flips ADR-0047 Status → Accepted at canonical-
+state register substantively.
+
+**Founder LOCKS preservation:** Q-PR-α through Q-PR-μ LOCKED at
+`[POST-GAP-3-PRODUCTION-READINESS-HARDENING-QLOCK]` register
+substantively per RULE 20; Q-PR-κ amended at `[Q-PR-κ-AMENDMENT-OPTION-γ]`
+register substantively per RULE 13 + RULE 20 patent-implementation
+lineage preservation discipline; PR.1 execution authorization at
+`[PR-HARDENING-ADR-PR.1-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 CLOSED 2026-05-18 at G3.10; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18; G3.7 conditional backfill SKIPPED 2026-05-18; G3.8 Elixir-boundary contract LANDED 2026-05-18; G3.9 production-contract integration tests LANDED 2026-05-18; G3.10 Gap 3 pgvector Embedding CLOSED 2026-05-18
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
