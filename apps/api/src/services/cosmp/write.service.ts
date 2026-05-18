@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { sha256Hex, type ContentEncryption } from "@niov/auth";
 import {
+  canonicalJson,
   getEntityById,
   prisma,
   writeAuditEvent,
@@ -21,6 +22,13 @@ import {
   type Prisma,
   type StorageTier,
 } from "@niov/database";
+// Phase 3 Sub-arc 2 Gap 1 G1.3 [CAPSULE-MUTATION-WRITE-SERVICE] per
+// ADR-0042 G1.3 RULE 13 Substrate-State Correction §9a: MutationType is
+// not currently re-exported from @niov/database (G1.2 added the Prisma
+// enum but did not extend @niov/database/index.ts). Direct @prisma/client
+// import preserves Q-G1.3-ν scope (no packages/database changes). Future
+// cleanup commit may consolidate via @niov/database re-export.
+import type { MutationType } from "@prisma/client";
 import type { ContentStore } from "../../content-store.js";
 import type { NonceStore } from "../../redis.js";
 import type { AuthService } from "../auth.service.js";
@@ -69,6 +77,12 @@ export interface CapsuleCreateInput {
 // WHY: Every field is optional; we apply only what is supplied.
 //      Identity / wallet / created_by are intentionally absent
 //      because they can never be modified by an update.
+//
+// G1.3 per ADR-0042 §Sub-decision Q-η + Q-G1.3-η LOCK: optional
+// expected_version enables opt-in optimistic-concurrency control.
+// When supplied and != existing.version, the write fails with
+// CAPSULE_VERSION_CONFLICT (HTTP 409). When null/omitted, the write
+// proceeds with last-writer-wins semantics (backward-compat preserved).
 export interface CapsuleUpdateInput {
   capsule_type?: CapsuleType;
   topic_tags?: string[];
@@ -87,6 +101,8 @@ export interface CapsuleUpdateInput {
   requires_validation?: boolean;
 
   write_reason?: string;
+
+  expected_version?: number | null;
 }
 
 // WHAT: Success return shape from createCapsule / updateCapsule.
@@ -132,7 +148,14 @@ export interface WriteFailure {
     | "ACTOR_JURISDICTION_MISSING"
     | "TARGET_JURISDICTION_MISSING"
     | "CROSS_JURISDICTION_ACCESS_DENIED"
-    | "JURISDICTION_NOT_AUTHORIZED";
+    | "JURISDICTION_NOT_AUTHORIZED"
+    // G1.3 per ADR-0042 §Sub-decision Q-η + Q-G1.3-θ LOCK: optimistic
+    // concurrency conflict. Returned when caller supplies
+    // expected_version that does not match existing.version, OR when
+    // a CAS conflict surfaces inside the transaction (concurrent
+    // writer landed first). Maps to HTTP 409 Conflict at the route
+    // layer per cosmp.routes.ts statusForCode.
+    | "CAPSULE_VERSION_CONFLICT";
   message: string;
   errors?: string[];
 }
@@ -230,6 +253,259 @@ function permissionAllowsWrite(conditions: Prisma.JsonValue | null): boolean {
   return obj.allow_write === true;
 }
 
+// ===========================================================================
+// G1.3 [CAPSULE-MUTATION-WRITE-SERVICE] mutation-discrimination substrate
+// per ADR-0042 §Sub-decisions Q-α through Q-ρ + Q-G1.3-α through Q-G1.3-σ
+// LOCKs at [CAPSULE-MUTATION-WRITE-SERVICE-QLOCK] +
+// [CAPSULE-MUTATION-WRITE-SERVICE-QLOCK-PATCH]. Pure helpers + decision
+// types live at module level so createCapsule + updateCapsule branches
+// invoke them as side-effect-free coordination primitives.
+// ===========================================================================
+
+// WHAT: Discriminator output shape for capsule mutation classification.
+// INPUT: Used as a return type from discriminateMutation only.
+// OUTPUT: None -- this is a type.
+// WHY: Carries the resolved MutationType plus the canonical-record
+//      projection + hash so the caller can persist mutation_type +
+//      emit audit details without recomputing. sideEffectsRequired
+//      drives the create/update branch (NOOP skips all; MERGE skips
+//      encryption + storage; UPDATE runs full pipeline). noopReason
+//      preserves observability for the σ-A unreadable-existing path.
+interface MutationDecision {
+  mutationType: "ADD" | "UPDATE" | "MERGE" | "NOOP";
+  canonicalCapsuleMutationRecord: string;
+  canonicalCapsuleMutationRecordHash: string;
+  contentChanged: boolean;
+  canonicalRecordChanged: boolean;
+  sideEffectsRequired: {
+    encryption: boolean;
+    storage: boolean;
+    dbWrite: boolean;
+    versionIncrement: boolean;
+  };
+  noopReason?: string;
+}
+
+// WHAT: Throwaway error for transaction unwinding on CAS conflict.
+// INPUT: mutationType (MERGE | UPDATE) + expected + actual versions.
+// OUTPUT: None -- this is a class.
+// WHY: V5 Patch 1 LOCK Option (b) per ADR-0042 G1.3 Correction 10: a
+//      DENIED audit row written inside the rolled-back transaction
+//      would not persist. Throw this private error from inside the
+//      transaction body to unwind the mutation; the outer catch
+//      emits a STANDALONE DENIED audit row (no tx arg) post-rollback
+//      to preserve audit-chain integrity per RULE 4 + ADR-0002.
+class VersionConflictError extends Error {
+  constructor(
+    public readonly mutationType: "MERGE" | "UPDATE",
+    public readonly expected: number,
+    public readonly actual: number | null,
+  ) {
+    super("CAPSULE_VERSION_CONFLICT");
+    this.name = "VersionConflictError";
+  }
+}
+
+// WHAT: 15-field byte-equivalent canonical projection of mutation-
+//        relevant MemoryCapsule fields.
+// INPUT: A subset of MemoryCapsule fields (existing or merged proposed).
+// OUTPUT: A stable JSON string suitable for sha256 hashing.
+// WHY: Q-G1.3-κ LOCK + ADR-0042 §Sub-decision Q-ε split-discriminator.
+//      Project mutation-relevant fields only. EXCLUDES: capsule_id,
+//      wallet_id, entity_id, version, previous_version, mutation_type,
+//      created_at, updated_at, created_by, updated_by, *_session_id,
+//      last_accessed_at, access_count, jurisdiction (immutable per
+//      ADR-0037 Sub-decision 4), volatile fields. Reuses the
+//      canonicalJson primitive from @niov/database/audit.ts to share
+//      alphabetic-key-sort discipline with the audit canonicalRecord
+//      port (avoids duplicate canonical-serializer drift).
+function canonicalCapsuleMutationRecord(fields: {
+  capsule_type: CapsuleType;
+  topic_tags: string[];
+  payload_summary: string;
+  content_hash: string;
+  decay_type: DecayType;
+  decay_rate: number;
+  storage_tier: StorageTier;
+  clearance_required: number;
+  connected_capsule_ids: string[];
+  connected_entity_ids: string[];
+  monetization_enabled: boolean;
+  monetization_category: string | null;
+  expires_at: Date | null;
+  ai_access_blocked: boolean;
+  requires_validation: boolean;
+}): string {
+  return canonicalJson({
+    capsule_type: fields.capsule_type,
+    topic_tags: fields.topic_tags,
+    payload_summary: fields.payload_summary,
+    content_hash: fields.content_hash,
+    decay_type: fields.decay_type,
+    decay_rate: fields.decay_rate,
+    storage_tier: fields.storage_tier,
+    clearance_required: fields.clearance_required,
+    connected_capsule_ids: fields.connected_capsule_ids,
+    connected_entity_ids: fields.connected_entity_ids,
+    monetization_enabled: fields.monetization_enabled,
+    monetization_category: fields.monetization_category,
+    expires_at: fields.expires_at === null ? null : fields.expires_at.toISOString(),
+    ai_access_blocked: fields.ai_access_blocked,
+    requires_validation: fields.requires_validation,
+  });
+}
+
+// WHAT: SHA-256 of plaintext content for NOOP discrimination probe.
+// INPUT: Plaintext content string.
+// OUTPUT: 64-char hex digest.
+// WHY: Q-G1.3-ζ LOCK + V2-CONTENT-NOOP-PATCH + V3 Correction 3: the
+//      persisted MemoryCapsule.content_hash is sha256(ciphertext) per
+//      processContentForStorage L213, and encryption is non-
+//      deterministic per packages/auth/src/crypto.ts:35 randomBytes(12)
+//      IV. Plaintext-to-plaintext hash comparison is the ONLY valid
+//      NOOP discriminator. This probe hash is NEVER persisted to the
+//      MemoryCapsule row (the column semantics remain ciphertext-
+//      derived for at-rest verification per Founder boundary lock).
+//      Used in audit details under `*_plaintext_probe_hash` suffix
+//      to distinguish from `*_ciphertext_content_hash`.
+function plaintextHash(plaintext: string): string {
+  return sha256Hex(plaintext);
+}
+
+// WHAT: Pure decision function classifying a capsule write as
+//        ADD / UPDATE / MERGE / NOOP per ADR-0042 split-discriminator.
+// INPUT: proposedInput (create or update payload) + the two plaintext
+//        hashes (or null when not applicable) + existingCapsule + the
+//        optional expected_version + caller-computed canonicalRecord
+//        change flag and projection record/hash pair.
+// OUTPUT: MutationDecision with sideEffectsRequired flags.
+// WHY: Q-G1.3-α LOCK + Q-G1.3-β output shape. ZERO DB reads, ZERO
+//      encryption calls, ZERO storage I/O, ZERO audit emissions
+//      inside this helper -- caller does all I/O. Purity makes the
+//      helper trivially unit-testable in G1.5 without mocks.
+function discriminateMutation(params: {
+  proposedInput: CapsuleCreateInput | CapsuleUpdateInput;
+  proposedPlaintextHash: string | null;
+  existingPlaintextHash: string | null;
+  existingCapsule: MemoryCapsule | null;
+  expectedVersion: number | null;
+  canonicalRecordChanged: boolean;
+  proposedCanonicalRecord: string;
+  proposedCanonicalRecordHash: string;
+}): MutationDecision {
+  const {
+    proposedInput,
+    proposedPlaintextHash,
+    existingPlaintextHash,
+    existingCapsule,
+    canonicalRecordChanged,
+    proposedCanonicalRecord,
+    proposedCanonicalRecordHash,
+  } = params;
+
+  // ADD: no prior capsule at this capsule_id -> create path.
+  if (existingCapsule === null) {
+    return {
+      mutationType: "ADD",
+      canonicalCapsuleMutationRecord: proposedCanonicalRecord,
+      canonicalCapsuleMutationRecordHash: proposedCanonicalRecordHash,
+      contentChanged: proposedPlaintextHash !== null,
+      canonicalRecordChanged: true,
+      sideEffectsRequired: {
+        encryption: true,
+        storage: true,
+        dbWrite: true,
+        // ADD path sets version=1 at create-time; no monotonic increment.
+        versionIncrement: false,
+      },
+    };
+  }
+
+  // Update-path branches. Determine contentChanged via plaintext-hash
+  // comparison ONLY (per V5 Patch 1 + V3 Correction 3). If
+  // input.content was undefined, content is unchanged by definition
+  // (proposedPlaintextHash === null). If content supplied but existing
+  // could not be read/decrypted, the caller will apply the Q-G1.3-σ
+  // σ-A override AFTER this function returns; here we report
+  // contentChanged based on the hashes we have.
+  const contentSupplied =
+    "content" in proposedInput && proposedInput.content !== undefined;
+  let contentChanged: boolean;
+  if (!contentSupplied) {
+    contentChanged = false;
+  } else if (
+    proposedPlaintextHash !== null &&
+    existingPlaintextHash !== null
+  ) {
+    contentChanged = proposedPlaintextHash !== existingPlaintextHash;
+  } else {
+    // Content supplied but existing plaintext unknown (read/decrypt
+    // failed). Conservative-by-construction: treat as changed; the
+    // call site applies the σ-A override to force UPDATE with the
+    // observability reason in audit details.
+    contentChanged = true;
+  }
+
+  // NOOP: prior exists, content unchanged, canonical record unchanged.
+  // Expected_version pre-check fires at the call site BEFORE this
+  // function is invoked; if we reach here with expected_version
+  // mismatch, it is a logic bug -- defense-in-depth still allows NOOP
+  // result to be safe (caller will perform the CAS check inside the
+  // transaction regardless).
+  if (!contentChanged && !canonicalRecordChanged) {
+    return {
+      mutationType: "NOOP",
+      canonicalCapsuleMutationRecord: proposedCanonicalRecord,
+      canonicalCapsuleMutationRecordHash: proposedCanonicalRecordHash,
+      contentChanged: false,
+      canonicalRecordChanged: false,
+      sideEffectsRequired: {
+        encryption: false,
+        storage: false,
+        dbWrite: false,
+        versionIncrement: false,
+      },
+      noopReason: "content_and_canonical_record_match",
+    };
+  }
+
+  // MERGE: prior exists, content unchanged, but canonical record
+  // differs (partial-field mutation of mutation-relevant non-content
+  // fields). Skip encryption + storage write; do DB write + version
+  // increment.
+  if (!contentChanged && canonicalRecordChanged) {
+    return {
+      mutationType: "MERGE",
+      canonicalCapsuleMutationRecord: proposedCanonicalRecord,
+      canonicalCapsuleMutationRecordHash: proposedCanonicalRecordHash,
+      contentChanged: false,
+      canonicalRecordChanged: true,
+      sideEffectsRequired: {
+        encryption: false,
+        storage: false,
+        dbWrite: true,
+        versionIncrement: true,
+      },
+    };
+  }
+
+  // UPDATE: prior exists, content differs (or unknown→assumed-changed).
+  // Run full pipeline: encryption + storage + DB + version increment.
+  return {
+    mutationType: "UPDATE",
+    canonicalCapsuleMutationRecord: proposedCanonicalRecord,
+    canonicalCapsuleMutationRecordHash: proposedCanonicalRecordHash,
+    contentChanged: true,
+    canonicalRecordChanged,
+    sideEffectsRequired: {
+      encryption: true,
+      storage: true,
+      dbWrite: true,
+      versionIncrement: true,
+    },
+  };
+}
+
 // WHAT: The class that orchestrates COSMP WRITE.
 // INPUT: AuthService, declaration NonceStore, ContentStore,
 //        ContentEncryption, JWT secret.
@@ -265,7 +541,7 @@ export class WriteService {
     );
     if (!session.valid) {
       await this.auditDenial(
-        "CAPSULE_CREATED",
+        "CAPSULE_MUTATION_ADD",
         null,
         session.entity_id ?? null,
         session.code,
@@ -277,7 +553,7 @@ export class WriteService {
     const errors = validateCreateInput(input);
     if (errors.length > 0) {
       await this.auditDenial(
-        "CAPSULE_CREATED",
+        "CAPSULE_MUTATION_ADD",
         null,
         session.entity_id,
         "CAPSULE_DATA_INVALID",
@@ -301,7 +577,7 @@ export class WriteService {
     if (wallet === null) {
       // Defensive: every entity should have a wallet (Section 1B).
       await this.auditDenial(
-        "CAPSULE_CREATED",
+        "CAPSULE_MUTATION_ADD",
         null,
         session.entity_id,
         "WALLET_MISSING",
@@ -339,62 +615,91 @@ export class WriteService {
     const storageTier: StorageTier =
       decayType === "FOUNDATIONAL" ? "HOT" : input.storage_tier ?? "WARM";
 
-    const created = await prisma.memoryCapsule.create({
-      data: {
-        capsule_id: capsuleId,
-        wallet_id: wallet.wallet_id,
-        entity_id: session.entity_id,
-        version: 1,
-        capsule_type: input.capsule_type,
-        topic_tags: input.topic_tags,
-        decay_type: decayType,
-        decay_rate: input.decay_rate ?? 0.01,
-        payload_summary: input.payload_summary,
-        payload_size_tokens: processed.payload_size_tokens,
-        tokens: processed.tokens,
-        tokens_tokenizer: processed.tokens_tokenizer,
-        storage_location: storageLocation,
-        storage_tier: storageTier,
-        clearance_required: input.clearance_required ?? 0,
-        content_hash: processed.content_hash,
-        connected_capsule_ids: input.connected_capsule_ids ?? [],
-        connected_entity_ids: input.connected_entity_ids ?? [],
-        monetization_enabled: input.monetization_enabled ?? false,
-        monetization_category: input.monetization_category ?? null,
-        expires_at: input.expires_at ?? null,
-        ai_access_blocked: input.ai_access_blocked ?? false,
-        requires_validation: input.requires_validation ?? false,
-        // CAR Sub-box 2 sub-phase 4 jurisdiction cascade per Q2
-        // LOCKED Option α — inherits from requester Entity at
-        // create-time; immutable thereafter per Sub-decision 4.
-        jurisdiction: cascadedJurisdiction,
+    // G1.3 per Q-G1.3-λ + V4 Patch 1 + V5 Patch 1: wrap DB create +
+    // audit emission in prisma.$transaction for atomic mutation+audit
+    // per RULE 4. contentStore.write at L336 (above) STAYS OUTSIDE the
+    // transaction because Supabase Storage (and any future object
+    // storage backend per ADR-0018) is NOT rollback-able by Prisma
+    // transaction abort -- the pre-existing storage→DB orphan risk
+    // (D-STORAGE-DB-ATOMICITY-BOUNDARY per ADR-0042 G1.3 Correction 4)
+    // is preserved, NOT introduced by G1.3. Outbox pattern remains
+    // forward-substrate.
+    const created = await prisma.$transaction(async (tx) => {
+      const row = await tx.memoryCapsule.create({
+        data: {
+          capsule_id: capsuleId,
+          wallet_id: wallet.wallet_id,
+          entity_id: session.entity_id,
+          version: 1,
+          // G1.3 per ADR-0042 §Sub-decision Q-β + Q-G1.3-γ LOCK:
+          // createCapsule always produces ADD (new capsule_id; no
+          // duplicate-create dedupe in G1.3 per Q-G1.3-γ).
+          mutation_type: "ADD",
+          capsule_type: input.capsule_type,
+          topic_tags: input.topic_tags,
+          decay_type: decayType,
+          decay_rate: input.decay_rate ?? 0.01,
+          payload_summary: input.payload_summary,
+          payload_size_tokens: processed.payload_size_tokens,
+          tokens: processed.tokens,
+          tokens_tokenizer: processed.tokens_tokenizer,
+          storage_location: storageLocation,
+          storage_tier: storageTier,
+          clearance_required: input.clearance_required ?? 0,
+          content_hash: processed.content_hash,
+          connected_capsule_ids: input.connected_capsule_ids ?? [],
+          connected_entity_ids: input.connected_entity_ids ?? [],
+          monetization_enabled: input.monetization_enabled ?? false,
+          monetization_category: input.monetization_category ?? null,
+          expires_at: input.expires_at ?? null,
+          ai_access_blocked: input.ai_access_blocked ?? false,
+          requires_validation: input.requires_validation ?? false,
+          // CAR Sub-box 2 sub-phase 4 jurisdiction cascade per Q2
+          // LOCKED Option α — inherits from requester Entity at
+          // create-time; immutable thereafter per Sub-decision 4.
+          jurisdiction: cascadedJurisdiction,
 
-        // Attribution (set once, never overwritten on update).
-        created_by: session.entity_id,
-        created_session_id: session.session_id,
-        write_reason: input.write_reason ?? null,
-      },
-    });
+          // Attribution (set once, never overwritten on update).
+          created_by: session.entity_id,
+          created_session_id: session.session_id,
+          write_reason: input.write_reason ?? null,
+        },
+      });
 
-    await writeAuditEvent({
-      event_type: "CAPSULE_CREATED",
-      outcome: "SUCCESS",
-      actor_entity_id: session.entity_id,
-      target_entity_id: session.entity_id,
-      target_capsule_id: capsuleId,
-      session_id: session.session_id,
-      ip_address: context.ip_address ?? null,
-      // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
-      // AuditEvent jurisdiction cascade: capsule-scoped success event
-      // carries created.jurisdiction at row-metadata register.
-      jurisdiction: created.jurisdiction,
-      details: {
-        write_type: "OWNER",
-        capsule_type: input.capsule_type,
-        content_hash: processed.content_hash,
-        payload_size_tokens: processed.payload_size_tokens,
-        write_reason: input.write_reason ?? null,
-      },
+      // G1.3 per ADR-0042 §Sub-decision Q-γ Disposition Q-γ.1 LOCKED
+      // clean transition: createCapsule SUCCESS emits the discriminated
+      // CAPSULE_MUTATION_ADD literal. The legacy CAPSULE_CREATED literal
+      // remains recognized by isKnownAuditEventType for historical-row
+      // queryability per RULE 10; new emissions use discriminated only.
+      await writeAuditEvent({
+        event_type: "CAPSULE_MUTATION_ADD",
+        outcome: "SUCCESS",
+        actor_entity_id: session.entity_id,
+        target_entity_id: session.entity_id,
+        target_capsule_id: capsuleId,
+        session_id: session.session_id,
+        ip_address: context.ip_address ?? null,
+        // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
+        // AuditEvent jurisdiction cascade: capsule-scoped success event
+        // carries created.jurisdiction at row-metadata register.
+        jurisdiction: row.jurisdiction,
+        details: {
+          // G1.3 per Q-G1.3-ο audit-details minimalism LOCK: include
+          // mutation_type field only; existing details (write_type,
+          // capsule_type, content_hash, payload_size_tokens,
+          // write_reason) preserved verbatim. NO diff summary, NO
+          // canonical record body, NO content-similarity, NO
+          // monetization/Federation/cohort metadata in G1.3.
+          mutation_type: "ADD",
+          write_type: "OWNER",
+          capsule_type: input.capsule_type,
+          content_hash: processed.content_hash,
+          payload_size_tokens: processed.payload_size_tokens,
+          write_reason: input.write_reason ?? null,
+        },
+      }, tx);
+
+      return row;
     });
 
     return {
@@ -407,16 +712,23 @@ export class WriteService {
     };
   }
 
-  // WHAT: Update an existing MemoryCapsule. Owner-write when the
-  //        session entity owns the capsule; otherwise attributed and
-  //        a write-permitting access declaration is required.
+  // WHAT: Update an existing MemoryCapsule with G1.3 mutation
+  //        discrimination (ADD / UPDATE / MERGE / NOOP) per ADR-0042.
+  //        Owner-write when the session entity owns the capsule;
+  //        otherwise attributed and a write-permitting access
+  //        declaration is required.
   // INPUT: Session token, the capsule_id to update, the update
-  //        input, and (for attributed writes) the declaration token.
+  //        input (with optional expected_version for opt-in OCC),
+  //        and (for attributed writes) the declaration token.
   // OUTPUT: WriteSuccess on success, WriteFailure otherwise.
-  // WHY: Spec says version increments, content_hash updates,
-  //      last_updated_at updates (Prisma's @updatedAt handles this),
-  //      and attribution adds updated_by + previous_version while
-  //      created_by stays untouched.
+  // WHY: G1.3 discriminates UPDATE / MERGE / NOOP via the split-
+  //      discriminator at discriminateMutation (content_hash +
+  //      canonical_record + version/expected_version per
+  //      ADR-0042 §Sub-decision Q-ε). NOOP emits audit + zero side
+  //      effects. MERGE updates DB without re-encryption. UPDATE
+  //      runs full pipeline. CAS conflicts throw VersionConflictError
+  //      to unwind the transaction; standalone DENIED audit emitted
+  //      post-rollback per V5 Patch 1 LOCK Option (b).
   async updateCapsule(
     sessionToken: string,
     capsuleId: string,
@@ -430,7 +742,7 @@ export class WriteService {
     );
     if (!session.valid) {
       await this.auditDenial(
-        "CAPSULE_UPDATED",
+        "CAPSULE_MUTATION_UPDATE",
         capsuleId,
         null,
         session.code,
@@ -444,7 +756,7 @@ export class WriteService {
     });
     if (existing === null) {
       await this.auditDenial(
-        "CAPSULE_UPDATED",
+        "CAPSULE_MUTATION_UPDATE",
         capsuleId,
         session.entity_id,
         "CAPSULE_NOT_FOUND",
@@ -484,7 +796,7 @@ export class WriteService {
       });
       if (!updateJurisdiction.ok) {
         await this.auditDenial(
-          "CAPSULE_UPDATED",
+          "CAPSULE_MUTATION_UPDATE",
           capsuleId,
           session.entity_id,
           updateJurisdiction.code,
@@ -509,7 +821,7 @@ export class WriteService {
     if (writeType === "ATTRIBUTED") {
       if (declarationToken === null) {
         await this.auditDenial(
-          "CAPSULE_UPDATED",
+          "CAPSULE_MUTATION_UPDATE",
           capsuleId,
           session.entity_id,
           "ACCESS_DECLARATION_INVALID",
@@ -529,7 +841,7 @@ export class WriteService {
       );
       if (!declarationCheck.ok) {
         await this.auditDenial(
-          "CAPSULE_UPDATED",
+          "CAPSULE_MUTATION_UPDATE",
           capsuleId,
           session.entity_id,
           declarationCheck.code,
@@ -542,7 +854,7 @@ export class WriteService {
       );
       if (!stillLive) {
         await this.auditDenial(
-          "CAPSULE_UPDATED",
+          "CAPSULE_MUTATION_UPDATE",
           capsuleId,
           session.entity_id,
           "ACCESS_DECLARATION_EXPIRED",
@@ -566,7 +878,7 @@ export class WriteService {
       });
       if (permission === null || !permissionAllowsWrite(permission.conditions)) {
         await this.auditDenial(
-          "CAPSULE_UPDATED",
+          "CAPSULE_MUTATION_UPDATE",
           capsuleId,
           session.entity_id,
           "WRITE_NOT_PERMITTED",
@@ -580,126 +892,451 @@ export class WriteService {
       }
     }
 
-    // Build the update data. content / content_hash / payload_size
-    // get re-derived together when content changes.
-    const data: Prisma.MemoryCapsuleUpdateInput = {
-      version: { increment: 1 },
-      previous_version: existing.version,
-      updated_by: session.entity_id,
-      updated_session_id: session.session_id,
-    };
-    if (input.write_reason !== undefined) {
-      data.write_reason = input.write_reason;
-    }
-    if (input.capsule_type !== undefined) {
-      data.capsule_type = input.capsule_type;
-    }
-    if (input.topic_tags !== undefined) {
-      if (input.topic_tags.length === 0) {
-        await this.auditDenial(
-          "CAPSULE_UPDATED",
-          capsuleId,
-          session.entity_id,
-          "CAPSULE_DATA_INVALID",
-          context.ip_address ?? null,
-          { errors: ["topic_tags must be non-empty when supplied"] },
-        );
-        return {
-          ok: false,
-          code: "CAPSULE_DATA_INVALID",
-          message: "Capsule data is invalid",
-          errors: ["topic_tags must be non-empty when supplied"],
-        };
-      }
-      data.topic_tags = input.topic_tags;
-    }
-    if (input.payload_summary !== undefined) {
-      data.payload_summary = input.payload_summary;
-    }
-    if (input.decay_type !== undefined) data.decay_type = input.decay_type;
-    if (input.decay_rate !== undefined) data.decay_rate = input.decay_rate;
-    if (input.storage_tier !== undefined)
-      data.storage_tier = input.storage_tier;
-    if (input.clearance_required !== undefined)
-      data.clearance_required = input.clearance_required;
-    if (input.relevance_score !== undefined)
-      data.relevance_score = input.relevance_score;
-    if (input.connected_capsule_ids !== undefined)
-      data.connected_capsule_ids = input.connected_capsule_ids;
-    if (input.connected_entity_ids !== undefined)
-      data.connected_entity_ids = input.connected_entity_ids;
-    if (input.monetization_enabled !== undefined)
-      data.monetization_enabled = input.monetization_enabled;
-    if (input.monetization_category !== undefined)
-      data.monetization_category = input.monetization_category;
-    if (input.ai_access_blocked !== undefined)
-      data.ai_access_blocked = input.ai_access_blocked;
-    if (input.requires_validation !== undefined)
-      data.requires_validation = input.requires_validation;
+    // ========================================================================
+    // G1.3 [CAPSULE-MUTATION-WRITE-SERVICE] discrimination phase begins here.
+    // Permission gates (session / existing / jurisdiction / ATTRIBUTED
+    // declaration / permissionAllowsWrite) all passed above. Per Q-G1.3-ν
+    // ORDER LOCK, discrimination NEVER runs before permission gates.
+    // ========================================================================
 
-    let newContentHash = existing.content_hash;
+    // G1.3 per ADR-0042 §Sub-decision Q-η + Q-G1.3-η + Q-G1.3-θ LOCKs:
+    // optional expected_version pre-check. Fast-fail outside the
+    // transaction for the common-case (caller's snapshot is stale).
+    // The authoritative CAS fires inside the transaction below as
+    // defense-in-depth against TOCTOU drift between this check and
+    // the transactional updateMany.
+    if (
+      input.expected_version != null &&
+      input.expected_version !== existing.version
+    ) {
+      await this.auditDenial(
+        "CAPSULE_MUTATION_UPDATE",
+        capsuleId,
+        session.entity_id,
+        "CAPSULE_VERSION_CONFLICT",
+        context.ip_address ?? null,
+        {
+          mutation_type: "UPDATE",
+          expected_version: input.expected_version,
+          actual_version: existing.version,
+        },
+      );
+      return {
+        ok: false,
+        code: "CAPSULE_VERSION_CONFLICT",
+        message: `Capsule version conflict — expected v${input.expected_version}, actual v${existing.version}`,
+      };
+    }
+
+    // Input shape validation (pre-discrimination, pre-transaction):
+    // structural rejects fire DENIED with discriminated literal but
+    // do NOT consult the mutation discriminator (input is malformed).
+    if (input.topic_tags !== undefined && input.topic_tags.length === 0) {
+      await this.auditDenial(
+        "CAPSULE_MUTATION_UPDATE",
+        capsuleId,
+        session.entity_id,
+        "CAPSULE_DATA_INVALID",
+        context.ip_address ?? null,
+        { errors: ["topic_tags must be non-empty when supplied"] },
+      );
+      return {
+        ok: false,
+        code: "CAPSULE_DATA_INVALID",
+        message: "Capsule data is invalid",
+        errors: ["topic_tags must be non-empty when supplied"],
+      };
+    }
+    if (input.content !== undefined && input.content.length === 0) {
+      await this.auditDenial(
+        "CAPSULE_MUTATION_UPDATE",
+        capsuleId,
+        session.entity_id,
+        "CAPSULE_DATA_INVALID",
+        context.ip_address ?? null,
+        { errors: ["content must be a non-empty string when supplied"] },
+      );
+      return {
+        ok: false,
+        code: "CAPSULE_DATA_INVALID",
+        message: "Capsule data is invalid",
+        errors: ["content must be a non-empty string when supplied"],
+      };
+    }
+
+    // G1.3 per Q-G1.3-ζ + V2-CONTENT-NOOP-PATCH + V3 Correction 3 +
+    // Q-G1.3-σ LOCK at σ-A (conservative-changed): read existing
+    // ciphertext + decrypt to derive existingPlaintextHash for valid
+    // plaintext-to-plaintext NOOP discrimination. Persisted
+    // MemoryCapsule.content_hash is sha256(ciphertext) and encryption
+    // is non-deterministic (packages/auth/src/crypto.ts:35 randomBytes
+    // per IV), so the persisted hash CANNOT be compared to a plaintext
+    // probe hash. The decrypted plaintext is held in a local variable
+    // only; never logged; never returned; never persisted; discarded
+    // after plaintextHash() computation per RULE 0 + Q-G1.3-ο.
+    let existingPlaintextHash: string | null = null;
+    let proposedPlaintextHash: string | null = null;
+    let contentReadable = true;
     if (input.content !== undefined) {
-      if (input.content.length === 0) {
-        await this.auditDenial(
-          "CAPSULE_UPDATED",
-          capsuleId,
-          session.entity_id,
-          "CAPSULE_DATA_INVALID",
-          context.ip_address ?? null,
-          { errors: ["content must be a non-empty string when supplied"] },
+      proposedPlaintextHash = plaintextHash(input.content);
+      try {
+        const existingCiphertext = await this.contentStore.read(
+          existing.storage_location,
         );
-        return {
-          ok: false,
-          code: "CAPSULE_DATA_INVALID",
-          message: "Capsule data is invalid",
-          errors: ["content must be a non-empty string when supplied"],
-        };
+        if (existingCiphertext === null) {
+          contentReadable = false;
+        } else {
+          const existingPlaintext = this.encryption.decrypt(existingCiphertext);
+          existingPlaintextHash = plaintextHash(existingPlaintext);
+        }
+      } catch {
+        // Auth-tag mismatch / key rotation / corruption. Q-G1.3-σ σ-A
+        // LOCK: do NOT fail the user write; force UPDATE path with
+        // observability reason in audit details (below).
+        contentReadable = false;
       }
-      const processed = processContentForStorage(input.content, this.encryption);
-      await this.contentStore.write(existing.storage_location, processed.ciphertext);
-      data.content_hash = processed.content_hash;
-      data.payload_size_tokens = processed.payload_size_tokens;
-      data.tokens = processed.tokens;
-      data.tokens_tokenizer = processed.tokens_tokenizer;
-      newContentHash = processed.content_hash;
     }
 
-    const updated = await prisma.memoryCapsule.update({
-      where: { capsule_id: capsuleId },
-      data,
+    // Compute canonical record projection for split-discriminator
+    // per ADR-0042 §Sub-decision Q-ε + Q-G1.3-κ.
+    const existingCanonicalRecord = canonicalCapsuleMutationRecord({
+      capsule_type: existing.capsule_type,
+      topic_tags: existing.topic_tags,
+      payload_summary: existing.payload_summary,
+      content_hash: existing.content_hash,
+      decay_type: existing.decay_type,
+      decay_rate: existing.decay_rate,
+      storage_tier: existing.storage_tier,
+      clearance_required: existing.clearance_required,
+      connected_capsule_ids: existing.connected_capsule_ids,
+      connected_entity_ids: existing.connected_entity_ids,
+      monetization_enabled: existing.monetization_enabled,
+      monetization_category: existing.monetization_category,
+      expires_at: existing.expires_at,
+      ai_access_blocked: existing.ai_access_blocked,
+      requires_validation: existing.requires_validation,
+    });
+    const existingCanonicalRecordHash = sha256Hex(existingCanonicalRecord);
+
+    // Proposed canonical record uses existing.content_hash (do NOT
+    // recompute new ciphertext hash here; encryption side effect is
+    // deferred to UPDATE branch only). Content equivalence is
+    // resolved separately via plaintext-hash comparison in
+    // discriminateMutation. canonical_record drift therefore reflects
+    // NON-CONTENT mutation-relevant fields (MERGE signal) while
+    // content drift is captured by plaintext-hash comparison.
+    const proposedCanonicalRecord = canonicalCapsuleMutationRecord({
+      capsule_type: input.capsule_type ?? existing.capsule_type,
+      topic_tags: input.topic_tags ?? existing.topic_tags,
+      payload_summary: input.payload_summary ?? existing.payload_summary,
+      content_hash: existing.content_hash,
+      decay_type: input.decay_type ?? existing.decay_type,
+      decay_rate: input.decay_rate ?? existing.decay_rate,
+      storage_tier: input.storage_tier ?? existing.storage_tier,
+      clearance_required:
+        input.clearance_required ?? existing.clearance_required,
+      connected_capsule_ids:
+        input.connected_capsule_ids ?? existing.connected_capsule_ids,
+      connected_entity_ids:
+        input.connected_entity_ids ?? existing.connected_entity_ids,
+      monetization_enabled:
+        input.monetization_enabled ?? existing.monetization_enabled,
+      monetization_category:
+        input.monetization_category !== undefined
+          ? input.monetization_category
+          : existing.monetization_category,
+      // CapsuleUpdateInput has no expires_at field (immutable post-
+      // create per existing substrate); project existing value.
+      expires_at: existing.expires_at,
+      ai_access_blocked:
+        input.ai_access_blocked ?? existing.ai_access_blocked,
+      requires_validation:
+        input.requires_validation ?? existing.requires_validation,
+    });
+    const proposedCanonicalRecordHash = sha256Hex(proposedCanonicalRecord);
+    const canonicalRecordChanged =
+      proposedCanonicalRecordHash !== existingCanonicalRecordHash;
+
+    // Invoke pure discriminator. Returns MutationDecision with
+    // sideEffectsRequired flags driving the branch below.
+    const decision = discriminateMutation({
+      proposedInput: input,
+      proposedPlaintextHash,
+      existingPlaintextHash,
+      existingCapsule: existing,
+      expectedVersion: input.expected_version ?? null,
+      canonicalRecordChanged,
+      proposedCanonicalRecord,
+      proposedCanonicalRecordHash,
     });
 
-    await writeAuditEvent({
-      event_type: "CAPSULE_UPDATED",
-      outcome: "SUCCESS",
-      actor_entity_id: session.entity_id,
-      target_entity_id: existing.entity_id,
-      target_capsule_id: capsuleId,
-      session_id: session.session_id,
-      ip_address: context.ip_address ?? null,
-      // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5
-      // AuditEvent jurisdiction cascade: existing capsule jurisdiction
-      // is immutable per Sub-decision 4, so existing.jurisdiction is
-      // also the post-update jurisdiction.
-      jurisdiction: existing.jurisdiction,
-      details: {
+    // Q-G1.3-σ σ-A LOCK: existing-content-unreadable override. Force
+    // UPDATE path with observability reason in audit details. NEVER
+    // fail the user write on a read/decrypt failure.
+    if (input.content !== undefined && !contentReadable) {
+      decision.mutationType = "UPDATE";
+      decision.contentChanged = true;
+      decision.noopReason = "existing_content_unreadable";
+      decision.sideEffectsRequired = {
+        encryption: true,
+        storage: true,
+        dbWrite: true,
+        versionIncrement: true,
+      };
+    }
+
+    // G1.3 per Q-G1.3-λ + Q-G1.3-ρ: storage write happens OUTSIDE the
+    // Prisma transaction for the UPDATE branch (object storage is not
+    // rollback-able by Prisma; pre-existing
+    // D-STORAGE-DB-ATOMICITY-BOUNDARY per ADR-0042 G1.3 Correction 4).
+    // Computed here so the new content_hash is available for both the
+    // tx.memoryCapsule.update data payload AND the audit details.
+    let processed:
+      | {
+          ciphertext: string;
+          content_hash: string;
+          payload_size_tokens: number;
+          tokens: number;
+          tokens_tokenizer: string;
+        }
+      | null = null;
+    if (decision.mutationType === "UPDATE") {
+      processed = processContentForStorage(input.content!, this.encryption);
+      await this.contentStore.write(
+        existing.storage_location,
+        processed.ciphertext,
+      );
+    }
+
+    // G1.3 per Q-G1.3-λ + V4 Patch 1 + V5 Patch 1: DB mutation +
+    // audit emission INSIDE prisma.$transaction for atomic mutation +
+    // audit per RULE 4. CAS conflicts throw VersionConflictError to
+    // unwind the transaction; the outer catch emits a STANDALONE
+    // DENIED audit row post-rollback (writeAuditEvent without tx arg)
+    // to preserve audit-chain integrity per RULE 4 + ADR-0002 +
+    // ADR-0042 G1.3 Correction 10.
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        // ============== NOOP branch ==============
+        if (decision.mutationType === "NOOP") {
+          await writeAuditEvent(
+            {
+              event_type: "CAPSULE_MUTATION_NOOP",
+              outcome: "SUCCESS",
+              actor_entity_id: session.entity_id,
+              target_entity_id: existing.entity_id,
+              target_capsule_id: capsuleId,
+              session_id: session.session_id,
+              ip_address: context.ip_address ?? null,
+              jurisdiction: existing.jurisdiction,
+              details: {
+                // Q-G1.3-ο audit-details minimalism: hashes only;
+                // distinguish ciphertext_content_hash vs
+                // plaintext_probe_hash via suffix per V3 Correction 3e.
+                mutation_type: "NOOP",
+                reason:
+                  decision.noopReason ?? "content_and_canonical_record_match",
+                existing_ciphertext_content_hash: existing.content_hash,
+                proposed_plaintext_probe_hash: proposedPlaintextHash,
+                existing_plaintext_probe_hash: existingPlaintextHash,
+                existing_canonical_record_hash: existingCanonicalRecordHash,
+                proposed_canonical_record_hash:
+                  decision.canonicalCapsuleMutationRecordHash,
+                expected_version: input.expected_version ?? null,
+                write_reason: input.write_reason ?? null,
+              },
+            },
+            tx,
+          );
+          // NOOP returns existing row unchanged. Zero DB writes; zero
+          // version increment; zero storage writes; zero encryption.
+          return existing;
+        }
+
+        // ============== MERGE + UPDATE shared data builder ==============
+        const data: Prisma.MemoryCapsuleUpdateInput = {
+          version: { increment: 1 },
+          previous_version: existing.version,
+          mutation_type: decision.mutationType as MutationType,
+          updated_by: session.entity_id,
+          updated_session_id: session.session_id,
+        };
+        if (input.write_reason !== undefined) {
+          data.write_reason = input.write_reason;
+        }
+        if (input.capsule_type !== undefined) {
+          data.capsule_type = input.capsule_type;
+        }
+        if (input.topic_tags !== undefined) {
+          data.topic_tags = input.topic_tags;
+        }
+        if (input.payload_summary !== undefined) {
+          data.payload_summary = input.payload_summary;
+        }
+        if (input.decay_type !== undefined) data.decay_type = input.decay_type;
+        if (input.decay_rate !== undefined) data.decay_rate = input.decay_rate;
+        if (input.storage_tier !== undefined)
+          data.storage_tier = input.storage_tier;
+        if (input.clearance_required !== undefined)
+          data.clearance_required = input.clearance_required;
+        if (input.relevance_score !== undefined)
+          data.relevance_score = input.relevance_score;
+        if (input.connected_capsule_ids !== undefined)
+          data.connected_capsule_ids = input.connected_capsule_ids;
+        if (input.connected_entity_ids !== undefined)
+          data.connected_entity_ids = input.connected_entity_ids;
+        if (input.monetization_enabled !== undefined)
+          data.monetization_enabled = input.monetization_enabled;
+        if (input.monetization_category !== undefined)
+          data.monetization_category = input.monetization_category;
+        if (input.ai_access_blocked !== undefined)
+          data.ai_access_blocked = input.ai_access_blocked;
+        if (input.requires_validation !== undefined)
+          data.requires_validation = input.requires_validation;
+        if (decision.mutationType === "UPDATE" && processed !== null) {
+          data.content_hash = processed.content_hash;
+          data.payload_size_tokens = processed.payload_size_tokens;
+          data.tokens = processed.tokens;
+          data.tokens_tokenizer = processed.tokens_tokenizer;
+        }
+
+        // CAS path when expected_version supplied; standard update
+        // otherwise (last-writer-wins backward-compat).
+        let updatedRow: MemoryCapsule | null;
+        if (input.expected_version != null) {
+          const result = await tx.memoryCapsule.updateMany({
+            where: {
+              capsule_id: capsuleId,
+              version: input.expected_version,
+              deleted_at: null,
+            },
+            data,
+          });
+          if (result.count === 0) {
+            // Concurrent writer landed between the pre-transaction
+            // fast-fail and this CAS. Read actual version inside the
+            // transaction (will be discarded with the rollback; safe
+            // read) and throw to unwind.
+            const reread = await tx.memoryCapsule.findFirst({
+              where: { capsule_id: capsuleId, deleted_at: null },
+              select: { version: true },
+            });
+            throw new VersionConflictError(
+              decision.mutationType as "MERGE" | "UPDATE",
+              input.expected_version,
+              reread?.version ?? null,
+            );
+          }
+          // Re-fetch the post-update row to return to caller.
+          updatedRow = await tx.memoryCapsule.findFirst({
+            where: { capsule_id: capsuleId },
+          });
+          if (updatedRow === null) {
+            throw new Error("Post-update row fetch returned null");
+          }
+        } else {
+          updatedRow = await tx.memoryCapsule.update({
+            where: { capsule_id: capsuleId },
+            data,
+          });
+        }
+
+        // SUCCESS audit emission inside transaction. Atomic with the
+        // DB mutation above; rollback discards both if any subsequent
+        // op throws.
+        await writeAuditEvent(
+          {
+            event_type:
+              decision.mutationType === "MERGE"
+                ? "CAPSULE_MUTATION_MERGE"
+                : "CAPSULE_MUTATION_UPDATE",
+            outcome: "SUCCESS",
+            actor_entity_id: session.entity_id,
+            target_entity_id: existing.entity_id,
+            target_capsule_id: capsuleId,
+            session_id: session.session_id,
+            ip_address: context.ip_address ?? null,
+            // CAR Sub-box 2 sub-phase 4 per ADR-0037 Sub-decision 5:
+            // capsule jurisdiction immutable; post-update jurisdiction
+            // equals existing.jurisdiction.
+            jurisdiction: existing.jurisdiction,
+            details: {
+              mutation_type: decision.mutationType,
+              write_type: writeType,
+              previous_version: existing.version,
+              new_version: updatedRow.version,
+              content_changed: decision.contentChanged,
+              content_hash:
+                decision.mutationType === "UPDATE" && processed !== null
+                  ? processed.content_hash
+                  : existing.content_hash,
+              write_reason: input.write_reason ?? null,
+              ...(decision.noopReason === "existing_content_unreadable"
+                ? { reason: "existing_content_unreadable" }
+                : {}),
+            },
+          },
+          tx,
+        );
+
+        return updatedRow;
+      });
+
+      return {
+        ok: true,
+        capsule_id: updated.capsule_id,
+        version: updated.version,
+        content_hash: updated.content_hash,
+        storage_location: updated.storage_location,
         write_type: writeType,
-        previous_version: existing.version,
-        new_version: updated.version,
-        content_changed: input.content !== undefined,
-        content_hash: newContentHash,
-        write_reason: input.write_reason ?? null,
-      },
-    });
-
-    return {
-      ok: true,
-      capsule_id: updated.capsule_id,
-      version: updated.version,
-      content_hash: updated.content_hash,
-      storage_location: updated.storage_location,
-      write_type: writeType,
-    };
+      };
+    } catch (err) {
+      if (err instanceof VersionConflictError) {
+        // V5 Patch 1 LOCK Option (b) per ADR-0042 G1.3 Correction 10:
+        // standalone DENIED audit emission AFTER rollback. The audit
+        // row from inside the transaction was discarded with the
+        // rollback; this standalone writeAuditEvent (no tx arg) opens
+        // its own transaction internally per audit.ts:541-549 and
+        // persists the DENIED row independently. Audit-chain
+        // integrity per RULE 4 + ADR-0002.
+        const conflictEventType:
+          | "CAPSULE_MUTATION_MERGE"
+          | "CAPSULE_MUTATION_UPDATE" =
+          err.mutationType === "MERGE"
+            ? "CAPSULE_MUTATION_MERGE"
+            : "CAPSULE_MUTATION_UPDATE";
+        try {
+          await writeAuditEvent({
+            event_type: conflictEventType,
+            outcome: "DENIED",
+            actor_entity_id: session.entity_id,
+            target_entity_id: existing.entity_id,
+            target_capsule_id: capsuleId,
+            session_id: session.session_id,
+            ip_address: context.ip_address ?? null,
+            jurisdiction: existing.jurisdiction,
+            denial_reason: "CAPSULE_VERSION_CONFLICT",
+            details: {
+              mutation_type: err.mutationType,
+              expected_version: err.expected,
+              actual_version: err.actual,
+            },
+          });
+        } catch (auditErr) {
+          // ABORT trigger 27 per V5 Patch 1: writeAuditEvent failure
+          // on the CAS-conflict path means audit infrastructure is
+          // unhealthy. Re-throw so the caller receives 5xx rather
+          // than silently swallowing an audit-chain gap.
+          throw auditErr;
+        }
+        return {
+          ok: false,
+          code: "CAPSULE_VERSION_CONFLICT" as const,
+          message: `Capsule version conflict — expected v${err.expected}, actual v${err.actual ?? "unknown"}`,
+        };
+      }
+      throw err;
+    }
   }
 
   // WHAT: Verify a declaration JWT and confirm it is for the right
@@ -761,8 +1398,21 @@ export class WriteService {
   // OUTPUT: A promise that resolves once the audit row is written.
   // WHY: One helper means create / update produce comparable rows
   //      regardless of which validation step rejected them.
+  // G1.3 per ADR-0042 G1.3 RULE 13 Substrate-State Correction §1 +
+  // §Sub-decision Q-γ Disposition Q-γ.1 + Q-G1.3-α + Q-G1.3-ι LOCKs:
+  // widened to the 4 discriminated CAPSULE_MUTATION_* literals.
+  // createCapsule denials emit "CAPSULE_MUTATION_ADD"; updateCapsule
+  // denials emit "CAPSULE_MUTATION_UPDATE" by default (discrimination
+  // cannot safely run for many denial cases; the literal that WOULD
+  // have been emitted on success per Q-G1.3-ι). The CAPSULE_VERSION_
+  // CONFLICT denial path emits "CAPSULE_MUTATION_UPDATE" or
+  // "CAPSULE_MUTATION_MERGE" per the throwing branch's mutationType.
   private async auditDenial(
-    eventType: "CAPSULE_CREATED" | "CAPSULE_UPDATED",
+    eventType:
+      | "CAPSULE_MUTATION_ADD"
+      | "CAPSULE_MUTATION_UPDATE"
+      | "CAPSULE_MUTATION_MERGE"
+      | "CAPSULE_MUTATION_NOOP",
     capsuleId: string | null,
     actorEntityId: string | null,
     denialReason: string,

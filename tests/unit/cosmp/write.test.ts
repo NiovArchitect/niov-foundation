@@ -176,7 +176,7 @@ describe("createCapsule -- owner write", () => {
     expect(result.code).toBe("SESSION_INVALID");
   });
 
-  it("writes a CAPSULE_CREATED SUCCESS audit event tied to the actor", async () => {
+  it("writes a CAPSULE_MUTATION_ADD SUCCESS audit event tied to the actor", async () => {
     const { auth, write } = makeServices();
     const owner = await loginAs(auth);
     const result = await write.createCapsule(owner.token, {
@@ -191,7 +191,7 @@ describe("createCapsule -- owner write", () => {
       where: {
         actor_entity_id: owner.entity.entity_id,
         target_capsule_id: result.capsule_id,
-        event_type: "CAPSULE_CREATED",
+        event_type: "CAPSULE_MUTATION_ADD",
         outcome: "SUCCESS",
       },
     });

@@ -424,6 +424,12 @@ function statusForCode(code: string): number {
       return 404;
     case "METADATA_FINGERPRINT_MISMATCH":
       return 409;
+    // Phase 3 Sub-arc 2 Gap 1 G1.3 per ADR-0042 §Sub-decision Q-η +
+    // Q-G1.3-θ + V4 Patch 4 LOCKs: optimistic-concurrency conflict
+    // from updateCapsule maps to HTTP 409 Conflict adjacent to the
+    // existing METADATA_FINGERPRINT_MISMATCH 409 precedent.
+    case "CAPSULE_VERSION_CONFLICT":
+      return 409;
     case "CAPSULE_DATA_INVALID":
     case "INVALID_REQUEST":
     // 422 covers basis-lifecycle / TAR validation failures that

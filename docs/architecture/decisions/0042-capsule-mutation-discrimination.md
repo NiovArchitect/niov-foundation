@@ -304,3 +304,270 @@ per RULE 13. Gap 1 closure remains forward-substrate to G1.3
 (write.service.ts discriminateMutation) + conditional G1.4 (Elixir
 support per Correction 5 disposition) + G1.5 (tests) + G1.6 (closure
 cascade) per §Status G1.1 scope paragraph.
+
+## G1.3 RULE 13 Substrate-State Correction
+
+Status: Active
+Date: 2026-05-17
+Trigger: G1.3 substantive landing per `[CAPSULE-MUTATION-WRITE-SERVICE]`
+commit. Section-class is RULE 13 substrate-state correction per the
+G1.2 H2 precedent; G1.3 documents 10 substrate-state observations
+surfaced during the G1.3.0 wide preflight + G1.3.0b hawkseye
+system-coherence preflight and resolved at execution time per Founder
+Q-locks Q-G1.3-α through Q-G1.3-σ + V2/V3/V4/V5 patch lineage at
+`[CAPSULE-MUTATION-WRITE-SERVICE-QLOCK]` +
+`[CAPSULE-MUTATION-WRITE-SERVICE-QLOCK-PATCH]` +
+`[CAPSULE-MUTATION-WRITE-SERVICE-V2-CONTENT-NOOP-PATCH]` +
+`[CAPSULE-MUTATION-WRITE-SERVICE-V3-FINAL-PATCH-AUTH]` +
+`[CAPSULE-MUTATION-WRITE-SERVICE-V4-FINAL-PATCH]` +
+`[CAPSULE-MUTATION-WRITE-SERVICE-G1.3-EXECUTE-VERIFY-AUTH]`.
+
+### Correction 1 — Q-G1.3-α: `writeAuditEventForCapsule` conceptual drift
+
+ADR-0042 §Sub-decision Q-γ.1 + §Sub-decision Q-μ reference a
+`writeAuditEventForCapsule` helper at write.service.ts L765 as the
+target of signature widening. **No such helper exists in substrate.**
+The actual substrate contains: (a) inline `writeAuditEvent(...)` calls
+at write.service.ts createCapsule SUCCESS path and updateCapsule
+SUCCESS path; (b) a private `auditDenial` helper for the DENIAL path
+only. G1.3 implements against the actual substrate: widens
+`auditDenial` eventType union to the 4 CAPSULE_MUTATION_* literals;
+updates inline `writeAuditEvent` literal arguments in createCapsule
+(CAPSULE_MUTATION_ADD) and updateCapsule (discriminated
+CAPSULE_MUTATION_ADD/UPDATE/MERGE/NOOP per the discriminateMutation
+result).
+
+### Correction 2 — Q-G1.3-κ: TS canonical_record already exists
+
+ADR-0042 §Sub-decision Q-ζ references "TS-canonical port from Elixir
+audit.ex:146" as forward-substrate work for G1.3. **The TS port
+already exists** at `packages/database/src/queries/audit.ts:349` as
+`canonicalRecord()` with 14-field byte-equivalent projection matching
+Elixir per ADR-0033; 12 fixture pairs at
+`apps/cosmp_router/test/fixtures/canonical_record/fixtures.json`
+verify cross-language byte-equivalence at every CI run. G1.3 REUSES
+the existing audit canonical helper and `canonicalJson` primitive.
+NEW `canonicalCapsuleMutationRecord()` is a SEPARATE projection at
+write.service.ts (15-field projection focused on mutation-relevant
+MemoryCapsule fields, distinct from the audit canonicalRecord field
+projection) for the discriminateMutation split-discriminator per
+ADR-0042 §Sub-decision Q-ε.
+
+### Correction 3 — Q-G1.3-ζ + V2-CONTENT-NOOP-PATCH
+
+3a. **Encryption is non-deterministic.** `packages/auth/src/crypto.ts:35`
+uses `randomBytes(12)` for fresh AES-256-GCM IV per `encrypt(...)` call
+(IV-uniqueness GCM safety requirement). The persisted
+`MemoryCapsule.content_hash = sha256Hex(ciphertext)` per
+processContentForStorage therefore DIFFERS for identical plaintext.
+
+3b. **NOOP detection requires plaintext-to-plaintext hash comparison.**
+The persisted ciphertext-derived content_hash cannot be compared to a
+proposed plaintext hash. Original Q-ε framing in V1 paste was
+substrate-incoherent on this point; corrected at V2.
+
+3c. **Existing content is read+decrypted inside updateCapsule AFTER
+permission gates** via `this.contentStore.read(existing.storage_location)`
++ `this.encryption.decrypt(...)`. Proof-of-life pattern at
+`apps/api/src/services/cosmp/read.service.ts:581`. The internal
+discrimination read is NOT a CAPSULE_CONTENT_READ audit-emitting event;
+plaintext is held only in a local variable for `plaintextHash(...)`
+computation; never logged; never returned; never persisted; discarded
+after hash computation. A write-permitted actor implicitly has
+read-for-internal-NOOP-discrimination authority per Q-G1.3-ν ORDER
+LOCK (all permission gates fire before discriminateMutation).
+
+3d. **Persisted `MemoryCapsule.content_hash` semantics UNCHANGED** —
+remains `sha256Hex(ciphertext)` for at-rest verification anchor per
+Founder Q-G1.3-ζ boundary lock. NO new persisted plaintext-hash field;
+NO schema change in G1.3.
+
+3e. **Audit metadata uses distinct hash-name suffixes** to prevent
+type confusion: `existing_ciphertext_content_hash` (from
+existing.content_hash) + `proposed_plaintext_probe_hash` +
+`existing_plaintext_probe_hash` (when contentReadable; null otherwise)
++ `existing_canonical_record_hash` + `proposed_canonical_record_hash`.
+
+### Correction 4 — Q-G1.3-λ + Q-G1.3-ρ + V4 Patch 1
+
+`writeAuditEvent` at `audit.ts:541-549` already accepts optional
+`tx?: Prisma.TransactionClient`. G1.3 wraps `tx.memoryCapsule.create`
+(createCapsule) and `tx.memoryCapsule.update` / `tx.memoryCapsule.
+updateMany` + `writeAuditEvent(_, tx)` (updateCapsule) inside
+`prisma.$transaction(async (tx) => { ... })` for atomic DB mutation +
+audit emission per RULE 4. NO changes to `audit.ts` required.
+
+**`contentStore.write` STAYS OUTSIDE the Prisma transaction** per
+Q-G1.3-ρ — Supabase Storage (and any future object storage backend per
+ADR-0018) is NOT rollback-able by Prisma transaction abort. Existing
+pre-G1.3 substrate at write.service.ts already performs
+`contentStore.write` BEFORE the DB write at create path
+(`storageLocation = niov://capsule/${capsuleId}` then write then
+DB-create) and at update path (`existing.storage_location` then write
+then DB-update). If the DB write fails, the storage object is
+orphaned. **This is a pre-existing risk, NOT introduced by G1.3.**
+
+**V4 Patch 1 CAS pattern:** when `expected_version` is supplied,
+`tx.memoryCapsule.updateMany({ where: { capsule_id, version:
+expected_version, deleted_at: null }, data })` is the final CAS
+defense inside the transaction; count === 0 throws
+`VersionConflictError` for transaction rollback. When
+`expected_version` is null/omitted, standard `tx.memoryCapsule.update`
+runs (backward-compat last-writer-wins). Both paths emit SUCCESS
+audit inside the same transaction as the DB write.
+
+**D-STORAGE-DB-ATOMICITY-BOUNDARY** is canonicalized as a forward-
+substrate substrate-state observation. The canonical remediation
+pattern is the transactional outbox pattern (per AWS Prescriptive
+Guidance + microservices.io + Azure Architecture Center 2026
+canonical references) + periodic reconciliation / compensating-delete.
+G1.3 does NOT implement outbox/compensating-delete; this is
+forward-substrate for a later mini-arc post-Gap 1 closure if Founder
+authorizes scope expansion.
+
+### Correction 5 — Q-G1.3-ο: audit details minimalism
+
+G1.3 audit details payload includes `mutation_type` + existing fields
+(write_type, capsule_type, content_hash, payload_size_tokens,
+previous_version, new_version, content_changed, write_reason) + (for
+CAPSULE_VERSION_CONFLICT) expected_version + actual_version + (for
+NOOP) existing/proposed content + canonical_record hash pairs +
+noopReason + expected_version + (for σ-A override path) reason:
+"existing_content_unreadable".
+
+G1.3 does NOT add: large diff summaries, canonical record bodies,
+content similarity scores, full before/after payloads, monetization
+analytics payloads, Federation export metadata, depersonalized cohort
+metadata, plaintext content, decrypted content. These are
+forward-substrate per Q-G1.3-ο Founder lock — hive-scale audit-volume
+risk per ADR-0039 + premature coupling to COE/Federation analytics +
+RULE 0 plaintext-confidentiality boundary.
+
+### Correction 6 — Q-G1.3-π: operator-surface deferral
+
+G1.3 does NOT add operator-tier surfaces: no mutation_type admin query
+routes, no operator dashboard changes, no override controls, no kill
+switches, no manual mutation correction surfaces, no new privileged
+endpoints per ADR-0026. Existing audit query routes
+(`org.routes.ts` + `regulator.routes.ts` `auditEvent.findMany`)
+already filter by event_type literal; the 4 NEW CAPSULE_MUTATION_*
+literals slot in via existing filter mechanism. Operator-tier
+mutation_type analytics + override controls + manual correction
+surfaces remain forward-substrate per Q-G1.3-π Founder lock.
+
+### Correction 7 — Q-G1.3-ξ: test-reality minimal waiver
+
+`tests/unit/cosmp/write.test.ts` L179 (test description) + L194
+(event_type assertion) reference the legacy `CAPSULE_CREATED` literal.
+G1.3 transitions emission to `CAPSULE_MUTATION_ADD` per Q-γ.1
+clean-transition LOCK; the existing test assertion becomes stale and
+would fail at runtime, breaking CI.
+
+Per Founder Q-G1.3-ξ Option β LOCK at `[CAPSULE-MUTATION-WRITE-SERVICE-
+QLOCK-PATCH]`: G1.3 applies a minimal 2-line baseline-preservation
+update — L179 description string + L194 event_type assertion literal
+sync from `CAPSULE_CREATED` to `CAPSULE_MUTATION_ADD`. **This is NOT
+G1.5 test expansion.** No new test cases. No additional test file
+modifications. The waiver authorizes only stale-literal-reference
+auto-update; the test logic is unchanged.
+
+### Correction 8 — Q-G1.3-σ LOCKED at σ-A (conservative-changed)
+
+When `contentStore.read(existing.storage_location)` returns null OR
+`encryption.decrypt(...)` throws (auth-tag mismatch / key rotation /
+corruption), G1.3 forces `decision.mutationType = "UPDATE"` with
+`decision.noopReason = "existing_content_unreadable"` and full
+sideEffectsRequired. The user write is NOT failed by default
+(preserves current write availability); the storage/decryption
+anomaly is surfaced in audit details `reason:
+"existing_content_unreadable"` for operator observability. No new
+failure code (no `EXISTING_CONTENT_UNREADABLE`); no schema field;
+hard-fail policy stricter than current substrate is deferred to a
+later disposition per Q-G1.3-σ Founder lock.
+
+### Correction 9 — V4 Patches 2/3/4 substrate-state acknowledgments
+
+**9a (Patch 2):** `contentStore.write` signature preserved verbatim —
+create-path uses local `storageLocation` variable = `niov://capsule/
+${capsule_id}` (write.service.ts L331+L336 substrate); update-path
+uses `existing.storage_location` (write.service.ts L659 substrate
+preserved at the new updateCapsule UPDATE branch). G1.3 introduces no
+new contentStore method, no new API shape.
+
+**9b (Patch 3):** Canonical CI unit-tier command is `npm run test:unit`
+per `.github/workflows/ci.yml:98` + `package.json:14` (=
+`vitest --config vitest.unit.config.ts --run`). Local pre-commit
+verification Gate 29 runs exactly this command (not `npm run test`,
+not `npx vitest run`) to mirror CI behavior.
+
+**9c (Patch 4):** `cosmp.routes.ts:245` PATCH route uses Fastify typed
+body `app.patch<{ Params: { id: string }; Body: CapsuleUpdateInput }>`
+with NO zod / typebox / runtime schema. `expected_version` flows
+through automatically once added to the `CapsuleUpdateInput`
+interface; no route-layer DTO addition required beyond the
+`statusForCode` 409 case for CAPSULE_VERSION_CONFLICT.
+
+**9d (substrate-state observation, surfaced at execution):**
+`MutationType` is not currently re-exported from `@niov/database/index.ts`
+(G1.2 added the Prisma enum but did not extend the re-export list).
+G1.3 imports `MutationType` directly from `@prisma/client` (matches
+existing precedent in `apps/api/src/services/governance/*.ts` files
+that import `Prisma`, `TwinConfig`, `Hive` direct from `@prisma/client`).
+This preserves the patched Q-G1.3-ν scope lock (no
+`packages/database/` changes). A future cleanup commit may consolidate
+the `MutationType` re-export via `@niov/database` for consistency
+with `CapsuleType` / `DecayType` / `StorageTier` re-export pattern.
+
+### Correction 10 — V5 Patch 1 CAS audit emission LOCK at Option (b)
+
+CAS-race conflicts inside the transaction throw a private
+`VersionConflictError` (declared at write.service.ts module level for
+this purpose) to unwind the transaction. The DENIED audit emission
+happens AFTER rollback via standalone `writeAuditEvent({...})` (NO
+`tx` 2nd argument). Rationale: a `writeAuditEvent({...}, tx)` call on
+the CAS-conflict path INSIDE the rolled-back transaction would write
+its audit row into the transaction's pending changeset, which is then
+discarded when `VersionConflictError` is thrown — the audit row would
+never persist. Audit-chain integrity per RULE 4 + ADR-0002 requires
+the DENIED audit row to persist via a SEPARATE transaction opened by
+standalone `writeAuditEvent` (per audit.ts:541-549 internal
+`prisma.$transaction` fallback).
+
+**Substrate-state observation:** if standalone `writeAuditEvent` ALSO
+fails on the CAS-conflict path, the audit infrastructure is unhealthy.
+G1.3 implementation re-throws the audit error to the caller (which
+surfaces as 5xx at the route layer) rather than silently swallowing
+an audit-chain gap. This is the V5 ABORT trigger 27 + RULE 13 surface.
+
+### G1.3 close authorization lineage
+
+Founder authorization explicit at G1.3 substantive landing per RULE 20
+at `[CAPSULE-MUTATION-WRITE-SERVICE-G1.3-EXECUTE-VERIFY-AUTH]`.
+Pre-flight discipline lineage:
+
+- G1.3.0 wide preflight per `[CAPSULE-MUTATION-WRITE-SERVICE-PREFLIGHT]`
+  surfaced 4 RULE 13 catches (writeAuditEventForCapsule drift +
+  canonical_record already exists + encryption-determinism question +
+  prisma generate prereq).
+- G1.3.0b hawkseye preflight per
+  `[CAPSULE-MUTATION-G1.3-HAWKSEYE-SYSTEM-PREFLIGHT]` confirmed
+  system-wide substrate coherence across DMW / COSMP / Elixir / COE /
+  monetization / operator / RULE 0 boundaries + identified 4 NEW
+  Q-lock surfaces (test-reality + audit-details minimalism +
+  operator-surface deferral + storage-DB orphan acknowledgment).
+- Q-lock disposition fired in waves: Q-G1.3-α through Q-G1.3-ν at
+  `[CAPSULE-MUTATION-WRITE-SERVICE-QLOCK]`; Q-G1.3-λ patch +
+  Q-G1.3-ξ through Q-G1.3-ρ at
+  `[CAPSULE-MUTATION-WRITE-SERVICE-QLOCK-PATCH]`; V2 content-NOOP
+  comparison patch at
+  `[CAPSULE-MUTATION-WRITE-SERVICE-V2-CONTENT-NOOP-PATCH]`; V3 σ-A
+  lock + V4 transaction coherence + contentStore signature +
+  canonical CI command + route validation patches at
+  `[CAPSULE-MUTATION-WRITE-SERVICE-V3-FINAL-PATCH-AUTH]` +
+  `[CAPSULE-MUTATION-WRITE-SERVICE-V4-FINAL-PATCH]`; V5 CAS-audit
+  emission Option (b) lock + diff-count gate correction at
+  the V5 paste authoring step.
+
+Gap 1 closure remains forward-substrate to optional G1.4 (Elixir;
+default SKIP per Q-ι) + G1.5 (full test coverage) + G1.6 (closure
+cascade, ADR-0042 Proposed → Accepted) per ADR-0042 §Sub-decision Q-μ.
