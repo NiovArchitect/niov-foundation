@@ -1407,6 +1407,11 @@ per ADR-0035 §9 cluster expansion canonical at sub-arc 2 Gap 3 G3.10
 substantively per Founder Q-G3.10-ε LOCK Option α at
 `[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]` register substantively.
 
+**Resolved by ADR-0047 PR.2** at canonical-execution register
+substantively at commit `57edb3b` (2026-05-18) per Founder
+Q-PR.4-β β-1 LOCK at `[PR-HARDENING-RUNBOOK-CLOSURE-PR.4-QLOCK]`
+RULE 14 bidirectional citation discipline.
+
 ### Sub-arc 2 Gap 3 G3.10 cluster expansion (38th observation; D-LOCAL-DEV-ENV-CROSS-LANGUAGE-OWNERSHIP-DRIFT)
 
 PROMOTE D-LOCAL-DEV-ENV-CROSS-LANGUAGE-OWNERSHIP-DRIFT 38th canonical
@@ -1501,6 +1506,11 @@ canonical-knowledge register substantively.
 per ADR-0035 §9 cluster expansion canonical at sub-arc 2 Gap 3 G3.10
 substantively per Founder Q-G3.10-ε LOCK Option α at
 `[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]` register substantively.
+
+**Resolved by ADR-0047 PR.3** at canonical-execution register
+substantively at commit `bb26126` (2026-05-18) per Founder
+Q-PR.4-β β-1 LOCK at `[PR-HARDENING-RUNBOOK-CLOSURE-PR.4-QLOCK]`
+RULE 14 bidirectional citation discipline.
 
 ## Forward Path
 

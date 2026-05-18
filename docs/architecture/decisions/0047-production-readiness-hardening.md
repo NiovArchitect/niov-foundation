@@ -2,11 +2,14 @@
 
 ## Status
 
-Proposed 2026-05-18
+Accepted 2026-05-18
 
-PR.1 docs-only ADR creation. Status flips to Accepted at PR.4 closure
-cascade per Q-PR-β LOCK Option β compressed 4-sub-phase decomposition
-+ Q-PR-α LOCK Option α (run pre-Gap-4 hardening mini-arc).
+ADR-0047 closure cascade LANDED at PR.4 per Q-PR.4-α α-1 LOCK +
+Q-PR.4-ε ε-2 LOCK at `[PR-HARDENING-RUNBOOK-CLOSURE-PR.4-EXECUTE-VERIFY-AUTH]`.
+Post-Gap-3 Production-Readiness Hardening Mini-Arc CLOSED at canonical-
+state register substantively. PR.1 + PR.2 + PR.3 + PR.4 all LANDED.
+Sub-arc 2 remains IN FLIGHT per Q-PR-δ + Q-PR-μ LOCK. Gap 4 / ADR-0044
+may start after PR.4 lands per Q-PR-μ Option α LOCK.
 
 ## Context
 
@@ -422,6 +425,177 @@ at `[POST-GAP-3-PRODUCTION-READINESS-HARDENING-QLOCK]` +
 | PR.3 | `[PR-LOCAL-DB-AND-PARITY-HARDENING]` | substantive 2 NEW scripts + docs | forward-substrate |
 | PR.4 | `[PR-HARDENING-RUNBOOK-CLOSURE]` | NEW `docs/operations/deployment-runbook.md` + closure cascade + Status → Accepted | forward-substrate |
 
-Status flips from `Proposed 2026-05-18` to `Accepted 2026-05-18` (or
-later closure date) at PR.4 closure cascade canonical at canonical-
-state register substantively.
+Status flipped from `Proposed 2026-05-18` to `Accepted 2026-05-18` at
+PR.4 closure cascade canonical at canonical-state register
+substantively (this commit).
+
+## PR.2 LANDED — Fail-Closed vitest.config.ts + Guard Test (2026-05-18)
+
+PR.2 `[PR-VITEST-CONFIG-HARDENING]` LANDED 2026-05-18 at commit
+`57edb3b54658f28349e0f34d5346e76a1888be42`. Substantive 1 MOD + 1 NEW
+landing per Founder Q-PR.2-α α-1 + Q-PR.2-β literal-"1" + Q-PR.2-γ
+leave-package.json + Q-PR.2-δ + Q-PR.2-ε 5-it-blocks + Q-PR.2-ζ
+no-docs + Q-PR.2-η 1 MOD + 1 NEW LOCKS at
+`[PR-HARDENING-VITEST-CONFIG-PR.2-QLOCK]`.
+
+**ADR-0035 §9 37th observation D-VITEST-NPX-CONFIG-DEFAULT-LOADS-
+PRODUCTION-SUPABASE CLOSED at canonical-execution register
+substantively** at PR.2 commit `57edb3b`.
+
+Substrate landed:
+
+- MOD `vitest.config.ts` — hardened fail-closed default. Default path
+  loads `.env.test` (containerized localhost:5433 Postgres test DB
+  per ADR-0013). Opt-in path loads `.env` ONLY when
+  `ALLOW_PROD_TEST_ENV === "1"` (literal string "1"). DATABASE_URL
+  host validation via `extractHost()` + `new URL(url).hostname`;
+  refuses non-local hosts with hostname-only error message. Error
+  message contains hostname only; NEVER credentials per RULE 0
+  secret-exposure boundary.
+- NEW `tests/unit/test-env-config-safety.test.ts` — 5 named-block
+  guard tests: (1) NODE_ENV=test; (2) DATABASE_URL defined; (3) host
+  is localhost/127.0.0.1/::1; (4) host is NOT a production Supabase
+  pooler; (5) guard test runs under tier config which loads
+  `.env.test`. Privacy discipline: only hostname extracted and
+  asserted; full URL never logged.
+
+T2.8 runtime probe proof at PR.2 PRE-STAGE substantively verified
+the RULE 0 boundary: fake credentials (`fake-user`, `fake-pass`,
+fake-db) NEVER appeared in error output; only hostname
+`aws-1-us-east-2.pooler.supabase.com` (public DNS info) appeared.
+
+Cosmp_router default tier + unit + integration baselines preserved.
+Full unit tier 552 → 557 (552 baseline + 5 NEW guard tests).
+
+## PR.3 LANDED — Local Refresh + Read-Only Parity Verifier (2026-05-18)
+
+PR.3 `[PR-LOCAL-DB-AND-PARITY-HARDENING]` LANDED 2026-05-18 at commit
+`bb261265dba1408dc44130b1efe599638705ac75`. Substantive 2 NEW + 0 MOD
+landing per Founder Q-PR.3-α α-1 + Q-PR.3-β β-4 + Q-PR.3-γ γ-1 +
+Q-PR.3-δ δ-1 + Q-PR.3-ε ε-1 + Q-PR.3-ζ 11-check + Q-PR.3-η stdout +
+exit codes + Q-PR.3-θ no-package.json + Q-PR.3-ι no-docs + Q-PR.3-κ
+2 NEW + 0 MOD LOCKS at `[PR-HARDENING-LOCAL-DB-AND-PARITY-PR.3-QLOCK]`.
+
+**ADR-0035 §9 38th observation D-LOCAL-DEV-ENV-CROSS-LANGUAGE-
+OWNERSHIP-DRIFT CLOSED at canonical-execution register substantively**
+at PR.3 commit `bb26126`. Read-only production parity verification
+path added per ADR-0047 Sub-decision 4.
+
+Substrate landed:
+
+- NEW `scripts/local-test-db-refresh.sh` — canonical local refresh
+  wrapper. Fail-closed validation at host (localhost/127.0.0.1) +
+  database (`foundation_test`) + port (5433) per β-4 LOCK. Drops
+  ONLY Ecto-owned tables (`schema_migrations` + `idempotency_keys`
+  per ADR-0033 §Q-5BII-EXEC-5); Prisma-owned shared tables NEVER
+  touched (RULE 11 boundary). Chains 5 canonical scripts:
+  `apply-pgvector-extension.ts` + `prisma-db-push-test.sh` (via
+  `npm run db:push:test`) + `apply-audit-triggers.ts` +
+  `apply-hnsw-index.ts` + `MIX_ENV=test mix ecto.migrate`. Supports
+  `--help` (usage + ADR/RULE citations) + `--dry-run` (skips all
+  DB-touching commands). Never prints full DATABASE_URL; only
+  host/db/port.
+
+- NEW `scripts/verify-production-parity.ts` — read-only parity
+  verifier. Requires `PARITY_DATABASE_URL` explicitly (Q-PR-ε α
+  LOCK); NEVER falls back to `DATABASE_URL`; NEVER loads `.env`.
+  Refuses localhost unless `ALLOW_LOCAL_PARITY_CHECK=1` set
+  explicitly (defense-in-depth). Uses
+  `new PrismaClient({ datasourceUrl: PARITY_DATABASE_URL })` Prisma
+  6.19.3 canonical override pattern. READ-ONLY `$queryRawUnsafe` with
+  `information_schema` / `pg_extension` / `pg_indexes` / `pg_trigger`
+  / `pg_tables` SELECT queries ONLY. ZERO `$executeRaw` invocations;
+  ZERO Prisma mutation verbs. Supports `--help` + `--dry-run`.
+  Warning banner: production migration / deploy requires SEPARATE
+  Founder authorization per ADR-0025 + RULE 20. Exit codes 0 (no
+  drift) / 1 (config or runtime error) / 2 (drift found). 11 checks:
+  4 jurisdiction columns (ADR-0037) + mutation_type (ADR-0042) +
+  embedding (ADR-0043) + pgvector + HNSW (ADR-0043) + 2 audit
+  triggers (ADR-0002) + idempotency_keys (INFORMATIONAL; ADR-0033).
+
+T2.6 runtime probe proof at PR.3 PRE-STAGE substantively verified
+the RULE 0 boundary: fake credentials (`fake-user`, `fake-pass`,
+`fake-db`) NEVER appeared in error output; only `host=fake-host.example.com
+database=fake-db port=5432` (public DNS info + db-name + port)
+appeared.
+
+## PR.4 LANDED — Deployment Runbook + Closure Cascade (2026-05-18)
+
+PR.4 `[PR-HARDENING-RUNBOOK-CLOSURE]` LANDED 2026-05-18 at this
+commit. Docs-only closure cascade per Founder Q-PR.4-α α-1 + Q-PR.4-β
+β-1 + Q-PR.4-γ γ-1 + Q-PR.4-δ δ-1 + Q-PR.4-ε ε-2 + Q-PR.4-ζ ζ-1 +
+Q-PR.4-η η-1 LOCKS at `[PR-HARDENING-RUNBOOK-CLOSURE-PR.4-QLOCK]`.
+
+**ADR-0047 Status flipped from `Proposed 2026-05-18` to `Accepted
+2026-05-18` at this commit.** Post-Gap-3 Production-Readiness
+Hardening Mini-Arc CLOSED at canonical-state register substantively.
+6 MOD + 1 NEW.
+
+Substrate landed:
+
+- NEW `docs/operations/deployment-runbook.md` — full production-
+  readiness deployment runbook per Q-PR.4-δ δ-1 LOCK + ADR-0047
+  §Sub-decision 8 (Q-PR-ι Option α LOCK). 13 required sections:
+  FILE/PURPOSE/CONNECTS TO header + Scope and non-goals + Absolute
+  safety boundaries + Environment classes + Pre-deploy verification
+  + Local test DB refresh + Production/staging parity verification
+  + Gap 3 deploy order + OpenAI embedding provider + Runtime
+  verification + Rollback posture + Observability + Launch checklist
+  + post-launch monitoring + known deferrals.
+- MOD this `docs/architecture/decisions/0047-production-readiness-
+  hardening.md` — Status `Proposed 2026-05-18` → `Accepted 2026-05-18`
+  + this PR.2 H2 + PR.3 H2 + PR.4 H2 + Post-Closure Implementation
+  Lineage H2.
+- MOD `docs/reference/section-12-progress.md` — Hardening Mini-Arc
+  row Status IN FLIGHT → CLOSED + PR.2 + PR.3 + PR.4 LANDED prose +
+  Gap 4 readiness statement per Q-PR-μ LOCK Option α.
+- MOD `docs/CURRENT_BUILD_STATE.md` — H2 visibility update CLOSED
+  2026-05-18 at PR.4 + NEW PR.2 H4 + NEW PR.3 H4 + NEW PR.4 H4.
+- MOD `docs/architecture/README.md` — ADR-0047 catalog parenthetical
+  Status Proposed → Accepted + PR.2/PR.3/PR.4 closure prose.
+- MOD `CLAUDE.md` — ADR-0047 catalog mirror Status Proposed →
+  Accepted + PR.2/PR.3/PR.4 closure prose.
+- MOD `docs/architecture/decisions/0035-substrate-build-discipline-
+  canonical.md` — RULE 14 back-citation footers at 37th + 38th
+  observations per Q-PR.4-β β-1 LOCK. Preserves observation bodies
+  verbatim; appends light "Resolved by ADR-0047 PR.2 commit `57edb3b`"
+  + "Resolved by ADR-0047 PR.3 commit `bb26126`" notes.
+
+Per Q-PR.4-γ γ-1 LOCK: in-arc PR.1/PR.2/PR.3 RULE 13 observations
+(D-PR.1-ADR-NUMBERING-FORWARD-SUBSTRATE-RESERVATION-CASCADE-IMPACT +
+D-PR.2-VERIFIER-GATE-20-REGEX-LITERAL-DOT-ESCAPING + D-PR.3-VERIFIER-
+GATE-27-NEGATIVE-CONTEXT-DOCUMENTATION-FALSE-POSITIVE) remain
+commit-body-only at canonical-state register substantively (NOT
+promoted to ADR-0035 §9 cluster at PR.4).
+
+**Sub-arc 2 status field remains IN FLIGHT** per Q-PR-δ + Q-PR-ι +
+Q-PR.4-α LOCK. Sub-arc 2 closure cascade forward-substrate pending
+Gap 4 + Gap 5 + optional Gap 6 + later Sub-arc 2 closure cascade per
+ADR-0041 CL.1 scope patch register substantively.
+
+**Gap 4 / ADR-0044 may start after PR.4 lands** per Q-PR-μ Option α
+LOCK + Q-PR.4-η η-1 LOCK. The hardening mini-arc closure cascade at
+PR.4 satisfies the pre-launch mandatory gate per Q-PR-λ Option β
+LOCK (PR.2 vitest hardening + PR.3 production parity verifier + PR.4
+deployment runbook all LANDED).
+
+## Post-Closure Implementation Lineage
+
+ADR-0047 Post-Gap-3 Production-Readiness Hardening Mini-Arc lineage
+canonical at canonical-execution register substantively per ADR-0020
+two-register IP discipline. 4-sub-phase compressed mini-arc
+decomposition per Q-PR-β LOCK Option β.
+
+| Sub-phase | Commit SHA | Tag + verbatim subject |
+|-----------|------------|------------------------|
+| PR.1 | `b478191` | `[PR-HARDENING-ADR]` PR.1: ADR-0047 NEW Proposed — Post-Gap-3 Production-Readiness Hardening |
+| PR.2 | `57edb3b` | `[PR-VITEST-CONFIG-HARDENING]` PR.2: fail-closed vitest.config.ts + guard test (closes ADR-0035 §9 37th observation D-VITEST-NPX-CONFIG-DEFAULT-LOADS-PRODUCTION-SUPABASE) |
+| PR.3 | `bb26126` | `[PR-LOCAL-DB-AND-PARITY-HARDENING]` PR.3: local refresh + read-only parity verifier (closes ADR-0035 §9 38th observation) |
+| PR.4 | this commit | `[PR-HARDENING-RUNBOOK-CLOSURE]` PR.4: deployment runbook + ADR-0047 Accepted; hardening mini-arc CLOSED |
+
+**Post-Gap-3 Production-Readiness Hardening Mini-Arc CLOSED at
+canonical-state register substantively at PR.4.** Mini-arc 4/4
+complete. ADR-0047 Status `Accepted 2026-05-18`. Sub-arc 2 closure
+cascade forward-substrate per ADR-0041 CL.1 scope patch register
+substantively. Gap 4 / ADR-0044 Decay Execution Formalization may
+start after PR.4 lands per Q-PR-μ LOCK Option α.

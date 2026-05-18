@@ -306,12 +306,12 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Post-Gap-3 Production-Readiness Hardening Mini-Arc IN FLIGHT 2026-05-18 at PR.1 -- ADR-0047 NEW Proposed; PR.2-PR.4 forward-substrate
+## Post-Gap-3 Production-Readiness Hardening Mini-Arc CLOSED 2026-05-18 at PR.4 -- PR.1+PR.2+PR.3+PR.4 LANDED; ADR-0047 Accepted
 
-**Status: IN FLIGHT** at PR.1 `[PR-HARDENING-ADR]`.
+**Status: CLOSED** at PR.4 `[PR-HARDENING-RUNBOOK-CLOSURE]`.
 
-Current HEAD at PR.1: this commit.
-Lineage: `08b10ef` (Gap 3 G3.10 closure register substantively) → this commit.
+Current HEAD at closure: this commit.
+Lineage: `08b10ef` (Gap 3 G3.10 closure register substantively) → `b478191` (PR.1 ADR-0047 NEW Proposed) → `57edb3b` (PR.2 fail-closed vitest config + guard test) → `bb26126` (PR.3 local refresh + parity verifier) → this commit (PR.4 deployment runbook + closure cascade + ADR-0047 Accepted).
 
 Post-Gap-3 production-readiness hardening mini-arc IN FLIGHT 2026-05-18
 at PR.1 docs-only ADR creation commit register substantively per
@@ -457,6 +457,152 @@ substantively per RULE 20; Q-PR-κ amended at `[Q-PR-κ-AMENDMENT-OPTION-γ]`
 register substantively per RULE 13 + RULE 20 patent-implementation
 lineage preservation discipline; PR.1 execution authorization at
 `[PR-HARDENING-ADR-PR.1-EXECUTE-VERIFY-AUTH]`.
+
+#### PR.2 LANDED — Fail-closed vitest config + guard test (2026-05-18)
+
+**Status:** PR.2 `[PR-VITEST-CONFIG-HARDENING]` LANDED 2026-05-18 at
+commit `57edb3b54658f28349e0f34d5346e76a1888be42` (substantive 1 MOD
++ 1 NEW) per Founder Q-PR.2-α α-1 + Q-PR.2-β literal-"1" + Q-PR.2-γ
+leave-package.json + Q-PR.2-δ + Q-PR.2-ε 5-it-blocks + Q-PR.2-ζ
+no-docs + Q-PR.2-η 1 MOD + 1 NEW LOCKS at
+`[PR-HARDENING-VITEST-CONFIG-PR.2-QLOCK]`.
+
+**ADR-0035 §9 37th observation D-VITEST-NPX-CONFIG-DEFAULT-LOADS-
+PRODUCTION-SUPABASE CLOSED at canonical-execution register
+substantively** at PR.2 commit `57edb3b`.
+
+**Substrate sites (2 authorized files; 1 MOD + 1 NEW):**
+MOD `vitest.config.ts` hardened fail-closed default (loads `.env.test`
+by default; opt-in path loads `.env` ONLY when
+`ALLOW_PROD_TEST_ENV === "1"`; DATABASE_URL host validation throws
+hostname-only error if non-local without opt-in). NEW
+`tests/unit/test-env-config-safety.test.ts` 5 named-block guard
+tests (NODE_ENV / DATABASE_URL defined / host localhost-family / host
+NOT production Supabase pooler / .env.test was loaded).
+
+**T2.8 runtime probe at PR.2 PRE-STAGE substantively verified RULE 0
+boundary**: fake credentials (`fake-user`, `fake-pass`, fake-db)
+NEVER appeared in error output; only hostname
+`aws-1-us-east-2.pooler.supabase.com` (public DNS info) appeared.
+Full unit tier 552 → 557 (552 baseline + 5 NEW guard tests).
+
+**Forbidden / preserved boundaries enumerated:** no production
+Supabase writes during tests; no `apps/**` / `tests/**` (beyond
+authorized NEW guard test) / `packages/**` / `scripts/**` /
+`schema.prisma` / CI / `package.json` / lockfile / other vitest
+configs / `docker-compose` / `.husky` / `mix.exs` / `mix.lock` /
+`audit.ts` changes; ADR-0022 + ADR-0033 + ADR-0035 + ADR-0043 +
+ADR-0047 Status all preserved at PR.2 register substantively.
+
+**Founder LOCKS preservation:** Q-PR.2-α α-1 + Q-PR.2-β/γ/δ/ε/ζ/η
+LOCKED at `[PR-HARDENING-VITEST-CONFIG-PR.2-QLOCK]` per RULE 20;
+PR.2 execution authorization at `[PR-HARDENING-VITEST-CONFIG-PR.2-EXECUTE-VERIFY-AUTH]`.
+
+#### PR.3 LANDED — Local refresh + read-only parity verifier (2026-05-18)
+
+**Status:** PR.3 `[PR-LOCAL-DB-AND-PARITY-HARDENING]` LANDED
+2026-05-18 at commit `bb261265dba1408dc44130b1efe599638705ac75`
+(substantive 2 NEW + 0 MOD) per Founder Q-PR.3-α α-1 + Q-PR.3-β β-4 +
+Q-PR.3-γ γ-1 + Q-PR.3-δ δ-1 + Q-PR.3-ε ε-1 + Q-PR.3-ζ 11-check +
+Q-PR.3-η stdout + exit codes + Q-PR.3-θ no-package.json + Q-PR.3-ι
+no-docs + Q-PR.3-κ 2 NEW + 0 MOD LOCKS at
+`[PR-HARDENING-LOCAL-DB-AND-PARITY-PR.3-QLOCK]`.
+
+**ADR-0035 §9 38th observation D-LOCAL-DEV-ENV-CROSS-LANGUAGE-
+OWNERSHIP-DRIFT CLOSED at canonical-execution register
+substantively** at PR.3 commit `bb26126`. Read-only production parity
+verification path added per ADR-0047 Sub-decision 4.
+
+**Substrate sites (2 authorized files; 2 NEW + 0 MOD):**
+
+NEW `scripts/local-test-db-refresh.sh` — canonical local refresh
+wrapper. Fail-closed validation at host (`localhost` / `127.0.0.1`)
++ database (`foundation_test`) + port (`5433`) per β-4 LOCK. Drops
+ONLY Ecto-owned tables (`schema_migrations` + `idempotency_keys`
+per ADR-0033 §Q-5BII-EXEC-5); Prisma-owned shared tables NEVER
+touched (RULE 11 boundary). Chains 5 canonical scripts. Supports
+`--help` + `--dry-run`.
+
+NEW `scripts/verify-production-parity.ts` — read-only parity
+verifier. Requires `PARITY_DATABASE_URL` explicitly (Q-PR-ε α LOCK);
+NEVER falls back to `DATABASE_URL`; NEVER loads `.env`. Refuses
+localhost unless `ALLOW_LOCAL_PARITY_CHECK=1`. Uses PrismaClient
+`datasourceUrl` override (Prisma 6.19.3 canonical pattern). READ-
+ONLY `$queryRawUnsafe` SELECT-only queries. ZERO `$executeRaw`;
+ZERO Prisma mutation verbs. 11 checks (10 REQUIRED + 1 INFO).
+Exit codes 0/1/2 per Q-PR-η LOCK.
+
+**T2.6 runtime probe at PR.3 PRE-STAGE substantively verified RULE 0
+boundary**: fake credentials (`fake-user`, `fake-pass`, `fake-db`)
+NEVER appeared in error output; only `host=fake-host.example.com
+database=fake-db port=5432` (public DNS info + db-name + port)
+appeared; ZERO DB connection attempted (`--dry-run`).
+
+**Forbidden / preserved boundaries enumerated:** no `apps/**` /
+`tests/**` / `packages/**` / `schema.prisma` / existing DB structural
+scripts / CI / `package.json` / lockfile / vitest configs /
+`docker-compose` / `.husky` / `mix.exs` / `mix.lock` / `audit.ts` /
+docs / CLAUDE.md changes; ADR-0022 + ADR-0033 + ADR-0035 + ADR-0043
++ ADR-0047 Status all preserved at PR.3 register substantively.
+
+**Founder LOCKS preservation:** Q-PR.3-α α-1 + Q-PR.3-β/γ/δ/ε/ζ/η/θ/ι/κ
+LOCKED at `[PR-HARDENING-LOCAL-DB-AND-PARITY-PR.3-QLOCK]` per RULE 20;
+PR.3 execution authorization at `[PR-HARDENING-LOCAL-DB-AND-PARITY-PR.3-EXECUTE-VERIFY-AUTH]`.
+
+#### PR.4 LANDED — Deployment runbook + closure cascade (2026-05-18)
+
+**Status:** PR.4 `[PR-HARDENING-RUNBOOK-CLOSURE]` LANDED 2026-05-18
+at this commit (docs-only closure cascade; 6 MOD + 1 NEW). Per
+Founder Q-PR.4-α α-1 + Q-PR.4-β β-1 + Q-PR.4-γ γ-1 + Q-PR.4-δ δ-1 +
+Q-PR.4-ε ε-2 + Q-PR.4-ζ ζ-1 + Q-PR.4-η η-1 LOCKS at
+`[PR-HARDENING-RUNBOOK-CLOSURE-PR.4-QLOCK]`.
+
+**ADR-0047 Status flipped from `Proposed 2026-05-18` to `Accepted
+2026-05-18`** at this commit per Q-PR.4-α α-1 LOCK. **Post-Gap-3
+Production-Readiness Hardening Mini-Arc CLOSED at canonical-state
+register substantively.**
+
+**Substrate sites (7 authorized files; 6 MOD + 1 NEW):**
+NEW `docs/operations/deployment-runbook.md` (13 sections per Q-PR.4-δ
+δ-1 LOCK + ADR-0047 §Sub-decision 8 Q-PR-ι Option α LOCK); MOD ADR-0047
+(Status flip + PR.2 H2 + PR.3 H2 + PR.4 H2 + Post-Closure Implementation
+Lineage H2 with PR.1-PR.4 SHAs); MOD section-12-progress (Hardening row
+Status IN FLIGHT → CLOSED + PR.2/PR.3/PR.4 prose); MOD this
+CURRENT_BUILD_STATE (H2 visibility update + NEW PR.2/PR.3/PR.4 H4
+sections); MOD README + CLAUDE.md ADR-0047 catalog entries (Status
+Proposed → Accepted + PR.2/PR.3/PR.4 closure prose); MOD ADR-0035 §9
+RULE 14 back-citation footers at 37th + 38th observations per
+Q-PR.4-β β-1 LOCK (preserves observation bodies verbatim).
+
+**Per Q-PR.4-γ γ-1 LOCK**: PR.1/PR.2/PR.3 in-arc RULE 13 observations
+(D-PR.1-ADR-NUMBERING-FORWARD-SUBSTRATE-RESERVATION-CASCADE-IMPACT
++ D-PR.2-VERIFIER-GATE-20-REGEX-LITERAL-DOT-ESCAPING + D-PR.3-VERIFIER-
+GATE-27-NEGATIVE-CONTEXT-DOCUMENTATION-FALSE-POSITIVE) remain
+commit-body-only canonical at canonical-state register substantively
+(NOT promoted to ADR-0035 §9 cluster at PR.4).
+
+**Sub-arc 2 status field remains IN FLIGHT** per Q-PR-δ + Q-PR-ι +
+Q-PR.4-α LOCK. **Gap 4 / ADR-0044 may start after PR.4 lands** per
+Q-PR-μ Option α LOCK + Q-PR.4-η η-1 LOCK.
+
+PR.4 closure satisfies pre-launch mandatory gate per Q-PR-λ Option β
+LOCK (PR.2 vitest config hardening + PR.3 production parity verifier
++ PR.4 deployment runbook all LANDED).
+
+**Forbidden / preserved boundaries enumerated:** no `apps/**` /
+`tests/**` / `packages/**` / `scripts/**` / `schema.prisma` /
+existing DB structural scripts / CI / `package.json` / lockfile /
+vitest configs / `docker-compose` / `.husky` / `mix.exs` / `mix.lock`
+/ `audit.ts` changes; ADR-0022 + ADR-0033 + ADR-0043 untouched;
+ADR-0035 substantive body preserved (only RULE 14 back-citation
+footers appended at 37th + 38th observations); Gap 4/5/6 reservations
+preserved at ADR-0041; no production-affecting actions; no production
+parity execution against a real target; no local DB mutation; no
+secret exposure.
+
+**Founder LOCKS preservation:** Q-PR.4-α α-1 + Q-PR.4-β/γ/δ/ε/ζ/η
+LOCKED at `[PR-HARDENING-RUNBOOK-CLOSURE-PR.4-QLOCK]` per RULE 20;
+PR.4 execution authorization at `[PR-HARDENING-RUNBOOK-CLOSURE-PR.4-EXECUTE-VERIFY-AUTH]`.
 
 ---
 
