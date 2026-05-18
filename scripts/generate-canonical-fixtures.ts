@@ -303,6 +303,120 @@ const fixtureCases: FixtureCase[] = [
         "2222222222222222222222222222222222222222222222222222222222222222",
     },
   },
+  // Phase 3 Sub-arc 2 Gap 1 G1.5 [CAPSULE-MUTATION-TESTS] NEW per ADR-0042
+  // §Sub-decision Q-ζ: 4 NEW mutation-class fixtures (one per MutationType
+  // variant) extending the existing 12-fixture set to 16. Verifies
+  // cross-language canonical_record byte-equivalence remains intact under
+  // the CAPSULE_MUTATION_* discriminator vocabulary. Elixir
+  // canonical_record/1 is event-type-string-agnostic per G1.4 Formal SKIP
+  // Record evidence; these fixtures prove that property holds for the new
+  // literal set.
+  {
+    description:
+      "mutation class: CAPSULE_MUTATION_ADD (capsule create discrimination per ADR-0042 Q-γ.1 + Q-G1.3-γ)",
+    input: {
+      audit_id: "00000000-0000-0000-0000-00000000000c",
+      event_type: "CAPSULE_MUTATION_ADD",
+      actor_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_capsule_id: "66666666-6666-6666-6666-666666666666",
+      session_id: "77777777-7777-7777-7777-777777777777",
+      outcome: "SUCCESS",
+      denial_reason: null,
+      details: {
+        mutation_type: "ADD",
+        write_type: "OWNER",
+        content_hash:
+          "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      },
+      ip_address: null,
+      timestamp: new Date("2026-05-17T22:00:00.000Z"),
+      previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
+    },
+  },
+  {
+    description:
+      "mutation class: CAPSULE_MUTATION_UPDATE (content-change discrimination per ADR-0042 Q-G1.3-δ)",
+    input: {
+      audit_id: "00000000-0000-0000-0000-00000000000d",
+      event_type: "CAPSULE_MUTATION_UPDATE",
+      actor_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_capsule_id: "66666666-6666-6666-6666-666666666666",
+      session_id: "77777777-7777-7777-7777-777777777777",
+      outcome: "SUCCESS",
+      denial_reason: null,
+      details: {
+        mutation_type: "UPDATE",
+        write_type: "OWNER",
+        previous_version: 1,
+        new_version: 2,
+        content_changed: true,
+        content_hash:
+          "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+      },
+      ip_address: null,
+      timestamp: new Date("2026-05-17T22:01:00.000Z"),
+      previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
+    },
+  },
+  {
+    description:
+      "mutation class: CAPSULE_MUTATION_MERGE (metadata-only discrimination per ADR-0042 Q-G1.3-ε)",
+    input: {
+      audit_id: "00000000-0000-0000-0000-00000000000e",
+      event_type: "CAPSULE_MUTATION_MERGE",
+      actor_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_capsule_id: "66666666-6666-6666-6666-666666666666",
+      session_id: "77777777-7777-7777-7777-777777777777",
+      outcome: "SUCCESS",
+      denial_reason: null,
+      details: {
+        mutation_type: "MERGE",
+        write_type: "OWNER",
+        previous_version: 1,
+        new_version: 2,
+        content_changed: false,
+        content_hash:
+          "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      },
+      ip_address: null,
+      timestamp: new Date("2026-05-17T22:02:00.000Z"),
+      previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
+    },
+  },
+  {
+    description:
+      "mutation class: CAPSULE_MUTATION_NOOP (semantic no-op discrimination per ADR-0042 Q-G1.3-ζ + Q-δ LOCK)",
+    input: {
+      audit_id: "00000000-0000-0000-0000-00000000000f",
+      event_type: "CAPSULE_MUTATION_NOOP",
+      actor_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_capsule_id: "66666666-6666-6666-6666-666666666666",
+      session_id: "77777777-7777-7777-7777-777777777777",
+      outcome: "SUCCESS",
+      denial_reason: null,
+      details: {
+        mutation_type: "NOOP",
+        reason: "content_and_canonical_record_match",
+        existing_ciphertext_content_hash:
+          "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      },
+      ip_address: null,
+      timestamp: new Date("2026-05-17T22:03:00.000Z"),
+      previous_event_hash: null,
+      lawful_basis_id: null,
+      lawful_basis_chain_hash: null,
+    },
+  },
 ];
 
 interface FixtureOutput {

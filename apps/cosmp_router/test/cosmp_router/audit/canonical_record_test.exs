@@ -56,11 +56,14 @@ defmodule CosmpRouter.Audit.CanonicalRecordTest do
            "fixtures.json missing — run `npx tsx scripts/generate-canonical-fixtures.ts` to regenerate"
   end
 
-  test "fixtures.json contains 8-12 representative cases per ADR-0033 spec", %{
-    fixtures: fixtures
-  } do
+  test "fixtures.json contains 8-16 representative cases per ADR-0033 spec + ADR-0042 §Q-ζ mutation-class extension",
+       %{fixtures: fixtures} do
+    # Phase 3 Sub-arc 2 Gap 1 G1.5 [CAPSULE-MUTATION-TESTS] per ADR-0042
+    # §Sub-decision Q-ζ + Q-G1.5-ζ LOCK: upper bound widened from 12 to 16
+    # to accommodate 4 NEW mutation-class fixtures (CAPSULE_MUTATION_ADD /
+    # UPDATE / MERGE / NOOP) extending the 12-fixture ADR-0033 baseline.
     count = length(fixtures)
-    assert count >= 8 and count <= 12, "fixture count #{count} out of expected band [8, 12]"
+    assert count >= 8 and count <= 16, "fixture count #{count} out of expected band [8, 16]"
   end
 
   describe "canonical_record/1 byte-equivalence with TypeScript register" do

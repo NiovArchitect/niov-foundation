@@ -8,7 +8,7 @@
 //              table, and the entity / capsule / permission queries.
 
 import { randomBytes } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   AuthService,
   MemoryContentStore,
@@ -499,5 +499,461 @@ describe("Attributed write requires a valid declaration + write permission", () 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe("ACCESS_DECLARATION_MISMATCH");
+  });
+});
+
+// ===========================================================================
+// G1.5 — mutation discrimination test coverage per Founder Q-locks Q-G1.5-α
+// through Q-G1.5-η at [CAPSULE-MUTATION-TESTS-G1.5-QLOCK]. Tests prove
+// production-observable behavior of ADR-0042 mutation discrimination through
+// public createCapsule / updateCapsule API only; private helpers
+// (discriminateMutation / canonicalCapsuleMutationRecord / plaintextHash /
+// VersionConflictError) are NOT exported per Q-G1.5-α LOCK.
+// ===========================================================================
+
+describe("G1.5 — mutation discrimination (Q-G1.5-α through Q-G1.5-η)", () => {
+  // U1 — createCapsule persists mutation_type = "ADD" on the row.
+  // Asserts row-state observability of G1.3 Phase 4 createCapsule mutation
+  // discrimination through prisma.memoryCapsule.findUnique row read.
+  it("U1: createCapsule persists mutation_type = 'ADD' on the MemoryCapsule row", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u1"],
+      payload_summary: "summary",
+      content: "u1-content",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const row = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: result.capsule_id },
+      select: {
+        mutation_type: true,
+        version: true,
+        previous_version: true,
+      },
+    });
+    expect(row?.mutation_type).toBe("ADD");
+    expect(row?.version).toBe(1);
+    expect(row?.previous_version).toBeNull();
+  });
+
+  // U2 — updateCapsule with content change → CAPSULE_MUTATION_UPDATE +
+  // mutation_type "UPDATE" + version+1 + previous_version + storage write.
+  // Verifies G1.3 Phase 6 UPDATE branch full pipeline via row state +
+  // audit event + contentStore.write spy.
+  it("U2: updateCapsule with content change emits CAPSULE_MUTATION_UPDATE + persists mutation_type UPDATE + version increments + storage write occurs", async () => {
+    const { auth, write, contentStore } = makeServices();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u2"],
+      payload_summary: "summary",
+      content: "u2-original-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const writeSpy = vi.spyOn(contentStore, "write");
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "u2-new-content-different" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+
+    const row = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        mutation_type: true,
+        version: true,
+        previous_version: true,
+        content_hash: true,
+      },
+    });
+    expect(row?.mutation_type).toBe("UPDATE");
+    expect(row?.version).toBe(2);
+    expect(row?.previous_version).toBe(1);
+    expect(row?.content_hash).not.toBe(create.content_hash);
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_UPDATE",
+        outcome: "SUCCESS",
+      },
+    });
+    expect(audit).not.toBeNull();
+
+    // UPDATE branch must call contentStore.write exactly once (the
+    // re-encrypted ciphertext write).
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    writeSpy.mockRestore();
+  });
+
+  // U3 — updateCapsule with metadata-only change → CAPSULE_MUTATION_MERGE +
+  // mutation_type "MERGE" + version+1 + content_hash UNCHANGED + storage
+  // write SKIPPED. Verifies G1.3 Phase 6 MERGE branch substrate.
+  it("U3: updateCapsule with metadata-only change emits CAPSULE_MUTATION_MERGE + persists mutation_type MERGE + version increments + storage write skipped", async () => {
+    const { auth, write, contentStore } = makeServices();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u3-original"],
+      payload_summary: "summary",
+      content: "u3-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const writeSpy = vi.spyOn(contentStore, "write");
+
+    // Change a non-content mutation-relevant field (decay_rate). Content
+    // is UNCHANGED → MERGE branch should fire.
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { decay_rate: 0.5 },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+
+    const row = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        mutation_type: true,
+        version: true,
+        previous_version: true,
+        content_hash: true,
+        decay_rate: true,
+      },
+    });
+    expect(row?.mutation_type).toBe("MERGE");
+    expect(row?.version).toBe(2);
+    expect(row?.previous_version).toBe(1);
+    expect(row?.content_hash).toBe(create.content_hash);
+    expect(row?.decay_rate).toBe(0.5);
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_MERGE",
+        outcome: "SUCCESS",
+      },
+    });
+    expect(audit).not.toBeNull();
+
+    // MERGE branch must NOT call contentStore.write (no re-encryption).
+    expect(writeSpy).not.toHaveBeenCalled();
+    writeSpy.mockRestore();
+  });
+
+  // U4 — updateCapsule with no delta → CAPSULE_MUTATION_NOOP +
+  // zero DB update + zero version increment + zero storage write +
+  // mutation_type UNCHANGED on row. Verifies G1.3 Phase 6 NOOP branch
+  // substrate per ADR-0042 §Sub-decision Q-δ LOCK.
+  it("U4: updateCapsule with no delta emits CAPSULE_MUTATION_NOOP + zero DB update + zero version increment + zero storage write", async () => {
+    const { auth, write, contentStore } = makeServices();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u4"],
+      payload_summary: "u4-summary-noop",
+      content: "u4-noop-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const writeSpy = vi.spyOn(contentStore, "write");
+
+    // Same content + same payload_summary = NOOP (content unchanged +
+    // canonical record unchanged).
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "u4-noop-content", payload_summary: "u4-summary-noop" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+
+    const row = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        mutation_type: true,
+        version: true,
+        previous_version: true,
+        content_hash: true,
+      },
+    });
+    // NOOP preserves existing mutation_type ("ADD" from creation) per
+    // Q-G1.3-ζ LOCK: zero DB write.
+    expect(row?.mutation_type).toBe("ADD");
+    expect(row?.version).toBe(1);
+    expect(row?.previous_version).toBeNull();
+    expect(row?.content_hash).toBe(create.content_hash);
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_NOOP",
+        outcome: "SUCCESS",
+      },
+    });
+    expect(audit).not.toBeNull();
+
+    // NOOP branch must NOT call contentStore.write.
+    expect(writeSpy).not.toHaveBeenCalled();
+    writeSpy.mockRestore();
+  });
+
+  // U5 — updateCapsule with matching expected_version succeeds. Verifies
+  // opt-in OCC happy path per ADR-0042 §Sub-decision Q-η + Q-G1.3-η LOCK.
+  it("U5: updateCapsule with matching expected_version succeeds", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u5"],
+      payload_summary: "summary",
+      content: "u5-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "u5-new-content", expected_version: 1 },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+    expect(update.version).toBe(2);
+  });
+
+  // U6 — updateCapsule with stale expected_version → CAPSULE_VERSION_CONFLICT
+  // failure + emits CAPSULE_MUTATION_UPDATE DENIED audit with
+  // expected_version + actual_version in details. Verifies G1.3 Phase 6
+  // expected_version pre-check fast-fail + V5 Patch 1 DENIED audit
+  // emission path.
+  it("U6: updateCapsule with stale expected_version returns CAPSULE_VERSION_CONFLICT + emits DENIED audit", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u6"],
+      payload_summary: "summary",
+      content: "u6-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "u6-new-content", expected_version: 999 },
+      null,
+    );
+    expect(update.ok).toBe(false);
+    if (update.ok) return;
+    expect(update.code).toBe("CAPSULE_VERSION_CONFLICT");
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_UPDATE",
+        outcome: "DENIED",
+        denial_reason: "CAPSULE_VERSION_CONFLICT",
+      },
+    });
+    expect(audit).not.toBeNull();
+    const details = audit?.details as Record<string, unknown>;
+    expect(details?.expected_version).toBe(999);
+    expect(details?.actual_version).toBe(1);
+  });
+
+  // U7 — σ-A existing-content-unreadable forces UPDATE with audit
+  // reason "existing_content_unreadable". Mocks contentStore.read to
+  // return null (simulates storage object missing) → ADR-0042 §G1.4
+  // Correction 8 Q-G1.3-σ σ-A conservative-changed LOCK should force
+  // UPDATE branch with observability reason in audit details.
+  it("U7: σ-A existing-content-unreadable forces UPDATE path with reason 'existing_content_unreadable'", async () => {
+    const { auth, write, contentStore } = makeServices();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u7"],
+      payload_summary: "summary",
+      content: "u7-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    // Mock contentStore.read to return null for the NEXT call only
+    // (which will be the discrimination read in updateCapsule).
+    const readSpy = vi.spyOn(contentStore, "read").mockResolvedValueOnce(null);
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "u7-new-content" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_UPDATE",
+        outcome: "SUCCESS",
+      },
+    });
+    expect(audit).not.toBeNull();
+    const details = audit?.details as Record<string, unknown>;
+    expect(details?.reason).toBe("existing_content_unreadable");
+
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    readSpy.mockRestore();
+  });
+
+  // U8 — createCapsule audit details NEVER contain plaintext sentinel.
+  // Verifies RULE 0 plaintext-confidentiality boundary discipline at the
+  // audit-details register per ADR-0042 G1.3 Correction 3 + Q-G1.3-ο
+  // minimalism LOCK.
+  it("U8: createCapsule audit details NEVER contain plaintext sentinel", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const SENTINEL = `NIOV_TEST_SENTINEL_${randomBytes(16).toString("hex")}`;
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u8"],
+      payload_summary: "summary",
+      content: SENTINEL,
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const auditRows = await prisma.auditEvent.findMany({
+      where: { target_capsule_id: create.capsule_id },
+    });
+    const serialized = JSON.stringify(auditRows.map((r) => r.details));
+    expect(serialized.indexOf(SENTINEL)).toBe(-1);
+  });
+
+  // U9 — NOOP audit details NEVER contain plaintext sentinel. Verifies
+  // plaintext-confidentiality boundary on the NOOP path (which derives
+  // plaintext from existing ciphertext via decrypt + hash, NEVER persists
+  // the plaintext value itself).
+  it("U9: NOOP audit details NEVER contain plaintext sentinel", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const SENTINEL = `NIOV_TEST_SENTINEL_${randomBytes(16).toString("hex")}`;
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u9"],
+      payload_summary: "summary",
+      content: SENTINEL,
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: SENTINEL, payload_summary: "summary" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+
+    const noopRow = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_NOOP",
+      },
+    });
+    expect(noopRow).not.toBeNull();
+    expect(JSON.stringify(noopRow?.details).indexOf(SENTINEL)).toBe(-1);
+  });
+
+  // U10 — NOOP audit details include plaintext probe hashes as 64-char hex
+  // values (NOT raw plaintext). Verifies ADR-0042 G1.3 Correction 3e
+  // hash-name-suffix discipline: distinguishes plaintext_probe_hash vs
+  // ciphertext_content_hash. For NOOP, the two probe hashes must EQUAL
+  // each other (plaintext equivalence is the NOOP discriminator).
+  it("U10: NOOP audit details include plaintext probe hashes as 64-char hex values, not raw plaintext", async () => {
+    const { auth, write } = makeServices();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u10"],
+      payload_summary: "summary",
+      content: "u10-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "u10-content", payload_summary: "summary" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+
+    const noopRow = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: create.capsule_id,
+        event_type: "CAPSULE_MUTATION_NOOP",
+      },
+    });
+    expect(noopRow).not.toBeNull();
+    const details = noopRow?.details as Record<string, unknown>;
+    expect(details?.existing_plaintext_probe_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(details?.proposed_plaintext_probe_hash).toMatch(/^[0-9a-f]{64}$/);
+    // NOOP fires only when plaintext probe hashes EQUAL (per
+    // discriminateMutation contract).
+    expect(details?.existing_plaintext_probe_hash).toBe(
+      details?.proposed_plaintext_probe_hash,
+    );
+  });
+
+  // U11 — encryption non-determinism: identical plaintext produces
+  // different ciphertext content_hash across calls. Verifies ADR-0042 G1.3
+  // Correction 3a per packages/auth/src/crypto.ts:35 randomBytes(12) per-IV
+  // AES-256-GCM safety requirement (and proves why plaintext-to-plaintext
+  // NOOP comparison is necessary).
+  it("U11: encryption non-determinism — identical plaintext produces different ciphertext content_hash across calls", async () => {
+    const { auth, write } = makeServices();
+    const owner1 = await loginAs(auth);
+    const owner2 = await loginAs(auth);
+    const identicalContent = "u11-identical-plaintext";
+
+    const create1 = await write.createCapsule(owner1.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u11-a"],
+      payload_summary: "summary",
+      content: identicalContent,
+    });
+    const create2 = await write.createCapsule(owner2.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g1.5-u11-b"],
+      payload_summary: "summary",
+      content: identicalContent,
+    });
+    expect(create1.ok).toBe(true);
+    expect(create2.ok).toBe(true);
+    if (!create1.ok || !create2.ok) return;
+    // Different IVs per encrypt() call → different ciphertext →
+    // different sha256(ciphertext) → different content_hash.
+    expect(create1.content_hash).not.toBe(create2.content_hash);
   });
 });

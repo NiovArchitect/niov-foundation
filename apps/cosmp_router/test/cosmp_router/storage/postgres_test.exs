@@ -187,7 +187,7 @@ defmodule CosmpRouter.Storage.PostgresTest do
       # Sandbox transaction).
       assert {:ok, e1} =
                Audit.write_audit_event(%{
-                 event_type: "CAPSULE_WRITE",
+                 event_type: "CAPSULE_MUTATION_ADD",
                  outcome: "SUCCESS",
                  actor_entity_id: nil,
                  system_principal: Audit.system_principals()[:cosmp_router],
@@ -197,7 +197,7 @@ defmodule CosmpRouter.Storage.PostgresTest do
 
       assert {:ok, e2} =
                Audit.write_audit_event(%{
-                 event_type: "CAPSULE_WRITE",
+                 event_type: "CAPSULE_MUTATION_ADD",
                  outcome: "SUCCESS",
                  actor_entity_id: nil,
                  system_principal: Audit.system_principals()[:cosmp_router],
@@ -218,7 +218,7 @@ defmodule CosmpRouter.Storage.PostgresTest do
       chain = PG.audit_chain_for_capsule(capsule_id)
       assert length(chain) == 3
       assert Enum.map(chain, & &1.audit_id) == [e1.audit_id, e2.audit_id, e3.audit_id]
-      assert Enum.map(chain, & &1.event_type) == ["CAPSULE_WRITE", "CAPSULE_WRITE", "CAPSULE_READ"]
+      assert Enum.map(chain, & &1.event_type) == ["CAPSULE_MUTATION_ADD", "CAPSULE_MUTATION_ADD", "CAPSULE_READ"]
     end
   end
 

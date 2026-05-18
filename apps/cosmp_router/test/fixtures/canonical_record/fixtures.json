@@ -285,5 +285,111 @@
     },
     "canonical_input": "00000000-0000-0000-0000-00000000000b|REGULATOR_ACCESS_GRANTED|66666666-6666-6666-6666-666666666666|77777777-7777-7777-7777-777777777777|88888888-8888-8888-8888-888888888888|99999999-9999-9999-9999-999999999999|SUCCESS||{\"jurisdiction\":\"US-FEDERAL\",\"scope\":\"SECURITIES_EXAMINATION\"}|10.0.0.42|2026-05-15T11:30:45.123Z|feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface|bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb|2222222222222222222222222222222222222222222222222222222222222222",
     "expected_hash": "bf2aeaaecebcfd8126dce115d3c9149306fb9236f9689fd3c2e55fc4ff0b2f2c"
+  },
+  {
+    "description": "mutation class: CAPSULE_MUTATION_ADD (capsule create discrimination per ADR-0042 Q-γ.1 + Q-G1.3-γ)",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-00000000000c",
+      "event_type": "CAPSULE_MUTATION_ADD",
+      "actor_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_capsule_id": "66666666-6666-6666-6666-666666666666",
+      "session_id": "77777777-7777-7777-7777-777777777777",
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "mutation_type": "ADD",
+        "write_type": "OWNER",
+        "content_hash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      },
+      "ip_address": null,
+      "timestamp": "2026-05-17T22:00:00.000Z",
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-00000000000c|CAPSULE_MUTATION_ADD|55555555-5555-5555-5555-555555555555|55555555-5555-5555-5555-555555555555|66666666-6666-6666-6666-666666666666|77777777-7777-7777-7777-777777777777|SUCCESS||{\"content_hash\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"mutation_type\":\"ADD\",\"write_type\":\"OWNER\"}||2026-05-17T22:00:00.000Z|||",
+    "expected_hash": "362f23c35446aa6f183d8b1a27c4dbddc68fd528ad43154c84a2d75f9d5dc371"
+  },
+  {
+    "description": "mutation class: CAPSULE_MUTATION_UPDATE (content-change discrimination per ADR-0042 Q-G1.3-δ)",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-00000000000d",
+      "event_type": "CAPSULE_MUTATION_UPDATE",
+      "actor_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_capsule_id": "66666666-6666-6666-6666-666666666666",
+      "session_id": "77777777-7777-7777-7777-777777777777",
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "mutation_type": "UPDATE",
+        "write_type": "OWNER",
+        "previous_version": 1,
+        "new_version": 2,
+        "content_changed": true,
+        "content_hash": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe"
+      },
+      "ip_address": null,
+      "timestamp": "2026-05-17T22:01:00.000Z",
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-00000000000d|CAPSULE_MUTATION_UPDATE|55555555-5555-5555-5555-555555555555|55555555-5555-5555-5555-555555555555|66666666-6666-6666-6666-666666666666|77777777-7777-7777-7777-777777777777|SUCCESS||{\"content_changed\":true,\"content_hash\":\"cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe\",\"mutation_type\":\"UPDATE\",\"new_version\":2,\"previous_version\":1,\"write_type\":\"OWNER\"}||2026-05-17T22:01:00.000Z|||",
+    "expected_hash": "8dc9facc09cb3fbb2ac0ccfd10766a0c234c29e4a96969cf8bf81b8d0957fb3c"
+  },
+  {
+    "description": "mutation class: CAPSULE_MUTATION_MERGE (metadata-only discrimination per ADR-0042 Q-G1.3-ε)",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-00000000000e",
+      "event_type": "CAPSULE_MUTATION_MERGE",
+      "actor_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_capsule_id": "66666666-6666-6666-6666-666666666666",
+      "session_id": "77777777-7777-7777-7777-777777777777",
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "mutation_type": "MERGE",
+        "write_type": "OWNER",
+        "previous_version": 1,
+        "new_version": 2,
+        "content_changed": false,
+        "content_hash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      },
+      "ip_address": null,
+      "timestamp": "2026-05-17T22:02:00.000Z",
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-00000000000e|CAPSULE_MUTATION_MERGE|55555555-5555-5555-5555-555555555555|55555555-5555-5555-5555-555555555555|66666666-6666-6666-6666-666666666666|77777777-7777-7777-7777-777777777777|SUCCESS||{\"content_changed\":false,\"content_hash\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"mutation_type\":\"MERGE\",\"new_version\":2,\"previous_version\":1,\"write_type\":\"OWNER\"}||2026-05-17T22:02:00.000Z|||",
+    "expected_hash": "c641582cbf182c3a05c9354d9de36583c4b7d7628afbecd193b625e361a4af38"
+  },
+  {
+    "description": "mutation class: CAPSULE_MUTATION_NOOP (semantic no-op discrimination per ADR-0042 Q-G1.3-ζ + Q-δ LOCK)",
+    "input": {
+      "audit_id": "00000000-0000-0000-0000-00000000000f",
+      "event_type": "CAPSULE_MUTATION_NOOP",
+      "actor_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_entity_id": "55555555-5555-5555-5555-555555555555",
+      "target_capsule_id": "66666666-6666-6666-6666-666666666666",
+      "session_id": "77777777-7777-7777-7777-777777777777",
+      "outcome": "SUCCESS",
+      "denial_reason": null,
+      "details": {
+        "mutation_type": "NOOP",
+        "reason": "content_and_canonical_record_match",
+        "existing_ciphertext_content_hash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      },
+      "ip_address": null,
+      "timestamp": "2026-05-17T22:03:00.000Z",
+      "previous_event_hash": null,
+      "lawful_basis_id": null,
+      "lawful_basis_chain_hash": null
+    },
+    "canonical_input": "00000000-0000-0000-0000-00000000000f|CAPSULE_MUTATION_NOOP|55555555-5555-5555-5555-555555555555|55555555-5555-5555-5555-555555555555|66666666-6666-6666-6666-666666666666|77777777-7777-7777-7777-777777777777|SUCCESS||{\"existing_ciphertext_content_hash\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"mutation_type\":\"NOOP\",\"reason\":\"content_and_canonical_record_match\"}||2026-05-17T22:03:00.000Z|||",
+    "expected_hash": "435eb5e5aa3753d93d7f0d73298390fe98f7993c0fba0ba958f6fb7e59cf1de2"
   }
 ]

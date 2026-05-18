@@ -967,3 +967,95 @@ describe("G. Backward-compat — null/null preservation for legacy entities + ca
     expect(negotiate.statusCode).toBe(200);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Section H — WRITE expected_version OCC + CAPSULE_VERSION_CONFLICT 409
+// (G1.5 per ADR-0042 §Sub-decision Q-η + Q-G1.3-θ + V4 Patch 4 LOCKs +
+//  Q-G1.5-β extension lock at [CAPSULE-MUTATION-TESTS-G1.5-QLOCK])
+// ---------------------------------------------------------------------------
+
+describe("H. WRITE — expected_version OCC + CAPSULE_VERSION_CONFLICT 409", () => {
+  // I1 — PATCH with stale expected_version returns HTTP 409 +
+  // CAPSULE_VERSION_CONFLICT body. Verifies route-layer statusForCode
+  // mapping landed at cosmp.routes.ts statusForCode case
+  // "CAPSULE_VERSION_CONFLICT" → 409 (G1.3 Phase 7).
+  it("PATCH with stale expected_version returns HTTP 409 + CAPSULE_VERSION_CONFLICT body", async () => {
+    const owner = await makeUser(app, "US-FEDERAL", ["read", "write"]);
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/cosmp/capsule",
+      headers: { authorization: `Bearer ${owner.token}` },
+      payload: {
+        capsule_type: "PREFERENCE",
+        topic_tags: ["g1.5-i1"],
+        payload_summary: "summary",
+        content: "i1-content",
+      },
+    });
+    expect(create.statusCode).toBe(201);
+    const capsuleId = (create.json() as { capsule_id: string }).capsule_id;
+    expect((create.json() as { version: number }).version).toBe(1);
+
+    // PATCH with stale expected_version 999 (actual is 1) → 409.
+    const conflict = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/cosmp/capsule/${capsuleId}`,
+      headers: { authorization: `Bearer ${owner.token}` },
+      payload: {
+        payload_summary: "i1-updated",
+        expected_version: 999,
+      },
+    });
+    expect(conflict.statusCode).toBe(409);
+    const body = conflict.json() as { ok: boolean; code: string; message: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("CAPSULE_VERSION_CONFLICT");
+  });
+
+  // I2 — stale expected_version path emits CAPSULE_MUTATION_UPDATE DENIED
+  // audit row with denial_reason CAPSULE_VERSION_CONFLICT and
+  // expected_version + actual_version in audit details JSON. Verifies V5
+  // Patch 1 LOCK Option (b) post-rollback standalone DENIED audit
+  // emission discipline.
+  it("stale expected_version path emits CAPSULE_MUTATION_UPDATE DENIED audit with denial_reason CAPSULE_VERSION_CONFLICT and expected/actual version details", async () => {
+    const owner = await makeUser(app, "US-FEDERAL", ["read", "write"]);
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/cosmp/capsule",
+      headers: { authorization: `Bearer ${owner.token}` },
+      payload: {
+        capsule_type: "PREFERENCE",
+        topic_tags: ["g1.5-i2"],
+        payload_summary: "summary",
+        content: "i2-content",
+      },
+    });
+    expect(create.statusCode).toBe(201);
+    const capsuleId = (create.json() as { capsule_id: string }).capsule_id;
+
+    const conflict = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/cosmp/capsule/${capsuleId}`,
+      headers: { authorization: `Bearer ${owner.token}` },
+      payload: {
+        payload_summary: "i2-updated",
+        expected_version: 42,
+      },
+    });
+    expect(conflict.statusCode).toBe(409);
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        target_capsule_id: capsuleId,
+        event_type: "CAPSULE_MUTATION_UPDATE",
+        outcome: "DENIED",
+        denial_reason: "CAPSULE_VERSION_CONFLICT",
+      },
+    });
+    expect(audit).not.toBeNull();
+    const details = audit?.details as Record<string, unknown>;
+    expect(details?.expected_version).toBe(42);
+    expect(details?.actual_version).toBe(1);
+    expect(details?.mutation_type).toBe("UPDATE");
+  });
+});
