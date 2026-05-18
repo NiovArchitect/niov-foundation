@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -432,6 +432,32 @@ Founder patches preserved verbatim across G1.1 + G1.0 research-arc + Path B comp
 Per-G forward-substrate canonical at canonical-state register substantively: G1.2 substantive Prisma migration + audit-literal generation (forward-substrate); G1.3 substantive write.service.ts discrimination + audit-emission transition + TS canonical_record port (forward-substrate); conditional G1.4 substantive Elixir support if grep-proven (forward-substrate; default SKIP per Q-ι); G1.5 dedicated tests substantive (forward-substrate); G1.6 docs-only closure cascade (forward-substrate; closes Gap 1 at canonical-state register substantively); Sub-arc 2 closure cascade (forward-substrate; awaits all per-gap mini-arcs G1 + G3 + G4 + G5 + optional G6 per ADR-0041 CL.1 scope patch).
 
 References: ADR-0042 (NEW) + ADR-0041 (parent umbrella) + ADR-0033 (cross-language data ownership + canonical_record byte-equivalence) + ADR-0026 §5 (6 BEAM-compatibility patterns preserved by construction) + ADR-0020 (patent-implementation evidence) + ADR-0002 (append-only audit chain + BEFORE DELETE trigger) + RULE 0 + RULE 4 + RULE 10 + RULE 13 + RULE 20 + RULE 21 + Patent US 12,517,919 + US 12,164,537 + US 12,399,904 + RFC 7232 §3.1 + Bernstein-Hadzilacos-Goodman §4.2 + Greg Young CQRS + Eric Evans DDD Domain Events.
+
+#### G1.6 Closure Cascade — Gap 1 IN FLIGHT → CLOSED 2026-05-17
+
+**Status transition:** Gap 1 Capsule Mutation Discrimination CLOSED at G1.6 `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` register substantively. Status lineage: IN FLIGHT (G1.1 2026-05-17) → CLOSED (G1.6 2026-05-17) at canonical-state register substantively.
+
+**G1 mini-arc landing lineage canonical at canonical-execution register substantively:**
+
+- **G1.1** `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-ADR]` `2cb0028` — docs-only architectural lock; ADR-0042 NEW Proposed.
+- **G1.2** `[CAPSULE-MUTATION-PRISMA-MIGRATION]` `dfcbbb1` — substantive Prisma migration (MutationType enum + nullable mutation_type column + 4 NEW CAPSULE_MUTATION_* audit literals).
+- **G1.3** `[CAPSULE-MUTATION-WRITE-SERVICE]` `16c562c` — substantive write.service.ts discrimination + expected_version OCC + CAPSULE_VERSION_CONFLICT envelope.
+- **G1.3-fix** `[CAPSULE-MUTATION-WRITE-SERVICE-G1.3-INTEGRATION-FIX]` `8f047de` — minimal integration-tier test waiver extension.
+- **G1.4** `[CAPSULE-MUTATION-ELIXIR-AUDIT]` `3505fde` — docs-only formal SKIP record.
+- **G1.5** `[CAPSULE-MUTATION-TESTS]` `16567eb` — substantive test substrate.
+- **G1.6** `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` this commit — docs-only closure cascade.
+
+**Forward-substrate to downstream consumers (post-Gap-1-closure):** MutationType
+discriminator is now available to ADR-0022 combined_score formula, ADR-0044
+lazy-at-read decay execution (forward-substrate), and ADR-0045 capsule-level
+staleness detection (forward-substrate) per substrate-coherent register
+substantively.
+
+**Sub-arc 2 status at Gap 1 closure register substantively:** Gap 1 CLOSED substantively. Sub-arc 2 remains IN FLIGHT pending Gap 3 (ADR-0043 pgvector Embedding) + Gap 4 (ADR-0044 Decay Execution Formalization) + Gap 5 (ADR-0045 Capsule-Level Staleness Detection) + optional Gap 6 (ADR-0046 AI_AGENT EntityType-Discriminated Capsule Routing) per ADR-0041 CL.1 scope patch register substantively.
+
+**ADR-0041 amendment at G1.6: NONE** per Q-G1.6-β LOCK. Gap 1 closure progress documented at this H4 + ADR-0042 §G1.6 H2 + section-12-progress Sub-arc 2 row inline update + architecture/README + CLAUDE.md ADR-0042 catalog refresh substantively.
+
+**Substrate-build observation cluster expansion:** D-TEST-TIER-WAIVER-SCOPE-PRECISION promoted to ADR-0035 §9 cluster as 36th canonical observation at G1.6 register substantively per Q-G1.6-α LOCK. Recurrence-1: G1.3 Q-G1.3-ξ Option β minimal waiver scoped to unit tier only; integration-tier stale literals at jurisdiction-cosmp-enforcement.test.ts required follow-up commit `8f047de`.
 
 ---
 

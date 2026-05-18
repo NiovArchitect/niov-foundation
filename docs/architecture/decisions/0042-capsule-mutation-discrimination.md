@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed 2026-05-17
+Accepted 2026-05-17 at sub-arc 2 Gap 1 G1.6 `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` (G1 mini-arc Commits 1-6 LANDED; Gap 1 CLOSED at canonical-state register substantively; Sub-arc 2 remains IN FLIGHT per ADR-0041 CL.1 scope patch substantively)
 
 **G1.1 scope at canonical-prose register substantively:** this ADR LOCKS the Gap 1 mutation-discrimination architecture for the MemoryCapsule write path. G1.1 is the docs-only architectural-lock commit. G1.1 does NOT close Gap 1 at canonical-state register substantively. G1.1 does NOT close Sub-arc 2 at canonical-state register substantively. Gap 1 closure requires G1.2 `[CAPSULE-MUTATION-PRISMA-MIGRATION]` (substantive Prisma migration + audit-literal generation/migration discipline) + G1.3 `[CAPSULE-MUTATION-WRITE-SERVICE]` (substantive discriminateMutation helper + ADD/UPDATE/MERGE/NOOP write semantics + expected_version) + conditional G1.4 `[CAPSULE-MUTATION-ELIXIR-AUDIT]` (substantive Elixir audit/canonical/idempotency support if G1.4 pre-flight grep proves substantive Elixir change needed) + G1.5 `[CAPSULE-MUTATION-TESTS]` (substantive TypeScript unit/integration + cross-language canonical_record + audit/idempotency tests) + G1.6 `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` (docs-only closure cascade) per §Sub-decision Q-μ. Sub-arc 2 closure requires all per-gap mini-arcs (G1 + G3 + G4 + G5 + optional G6) and a later Sub-arc 2 closure cascade per ADR-0041 CL.1 scope patch.
 
@@ -766,3 +766,75 @@ Gap 1 closure remains forward-substrate to G1.5 + G1.6 per ADR-0042
 §Sub-decision Q-μ. The G1.4 SKIP record DOES NOT close Gap 1 at
 canonical-state register substantively. Sub-arc 2 closure remains
 forward-substrate per ADR-0041 CL.1 scope patch.
+
+## G1.6 Closure Cascade — Gap 1 IN FLIGHT → CLOSED + ADR-0042 Proposed → Accepted
+
+Status transition: Proposed 2026-05-17 (G1.1) → Accepted 2026-05-17 (G1.6).
+Date: 2026-05-17.
+Trigger: G1.6 docs-only closure cascade landing per
+`[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` commit per Founder
+authorization at `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-G1.6-QLOCK]` +
+`[BEAM-CAPSULE-MUTATION-DISCRIMINATION-G1.6-V5-MINIMAL-EXECUTION-REQUEST]`.
+
+### G1 mini-arc landing lineage canonical at canonical-execution register substantively
+
+- **G1.1** `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-ADR]` `2cb0028` — docs-only architectural lock; ADR-0042 NEW Proposed + section-12-progress Sub-arc 2 row IN FLIGHT update + CURRENT_BUILD_STATE Gap 1 H3 NEW + architecture/README + CLAUDE.md ADR-0042 catalog entries NEW.
+- **G1.2** `[CAPSULE-MUTATION-PRISMA-MIGRATION]` `dfcbbb1` — substantive Prisma migration: MutationType enum (ADD/UPDATE/MERGE/NOOP) + nullable `mutation_type MutationType?` column on MemoryCapsule + 4 NEW CAPSULE_MUTATION_* literals extending AUDIT_EVENT_TYPE_VALUES per Q-α/Q-β/Q-γ Disposition Q-γ.1 clean-transition LOCKED. Per ADR-0025 schema-push-target discipline (`npm run db:push:test`); NO Prisma Migrate; NO migrations directory created.
+- **G1.3** `[CAPSULE-MUTATION-WRITE-SERVICE]` `16c562c` — substantive write.service.ts discrimination: discriminateMutation helper + 3 pure module-level helpers (canonicalCapsuleMutationRecord + plaintextHash + VersionConflictError) + createCapsule ADD persistence + updateCapsule UPDATE/MERGE/NOOP discriminated branches + expected_version opt-in OCC + CAPSULE_VERSION_CONFLICT failure code + auditDenial signature widening + inline writeAuditEvent literal transitions + Prisma `$transaction` wrapping + standalone post-rollback DENIED audit emission on CAS conflict per V5 Patch 1 LOCK Option (b).
+- **G1.3-fix** `[CAPSULE-MUTATION-WRITE-SERVICE-G1.3-INTEGRATION-FIX]` `8f047de` — minimal test-tier waiver scope extension to integration tier (6-line literal sync at `tests/integration/jurisdiction-cosmp-enforcement.test.ts`).
+- **G1.4** `[CAPSULE-MUTATION-ELIXIR-AUDIT]` `3505fde` — docs-only formal SKIP record per ADR-0042 §Sub-decision Q-ι LOCKED default disposition (SKIP). 8-point grep-grounded evidence preserved.
+- **G1.5** `[CAPSULE-MUTATION-TESTS]` `16567eb` — substantive test substrate: 11 NEW unit tests + 2 NEW integration tests + 4 NEW canonical-record fixtures + fixture-count bound widening + cosmetic Elixir test fixture cleanup. CI 4/4 green.
+- **G1.6** `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` this commit — docs-only closure cascade across 6 files (ADR-0042 + section-12-progress + CURRENT_BUILD_STATE + architecture/README + CLAUDE.md + ADR-0035).
+
+### Post-Closure Implementation Lineage substantively
+
+Gap 1 substrate canonical at canonical-state register substantively:
+
+- MutationType enum (ADD/UPDATE/MERGE/NOOP) defined at Prisma register per §Sub-decision Q-α (LANDED G1.2 `dfcbbb1`).
+- `mutation_type MutationType?` nullable column on MemoryCapsule persisted per §Sub-decision Q-β (LANDED G1.2 `dfcbbb1`).
+- 4 NEW CAPSULE_MUTATION_ADD/UPDATE/MERGE/NOOP audit-event literals appended to AUDIT_EVENT_TYPE_VALUES per RULE 10 nothing-is-ever-deleted + ADR-0002 append-only audit chain per §Sub-decision Q-γ Disposition Q-γ.1 clean-transition LOCKED (LANDED G1.2).
+- createCapsule discriminated ADD path emitting CAPSULE_MUTATION_ADD + persisting mutation_type "ADD" (LANDED G1.3 `16c562c`).
+- updateCapsule discriminated UPDATE/MERGE/NOOP branches with split-discriminator strategy per §Sub-decision Q-ε (content_hash via plaintext probe + canonical_record + version/expected_version) (LANDED G1.3).
+- NOOP audit-only emission with zero MemoryCapsule write + zero version increment + zero storage write per §Sub-decision Q-δ LOCK (LANDED G1.3).
+- Optimistic-concurrency expected_version + CAPSULE_VERSION_CONFLICT envelope per §Sub-decision Q-η RFC 7232 §3.1 If-Match canonical (LANDED G1.3); HTTP 409 mapping at `apps/api/src/routes/cosmp.routes.ts` statusForCode addition (LANDED G1.3).
+- discriminateMutation helper at write.service.ts boundary preserving exact `processContentForStorage` substrate name per §Sub-decision Q-θ + RULE 13 ground-truth surface (LANDED G1.3).
+- TS-side `canonicalCapsuleMutationRecord` projection helper + reuse of existing audit `canonicalRecord()` at `audit.ts:349` (NOT re-ported) per §Sub-decision Q-ζ + Q-G1.3-κ correction (LANDED G1.3).
+- Plaintext-to-plaintext NOOP comparison via `plaintextHash` private helper + read+decrypt existing ciphertext inside updateCapsule per Q-G1.3-ζ + V2-CONTENT-NOOP-PATCH correction (LANDED G1.3). Plaintext never logged, returned, or persisted to audit details per RULE 0 cryptographic-confidentiality discipline.
+- σ-A existing-content-unreadable conservative-changed fallback per Q-G1.3-σ LOCK Option α (LANDED G1.3).
+- CAS conflict standalone post-rollback DENIED audit emission per V5 Patch 1 LOCK Option (b) audit-chain integrity discipline (LANDED G1.3).
+- Elixir audit/canonical/idempotency substrate retains support/verification role only per §Sub-decision Q-ι LOCKED default disposition (SKIP G1.4); no Elixir code changes; 8-point grep-grounded evidence preserved at G1.4 H2 SKIP record (LANDED G1.4 `3505fde`).
+- Cross-language canonical_record byte-equivalence verified across 16 fixture pairs (12 baseline + 4 NEW mutation-class) per ADR-0033 cross-language data-ownership discipline (LANDED G1.5 `16567eb`).
+- CAPSULE_WRITE fixture-drift cleanup at `apps/cosmp_router/test/cosmp_router/storage/postgres_test.exs` per G1.4 SKIP record forward-substrate disposition (LANDED G1.5).
+- Full mutation-discrimination test coverage at unit + integration tiers per Q-G1.5-ζ scope LOCK (LANDED G1.5).
+
+### Forward-substrate at G1.6 closure register substantively
+
+The following items remain forward-substrate (NOT closed at G1.6) per substrate-honest disposition:
+
+- D-PRISMA-ECTO-SCHEMA-OWNERSHIP-BOUNDARY — Prisma `db push` drops Ecto-owned tables (`schema_migrations`, `idempotency_keys`); CI handles via Prisma push → Ecto migrate ordering; local `db:push:test` does not auto-restore. Per G1.2 Correction 4 forward-substrate disposition.
+- D-STORAGE-DB-ATOMICITY-BOUNDARY — `contentStore.write` stays outside Prisma `$transaction`; pre-existing storage→DB orphan risk. Per G1.3 Correction 4 + Q-G1.3-ρ LOCK. Transactional outbox pattern is canonical remediation; deferred to later mini-arc if Founder authorizes.
+- `@niov/database` MutationType re-export cleanup — G1.3 imports MutationType direct from `@prisma/client`; future cosmetic consolidation via `@niov/database/index.ts` re-export per G1.3 Correction 9d.
+- `CapsuleMetadata` mutation_type field extension — `capsule.ts` CapsuleMetadata interface error message "and 6 more" reflects mutation_type now in Prisma client; type-drift cleanup forward-substrate.
+- CI unit-tier label staleness — `.github/workflows/ci.yml` labels Unit tier as `(371 tests)` but actual count is 519 post-G1.5; cosmetic cleanup forward-substrate.
+- Gate 19 grep false-positive refinement — G1.3 V5 Gate 19 grep pattern `return.*plaintext\b` matched function parameter name `plaintext` in `plaintextHash` helper return statement; substantively PASS by inspection. Future grep-pattern refinement forward-substrate.
+- ADR-0042 §Sub-decision Q-μ idempotency_test.exs / write_or_replay/6 reference drift — referenced Elixir wrapper does not exist in current substrate; G1.4 SKIP record + G1.5 Q-G1.5-δ LOCK confirm SKIP. Forward-substrate if Founder later authorizes Elixir-idempotency mini-arc.
+
+### Sub-arc 2 status at Gap 1 closure register substantively
+
+**Gap 1 Capsule Mutation Discrimination CLOSED** substantively at G1.6 register substantively per the 6-commit mini-arc lineage above.
+
+**Sub-arc 2 remains IN FLIGHT** pending Gap 3 (ADR-0043 pgvector Embedding) + Gap 4 (ADR-0044 Decay Execution Formalization) + Gap 5 (ADR-0045 Capsule-Level Staleness Detection) + optional Gap 6 (ADR-0046 AI_AGENT EntityType-Discriminated Capsule Routing) per ADR-0041 CL.1 scope patch register substantively. Final Sub-arc 2 closure cascade awaits all per-gap mini-arcs G1 + G3 + G4 + G5 + optional G6 landing and final Sub-arc 2 closure docs cascade per Founder CL.1 scope patch substantively.
+
+**ADR-0041 amendment at G1.6: NONE** per Q-G1.6-β LOCK. ADR-0041 remains Proposed per CL.1 scope patch; Gap 1 closure progress documented at this ADR-0042 §G1.6 H2 + section-12-progress + CURRENT_BUILD_STATE substantively; no in-place ADR-0041 update fires at G1.6 register substantively.
+
+### G1.6 close authorization lineage
+
+Founder authorization explicit at G1.6 substantive landing per RULE 20 at `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-G1.6-V5-MINIMAL-EXECUTION-REQUEST]`.
+
+Preflight discipline lineage:
+
+- G1.6.0 wide preflight per `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-G1.6-PREFLIGHT]` mapped 5 closure surfaces (ADR-0042 + section-12-progress + CURRENT_BUILD_STATE + architecture/README + CLAUDE.md) + analyzed candidate ADR-0035 cluster expansion observation.
+- G1.6 Q-lock disposition fired at `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-G1.6-QLOCK]`: Q-G1.6-α INCLUDE 1 ADR-0035 observation (D-TEST-TIER-WAIVER-SCOPE-PRECISION as 36th canonical) + Q-G1.6-β NO ADR-0041 amendment + Q-G1.6-γ INCLUDE CURRENT_BUILD_STATE H2 header visibility update.
+- G1.6 paste-authoring discipline: V1 → V2 → V3 → V4 → V5 redraft cycle applied at substrate-honest pre-execution discipline register per RULE 13; Founder corrections to long prose-heavy pastes drove a switch to a minimal constraint-based execution paste at V5 register substantively.
+
+Gap 1 Capsule Mutation Discrimination CLOSED at canonical-state register substantively. ADR-0042 Status: Accepted 2026-05-17. Sub-arc 2 closure remains forward-substrate per ADR-0041 CL.1 scope patch substantively pending Gap 3/4/5/optional 6 mini-arcs + final Sub-arc 2 closure cascade.

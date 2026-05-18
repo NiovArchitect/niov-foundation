@@ -1304,6 +1304,19 @@ load-on-open principle requires canonical patterns at the
 RULE / ADR / onboarding-doc register, not buried in commit
 histories.
 
+### Sub-arc 2 Gap 1 G1.6 cluster expansion (36th observation; D-TEST-TIER-WAIVER-SCOPE-PRECISION)
+
+PROMOTE D-TEST-TIER-WAIVER-SCOPE-PRECISION 36th canonical at substrate-build register substantively at sub-arc 2 Gap 1 G1.6 `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` register substantively per Founder Q-G1.6-α LOCK at `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-G1.6-QLOCK]` register substantively.
+
+**D-TEST-TIER-WAIVER-SCOPE-PRECISION** — Minimal test waiver scope must grep
+ALL affected test tiers, not only the primary local or focused tier.
+
+Recurrence-1 (G1.3 Q-G1.3-ξ Option β substantively): the minimal-waiver authorization for the Q-γ.1 clean-transition audit literal change (`CAPSULE_CREATED` → `CAPSULE_MUTATION_ADD`) was scoped at G1.3 V5 authoring time to `tests/unit/cosmp/write.test.ts` only (2-line literal sync at L179 + L194). The full canonical CI unit tier passed at Gate 23. CI Job 4 (Integration tier) subsequently surfaced 2 failing assertions at `tests/integration/jurisdiction-cosmp-enforcement.test.ts:828 + 926` querying the stale `event_type: "CAPSULE_CREATED"` literal. Required follow-up commit `8f047de` `[CAPSULE-MUTATION-WRITE-SERVICE-G1.3-INTEGRATION-FIX]` extending the minimal-waiver-pattern to integration tier (6-line literal sync across 3 assertion sites + 3 prose/comment references).
+
+**Discipline rule:** when authoring a minimal-waiver paste that updates an intentionally changed literal / event_type / enum value / taxonomy, the preflight grep MUST enumerate ALL affected test tiers (`tests/unit/` + `tests/integration/` + `apps/cosmp_router/test/` + Elixir test fixtures + canonical fixture generators). Scoping the waiver to the primary local or focused tier alone risks integration-tier or cross-language-fixture-tier stale literals surfacing at CI post-push, requiring follow-up cleanup commits and producing temporary CI red.
+
+**Discipline binding:** at the substrate-build register substantively per ADR-0035 §9 cluster expansion canonical at sub-arc 2 Gap 1 G1.6 substantively per Q-G1.6-α LOCK.
+
 ## Forward Path
 
 | Sub-phase | Subject | This ADR's instantiation |
