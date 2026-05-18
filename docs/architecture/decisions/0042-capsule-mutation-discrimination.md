@@ -571,3 +571,198 @@ Pre-flight discipline lineage:
 Gap 1 closure remains forward-substrate to optional G1.4 (Elixir;
 default SKIP per Q-ι) + G1.5 (full test coverage) + G1.6 (closure
 cascade, ADR-0042 Proposed → Accepted) per ADR-0042 §Sub-decision Q-μ.
+
+## G1.4 Formal SKIP Record — CAPSULE-MUTATION-ELIXIR-AUDIT
+
+Status: SKIPPED / NOT REQUIRED
+Date: 2026-05-17
+Trigger: G1.4.0 wide preflight per
+`[CAPSULE-MUTATION-ELIXIR-AUDIT-G1.4-PREFLIGHT]` (read-only substrate
+mapping across Elixir COSMP router + DBGI supervisor + cross-language
+canonical fixtures + parallel execution boundaries).
+
+### Disposition
+
+G1.4 was canonicalized as a CONDITIONAL mini-arc per ADR-0042
+§Sub-decision Q-ι default LOCK Option α: "SKIP G1.4 — Elixir substrate
+consumes MutationType as a string at the canonical_record/1
+byte-equivalence boundary substantively without substantive Elixir
+code change per the Q-ζ TS-canonical-port discipline." The conditional
+clause "fires only if grep at G1.4 pre-flight register substantively
+proves the Elixir substrate requires substantive change" specified the
+SKIP-default may flip only when grep-grounded evidence proves Elixir
+code change is required at the `canonical_record/1` field-projection
+register substantively.
+
+**The condition did not trigger.** The G1.4.0 preflight grep proved
+the SKIP default is substrate-coherent at the current substrate-state
+register substantively. **No Elixir code changes are authorized or
+required at G1.4 register substantively.** This commit lands as the
+formal docs-only SKIP record per Founder authorization at
+`[CAPSULE-MUTATION-ELIXIR-AUDIT-G1.4-SKIP-RECORD-AUTH]`.
+
+### Substrate evidence (grep-grounded per RULE 12 / 13)
+
+The G1.4.0 preflight verified the following empirically across
+`apps/cosmp_router/lib/` and `apps/dbgi_supervisor/lib/`:
+
+1. **`CosmpRouter.Audit.canonical_record/1`** at
+   `apps/cosmp_router/lib/cosmp_router/audit.ex:146-164` treats
+   `event_type` as an opaque string parameter (no enum gate; no
+   literal-set validation). The 14-field byte-equivalent projection
+   per ADR-0033 §Sub-decision 5b-ii is event-type-string-agnostic —
+   the audit primitive correctly hashes any literal including the 4
+   NEW G1.2 `CAPSULE_MUTATION_*` literals without code change.
+
+2. **`CosmpRouter.Audit.write_audit_event/1`** at audit.ex:252 and
+   **`/3`** at audit.ex:272 accept `event_type` as an opaque string;
+   no validation against a closed enum. Cross-language byte-equivalence
+   per ADR-0033 is preserved by construction for any TS-emitted literal.
+
+3. **`CosmpRouter.Idempotency`** at
+   `apps/cosmp_router/lib/cosmp_router/idempotency.ex` caches by
+   `(idempotency_key, scope)` tuple. `check/2` at L67 and `record/3`
+   at L94 do not inspect `event_type` or `mutation_type` for routing
+   or storage decisions. The idempotency layer is event-type-opaque
+   and mutation-type-opaque at substrate-state ground truth.
+
+4. **`CosmpRouter.Operations`** at
+   `apps/cosmp_router/lib/cosmp_router/operations.ex` emits
+   COSMP-namespaced audit literals only: `COSMP_AUTHENTICATE` at L84,
+   `COSMP_NEGOTIATE` at L109, `COSMP_READ` at L134, plus
+   `COSMP_WRITE` / `COSMP_SHARE` / `COSMP_REVOKE` / `COSMP_AUDIT` at
+   subsequent op handlers. The Elixir COSMP router does **NOT** emit
+   any `CAPSULE_MUTATION_*` literal; that literal set is exclusively
+   TypeScript-side per ADR-0042 §Sub-decision Q-ζ TS-canonical-port
+   discipline + Q-γ.1 clean transition LOCK substantively.
+
+5. **`DbgiSupervisor.DMWWorker`** at
+   `apps/dbgi_supervisor/lib/dbgi_supervisor/dmw_worker.ex` and
+   **`CosmpRouter.GRPC.Server`** at
+   `apps/cosmp_router/lib/cosmp_router/grpc/server.ex` are
+   dispatcher/supervision substrate per ADR-0038/0039/0040; they
+   delegate execution via the `DbgiSupervisor.CosmpExecution`
+   behaviour. **Neither writes capsule rows to Postgres directly.**
+   TS API at `apps/api/src/services/cosmp/write.service.ts` remains
+   the canonical capsule write path post-G1.3 per the
+   forward-substrate framing canonical at ADR-0028 §3.
+
+6. **`expected_version` + `CAPSULE_VERSION_CONFLICT`** are TS-side
+   write semantics introduced at G1.3 per ADR-0042 §Sub-decision
+   Q-η + Q-G1.3-θ LOCKs. The CAS check fires inside the TS-owned
+   `prisma.$transaction` via `tx.memoryCapsule.updateMany` per V4 Patch
+   1. The CAPSULE_VERSION_CONFLICT denial path emits a standalone
+   `writeAuditEvent` post-rollback per V5 Patch 1 LOCK Option (b).
+   No Elixir-side cooperation is required for OCC or version conflict
+   detection at the current substrate-state register substantively.
+
+7. **`CosmpRouter.MemoryCapsule`** Ecto schema at
+   `apps/cosmp_router/lib/cosmp_router/schemas/memory_capsule.ex` does
+   **not** include a `mutation_type` field. This is **benign** per
+   standard Ecto behavior: fields not declared in the schema are
+   silently ignored when reading from the database (Ecto select
+   projection is schema-bounded). Insert/update statements emitted by
+   Elixir Ecto code never reference `mutation_type` because Elixir
+   does not write capsule mutation classifications (TS API owns
+   capsule writes per ADR-0042 §Sub-decision Q-θ). The G1.2 Prisma
+   schema addition of `mutation_type MutationType?` at schema.prisma:157
+   is read-only-ignored at the Elixir register substantively.
+
+8. **`CAPSULE_WRITE`** appears only at
+   `apps/cosmp_router/test/cosmp_router/storage/postgres_test.exs`
+   lines 190, 200, 221 as a synthetic test-fixture literal for
+   verifying `audit_chain_for_capsule/1` ordering. The literal does
+   **not** appear in any Elixir lib code. The test is event-type
+   literal-vocabulary-agnostic; it verifies audit-chain mechanics
+   (hash recomputation + timestamp ordering), not membership in any
+   canonical taxonomy. The drift is fixture-only and does not block
+   live production.
+
+### Forward-substrate disposition
+
+- **Cross-language `CAPSULE_MUTATION_*` canonical-record fixtures:**
+  the existing 12 byte-equivalence fixtures at
+  `apps/cosmp_router/test/fixtures/canonical_record/fixtures.json`
+  test the canonical-record serialization MECHANISM (sorted-key
+  pipe-join with millisecond-truncated timestamp), not the literal
+  vocabulary. Extending to mutation-class fixtures (4 NEW pairs, one
+  per MutationType variant) is **deferred to G1.5
+  `[CAPSULE-MUTATION-TESTS]`** per ADR-0042 §Sub-decision Q-ζ
+  ("the existing 10 fixture pairs per ADR-0033 are extended with
+  mutation-class fixtures in G1.5"). NOT required for G1.4 SKIP
+  record landing.
+
+- **`CAPSULE_WRITE` test-fixture cosmetic cleanup at
+  `postgres_test.exs:190/200/221`:** deferred to G1.5 or a separate
+  cosmetic cleanup commit (e.g., `[CAPSULE-WRITE-FIXTURE-CLEANUP]`)
+  per Founder discretion. NOT blocking G1.4 SKIP record or G1.6
+  closure cascade. The synthetic literal does not match any canonical
+  taxonomy member (pre-G1.2 or post-G1.2); renaming to
+  `CAPSULE_MUTATION_ADD` would be cosmetic alignment with the
+  Q-G1.3-ξ Option β pattern extension to Elixir test substrate.
+
+- **G1.5 `[CAPSULE-MUTATION-TESTS]`** remains required for full
+  mutation-discrimination test coverage per ADR-0042 §Sub-decision
+  Q-μ: TS unit/integration tests covering ADD/UPDATE/MERGE/NOOP
+  discrimination + expected_version OCC + CAPSULE_VERSION_CONFLICT +
+  σ-A unreadable-existing fallback + plaintext probe non-leakage +
+  cross-language canonical-record byte-equivalence fixture extension
+  for mutation-class + (optional per Founder) CAPSULE_WRITE fixture
+  cosmetic cleanup.
+
+- **G1.6 `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]`** remains
+  required for the docs-only closure cascade: ADR-0042 Status
+  Proposed → Accepted + Gap 1 IN FLIGHT → CLOSED at
+  `docs/reference/section-12-progress.md` + Gap 1 H3 closure prose at
+  `docs/CURRENT_BUILD_STATE.md` + `docs/architecture/README.md`
+  ADR-0042 catalog Proposed → Accepted refresh + `CLAUDE.md`
+  ADR-0042 catalog entry refresh + ADR-0035 §9 substrate-build
+  observation cluster expansion if substrate-build observations
+  surface across G1.2-G1.5 that warrant canonical promotion.
+
+### ADR-0033 cross-citation amendment disposition
+
+ADR-0042 §Bidirectional Citation paragraph 2 (line 165) specified
+that if G1.4 conditional Elixir support-port fires and surfaces
+substrate-state evidence at the `canonical_record/1` register
+substantively that warrants an ADR-0033 cross-citation amendment
+substantively, that amendment fires at G1.4 register substantively
+per the ADR-0035 §Amendment Pattern discipline canonical.
+
+**G1.4 SKIP disposition implication:** no ADR-0033 cross-citation
+amendment fires at G1.4 register substantively because Elixir
+substrate did not require change. The substrate-state evidence
+surfaced at G1.4.0 preflight confirms the existing ADR-0033
+cross-language data-ownership canonical disposition holds without
+amendment: Prisma owns the MutationType enum + mutation_type column
+DDL at the TypeScript canonical register substantively (G1.2); Elixir
+consumes MutationType values as opaque strings at the
+`canonical_record/1` byte-equivalence boundary substantively (G1.4
+SKIP). The Ecto MemoryCapsule schema absence of mutation_type field
+is benign forward-substrate per the Q-ι support/verification-role
+discipline.
+
+### G1.4 close authorization lineage
+
+Founder authorization explicit at G1.4 SKIP-record substantive landing
+per RULE 20 at `[CAPSULE-MUTATION-ELIXIR-AUDIT-G1.4-SKIP-RECORD-AUTH]`.
+Preflight discipline lineage:
+
+- G1.4.0 wide preflight per
+  `[CAPSULE-MUTATION-ELIXIR-AUDIT-G1.4-PREFLIGHT]` proved the SKIP
+  default per Q-ι is substrate-coherent at the current substrate-state
+  register substantively. Read-only substrate mapping covered: Elixir
+  audit/canonical/idempotency module surface + cross-language fixture
+  byte-equivalence mechanism + Elixir parallel execution boundary +
+  CAPSULE_WRITE fixture drift scope.
+
+- G1.4 SKIP record commit `[CAPSULE-MUTATION-ELIXIR-AUDIT]` lands as
+  the formal substrate-state acknowledgment per Founder authorization.
+  G1.4 mini-arc count is 1 commit (docs-only). The CAPSULE prefix per
+  Q-ν LOCK is preserved (substantive landing in the mini-arc sequence
+  even though the substantive content is the SKIP disposition itself).
+
+Gap 1 closure remains forward-substrate to G1.5 + G1.6 per ADR-0042
+§Sub-decision Q-μ. The G1.4 SKIP record DOES NOT close Gap 1 at
+canonical-state register substantively. Sub-arc 2 closure remains
+forward-substrate per ADR-0041 CL.1 scope patch.
