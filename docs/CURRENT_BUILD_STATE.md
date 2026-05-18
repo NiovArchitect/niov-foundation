@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -506,6 +506,24 @@ References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q
 **Forward-substrate unchanged from G3.1 + G3.2 enumeration:** G3.4 embedding provider + G3.5 write-integration via mutation_type + G3.6 retrieval + COE integration disposition per Q-G3-δ + G3.7 conditional backfill + G3.8 conditional Elixir per Q-G3-θ + G3.9 tests + G3.10 docs-only closure cascade.
 
 **Founder LOCKS preservation:** 12 Q-G3.3 sub-decisions / locks Q-G3.3-α through Q-G3.3-λ all LOCKED at `[CAPSULE-EMBEDDING-SCHEMA-G3.3-QLOCK]` register substantively per RULE 20; G3.3 execution authorization at `[CAPSULE-EMBEDDING-SCHEMA-G3.3-EXECUTE-VERIFY-AUTH]`. CI label staleness KEPT DEFERRED per Q-G3.2-ζ (preserved forward-substrate from G1.6 + G3.2). D-G3.3-LOCAL-CONTAINER-DRIFT surfaced docs-only; ADR-0035 promotion deferred to G3.10 per Q-G3.3-λ.
+
+#### G3.4 LANDED — Embedding provider substrate (2026-05-17)
+
+**Status:** G3.4 `[CAPSULE-EMBEDDING-PROVIDER]` LANDED 2026-05-17 (single commit covering provider + tests + ADR/state/catalog updates) per ADR-0043 §Sub-decision 3 (Q-G3-γ LOCK; text-embedding-3-small @ 1536 dims) + 12 Q-G3.4 sub-decisions / locks Q-G3.4-α through Q-G3.4-λ at `[CAPSULE-EMBEDDING-PROVIDER-G3.4-QLOCK]`. ADR-0043 Status preserved as `Proposed 2026-05-17`. G3.4 does NOT close Gap 3.
+
+**Substrate sites (8 authorized files):** 1 NEW provider single-file (`apps/api/src/services/embedding/embedding.service.ts`) + 1 barrel re-export MOD (`apps/api/src/index.ts`) + 1 NEW unit test (`tests/unit/embedding.test.ts`) + 4 docs/state files (ADR-0043 + section-12-progress + this CURRENT_BUILD_STATE + README) + 1 CLAUDE.md mirror = 8.
+
+**Provider shape:** EmbeddingProvider interface (single-text per call per Q-G3.4-ε; opts.fixtureKey for ADR-0014-style test dispatch) + EmbeddingResult discriminated union (5 error_class values per Q-G3.4-κ: AUTH / RATE_LIMIT / PROVIDER_ERROR / DIMENSION_MISMATCH / VALIDATION; vector type number[] per Q-G3.4-δ) + OpenAIEmbeddingProvider (reuses OPENAI_API_KEY per Q-G3.4-θ; hardcoded text-embedding-3-small @ 1536 dims per Q-G3-γ + Q-G3.3-γ lockstep) + FixtureBasedEmbeddingProvider (strict-fixtureKey per ADR-0014 precedent; uses computeFixtureVector) + getEmbeddingProvider() factory (returns OpenAI default per Q-G3.4-β; no PREFERRED_EMBEDDING env switching) + computeFixtureVector helper (deterministic SHA-256 iterated 1536-dim number[] in [-1, 1]; no file-based fixtures required per Q-G3.4-γ).
+
+**Privacy invariant per Q-G3-ζ LOCK + RULE 0:** vectors are server-side substrate only; never returned at the HTTP/gRPC API response boundary; never logged (model / dimensions / tokens_used metadata is permissible; vector content is NOT); never sent to AI_AGENT entities denied content access (future G3.5/G3.6 enforce per-capsule wallet_id + ai_access_blocked + requires_validation gates per Q-G3-ζ).
+
+**Test discipline per Q-G3.4-η:** 10 unit tests at `tests/unit/embedding.test.ts` covering computeFixtureVector determinism/uniqueness/dimension/range, FixtureBasedEmbeddingProvider strict-fixtureKey/validation/canonical-success-shape, OpenAIEmbeddingProvider constructor missing-key fail-fast + explicit-apiKey instantiation, getEmbeddingProvider factory shape, discriminated-union narrowing, no-network independence proof. No real OpenAI calls in any test.
+
+**Scope boundaries preserved:** No CircuitBreaker wrapper per Q-G3.4-ζ (provider not yet integrated into write path). No batch interface per Q-G3.4-ε (forward-substrate to G3.7 if bulk backfill authorized). No new dependency (openai SDK already at `package.json` L42). No write/retrieval integration (G3.5/G3.6 forward-substrate). No `CAPSULE_SIMILARITY_SEARCH` audit literal (G3.6 forward-substrate). No ADR-0022 amendment (Q-G3-δ preserved). No schema/DB-scripts/CI/Elixir/docker-compose changes.
+
+**Forward-substrate unchanged from G3.1+G3.2+G3.3 enumeration:** G3.5 write-integration via Q-G3-ι mutation_type matrix + G3.6 retrieval + COE integration disposition per Q-G3-δ + G3.7 conditional backfill + G3.8 conditional Elixir + G3.9 integration tests + G3.10 docs-only closure cascade.
+
+**Founder LOCKS preservation:** 12 Q-G3.4 sub-decisions / locks Q-G3.4-α through Q-G3.4-λ all LOCKED at `[CAPSULE-EMBEDDING-PROVIDER-G3.4-QLOCK]` register substantively per RULE 20; G3.4 execution authorization at `[CAPSULE-EMBEDDING-PROVIDER-G3.4-EXECUTE-VERIFY-AUTH]`.
 
 ---
 

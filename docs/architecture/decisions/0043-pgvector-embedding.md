@@ -678,3 +678,106 @@ conditional Elixir; G3.9 tests; G3.10 docs-only closure cascade.
 
 **Founder authorization explicit at G3.3 substantive landing per
 RULE 20 at `[CAPSULE-EMBEDDING-SCHEMA-G3.3-EXECUTE-VERIFY-AUTH]`.**
+
+## G3.4 Progress — Embedding Provider Substrate LANDED (2026-05-17)
+
+G3.4 `[CAPSULE-EMBEDDING-PROVIDER]` LANDS the embedding provider
+abstraction per §Sub-decision 11 (Q-G3-κ) + 12 Q-G3.4 sub-decisions /
+locks Q-G3.4-α through Q-G3.4-λ at
+`[CAPSULE-EMBEDDING-PROVIDER-G3.4-QLOCK]`.
+
+**Single-file structure per Q-G3.4-α LOCK** at
+`apps/api/src/services/embedding/embedding.service.ts` mirroring
+`apps/api/src/services/llm/llm.service.ts` pattern.
+
+**Exports:**
+
+- `interface EmbeddingProvider` — single-text-per-call signature per
+  Q-G3.4-ε LOCK; opts.fixtureKey enables ADR-0014-style test dispatch.
+- `type EmbeddingResult` — discriminated union per Q-G3.4-γ + Q-G3.4-δ
+  + Q-G3.4-κ LOCKS. `ok: true` exposes `vector: number[]` (1536 dims;
+  pgvector-compatible) + `model: "text-embedding-3-small"` +
+  `dimensions: 1536` + `tokens_used: number`. `ok: false` exposes one
+  of 5 error_class values: AUTH / RATE_LIMIT / PROVIDER_ERROR /
+  DIMENSION_MISMATCH / VALIDATION.
+- `class OpenAIEmbeddingProvider implements EmbeddingProvider` —
+  production default per Q-G3.4-β LOCK. Reuses `OPENAI_API_KEY` per
+  Q-G3.4-θ LOCK (no new env var; openai SDK 6.35.0 already at
+  `package.json` L42 — no new dependency at G3.4). Hardcoded
+  `text-embedding-3-small` per Q-G3-γ LOCK; hardcoded 1536 dimensions
+  per Q-G3.3-γ Prisma lockstep. Maps OpenAI errors to discriminated
+  classes via status-code + message inspection.
+- `class FixtureBasedEmbeddingProvider implements EmbeddingProvider` —
+  deterministic CI test provider. opts.fixtureKey REQUIRED
+  (strict-failure per ADR-0014 precedent). Validates text input
+  identically to OpenAI provider; returns
+  `vector: computeFixtureVector(fixtureKey)` + tokens_used: 0.
+- `function getEmbeddingProvider(): EmbeddingProvider` — factory
+  returns OpenAIEmbeddingProvider by default per Q-G3.4-β LOCK. No
+  PREFERRED_EMBEDDING env switching at G3.4.
+- `function computeFixtureVector(fixtureKey: string): number[]` —
+  deterministic SHA-256-iterated algorithm per Q-G3.4-γ LOCK. Same
+  fixtureKey always yields identical 1536-element vector with values
+  in `[-1, 1]`. No file-based fixtures required at G3.4.
+
+**No CircuitBreaker wrapper at G3.4 per Q-G3.4-ζ LOCK** — provider is
+not yet integrated into write path; circuit-breaker can be added at
+G3.5 only if write-path latency/rate-limit posture requires it.
+
+**Barrel re-export per Q-G3.4-ι LOCK** at `apps/api/src/index.ts`
+following the canonical `llm.service.ts` precedent at L264-275 (verified
+during preflight): `EmbeddingProvider` + `EmbeddingResult` (types) +
+`OpenAIEmbeddingProvider` + `FixtureBasedEmbeddingProvider` +
+`getEmbeddingProvider` + `computeFixtureVector` (classes/functions)
+exported via `./services/embedding/embedding.service.js` path.
+
+**Unit tests per Q-G3.4-η LOCK** at `tests/unit/embedding.test.ts` —
+10 test cases covering: computeFixtureVector determinism / uniqueness
+/ dimension / range; FixtureBasedEmbeddingProvider strict-fixtureKey
+behavior / validation / canonical success shape; OpenAIEmbeddingProvider
+constructor missing-key fail-fast / instantiates-with-explicit-apiKey;
+getEmbeddingProvider factory shape; discriminated-union narrowing;
+no-network independence proof. No real OpenAI calls in any test.
+
+**Privacy invariant per Q-G3-ζ LOCK + RULE 0:** vectors are server-side
+substrate only; never returned at the HTTP/gRPC API response boundary;
+never logged (model / dimensions / tokens_used metadata is permissible;
+vector content is NOT); never sent to AI_AGENT entities denied content
+access per future G3.5 write + G3.6 retrieval gate enforcement at
+wallet_id + ai_access_blocked + requires_validation registers. The
+embedding service contains NO logger.* calls referencing vector
+content (Tier 1 Gate 8 verifies).
+
+**Scope boundaries preserved at G3.4:**
+
+- G3.4 does NOT close Gap 3 at canonical-state register substantively;
+  Gap 3 remains IN FLIGHT.
+- G3.4 does NOT integrate into write.service.ts (forward-substrate to
+  G3.5 per Q-G3-ι mutation_type matrix).
+- G3.4 does NOT integrate into read.service.ts / coe.service.ts
+  (forward-substrate to G3.6).
+- G3.4 does NOT add the `CAPSULE_SIMILARITY_SEARCH` audit literal
+  (forward-substrate to G3.6).
+- G3.4 does NOT amend ADR-0022 (Q-G3-δ LOCK preserved); the
+  `combined_score` formula remains untouched.
+- G3.4 does NOT touch `schema.prisma`, DB scripts
+  (`apply-pgvector-extension.ts` / `apply-hnsw-index.ts` /
+  `test-db-up.sh` / `prisma-db-push-test.sh`), CI workflows,
+  `docker-compose.test.yml`, `.husky/pre-commit`, `package.json`,
+  lockfiles, or any other ADR (no ADR-0011 / 0013 / 0014 / 0015 /
+  0016 / 0022 / 0025 / 0033 / 0034 / 0035 / 0041 / 0042 amendments).
+- G3.4 does NOT add a new dependency — `openai: ^6.35.0` already at
+  `package.json` L42.
+- ADR-0043 Status preserved at `Proposed 2026-05-17`.
+
+**Forward-substrate at G3.5-G3.10 register substantively (unchanged
+from G3.1 §Sub-decision 11 Q-G3-κ enumeration):** G3.5
+`[CAPSULE-EMBEDDING-WRITE-INTEGRATION]` write.service.ts via Q-G3-ι
+mutation_type matrix (ADD→generate / UPDATE+MERGE→regenerate /
+NOOP→preserve); G3.6 `[CAPSULE-EMBEDDING-RETRIEVAL]` searchBySimilarity
++ CAPSULE_SIMILARITY_SEARCH audit literal + COE integration disposition
+per Q-G3-δ; G3.7 conditional backfill; G3.8 conditional Elixir; G3.9
+integration tests; G3.10 docs-only closure cascade.
+
+**Founder authorization explicit at G3.4 substantive landing per
+RULE 20 at `[CAPSULE-EMBEDDING-PROVIDER-G3.4-EXECUTE-VERIFY-AUTH]`.**

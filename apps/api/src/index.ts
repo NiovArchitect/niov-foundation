@@ -440,3 +440,16 @@ export { MemoryContentStore } from "./content-store.js";
 export type { ContentStore } from "./content-store.js";
 
 export { registerCosmpRoutes } from "./routes/cosmp.routes.js";
+
+// ADR-0043 G3.4 (Q-G3.4-α + Q-G3.4-ι LOCKS): embedding provider
+// substrate exports. Mirrors llm.service.ts re-export pattern.
+export {
+  FixtureBasedEmbeddingProvider,
+  OpenAIEmbeddingProvider,
+  computeFixtureVector,
+  getEmbeddingProvider,
+} from "./services/embedding/embedding.service.js";
+export type {
+  EmbeddingProvider,
+  EmbeddingResult,
+} from "./services/embedding/embedding.service.js";
