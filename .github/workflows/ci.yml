@@ -5,7 +5,7 @@
 #
 # 8 locked architectural decisions (A-H) in ADR-0015. Key
 # pins for substrate-honesty discipline:
-# - Decision E: postgres:16.4-alpine pinned (true parity
+# - Decision E: pgvector/pgvector:0.8.2-pg16-trixie pinned (parity with Supabase pgvector + ADR-0015 Decision E amendment at G3.2; true parity
 #   with docker-compose.test.yml; Drift G7-A resolution)
 # - Decision G: npm caching via setup-node@v6
 # - Decision H: Node 22.11.0 via .nvmrc (LTS posture per
@@ -67,7 +67,7 @@ jobs:
       DIRECT_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
     services:
       postgres:
-        image: postgres:16.4-alpine
+        image: pgvector/pgvector:0.8.2-pg16-trixie
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -111,7 +111,7 @@ jobs:
             npx vitest --version || true
             echo ""
             echo "=== Postgres image ==="
-            docker ps --filter ancestor=postgres:16.4-alpine || true
+            docker ps --filter ancestor=pgvector/pgvector:0.8.2-pg16-trixie || true
           } > env-metadata.log 2>&1
       - name: Upload unit-tier diagnostics on failure
         if: failure()
@@ -131,7 +131,7 @@ jobs:
       DIRECT_URL: postgresql://postgres:postgres@localhost:5433/foundation_test
     services:
       postgres:
-        image: postgres:16.4-alpine
+        image: pgvector/pgvector:0.8.2-pg16-trixie
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -175,7 +175,7 @@ jobs:
             npx vitest --version || true
             echo ""
             echo "=== Postgres image ==="
-            docker ps --filter ancestor=postgres:16.4-alpine || true
+            docker ps --filter ancestor=pgvector/pgvector:0.8.2-pg16-trixie || true
           } > env-metadata.log 2>&1
       - name: Upload integration-tier diagnostics on failure
         if: failure()
@@ -192,14 +192,14 @@ jobs:
     runs-on: ubuntu-latest
     # Sub-phase 5b-ii [BEAM-COSMP-INTEROP-PERSISTENCE] per ADR-0033
     # §Decision Q-PG-TEST + D-5BII-EXEC-2: Postgres service block for
-    # the Elixir tier; postgres:16.4-alpine matches ADR-0015 §Decision E
+    # the Elixir tier; pgvector/pgvector:0.8.2-pg16-trixie matches ADR-0015 §Decision E amendment at G3.2
     # pin used by the TS unit tier. Port-map 5433:5432 mirrors the local
     # Colima container convention so config/test.exs's hardcoded
     # localhost:5433 URL works in both registers without env-var
     # plumbing.
     services:
       postgres:
-        image: postgres:16.4-alpine
+        image: pgvector/pgvector:0.8.2-pg16-trixie
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

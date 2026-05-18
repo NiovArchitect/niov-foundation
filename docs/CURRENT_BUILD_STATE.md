@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -474,6 +474,20 @@ Founder LOCKS preservation: 11 Q-G3 sub-decisions / locks Q-G3-α through Q-G3-�
 Forward-substrate canonical at canonical-state register substantively: G3.2 pgvector image switch + ADR-0013 / ADR-0015 / ADR-0016 amendments (forward-substrate); G3.3 Prisma schema + extension/index scripts (forward-substrate); G3.4 embedding provider (forward-substrate); G3.5 write-integration via mutation_type (forward-substrate); G3.6 retrieval + COE integration disposition (forward-substrate; ADR-0022 amendment authorization required if path a or b selected); G3.7 conditional backfill (forward-substrate; lazy-on-first-read default); G3.8 conditional Elixir (forward-substrate; default skip per β-A); G3.9 tests (forward-substrate); G3.10 docs-only closure cascade (forward-substrate; closes Gap 3 at canonical-state register substantively); Sub-arc 2 closure cascade (forward-substrate; awaits Gap 4 + Gap 5 + optional Gap 6 + later Sub-arc 2 closure cascade per ADR-0041 CL.1 scope patch).
 
 References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q-F LOCKS load-bearing) + ADR-0042 (Gap 1 mutation_type substrate; Q-G3-ι integration load-bearing) + ADR-0022 (combined_score formula; explicit NO amendment at G3.1) + ADR-0025 (schema-push-target discipline) + ADR-0033 §Decision 7 (cross-language data-ownership boundary) + ADR-0026 §5 (6 BEAM-compatibility patterns) + ADR-0020 (patent-implementation evidence) + ADR-0018 (deployment-target agnosticism) + ADR-0013 + ADR-0015 + ADR-0016 (forward amendments at G3.2) + RULE 0 + RULE 4 + RULE 10 + RULE 13 + RULE 20 + RULE 21 + Patent US 12,517,919 + US 12,164,537 + US 12,399,904; RS-1 through RS-7 current public sources cited verbatim at ADR-0043 §Context register substantively.
+
+#### G3.2 LANDED — pgvector image pin (2026-05-17)
+
+**Status:** G3.2 `[CAPSULE-EMBEDDING-INFRA]` LANDED 2026-05-17 (single docs + infra commit) per ADR-0043 §Sub-decision 1 (Q-G3-α LOCK) + Q-G3.2-α LOCK at `[CAPSULE-EMBEDDING-INFRA-G3.2-QLOCK]`. pgvector-enabled Postgres image pin `pgvector/pgvector:0.8.2-pg16-trixie` LANDED at local/test/CI. G3.2 does NOT close Gap 3 at canonical-state register substantively. G3.2 does NOT change schema, code, tests, Elixir, or scripts.
+
+**Substrate sites:** 5 substantive image substitutions across 3 infra files (`docker-compose.test.yml` L7 + `.github/workflows/ci.yml` 3 service blocks at Unit / Integration / Elixir tiers + `.github/workflows/nightly-real-llm.yml` L41) + 4 prose/comment refresh sites at `.github/workflows/ci.yml` per Q-G3.2-β LOCK (header comment + 2 `docker ps --filter ancestor=` failure-diagnostic lines + Elixir tier comment). Post-G3.2 invariant: zero `postgres:16.4-alpine` references remain in `docker-compose.test.yml` + `.github/workflows/`.
+
+**ADR amendments at G3.2:** ADR-0013 §Amendment G3.2 Image Pin (NEW H2; in-place amendment per Q-G3.2-γ; Status preserved) + ADR-0015 §Decision E amendment at G3.2 (NEW H3 per ADR-0011 §Amendment convention per Q-G3.2-δ; Decision E body preserved) + ADR-0016 §Worked example — pgvector/pgvector:0.8.2-pg16-trixie image pin (G3.2) (NEW H3 worked-example subsection per Q-G3.2-ε) + ADR-0043 §G3.2 Progress — Image Pin LANDED (NEW H2; ADR-0043 Status preserved as Proposed 2026-05-17).
+
+**ADR-0022 NOT amended at G3.2** — Q-G3-δ LOCK preserved; `combined_score` formula at `apps/api/src/services/coe/keywords.ts:87-93` untouched.
+
+**Forward-substrate unchanged from G3.1 §G3.3-G3.10 enumeration:** G3.3 substantive Prisma `embedding Unsupported("vector(1536)")?` field + `scripts/apply-pgvector-extension.ts` + `scripts/apply-hnsw-index.ts` + `scripts/test-db-up.sh` post-push integration; G3.4 embedding provider; G3.5 write-integration via mutation_type; G3.6 retrieval + COE integration disposition; G3.7 conditional backfill; G3.8 conditional Elixir; G3.9 tests; G3.10 docs-only closure cascade.
+
+**Founder LOCKS preservation:** 8 Q-G3.2 sub-decisions / locks Q-G3.2-α through Q-G3.2-θ all LOCKED at `[CAPSULE-EMBEDDING-INFRA-G3.2-QLOCK]` register substantively per RULE 20; G3.2 execution authorization at `[CAPSULE-EMBEDDING-INFRA-G3.2-EXECUTE-VERIFY-AUTH]`. CI label staleness (Unit tier `(371 tests)` / Integration tier `(111 tests + 1 skipped)`) KEPT DEFERRED per Q-G3.2-ζ; preserved forward-substrate from G1.6.
 
 ---
 

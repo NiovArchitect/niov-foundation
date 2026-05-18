@@ -4,7 +4,7 @@
 
 services:
   postgres:
-    image: postgres:16.4-alpine
+    image: pgvector/pgvector:0.8.2-pg16-trixie
     container_name: niov-foundation-test-db
     restart: unless-stopped
     ports:

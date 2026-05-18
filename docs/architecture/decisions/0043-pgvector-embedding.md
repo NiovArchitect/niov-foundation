@@ -510,3 +510,59 @@ no-raw-vector-return invariants.
 - RS-7: `https://supabase.com/docs/guides/ai/vector-indexes/hnsw-indexes`
   + Supabase pgvector documentation — HNSW + IVFFlat production-supported;
   HNSW 2026 default; pgvector 0.8.2 bundled.
+
+## G3.2 Progress — Image Pin LANDED (2026-05-17)
+
+G3.2 `[CAPSULE-EMBEDDING-INFRA]` LANDS the pgvector-enabled Postgres
+image pin per §Sub-decision 1 (Q-G3-α LOCK). ADR-0013 + ADR-0015 +
+ADR-0016 amended in-place at G3.2 per Q-G3.2-γ / Q-G3.2-δ / Q-G3.2-ε
+LOCKS at `[CAPSULE-EMBEDDING-INFRA-G3.2-QLOCK]`.
+
+**LOCKED image pin** (Founder α-A selection per Q-G3.2-α):
+`pgvector/pgvector:0.8.2-pg16-trixie`
+
+**Substrate sites at G3.2 LANDED register:**
+
+- 5 substantive image substitutions across 3 infra files
+  (`docker-compose.test.yml` L7 + `.github/workflows/ci.yml` 3 service
+  blocks at Unit / Integration / Elixir tiers + `.github/workflows/nightly-real-llm.yml`).
+- 4 prose/comment refresh sites at `.github/workflows/ci.yml` per
+  Q-G3.2-β LOCK (header comment + 2 `docker ps --filter ancestor=` failure-diagnostic lines + Elixir tier comment).
+- Post-G3.2 invariant: zero `postgres:16.4-alpine` references remain
+  in `docker-compose.test.yml` + `.github/workflows/`.
+
+**Scope boundaries preserved at G3.2:**
+
+- G3.2 does NOT close Gap 3 at canonical-state register substantively;
+  Gap 3 remains IN FLIGHT.
+- G3.2 does NOT change `schema.prisma`; the Prisma `embedding
+  Unsupported("vector(1536)")?` field remains forward-substrate to G3.3.
+- G3.2 does NOT add `scripts/apply-pgvector-extension.ts` or
+  `scripts/apply-hnsw-index.ts`; raw-SQL post-push scripts remain
+  forward-substrate to G3.3 per §Sub-decision 2 (Q-G3-β LOCK).
+- G3.2 does NOT run `CREATE EXTENSION vector`; the extension binary is
+  present in the new image but the extension is inert until G3.3.
+- G3.2 does NOT touch `scripts/test-db-up.sh`; the 3-step bring-up
+  delegates the image choice entirely to `docker-compose.test.yml`.
+- ADR-0022 NOT amended at G3.2 — Q-G3-δ LOCK preserved; the
+  `combined_score` formula at `apps/api/src/services/coe/keywords.ts:87-93`
+  is untouched.
+- ADR-0041 NOT amended at G3.2 (parent umbrella unchanged).
+- CI label staleness (Unit tier `(371 tests)` / Integration tier
+  `(111 tests + 1 skipped)`) remains DEFERRED per Q-G3.2-ζ KEEP DEFERRED;
+  preserved forward-substrate from G1.6.
+
+**Forward-substrate at G3.3 register substantively:** Prisma schema
+field + `apply-pgvector-extension.ts` + `apply-hnsw-index.ts` +
+`test-db-up.sh` post-push integration + (conditional)
+`previewFeatures = ["postgresqlExtensions"]` per §Sub-decision 2
+Q-G3-β LOCK; G3.4-G3.10 unchanged from §Sub-decision 11 Q-G3-κ
+mini-arc decomposition.
+
+**Founder authorization explicit at G3.2 substantive landing per
+RULE 20 at `[CAPSULE-EMBEDDING-INFRA-G3.2-EXECUTE-VERIFY-AUTH]`.**
+
+ADR-0043 Status preserved at `Proposed 2026-05-17` (the ADR remains
+Proposed; G3.10 closure cascade is the eventual Status transition
+to Accepted at canonical-state register substantively per
+§Sub-decision 11 Q-G3-κ).

@@ -242,3 +242,39 @@ Bidirectional citations (cited from):
   [SEC-DBPUSH-WRAPPER]). The test-tier substrate canonical here is the
   validated target; ADR-0025's Decision section names this ADR as the
   canonical test-DB target.
+
+## Amendment — G3.2 Image Pin (2026-05-17)
+
+G3.2 `[CAPSULE-EMBEDDING-INFRA]` updates the local/test/CI Postgres
+image from `postgres:16.4-alpine` to
+`pgvector/pgvector:0.8.2-pg16-trixie` per ADR-0043 §Sub-decision 1
+(Q-G3-α LOCK) + Q-G3.2-α LOCK at
+`[CAPSULE-EMBEDDING-INFRA-G3.2-QLOCK]`.
+
+Scope of this amendment:
+
+- This is an image-substrate amendment only.
+- No schema, vector field, extension, or HNSW index is created at G3.2.
+- `CREATE EXTENSION vector` + HNSW index creation remain deferred to
+  G3.3 per ADR-0043 §Sub-decision 2 (Q-G3-β LOCK).
+- The 3-step `scripts/test-db-up.sh` bring-up is unchanged; it
+  delegates the image choice entirely to `docker-compose.test.yml`.
+- The `pg_isready` health-check, port-map (5433:5432), env-block,
+  POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB, and DATABASE_URL /
+  DIRECT_URL are all unchanged.
+- ADR-0013 §Decision §Container image lineage is amended in-place per
+  this subsection; the original `postgres:16-alpine` framing at L54-57
+  is preserved at canonical-prose register substantively per RULE 1
+  BUILD FORWARD ONLY.
+
+References (G3.2 cross-cite):
+
+- ADR-0015 Decision E amendment at G3.2 (sibling amendment landed in
+  the same commit; CI service-container parity)
+- ADR-0016 worked example at G3.2 (pin-and-optimize framework
+  worked-example entry for `pgvector/pgvector:0.8.2-pg16-trixie`)
+- ADR-0043 §Sub-decision 1 (Q-G3-α LOCK; parent decision authorizing
+  the pgvector-enabled image transition)
+- pgvector 0.8.2 + PostgreSQL 16 + Debian trixie base — RS-1 + RS-7
+  current public sources embedded at ADR-0043 §Context register
+  substantively

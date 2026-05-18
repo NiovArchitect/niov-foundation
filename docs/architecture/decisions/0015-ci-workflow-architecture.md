@@ -120,6 +120,32 @@ non-determinism reasoning applies to moving tags at any
 cadence). The corrected pin is what's used in the workflow
 files.
 
+### Decision E amendment at G3.2 (2026-05-17)
+
+G3.2 `[CAPSULE-EMBEDDING-INFRA]` updates the CI service-container
+Postgres image from `postgres:16.4-alpine` to
+`pgvector/pgvector:0.8.2-pg16-trixie` across all 3 CI tiers in
+`ci.yml` (Unit / Integration / Elixir) + the nightly-real-llm
+tier — per ADR-0043 §Sub-decision 1 (Q-G3-α LOCK) + Q-G3.2-α LOCK
+at `[CAPSULE-EMBEDDING-INFRA-G3.2-QLOCK]`.
+
+Cross-workflow parity: all 4 CI tiers + the nightly tier preserve
+Postgres service parity (port-map 5433:5432 + health-check
+`pg_isready` + env-block + DATABASE_URL / DIRECT_URL unchanged).
+Typecheck, Unit, Integration, and Elixir tiers remain authoritative
+post-G3.2 — the image switch is drop-in compatible (pgvector binary
+is preinstalled in the image but `vector` extension remains inert
+until `CREATE EXTENSION vector` runs at G3.3 per ADR-0043 §Sub-decision
+2 Q-G3-β LOCK).
+
+CI label staleness (Unit tier `(371 tests)` / Integration tier
+`(111 tests + 1 skipped)`) is NOT refreshed in G3.2 per Q-G3.2-ζ
+KEEP DEFERRED — preserved forward-substrate from G1.6.
+
+Decision E body above is preserved verbatim; this H3 amendment
+captures the G3.2 substrate transition at canonical-prose register
+substantively per ADR-0011 §Amendment convention.
+
 **Decision F**: Concurrency control for nightly = allow
 concurrent runs (no `concurrency:` block). Rationale:
 real-LLM tests are stateless (each test uses

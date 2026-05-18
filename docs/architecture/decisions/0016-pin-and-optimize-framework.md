@@ -401,6 +401,63 @@ consistent decisions about new resources.
   triggers are documented in ADR-0019's worked
   examples.
 
+### Worked example — pgvector/pgvector:0.8.2-pg16-trixie image pin (G3.2)
+
+**Pinned resource:** Postgres service-container image at local
+(`docker-compose.test.yml`) + CI (`.github/workflows/ci.yml` 3
+tiers + `.github/workflows/nightly-real-llm.yml`).
+
+**Pin value:** `pgvector/pgvector:0.8.2-pg16-trixie`.
+
+**Dominant axis:** parity-with-production. Supabase (the current
+operator deployment per ADR-0018) bundles pgvector 0.8.2 by default
+per RS-7 (Supabase HNSW Indexes guide retrieved 2026-05-17 at ADR-0043
+§Context). Pinning local/test/CI to the same pgvector library version
+matches the production substrate at the active-write + high-recall
+register canonical at ADR-0041 §Sub-decision 3 Q-E LOCK.
+
+**Why pgvector library version pinned (0.8.2):** the pgvector
+vector-storage format must match production substrate; pgvector-major
+drift between local/test/CI and Supabase risks format-incompatibility
+at later cross-environment writes. Pinning the library version eliminates
+that risk and gives the substrate deterministic vector semantics.
+
+**Why PostgreSQL major pinned (pg16):** matches Supabase Postgres 16
+major + matches existing ADR-0013 §Decision §Container image lineage
+(`postgres:16-alpine` → `postgres:16.4-alpine` → now
+`pgvector/pgvector:0.8.2-pg16-trixie`). The PG-major axis carries
+schema/syntax/feature parity with production.
+
+**Why Debian release pinned (trixie):** matches ADR-0013's
+parity-precision posture. Floating Debian release would introduce
+within-image drift (Debian point-release updates land in image
+rebuilds at unpredictable cadence) that the Pin-and-Optimize
+framework rejects when parity is the dominant axis.
+
+**Why digest pin deferred (rejected α-E):** the Pin-and-Optimize
+framework's dominant-axis discipline does not require digest pin
+when parity-with-production is the dominant axis. Digest pinning
+addresses a different axis — supply-chain provenance — which is
+not the load-bearing concern for this resource at the current
+substrate register. Digest pinning is over-discipline; the
+`pgvector/pgvector:0.8.2-pg16-trixie` tag is sufficiently
+deterministic for the parity axis.
+
+**Why floating `pgvector/pgvector:pg16` rejected (α-D rejected):**
+floating-within-PG-major would let the pgvector library version
+drift away from Supabase production substrate (currently 0.8.2 per
+RS-7). The pin-and-optimize framework rejects this for the same
+reason ADR-0015 §Decision E rejected `postgres:16-alpine` in favor
+of `postgres:16.4-alpine`: deterministic parity beats convenience
+of floating tags when the dominant axis is parity.
+
+**Cross-references:** ADR-0013 §Amendment G3.2 (image-substrate
+amendment) + ADR-0015 §Decision E amendment at G3.2 (CI
+service-container amendment) + ADR-0043 §Sub-decision 1 (parent
+Q-G3-α LOCK) + ADR-0018 (deployment-target agnosticism preserved
+across Supabase + AWS RDS + self-hosted Postgres + air-gapped
+deployments).
+
 ## Decision Template for Future Pinning Decisions
 
 When a new pinning decision arises, the ADR (or ADR
