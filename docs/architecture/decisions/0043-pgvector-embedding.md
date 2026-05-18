@@ -1103,3 +1103,115 @@ Gap 3 at canonical-state register substantively).
 
 **Founder authorization explicit at G3.6 substantive landing per
 RULE 20 at `[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-EXECUTE-VERIFY-AUTH]`.**
+
+## G3.7 SKIP — Conditional Lazy Backfill Formally Deferred (2026-05-18)
+
+G3.7 `[CAPSULE-EMBEDDING-BACKFILL]` formally SKIPPED per
+`[CAPSULE-EMBEDDING-BACKFILL-G3.7-QLOCK]` Q-G3.7-α α-1 LOCK +
+Q-G3.7-η 5-MOD-docs-only scope LOCK. ADR-0043 Status preserved as
+`Proposed 2026-05-17`. G3.7 does NOT close Gap 3 at canonical-state
+register substantively; G3 mini-arc advances 6/10 → 7/10 after the
+G3.7 SKIP record lands.
+
+**Substrate-state rationale.** At HEAD `371e108`, the current
+production substrate has no proven production population of legacy
+capsules requiring lazy backfill. Every capsule on origin/main was
+created via the post-G3.5 `WriteService` with embedding generation
+at create-time (G3.5 LANDS the create/update embedding path). The
+hypothetical NULL-embedding population reduces to (a) test-DB
+artifacts from S8 NULLed via raw SQL (controlled-test scenario;
+not production) and (b) rare degraded-provider writes per Q-G3.5-α
+(provider outage degrades to capsule write succeeds with embedding
+NULL; subsequent UPDATE re-generates). Both are negligible at
+canonical-state register.
+
+**Q-G3-ε wording authorized this disposition.** ADR-0043
+§Sub-decision 5 (Q-G3-ε) explicitly canonicalizes the default
+posture: "lazy-on-first-read default suffices for production
+rollout. Bulk-backfill script (`scripts/backfill-embeddings.ts`)
+remains forward-substrate at G3.7 conditional register
+substantively unless Founder explicitly authorizes later." The
+default was always SKIP unless substrate-state warranted lazy
+hook. At G3.7 Hawkseye preflight, the substrate-state ground
+truth confirmed SKIP is the substrate-coherent path.
+
+**G3.6 already provides graceful exclusion.** G3.6 similarity
+service at `apps/api/src/services/cosmp/similarity.service.ts:307`
+enforces `AND embedding IS NOT NULL` in the raw SQL filter set
+(part of the 6 RULE 0 SQL-tier privacy filters per Q-G3.6-γ).
+NULL-embedding capsules are silently excluded from similarity
+search results. This is the **graceful exclusion** semantics that
+makes lazy backfill non-load-bearing at current substrate-state.
+Lazy backfill would convert exclusion to inclusion — solving a
+non-problem.
+
+**G1.4 SKIP precedent.** ADR-0042 §Sub-decision Q-ι default LOCK
+landed a formal SKIP record at commit `3505fde`
+`[CAPSULE-MUTATION-ELIXIR-AUDIT]` for conditional Elixir audit
+work that pre-flight grep proved unnecessary at substrate-state
+register. G3.7 follows the same pattern: docs-only formal SKIP
+record preserves G3 mini-arc lineage coherence (mini-arc advances
+6/10 → 7/10) without expanding scope into a non-existent
+population. The SKIP record IS the substrate-honest discipline
+applied at the gate; pretending the population exists and
+landing a lazy hook anyway would be substrate-incoherent.
+
+**Forward-substrate posture.** Bulk-backfill script remains
+forward-substrate per Q-G3-ε. Lazy-on-read hook remains
+forward-substrate. If a future migration scenario surfaces a real
+NULL-embedding population (e.g., adopting NIOV for an existing
+capsule store via import; large-scale extended-duration provider
+outage backlog; cross-tenant aggregation of pre-NIOV capsule
+data), Founder authorization at that point may re-open G3.7 via
+ADR-0043 amendment OR new gap-substrate per ADR-0041 umbrella
+capsule layer. Until then, default disposition = SKIP.
+
+**Q-G3.7 sub-decisions under α-1 SKIP.** Q-G3.7-β trigger path
+N/A (no readContent / readMetadata / similarity-fallback /
+runtime trigger); Q-G3.7-γ update pattern N/A (no new raw SQL
+update site; no helper extraction; no write.service.ts refactor);
+Q-G3.7-δ concurrency/idempotency N/A (no read-path mutation; no
+advisory lock; no transaction change); Q-G3.7-ε audit posture
+N/A (no `CAPSULE_EMBEDDING_BACKFILL` literal at G3.7; audit.ts
+UNTOUCHED); Q-G3.7-ζ failure behavior N/A (no provider call; no
+read-path degradation change).
+
+**Scope-boundary discipline at G3.7 SKIP register.** 5 docs files
+modified (this ADR + section-12-progress + CURRENT_BUILD_STATE +
+README + CLAUDE). NO code changes; NO test changes; NO
+schema/CI/package/Elixir/audit-literal changes. ADR-0022 +
+ADR-0011/0013/0014/0015/0016/0025/0033/0034/0035/0041/0042 ALL
+UNTOUCHED. ADR-0043 Status preserved as `Proposed 2026-05-17`.
+
+**Substrate-state observations forward-queued at commit-body-only
+register substantively per Option β substrate-honest discipline
+(NOT promoted to ADR-0035 §9 cluster at G3.7).**
+
+**D-PRODUCTION-LAZY-BACKFILL-POPULATION-NON-EXISTENT-AT-G3.7-LANDING**
+— substrate-state at HEAD `371e108` has zero capsules predating
+G3.5; lazy backfill semantics solve a hypothetical not actual
+population. This observation is the canonical substrate-honesty
+catch that authorized α-1 SKIP at Hawkseye preflight. Future
+recurrence (migration scenario surfacing a real legacy population)
+would re-open G3.7 substrate per Founder authorization.
+
+**D-RAW-SQL-EMBEDDING-UPDATE-DUPLICATION-CANDIDATE** — 2 sites in
+`apps/api/src/services/cosmp/write.service.ts` (L699-703
+createCapsule + L1330-1334 updateCapsule UPDATE branch) share an
+identical 4-line raw SQL `tx.$executeRawUnsafe('UPDATE
+memory_capsules SET embedding = $1::vector(1536) WHERE capsule_id
+= $2::uuid', vectorLiteral, capsuleId)` pattern. Helper-
+extraction candidate but rejected for G3.7 SKIP scope (no
+write.service.ts touch per Q-G3.7-γ N/A); remains forward-queue
+for future cleanup commit (likely G3.10 closure cascade or
+post-Gap-3 maintenance commit).
+
+**Forward G3.8-G3.10 (unchanged from G3.1 §Sub-decision 11 Q-G3-κ
+enumeration):** G3.8 `[CAPSULE-EMBEDDING-ELIXIR]` conditional
+(default β-A skip per Q-G3-θ; Elixir untouched at current
+substrate); G3.9 broader integration tests; G3.10
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade
+closes Gap 3 at canonical-state register substantively.
+
+**Founder authorization explicit at G3.7 substantive landing per
+RULE 20 at `[CAPSULE-EMBEDDING-BACKFILL-G3.7-EXECUTE-VERIFY-AUTH]`.**

@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18; G3.7 conditional backfill SKIPPED 2026-05-18
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -574,6 +574,26 @@ References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q
 **Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4+G3.5 enumeration:** G3.7 `[CAPSULE-EMBEDDING-BACKFILL]` conditional (lazy-on-first-read default per Q-G3-ε); G3.8 `[CAPSULE-EMBEDDING-ELIXIR]` conditional (default skip per Q-G3-θ β-A); G3.9 broader integration tests; G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes Gap 3 at canonical-state register substantively).
 
 **Founder LOCKS preservation:** 10 Q-G3.6 sub-decisions / locks Q-G3.6-α through Q-G3.6-κ all LOCKED at `[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-QLOCK]` register substantively per RULE 20; G3.6 execution authorization at `[CAPSULE-EMBEDDING-RETRIEVAL-G3.6-EXECUTE-VERIFY-AUTH]`.
+
+#### G3.7 SKIPPED — Conditional lazy backfill formally deferred (2026-05-18)
+
+**Status:** G3.7 `[CAPSULE-EMBEDDING-BACKFILL]` formally SKIPPED 2026-05-18 (single docs-only commit; 5 MOD + 0 NEW) per Q-G3.7-α α-1 LOCK + Q-G3.7-η 5-MOD-docs-only scope LOCK at `[CAPSULE-EMBEDDING-BACKFILL-G3.7-QLOCK]`. ADR-0043 Status preserved as `Proposed 2026-05-17`. G3.7 does NOT close Gap 3.
+
+**Substrate sites (5 authorized files; 5 MOD + 0 NEW):** ADR-0043 G3.7 SKIP H2 record + section-12-progress Sub-arc 2 row inline G3.7 SKIPPED + this CURRENT_BUILD_STATE (H2 visibility + this G3.7 SKIP H4) + README ADR-0043 catalog parenthetical + CLAUDE.md mirror.
+
+**Substrate-state rationale.** At HEAD `371e108`, current production substrate has no proven population of legacy capsules requiring lazy backfill — every capsule on origin/main was created via post-G3.5 WriteService with embedding generation at create-time per Q-G3-ε ADD/UPDATE matrix. G3.6 similarity service already enforces `embedding IS NOT NULL` graceful-exclusion semantics in the raw SQL filter set (the 6 RULE 0 SQL-tier privacy filters per Q-G3.6-γ). Lazy backfill would convert exclusion to inclusion — solving a non-problem at current substrate-state. Q-G3-ε wording explicitly authorized this disposition: "lazy-on-first-read default suffices for production rollout; bulk-backfill remains forward-substrate at G3.7 conditional register substantively unless Founder explicitly authorizes later."
+
+**Q-G3.7 sub-decisions under α-1 SKIP.** Q-G3.7-β trigger path N/A (no readContent / readMetadata / similarity-fallback / runtime trigger); Q-G3.7-γ update pattern N/A (no new raw SQL update site; no helper extraction); Q-G3.7-δ concurrency/idempotency N/A (no read-path mutation); Q-G3.7-ε audit posture N/A (no `CAPSULE_EMBEDDING_BACKFILL` literal at G3.7); Q-G3.7-ζ failure behavior N/A (no provider call).
+
+**G1.4 SKIP precedent.** Commit `3505fde` `[CAPSULE-MUTATION-ELIXIR-AUDIT]` per ADR-0042 §Sub-decision Q-ι default LOCK landed the canonical mini-arc SKIP pattern G3.7 mirrors: docs-only formal SKIP record preserves G3 mini-arc lineage coherence (G3 mini-arc advances 6/10 → 7/10 after G3.7 SKIP lands) without expanding scope into a non-existent population.
+
+**Scope boundaries preserved:** no `apps/api/**` / `tests/**` / `packages/**` / `scripts/**` / schema / CI workflows / `docker-compose.test.yml` / `.husky/pre-commit` / `package.json` / lockfiles / Elixir changes; no `audit.ts` changes (no `CAPSULE_EMBEDDING_BACKFILL` literal); ADR-0022 + ADR-0011/0013/0014/0015/0016/0025/0033/0034/0035/0041/0042 ALL UNTOUCHED; ADR-0043 Status preserved at `Proposed 2026-05-17`.
+
+**Substrate-state observations forward-queued at commit-body-only register (not promoted to ADR-0035 §9 cluster at G3.7):** D-PRODUCTION-LAZY-BACKFILL-POPULATION-NON-EXISTENT-AT-G3.7-LANDING (zero legacy capsules) + D-RAW-SQL-EMBEDDING-UPDATE-DUPLICATION-CANDIDATE (2 sites in write.service.ts share identical raw SQL; helper-extraction candidate; forward-queue for future cleanup).
+
+**Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4+G3.5+G3.6 enumeration:** G3.8 `[CAPSULE-EMBEDDING-ELIXIR]` conditional (default β-A skip per Q-G3-θ); G3.9 broader integration tests; G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes Gap 3 at canonical-state register substantively).
+
+**Founder LOCKS preservation:** Q-G3.7-α α-1 + Q-G3.7-η LOCKED at `[CAPSULE-EMBEDDING-BACKFILL-G3.7-QLOCK]` register substantively per RULE 20; G3.7 execution authorization at `[CAPSULE-EMBEDDING-BACKFILL-G3.7-EXECUTE-VERIFY-AUTH]`.
 
 ---
 
