@@ -1317,6 +1317,191 @@ Recurrence-1 (G1.3 Q-G1.3-ξ Option β substantively): the minimal-waiver author
 
 **Discipline binding:** at the substrate-build register substantively per ADR-0035 §9 cluster expansion canonical at sub-arc 2 Gap 1 G1.6 substantively per Q-G1.6-α LOCK.
 
+### Sub-arc 2 Gap 3 G3.10 cluster expansion (37th observation; D-VITEST-NPX-CONFIG-DEFAULT-LOADS-PRODUCTION-SUPABASE)
+
+PROMOTE D-VITEST-NPX-CONFIG-DEFAULT-LOADS-PRODUCTION-SUPABASE 37th canonical
+at substrate-build register substantively at sub-arc 2 Gap 3 G3.10
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE]` register substantively per Founder
+Q-G3.10-ε LOCK Option α at `[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]`
+register substantively.
+
+**Substrate-state ground truth at HEAD `fa80624`:** the repository contains
+three vitest configurations canonical at canonical-state register
+substantively —
+
+- `vitest.config.ts` (legacy; loads `.env` at module level via
+  `loadEnv()` → production Supabase pooler
+  `aws-1-us-east-2.pooler.supabase.com:6543/postgres?pgbouncer=true`)
+- `vitest.unit.config.ts` (loads `.env.test` via
+  `loadDotenv({ path: resolve(process.cwd(), ".env.test") })` →
+  containerized Postgres `localhost:5433/foundation_test`)
+- `vitest.integration.config.ts` (loads `.env.test` → containerized
+  Postgres `localhost:5433/foundation_test`)
+
+Bare `npx vitest run <file>` invocations route through the default
+`vitest.config.ts` which loads `.env` and points focused tests at
+production Supabase. The canonical tier configs
+(`vitest.unit.config.ts` + `vitest.integration.config.ts`) load
+`.env.test` and route through the local test DB. The npm scripts
+`npm run test:unit` and `npm run test:integration` invoke the
+canonical configs; `npx vitest run <file>` does NOT.
+
+**Substrate-trap manifestation at G3.9 Tier 2:** bare
+`npx vitest run tests/unit/cosmp/write.test.ts` +
+`npx vitest run tests/unit/cosmp/similarity.test.ts` were specified
+at G3.9 V1 §5 + echoed in the Founder rerun authorization. Both
+commands routed through `vitest.config.ts` → `.env` → production
+Supabase pooler. Both tests failed with `"The column 'jurisdiction'
+does not exist in the current database"` — production schema is
+behind the repo source-of-truth on `entities.jurisdiction` (ADR-0037
+substrate). Prisma rejected the insert before any data committed;
+no production data was written. The substrate-trap was canonical at
+canonical-prose register substantively (acknowledged at
+`vitest.unit.config.ts:13-19` as "Drift G4-A") but unenforced at
+canonical-state register substantively.
+
+**Substrate-build discipline at canonical-knowledge register
+substantively:** canonical test commands at substrate-build register
+substantively MUST use one of —
+
+- `npx vitest run --config vitest.unit.config.ts <file>` (focused
+  unit-tier; explicit config)
+- `npx vitest run --config vitest.integration.config.ts <file>`
+  (focused integration-tier; explicit config)
+- `npm run test:unit` (canonical full unit-tier; loads `.env.test`)
+- `npm run test:integration` (canonical full integration-tier; loads
+  `.env.test`)
+
+Bare `npx vitest run <file>` is FORBIDDEN at substrate-build register
+substantively until `vitest.config.ts` itself is amended at
+substrate-architectural register substantively to load `.env.test` by
+default OR is removed entirely with the canonical tier configs taking
+over default-discovery responsibilities (forward-substrate at
+substrate-architectural register; Drift G4-A acknowledged at ADR-0011
+register but not yet remediated at canonical-execution register
+substantively).
+
+**Cross-environment substrate-state at canonical-coherence register
+substantively:** CI workflows per ADR-0015 Decision E + Decision F
+invoke `npm run test:unit` and `npm run test:integration` at
+canonical-execution register substantively; CI is unaffected by the
+substrate-trap because CI uses npm scripts at canonical-state
+register substantively. Local-development substrate-build discipline
+at substrate-build register substantively MUST mirror CI at
+canonical-execution register substantively per Founder discipline at
+canonical-rule register substantively (RULE 13 surface-honest
+discipline + RULE 0 production-safety boundary).
+
+**Recurrence:** recurrence-1 surfaced at G3.9 Tier 2 register
+substantively (2026-05-18) per
+`[CAPSULE-EMBEDDING-PRODUCTION-CONTRACT-G3.9-EXECUTE-VERIFY-AUTH]`
+register substantively + `[G3.9-TIER-2-DB-SCHEMA-REFRESH-AUTH]`
+register substantively. Pre-existing acknowledgment at
+`vitest.unit.config.ts` L13-19 commented as "Drift G4-A" canonical at
+canonical-prose register substantively but NOT canonical at
+substrate-build register substantively until this promotion register
+substantively.
+
+**Discipline binding:** at the substrate-build register substantively
+per ADR-0035 §9 cluster expansion canonical at sub-arc 2 Gap 3 G3.10
+substantively per Founder Q-G3.10-ε LOCK Option α at
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]` register substantively.
+
+### Sub-arc 2 Gap 3 G3.10 cluster expansion (38th observation; D-LOCAL-DEV-ENV-CROSS-LANGUAGE-OWNERSHIP-DRIFT)
+
+PROMOTE D-LOCAL-DEV-ENV-CROSS-LANGUAGE-OWNERSHIP-DRIFT 38th canonical
+at substrate-build register substantively at sub-arc 2 Gap 3 G3.10
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE]` register substantively per Founder
+Q-G3.10-ε LOCK Option α at `[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]`
+register substantively.
+
+**Umbrella scope:** unifies three substrate-build observations
+surfaced across G3.3 + G3.8 + G3.9 sub-phases register substantively
+at local-development environment + cross-language data ownership
+boundary canonical at canonical-coherence register substantively per
+ADR-0033 cross-language data ownership boundary (Prisma owns
+shared-table DDL; Ecto owns Elixir-internal DDL) —
+
+1. **D-G3.3-LOCAL-CONTAINER-DRIFT** (G3.3 register substantively;
+   2026-05-17) — local test DB container stale on
+   `postgres:16.4-alpine` post-G3.2 image-pin amendment to
+   `pgvector/pgvector:0.8.2-pg16-trixie`; CI fresh-per-job unaffected.
+   Surfaced docs-only per Q-G3.3-λ; ADR-0035 promotion deferred to
+   G3.10 per Founder Q-G3.3-λ explicit deferral.
+
+2. **D-LOCAL-ECTO-MIGRATION-STATE-DRIFT-AT-G3.8-TIER-2** (G3.8 register
+   substantively; 2026-05-18) — local test DB missing Ecto-owned
+   `idempotency_keys` table at G3.8 Tier 2 Elixir umbrella `mix test`
+   register substantively; resolved via `MIX_ENV=test mix ecto.migrate`
+   canonical at canonical-execution register substantively. CI
+   fresh-per-job provisions canonical via the Run Ecto migrations
+   step.
+
+3. **D-PRISMA-ECTO-CROSS-LANGUAGE-SCHEMA-MIGRATIONS-OWNERSHIP-COLLISION-AT-LOCAL-REFRESH**
+   (G3.9 register substantively; 2026-05-18) — `npm run db:push:test`
+   blocked at Prisma data-loss safety register substantively because
+   Ecto-owned `schema_migrations` table (created at G3.8 Tier 2
+   register substantively by `mix ecto.migrate` per ADR-0033 §Decision
+   Q-5BII-EXEC-5 Ecto-owned DDL boundary canonical at canonical-state
+   register substantively) is not in `schema.prisma` source-of-truth
+   canonical at canonical-state register substantively. Resolved at
+   canonical-execution register substantively by dropping Ecto-owned
+   tables BEFORE `db:push:test` invocation canonical at
+   canonical-execution register substantively, then running
+   `mix ecto.migrate` AFTER schema push canonical at canonical-execution
+   register substantively. CI canonical sequence (Postgres up →
+   pgvector extension → Prisma db push → audit triggers → HNSW index →
+   Ecto migrate) avoids the collision by ordering canonical at
+   canonical-execution register substantively.
+
+**Pattern at canonical-knowledge register substantively:**
+local-development environment state drifts at cross-language data
+ownership boundary canonical at canonical-coherence register
+substantively per ADR-0033 §Decision 7 + Q-5BII-EXEC-5. CI
+fresh-per-job sequence at substrate-execution register substantively
+prevents recurrence; local-development substrate-build discipline at
+substrate-build register substantively MUST mirror CI at
+canonical-execution register substantively to avoid recurrence per
+Founder discipline at canonical-rule register substantively (RULE 13
+surface-honest discipline + ADR-0033 cross-language data ownership
+boundary).
+
+**Canonical local-development refresh sequence at substrate-build
+register substantively:**
+
+1. (Pre-condition) Postgres container running on `localhost:5433`
+   canonical at canonical-state register substantively
+2. Drop Ecto-owned tables (`schema_migrations` + `idempotency_keys`
+   canonical at canonical-state register substantively per ADR-0033
+   §Decision Q-5BII-EXEC-5)
+3. `npx tsx scripts/apply-pgvector-extension.ts` canonical at
+   canonical-execution register substantively per G3.3
+4. `npm run db:push:test` (ADR-0025 schema-push-target wrapper)
+   canonical at canonical-execution register substantively per
+   ADR-0025
+5. Apply audit triggers canonical at canonical-execution register
+   substantively per ADR-0002
+6. `npx tsx scripts/apply-hnsw-index.ts` canonical at
+   canonical-execution register substantively per G3.3
+7. `MIX_ENV=test mix ecto.migrate` canonical at canonical-execution
+   register substantively per ADR-0033 §Decision Q-5BII-EXEC-5
+   (restores Ecto-owned `schema_migrations` + `idempotency_keys`
+   tables canonical at canonical-state register substantively)
+
+**Recurrence:** recurrence-3 across G3.3 + G3.8 + G3.9 sub-phases
+register substantively at local-development environment +
+cross-language data ownership boundary canonical at
+canonical-coherence register substantively. Promotion at G3.10
+register substantively per Q-G3.10-ε LOCK Option α captures the
+umbrella pattern at substrate-build register substantively for future
+Sub-arc 2 substrate-build cycles (Gap 4 + Gap 5 + optional Gap 6) at
+canonical-knowledge register substantively.
+
+**Discipline binding:** at the substrate-build register substantively
+per ADR-0035 §9 cluster expansion canonical at sub-arc 2 Gap 3 G3.10
+substantively per Founder Q-G3.10-ε LOCK Option α at
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]` register substantively.
+
 ## Forward Path
 
 | Sub-phase | Subject | This ADR's instantiation |

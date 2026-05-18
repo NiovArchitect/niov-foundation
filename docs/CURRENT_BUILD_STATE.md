@@ -306,7 +306,7 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
-## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 IN FLIGHT 2026-05-17 at G3.1; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18; G3.7 conditional backfill SKIPPED 2026-05-18; G3.8 Elixir-boundary contract LANDED 2026-05-18
+## Phase 3 Sub-Arc 2 -- Capsule Layer Substrate Umbrella IN FLIGHT 2026-05-17; Gap 1 CLOSED 2026-05-17 at G1.6; Gap 3 CLOSED 2026-05-18 at G3.10; G3.2 pgvector infra LANDED 2026-05-17; G3.3 pgvector schema LANDED 2026-05-17; G3.4 embedding provider LANDED 2026-05-17; G3.5 write integration LANDED 2026-05-17; G3.6 retrieval LANDED 2026-05-18; G3.7 conditional backfill SKIPPED 2026-05-18; G3.8 Elixir-boundary contract LANDED 2026-05-18; G3.9 production-contract integration tests LANDED 2026-05-18; G3.10 Gap 3 pgvector Embedding CLOSED 2026-05-18
 
 **Status: IN FLIGHT** at CL.1 `[BEAM-CAPSULE-LAYER-ADR]`.
 
@@ -620,6 +620,52 @@ References: ADR-0043 (NEW) + ADR-0041 §Sub-decision 3 (parent umbrella; Q-E + Q
 **Forward-substrate unchanged from G3.1+G3.2+G3.3+G3.4+G3.5+G3.6+G3.7 enumeration:** G3.9 broader integration tests; G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes Gap 3 at canonical-state register substantively).
 
 **Founder LOCKS preservation:** Q-G3.8-α α-2 + Q-G3.8-β + Q-G3.8-γ + Q-G3.8-δ + Q-G3.8-ε LOCKED at `[CAPSULE-EMBEDDING-ELIXIR-G3.8-QLOCK]` register substantively per RULE 20; G3.8 execution authorization at `[CAPSULE-EMBEDDING-ELIXIR-G3.8-EXECUTE-VERIFY-AUTH]`.
+
+#### G3.9 LANDED — broader integration tests (2026-05-18)
+
+**Status:** G3.9 `[CAPSULE-EMBEDDING-PRODUCTION-CONTRACT]` LANDED 2026-05-18 at commit `fa80624` (substantive test-only landing) per Q-G3.9-α α-1 LOCK + 10 additional Q-G3.9 LOCKs at `[CAPSULE-EMBEDDING-PRODUCTION-CONTRACT-G3.9-QLOCK]`. ADR-0043 Status preserved as `Proposed 2026-05-17` at G3.9 (G3.10 flips to Accepted at the closure register substantively). G3.9 does NOT close Gap 3.
+
+**Substrate sites (1 authorized file; 1 MOD + 0 NEW):** `tests/integration/similarity-search.test.ts` extended with 4 NEW integration tests J5-J8 inside a NEW `describe("G3.9 — production-contract end-to-end (J5-J8)", ...)` block. Existing J1-J4 describe block preserved verbatim.
+
+**Production-contract framing.** Foundation production readiness requires integration-tier round-trip proof of write → search composition; unit-tier mocks are insufficient as sole proof for production-bound surfaces. G3.9 proves end-to-end ADD + UPDATE roundtrip under real DB/HNSW, integration-tier RULE 0 privacy filter joint adversarial fixture, and NULL embedding graceful exclusion under real HNSW.
+
+**4 NEW integration tests (verbatim titles).** J5 end-to-end ADD via WriteService persists embedding then SimilaritySearch retrieves same-wallet capsule; J6 end-to-end UPDATE via WriteService regenerates embedding then SimilaritySearch reflects updated content; J7 integration-tier RULE 0 privacy filter joint adversarial fixture excludes all 4 disqualifying capsules under real HNSW; J8 integration-tier embedding-NULL capsule gracefully excluded without crash under real HNSW.
+
+**J7 5-capsule labeled fixture composition.** 1 ELIGIBLE (passes all filters) + 1 BLOCKED (`ai_access_blocked = true`) + 1 PENDING (`requires_validation = true`) + 1 SOFT (`deleted_at IS NOT NULL`) + 1 HIGH-CLEARANCE (`clearance_required = 999` above default session ceiling). Each disqualifying capsule labeled via `topic_tags` for diagnostic clarity. Real DB + real HNSW exercise the 6 RULE 0 SQL-tier filters at `similarity.service.ts:303-308` jointly.
+
+**Privacy invariants asserted in all 4 NEW tests.** HTTP response body MUST NOT contain `vector` / `embedding` / `distance` / `cosine_distance` substrings (verbatim negative assertions). CAPSULE_SIMILARITY_SEARCH audit row metadata safety asserted in J5: no raw query text (sentinel pattern) / no `query_text` / no `query_keywords` / no `vector_hash` / no `embedding_sample` / no `"distances"`.
+
+**Integration baseline shift.** 207 passed + 1 skipped → 211 passed + 1 skipped after G3.9 LANDS (4 NEW J5-J8 tests added). Total focused-file count 4 → 8.
+
+**Forbidden / preserved boundaries enumerated:** no production code changes; no `apps/**` / `apps/cosmp_router/**` / `apps/dbgi_supervisor/**` / `packages/**` / `scripts/**` / `schema.prisma` / DB scripts / CI workflows / package / lockfile / `mix.exs` / `mix.lock` / `audit.ts` / new audit literals / new files. ADR-0022 + ADR-0033 + ADR-0043 Status untouched. `coe/**` + `keywords.ts` + `read.service.ts` + `write.service.ts` + `similarity.service.ts` + `embedding.service.ts` UNTOUCHED.
+
+**3 in-arc RULE 13 observations** (commit-body-only register substantively at G3.9 commit `fa80624`; 2 of 3 promoted to ADR-0035 §9 cluster at G3.10): D-J4-ALREADY-COVERS-3-OF-4-J7-FILTERS-AT-INTEGRATION-TIER (commit-body-only preserved at G3.10) + D-VITEST-NPX-CONFIG-DEFAULT-LOADS-PRODUCTION-SUPABASE-AT-G3.9-TIER-2 (PROMOTED to 37th §9 observation at G3.10) + D-PRISMA-ECTO-CROSS-LANGUAGE-SCHEMA-MIGRATIONS-OWNERSHIP-COLLISION-AT-LOCAL-REFRESH (folded into 38th §9 umbrella observation at G3.10).
+
+**Forward-substrate after G3.9:** G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` docs-only closure cascade (closes Gap 3 at canonical-state register substantively).
+
+**Founder LOCKS preservation:** Q-G3.9-α α-1 through Q-G3.9-λ LOCKED at `[CAPSULE-EMBEDDING-PRODUCTION-CONTRACT-G3.9-QLOCK]` register substantively per RULE 20; G3.9 execution authorization at `[CAPSULE-EMBEDDING-PRODUCTION-CONTRACT-G3.9-EXECUTE-VERIFY-AUTH]` + commit authorization at `[CAPSULE-EMBEDDING-PRODUCTION-CONTRACT-G3.9-COMMIT-AUTH]`.
+
+#### G3.10 LANDED — Gap 3 pgvector Embedding CLOSED (2026-05-18)
+
+**Status:** G3.10 `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` LANDED 2026-05-18 — **Gap 3 CLOSED at canonical-state register substantively**. Docs-only closure cascade. 6 MOD + 0 NEW. ADR-0043 Status flipped from `Proposed 2026-05-17` to **`Accepted 2026-05-18`** at this commit register substantively per Q-G3.10-γ LOCK. **G3 mini-arc 10/10 complete.**
+
+**Substrate sites (6 authorized files; 6 MOD + 0 NEW):** ADR-0043 Status flip + G3.9 H2 + G3.10 H2 + Post-Closure Implementation Lineage H2; section-12-progress Sub-arc 2 row inline G3.9 + G3.10 prose; this CURRENT_BUILD_STATE H2 visibility update + NEW G3.9 H4 + this G3.10 H4; README ADR-0043 catalog entry Proposed → Accepted; CLAUDE.md ADR-0043 catalog entry Proposed → Accepted; ADR-0035 §9 cluster expansion 37th + 38th observation H3 sections.
+
+**11 Q-G3.10 LOCKs canonical at `[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]`.** Q-G3.10-α (docs-only closure cascade) + Q-G3.10-β (6 MOD + 0 NEW) + Q-G3.10-γ (ADR-0043 Status Proposed → Accepted) + Q-G3.10-δ (Sub-arc 2 remains IN FLIGHT) + Q-G3.10-ε Option α (ADR-0035 §9 promotions 37th + 38th) + Q-G3.10-ζ (no ADR-0022 / ADR-0033 amendment) + Q-G3.10-η (no production code/schema/test/CI/package/Elixir/audit changes) + Q-G3.10-θ (G3.10 closes Gap 3) + Q-G3.10-ι (Sub-arc 2 closure remains forward-substrate) + Q-G3.10-κ (COE / ADR-0022 integration remains forward-substrate; NOT a Gap 3 closure dependency).
+
+**Sub-arc 2 status field remains IN FLIGHT per Q-G3.10-δ + Q-G3.10-ι.** Sub-arc 2 closure remains forward-substrate pending Gap 4 (ADR-0044 Decay Execution Formalization) + Gap 5 (ADR-0045 Capsule-Level Staleness Detection) + optional Gap 6 (ADR-0046 AI_AGENT EntityType-Discriminated Capsule Routing) + later Sub-arc 2 closure cascade per ADR-0041 CL.1 scope patch register substantively.
+
+**ADR-0035 §9 cluster expansion (Option α; 37th + 38th observations).** Cluster 36 → 38 observations after G3.10 LANDS. 37th = **D-VITEST-NPX-CONFIG-DEFAULT-LOADS-PRODUCTION-SUPABASE** (critical production-safety substrate trap; bare `npx vitest run <file>` loads `.env` via legacy `vitest.config.ts` → production Supabase pooler; canonical commands MUST use `--config vitest.{unit,integration}.config.ts` OR `npm run test:{unit,integration}` which load `.env.test`). 38th = **D-LOCAL-DEV-ENV-CROSS-LANGUAGE-OWNERSHIP-DRIFT** (umbrella unifying D-G3.3-LOCAL-CONTAINER-DRIFT + D-LOCAL-ECTO-MIGRATION-STATE-DRIFT-AT-G3.8-TIER-2 + D-PRISMA-ECTO-CROSS-LANGUAGE-SCHEMA-MIGRATIONS-OWNERSHIP-COLLISION-AT-LOCAL-REFRESH at local-development environment + cross-language data ownership boundary per ADR-0033 §Decision 7 + Q-5BII-EXEC-5).
+
+**Commit-body-only observations preserved at G3.10 (NOT §9 promoted).** D-PGVECTOR-EX-HEX-PACKAGE-NAME-DRIFT-AT-Q-G3-θ (cosmetic label; reconcile at α-3 implementation only) + D-ELIXIR-VECTOR-CONSUMER-DELIBERATELY-EXCLUDED-AT-FOUNDATION-PRODUCTION-READINESS (canonical at G3.8 H2 body) + D-IMPLICIT-VS-EXPLICIT-BOUNDARY-CONTRACT-AT-Q-G3-θ-G3.3-DEFERRAL (canonical at G3.8 amendment register) + D-J4-ALREADY-COVERS-3-OF-4-J7-FILTERS-AT-INTEGRATION-TIER (G3.9-paste-specific; no broader pattern).
+
+**Forbidden / preserved boundaries at G3.10 (Q-G3.10-η enumeration):** no production code/schema/test/CI/package/Elixir/audit changes. No `apps/**` / no `tests/**` / no `packages/**` / no `scripts/**` / no `schema.prisma` / no DB scripts / no CI workflows / no package/lockfiles / no `mix.exs` / no `mix.lock` / no `audit.ts` / no new audit literals / no ADR-0022 amendment / no ADR-0033 amendment / no new files. `coe/**` + `keywords.ts` + `read.service.ts` + `write.service.ts` + `similarity.service.ts` + `embedding.service.ts` UNTOUCHED. All G3.9 production-contract test evidence preserved by construction.
+
+**COE / ADR-0022 integration remains forward-substrate (Q-G3.10-κ).** ADR-0022 combined_score formula at `apps/api/src/services/coe/keywords.ts:87-93` preserved verbatim at G3.10. COE integration paths enumerated at ADR-0043 §Sub-decision 4 (replace tagOverlap / 4th coefficient / rerank / prefilter) remain forward-substrate; paths (a) + (b) require Founder-authorized ADR-0022 amendment if/when authorized. NOT a Gap 3 closure dependency.
+
+**Patent-implementation evidence per ADR-0020 two-register IP discipline:** Gap 3 closure at G3.10 canonicalizes the pgvector embedding substrate as patent-implementation evidence per US 12,517,919 + US 12,164,537 + US 12,399,904. G3.1-G3.10 lineage at ADR-0043 §Post-Closure Implementation Lineage provides cryptographically-timestamped commit evidence at canonical-execution register substantively.
+
+**Founder LOCKS preservation:** Q-G3.10-α through Q-G3.10-κ LOCKED at `[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-QLOCK]` register substantively per RULE 20; G3.10 execution authorization at `[BEAM-CAPSULE-EMBEDDING-CLOSURE-G3.10-EXECUTE-VERIFY-AUTH]`.
 
 ---
 
