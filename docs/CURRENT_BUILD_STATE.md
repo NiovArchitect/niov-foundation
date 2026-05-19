@@ -429,6 +429,111 @@ secret exposure.
 `[BEAM-CAPSULE-DECAY-G4-QLOCK]` register substantively per RULE 20;
 G4.1 execution authorization at `[BEAM-CAPSULE-DECAY-ADR-G4.1-EXECUTE-VERIFY-AUTH]`.
 
+#### G4.2 LANDED — Substrate observation disposition (α-2 + β-2 defer; γ-1 G4.3 SKIP) (2026-05-18)
+
+**Status:** G4.2 `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` LANDED
+2026-05-18 (docs-only 3 MOD) per Founder Q-G4.2-α α-2 LOCK + Q-G4.2-β
+β-2 LOCK + Q-G4.2-γ γ-1 LOCK + Q-G4.2-δ δ-1 LOCK at
+`[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-QLOCK]` +
+`[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-EXECUTE-VERIFY-AUTH]`
+register substantively. ADR-0044 Status preserved
+`Proposed 2026-05-18` (G4.4 closure cascade is the Status-flip
+commit). Gap 4 row Status preserved IN FLIGHT; Sub-arc 2 status
+field preserved IN FLIGHT. G4.2 does NOT close Gap 4.
+
+**Substrate sites (3 authorized files; 3 MOD):** MOD
+`docs/architecture/decisions/0044-decay-execution-formalization.md`
+(NEW H2 `## G4.2 Substrate Observation Resolution (2026-05-18)` +
+Founder Authorization G4.2 citations + Implementation Lineage G4.2
+row updated to LANDED + G4.3 row updated to SKIP-by-default) + MOD
+`docs/reference/section-12-progress.md` (G4.2 LANDED prose appended
+to Gap 4 row) + MOD this `docs/CURRENT_BUILD_STATE.md` (this NEW H4).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (no automatic deletion; user/entity autonomy preserved) +
+RULE 11 (Prisma/Ecto cross-language ownership boundary preserved) +
+RULE 12 (pre-flight grep substrate-state ground truth verified for
+expires_at + DecayType) + RULE 13 (NEW O-G4.2-3 substrate-state
+observation surfaced inline) + RULE 20 (Founder authorization
+required and granted) + RULE 21 (current-source inspection canonical
+at G4.2 PRE-FLIGHT register substantively).
+
+**Three substrate-state observations canonical at G4.2 substrate-
+architectural register substantively:**
+
+- **O-G4.1-1 expires_at TTL deferred** per Q-G4.2-α α-2 LOCK.
+  MemoryCapsule.expires_at field exists at `schema.prisma:165`
+  (`DateTime?`); persisted at create-time at `write.service.ts:675`;
+  immutable post-create per `write.service.ts:1102` inline comment;
+  no `@@index` on MemoryCapsule; no service-tier enforcement at
+  `coe.service.ts` / `read.service.ts` / `similarity.service.ts`;
+  no MemoryCapsule-level audit literal. Other models' expires_at
+  ARE actively enforced via dedicated audit literals
+  (`SESSION_EXPIRED` + `PERMISSION_EXPIRED` +
+  `REGULATOR_ACCESS_EXPIRED`); MemoryCapsule has no such audit
+  literal and Q-G4-η η-1 LOCK preserves "no new audit literals at
+  G4". Deferral is substrate-honest and preserves RULE 0 no-
+  automatic-deletion discipline.
+
+- **O-G4.1-2 DecayType enum semantics deferred** per Q-G4.2-β β-2
+  LOCK. Canonical runtime state at HEAD `7097bb8`: FOUNDATIONAL has
+  explicit substrate behavior at `coe.service.ts:235` (forget-floor
+  bypass) + `:250` (isFoundational flag) + `:253-259` (FOUNDATIONAL-
+  first ordering + zero token budget consumption) +
+  `write.service.ts:637` (storage_tier defaults to HOT); TIME_BASED
+  is the write-time default at `write.service.ts:635` with no
+  distinct behavior beyond `combined_score` recency per ADR-0022
+  (which applies to ALL non-FOUNDATIONAL types equally);
+  ACCESS_BASED + PERMANENT + SESSION_ONLY have no distinct runtime
+  behavior at any register. Canonical state: "FOUNDATIONAL is
+  special; all non-FOUNDATIONAL values share default ranking
+  behavior".
+
+- **O-G4.2-3 NEW substrate-state observation surfaced at G4.2 PRE-
+  FLIGHT per RULE 13.** MemoryCapsule.expires_at is settable at
+  create-time (`write.service.ts:675`) but explicitly immutable
+  post-create (`write.service.ts:1102` inline comment + omission
+  from `CapsuleUpdateInput`). Combined with absence of any service-
+  tier enforcement (O-G4.1-1), the field is currently a persisted-
+  but-unused metadata field at the capsule tier. No `@@index` on
+  MemoryCapsule (indices at L270 + L368 + L617 belong to
+  CapsulePermission + Session + RegulatorAccess respectively). No
+  production data depends on the field's semantics. Reinforces
+  Q-G4.2-α α-2 defer disposition. Folds into Q-G4.2-α α-2 LOCK
+  rationale at canonical-coherence register substantively; no
+  separate Q-LOCK required.
+
+**G4.3 formal SKIP forward-substrate per Q-G4.2-γ γ-1 LOCK**:
+separate SKIP commit canonical per G1.4 (`3505fde`
+`[CAPSULE-MUTATION-ELIXIR-AUDIT]`) + G3.7 (`ee0b01b`
+`[CAPSULE-EMBEDDING-BACKFILL]`) mini-arc SKIP precedents. SKIP NOT
+folded into G4.2 or G4.4; preserves canonical SKIP commit pattern at
+canonical-state register substantively.
+
+**G4.4 closure cascade forward-substrate** — ADR-0044 Status flip
+`Proposed 2026-05-18` → `Accepted 2026-05-1X` + Implementation
+Lineage G4.4 row update + section-12-progress Gap 4 row Status flip
+to CLOSED + this CURRENT_BUILD_STATE G4.4 H4 addition + optional
+ADR-0035 §9 cluster expansion if Founder authorizes.
+
+**Forbidden / preserved boundaries enumerated at G4.2**: no apps/**
+/ tests/** / packages/** / scripts/** changes; no schema.prisma; no
+CI workflows; no package.json / lockfile changes; no vitest config
+changes; no docker-compose / .husky changes; no mix.exs / mix.lock;
+no audit.ts changes; no new audit literals at G4.2; no ADR-0022
+amendment; no ADR-0033 amendment; no ADR-0035 modification at G4.2;
+no ADR-0043 Status change; no ADR-0047 Status change; no ADR-0041
+modification (Gap 4/5/6 reservations preserved); no ADR-0045 /
+ADR-0046 renumbering; no README / CLAUDE.md changes at G4.2; no
+production-affecting actions; no Elixir vector access; no Elixir
+decay computation; no secret exposure.
+
+**Founder LOCKS preservation:** Q-G4.2-α α-2 + Q-G4.2-β β-2 +
+Q-G4.2-γ γ-1 + Q-G4.2-δ δ-1 LOCKED at
+`[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-QLOCK]` register
+substantively per RULE 20; G4.2 execution authorization at
+`[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## Post-Gap-3 Production-Readiness Hardening Mini-Arc CLOSED 2026-05-18 at PR.4 -- PR.1+PR.2+PR.3+PR.4 LANDED; ADR-0047 Accepted

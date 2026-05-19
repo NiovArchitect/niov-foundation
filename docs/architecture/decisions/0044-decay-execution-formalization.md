@@ -483,6 +483,143 @@ Founder Q-G4-μ μ-2 LOCK. Founder Q-G4.2 disposition required:
 NO disposition at G4.1; surfacing for canonical-state register
 substantively per RULE 13.
 
+## G4.2 Substrate Observation Resolution (2026-05-18)
+
+G4.2 `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` resolves the two
+substrate-state observations surfaced at G4.1 per Founder Q-G4.2
+LOCKs at `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-QLOCK]` +
+`[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-EXECUTE-VERIFY-AUTH]`
+register substantively. G4.2 is docs-only 3 MOD per Founder Q-G4.2-δ
+δ-1 LOCK. G4.2 does NOT flip ADR-0044 Status; preserved as
+`Proposed 2026-05-18`. G4.2 does NOT close Gap 4; G4.3 SKIP forward-
+substrate + G4.4 closure cascade forward-substrate remain canonical.
+
+### G4.2 Q-LOCKs canonical at canonical-state register substantively
+
+- **Q-G4.2-α α-2 LOCK** — defer `MemoryCapsule.expires_at` TTL
+  enforcement to a future Founder-authorized ADR amendment. Rationale:
+  MemoryCapsule.expires_at is settable at create-time, immutable
+  post-create, has no service-tier enforcement at COE / read /
+  similarity registers, has no MemoryCapsule-level audit literal, and
+  has no `@@index` on MemoryCapsule (only on CapsulePermission +
+  Session + RegulatorAccess). Enforcing TTL now would introduce
+  runtime semantics + audit implications + RULE 0 review surface.
+  Deferral is substrate-honest and preserves RULE 0 no-automatic-
+  deletion + RULE 10 soft-delete-only discipline.
+- **Q-G4.2-β β-2 LOCK** — defer explicit non-FOUNDATIONAL DecayType
+  enum semantics to a future Founder-authorized ADR amendment.
+  Rationale: FOUNDATIONAL has explicit runtime behavior at
+  `coe.service.ts:235` (forget-floor bypass) + `:250` (isFoundational
+  flag) + `:253-259` (FOUNDATIONAL-first ordering + zero token budget
+  consumption); TIME_BASED is the write-time default at
+  `write.service.ts:635` with no distinct behavior beyond
+  `combined_score` recency component per ADR-0022 (which applies to
+  ALL non-FOUNDATIONAL types equally); ACCESS_BASED / PERMANENT /
+  SESSION_ONLY have no explicit substrate behavior at any register.
+  Implementing distinct semantics now would require product-level
+  decisions + tests per type + possible audit-literal expansion +
+  potential ADR-0022 amendment surface. Current canonical runtime
+  state at HEAD `7097bb8` is "**FOUNDATIONAL is special; all non-
+  FOUNDATIONAL values share default ranking behavior**".
+- **Q-G4.2-γ γ-1 LOCK** — G4.3 `[BEAM-CAPSULE-DECAY-IMPL]` formal SKIP
+  by default; separate SKIP commit canonical at canonical-state
+  register substantively per G1.4 (`3505fde`) + G3.7 (`ee0b01b`) +
+  G3.8 (`ee0b01b` variant) canonical mini-arc SKIP precedents. SKIP
+  NOT folded into G4.2 or G4.4; preserves canonical SKIP commit
+  pattern.
+- **Q-G4.2-δ δ-1 LOCK** — docs-only 3 MOD scope: ADR-0044 +
+  section-12-progress + CURRENT_BUILD_STATE. No code / test / script
+  / schema / CI / package / lockfile / vitest config / docker-compose
+  / .husky / mix / audit.ts / .env / README / CLAUDE.md changes at
+  G4.2.
+
+### G4.2 disposition resolution for O-G4.1-1 (`expires_at` TTL)
+
+Per Founder Q-G4.2-α α-2 LOCK, MemoryCapsule.expires_at TTL
+enforcement is **deferred to a future Founder-authorized ADR
+amendment**. Substrate-state ground truth at HEAD `7097bb8`:
+
+- MemoryCapsule.expires_at field exists at `schema.prisma:165`
+  (`DateTime?`); persisted at create-time at `write.service.ts:675`
+  (`expires_at: input.expires_at ?? null`).
+- **Immutable post-create** per inline comment at
+  `write.service.ts:1102` ("CapsuleUpdateInput has no `expires_at`
+  field (immutable post-create)") + omission from `CapsuleUpdateInput`
+  type.
+- **No `@@index` on MemoryCapsule.expires_at** (indices at L270 +
+  L368 + L617 belong to CapsulePermission + Session + RegulatorAccess
+  respectively).
+- **No service-tier enforcement** at `coe.service.ts` /
+  `read.service.ts` / `similarity.service.ts`.
+- Other models' `expires_at` ARE actively enforced via dedicated
+  audit literals (`SESSION_EXPIRED` + `PERMISSION_EXPIRED` +
+  `REGULATOR_ACCESS_EXPIRED`); MemoryCapsule has no such audit
+  literal and Q-G4-η η-1 LOCK preserves "no new audit literals at G4".
+
+RULE 0 preserved: no automatic deletion path introduced; user/entity
+autonomy preserved; explicit-recall + FOUNDATIONAL bypass + soft-
+delete-only discipline canonical at canonical-rule register
+substantively.
+
+### G4.2 disposition resolution for O-G4.1-2 (DecayType enum semantics)
+
+Per Founder Q-G4.2-β β-2 LOCK, explicit non-FOUNDATIONAL DecayType
+enum semantics are **deferred to a future Founder-authorized ADR
+amendment**. Canonical runtime state at HEAD `7097bb8` documented
+verbatim:
+
+| DecayType value | Behavior at HEAD `7097bb8` |
+|---|---|
+| `FOUNDATIONAL` | **EXPLICIT runtime behavior**: forget-floor bypass at `coe.service.ts:235`; `isFoundational` flag at `coe.service.ts:250`; FOUNDATIONAL-first ordering + zero token budget consumption at `coe.service.ts:253-259`; storage_tier defaults to HOT at `write.service.ts:637` |
+| `TIME_BASED` | **DEFAULT** at `write.service.ts:635` for non-FOUNDATIONAL writes; **no distinct behavior** beyond `combined_score` recency component per ADR-0022 |
+| `ACCESS_BASED` | **NO distinct runtime behavior** at any register; `access_count` is tracked at `read.service.ts:772-788` but NOT wired into any DecayType-conditional logic |
+| `PERMANENT` | **NO distinct runtime behavior** at any register; does NOT bypass forget-floor |
+| `SESSION_ONLY` | **NO distinct runtime behavior** at any register; session-scoped lifecycle NOT implemented; no auto-cleanup on session end; no integration with `Session.expires_at` |
+
+Canonical state: "**FOUNDATIONAL is special; all non-FOUNDATIONAL
+values share default ranking behavior**". Future product feature
+requiring distinct non-FOUNDATIONAL semantics requires a separate
+Founder-authorized ADR amendment.
+
+### O-G4.2-3 NEW substrate-state observation (surfaced at G4.2 PRE-FLIGHT per RULE 13)
+
+**Substrate-state ground truth**: `MemoryCapsule.expires_at` is
+write-set-only — settable at `write.service.ts:675` at create-time,
+but **explicitly immutable post-create** per inline comment at
+`write.service.ts:1102` + omission from `CapsuleUpdateInput`. Combined
+with the absence of any service-tier enforcement documented in
+O-G4.1-1, MemoryCapsule.expires_at is currently a **persisted-but-
+unused metadata field** at the capsule tier. The field has no
+`@@index` on MemoryCapsule (indices at schema.prisma L270 + L368 +
+L617 belong to CapsulePermission + Session + RegulatorAccess
+respectively, NOT MemoryCapsule). No production data depends on the
+field's semantics.
+
+**Disposition**: reinforces Q-G4.2-α α-2 defer disposition. No
+separate Q-LOCK required; folds into Q-G4.2-α α-2 LOCK rationale at
+canonical-coherence register substantively. Surfaced inline per RULE
+13 substrate-honest discipline. Future Founder-authorized ADR
+amendment may address all three dimensions (write-settable +
+post-create-mutable + service-tier enforcement) together if product
+requirements surface capsule-tier TTL.
+
+### G4.2 critical coherence preserved
+
+- ADR-0044 Status preserved `Proposed 2026-05-18` (G4.2 NOT a Status-
+  flip commit; G4.4 closure cascade is the Status-flip commit)
+- Sub-arc 2 status field preserved IN FLIGHT throughout G4.1-G4.4
+- Gap 4 row Status preserved IN FLIGHT
+- Gap 4 / Gap 5 / Gap 6 reservations preserved at ADR-0041
+- ADR-0022 + ADR-0033 + ADR-0035 + ADR-0043 + ADR-0047 + ADR-0041
+  untouched at G4.2
+- No new audit literals (Q-G4-η η-1 LOCK + RULE 0 + Q-G4-ζ no-auto-
+  deletion preserved)
+- No code / test / script / schema / CI / package / vitest /
+  docker-compose / .husky / mix / audit.ts / .env / README /
+  CLAUDE.md changes at G4.2
+- No production-affecting actions; no Elixir decay computation; no
+  secret exposure
+
 ## Consequences
 
 ### Positive
@@ -669,13 +806,19 @@ Founder authorization explicit at G4.1 substantive landing per RULE
 - `[BEAM-CAPSULE-DECAY-G4-QLOCK]`
 - `[BEAM-CAPSULE-DECAY-ADR-G4.1-EXECUTE-VERIFY-AUTH]`
 
+Founder authorization explicit at G4.2 substantive landing per RULE
+20 at:
+
+- `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-QLOCK]`
+- `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-EXECUTE-VERIFY-AUTH]`
+
 ## Implementation Lineage (forward-substrate G4.1-G4.4)
 
 | Sub-phase | Tag | Authorized scope | Status |
 |-----------|-----|------------------|--------|
 | G4.1 | `[BEAM-CAPSULE-DECAY-ADR]` | 4 MOD + 1 NEW docs-only ADR-0044 NEW Proposed; RULE 21 research arc embedded; canonicalizes existing lazy-at-read substrate; 2 substrate-state observations surfaced (O-G4.1-1 + O-G4.1-2) | this commit |
-| G4.2 | `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` | Docs-only or minimal verification; resolves O-G4.1-1 + O-G4.1-2 disposition; Founder Q-G4.2 authorization required | forward-substrate |
-| G4.3 | `[BEAM-CAPSULE-DECAY-IMPL]` | Conditional code-tier landing; SKIP by default unless G4.2 proves required implementation; Founder Q-G4.3 authorization required | forward-substrate |
+| G4.2 | `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` | Docs-only 3 MOD per Founder Q-G4.2-δ δ-1 LOCK; resolves O-G4.1-1 disposition (Q-G4.2-α α-2 LOCK defer `expires_at` TTL) + O-G4.1-2 disposition (Q-G4.2-β β-2 LOCK defer DecayType enum semantics); G4.3 formal SKIP determination (Q-G4.2-γ γ-1 LOCK); NEW O-G4.2-3 substrate-state observation surfaced (MemoryCapsule.expires_at immutable post-create + persisted-but-unused metadata) | G4.2 LANDED 2026-05-18 |
+| G4.3 | `[BEAM-CAPSULE-DECAY-IMPL]` | Formal SKIP per Q-G4.2-γ γ-1 LOCK; separate SKIP commit canonical at canonical-state register substantively per G1.4 + G3.7 mini-arc SKIP precedents; Founder Q-G4.3 authorization required at SKIP commit | forward-substrate (SKIP-by-default per Q-G4.2-γ γ-1 LOCK) |
 | G4.4 | `[BEAM-CAPSULE-DECAY-CLOSURE]` | Docs-only closure cascade; ADR-0044 Status Proposed → Accepted; optional ADR-0035 §9 back-citation + cluster expansion if Founder authorizes | forward-substrate |
 
 Status flips from `Proposed 2026-05-18` to `Accepted 2026-05-1X` at
