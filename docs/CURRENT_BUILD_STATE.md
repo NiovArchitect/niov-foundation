@@ -753,6 +753,121 @@ LOCKED at `[BEAM-CAPSULE-STALENESS-IMPL-G5.3-QLOCK]` register
 substantively per RULE 20; G5.3 execution authorization at
 `[BEAM-CAPSULE-STALENESS-IMPL-G5.3-EXECUTE-VERIFY-AUTH]`.
 
+#### G5.4 CLOSED — Gap 5 Capsule-Level Staleness Detection closure cascade (ADR-0045 Accepted 2026-05-18)
+
+**Status:** G5.4 `[BEAM-CAPSULE-STALENESS-CLOSURE]` docs-only closure
+cascade LANDED 2026-05-18 (5 MOD) per Founder Q-G5.4-α α-1 LOCK +
+Q-G5.4-β β-1 LOCK + Q-G5.4-γ γ-1 LOCK + Q-G5.4-δ δ-1 LOCK + Q-G5.4-ε
+ε-1 LOCK + Q-G5.4-ζ ζ-1 LOCK + Q-G5.4-η η-1 LOCK at
+`[BEAM-CAPSULE-STALENESS-CLOSURE-G5.4-QLOCK]` +
+`[BEAM-CAPSULE-STALENESS-CLOSURE-G5.4-EXECUTE-VERIFY-AUTH]` register
+substantively. **Gap 5 Capsule-Level Staleness Detection CLOSED at
+canonical-state register substantively.** ADR-0045 Status flipped
+from `Proposed 2026-05-18` to **`Accepted 2026-05-18`** per Q-G5.4-β
+β-1 LOCK. Gap 5 mini-arc 4/4. Sub-arc 2 remains IN FLIGHT per
+Q-G5.4-ζ ζ-1 LOCK. **Optional Gap 6 / ADR-0046 AI_AGENT EntityType-
+Discriminated Capsule Routing starts next under Path A** per
+Q-G5.4-η η-1 LOCK. Sub-arc 2 closure remains later forward-
+substrate per ADR-0041 CL.1 scope patch.
+
+**Substrate sites (5 authorized files; 5 MOD; 0 NEW):** MOD
+`docs/architecture/decisions/0045-capsule-level-staleness-detection.md`
+(Status flip + NEW H2 `## G5.4 Closure Cascade (2026-05-18)` + NEW
+H2 `## Post-Closure Implementation Lineage` with 4-commit table +
+Implementation Lineage G5.1 row anchored at `0a21d62` +
+Implementation Lineage G5.4 row flipped LANDED + Founder
+Authorization G5.4 citations) + MOD
+`docs/reference/section-12-progress.md` (Gap 5 row Status IN FLIGHT
+→ CLOSED + commit lineage updated to `0a21d62 → 14667a1 → e6e93b8
+→ this commit` + G5.4 LANDED closure prose appended) + MOD this
+`docs/CURRENT_BUILD_STATE.md` (this NEW H4) + MOD
+`docs/architecture/README.md` (ADR-0045 catalog Status flip Proposed
+→ Accepted + tail refresh with G5.2/G5.3/G5.4 substantive landing
+summary) + MOD `CLAUDE.md` (ADR-0045 catalog mirror Status flip
+Proposed → Accepted + parallel tail refresh).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (Humans Always Sovereign; staleness never deletes; non-
+destructive marking only; FOUNDATIONAL bypass + explicit-recall +
+reversible filtering preserved) + RULE 10 (no deletion; soft-delete-
+only discipline preserved) + RULE 11 (Prisma/Ecto cross-language
+ownership boundary preserved; BEAM observer-only at all G5 sub-
+phases) + RULE 12 (pre-flight grep verified G3.10 + G4.4 + PR.4 +
+G1.6 closure cascade precedents + ADR-0045 anchors + README/CLAUDE.md
+catalog Status strings) + RULE 13 (G5.4 closure rationale surfaced
+clearly + ADR-0035 §9 promotion decision δ-1 surfaced with rationale)
++ RULE 20 (Founder authorization required and granted at G5.4
+landing per `[BEAM-CAPSULE-STALENESS-CLOSURE-G5.4-QLOCK]` +
+`[BEAM-CAPSULE-STALENESS-CLOSURE-G5.4-EXECUTE-VERIFY-AUTH]`) + RULE
+21 (current-source inspection canonical at G5.4 PRE-FLIGHT register
+substantively).
+
+**Post-Closure Implementation Lineage canonical at canonical-
+execution register substantively per ADR-0020 two-register IP
+discipline**:
+
+- G5.1 `0a21d62` `[BEAM-CAPSULE-STALENESS-ADR]` — ADR-0045 NEW
+  Proposed; 4 MOD + 1 NEW docs-only; canonical 4-dimension staleness
+  model (content age + embedding lag + coverage drift + semantic
+  validity); RULE 21 research arc embedded (RS-G5-1 through RS-G5-5;
+  14+ public sources); 12 Q-G5 sub-decisions canonical; mandatory
+  feedback-loop vs capsule-level staleness discrimination canonical
+  per RULE 13.
+- G5.2 `14667a1` `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION]` —
+  substrate observation phase; 3 MOD docs-only; Q-G5.2-α α-2
+  minimum-viable embedding lag schema disposition; Q-G5.2-β β-1
+  defer audit literals; Q-G5.2-γ γ-2 write.service-only integration;
+  Q-G5.2-δ δ-2 G5.3 minimal substantive implementation; NEW O-G5.2-1
+  substrate-state observation (feedback_loop_score three-register
+  discrimination canonical).
+- G5.3 `e6e93b8` `[BEAM-CAPSULE-STALENESS-IMPL]` — minimum-viable
+  embedding lag implementation; 11 MOD substantive + docs; 2 NEW
+  MemoryCapsule fields (`embedding_content_hash` +
+  `embedding_generated_at`); write.service Prisma data conditional
+  spread for ADD + UPDATE branches; Ecto schema + Translator pack/
+  unpack pass-through; unit tests L1-L5 + integration tests L6-L7;
+  baseline deltas: unit 557 → 562 (+5); integration 211 → 213 (+2);
+  Elixir cosmp_router 219 → 223 (+4); dbgi_supervisor 67/0/19
+  preserved.
+- G5.4 this commit `[BEAM-CAPSULE-STALENESS-CLOSURE]` — docs-only
+  closure cascade; 5 MOD; ADR-0045 Status Proposed → Accepted; Gap 5
+  row Status IN FLIGHT → CLOSED; README + CLAUDE.md catalogs
+  flipped; NO ADR-0035 modification per Q-G5.4-δ δ-1 LOCK.
+
+**Canonical closure precedent**: G3.10 (`08b10ef` `[BEAM-CAPSULE-
+EMBEDDING-CLOSURE]`; 6 MOD docs-only; ADR-0043 Status flipped;
+ADR-0035 §9 cluster expansion 36 → 38) + G4.4 (`a05040f`
+`[BEAM-CAPSULE-DECAY-CLOSURE]`; 5 MOD docs-only; ADR-0044 Status
+flipped; **NO ADR-0035 modification — minimum-touch precedent G5.4
+follows exactly**) + PR.4 (`e60122c` `[PR-HARDENING-RUNBOOK-
+CLOSURE]`; 6 MOD + 1 NEW; ADR-0047 Status flipped; ADR-0035 §9 RULE
+14 back-citation footers only) + G1.6 (`[BEAM-CAPSULE-MUTATION-
+DISCRIMINATION-CLOSURE]`; 6 MOD docs-only). G5.4 mirrors G4.4 step-
+for-step: 5 MOD docs-only + Status flip + Gap row flip + catalog
+mirrors + **NO ADR-0035 modification** per Q-G5.4-δ δ-1 LOCK (G5.3
+observations D-G5.3-DB-PUSH-PRISMA-GENERATE-SPLIT + D-G5.3-AUDIT-
+LOOKUP-TARGET-COLUMN-vs-JSON-PATH remain canonical at commit-body-
+only register; promotion to ADR-0035 §9 reserved for later Founder-
+authorized amendment if recurrence proves it belongs).
+
+**ADR-0045 forward-substrate after closure**: capsule-level staleness
+detection model canonical at substrate-architectural register
+substantively; minimum-viable embedding lag substrate LANDED at G5.3
+(`embedding_content_hash` + `embedding_generated_at` fields +
+write.service integration + Translator pass-through). Stale-
+detection semantic at canonical-execution register substantively is
+UPDATE-failure preservation (OLD lag metadata while NEW content_hash
+lands → `embedding_content_hash != content_hash` is the stale
+signal). Filtering / ranking / lifecycle / audit-literal expansion /
+COE / SimilarityService / read.service / feedback.service
+integration remain forward-substrate (dormant unless future Founder-
+authorized ADR-0045 amendment lands). RULE 0 + RULE 10 no-auto-
+deletion discipline preserved. SimilarityService preserved UNTOUCHED
+per Q-G5-ι inheritance; ADR-0043 G3.9 J5-J8 privacy proofs
+preserved. BEAM observer-only canonical per Q-G5-κ κ-1 LOCK; no
+Elixir-side staleness computation; Translator round-trip
+preservation only.
+
 ---
 
 ## Phase 3 Sub-Arc 2 Gap 4 -- Decay Execution Formalization IN FLIGHT 2026-05-18 at G4.1 -- ADR-0044 NEW Proposed; G4.2-G4.4 forward-substrate
