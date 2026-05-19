@@ -51,11 +51,20 @@ defmodule CosmpRouter.ActivityCounter do
 
   ## References at canonical-coherence register
 
-  - ADR-0039 §Sub-decision 8 (ENTERPRISE-only scope at sub-phase b
-    register substantively; amendment forward-substrate at C.4 commit
-    register substantively widens scope canonical at canonical-prose
-    register substantively to include PERSONAL-promoted + AI_AGENT-
-    promoted at canonical-coherence register substantively)
+  - ADR-0039 §Sub-decision 8 + §Amendment 1 (PERSONAL-promoted scope
+    widening at sub-arc 1 sub-phase c canonical at canonical-execution
+    register substantively; PERSONAL wallet entities — including
+    Personal AI Agent / twin entities per ADR-0046 dual-context model
+    — promote on activity threshold crossing per
+    `should_promote?/1` register substantively; AI_AGENT entities
+    route via wallet_type column canonical BEAM dispatch signal per
+    ADR-0039 §Amendment 2 — Personal AI Agent twins (PERSONAL wallet)
+    follow this promote-on-activity path; Enterprise AI Agent entities
+    (ENTERPRISE wallet) follow the always-hot DMWWorker dispatch path
+    per ADR-0039 §Sub-decision 1)
+  - ADR-0046 (AI_AGENT EntityType-Discriminated Capsule Routing;
+    dual-context routing model — Personal AI Agent + Enterprise AI
+    Agent; G6.2 doc-and-test cascade corrects this comment)
   - ADR-0034 (BEAM testability discipline; name-configurable substrate
     + Application.get_env-resolved defaults at canonical-knowledge
     register substantively)

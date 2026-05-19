@@ -446,32 +446,67 @@ humans; AI entities cannot grant access to other AI entities; only a
 human entity can grant LONG_TERM or PERMANENT access).
 
 EntityType-discriminated capsule routing LOCKED at ADR-0041 umbrella
-register substantively per Q-J:
+register substantively per Q-J + G6.2 dual-context amendment (per
+ADR-0046 + Founder dual-context correction at
+`[BEAM-CAPSULE-ROUTING-G6-FOUNDER-CORRECTION]`):
 
 - AI_AGENT remains canonical at EntityType register substantively NOT
   WalletType register substantively at substrate-state register
   substantively per ADR-0033 cross-language data ownership register
-  substantively
-- AI_AGENT continues mapping to PERSONAL wallet_type for
-  storage/economic tier at INSERT register substantively per TS-side
-  `defaultWalletTypeFor/1` helper canonical at
-  `packages/database/src/queries/wallet.ts` register substantively
+  substantively.
+- **AI_AGENT routes to PERSONAL or ENTERPRISE wallet context depending
+  on deployment/use context per ADR-0046 dual-context model**:
+  - **Personal AI Agent context** — AI_AGENT + PERSONAL +
+    EntityMembership(parent=PERSON owner, child=AI_AGENT twin); LIVE
+    in production via `apps/api/src/services/governance/twin.service.ts:
+    189-191` explicit `wallet_type: "PERSONAL"` override per ADR-0001
+    §Amendment 1 design intent for digital twins.
+  - **Enterprise AI Agent context** — AI_AGENT + ENTERPRISE +
+    EntityMembership(parent=COMPANY / organization / agency, child=
+    AI_AGENT); forward-substrate product surface; defensive
+    infrastructure live via `defaultWalletTypeFor(AI_AGENT) =
+    ENTERPRISE` RULE 0 safe default at
+    `packages/database/src/queries/wallet.ts:39-58`.
+  - **Defensive fallback** — `defaultWalletTypeFor(AI_AGENT) =
+    ENTERPRISE` canonical RULE 0 safe default for bare AI_AGENT
+    creates without explicit `wallet_type` override.
+- Canonical context-resolution signals: explicit `wallet_type`
+  override + EntityMembership parent/child relationship + defensive
+  fallback when context is ambiguous (per ADR-0046 §Decision
+  register substantively).
 - Sub-arc 2 decides capsule-layer routing using EntityType NOT
   WalletType canonical at canonical-coherence register substantively
-  per Founder Q-J LOCK
+  per Founder Q-J LOCK (preserved); ADR-0046 canonicalizes the
+  dual-context routing model and resolves which EntityType-context
+  pairing maps to which WalletType.
 - RULE 0 compliance canonical at canonical-rule register substantively:
   AI_AGENT capsule operations preserve lower default permission
   ceilings canonical at canonical-execution register substantively
+  regardless of wallet context (PERSONAL or ENTERPRISE).
 
-ADR-0041 §Sub-decision 1 + ADR-0042 (Gap 1) determine at canonical-
-prose register substantively whether AI_AGENT routing branch belongs
-INSIDE Gap 1 mutation discrimination ADR (substrate-coherent if
-MutationType discriminates per EntityType at write register
-substantively) OR warrants separate ADR-0046 (substrate-coherent if
-AI_AGENT routing cuts across multiple gaps register substantively).
-Founder Q-C LOCKED Option register substantively allows optional
-ADR-0046; ADR-0041 §Sub-decision 1 + ADR-0042 prose register
-substantively will canonicalize the decision at canonical-coherence
+**Decision canonical at canonical-coherence register substantively
+per ADR-0046**: AI_AGENT routing belongs at a separate ADR (ADR-0046)
+canonical at canonical-architectural register substantively. ADR-0046
+canonicalizes the dual-context routing model + 11-row enforcement
+surface inventory + 10-row adversarial threat model T1-T10 + RULE 21
+research arc (RS-G6-1 through RS-G6-4 register substantively). G6.2
+doc-and-test cascade lands ADR-0001 §Amendment 1 + ADR-0039
+§Amendment 2 + this §Sub-decision 6 amendment + glossary updates +
+3 Elixir module docstring corrections + grpc/server.ex:266 comment
+closure + CLAUDE.md catalog updates + NEW TS dual-context tests per
+RULE 14 bidirectional citation discipline.
+
+**Bidirectional citation (RULE 14)**: ADR-0046 (AI_AGENT EntityType-
+Discriminated Capsule Routing; canonicalizes dual-context routing
+model; G6.2 cascade lands this §Sub-decision 6 amendment at
+`[BEAM-CAPSULE-ROUTING-G6.2-QLOCK]` +
+`[BEAM-CAPSULE-ROUTING-G6.2-EXECUTE-VERIFY-AUTH]` register
+substantively).
+
+**Sub-arc 2 status field remains IN FLIGHT** per ADR-0041 CL.1 scope
+patch + Q-G6.2-κ κ-1 LOCK; Gap 6 lineage canonical at G6.1 `c130826`
++ G6.2 this commit + G6.3 DEFERRED forward-substrate + G6.4 closure
+cascade forward-substrate per ADR-0046 §Implementation Lineage
 register substantively.
 
 ### Sub-decision 7: Weighting architecture per Entry #28

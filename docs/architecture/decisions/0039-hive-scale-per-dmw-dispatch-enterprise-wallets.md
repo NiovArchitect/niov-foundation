@@ -920,3 +920,114 @@ discipline canonical:
   substantively)
 - RULE 21 (pre-authorization research arc canonical at canonical-rule
   register substantively per 67f6112 commit substantively)
+
+## Amendment 2: Dual-context AI_AGENT routing per ADR-0046 (2026-05-19)
+
+Per ADR-0046 (AI_AGENT EntityType-Discriminated Capsule Routing;
+Sub-arc 2 Gap 6), this Amendment 2 corrects the substrate-honest
+drift in this ADR's prose register substantively that claimed
+AI_AGENT entities universally map to PERSONAL WalletType. **The
+actual runtime dispatch path is dual-context per the canonical
+model in ADR-0046**, with `wallet_type` (column on the `wallets`
+table) being the canonical dispatch signal at the BEAM register
+substantively. This Amendment 2 augments §Decision + §Sub-decision
+1 + §Amendment 1 prose register substantively without erasing the
+surrounding substrate-build observations, research arc, or Horde
+/ cosmp_router refactor decisions.
+
+### Substrate-honest correction (RULE 13)
+
+This ADR's earlier prose register substantively (notably at
+canonical-prose register at L106-108 + L250-253 + §Sub-decision 1
++ §Amendment 1) describes AI_AGENT entities as mapping universally
+to PERSONAL WalletType via TS-side `defaultWalletTypeFor/1`.
+**This is substrate-honestly incomplete.** The TS helper canonical
+at `packages/database/src/queries/wallet.ts:39-58` register
+substantively maps `AI_AGENT → ENTERPRISE` as RULE 0 defensive
+fallback at canonical-execution register substantively (see code
+comment "non-human entities default to ENTERPRISE rather than
+PERSONAL"). The PERSONAL routing path for AI_AGENT fires ONLY
+when an explicit `wallet_type: "PERSONAL"` override is passed to
+`createEntity` — currently at `apps/api/src/services/governance/
+twin.service.ts:189-191` for the digital twin / Personal AI Agent
+flow per ADR-0001 §Amendment 1 register substantively.
+
+### Dual-context routing canonical per ADR-0046
+
+The canonical runtime AI_AGENT dispatch path is dual-context:
+
+- **Personal AI Agent twin** — AI_AGENT entity created with
+  explicit `wallet_type: "PERSONAL"` override (twin.service.ts:
+  189-191) → wallet row carries `wallet_type = PERSONAL` →
+  `CosmpRouter.WalletCache.wallet_type_for/1` returns `:personal`
+  → tier-routed dispatch shim at `apps/cosmp_router/lib/
+  cosmp_router/grpc/server.ex` routes through
+  `dispatch_with_promote_check/4` → ActivityCounter
+  promote-on-activity per Amendment 1 + sub-arc 1 sub-phase c
+  substrate.
+
+- **Enterprise AI Agent** — AI_AGENT entity created via bare
+  `createEntity({entity_type: "AI_AGENT"})` (no explicit
+  `wallet_type` override) → `defaultWalletTypeFor(AI_AGENT) =
+  ENTERPRISE` defensive fallback → wallet row carries
+  `wallet_type = ENTERPRISE` → `WalletCache.wallet_type_for/1`
+  returns `:enterprise` → tier-routed dispatch shim routes
+  through `dispatch_enterprise/3` → DMWWorker via Horde via-tuple
+  always-hot per-DMW dispatch path canonical at §Sub-decision 1
+  + §Sub-decision 7 substantively. Forward-substrate product
+  surface; defensive infrastructure live; no current product code
+  path creates Enterprise AI Agent entities at HEAD register
+  substantively.
+
+- **wallet_type column is the canonical dispatch signal at BEAM
+  register substantively** — neither EntityType nor the TS-side
+  helper directly drives the BEAM dispatch tier. The BEAM layer
+  reads `wallet_type` from the Prisma-owned `wallets` table per
+  ADR-0033 §Decision 7 + Q-5BII-EXEC-5 cross-language data
+  ownership boundary canonical. The dispatch shim canonical at
+  `apps/cosmp_router/lib/cosmp_router/grpc/server.ex:199-225`
+  branches on `:enterprise | :personal | :device | _other_tier`
+  resolved via `WalletCache.wallet_type_for/1`.
+
+### Prior prose register substantively (preserved)
+
+This ADR's earlier substrate-build observations, research arc
+(D-WIDER-KNOWLEDGE-CHECK + libcluster guidance), Horde Registry
++ Horde DynamicSupervisor decision, cosmp_router pure-module
+refactor at single-source-of-truth register, ETS WalletCache
+canonical at Sub-decision 5, and Amendment 1 PERSONAL-promoted
+substrate (sub-arc 1 sub-phase c) are **preserved verbatim** at
+the canonical-prose register substantively. The substrate-honest
+correction in this Amendment 2 narrows specific AI_AGENT-to-
+PERSONAL universality claims without erasing the surrounding
+substrate.
+
+### Patent-implementation evidence
+
+Per ADR-0020 two-register IP discipline, this Amendment 2
+preserves the patent-implementation evidence trail at canonical-
+prose register substantively. ADR-0046 + this Amendment 2
+substantively close the `D-AI-AGENT-ENTITY-TYPE-vs-WALLET-TYPE-
+DISCRIMINATION-DRIFT` observation register substantively that
+this ADR's §Amendment 1 + §Decision §Sub-decision 8 originally
+forward-queued at sub-arc 2 capsule-layer register substantively.
+
+### Bidirectional citation (RULE 14)
+
+- ADR-0046 (AI_AGENT EntityType-Discriminated Capsule Routing;
+  canonicalizes dual-context model corrected by this Amendment 2;
+  G6.2 doc-and-test cascade lands this Amendment 2 register
+  substantively per `[BEAM-CAPSULE-ROUTING-G6.2-QLOCK]` +
+  `[BEAM-CAPSULE-ROUTING-G6.2-EXECUTE-VERIFY-AUTH]`).
+- ADR-0001 §Amendment 1 (preserves + narrows Personal DMW /
+  digital twin claim to Personal AI Agent context; companion
+  Enterprise AI Agent context added at canonical-prose register
+  substantively).
+- ADR-0041 §Sub-decision 6 amendment (capsule layer umbrella;
+  dual-context model canonical at parent umbrella register
+  substantively).
+
+Founder authorization explicit at Amendment 2 landing per RULE 20
+at `[BEAM-CAPSULE-ROUTING-G6.2-QLOCK]` +
+`[BEAM-CAPSULE-ROUTING-G6.2-QLOCK-CORRECTION]` +
+`[BEAM-CAPSULE-ROUTING-G6.2-EXECUTE-VERIFY-AUTH]`.

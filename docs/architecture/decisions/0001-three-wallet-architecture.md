@@ -91,6 +91,63 @@ accountability; a separate `AI_AGENT` entity with its own
 Personal DMW preserves attribution clarity for SOC 2 / audit
 purposes.
 
+## Amendment 1 (2026-05-19) — Dual-context AI_AGENT routing per ADR-0046
+
+Per ADR-0046 (AI_AGENT EntityType-Discriminated Capsule Routing;
+Sub-arc 2 Gap 6), the canonical AI_AGENT-to-wallet mapping is
+**dual-context, not single-default**. This Amendment 1 preserves
+this ADR's original Personal DMW / digital twin claim and narrows
+it to the **Personal AI Agent context**, with a companion
+**Enterprise AI Agent context** added at canonical-prose register
+substantively. The §Decision body above is preserved verbatim;
+this Amendment 1 augments it.
+
+**Canonical dual-context AI_AGENT routing (per ADR-0046):**
+
+- **Personal AI Agent context** — EntityType = `AI_AGENT`,
+  WalletType = `PERSONAL`, EntityMembership(parent=`PERSON` owner,
+  child=`AI_AGENT` twin). `niov_can_access_contents = true` per
+  `defaultNiovAccessFor(PERSONAL)`. This is the canonical digital
+  twin pattern described in this ADR's §Decision body. LIVE in
+  production at `apps/api/src/services/governance/twin.service.ts:
+  189-191` (explicit `wallet_type: "PERSONAL"` override). Matches
+  the GDPR Article 20 portability discipline canonical at this
+  ADR's §Consequences §Easier substantively.
+
+- **Enterprise AI Agent context** — EntityType = `AI_AGENT`,
+  WalletType = `ENTERPRISE`, EntityMembership(parent=`COMPANY` /
+  organization / agency, child=`AI_AGENT`).
+  `niov_can_access_contents = false` per
+  `defaultNiovAccessFor(ENTERPRISE)`. Forward-substrate product
+  surface for autonomous AI agents owned by an enterprise /
+  organization / agency; defensive infrastructure live via
+  `packages/database/src/queries/wallet.ts:39-58`
+  `defaultWalletTypeFor(AI_AGENT) = ENTERPRISE` RULE 0 safe
+  default. No current product code path creates Enterprise AI
+  Agent entities at HEAD register substantively (defensive
+  fallback only).
+
+- **Defensive fallback** — `defaultWalletTypeFor(AI_AGENT) =
+  ENTERPRISE` is the canonical RULE 0 safe default for bare
+  `createEntity({entity_type: "AI_AGENT"})` calls without explicit
+  `wallet_type` override. Preserves RULE 0 by avoiding accidental
+  PERSONAL/human-authority assumptions for AI agent entities
+  created outside the canonical twin onboarding flow.
+
+- **Canonical context-resolution signals** — (a) explicit
+  `wallet_type` override in `CreateEntityInput` (twin path); (b)
+  `EntityMembership` parent/child relationship (`parent=PERSON` →
+  Personal AI Agent; `parent=COMPANY` → Enterprise AI Agent); (c)
+  defensive fallback when context is ambiguous.
+
+**Substrate-honest preservation discipline**: this ADR's original
+"Digital twins are `AI_AGENT` entities with their own Personal
+DMW" claim at §Decision and §Alternatives Considered is preserved
+verbatim. The claim is **correct for the Personal AI Agent
+context**; ADR-0046 narrows the universe of claims about
+AI_AGENT-wallet mapping to the dual-context model without
+erasing this ADR's original design intent.
+
 ## References
 
 - User memory #20 (Otzar architecture: AGI for Work)
@@ -100,9 +157,20 @@ purposes.
 - Patent US 12,517,919 (claim coverage of wallet enumeration)
 - ADR-0009 (COSMP 7-operation enumeration; relates the seven
   operations to wallet boundaries)
+- ADR-0046 (AI_AGENT EntityType-Discriminated Capsule Routing;
+  Amendment 1 of this ADR per RULE 14 bidirectional citation
+  discipline; canonicalizes dual-context AI_AGENT routing model
+  that preserves + narrows this ADR's Personal DMW / digital
+  twin claim to the Personal AI Agent context + adds the
+  Enterprise AI Agent context)
 
 Bidirectional citations (cited from):
 
 - `docs/reference/glossary.md` → "Decentralized Memory Wallet
   (DMW)", "Enterprise DMW", "Personal DMW", "Device DMW",
-  "Digital Twin Wallet", "Three-Wallet Architecture"
+  "Digital Twin Wallet", "Three-Wallet Architecture",
+  "Personal AI Agent", "Enterprise AI Agent"
+- `docs/architecture/decisions/0046-ai-agent-entity-type-discriminated-capsule-routing.md`
+  → preserves + narrows this ADR's Personal DMW / digital twin
+  claim to Personal AI Agent context + adds Enterprise AI Agent
+  context companion (RULE 14)

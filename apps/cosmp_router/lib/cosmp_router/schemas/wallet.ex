@@ -35,10 +35,16 @@ defmodule CosmpRouter.Wallet do
     3 values: PERSONAL, ENTERPRISE, DEVICE per ADR-0038 Sub-decision 3)
 
   AI_AGENT substantively is an EntityType (not a WalletType) per Prisma
-  schema canonical at substrate-state ground truth register; AI_AGENT
-  entities map to PERSONAL wallet_type at INSERT register per TS-side
-  `defaultWalletTypeFor/1` helper canonical at
-  `packages/database/src/queries/wallet.ts`.
+  schema canonical at substrate-state ground truth register. AI_AGENT
+  entities route to either PERSONAL or ENTERPRISE WalletType depending
+  on deployment/use context per ADR-0046 dual-context routing model:
+
+  - Personal AI Agent / twin pattern → AI_AGENT + PERSONAL wallet
+    (explicit `wallet_type: "PERSONAL"` override at
+    `apps/api/src/services/governance/twin.service.ts:189-191`).
+  - Enterprise AI Agent → AI_AGENT + ENTERPRISE wallet
+    (`defaultWalletTypeFor(AI_AGENT) = ENTERPRISE` RULE 0 safe default
+    at `packages/database/src/queries/wallet.ts:39-58`).
 
   ## References
 
@@ -46,6 +52,9 @@ defmodule CosmpRouter.Wallet do
   - ADR-0033 (cross-language data ownership; Prisma-owned tables;
     Ecto read-only projection pattern)
   - ADR-0038 Sub-decision 3 (WalletType 3-tier: PERSONAL/ENTERPRISE/DEVICE)
+  - ADR-0046 (AI_AGENT EntityType-Discriminated Capsule Routing;
+    dual-context routing model — Personal AI Agent + Enterprise AI
+    Agent; G6.2 doc-and-test cascade corrects this moduledoc)
   - `packages/database/prisma/schema.prisma` (Prisma canonical schema)
   """
 

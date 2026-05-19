@@ -95,6 +95,75 @@ describe("entity creation auto-creates a wallet", () => {
   });
 });
 
+// ADR-0046 G6.2 doc-and-test cascade: dual-context AI_AGENT routing.
+// AI_AGENT routes to PERSONAL or ENTERPRISE depending on context.
+// Personal AI Agent context = explicit wallet_type: "PERSONAL" override
+// (twin pattern at twin.service.ts:189-191; also exercised here for
+// non-twin direct creates). Enterprise AI Agent context = ENTERPRISE
+// wallet via defaultWalletTypeFor(AI_AGENT) RULE 0 defensive fallback.
+describe("AI_AGENT dual-context routing (ADR-0046)", () => {
+  it("explicit wallet_type: PERSONAL override on AI_AGENT creates a Personal AI Agent (PERSONAL wallet)", async () => {
+    const agent = await createEntity(
+      makeEntityInput({
+        entity_type: "AI_AGENT",
+        wallet_type: "PERSONAL",
+        email: null,
+      }),
+    );
+    const wallet = await getWalletByEntityId(agent.entity_id);
+    expect(wallet?.wallet_type).toBe("PERSONAL");
+    expect(wallet?.niov_can_access_contents).toBe(true);
+  });
+
+  it("explicit wallet_type: ENTERPRISE override on AI_AGENT creates an Enterprise AI Agent (ENTERPRISE wallet)", async () => {
+    const agent = await createEntity(
+      makeEntityInput({
+        entity_type: "AI_AGENT",
+        wallet_type: "ENTERPRISE",
+        email: null,
+      }),
+    );
+    const wallet = await getWalletByEntityId(agent.entity_id);
+    expect(wallet?.wallet_type).toBe("ENTERPRISE");
+    expect(wallet?.niov_can_access_contents).toBe(false);
+  });
+
+  it("bare AI_AGENT direct-create falls back to ENTERPRISE per defaultWalletTypeFor RULE 0 safe default", async () => {
+    const agent = await createEntity(
+      makeEntityInput({ entity_type: "AI_AGENT", email: null }),
+    );
+    const wallet = await getWalletByEntityId(agent.entity_id);
+    expect(wallet?.wallet_type).toBe("ENTERPRISE");
+    expect(wallet?.niov_can_access_contents).toBe(false);
+  });
+
+  it("niov_can_access_contents differs correctly between Personal AI Agent and Enterprise AI Agent contexts", async () => {
+    const personalAgent = await createEntity(
+      makeEntityInput({
+        entity_type: "AI_AGENT",
+        wallet_type: "PERSONAL",
+        email: null,
+      }),
+    );
+    const enterpriseAgent = await createEntity(
+      makeEntityInput({
+        entity_type: "AI_AGENT",
+        wallet_type: "ENTERPRISE",
+        email: null,
+      }),
+    );
+    const personalWallet = await getWalletByEntityId(personalAgent.entity_id);
+    const enterpriseWallet = await getWalletByEntityId(enterpriseAgent.entity_id);
+    // RULE 0: PERSONAL allows NIOV access (consent-based);
+    // ENTERPRISE does not (maximum-human-control default).
+    expect(personalWallet?.niov_can_access_contents).toBe(true);
+    expect(enterpriseWallet?.niov_can_access_contents).toBe(false);
+    // Both share EntityType AI_AGENT; only wallet context differs.
+    expect(personalWallet?.wallet_type).toBe("PERSONAL");
+    expect(enterpriseWallet?.wallet_type).toBe("ENTERPRISE");
+  });
+});
+
 describe("wallet content-access rule", () => {
   it("PERSONAL wallets allow NIOV to access contents", async () => {
     const person = await createEntity(

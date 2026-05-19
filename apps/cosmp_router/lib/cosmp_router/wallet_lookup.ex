@@ -19,20 +19,26 @@ defmodule CosmpRouter.WalletLookup do
   Return shape matches actual Prisma WalletType enum 3-tier at
   canonical-honest register substantively:
 
-  - `:personal` (Prisma PERSONAL; includes AI_AGENT entities per TS-side
-    `defaultWalletTypeFor/1` mapping AI_AGENT EntityType to PERSONAL
-    wallet_type at INSERT register canonical at
-    `packages/database/src/queries/wallet.ts`)
-  - `:enterprise` (Prisma ENTERPRISE)
+  - `:personal` (Prisma PERSONAL; includes Personal AI Agent / twin
+    entities per ADR-0046 dual-context routing model — AI_AGENT
+    entities created with explicit `wallet_type: "PERSONAL"` override
+    at `apps/api/src/services/governance/twin.service.ts:189-191`)
+  - `:enterprise` (Prisma ENTERPRISE; includes Enterprise AI Agent
+    entities per ADR-0046 dual-context routing model — AI_AGENT
+    entities falling back to `defaultWalletTypeFor(AI_AGENT) =
+    ENTERPRISE` RULE 0 safe default at
+    `packages/database/src/queries/wallet.ts:39-58`)
   - `:device` (Prisma DEVICE)
 
   AI_AGENT substantively is an EntityType (not a WalletType) at
-  canonical-honest register substantively; AI_AGENT entities map to
-  PERSONAL wallet_type at INSERT register substantively per TS-side
-  helper canonical at substrate-state ground truth register. The
+  canonical-honest register substantively per ADR-0046. AI_AGENT
+  entities route to either PERSONAL or ENTERPRISE WalletType
+  depending on deployment/use context per ADR-0046 dual-context
+  routing model (Personal AI Agent + Enterprise AI Agent). The
   wallet_type column substantively is read directly canonical at
   canonical-knowledge register substantively without EntityType
-  inspection.
+  inspection — `wallet_type` is the canonical BEAM dispatch signal
+  per ADR-0039 §Amendment 2.
 
   ## Cardinality at sub-phase b register
 
@@ -54,8 +60,13 @@ defmodule CosmpRouter.WalletLookup do
   ## References
 
   - ADR-0039 Sub-decision 4 (NEW CosmpRouter.WalletLookup)
+  - ADR-0039 §Amendment 2 (dual-context AI_AGENT routing path
+    documentation; wallet_type column canonical BEAM dispatch signal)
   - ADR-0036 (REGULATOR per-request indexed point-lookup pattern)
   - ADR-0038 Sub-decision 3 (WalletType 3-tier canonical)
+  - ADR-0046 (AI_AGENT EntityType-Discriminated Capsule Routing;
+    dual-context routing model — Personal AI Agent + Enterprise AI
+    Agent; G6.2 doc-and-test cascade corrects this moduledoc)
   - `CosmpRouter.Wallet` (read-only Ecto projection on wallets table)
   """
 

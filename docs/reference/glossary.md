@@ -270,10 +270,34 @@ CapsuleType enum.
 employee's AI counterpart. Each digital twin has its own
 Personal DMW (called the Digital Twin Wallet in some
 documentation). Twins are "fused" with their owning employee
-via EntityMembership.
+via EntityMembership. Digital twins are the canonical example
+of the **Personal AI Agent** context defined in ADR-0046; see
+the Personal AI Agent + Enterprise AI Agent entries below for
+the dual-context AI_AGENT routing model.
 
 **Digital Twin Wallet.** Synonym for the Personal DMW belonging
-to an AI_AGENT entity (a digital twin).
+to an AI_AGENT entity in the **Personal AI Agent context** (i.e.,
+a digital twin fused to a `PERSON` owner via EntityMembership).
+The Digital Twin Wallet term applies specifically to twins; the
+broader AI_AGENT routing universe is canonical in ADR-0046, which
+distinguishes Personal AI Agent (twin) from Enterprise AI Agent
+(organization-owned) contexts. See ADR-0001 + ADR-0001 §Amendment
+1 + ADR-0046.
+
+**Enterprise AI Agent.** The dual-context AI_AGENT routing pattern
+for an `AI_AGENT` entity owned by an enterprise, organization, or
+agency. EntityType = `AI_AGENT`; WalletType = `ENTERPRISE`;
+EntityMembership(parent=`COMPANY` / organization / agency, child=
+`AI_AGENT`); `niov_can_access_contents = false` per
+`defaultNiovAccessFor(ENTERPRISE)` (RULE 0 maximum-human-control
+default). Forward-substrate product surface; defensive
+infrastructure live via `defaultWalletTypeFor(AI_AGENT) =
+ENTERPRISE` RULE 0 safe default at
+`packages/database/src/queries/wallet.ts:39-58`. No current product
+code path creates Enterprise AI Agent entities at HEAD register
+substantively. Canonical at ADR-0046; companion to Personal AI
+Agent below. See ADR-0046 + ADR-0039 §Amendment 2 + ADR-0041
+§Sub-decision 6 amendment.
 
 **DOMAIN_KNOWLEDGE Capsule.** A Capsule type carrying
 subject-matter intelligence within a defined knowledge domain —
@@ -531,9 +555,27 @@ elapsed or access patterns — does not decay. Used for Capsules
 carrying intelligence whose value does not erode. See
 `packages/database/prisma/schema.prisma` DecayType enum.
 
+**Personal AI Agent.** The dual-context AI_AGENT routing pattern
+for an `AI_AGENT` entity acting in a personal / non-enterprise
+context. EntityType = `AI_AGENT`; WalletType = `PERSONAL`;
+EntityMembership(parent=`PERSON` owner, child=`AI_AGENT`);
+`niov_can_access_contents = true` per
+`defaultNiovAccessFor(PERSONAL)`. Canonical example: the digital
+twin pattern per ADR-0001 + ADR-0001 §Amendment 1 (twin "fused"
+to employee via EntityMembership; portable on departure per GDPR
+Article 20). LIVE in production at
+`apps/api/src/services/governance/twin.service.ts:189-191`
+explicit `wallet_type: "PERSONAL"` override. Personal AI Agent is
+the companion to Enterprise AI Agent above; together they form
+the dual-context AI_AGENT routing model canonical at ADR-0046.
+See ADR-0046 + ADR-0001 §Amendment 1 + ADR-0039 §Amendment 2 +
+ADR-0041 §Sub-decision 6 amendment.
+
 **Personal DMW.** The wallet type owned by an individual
 (`WalletType.PERSONAL`). Employee personal capsules live here
-and port to the next employer on departure. See ADR-0001.
+and port to the next employer on departure. See ADR-0001. For
+the AI_AGENT-specific routing of Personal DMW (the twin pattern),
+see "Personal AI Agent" above + ADR-0046.
 
 **PREFERENCE Capsule.** A Capsule type carrying explicit Entity
 preferences — stated choices, configured options, and declared

@@ -523,6 +523,108 @@ scope patch.
 Founder authorization explicit per RULE 20 at
 `[BEAM-CAPSULE-ROUTING-G6-QLOCK]` + `[BEAM-CAPSULE-ROUTING-G6.1-EXECUTE-VERIFY-AUTH]`.
 
+#### G6.2 LANDED — ADR-0046 dual-context routing propagated across 13 substrate sites (2026-05-19)
+
+**Status:** G6.2 `[BEAM-CAPSULE-ROUTING-DOC-AND-TEST-CASCADE]` doc-
+and-test cascade LANDED 2026-05-19 (13 MOD + 0 NEW corrected) per
+Founder Q-G6.2-α α-1 + Q-G6.2-β β-1 + Q-G6.2-γ γ-1 + Q-G6.2-δ δ-1 +
+Q-G6.2-ε ε-1 + Q-G6.2-ζ ζ-1 + Q-G6.2-η η-1 + Q-G6.2-θ θ-1 + Q-G6.2-ι
+(13 MOD + 0 NEW corrected) + Q-G6.2-κ κ-1 LOCKS at
+`[BEAM-CAPSULE-ROUTING-G6.2-QLOCK]` +
+`[BEAM-CAPSULE-ROUTING-G6.2-QLOCK-CORRECTION]` (substrate-state
+drifts D-G6.2-1 file-count + D-G6.2-2 ADR-0001 / ADR-0039 filename
+resolved) + `[BEAM-CAPSULE-ROUTING-G6.2-EXECUTE-VERIFY-AUTH]`
+register substantively.
+
+**G6.2 propagated ADR-0046 dual-context routing model across 13
+substrate sites canonical at canonical-prose register substantively**:
+
+- ADR-0001 in-place Amendment 1: preserve Personal DMW / digital
+  twin claim verbatim + narrow to Personal AI Agent context + add
+  companion Enterprise AI Agent context + RULE 14 bidirectional
+  citation to ADR-0046.
+- ADR-0039 in-place Amendment 2: substrate-honest correction at
+  canonical-prose register substantively (L106-108 + L250-253 +
+  §Sub-decision 1 + §Amendment 1); document dual-context dispatch
+  path (Personal AI Agent twin → PERSONAL → personal/promote-on-
+  activity dispatch shim; Enterprise AI Agent → ENTERPRISE →
+  DMWWorker hot dispatch); wallet_type column is canonical BEAM
+  dispatch signal; prior substrate-build observations + research
+  arc + Horde + cosmp_router pure-module decisions preserved
+  verbatim; RULE 14 bidirectional citation to ADR-0046.
+- ADR-0041 §Sub-decision 6 amendment: replace hard-mapping prose
+  ("AI_AGENT continues mapping to PERSONAL wallet_type") with
+  ADR-0046 dual-context model; preserve Gap 6 lineage; preserve
+  Sub-arc 2 IN FLIGHT.
+- ADR-0046 update: G6.2 cascade section + Implementation Lineage
+  G6.1 row anchored at `c130826` + G6.2 row flipped LANDED
+  2026-05-19 + Founder Authorization G6.2 citations.
+- Glossary update: narrow "Digital Twin Wallet" entry to Personal
+  AI Agent / twin context; NEW "Personal AI Agent" entry; NEW
+  "Enterprise AI Agent" entry; cite ADR-0046 throughout.
+- section-12-progress: G6.2 LANDED prose appended to Gap 6 row;
+  Gap 6 row Status preserved IN FLIGHT; Sub-arc 2 umbrella row
+  Status preserved IN FLIGHT.
+- this CURRENT_BUILD_STATE NEW H4 section.
+- CLAUDE.md ADR-0001 / ADR-0039 / ADR-0041 / ADR-0046 catalog
+  entries with G6.2 amendment summaries.
+- 3 Elixir module docstring corrections (canonical dual-context
+  language; ADR-0046 citations; no routing logic changes; no
+  Translator behavior changes):
+  - `apps/cosmp_router/lib/cosmp_router/wallet_lookup.ex` moduledoc
+  - `apps/cosmp_router/lib/cosmp_router/schemas/wallet.ex` moduledoc
+  - `apps/cosmp_router/lib/cosmp_router/activity_counter.ex` L57
+    comment
+- `apps/cosmp_router/lib/cosmp_router/grpc/server.ex:266` forward-
+  substrate AI_AGENT branch comment closure: canonical disposition
+  per ADR-0046 — AI_AGENT routing is canonical, no separate
+  AI_AGENT branch needed (wallet_type column is the canonical
+  BEAM dispatch signal per ADR-0039 §Amendment 2).
+- `tests/unit/wallet.test.ts` NEW dual-context tests (4 NEW tests
+  in NEW `describe("AI_AGENT dual-context routing (ADR-0046)")`
+  block: explicit PERSONAL override on AI_AGENT → PERSONAL wallet
+  + explicit ENTERPRISE override on AI_AGENT → ENTERPRISE wallet
+  + bare AI_AGENT direct-create RULE 0 defensive fallback to
+  ENTERPRISE preserved + niov_can_access_contents differs
+  correctly between Personal AI Agent and Enterprise AI Agent
+  contexts).
+
+**G6.2 baseline deltas at canonical-execution register substantively**:
+TS=12 baseline preserved; no-console 1/1 preserved; unit 562 → 566
+(+4 NEW dual-context tests per Q-G6.2-ζ ζ-1 LOCK); integration
+213+1 skipped preserved; mix compile clean; Elixir cosmp_router
+223+1 skipped preserved; dbgi_supervisor 67/0/19 preserved.
+
+**Critical coherence preserved at G6.2**: ADR-0046 Status
+preserved `Proposed 2026-05-19` per Q-G6.2-κ κ-1 LOCK (G6.4 closure
+cascade is canonical Status-flip commit); Gap 6 row Status
+preserved IN FLIGHT; Sub-arc 2 umbrella row Status preserved IN
+FLIGHT; ADR-0022 + ADR-0033 + ADR-0035 + ADR-0042 + ADR-0043 +
+ADR-0044 + ADR-0045 + ADR-0047 untouched at G6.2; no schema.prisma
+changes; no audit.ts changes per Q-G6.2-η η-1 LOCK; no new audit
+literals; no read.service / write.service / SimilarityService /
+COE / permission / TAR / negotiate.service behavior changes
+(forbidden boundaries preserved); no Elixir routing logic /
+Translator behavior changes per Q-G6.2-ε ε-1 LOCK; no schema
+discriminator changes per Q-G6.2-θ θ-1 LOCK; **G6.3 substantive
+`resolveAiAgentWalletContext` helper remains DEFERRED forward-
+substrate** per Founder G6.3 disposition LOCK (not in current
+closure path); no production-affecting actions; no real OpenAI
+calls; no Supabase mutation; no secret exposure.
+
+**G6.4 closure cascade forward-substrate next**: ADR-0046 Status
+flip `Proposed 2026-05-19` → `Accepted 2026-05-XX` + Gap 6 row
+Status flip IN FLIGHT → CLOSED + README + CLAUDE.md ADR-0046
+catalog refresh + Sub-arc 2 preserved IN FLIGHT pending later
+Sub-arc 2 closure cascade per ADR-0041 CL.1 scope patch register
+substantively.
+
+Founder authorization explicit per RULE 20 at
+`[BEAM-CAPSULE-ROUTING-G6-QLOCK]` +
+`[BEAM-CAPSULE-ROUTING-G6.2-QLOCK]` +
+`[BEAM-CAPSULE-ROUTING-G6.2-QLOCK-CORRECTION]` +
+`[BEAM-CAPSULE-ROUTING-G6.2-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## Phase 3 Sub-Arc 2 Gap 5 -- Capsule-Level Staleness Detection IN FLIGHT 2026-05-18 at G5.1 -- ADR-0045 NEW Proposed; G5.2-G5.4 forward-substrate

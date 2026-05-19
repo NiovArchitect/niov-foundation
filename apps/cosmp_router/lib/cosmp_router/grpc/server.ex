@@ -260,9 +260,18 @@ defmodule CosmpRouter.GRPC.Server do
   # Sub-arc 1 sub-phase c Commit C.3 [BEAM-DBGI-PROMOTE-TIER-ROUTED-DISPATCH]
   # Mirrors dispatch_enterprise/3 substrate-architectural shape; lazy-spawns
   # DMWWorker via DbgiSupervisor.start_dmw_worker_horde/3 with the resolved
-  # wallet_type and dispatches via Horde via-tuple. Forward-substrate to
-  # AI_AGENT branch at C.4 ADR amendment register per ADR-0039 §Sub-decision
-  # 8 amendment forward-substrate.
+  # wallet_type and dispatches via Horde via-tuple.
+  #
+  # AI_AGENT routing CLOSED per ADR-0046 dual-context routing model
+  # canonical at canonical-architectural register substantively. AI_AGENT
+  # entities route via wallet_type column (canonical BEAM dispatch signal
+  # per ADR-0039 §Amendment 2) — no separate AI_AGENT branch is needed:
+  # Personal AI Agent / twin (PERSONAL wallet) reaches this function via
+  # dispatch_with_promote_check/4; Enterprise AI Agent (ENTERPRISE wallet)
+  # reaches dispatch_enterprise/3 directly. The prior "Forward-substrate
+  # to AI_AGENT branch at C.4 ADR amendment" forward-queued observation
+  # is resolved by ADR-0046 + ADR-0039 §Amendment 2 + ADR-0041 §Sub-
+  # decision 6 amendment (G6.2 doc-and-test cascade landing 2026-05-19).
   defp dispatch_promoted(op_name, entity_id, wallet_type, request) do
     case DbgiSupervisor.start_dmw_worker_horde(entity_id, wallet_type) do
       {:ok, _pid} ->
