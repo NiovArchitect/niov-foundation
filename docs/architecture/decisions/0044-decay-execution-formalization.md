@@ -620,6 +620,117 @@ requirements surface capsule-tier TTL.
 - No production-affecting actions; no Elixir decay computation; no
   secret exposure
 
+## G4.3 Formal SKIP Record (2026-05-18)
+
+G4.3 `[BEAM-CAPSULE-DECAY-IMPL]` formally SKIPPED at canonical-state
+register substantively per Founder Q-G4.3-α α-1 LOCK + Q-G4.3-β β-1
+LOCK + Q-G4.3-γ γ-1 LOCK + Q-G4.3-δ δ-3 LOCK at
+`[BEAM-CAPSULE-DECAY-IMPL-G4.3-QLOCK]` +
+`[BEAM-CAPSULE-DECAY-IMPL-G4.3-EXECUTE-VERIFY-AUTH]` register
+substantively. **No implementation landed at G4.3.** G4.3 is a formal
+docs-only SKIP record per the canonical mini-arc SKIP commit pattern
+established at G1.4 (`3505fde` `[CAPSULE-MUTATION-ELIXIR-AUDIT]` per
+ADR-0042 §Sub-decision Q-ι default LOCK) + G3.7 (`ee0b01b`
+`[CAPSULE-EMBEDDING-BACKFILL]` per ADR-0043 §Sub-decision Q-G3.7-α
+α-1 LOCK).
+
+### G4.3 Q-LOCKs canonical at canonical-state register substantively
+
+- **Q-G4.3-α α-1 LOCK** — formal SKIP record now (NOT folded into
+  G4.4 closure cascade per Founder Q-G4.2-γ γ-1 LOCK explicit
+  directive "SKIP NOT folded into G4.2 or G4.4"). Canonical SKIP
+  commit pattern preserves mini-arc traceability.
+- **Q-G4.3-β β-1 LOCK** — docs-only 3 MOD scope (ADR-0044 +
+  section-12-progress + CURRENT_BUILD_STATE). No code / test / script
+  / schema / CI / package / lockfile / vitest config / docker-compose
+  / .husky / mix / audit.ts / .env / README / CLAUDE.md changes at
+  G4.3.
+- **Q-G4.3-γ γ-1 LOCK** — ADR-0044 Status preserved
+  `Proposed 2026-05-18` (G4.4 closure cascade is the canonical
+  Status-flip commit per ADR-0044 §Implementation Lineage).
+- **Q-G4.3-δ δ-3 LOCK** — ADR-0035 §9 cluster promotion decision
+  deferred to G4.4 closure cascade per canonical mini-arc cluster
+  expansion pattern (G3.10 + PR.4 precedents at closure register
+  substantively).
+
+### G4.3 SKIP rationale — substrate-state ground truth
+
+After G4.2 LANDED (`ce33c3a`), G4.3 has no implementation substrate
+left:
+
+- **Q-G4.2-α α-2 LOCK** at G4.2 deferred MemoryCapsule.expires_at
+  TTL enforcement to a future Founder-authorized ADR amendment →
+  **removed TTL enforcement implementation from G4.3 scope**.
+- **Q-G4.2-β β-2 LOCK** at G4.2 deferred explicit non-FOUNDATIONAL
+  DecayType enum semantics to a future Founder-authorized ADR
+  amendment → **removed DecayType enum semantics implementation from
+  G4.3 scope**.
+- **Q-G4-η η-1 LOCK** at G4 mini-arc level: existing audit literals
+  suffice; no new audit literals at G4 → **removed audit-literal
+  expansion from G4.3 scope**.
+- **Q-G4-θ θ-1 LOCK** at G4 mini-arc level: SimilarityService
+  UNTOUCHED; ADR-0043 G3.9 J5-J8 privacy proofs preserved → **removed
+  COE integration + similarity-search integration from G4.3 scope**.
+- **Q-G4-κ κ-1 LOCK** at G4 mini-arc level: BEAM observer only; no
+  Elixir-side decay computation; no scheduler dependency; no
+  Oban/Quantum hex-dep → **removed Elixir implementation from G4.3
+  scope**.
+- **RULE 0 + RULE 10 + Q-G4-ζ LOCK**: decay never deletes; no
+  automatic deletion; soft-delete-only discipline; FOUNDATIONAL
+  bypass + explicit-recall bypass preserved → **removed any
+  deletion-class implementation from G4.3 scope**.
+
+**Conclusion**: every implementation surface that G4.3 could
+substantively touch was deferred or excluded by prior locks. Formal
+SKIP preserves mini-arc traceability without pretending implementation
+landed (RULE 13 substrate-honest discipline).
+
+### Canonical SKIP precedent citations
+
+- **G1.4** commit `3505fde` `[CAPSULE-MUTATION-ELIXIR-AUDIT]` —
+  formal SKIP per ADR-0042 §Sub-decision Q-ι default LOCK; substrate-
+  state proof that Elixir audit/canonical/idempotency support was not
+  substantively needed at Gap 1 mini-arc register (Elixir
+  canonical_record treats event_type as opaque string; Elixir
+  write_audit_event accepts event_type as opaque string; TS API
+  remains canonical capsule write path; MemoryCapsule Ecto schema
+  absence of mutation_type is benign because Elixir does not depend
+  on the column). G1.4 SKIP scope: 1 MOD docs-only (ADR-0042 only).
+- **G3.7** commit `ee0b01b` `[CAPSULE-EMBEDDING-BACKFILL]` — formal
+  SKIP per ADR-0043 §Sub-decision Q-G3.7-α α-1 LOCK + Q-G3.7-η 5-MOD-
+  docs-only scope LOCK; substrate-state proof that legacy capsule
+  bulk-backfill was not substantively needed (every capsule on
+  origin/main was created via post-G3.5 WriteService with embedding
+  generation at create-time; G3.6 similarity service already enforces
+  `embedding IS NOT NULL` graceful-exclusion in raw SQL filter set).
+  G3.7 SKIP scope: 5 MOD docs-only (ADR-0043 + section-12-progress +
+  CURRENT_BUILD_STATE + architecture/README + CLAUDE.md).
+
+G4.3 SKIP scope (3 MOD docs-only) is smaller than G3.7 SKIP scope
+because ADR-0044 catalog entries in README + CLAUDE.md were added at
+G4.1 (`7097bb8`) and remain current; G4.3 SKIP does not need a
+catalog refresh because ADR-0044 Status is preserved and the catalog
+entry is unchanged. G4.3 SKIP scope is closer to G1.4 minimum-touch
+pattern.
+
+### G4.3 critical coherence preserved
+
+- ADR-0044 Status preserved `Proposed 2026-05-18` (G4.4 closure
+  cascade is the Status-flip commit per Q-G4.3-γ γ-1 LOCK)
+- Sub-arc 2 status field preserved IN FLIGHT
+- Gap 4 row Status preserved IN FLIGHT (G4.3 SKIP advances Gap 4
+  mini-arc 2/4 → 3/4; G4.4 closure forward-substrate)
+- Gap 4 / Gap 5 / Gap 6 reservations preserved at ADR-0041
+- ADR-0022 + ADR-0033 + ADR-0035 + ADR-0043 + ADR-0047 + ADR-0041
+  untouched at G4.3
+- No new audit literals (Q-G4-η η-1 LOCK + RULE 0 + Q-G4-ζ no-auto-
+  deletion preserved)
+- No code / test / script / schema / CI / package / vitest /
+  docker-compose / .husky / mix / audit.ts / .env / README /
+  CLAUDE.md changes at G4.3
+- No production-affecting actions; no Elixir vector access; no
+  Elixir decay computation; no secret exposure
+
 ## Consequences
 
 ### Positive
@@ -812,13 +923,19 @@ Founder authorization explicit at G4.2 substantive landing per RULE
 - `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-QLOCK]`
 - `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION-G4.2-EXECUTE-VERIFY-AUTH]`
 
+Founder authorization explicit at G4.3 formal SKIP record landing per
+RULE 20 at:
+
+- `[BEAM-CAPSULE-DECAY-IMPL-G4.3-QLOCK]`
+- `[BEAM-CAPSULE-DECAY-IMPL-G4.3-EXECUTE-VERIFY-AUTH]`
+
 ## Implementation Lineage (forward-substrate G4.1-G4.4)
 
 | Sub-phase | Tag | Authorized scope | Status |
 |-----------|-----|------------------|--------|
 | G4.1 | `[BEAM-CAPSULE-DECAY-ADR]` | 4 MOD + 1 NEW docs-only ADR-0044 NEW Proposed; RULE 21 research arc embedded; canonicalizes existing lazy-at-read substrate; 2 substrate-state observations surfaced (O-G4.1-1 + O-G4.1-2) | this commit |
 | G4.2 | `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` | Docs-only 3 MOD per Founder Q-G4.2-δ δ-1 LOCK; resolves O-G4.1-1 disposition (Q-G4.2-α α-2 LOCK defer `expires_at` TTL) + O-G4.1-2 disposition (Q-G4.2-β β-2 LOCK defer DecayType enum semantics); G4.3 formal SKIP determination (Q-G4.2-γ γ-1 LOCK); NEW O-G4.2-3 substrate-state observation surfaced (MemoryCapsule.expires_at immutable post-create + persisted-but-unused metadata) | G4.2 LANDED 2026-05-18 |
-| G4.3 | `[BEAM-CAPSULE-DECAY-IMPL]` | Formal SKIP per Q-G4.2-γ γ-1 LOCK; separate SKIP commit canonical at canonical-state register substantively per G1.4 + G3.7 mini-arc SKIP precedents; Founder Q-G4.3 authorization required at SKIP commit | forward-substrate (SKIP-by-default per Q-G4.2-γ γ-1 LOCK) |
+| G4.3 | `[BEAM-CAPSULE-DECAY-IMPL]` | Formal SKIP per Q-G4.2-γ γ-1 LOCK + Q-G4.3-α α-1 LOCK + Q-G4.3-β β-1 LOCK + Q-G4.3-γ γ-1 LOCK + Q-G4.3-δ δ-3 LOCK at G4.3 mini-arc register substantively; separate SKIP commit canonical per G1.4 (`3505fde`) + G3.7 (`ee0b01b`) mini-arc SKIP precedents; G4.3 docs-only 3 MOD; no implementation landed; substrate-state proof of empty implementation scope: Q-G4.2-α α-2 deferred TTL + Q-G4.2-β β-2 deferred DecayType semantics + Q-G4-η η-1 no new audit literals + Q-G4-θ θ-1 SimilarityService untouched + Q-G4-κ κ-1 no Elixir decay + RULE 0 + Q-G4-ζ no auto-deletion | **G4.3 SKIPPED 2026-05-18** |
 | G4.4 | `[BEAM-CAPSULE-DECAY-CLOSURE]` | Docs-only closure cascade; ADR-0044 Status Proposed → Accepted; optional ADR-0035 §9 back-citation + cluster expansion if Founder authorizes | forward-substrate |
 
 Status flips from `Proposed 2026-05-18` to `Accepted 2026-05-1X` at
