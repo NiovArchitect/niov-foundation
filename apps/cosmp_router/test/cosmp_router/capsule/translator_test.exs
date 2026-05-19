@@ -258,4 +258,77 @@ defmodule CosmpRouter.Capsule.TranslatorTest do
       assert clearance_rule.value == 3
     end
   end
+
+  describe "G5.3 — embedding lag metadata pass-through (Q-G5.3-κ κ-1)" do
+    # ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK: embedding lag metadata round-
+    # trip preservation via Translator pack/unpack. Distinct from
+    # G3.8 `embedding` pgvector Prisma-only boundary. BEAM observer-
+    # only; preserves write-tier-set values without computation.
+    test "embedding_content_hash round-trips through Translator unpack per Q-G5.3-κ κ-1" do
+      sample_hash = "abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+      row = %MemoryCapsule{
+        capsule_id: "00000000-0000-0000-0000-000000000001",
+        wallet_id: "00000000-0000-0000-0000-000000000002",
+        entity_id: "00000000-0000-0000-0000-000000000003",
+        version: 1,
+        capsule_type: "PREFERENCE",
+        topic_tags: ["g5.3"],
+        payload_summary: "summary",
+        payload_size_tokens: 1,
+        storage_location: "s3://x",
+        storage_tier: "WARM",
+        content_hash: sample_hash,
+        embedding_content_hash: sample_hash,
+        ai_access_blocked: false,
+        requires_validation: false,
+        connected_capsule_ids: [],
+        connected_entity_ids: [],
+        relevance_score: 1.0,
+        decay_type: "TIME_BASED",
+        decay_rate: 0.01,
+        feedback_loop_score: 0.0,
+        access_count: 0,
+        monetization_enabled: false,
+        created_at: ~U[2026-05-18 10:00:00.000000Z],
+        last_updated_at: ~U[2026-05-18 10:00:00.000000Z],
+        embedding_generated_at: ~U[2026-05-18 10:00:00.000000Z]
+      }
+
+      unpacked = Translator.unpack(row)
+      assert unpacked.payload.embedding_content_hash == sample_hash
+    end
+
+    test "embedding_generated_at round-trips through Translator unpack per Q-G5.3-κ κ-1" do
+      sample_time = ~U[2026-05-18 12:34:56.789000Z]
+      row = %MemoryCapsule{
+        capsule_id: "00000000-0000-0000-0000-000000000004",
+        wallet_id: "00000000-0000-0000-0000-000000000005",
+        entity_id: "00000000-0000-0000-0000-000000000006",
+        version: 1,
+        capsule_type: "PREFERENCE",
+        topic_tags: ["g5.3"],
+        payload_summary: "summary",
+        payload_size_tokens: 1,
+        storage_location: "s3://y",
+        storage_tier: "WARM",
+        content_hash: "h1",
+        ai_access_blocked: false,
+        requires_validation: false,
+        connected_capsule_ids: [],
+        connected_entity_ids: [],
+        relevance_score: 1.0,
+        decay_type: "TIME_BASED",
+        decay_rate: 0.01,
+        feedback_loop_score: 0.0,
+        access_count: 0,
+        monetization_enabled: false,
+        created_at: ~U[2026-05-18 10:00:00.000000Z],
+        last_updated_at: ~U[2026-05-18 10:00:00.000000Z],
+        embedding_generated_at: sample_time
+      }
+
+      unpacked = Translator.unpack(row)
+      assert unpacked.time.embedding_generated_at == sample_time
+    end
+  end
 end

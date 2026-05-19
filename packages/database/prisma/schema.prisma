@@ -130,6 +130,14 @@ model MemoryCapsule {
   clearance_required Int     @default(0)
   access_count       Int     @default(0)
   content_hash       String
+  // ADR-0045 G5.3 Q-G5.3-α α-1 LOCK: embedding lag detection
+  // metadata. Set after successful embedding generation at write-tier
+  // only (per Q-G5.3-γ γ-1). Stale-embedding detectable via
+  // embedding_content_hash != content_hash when UPDATE provider
+  // failure leaves OLD embedding + OLD hash while NEW content_hash
+  // lands via Prisma update (per Q-G5.3-θ θ-1). Per Q-G5.3-β β-1
+  // no @@index at G5.3 (no filtering surface yet).
+  embedding_content_hash String?
   ai_access_blocked  Boolean @default(false)
   // D-2D-D10-4 validation gate flag (RAA 12.8 §5.2): when true, a
   // restricted-class entity's NEGOTIATE is denied (VALIDATION_REQUIRED)
@@ -162,6 +170,12 @@ model MemoryCapsule {
   created_at       DateTime  @default(now())
   last_accessed_at DateTime?
   last_updated_at  DateTime  @updatedAt
+  // ADR-0045 G5.3 Q-G5.3-α α-1 LOCK: timestamp of last successful
+  // embedding generation. Paired with embedding_content_hash for
+  // stale-embedding detection. Set only when embeddingResult.ok per
+  // Q-G5.3-γ γ-1 + Q-G5.3-ε ε-1. Preserved on UPDATE failure
+  // (Q-G5.3-θ θ-1) and MERGE/NOOP (Q-G5.3-ζ + Q-G5.3-η).
+  embedding_generated_at DateTime?
   expires_at       DateTime?
   deleted_at       DateTime?
   // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037

@@ -188,4 +188,61 @@ describe("G3.5 — embedding persistence integration (Q-G3.5-ζ)", () => {
     );
     expect(afterRows[0]?.embedding_text).toBe(before);
   });
+
+  // L6 — G5.3 embedding lag metadata DB persistence via Prisma data
+  // path (NO raw SQL extension; Prisma generated client handles
+  // String + DateTime fields natively per Q-G5.3-δ δ-3).
+  it("L6: createCapsule persists embedding_content_hash + embedding_generated_at via Prisma data path", async () => {
+    const { auth, write } = makeWriteService();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g5.3-l6"],
+      payload_summary: "summary",
+      content: "l6-content-for-embedding-lag-persistence",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        content_hash: string;
+        embedding_content_hash: string | null;
+        embedding_generated_at: Date | null;
+      }>
+    >(
+      "SELECT content_hash, embedding_content_hash, embedding_generated_at FROM memory_capsules WHERE capsule_id = $1::uuid",
+      create.capsule_id,
+    );
+    expect(rows[0]?.embedding_content_hash).toBe(rows[0]?.content_hash);
+    expect(rows[0]?.embedding_generated_at).toBeInstanceOf(Date);
+  });
+
+  // L7 — G5.3 audit metadata privacy: write event details must NOT
+  // include embedding_content_hash or embedding_generated_at values
+  // per Q-G5.3-ι ι-1 LOCK + G3.9 J5-J8 privacy proof inheritance
+  // (no hash/timestamp leakage in audit details).
+  it("L7: audit metadata does NOT leak embedding_content_hash or embedding_generated_at values (Q-G5.3-ι ι-1)", async () => {
+    const { auth, write } = makeWriteService();
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g5.3-l7"],
+      payload_summary: "summary",
+      content: "l7-content-for-audit-privacy",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const audits = await prisma.auditEvent.findMany({
+      where: {
+        event_type: "CAPSULE_MUTATION_ADD",
+        target_capsule_id: create.capsule_id,
+      },
+      orderBy: { timestamp: "desc" },
+      take: 1,
+    });
+    expect(audits.length).toBe(1);
+    const serialized = JSON.stringify(audits[0]?.details ?? {});
+    expect(serialized).not.toContain("embedding_content_hash");
+    expect(serialized).not.toContain("embedding_generated_at");
+  });
 });

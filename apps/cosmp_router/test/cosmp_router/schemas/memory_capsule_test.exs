@@ -41,6 +41,8 @@ defmodule CosmpRouter.MemoryCapsuleTest do
     :clearance_required,
     :access_count,
     :content_hash,
+    # ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK: embedding lag pass-through
+    :embedding_content_hash,
     :ai_access_blocked,
     :requires_validation,
     # Patent layer 4 (Relations)
@@ -60,6 +62,8 @@ defmodule CosmpRouter.MemoryCapsuleTest do
     :created_at,
     :last_accessed_at,
     :last_updated_at,
+    # ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK: embedding lag timestamp pass-through
+    :embedding_generated_at,
     :expires_at,
     :deleted_at
   ]
@@ -136,5 +140,22 @@ defmodule CosmpRouter.MemoryCapsuleTest do
     # vector field without proven Elixir consumer + Founder
     # authorization + ADR-0033 amendment + RULE 0 safeguards.
     refute :embedding in MemoryCapsule.__schema__(:fields)
+  end
+
+  # ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK: embedding lag metadata pass-
+  # through. Distinct from G3.8 `embedding` pgvector Prisma-only
+  # boundary — these are pure metadata fields (String + DateTime)
+  # following the existing content_hash + last_updated_at +
+  # relevance_score + feedback_loop_score Translator pattern. BEAM
+  # observer-only; no Elixir staleness computation.
+  test "embedding_content_hash field is present per ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK" do
+    assert :embedding_content_hash in MemoryCapsule.__schema__(:fields)
+    assert MemoryCapsule.__schema__(:type, :embedding_content_hash) == :string
+  end
+
+  test "embedding_generated_at field is present per ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK" do
+    assert :embedding_generated_at in MemoryCapsule.__schema__(:fields)
+    assert MemoryCapsule.__schema__(:type, :embedding_generated_at) ==
+             :utc_datetime_usec
   end
 end

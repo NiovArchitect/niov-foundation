@@ -837,6 +837,142 @@ substrate for future Founder-authorized ADR amendments (content age
 - RULE 0 + RULE 10 + RULE 11 + RULE 12 + RULE 13 + RULE 20 + RULE 21
   preserved
 
+## G5.3 Implementation (2026-05-18)
+
+G5.3 `[BEAM-CAPSULE-STALENESS-IMPL]` substantive code implementation
+LANDED per Founder Q-G5.3 LOCKs at
+`[BEAM-CAPSULE-STALENESS-IMPL-G5.3-QLOCK]` +
+`[BEAM-CAPSULE-STALENESS-IMPL-G5.3-EXECUTE-VERIFY-AUTH]`. G5.3 is
+the minimum-viable embedding lag implementation per Q-G5.2-α α-2 +
+Q-G5.2-γ γ-2 + Q-G5.2-δ δ-2 LOCK inheritance. ADR-0045 Status
+preserved `Proposed 2026-05-18` per Q-G5.2-ζ inheritance (G5.4
+closure cascade is the canonical Status-flip commit). Gap 5 row
+Status preserved IN FLIGHT (G5.3 advances mini-arc 2/4 → 3/4).
+Sub-arc 2 status preserved IN FLIGHT.
+
+### G5.3 Q-LOCKs canonical
+
+- **Q-G5.3-α α-1 LOCK** — split schema field placement:
+  `embedding_content_hash String?` at `schema.prisma` adjacent to
+  existing `content_hash String`; `embedding_generated_at DateTime?`
+  adjacent to existing `last_updated_at DateTime @updatedAt`. Each
+  field paired with its comparator at substrate-architectural register
+  substantively.
+- **Q-G5.3-β β-1 LOCK** — no new Prisma indexes at G5.3. G5.3
+  introduces no filtering / ranking / query behavior; future query
+  surfaces may add indexes through a future Founder-authorized ADR
+  amendment.
+- **Q-G5.3-γ γ-1 LOCK** — update embedding lag metadata ONLY after
+  successful embedding generation (`embeddingResult.ok === true`).
+- **Q-G5.3-δ δ-3 LOCK** — Prisma update for metadata fields + raw
+  SQL only for vector field. `embedding_content_hash` (String) +
+  `embedding_generated_at` (DateTime) handled natively by Prisma
+  generated client via conditional spread in `data`; `embedding`
+  pgvector column stays in raw SQL per ADR-0043 G3.3 Unsupported
+  pgvector path; both inside same `tx` transaction (atomic by
+  rollback semantics).
+- **Q-G5.3-ε ε-1 LOCK** — provider failure behavior: ADD failure
+  leaves embedding NULL + both new fields NULL; UPDATE failure
+  preserves OLD embedding + OLD embedding_content_hash + OLD
+  embedding_generated_at while NEW content_hash lands via Prisma
+  (stale-detectable via `embedding_content_hash != content_hash`).
+  Matches G3.5 Q-G3.5-α degrade-policy inheritance.
+- **Q-G5.3-ζ ζ-1 LOCK** — MERGE preserves embedding + both lag
+  metadata fields. MERGE skips embedding regen per Q-G3.5-β
+  (content_hash unchanged); δ-3 conditional spread excludes lag
+  fields from MERGE data → Prisma update preserves naturally.
+- **Q-G5.3-η η-1 LOCK** — NOOP preserves embedding + both lag
+  metadata fields. NOOP returns before any DB write at
+  `write.service.ts:1194` per ADR-0042 §Sub-decision Q-δ.
+- **Q-G5.3-θ θ-1 LOCK** — UPDATE success regenerates embedding +
+  resets both lag fields; UPDATE failure preserves OLD lag metadata,
+  making the stale embedding detectable by
+  `embedding_content_hash != content_hash`. **Substrate-honest
+  preservation of pre-existing G3.5 Q-G3.5-α degrade-policy
+  semantic** — G5.3 does NOT introduce the stale state; the existing
+  G3.5 substrate already creates `NEW content_hash + OLD embedding`
+  on UPDATE provider failure; G5.3 adds the detection mechanism via
+  the lag metadata fields.
+- **Q-G5.3-ι ι-1 LOCK** — no new audit fields for embedding lag at
+  G5.3. Existing G3.5 audit metadata (`embedding_generated` +
+  `embedding_model` + `embedding_dimensions` + `embedding_tokens_used`
+  + failure class/message) preserved unchanged. No
+  `CAPSULE_STALENESS_*` audit literal. No hash/timestamp values in
+  audit details (G3.9 J5-J8 privacy proof inheritance).
+- **Q-G5.3-κ κ-1 LOCK** — full Elixir pass-through. Add 2 Ecto
+  schema fields (`field :embedding_content_hash, :string` +
+  `field :embedding_generated_at, :utc_datetime_usec`) + Translator
+  pack/unpack pass-through (Payload group + Time group) + Ecto field-
+  presence tests + Translator round-trip tests. BEAM observer-only
+  metadata preservation per Q-G5-κ κ-1 canonical intent — no Elixir
+  staleness computation, no Elixir vector access. Distinct from G3.8
+  `embedding` pgvector Prisma-only boundary (G3.8 was for Unsupported
+  pgvector type complexity; metadata fields fit existing
+  `content_hash` + `last_updated_at` + `relevance_score` +
+  `feedback_loop_score` Translator pattern).
+- **Q-G5.3-μ μ-2 LOCK** — 11 MOD substantive + docs file scope:
+  8 substantive (schema + write.service + 2 TS test files + Ecto
+  schema + Translator + 2 Elixir test files) + 3 docs (ADR-0045 +
+  section-12-progress + CURRENT_BUILD_STATE).
+
+### G5.3 UPDATE-failure stale-detection semantic (substrate-honest discipline)
+
+The G5.3 implementation surfaces an important **substrate-honest**
+fact about the existing G3.5 substrate: at UPDATE provider failure
+path, the existing Q-G3.5-α degrade-policy produces a `NEW content_hash
++ OLD embedding` state in the DB. This is a **pre-existing stale
+embedding state** — not introduced by G5.3.
+
+G5.3 adds two new fields (`embedding_content_hash` +
+`embedding_generated_at`) that make this pre-existing stale state
+**detectable**:
+
+- **UPDATE success path** (canonical): Prisma update writes NEW
+  `content_hash` + δ-3 conditional spread writes NEW
+  `embedding_content_hash` (= NEW `content_hash`) + NEW
+  `embedding_generated_at`; raw SQL writes NEW `embedding` vector →
+  all 4 fields aligned → **detection: `embedding_content_hash ==
+  content_hash` → embedding-fresh**
+- **UPDATE failure path** (degrade): Prisma update writes NEW
+  `content_hash` (still happens); δ-3 conditional spread EXCLUDES lag
+  fields → OLD `embedding_content_hash` + OLD `embedding_generated_at`
+  preserved; raw SQL SKIPPED → OLD `embedding` vector preserved →
+  **detection: `embedding_content_hash != content_hash` →
+  embedding-stale**
+
+This is the canonical deterministic stale-embedding detection
+semantic at substrate-architectural register substantively. No
+scoring model required. No new audit literals required (per
+Q-G5.3-ι ι-1 LOCK). Future ADR amendment may wire COE / similarity
+ranking pressure on top of this detection metadata; G5.3 lands the
+substrate.
+
+### G5.3 critical coherence preserved
+
+- ADR-0045 Status preserved `Proposed 2026-05-18` (G5.4 closure
+  cascade is the Status-flip commit)
+- Gap 5 row Status preserved IN FLIGHT (mini-arc 3/4)
+- Sub-arc 2 status field preserved IN FLIGHT
+- Gap 4 / Gap 5 / Gap 6 reservations preserved at ADR-0041
+- ADR-0022 + ADR-0033 + ADR-0035 + ADR-0041 + ADR-0042 + ADR-0043 +
+  ADR-0044 + ADR-0047 untouched at G5.3
+- No new audit literals (Q-G5.3-ι ι-1 LOCK)
+- No SimilarityService modification (G3.9 J5-J8 privacy proofs
+  preserved per Q-G5-ι inheritance)
+- No read.service / COE / feedback.service modification (O-G5.2-1
+  three-register discrimination preserved)
+- No new Prisma indexes (Q-G5.3-β β-1 LOCK)
+- No filtering / ranking / lifecycle / deletion behavior introduced
+- No vector / distance / raw query / embedding sample leakage at any
+  G5 surface
+- No README / CLAUDE.md changes at G5.3 (G5.4 closure does catalog
+  refresh)
+- No production-affecting actions; no real OpenAI calls
+  (FixtureBasedEmbeddingProvider in tests); no production Supabase
+  mutation
+- RULE 0 + RULE 10 + RULE 11 + RULE 12 + RULE 13 + RULE 20 + RULE 21
+  preserved
+
 ## Consequences
 
 ### Positive
@@ -1060,13 +1196,19 @@ landing per RULE 20 at:
 - `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION-G5.2-QLOCK]`
 - `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION-G5.2-EXECUTE-VERIFY-AUTH]`
 
+Founder authorization explicit at G5.3 minimum-viable embedding lag
+implementation landing per RULE 20 at:
+
+- `[BEAM-CAPSULE-STALENESS-IMPL-G5.3-QLOCK]`
+- `[BEAM-CAPSULE-STALENESS-IMPL-G5.3-EXECUTE-VERIFY-AUTH]`
+
 ## Implementation Lineage (forward-substrate G5.1-G5.4)
 
 | Sub-phase | Tag | Authorized scope | Status |
 |-----------|-----|------------------|--------|
 | G5.1 | `[BEAM-CAPSULE-STALENESS-ADR]` | 4 MOD + 1 NEW docs-only ADR-0045 NEW Proposed; RULE 21 research arc embedded (RS-G5-1 through RS-G5-5); canonical 4-dimension staleness model (content age + embedding lag + coverage drift + semantic validity); 12 sub-decisions canonical; mandatory feedback-loop vs capsule-level discrimination canonical | this commit |
 | G5.2 | `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION]` | Docs-only 3 MOD per Founder Q-G5.2-ε ε-1 LOCK; resolves Q-G5-δ schema disposition (Q-G5.2-α α-2 LOCK minimum-viable embedding lag) + Q-G5-ε audit disposition (Q-G5.2-β β-1 LOCK defer all literals) + Q-G5-ζ integration disposition (Q-G5.2-γ γ-2 LOCK write.service only); G5.3 disposition (Q-G5.2-δ δ-2 LOCK minimal substantive implementation); NEW O-G5.2-1 substrate-state observation (`feedback_loop_score` three-register discrimination canonical); RAA 12.8 D3 gap closure path canonical | **G5.2 LANDED 2026-05-18** |
-| G5.3 | `[BEAM-CAPSULE-STALENESS-IMPL]` | Substantive code per Q-G5.2-δ δ-2 LOCK minimum-viable scope: 2 NEW MemoryCapsule fields (`embedding_content_hash String?` + `embedding_generated_at DateTime?`) + write.service integration (ADD/UPDATE/MERGE set fields after embedding generation success; NOOP preserves) + conditional Translator pass-through per ADR-0033 §Decision 7 + Q-5BII-EXEC-5 + tests proving embedding lag metadata behavior (write-time population + NULL preservation on NOOP + graceful degradation on EmbeddingProvider failure + Translator round-trip + audit metadata preserves G3.9 J5-J8 privacy proofs); NO filtering / NO ranking / NO lifecycle / NO audit literal expansion at G5.3 | forward-substrate |
+| G5.3 | `[BEAM-CAPSULE-STALENESS-IMPL]` | Substantive code 11 MOD per Q-G5.2-δ δ-2 + Q-G5.3-μ μ-2 LOCK minimum-viable scope: 2 NEW MemoryCapsule fields (`embedding_content_hash String?` adjacent to `content_hash` + `embedding_generated_at DateTime?` adjacent to `last_updated_at` per Q-G5.3-α α-1) + write.service Prisma data conditional spread for ADD + UPDATE branches per Q-G5.3-δ δ-3 + γ-1 + ε-1 + θ-1 + Elixir Ecto schema + Translator pack/unpack pass-through per Q-G5.3-κ κ-1 + unit tests (L1-L5: ADD success + ADD failure + UPDATE success + UPDATE failure stale-detectable + NOOP preserve) + integration tests (L6-L7: DB persistence + audit metadata privacy); MERGE/NOOP preserve all fields per Q-G5.3-ζ + η; UPDATE-failure stale-detection semantic substrate-honest preservation of G3.5 Q-G3.5-α degrade-policy; NO filtering / NO ranking / NO lifecycle / NO audit literal expansion / NO SimilarityService / read.service / COE / feedback.service modification at G5.3 | **G5.3 LANDED 2026-05-18** |
 | G5.4 | `[BEAM-CAPSULE-STALENESS-CLOSURE]` | Docs-only closure cascade; ADR-0045 Status Proposed → Accepted; Gap 5 row Status IN FLIGHT → CLOSED; optional ADR-0035 §9 cluster expansion if Founder authorizes; Sub-arc 2 closure decision deferred to separate commit OR bundled per Founder authorization | forward-substrate |
 
 Status flips from `Proposed 2026-05-18` to `Accepted 2026-05-1X` at

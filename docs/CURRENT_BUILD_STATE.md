@@ -599,6 +599,160 @@ Q-G5.2-γ γ-2 + Q-G5.2-δ δ-2 + Q-G5.2-ε ε-1 + Q-G5.2-ζ ζ-1 LOCKED at
 substantively per RULE 20; G5.2 execution authorization at
 `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION-G5.2-EXECUTE-VERIFY-AUTH]`.
 
+#### G5.3 LANDED — Minimum-viable embedding lag implementation (2026-05-18)
+
+**Status:** G5.3 `[BEAM-CAPSULE-STALENESS-IMPL]` substantive code
+LANDED 2026-05-18 (11 MOD: 8 substantive + 3 docs) per Founder
+Q-G5.3-α α-1 + Q-G5.3-β β-1 + Q-G5.3-γ γ-1 + Q-G5.3-δ δ-3 + Q-G5.3-ε
+ε-1 + Q-G5.3-ζ ζ-1 + Q-G5.3-η η-1 + Q-G5.3-θ θ-1 + Q-G5.3-ι ι-1 +
+Q-G5.3-κ κ-1 + Q-G5.3-μ μ-2 LOCKS at
+`[BEAM-CAPSULE-STALENESS-IMPL-G5.3-QLOCK]` +
+`[BEAM-CAPSULE-STALENESS-IMPL-G5.3-EXECUTE-VERIFY-AUTH]` register
+substantively. ADR-0045 Status preserved `Proposed 2026-05-18` (G5.4
+closure cascade is the canonical Status-flip commit per ζ-1
+inheritance). Gap 5 row Status preserved IN FLIGHT (mini-arc 3/4);
+Sub-arc 2 status preserved IN FLIGHT. **G5.4 closure cascade
+forward-substrate next.**
+
+**Substrate sites (11 authorized MOD; 0 NEW)**:
+
+- MOD `packages/database/prisma/schema.prisma`: +2 fields per α-1
+  (`embedding_content_hash String?` at L133 adjacent to `content_hash`
+  + `embedding_generated_at DateTime?` at L165 adjacent to
+  `last_updated_at`); no new indexes per β-1
+- MOD `apps/api/src/services/cosmp/write.service.ts`:
+  `createCapsule` ADD branch conditional Prisma data spread sets
+  `embedding_content_hash = processed.content_hash` +
+  `embedding_generated_at = new Date()` only when `embeddingResult.ok`
+  per γ-1 + δ-3; `updateCapsule` UPDATE branch conditional `data`
+  fields set when `embeddingResult.ok` per γ-1 + δ-3 + θ-1; MERGE
+  branch naturally preserves via Prisma update without lag fields in
+  data per ζ-1; NOOP returns before any DB write per η-1
+- MOD `tests/unit/cosmp/write.test.ts`: +5 unit tests L1-L5 (L1 ADD
+  success populates embedding_content_hash = content_hash +
+  embedding_generated_at NOT NULL; L2 ADD provider failure leaves
+  both fields NULL; L3 UPDATE success regenerates both fields to NEW
+  content_hash + NEW timestamp; L4 UPDATE provider failure preserves
+  OLD lag fields stale-detectable via embedding_content_hash !=
+  content_hash; L5 NOOP preserves embedding lag metadata)
+- MOD `tests/integration/embedding-write.test.ts`: +2 integration
+  tests L6-L7 (L6 DB persistence via Prisma data path; L7 audit
+  metadata does NOT leak embedding_content_hash or
+  embedding_generated_at values per Q-G5.3-ι ι-1)
+- MOD `apps/cosmp_router/lib/cosmp_router/schemas/memory_capsule.ex`:
+  +2 Ecto fields per κ-1 (`field :embedding_content_hash, :string` at
+  Patent layer 3 Rules adjacent to `content_hash` +
+  `field :embedding_generated_at, :utc_datetime_usec` at Patent
+  layer 5 Time adjacent to `last_updated_at`)
+- MOD `apps/cosmp_router/lib/cosmp_router/capsule/translator.ex`:
+  pack adds `embedding_content_hash: get(metadata, ...)` to Payload
+  group + `embedding_generated_at: get(time, ...)` to Time group;
+  unpack adds same fields to row → struct projection (Payload group
+  + Time group); mirrors existing `content_hash` + `last_updated_at`
+  + `relevance_score` + `feedback_loop_score` pass-through pattern
+- MOD `apps/cosmp_router/test/cosmp_router/schemas/memory_capsule_test.exs`:
+  +2 tests per κ-1 (embedding_content_hash field presence +
+  embedding_generated_at field presence with type asserts); also
+  @expected_fields list updated to include both new fields for the
+  field-set parity test
+- MOD `apps/cosmp_router/test/cosmp_router/capsule/translator_test.exs`:
+  +2 round-trip tests per κ-1 (embedding_content_hash unpack
+  round-trip + embedding_generated_at unpack round-trip) in NEW
+  `describe "G5.3 — embedding lag metadata pass-through (Q-G5.3-κ
+  κ-1)"` block
+- MOD `docs/architecture/decisions/0045-capsule-level-staleness-detection.md`:
+  +NEW H2 `## G5.3 Implementation (2026-05-18)` with 11 Q-G5.3 LOCK
+  resolutions + UPDATE-failure stale-detection semantic canonical
+  prose + critical-coherence enumeration; +Founder Authorization
+  G5.3 citations; +Implementation Lineage G5.3 row flipped
+  `forward-substrate` → `**G5.3 LANDED 2026-05-18**`
+- MOD `docs/reference/section-12-progress.md`: G5.3 LANDED prose
+  appended to Phase 3 Sub-Arc 2 Gap 5 row
+- MOD this `docs/CURRENT_BUILD_STATE.md`: this NEW H4
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (detection metadata only; no automatic deletion / filtering /
+ranking / lifecycle / autonomy erosion) + RULE 10 (no deletion
+semantics; soft-delete-only preserved) + RULE 11 (Prisma/Ecto cross-
+language ownership boundary preserved per ADR-0033 §Decision 7 +
+Q-5BII-EXEC-5; TypeScript owns write integration; BEAM observer-only
+via Translator round-trip preservation per κ-1) + RULE 12 (pre-
+flight grep substrate-state ground truth) + RULE 13 (UPDATE-failure
+stale-detection semantic surfaced inline at ADR-0045 §G5.3; G5.3
+adds DETECTION mechanism, does NOT introduce stale state — pre-
+existing G3.5 Q-G3.5-α degrade-policy already creates `NEW
+content_hash + OLD embedding` on UPDATE failure; feedback_loop_score
+three-register discrimination preserved per O-G5.2-1) + RULE 20
+(Founder authorization required and granted) + RULE 21 (current-
+source inspection canonical).
+
+**UPDATE-failure stale-detection semantic canonical at substrate-
+architectural register substantively**:
+
+- **UPDATE success** (canonical): NEW `content_hash` + NEW
+  `embedding` + NEW `embedding_content_hash` (= NEW `content_hash`)
+  + NEW `embedding_generated_at` → detection
+  `embedding_content_hash == content_hash` → embedding-fresh
+- **UPDATE failure** (degrade): NEW `content_hash` + OLD `embedding`
+  + OLD `embedding_content_hash` + OLD `embedding_generated_at` →
+  detection `embedding_content_hash != content_hash` →
+  embedding-stale
+
+Deterministic stale-embedding detection. No scoring model. No new
+audit literals. Future ADR amendment may wire COE / similarity
+ranking pressure on top of this detection metadata; G5.3 lands the
+substrate.
+
+**Baseline deltas at canonical-execution register substantively**:
+
+- TS=12 baseline preserved
+- no-console 1/1 preserved
+- unit 557 → 562 (+5 L1-L5 tests)
+- integration 211 + 1 skipped → 213 + 1 skipped (+2 L6-L7 tests)
+- mix compile clean (canonical baseline)
+- Elixir cosmp_router 219 + 1 skipped → 223 + 1 skipped (+4 tests:
+  2 Ecto field presence + 2 Translator round-trip)
+- dbgi_supervisor 67/0/19 excluded preserved
+
+**Forbidden / preserved boundaries enumerated at G5.3**: no
+read.service.ts modification; no COE modification; no
+SimilarityService modification (G3.9 J5-J8 privacy proofs preserved
+per Q-G5-ι); no feedback.service modification (O-G5.2-1 three-
+register discrimination preserved); no audit.ts changes; no new
+audit literals (Q-G5.3-ι ι-1); no stale_score / stale_reason /
+stale_checked_at / source_updated_at / validity_window_end /
+lifecycle enum fields; no new Prisma indexes (Q-G5.3-β β-1); no
+filtering / ranking / deletion behavior; no vector / distance / raw
+query / embedding sample leakage; no ADR-0022 / ADR-0033 / ADR-0035
+/ ADR-0041 / ADR-0042 / ADR-0043 / ADR-0044 / ADR-0047 modification;
+no ADR-0046 renumbering; no README / CLAUDE.md changes at G5.3
+(G5.4 closure does catalog refresh); no Sub-arc 2 status flip to
+CLOSED; no Gap 5 row Status flip to CLOSED; no ADR-0045 Status flip
+(G5.4 closure cascade); no production-affecting actions; no real
+OpenAI calls (FixtureBasedEmbeddingProvider in tests); no production
+Supabase mutation; no production parity execution against real
+target; no secret exposure.
+
+**Forward-substrate after G5.3**:
+
+- **G5.4** `[BEAM-CAPSULE-STALENESS-CLOSURE]` docs-only closure
+  cascade next (ADR-0045 Status flip Proposed → Accepted + Gap 5 row
+  Status IN FLIGHT → CLOSED + README + CLAUDE.md ADR-0045 catalog
+  refresh + optional ADR-0035 §9 cluster decision + Sub-arc 2
+  closure decision)
+- **Optional Gap 6 / ADR-0046** AI_AGENT EntityType-Discriminated
+  Capsule Routing remains forward-substrate per ADR-0041
+  §Sub-decision 6
+- **Sub-arc 2 closure cascade** forward-substrate pending G5.4 +
+  optional Gap 6 per ADR-0041 CL.1 scope patch
+
+**Founder LOCKS preservation:** Q-G5.3-α α-1 + Q-G5.3-β β-1 +
+Q-G5.3-γ γ-1 + Q-G5.3-δ δ-3 + Q-G5.3-ε ε-1 + Q-G5.3-ζ ζ-1 + Q-G5.3-η
+η-1 + Q-G5.3-θ θ-1 + Q-G5.3-ι ι-1 + Q-G5.3-κ κ-1 + Q-G5.3-μ μ-2
+LOCKED at `[BEAM-CAPSULE-STALENESS-IMPL-G5.3-QLOCK]` register
+substantively per RULE 20; G5.3 execution authorization at
+`[BEAM-CAPSULE-STALENESS-IMPL-G5.3-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## Phase 3 Sub-Arc 2 Gap 4 -- Decay Execution Formalization IN FLIGHT 2026-05-18 at G4.1 -- ADR-0044 NEW Proposed; G4.2-G4.4 forward-substrate

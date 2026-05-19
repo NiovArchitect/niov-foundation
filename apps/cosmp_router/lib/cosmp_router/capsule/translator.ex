@@ -58,6 +58,12 @@ defmodule CosmpRouter.Capsule.Translator do
       tokens_tokenizer: get(metadata, :tokens_tokenizer, "anthropic"),
       commitment_date: get(metadata, :commitment_date),
       content_hash: get(metadata, :content_hash, ""),
+      # ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK: embedding lag metadata
+      # pass-through. BEAM observer-only; no Elixir staleness
+      # computation. Set by TS write.service.ts after successful
+      # embedding generation; preserved on UPDATE failure for stale
+      # detection per Q-G5.3-θ θ-1.
+      embedding_content_hash: get(metadata, :embedding_content_hash),
       storage_location: get(metadata, :storage_location, ""),
       storage_tier: get(metadata, :storage_tier, "WARM"),
 
@@ -81,6 +87,10 @@ defmodule CosmpRouter.Capsule.Translator do
       created_at: get(time, :created_at),
       last_accessed_at: get(time, :last_accessed_at),
       last_updated_at: get(time, :last_updated_at) || get(time, :created_at),
+      # ADR-0045 G5.3 Q-G5.3-κ κ-1 LOCK: embedding lag timestamp
+      # pass-through (Patent layer 5 Time group); Translator round-
+      # trip preservation only.
+      embedding_generated_at: get(time, :embedding_generated_at),
       expires_at: get(time, :expires_at),
       deleted_at: nil,
 
@@ -123,6 +133,8 @@ defmodule CosmpRouter.Capsule.Translator do
         tokens_tokenizer: row.tokens_tokenizer,
         commitment_date: row.commitment_date,
         content_hash: row.content_hash,
+        # ADR-0045 G5.3 Q-G5.3-κ κ-1: embedding lag pass-through.
+        embedding_content_hash: row.embedding_content_hash,
         storage_location: row.storage_location,
         storage_tier: row.storage_tier
       },
@@ -145,6 +157,9 @@ defmodule CosmpRouter.Capsule.Translator do
         created_at: row.created_at,
         last_accessed_at: row.last_accessed_at,
         last_updated_at: row.last_updated_at,
+        # ADR-0045 G5.3 Q-G5.3-κ κ-1: embedding lag timestamp pass-
+        # through (Patent layer 5 Time group).
+        embedding_generated_at: row.embedding_generated_at,
         expires_at: row.expires_at,
         deleted_at: row.deleted_at
       },

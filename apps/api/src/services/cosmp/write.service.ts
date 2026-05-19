@@ -684,6 +684,20 @@ export class WriteService {
           created_by: session.entity_id,
           created_session_id: session.session_id,
           write_reason: input.write_reason ?? null,
+
+          // ADR-0045 G5.3 Q-G5.3-α α-1 + γ-1 + δ-3 + ε-1: embedding
+          // lag detection metadata. Set ONLY when embeddingResult.ok
+          // (γ-1 success-only); paired with content_hash for stale
+          // detection. ADD failure leaves both NULL (ε-1) — graceful
+          // degradation per Q-G3.5-α inheritance. No new audit literal
+          // (Q-G5.3-ι ι-1). No filtering / ranking / lifecycle
+          // (Q-G5.3-β β-1 + scope canonical at ADR-0045 §G5.3).
+          ...(embeddingResult.ok
+            ? {
+                embedding_content_hash: processed.content_hash,
+                embedding_generated_at: new Date(),
+              }
+            : {}),
         },
       });
 
@@ -1271,6 +1285,19 @@ export class WriteService {
           data.payload_size_tokens = processed.payload_size_tokens;
           data.tokens = processed.tokens;
           data.tokens_tokenizer = processed.tokens_tokenizer;
+          // ADR-0045 G5.3 Q-G5.3-α α-1 + γ-1 + δ-3 + θ-1: UPDATE
+          // success regenerates embedding lag metadata to NEW
+          // content_hash + NEW timestamp. UPDATE failure
+          // (!embeddingResult.ok) does NOT add these to data, so
+          // Prisma update leaves OLD embedding_content_hash + OLD
+          // embedding_generated_at intact alongside OLD embedding
+          // vector — stale-embedding state detectable via NEW
+          // content_hash != OLD embedding_content_hash. Substrate-
+          // honest preservation of Q-G3.5-α degrade-policy.
+          if (embeddingResult !== null && embeddingResult.ok) {
+            data.embedding_content_hash = processed.content_hash;
+            data.embedding_generated_at = new Date();
+          }
         }
 
         // CAS path when expected_version supplied; standard update

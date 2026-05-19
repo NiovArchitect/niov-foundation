@@ -1349,3 +1349,252 @@ describe("G3.5 — embedding write integration (Q-G3.5 mutation_type matrix)", (
     expect(updateKeys).not.toContain("embedding_vector");
   });
 });
+
+// G5.3 -- embedding lag metadata at write-tier per ADR-0045 §G5.3
+// Q-G5.3-α α-1 + γ-1 + δ-3 + ε-1 + ζ-1 + η-1 + θ-1 LOCKs.
+// Detection-only metadata. No filtering / ranking / lifecycle /
+// audit literal expansion. RULE 0 preserved (Q-G5-η canonical).
+describe("G5.3 -- embedding lag metadata (Q-G5.3 LOCKs)", () => {
+  function buildLagVector(seed: string): number[] {
+    const arr = new Array<number>(1536);
+    let h = 0;
+    for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    for (let i = 0; i < 1536; i++) {
+      arr[i] = ((h ^ (i * 2654435761)) >>> 0) / 0xffffffff;
+    }
+    return arr;
+  }
+
+  it("L1: createCapsule success populates embedding_content_hash = content_hash + embedding_generated_at NOT NULL", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildLagVector("l1"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 1,
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g5.3-l1"],
+      payload_summary: "summary",
+      content: "l1-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const row = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        content_hash: true,
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    expect(row?.embedding_content_hash).toBe(row?.content_hash);
+    expect(row?.embedding_generated_at).toBeInstanceOf(Date);
+  });
+
+  it("L2: createCapsule provider failure leaves embedding_content_hash NULL + embedding_generated_at NULL", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: false,
+        error_class: "PROVIDER_ERROR",
+        message: "simulated provider failure L2",
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g5.3-l2"],
+      payload_summary: "summary",
+      content: "l2-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const row = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    expect(row?.embedding_content_hash).toBeNull();
+    expect(row?.embedding_generated_at).toBeNull();
+  });
+
+  it("L3: updateCapsule UPDATE success regenerates embedding_content_hash + embedding_generated_at", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildLagVector("l3"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 1,
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g5.3-l3"],
+      payload_summary: "summary",
+      content: "l3-content-original",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const createRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        content_hash: true,
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    const oldGeneratedAt = createRow?.embedding_generated_at as Date;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "l3-content-updated" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+    const updateRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        content_hash: true,
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    expect(updateRow?.content_hash).not.toBe(createRow?.content_hash);
+    expect(updateRow?.embedding_content_hash).toBe(
+      updateRow?.content_hash,
+    );
+    expect(
+      (updateRow?.embedding_generated_at as Date).getTime(),
+    ).toBeGreaterThan(oldGeneratedAt.getTime());
+  });
+
+  it("L4: updateCapsule UPDATE failure preserves OLD embedding lag fields; stale-detectable via embedding_content_hash != content_hash", async () => {
+    let callCount = 0;
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            ok: true,
+            vector: buildLagVector("l4-first"),
+            model: "text-embedding-3-small",
+            dimensions: 1536 as const,
+            tokens_used: 1,
+          };
+        }
+        return {
+          ok: false,
+          error_class: "RATE_LIMIT",
+          message: "simulated rate limit on L4 UPDATE",
+        };
+      },
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g5.3-l4"],
+      payload_summary: "summary",
+      content: "l4-content-original",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const createRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        content_hash: true,
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    const oldContentHash = createRow?.content_hash as string;
+    const oldEmbeddingContentHash = createRow?.embedding_content_hash as string;
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "l4-content-updated" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+    const updateRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        content_hash: true,
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    expect(updateRow?.content_hash).not.toBe(oldContentHash);
+    expect(updateRow?.embedding_content_hash).toBe(oldEmbeddingContentHash);
+    expect(updateRow?.embedding_content_hash).not.toBe(
+      updateRow?.content_hash,
+    );
+  });
+
+  it("L5: updateCapsule NOOP preserves embedding_content_hash + embedding_generated_at", async () => {
+    const provider: EmbeddingProvider = {
+      generateEmbedding: async (): Promise<EmbeddingResult> => ({
+        ok: true,
+        vector: buildLagVector("l5"),
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        tokens_used: 1,
+      }),
+    };
+    const { auth, write } = makeServices(provider);
+    const owner = await loginAs(auth);
+    const create = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["g5.3-l5"],
+      payload_summary: "summary",
+      content: "l5-content",
+    });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    const createRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    // NOOP: same content + same non-content fields → discriminator
+    // returns NOOP; updateCapsule emits NOOP audit + zero DB writes;
+    // embedding lag metadata preserved exactly.
+    const update = await write.updateCapsule(
+      owner.token,
+      create.capsule_id,
+      { content: "l5-content" },
+      null,
+    );
+    expect(update.ok).toBe(true);
+    if (!update.ok) return;
+    const updateRow = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: create.capsule_id },
+      select: {
+        embedding_content_hash: true,
+        embedding_generated_at: true,
+      },
+    });
+    expect(updateRow?.embedding_content_hash).toBe(
+      createRow?.embedding_content_hash,
+    );
+    expect((updateRow?.embedding_generated_at as Date).getTime()).toBe(
+      (createRow?.embedding_generated_at as Date).getTime(),
+    );
+  });
+});

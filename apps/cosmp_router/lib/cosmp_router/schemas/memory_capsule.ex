@@ -134,6 +134,12 @@ defmodule CosmpRouter.MemoryCapsule do
     field :clearance_required, :integer, default: 0
     field :access_count, :integer, default: 0
     field :content_hash, :string
+    # ADR-0045 G5.3 Q-G5.3-α α-1 + κ-1 LOCK: embedding lag detection
+    # metadata pass-through. BEAM observer-only per Q-G5-κ κ-1; no
+    # Elixir staleness computation; Translator round-trip preservation
+    # only. Set by TS write.service.ts after successful embedding
+    # generation per Q-G5.3-γ γ-1.
+    field :embedding_content_hash, :string
     field :ai_access_blocked, :boolean, default: false
     field :requires_validation, :boolean, default: false
 
@@ -180,6 +186,11 @@ defmodule CosmpRouter.MemoryCapsule do
     # this field (Proto-routed WRITE with `time: nil`). Mutation-time
     # updates land via explicit changeset (no Ecto auto-touch).
     field :last_updated_at, :utc_datetime_usec, autogenerate: {DateTime, :utc_now, []}
+    # ADR-0045 G5.3 Q-G5.3-α α-1 + κ-1 LOCK: timestamp of last
+    # successful embedding generation. Paired with
+    # embedding_content_hash at Patent layer 3 (Rules) for stale-
+    # embedding detection. BEAM observer-only per Q-G5-κ κ-1.
+    field :embedding_generated_at, :utc_datetime_usec
     field :expires_at, :utc_datetime_usec
     field :deleted_at, :utc_datetime_usec
   end
