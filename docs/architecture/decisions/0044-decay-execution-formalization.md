@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed 2026-05-18
+Accepted 2026-05-18
 
 G4.1 docs-only ADR creation per Founder Q-G4-α α-1 LOCK at
 `[BEAM-CAPSULE-DECAY-G4-QLOCK]`. Status flips to Accepted at G4.4
@@ -731,6 +731,153 @@ pattern.
 - No production-affecting actions; no Elixir vector access; no
   Elixir decay computation; no secret exposure
 
+## G4.4 Closure Cascade (2026-05-18)
+
+G4.4 `[BEAM-CAPSULE-DECAY-CLOSURE]` docs-only closure cascade LANDED
+per Founder Q-G4.4-α α-1 LOCK + Q-G4.4-β β-1 LOCK + Q-G4.4-γ γ-1 LOCK
++ Q-G4.4-δ δ-1 LOCK + Q-G4.4-ε ε-1 LOCK + Q-G4.4-ζ ζ-1 LOCK +
+Q-G4.4-η η-1 LOCK at `[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-QLOCK]` +
+`[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-EXECUTE-VERIFY-AUTH]` register
+substantively. **Gap 4 Decay Execution Formalization CLOSED at
+canonical-state register substantively.** ADR-0044 Status flipped
+from `Proposed 2026-05-18` to `Accepted 2026-05-18` per Q-G4.4-β β-1
+LOCK. Gap 4 mini-arc advances 3/4 → **4/4**. Sub-arc 2 remains IN
+FLIGHT per Q-G4.4-ζ ζ-1 LOCK pending Gap 5 + optional Gap 6 + later
+Sub-arc 2 closure cascade per ADR-0041 CL.1 scope patch.
+
+### G4.4 Q-LOCKs canonical at canonical-state register substantively
+
+- **Q-G4.4-α α-1 LOCK** — close ADR-0044 now (Gap 4 mini-arc 3/4
+  complete; G4.4 is the canonical closure cascade Status-flip commit
+  per ADR-0044 §Implementation Lineage).
+- **Q-G4.4-β β-1 LOCK** — flip ADR-0044 Status `Proposed 2026-05-18`
+  → `Accepted 2026-05-18` (same-day mini-arc landing matches G3.10 +
+  PR.4 + G1.6 canonical pattern).
+- **Q-G4.4-γ γ-1 LOCK** — 5 MOD docs-only scope (ADR-0044 +
+  section-12-progress + CURRENT_BUILD_STATE + docs/architecture/README +
+  CLAUDE.md). No code / test / script / schema / CI / package /
+  lockfile / vitest config / docker-compose / .husky / mix / audit.ts
+  / .env changes at G4.4.
+- **Q-G4.4-δ δ-1 LOCK** — NO ADR-0035 modification at G4.4. G4
+  observations (O-G4.1-1 + O-G4.1-2 + O-G4.2-3) are specific substrate-
+  state facts about MemoryCapsule.expires_at and DecayType enum
+  semantics; they are already canonical inside ADR-0044; no
+  recurrence/generalizable substrate-build risk proven; no existing
+  ADR-0035 §9 observation directly corresponds to G4 observations for
+  back-citation. Mirrors PR.4 minimum-touch precedent (PR.4 added
+  only RULE 14 footers; G4.4 is one step lighter — no footers since
+  no direct back-citation target exists).
+- **Q-G4.4-ε ε-1 LOCK** — update both README + CLAUDE.md ADR-0044
+  catalog entries `Status: Proposed 2026-05-18` → `Status: Accepted
+  2026-05-18` plus G4.2/G4.3/G4.4 substantive landing summary
+  refresh at catalog entry tails.
+- **Q-G4.4-ζ ζ-1 LOCK** — preserve Sub-arc 2 status IN FLIGHT (Sub-
+  arc 2 closure requires Gap 5 + optional Gap 6 + later Sub-arc 2
+  closure cascade per ADR-0041 CL.1 scope patch).
+- **Q-G4.4-η η-1 LOCK** — Gap 5 / ADR-0045 Capsule-Level Staleness
+  Detection starts next per ADR-0041 §Sub-decision 5 canonical
+  next-Gap ordering (optional Gap 6 / ADR-0046 AI_AGENT EntityType-
+  Discriminated Capsule Routing remains optional per ADR-0041 §Sub-
+  decision 6).
+
+### Canonical closure precedent citations
+
+- **G3.10** commit `08b10ef` `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` —
+  Gap 3 pgvector Embedding closure cascade; 6 MOD docs-only (ADR-0043
+  + ADR-0035 + section-12-progress + CURRENT_BUILD_STATE + README +
+  CLAUDE.md); ADR-0043 Status flipped Proposed → Accepted; ADR-0035
+  §9 cluster expansion 36 → 38 (promoted 2 NEW observations at
+  closure).
+- **PR.4** commit `e60122c` `[PR-HARDENING-RUNBOOK-CLOSURE]` — Post-
+  Gap-3 Production-Readiness Hardening Mini-Arc closure cascade; 6
+  MOD + 1 NEW (ADR-0047 + ADR-0035 + section-12-progress +
+  CURRENT_BUILD_STATE + README + CLAUDE.md + NEW deployment-
+  runbook.md); ADR-0047 Status flipped Proposed → Accepted; ADR-0035
+  §9 RULE 14 back-citation footers only (no NEW observations
+  promoted).
+- **G1.6** commit `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` —
+  Gap 1 Mutation Discrimination closure cascade; 6 MOD docs-only
+  (ADR-0042 + ADR-0035 + section-12-progress + CURRENT_BUILD_STATE +
+  README + CLAUDE.md); ADR-0042 Status flipped Proposed → Accepted;
+  ADR-0035 §9 small addition.
+
+G4.4 follows the G3.10 + PR.4 + G1.6 canonical closure cascade
+pattern with one step lighter than PR.4 (no ADR-0035 modification
+per Q-G4.4-δ δ-1 LOCK). G4.4 scope: 5 MOD docs-only.
+
+### G4.4 critical coherence preserved
+
+- ADR-0044 Status flipped `Proposed 2026-05-18` → `Accepted 2026-05-18`
+  (Q-G4.4-β β-1 LOCK; this is the canonical closure-cascade Status-flip
+  commit per ADR-0044 §Implementation Lineage)
+- Gap 4 row Status flipped `**IN FLIGHT**` → `**CLOSED**`
+- Sub-arc 2 status field preserved IN FLIGHT (Q-G4.4-ζ ζ-1 LOCK)
+- Gap 4 / Gap 5 / Gap 6 reservations preserved at ADR-0041
+- ADR-0022 + ADR-0033 + ADR-0035 + ADR-0041 + ADR-0043 + ADR-0047
+  untouched at G4.4
+- No new audit literals (Q-G4-η η-1 LOCK + RULE 0 + Q-G4-ζ no-auto-
+  deletion preserved)
+- No code / test / script / schema / CI / package / vitest /
+  docker-compose / .husky / mix / audit.ts / .env changes at G4.4
+- No production-affecting actions; no Elixir vector access; no
+  Elixir decay computation; no secret exposure
+- RULE 0 + RULE 11 + RULE 12 + RULE 13 + RULE 20 + RULE 21 preserved
+
+## Post-Closure Implementation Lineage
+
+The 4-commit Gap 4 mini-arc lineage canonical at canonical-execution
+register substantively per ADR-0020 two-register IP discipline:
+
+| Commit SHA | Sub-phase | Tag | Status |
+|------------|-----------|-----|--------|
+| `7097bb8` | G4.1 | `[BEAM-CAPSULE-DECAY-ADR]` | LANDED 2026-05-18 |
+| `ce33c3a` | G4.2 | `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` | LANDED 2026-05-18 |
+| `b558f64` | G4.3 | `[BEAM-CAPSULE-DECAY-IMPL]` | SKIPPED 2026-05-18 |
+| this commit | G4.4 | `[BEAM-CAPSULE-DECAY-CLOSURE]` | LANDED 2026-05-18; **Gap 4 CLOSED** |
+
+**Lineage notes**:
+
+- **G4.1** `7097bb8` — ADR-0044 NEW Proposed; 4 MOD + 1 NEW docs-only;
+  canonicalizes existing lazy-at-read decay substrate; 2 substrate-
+  state observations surfaced (O-G4.1-1 expires_at TTL + O-G4.1-2
+  DecayType enum semantics); RULE 21 research arc embedded; 12 Q-G4
+  sub-decisions canonical per `[BEAM-CAPSULE-DECAY-G4-QLOCK]`.
+- **G4.2** `ce33c3a` — substrate observation phase; 3 MOD docs-only;
+  Q-G4.2-α α-2 LOCK deferred MemoryCapsule.expires_at TTL enforcement
+  to future Founder-authorized ADR amendment; Q-G4.2-β β-2 LOCK
+  deferred non-FOUNDATIONAL DecayType enum semantics to future
+  Founder-authorized ADR amendment; Q-G4.2-γ γ-1 LOCK G4.3 formal
+  SKIP determination; Q-G4.2-δ δ-1 LOCK docs-only scope; NEW O-G4.2-3
+  substrate-state observation surfaced (MemoryCapsule.expires_at
+  immutable post-create + persisted-but-unused metadata).
+- **G4.3** `b558f64` — formal SKIP record; 3 MOD docs-only; Q-G4.3-α
+  α-1 LOCK formal SKIP record now; Q-G4.3-β β-1 LOCK 3 MOD docs-only;
+  Q-G4.3-γ γ-1 LOCK preserve ADR-0044 Status Proposed; Q-G4.3-δ δ-3
+  LOCK defer ADR-0035 §9 cluster decision to G4.4; canonical SKIP
+  commit pattern per G1.4 (`3505fde`) + G3.7 (`ee0b01b`) precedents;
+  no implementation landed (every implementation surface deferred or
+  excluded by prior locks).
+- **G4.4** this commit — docs-only closure cascade; 5 MOD; ADR-0044
+  Status Proposed → Accepted; Gap 4 row Status IN FLIGHT → CLOSED;
+  README + CLAUDE.md catalogs flipped; NO ADR-0035 modification per
+  Q-G4.4-δ δ-1 LOCK; canonical closure cascade per G3.10 (`08b10ef`)
+  + PR.4 (`e60122c`) + G1.6 precedents.
+
+**Forward-substrate after G4.4**:
+
+- **Gap 5 / ADR-0045** Capsule-Level Staleness Detection mini-arc is
+  the canonical next-Gap per ADR-0041 §Sub-decision 5 + Q-G4.4-η η-1
+  LOCK
+- **Optional Gap 6 / ADR-0046** AI_AGENT EntityType-Discriminated
+  Capsule Routing remains forward-substrate per ADR-0041 §Sub-
+  decision 6 (optional; deferred unless Founder authorizes)
+- **Sub-arc 2 closure cascade** forward-substrate pending Gap 5 +
+  optional Gap 6 per ADR-0041 CL.1 scope patch
+- ADR-0044 forward-substrate is dormant unless future Founder-
+  authorized ADR amendment lands MemoryCapsule.expires_at TTL
+  enforcement (per Q-G4.2-α α-2 deferral) or non-FOUNDATIONAL
+  DecayType enum semantics (per Q-G4.2-β β-2 deferral)
+
 ## Consequences
 
 ### Positive
@@ -929,14 +1076,20 @@ RULE 20 at:
 - `[BEAM-CAPSULE-DECAY-IMPL-G4.3-QLOCK]`
 - `[BEAM-CAPSULE-DECAY-IMPL-G4.3-EXECUTE-VERIFY-AUTH]`
 
+Founder authorization explicit at G4.4 closure cascade landing per
+RULE 20 at:
+
+- `[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-QLOCK]`
+- `[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-EXECUTE-VERIFY-AUTH]`
+
 ## Implementation Lineage (forward-substrate G4.1-G4.4)
 
 | Sub-phase | Tag | Authorized scope | Status |
 |-----------|-----|------------------|--------|
-| G4.1 | `[BEAM-CAPSULE-DECAY-ADR]` | 4 MOD + 1 NEW docs-only ADR-0044 NEW Proposed; RULE 21 research arc embedded; canonicalizes existing lazy-at-read substrate; 2 substrate-state observations surfaced (O-G4.1-1 + O-G4.1-2) | this commit |
+| G4.1 | `[BEAM-CAPSULE-DECAY-ADR]` | 4 MOD + 1 NEW docs-only ADR-0044 NEW Proposed; RULE 21 research arc embedded; canonicalizes existing lazy-at-read substrate; 2 substrate-state observations surfaced (O-G4.1-1 + O-G4.1-2) | G4.1 LANDED 2026-05-18 at `7097bb8` |
 | G4.2 | `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` | Docs-only 3 MOD per Founder Q-G4.2-δ δ-1 LOCK; resolves O-G4.1-1 disposition (Q-G4.2-α α-2 LOCK defer `expires_at` TTL) + O-G4.1-2 disposition (Q-G4.2-β β-2 LOCK defer DecayType enum semantics); G4.3 formal SKIP determination (Q-G4.2-γ γ-1 LOCK); NEW O-G4.2-3 substrate-state observation surfaced (MemoryCapsule.expires_at immutable post-create + persisted-but-unused metadata) | G4.2 LANDED 2026-05-18 |
 | G4.3 | `[BEAM-CAPSULE-DECAY-IMPL]` | Formal SKIP per Q-G4.2-γ γ-1 LOCK + Q-G4.3-α α-1 LOCK + Q-G4.3-β β-1 LOCK + Q-G4.3-γ γ-1 LOCK + Q-G4.3-δ δ-3 LOCK at G4.3 mini-arc register substantively; separate SKIP commit canonical per G1.4 (`3505fde`) + G3.7 (`ee0b01b`) mini-arc SKIP precedents; G4.3 docs-only 3 MOD; no implementation landed; substrate-state proof of empty implementation scope: Q-G4.2-α α-2 deferred TTL + Q-G4.2-β β-2 deferred DecayType semantics + Q-G4-η η-1 no new audit literals + Q-G4-θ θ-1 SimilarityService untouched + Q-G4-κ κ-1 no Elixir decay + RULE 0 + Q-G4-ζ no auto-deletion | **G4.3 SKIPPED 2026-05-18** |
-| G4.4 | `[BEAM-CAPSULE-DECAY-CLOSURE]` | Docs-only closure cascade; ADR-0044 Status Proposed → Accepted; optional ADR-0035 §9 back-citation + cluster expansion if Founder authorizes | forward-substrate |
+| G4.4 | `[BEAM-CAPSULE-DECAY-CLOSURE]` | Docs-only closure cascade 5 MOD per Founder Q-G4.4-γ γ-1 LOCK; ADR-0044 Status Proposed → Accepted per Q-G4.4-β β-1 LOCK; Gap 4 row Status IN FLIGHT → CLOSED; README + CLAUDE.md catalogs flipped per Q-G4.4-ε ε-1 LOCK; NO ADR-0035 modification per Q-G4.4-δ δ-1 LOCK; Sub-arc 2 preserved IN FLIGHT per Q-G4.4-ζ ζ-1 LOCK; Gap 5 / ADR-0045 starts next per Q-G4.4-η η-1 LOCK; canonical closure cascade per G3.10 (`08b10ef`) + PR.4 (`e60122c`) + G1.6 precedents | **G4.4 LANDED 2026-05-18; Gap 4 CLOSED** |
 
 Status flips from `Proposed 2026-05-18` to `Accepted 2026-05-1X` at
 G4.4 closure cascade canonical at canonical-state register

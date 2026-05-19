@@ -631,6 +631,122 @@ Q-G4.3-γ γ-1 + Q-G4.3-δ δ-3 LOCKED at
 RULE 20; G4.3 execution authorization at
 `[BEAM-CAPSULE-DECAY-IMPL-G4.3-EXECUTE-VERIFY-AUTH]`.
 
+#### G4.4 CLOSED — Gap 4 Decay Execution Formalization closure cascade (ADR-0044 Accepted 2026-05-18)
+
+**Status:** G4.4 `[BEAM-CAPSULE-DECAY-CLOSURE]` docs-only closure
+cascade LANDED 2026-05-18 (5 MOD) per Founder Q-G4.4-α α-1 LOCK +
+Q-G4.4-β β-1 LOCK + Q-G4.4-γ γ-1 LOCK + Q-G4.4-δ δ-1 LOCK + Q-G4.4-ε
+ε-1 LOCK + Q-G4.4-ζ ζ-1 LOCK + Q-G4.4-η η-1 LOCK at
+`[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-QLOCK]` +
+`[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-EXECUTE-VERIFY-AUTH]` register
+substantively. **Gap 4 Decay Execution Formalization CLOSED at
+canonical-state register substantively.** ADR-0044 Status flipped
+from `Proposed 2026-05-18` to **`Accepted 2026-05-18`** per Q-G4.4-β
+β-1 LOCK. Gap 4 mini-arc 4/4. Sub-arc 2 remains IN FLIGHT per
+Q-G4.4-ζ ζ-1 LOCK. **Gap 5 / ADR-0045 Capsule-Level Staleness
+Detection starts next** per Q-G4.4-η η-1 LOCK.
+
+**Substrate sites (5 authorized files; 5 MOD; 0 NEW):** MOD
+`docs/architecture/decisions/0044-decay-execution-formalization.md`
+(Status flip + NEW H2 `## G4.4 Closure Cascade (2026-05-18)` + NEW
+H2 `## Post-Closure Implementation Lineage` with 4-commit table +
+Implementation Lineage G4.1 row anchored at `7097bb8` +
+Implementation Lineage G4.4 row flipped LANDED + Founder
+Authorization G4.4 citations) + MOD
+`docs/reference/section-12-progress.md` (Gap 4 row Status IN FLIGHT
+→ CLOSED + G4.4 closure prose appended) + MOD this
+`docs/CURRENT_BUILD_STATE.md` (this NEW H4) + MOD
+`docs/architecture/README.md` (ADR-0044 catalog Status flip Proposed
+→ Accepted + tail refresh with G4.2/G4.3/G4.4 substantive landing
+summary) + MOD `CLAUDE.md` (ADR-0044 catalog mirror Status flip
+Proposed → Accepted + parallel tail refresh).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (no automatic deletion preserved) + RULE 11 (Prisma/Ecto
+boundary preserved; no Elixir decay computation) + RULE 12 (pre-
+flight grep verified G3.10 + PR.4 + G1.6 closure cascade precedents
++ ADR-0044 anchors + README/CLAUDE.md catalog Status strings) + RULE
+13 (G4.4 closure rationale surfaced clearly + ADR-0035 §9 promotion
+decision δ-1 surfaced with rationale + G4.1 Implementation Lineage
+row anchor correction surfaced inline) + RULE 20 (Founder
+authorization required and granted) + RULE 21 (current-source
+inspection canonical at G4.4 PRE-FLIGHT register substantively).
+
+**Post-Closure Implementation Lineage canonical at canonical-
+execution register substantively per ADR-0020 two-register IP
+discipline**:
+
+- G4.1 `7097bb8` `[BEAM-CAPSULE-DECAY-ADR]` — ADR-0044 NEW Proposed;
+  4 MOD + 1 NEW docs-only; canonicalizes existing lazy-at-read decay
+  substrate; 2 substrate-state observations surfaced (O-G4.1-1
+  expires_at TTL + O-G4.1-2 DecayType enum semantics); RULE 21
+  research arc embedded.
+- G4.2 `ce33c3a` `[BEAM-CAPSULE-DECAY-SUBSTRATE-OBSERVATION]` —
+  substrate observation phase; 3 MOD docs-only; Q-G4.2-α α-2 deferred
+  TTL; Q-G4.2-β β-2 deferred DecayType enum semantics; Q-G4.2-γ γ-1
+  G4.3 formal SKIP determination; NEW O-G4.2-3 substrate-state
+  observation surfaced.
+- G4.3 `b558f64` `[BEAM-CAPSULE-DECAY-IMPL]` — formal SKIP record; 3
+  MOD docs-only; no implementation landed; canonical SKIP commit
+  pattern per G1.4 (`3505fde`) + G3.7 (`ee0b01b`) precedents; Q-G4.3-δ
+  δ-3 deferred ADR-0035 §9 cluster decision to G4.4.
+- G4.4 this commit `[BEAM-CAPSULE-DECAY-CLOSURE]` — docs-only closure
+  cascade; 5 MOD; ADR-0044 Status Proposed → Accepted; Gap 4 row
+  Status IN FLIGHT → CLOSED; README + CLAUDE.md catalogs flipped; NO
+  ADR-0035 modification per Q-G4.4-δ δ-1 LOCK.
+
+**Canonical closure precedent**: G3.10 (`08b10ef` `[BEAM-CAPSULE-
+EMBEDDING-CLOSURE]`; 6 MOD docs-only; ADR-0043 Status flipped; ADR-
+0035 §9 cluster expansion 36 → 38) + PR.4 (`e60122c` `[PR-HARDENING-
+RUNBOOK-CLOSURE]`; 6 MOD + 1 NEW; ADR-0047 Status flipped; ADR-0035
+§9 RULE 14 back-citation footers only) + G1.6 (`[BEAM-CAPSULE-
+MUTATION-DISCRIMINATION-CLOSURE]`; 6 MOD docs-only). G4.4 follows
+the canonical pattern one step lighter than PR.4 — NO ADR-0035
+modification per Q-G4.4-δ δ-1 LOCK (G4 observations are specific
+substrate-state facts about MemoryCapsule.expires_at + DecayType
+enum semantics; no recurrence/generalizable substrate-build risk
+proven; no existing ADR-0035 §9 observation directly corresponds for
+back-citation).
+
+**ADR-0044 forward-substrate after closure**: dormant unless future
+Founder-authorized ADR amendment lands MemoryCapsule.expires_at TTL
+enforcement (per Q-G4.2-α α-2 deferral) or non-FOUNDATIONAL DecayType
+enum semantics (per Q-G4.2-β β-2 deferral). RULE 0 + RULE 10 + Q-G4-ζ
+no-auto-deletion discipline preserved. SimilarityService preserved
+UNTOUCHED per Q-G4-θ θ-1 LOCK; ADR-0043 G3.9 J5-J8 privacy proofs
+preserved. BEAM observer-only canonical per Q-G4-κ κ-1 LOCK; no
+Elixir-side decay computation; Translator round-trip preservation
+only.
+
+**Forbidden / preserved boundaries enumerated at G4.4**: no apps/**
+/ tests/** / packages/** / scripts/** changes; no schema.prisma; no
+CI workflows; no package.json / lockfile changes; no vitest config
+changes; no docker-compose / .husky changes; no mix.exs / mix.lock;
+no audit.ts changes; no new audit literals at G4.4; no ADR-0022
+amendment; no ADR-0033 amendment; no ADR-0035 modification at G4.4
+(δ-1 LOCK); no ADR-0041 modification (Gap 4/5/6 reservations
+preserved); no ADR-0043 Status change; no ADR-0047 Status change; no
+ADR-0045 / ADR-0046 renumbering; no Sub-arc 2 status flip to CLOSED
+(ζ-1 LOCK); no production-affecting actions; no Elixir vector
+access; no Elixir decay computation; no secret exposure.
+
+**Forward-substrate after G4.4 closure**:
+
+- **Gap 5 / ADR-0045** Capsule-Level Staleness Detection mini-arc is
+  the canonical next-Gap per Q-G4.4-η η-1 LOCK + ADR-0041 §Sub-
+  decision 5 canonical next-Gap ordering
+- **Optional Gap 6 / ADR-0046** AI_AGENT EntityType-Discriminated
+  Capsule Routing remains forward-substrate per ADR-0041 §Sub-
+  decision 6 (optional)
+- **Sub-arc 2 closure cascade** forward-substrate pending Gap 5 +
+  optional Gap 6 per ADR-0041 CL.1 scope patch
+
+**Founder LOCKS preservation:** Q-G4.4-α α-1 + Q-G4.4-β β-1 +
+Q-G4.4-γ γ-1 + Q-G4.4-δ δ-1 + Q-G4.4-ε ε-1 + Q-G4.4-ζ ζ-1 + Q-G4.4-η
+η-1 LOCKED at `[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-QLOCK]` register
+substantively per RULE 20; G4.4 execution authorization at
+`[BEAM-CAPSULE-DECAY-CLOSURE-G4.4-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## Post-Gap-3 Production-Readiness Hardening Mini-Arc CLOSED 2026-05-18 at PR.4 -- PR.1+PR.2+PR.3+PR.4 LANDED; ADR-0047 Accepted
