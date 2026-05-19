@@ -635,6 +635,208 @@ inherited if/when staleness literals land at G5.2/G5.3.
 New capsule-level staleness tests at G5.3 conditional implementation
 if implementation lands.
 
+## G5.2 Substrate Observation Resolution (2026-05-18)
+
+G5.2 `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION]` resolves the
+three Q-G5 dispositions deferred at G5.1 (Q-G5-δ schema + Q-G5-ε
+audit + Q-G5-ζ integration) per Founder Q-G5.2 LOCKs at
+`[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION-G5.2-QLOCK]` +
+`[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION-G5.2-EXECUTE-VERIFY-AUTH]`
+register substantively. G5.2 is docs-only 3 MOD per Q-G5.2-ε ε-1
+LOCK. G5.2 does NOT flip ADR-0045 Status (preserved as
+`Proposed 2026-05-18` per Q-G5.2-ζ ζ-1 LOCK; G5.4 closure cascade
+is the canonical Status-flip commit). G5.2 does NOT close Gap 5.
+
+### G5.2 Q-LOCKs canonical
+
+- **Q-G5.2-α α-2 LOCK** — minimum-viable embedding lag schema path
+  for G5.3:
+  - `embedding_content_hash String?` — content_hash at embedding-
+    generation time (deterministic skew detection against current
+    `content_hash`)
+  - `embedding_generated_at DateTime?` — when current embedding was
+    generated (embedding age dimension)
+  - Rationale: `content_hash` already exists from Gap 1 mutation
+    discrimination per ADR-0042; `embedding` already exists from Gap
+    3 pgvector per ADR-0043; embedding lag is the most deterministic
+    Gap 5 dimension (Atlan canonical 4-dimension framework);
+    `embedding_content_hash != content_hash` is a clean boolean stale-
+    embedding signal (no scoring model required); avoids `stale_score`
+    + `stale_reason` + lifecycle-state + semantic-validity policy
+    decisions too early; detection metadata only at G5.3 (no
+    filtering / ranking / lifecycle / audit-literal expansion).
+- **Q-G5.2-β β-1 LOCK** — defer all new audit literals. NO
+  `CAPSULE_STALENESS_CHECKED` / `CAPSULE_STALENESS_MARKED` /
+  `CAPSULE_STALENESS_CLEARED` / `CAPSULE_STALENESS_CONTEXT_FILTERED`
+  literal at G5.3. Rationale: α-2 is write-time metadata only; no
+  user-facing marking / clearing / filtering / lifecycle state lands
+  at G5.3; ADR-0042 §Q-γ.1 clean-transition discipline preserved for
+  future implementation.
+- **Q-G5.2-γ γ-2 LOCK** — G5.3 integration target is `write.service.ts`
+  ONLY. G5.3 may set `embedding_content_hash = content_hash` +
+  `embedding_generated_at = current timestamp` ONLY AFTER embedding
+  generation succeeds. NO `read.service` integration. NO COE
+  integration. NO SimilarityService integration (G3.9 J5-J8 privacy
+  proofs preserved per Q-G5-ι). NO `feedback.service` integration
+  (preserved at separate register per RULE 13 + O-G5.2-1).
+- **Q-G5.2-δ δ-2 LOCK** — G5.3 will be a minimal substantive
+  implementation (NOT a SKIP). G5.3 scope limited to: 2 MemoryCapsule
+  fields + write.service metadata integration + cross-language
+  Translator pass-through if required + tests proving embedding lag
+  metadata behavior. NO filtering / ranking / lifecycle / audit-
+  literal expansion at G5.3.
+- **Q-G5.2-ε ε-1 LOCK** — 3 MOD docs-only scope (ADR-0045 +
+  section-12-progress + CURRENT_BUILD_STATE). No README / CLAUDE.md
+  changes at G5.2 (catalog refresh deferred to G5.4 closure cascade).
+- **Q-G5.2-ζ ζ-1 LOCK** — ADR-0045 Status preserved
+  `Proposed 2026-05-18` (G5.4 closure cascade is canonical Status-
+  flip commit).
+
+### G5.3 minimum-viable embedding lag substrate scope
+
+Per Q-G5.2-α α-2 LOCK + Q-G5.2-γ γ-2 LOCK + Q-G5.2-δ δ-2 LOCK:
+
+**Schema substrate at G5.3** (2 NEW fields):
+
+- `embedding_content_hash String?` on `MemoryCapsule` — adjacent to
+  existing `content_hash String` at `schema.prisma:132`; nullable to
+  allow gradual population on legacy capsules (NULL = embedding-skew
+  unknown; non-NULL = comparable against `content_hash`)
+- `embedding_generated_at DateTime?` on `MemoryCapsule` — adjacent
+  to existing `last_updated_at DateTime` at `schema.prisma:164`;
+  nullable to allow gradual population on legacy capsules
+- No new index at G5.3 (filtering deferred; detection metadata only;
+  if future ADR amendment lands filtering, index evaluation joins
+  that scope)
+
+**Write.service integration at G5.3**:
+
+- `write.service.ts:createCapsule` ADD branch — after embedding
+  generation succeeds (per Gap 3 G3.5 EmbeddingProvider invocation):
+  `embedding_content_hash = content_hash` + `embedding_generated_at = now()`
+- `write.service.ts:updateCapsule` UPDATE/MERGE branches — after
+  re-embedding generation succeeds: `embedding_content_hash =
+  current content_hash` + `embedding_generated_at = now()`
+- NOOP branch (per Gap 1 ADR-0042 mutation discrimination) — no
+  changes to embedding lag fields (NOOP means content unchanged)
+- Failure path (Gap 3 G3.5 Q-G3.5-α degrade-policy preserved): if
+  EmbeddingProvider fails, embedding remains NULL + both lag fields
+  remain NULL — graceful degradation; G5.3 detection logic must
+  handle NULL safely
+- Audit metadata at G5.3: existing `CAPSULE_MUTATION_*` literals
+  carry the write event; no new audit literal needed; embedding lag
+  fields appear in audit details alongside existing `content_hash`
+  metadata (per Gap 1 + Gap 3 audit detail pattern; never the raw
+  embedding vector per G3.9 J5-J8 privacy proofs)
+
+**Cross-language Translator pass-through at G5.3** (if required per
+ADR-0033 §Decision 7 + Q-5BII-EXEC-5):
+
+- `apps/cosmp_router/lib/cosmp_router/capsule/translator.ex` —
+  conditional addition of `embedding_content_hash` +
+  `embedding_generated_at` to pass-through metadata maps (mirrors
+  existing `content_hash` + `last_updated_at` patterns)
+- `apps/cosmp_router/lib/cosmp_router/schemas/memory_capsule.ex` Ecto
+  schema — conditional field additions
+- BEAM observer-only canonical per Q-G5-κ κ-1 LOCK; no Elixir-side
+  staleness computation (Translator round-trip preservation only)
+
+**Tests at G5.3**:
+
+- Write-time embedding lag fields populated on ADD/UPDATE/MERGE
+  (existing `write.test.ts` extended)
+- Write-time embedding lag fields preserved on NOOP (no re-set)
+- Write-time embedding lag fields remain NULL on EmbeddingProvider
+  failure (graceful degradation)
+- Audit metadata at write-time includes embedding lag field names
+  (NOT raw embedding vector per G3.9 J5-J8 privacy proof preservation)
+- Translator round-trip preserves embedding lag fields if Translator
+  pass-through addition lands
+- No new test infrastructure required (existing FixtureBasedEmbedding-
+  Provider per Gap 3 G3.4 used for deterministic tests)
+
+### O-G5.2-1 NEW substrate-state observation (surfaced at G5.2 PRE-FLIGHT per RULE 13)
+
+**Substrate-state ground truth**: `MemoryCapsule.feedback_loop_score
+Float @default(0.0)` exists at `schema.prisma:110` as a **per-capsule
+feedback-derived score** populated by Loop 1 path at
+`apps/api/src/services/feedback/feedback.service.ts` (per
+`packages/database/src/queries/capsule.ts:148-152, 209` validation +
+write substrate + `docs/architecture/raa-12-8-substrate-dynamics.md
+:139` D3 documentation: "3 weight-bearing fields: relevance_score +
+feedback_loop_score + access_count").
+
+This surfaces **three distinct staleness/score registers** at
+substrate-architectural register substantively that MUST NOT be
+conflated at G5.3 or any future Gap 5 implementation:
+
+1. **Loop-7 health staleness** (operational/loop-health) — targets
+   `FeedbackLoopHealth` rows representing loop runs; signal is
+   `last_run` vs cron cadence; mechanism is `runLoop7Once()` at
+   `feedback.service.ts:683`; audit literal is `FEEDBACK_LOOP_STALE`;
+   register is operational/observability; documented at §A
+   discrimination above
+2. **Per-capsule feedback-derived score** (Loop 1 register) —
+   `MemoryCapsule.feedback_loop_score Float @default(0.0)` at
+   `schema.prisma:110`; populated by Loop 1 path at
+   `feedback.service.ts`; signal is feedback-derived (NOT staleness);
+   register is per-capsule weighting (alongside `relevance_score` +
+   `access_count`); cross-language pass-through via Translator at
+   `apps/cosmp_router/lib/cosmp_router/capsule/translator.ex:93, 135`
+   + Ecto schema at `apps/cosmp_router/lib/cosmp_router/schemas/
+   memory_capsule.ex:120`
+3. **Gap 5 capsule-level staleness** (this ADR; semantic/currentness/
+   validity) — greenfield at G5.1; G5.3 lands embedding lag dimension
+   (per Q-G5.2-α α-2 LOCK); content age + coverage drift + semantic
+   validity dimensions deferred to future Founder-authorized ADR
+   amendments
+
+**Disposition**: G5.3 implementation MUST NOT conflate
+`feedback_loop_score` (register #2) with Gap 5 staleness signals
+(register #3). They are related but distinct registers.
+`feedback_loop_score` may inform semantic validity dimension in a
+future ADR amendment per Q-G5-γ γ-5 4-dimension framework — but is
+NOT a staleness signal at the canonical-prose register substantively
+at G5.3 register. Surfaced inline per RULE 13 substrate-honest
+discipline; no separate Q-LOCK required at G5.2.
+
+**RAA 12.8 D3 gap closure path**: `docs/architecture/raa-12-8-
+substrate-dynamics.md:139` D3 documents an explicit gap — "zero
+confidence/certainty/provenance/trust dimension in schema or
+services". Gap 5 is the **canonical closure path** for this gap at
+substrate-architectural register substantively. However, G5.3 only
+lands embedding-lag metadata (per α-2 LOCK minimum-viable scope) —
+confidence/certainty/provenance/trust dimensions remain forward-
+substrate for future Founder-authorized ADR amendments (content age
++ coverage drift + semantic validity dimensions per Q-G5-γ γ-5
+4-dimension framework).
+
+### G5.2 critical coherence preserved
+
+- ADR-0045 Status preserved `Proposed 2026-05-18` (G5.4 closure
+  cascade is the Status-flip commit per Q-G5.2-ζ ζ-1 LOCK)
+- Sub-arc 2 status field preserved IN FLIGHT
+- Gap 5 row Status preserved IN FLIGHT (G5.2 advances mini-arc 1/4 →
+  2/4; G5.3 minimal implementation + G5.4 closure forward-substrate)
+- Gap 4 / Gap 5 / Gap 6 reservations preserved at ADR-0041
+- ADR-0022 + ADR-0033 + ADR-0035 + ADR-0041 + ADR-0042 + ADR-0043 +
+  ADR-0044 + ADR-0047 untouched at G5.2
+- No new audit literals at G5.2 (Q-G5.2-β β-1 LOCK)
+- No code / test / script / schema / CI / package / vitest /
+  docker-compose / .husky / mix / audit.ts / .env / README /
+  CLAUDE.md changes at G5.2
+- No SimilarityService modification (G3.9 J5-J8 privacy proofs
+  preserved per Q-G5-ι inheritance)
+- No `read.service` modification
+- No COE modification
+- No `feedback.service` modification (preserved per O-G5.2-1
+  three-register discrimination)
+- No production-affecting actions; no Elixir vector access; no
+  Elixir staleness computation; no vector / distance / raw query
+  leakage at any G5 surface; no secret exposure
+- RULE 0 + RULE 10 + RULE 11 + RULE 12 + RULE 13 + RULE 20 + RULE 21
+  preserved
+
 ## Consequences
 
 ### Positive
@@ -852,13 +1054,19 @@ Founder authorization explicit at G5.1 substantive landing per RULE
 - `[BEAM-CAPSULE-STALENESS-G5-QLOCK]`
 - `[BEAM-CAPSULE-STALENESS-G5.1-EXECUTE-VERIFY-AUTH]`
 
+Founder authorization explicit at G5.2 substrate observation phase
+landing per RULE 20 at:
+
+- `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION-G5.2-QLOCK]`
+- `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION-G5.2-EXECUTE-VERIFY-AUTH]`
+
 ## Implementation Lineage (forward-substrate G5.1-G5.4)
 
 | Sub-phase | Tag | Authorized scope | Status |
 |-----------|-----|------------------|--------|
 | G5.1 | `[BEAM-CAPSULE-STALENESS-ADR]` | 4 MOD + 1 NEW docs-only ADR-0045 NEW Proposed; RULE 21 research arc embedded (RS-G5-1 through RS-G5-5); canonical 4-dimension staleness model (content age + embedding lag + coverage drift + semantic validity); 12 sub-decisions canonical; mandatory feedback-loop vs capsule-level discrimination canonical | this commit |
-| G5.2 | `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION]` | Docs-only substrate observation phase; surface schema additions disposition (Q-G5-δ G5.2 resolution) + audit literal disposition (Q-G5-ε G5.2 resolution) + integration target disposition (Q-G5-ζ G5.2 resolution); G5.3 SKIP-or-implement determination | forward-substrate |
-| G5.3 | `[BEAM-CAPSULE-STALENESS-IMPL]` | Conditional substantive code if G5.2 proves implementation needed (Prisma migration + service-tier integration); OR formal SKIP record per G1.4 + G3.7 + G4.3 canonical SKIP precedent | forward-substrate |
+| G5.2 | `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION]` | Docs-only 3 MOD per Founder Q-G5.2-ε ε-1 LOCK; resolves Q-G5-δ schema disposition (Q-G5.2-α α-2 LOCK minimum-viable embedding lag) + Q-G5-ε audit disposition (Q-G5.2-β β-1 LOCK defer all literals) + Q-G5-ζ integration disposition (Q-G5.2-γ γ-2 LOCK write.service only); G5.3 disposition (Q-G5.2-δ δ-2 LOCK minimal substantive implementation); NEW O-G5.2-1 substrate-state observation (`feedback_loop_score` three-register discrimination canonical); RAA 12.8 D3 gap closure path canonical | **G5.2 LANDED 2026-05-18** |
+| G5.3 | `[BEAM-CAPSULE-STALENESS-IMPL]` | Substantive code per Q-G5.2-δ δ-2 LOCK minimum-viable scope: 2 NEW MemoryCapsule fields (`embedding_content_hash String?` + `embedding_generated_at DateTime?`) + write.service integration (ADD/UPDATE/MERGE set fields after embedding generation success; NOOP preserves) + conditional Translator pass-through per ADR-0033 §Decision 7 + Q-5BII-EXEC-5 + tests proving embedding lag metadata behavior (write-time population + NULL preservation on NOOP + graceful degradation on EmbeddingProvider failure + Translator round-trip + audit metadata preserves G3.9 J5-J8 privacy proofs); NO filtering / NO ranking / NO lifecycle / NO audit literal expansion at G5.3 | forward-substrate |
 | G5.4 | `[BEAM-CAPSULE-STALENESS-CLOSURE]` | Docs-only closure cascade; ADR-0045 Status Proposed → Accepted; Gap 5 row Status IN FLIGHT → CLOSED; optional ADR-0035 §9 cluster expansion if Founder authorizes; Sub-arc 2 closure decision deferred to separate commit OR bundled per Founder authorization | forward-substrate |
 
 Status flips from `Proposed 2026-05-18` to `Accepted 2026-05-1X` at
