@@ -306,6 +306,154 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3 Sub-Arc 2 Gap 5 -- Capsule-Level Staleness Detection IN FLIGHT 2026-05-18 at G5.1 -- ADR-0045 NEW Proposed; G5.2-G5.4 forward-substrate
+
+**Status: IN FLIGHT** at G5.1 `[BEAM-CAPSULE-STALENESS-ADR]`.
+
+Phase 3 (Dynamic Memory Accuracy at Scale) Sub-arc 2 Gap 5 (Capsule-
+Level Staleness Detection) IN FLIGHT 2026-05-18 at G5.1 per Founder
+Q-G5-α α-1 LOCK + Q-G5-μ 4-phase mini-arc LOCK at
+`[BEAM-CAPSULE-STALENESS-G5-QLOCK]` register substantively. ADR-0045
+NEW (Capsule-Level Staleness Detection; Status Proposed 2026-05-18).
+G5.1 does NOT close Gap 5; G5.4 closure cascade flips ADR-0045 Status
+→ Accepted at canonical-state register substantively. Sub-arc 2
+remains IN FLIGHT throughout G5.1-G5.4. **Optional Gap 6 / ADR-0046
+AI_AGENT EntityType-Discriminated Capsule Routing remains forward-
+substrate** per ADR-0041 §Sub-decision 6 (optional; Founder may elect
+post-Gap 5 closure).
+
+#### G5.1 LANDED — ADR-0045 NEW Proposed (2026-05-18)
+
+**Status:** G5.1 `[BEAM-CAPSULE-STALENESS-ADR]` LANDED 2026-05-18
+(docs-only ADR creation; 4 MOD + 1 NEW) per Founder Q-G5-α α-1 LOCK +
+Q-G5-β β-4 LOCK + Q-G5-γ γ-5 LOCK + Q-G5-δ δ-1 + δ-5 LOCK + Q-G5-ε
+ε-4 LOCK + Q-G5-ζ ζ-5 LOCK + Q-G5-η canonical + Q-G5-θ canonical +
+Q-G5-ι canonical + Q-G5-κ κ-1 LOCK + Q-G5-λ λ-1 LOCK + Q-G5-μ 4-phase
+LOCK at `[BEAM-CAPSULE-STALENESS-G5-QLOCK]` +
+`[BEAM-CAPSULE-STALENESS-G5.1-EXECUTE-VERIFY-AUTH]` register
+substantively. ADR-0045 NEW (Capsule-Level Staleness Detection;
+Status Proposed 2026-05-18). G5.1 does NOT close Gap 5; G5.4 closure
+cascade flips ADR-0045 Status → Accepted at canonical-state register
+substantively.
+
+**Substrate sites (5 authorized files; 4 MOD + 1 NEW):** NEW
+`docs/architecture/decisions/0045-capsule-level-staleness-detection.md`
++ MOD `docs/reference/section-12-progress.md` (NEW Gap 5 IN FLIGHT
+row) + MOD this `docs/CURRENT_BUILD_STATE.md` (NEW H2 + this G5.1
+H4) + MOD `docs/architecture/README.md` (NEW ADR-0045 catalog entry)
++ MOD `CLAUDE.md` (NEW ADR-0045 catalog entry mirror).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (Humans Always Sovereign; staleness never deletes; non-
+destructive marking only; FOUNDATIONAL bypass + explicit-recall +
+reversible filtering preserved) + RULE 11 (Prisma/Ecto cross-language
+ownership boundary preserved per ADR-0033 §Decision 7 + Q-5BII-EXEC-5;
+TypeScript owns capsule-level staleness semantics; BEAM observer-
+only at G5.1) + RULE 12 (pre-flight grep substrate-state ground
+truth verified for schema.prisma + feedback.service.ts + coe + read +
+similarity + write + audit + tests) + RULE 13 (mandatory feedback-
+loop staleness vs capsule-level staleness discrimination canonical
+inline) + RULE 20 (Founder authorization required and granted) +
+RULE 21 (current-source research arc embedded RS-G5-1 through
+RS-G5-5; 14+ public sources retrieved 2026-05-18).
+
+**Canonical 4-dimension staleness model per Atlan framework + RS-G5-3
+canonical at canonical-execution register substantively**: content
+age (per-capsule; last_updated_at + optional source_updated_at) +
+embedding lag (per-capsule; gap between content_hash and hypothetical
+embedding_content_hash) + coverage drift (corpus-level aggregate
+metric) + semantic validity (per-capsule + cross-capsule; STALE
+benchmark Implicit Conflict Type I + Type II invalidation taxonomy).
+
+**Mandatory feedback-loop staleness vs capsule-level staleness
+discrimination canonical at substrate-architectural register
+substantively per RULE 13 + ADR-0041 §Sub-decision 5 Q-I LOCK
+explicit**: existing feedback-loop staleness at `feedback.service.ts:
+683 runLoop7Once` + `FEEDBACK_LOOP_STALE` audit literal + `Loop7Result
+.stale_loops: string[]` targets FeedbackLoopHealth rows representing
+loop runs (NOT MemoryCapsule rows); signal is `last_run` vs `2x
+expected cron interval` (NOT content/embedding/source/validity
+dimensions); action is operator alerting under
+`SYSTEM_PRINCIPALS.FEEDBACK_LOOP` (NOT capsule retrieval suppression);
+register is operational/observability (NOT capsule semantic
+validity); MUST NOT be conflated with Gap 5 capsule-level staleness.
+
+**RULE 21 research arc embedded at ADR-0045 §Context register
+substantively**: RS-G5-1 STALE benchmark (arXiv:2605.06527; Implicit
+Conflict failure mode; Type I/II invalidation taxonomy; 400 scenarios
+/ 1,200 queries / 150K-token contexts) + Mem0 State of AI Agent Memory
+2026 (staleness "unresolved in most frameworks"; ADD/UPDATE/DELETE/
+NONE reconciliation; analog to ADR-0042 mutation discrimination) +
+MemPalace 2026 (validity windows with end-date invalidation marking;
+no deletion) + Memory Worth 2-counter primitive; RS-G5-2 arXiv:
+2509.19376 simple recency prior (1.00 freshness task accuracy) +
+Temporal-aware Matryoshka Representation Learning (TMRL) + RisingWave
+RAG 2026 (stale retrieval rate; staleness gap 24h nightly / 60min
+hourly) + Continuous-ETL RAG Freshness Measurement; RS-G5-3 Atlan LLM
+Knowledge Base Freshness Scoring canonical 4-dimension framework
+(content age + embedding lag + stale retrieval rate + coverage drift)
++ 3-layer monitoring (retrieval logging + corpus scanning + source-
+system monitoring) + Context Drift Detection signals (schema version
+staleness + glossary age + lineage gaps + ownership freshness);
+RS-G5-4 DeDrift (arXiv:2308.02752) + Self-Aware Vector Embeddings
+(arXiv:2604.20598) + MPZCH (arXiv:2602.17050) + Encord 2026 embedding
+monitoring; RS-G5-5 When to Forget (arXiv:2604.12007) memory
+governance primitive + Acuvity Memory Governance transparency
+cornerstone + LinkedIn Cognitive Memory Agent human-validation
+workflow (InfoQ 2026).
+
+**Substrate-state ground truth at G5.1 PRE-FLIGHT register
+substantively**: existing MemoryCapsule fields `content_hash` +
+`ai_access_blocked` + `requires_validation` + `last_accessed_at` +
+`last_updated_at` + `expires_at` (dormant per Gap 4 G4.2 O-G4.1-1) +
+`relevance_score` + `decay_type`; **NO** `stale_score` /
+`stale_reason` / `stale_checked_at` / `embedding_content_hash` /
+`embedding_generated_at` / `source_updated_at` / `validity_window_end`
+/ `staleness_lifecycle_state` field (all **GREENFIELD** at G5.1);
+**NO** `CAPSULE_STALENESS_*` audit literal (greenfield); **NO**
+capsule-level staleness signal at `coe.service.ts` or
+`read.service.ts` or `similarity.service.ts` G3.6 SQL filter set or
+`write.service.ts`; **NO** tests at capsule-level staleness register
+(greenfield).
+
+**Forbidden / preserved boundaries enumerated at G5.1**: no apps/**
+/ tests/** / packages/** / scripts/** changes; no schema.prisma; no
+CI workflows; no package.json / lockfile changes; no vitest config
+changes; no docker-compose / .husky changes; no mix.exs / mix.lock;
+no audit.ts changes; no new audit literals at G5.1 per Q-G5-ε ε-4
+LOCK; no ADR-0022 amendment; no ADR-0033 amendment; no ADR-0035
+modification at G5.1; no ADR-0041 modification (Gap 4/5/6
+reservations preserved); no ADR-0042 / ADR-0043 / ADR-0044 / ADR-0047
+modifications; no ADR-0046 renumbering; no Sub-arc 2 status flip to
+CLOSED; no SimilarityService modification (G3.9 J5-J8 privacy proofs
+preserved per Q-G5-ι); no production-affecting actions; no Elixir
+vector access; no Elixir staleness computation; no vector / distance
+/ raw query leakage at any G5 surface; no secret exposure.
+
+**Forward-substrate after G5.1**:
+
+- **G5.2** `[BEAM-CAPSULE-STALENESS-SUBSTRATE-OBSERVATION]` — docs-
+  only substrate observation phase; surface schema additions
+  disposition (Q-G5-δ G5.2 resolution: which of stale_score /
+  embedding_content_hash / etc. are needed) + audit literal
+  disposition (Q-G5-ε G5.2 resolution) + integration target
+  disposition (Q-G5-ζ G5.2 resolution); G5.3 SKIP-or-implement
+  determination
+- **G5.3** `[BEAM-CAPSULE-STALENESS-IMPL]` — conditional substantive
+  code if G5.2 proves implementation needed; OR formal SKIP record
+  per G1.4 + G3.7 + G4.3 canonical SKIP precedent
+- **G5.4** `[BEAM-CAPSULE-STALENESS-CLOSURE]` — docs-only closure
+  cascade; ADR-0045 Status Proposed → Accepted; Gap 5 row Status
+  IN FLIGHT → CLOSED; optional ADR-0035 §9 cluster decision; Sub-arc
+  2 closure decision
+
+**Founder LOCKS preservation:** Q-G5-α through Q-G5-μ LOCKED at
+`[BEAM-CAPSULE-STALENESS-G5-QLOCK]` register substantively per RULE
+20; G5.1 execution authorization at
+`[BEAM-CAPSULE-STALENESS-G5.1-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## Phase 3 Sub-Arc 2 Gap 4 -- Decay Execution Formalization IN FLIGHT 2026-05-18 at G4.1 -- ADR-0044 NEW Proposed; G4.2-G4.4 forward-substrate
 
 **Status: IN FLIGHT** at G4.1 `[BEAM-CAPSULE-DECAY-ADR]`.
