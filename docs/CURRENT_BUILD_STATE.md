@@ -306,6 +306,225 @@ ENTERPRISE always-hot per-DMW process pool + PERSONAL/AI_AGENT
 promote-on-activity tier promotion substrate + DEVICE cold-shard
 mapping with K=128-1024 consistent-hash shards.
 
+## Phase 3 Sub-Arc 2 Gap 6 -- AI_AGENT EntityType-Discriminated Capsule Routing IN FLIGHT 2026-05-19 at G6.1 -- ADR-0046 NEW Proposed; G6.2 + G6.4 forward-substrate; G6.3 DEFERRED
+
+**Status: IN FLIGHT** at G6.1 `[BEAM-CAPSULE-ROUTING-ADR]`.
+
+Phase 3 (Dynamic Memory Accuracy at Scale) Sub-arc 2 Gap 6 (AI_AGENT
+EntityType-Discriminated Capsule Routing) IN FLIGHT 2026-05-19 at
+G6.1 per Founder Q-G6-α α-1 LOCK + Q-G6-β β-1 LOCK + Q-G6-γ γ-1 LOCK
++ Q-G6-δ δ-1 LOCK + Q-G6-ε ε-2 LOCK + Q-G6-ζ ζ-1 LOCK + Q-G6-η η-2
+LOCK + Q-G6-θ θ-1 LOCK + Q-G6-ι ι-1 (refined) LOCK at
+`[BEAM-CAPSULE-ROUTING-G6-QLOCK]` register substantively. ADR-0046
+NEW (AI_AGENT EntityType-Discriminated Capsule Routing; Status
+Proposed 2026-05-19). G6.1 does NOT close Gap 6; G6.4 closure cascade
+flips ADR-0046 Status → Accepted at canonical-state register
+substantively. Sub-arc 2 remains IN FLIGHT throughout G6.1-G6.4.
+G6.3 substantive `resolveAiAgentWalletContext` helper canonical at
+**DEFERRED** forward-substrate disposition per Founder G6.3
+disposition LOCK (not in current closure path; may land later if
+separate Founder QLOCK explicitly authorizes AND G6.2 verification
+proves unresolved ambiguity at wallet-defaulting tier).
+
+#### G6.1 LANDED — ADR-0046 NEW Proposed; dual-context AI_AGENT routing canonicalized for production/government readiness (2026-05-19)
+
+**Status:** G6.1 `[BEAM-CAPSULE-ROUTING-ADR]` LANDED 2026-05-19
+docs-only ADR creation (4 MOD + 1 NEW) per Founder Q-G6-α α-1 LOCK +
+Q-G6-β β-1 LOCK + Q-G6-γ γ-1 LOCK + Q-G6-δ δ-1 LOCK + Q-G6-ε ε-2
+LOCK + Q-G6-ζ ζ-1 LOCK + Q-G6-η η-2 LOCK + Q-G6-θ θ-1 LOCK + Q-G6-ι
+ι-1 (refined) LOCK at `[BEAM-CAPSULE-ROUTING-G6-QLOCK]` +
+`[BEAM-CAPSULE-ROUTING-G6.1-EXECUTE-VERIFY-AUTH]` register
+substantively.
+
+**Canonical dual-context AI_AGENT routing model lands at canonical-
+prose register substantively per Founder dual-context correction at
+`[BEAM-CAPSULE-ROUTING-G6-FOUNDER-CORRECTION]` register
+substantively**:
+
+- **Personal AI Agent context**: EntityType = AI_AGENT; WalletType =
+  PERSONAL; EntityMembership(parent=PERSON owner, child=AI_AGENT);
+  `niov_can_access_contents = true`; used by humans outside
+  enterprise context and by digital twin flows per ADR-0001 design
+  intent; **LIVE production product flow** via
+  `apps/api/src/services/governance/twin.service.ts:189-191`
+  explicit `wallet_type: "PERSONAL"` override.
+- **Enterprise AI Agent context**: EntityType = AI_AGENT; WalletType
+  = ENTERPRISE; EntityMembership(parent=COMPANY / organization /
+  agency, child=AI_AGENT); `niov_can_access_contents = false`;
+  **forward-substrate product surface** for autonomous AI agents
+  owned by an enterprise / organization / agency; defensive
+  infrastructure live via `packages/database/src/queries/wallet.ts:
+  39-58` `defaultWalletTypeFor(AI_AGENT) = ENTERPRISE` RULE 0 safe
+  default; no current product code path creates Enterprise AI Agent
+  entities at HEAD `5fcdbde` register substantively.
+- **Defensive fallback**: `defaultWalletTypeFor(AI_AGENT) =
+  ENTERPRISE` canonical RULE 0 safe default for bare AI_AGENT
+  creates without explicit context; preserves RULE 0 by avoiding
+  accidental PERSONAL/human-authority assumptions for AI agent
+  entities created outside the canonical Personal AI Agent (twin)
+  onboarding flow.
+- **Canonical context-resolution signals**: explicit `wallet_type`
+  override in `CreateEntityInput` (twin path) + EntityMembership
+  parent/child relationship (parent=PERSON → Personal AI Agent;
+  parent=COMPANY → Enterprise AI Agent) + defensive fallback when
+  context is ambiguous.
+
+**Substrate sites (5 authorized files; 4 MOD; 1 NEW)**: NEW
+`docs/architecture/decisions/0046-ai-agent-entity-type-discriminated-capsule-routing.md`
+(canonical dual-context ADR with RULE 21 research arc embedded
+RS-G6-1 through RS-G6-4; 11-row enforcement surface inventory; 10-row
+adversarial threat model T1-T10; 8 RULE 13 substrate-honest drift
+surfaces for G6.2 cascade; 10 Q-G6 sub-decisions canonical; 4-phase
+Implementation Lineage with G6.3 DEFERRED) + MOD
+`docs/reference/section-12-progress.md` (NEW Gap 6 row IN FLIGHT
+with this G6.1 LANDED prose) + MOD this `docs/CURRENT_BUILD_STATE.md`
+(NEW Gap 6 H2 + this G6.1 LANDED H4) + MOD
+`docs/architecture/README.md` (NEW ADR-0046 catalog entry Status
+Proposed 2026-05-19) + MOD `CLAUDE.md` (NEW ADR-0046 catalog mirror
+entry Status Proposed 2026-05-19).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (Humans Always Sovereign; AI_AGENT routing cannot silently
+expand authority; AI entities have lower default permission ceilings
+than humans; AI cannot grant LONG_TERM/PERMANENT; AI cannot grant to
+AI; AI sovereignty cap on FULL scope; explicit human/entity recall
+and override preserved) + RULE 10 (no deletion semantics preserved
+for AI_AGENT operations) + RULE 11 (Prisma/Ecto cross-language
+ownership boundary preserved; BEAM observer-only at G6.1) + RULE 12
+(pre-flight grep substrate-state ground truth verified at HEAD
+`5fcdbde` register substantively; all anchor citations grep-confirmed
+pre-authorization) + RULE 13 (8 substrate-honest drift surfaces
+enumerated inline for G6.2 cascade per RULE 14 bidirectional citation
+discipline) + RULE 20 (Founder authorization required and granted) +
+RULE 21 (current-source research arc embedded RS-G6-1 through
+RS-G6-4; 4 streams; 20+ documented public sources retrieved
+2026-05-19).
+
+**RULE 21 research arc embedded at ADR-0046 §Context register
+substantively** (4 streams retrieved 2026-05-19):
+
+- **RS-G6-1 agent identity vs storage/account separation** (Mem0 +
+  Aembit + ResilientCyber + GitGuardian + Built In; 2026 industry
+  direction: Microsoft Entra Agent ID + Okta AI Agents in Universal
+  Directory + Google Vertex AI Agent Identity model AI agents as
+  first-class identity principals distinct from service accounts
+  and human users; multi-scope memory tagging emerging best
+  practice).
+- **RS-G6-2 confused-deputy in agentic systems** (Cloud Security
+  Alliance + HashiCorp + Quarkslab + BeyondTrust + Safeguard.sh;
+  classical confused-deputy access-control vulnerability re-emerged
+  as high-severity 2026 threat pattern in AI agent deployments;
+  MCP server design + memory-as-trusted-context features +
+  multi-agent input chains are canonical attack surfaces; NIOV's
+  `isRestrictedAiClass` + `ai_capped` + `ai_access_blocked` +
+  `requires_validation` + AI-cannot-grant-to-AI + AI-cannot-raise-AI
+  + AI-FULL-scope-silent-cap substantively implement canonical
+  mitigations).
+- **RS-G6-3 enterprise/government auditability** (Atlan + IBL +
+  BigID + MarkTechPost + AGAT Software; federal/SOC 2 compliance
+  demand every AI agent interaction logged + attributed + exportable
+  for FOIA/IG investigations; column-level lineage for provenance;
+  active metadata for freshness signals; decision traces for audit
+  trails; chain-of-custody logging at autonomous-operation register).
+- **RS-G6-4 NIST AI Agent Standards Initiative + least-privilege
+  capability tokens** (Build MVP Fast + WorkOS + Security Boulevard
+  + Biometric Update + CSA; February 2026 NIST Center for AI
+  Standards and Innovation launched the AI Agent Standards
+  Initiative; federal direction: zero-trust principles for agent
+  authorization + least-privilege task-scoped capability tokens +
+  short-lived expiring tokens + task-scoped permissions + action-
+  level approvals + chain-of-custody logging; SP 800-53 control
+  overlays in development).
+
+**11-row enforcement surface inventory canonical at ADR-0046 §B**:
+defaultWalletTypeFor RULE 0 defensive fallback (wallet.ts:39-58) +
+AI_AGENT clearance_ceiling 2 (tar.ts:105) + sovereignty cap on
+raising AI ceiling (tar.ts:376-395) + AI cannot grant to AI
+(permission.ts:106-110) + AI grantors default SESSION_ONLY
+(permission.ts:122) + isRestrictedAiClass (negotiate.service.ts:
+142-143) + AI sovereignty cap on FULL scope (negotiate.service.ts:
+577-585) + ai_capped audit metadata (negotiate.service.ts:625-630) +
+similarity SQL filters (similarity.service.ts:305-307) + embedding
+provider denial (embedding.service.ts:19) + twin EntityMembership
+fusion (twin.service.ts:182-220).
+
+**10-row adversarial threat model canonical at ADR-0046 §Threat
+Model** (T1-T10; net verdict: no code-tier vulnerability at HEAD
+`5fcdbde`; T1+T2+T4+T5+T7 are documentation-canonicalization gaps
+ADR-0046 closes; T3+T6+T8+T9+T10 substantively defended at
+canonical-execution register substantively).
+
+**8 RULE 13 substrate-honest drift surfaces canonical at ADR-0046 §C
+for G6.2 doc-and-test cascade**:
+
+- ADR-0001 L46+L90 Personal DMW claim for digital twins (preserve +
+  narrow to Personal AI Agent context at G6.2 Amendment 1)
+- glossary "Digital Twin Wallet" entry (preserve + narrow at G6.2;
+  add NEW "Personal AI Agent" + "Enterprise AI Agent" entries)
+- ADR-0039 L106-108 + L250-253 + Sub-decision 8 Amendment 1
+  (dual-context routing path documentation gap; Amendment 2 at G6.2)
+- ADR-0041 §Sub-decision 6 hard-mapping prose (replace with dual-
+  context model at G6.2 amendment)
+- `apps/cosmp_router/lib/cosmp_router/wallet_lookup.ex` moduledoc
+  (dual-context correction at G6.2)
+- `apps/cosmp_router/lib/cosmp_router/schemas/wallet.ex` moduledoc
+  (dual-context correction at G6.2)
+- `apps/cosmp_router/lib/cosmp_router/activity_counter.ex` L57
+  comment (dual-context correction at G6.2)
+- `apps/cosmp_router/lib/cosmp_router/grpc/server.ex:266` "Forward-
+  substrate to AI_AGENT branch" comment (closure at G6.2)
+
+**Substrate-state ground truth at G6.1 PRE-FLIGHT register
+substantively**: AI_AGENT entity creation in current product flows =
+`twin.service.ts:182-220` via `dandelion.service.ts:396` (explicit
+`wallet_type: "PERSONAL"` override at twin.service.ts:189-191 +
+EntityMembership(parent=PERSON owner, child=AI_AGENT twin) at twin.
+service.ts STEP 3); no current product code path creates Enterprise
+AI Agent entities; `defaultWalletTypeFor(AI_AGENT) = ENTERPRISE` is
+defensive infrastructure for forward-substrate product surface;
+`niov_can_access_contents = false` for ENTERPRISE wallets canonical
+at `wallet.ts:68-70` register substantively per RULE 0; tests/unit/
+wallet.test.ts:73-77 anchors bare-default behavior; tests/unit/
+wallet.test.ts:322-block anchors explicit override behavior.
+
+**Forbidden / preserved boundaries enumerated at G6.1**: no apps/**
+code changes; no packages/** changes; no tests/** changes; no
+scripts/** changes; no schema.prisma changes; no Elixir code/
+docstring changes (G6.2 owns); no ADR-0001 modification (G6.2 owns);
+no ADR-0039 modification (G6.2 owns); no ADR-0041 modification (G6.2
+owns); no glossary modification (G6.2 owns); no grpc/server.ex
+modification (G6.2 owns); no audit.ts changes; no new audit literals
+at G6.1 per Q-G6-ζ ζ-1 LOCK; no SimilarityService modification
+(G3.9 J5-J8 privacy proofs preserved per Q-G6-ι inheritance); no
+production-affecting actions; no real OpenAI calls; no Supabase
+mutation; no Elixir vector access; no secret exposure. **Sub-arc 2
+remains IN FLIGHT** per Q-G6-θ θ-1 LOCK + ADR-0041 CL.1 scope patch.
+
+**G6.2 doc-and-test cascade forward-substrate next**: ADR-0001
+Amendment 1 (preserve + narrow Personal DMW claim to Personal AI
+Agent context; add Enterprise AI Agent context companion); ADR-0039
+Amendment 2 (dual-context routing path documentation); ADR-0041
+§Sub-decision 6 amendment (replace hard-mapping prose with dual-
+context model); glossary "Digital Twin Wallet" preserved + narrowed
++ NEW "Personal AI Agent" + "Enterprise AI Agent" entries; 3 Elixir
+module docstring corrections (wallet_lookup.ex + schemas/wallet.ex +
+activity_counter.ex); grpc/server.ex:266 forward-substrate comment
+closure; CLAUDE.md ADR-0001/0039/0041 catalog updates; NEW TS unit
+tests per Q-G6-η η-2 LOCK proving dual-context behavior. G6.3
+substantive `resolveAiAgentWalletContext` helper canonical at
+**DEFERRED** forward-substrate disposition per Founder G6.3
+disposition LOCK (not in current closure path). G6.4 closure cascade
+forward-substrate after G6.2: ADR-0046 Status `Proposed 2026-05-19`
+→ `Accepted 2026-05-XX` + Gap 6 row Status flip IN FLIGHT → CLOSED
++ README + CLAUDE.md ADR-0046 catalog refresh + Sub-arc 2 preserved
+IN FLIGHT pending later Sub-arc 2 closure cascade per ADR-0041 CL.1
+scope patch.
+
+Founder authorization explicit per RULE 20 at
+`[BEAM-CAPSULE-ROUTING-G6-QLOCK]` + `[BEAM-CAPSULE-ROUTING-G6.1-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## Phase 3 Sub-Arc 2 Gap 5 -- Capsule-Level Staleness Detection IN FLIGHT 2026-05-18 at G5.1 -- ADR-0045 NEW Proposed; G5.2-G5.4 forward-substrate
 
 **Status: IN FLIGHT** at G5.1 `[BEAM-CAPSULE-STALENESS-ADR]`.
