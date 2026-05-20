@@ -17,6 +17,117 @@ register substantively when substrate justifies. Prior `**Last
 updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH] post-Track A
 + RAA 12.8 canonicalization).
 
+## Phase 3 Sub-Arc 3 — Foundation/COSMP Personalization-Orchestration Substrate IN FLIGHT 2026-05-19 at PERS.1 -- ADR-0048 NEW Proposed; PERS.2-PERS.6 forward-substrate
+
+**Status: IN FLIGHT** at PERS.1 `[COSMP-PERSONALIZATION-ADR]`.
+
+Phase 3 Sub-Arc 3 (Foundation/COSMP Personalization-Orchestration
+Substrate) IN FLIGHT 2026-05-19 at PERS.1 per Founder Q-PERS-α α-1
+LOCK at `[COSMP-PERSONALIZATION-ORCHESTRATION-QLOCK]` register
+substantively. ADR-0048 NEW (Foundation/COSMP Personalization-
+Orchestration Substrate; Status Proposed 2026-05-19). PERS.1 does
+NOT close Sub-Arc 3; PERS.6 closure cascade flips ADR-0048 Status →
+Accepted at canonical-state register substantively. Sub-arc 2
+remains CLOSED. Phase 3 global status NOT flipped (Phase 3 closure
+requires separate explicit Founder QLOCK).
+
+#### PERS.1 LANDED — ADR-0048 NEW Proposed; governed personalization-orchestration substrate canonicalized (2026-05-19)
+
+**Status:** PERS.1 `[COSMP-PERSONALIZATION-ADR]` LANDED 2026-05-19
+docs-only ADR creation (4 MOD + 1 NEW) per Founder Q-PERS-α α-1
+LOCK + Q-PERS-β β-1 + Q-PERS-γ γ-1 + Q-PERS-δ δ-3 + Q-PERS-ε ε-1 +
+Q-PERS-ζ ζ-1 + Q-PERS-η η-1 + Q-PERS-θ θ-2 + Q-PERS-ι ι-1 +
+Q-PERS-κ κ-1 + Q-PERS-λ λ-1 LOCKS at
+`[COSMP-PERSONALIZATION-ORCHESTRATION-QLOCK]` +
+`[COSMP-PERSONALIZATION-PERS.1-EXECUTE-VERIFY-AUTH]` register
+substantively.
+
+**ADR-0048 Proposed 2026-05-19.** Canonical Foundation/COSMP
+personalization-orchestration model lands at canonical-prose
+register substantively per Founder directive: the Foundation/COSMP
+constructs the governed working set BEFORE the LLM sees context; the
+LLM must never decide what memory it is allowed to see; apps compose
+UX; Otzar consumes the working set; agents reason over the working
+set; permissions/wallet-boundaries/clearance/audit/capsule-state
+remain Foundation-owned. Personalization is dynamic (changes by
+moment, location, role, task, permission state), permission-aware but
+not permission-fragile.
+
+**Substrate sites (5 authorized files; 4 MOD; 1 NEW)**: NEW
+`docs/architecture/decisions/0048-personalization-orchestration-substrate.md`
+(canonical ADR with RULE 21 Hawkseye research arc + 4-tier permission
+matrix + stable/dynamic/ephemeral personalization-capsule taxonomy +
+Foundation/API/Otzar/LLM boundary + hybrid buildPersonalizedWorkingSet
+API strategy + 5 proposed audit literals + TurboQuant future-research
+deferral + privacy-policy implications + 12-row adversarial threat
+model TP1-TP12 + 11 Q-PERS sub-decisions + 6-sub-phase Implementation
+Lineage) + MOD `docs/reference/section-12-progress.md` (NEW Sub-Arc 3
+row IN FLIGHT with PERS.1 LANDED prose) + MOD this
+`docs/CURRENT_BUILD_STATE.md` (NEW Sub-Arc 3 H2 + this PERS.1 LANDED
+H4) + MOD `docs/architecture/README.md` (NEW ADR-0048 catalog entry
+Status Proposed 2026-05-19) + MOD `CLAUDE.md` (NEW ADR-0048 catalog
+mirror entry Status Proposed 2026-05-19).
+
+**Substrate-state observations canonical at ADR-0048**: COE
+assembleContext (`coe.service.ts:172`) is the LIVE governed 7-step
+working-set constructor — the Founder's core principle (LLM does not
+decide what it sees) is already implemented; the personalization arc
+EXTENDS it. EntityProfile.timezone + name + job_title LIVE
+(preferred_name/pronouns/locale GREENFIELD); OrgSettings enterprise
+governance defaults LIVE; TwinConfig role+autonomy LIVE;
+Permission.conditions JSON consent-extensible; Otzar priming moment-
+aware time precedent; degraded-mode app-layer patterns exist (not
+Foundation-canonical); CapsuleType personalization taxonomy partially
+canonical. Missing GREENFIELD/PARTIAL: moment-context resolver +
+4-tier permission envelope + Foundation-tier degraded contract +
+cross-context scoped-authorization workflow + high-level
+buildPersonalizedWorkingSet API + personalization-signal recording
+with provenance.
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (personalization cannot silently expand authority, infer
+forbidden context, or cross personal/enterprise DMW boundaries) +
+RULE 10 (no deletion semantics) + RULE 11 (Prisma/Ecto boundary; BEAM
+locality reuse DMWWorker/WalletCache) + RULE 12 (pre-flight grep
+verified COE + EntityProfile + OrgSettings + TwinConfig + Permission +
+Otzar priming + CapsuleType at HEAD `03ebcd7`) + RULE 13 (missing
+substrate + permission gaps + API bottleneck + cross-context leakage
+risk surfaced inline) + RULE 20 (Founder authorization required and
+granted) + RULE 21 (Hawkseye research arc embedded; 15+ documented
+public sources retrieved 2026-05-19).
+
+**12-row adversarial threat model canonical at ADR-0048** (TP1-TP12;
+net verdict: no code-tier vulnerability in existing governed-retrieval
+substrate; HIGH-severity TP1 personal→enterprise leak + TP2
+enterprise→personal leak + TP3 permission-denied hallucinated context
+are about NEW moment-context + degraded + cross-context surfaces
+canonicalized PERS.2-PERS.6 before app/UI consumption).
+
+**Forbidden / preserved boundaries enumerated at PERS.1**: no apps/**
+/ packages/** / tests/** / scripts/** / schema.prisma / Elixir /
+audit.ts / new audit literals / glossary / existing-ADR modifications
+(besides ADR-0048 catalog refs); no production-affecting actions; no
+database mutations; no real OpenAI calls; no Supabase mutation; no
+secret exposure. **Sub-arc 2 remains CLOSED. Phase 3 global status
+NOT flipped.**
+
+**PERS.2 permission-envelope + moment-context resolver forward-
+substrate next**: permission-envelope resolver + moment-context
+resolver (location/calendar/device permissioned; timezone reuse) +
+schema disposition for location/device/preferred_name/pronouns/locale
+(prefer conditions-JSON + capsule-based; schema delta only if Founder
+authorizes). PERS.3 buildPersonalizedWorkingSet API + PERS.4 degraded-
+mode contract + PERS.5 synthetic DMW simulation harness (10 scenarios)
++ PERS.6 closure cascade forward-substrate. **No implementation yet** —
+PERS.1 is docs-only.
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-PERSONALIZATION-ORCHESTRATION-SUBSTRATE-HAWKSEYE]` +
+`[COSMP-PERSONALIZATION-ORCHESTRATION-QLOCK]` +
+`[COSMP-PERSONALIZATION-PERS.1-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
