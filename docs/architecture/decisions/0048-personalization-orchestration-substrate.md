@@ -2,7 +2,15 @@
 
 ## Status
 
-Proposed 2026-05-19
+Accepted 2026-05-20
+
+ADR-0048 closure cascade LANDED at PERS.6 `[COSMP-PERSONALIZATION-CLOSURE]`
+per Founder Q-PERS.6-α α-1 + β-1 + γ-1 + δ-1 + ε-1 + ζ-1 + η-1 + θ-2 LOCKS
+at `[COSMP-PERSONALIZATION-CLOSURE-EXECUTE-VERIFY-AUTH]`. Phase 3 Sub-Arc 3
+(Foundation/COSMP Personalization-Orchestration Substrate) is CLOSED
+2026-05-20. Phase 3 global status is NOT flipped — all Phase 3 sub-arcs are
+now CLOSED (the global-closure prerequisite is met), but Phase 3 global
+closure requires a separate explicit Founder QLOCK.
 
 ## Context
 
@@ -623,20 +631,38 @@ RULE 20 at:
 - `[COSMP-PERSONALIZATION-ORCHESTRATION-QLOCK]`
 - `[COSMP-PERSONALIZATION-PERS.1-EXECUTE-VERIFY-AUTH]`
 
-## Implementation Lineage (forward-substrate PERS.1-PERS.6)
+Founder authorization explicit at PERS.6 closure cascade (Status flip
+Proposed → Accepted; this ADR edit + the CLAUDE.md §5 catalog status-sync
+authorized per RULE 20) at:
 
-| Sub-phase | Tag | Authorized scope | Status |
-|-----------|-----|------------------|--------|
-| PERS.1 | `[COSMP-PERSONALIZATION-ADR]` | 4 MOD + 1 NEW docs-only; ADR-0048 NEW Proposed; canonical personalization-orchestration model; RULE 21 Hawkseye research arc; 4-tier permission matrix; stable/dynamic/ephemeral taxonomy; Foundation/API/Otzar/LLM boundary; hybrid API strategy; audit-literal proposals; TurboQuant deferral; privacy-policy implications; 12-row threat model; 11 Q-PERS sub-decisions | this commit |
-| PERS.2 | `[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT]` | Permission-envelope resolver + moment-context resolver; schema disposition for location/device/preferred_name/pronouns/locale (prefer conditions-JSON + capsule-based; schema delta only if Founder authorizes) | forward-substrate |
-| PERS.3 | `[COSMP-BUILD-WORKING-SET-API]` | `buildPersonalizedWorkingSet` high-level orchestrator + COSMP primitives; extends COE assembleContext signature with moment_context; caching | forward-substrate |
-| PERS.4 | `[COSMP-DEGRADED-MODE-CONTRACT]` | Foundation-tier degraded/uncertainty disclosure contract; partial/denied-permission handling; no-hallucination + no-cross-context-inference guarantees | forward-substrate |
-| PERS.5 | `[COSMP-SYNTHETIC-DMW-SIMULATION]` | Integration-test harness: 10 adversarial scenarios + 11 metrics; personal/enterprise/twin/regulator fixtures | forward-substrate |
-| PERS.6 | `[COSMP-PERSONALIZATION-CLOSURE]` | Audit literals + closure cascade; ADR-0048 Status Proposed → Accepted | forward-substrate |
+- `[COSMP-PERSONALIZATION-CLOSURE-HAWKSEYE-QLOCK]`
+- `[COSMP-PERSONALIZATION-CLOSURE-EXECUTE-VERIFY-AUTH]`
 
-Status flips from `Proposed 2026-05-19` to `Accepted 2026-05-XX` at
-PERS.6 closure cascade canonical at canonical-state register
-substantively. Phase 3 Sub-Arc 3 remains IN FLIGHT throughout
-PERS.1-PERS.6. Sub-arc 2 + all per-gap ADRs preserved Accepted/CLOSED.
-Phase 3 global status preserved (not flipped) pending separate
-explicit Founder QLOCK.
+## Post-Closure Implementation Lineage
+
+Reconciled to landed reality per RULE 13 (the pre-closure table's
+"authorized scope" column was aspirational; several items diverged from
+what shipped — notably PERS.3 wraps `assembleContext` rather than
+extending its signature, and PERS.5 became a 3-sub-phase mini-arc).
+
+| Sub-phase | Tag | Landed scope | Commit |
+|-----------|-----|--------------|--------|
+| PERS.1 | `[COSMP-PERSONALIZATION-ADR]` | docs-only ADR-0048 NEW Proposed; canonical personalization-orchestration model; RULE 21 Hawkseye research arc; 4-tier permission matrix; stable/dynamic/ephemeral taxonomy; Foundation/API/Otzar/LLM boundary; hybrid API strategy; audit-literal proposals; TurboQuant deferral; privacy-policy implications; 12-row threat model; 11 Q-PERS sub-decisions | `ce3a6a5` |
+| PERS.2 | `[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT]` | NEW `temporal-personalization.ts` (5 temporal classes) + `permission-envelope.service.ts` (`resolvePermissionEnvelope`, 4-tier) + `moment-context.service.ts` (`resolveMomentContext`, injected `now`); no schema delta (caller-supplied / conditions-JSON); no new audit literals | `2fe7bfb` |
+| PERS.3 | `[COSMP-BUILD-WORKING-SET-API]` | NEW `working-set.service.ts` — `WorkingSetService.buildPersonalizedWorkingSet` **wraps** COE `assembleContext` (no signature change; via the `ContextAssembler` seam); domain READ from established `wallet_type`; **no caching**; service-level only (no route) | `8c16c14` |
+| PERS.4 | `[COSMP-DEGRADED-MODE-CONTRACT]` | NEW `degraded-mode-contract.ts` (13-reason `DegradedReason` taxonomy + `DISCLOSURE_POLICY` + `CONSUMER_OBLIGATIONS` + `buildDegradedContract`); integrated into the working set; audience-tier doctrine; no new audit literals | `d0980ce` |
+| PERS.5a | `[COSMP-SYNTHETIC-DMW-VIEWS]` | NEW production `SessionContextResolver` (`createSessionContextResolver` + `prismaWalletContextLookup`) + `projectConsumerView`/`projectAdminView` (consumer/admin projection split) | `d28f20f` |
+| PERS.5b | `[COSMP-SYNTHETIC-DMW-SIMULATION]` | lifelike multi-DMW integration harness: **5 employees + 5 digital twins + 1 enterprise DMW + project source-of-truth**; accepted→SoT fixture convention; scoped-summary + SUMMARY-scope NEGOTIATE alignment; **single-wallet spine**; all 8 obligations proven across **S1–S10** scenarios | `27db2e2` |
+| PERS.5c | `[COSMP-SYNTHETIC-DMW-CLOSURE]` | docs-only closure of the PERS.5 mini-arc | `8ad41fe` |
+| PERS.6 | `[COSMP-PERSONALIZATION-CLOSURE]` | docs-only closure cascade; Status Proposed → Accepted; Sub-Arc 3 CLOSED; **audit literals deferred** (forward-substrate, not implemented); no ADR-0035 promotion; catalog status-sync | this commit |
+
+Status flipped from `Proposed 2026-05-19` to **`Accepted 2026-05-20`** at
+PERS.6 closure cascade canonical at canonical-state register substantively.
+Phase 3 Sub-Arc 3 is **CLOSED 2026-05-20**. Sub-arc 2 + all per-gap ADRs
+preserved Accepted/CLOSED. **Phase 3 global status is NOT flipped** — all
+Phase 3 sub-arcs are now CLOSED (the global-closure prerequisite is met), but
+Phase 3 global closure requires a separate explicit Founder QLOCK. The five
+proposed audit literals (`WORKING_SET_BUILT` + `CONTEXT_USED_MANIFEST_RECORDED`
++ `PERSONALIZATION_DEGRADED` + `CROSS_ENTITY_CONTEXT_REQUESTED` +
+`PERSONALIZATION_SIGNAL_RECORDED`) remain forward-substrate per §Audit-Literal
+Proposals (deferred to a clean-transition phase; not implemented at closure).

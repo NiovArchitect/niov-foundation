@@ -522,6 +522,51 @@ LANDED 2026-05-20 (2 tracker MOD) per Founder Q-PERS.5c-α α-1 + β-1 + γ-1 +
 Founder authorization explicit per RULE 20 at
 `[COSMP-SYNTHETIC-DMW-CLOSURE-QLOCK-EXECUTE-VERIFY-AUTH]`.
 
+#### PERS.6 CLOSED — ADR-0048 Accepted; Phase 3 Sub-Arc 3 CLOSED; Phase 3 global closure deferred (2026-05-20)
+
+**Status:** PERS.6 `[COSMP-PERSONALIZATION-CLOSURE]` final closure cascade
+LANDED 2026-05-20 (docs-only; 5 MOD) per Founder Q-PERS.6-α α-1 + β-1 + γ-1 +
+δ-1 + ε-1 + ζ-1 + η-1 + θ-2 LOCKS at
+`[COSMP-PERSONALIZATION-CLOSURE-HAWKSEYE-QLOCK]` +
+`[COSMP-PERSONALIZATION-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
+- **PERS.6 docs-only closure.** Final closure cascade for ADR-0048 + Phase 3
+  Sub-Arc 3 (the Personalization-Orchestration Substrate).
+- **ADR-0048 Status flipped Proposed 2026-05-19 → Accepted 2026-05-20** (RULE
+  20 Founder authorization explicit at this closure; ADR-0048 §Status +
+  §Post-Closure Implementation Lineage + §Founder Authorization PERS.6
+  addendum updated).
+- **Phase 3 Sub-Arc 3 CLOSED.**
+- **PERS mini-arc lineage:** PERS.1 `ce3a6a5` + PERS.2 `2fe7bfb` + PERS.3
+  `8c16c14` + PERS.4 `d0980ce` + PERS.5a `d28f20f` + PERS.5b `27db2e2` +
+  PERS.5c `8ad41fe` + PERS.6 this commit.
+- **Sub-arc 2 CLOSED preserved.**
+- **All Phase 3 sub-arcs are now CLOSED** (Sub-Arc 1 a/b/c/d + Sub-Arc 2 +
+  Gaps 4/5/6 + Sub-Arc 3).
+- **Phase 3 global status NOT flipped** per Q-PERS.6-δ δ-1 — the global-closure
+  prerequisite is met, but Phase 3 global closure requires a **separate
+  explicit Founder QLOCK**.
+- **Audit literals deferred forward-substrate** (the 5 proposed literals are
+  not implemented at closure; per Q-PERS.6-ε ε-1).
+- **No ADR-0035 promotion** per Q-PERS.6-ζ ζ-1.
+- **Single-wallet spine preserved; `coe.service.ts` untouched.**
+- **No schema / audit / Elixir / route / server / provider changes.**
+- **No production-affecting action.**
+
+**Substrate sites (5 MOD docs-only)**: MOD
+`docs/architecture/decisions/0048-personalization-orchestration-substrate.md`
+(Status flip + Post-Closure Implementation Lineage reconciliation per RULE 13
++ Founder Authorization PERS.6 addendum + Sub-Arc 3 CLOSED note) + MOD
+`docs/reference/section-12-progress.md` (Sub-Arc 3 row IN FLIGHT → CLOSED +
+closure prose) + MOD this `CURRENT_BUILD_STATE.md` (this PERS.6 CLOSED H4) +
+MOD `docs/architecture/README.md` (ADR-0048 catalog status-sync) + MOD
+`CLAUDE.md` (ADR-0048 §5 catalog status-sync only; RULE 20 Founder-authorized;
+no RULE touched).
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-PERSONALIZATION-CLOSURE-HAWKSEYE-QLOCK]` +
+`[COSMP-PERSONALIZATION-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
