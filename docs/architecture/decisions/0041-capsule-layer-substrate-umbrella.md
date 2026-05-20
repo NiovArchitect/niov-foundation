@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed 2026-05-17
+Accepted 2026-05-19
 
 Author: niovarchitect (NIOV Labs Founder; patent-holder per US 12,517,919 + US 12,164,537 + US 12,399,904)
 
@@ -789,14 +789,166 @@ state register substantively).
   arXiv:1406.2294 + Elixir Bitwise hexdocs + pgvector + OpenAI text-
   embedding-3 + Mem0 + Atlan freshness sources
 
-- Cited by: ADR-0042 + ADR-0043 + ADR-0044 + ADR-0045 (+ optional
-  ADR-0046) per-gap forward-substrate ADRs canonical at canonical-
-  prose register substantively per Sub-decision 1 + Sub-decision 7
-  4-gap decomposition register substantively. section-12-progress.md
-  sub-arc 2 row IN FLIGHT canonical at canonical-state register
-  substantively at this commit register substantively; sub-arc 2 row
-  CLOSED at Sub-arc 2 closure cascade register substantively.
-  CURRENT_BUILD_STATE.md sub-arc 2 H2 section canonical at canonical-
-  state register substantively at this commit register substantively;
-  H2 section updated to CLOSED at Sub-arc 2 closure cascade register
-  substantively.
+- Cited by: ADR-0042 + ADR-0043 + ADR-0044 + ADR-0045 + ADR-0046
+  per-gap forward-substrate ADRs canonical at canonical-prose
+  register substantively per Sub-decision 1 + Sub-decision 7 4-gap
+  decomposition register substantively + ADR-0047 (Post-Gap-3
+  Production-Readiness Hardening companion mini-arc).
+  section-12-progress.md sub-arc 2 row IN FLIGHT canonical at
+  canonical-state register substantively at CL.1 register
+  substantively; **sub-arc 2 row CLOSED at this Sub-arc 2 closure
+  cascade commit register substantively (2026-05-19)**.
+  CURRENT_BUILD_STATE.md sub-arc 2 H2 section canonical at
+  canonical-state register substantively at CL.1 register
+  substantively; **H2 section updated to CLOSED at this Sub-arc 2
+  closure cascade commit register substantively (2026-05-19)**.
+
+## Sub-arc 2 Closure Cascade (2026-05-19)
+
+Sub-arc 2 `[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE]` docs-only closure
+cascade LANDED 2026-05-19 (5 MOD) per Founder Q-SA2-α α-1 LOCK +
+Q-SA2-β β-1 LOCK + Q-SA2-γ γ-1 LOCK + Q-SA2-δ δ-1 LOCK + Q-SA2-ε ε-1
+LOCK + Q-SA2-ζ ζ-1 LOCK + Q-SA2-η η-1 LOCK at
+`[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-QLOCK]` +
+`[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-EXECUTE-VERIFY-AUTH]`
+register substantively. **Phase 3 Sub-Arc 2 Capsule Layer Substrate
+Umbrella CLOSED at canonical-state register substantively.** ADR-0041
+Status flipped from `Proposed 2026-05-17` to **`Accepted 2026-05-19`**
+per Q-SA2-β β-1 LOCK. All 5 per-gap ADRs canonical at canonical-state
+register substantively as Accepted (ADR-0042 + ADR-0043 + ADR-0044 +
+ADR-0045 + ADR-0046) + ADR-0047 (Post-Gap-3 Production-Readiness
+Hardening companion mini-arc) Accepted.
+
+**Sub-arc 2 status field**: **CLOSED** at canonical-state register
+substantively at this commit register substantively.
+
+**Phase 3 status**: NOT flipped at this closure cascade per Q-SA2-ζ
+ζ-1 LOCK — Sub-arc 2 closure closes the Capsule Layer Substrate
+Umbrella only; Phase 3 global status preservation pending explicit
+Founder QLOCK + proof that no other Phase 3 sub-arcs remain open at
+canonical-state register substantively.
+
+**G6.3 disposition**: G6.3 `[BEAM-CAPSULE-ROUTING-CONTEXT-RESOLVER]`
+remains DEFERRED forward-substrate dormant per Founder G6.3
+disposition LOCK + Q-G6.4-η η-1 LOCK preservation. **Not a closure
+blocker** at Sub-arc 2 closure register substantively — G6.3 is
+optional substantive code (substantive `resolveAiAgentWalletContext`
+helper) that may land later only if a separate Founder QLOCK
+explicitly authorizes AND a real product flow surfaces unresolved
+ambiguity at the wallet-defaulting tier; current Gap 6 verification
+PASS substantively does not surface such ambiguity, and Sub-arc 2
+closes coherently with G6.3 DEFERRED.
+
+**ADR-0047 disposition**: ADR-0047 (Post-Gap-3 Production-Readiness
+Hardening Mini-Arc) is a companion hardening arc that landed between
+Gap 3 closure (G3.10 `08b10ef`) and Gap 4 start. Accepted at PR.4
+`e60122c`. Included in Sub-arc 2 closure lineage as a companion
+mini-arc per ADR-0041 §References + canonical Sub-arc 2 substrate
+register substantively.
+
+**Q-SA2 locks canonical**:
+
+- Q-SA2-α α-1 — close Sub-arc 2 / ADR-0041 now at canonical-state
+  register substantively.
+- Q-SA2-β β-1 — flip ADR-0041 Status `Proposed 2026-05-17` →
+  **`Accepted 2026-05-19`**.
+- Q-SA2-γ γ-1 — 5 MOD docs-only file scope (this ADR + section-12-
+  progress + CURRENT_BUILD_STATE + docs/architecture/README +
+  CLAUDE.md).
+- Q-SA2-δ δ-1 — **no ADR-0035 modification at Sub-arc 2 closure.**
+  G3.10 already promoted the major Gap 3 observations into ADR-0035
+  §9 cluster expansion 36 → 38 register substantively. G4.4 / G5.4 /
+  G6.4 followed minimum-touch closure precedent (no ADR-0035
+  modification). G6.2 drifts were resolved in-place by corrected
+  QLOCK at `[BEAM-CAPSULE-ROUTING-G6.2-QLOCK-CORRECTION]` and do not
+  require ADR-0035 promotion now. Any future recurrent substrate-
+  build discipline issues may be promoted by later Founder-authorized
+  ADR amendment.
+- Q-SA2-ε ε-1 — update README + CLAUDE.md ADR-0041 catalog entries
+  from `Proposed 2026-05-17` to **`Accepted 2026-05-19`** with tail
+  refresh covering complete per-gap closure list (ADR-0042 +
+  ADR-0043 + ADR-0044 + ADR-0045 + ADR-0046 + ADR-0047 hardening
+  companion + Sub-arc 2 closure summary).
+- Q-SA2-ζ ζ-1 — do not close Phase 3 global status. Sub-arc 2
+  closure cascade closes the Capsule Layer Substrate Umbrella
+  exclusively. Phase 3 closure requires separate explicit Founder
+  QLOCK + substrate-state proof that no other Phase 3 sub-arcs
+  remain open.
+- Q-SA2-η η-1 — next strategic arc is Foundation/COSMP
+  personalization-orchestration substrate Hawkseye (research +
+  Hawkseye phase before any implementation). Personalization /
+  orchestration substrate implementation + Phase 4 transition + any
+  code changes are explicitly forbidden at this Sub-arc 2 closure
+  cascade commit per Q-SA2-η η-1 LOCK.
+
+**Canonical closure precedents**: G3.10 (`08b10ef` `[BEAM-CAPSULE-
+EMBEDDING-CLOSURE]`; 6 MOD docs-only; ADR-0043 Status flipped;
+ADR-0035 §9 cluster expansion 36 → 38) + G4.4 (`a05040f`
+`[BEAM-CAPSULE-DECAY-CLOSURE]`; 5 MOD docs-only; ADR-0044 Status
+flipped; NO ADR-0035 modification) + G5.4 (`5fcdbde`
+`[BEAM-CAPSULE-STALENESS-CLOSURE]`; 5 MOD docs-only; ADR-0045 Status
+flipped; NO ADR-0035 modification) + G6.4 (`5b5b143`
+`[BEAM-CAPSULE-ROUTING-CLOSURE]`; 5 MOD docs-only; ADR-0046 Status
+flipped; NO ADR-0035 modification). **Sub-arc 2 closure cascade
+follows the G4.4 / G5.4 / G6.4 minimum-touch precedent at the
+umbrella tier**: 5 MOD docs-only + Status flip + Sub-arc 2 umbrella
+row flip + catalog mirrors + **NO ADR-0035 modification** per
+Q-SA2-δ δ-1 LOCK.
+
+**Forward-substrate after Sub-arc 2 closure**:
+
+- **Next strategic arc**: Foundation/COSMP personalization-
+  orchestration substrate Hawkseye per Q-SA2-η η-1 LOCK. Research +
+  Hawkseye phase first; substantive implementation requires
+  separate Founder authorization.
+- **Phase 3 global status**: preserved per Q-SA2-ζ ζ-1 LOCK. Phase 3
+  closure cascade (if applicable; substrate-state ground truth at
+  this commit register substantively shows Phase 3 Sub-Arc 1 +
+  Sub-Arc 2 both substantively closed at sub-arc level register
+  substantively) requires separate explicit Founder QLOCK.
+- **G6.3 helper**: remains DEFERRED dormant.
+- **Forward-substrate items reserved across Sub-arc 2 mini-arcs**
+  (e.g., ADR-0044 dormant TTL enforcement + DecayType enum semantic
+  forward-substrate; ADR-0045 dormant filtering / ranking /
+  lifecycle / audit-literal expansion forward-substrate; ADR-0046
+  G6.3 helper forward-substrate; ADR-0042 §Q-γ.1 clean-transition
+  discipline for future audit literal expansion path; etc.):
+  remain dormant unless future Founder-authorized ADR amendments
+  land them.
+
+Founder authorization explicit at Sub-arc 2 closure cascade landing
+per RULE 20 at:
+
+- `[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-QLOCK]`
+- `[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-EXECUTE-VERIFY-AUTH]`
+
+## Post-Closure Implementation Lineage
+
+Post-Closure Implementation Lineage canonical at canonical-execution
+register substantively per ADR-0020 two-register IP discipline:
+
+| Sub-phase | Commit | Tag | Substantive landing |
+|-----------|--------|-----|---------------------|
+| CL.1 | (initial) | `[BEAM-CAPSULE-LAYER-ADR]` | ADR-0041 NEW Proposed; umbrella architecture canonical; 9 sub-decisions all locked at α-default per Founder Q-A through Q-L LOCKS at `[BEAM-CAPSULE-LAYER-QLOCK]` + Founder RULE 0 continuity patch + Founder CL.1 scope patch; 5-gap forward-substrate strategy (ADR-0042 Gap 1 + ADR-0043 Gap 3 + ADR-0044 Gap 4 + ADR-0045 Gap 5 + optional ADR-0046 Gap 6); CL.0 RULE 21 research arc embedded (5 parallel WebSearches + 14 documented sources) |
+| Gap 1 | G1.6 closure | `[BEAM-CAPSULE-MUTATION-DISCRIMINATION-CLOSURE]` | ADR-0042 Accepted; capsule mutation discrimination canonical (ADD / UPDATE / MERGE / NOOP); G1 mini-arc 6-commit lineage |
+| Gap 3 | G3.10 `08b10ef` | `[BEAM-CAPSULE-EMBEDDING-CLOSURE]` | ADR-0043 Accepted; pgvector embedding substrate canonical (text-embedding-3-small @ 1536 dims; HNSW + cosine); G3 mini-arc 10-commit lineage; ADR-0035 §9 cluster expansion 36 → 38 (D-VITEST-NPX-CONFIG-DEFAULT-LOADS-PRODUCTION-SUPABASE 37th + D-LOCAL-DEV-ENV-CROSS-LANGUAGE-OWNERSHIP-DRIFT 38th) |
+| Post-Gap-3 hardening | PR.4 `e60122c` | `[PR-HARDENING-RUNBOOK-CLOSURE]` | ADR-0047 Accepted; Post-Gap-3 Production-Readiness Hardening Mini-Arc; companion arc landed between Gap 3 and Gap 4; ADR-0035 §9 RULE 14 back-citation footers at 37th + 38th observations |
+| Gap 4 | G4.4 `a05040f` | `[BEAM-CAPSULE-DECAY-CLOSURE]` | ADR-0044 Accepted; decay execution formalization canonical (lazy-at-read; FOUNDATIONAL bypass; soft-delete-only); G4 mini-arc 4-commit lineage with G4.3 SKIP record |
+| Gap 5 | G5.4 `5fcdbde` | `[BEAM-CAPSULE-STALENESS-CLOSURE]` | ADR-0045 Accepted; capsule-level staleness detection canonical (4-dimension model; minimum-viable embedding lag at G5.3); G5 mini-arc 4-commit lineage |
+| Gap 6 | G6.4 `5b5b143` | `[BEAM-CAPSULE-ROUTING-CLOSURE]` | ADR-0046 Accepted; AI_AGENT EntityType-Discriminated Capsule Routing canonical (dual-context: Personal AI Agent + Enterprise AI Agent + defensive fallback); G6 mini-arc 3 substantive commits (G6.1 + G6.2 + G6.4) with G6.3 DEFERRED forward-substrate |
+| Sub-arc 2 closure | this commit | `[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE]` | Docs-only closure cascade; 5 MOD; ADR-0041 Status Proposed → Accepted; Sub-arc 2 umbrella row Status IN FLIGHT → CLOSED; README + CLAUDE.md ADR-0041 catalogs flipped; NO ADR-0035 modification per Q-SA2-δ δ-1 LOCK; Phase 3 status preserved per Q-SA2-ζ ζ-1 LOCK; next strategic arc Foundation/COSMP personalization-orchestration substrate Hawkseye per Q-SA2-η η-1 LOCK |
+
+**ADR-0041 forward-substrate after closure**: dual-context AI_AGENT
+routing model + capsule mutation discrimination + pgvector embedding
+substrate + decay execution formalization + capsule-level staleness
+detection all canonical at canonical-execution register substantively
+across the 5 per-gap ADRs + companion hardening at ADR-0047. The
+Capsule Layer Substrate Umbrella is closed at canonical-state
+register substantively; any future Capsule Layer extensions require
+separate Founder-authorized ADR (new ADR or amendments to existing
+per-gap ADRs). Phase 3 global status preserved IN FLIGHT (per
+Q-SA2-ζ ζ-1 LOCK) pending separate explicit Founder QLOCK + proof
+that no other Phase 3 sub-arcs remain open. Next strategic arc per
+Q-SA2-η η-1 LOCK is Foundation/COSMP personalization-orchestration
+substrate Hawkseye (research + Hawkseye phase first; substantive
+implementation requires separate Founder authorization).

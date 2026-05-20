@@ -753,6 +753,150 @@ Founder authorization explicit per RULE 20 at
 `[BEAM-CAPSULE-ROUTING-G6.4-QLOCK]` +
 `[BEAM-CAPSULE-ROUTING-G6.4-EXECUTE-VERIFY-AUTH]`.
 
+### Sub-arc 2 CLOSED — Capsule Layer Substrate Umbrella closure cascade (ADR-0041 Accepted 2026-05-19)
+
+**Status:** Sub-arc 2 `[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE]`
+docs-only closure cascade LANDED 2026-05-19 (5 MOD) per Founder
+Q-SA2-α α-1 LOCK + Q-SA2-β β-1 LOCK + Q-SA2-γ γ-1 LOCK + Q-SA2-δ δ-1
+LOCK + Q-SA2-ε ε-1 LOCK + Q-SA2-ζ ζ-1 LOCK + Q-SA2-η η-1 LOCK at
+`[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-QLOCK]` +
+`[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-EXECUTE-VERIFY-AUTH]`
+register substantively.
+
+**Phase 3 Sub-Arc 2 Capsule Layer Substrate Umbrella CLOSED at
+canonical-state register substantively.** ADR-0041 Status flipped
+from `Proposed 2026-05-17` to **`Accepted 2026-05-19`** per Q-SA2-β
+β-1 LOCK. Sub-arc 2 umbrella row Status flipped IN FLIGHT → CLOSED
+per Q-SA2-α α-1 LOCK at section-12-progress register substantively.
+
+**All Sub-arc 2 per-gap ADRs canonical at canonical-state register
+substantively as Accepted**:
+
+- **ADR-0042** (Gap 1 Mutation Discrimination) — Accepted at G1.6
+  closure (capsule mutation discrimination canonical: ADD / UPDATE
+  / MERGE / NOOP).
+- **ADR-0043** (Gap 3 pgvector Embedding) — Accepted 2026-05-18 at
+  G3.10 `08b10ef` closure (pgvector substrate canonical: text-
+  embedding-3-small @ 1536 dims; HNSW + cosine).
+- **ADR-0044** (Gap 4 Decay Execution Formalization) — Accepted
+  2026-05-18 at G4.4 `a05040f` closure (lazy-at-read; FOUNDATIONAL
+  bypass; soft-delete-only).
+- **ADR-0045** (Gap 5 Capsule-Level Staleness Detection) — Accepted
+  2026-05-18 at G5.4 `5fcdbde` closure (4-dimension model; minimum-
+  viable embedding lag at G5.3).
+- **ADR-0046** (Gap 6 AI_AGENT EntityType-Discriminated Capsule
+  Routing) — Accepted 2026-05-19 at G6.4 `5b5b143` closure (dual-
+  context routing: Personal AI Agent + Enterprise AI Agent +
+  defensive fallback).
+
+**Companion hardening arc**: **ADR-0047** (Post-Gap-3 Production-
+Readiness Hardening Mini-Arc) — Accepted 2026-05-18 at PR.4
+`e60122c` closure (vitest fail-closed; local refresh + parity
+verifier scripts; deployment runbook). Included in Sub-arc 2 closure
+lineage as companion mini-arc that landed between Gap 3 closure and
+Gap 4 start.
+
+**G6.3 disposition**: G6.3 `[BEAM-CAPSULE-ROUTING-CONTEXT-RESOLVER]`
+remains DEFERRED forward-substrate dormant per Founder G6.3
+disposition LOCK + Q-G6.4-η η-1 LOCK preservation. Not a Sub-arc 2
+closure blocker; current Gap 6 verification PASS substantively does
+not surface unresolved ambiguity at wallet-defaulting tier.
+
+**Substrate sites (5 authorized files; 5 MOD; 0 NEW)**: MOD
+`docs/architecture/decisions/0041-capsule-layer-substrate-umbrella.md`
+(Status flip + NEW H2 `## Sub-arc 2 Closure Cascade (2026-05-19)` +
+NEW H2 `## Post-Closure Implementation Lineage` with 8-row table +
+Founder Authorization Sub-arc 2 closure citations) + MOD
+`docs/reference/section-12-progress.md` (Sub-arc 2 umbrella row
+Status IN FLIGHT → CLOSED + commit lineage updated to `CL.1 → G1.6
+→ G3.10 → PR.4 → G4.4 → G5.4 → G6.4 → this commit` + Sub-arc 2
+closure prose appended) + MOD this `docs/CURRENT_BUILD_STATE.md`
+(this NEW H3) + MOD `docs/architecture/README.md` (ADR-0041 catalog
+Status flip Proposed → Accepted + tail refresh with complete per-
+gap closure list) + MOD `CLAUDE.md` (ADR-0041 catalog mirror Status
+flip Proposed → Accepted + parallel tail refresh).
+
+**Governing RULES at substrate-architectural register substantively**:
+RULE 0 (Humans Always Sovereign; capsule layer governance canonical
+at canonical-execution register substantively across all per-gap
+ADRs; AI_AGENT routing dual-context; staleness never deletes;
+soft-delete-only) + RULE 10 (no deletion semantics preserved across
+all per-gap ADRs) + RULE 11 (Prisma/Ecto cross-language ownership
+boundary preserved; no Elixir code changes at Sub-arc 2 closure) +
+RULE 12 (pre-flight grep substrate-state ground truth verified at
+HEAD `5b5b143` register substantively; all anchor citations grep-
+confirmed pre-authorization) + RULE 13 (Sub-arc 2 closure rationale
+surfaced clearly; ADR-0035 §9 promotion decision δ-1 surfaced with
+rationale: G3.10 already promoted Gap 3 observations 37th + 38th;
+G4.4 / G5.4 / G6.4 followed minimum-touch precedent; G6.2 drifts
+resolved in-place by corrected QLOCK; any future recurrent
+substrate-build discipline issues may be promoted by later Founder-
+authorized ADR amendment) + RULE 14 (bidirectional citation
+discipline canonical across all per-gap ADRs + ADR-0001 §Amendment
+1 + ADR-0039 §Amendment 2 + ADR-0041 §Sub-decision 6 amendment +
+ADR-0046 §G6.2 cascade section + glossary updates) + RULE 20
+(Founder authorization required and granted at Sub-arc 2 closure
+landing per `[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-QLOCK]` +
+`[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-EXECUTE-VERIFY-AUTH]`) + RULE
+21 (current-source research arcs preserved at all per-gap ADRs +
+ADR-0046 §Context register substantively; canonical research arc
+sources canonical at canonical-knowledge register substantively).
+
+**Canonical closure precedent**: G3.10 (`08b10ef`; 6 MOD docs-only;
+ADR-0043 Status flipped; ADR-0035 §9 cluster expansion 36 → 38) +
+G4.4 (`a05040f`; 5 MOD docs-only; ADR-0044 Status flipped; NO
+ADR-0035 modification — minimum-touch precedent Sub-arc 2 mirrors at
+umbrella tier) + G5.4 (`5fcdbde`; 5 MOD docs-only; ADR-0045 Status
+flipped; NO ADR-0035 modification) + G6.4 (`5b5b143`; 5 MOD docs-
+only; ADR-0046 Status flipped; NO ADR-0035 modification). Sub-arc 2
+closure mirrors G4.4 / G5.4 / G6.4 minimum-touch precedent at the
+umbrella tier.
+
+**Critical coherence preserved at Sub-arc 2 closure**: ADR-0042 +
+ADR-0043 + ADR-0044 + ADR-0045 + ADR-0046 + ADR-0047 untouched (5
+per-gap ADRs + hardening companion remain Accepted at their per-gap
+closure commits); ADR-0001 + ADR-0039 untouched (G6.2 owned
+amendments); ADR-0022 + ADR-0033 + ADR-0035 untouched at Sub-arc 2
+closure; no glossary modification (G6.2 owned); no Elixir code or
+docstring changes (G6.2 owned); no apps/** / tests/** / packages/**
+/ scripts/** / schema.prisma / CI workflow / package.json / lockfile
+/ vitest config / docker-compose / .husky / mix files / audit.ts /
+.env changes; no new audit literals; no read.service / COE /
+feedback.service / write.service / SimilarityService / permission /
+TAR / negotiate.service behavior changes; no Translator behavior
+changes; no G6.3 helper implementation per Q-SA2-η η-1 LOCK; no
+Foundation/COSMP personalization implementation per Q-SA2-η η-1
+LOCK; no Phase 4 start; no production-affecting actions; no real
+OpenAI calls; no Supabase mutation; no Elixir vector access; no
+secret exposure.
+
+**Phase 3 global status**: PRESERVED per Q-SA2-ζ ζ-1 LOCK. Sub-arc
+2 closure cascade closes the Capsule Layer Substrate Umbrella
+exclusively. Phase 3 closure requires separate explicit Founder
+QLOCK + substrate-state proof that no other Phase 3 sub-arcs remain
+open. Substrate-state ground truth at HEAD `5b5b143` register
+substantively shows Phase 3 Sub-Arc 1 (Hive Substrate;
+`[BEAM-DBGI-DEVICE-COLDSHARD-CLOSURE]` D.4 closed sub-arc 1) +
+Phase 3 Sub-Arc 2 (this Sub-arc 2 closure) both substantively closed
+at sub-arc level; any Phase 3 global closure remains forward-
+substrate pending Founder QLOCK.
+
+**Forward-substrate next strategic arc**: Foundation/COSMP
+personalization-orchestration substrate Hawkseye per Q-SA2-η η-1
+LOCK (research + Hawkseye phase first; substantive personalization /
+orchestration implementation requires separate Founder authorization
++ Hawkseye disposition). G6.3 `resolveAiAgentWalletContext` helper
+remains DEFERRED dormant. Forward-substrate items reserved across
+Sub-arc 2 mini-arcs (ADR-0044 dormant TTL enforcement + DecayType
+enum semantic; ADR-0045 dormant filtering / ranking / lifecycle /
+audit-literal expansion; ADR-0046 G6.3 helper; ADR-0042 §Q-γ.1
+clean-transition discipline; etc.) remain dormant unless future
+Founder-authorized ADR amendments land them.
+
+Founder authorization explicit per RULE 20 at
+`[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-QLOCK]` +
+`[BEAM-CAPSULE-LAYER-SUB-ARC-2-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## Phase 3 Sub-Arc 2 Gap 5 -- Capsule-Level Staleness Detection IN FLIGHT 2026-05-18 at G5.1 -- ADR-0045 NEW Proposed; G5.2-G5.4 forward-substrate
