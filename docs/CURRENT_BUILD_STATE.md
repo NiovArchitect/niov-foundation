@@ -126,6 +126,95 @@ Founder authorization explicit per RULE 20 at
 `[COSMP-PERSONALIZATION-ORCHESTRATION-QLOCK]` +
 `[COSMP-PERSONALIZATION-PERS.1-EXECUTE-VERIFY-AUTH]`.
 
+#### PERS.2 LANDED — permission-envelope + moment-context resolvers; temporal personalization model implemented (2026-05-19)
+
+**Status:** PERS.2 `[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT]`
+substantive service + test phase LANDED 2026-05-19 (5 NEW + 3 MOD;
+8 files) per Founder Q-PERS.2-α α-1 + Q-PERS.2-β β-1 + Q-PERS.2-γ γ-1
++ Q-PERS.2-δ δ-1 + Q-PERS.2-ε ε-1 + Q-PERS.2-ζ ζ-1 + Q-PERS.2-η η-1 +
+Q-PERS.2-θ θ-1 + Q-PERS.2-ι + Q-PERS.2-κ κ-1 LOCKS at
+`[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT-QLOCK]` +
+`[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT-EXECUTE-VERIFY-AUTH]`
+register substantively.
+
+- **PERS.2 substantive service/test phase LANDED.** First substantive
+  code phase of Sub-Arc 3 (PERS.1 was docs-only).
+- **ADR-0048 remains Proposed** (PERS.6 closure cascade is the Status-
+  flip commit).
+- **Sub-Arc 3 remains IN FLIGHT.**
+- **Sub-arc 2 remains CLOSED.**
+- **PERS.3 buildPersonalizedWorkingSet API next.**
+- **No schema changes** per Q-PERS.2-β β-1 LOCK (location/device/
+  preferred_name/pronouns/locale all caller-provided optional inputs
+  or deferred; zero schema delta — all required substrate already
+  exists: EntityProfile.timezone + OrgSettings + Permission.conditions
+  + Session + Entity/Wallet types).
+- **No audit literals** per Q-PERS.2-η η-1 LOCK (audit-intent metadata
+  only).
+- **No Elixir changes** per Q-PERS.2-θ θ-1 LOCK.
+- **No external provider calls** per Q-PERS.2-δ (resolvers are pure
+  deterministic TypeScript; injected `now`; no calendar/location/
+  weather/network/production-data access).
+
+**Substrate sites (8 authorized files; 5 NEW + 3 MOD)**: NEW
+`apps/api/src/services/personalization/temporal-personalization.ts`
+(Q-PERS.2-ε temporal personalization model — 5 classes REAL_TIME +
+REPEATED_PATTERN + STABLE_IDENTITY + CONTEXTUAL_PREFERENCE +
+SENSITIVE_ENRICHMENT; each defines freshness behavior + defaultTtlSeconds
++ defaultPermissionTier + conflictUpdatePosture + oneOffCanUpdateDurable
+Memory + uncertaintyDisclosureRequiredWhenAbsent; frozen TEMPORAL_POLICIES;
+consistent-yet-dynamic doctrine — real-time updates fast, repeated
+patterns stable unless repeated contrary change, stable identity no
+thrash from one-off, contextual preference context-scoped, sensitive
+enrichment scoped+permissioned) + NEW
+`apps/api/src/services/personalization/permission-envelope.service.ts`
+(Q-PERS.2-γ resolvePermissionEnvelope; 4-tier mapping required /
+accuracy_enhancing / optional_enrichment / denied_or_unavailable;
+personal/enterprise discrimination; OrgSettings dept_data_isolation
+enterprise defaults; Permission.conditions-style ScopedGrant
+authorization; cross_wallet_blocked + cross_context_blocked guards — no
+silent bridging; fail-closed unknown_context_key; machine-readable
+EnvelopeReason; audit-intent metadata only) + NEW
+`apps/api/src/services/personalization/moment-context.service.ts`
+(Q-PERS.2-δ + ζ resolveMomentContext; injected now; timezone precedence
+caller_input > entity_profile > session > SAFE_FALLBACK_TIMEZONE clearly
+marked fallback+uncertain; Intl local-time derivation; permissioned-
+optional location/calendar/device/active_app; current_task caller-
+context represented-not-persisted; per-field TTL/freshness; typed
+MomentDegradedReason; no hallucinated specificity; no external provider
+calls) + MOD `apps/api/src/index.ts` (barrel re-exports for the 3 NEW
+modules) + NEW `tests/unit/permission-envelope.test.ts` + NEW
+`tests/unit/moment-context.test.ts` + MOD this CURRENT_BUILD_STATE
+(this PERS.2 LANDED H4) + MOD section-12-progress (PERS.2 LANDED prose).
+
+**PERS.2 baseline deltas**: TS=12 baseline preserved (zero new TS
+errors); no-console 1/1 preserved; unit 566 → 566+N (N NEW
+personalization tests); integration 213+1 skipped preserved; mix
+compile clean; Elixir cosmp_router 223+1 skipped + dbgi_supervisor
+67/0/19 preserved.
+
+**Critical coherence preserved at PERS.2**: ADR-0048 Status preserved
+Proposed 2026-05-19; Sub-Arc 3 IN FLIGHT; Sub-arc 2 CLOSED; no
+schema.prisma; no package.json/lockfiles; no audit.ts + no new audit
+literals; no Elixir; no DB migrations; no real DB mutation; no
+buildPersonalizedWorkingSet endpoint (PERS.3 deferred); no synthetic
+DMW harness (PERS.5 deferred); no app/Otzar UX; no README/CLAUDE/
+glossary/existing-ADR changes (minimum-touch; catalogs refresh at
+PERS.6 closure); no production-affecting actions; no external provider
+integrations; no secret exposure.
+
+**PERS.3 buildPersonalizedWorkingSet API forward-substrate next**:
+high-level orchestrator composing COE assembleContext +
+resolveMomentContext + resolvePermissionEnvelope in one round trip +
+COSMP primitives + caching (DMWWorker/WalletCache/priming-TTL
+precedent). PERS.4 degraded-mode contract + PERS.5 synthetic DMW
+simulation harness (10 scenarios) + PERS.6 closure cascade forward-
+substrate.
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT-QLOCK]` +
+`[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15

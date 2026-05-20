@@ -466,3 +466,47 @@ export type {
   SimilarityDegraded,
   SimilarityFailure,
 } from "./services/cosmp/similarity.service.js";
+
+// ADR-0048 PERS.2 (Q-PERS.2-ε): temporal personalization model.
+export { TEMPORAL_POLICIES, getTemporalPolicy } from "./services/personalization/temporal-personalization.js";
+export type {
+  PermissionTier,
+  TemporalClass,
+  FreshnessBehavior,
+  ConflictUpdatePosture,
+  TemporalClassPolicy,
+} from "./services/personalization/temporal-personalization.js";
+
+// ADR-0048 PERS.2 (Q-PERS.2-γ): Foundation/COSMP permission-envelope
+// resolver. Maps requested context into the 4 permission tiers;
+// personal/enterprise discrimination; no cross-wallet / cross-context
+// bridging by default. Audit-intent metadata only (no audit literals).
+export { resolvePermissionEnvelope } from "./services/personalization/permission-envelope.service.js";
+export type {
+  ContextDomain,
+  EnvelopeReason,
+  ScopedGrant,
+  EnterpriseEnvelopeDefaults,
+  PermissionEnvelopeInput,
+  ResolvedContextKey,
+  PermissionEnvelope,
+} from "./services/personalization/permission-envelope.service.js";
+
+// ADR-0048 PERS.2 (Q-PERS.2-δ + ζ): Foundation/COSMP moment-context
+// resolver. Injected now; permissioned-optional location/calendar/
+// device/task; per-field TTL/freshness; graceful degradation; safe
+// timezone fallback clearly marked. No external provider calls.
+export {
+  resolveMomentContext,
+  SAFE_FALLBACK_TIMEZONE,
+} from "./services/personalization/moment-context.service.js";
+export type {
+  TimezoneSource,
+  ResolvedTimezone,
+  MomentDegradedReason,
+  MomentField,
+  MomentCallerInputs,
+  MomentSessionView,
+  MomentContextInput,
+  MomentContextEnvelope,
+} from "./services/personalization/moment-context.service.js";
