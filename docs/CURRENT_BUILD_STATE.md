@@ -422,6 +422,72 @@ Founder authorization explicit per RULE 20 at
 `[COSMP-SYNTHETIC-DMW-SIMULATION-HAWKSEYE-QLOCK]` +
 `[COSMP-SYNTHETIC-DMW-VIEWS-EXECUTE-VERIFY-AUTH]`.
 
+#### PERS.5b LANDED — lifelike multi-DMW simulation proving all 8 governance obligations (2026-05-20)
+
+**Status:** PERS.5b `[COSMP-SYNTHETIC-DMW-SIMULATION]` substantive
+integration-harness phase LANDED 2026-05-20 (2 NEW + 2 MOD; 4 files, under
+the Q-PERS.5b-μ μ-2 ≤7 ceiling) — the second sub-phase of the PERS.5
+3-sub-phase mini-arc — per Founder Q-PERS.5b-α α-1 + β-1 + γ-1 + δ-1 + ε-1 +
+ζ-1 + η-1 + θ-1 + ι-1 + κ-1 + λ-1 + μ-2 + ν LOCKS at
+`[COSMP-SYNTHETIC-DMW-SIMULATION-HAWKSEYE-QLOCK]` +
+`[COSMP-SYNTHETIC-DMW-SIMULATION-EXECUTE-VERIFY-AUTH]`.
+
+- **Lifelike multi-DMW world LANDED.** A new
+  `tests/integration/helpers/synthetic-dmw-world.ts` seeds — via the REAL
+  Foundation paths (createEntity → wallet/TAR, WriteService.createCapsule,
+  createPermission, EntityMembership, AuthService.login) — 1 COMPANY
+  enterprise DMW + its project source-of-truth, 5 distinct PERSON employees
+  (Dana Okafor / Liang Wei / Priya Nair / Marco Rossi / Sara Haddad, each
+  with role / department / hierarchy / clearance / routine / work style /
+  comms style + personal-DMW capsules), and 5 login-capable AI_AGENT digital
+  twins (PERSONAL wallets + operating memory + an authorized portable
+  goal-summary alignment capsule; never the sensitive capsule).
+- **All 8 governance obligations proven** by `synthetic-dmw-simulation.test.ts`
+  across S1–S10 driving the real working-set spine (login → session →
+  prismaWalletContextLookup → createSessionContextResolver →
+  buildPersonalizedWorkingSet) + the NEGOTIATE permission path + the
+  consumer/admin two-view projection.
+- **Single-wallet working set is the spine; `coe.service.ts` UNTOUCHED.**
+  Obligations 1–2 (no leakage) are proven structurally (the working set
+  resolves only the session entity's wallet); obligation 4 (accepted = SoT)
+  via the enterprise-entity working set; obligation 5 (twin scoped alignment)
+  via a fixture-materialized authorized scoped-summary in the twin wallet +
+  a SUMMARY-scope NEGOTIATE for the grant path.
+- **Accepted→source-of-truth is fixture-modeled** (`promoteAcceptedDecision`
+  writes only the accepted DECISION into the enterprise wallet; the
+  un-accepted conversation stays in a personal wallet and is never promoted)
+  — no schema change (δ-1).
+- **Twin portability proven read-side + fixture discipline** (ε-1): twin
+  wallets hold only portable `clearance_required=0` capsules + the authorized
+  goal summary; the sensitive enterprise capsule (`clearance_required=6` +
+  `ai_access_blocked`) is never written to any twin/personal wallet, and a
+  twin NEGOTIATE of it is denied.
+- **Pre-flight RULE 13 findings (test-only; no production code changed):**
+  createTwin produces password-less twins → twins seeded login-capable via
+  createEntity + manual EntityMembership/TwinConfig; TAR.clearance_ceiling
+  (= defaultCeilingFor(type)) mutated via computeTARHash before login for
+  per-employee session clearance; capsule content written via
+  WriteService.createCapsule so the working set returns it.
+- **ADR-0048 remains Proposed.**
+- **Sub-Arc 3 remains IN FLIGHT.**
+- **Sub-arc 2 remains CLOSED.**
+- **PERS.5c `[COSMP-SYNTHETIC-DMW-CLOSURE]` closure cascade next** (docs-only);
+  then PERS.6 closure cascade.
+- **No schema / no audit literals / no Elixir / no server.ts / no routes / no
+  cosmp service mutation** (ζ-1 + ν; tests + docs only).
+- **No production-affecting action** (real DB is the test database;
+  TEST_PREFIX-namespaced; cleanupTestData in afterAll).
+
+**Substrate sites (4 authorized files; 2 NEW + 2 MOD)**: NEW
+`tests/integration/helpers/synthetic-dmw-world.ts` + NEW
+`tests/integration/synthetic-dmw-simulation.test.ts` + MOD
+`docs/reference/section-12-progress.md` (PERS.5b prose; Sub-Arc 3 preserved
+IN FLIGHT) + MOD this `CURRENT_BUILD_STATE.md` (this PERS.5b LANDED H4).
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-SYNTHETIC-DMW-SIMULATION-HAWKSEYE-QLOCK]` +
+`[COSMP-SYNTHETIC-DMW-SIMULATION-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
