@@ -510,3 +510,25 @@ export type {
   MomentContextInput,
   MomentContextEnvelope,
 } from "./services/personalization/moment-context.service.js";
+
+// ADR-0048 PERS.3 (Q-PERS.3-α/β): Foundation/COSMP working-set
+// orchestrator. Composes the PERS.2 permission-envelope + moment-context
+// resolvers with the governed COE assembleContext path (wrapped via the
+// ContextAssembler seam); domain READ from the established wallet_type
+// (Q-PERS.3-δ); fail-closed with no personalization leakage; degraded
+// metadata + audit-intent only (no new audit literals). Service-level
+// only — no route at PERS.3.
+export { WorkingSetService } from "./services/personalization/working-set.service.js";
+export type {
+  SessionContextResolver,
+  SessionContextSuccess,
+  SessionContextFailure,
+  ContextAssembler,
+  WorkingSetInput,
+  WorkingSetSuccess,
+  WorkingSetFailure,
+  WorkingSetFailureCode,
+  WorkingSetPermissionSummary,
+  WorkingSetDegradedEntry,
+  WorkingSetStats,
+} from "./services/personalization/working-set.service.js";

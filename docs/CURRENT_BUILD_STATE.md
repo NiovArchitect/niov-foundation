@@ -215,6 +215,68 @@ Founder authorization explicit per RULE 20 at
 `[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT-QLOCK]` +
 `[COSMP-PERMISSION-ENVELOPE-MOMENT-CONTEXT-EXECUTE-VERIFY-AUTH]`.
 
+#### PERS.3 LANDED — buildPersonalizedWorkingSet service-level orchestrator composes permission envelope + moment context + COE (2026-05-19)
+
+**Status:** PERS.3 `[COSMP-BUILD-WORKING-SET-API]` substantive service +
+test phase LANDED 2026-05-19 (2 NEW + 3 MOD; 5 files, under the
+Q-PERS.3-κ κ-1 ≤8-file ceiling) per Founder Q-PERS.3-α α-1 + Q-PERS.3-β
+β-1 + Q-PERS.3-γ γ-1 + Q-PERS.3-δ δ-1 + Q-PERS.3-ε ε-1 + Q-PERS.3-ζ ζ-1
++ Q-PERS.3-η η-1 + Q-PERS.3-θ θ-1 + Q-PERS.3-ι ι-1 + Q-PERS.3-κ κ-1 +
+Q-PERS.3-λ LOCKS at `[COSMP-BUILD-WORKING-SET-API-HAWKSEYE-QLOCK]` +
+`[COSMP-BUILD-WORKING-SET-API-EXECUTE-VERIFY-AUTH]`.
+
+- **PERS.3 service-level orchestrator LANDED.** `WorkingSetService.
+  buildPersonalizedWorkingSet` composes the proven governed substrate in
+  one high-level call: authoritative session→wallet resolution (injected
+  `SessionContextResolver`) → domain READ from the established
+  `wallet_type` (ENTERPRISE→enterprise, else personal; DEVICE→personal) →
+  `resolvePermissionEnvelope` (PERS.2) → `resolveMomentContext` (PERS.2,
+  injected `now`) → WRAP COE `assembleContext` (injected `ContextAssembler`
+  seam) → compose the governed working set. The Foundation constructs the
+  working set BEFORE the LLM sees context.
+- **WRAP, not mutate, COE** per β-1 — `assembleContext` is consumed via a
+  structural seam; `coe.service.ts` is untouched.
+- **Fail-closed with zero personalization leakage** — an invalid/expired
+  session, a missing wallet, or a COE failure returns only `ok/code/
+  message` (no moment, no permissions, no capsules).
+- **ADR-0048 remains Proposed** (PERS.6 closure cascade is the Status-flip
+  commit).
+- **Sub-Arc 3 remains IN FLIGHT.**
+- **Sub-arc 2 remains CLOSED.**
+- **PERS.4 `[COSMP-DEGRADED-MODE-CONTRACT]` degraded-mode contract next.**
+- **Route/server wiring deferred** per γ-1 (service lands defined-but-
+  unwired; production wiring at PERS.4).
+- **Synthetic DMW simulation deferred to PERS.5.**
+- **No COE mutation** (β-1; `coe.service.ts` + `keywords.ts` untouched).
+- **No schema changes.**
+- **No audit literals** per ε-1 (the wrapped `assembleContext` emits
+  `COE_ASSEMBLE_CONTEXT`; the orchestrator returns `audit_intent` metadata
+  only).
+- **No Elixir changes.**
+- **No external provider calls** (composition is deterministic; injected
+  `now`; no DB access in the orchestrator — the injected resolver owns the
+  authoritative lookup).
+
+**Substrate sites (5 authorized files; 2 NEW + 3 MOD)**: NEW
+`apps/api/src/services/personalization/working-set.service.ts`
+(`WorkingSetService` + `buildPersonalizedWorkingSet` + `SessionContextResolver`
+/ `ContextAssembler` injection seams + `WorkingSetInput` / `WorkingSetSuccess`
+/ `WorkingSetFailure` / `WorkingSetPermissionSummary` / `WorkingSetDegradedEntry`
+/ `WorkingSetStats` types + `domainForWalletType`) + NEW
+`tests/unit/working-set.test.ts` (personal/enterprise/DEVICE domain
+derivation + fail-closed no-leakage on session/wallet/COE failure +
+cross_wallet_blocked + cross_context_blocked + moment degraded surfaced +
+per-field TTL/freshness + deterministic injected `now` + no raw vector/
+distance/embedding fields + audit_intent-without-literal) + MOD
+`apps/api/src/index.ts` (barrel re-export for `WorkingSetService` + types
+only) + MOD `docs/reference/section-12-progress.md` (PERS.3 LANDED prose;
+Sub-Arc 3 preserved IN FLIGHT) + MOD this `CURRENT_BUILD_STATE.md` (this
+PERS.3 LANDED H4).
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-BUILD-WORKING-SET-API-HAWKSEYE-QLOCK]` +
+`[COSMP-BUILD-WORKING-SET-API-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
