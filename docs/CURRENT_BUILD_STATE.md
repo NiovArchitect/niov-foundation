@@ -567,6 +567,64 @@ Founder authorization explicit per RULE 20 at
 `[COSMP-PERSONALIZATION-CLOSURE-HAWKSEYE-QLOCK]` +
 `[COSMP-PERSONALIZATION-CLOSURE-EXECUTE-VERIFY-AUTH]`.
 
+#### Phase 3 GLOBAL CLOSED — Dynamic Memory Accuracy at Scale; all sub-arcs CLOSED; deferred items carried forward (2026-05-20)
+
+**Status:** Phase 3 (Dynamic Memory Accuracy at Scale) is **GLOBALLY CLOSED**
+2026-05-20 at `[PHASE-3-GLOBAL-CLOSURE]` (tracker-docs-only; 2 MOD) per Founder
+Q-P3C-α α-1 + β-1 + γ-1 + δ-1 + ε-1 + ζ-1 + η-1 LOCKS at
+`[PHASE-3-GLOBAL-CLOSURE-EXECUTE-VERIFY-AUTH]`. **This is the separate Founder
+QLOCK contemplated at PERS.6-δ** — the PERS.6 closure deliberately did NOT flip
+Phase 3 global status; this performs it.
+
+- **All Phase 3 sub-arcs CLOSED:**
+  - Sub-Arc 1 — Sub-Phase a DMW Worker (ADR-0038) + Sub-Phase b Hive-Scale
+    Per-DMW Dispatch ENTERPRISE (ADR-0039) + Sub-Phase c PERSONAL
+    Promote-on-Activity (ADR-0039 Amendment 1) + Sub-Phase d DEVICE Cold-Shard
+    (ADR-0040).
+  - Sub-Arc 2 — Capsule Layer Substrate Umbrella (ADR-0041), **including Gap 1
+    Capsule Mutation Discrimination (ADR-0042) and Gap 3 pgvector Embedding
+    (ADR-0043) — both CLOSED under the Sub-Arc 2 umbrella with no dedicated
+    status rows** — + Gap 4 Decay Execution (ADR-0044) + Gap 5 Capsule-Level
+    Staleness (ADR-0045) + Gap 6 AI_AGENT EntityType-Discriminated Capsule
+    Routing (ADR-0046).
+  - Sub-Arc 3 — Foundation/COSMP Personalization-Orchestration Substrate
+    (ADR-0048, Accepted 2026-05-20).
+  - All per-gap + per-sub-arc ADRs (0038/0039/0040/0041/0042/0043/0044/0045/0046/0048)
+    Accepted/CLOSED.
+- **Carried forward as post-closure forward-substrate (explicitly NOT
+  blockers):**
+  - ADR-0044 dormant TTL / DecayType future amendments
+  - ADR-0045 dormant filtering / ranking / lifecycle / audit-literal expansion /
+    COE / SimilarityService / read.service / feedback.service integration
+  - ADR-0046 G6.3 `resolveAiAgentWalletContext` helper (deferred; absent in code)
+  - ADR-0048 five audit literals (`WORKING_SET_BUILT` +
+    `CONTEXT_USED_MANIFEST_RECORDED` + `PERSONALIZATION_DEGRADED` +
+    `CROSS_ENTITY_CONTEXT_REQUESTED` + `PERSONALIZATION_SIGNAL_RECORDED`;
+    future clean-transition)
+  - ADR-0048 route/server wiring for the working-set endpoint
+  - ADR-0048 personalization signal recording
+  - ADR-0048 caching / performance optimization (measure-first)
+  - ADR-0048 TurboQuant research arc
+  - ADR-0048 self-repair feedback loop
+  - ADR-0048 stale emission / ADR-0045 freshness-clock integration
+  - ADR-0048 privacy-policy implications
+- **Audit literals = future clean-transition** (deferred; not implemented; the 5
+  literals remain absent from `audit.ts`).
+- **No ADR-0035 promotion** per Q-P3C-ε ε-1.
+- **Tracker-docs-only**: this `CURRENT_BUILD_STATE.md` H4 + the
+  `section-12-progress.md` Phase 3 GLOBAL CLOSURE row. The PERS.6 "global status
+  NOT flipped" prose + the ADR-0048 / README / CLAUDE.md catalog "NOT flipped"
+  notes are preserved as historical PERS.6 context and superseded by these
+  markers; **no ADR / README / CLAUDE.md edit**.
+- **Single-wallet spine preserved; `coe.service.ts` untouched.**
+- **No schema / audit / Elixir / route / server / provider changes.**
+- **No production-affecting action.**
+- **Recommended next strategic arc (Founder-gated; not scheduled):**
+  audit-literal clean-transition phase, then working-set API exposure.
+
+Founder authorization explicit at `[PHASE-3-GLOBAL-CLOSURE-HAWKSEYE-QLOCK]` +
+`[PHASE-3-GLOBAL-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
