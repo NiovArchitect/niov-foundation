@@ -488,6 +488,40 @@ Founder authorization explicit per RULE 20 at
 `[COSMP-SYNTHETIC-DMW-SIMULATION-HAWKSEYE-QLOCK]` +
 `[COSMP-SYNTHETIC-DMW-SIMULATION-EXECUTE-VERIFY-AUTH]`.
 
+#### PERS.5c CLOSED — synthetic DMW simulation mini-arc closed; PERS.6 closure cascade next (2026-05-20)
+
+**Status:** PERS.5c `[COSMP-SYNTHETIC-DMW-CLOSURE]` docs-only closure cascade
+LANDED 2026-05-20 (2 tracker MOD) per Founder Q-PERS.5c-α α-1 + β-1 + γ-1 +
+δ-1 + ε-1 + ζ-1 + η-1 + θ-1 + ι-1 + κ-1 LOCKS at
+`[COSMP-SYNTHETIC-DMW-CLOSURE-QLOCK-EXECUTE-VERIFY-AUTH]`.
+
+- **PERS.5 mini-arc CLOSED.** The PERS.5 3-sub-phase mini-arc (5a views +
+  5b simulation + 5c closure) is closed at the mini-arc register.
+- **PERS.5a landed `d28f20f`** — production `SessionContextResolver`
+  (`createSessionContextResolver` + `prismaWalletContextLookup`) +
+  `projectConsumerView`/`projectAdminView` consumer/admin projection split.
+- **PERS.5b landed `27db2e2`** — lifelike multi-day synthetic DMW simulation
+  (5 employees + 5 digital twins + 1 enterprise DMW + project
+  source-of-truth; accepted→SoT fixture convention; scoped-summary +
+  SUMMARY-scope NEGOTIATE alignment; single-wallet spine; all 8 obligations
+  proven across S1–S10; full CI success at run `26160755203`).
+- **PERS.5c is docs-only closure** (this update; the two trackers only).
+- **ADR-0048 remains Proposed** 2026-05-19.
+- **Phase 3 Sub-Arc 3 remains IN FLIGHT.**
+- **PERS.6 closure cascade next** — the final ADR-0048-acceptance / Sub-Arc-3
+  closure cascade.
+- **Single-wallet spine preserved; `coe.service.ts` untouched** across
+  PERS.5a + PERS.5b + PERS.5c.
+- **No schema changes.**
+- **No audit literals.**
+- **No Elixir changes.**
+- **No route/server changes.**
+- **No provider/external API changes.**
+- **No production-affecting action.**
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-SYNTHETIC-DMW-CLOSURE-QLOCK-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
