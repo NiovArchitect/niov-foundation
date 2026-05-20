@@ -557,3 +557,30 @@ export type {
   FailClosedCategory,
   BuildDegradedContractInput,
 } from "./services/personalization/degraded-mode-contract.js";
+
+// ADR-0048 PERS.5a (Q-PERS.5-δ): production SessionContextResolver — the
+// authoritative session→{entity_id, wallet_id, wallet_type, entity_type,
+// timezone} resolver the WorkingSetService consumes. Pure coordination over
+// an injected session validator + WalletContextLookup; prisma-backed lookup
+// factory is the storage seam (integration-exercised at PERS.5b). No route.
+export {
+  createSessionContextResolver,
+  prismaWalletContextLookup,
+} from "./services/personalization/session-context-resolver.js";
+export type {
+  SessionValidator,
+  WalletContextLookup,
+} from "./services/personalization/session-context-resolver.js";
+
+// ADR-0048 PERS.5a (Q-PERS.5-γ): Foundation-owned working-set projections.
+// projectAdminView = full machine truth; projectConsumerView = graceful
+// subset that strips raw Foundation diagnostics and exposes only coarse
+// uncertainty flags (apps compose UX on top). Pure; no I/O.
+export {
+  projectAdminView,
+  projectConsumerView,
+} from "./services/personalization/working-set-views.js";
+export type {
+  AdminWorkingSetView,
+  ConsumerWorkingSetView,
+} from "./services/personalization/working-set-views.js";

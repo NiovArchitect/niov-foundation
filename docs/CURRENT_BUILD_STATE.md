@@ -360,6 +360,68 @@ Founder authorization explicit per RULE 20 at
 `[COSMP-DEGRADED-MODE-CONTRACT-HAWKSEYE-QLOCK]` +
 `[COSMP-DEGRADED-MODE-CONTRACT-EXECUTE-VERIFY-AUTH]`.
 
+#### PERS.5a LANDED — SessionContextResolver + consumer/admin working-set projections (2026-05-20)
+
+**Status:** PERS.5a `[COSMP-SYNTHETIC-DMW-VIEWS]` substantive service + test
+phase LANDED 2026-05-20 (2 NEW source + 2 NEW tests + 3 MOD; 7 files —
+Q-PERS.5-κ 5a ceiling ≤6 → ≤7 per RULE 13 because two new tested modules
+require proper per-module testing) — the first sub-phase of the PERS.5
+3-sub-phase mini-arc (PERS.5a views + PERS.5b simulation + PERS.5c closure)
+per Founder Q-PERS.5-α α-1 + the Q-PERS.5a-α through ζ LOCKS at
+`[COSMP-SYNTHETIC-DMW-SIMULATION-HAWKSEYE-QLOCK]` +
+`[COSMP-SYNTHETIC-DMW-VIEWS-EXECUTE-VERIFY-AUTH]`.
+
+- **Production SessionContextResolver service-layer implementation LANDED**
+  per Q-PERS.5-δ δ-1. `createSessionContextResolver(authService, lookup)` is
+  pure coordination over an injected `SessionValidator` (the live AuthService
+  satisfies it) + a `WalletContextLookup` storage seam: validate session
+  (fail-closed with the session code) → resolve the established wallet
+  (fail-closed `INVALID_REQUEST` when absent) → entity type → profile
+  timezone → authoritative `{entity_id, wallet_id, wallet_type, entity_type,
+  timezone}`. The `prismaWalletContextLookup(prisma)` factory is the real
+  storage seam — **integration-exercised at PERS.5b**, not unit-tested at 5a.
+- **projectConsumerView / projectAdminView LANDED** per Q-PERS.5-γ γ-1.
+  `projectAdminView` = full machine truth (`{view:"admin"} & Omit<
+  WorkingSetSuccess,"ok">`). `projectConsumerView` = an allow-listed graceful
+  subset (`view`, `domain`, `current_time_iso`, `timezone_uncertain`,
+  `capsules`, `has_uncertainty`, `has_withheld_context`,
+  `may_request_permission`).
+- **Consumer view strips raw Foundation diagnostics by default** — no
+  degraded reasons, dispositions, advisories, stats, audit_intent,
+  consumer_obligations, permission summary, or moment-field internals; the
+  coarse flags are derived from the degraded contract's dispositions. The
+  consumer view is a strict subset that never adds data.
+- **Admin view preserves machine truth** — agents / Foundation services /
+  administrators receive the full working set incl. the degraded contract.
+- **Route/server wiring deferred** per Q-PERS.5-δ (no route, no `server.ts`
+  at 5a).
+- **PERS.5b synthetic lifelike multi-day DMW simulation next** — 5 employees
+  (realistic personal lives, routines, work preferences, calendar
+  constraints, communication styles, project roles, hierarchy, clearance,
+  departments, ABAC) + 5 digital twins + 1 enterprise DMW + 1 project
+  source-of-truth (+ optional enterprise/project AI twin), proving all 8
+  governance obligations across ~10 scenarios; integration-tier; carries the
+  production resolver real-path verification + the two-view proof.
+- **No schema changes.**
+- **No audit literals.**
+- **No Elixir changes.**
+- **No external provider calls** (resolver reads only through the injected
+  lookup; views are pure; no `Date.now()`).
+- **No production-affecting action.**
+
+**Substrate sites (7 authorized files; 2 NEW source + 2 NEW tests + 3 MOD)**:
+NEW `apps/api/src/services/personalization/session-context-resolver.ts` +
+NEW `apps/api/src/services/personalization/working-set-views.ts` + NEW
+`tests/unit/session-context-resolver.test.ts` + NEW
+`tests/unit/working-set-views.test.ts` + MOD `apps/api/src/index.ts` (barrel
+re-export) + MOD `docs/reference/section-12-progress.md` (PERS.5a prose;
+Sub-Arc 3 preserved IN FLIGHT) + MOD this `CURRENT_BUILD_STATE.md` (this
+PERS.5a H4).
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-SYNTHETIC-DMW-SIMULATION-HAWKSEYE-QLOCK]` +
+`[COSMP-SYNTHETIC-DMW-VIEWS-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
