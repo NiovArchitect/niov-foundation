@@ -277,6 +277,89 @@ Founder authorization explicit per RULE 20 at
 `[COSMP-BUILD-WORKING-SET-API-HAWKSEYE-QLOCK]` +
 `[COSMP-BUILD-WORKING-SET-API-EXECUTE-VERIFY-AUTH]`.
 
+#### PERS.4 LANDED — degraded-mode truth contract integrated into working-set response (2026-05-19)
+
+**Status:** PERS.4 `[COSMP-DEGRADED-MODE-CONTRACT]` substantive contract +
+integration + test phase LANDED 2026-05-19 (2 NEW + 5 MOD; 7 files, under
+the Q-PERS.4-ι ι-2 ≤8-file ceiling) per Founder Q-PERS.4-α α-2 + Q-PERS.4-β
+β-1 + Q-PERS.4-γ γ-1 + Q-PERS.4-δ δ-1 + Q-PERS.4-ε ε-1 + Q-PERS.4-ζ ζ-1 +
+Q-PERS.4-η η-1 + Q-PERS.4-θ θ-1 + Q-PERS.4-ι ι-2 + Q-PERS.4-κ + Q-PERS.4-λ
+λ-1 LOCKS at `[COSMP-DEGRADED-MODE-CONTRACT-HAWKSEYE-QLOCK]` +
+`[COSMP-DEGRADED-MODE-CONTRACT-EXECUTE-VERIFY-AUTH]`.
+
+- **PERS.4 degraded-mode contract LANDED.** A new
+  `degraded-mode-contract.ts` canonicalizes one degraded/uncertainty
+  taxonomy (13 `DegradedReason` values), a per-reason `DISCLOSURE_POLICY`
+  use policy (disposition + may_use_as_truth + must_disclose_uncertainty +
+  may_request_permission + must_not_fabricate), the frozen
+  `CONSUMER_OBLIGATIONS`, and pure normalization
+  (`buildDegradedContract` / `mapEnvelopeReason` / `mapMomentReason` /
+  `disclosurePolicyFor` / `classifyFailClosed`). `WorkingSetService` now
+  carries the canonical contract (`degraded: DegradedContractEntry[]`) plus
+  `consumer_obligations` in its response.
+- **The Foundation now truthfully discloses context state** — denied /
+  missing / fallback / uncertain / blocked / sensitive — so consumers
+  cannot misuse it. Timezone fallback surfaces `fallback_used`
+  (`fallback_not_truth`); low-confidence fields surface `uncertain`; the COE
+  aggregate denial surfaces a single `clearance_blocked` entry.
+- **ADR-0048 remains Proposed** (PERS.6 closure cascade is the Status-flip
+  commit).
+- **Sub-Arc 3 remains IN FLIGHT.**
+- **Sub-arc 2 remains CLOSED.**
+- **PERS.5 `[COSMP-SYNTHETIC-DMW-SIMULATION]` synthetic DMW simulation
+  next.**
+- **Route/server wiring deferred to PERS.5** per δ-1 (the simulation harness
+  exercises the full path; production `SessionContextResolver` + route land
+  there).
+- **Audit literals deferred** per ε-1 (`WORKING_SET_BUILT` /
+  `PERSONALIZATION_DEGRADED` remain ADR-0048 forward-substrate; the
+  contract carries advisory metadata only).
+- **`stale` is defined but NOT emitted at PERS.4** — caller moment inputs
+  are fresh in-request with no as-of timestamp; emitting `stale` would be a
+  false claim. Emission is forward-substrate for a freshness clock /
+  ADR-0045 capsule-staleness integration.
+- **Consumer obligations are DECLARED but not enforced in-process** —
+  downstream enforcement is app/agent + future integration-test
+  responsibility; the Foundation's PERS.4 duty is truthful disclosure.
+- **Audience & disclosure tiers (Founder doctrine)** — the contract is
+  MACHINE-FACING + FOUNDATION-FACING BY DEFAULT, not a render target for
+  end users. Agents + Foundation services consume the full machine-readable
+  truth contract (so they do not hallucinate / over-personalize / misuse
+  missing/denied/stale/fallback context); Foundation / Federation
+  administrators get deeper diagnostic + audit views; future self-repair
+  agents use the signals to diagnose, propose safe repairs, and build an
+  audit trail. End-user consumers (apps/Otzar) should surface only
+  graceful, experience-level uncertainty — and only when it improves trust
+  or actionability — never raw degraded reasons, Memory Capsule
+  diagnostics, resolver failure details, capsule-denial counts, or repair
+  telemetry. Translating the contract into a user-appropriate experience is
+  an app/UX-layer responsibility (ADR-0048 "apps compose UX"); PERS.4 adds
+  this as doctrine only — no behavior change.
+- **No schema changes.**
+- **No audit literals.**
+- **No Elixir changes.**
+- **No external provider calls** (the contract is pure deterministic
+  TypeScript; no I/O; no DB access; no `Date.now()`).
+- **No COE mutation / no route / no `server.ts`** (β-1 + δ-1;
+  `coe.service.ts`, `keywords.ts`, and `cosmp/**` untouched).
+
+**Substrate sites (7 authorized files; 2 NEW + 5 MOD)**: NEW
+`apps/api/src/services/personalization/degraded-mode-contract.ts` + NEW
+`tests/unit/degraded-mode-contract.test.ts` + MOD
+`apps/api/src/services/personalization/working-set.service.ts` (consume the
+contract; replace `WorkingSetDegradedEntry` with `DegradedContractEntry`;
+add `consumer_obligations`) + MOD `tests/unit/working-set.test.ts` (assert
+the canonical contract + obligations + fallback/uncertain/sensitive/
+clearance entries + fail-closed no-leakage) + MOD `apps/api/src/index.ts`
+(export the contract surface; drop `WorkingSetDegradedEntry`) + MOD
+`docs/reference/section-12-progress.md` (PERS.4 LANDED prose; Sub-Arc 3
+preserved IN FLIGHT) + MOD this `CURRENT_BUILD_STATE.md` (this PERS.4
+LANDED H4).
+
+Founder authorization explicit per RULE 20 at
+`[COSMP-DEGRADED-MODE-CONTRACT-HAWKSEYE-QLOCK]` +
+`[COSMP-DEGRADED-MODE-CONTRACT-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15

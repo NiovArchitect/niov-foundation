@@ -46,7 +46,12 @@ function okResolver(
         wallet_id: overrides.wallet_id ?? WALLET,
         wallet_type: overrides.wallet_type ?? ("PERSONAL" as WalletType),
         entity_type: overrides.entity_type ?? "PERSON",
-        timezone: overrides.timezone ?? "America/New_York",
+        // `=== undefined` (not `??`) so an explicit null is honored — that
+        // forces the moment resolver onto its safe timezone fallback.
+        timezone:
+          overrides.timezone === undefined
+            ? "America/New_York"
+            : overrides.timezone,
       };
     },
   };
@@ -309,5 +314,101 @@ describe("WorkingSetService — no leakage of forbidden retrieval internals", ()
     // No new audit literal: the orchestrator returns intent metadata only.
     const serialized = JSON.stringify(out);
     expect(serialized).not.toContain("WORKING_SET_BUILT");
+    expect(serialized).not.toContain("PERSONALIZATION_DEGRADED");
+  });
+});
+
+describe("WorkingSetService — PERS.4 degraded/uncertainty contract", () => {
+  it("success output carries consumer_obligations (non-empty)", async () => {
+    const svc = new WorkingSetService(okResolver(), successAssembler());
+    const out = asSuccess(
+      await svc.buildPersonalizedWorkingSet("tok", { ...BASE_INPUT, now: FIXED_NOW }),
+    );
+    expect(Array.isArray(out.consumer_obligations)).toBe(true);
+    expect(out.consumer_obligations.length).toBeGreaterThan(0);
+    expect(
+      out.consumer_obligations.some((o) => /fabricate/i.test(o)),
+    ).toBe(true);
+  });
+
+  it("every degraded entry carries a canonical disposition + use policy", async () => {
+    const svc = new WorkingSetService(okResolver(), successAssembler());
+    const out = asSuccess(
+      await svc.buildPersonalizedWorkingSet("tok", {
+        ...BASE_INPUT,
+        requested_context: ["health"],
+        now: FIXED_NOW,
+      }),
+    );
+    expect(out.degraded.length).toBeGreaterThan(0);
+    for (const d of out.degraded) {
+      expect(typeof d.reason).toBe("string");
+      expect(typeof d.disposition).toBe("string");
+      expect(d.must_not_fabricate).toBe(true);
+      expect(typeof d.may_use_as_truth).toBe("boolean");
+    }
+  });
+
+  it("timezone fallback surfaces fallback_used (not user truth) + an uncertain entry", async () => {
+    const svc = new WorkingSetService(
+      okResolver({ timezone: null }),
+      successAssembler(),
+    );
+    const out = asSuccess(
+      await svc.buildPersonalizedWorkingSet("tok", { ...BASE_INPUT, now: FIXED_NOW }),
+    );
+    const fb = out.degraded.find(
+      (d) => d.source === "timezone" && d.reason === "fallback_used",
+    );
+    expect(fb).toBeDefined();
+    expect(fb?.disposition).toBe("fallback_not_truth");
+    expect(fb?.may_use_as_truth).toBe(false);
+    // The derived local_time rides as a low-confidence uncertain entry.
+    const unc = out.degraded.find((d) => d.reason === "uncertain");
+    expect(unc?.disposition).toBe("low_confidence");
+    expect(unc?.must_disclose_uncertainty).toBe(true);
+  });
+
+  it("a denied sensitive key surfaces sensitive_enrichment_blocked / withheld", async () => {
+    const svc = new WorkingSetService(okResolver(), successAssembler());
+    const out = asSuccess(
+      await svc.buildPersonalizedWorkingSet("tok", {
+        ...BASE_INPUT,
+        requested_context: ["health"],
+        now: FIXED_NOW,
+      }),
+    );
+    const sensitive = out.degraded.find(
+      (d) => d.source === "permission" && d.reason === "sensitive_enrichment_blocked",
+    );
+    expect(sensitive).toBeDefined();
+    expect(sensitive?.disposition).toBe("withheld");
+    expect(sensitive?.may_use_as_truth).toBe(false);
+    expect(sensitive?.may_request_permission).toBe(true);
+  });
+
+  it("aggregate COE denial surfaces a single clearance_blocked entry", async () => {
+    // SAMPLE_SUCCESS has capsules_denied_permission = 1.
+    const svc = new WorkingSetService(okResolver(), successAssembler());
+    const out = asSuccess(
+      await svc.buildPersonalizedWorkingSet("tok", { ...BASE_INPUT, now: FIXED_NOW }),
+    );
+    const clearance = out.degraded.filter((d) => d.reason === "clearance_blocked");
+    expect(clearance).toHaveLength(1);
+    expect(clearance[0]?.source).toBe("capsule");
+    expect(clearance[0]?.disposition).toBe("withheld");
+  });
+
+  it("fail-closed paths return no contract / no consumer_obligations leakage", async () => {
+    const svc = new WorkingSetService(failResolver("SESSION_EXPIRED"), successAssembler());
+    const out = await svc.buildPersonalizedWorkingSet("tok", {
+      ...BASE_INPUT,
+      requested_context: ["health"],
+      now: FIXED_NOW,
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) throw new Error("unreachable");
+    expect("degraded" in out).toBe(false);
+    expect("consumer_obligations" in out).toBe(false);
   });
 });

@@ -57,6 +57,11 @@ import {
   type MomentContextEnvelope,
 } from "./moment-context.service.js";
 import type { PermissionTier, TemporalClass } from "./temporal-personalization.js";
+import {
+  buildDegradedContract,
+  CONSUMER_OBLIGATIONS,
+  type DegradedContractEntry,
+} from "./degraded-mode-contract.js";
 import type {
   AssembleContextFailure,
   AssembleContextSuccess,
@@ -147,16 +152,6 @@ export interface WorkingSetPermissionSummary {
   readonly audit_intent: string;
 }
 
-// WHAT: One typed degraded/missing-context entry (ζ-1).
-// WHY: Apps + agents need to know what was withheld and why, without any
-//      hallucinated specificity.
-export interface WorkingSetDegradedEntry {
-  readonly source: "permission" | "moment";
-  readonly key: string;
-  readonly reason: string;
-  readonly available: false;
-}
-
 // WHAT: Assembly counters for the composed working set.
 // WHY: Surfaces both the COE capsule stats and the personalization
 //      availability counts for observability + the future context-used
@@ -175,8 +170,12 @@ export interface WorkingSetStats {
 // WHAT: The governed working set returned on success.
 // WHY: The single coherent package the Foundation hands to apps/agents:
 //      domain + moment slice + permission summary + governed capsules +
-//      stats + degraded metadata + audit_intent. Carries only governed
-//      capsule content items — never raw retrieval internals.
+//      stats + the canonical degraded/uncertainty contract + the consumer
+//      obligations + audit_intent. Carries only governed capsule content
+//      items — never raw retrieval internals. `degraded` is the canonical
+//      PERS.4 disclosure (DegradedContractEntry) so consumers cannot misuse
+//      withheld/fallback/uncertain context; `consumer_obligations` declares
+//      the truth-handling duties (Q-PERS.4-η).
 export interface WorkingSetSuccess {
   readonly ok: true;
   readonly domain: ContextDomain;
@@ -184,7 +183,8 @@ export interface WorkingSetSuccess {
   readonly permissions: readonly WorkingSetPermissionSummary[];
   readonly capsules: readonly ContextItem[];
   readonly stats: WorkingSetStats;
-  readonly degraded: readonly WorkingSetDegradedEntry[];
+  readonly degraded: readonly DegradedContractEntry[];
+  readonly consumer_obligations: readonly string[];
   readonly audit_intent: string;
 }
 
@@ -296,27 +296,16 @@ export class WorkingSetService {
       }),
     );
 
-    const degraded: WorkingSetDegradedEntry[] = [];
-    for (const r of envelope.resolved) {
-      if (!r.available) {
-        degraded.push({
-          source: "permission",
-          key: r.key,
-          reason: r.reason,
-          available: false,
-        });
-      }
-    }
-    for (const f of moment.fields) {
-      if (!f.available && f.degraded_reason !== null) {
-        degraded.push({
-          source: "moment",
-          key: f.key,
-          reason: f.degraded_reason,
-          available: false,
-        });
-      }
-    }
+    // Canonical PERS.4 degraded/uncertainty contract: normalize the
+    // permission-envelope, moment-context, timezone-fallback, and the COE
+    // aggregate denial count into one leak-free disclosure with per-entry
+    // use policy. `stale` is intentionally not emitted (no as-of timestamp
+    // at build time) per the Q-PERS.4 blind-spot lock.
+    const degraded: DegradedContractEntry[] = buildDegradedContract({
+      envelope,
+      moment,
+      capsules_denied_permission: assembled.capsules_denied_permission,
+    });
 
     const contextKeysAvailable = envelope.resolved.filter(
       (r) => r.available,
@@ -344,6 +333,7 @@ export class WorkingSetService {
       capsules: assembled.context,
       stats,
       degraded,
+      consumer_obligations: CONSUMER_OBLIGATIONS,
       audit_intent: `working_set_built:${domain}:capsules=${assembled.capsules_loaded}:ctx_keys=${contextKeysAvailable}/${input.requested_context.length}:degraded=${degraded.length}`,
     };
   }

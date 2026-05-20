@@ -529,6 +529,31 @@ export type {
   WorkingSetFailure,
   WorkingSetFailureCode,
   WorkingSetPermissionSummary,
-  WorkingSetDegradedEntry,
   WorkingSetStats,
 } from "./services/personalization/working-set.service.js";
+
+// ADR-0048 PERS.4 (Q-PERS.4): Foundation-tier degraded/uncertainty truth
+// contract. Canonical DegradedReason taxonomy + UseDisposition + frozen
+// DISCLOSURE_POLICY use-policy table + CONSUMER_OBLIGATIONS + pure
+// normalization (buildDegradedContract / mapEnvelopeReason / mapMomentReason
+// / disclosurePolicyFor / classifyFailClosed). Carried by the working-set
+// response so consumers cannot misuse withheld/fallback/uncertain/blocked
+// context. No audit literals; no route.
+export {
+  DISCLOSURE_POLICY,
+  CONSUMER_OBLIGATIONS,
+  disclosurePolicyFor,
+  classifyFailClosed,
+  mapEnvelopeReason,
+  mapMomentReason,
+  buildDegradedContract,
+} from "./services/personalization/degraded-mode-contract.js";
+export type {
+  DegradedReason,
+  UseDisposition,
+  DisclosurePolicy,
+  DegradedSource,
+  DegradedContractEntry,
+  FailClosedCategory,
+  BuildDegradedContractInput,
+} from "./services/personalization/degraded-mode-contract.js";
