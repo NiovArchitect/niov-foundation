@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed 2026-05-19
+Accepted 2026-05-19
 
 ## Context
 
@@ -752,6 +752,12 @@ per RULE 20 at:
   resolved)
 - `[BEAM-CAPSULE-ROUTING-G6.2-EXECUTE-VERIFY-AUTH]`
 
+Founder authorization explicit at G6.4 closure cascade landing per
+RULE 20 at:
+
+- `[BEAM-CAPSULE-ROUTING-G6.4-QLOCK]`
+- `[BEAM-CAPSULE-ROUTING-G6.4-EXECUTE-VERIFY-AUTH]`
+
 ## G6.2 Doc-and-Test Cascade (2026-05-19)
 
 G6.2 `[BEAM-CAPSULE-ROUTING-DOC-AND-TEST-CASCADE]` doc-and-test
@@ -851,16 +857,104 @@ substantively.
 | Sub-phase | Tag | Authorized scope | Status |
 |-----------|-----|------------------|--------|
 | G6.1 | `[BEAM-CAPSULE-ROUTING-ADR]` | 4 MOD + 1 NEW docs-only; ADR-0046 NEW Proposed; canonical dual-context routing model; RULE 21 research arc embedded (RS-G6-1 through RS-G6-4); 11-row enforcement surface inventory; 10-row adversarial threat model; RULE 13 substrate-honest drift surfaces (8 G6.2 cascade targets) | **G6.1 LANDED 2026-05-19 at `c130826`** |
-| G6.2 | `[BEAM-CAPSULE-ROUTING-DOC-AND-TEST-CASCADE]` | Docs cascade + new tests; ADR-0001 Amendment 1 (preserve + narrow Personal DMW claim); ADR-0039 Amendment 2 (dual-context routing path documentation); ADR-0041 §Sub-decision 6 amendment (replace hard-mapping prose); glossary "Digital Twin Wallet" narrow + NEW "Personal AI Agent" + "Enterprise AI Agent" entries; 3 Elixir module docstring corrections (wallet_lookup.ex + schemas/wallet.ex + activity_counter.ex); grpc/server.ex:266 forward-substrate comment closure; CLAUDE.md ADR-0001/0039/0041 catalog updates; NEW dual-context TS unit tests per Q-G6-η η-2 LOCK | **G6.2 LANDED 2026-05-19** |
-| G6.3 | `[BEAM-CAPSULE-ROUTING-CONTEXT-RESOLVER]` | Substantive `resolveAiAgentWalletContext` helper; entity.test.ts + wallet.test.ts test extensions for explicit context resolution | **DEFERRED** forward-substrate (not in current closure path per Founder G6.3 disposition LOCK) |
-| G6.4 | `[BEAM-CAPSULE-ROUTING-CLOSURE]` | Docs-only closure cascade; ADR-0046 Status Proposed → Accepted; Gap 6 row Status IN FLIGHT → CLOSED; README + CLAUDE.md catalogs flipped Accepted; Sub-arc 2 preserved IN FLIGHT pending later Sub-arc 2 closure cascade per ADR-0041 CL.1 scope patch | forward-substrate |
+| G6.2 | `[BEAM-CAPSULE-ROUTING-DOC-AND-TEST-CASCADE]` | Docs cascade + new tests; ADR-0001 Amendment 1 (preserve + narrow Personal DMW claim); ADR-0039 Amendment 2 (dual-context routing path documentation); ADR-0041 §Sub-decision 6 amendment (replace hard-mapping prose); glossary "Digital Twin Wallet" narrow + NEW "Personal AI Agent" + "Enterprise AI Agent" entries; 3 Elixir module docstring corrections (wallet_lookup.ex + schemas/wallet.ex + activity_counter.ex); grpc/server.ex:266 forward-substrate comment closure; CLAUDE.md ADR-0001/0039/0041 catalog updates; NEW dual-context TS unit tests per Q-G6-η η-2 LOCK | **G6.2 LANDED 2026-05-19 at `9c3943d`** |
+| G6.3 | `[BEAM-CAPSULE-ROUTING-CONTEXT-RESOLVER]` | Substantive `resolveAiAgentWalletContext` helper; entity.test.ts + wallet.test.ts test extensions for explicit context resolution | **DEFERRED** forward-substrate (not in current closure path per Founder G6.3 disposition LOCK + Q-G6.4-η η-1 LOCK preservation) |
+| G6.4 | `[BEAM-CAPSULE-ROUTING-CLOSURE]` | Docs-only closure cascade; 5 MOD per Q-G6.4-γ γ-1 LOCK; ADR-0046 Status flip `Proposed 2026-05-19` → **`Accepted 2026-05-19`**; Gap 6 row Status flip IN FLIGHT → CLOSED; NO ADR-0035 modification per Q-G6.4-δ δ-1 LOCK; README + CLAUDE.md ADR-0046 catalog Status flip per Q-G6.4-ε ε-1 LOCK; Sub-arc 2 preserved IN FLIGHT per Q-G6.4-ζ ζ-1 LOCK; G6.3 helper preserved DEFERRED forward-substrate per Q-G6.4-η η-1 LOCK | **G6.4 LANDED 2026-05-19; Gap 6 CLOSED** |
 
-Status flips from `Proposed 2026-05-19` to `Accepted 2026-05-XX` at
-G6.4 closure cascade canonical at canonical-state register
-substantively per Q-G6-α + Q-G6-θ LOCK + canonical mini-arc closure
-precedent (G3.10 + G4.4 + PR.4 + G1.6 + G5.4).
+Status flipped from `Proposed 2026-05-19` to **`Accepted 2026-05-19`**
+at G6.4 closure cascade canonical at canonical-state register
+substantively per Q-G6-α + Q-G6-θ + Q-G6.4-β β-1 LOCK + canonical
+mini-arc closure precedent (G3.10 + G4.4 + G5.4 + PR.4 + G1.6).
 
 **Sub-arc 2 status field remains IN FLIGHT throughout G6.1-G6.4**
-per Q-G6-θ θ-1 LOCK + ADR-0041 CL.1 scope patch. Sub-arc 2 closure
-cascade forward-substrate pending G6.4 + later Sub-arc 2 closure
-cascade per ADR-0041 CL.1 scope patch register substantively.
+per Q-G6-θ θ-1 + Q-G6.4-ζ ζ-1 LOCK + ADR-0041 CL.1 scope patch.
+Sub-arc 2 closure cascade forward-substrate after G6.4 + remains a
+separate later commit per ADR-0041 CL.1 scope patch register
+substantively.
+
+## G6.4 Closure Cascade (2026-05-19)
+
+G6.4 `[BEAM-CAPSULE-ROUTING-CLOSURE]` docs-only closure cascade
+LANDED 2026-05-19 (5 MOD) per Founder Q-G6.4-α α-1 LOCK + Q-G6.4-β
+β-1 LOCK + Q-G6.4-γ γ-1 LOCK + Q-G6.4-δ δ-1 LOCK + Q-G6.4-ε ε-1
+LOCK + Q-G6.4-ζ ζ-1 LOCK + Q-G6.4-η η-1 LOCK at
+`[BEAM-CAPSULE-ROUTING-G6.4-QLOCK]` +
+`[BEAM-CAPSULE-ROUTING-G6.4-EXECUTE-VERIFY-AUTH]` register
+substantively. **Gap 6 AI_AGENT EntityType-Discriminated Capsule
+Routing CLOSED at canonical-state register substantively.** ADR-0046
+Status flipped from `Proposed 2026-05-19` to **`Accepted 2026-05-19`**
+per Q-G6.4-β β-1 LOCK. Gap 6 mini-arc 3/3 substantive sub-phases
+LANDED (G6.1 LANDED `c130826` + G6.2 LANDED `9c3943d` + G6.3
+DEFERRED + G6.4 LANDED this commit). Sub-arc 2 remains IN FLIGHT
+per Q-G6.4-ζ ζ-1 LOCK; Sub-arc 2 closure cascade is a separate
+later commit per ADR-0041 CL.1 scope patch.
+
+**Q-G6.4 locks canonical**:
+
+- Q-G6.4-α α-1 — close ADR-0046 now at G6.4 closure cascade
+  canonical at canonical-state register substantively.
+- Q-G6.4-β β-1 — flip ADR-0046 Status `Proposed 2026-05-19` →
+  **`Accepted 2026-05-19`**.
+- Q-G6.4-γ γ-1 — 5 MOD docs-only file scope (this ADR + section-12-
+  progress + CURRENT_BUILD_STATE + docs/architecture/README +
+  CLAUDE.md).
+- Q-G6.4-δ δ-1 — **no ADR-0035 modification at G6.4**. G6.2 drifts
+  were resolved in-place through ADR-0001 / ADR-0039 / ADR-0041 /
+  glossary / Elixir docstrings / grpc comment / TS tests. No new
+  recurring substrate-build discipline observation requires ADR-0035
+  promotion at G6.4. D-G6.2-1 file-count drift + D-G6.2-2 ADR-0001
+  / ADR-0039 filename drift were handled immediately by QLOCK
+  correction at `[BEAM-CAPSULE-ROUTING-G6.2-QLOCK-CORRECTION]` and
+  do not require ADR-0035 promotion now.
+- Q-G6.4-ε ε-1 — update README + CLAUDE.md ADR-0046 catalog entries
+  from `Proposed 2026-05-19` to **`Accepted 2026-05-19`** with tail
+  refresh covering G6.2 + G6.4 substantive landing summary.
+- Q-G6.4-ζ ζ-1 — preserve Sub-arc 2 status field as IN FLIGHT.
+- Q-G6.4-η η-1 — preserve G6.3 `[BEAM-CAPSULE-ROUTING-CONTEXT-
+  RESOLVER]` as DEFERRED forward-substrate. Do not implement
+  `resolveAiAgentWalletContext`. Do not add schema fields. Do not
+  modify runtime service behavior.
+
+**Canonical closure precedents**: G4.4 (`a05040f` `[BEAM-CAPSULE-
+DECAY-CLOSURE]`; 5 MOD docs-only; ADR-0044 Status flipped; **NO
+ADR-0035 modification — minimum-touch precedent G6.4 mirrors
+exactly**) + G5.4 (`5fcdbde` `[BEAM-CAPSULE-STALENESS-CLOSURE]`; 5
+MOD docs-only; ADR-0045 Status flipped; NO ADR-0035 modification;
+canonical 5-file scope identical to G6.4) + G3.10 (`08b10ef`
+`[BEAM-CAPSULE-EMBEDDING-CLOSURE]`; 6 MOD docs-only; ADR-0043
+Status flipped; ADR-0035 §9 cluster expansion 36 → 38 — G6.4 does
+NOT follow this expansion-class precedent per Q-G6.4-δ δ-1 LOCK).
+**G6.4 follows the G5.4 / G4.4 minimum-touch precedent exactly**:
+5 MOD docs-only + Status flip + Gap row flip + catalog mirrors +
+**NO ADR-0035 modification** per Q-G6.4-δ δ-1 LOCK.
+
+**Founder authorization explicit at G6.4 closure cascade landing
+per RULE 20**:
+
+- `[BEAM-CAPSULE-ROUTING-G6.4-QLOCK]`
+- `[BEAM-CAPSULE-ROUTING-G6.4-EXECUTE-VERIFY-AUTH]`
+
+## Post-Closure Implementation Lineage
+
+Post-Closure Implementation Lineage canonical at canonical-execution
+register substantively per ADR-0020 two-register IP discipline:
+
+| Sub-phase | Commit | Tag | Substantive landing |
+|-----------|--------|-----|---------------------|
+| G6.1 | `c130826` | `[BEAM-CAPSULE-ROUTING-ADR]` | ADR-0046 NEW Proposed; canonical dual-context routing model; RULE 21 research arc embedded (RS-G6-1 through RS-G6-4; 20+ documented public sources retrieved 2026-05-19); 11-row enforcement surface inventory; 10-row adversarial threat model T1-T10; 8 RULE 13 substrate-honest drift surfaces for G6.2 cascade; 10 Q-G6 sub-decisions canonical; 4-phase Implementation Lineage with G6.3 DEFERRED disposition |
+| G6.2 | `9c3943d` | `[BEAM-CAPSULE-ROUTING-DOC-AND-TEST-CASCADE]` | Doc-and-test cascade; 13 MOD + 0 NEW corrected scope per Q-G6.2-ι (drifts D-G6.2-1 file-count + D-G6.2-2 ADR-0001 / ADR-0039 filename resolved at `[BEAM-CAPSULE-ROUTING-G6.2-QLOCK-CORRECTION]`); ADR-0001 in-place Amendment 1 + ADR-0039 in-place Amendment 2 + ADR-0041 §Sub-decision 6 amendment + ADR-0046 G6.2 cascade section + glossary "Digital Twin Wallet" narrow + NEW "Personal AI Agent" + "Enterprise AI Agent" entries + 3 Elixir module docstring corrections + grpc/server.ex:266 forward-substrate comment closure + CLAUDE.md catalog updates + 4 NEW dual-context TS unit tests; baseline deltas unit 562 → 566 (+4 NEW tests); RULE 14 bidirectional citation discipline across all 4 ADR amendments |
+| G6.3 | DEFERRED | `[BEAM-CAPSULE-ROUTING-CONTEXT-RESOLVER]` | DEFERRED forward-substrate per Founder G6.3 disposition LOCK + Q-G6.4-η η-1 LOCK preservation; substantive `resolveAiAgentWalletContext` helper not in current closure path; may land later only if separate Founder QLOCK explicitly authorizes AND G6.2 verification proves unresolved ambiguity at wallet-defaulting tier — G6.2 verification PASS substantively does not surface such ambiguity |
+| G6.4 | this commit | `[BEAM-CAPSULE-ROUTING-CLOSURE]` | Docs-only closure cascade; 5 MOD per Q-G6.4-γ γ-1 LOCK; ADR-0046 Status `Proposed 2026-05-19` → **`Accepted 2026-05-19`**; Gap 6 row Status IN FLIGHT → CLOSED; README + CLAUDE.md ADR-0046 catalogs flipped per Q-G6.4-ε ε-1 LOCK; NO ADR-0035 modification per Q-G6.4-δ δ-1 LOCK; Sub-arc 2 preserved IN FLIGHT per Q-G6.4-ζ ζ-1 LOCK; G6.3 helper preserved DEFERRED forward-substrate per Q-G6.4-η η-1 LOCK |
+
+**ADR-0046 forward-substrate after closure**: dual-context AI_AGENT
+routing model canonical at substrate-architectural register
+substantively across ADR-0001 §Amendment 1 + ADR-0039 §Amendment 2
++ ADR-0041 §Sub-decision 6 amendment + ADR-0046 §Decision +
+glossary + 3 Elixir module docstrings + grpc/server.ex:266 closure
++ TS dual-context test anchors. G6.3 `resolveAiAgentWalletContext`
+helper remains DEFERRED dormant unless future Founder-authorized
+QLOCK lands the helper AND a real product flow surfaces unresolved
+ambiguity at the wallet-defaulting tier. Sub-arc 2 closure cascade
+remains forward-substrate after this commit per Q-G6.4-ζ ζ-1 LOCK +
+ADR-0041 CL.1 scope patch register substantively (separate later
+commit).
