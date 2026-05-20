@@ -7,8 +7,10 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  AUDIT_EVENT_TYPE_VALUES,
   createEntity,
   getLatestEventHash,
+  isKnownAuditEventType,
   prisma,
   queryAuditEvents,
   verifyAuditChain,
@@ -346,5 +348,36 @@ describe("getLatestEventHash", () => {
     });
     const head = await getLatestEventHash(actorId);
     expect(head).toBe(e2.event_hash);
+  });
+});
+
+// AUDIT.1 [PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION] per ADR-0048
+// §Audit-Literal Proposals (Q-PERS-θ θ-2): the 5 personalization literals are
+// DEFINED as append-only forward-substrate. No emitter exists in AUDIT.1
+// (emission is AUDIT.2 / working-set API exposure + future flows); these tests
+// only assert the literal vocabulary is present + recognized.
+describe("AUDIT.1 — personalization audit literals defined (no emission)", () => {
+  const PERSONALIZATION_LITERALS = [
+    "WORKING_SET_BUILT",
+    "CONTEXT_USED_MANIFEST_RECORDED",
+    "PERSONALIZATION_DEGRADED",
+    "CROSS_ENTITY_CONTEXT_REQUESTED",
+    "PERSONALIZATION_SIGNAL_RECORDED",
+  ] as const;
+
+  it("all 5 literals are present in AUDIT_EVENT_TYPE_VALUES", () => {
+    for (const lit of PERSONALIZATION_LITERALS) {
+      expect(AUDIT_EVENT_TYPE_VALUES).toContain(lit);
+    }
+  });
+
+  it("isKnownAuditEventType recognizes all 5 literals", () => {
+    for (const lit of PERSONALIZATION_LITERALS) {
+      expect(isKnownAuditEventType(lit)).toBe(true);
+    }
+  });
+
+  it("the literal set has no duplicates after the append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });

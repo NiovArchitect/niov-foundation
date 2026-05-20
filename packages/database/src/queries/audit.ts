@@ -109,7 +109,32 @@ export type AuditEventType =
   // embedding_failure_class / embedding_failure_message in degraded
   // path). NEVER raw query text, query keywords, query vectors, or
   // per-result distance distribution per RULE 0 + Q-G3-ζ.
-  | "CAPSULE_SIMILARITY_SEARCH";
+  | "CAPSULE_SIMILARITY_SEARCH"
+  // Phase 3 Sub-Arc 3 personalization audit literals per ADR-0048
+  // §Audit-Literal Proposals (Q-PERS-θ θ-2). AUDIT.1 clean-transition
+  // (`[PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION]`) DEFINES these 5
+  // append-only literals only — there is NO emitter in AUDIT.1. Emission
+  // is forward-substrate (AUDIT.2): WORKING_SET_BUILT + PERSONALIZATION_DEGRADED
+  // emit from the working-set orchestrator and land with working-set API
+  // exposure (arc 2); CONTEXT_USED_MANIFEST_RECORDED + CROSS_ENTITY_CONTEXT_REQUESTED
+  // + PERSONALIZATION_SIGNAL_RECORDED land with their future production flows
+  // (context-used manifest / cross-entity request / personalization-signal
+  // recording — all greenfield per ADR-0048 §missing). Append-only per
+  // ADR-0042 §Q-γ.1 (no removal/reorder of existing literals).
+  //
+  // SAFE audit metadata when emission lands (AUDIT.2): counts only +
+  // outcome classes + domain classes ("personal"/"enterprise") + DegradedReason
+  // class names + source/provenance classes. FORBIDDEN (RULE 0): no raw capsule
+  // content, no raw memory text, no raw vectors, no embeddings, no distance/cosine
+  // values, no raw query/request text (unless an existing audit policy explicitly
+  // allows it), no private capsule content, no cross-wallet content leakage, no
+  // precise sensitive location data, no consumer-facing diagnostic leakage —
+  // preserve the consumer/admin view split + the single-wallet spine.
+  | "WORKING_SET_BUILT"
+  | "CONTEXT_USED_MANIFEST_RECORDED"
+  | "PERSONALIZATION_DEGRADED"
+  | "CROSS_ENTITY_CONTEXT_REQUESTED"
+  | "PERSONALIZATION_SIGNAL_RECORDED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -173,6 +198,15 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   // §G3.6 + Q-G3.6-δ. Append-only per Q-γ.1 clean-transition (no
   // removal of existing literals; new literal appended).
   "CAPSULE_SIMILARITY_SEARCH",
+  // Phase 3 Sub-Arc 3 personalization literals per ADR-0048 §Audit-Literal
+  // Proposals (Q-PERS-θ θ-2). AUDIT.1 defines only; emission forward-substrate
+  // (AUDIT.2 / working-set API exposure + future manifest/cross-entity/signal
+  // flows). Append-only per ADR-0042 §Q-γ.1.
+  "WORKING_SET_BUILT",
+  "CONTEXT_USED_MANIFEST_RECORDED",
+  "PERSONALIZATION_DEGRADED",
+  "CROSS_ENTITY_CONTEXT_REQUESTED",
+  "PERSONALIZATION_SIGNAL_RECORDED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

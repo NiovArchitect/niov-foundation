@@ -625,6 +625,57 @@ Phase 3 global status; this performs it.
 Founder authorization explicit at `[PHASE-3-GLOBAL-CLOSURE-HAWKSEYE-QLOCK]` +
 `[PHASE-3-GLOBAL-CLOSURE-EXECUTE-VERIFY-AUTH]`.
 
+#### AUDIT.1 LANDED — 5 personalization audit literals defined (emission deferred to AUDIT.2) (2026-05-20)
+
+**Status:** AUDIT.1 `[PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION]`
+define-only landing (2 code/test + 2 tracker MOD) per Founder Q-AUDIT-α α-2 +
+β-1 + γ (no emission) + δ-1 + ε-1 + ζ-1 LOCKS at
+`[PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION-EXECUTE-VERIFY-AUTH]`. This is
+**arc 1** of the two Founder-gated post-Phase-3-closure arcs.
+
+- **5 personalization audit literals are now DEFINED** in
+  `packages/database/src/queries/audit.ts` (per ADR-0048 §Audit-Literal
+  Proposals / Q-PERS-θ θ-2; both the `AuditEventType` union and
+  `AUDIT_EVENT_TYPE_VALUES`, satisfies guard preserved, append-only per
+  ADR-0042 §Q-γ.1; 41 → 46 literals): `WORKING_SET_BUILT`,
+  `CONTEXT_USED_MANIFEST_RECORDED`, `PERSONALIZATION_DEGRADED`,
+  `CROSS_ENTITY_CONTEXT_REQUESTED`, `PERSONALIZATION_SIGNAL_RECORDED`.
+- **Emissions remain deferred to AUDIT.2** — define-only; no `writeAuditEvent`
+  emitter added; `WorkingSetService` / `SessionContextResolver` /
+  permission-envelope / moment-context / temporal-personalization /
+  degraded-mode / COE / read / write / negotiate all UNTOUCHED.
+  - `WORKING_SET_BUILT` + `PERSONALIZATION_DEGRADED` → emit at **arc 2
+    (working-set API exposure)**, the orchestrator's first production caller.
+  - `CONTEXT_USED_MANIFEST_RECORDED` + `CROSS_ENTITY_CONTEXT_REQUESTED` +
+    `PERSONALIZATION_SIGNAL_RECORDED` → emit with their future production flows
+    (greenfield per ADR-0048 §missing).
+- **Safe-metadata contract documented**: counts + outcome/domain/reason/
+  provenance classes only.
+- **Forbidden-metadata contract documented**: no raw capsule content / memory
+  text / vectors / embeddings / distance / cosine / raw query / private content
+  / cross-wallet leakage / precise location / consumer-facing diagnostics;
+  preserve the consumer/admin view split + the single-wallet spine.
+- **No schema / migration** (`event_type` is `String`); **no Elixir mirroring**
+  (API-tier literal, per the `CAPSULE_SIMILARITY_SEARCH` precedent); **no ADR
+  edit** (ADR-0048 §Audit-Literal Proposals preserved as the proposal record);
+  no `coe.service.ts`; no `working-set.service.ts`; no route/server.
+- **No production-affecting action** (vocabulary-only; no emission, no behavior
+  change).
+- **Next Founder-gated arc after AUDIT.1 = working-set API exposure** (arc 2;
+  carries AUDIT.2 emission for `WORKING_SET_BUILT` + `PERSONALIZATION_DEGRADED`).
+  **GOVSEC / government-grade hardening remains later and must NOT be started
+  now.**
+
+**Substrate sites (4 MOD)**: MOD `packages/database/src/queries/audit.ts` (5
+literals + per-literal safe/forbidden-metadata contract comments) + MOD
+`tests/unit/audit.test.ts` (presence + `isKnownAuditEventType` + no-duplicates)
++ MOD `docs/reference/section-12-progress.md` (AUDIT.1 row) + MOD this
+`CURRENT_BUILD_STATE.md` (this AUDIT.1 H4).
+
+Founder authorization explicit at
+`[PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION-HAWKSEYE-QLOCK]` +
+`[PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
