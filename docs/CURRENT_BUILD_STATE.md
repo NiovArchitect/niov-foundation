@@ -947,6 +947,45 @@ docs = 5 files) per Founder Q-GOVSEC3-α α-2 + β-1 + γ-1 + ε-1 **always-rota
 Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3A-EXECUTE-VERIFY-AUTH]`.
 
+#### GOVSEC.3B READINESS — Credential-Change Session Invalidation (GAP-A5; deferred-with-contract) (2026-05-20)
+
+**Status:** GOVSEC.3B `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` — **docs-only readiness**
+(3 MOD docs) per Founder Q-GOVSEC3B-α α-2 + β-2 + γ-1 + δ-3 + ε-1 + ζ-1 + η-2 LOCKS
+at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3B-READINESS-EXECUTE-VERIFY-AUTH]`.
+
+- **GAP-A5 is deferred-with-contract, not silently skipped.** There is **no
+  credential-change flow today**: `POST /auth/admin-reset` is a stub (returns a
+  UUID; no reset-token persistence, no email, no `password_hash` update) and
+  `password_hash` has no update path (written only at entity creation). The
+  GAP-A5 risk (a stale session surviving a credential change) is **unreachable**
+  until Section 14+ ships credential-change/password/email infrastructure.
+- **`invalidateEntitySessions` is available but incomplete for future GOVSEC
+  use** — it invalidates all ACTIVE sessions (DB status → INVALIDATED) but
+  writes only **legacy `audit_logs`** (not the modern hash-chained `audit_events`)
+  and does **not** delete Redis nonces. Security is preserved today via the DB
+  INVALIDATED status check (GOVSEC.2A maps it to `SESSION_REVOKED` reason
+  `invalidated` on next use); the future flow's helper must add modern audit +
+  nonce deletion.
+- **Canonical closure contract landed (ADR-0049).** When the Section 14+
+  credential-change flow ships it MUST: (1) list the entity's previously-ACTIVE
+  sessions; (2) `invalidateEntitySessions(entity_id, "credential_changed",
+  actor_id)`; (3) delete those sessions' nonces; (4) emit ONE aggregate modern
+  `SESSION_REVOKED` (outcome `SUCCESS`, `reason: "credential_changed"`,
+  `invalidated_count: N`) — reusing the existing literal (no new literal); (5)
+  safe/minimized metadata; (6) replay tests; (7) `verifyAuditChain` valid.
+- **No implementation landed** — no code, no route, no helper, no schema, no new
+  audit literal, no email infra, no `invalidateEntitySessions` modification.
+- **No ADR-0002 amendment** (no audit-architecture change). **GOVSEC.3A / 2A /
+  2B unchanged.** GOVSEC.3C (idle timeout) / GOVSEC.3D (device binding) and
+  GOVSEC.4/5/7 remain separate forward-substrate phases.
+
+**Substrate sites (3, docs-only)**: MOD `docs/reference/section-12-progress.md` +
+MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3B-READINESS-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15

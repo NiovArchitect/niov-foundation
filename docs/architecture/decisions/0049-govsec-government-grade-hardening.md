@@ -414,6 +414,61 @@ forward-substrate (GOVSEC.3B): the `invalidateEntitySessions` helper is ready,
 but there is no real password-change/reset flow yet (the current admin-reset is a
 stub; the flow ships with email infrastructure, Section 14+) to hook it to.
 
+## GOVSEC.3B Readiness Note — GAP-A5 Credential-Change Session Invalidation (2026-05-20)
+
+GAP-A5 is **prerequisite-gated**. There is no real credential-change flow today:
+`POST /auth/admin-reset` is a stub (it returns a one-time token but does not
+persist a reset-token, send email, or update `password_hash`), and `password_hash`
+has no update path (written only at entity creation). The GAP-A5 risk — a stale
+session surviving a credential change — is therefore **unreachable** until Section
+14+ ships credential-change / password-reset / email infrastructure. Building the
+invalidation now would be speculative uncalled code designed for a caller that does
+not yet exist; GOVSEC.3B instead lands the **closure contract** so the gap is
+closed correctly when the flow ships.
+
+**Closure contract (canonical).** When a credential-change / password-change /
+password-reset flow ships, it MUST:
+1. List the entity's previously-ACTIVE sessions (`prisma.session.findMany
+   {entity_id, status:"ACTIVE"}`).
+2. Call `invalidateEntitySessions(entity_id, "credential_changed", actor_id)`.
+3. Delete the Redis nonces for those previously-ACTIVE sessions.
+4. Emit ONE aggregate modern hash-chained `SESSION_REVOKED` event:
+   - `outcome: "SUCCESS"`
+   - `details.reason: "credential_changed"`
+   - `details.invalidated_count: N`
+   - `actor_entity_id`: the actor performing the credential change
+   - `target_entity_id` (or equivalent target scope) if existing audit policy supports it
+5. Keep metadata safe and minimized.
+6. Add replay tests proving old sessions cannot validate after credential change.
+7. Preserve `verifyAuditChain` validity.
+
+**Reuse `SESSION_REVOKED`; add no new literal.** Do NOT use per-session modern
+audit events unless a later QLOCK proves evidence requires it — per-session events
+may create avoidable actor-chain contention. On later use of an invalidated
+session, GOVSEC.2A already emits `SESSION_REVOKED` reason `invalidated`.
+
+**Substrate gaps to address in that flow's helper.** `invalidateEntitySessions`
+currently (a) writes only legacy `audit_logs` (no modern `audit_events`) and (b)
+does not delete Redis nonces. Security is preserved today regardless (the DB
+INVALIDATED status check fires before the nonce check in `validateSession` and
+GOVSEC.2A maps it to `SESSION_REVOKED` reason `invalidated`), but the future
+helper must add modern hash-chained audit + nonce deletion per the contract.
+
+**Safe future audit metadata:** `reason: "credential_changed"`,
+`invalidated_count`, and a class-only credential-change source if needed (e.g.
+`"self_service_password_change"` / `"admin_password_reset_completed"`).
+**Forbidden future audit metadata:** no password / password hash / reset token /
+bearer token / JWT / nonce value / secret / raw or previous TAR hash / raw PII
+beyond existing allowed identifiers / raw capsule content / memory text / vectors /
+embeddings / distance / cosine / private enterprise content / cross-wallet data /
+precise location / full audit rows / consumer diagnostics.
+
+**No ADR-0002 amendment** — GOVSEC.3B changes no audit architecture (docs-only
+contract). **No schema** in GOVSEC.3B. Section 14+ password / email / reset-token
+infrastructure remains outside this phase. GAP-A5 is marked **deferred-with-
+contract**; it closes when the credential-change flow lands and satisfies the
+contract above.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
