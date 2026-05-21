@@ -305,6 +305,40 @@ GOVSEC.1 authorized at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-HAWKSEYE-QLOCK]`
 (this docs-only landing; RULE 20 explicit authorization for ADR-0049 creation +
 the CLAUDE.md catalog edit). 2026-05-20.
 
+## GOVSEC.2A Implementation Note (2026-05-20)
+
+GOVSEC.2A (the first code-bearing GOVSEC phase) closed **GAP-G1** (session-
+lifecycle audit emission). `validateSession` now emits the modern hash-chained
+`SESSION_EXPIRED` / `SESSION_REVOKED` literals at its failure-detection branches
+(`apps/api/src/services/auth.service.ts`, private `emitSessionDenial` helper),
+on the actor's per-user chain, with safe class metadata only
+(`reason`/`subreason` enums; never token/nonce/TAR-hash/secret/raw content). The
+`SESSION_INVALIDATED` branches map to `SESSION_REVOKED` (no new literal);
+`SESSION_CREATED` is preserved as-is (emitted at refresh).
+
+**RULE 13 — two audit systems (clarification).** Foundation has two distinct
+audit surfaces: (1) a **legacy** `audit_logs` table written via
+`writeAudit({action})` (`packages/database/src/audit.ts`, used by
+`packages/database/src/queries/session.ts` for `SESSION_CREATE` /
+`SESSION_TERMINATE` / `SESSION_EXPIRY_SWEEP`), which is **not** hash-chained; and
+(2) the **modern** append-only SHA-256 hash-chained `audit_events` table written
+via `writeAuditEvent({event_type})` (`packages/database/src/queries/audit.ts`).
+**GOVSEC.2A targets the modern `audit_events` chain only.** The legacy
+`audit_logs` session path is intentionally left untouched.
+
+**ADR-0002 amendment re-scope.** This ADR's §Phase Decomposition and §Closure
+Criteria originally stated that GOVSEC.2 "amends ADR-0002." That expectation is
+**re-scoped**: GOVSEC.2A emits **already-defined** literals through the
+**existing, unchanged** append-only hash-chain architecture (no change to
+`writeAuditEvent`, `canonicalRecord`, the advisory-lock discipline, the
+append-only triggers, or `verifyAuditChain`). Because no audit-architecture
+change occurs, **ADR-0002 is not amended** at GOVSEC.2A. An ADR-0002 amendment
+may be reconsidered later only if GOVSEC.2B (machine-readable evidence export)
+introduces new audit-derived-evidence semantics. GAP-O1 (audit-throughput /
+hash-chain advisory-lock contention) is addressed by design at 2A (per-user
+chain, failure-path only) and remains a future-substrate optimization-measurement
+item.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

@@ -6,6 +6,7 @@
 //              audit_events table, and the in-memory NonceStore.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import jwt from "jsonwebtoken";
 import {
   AuthService,
   narrowOperations,
@@ -309,6 +310,193 @@ describe("validateSession", () => {
     if (check.valid) return;
     expect(check.code).toBe("SESSION_EXPIRED");
     void entity;
+  });
+});
+
+describe("validateSession -- GAP-G1 session-lifecycle audit emission (GOVSEC.2A)", () => {
+  // WHAT: Fetch the modern hash-chained session-lifecycle rows for an actor.
+  // WHY: GAP-G1 records SESSION_EXPIRED / SESSION_REVOKED on the actor chain.
+  async function sessionRows(
+    entityId: string,
+    eventType: "SESSION_EXPIRED" | "SESSION_REVOKED",
+  ) {
+    return prisma.auditEvent.findMany({
+      where: { actor_entity_id: entityId, event_type: eventType },
+      orderBy: { timestamp: "asc" },
+    });
+  }
+  function lastDetails(rows: { details: unknown }[]): Record<string, unknown> {
+    return (rows[rows.length - 1]!.details ?? {}) as Record<string, unknown>;
+  }
+
+  it("JWT-expired branch emits SESSION_EXPIRED with reason jwt_expired", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    const tar = await getTARByEntityId(entity.entity_id);
+    const expiredToken = jwt.sign(
+      {
+        session_id: login.session_id,
+        entity_id: entity.entity_id,
+        allowed_operations: login.allowed_operations,
+        clearance_ceiling: login.clearance_ceiling,
+        tar_hash: tar!.tar_hash,
+        expires_at: Date.now() - 1000,
+        issued_at: Date.now() - 2000,
+      },
+      TEST_JWT_SECRET,
+    );
+    const check = await service.validateSession(expiredToken, "read");
+    expect(check.valid).toBe(false);
+    const rows = await sessionRows(entity.entity_id, "SESSION_EXPIRED");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(lastDetails(rows).reason).toBe("jwt_expired");
+    expect(rows[rows.length - 1]!.outcome).toBe("DENIED");
+  });
+
+  it("row-EXPIRED branch emits SESSION_EXPIRED with reason row_expired", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    await prisma.session.update({
+      where: { session_id: login.session_id },
+      data: { status: "EXPIRED" },
+    });
+    await service.validateSession(login.token, "read");
+    const rows = await sessionRows(entity.entity_id, "SESSION_EXPIRED");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(lastDetails(rows).reason).toBe("row_expired");
+  });
+
+  it("nonce-absent branch emits SESSION_EXPIRED with reason nonce_absent", async () => {
+    const { service, store } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    await store.delete(login.session_id);
+    await service.validateSession(login.token, "read");
+    const rows = await sessionRows(entity.entity_id, "SESSION_EXPIRED");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(lastDetails(rows).reason).toBe("nonce_absent");
+  });
+
+  it("row-absent branch emits SESSION_REVOKED with reason row_absent", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    await prisma.session.delete({ where: { session_id: login.session_id } });
+    await service.validateSession(login.token, "read");
+    const rows = await sessionRows(entity.entity_id, "SESSION_REVOKED");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(lastDetails(rows).reason).toBe("row_absent");
+  });
+
+  it("TERMINATED branch emits SESSION_REVOKED with reason terminated", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    await service.logout(login.session_id, entity.entity_id);
+    await service.validateSession(login.token, "read");
+    const rows = await sessionRows(entity.entity_id, "SESSION_REVOKED");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(lastDetails(rows).reason).toBe("terminated");
+  });
+
+  it("INVALIDATED status emits SESSION_REVOKED with reason invalidated + subreason session_invalidated", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    await prisma.session.update({
+      where: { session_id: login.session_id },
+      data: { status: "INVALIDATED" },
+    });
+    const check = await service.validateSession(login.token, "read");
+    expect(check.valid).toBe(false);
+    if (!check.valid) expect(check.code).toBe("SESSION_INVALIDATED");
+    const rows = await sessionRows(entity.entity_id, "SESSION_REVOKED");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(lastDetails(rows).reason).toBe("invalidated");
+    expect(lastDetails(rows).subreason).toBe("session_invalidated");
+  });
+
+  it("stale TAR-hash token (active session) emits SESSION_REVOKED with reason + subreason tar_hash_mismatch", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    // An ACTIVE session plus a token carrying a tar_hash that no longer matches
+    // the current TAR exercises the TAR-mismatch branch directly.
+    // (updateTARPermissions would instead invalidate the session row and hit the
+    // INVALIDATED-status branch first -- reason "invalidated", not this one.)
+    const staleTarToken = jwt.sign(
+      {
+        session_id: login.session_id,
+        entity_id: entity.entity_id,
+        allowed_operations: login.allowed_operations,
+        clearance_ceiling: login.clearance_ceiling,
+        tar_hash: "stale-tar-hash-that-does-not-match",
+        expires_at: Date.now() + 60_000,
+        issued_at: Date.now(),
+      },
+      TEST_JWT_SECRET,
+    );
+    const check = await service.validateSession(staleTarToken, "read");
+    expect(check.valid).toBe(false);
+    if (!check.valid) expect(check.code).toBe("SESSION_INVALIDATED");
+    const rows = await sessionRows(entity.entity_id, "SESSION_REVOKED");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(lastDetails(rows).reason).toBe("tar_hash_mismatch");
+    expect(lastDetails(rows).subreason).toBe("tar_hash_mismatch");
+  });
+
+  it("bad/tampered token returns SESSION_INVALID and emits NO session-lifecycle event", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    const tampered = `${login.token}tamper`;
+    const check = await service.validateSession(tampered, "read");
+    expect(check.valid).toBe(false);
+    if (!check.valid) expect(check.code).toBe("SESSION_INVALID");
+    const expired = await sessionRows(entity.entity_id, "SESSION_EXPIRED");
+    const revoked = await sessionRows(entity.entity_id, "SESSION_REVOKED");
+    expect(expired.length).toBe(0);
+    expect(revoked.length).toBe(0);
+  });
+
+  it("successful validateSession emits NO session-lifecycle event", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    const check = await service.validateSession(login.token, "read");
+    expect(check.valid).toBe(true);
+    const expired = await sessionRows(entity.entity_id, "SESSION_EXPIRED");
+    const revoked = await sessionRows(entity.entity_id, "SESSION_REVOKED");
+    expect(expired.length).toBe(0);
+    expect(revoked.length).toBe(0);
+  });
+
+  it("emitted details contain only safe class metadata (no token / nonce / tar hash / secret / raw content)", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    const login = (await service.login(email, password, ["read"])) as LoginResult;
+    await prisma.session.update({
+      where: { session_id: login.session_id },
+      data: { status: "INVALIDATED" },
+    });
+    await service.validateSession(login.token, "read");
+    const rows = await sessionRows(entity.entity_id, "SESSION_REVOKED");
+    const details = lastDetails(rows);
+    expect(Object.keys(details).sort()).toEqual(["reason", "subreason"]);
+    const serialized = JSON.stringify(details);
+    for (const forbidden of [
+      login.token,
+      entity.entity_id === "" ? "x" : "eyJ", // JWT prefix never appears
+      "password",
+      "nonce",
+      "tar_hash",
+      "secret",
+      "bearer",
+    ]) {
+      expect(serialized).not.toContain(forbidden);
+    }
   });
 });
 

@@ -798,6 +798,57 @@ Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-HAWKSEYE-QLOCK]` +
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G1-EXECUTE-VERIFY-AUTH]`.
 
+#### GOVSEC.2A LANDED — Session-Lifecycle Audit Emission Completion (GAP-G1) (2026-05-20)
+
+**Status:** GOVSEC.2A `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — the **first
+code-bearing GOVSEC phase** (1 MOD code + 1 MOD unit + 1 NEW integration + 3 docs
+= 6 files) per Founder Q-GOVSEC2-α α-2 (split) + β-1 + γ-1 + δ (export→2B) + ε-1 +
+ζ-3 + η-1 + θ-2 LOCKS at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G2A-EXECUTE-VERIFY-AUTH]`.
+
+- **GAP-G1 closed** (session-lifecycle emission): `validateSession` now emits the
+  modern hash-chained `SESSION_EXPIRED` / `SESSION_REVOKED` literals at its
+  failure-detection branches via a private `emitSessionDenial` helper in
+  `apps/api/src/services/auth.service.ts`. Matrix: JWT-expired/row-EXPIRED/
+  nonce-absent → `SESSION_EXPIRED`; row-absent/TERMINATED → `SESSION_REVOKED`;
+  INVALIDATED-status + TAR-hash-mismatch → `SESSION_REVOKED` with safe
+  `subreason`. Bad/malformed token (`SESSION_INVALID`) and the success path emit
+  nothing; `OPERATION_NOT_PERMITTED` emits nothing (authz, not lifecycle).
+- **Modern `audit_events` hash chain used** — emissions land on the **actor's
+  per-user chain** (no SCHEDULER-chain batch emission; GAP-O1 shared-chain
+  advisory-lock contention avoided; success path adds no audit write).
+- **No legacy `audit_logs` migration** — the `session.ts` `writeAudit(action)`
+  legacy path is untouched; `packages/database/**`, `audit.ts`, `writeAuditEvent`,
+  and `verifyAuditChain` are unchanged.
+- **No new audit literal** — `SESSION_INVALIDATED` is **not** created; INVALIDATED
+  branches map to `SESSION_REVOKED` (reason/subreason). `SESSION_CREATED`
+  preserved as-is (refresh).
+- **No schema change** (event_type is String; literals already defined).
+- **No compliance/export implementation** — GOVSEC.2B machine-readable evidence
+  export remains a **separate forward-substrate phase**.
+- **No ADR-0002 amendment** (θ-2): GOVSEC.2A emits already-defined literals
+  through the existing **unchanged** hash-chain architecture, so ADR-0002 is not
+  amended; ADR-0049 carries a GOVSEC.2A progress note + the re-scope record + the
+  RULE 13 two-audit-system clarification (legacy `audit_logs` via
+  `writeAudit(action)` vs modern hash-chained `audit_events` via
+  `writeAuditEvent(event_type)`; GOVSEC.2A targets the modern chain only).
+- **Safe metadata** — `reason`/`subreason` enum classes + `session_id` +
+  `actor_entity_id` + `outcome` only; never token/nonce/TAR-hash/secret/raw
+  content. Per RULE 4 the audit write is awaited and not swallowed (fails closed).
+- **GOVSEC.2B and GOVSEC.3 remain separate** forward-substrate phases, each
+  gated by a distinct Founder QLOCK.
+- **Tests:** 10 NEW unit (per-branch + bad-token-no-emission + success-no-emission
+  + safe-metadata) + NEW `tests/integration/session-lifecycle-audit.test.ts` (8
+  scenarios incl. `verifyAuditChain` valid:true after emissions + append-only
+  UPDATE rejection).
+
+**Substrate sites (6)**: MOD `apps/api/src/services/auth.service.ts` + MOD
+`tests/unit/auth.test.ts` + NEW `tests/integration/session-lifecycle-audit.test.ts`
++ MOD `docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md`
++ MOD `docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G2A-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15

@@ -116,6 +116,16 @@ export interface ValidateFailure {
     | "OPERATION_NOT_PERMITTED";
 }
 
+// WHAT: Optional request context for validateSession (GAP-G1 / GOVSEC.2A).
+// INPUT: Used as an optional parameter only.
+// OUTPUT: None -- this is a type.
+// WHY: Lets a caller supply the request IP for the session-lifecycle denial
+//      audit without breaking existing callers (the parameter is optional and
+//      ip_address defaults to null when absent).
+export interface ValidateSessionContext {
+  ip_address?: string | null;
+}
+
 // WHAT: The shape of the JWT payload we sign.
 // INPUT: Used as a parameter / return type for jwt.sign / jwt.verify.
 // OUTPUT: None -- this is a type.
@@ -372,6 +382,7 @@ export class AuthService {
   async validateSession(
     token: string,
     requiredOp: string,
+    context?: ValidateSessionContext,
   ): Promise<ValidateSuccess | ValidateFailure> {
     // 1. Verify JWT signature
     let payload: SessionTokenPayload;
@@ -381,36 +392,46 @@ export class AuthService {
         this.config.jwtSecret,
       ) as SessionTokenPayload;
     } catch {
+      // Malformed / bad-signature token: not a session-lifecycle transition
+      // and no decoded payload to attribute -- emit no lifecycle audit event.
       return { valid: false, code: "SESSION_INVALID" };
     }
 
     // 2. Check expires_at
     if (Date.now() >= payload.expires_at) {
+      await this.emitSessionDenial(payload, "SESSION_EXPIRED", "jwt_expired", null, context);
       return { valid: false, code: "SESSION_EXPIRED" };
     }
 
     // 3. Check session in DB -- TERMINATED rejects
     const sessionRow = await getSessionById(payload.session_id);
     if (sessionRow === null) {
+      await this.emitSessionDenial(payload, "SESSION_REVOKED", "row_absent", null, context);
       return { valid: false, code: "SESSION_REVOKED" };
     }
     if (sessionRow.status === "TERMINATED") {
+      await this.emitSessionDenial(payload, "SESSION_REVOKED", "terminated", null, context);
       return { valid: false, code: "SESSION_REVOKED" };
     }
     if (sessionRow.status === "INVALIDATED") {
+      await this.emitSessionDenial(payload, "SESSION_REVOKED", "invalidated", "session_invalidated", context);
       return { valid: false, code: "SESSION_INVALIDATED" };
     }
     if (sessionRow.status === "EXPIRED") {
+      await this.emitSessionDenial(payload, "SESSION_EXPIRED", "row_expired", null, context);
       return { valid: false, code: "SESSION_EXPIRED" };
     }
 
     // 4 + 5. Compare current TAR hash to the one in the token
     const currentTar = await getTARByEntityId(payload.entity_id);
     if (currentTar === null || currentTar.tar_hash !== payload.tar_hash) {
+      await this.emitSessionDenial(payload, "SESSION_REVOKED", "tar_hash_mismatch", "tar_hash_mismatch", context);
       return { valid: false, code: "SESSION_INVALIDATED" };
     }
 
-    // 6. Required operation must be in the session's allowed_operations
+    // 6. Required operation must be in the session's allowed_operations.
+    // An operation-scope denial is an authorization decision, not a session-
+    // lifecycle transition -- emit no lifecycle audit event here.
     if (!payload.allowed_operations.includes(requiredOp)) {
       return { valid: false, code: "OPERATION_NOT_PERMITTED" };
     }
@@ -418,6 +439,7 @@ export class AuthService {
     // 7. Nonce must still exist in Redis
     const nonceLive = await this.config.nonceStore.has(payload.session_id);
     if (!nonceLive) {
+      await this.emitSessionDenial(payload, "SESSION_EXPIRED", "nonce_absent", null, context);
       return { valid: false, code: "SESSION_EXPIRED" };
     }
 
@@ -428,6 +450,34 @@ export class AuthService {
       clearance_ceiling: payload.clearance_ceiling,
       allowed_operations: payload.allowed_operations,
     };
+  }
+
+  // WHAT: Emit a modern hash-chained session-lifecycle denial audit event.
+  // INPUT: The decoded session payload, the lifecycle event_type, a safe
+  //        reason class, an optional subreason class, and optional context.
+  // OUTPUT: A promise that resolves once the audit_events row is written.
+  // WHY: GAP-G1 (GOVSEC.2A) -- record SESSION_EXPIRED / SESSION_REVOKED on the
+  //      actor's own audit chain at validateSession failure detection. Only safe
+  //      class metadata is recorded (reason / subreason enums); never the token,
+  //      nonce, TAR hash, or any raw content. Per RULE 4 the write is awaited and
+  //      not swallowed: a failed audit fails closed -- the caller never receives a
+  //      valid session. Emitting on the actor's per-user chain (not SCHEDULER)
+  //      avoids shared-chain advisory-lock contention (GAP-O1).
+  private async emitSessionDenial(
+    payload: SessionTokenPayload,
+    eventType: "SESSION_EXPIRED" | "SESSION_REVOKED",
+    reason: string,
+    subreason: string | null,
+    context: ValidateSessionContext | undefined,
+  ): Promise<void> {
+    await writeAuditEvent({
+      event_type: eventType,
+      outcome: "DENIED",
+      actor_entity_id: payload.entity_id,
+      session_id: payload.session_id,
+      ip_address: context?.ip_address ?? null,
+      details: subreason === null ? { reason } : { reason, subreason },
+    });
   }
 }
 
