@@ -469,6 +469,50 @@ infrastructure remains outside this phase. GAP-A5 is marked **deferred-with-
 contract**; it closes when the credential-change flow lands and satisfies the
 contract above.
 
+## GOVSEC.3C-A Implementation Note — GAP-A1/A2 Idle-Session Activity Tracking (2026-05-20)
+
+GAP-A1 (idle timeout) and GAP-A2 (abandoned-session reaping) require **activity
+tracking before enforcement** — a session has no idle baseline until its activity
+is recorded. GOVSEC.3C is therefore **split** to isolate the schema/tracking
+substrate (3C-A) from the behavior-changing enforcement (3C-B):
+
+- **GOVSEC.3C-A (this phase):** adds a nullable `Session.last_activity_at`
+  (additive; no backfill; no NOT NULL); `createSession` initializes it to
+  `issued_at`; `validateSession` updates it on the **success path** via the
+  throttled, audit-free `touchSessionActivity` helper (single atomic `updateMany`
+  whose WHERE clause encodes the throttle: write only when `last_activity_at` is
+  null or older than the threshold — default 60s — and status ACTIVE). The touch
+  is **best-effort** (try/catch): validation already succeeded, so a failed
+  tracking write must not fail the request (availability) and cannot make an
+  invalid session valid; a lagging write only makes the session appear slightly
+  more idle to 3C-B (conservative/safe).
+- **3C-A does NOT enforce idle timeout**, adds **no `idle_timeout_minutes`**,
+  emits **no new audit event**, and performs **no Redis TTL refresh** (θ-1: the
+  DB `last_activity_at` is authoritative; activity does not extend the nonce TTL).
+
+**GOVSEC.3C-B (forward-substrate)** will add a nullable
+`OrgSettings.idle_timeout_minutes` (NULL = idle disabled) and enforce the idle
+window in `validateSession`: when `now - COALESCE(last_activity_at, issued_at) >
+idle_window`, mark the session EXPIRED, delete its nonce, and emit
+`SESSION_EXPIRED` with `details.reason: "idle_timeout"` — **reusing the existing
+literal (no new literal)** — once at the detection transition (not per request).
+
+**Government-grade AAL targets (documented from the planning pass):**
+- AAL2 inactivity timeout ≤ **1 hour** (overall/reauth ≤ 24h).
+- AAL3 inactivity timeout ≤ **15 minutes** (overall/reauth ≤ 12h).
+- Activity resets the inactivity timer; on expiry the session is terminated
+  server-side (NIST SP 800-63B-4; NIST SP 800-53 AC-11 / AC-12 / IA-11; OWASP
+  Session Management; CISA secure-by-default short-lived sessions).
+
+**No ADR-0002 amendment** — 3C-A changes no audit architecture (tracking is a
+metadata write; no `writeAuditEvent`/`verifyAuditChain`/literal change). The
+schema addition is an additive nullable column documented here (no separate
+schema ADR). **No proactive abandoned-session sweep in 3C-A** — GAP-A2 is closed
+by lazy enforcement at next use (3C-B) plus the absolute TTL cap; a proactive
+idle-sweep needs a scheduler (none live) and is deferred to a future operational
+phase. The `touchSessionActivity` barrel re-export in `packages/database/src/index.ts`
+is the single additive line authorized as the 8th GOVSEC.3C-A file.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

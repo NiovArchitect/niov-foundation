@@ -124,6 +124,7 @@ export {
   createSession,
   getSessionById,
   terminateSession,
+  touchSessionActivity,
   expireOldSessions,
 } from "./queries/session.js";
 

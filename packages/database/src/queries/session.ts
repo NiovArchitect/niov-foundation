@@ -55,6 +55,9 @@ export async function createSession(
         // Override @default(now()) only when caller anchors all three
         // expiry sources to a known JS-clock instant (login does).
         ...(input.issued_at !== undefined ? { issued_at: input.issued_at } : {}),
+        // GOVSEC.3C-A / GAP-A1: seed activity tracking at creation so the
+        // future idle-timeout enforcement (GOVSEC.3C-B) always has a baseline.
+        last_activity_at: input.issued_at ?? new Date(),
       },
     });
 
@@ -86,6 +89,34 @@ export async function getSessionById(
   return prisma.session.findUnique({
     where: { session_id: sessionId },
   });
+}
+
+// WHAT: Throttled, audit-free update of an ACTIVE session's last_activity_at.
+// INPUT: session_id, optional { thresholdMs (default 60s), now }.
+// OUTPUT: true if the row was updated, false if the throttle window had not
+//         elapsed (or the session is not ACTIVE).
+// WHY: GOVSEC.3C-A / GAP-A1 -- record session activity so GOVSEC.3C-B can later
+//      enforce an idle timeout. The update is a single atomic updateMany whose
+//      WHERE clause itself encodes the throttle (last_activity_at is null OR
+//      older than the threshold), avoiding a read-then-write race and capping
+//      hot-path writes to at most one per threshold window per session. No
+//      audit, no Redis, no status change -- this is metadata tracking only.
+export async function touchSessionActivity(
+  sessionId: string,
+  options: { thresholdMs?: number; now?: Date } = {},
+): Promise<boolean> {
+  const thresholdMs = options.thresholdMs ?? 60_000;
+  const now = options.now ?? new Date();
+  const staleBefore = new Date(now.getTime() - thresholdMs);
+  const result = await prisma.session.updateMany({
+    where: {
+      session_id: sessionId,
+      status: "ACTIVE",
+      OR: [{ last_activity_at: null }, { last_activity_at: { lt: staleBefore } }],
+    },
+    data: { last_activity_at: now },
+  });
+  return result.count > 0;
 }
 
 // WHAT: Mark a session as TERMINATED (the user logged out).

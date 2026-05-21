@@ -20,6 +20,7 @@ import {
   incrementFailedAuth,
   resetFailedAuth,
   terminateSession,
+  touchSessionActivity,
   updateEntityStatus,
   writeAuditEvent,
   type Entity,
@@ -441,6 +442,19 @@ export class AuthService {
     if (!nonceLive) {
       await this.emitSessionDenial(payload, "SESSION_EXPIRED", "nonce_absent", null, context);
       return { valid: false, code: "SESSION_EXPIRED" };
+    }
+
+    // GOVSEC.3C-A / GAP-A1: record session activity (throttled, audit-free) on
+    // the success path only. This is best-effort metadata tracking, not a
+    // security gate: the session has already validated, so a failed tracking
+    // write must NOT fail an otherwise-valid request (availability), and cannot
+    // make an invalid session valid. If it lags, the session merely appears
+    // slightly more idle to the future GOVSEC.3C-B enforcement -- a conservative,
+    // safe direction. No idle enforcement is performed here.
+    try {
+      await touchSessionActivity(payload.session_id);
+    } catch {
+      // best-effort: validation already succeeded; activity tracking is non-critical
     }
 
     return {

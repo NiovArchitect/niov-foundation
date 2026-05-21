@@ -270,10 +270,11 @@ model Session {
   allowed_operations   String[]
   clearance_ceiling    Int
 
-  issued_at       DateTime  @default(now())
-  expires_at      DateTime?
-  terminated_at   DateTime?
-  invalidated_at  DateTime?
+  issued_at        DateTime  @default(now())
+  expires_at       DateTime?
+  last_activity_at DateTime?
+  terminated_at    DateTime?
+  invalidated_at   DateTime?
 
   status SessionStatus @default(ACTIVE)
 

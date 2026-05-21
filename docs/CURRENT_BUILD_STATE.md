@@ -986,6 +986,55 @@ MOD this `CURRENT_BUILD_STATE.md` + MOD
 Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3B-READINESS-EXECUTE-VERIFY-AUTH]`.
 
+#### GOVSEC.3C-A LANDED — Idle-Session Activity Tracking Substrate (GAP-A1 part 1) (2026-05-20)
+
+**Status:** GOVSEC.3C-A `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — the first
+**schema-bearing** GOVSEC code phase; **tracking only, no enforcement** (4
+code/schema + 1 NEW test + 3 docs = 8 files) per Founder Q-GOVSEC3C-α α-2 + β-2 +
+δ-2 + ε-2 + ζ-1 + θ-1 + ι-2 + κ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3CA-EXECUTE-VERIFY-AUTH]` + Founder index.ts
+8th-file authorization.
+
+- **Schema-bearing tracking substrate landed** — NEW additive nullable
+  `Session.last_activity_at DateTime?` (applied via `prisma db push` per ADR-0025;
+  the local test DB was refreshed via `scripts/local-test-db-refresh.sh` because
+  the bare `db:push:test` hit the documented pre-existing Ecto `schema_migrations`
+  cross-language drift — ADR-0035 §9 38th observation / ADR-0047 PR.3).
+- **`createSession` initializes `last_activity_at`** (= `issued_at`) so future
+  enforcement always has a baseline.
+- **`validateSession` success-path touches `last_activity_at`** via the NEW
+  throttled `touchSessionActivity` helper (atomic `updateMany`; writes only when
+  `last_activity_at` is null or older than a 60s threshold AND status ACTIVE).
+  The touch is **best-effort** (try/catch): a failed tracking write must not fail
+  an otherwise-valid request and cannot make an invalid session valid; if it lags,
+  the session merely appears slightly more idle to the future GOVSEC.3C-B
+  enforcement (a conservative, safe direction).
+- **No rejection-behavior change** — no session is rejected by idle time; a
+  1h-idle session still validates. **No idle enforcement.** **No
+  `idle_timeout_minutes`** (GOVSEC.3C-B).
+- **No audit event change** — 3C-A emits nothing new; `SESSION_EXPIRED` reason
+  `idle_timeout` belongs to 3C-B. **No new audit literal.**
+- **No Redis TTL refresh** (θ-1) — DB `last_activity_at` is authoritative;
+  activity does not extend the Redis nonce TTL.
+- **`touchSessionActivity` barrel re-export** added to `index.ts` (one additive
+  line; the only index.ts change; authorized as the 8th file).
+- **GOVSEC.2A** `emitSessionDenial` failure branches unchanged; **GOVSEC.3A**
+  refresh rotation unchanged; **GOVSEC.3B** readiness untouched (docs continuity
+  only). AAL2 idle ≤60min / AAL3 ≤15min documented for 3C-B.
+- **GOVSEC.3C-B enforcement remains separate** forward-substrate; GOVSEC.3D/4/5/7
+  untouched.
+- **Tests:** NEW `tests/integration/session-idle-tracking.test.ts` (7 scenarios).
+
+**Substrate sites (8)**: MOD `packages/database/prisma/schema.prisma` + MOD
+`packages/database/src/queries/session.ts` + MOD `packages/database/src/index.ts`
++ MOD `apps/api/src/services/auth.service.ts` + NEW
+`tests/integration/session-idle-tracking.test.ts` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3CA-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
