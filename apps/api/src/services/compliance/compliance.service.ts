@@ -97,6 +97,52 @@ export interface ComplianceReport {
   recent_failures: AuditEvent[];
 }
 
+// WHAT: GOVSEC.2B / GAP-G2 -- a machine-readable, OSCAL-compatible evidence
+//        summary derived read-only from the compliance state + audit-event
+//        counts. NOT a full OSCAL package (no SSP/SAP/SAR/POA&M generation).
+// INPUT: Used as return types only.
+// OUTPUT: None -- these are types.
+// WHY: Counts/classes only -- never raw AuditEvent rows, IP, event_hash,
+//      details JSON, or any actor/target id beyond the caller's own org.
+//      Field names mirror the OSCAL Assessment Results vocabulary
+//      (observations / findings / control-id) so the summary is
+//      machine-readable without implementing the full schema.
+export interface EvidenceObservation {
+  control_id: string;
+  methods: string[];
+  observation_class: string;
+  collected: string;
+  counts: { passed: number; failed: number };
+}
+export interface EvidenceFinding {
+  control_id: string;
+  status: string;
+  related_observation_count: number;
+}
+export interface EvidenceFrameworkResult {
+  framework_name: string;
+  compliant: boolean;
+  observations: EvidenceObservation[];
+  findings: EvidenceFinding[];
+}
+export interface EvidenceAuditSummaryEntry {
+  event_type: string;
+  outcome: string;
+  count: number;
+}
+export interface EvidenceExport {
+  export_type: "OSCAL_ASSESSMENT_RESULTS_SUMMARY";
+  oscal_compatible: true;
+  org_entity_id: string;
+  generated_at: string;
+  window: { from: string; to: string };
+  results: EvidenceFrameworkResult[];
+  audit_event_summary: EvidenceAuditSummaryEntry[];
+}
+export interface EvidenceExportOptions {
+  windowMs?: number;
+}
+
 // WHAT: The seed data for the seven spec frameworks.
 // INPUT: Used as a constant.
 // OUTPUT: An array of insert payloads.
@@ -638,6 +684,124 @@ export class ComplianceService {
       org_entity_id: orgEntityId,
       frameworks,
       evaluated_at: evaluatedAt,
+    };
+  }
+
+  // WHAT: Validate a session and build the caller's org's machine-readable
+  //        evidence export (GOVSEC.2B / GAP-G2).
+  // INPUT: Session token + optional window.
+  // OUTPUT: { ok:true, evidence } on success; auth-failure shape on invalid
+  //          session (fail-closed -- no evidence returned).
+  // WHY: Mirrors getComplianceStateForCaller's auth + org-scope pattern so the
+  //      export is org-scoped by construction (no cross-org/cross-tenant leak).
+  //      Helper-only in GOVSEC.2B; route exposure is deferred to GOVSEC.5 /
+  //      GOVSEC.7 after admin/authz + tenant-isolation hardening. The field is
+  //      named `evidence` (not `export`, a reserved word).
+  async generateEvidenceExportForCaller(
+    sessionToken: string,
+    options: EvidenceExportOptions = {},
+  ): Promise<
+    | { ok: true; evidence: EvidenceExport }
+    | { ok: false; code: string }
+  > {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "read",
+    );
+    if (!validation.valid) {
+      return { ok: false, code: validation.code };
+    }
+    const orgEntityId = await getOrgEntityId(validation.entity_id);
+    const evidence = await this.generateEvidenceExport(orgEntityId, options);
+    return { ok: true, evidence };
+  }
+
+  // WHAT: Build the deterministic, OSCAL-compatible evidence summary for an org.
+  // INPUT: The org entity id + optional window (default 24h, mirroring
+  //         getComplianceState).
+  // OUTPUT: An EvidenceExport (counts/classes only).
+  // WHY: GAP-G2 -- a read-only projection over getComplianceState (per-framework
+  //      verdicts) + strict prisma.auditEvent.count summaries scoped to the org
+  //      by target_entity_id. Never writes audit (no writeAuditEvent), never
+  //      mutates state, never returns raw AuditEvent rows. PASSED events are not
+  //      framework-tagged in the substrate, so observation counts.passed is the
+  //      org-window COMPLIANCE_CHECK_PASSED volume; counts.failed is per-framework
+  //      (via getComplianceState.sample_failure_count_24h). Each audit_event_summary
+  //      entry counts an exact (event_type, outcome) pair so the count matches its
+  //      label. au-2 (Audit & Accountability) is the canonical control the
+  //      audit-event evidence maps to.
+  async generateEvidenceExport(
+    orgEntityId: string,
+    options: EvidenceExportOptions = {},
+  ): Promise<EvidenceExport> {
+    const windowMs = options.windowMs ?? 24 * 60 * 60 * 1000;
+    const evaluatedAt = new Date();
+    const windowStart = new Date(evaluatedAt.getTime() - windowMs);
+    const window = { gte: windowStart, lte: evaluatedAt };
+
+    const state = await this.getComplianceState(orgEntityId, windowMs);
+
+    const [passedCount, failedCount, adminCount] = await Promise.all([
+      prisma.auditEvent.count({
+        where: {
+          target_entity_id: orgEntityId,
+          event_type: "COMPLIANCE_CHECK_PASSED",
+          outcome: "SUCCESS",
+          timestamp: window,
+        },
+      }),
+      prisma.auditEvent.count({
+        where: {
+          target_entity_id: orgEntityId,
+          event_type: "COMPLIANCE_CHECK_FAILED",
+          outcome: "DENIED",
+          timestamp: window,
+        },
+      }),
+      prisma.auditEvent.count({
+        where: {
+          target_entity_id: orgEntityId,
+          event_type: "ADMIN_ACTION",
+          outcome: "SUCCESS",
+          timestamp: window,
+        },
+      }),
+    ]);
+
+    const collected = evaluatedAt.toISOString();
+    const results: EvidenceFrameworkResult[] = state.frameworks.map((f) => ({
+      framework_name: f.framework_name,
+      compliant: f.compliant,
+      observations: [
+        {
+          control_id: "au-2",
+          methods: ["EXAMINE"],
+          observation_class: "audit_event_summary",
+          collected,
+          counts: { passed: passedCount, failed: f.sample_failure_count_24h },
+        },
+      ],
+      findings: [
+        {
+          control_id: "au-2",
+          status: f.compliant ? "satisfied" : "not-satisfied",
+          related_observation_count: 1,
+        },
+      ],
+    }));
+
+    return {
+      export_type: "OSCAL_ASSESSMENT_RESULTS_SUMMARY",
+      oscal_compatible: true,
+      org_entity_id: orgEntityId,
+      generated_at: collected,
+      window: { from: windowStart.toISOString(), to: evaluatedAt.toISOString() },
+      results,
+      audit_event_summary: [
+        { event_type: "COMPLIANCE_CHECK_PASSED", outcome: "SUCCESS", count: passedCount },
+        { event_type: "COMPLIANCE_CHECK_FAILED", outcome: "DENIED", count: failedCount },
+        { event_type: "ADMIN_ACTION", outcome: "SUCCESS", count: adminCount },
+      ],
     };
   }
 

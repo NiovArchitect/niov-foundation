@@ -849,6 +849,57 @@ code-bearing GOVSEC phase** (1 MOD code + 1 MOD unit + 1 NEW integration + 3 doc
 Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G2A-EXECUTE-VERIFY-AUTH]`.
 
+#### GOVSEC.2B LANDED — Machine-Readable Evidence Export Foundation (GAP-G2) (2026-05-20)
+
+**Status:** GOVSEC.2B `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — **helper/service
+only** (1 MOD code + 2 NEW tests + 3 docs = 6 files) per Founder Q-GOVSEC2B-α α-1 +
+β-1 + γ-2 + δ-3 + ε-1 + ζ-1 + η-3 + θ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G2B-EXECUTE-VERIFY-AUTH]`.
+
+- **Evidence export helper exists** — two additive `ComplianceService` methods:
+  `generateEvidenceExport(orgEntityId, options)` (pure deterministic core) +
+  `generateEvidenceExportForCaller(sessionToken, options)` (validate session →
+  `getOrgEntityId` org-scope → fail-closed; mirrors `getComplianceStateForCaller`).
+- **Export is an OSCAL-compatible SUMMARY, not a full OSCAL package** —
+  `export_type: "OSCAL_ASSESSMENT_RESULTS_SUMMARY"`, `oscal_compatible: true`;
+  per-framework `observations` (control_id `au-2`, methods `["EXAMINE"]`,
+  observation_class `audit_event_summary`, counts {passed, failed}) + `findings`
+  (status satisfied/not-satisfied) + top-level `audit_event_summary` of
+  (event_type, outcome, count). **Counts/classes only — no full AuditEvent rows,
+  ip_address, event_hash, details JSON, actor/target ids, or recent_failures.**
+  No SSP/SAP/SAR/POA&M generation.
+- **Data source (δ-3):** `getComplianceState` per-framework verdicts + strict
+  `prisma.auditEvent.count` scoped by `target_entity_id` (org). Read-only — **no
+  writeAuditEvent; hash chain + GAP-O1 unaffected** (no advisory-lock contention).
+- **Route exposure deferred** — there is **no route** in GOVSEC.2B
+  (`compliance.routes.ts` untouched). Route exposure is deferred to **GOVSEC.5**
+  (admin/authz + dual-control self-approval resolution) and/or **GOVSEC.7**
+  (tenant isolation). The `…ForCaller` helper establishes the safe org-scoped
+  contract a future route will use.
+- **`/compliance/report` BOLA + full-row exposure (pre-existing) surfaced, NOT
+  fixed here** — `GET /compliance/report` is bearer-only with no entity scoping
+  and returns full AuditEvent rows (`recent_failures`). GOVSEC.2B's export does
+  the OPPOSITE (org-scoped `…ForCaller` + counts-only). **GOVSEC.5 (authz) /
+  GOVSEC.7 (tenant) own this access-route hardening.**
+- **No schema change** (ζ-1; computed on-demand). **No ADR-0002 amendment** (θ-2;
+  read-only projection, no audit-architecture semantic change). **GOVSEC.2A
+  untouched** (auth.service.ts / audit.ts / session.ts / writeAuditEvent /
+  verifyAuditChain unchanged). **GOVSEC.3 remains a separate** forward-substrate
+  phase.
+- **Tests:** NEW `tests/unit/evidence-export.test.ts` (9) + NEW
+  `tests/integration/evidence-export.test.ts` (5; ForCaller auth path +
+  cross-org isolation + forbidden-field regression + no-audit-rows +
+  verifyAuditChain valid).
+
+**Substrate sites (6)**: MOD `apps/api/src/services/compliance/compliance.service.ts`
++ NEW `tests/unit/evidence-export.test.ts` + NEW
+`tests/integration/evidence-export.test.ts` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G2B-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15

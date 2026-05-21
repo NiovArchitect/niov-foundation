@@ -339,6 +339,40 @@ hash-chain advisory-lock contention) is addressed by design at 2A (per-user
 chain, failure-path only) and remains a future-substrate optimization-measurement
 item.
 
+## GOVSEC.2B Implementation Note (2026-05-20)
+
+GOVSEC.2B established the **GAP-G2** machine-readable evidence-export substrate.
+It is **substrate-complete through a helper/service** — two additive
+`ComplianceService` methods (`generateEvidenceExport(orgEntityId, options)` pure
+core + `generateEvidenceExportForCaller(sessionToken, options)` org-scoped auth
+gate mirroring `getComplianceStateForCaller`). The output is an OSCAL-compatible
+**assessment-results summary** (`export_type: "OSCAL_ASSESSMENT_RESULTS_SUMMARY"`;
+field names mirror OSCAL `observations`/`findings`/`control-id` lowercase-dotted
+e.g. `au-2`) carrying **counts and classes only** — never raw `AuditEvent` rows,
+`ip_address`, `event_hash`, `details` JSON, actor/target ids beyond the caller's
+org, or `recent_failures`. It is a **read-only projection** over
+`getComplianceState` + strict `prisma.auditEvent.count` scoped by
+`target_entity_id` (org); it never calls `writeAuditEvent` and does not touch the
+hash chain (GAP-O1 unaffected).
+
+**Route exposure deferred.** GOVSEC.2B adds **no route**. Route exposure is
+deferred to **GOVSEC.5** (admin/authz + dual-control self-approval resolution per
+ADR-0026) and/or **GOVSEC.7** (tenant isolation). The `…ForCaller` helper
+establishes the safe org-scoped contract a future route will reuse.
+
+**No ADR-0002 amendment.** The evidence export is a read-only projection over the
+existing audit/compliance data; it changes no audit architecture, so ADR-0002 is
+not amended (consistent with the GOVSEC.2A re-scope).
+
+**RULE 13 — pre-existing `/compliance/report` exposure surfaced (not fixed
+here).** `GET /api/v1/compliance/report` is bearer-only with **no entity-scoping
+authorization** (BOLA) and returns **full `AuditEvent` rows** via
+`generateComplianceReport.recent_failures` (including `ip_address`, `event_hash`,
+`details`). GOVSEC.2B deliberately does the OPPOSITE (org-scoped `…ForCaller` +
+counts-only) and does **not** modify or fix that route — the access-control +
+full-row-exposure remediation is assigned to **GOVSEC.5 (authz) / GOVSEC.7
+(tenant isolation)**. GOVSEC.2B does not modify GOVSEC.2A.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
