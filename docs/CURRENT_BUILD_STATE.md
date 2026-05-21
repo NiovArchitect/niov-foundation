@@ -1237,6 +1237,47 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.3D-C READINESS — Device-Mismatch Enforcement (deferred to GOVSEC.5) (2026-05-21)
+
+**Status:** GOVSEC.3D-C `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — **docs-only
+readiness contract** (3 docs) per Founder Q-GOVSEC3DC-α α-1 + β-3/γ-1/ε-2/ζ-1/η-2
+DEFERRED + δ-1 + θ-1 + ι-1 + κ-1 + λ-1 + μ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3DC-DEVICE-MISMATCH-READINESS-EXECUTE-VERIFY-AUTH]`.
+
+- **Docs-only.** No enforcement, no schema, no config substrate, no code.
+- **Records the enforcement blocker:** no recovery/step-up/break-glass substrate
+  exists — `/api/v1/auth/admin-reset` is a stub (PASSWORD_RESET_TRIGGERED trigger,
+  no reset-completion flow); `OrgSettings.mfa_required` is an unenforced flag (not
+  referenced by auth.service or middleware); no TOTP/second-factor/step-up route;
+  the only practical recovery today is a full re-login.
+- **3D-B advisory `device_bound` detection remains the only live device-binding
+  behavior** (a mismatch does not deny/revoke/audit).
+- **Future enforcement contract (deferred to a post-GOVSEC.5 phase):**
+  config-gated via a future `OrgSettings.device_binding_mode` +
+  `Session.device_binding_mode` snapshot (read free from the already-fetched row
+  per the 3C-B1 idle-snapshot precedent; default null/off; enum shape deferred
+  until GOVSEC.5); a future `markSessionDeviceMismatch` mirroring
+  `markSessionIdleExpired` (atomic ACTIVE→TERMINATED/INVALIDATED, returns boolean,
+  audit-free/Redis-free); reuse `SESSION_REVOKED` reason `device_mismatch` on an
+  actual revoke only (no new audit literal; no ADR-0002 amendment); best-effort
+  nonce delete with DB status authoritative; θ-1 missing-UA / ι-1 null-stored ⇒
+  no enforcement; single-emit on transition win.
+- **Hard enforcement is BLOCKED until GOVSEC.5** provides recovery/step-up/
+  break-glass (κ-1) — hard deny/revoke on user-agent churn would create surprise
+  re-login lockouts with no gentler alternative.
+- **GAP-A3 honest status:** detection landed (3D-A snapshot + 3D-B advisory);
+  runtime rejection/revoke gated on GOVSEC.5; **NOT runtime-enforcement closed.**
+- **GOVSEC.4 / GOVSEC.5 / GOVSEC.7 remain separate** forward-substrate.
+
+**Substrate sites (3, docs-only)**: MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3DC-DEVICE-MISMATCH-READINESS-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

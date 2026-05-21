@@ -730,6 +730,68 @@ and recovery/step-up/break-glass integration with GOVSEC.5 — hard-blocking
 mismatches must not ship before recovery exists (OWASP: blocking mismatches is
 impractical for multi-device users).
 
+## GOVSEC.3D-C Readiness Note — GAP-A3 Device-Mismatch Enforcement (deferred to GOVSEC.5) (2026-05-21)
+
+GOVSEC.3D-C is a **docs-only readiness contract**. It records why hard
+device-mismatch enforcement is **not coherent to ship today** and specifies the
+future enforcement contract + its dependency. **No code, no schema, no config
+substrate, no enforcement.**
+
+**Enforcement blocker (decisive).** Planning found **no recovery / step-up /
+break-glass substrate exists**:
+- `/api/v1/auth/admin-reset` is a **stub** — it validates membership and emits a
+  `PASSWORD_RESET_TRIGGERED` legacy audit, but has **no reset-completion flow**.
+- `OrgSettings.mfa_required` exists (org.ts) but is an **unenforced** org/compliance
+  flag — it is referenced by neither `auth.service.ts` nor the middleware; there is
+  no runtime step-up.
+- There is **no TOTP / second-factor / step-up challenge route** and **no
+  break-glass recovery path**.
+- The **only practical recovery from a revoked session today is a full re-login**.
+
+Because user-agent strings churn (browser/OS updates, multi-device users,
+APIs/bots, missing user-agent, mobile/proxy variability), a hard deny/revoke on
+user-agent mismatch would create **surprise re-login lockouts** with no gentler
+alternative — the government-grade-coherent response to a mismatch is a **step-up
+challenge** (re-verify), which is a **GOVSEC.5** capability. Therefore hard
+enforcement is **blocked until GOVSEC.5** (κ-1). This mirrors the GOVSEC.3B
+posture (a closure contract gated on a missing prerequisite).
+
+**Live behavior today.** GOVSEC.3D-B advisory `device_bound` detection (true /
+false / null) on the validateSession success path remains the **only** live
+device-binding behavior. A mismatch does **not** deny, revoke, or audit.
+
+**GAP-A3 honest status:**
+- 3D-A captured + snapshotted the device-binding material (`Session.device_binding_hash`).
+- 3D-B threaded client context and surfaced advisory `device_bound`.
+- 3D-C documents the enforcement contract + the GOVSEC.5 dependency.
+- **Runtime rejection/revoke is NOT active.** GAP-A3 is **detection-ready, not
+  runtime-enforcement closed.**
+
+**Future enforcement contract (deferred; lands in a post-GOVSEC.5 phase):**
+- **Config-gated.** Likely `OrgSettings.device_binding_mode` + a
+  `Session.device_binding_mode` **snapshot** read free from the already-fetched
+  session row (the GOVSEC.3C-B1 idle-snapshot precedent — avoids a validateSession
+  org-settings hot-path read). **Default null/off** (γ-1; no surprise lockouts).
+  The **enum/value shape is deferred until GOVSEC.5 capabilities are known**
+  (off / advisory / step-up / deny / revoke depends on what recovery enables).
+- **Enforcement point.** The existing θ-3 `device_bound` computation point, gated
+  by the snapshot mode. Uses already-fetched `Session` fields + the threaded
+  `user_agent` — **zero extra DB reads**. **θ-1** missing live user-agent ⇒ no
+  enforcement; **ι-1** null stored `device_binding_hash` ⇒ no enforcement.
+- **Revoke helper.** A future `markSessionDeviceMismatch` mirroring
+  `markSessionIdleExpired`: atomic `ACTIVE -> TERMINATED` (or `-> INVALIDATED`)
+  `updateMany` returning a transitioned boolean; **audit-free, Redis-free**.
+- **Audit.** Reuse **`SESSION_REVOKED` with `details.reason = "device_mismatch"`**
+  on an **actual revoke only** (the `tar_hash_mismatch` precedent) — **no new
+  audit literal, no ADR-0002 amendment**. Emit **only** when the atomic transition
+  wins (`count === 1`) → single emission under concurrency (ζ-1).
+- **Nonce.** Best-effort delete on actual revoke (η-2); DB status authoritative;
+  audit fail-closed per RULE 4.
+
+**No ADR-0002 amendment** (no audit-architecture change in 3D-C; the future
+`device_mismatch` reuses the existing `SESSION_REVOKED` literal). **No schema, no
+config substrate, no enforcement in 3D-C.**
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
