@@ -270,11 +270,12 @@ model Session {
   allowed_operations   String[]
   clearance_ceiling    Int
 
-  issued_at        DateTime  @default(now())
-  expires_at       DateTime?
-  last_activity_at DateTime?
-  terminated_at    DateTime?
-  invalidated_at   DateTime?
+  issued_at            DateTime  @default(now())
+  expires_at           DateTime?
+  last_activity_at     DateTime?
+  idle_timeout_minutes Int?
+  terminated_at        DateTime?
+  invalidated_at       DateTime?
 
   status SessionStatus @default(ACTIVE)
 
@@ -835,6 +836,7 @@ model EntityProfile {
 model OrgSettings {
   org_entity_id           String   @id @db.Uuid
   session_timeout_minutes Int      @default(480)
+  idle_timeout_minutes    Int?
   mfa_required            Boolean  @default(false)
   ip_whitelist            String[] @default([])
   auto_approve_low_risk   Boolean  @default(false)

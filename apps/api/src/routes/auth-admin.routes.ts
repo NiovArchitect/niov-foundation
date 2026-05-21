@@ -380,6 +380,10 @@ export async function registerAuthAdminRoutes(
       clearance_ceiling: originalSession.clearance_ceiling,
       issued_at: issuedAt,
       expires_at: expiresAt,
+      // GOVSEC.3C-B1 / GAP-A1: snapshot the org idle-timeout window onto the
+      // refreshed session so a refreshed session also idle-expires (3C-B2).
+      // Additive only -- the GOVSEC.3A rotation logic below is unchanged.
+      idle_timeout_minutes: orgSettings.idle_timeout_minutes,
     });
 
     const payload: SessionTokenPayload = {

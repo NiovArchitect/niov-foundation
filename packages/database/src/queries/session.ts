@@ -30,6 +30,12 @@ export interface CreateSessionInput {
   expires_at: Date;
   issued_at?: Date;
   session_id?: string;
+  // GOVSEC.3C-B1 / GAP-A1: per-session snapshot of the org's idle-timeout
+  // window, captured at creation (mirrors clearance_ceiling/allowed_operations
+  // snapshotting). null = idle enforcement disabled for this session. Read by
+  // GOVSEC.3C-B2 enforcement from the already-fetched session row -- no
+  // per-request org-settings lookup in validateSession.
+  idle_timeout_minutes?: number | null;
 }
 
 // WHAT: Insert one Session row plus its audit entry, atomically.
@@ -58,6 +64,10 @@ export async function createSession(
         // GOVSEC.3C-A / GAP-A1: seed activity tracking at creation so the
         // future idle-timeout enforcement (GOVSEC.3C-B) always has a baseline.
         last_activity_at: input.issued_at ?? new Date(),
+        // GOVSEC.3C-B1 / GAP-A1: snapshot the org idle-timeout window onto the
+        // session (null = idle disabled). Enforcement (3C-B2) reads this from
+        // the already-fetched row -- no per-request org-settings lookup.
+        idle_timeout_minutes: input.idle_timeout_minutes ?? null,
       },
     });
 

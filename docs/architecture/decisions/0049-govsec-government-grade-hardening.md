@@ -513,6 +513,55 @@ idle-sweep needs a scheduler (none live) and is deferred to a future operational
 phase. The `touchSessionActivity` barrel re-export in `packages/database/src/index.ts`
 is the single additive line authorized as the 8th GOVSEC.3C-A file.
 
+## GOVSEC.3C-B1 Implementation Note — GAP-A1/A2 Idle-Window Snapshot (Option B) (2026-05-20)
+
+GOVSEC.3C-B is split into **B1 (idle-window snapshot substrate)** and **B2 (idle
+enforcement)**. This note records B1.
+
+**Performance decision (Option B snapshot).** Planning found that fetching org
+settings inside `validateSession` to discover the idle window would be expensive:
+`getOrgSettingsOrDefaults` for a PERSON caller walks `EntityMembership` (up to 7
+hops) + reads `OrgSettings` — **~3 reads typical, up to ~16 worst-case per
+authenticated request** — and `validateSession` does not fetch org settings today.
+That would be a 2-8× hot-path read amplification, paid **even for null-idle orgs**
+(the default). Therefore the idle window is **snapshotted onto the session row at
+creation**, exactly as `clearance_ceiling` and `allowed_operations` already are.
+B2 enforcement reads `sessionRow.idle_timeout_minutes` from the already-fetched
+row → **zero extra `validateSession` reads**, including for null-idle sessions.
+
+**B1 substrate:**
+- `OrgSettings.idle_timeout_minutes Int?` (per-org config; null = disabled).
+- `Session.idle_timeout_minutes Int?` (per-session snapshot; null = disabled).
+- `ORG_SETTINGS_DEFAULTS.idle_timeout_minutes = null` + `MergedOrgSettings` +
+  `getOrgSettingsOrDefaults` row-mapping carry it through.
+- `createSession` persists an optional `idle_timeout_minutes`; **login** and
+  **refresh** (the two createSession callers, both of which already read org
+  settings) snapshot it. The refresh change is a one-line additive snapshot pass;
+  the GOVSEC.3A rotation logic is unchanged.
+- `validateSession` is **unchanged** in B1 — no org-settings lookup, no idle
+  check, no enforcement. GOVSEC.3C-A success-path activity tracking + GOVSEC.2A
+  failure-branch emissions are preserved.
+
+**Null-default posture (standards-aligned, honest GAP status).** NIST SP 800-53
+AC-11/AC-12 treat the inactivity period as **organization-defined**; OWASP ties
+the idle window to risk tier. A per-org configured idle window with null-default
+is therefore standards-aligned and avoids surprising consumer/enterprise tenants.
+The **GOVSEC government profile MUST mandate** AAL2 idle ≤ 60 minutes / AAL3 idle ≤
+15 minutes. Honest GAP-A1 status: **B1 lands the snapshot substrate; runtime
+closure requires B2 enforcement; per-org closure requires deployment config
+(government profile).**
+
+**B2 (forward-substrate)** will, in `validateSession` after the DB status checks,
+compute idle from `sessionRow.idle_timeout_minutes` + `sessionRow.last_activity_at`
+(both already fetched), `markSessionIdleExpired` (atomic ACTIVE→EXPIRED, emit once
+when count===1), best-effort nonce delete, and emit `SESSION_EXPIRED` reason
+`idle_timeout` (reusing the literal; no new literal). GAP-A2 closes via lazy
+enforcement + the absolute TTL cap; no proactive sweep (no scheduler).
+
+**No ADR-0002 amendment** (no audit-architecture change in B1; both schema
+additions are additive nullable columns documented here). **No new audit literal.**
+**No enforcement in B1.**
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

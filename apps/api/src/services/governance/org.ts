@@ -31,6 +31,11 @@ export const MAX_ORG_HIERARCHY_DEPTH = 7;
 //      Using these matches the column defaults in schema.prisma.
 export const ORG_SETTINGS_DEFAULTS = Object.freeze({
   session_timeout_minutes: 480,
+  // GOVSEC.3C-B1 / GAP-A1: per-org idle-timeout window. null = idle enforcement
+  // disabled (default; no behavior change for existing orgs). The GOVSEC
+  // government profile mandates setting it (AAL2 <= 60min / AAL3 <= 15min);
+  // enforcement lands at GOVSEC.3C-B2 reading the per-session snapshot.
+  idle_timeout_minutes: null as number | null,
   mfa_required: false,
   ip_whitelist: [] as string[],
   auto_approve_low_risk: false,
@@ -63,6 +68,7 @@ export const ORG_SETTINGS_DEFAULTS = Object.freeze({
 export interface MergedOrgSettings {
   org_entity_id: string | null;
   session_timeout_minutes: number;
+  idle_timeout_minutes: number | null;
   mfa_required: boolean;
   ip_whitelist: string[];
   auto_approve_low_risk: boolean;
@@ -161,6 +167,7 @@ export async function getOrgSettingsOrDefaults(
   return {
     org_entity_id: row.org_entity_id,
     session_timeout_minutes: row.session_timeout_minutes,
+    idle_timeout_minutes: row.idle_timeout_minutes,
     mfa_required: row.mfa_required,
     ip_whitelist: row.ip_whitelist,
     auto_approve_low_risk: row.auto_approve_low_risk,

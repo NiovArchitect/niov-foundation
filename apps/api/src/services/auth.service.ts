@@ -298,6 +298,10 @@ export class AuthService {
       clearance_ceiling: tar.clearance_ceiling,
       issued_at: issuedAt,
       expires_at: expiresAt,
+      // GOVSEC.3C-B1 / GAP-A1: snapshot the org idle-timeout window onto the
+      // session at login (null = idle disabled). Enforcement (3C-B2) reads it
+      // from the session row -- no per-request org-settings lookup.
+      idle_timeout_minutes: orgSettings.idle_timeout_minutes,
     });
 
     const payload: SessionTokenPayload = {

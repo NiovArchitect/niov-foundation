@@ -1035,6 +1035,54 @@ code/schema + 1 NEW test + 3 docs = 8 files) per Founder Q-GOVSEC3C-α α-2 + β
 Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3CA-EXECUTE-VERIFY-AUTH]`.
 
+#### GOVSEC.3C-B1 LANDED — Idle-Window Snapshot Substrate (GAP-A1 part 2; Option B) (2026-05-20)
+
+**Status:** GOVSEC.3C-B1 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing —
+schema-bearing **snapshot substrate, no enforcement** (5 code/schema + 1 NEW test
++ 3 docs = 9 files) per Founder Q-GOVSEC3CB-α α-2 + β-1+snapshot + γ-1 + κ-2 + λ-2
+LOCKS + Option B design lock + auth-admin.routes.ts authorization at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3CB1-EXECUTE-VERIFY-AUTH]`.
+
+- **Idle-window snapshot substrate landed (Option B).** NEW additive nullable
+  `OrgSettings.idle_timeout_minutes Int?` (per-org config) + `Session.idle_timeout_minutes Int?`
+  (per-session snapshot). The snapshot avoids a per-request org-settings lookup in
+  validateSession (planning found that would add ~3 typical / up to ~16 worst-case
+  reads per authed request, even for null-idle orgs — 2-8× hot-path amplification).
+- **login snapshots from org settings** (auth.service.ts passes
+  `orgSettings.idle_timeout_minutes` to `createSession`).
+- **refresh snapshots from org settings** (auth-admin.routes.ts — one additive
+  line; the GOVSEC.3A rotation logic is unchanged) so a refreshed session also
+  carries the idle window.
+- **validateSession does NOT perform an org-settings lookup** and is otherwise
+  unchanged (GOVSEC.3C-A success-path touch + GOVSEC.2A failure branches
+  preserved). B2 enforcement will read `sessionRow.idle_timeout_minutes` from the
+  already-fetched row — zero extra reads.
+- **No enforcement behavior landed** — a snapshot-set + aged session still
+  validates. **No `SESSION_EXPIRED idle_timeout` emission.** **No new audit
+  literal.** **No Redis TTL refresh.** **No `markSessionIdleExpired`.**
+- **null default** = idle enforcement disabled until an org sets it (no surprise
+  to consumer/enterprise tenants); standards-aligned (NIST AC-11/AC-12
+  organization-defined; OWASP risk-tiered). The **GOVSEC government profile
+  mandates AAL2 ≤60min / AAL3 ≤15min**.
+- **GAP-A1 honest status:** substrate landed; runtime closure requires
+  GOVSEC.3C-B2 enforcement + per-org config.
+- Schema applied via `prisma db push` + `scripts/local-test-db-refresh.sh` +
+  `db:generate`. **GOVSEC.3C-B2 enforcement remains separate** forward-substrate;
+  GOVSEC.3D/4/5/7 untouched.
+- **Tests:** NEW `tests/integration/session-idle-snapshot.test.ts` (7 scenarios).
+
+**Substrate sites (9)**: MOD `packages/database/prisma/schema.prisma` + MOD
+`apps/api/src/services/governance/org.ts` + MOD
+`packages/database/src/queries/session.ts` + MOD
+`apps/api/src/services/auth.service.ts` + MOD
+`apps/api/src/routes/auth-admin.routes.ts` + NEW
+`tests/integration/session-idle-snapshot.test.ts` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3CB1-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
