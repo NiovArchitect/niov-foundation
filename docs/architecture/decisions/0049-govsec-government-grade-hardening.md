@@ -373,6 +373,47 @@ counts-only) and does **not** modify or fix that route — the access-control +
 full-row-exposure remediation is assigned to **GOVSEC.5 (authz) / GOVSEC.7
 (tenant isolation)**. GOVSEC.2B does not modify GOVSEC.2A.
 
+## GOVSEC.3A Implementation Note (2026-05-20)
+
+GOVSEC.3A (the first GOVSEC.3 auth/session hardening subphase) **closes GAP-A4
+by default** using **always-rotate**. `POST /api/v1/auth/refresh` now revokes the
+prior session: after the new session + nonce are created, it terminates the old
+session (existing `terminateSession`), deletes the old nonce, and emits a modern
+hash-chained `SESSION_REVOKED` (outcome `SUCCESS`, `details.reason: "rotated"`,
+`session_id` = the old session). The old token can no longer be used; the new
+token + its `SESSION_CREATED` emission remain valid.
+
+**Always-rotate vs opt-in flag.** An opt-in `revoke_prior` flag (the option the
+prior code comment anticipated) was **rejected** because it leaves GAP-A4
+partially open by default. Always-rotate is the genuine closure and aligns with
+OWASP (renew session ID + destroy old on re-authentication), NIST SP 800-53 AC-12
+(session termination) / IA-11 (re-authentication), and CISA secure-by-default
+short-lived sessions.
+
+**Multi-tab tradeoff accepted.** Refresh previously kept the prior session ACTIVE
+to support multiple tabs. Always-rotate intentionally ends the prior session;
+other tabs holding the old token must re-authenticate/recover per existing client
+behavior. This is accepted as a government-grade security posture.
+
+**Audit semantics (no new literal).** `SESSION_REVOKED` is reused. `outcome:
+SUCCESS` + `reason: "rotated"` denotes a **successful lifecycle rotation**;
+GOVSEC.2A's `outcome: DENIED` SESSION_REVOKED (rejected use of an already-dead
+session) remains distinct and unchanged. No `SESSION_ROTATED` literal was added.
+
+**No ADR-0002 amendment** — GOVSEC.3A reuses the existing append-only hash-chain
+architecture + the existing literal; it changes no audit architecture. **No
+schema** (reuses `status`/`terminated_at`). `validateSession` /
+`emitSessionDenial` (GOVSEC.2A) are unchanged; the validateSession hot path is
+untouched (only refresh pays the rotation cost, on the actor's per-user chain).
+
+**Forward-substrate (still open in GOVSEC.3).** GAP-A1/A2 (idle/abandoned-session
+timeout) and GAP-A3 (device/session binding) remain forward-substrate — each
+needs a schema field (`last_activity` / `ip`-`ua`-`device`) and lands in
+GOVSEC.3C / GOVSEC.3D. GAP-A5 (password-change session invalidation) remains
+forward-substrate (GOVSEC.3B): the `invalidateEntitySessions` helper is ready,
+but there is no real password-change/reset flow yet (the current admin-reset is a
+stub; the flow ships with email infrastructure, Section 14+) to hook it to.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

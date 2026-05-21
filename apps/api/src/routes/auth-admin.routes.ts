@@ -23,6 +23,7 @@ import {
   getSessionById,
   getTARByEntityId,
   prisma,
+  terminateSession,
   writeAudit,
   writeAuditEvent,
   writeTARCreateAudit,
@@ -406,6 +407,27 @@ export async function registerAuthAdminRoutes(
       config: { nonceStore: { set: (k: string, ttl: number) => Promise<void> } };
     }).config.nonceStore.set(newSessionId, ttlSeconds);
 
+    // GOVSEC.3A / GAP-A4: always-rotate. Revoke the prior session so the old
+    // token can no longer be used: terminate the old session row, delete its
+    // nonce, and record the rotation on the modern hash-chained audit
+    // (reusing SESSION_REVOKED with reason "rotated"; outcome SUCCESS marks a
+    // successful lifecycle transition, distinct from the GOVSEC.2A DENIED-path
+    // SESSION_REVOKED for rejected use of an already-dead session). This
+    // intentionally ends the prior session (multi-tab tradeoff accepted for
+    // government-grade closure). Emitted on the actor's per-user chain only.
+    await terminateSession(result.session_id, result.entity_id);
+    await (authService as unknown as {
+      config: { nonceStore: { delete: (k: string) => Promise<void> } };
+    }).config.nonceStore.delete(result.session_id);
+    await writeAuditEvent({
+      event_type: "SESSION_REVOKED",
+      outcome: "SUCCESS",
+      actor_entity_id: result.entity_id,
+      session_id: result.session_id,
+      ip_address: request.ip ?? null,
+      details: { reason: "rotated", revoked_prior: true },
+    });
+
     await writeAuditEvent({
       event_type: "SESSION_CREATED",
       outcome: "SUCCESS",
@@ -415,7 +437,8 @@ export async function registerAuthAdminRoutes(
       details: {
         action: "TOKEN_REFRESH",
         prior_session_id: result.session_id,
-        prior_session_kept_active: true,
+        prior_session_kept_active: false,
+        revoked_prior: true,
         ttl_minutes: orgSettings.session_timeout_minutes,
       },
     });

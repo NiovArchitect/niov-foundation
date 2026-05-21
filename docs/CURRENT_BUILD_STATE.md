@@ -900,6 +900,53 @@ only** (1 MOD code + 2 NEW tests + 3 docs = 6 files) per Founder Q-GOVSEC2B-α �
 Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G2B-EXECUTE-VERIFY-AUTH]`.
 
+#### GOVSEC.3A LANDED — Refresh Rotation / Old-Session Revocation (GAP-A4) (2026-05-20)
+
+**Status:** GOVSEC.3A `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — the first
+GOVSEC.3 auth/session hardening subphase (1 MOD code + 1 NEW integration test + 3
+docs = 5 files) per Founder Q-GOVSEC3-α α-2 + β-1 + γ-1 + ε-1 **always-rotate** +
+δ-3 + ζ-3 + η-3 + θ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3A-EXECUTE-VERIFY-AUTH]`.
+
+- **GAP-A4 closed by default** — `POST /api/v1/auth/refresh` now rotates: after
+  the new session/nonce are created, the **old session is revoked** —
+  `terminateSession(oldSessionId, entityId)` + **old nonce deleted** + a modern
+  hash-chained `SESSION_REVOKED` (outcome `SUCCESS`, `details.reason: "rotated"`,
+  `session_id` = old session) is emitted.
+- **Old token replay denied** — the old session row is `TERMINATED` and its
+  nonce is gone, so any further use of the old token fails validateSession.
+- **New session remains valid** — the new token works; its `SESSION_CREATED`
+  emission is preserved (detail flips `prior_session_kept_active: false` +
+  `revoked_prior: true`).
+- **Always-rotate** chosen over an opt-in `revoke_prior` flag (an opt-in flag
+  would leave GAP-A4 partially open). The prior multi-tab active-session
+  behavior is intentionally removed for government-grade closure (OWASP renew+
+  destroy-old; NIST AC-12/IA-11; CISA secure defaults).
+- **No validateSession hot-path change** — only refresh pays the cost (one
+  terminate + one nonce delete + one audit emit, on the actor's per-user chain;
+  GAP-O6 unaffected; no SCHEDULER/system_principal batch emission).
+- **No idle/device/password-flow work** — GOVSEC.3B (password-change
+  invalidation; `invalidateEntitySessions` ready, blocked on password flow),
+  GOVSEC.3C (idle timeout; needs schema), GOVSEC.3D (device binding; needs
+  schema) remain forward-substrate.
+- **No schema change** (β-1; reuses `status`/`terminated_at`). **No new audit
+  literal** (γ-1; SESSION_REVOKED reused — `SUCCESS`/`rotated` = successful
+  lifecycle rotation, distinct from GOVSEC.2A's `DENIED` rejected-use path).
+- **GOVSEC.2A untouched** (validateSession / emitSessionDenial / audit.ts /
+  session.ts / writeAuditEvent / verifyAuditChain unchanged; `terminateSession`
+  is called, not modified). **GOVSEC.2B untouched** (no compliance/evidence
+  change). **Route-local** (no auth.service.ts helper).
+- **Tests:** NEW `tests/integration/refresh-rotation.test.ts` (6 scenarios incl.
+  double-refresh chain, replay denial, verifyAuditChain valid, append-only).
+
+**Substrate sites (5)**: MOD `apps/api/src/routes/auth-admin.routes.ts` + NEW
+`tests/integration/refresh-rotation.test.ts` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3A-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
