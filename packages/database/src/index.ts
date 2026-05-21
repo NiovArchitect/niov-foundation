@@ -123,6 +123,7 @@ export type {
 export {
   createSession,
   getSessionById,
+  markSessionIdleExpired,
   terminateSession,
   touchSessionActivity,
   expireOldSessions,

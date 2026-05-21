@@ -145,7 +145,7 @@ describe("GOVSEC.3C-B1 idle-window snapshot substrate (GAP-A1; no enforcement)",
     expect(newValidate.valid).toBe(true);
   });
 
-  it("3C-B1 does NOT enforce idle: a snapshot-set + aged session still validates", async () => {
+  it("with GOVSEC.3C-B2 landed, a snapshot-set + aged session is now idle-expired (SESSION_EXPIRED)", async () => {
     const platform = await makePlatformAdmin();
     const { adminEmail } = await createOrgWithIdle(platform, 1); // 1-min idle window
     const s = await login(adminEmail);
@@ -156,11 +156,13 @@ describe("GOVSEC.3C-B1 idle-window snapshot substrate (GAP-A1; no enforcement)",
       data: { last_activity_at: new Date(Date.now() - 60 * 60_000) },
     });
     const check = await seedAuth.validateSession(s.token, "read");
-    // no enforcement in 3C-B1 -> still valid despite being idle
-    expect(check.valid).toBe(true);
+    // GOVSEC.3C-B2 enforcement supersedes the B1-only "no enforcement" contract:
+    // the idle window the B1 substrate snapshots is now enforced at validate time.
+    expect(check.valid).toBe(false);
+    if (!check.valid) expect(check.code).toBe("SESSION_EXPIRED");
   });
 
-  it("no SESSION_EXPIRED idle_timeout audit event is emitted in 3C-B1", async () => {
+  it("with GOVSEC.3C-B2 landed, a configured aged session emits one SESSION_EXPIRED idle_timeout audit", async () => {
     const platform = await makePlatformAdmin();
     const { adminEmail } = await createOrgWithIdle(platform, 1);
     const s = await login(adminEmail);
@@ -172,7 +174,8 @@ describe("GOVSEC.3C-B1 idle-window snapshot substrate (GAP-A1; no enforcement)",
     await seedAuth.validateSession(s.token, "read");
     const rows = await prisma.auditEvent.findMany({ where: { actor_entity_id: entityId, event_type: "SESSION_EXPIRED" } });
     const idle = rows.filter((r) => ((r.details ?? {}) as Record<string, unknown>).reason === "idle_timeout");
-    expect(idle.length).toBe(0);
+    expect(idle.length).toBe(1);
+    expect(((idle[0]!.details ?? {}) as Record<string, unknown>).reason).toBe("idle_timeout");
   });
 
   it("GOVSEC.3C-A activity tracking still works (last_activity_at touched on validate)", async () => {

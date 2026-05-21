@@ -129,6 +129,35 @@ export async function touchSessionActivity(
   return result.count > 0;
 }
 
+// WHAT: Atomically transition an ACTIVE session to EXPIRED on an idle-timeout
+//        breach the caller has already detected.
+// INPUT: The session_id.
+// OUTPUT: true if THIS call won the ACTIVE -> EXPIRED transition (count === 1);
+//         false if the session was not ACTIVE (already EXPIRED / TERMINATED /
+//         INVALIDATED, or a concurrent caller won the transition first).
+// WHY: GOVSEC.3C-B2 / GAP-A1 -- runtime idle-timeout enforcement. validateSession
+//      computes the idle breach from the already-fetched session row (the
+//      idle_timeout_minutes snapshot from GOVSEC.3C-B1 + last_activity_at from
+//      GOVSEC.3C-A) and calls this to flip the row. The single atomic updateMany
+//      guarded by status = "ACTIVE" guarantees exactly one caller observes
+//      count === 1 under concurrency, so the lifecycle audit event is emitted
+//      once and only once. Audit-free and Redis-free by design: the caller owns
+//      the SESSION_EXPIRED idle_timeout audit emission (on the actor's chain) and
+//      the best-effort nonce delete; the DB EXPIRED status is the authoritative
+//      gate. No timestamp is written -- status = "EXPIRED" is the transition.
+export async function markSessionIdleExpired(
+  sessionId: string,
+): Promise<boolean> {
+  const result = await prisma.session.updateMany({
+    where: {
+      session_id: sessionId,
+      status: "ACTIVE",
+    },
+    data: { status: "EXPIRED" },
+  });
+  return result.count > 0;
+}
+
 // WHAT: Mark a session as TERMINATED (the user logged out).
 // INPUT: The session_id and the entity_id of the actor.
 // OUTPUT: The updated Session row.

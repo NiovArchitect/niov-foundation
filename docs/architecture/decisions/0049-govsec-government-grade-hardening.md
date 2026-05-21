@@ -562,6 +562,57 @@ enforcement + the absolute TTL cap; no proactive sweep (no scheduler).
 additions are additive nullable columns documented here). **No new audit literal.**
 **No enforcement in B1.**
 
+## GOVSEC.3C-B2 Implementation Note — GAP-A1/A2 Idle-Timeout Enforcement (2026-05-20)
+
+GOVSEC.3C-B2 completes runtime idle-timeout enforcement on the B1 snapshot + the
+3C-A activity substrate. **No schema change, no new audit literal, no new return
+code, no org-settings lookup in `validateSession`.**
+
+**Enforcement.** In `validateSession`, **after the DB status checks (the EXPIRED
+branch) and before the TAR / operation / nonce checks**, the session is known
+ACTIVE. Enforcement uses **only the already-fetched session row**:
+- baseline = `COALESCE(last_activity_at, issued_at)` (3C-A activity, falling back
+  to issue time for pre-3C-A sessions whose `last_activity_at` is null);
+- window = `sessionRow.idle_timeout_minutes * 60_000` (the B1 snapshot; **null ⇒
+  no enforcement**);
+- if `Date.now() - baseline > window`, call `markSessionIdleExpired(session_id)`.
+
+This adds **zero extra `validateSession` reads** (Option B pays off). Placing it
+before TAR/operation/nonce means an idle-expired session is rejected without that
+downstream work; placing it before the 3C-A success-path touch means an
+idle-expired session is **never touched**.
+
+**`markSessionIdleExpired`** (NEW in `session.ts`; barrel re-exported from
+`index.ts` per the 3C-A `touchSessionActivity` 8th-file precedent) is a single
+**atomic `updateMany` WHERE `{session_id, status:"ACTIVE"}` SET
+`{status:"EXPIRED"}`** returning `count > 0`. It is **audit-free and Redis-free**:
+no timestamp is written (`status = EXPIRED` is the transition).
+
+**Concurrency / single-emit.** The atomic `status="ACTIVE"` guard guarantees
+exactly one concurrent caller observes `count === 1`. Only that winner emits, so
+there is **no duplicate `idle_timeout` event** under concurrency.
+
+**Audit.** On a won transition, `validateSession` reuses the GOVSEC.2A
+`emitSessionDenial` helper to write `SESSION_EXPIRED` / outcome `DENIED` /
+`details.reason = "idle_timeout"` on the actor's own hash chain (reusing the
+existing literal — **no ADR-0002 amendment**, no new literal). The audit emit is
+**awaited / fail-closed per RULE 4**. Later uses of the now-EXPIRED session take
+the existing EXPIRED-status branch and emit `row_expired` (GOVSEC.2A) — the idle
+cause is recorded once, at the transition.
+
+**Nonce.** After a won transition, the nonce is deleted **best-effort** (try/catch);
+the **DB `EXPIRED` status is authoritative**, so a failed nonce delete does not
+change the outcome (the request still returns `SESSION_EXPIRED`, and every future
+use is gated by the DB status). No Redis TTL refresh.
+
+**Return code** is the existing `SESSION_EXPIRED` (ι-1; no `SESSION_IDLE_TIMEOUT`).
+
+**GAP closure.** GAP-A1 runtime-closes for any session whose org sets
+`idle_timeout_minutes` (the GOVSEC government profile mandates AAL2 ≤60min / AAL3
+≤15min). GAP-A2 (abandoned sessions) closes via **lazy enforcement** — an
+abandoned session is transitioned EXPIRED at its next use — plus the absolute TTL
+cap; **no proactive sweep / scheduler**.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

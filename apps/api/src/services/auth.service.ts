@@ -18,6 +18,7 @@ import {
   getSessionById,
   getTARByEntityId,
   incrementFailedAuth,
+  markSessionIdleExpired,
   resetFailedAuth,
   terminateSession,
   touchSessionActivity,
@@ -425,6 +426,40 @@ export class AuthService {
     if (sessionRow.status === "EXPIRED") {
       await this.emitSessionDenial(payload, "SESSION_EXPIRED", "row_expired", null, context);
       return { valid: false, code: "SESSION_EXPIRED" };
+    }
+
+    // GOVSEC.3C-B2 / GAP-A1: idle-timeout enforcement. The session is ACTIVE
+    // here (it passed the status checks above). Enforce using ONLY the
+    // already-fetched session row -- idle_timeout_minutes (the snapshot from
+    // GOVSEC.3C-B1) and last_activity_at (GOVSEC.3C-A) -- so validateSession
+    // performs zero extra org-settings reads on the hot path. A null snapshot
+    // means idle enforcement is disabled for this session. The baseline
+    // COALESCEs to issued_at for pre-3C-A sessions whose last_activity_at is
+    // null. Placed before the TAR / operation / nonce checks so an idle-expired
+    // session is rejected without that downstream work, and before the
+    // success-path touch so an idle-expired session is never touched.
+    if (sessionRow.idle_timeout_minutes !== null) {
+      const idleBaseline = sessionRow.last_activity_at ?? sessionRow.issued_at;
+      const idleWindowMs = sessionRow.idle_timeout_minutes * 60_000;
+      if (Date.now() - idleBaseline.getTime() > idleWindowMs) {
+        // Atomic ACTIVE -> EXPIRED. Exactly one concurrent caller wins
+        // (count === 1); only the winner emits the lifecycle audit event, so
+        // there is no duplicate idle_timeout emission under concurrency.
+        const transitioned = await markSessionIdleExpired(payload.session_id);
+        if (transitioned) {
+          // Best-effort nonce delete: the DB EXPIRED status is authoritative,
+          // so a failed nonce delete must not change the outcome. The audit
+          // emission below is NOT best-effort -- it is awaited / fail-closed
+          // per RULE 4.
+          try {
+            await this.config.nonceStore.delete(payload.session_id);
+          } catch {
+            // best-effort: DB EXPIRED already gates this and every future use
+          }
+          await this.emitSessionDenial(payload, "SESSION_EXPIRED", "idle_timeout", null, context);
+        }
+        return { valid: false, code: "SESSION_EXPIRED" };
+      }
     }
 
     // 4 + 5. Compare current TAR hash to the one in the token

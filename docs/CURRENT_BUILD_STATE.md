@@ -1085,6 +1085,52 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.3C-B2 LANDED — Idle-Timeout Enforcement (GAP-A1 + GAP-A2) (2026-05-20)
+
+**Status:** GOVSEC.3C-B2 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — runtime
+idle enforcement on the B1 snapshot + 3C-A activity substrate (3 code + 1 NEW test
++ 3 docs = 7 files) per Founder Q-GOVSEC3CB2-α α-1 + β-1 (no schema) + γ-1 + δ-1 +
+ε-1 + ζ-1 + η-1 + θ-1 + ι-1 + κ-1 + λ-3 + μ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3CB2-EXECUTE-VERIFY-AUTH]`.
+
+- **Idle enforcement landed.** `validateSession` checks idle **after the DB status
+  checks and before the TAR / operation / nonce checks**, using only the
+  already-fetched session row — **zero extra org-settings reads** (Option B
+  snapshot pays off).
+- **Baseline** = `COALESCE(last_activity_at, issued_at)`; **window** =
+  `sessionRow.idle_timeout_minutes * 60_000`; **null snapshot ⇒ no enforcement**.
+- **Idle-expired sessions transition ACTIVE → EXPIRED** via NEW
+  `markSessionIdleExpired` (atomic `updateMany` WHERE `status="ACTIVE"`; returns
+  `count > 0`; audit-free; Redis-free; no timestamp) and **return
+  `SESSION_EXPIRED`** (existing code; no new return code).
+- **`SESSION_EXPIRED` `idle_timeout` audit emitted once** — only when the atomic
+  transition wins (`count === 1`), so no duplicate emission under concurrency;
+  reuses the GOVSEC.2A `emitSessionDenial` helper (outcome DENIED, actor chain).
+  **No new audit literal.**
+- **No schema change.** **No Redis TTL refresh.** **Best-effort nonce delete** —
+  DB `EXPIRED` is authoritative if the delete fails.
+- **`touchSessionActivity` is NOT called on an idle denial** (the idle return
+  precedes the success-path touch).
+- A **configured org/session is required** for idle enforcement (null-default;
+  GOVSEC government profile mandates AAL2 ≤60min / AAL3 ≤15min). GAP-A2 closes via
+  **lazy enforcement + the absolute TTL cap** — no proactive sweep / scheduler.
+- **Tests:** NEW `tests/integration/session-idle-enforcement.test.ts` (helper
+  transition/idempotent/non-ACTIVE + idle denial + single audit + safe metadata +
+  DB-authoritative replay + null-no-enforcement + within-window-valid +
+  not-touched + concurrency single-emit + replay no-duplicate + verifyAuditChain).
+- **GOVSEC.3D / GOVSEC.4 / GOVSEC.5 / GOVSEC.7 remain separate** forward-substrate.
+
+**Substrate sites (7)**: MOD `packages/database/src/queries/session.ts` + MOD
+`packages/database/src/index.ts` + MOD `apps/api/src/services/auth.service.ts` +
+NEW `tests/integration/session-idle-enforcement.test.ts` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3CB2-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
