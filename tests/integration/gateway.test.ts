@@ -8,6 +8,7 @@
 
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import jwt from "jsonwebtoken";
 import {
   buildApp,
   detectOperation,
@@ -16,7 +17,7 @@ import {
   MemoryRateLimitStore,
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
-import { createEntity, prisma } from "@niov/database";
+import { createEntity, prisma, verifyAuditChain } from "@niov/database";
 import {
   cleanupTestData,
   ensureAuditTriggers,
@@ -468,5 +469,90 @@ describe("GOVSEC.4 G4-A unmapped-route governance + auth-endpoint limits", () =>
       const r = await g4app.inject({ method: "GET", url: "/api/v1/health", remoteAddress });
       expect(r.statusCode).toBe(200);
     }
+  });
+});
+
+// GOVSEC.4 G4-B1 / GAP-B1+B4 evidence: bounded rate-limit-denial audit.
+// RATE_LIMITED chain audit fires only on the FIRST breach per key/window and
+// ONLY for authenticated entities (per-entity chain, no SYSTEM_CHAIN_KEY
+// contention). Unauthenticated denials never chain-audit. Own app + store +
+// low ip/entity overrides so the bursts are isolated.
+describe("GOVSEC.4 G4-B1 rate-limit-denial audit", () => {
+  let g4b1app: FastifyInstance;
+
+  beforeAll(async () => {
+    g4b1app = await buildApp({
+      jwtSecret: TEST_JWT_SECRET,
+      sessionNonceStore: new MemoryNonceStore(),
+      declarationStore: new MemoryNonceStore(),
+      contentStore: new MemoryContentStore(),
+      contentEncryption: new ContentEncryption(TEST_KEY),
+      rateLimitStore: new MemoryRateLimitStore(),
+      rateLimitOverrides: {
+        read_metadata: { perMinute: 2, scope: "entity" }, // authenticated entity-scoped burst
+        login: { perMinute: 2, scope: "ip" }, // unauthenticated ip-scoped burst
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await g4b1app.close();
+  });
+
+  it("authenticated first breach writes exactly one RATE_LIMITED chain audit with safe metadata", async () => {
+    const entity = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
+    // The gateway only needs entity_id in the verified token to key by entity.
+    const token = jwt.sign({ entity_id: entity.entity_id }, TEST_JWT_SECRET);
+    const url = "/api/v1/cosmp/capsule/abcdef12-3456-7890-abcd-ef1234567890/metadata";
+
+    let saw429 = false;
+    for (let i = 0; i < 4; i++) {
+      const r = await g4b1app.inject({
+        method: "GET",
+        url,
+        headers: { authorization: `Bearer ${token}` },
+        remoteAddress: "10.88.1.1",
+      });
+      if (r.statusCode === 429) saw429 = true;
+    }
+    expect(saw429).toBe(true);
+
+    const rows = await prisma.auditEvent.findMany({
+      where: { event_type: "RATE_LIMITED", actor_entity_id: entity.entity_id },
+    });
+    // first-breach single-emit: exactly one row despite multiple 429s
+    expect(rows.length).toBe(1);
+    const row = rows[0]!;
+    expect(row.actor_entity_id).toBe(entity.entity_id);
+    expect(row.outcome).toBe("DENIED");
+    const details = (row.details ?? {}) as Record<string, unknown>;
+    expect(details.reason).toBe("rate_limited");
+    expect(details.operation).toBe("read_metadata");
+    // safe/minimized metadata: no raw IP / token / auth header / UA
+    const serialized = JSON.stringify(row.details).toLowerCase();
+    for (const forbidden of ["10.88.1.1", token.toLowerCase(), "bearer", "authorization", "user-agent"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+    // chain integrity preserved after the RATE_LIMITED emission
+    const chain = await verifyAuditChain(entity.entity_id);
+    expect(chain.valid).toBe(true);
+  });
+
+  it("unauthenticated 429 does NOT write a RATE_LIMITED chain audit (avoids SYSTEM_CHAIN_KEY contention)", async () => {
+    const before = await prisma.auditEvent.count({ where: { event_type: "RATE_LIMITED" } });
+    let saw429 = false;
+    for (let i = 0; i < 4; i++) {
+      const r = await g4b1app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { email: "__niov_test__g4b1-unauth@niov.test", password: "x" },
+        remoteAddress: "10.88.9.9",
+      });
+      if (r.statusCode === 429) saw429 = true;
+    }
+    expect(saw429).toBe(true);
+    const after = await prisma.auditEvent.count({ where: { event_type: "RATE_LIMITED" } });
+    // no new RATE_LIMITED row for the unauthenticated denial
+    expect(after).toBe(before);
   });
 });

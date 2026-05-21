@@ -844,6 +844,61 @@ envelope** (`RATE_LIMIT_EXCEEDED` + `Retry-After`).
 (perf) — those are G4-B/C/D. **GAP-B1 status after G4-A: closed** (unmapped routes
 governed + auth endpoints covered + health exempt; tested under burst).
 
+## GOVSEC.4 G4-B1 Implementation Note — Rate-Limit-Denial Audit + GAP-B3 Correction (2026-05-21)
+
+GOVSEC.4 G4-B is **split**: **G4-B1** = rate-limit-denial audit + a GAP-B3
+documentation correction; **G4-B2** = general bot/swarm resistance (GAP-B2),
+deferred.
+
+**GAP-B3 correction (RULE 13).** Planning found GAP-B3
+("anomaly detector not wired to backpressure") is **largely already closed for
+`read_content`**: `feedback.service.ts` `runLoop5Once` — invoked live via
+`readService.onContentRead` (server.ts) — emits the **existing**
+`ANOMALY_DETECTED` audit (safe details only) **and** calls
+`setMultiplier("read_content:entity:<id>", 0.5, 3600)`; the gateway reads the
+**matching** `getMultiplier("read_content:entity:<id>")` and applies
+`effectiveLimit = policy.perMinute * multiplier` (0.5 ⇒ stricter). So
+anomaly→backpressure is wired end-to-end for read_content. **G4-B1 does not
+re-wire anomaly/backpressure**; the residual (generalizing beyond read_content)
+folds into GAP-B2 / G4-B2. The control matrix is corrected accordingly.
+
+**Rate-limit-denial audit (GAP-B1/B4 evidence).** A rate-limit denial is not a
+session-lifecycle event (often unauthenticated, no session), so no existing
+literal fits. G4-B1 adds a NEW additive `RATE_LIMITED` literal (union +
+`AUDIT_EVENT_TYPE_VALUES`; the `ANOMALY_DETECTED` precedent). In the gateway 429
+branch:
+- a **structured-logger** warn fires for **all** denials (cheap, contention-free
+  operational evidence; safe/minimized fields: operation, scope, limit, count,
+  `ip_hash`, entity_id, first_breach);
+- a **hash-chained `RATE_LIMITED`** (outcome DENIED) fires **only on the first
+  breach per key/window** (`count > effectiveLimit && count - 1 <= effectiveLimit`
+  — robust for fractional Loop-5 multipliers) **and only when an authenticated
+  entity is present**.
+
+**Why authenticated-only on the chain.** The audit chain-key priority is
+`actor_entity_id` → per-entity chain; a null-actor (unauthenticated) event falls
+to the shared `SYSTEM_CHAIN_KEY`, where a distributed swarm of distinct-IP
+first-breaches would cause `pg_advisory_xact_lock` contention (GAP-O1 — the
+audit-before-response becoming a DoS vector). Restricting the chain emit to
+authenticated entities keeps each chain per-entity and bounded; unauthenticated
+denials are logger-only.
+
+**Privacy.** `ip_hash = HMAC-SHA256(request.ip, jwtSecret)` — correlatable, not
+reversible. **Never** raw IP, user-agent, Authorization header, JWT, nonce,
+request body/query, route params, or private content in audit/log metadata.
+
+**No ADR-0002 amendment** — `RATE_LIMITED` is additive to the literal set; the
+hash-chain architecture, `writeAuditEvent`, and `verifyAuditChain` are unchanged.
+**No backpressure/multiplier change** (reuses the existing store; semantics
+unchanged). **No rate-limit.ts/redis.ts/feedback.service.ts/auth change; no
+schema; no dependency.** G4-A keying/fallback/health-exemption/429 envelope
+preserved.
+
+**Scope boundary.** G4-B1 does **not** implement general bot/swarm resistance
+(GAP-B2 → G4-B2), privileged-route throttle (GAP-B4 → G4-C w/ GOVSEC.5), or perf
+hardening (GAP-O2/O7 → G4-D). **GAP-B1/B4 rate-limit-denial evidence is closed for
+authenticated denials; unauthenticated denials have logger evidence.**
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

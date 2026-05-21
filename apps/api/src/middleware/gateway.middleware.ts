@@ -6,8 +6,10 @@
 // CONNECTS TO: rate-limit.ts (the store), every route the gateway
 //              gates by URL pattern.
 
+import { createHmac } from "node:crypto";
 import jwt from "jsonwebtoken";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { writeAuditEvent } from "@niov/database";
 import type { RateLimitStore } from "../rate-limit.js";
 import { getOrgSettingsOrDefaults } from "../services/governance/org.js";
 
@@ -271,6 +273,55 @@ export function makeGatewayHook(args: {
     const multiplier = await store.getMultiplier(key);
     const effectiveLimit = policy.perMinute * multiplier;
     if (result.count > effectiveLimit) {
+      // GOVSEC.4 G4-B1 / GAP-B1+B4 evidence: rate-limit-denial audit, bounded.
+      // First breach in this window only (the previous count was within the
+      // limit, this one exceeded) -- avoids per-429 spam. Robust for fractional
+      // multipliers (Loop-5 backpressure can make effectiveLimit non-integer).
+      const firstBreach =
+        result.count > effectiveLimit && result.count - 1 <= effectiveLimit;
+      // Token-derived entity (cheap HMAC verify; null when unauthenticated).
+      const auditEntityId = entityFromBearer(
+        request.headers.authorization,
+        jwtSecret,
+      );
+      // Hashed IP for correlatable-but-not-reversible evidence (never raw IP).
+      const ipHash = createHmac("sha256", jwtSecret)
+        .update(request.ip ?? "unknown")
+        .digest("hex");
+      // Structured logger (Pino) for ALL denials -- cheap, contention-free
+      // operational evidence. Safe/minimized fields only; never raw IP/UA/body.
+      request.log.warn(
+        {
+          event: "rate_limited",
+          operation: opKey,
+          scope: policy.scope,
+          limit: effectiveLimit,
+          count: result.count,
+          ip_hash: ipHash,
+          entity_id: auditEntityId,
+          first_breach: firstBreach,
+        },
+        "gateway rate limit exceeded",
+      );
+      // Chain audit ONLY for authenticated first breaches: a per-entity chain is
+      // bounded, whereas an unauthenticated null-actor event would fall to the
+      // shared SYSTEM_CHAIN_KEY and risk pg_advisory_xact_lock contention under
+      // swarm (GAP-O1). Authenticated-only + first-breach keeps the chain clean.
+      if (firstBreach && auditEntityId !== null) {
+        await writeAuditEvent({
+          event_type: "RATE_LIMITED",
+          outcome: "DENIED",
+          actor_entity_id: auditEntityId,
+          details: {
+            reason: "rate_limited",
+            operation: opKey,
+            scope: policy.scope,
+            limit: effectiveLimit,
+            count: result.count,
+            retry_after_seconds: result.ttl_seconds,
+          },
+        });
+      }
       await reply
         .code(429)
         .header("Retry-After", String(result.ttl_seconds))

@@ -55,6 +55,7 @@ export type AuditEventType =
   | "COMPLIANCE_CHECK_PASSED"
   | "COMPLIANCE_CHECK_FAILED"
   | "ANOMALY_DETECTED"
+  | "RATE_LIMITED"
   | "ADMIN_ACTION"
   | "NEGOTIATE"
   // Section 11D: Otzar conversation lifecycle events. Emitted by
@@ -176,6 +177,7 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "COMPLIANCE_CHECK_PASSED",
   "COMPLIANCE_CHECK_FAILED",
   "ANOMALY_DETECTED",
+  "RATE_LIMITED",
   "ADMIN_ACTION",
   "NEGOTIATE",
   "CONVERSATION_STARTED",

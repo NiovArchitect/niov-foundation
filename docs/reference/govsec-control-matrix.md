@@ -80,6 +80,20 @@ candidate → tests → phase → ADR → tier.
   (API4/LLM10). Candidate: governed default for unmapped routes + per-entity
   quotas + wire anomaly→`setMultiplier` + privileged-route limits. Tests:
   unit+integration+adversarial burst. Phase GOVSEC.4. New-ADR. Tier code.
+- **G4-A status (LANDED `fea17ea`):** GAP-B1 CLOSED — unmapped routes governed by
+  a default fallback; `refresh`/`admin-reset` rate-limited; health exempt.
+- **G4-B1 status (this commit):** GAP-B3 found **largely already closed for
+  `read_content`** — `feedback.service.ts` `runLoop5Once` (invoked via
+  `readService.onContentRead`) emits `ANOMALY_DETECTED` and calls
+  `setMultiplier("read_content:entity:<id>", 0.5, 3600)`; the gateway reads the
+  **matching** `getMultiplier("read_content:entity:<id>")` and applies
+  `effectiveLimit = perMinute * multiplier`, so anomaly→backpressure IS wired for
+  read_content. G4-B1 adds the `RATE_LIMITED` audit (bounded: first-breach per
+  key/window, authenticated-entity chain only — unauthenticated denials are
+  logger-only to avoid SYSTEM_CHAIN_KEY contention per GAP-O1) for GAP-B1/B4
+  rate-limit-denial evidence. **General bot/swarm resistance (GAP-B2) and any
+  anomaly generalization beyond read_content remain open → G4-B2.** Privileged-
+  route throttle (GAP-B4) → G4-C w/ GOVSEC.5; perf (GAP-O2/O7) → G4-D.
 
 ### C. Admin/privilege escalation threats
 - Evidence: `admin.middleware.ts` `requireAdminCapability`; `dual-control.middleware.ts`.
@@ -193,7 +207,7 @@ docs / test / code / schema / CI-infra / policy-runbook / research-design.
 | GAP-A5 | A Identity | admin-reset stub | none | no password-change session invalidation | Med | Low | GOVSEC.3 | code | unit+integration | invalidation audit | — | password change invalidates sessions+tested | H |
 | GAP-B1 | B API | `gateway.middleware.ts` `detectOperation` | null→pass-through | unmapped routes ungoverned | High | High | GOVSEC.4 | code | unit+integration+adversarial | rate-limit audit | core: bounds adversarial volume | unmapped routes governed; tested under burst | B |
 | GAP-B2 | B API | gateway static limits | per-op limits | no bot/swarm resistance | High | High | GOVSEC.4 | code | adversarial sim | anomaly audit | core: swarm backpressure | swarm load shed without correctness loss | B |
-| GAP-B3 | B API | `feedback.service.ts` anomaly + `setMultiplier` | hook exists, unwired | anomaly→backpressure unwired | High | Med | GOVSEC.4 | code | integration+adversarial | ANOMALY_DETECTED audit | core: dynamic throttle | anomaly drives throttle; tested | B |
+| GAP-B3 | B API | `feedback.service.ts` anomaly + `setMultiplier` | **G4-B1 correction: largely WIRED for read_content** (runLoop5Once → ANOMALY_DETECTED audit + setMultiplier("read_content:entity:<id>",0.5,3600) via readService.onContentRead; gateway getMultiplier matching key). Residual generalization beyond read_content → G4-B2 | High | Med | GOVSEC.4 | code | integration+adversarial | ANOMALY_DETECTED audit (exists) | core: dynamic throttle | anomaly drives throttle for read_content; generalization tested in G4-B2 | B |
 | GAP-B4 | B API/C | privileged routes | dual-control | privileged endpoints unthrottled | Med | Med | GOVSEC.4 | code | integration | rate-limit audit | — | privileged routes throttled; tested | H |
 | GAP-C1 | C Admin | `dual-control.middleware.ts` | placeholder target=caller | self-approval possible | High | Low | GOVSEC.5 | code | unit+integration | ADMIN_ACTION audit | — | org-admin-set approver; self-approval rejected+tested | B |
 | GAP-D1 | D AI | `share.service.ts`/`system-permission.ts` | consumption cap only | AI-as-grantor not rejected | High | Med | GOVSEC.6 | code | unit+integration+adversarial | grant audit | — | AI grantor rejected/constrained; tested | B |

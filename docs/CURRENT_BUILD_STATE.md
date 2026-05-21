@@ -1319,6 +1319,48 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-B1 LANDED — Rate-Limit-Denial Audit + GAP-B3 Correction (2026-05-21)
+
+**Status:** GOVSEC.4 G4-B1 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — bounded
+rate-limit-denial audit (2 code + 1 test + 4 docs = 7 files) per Founder
+Q-GOVSEC4B-α α-5 + β-2 + γ-2 + δ-1 + ε-4 + ζ-1 + η-3 + θ-3 + ι-3 + κ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4B1-RATE-LIMIT-AUDIT-EXECUTE-VERIFY-AUTH]`.
+
+- **G4-B split:** G4-B1 = rate-limit-denial audit + GAP-B3 docs correction;
+  G4-B2 = general bot/swarm resistance (GAP-B2, deferred).
+- **GAP-B3 correction (RULE 13):** planning found GAP-B3 **largely already closed
+  for `read_content`** — `feedback.service.ts runLoop5Once` (via
+  `readService.onContentRead`) emits the existing `ANOMALY_DETECTED` audit and
+  calls `setMultiplier("read_content:entity:<id>", 0.5, 3600)`; the gateway reads
+  the matching `getMultiplier(...)` (`effectiveLimit = perMinute * multiplier`).
+  Anomaly→backpressure IS wired for read_content. G4-B1 does not re-wire it.
+- **Rate-limit-denial audit landed:** NEW additive `RATE_LIMITED` literal (union +
+  AUDIT_EVENT_TYPE_VALUES; ANOMALY_DETECTED precedent; no ADR-0002). Gateway 429
+  branch: structured-logger warn for ALL denials (safe metadata) + a hash-chained
+  `RATE_LIMITED` (DENIED) **only on first breach per key/window AND only when an
+  authenticated entity is present** (per-entity chain; unauthenticated denials are
+  logger-only to avoid SYSTEM_CHAIN_KEY contention per GAP-O1). ip_hash =
+  HMAC-SHA256(ip, jwtSecret); **never raw IP/UA/body/query/token**.
+- **No backpressure/multiplier change; no rate-limit.ts/redis.ts/feedback.service
+  change; no auth.service/route/session change.** G4-A keying/fallback/health
+  exemption/429 envelope preserved. **No schema; no dependency.**
+- **G4-B2 (bot/swarm) / G4-C (privileged throttle) / G4-D (perf) remain separate**
+  forward-substrate; **GOVSEC.5/7 remain separate.**
+- **Tests:** MOD `tests/integration/gateway.test.ts` — authenticated first-breach →
+  one RATE_LIMITED row (safe metadata, verifyAuditChain valid); unauthenticated →
+  no chain row.
+
+**Substrate sites (7)**: MOD `packages/database/src/queries/audit.ts` + MOD
+`apps/api/src/middleware/gateway.middleware.ts` + MOD
+`tests/integration/gateway.test.ts` + MOD `docs/reference/govsec-control-matrix.md`
++ MOD `docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` +
+MOD `docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4B1-RATE-LIMIT-AUDIT-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
