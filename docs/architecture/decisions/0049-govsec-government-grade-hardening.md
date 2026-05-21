@@ -673,6 +673,63 @@ blocking mismatches is impractical for multi-device users) — gated on GOVSEC.5
 addition is one additive nullable column documented here, applied via the
 ADR-0025 `prisma db push` flow). **No enforcement in 3D-A.**
 
+## GOVSEC.3D-B Implementation Note — GAP-A3 Context Threading + Advisory Detection (2026-05-21)
+
+GOVSEC.3D-B threads the client user-agent into the normal-use `validateSession`
+callers and adds an **advisory** device-binding comparison. **No denial, no
+revoke, no audit, no schema** — enforcement is GOVSEC.3D-C.
+
+**Caller-set finding (RULE 13).** Pre-flight found the actual
+`AuthService.validateSession` caller set is **6 files / 8 call sites**, not the 4
+initially named: `auth.middleware.ts`, `admin.middleware.ts`,
+`developer.routes.ts` (3 sites), `working-set.routes.ts`, `wallet.routes.ts`, and
+`auth-admin.routes.ts:336` (refresh old-token validation).
+`session-context-resolver.ts` depends on a narrow `SessionValidator` interface,
+not the `AuthService` class, and is **not** a caller.
+
+**Threading disposition.** The **5 normal-use callers are threaded** via a NEW
+`clientContextFrom(request)` helper (`apps/api/src/middleware/request-context.ts`)
+that returns `{ ip_address, user_agent }` (no hashing/normalization there; no IP
+binding; no raw storage). **`auth-admin.routes.ts:336` (refresh) is intentionally
+left unthreaded** because it authorizes refresh *rotation*, not normal-use access;
+the refreshed session already snapshots a fresh `device_binding_hash` from the
+current user-agent (3D-A); comparing the refreshing client's live UA to the old
+session's snapshot would be ambiguous advisory with no consumer; and GOVSEC.3A
+rotation must remain unchanged.
+
+**Advisory comparison.** `ValidateSessionContext` gains `user_agent?`;
+`ValidateSuccess` gains `device_bound?: boolean | null`. On the success path
+(θ-3), after every existing check (incl. the 3C-B2 idle enforcement and the 3C-A
+activity touch), validateSession computes:
+- `device_bound = true` when the live user-agent's HMAC (via the existing
+  `deviceBindingHash`) equals `sessionRow.device_binding_hash`;
+- `device_bound = false` on mismatch — **the session remains valid** (advisory);
+- `device_bound = null` when `sessionRow.device_binding_hash` is null (unbound) OR
+  no live user-agent is present (no detection).
+Computed from the already-fetched session row + the threaded context — **zero
+extra DB reads**.
+
+**Why no audit in 3D-B.** The modern `AuditEventType` set is
+`SESSION_CREATED/EXPIRED/REVOKED`. An advisory mismatch (session still valid)
+cannot honestly use `SESSION_REVOKED` (a DENIED outcome on a valid session is
+contradictory), and a new literal is not warranted; per-request advisory audit on
+user-agent churn (browser/OS updates) would be noise without a schema throttle.
+The accurate `SESSION_REVOKED` / `details.reason = "device_mismatch"` audit lands
+in **GOVSEC.3D-C**, where the session is actually revoked (making the literal
+truthful) and config-gating bounds emission.
+
+**No enforcement, no schema, no nonce change.** A mismatch never denies, revokes,
+or deletes the nonce. No `OrgSettings.device_binding_mode` and no
+`Session.device_mismatch_seen_at` are added (those belong to 3D-C if/when
+config-gating + audit land). **No ADR-0002 amendment** (no audit-architecture
+change). **No IP binding; no raw user-agent/IP stored.**
+
+**3D-C (forward-substrate).** GOVSEC.3D-C owns `OrgSettings.device_binding_mode`,
+config-gated enforcement, the accurate `SESSION_REVOKED device_mismatch` audit,
+and recovery/step-up/break-glass integration with GOVSEC.5 — hard-blocking
+mismatches must not ship before recovery exists (OWASP: blocking mismatches is
+impractical for multi-device users).
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

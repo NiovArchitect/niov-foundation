@@ -17,6 +17,7 @@ import { writeAuditEvent } from "@niov/database";
 import type { AuthService } from "../services/auth.service.js";
 import type { WorkingSetService } from "../services/personalization/working-set.service.js";
 import { projectConsumerView } from "../services/personalization/working-set-views.js";
+import { clientContextFrom } from "../middleware/request-context.js";
 
 // WHAT: Pull a Bearer token out of an Authorization header.
 // INPUT: The raw header value.
@@ -90,7 +91,7 @@ export async function registerWorkingSetRoutes(
     // actor context (entity_id + session_id) for the AUDIT.2 emission. The
     // WorkingSetService re-resolves the session authoritatively; this is the
     // accepted minor double-validate that keeps WorkingSetService pure.
-    const session = await authService.validateSession(sessionToken, "read");
+    const session = await authService.validateSession(sessionToken, "read", clientContextFrom(request));
     if (!session.valid) {
       // Fail-closed: no personalization audit literal, no payload.
       return reply

@@ -13,6 +13,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { getTARByEntityId } from "@niov/database";
 import type { AuthService } from "../services/auth.service.js";
+import { clientContextFrom } from "./request-context.js";
 
 // WHAT: The two TAR fields this middleware can gate on.
 // INPUT: Used as a parameter type only.
@@ -52,7 +53,7 @@ export function requireAdminCapability(
     // The session itself is gated to "read" -- admin actions can
     // happen via any active session, the capability flag does the
     // heavier lifting.
-    const result = await authService.validateSession(token, "read");
+    const result = await authService.validateSession(token, "read", clientContextFrom(request));
     if (!result.valid) {
       const status =
         result.code === "OPERATION_NOT_PERMITTED" ? 403 : 401;

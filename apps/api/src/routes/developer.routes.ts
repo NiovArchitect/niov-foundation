@@ -11,6 +11,7 @@ import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { prisma, writeAuditEvent } from "@niov/database";
 import type { AuthService } from "../services/auth.service.js";
+import { clientContextFrom } from "../middleware/request-context.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 function bearerFrom(value: string | string[] | undefined): string | null {
@@ -48,7 +49,7 @@ export async function registerDeveloperRoutes(
           message: "Missing bearer token",
         });
       }
-      const session = await authService.validateSession(sessionToken, "read");
+      const session = await authService.validateSession(sessionToken, "read", clientContextFrom(request));
       if (!session.valid) {
         return reply.code(401).send({
           ok: false,
@@ -106,7 +107,7 @@ export async function registerDeveloperRoutes(
         message: "Missing bearer token",
       });
     }
-    const session = await authService.validateSession(sessionToken, "read");
+    const session = await authService.validateSession(sessionToken, "read", clientContextFrom(request));
     if (!session.valid) {
       return reply.code(401).send({
         ok: false,
@@ -143,7 +144,7 @@ export async function registerDeveloperRoutes(
           message: "Missing bearer token",
         });
       }
-      const session = await authService.validateSession(sessionToken, "share");
+      const session = await authService.validateSession(sessionToken, "share", clientContextFrom(request));
       if (!session.valid) {
         return reply.code(401).send({
           ok: false,

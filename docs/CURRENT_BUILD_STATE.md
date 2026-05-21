@@ -1184,6 +1184,59 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.3D-B LANDED — Device-Binding Context Threading + Advisory Detection (GAP-A3 part 2) (2026-05-21)
+
+**Status:** GOVSEC.3D-B `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — client-context
+threading into the normal-use validateSession callers + **advisory** device-binding
+detection (7 code + 1 NEW test + 3 docs = 11 files) per Founder Q-GOVSEC3DB-α α-2 +
+β-1 + γ-1 + δ-1 + ε-1 + ζ-1 + η-1 + θ-3 + ι-1 + κ-3 + λ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3DB-CONTEXT-THREADING-EXECUTE-VERIFY-AUTH]`.
+
+- **Context threading landed for the 5 normal-use callers.** Pre-flight found the
+  actual `AuthService.validateSession` caller set is **6 files / 8 sites** (not the
+  4 named): `auth.middleware.ts`, `admin.middleware.ts`, `developer.routes.ts` (×3),
+  `working-set.routes.ts`, `wallet.routes.ts`, and `auth-admin.routes.ts:336`
+  (refresh). The 5 normal-use callers are threaded; **`auth-admin.routes.ts:336`
+  (refresh old-token validation) is intentionally left unthreaded** (refresh
+  authorization, not normal-use; the refreshed session already snapshots a fresh
+  binding hash per 3D-A; GOVSEC.3A rotation unchanged).
+- **NEW `apps/api/src/middleware/request-context.ts`** `clientContextFrom(request)`
+  returns `{ ip_address, user_agent }` (no hashing/normalization here; no IP
+  binding; no raw storage). The 5 callers pass it into `validateSession`.
+- **Advisory `device_bound` added to the validateSession success result.**
+  `ValidateSessionContext.user_agent?` + `ValidateSuccess.device_bound?: boolean | null`.
+  At θ-3 (success path, after every existing check incl. 3C-B2 idle + 3C-A touch):
+  `true` = live UA HMAC matches the snapshot; `false` = mismatch (**session still
+  valid**); `null` = null stored hash OR no live user-agent.
+- **No behavior rejection.** A mismatch is advisory — no denial, no revoke, no new
+  return code. **No response-shape change** (routes build responses separately).
+- **No audit, no schema, no Redis/nonce change, no new audit literal.** A mismatch
+  emits nothing and leaves the token usable.
+- **refresh old-token validation remains unthreaded by design** (rationale above).
+- **GAP-A3 status:** detection signal now available at validateSession; runtime
+  closure (deny/revoke) remains GOVSEC.3D-C.
+- **Tests:** NEW `tests/integration/session-device-binding-detection.test.ts`
+  (7 scenarios incl. auth.middleware end-to-end).
+- **GOVSEC.3D-C remains separate** (config-gated/hard enforcement + accurate
+  `SESSION_REVOKED device_mismatch` audit + recovery, gated on GOVSEC.5);
+  GOVSEC.4/5/7 untouched.
+
+**Substrate sites (11)**: MOD `apps/api/src/services/auth.service.ts` + NEW
+`apps/api/src/middleware/request-context.ts` + MOD
+`apps/api/src/middleware/auth.middleware.ts` + MOD
+`apps/api/src/middleware/admin.middleware.ts` + MOD
+`apps/api/src/routes/developer.routes.ts` + MOD
+`apps/api/src/routes/working-set.routes.ts` + MOD
+`apps/api/src/routes/wallet.routes.ts` + NEW
+`tests/integration/session-device-binding-detection.test.ts` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3DB-CONTEXT-THREADING-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

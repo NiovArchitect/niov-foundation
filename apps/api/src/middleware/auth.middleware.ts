@@ -9,6 +9,7 @@ import type {
   AuthService,
   ValidateFailure,
 } from "../services/auth.service.js";
+import { clientContextFrom } from "./request-context.js";
 
 // WHAT: Augment FastifyRequest so handlers can read req.auth after
 //        the middleware runs.
@@ -71,7 +72,7 @@ export function requireAuth(
     }
     const token = header.slice("Bearer ".length).trim();
 
-    const result = await authService.validateSession(token, requiredOperation);
+    const result = await authService.validateSession(token, requiredOperation, clientContextFrom(request));
     if (!result.valid) {
       await reply
         .code(statusForFailure(result.code))

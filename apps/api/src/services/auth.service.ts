@@ -101,6 +101,12 @@ export interface ValidateSuccess {
   session_id: string;
   clearance_ceiling: number;
   allowed_operations: string[];
+  // GOVSEC.3D-B / GAP-A3: advisory device-binding result computed on the success
+  // path. true = the live user-agent hash matched the session's snapshot; false
+  // = mismatch (session still valid -- advisory only, no denial in 3D-B); null =
+  // unbound (no stored hash) or no live user-agent (no detection). Enforcement
+  // is deferred to GOVSEC.3D-C.
+  device_bound?: boolean | null;
 }
 
 // WHAT: The failure return shape of validateSession().
@@ -126,6 +132,10 @@ export interface ValidateFailure {
 //      ip_address defaults to null when absent).
 export interface ValidateSessionContext {
   ip_address?: string | null;
+  // GOVSEC.3D-B / GAP-A3: the client user-agent threaded from the request by the
+  // normal-use callers. Used only for the advisory device-binding comparison
+  // (never stored raw; no IP). Absent => no detection (device_bound stays null).
+  user_agent?: string | null;
 }
 
 // WHAT: The shape of the JWT payload we sign.
@@ -500,12 +510,28 @@ export class AuthService {
       // best-effort: validation already succeeded; activity tracking is non-critical
     }
 
+    // GOVSEC.3D-B / GAP-A3: advisory device-binding comparison on the success
+    // path only (after every existing check, off the denial path). Computed from
+    // the already-fetched session row + the threaded client user-agent -- no
+    // extra DB read, no audit, no denial, no nonce change. null = unbound (no
+    // stored hash) OR no live user-agent (no detection). A mismatch is advisory:
+    // the session remains valid. Enforcement (deny/revoke + accurate
+    // SESSION_REVOKED device_mismatch audit) is GOVSEC.3D-C.
+    let device_bound: boolean | null = null;
+    if (sessionRow.device_binding_hash !== null) {
+      const liveHash = this.deviceBindingHash(context?.user_agent);
+      if (liveHash !== null) {
+        device_bound = liveHash === sessionRow.device_binding_hash;
+      }
+    }
+
     return {
       valid: true,
       entity_id: payload.entity_id,
       session_id: payload.session_id,
       clearance_ceiling: payload.clearance_ceiling,
       allowed_operations: payload.allowed_operations,
+      device_bound,
     };
   }
 
