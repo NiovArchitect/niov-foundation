@@ -1131,6 +1131,59 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.3D-A LANDED — Device-Binding Snapshot Substrate (GAP-A3 part 1) (2026-05-21)
+
+**Status:** GOVSEC.3D-A `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing —
+schema-bearing **device-binding snapshot substrate, no enforcement** (5 code/schema
++ 1 NEW test + 3 docs = 9 files) per Founder Q-GOVSEC3D-α α-1 + β-1 HMAC + γ-2 +
+δ-1/ε-1 DEFERRED + η-3 + θ-1 + ι-2 + κ-2 LOCKS + auth.routes.ts 9th-file
+authorization at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3DA-DEVICE-BINDING-SNAPSHOT-EXECUTE-VERIFY-AUTH]`.
+
+- **Device-binding snapshot substrate landed.** NEW additive nullable
+  `Session.device_binding_hash String?`. Planning found the Session row had no
+  device/ua/ip field (IP only logged in `audit_events`) and that
+  `validateSession` receives no client context from any of its four hot-path
+  callers — so enforcement is a separate phase (3D-B).
+- **`AuthService.deviceBindingHash(userAgent)`** computes **HMAC-SHA256(normalized
+  user-agent, jwtSecret)** via Node built-in `crypto` (no dependency; ADR-0019
+  HS256 family). Trim-only normalization (preserves meaningful UA case);
+  null/empty/whitespace user-agent → null (unbound).
+- **login snapshots from the client user-agent** (auth.routes.ts passes
+  `request.headers["user-agent"]` into the login context; auth.service.login
+  computes the hash and snapshots it onto the session).
+- **refresh snapshots from the client user-agent** (auth-admin.routes.ts — one
+  additive line via `authService.deviceBindingHash(...)`; the GOVSEC.3A rotation
+  logic is unchanged).
+- **No raw user-agent or raw IP is persisted** anywhere on the Session row.
+  **IP is excluded** from the binding material (brittle across mobile/NAT/VPN/
+  proxy). No fingerprinting library; no precise fingerprinting.
+- **validateSession is UNCHANGED** — no context threading into its callers, no
+  binding check, no enforcement. GOVSEC.3C-A activity touch + 3C-B2 idle
+  enforcement + GOVSEC.2A failure branches preserved.
+- **No audit change.** No device-mismatch audit, no new audit literal. **No
+  Redis/nonce change.**
+- **GAP-A3 honest status:** binding material captured + snapshotted; mismatch
+  rejection deferred to GOVSEC.3D-B (context threading + advisory/config-gated)
+  and GOVSEC.3D-C (hard revoke + recovery/step-up, gated on GOVSEC.5).
+- Schema applied via `prisma db push` + `scripts/local-test-db-refresh.sh` +
+  `db:generate`. **GOVSEC.3D-B/C remain separate** forward-substrate;
+  GOVSEC.4/5/7 untouched.
+- **Tests:** NEW `tests/integration/session-device-binding.test.ts` (10 scenarios).
+
+**Substrate sites (9)**: MOD `packages/database/prisma/schema.prisma` + MOD
+`packages/database/src/queries/session.ts` + MOD
+`apps/api/src/services/auth.service.ts` + MOD
+`apps/api/src/routes/auth.routes.ts` + MOD
+`apps/api/src/routes/auth-admin.routes.ts` + NEW
+`tests/integration/session-device-binding.test.ts` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G3DA-DEVICE-BINDING-SNAPSHOT-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

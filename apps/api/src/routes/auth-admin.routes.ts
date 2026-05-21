@@ -384,6 +384,11 @@ export async function registerAuthAdminRoutes(
       // refreshed session so a refreshed session also idle-expires (3C-B2).
       // Additive only -- the GOVSEC.3A rotation logic below is unchanged.
       idle_timeout_minutes: orgSettings.idle_timeout_minutes,
+      // GOVSEC.3D-A / GAP-A3: snapshot the device-binding hash onto the
+      // refreshed session from the current client user-agent (the service
+      // computes the HMAC; raw user-agent never stored). Additive only -- the
+      // GOVSEC.3A rotation logic below is unchanged; no enforcement in 3D-A.
+      device_binding_hash: authService.deviceBindingHash(request.headers["user-agent"] ?? null),
     });
 
     const payload: SessionTokenPayload = {

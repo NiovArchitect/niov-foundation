@@ -613,6 +613,66 @@ use is gated by the DB status). No Redis TTL refresh.
 abandoned session is transitioned EXPIRED at its next use — plus the absolute TTL
 cap; **no proactive sweep / scheduler**.
 
+## GOVSEC.3D-A Implementation Note — GAP-A3 Device-Binding Snapshot (2026-05-21)
+
+GOVSEC.3D is split into **3D-A (device-binding snapshot substrate)**, **3D-B
+(client-context threading + advisory/config-gated mismatch detection)**, and
+**3D-C (hard revoke + recovery/step-up UX, gated on GOVSEC.5)**. This note
+records 3D-A.
+
+**Planning findings (why snapshot-only).** GAP-A3 planning found (1) the
+`Session` row has **no** device/user-agent/IP field — IP is only logged in
+`audit_events` ("logged not bound"); and (2) **`validateSession` receives no
+client context from any of its four hot-path callers** (`auth.middleware.ts`,
+`admin.middleware.ts`, `developer.routes.ts`, `working-set.routes.ts`). So
+enforcement-at-validate cannot exist until client context is threaded to those
+callers — a distinct, cross-cutting phase. 3D-A therefore lands the **snapshot
+substrate only**.
+
+**3D-A substrate:**
+- `Session.device_binding_hash String?` (nullable additive; no index; no
+  backfill).
+- `AuthService.deviceBindingHash(userAgent)` = **HMAC-SHA256(normalized
+  user-agent, jwtSecret)** (hex), via Node built-in `crypto` — no dependency.
+  Trim-only normalization (case in a UA token is meaningful, so it is preserved
+  to avoid collapsing genuinely-distinct clients); a missing/empty/whitespace
+  user-agent yields **null** (unbound).
+- **login** (`auth.routes.ts` passes `request.headers["user-agent"]` into the
+  login context; `auth.service.login` computes and snapshots) and **refresh**
+  (`auth-admin.routes.ts` — one additive line; GOVSEC.3A rotation unchanged)
+  snapshot `device_binding_hash` via `createSession`.
+- `validateSession` is **unchanged** in 3D-A — no enforcement, no context
+  threading. GOVSEC.3C-A touch + 3C-B2 idle enforcement + GOVSEC.2A failure
+  branches preserved.
+
+**Binding-material decision (privacy-preserving).** The binding material is the
+**normalized user-agent only**. **IP is excluded** because it is brittle across
+mobile/NAT/VPN/proxy contexts (OWASP Session Management Cheat Sheet) and would
+produce false mismatches when enforcement lands. The **raw user-agent and raw IP
+are never stored** — only the keyed HMAC, which is not reversible to the raw UA
+and cannot be correlated across servers. No fingerprinting library; no precise
+fingerprinting. The HMAC key reuses the existing **auth secret / `jwtSecret`**
+(HS256 family per ADR-0019 / `CRYPTO_CONFIG`); a dedicated `DEVICE_BINDING_KEY`
+may be future substrate. A `jwtSecret` rotation invalidates binding hashes, but
+it already ends all sessions (JWTs become unverifiable), so the coupling is
+consistent.
+
+**No enforcement, no audit change in 3D-A.** No mismatch rejection; no audit
+events; **no new audit literal**. Null/missing user-agent snapshots null.
+
+**3D-B / 3D-C (forward-substrate).** 3D-B must thread the client context
+(user-agent) into the four `validateSession` callers and decide **advisory**
+mismatch detection vs **config-gated** enforcement (`OrgSettings.device_binding_mode`).
+Future mismatch enforcement should **reuse `SESSION_REVOKED` with
+`details.reason = "device_mismatch"`** (the `tar_hash_mismatch` precedent) unless
+a later QLOCK proves a new literal is required. 3D-C must address **hard revoke,
+recovery, break-glass, or step-up UX before hard-blocking** mismatches (OWASP:
+blocking mismatches is impractical for multi-device users) — gated on GOVSEC.5.
+
+**No ADR-0002 amendment** (no audit-architecture change in 3D-A; the schema
+addition is one additive nullable column documented here, applied via the
+ADR-0025 `prisma db push` flow). **No enforcement in 3D-A.**
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

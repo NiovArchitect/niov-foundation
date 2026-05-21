@@ -267,6 +267,7 @@ model Session {
   entity_id  String @db.Uuid
 
   tar_hash_at_creation String
+  device_binding_hash  String?
   allowed_operations   String[]
   clearance_ceiling    Int
 

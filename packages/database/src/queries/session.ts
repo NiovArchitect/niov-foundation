@@ -36,6 +36,13 @@ export interface CreateSessionInput {
   // GOVSEC.3C-B2 enforcement from the already-fetched session row -- no
   // per-request org-settings lookup in validateSession.
   idle_timeout_minutes?: number | null;
+  // GOVSEC.3D-A / GAP-A3: per-session device-binding snapshot, captured at
+  // creation (mirrors clearance_ceiling/allowed_operations/idle_timeout_minutes
+  // snapshotting). An HMAC-SHA256 over the normalized client user-agent computed
+  // in the API layer (never the raw user-agent; no IP). null = unbound. Read by
+  // a future GOVSEC.3D-B enforcement from the already-fetched session row -- no
+  // per-request rebind lookup. No enforcement is performed in 3D-A.
+  device_binding_hash?: string | null;
 }
 
 // WHAT: Insert one Session row plus its audit entry, atomically.
@@ -68,6 +75,9 @@ export async function createSession(
         // session (null = idle disabled). Enforcement (3C-B2) reads this from
         // the already-fetched row -- no per-request org-settings lookup.
         idle_timeout_minutes: input.idle_timeout_minutes ?? null,
+        // GOVSEC.3D-A / GAP-A3: snapshot the device-binding hash onto the
+        // session (null = unbound). Snapshot only -- no enforcement in 3D-A.
+        device_binding_hash: input.device_binding_hash ?? null,
       },
     });
 

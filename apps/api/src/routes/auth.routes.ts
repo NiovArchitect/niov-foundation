@@ -46,7 +46,10 @@ export async function registerAuthRoutes(
       body.email,
       body.password,
       requested,
-      { ip_address: request.ip ?? null },
+      // GOVSEC.3D-A / GAP-A3: pass the client user-agent so login can snapshot a
+      // device-binding hash onto the session (the service computes the HMAC and
+      // never stores the raw user-agent). ip_address unchanged.
+      { ip_address: request.ip ?? null, user_agent: request.headers["user-agent"] ?? null },
     );
     if (!result.ok) {
       const status = result.code === "SUSPENDED" ? 403 : 401;

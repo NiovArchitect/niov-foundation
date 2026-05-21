@@ -9,7 +9,7 @@
 //              tar, session queries plus audit_events), and the
 //              NonceStore interface in /redis.ts.
 
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { CRYPTO_CONFIG, verifyPassword } from "@niov/auth";
 import {
@@ -183,7 +183,7 @@ export class AuthService {
     email: string,
     password: string,
     requestedOperations: string[],
-    context: { ip_address?: string | null } = {},
+    context: { ip_address?: string | null; user_agent?: string | null } = {},
   ): Promise<LoginResult | LoginFailure> {
     // STEP 1 -- find entity by email
     const entity = await getEntityByEmail(email);
@@ -303,6 +303,10 @@ export class AuthService {
       // session at login (null = idle disabled). Enforcement (3C-B2) reads it
       // from the session row -- no per-request org-settings lookup.
       idle_timeout_minutes: orgSettings.idle_timeout_minutes,
+      // GOVSEC.3D-A / GAP-A3: snapshot the device-binding hash (HMAC over the
+      // normalized client user-agent; null when absent). Snapshot only -- 3D-A
+      // performs no mismatch enforcement.
+      device_binding_hash: this.deviceBindingHash(context.user_agent),
     });
 
     const payload: SessionTokenPayload = {
@@ -503,6 +507,25 @@ export class AuthService {
       clearance_ceiling: payload.clearance_ceiling,
       allowed_operations: payload.allowed_operations,
     };
+  }
+
+  // WHAT: Compute a privacy-preserving device-binding hash for a session.
+  // INPUT: An optional client user-agent string (from the login/refresh route).
+  // OUTPUT: A hex HMAC-SHA256 of the normalized user-agent, or null when the
+  //         user-agent is missing / empty / whitespace-only.
+  // WHY: GOVSEC.3D-A / GAP-A3 -- bind a session to its originating client
+  //      without storing the raw user-agent or any IP. The output is keyed by
+  //      the server's auth secret (HS256 family per ADR-0019 / CRYPTO_CONFIG)
+  //      so the stored value is not reversible to the raw user-agent and cannot
+  //      be correlated across servers. Normalization is trim-only to avoid
+  //      collapsing genuinely-distinct clients (case in a UA token is
+  //      meaningful); a missing user-agent yields null (unbound). 3D-A snapshots
+  //      this at session creation only -- no enforcement is performed here.
+  deviceBindingHash(userAgent?: string | null): string | null {
+    if (userAgent === null || userAgent === undefined) return null;
+    const normalized = userAgent.trim();
+    if (normalized.length === 0) return null;
+    return createHmac("sha256", this.config.jwtSecret).update(normalized).digest("hex");
   }
 
   // WHAT: Emit a modern hash-chained session-lifecycle denial audit event.
