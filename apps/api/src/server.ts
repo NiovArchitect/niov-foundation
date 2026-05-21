@@ -20,6 +20,13 @@ import { ShareService } from "./services/cosmp/share.service.js";
 import { SimilarityService } from "./services/cosmp/similarity.service.js";
 import { COEService } from "./services/coe/coe.service.js";
 import { registerCoeRoutes } from "./routes/coe.routes.js";
+import { WorkingSetService } from "./services/personalization/working-set.service.js";
+import {
+  createSessionContextResolver,
+  prismaWalletContextLookup,
+} from "./services/personalization/session-context-resolver.js";
+import { registerWorkingSetRoutes } from "./routes/working-set.routes.js";
+import { prisma } from "@niov/database";
 import { HiveService } from "./services/hive/hive.service.js";
 import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { MonetizationService } from "./services/monetization/monetization.service.js";
@@ -222,6 +229,13 @@ export async function buildApp(
       },
     },
   );
+  // arc 2 WSAPI: the Foundation-owned working-set orchestrator, wired with
+  // the production SessionContextResolver (authoritative session→wallet
+  // resolution) and the COE assembleContext path as its ContextAssembler.
+  const workingSetService = new WorkingSetService(
+    createSessionContextResolver(authService, prismaWalletContextLookup(prisma)),
+    coeService,
+  );
   const rateLimits: Record<string, RateLimitPolicy> = {
     ...DEFAULT_LIMITS,
     ...(config.rateLimitOverrides ?? {}),
@@ -347,6 +361,7 @@ export async function buildApp(
     similarityService,
   );
   await registerCoeRoutes(app, coeService);
+  await registerWorkingSetRoutes(app, workingSetService, authService);
   await registerHiveRoutes(app, hiveService);
   await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);

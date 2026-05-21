@@ -163,6 +163,11 @@ export {
 
 export { registerCoeRoutes } from "./routes/coe.routes.js";
 
+// ADR-0048 arc 2 (WSAPI): consumer-safe working-set HTTP route. Exposes
+// WorkingSetService via projectConsumerView only; emits the AUDIT.2 literals
+// (WORKING_SET_BUILT + PERSONALIZATION_DEGRADED) at the route layer.
+export { registerWorkingSetRoutes } from "./routes/working-set.routes.js";
+
 export {
   HiveService,
   HIVE_AGGREGATE_TAG_FLOOR,

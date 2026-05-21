@@ -676,6 +676,69 @@ Founder authorization explicit at
 `[PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION-HAWKSEYE-QLOCK]` +
 `[PERSONALIZATION-AUDIT-LITERAL-CLEAN-TRANSITION-EXECUTE-VERIFY-AUTH]`.
 
+#### WSAPI LANDED — working-set API exposure (consumer route + AUDIT.2 route-layer emission) (2026-05-20)
+
+**Status:** WSAPI `[WORKING-SET-API-EXPOSURE]` landing (2 NEW + 3 MOD; 6
+files) per Founder Q-WSAPI-α α-1 + β-3 + γ-1 + δ-2 + ε-1 + ζ-3 + η-1 LOCKS at
+`[WORKING-SET-API-EXPOSURE-EXECUTE-VERIFY-AUTH]`. **arc 2** of the
+post-Phase-3 sequence (follows AUDIT.1; GOVSEC later — NOT started).
+
+- **Consumer-safe production route LANDED**: `POST
+  /api/v1/personalization/working-set` (NEW
+  `apps/api/src/routes/working-set.routes.ts`). bearer →
+  `authService.validateSession` (audit actor context only) →
+  `workingSetService.buildPersonalizedWorkingSet` → returns
+  **`projectConsumerView` only**. `projectAdminView` is NOT invoked; the raw
+  `WorkingSetSuccess` is never returned.
+- **server.ts wiring**: constructs `WorkingSetService(createSessionContextResolver(
+  authService, prismaWalletContextLookup(prisma)), coeService)` (the production
+  resolver + COE assembleContext seam) + `registerWorkingSetRoutes(app,
+  workingSetService, authService)`; barrel re-exports `registerWorkingSetRoutes`.
+- **AUDIT.2 route-layer emission** (γ-1; `WorkingSetService` stays PURE — 0
+  `writeAuditEvent`): `WORKING_SET_BUILT` on every success (safe counts +
+  `domain` only); `PERSONALIZATION_DEGRADED` only when `degraded.length > 0`
+  (reason-class histogram + counts only). Both awaited **before** the response
+  per RULE 4 (audit-failure fails the request).
+- **Fail-closed**: missing/invalid/expired session or service failure →
+  route-style failure response, **no personalization audit literal, no
+  payload**.
+- **The other 3 literals remain defined-not-emitted** (future-substrate):
+  `CONTEXT_USED_MANIFEST_RECORDED`, `CROSS_ENTITY_CONTEXT_REQUESTED`,
+  `PERSONALIZATION_SIGNAL_RECORDED`.
+- **`now` is server-set** (client-supplied `now` never trusted).
+- **Gateway**: no rate-limit entry added — the peer COE retrieval route
+  (`/api/v1/coe/context`) is likewise unmapped (session-auth is the gate);
+  unmapped operations pass through. `gateway.middleware.ts` untouched.
+- **No admin endpoint** (projectAdminView not route-exposed; deferred until a
+  Foundation admin/agent/self-repair caller exists). No Otzar UX. No GOVSEC.
+  No ADR edit (ADR-0048 §Hybrid API Strategy already contemplates the
+  buildPersonalizedWorkingSet endpoint).
+- **Untouched**: all personalization-service substrate (working-set.service.ts,
+  session-context-resolver.ts, permission-envelope, moment-context,
+  temporal-personalization, degraded-mode-contract, working-set-views.ts),
+  `coe.service.ts`, `cosmp/**`, `audit.ts` (literals already defined at
+  AUDIT.1), schema, Elixir, gateway.
+- **Tests**: NEW `tests/integration/working-set-route.test.ts` — route
+  integration + AUDIT.2 emission persistence (safe-counts / reason-histogram
+  only) + consumer-view no-diagnostics + no raw vector/distance/embedding/
+  cosine + fail-closed-no-audit + **synthetic-DMW route regression** (2
+  employees + 1 twin + 1 enterprise; single-wallet spine proven at the HTTP
+  boundary — no cross-wallet, no sensitive enterprise content in any consumer
+  response).
+
+**Substrate sites (6: 2 NEW + 4 MOD... 2 NEW + 3 MOD code/doc)**: NEW
+`apps/api/src/routes/working-set.routes.ts` + NEW
+`tests/integration/working-set-route.test.ts` + MOD `apps/api/src/server.ts`
+(wiring) + MOD `apps/api/src/index.ts` (barrel) + MOD
+`docs/reference/section-12-progress.md` (WSAPI row) + MOD this
+`CURRENT_BUILD_STATE.md` (this WSAPI H4).
+
+**Next Founder-gated arc = GOVSEC / government-grade hardening — NOT started.**
+
+Founder authorization explicit at
+`[WORKING-SET-API-EXPOSURE-HAWKSEYE-QLOCK]` +
+`[WORKING-SET-API-EXPOSURE-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
