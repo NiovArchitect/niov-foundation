@@ -739,6 +739,65 @@ Founder authorization explicit at
 `[WORKING-SET-API-EXPOSURE-HAWKSEYE-QLOCK]` +
 `[WORKING-SET-API-EXPOSURE-EXECUTE-VERIFY-AUTH]`.
 
+#### GOVSEC.1 LANDED — Government-Grade Hardening and Gap-Closure Program (umbrella; docs-only) (2026-05-20)
+
+**Status:** GOVSEC.1 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing (2 NEW + 4 MOD;
+6 files; docs-only) per Founder Q-GOVSEC-α α-1 + β-1 + γ-2 + η-3 (reserved for
+code phases) + θ-3 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G1-EXECUTE-VERIFY-AUTH]`.
+
+- **GOVSEC is the master government-grade gap-closure arc** — not security-only
+  and not compliance theater. It spans security, privacy, auditability,
+  identity/session, AI/agent abuse, tenant isolation, supply chain, incident
+  response, cryptography, operational resilience, correctness, scalability, and
+  **optimization** (treated as government-grade readiness wherever it affects
+  security under load, bot/swarm resistance, backpressure, latency under
+  adversarial traffic, audit throughput, high-concurrency correctness, AI-agent
+  coordination safety, tenant isolation at scale, or reliability during attacks/
+  degraded states).
+- **ADR-0049 created** (NEW `docs/architecture/decisions/0049-govsec-government-grade-hardening.md`;
+  Status: Proposed) — umbrella ADR: Founder doctrine, standards basis, current
+  substrate summary, master threat model A–L summary, gap-closure register
+  summary, optimization register summary, 10-phase decomposition, per-phase
+  closure criteria, and the 7 RULE 13 blind-spot resolutions (BS1–BS7).
+- **Control matrix created** (NEW `docs/reference/govsec-control-matrix.md`) —
+  source notes (retrieved 2026-05-20) + standards-to-substrate matrix (NIST
+  800-53 AC/AU/IA/SC/SI/IR/SR + 800-63-4 + AI RMF + ZTMM v2.0 + OWASP API 2023 +
+  OWASP LLM 2025 + SLSA + SOC 2 CC, each mapped to a named repo surface) + full
+  threat model A–L + Master Gap-Closure Register + Optimization/Resilience
+  Register + phase-ownership / test-strategy / closure-criteria matrices.
+- **Master gap-closure register created** — every meaningful gap discovered in
+  the planning pass is owned by gap-id with category, evidence, protection,
+  description, severity, likelihood, phase owner, closure type, required tests,
+  required audit/evidence, optimization impact, closure criteria, and disposition
+  (blocker / high-priority forward-substrate / future-substrate). No gap unowned.
+- **Optimization/resilience register created** (GAP-O1..O9) — audit throughput +
+  hash-chain contention, gateway perf under adversarial load, AI-agent
+  coordination under concurrency, tenant isolation at scale, profile separation,
+  nonce/session validation perf, working-set latency under volume, CI scan cost,
+  fail-closed under partial outages.
+- **7 RULE 13 blind spots resolved at pre-flight:** BS1 ADMIN_ACTION is emitted
+  widely (not a gap) · BS2 SESSION_EXPIRED/REVOKED unemitted (GAP-G1) · BS3
+  AI-grantor/SESSION_ONLY unconfirmed in grant path (GAP-D1/D2) · BS4 hive/dept
+  filtering absent in read/negotiate (GAP-F1) · BS5 `assembleContext` cited by
+  symbol · BS6 synthetic-DMW S7 covers twin denial; narrowed (GAP-F3) · BS7
+  `detectOperation` returns null → pass-through (GAP-B1).
+- **No implementation yet.** No code/schema/CI/Elixir change; no new CLAUDE RULE.
+- **GOVSEC.2 forward-substrate** (audit/security-event completion + machine-
+  readable evidence foundation), and GOVSEC.3–10 forward-substrate — each gated
+  by a separate Founder QLOCK.
+
+**Substrate sites (6: 2 NEW + 4 MOD docs-only)**: NEW
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md` + NEW
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` (GOVSEC.1 row) + MOD this
+`CURRENT_BUILD_STATE.md` (this GOVSEC.1 H4) + MOD `docs/architecture/README.md`
+(ADR-0049 catalog) + MOD `CLAUDE.md` (ADR-0049 catalog line; no new RULE).
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-HAWKSEYE-QLOCK]` +
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G1-EXECUTE-VERIFY-AUTH]`.
+
 ---
 
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15

@@ -1,0 +1,318 @@
+# ADR-0049 — Government-Grade Hardening and Gap-Closure Program for Foundation/COSMP
+
+- **Status:** Proposed
+- **Date:** 2026-05-20
+- **Phase:** GOVSEC (master government-grade gap-closure arc) — GOVSEC.1 (umbrella ADR + control matrix + gap-closure register + optimization register)
+- **Supersedes:** none
+- **Amends:** none at GOVSEC.1 (later phases amend ADR-0002/0019/0026/0037/0041/0046 per the phase decomposition)
+
+## Context
+
+Phase 3 (Dynamic Memory Accuracy at Scale) is globally closed; AUDIT.1
+(personalization audit-literal clean-transition) and WSAPI (working-set API
+exposure) are landed on `origin/main` at `8674fca`. The Foundation/COSMP
+substrate is already heavily hardened at the architectural register — RULE 0
+permission gating, an append-only SHA-256 hash-chained audit, a single-wallet
+COE spine, dual-control middleware, a frozen `CRYPTO_CONFIG`, the consumer/admin
+working-set view split, and AI-access caps all exist and are tested.
+
+What does **not** yet exist is a single canonical program that (a) maps the
+current government/enterprise security standards to the **concrete repo
+surfaces** that implement them, (b) enumerates **every meaningful gap** required
+for true government-grade implementation so that no gap is left unowned, and
+(c) sequences the gap closures into small, CI-verifiable phases. GOVSEC.1
+creates that canonical foundation. It is docs-only.
+
+A read-only planning pass (substrate inspection across 11 areas + RULE 21
+current-source research on 10 standards, all retrieved 2026-05-20) preceded this
+ADR. Its findings are carried into the Master Gap-Closure Register (this ADR §10
+summary; `docs/reference/govsec-control-matrix.md` authoritative) and the RULE 13
+blind-spot resolutions (§14).
+
+## Founder Doctrine
+
+GOVSEC is governed by an explicit Founder doctrine:
+
+- **Deeper than FedRAMP paperwork.** GOVSEC is not a compliance-narrative
+  exercise. Cosmetic documentation, control renaming, and standards name-dropping
+  are forbidden shortcuts (§16).
+- **Not security theater.** Each control must map to a real, named repo surface
+  (file + function/symbol) or to a concrete planned surface.
+- **All meaningful gaps must be owned.** Every gap discovered in the planning
+  pass is registered with a phase owner, a closure type, required tests, and
+  closure criteria. No known gap is left unassigned.
+- **GOVSEC is not security-only.** It is the master government-grade gap-closure
+  arc spanning security, privacy, auditability, identity/session, AI/agent abuse,
+  tenant isolation, supply chain, incident response, cryptography, operational
+  resilience, correctness, scalability, and optimization.
+- **Optimization is part of government-grade readiness** wherever it affects
+  security under load, bot/swarm resistance, backpressure, latency under
+  adversarial traffic, audit throughput, high-concurrency correctness, AI-agent
+  coordination safety, tenant isolation at scale, reliability during attacks or
+  degraded states, or government/enterprise/consumer production readiness.
+  Optimization is therefore registered alongside security gaps (§11; matrix
+  Optimization/Resilience Register), never treated as a separate concern.
+
+## Decision
+
+Establish **GOVSEC** as the master government-grade hardening and gap-closure
+program for Foundation/COSMP, anchored by:
+
+1. **This umbrella ADR (ADR-0049)** — the program decision, doctrine, standards
+   basis, threat model, gap-closure register summary, optimization register
+   summary, phase decomposition, and per-phase closure criteria.
+2. **`docs/reference/govsec-control-matrix.md`** — the canonical
+   standards-to-substrate matrix, full threat model A–L, Master Gap-Closure
+   Register, Optimization/Resilience Register, phase-ownership matrix, test-
+   strategy matrix, and closure-criteria matrix.
+3. **A 10-phase decomposition** (§12) in which GOVSEC.1 is docs-only and
+   GOVSEC.2–10 are forward-substrate code/infra/policy phases, each gated by a
+   separate Founder QLOCK authorization per the established workflow.
+
+GOVSEC.1 lands the canonical foundation only. It implements no code.
+
+## Scope (GOVSEC.1)
+
+- NEW ADR-0049 (this file).
+- NEW `docs/reference/govsec-control-matrix.md`.
+- Tracker update (`docs/reference/section-12-progress.md`).
+- Build-state update (`docs/CURRENT_BUILD_STATE.md`).
+- ADR catalog entry + RULE 14 bidirectional citation (`docs/architecture/README.md`).
+- ADR catalog line in `CLAUDE.md` (no new RULE).
+
+## Non-Scope for GOVSEC.1
+
+No code (`apps/**`, `packages/**`, `scripts/**`). No schema/migration. No
+`.github/**` CI. No Elixir. No `.husky/**`. No `package.json`/lockfile. No new
+CLAUDE.md RULE. No admin endpoint. No Otzar UX/frontend. No GOVSEC.2–10
+implementation. No optimization code. No production-affecting action.
+
+## Standards Basis (RULE 21 current-source research; all retrieved 2026-05-20)
+
+- **FedRAMP 20x** — automation-first authorization; OSCAL machine-readable
+  packages + continuous monitoring; machine-readable requirements effective
+  2026-09-30 (RFC-0024/0008). (fedramp.gov/20x)
+- **NIST SP 800-53 Rev. 5 (upd1)** — 20 control families; GOVSEC anchors on
+  **AC, AU, IA, SC, SI, IR, SR**. (csrc.nist.gov/pubs/sp/800/53/r5/upd1/final)
+- **NIST SP 800-63-4** — finalized 2025-07-31; AAL2 session ≤24h / idle ≤1h,
+  AAL3 session ≤12h / idle ≤15min, ≥64-bit session secrets, server-side
+  invalidation on logout, CSRF on state-change. (pages.nist.gov/800-63-4)
+- **NIST AI RMF (AI 100-1) + GenAI Profile (AI 600-1)** — GOVERN/MAP/MEASURE/
+  MANAGE. (nist.gov/itl/ai-risk-management-framework)
+- **NIST PQC** — FIPS 203/204/205 finalized 2024-08-13; SP 800-227 final
+  2025-09; crypto-agility is the expected posture; symmetric-only stacks
+  (HMAC-SHA256, AES-256-GCM, SHA-256, bcrypt) are already PQC-resilient — only
+  asymmetric surfaces are Shor-exposed. (csrc.nist.gov/pubs/fips/203/final)
+- **CISA Zero Trust Maturity Model v2.0 + Secure-by-Design** — 5 pillars +
+  3 cross-cutting; Secure-by-Design Goal 6 "Evidence of Intrusions" (logging/
+  audit). (cisa.gov/zero-trust-maturity-model)
+- **OWASP API Security Top 10 (2023)** — API1 BOLA … API4 Unrestricted Resource
+  Consumption … API10. (owasp.org/API-Security/editions/2023)
+- **OWASP LLM/GenAI Top 10 (2025)** — LLM01 Prompt Injection … LLM06 Excessive
+  Agency … LLM08 Vector/Embedding Weaknesses. (genai.owasp.org/llm-top-10)
+- **SLSA v1.0 + sigstore + SBOM (SPDX/CycloneDX)** — Build L1→L3; L2 = signed
+  provenance. (slsa.dev/spec/v1.0/levels)
+- **SOC 2 Trust Services Criteria** — Security/Common Criteria CC1–CC9; CC6/CC7/
+  CC8 most relevant. (aicpa.org)
+
+## Current Substrate Summary
+
+Hardened (cited by symbol per RULE 12; line numbers volatile):
+
+- Identity/auth: `auth.service.ts` `validateSession` (7-step: JWT verify → expiry
+  → session row → TAR-hash binding → operation scope → nonce presence); bcrypt-12;
+  5-strike lockout; atomic logout + nonce delete; `LOGIN_SUCCESS` audit.
+- Audit: `packages/database/src/queries/audit.ts` `writeAuditEvent` (SHA-256
+  14-field canonical record + `previous_event_hash` chain + per-chain advisory
+  lock), `applyAuditEventTriggers` (BEFORE UPDATE/DELETE append-only),
+  `verifyAuditChain`, `satisfies` literal guard, 5 frozen SYSTEM_PRINCIPALS.
+- Gateway: `gateway.middleware.ts` `RateLimitPolicy` + `detectOperation` (Redis
+  fixed-window; login limited; IP whitelist); `setMultiplier` throttle hook.
+- Privacy: `working-set-views.ts` `projectConsumerView` allow-list; single-wallet
+  COE spine `coe.service.ts` `assembleContext`; `similarity.service.ts`
+  SQL-projection (no raw vector/distance/cosine).
+- AI governance: `negotiate.service.ts` `isRestrictedAiClass`, AI FULL→SUMMARY
+  cap + `ai_capped`, `requires_validation`→COMPLIANCE_GATE; LLM materializes the
+  working set before the model call (Foundation decides context; LLM06 mitigation).
+- Crypto: frozen `CRYPTO_CONFIG` (HS256/AES-256-GCM/SHA-256/bcrypt) — symmetric-
+  only, already PQC-resilient; boot gates JWT_SECRET/ENCRYPTION_KEY/BCRYPT.
+- Supply chain: pinned Node + pgvector; `npm ci`; 4-job CI; pre-commit guards.
+- Monitoring: Pino + Fastify redaction; Loop-5 anomaly detector
+  (`ANOMALY_RATIO_THRESHOLD`, `ANOMALY_THROTTLE_MULTIPLIER`) wired to
+  `setMultiplier`; 7 seeded compliance frameworks; deployment runbook (ADR-0047).
+
+## Master Threat Model A–L (summary; matrix authoritative)
+
+A. Identity/session · B. API abuse + bot/swarm · C. Admin/privilege escalation ·
+D. AI/agent abuse + confused-deputy · E. Prompt/tool/model/provider compromise ·
+F. Tenant isolation + cross-wallet leakage · G. Audit/evidence tampering ·
+H. Privacy/logging/metadata leakage · I. Supply-chain + CI/CD · J. Crypto/key/
+quantum-readiness · K. Insider threat + break-glass misuse · L. Incident response
++ continuous monitoring. Each category's per-threat detail (evidence, protection,
+gap, severity, likelihood, candidate, tests, phase, ADR, tier) is in
+`docs/reference/govsec-control-matrix.md` §3.
+
+## Master Gap-Closure Register Summary
+
+The full register (`docs/reference/govsec-control-matrix.md` §4) enumerates every
+discovered gap with: gap id, category, current evidence, current protection, gap
+description, severity, likelihood, phase owner, closure type (docs/test/code/
+schema/CI-infra/policy-runbook/research-design), required tests, required audit/
+evidence, optimization impact, closure criteria, and disposition (blocker /
+high-priority forward-substrate / future-substrate). Representative ids:
+GAP-A1 idle-session timeout · GAP-A3 device/session binding · GAP-A4 refresh
+rotation/old-session revocation · GAP-B1 unmapped-route rate-limit · GAP-B2
+bot/swarm resistance · GAP-B3 anomaly→backpressure wiring · GAP-C1 dual-control
+self-approval placeholder · GAP-D1 AI-as-grantor enforcement · GAP-D2 AI
+SESSION_ONLY grant enforcement · GAP-E1 prompt/tool injection handling · GAP-F1
+hive/department filtering · GAP-G1 session-lifecycle audit emission (SESSION_
+EXPIRED/REVOKED) · GAP-G2 machine-readable (OSCAL) evidence export · GAP-I1
+dependency scanning · GAP-I2 SBOM/provenance · GAP-J1 key rotation/KMS · GAP-K1
+break-glass absence · GAP-L1 alerting/SIEM. No gap is unowned.
+
+## Optimization and Resilience Register Summary
+
+Optimization is registered as government-grade readiness, not separate cleanup
+(`docs/reference/govsec-control-matrix.md` §5). Representative ids: GAP-O1 audit
+write throughput + hash-chain advisory-lock contention · GAP-O2 gateway rate-
+limit performance under adversarial load · GAP-O3 AI-agent coordination under
+high concurrency · GAP-O4 tenant isolation at scale · GAP-O5 government/
+enterprise/consumer security-profile separation · plus Redis nonce/session
+validation perf, backpressure under bot/swarm, working-set route latency under
+adversarial volume, CI runtime + security-scan cost, telemetry overhead, and
+fail-closed behavior under partial outages. Each carries a measurement strategy
+and closure criteria.
+
+## GOVSEC Phase Decomposition
+
+- **GOVSEC.1** — ADR-0049 + control matrix + master gap-closure register +
+  optimization/resilience register. *(this phase; docs-only)*
+- **GOVSEC.2** — Audit/security-event completion + machine-readable evidence
+  foundation (SESSION_EXPIRED/REVOKED emission; OSCAL-style export). *(amends
+  ADR-0002)*
+- **GOVSEC.3** — Auth/session hardening (idle timeout, device/session binding,
+  refresh rotation, password-change invalidation) toward 800-63-4 AAL2/AAL3.
+- **GOVSEC.4** — Gateway rate limits, bot/swarm backpressure, high-volume abuse
+  protection, and performance under adversarial load (API4/LLM10).
+- **GOVSEC.5** — Admin privilege, break-glass, dual-control self-approval
+  resolution, insider-threat controls. *(amends ADR-0026/0027)*
+- **GOVSEC.6** — AI/agent abuse, confused-deputy hardening, prompt/tool/model/
+  provider compromise controls, AI-grantor + SESSION_ONLY enforcement. *(amends
+  ADR-0046)*
+- **GOVSEC.7** — Tenant isolation, government profile controls, department/hive
+  filtering, cross-org/cross-wallet denial proofs. *(amends ADR-0037/0041)*
+- **GOVSEC.8** — Supply-chain, CI/CD, dependency scanning, SBOM, provenance,
+  secret scanning (SLSA L2→L3).
+- **GOVSEC.9** — Crypto agility, key rotation/KMS design, FIPS/PQC readiness.
+  *(amends ADR-0019)*
+- **GOVSEC.10** — Incident response, monitoring, alerting, continuous evidence,
+  closure cascade.
+
+## Closure Criteria (per phase)
+
+- **GOVSEC.1** CLOSED when: ADR-0049 + control matrix + gap register +
+  optimization register exist; threat model covers A–L; every minimum gap is
+  registered with an owner; the 7 RULE 13 blind spots are resolved; tracker +
+  build-state updated; verifier PASS; regression baselines unchanged.
+- **GOVSEC.2** CLOSED when: session-lifecycle audit literals are emitted at their
+  source sites with chain integrity preserved; an OSCAL-style evidence export
+  exists; unit + integration tests prove emission; ADR-0002 amended.
+- **GOVSEC.3** CLOSED when: idle timeout + device/session binding + refresh
+  rotation land with 800-63-4 AAL targets documented; unit + integration +
+  adversarial replay tests pass.
+- **GOVSEC.4** CLOSED when: previously unmapped routes are rate-governed,
+  anomaly→backpressure is wired, and adversarial-load tests prove backpressure
+  without correctness loss.
+- **GOVSEC.5** CLOSED when: dual-control self-approval is resolved, break-glass
+  exists with mandatory time-boxed audit, privileged routes are throttled; tests
+  prove self-approval rejection + break-glass audit completeness.
+- **GOVSEC.6** CLOSED when: AI-grantor rejection + SESSION_ONLY-for-AI-grants are
+  enforced in code, confused-deputy chains are blocked, output-handling/prompt-
+  leak controls exist; adversarial agent tests pass.
+- **GOVSEC.7** CLOSED when: department/hive filtering is confirmed or added,
+  cross-org escalation isolation is enforced, and a failed cross-wallet NEGOTIATE
+  denial regression exists.
+- **GOVSEC.8** CLOSED when: dependency scanning + secret scanning + CodeQL/SAST +
+  SBOM + signed provenance gate CI at SLSA L2→L3.
+- **GOVSEC.9** CLOSED when: key-rotation/KMS design lands, algorithm references
+  route through CRYPTO_CONFIG, a FIPS/PQC readiness check + asymmetric-import
+  guard exist.
+- **GOVSEC.10** CLOSED when: alerting + SIEM/OSCAL export + post-incident runbook
+  + health telemetry exist and the GOVSEC closure cascade lands.
+
+## RULE 13 Blind-Spot Resolutions
+
+Resolved at GOVSEC.1 pre-flight by grep against current substrate (`8674fca`):
+
+- **BS1 — ADMIN_ACTION emission.** RESOLVED: `ADMIN_ACTION` is emitted widely —
+  `dual-control.middleware.ts` (6 sites), `org.routes.ts`, `developer.routes.ts`,
+  `platform.routes.ts`, `auth-admin.routes.ts`, `twin.service.ts`,
+  `dandelion.service.ts`, `escalation.service.ts`, `system-permission.ts`,
+  `coe.service.ts`. The planning-pass "defined-not-emitted" claim was incorrect;
+  ADMIN_ACTION is **not** a gap.
+- **BS2 — SESSION lifecycle emission.** RESOLVED (partial gap): `SESSION_CREATED`
+  is emitted at the refresh route (`auth-admin.routes.ts`). `session.ts`
+  createSession/terminate/expiry use a separate `action` field
+  (`SESSION_CREATE`/`SESSION_TERMINATE`/`SESSION_EXPIRY_SWEEP`), not the audit
+  `event_type` chain. `SESSION_EXPIRED` and `SESSION_REVOKED` are defined-not-
+  emitted as audit literals → GAP-G1 (GOVSEC.2).
+- **BS3 — AI-as-grantor / SESSION_ONLY.** RESOLVED (gap confirmed): the
+  consumption-side AI cap is enforced (`negotiate.service.ts` `isRestrictedAiClass`,
+  `ai_capped`, `allow_ai_full` override). A grantor-side "AI cannot grant to AI"
+  rejection and a SESSION_ONLY default for AI grants were **not** located in the
+  grant-creation path (`share.service.ts` / `system-permission.ts`). Treated as
+  documented-intent not yet code-verified → GAP-D1/GAP-D2 (GOVSEC.6).
+- **BS4 — Hive/department capsule filtering.** RESOLVED (gap confirmed): grep of
+  `read.service.ts` + `negotiate.service.ts` for department/hive/team_graph
+  filtering returned nothing. Isolation relies on wallet_id + permission +
+  clearance, not department sub-scoping → GAP-F1 (GOVSEC.7).
+- **BS5 — COE assembleContext citation.** RESOLVED: `assembleContext` is the
+  async method in `coe.service.ts` (wallet-lock select + capsule filter follow);
+  cite by symbol, not line.
+- **BS6 — synthetic-DMW regression file.** RESOLVED: both
+  `tests/integration/synthetic-dmw-simulation.test.ts` (S1–S10, incl. S2 cross-
+  wallet exclusion and S7 twin NEGOTIATE-DENIED) and
+  `tests/integration/working-set-route.test.ts` (WSAPI) exist. Remaining gap
+  narrows to an explicit **employee non-AI cross-wallet NEGOTIATE-denial**
+  regression → GAP-F3 (GOVSEC.7).
+- **BS7 — detectOperation default.** RESOLVED: `detectOperation` returns `null`
+  for unmapped routes → pass-through, no limiting; unmapped routes (incl.
+  `/coe/context`, `/personalization/working-set`) are ungoverned → GAP-B1
+  (GOVSEC.4).
+
+## Forward-Substrate Items
+
+GOVSEC.2–10 are forward-substrate; each requires a separate Founder QLOCK. Within
+phases, dormant items are explicitly reserved (e.g., OSCAL export depth, KMS
+provider selection, SIEM connector choice) and remain dormant until a Founder-
+authorized phase lands them. The optimization register items become first-class
+acceptance criteria of their owning phases, not separate work.
+
+## Forbidden Shortcuts
+
+- Cosmetic documentation that does not map to a real or concrete-planned surface.
+- Renaming an existing control as "government-grade" without closing its gap.
+- Treating FedRAMP/NIST/SOC 2/CISA/OWASP/zero-trust as buzzwords.
+- Collapsing GOVSEC into generic application security.
+- Treating optimization as out of scope.
+- Modifying any RULE or any other ADR without explicit Founder authorization
+  (RULE 20).
+
+## Founder Authorization Lineage
+
+GOVSEC.1 authorized at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-HAWKSEYE-QLOCK]`
+(read-only planning) + `[GOVSEC-GOVERNMENT-GRADE-HARDENING-G1-EXECUTE-VERIFY-AUTH]`
+(this docs-only landing; RULE 20 explicit authorization for ADR-0049 creation +
+the CLAUDE.md catalog edit). 2026-05-20.
+
+## References / Source Notes (retrieved 2026-05-20)
+
+Standards sources are listed in §Standards Basis with URLs. Internal references:
+ADR-0002 (append-only audit chain), ADR-0019 (cryptographic-suite posture),
+ADR-0022 (combined_score), ADR-0026 (dual-control), ADR-0027 (contributor/AI
+governance), ADR-0036 (REGULATOR + lawful basis), ADR-0037 (jurisdiction),
+ADR-0041 (capsule layer umbrella), ADR-0046 (AI_AGENT dual-context routing),
+ADR-0047 (production-readiness hardening), ADR-0048 (personalization
+orchestration). Companion canonical document: `docs/reference/govsec-control-
+matrix.md`. Governing rules: RULE 0, RULE 4, RULE 10, RULE 11, RULE 12, RULE 13,
+RULE 18, RULE 20, RULE 21.
