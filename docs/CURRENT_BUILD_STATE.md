@@ -1361,6 +1361,45 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-B2-A LANDED — Adversarial Swarm Harness + Readiness (GAP-B2 baseline) (2026-05-21)
+
+**Status:** GOVSEC.4 G4-B2-A `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — test +
+docs only (1 NEW test + 4 docs = 5 files) per Founder Q-GOVSEC4B2-α α-6 + β-4 + γ-5
++ δ-3/δ-4 + ε-1 + ζ-1/ζ-3 + η-2/η-3 + θ-3 + ι-3 + κ-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4B2A-SWARM-HARNESS-READINESS-EXECUTE-VERIFY-AUTH]`.
+
+- **G4-B2 split:** B2-A = adversarial-sim harness + readiness/design (test + docs
+  only); B2-B = production swarm counter, sequenced **after G4-D** perf.
+- **No production code** — no gateway.middleware.ts / rate-limit.ts / redis.ts /
+  feedback.service.ts / audit.ts change; no audit literal; no schema; no
+  dependency; no backpressure code; no swarm counter.
+- **GAP-B2 ↔ GAP-O2 coupling documented:** a general swarm signal needs an
+  aggregate counter → operation-global = Redis hot key (GAP-O2 collapse);
+  hashed-IP-cluster reduces it but still adds a per-request Redis op → must be
+  measured by G4-D. Productionizing before G4-D risks the GAP-O2 failure mode.
+- **Harness (`tests/integration/gateway-swarm.test.ts`) proves current posture:**
+  single-source floods (login + default fallback) are **shed** by G4-A per-key
+  limits; a **distributed-under-limit swarm is NOT shed today** (the residual,
+  named so G4-B2-B can flip the expectation); health stays exempt under load.
+- **GAP-B2 remains behaviorally OPEN** — closure is G4-B2-B after G4-D.
+- **Future B2-B design (deferred):** synthetic keys via existing
+  `RateLimitStore.hit`; operation + hashed-IP cluster; optional `setMultiplier`
+  backpressure via the existing multiplier path; logger-only/no SYSTEM_CHAIN_KEY
+  for unauthenticated; authenticated denials via G4-B1 RATE_LIMITED; thresholds
+  after G4-D perf budget.
+- **G4-D owns perf (GAP-O2/O7); G4-C owns privileged throttle (GAP-B4) w/
+  GOVSEC.5; GOVSEC.5/7 remain separate.**
+
+**Substrate sites (5)**: NEW `tests/integration/gateway-swarm.test.ts` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4B2A-SWARM-HARNESS-READINESS-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

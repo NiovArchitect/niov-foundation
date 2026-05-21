@@ -94,6 +94,16 @@ candidate → tests → phase → ADR → tier.
   rate-limit-denial evidence. **General bot/swarm resistance (GAP-B2) and any
   anomaly generalization beyond read_content remain open → G4-B2.** Privileged-
   route throttle (GAP-B4) → G4-C w/ GOVSEC.5; perf (GAP-O2/O7) → G4-D.
+- **G4-B2-A status (this commit):** adversarial-sim **harness + readiness design**
+  landed (test + docs only; no production swarm counter). The harness proves the
+  current posture: G4-A per-key limits **shed single-source floods** (login +
+  default fallback), while a **distributed-under-limit swarm** (many sources, each
+  under its own per-IP limit) is **NOT shed today** — the residual GAP-B2.
+  **GAP-B2 ↔ GAP-O2 coupling:** a general swarm signal needs an *aggregate*
+  counter; an operation-global counter is a Redis **hot key** (hot-key collapse =
+  GAP-O2), and even a hashed-IP-cluster counter adds a per-request Redis op that
+  **must be measured by G4-D**. So the production swarm counter is **G4-B2-B,
+  sequenced after G4-D**. **GAP-B2 behavioral closure NOT claimed.**
 
 ### C. Admin/privilege escalation threats
 - Evidence: `admin.middleware.ts` `requireAdminCapability`; `dual-control.middleware.ts`.
@@ -206,7 +216,7 @@ docs / test / code / schema / CI-infra / policy-runbook / research-design.
 | GAP-A4 | A Identity | `auth-admin.routes.ts` refresh | rolling window | old session not revoked | High | Med | GOVSEC.3 | code | unit+integration | rotation audit | — | refresh rotates+revokes prior; tested | H |
 | GAP-A5 | A Identity | admin-reset stub | none | no password-change session invalidation | Med | Low | GOVSEC.3 | code | unit+integration | invalidation audit | — | password change invalidates sessions+tested | H |
 | GAP-B1 | B API | `gateway.middleware.ts` `detectOperation` | null→pass-through | unmapped routes ungoverned | High | High | GOVSEC.4 | code | unit+integration+adversarial | rate-limit audit | core: bounds adversarial volume | unmapped routes governed; tested under burst | B |
-| GAP-B2 | B API | gateway static limits | per-op limits | no bot/swarm resistance | High | High | GOVSEC.4 | code | adversarial sim | anomaly audit | core: swarm backpressure | swarm load shed without correctness loss | B |
+| GAP-B2 | B API | gateway static limits | per-op limits + **G4-B2-A adversarial-sim harness landed** (single-source floods shed by G4-A; distributed-under-limit swarm = residual, NOT shed). Production swarm counter (hashed-IP cluster + setMultiplier) = **G4-B2-B after G4-D** (coupled to GAP-O2 hot-key). **Behavioral closure NOT done.** | High | High | GOVSEC.4 | code | adversarial sim (harness landed G4-B2-A) | RATE_LIMITED/logger (G4-B1); no new literal | core: swarm backpressure (G4-B2-B) | swarm load shed without correctness loss (G4-B2-B, post-G4-D) | B |
 | GAP-B3 | B API | `feedback.service.ts` anomaly + `setMultiplier` | **G4-B1 correction: largely WIRED for read_content** (runLoop5Once → ANOMALY_DETECTED audit + setMultiplier("read_content:entity:<id>",0.5,3600) via readService.onContentRead; gateway getMultiplier matching key). Residual generalization beyond read_content → G4-B2 | High | Med | GOVSEC.4 | code | integration+adversarial | ANOMALY_DETECTED audit (exists) | core: dynamic throttle | anomaly drives throttle for read_content; generalization tested in G4-B2 | B |
 | GAP-B4 | B API/C | privileged routes | dual-control | privileged endpoints unthrottled | Med | Med | GOVSEC.4 | code | integration | rate-limit audit | — | privileged routes throttled; tested | H |
 | GAP-C1 | C Admin | `dual-control.middleware.ts` | placeholder target=caller | self-approval possible | High | Low | GOVSEC.5 | code | unit+integration | ADMIN_ACTION audit | — | org-admin-set approver; self-approval rejected+tested | B |

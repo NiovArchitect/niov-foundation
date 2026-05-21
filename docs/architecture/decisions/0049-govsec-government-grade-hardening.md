@@ -899,6 +899,51 @@ preserved.
 hardening (GAP-O2/O7 → G4-D). **GAP-B1/B4 rate-limit-denial evidence is closed for
 authenticated denials; unauthenticated denials have logger evidence.**
 
+## GOVSEC.4 G4-B2-A Implementation Note — Adversarial Swarm Harness + Readiness (2026-05-21)
+
+GOVSEC.4 G4-B2 (general bot/swarm resistance, GAP-B2) is **split**: **G4-B2-A** =
+adversarial-sim harness + readiness/design (this commit; test + docs only);
+**G4-B2-B** = the production swarm counter, **sequenced after G4-D** perf.
+
+**Why split (GAP-B2 ↔ GAP-O2 coupling).** A general swarm signal — coordinated
+distributed abuse where each source stays under its own per-key limit — requires
+an **aggregate counter**. An operation-global counter (`swarm:op:<op>`) is a
+single Redis **hot key**: every request INCRs it → hot-key contention, which is
+exactly **GAP-O2** ("Redis INCR hot-key contention under adversarial load"),
+assigned to **G4-D**. A hashed-IP-cluster counter (`swarm:op:<op>:cluster:<HMAC(ip)%N>`)
+distributes the load N× but still adds a **per-request Redis op** whose latency
+must be measured. Productionizing a swarm counter before G4-D would land a
+hot-key-class change ahead of its own perf measurement. Therefore G4-B2-A lands
+only the **adversarial-sim harness + the B2-B design**; it is **not** behavioral
+closure of GAP-B2.
+
+**Current posture (proven by the harness).** G4-A per-key limits **shed
+single-source floods** (login + default fallback); a **distributed-under-limit
+swarm is NOT shed today** — the residual GAP-B2. Loop-5 already sheds the
+read_content anomaly (GAP-B3). The harness
+(`tests/integration/gateway-swarm.test.ts`) asserts this current behavior and
+names the residual tests so G4-B2-B can flip the "not shed" expectation to "shed"
+when the production counter lands.
+
+**Future G4-B2-B design (deferred).**
+- Synthetic swarm keys via the **existing `RateLimitStore.hit`** (no interface
+  change); **operation + hashed-IP cluster** (`HMAC(ip)%N`) to distribute the
+  hot key.
+- Backpressure via the **existing `setMultiplier`/`getMultiplier`** path (the
+  Loop-5 mechanism generalized to a swarm/cluster key) — tightening limits, not
+  dropping valid traffic below the floor (no correctness loss).
+- **Unauthenticated** swarm signals: **logger-only / hashed-IP operational
+  evidence — no `SYSTEM_CHAIN_KEY` chain audit** (GAP-O1, per G4-B1). Authenticated
+  denials continue through the G4-B1 `RATE_LIMITED` first-breach audit. **No new
+  `SWARM_DETECTED` literal** unless a later QLOCK proves it necessary.
+- **Never** raw IP/user-agent/body/query/headers/private content; hashed IP only.
+- **Final thresholds + the per-request-op budget are set after G4-D** measures the
+  gateway's perf envelope.
+
+**Scope.** **No ADR-0002 amendment** (no audit change). G4-D owns measured
+perf/hot-key (GAP-O2/O7); G4-C owns privileged-route throttle (GAP-B4) with
+GOVSEC.5. GOVSEC.5/7 untouched.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
