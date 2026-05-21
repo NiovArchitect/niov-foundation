@@ -1278,6 +1278,47 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-A LANDED — Gateway Unmapped-Route Governance + Auth-Endpoint Limits (GAP-B1) (2026-05-21)
+
+**Status:** GOVSEC.4 G4-A `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — gateway
+gap-closure (1 code + 1 test + 3 docs = 5 files) per Founder Q-GOVSEC4-α α-5 +
+β-1 + γ-3 + δ-1 + ε-4 + ζ-2 + η-1/η-4 + θ-3 + ι-2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4A-UNMAPPED-ROUTE-GOVERNANCE-EXECUTE-VERIFY-AUTH]`.
+
+- **Gateway/rate-limit gap closure started with G4-A.** GOVSEC.4 is split: G4-A =
+  GAP-B1; G4-B = GAP-B2/B3 (bot/swarm + anomaly backpressure + any audit); G4-C =
+  GAP-B4 (privileged-route throttle w/ GOVSEC.5); G4-D = GAP-O2/O7 (measured perf).
+- **The gateway was already wired and Redis-backed** (`makeGatewayHook` via
+  `app.addHook("onRequest", ...)`; `RedisRateLimitStore`/`MemoryRateLimitStore` in
+  `rate-limit.ts`). G4-A is gap-closure, not greenfield.
+- **G4-A closes unmapped-route pass-through:** the `operation === null` /
+  `policy === undefined` pass-throughs are replaced by a `DEFAULT_FALLBACK`
+  (300/min entity, also `DEFAULT_LIMITS.default`, overridable in tests) keyed on a
+  shared `default` bucket (entity, IP fallback) — no route passes ungoverned.
+- **refresh + admin-reset now governed:** NEW `OPERATION_RULES` + `DEFAULT_LIMITS`
+  — `refresh` 20/min entity, `admin_reset` 5/min entity (high-risk stub).
+- **Health/readiness exempt:** NEW narrow `isExemptPath`/`EXEMPT_RULES` keeps
+  `GET /api/v1/health` unthrottled (deploy/CI probes never self-DoS'd).
+- **No audit / no schema / no dependency.** Reuses the existing 429 envelope;
+  γ-3 keying (op/`default` + entity, IP fallback); no raw UA/IP storage; no new
+  org read; ip_whitelist STEP-1 + Loop-5 multiplier unchanged.
+- **No anomaly wiring** (G4-B). **No privileged-route throttle** (G4-C).
+- **G4-B / G4-C / G4-D remain separate** forward-substrate; **GOVSEC.5/7 remain
+  separate.**
+- **Tests:** MOD `tests/integration/gateway.test.ts` — isolated describe (own app +
+  store + low ip-scoped overrides): refresh→429, admin-reset→429, unmapped
+  wallet/balance→429 via fallback, health exempt under a tight default.
+
+**Substrate sites (5)**: MOD `apps/api/src/middleware/gateway.middleware.ts` + MOD
+`tests/integration/gateway.test.ts` + MOD `docs/reference/section-12-progress.md` +
+MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4A-UNMAPPED-ROUTE-GOVERNANCE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

@@ -29,13 +29,34 @@ export interface RateLimitPolicy {
 //      buildApp({ rateLimitOverrides: { ... } }).
 export const DEFAULT_LIMITS: Record<string, RateLimitPolicy> = {
   login: { perMinute: 10, scope: "ip" },
+  // GOVSEC.4 G4-A / GAP-B1: govern the previously-unthrottled auth-sensitive
+  // endpoints. refresh is authenticated -> entity-scoped, conservative (a client
+  // should not rotate tokens dozens of times a minute). admin-reset is a
+  // high-risk trigger path (ADR-0049 GOVSEC.3B/3D-C notes record it as a stub)
+  // -> very restrictive.
+  refresh: { perMinute: 20, scope: "entity" },
+  admin_reset: { perMinute: 5, scope: "entity" },
   negotiate: { perMinute: 100, scope: "entity" },
   read_metadata: { perMinute: 200, scope: "entity" },
   read_content: { perMinute: 50, scope: "entity" },
   write: { perMinute: 30, scope: "entity" },
   share: { perMinute: 20, scope: "entity" },
   audit_query: { perMinute: 10, scope: "entity" },
+  // GOVSEC.4 G4-A / GAP-B1: the fallback policy applied to any route
+  // detectOperation does not map (and any mapped op missing an explicit policy)
+  // so no route passes through the gateway ungoverned. Generous enough not to
+  // break normal single-entity use, but bounds adversarial volume. Overridable
+  // in tests via buildApp({ rateLimitOverrides: { default: { ... } } }).
+  default: { perMinute: 300, scope: "entity" },
 };
+
+// WHAT: The fallback policy for unmapped routes when no "default" entry is
+//        present in the limits map.
+// INPUT: Used as a constant.
+// OUTPUT: None.
+// WHY: GOVSEC.4 G4-A / GAP-B1 -- a hard floor so unmapped routes are always
+//      governed even if DEFAULT_LIMITS.default were ever removed.
+export const DEFAULT_FALLBACK: RateLimitPolicy = { perMinute: 300, scope: "entity" };
 
 // WHAT: One pattern that matches a request to an operation type.
 // INPUT: Used as a parameter type only.
@@ -53,6 +74,13 @@ interface OperationRule {
 // WHY: Keeps the rate-limit topology in one place.
 const OPERATION_RULES: OperationRule[] = [
   { method: "POST", pattern: /^\/api\/v1\/auth\/login$/, operation: "login" },
+  // GOVSEC.4 G4-A / GAP-B1: previously-unmapped auth-sensitive endpoints.
+  { method: "POST", pattern: /^\/api\/v1\/auth\/refresh$/, operation: "refresh" },
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/auth\/admin-reset$/,
+    operation: "admin_reset",
+  },
   {
     method: "POST",
     pattern: /^\/api\/v1\/cosmp\/negotiate$/,
@@ -104,6 +132,28 @@ export function detectOperation(method: string, url: string): string | null {
     }
   }
   return null;
+}
+
+// WHAT: The narrow list of routes exempt from rate limiting entirely.
+// INPUT: Used as a constant.
+// OUTPUT: None.
+// WHY: GOVSEC.4 G4-A / GAP-B1 -- the default fallback governs every unmapped
+//      route, but deploy/CI/platform health probes are high-frequency by design
+//      and must never be throttled (a throttled probe would self-DoS the
+//      deployment). Kept deliberately narrow: only the health endpoint.
+const EXEMPT_RULES: OperationRule[] = [
+  { method: "GET", pattern: /^\/api\/v1\/health$/, operation: "health" },
+];
+
+// WHAT: Whether a request path is exempt from rate limiting.
+// INPUT: HTTP method and the query-stripped path.
+// OUTPUT: true when the request matches an EXEMPT_RULES entry.
+// WHY: GOVSEC.4 G4-A / GAP-B1 -- keep health/readiness probes unthrottled.
+export function isExemptPath(method: string, path: string): boolean {
+  for (const rule of EXEMPT_RULES) {
+    if (rule.method === method && rule.pattern.test(path)) return true;
+  }
+  return false;
 }
 
 // WHAT: Try to recover the entity_id from a Bearer token without a
@@ -181,14 +231,24 @@ export function makeGatewayHook(args: {
       }
     }
 
-    // STEP 2 -- rate limiting (existing logic).
-    if (operation === null) return; // not gated
-    const policy = limits[operation];
-    if (policy === undefined) return; // unknown op
+    // STEP 2 -- rate limiting.
+    // GOVSEC.4 G4-A / GAP-B1: health/readiness probes are exempt so deploy/CI/
+    // platform health checks are never throttled (a throttled probe self-DoSes
+    // the deployment).
+    const path = request.url.split("?")[0] ?? request.url;
+    if (isExemptPath(request.method, path)) return;
+
+    // GOVSEC.4 G4-A / GAP-B1: unmapped routes (detectOperation === null) and any
+    // mapped op missing an explicit policy no longer pass through ungoverned --
+    // they fall back to the "default" policy (overridable in tests) / the
+    // DEFAULT_FALLBACK floor. The bucket key uses the operation name when mapped,
+    // else a shared "default" bucket.
+    const opKey = operation ?? "default";
+    const policy = limits[opKey] ?? limits.default ?? DEFAULT_FALLBACK;
 
     let key: string;
     if (policy.scope === "ip") {
-      key = `${operation}:ip:${request.ip ?? "unknown"}`;
+      key = `${opKey}:ip:${request.ip ?? "unknown"}`;
     } else {
       const entityId = entityFromBearer(
         request.headers.authorization,
@@ -197,9 +257,9 @@ export function makeGatewayHook(args: {
       if (entityId === null) {
         // No verifiable token -- fall back to IP-keyed bucket so
         // unauthenticated callers cannot share an entity bucket.
-        key = `${operation}:ip:${request.ip ?? "unknown"}`;
+        key = `${opKey}:ip:${request.ip ?? "unknown"}`;
       } else {
-        key = `${operation}:entity:${entityId}`;
+        key = `${opKey}:entity:${entityId}`;
       }
     }
 

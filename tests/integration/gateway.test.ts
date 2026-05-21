@@ -388,3 +388,85 @@ describe("Rate limiting", () => {
     expect(r3.headers["retry-after"]).toBeDefined();
   });
 });
+
+// GOVSEC.4 G4-A / GAP-B1: unmapped-route governance + auth-endpoint coverage.
+// Uses its OWN app + store + low ip-scoped overrides so the burst tests are
+// isolated from the shared-app tests above. detectOperation pure-helper checks
+// confirm health/wallet still map to null (the fallback lives in the hook).
+describe("GOVSEC.4 G4-A unmapped-route governance + auth-endpoint limits", () => {
+  let g4app: FastifyInstance;
+
+  beforeAll(async () => {
+    g4app = await buildApp({
+      jwtSecret: TEST_JWT_SECRET,
+      sessionNonceStore: new MemoryNonceStore(),
+      declarationStore: new MemoryNonceStore(),
+      contentStore: new MemoryContentStore(),
+      contentEncryption: new ContentEncryption(TEST_KEY),
+      rateLimitStore: new MemoryRateLimitStore(),
+      rateLimitOverrides: {
+        // ip-scoped low limits so unauthenticated bursts trip deterministically.
+        refresh: { perMinute: 2, scope: "ip" },
+        admin_reset: { perMinute: 2, scope: "ip" },
+        default: { perMinute: 2, scope: "ip" },
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await g4app.close();
+  });
+
+  it("detectOperation maps refresh + admin-reset (previously unmapped)", () => {
+    expect(detectOperation("POST", "/api/v1/auth/refresh")).toBe("refresh");
+    expect(detectOperation("POST", "/api/v1/auth/admin-reset")).toBe("admin_reset");
+  });
+
+  it("POST /api/v1/auth/refresh is governed -> 429 under burst", async () => {
+    const remoteAddress = "10.77.1.1";
+    const hits = [];
+    for (let i = 0; i < 3; i++) {
+      hits.push(
+        await g4app.inject({ method: "POST", url: "/api/v1/auth/refresh", remoteAddress }),
+      );
+    }
+    expect(hits[2]!.statusCode).toBe(429);
+    const body = hits[2]!.json() as { error: string };
+    expect(body.error).toBe("RATE_LIMIT_EXCEEDED");
+  });
+
+  it("POST /api/v1/auth/admin-reset is governed -> 429 under burst", async () => {
+    const remoteAddress = "10.77.2.2";
+    const hits = [];
+    for (let i = 0; i < 3; i++) {
+      hits.push(
+        await g4app.inject({ method: "POST", url: "/api/v1/auth/admin-reset", remoteAddress }),
+      );
+    }
+    expect(hits[2]!.statusCode).toBe(429);
+    expect((hits[2]!.json() as { error: string }).error).toBe("RATE_LIMIT_EXCEEDED");
+  });
+
+  it("an unmapped route is governed by the default fallback -> 429 (no more pass-through)", async () => {
+    // /api/v1/wallet/balance is NOT in OPERATION_RULES (detectOperation -> null);
+    // before G4-A it passed through ungoverned. Now the default fallback governs it.
+    const remoteAddress = "10.77.3.3";
+    const hits = [];
+    for (let i = 0; i < 3; i++) {
+      hits.push(
+        await g4app.inject({ method: "GET", url: "/api/v1/wallet/balance", remoteAddress }),
+      );
+    }
+    expect(hits[2]!.statusCode).toBe(429);
+    expect((hits[2]!.json() as { error: string }).error).toBe("RATE_LIMIT_EXCEEDED");
+  });
+
+  it("health/readiness probe stays EXEMPT even under a tight default fallback", async () => {
+    // default fallback is 2/min here, but health must never be throttled.
+    const remoteAddress = "10.77.4.4";
+    for (let i = 0; i < 6; i++) {
+      const r = await g4app.inject({ method: "GET", url: "/api/v1/health", remoteAddress });
+      expect(r.statusCode).toBe(200);
+    }
+  });
+});

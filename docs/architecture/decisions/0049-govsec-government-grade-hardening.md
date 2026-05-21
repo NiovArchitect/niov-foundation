@@ -792,6 +792,58 @@ device-binding behavior. A mismatch does **not** deny, revoke, or audit.
 `device_mismatch` reuses the existing `SESSION_REVOKED` literal). **No schema, no
 config substrate, no enforcement in 3D-C.**
 
+## GOVSEC.4 G4-A Implementation Note — GAP-B1 Unmapped-Route Governance (2026-05-21)
+
+GOVSEC.4 (gateway / rate-limit / abuse-control) is **split**: **G4-A = GAP-B1**
+(unmapped-route governance + auth-endpoint coverage); **G4-B = GAP-B2/B3**
+(bot/swarm resistance + wiring the Loop-5 anomaly detector to backpressure, plus
+any rate-limit/anomaly audit); **G4-C = GAP-B4** (privileged-route throttle,
+coordinated with GOVSEC.5); **G4-D = GAP-O2/O7** (measured performance hardening).
+
+**Planning finding.** The gateway limiter **already existed and was wired** —
+`gateway.middleware.ts` (`RateLimitPolicy`, `DEFAULT_LIMITS`, `OPERATION_RULES`/
+`detectOperation`, `makeGatewayHook`) is registered via
+`app.addHook("onRequest", makeGatewayHook(...))` in `server.ts`, backed by
+`rate-limit.ts` (`RedisRateLimitStore` prod / `MemoryRateLimitStore` test, ioredis
+INCR+EXPIRE). **G4-A is gap-closure, not greenfield.**
+
+**GAP-B1 root cause.** `detectOperation` returned null for unmapped routes →
+`if (operation === null) return;` **passed them through ungoverned**; and
+`POST /api/v1/auth/refresh` + `POST /api/v1/auth/admin-reset` were **absent** from
+`OPERATION_RULES`/`DEFAULT_LIMITS` (auth-abuse-sensitive but unthrottled).
+
+**G4-A fix:**
+- NEW `OPERATION_RULES` + `DEFAULT_LIMITS` for **refresh** (20/min entity) and
+  **admin_reset** (5/min entity — high-risk trigger; the GOVSEC.3B/3D-C notes
+  record admin-reset as a stub).
+- NEW `DEFAULT_FALLBACK` (300/min entity), exposed as `DEFAULT_LIMITS.default`
+  (overridable via `buildApp({ rateLimitOverrides: { default } })`). The
+  `operation === null` / `policy === undefined` pass-throughs are replaced by the
+  fallback policy keyed on a shared `default` bucket (entity, IP fallback when
+  unauthenticated) — **no route passes the gateway ungoverned**.
+- NEW narrow `isExemptPath` / `EXEMPT_RULES` so `GET /api/v1/health` stays
+  **exempt** — deploy/CI/platform probes are high-frequency by design and must
+  never be throttled (a throttled probe would self-DoS the deployment).
+- `detectOperation` still returns null for unmapped routes (the fallback lives in
+  the hook, not the matcher); existing governed ops + the ip_whitelist STEP-1 +
+  the Loop-5 multiplier are unchanged.
+
+**Keying (γ-3):** operation (or `default`) + entity when a token-derived entity is
+available, IP fallback otherwise. **No raw IP/user-agent stored; no new org read.**
+
+**No audit in G4-A (δ-1).** A rate-limit denial is not a session-lifecycle event
+(often unauthenticated, no session), so no existing literal fits; per-request 429
+audit would be spam + chain contention (GAP-O1). The rate-limit/anomaly audit
+(with a first-breach-per-window single-emit and a justified new literal) is a
+**G4-B** decision. **No new audit literal; no ADR-0002 amendment.** **No schema;
+no dependency** (reuses the ioredis-backed store). **Reuses the existing 429
+envelope** (`RATE_LIMIT_EXCEEDED` + `Retry-After`).
+
+**Scope boundary.** G4-A does **not** address GAP-B2 (bot/swarm), GAP-B3
+(anomaly→backpressure wiring), GAP-B4 (privileged-route throttle), or GAP-O2/O7
+(perf) — those are G4-B/C/D. **GAP-B1 status after G4-A: closed** (unmapped routes
+governed + auth endpoints covered + health exempt; tested under burst).
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
