@@ -1116,6 +1116,44 @@ p99/timing assertions). `rate-limit.ts` / `RedisRateLimitStore` / `HIT_LUA` /
 schema / dependencies are untouched. D2-B / D2-C (→ GOVSEC.7) / G4-C (→ GOVSEC.5) /
 GOVSEC.5 / GOVSEC.7 untouched.
 
+## GOVSEC.4 G4-D-D2-B Implementation Note — getMultiplier Optimization (Fork B docs-only no-op) (2026-05-21)
+
+**G4-D-D2-B is a docs-only no-op / status-recording phase: `getMultiplier` has no
+safe further optimization at this phase. Fork B (no-op) is chosen; Fork A
+(producer-scoped skipping) is rejected by default. No code or tests change.**
+
+**Substrate finding.** `getMultiplier` is already **one minimal Redis `GET` /
+O(1)**; there is exactly **one production call site**
+(`apps/api/src/middleware/gateway.middleware.ts` `store.getMultiplier(key)` on the
+per-key key), and **G4-B2-B added no second `getMultiplier` call** (the swarm path
+uses `store.hit` only). The only production `setMultiplier` producer remains Loop-5
+(`apps/api/src/services/feedback/feedback.service.ts`:
+`setMultiplier("read_content:entity:<id>", 0.5, 3600)`), so a multiplier is only
+ever written for the `read_content` operation; the `setMultiplier` TTL (3600s) and
+behavior are unchanged.
+
+**Why no optimization is safe here.**
+- **Caching rejected** — it would create stale-multiplier behavior (delayed
+  observation of a Loop-5 throttle, a stale `1.0` while a multiplier should apply,
+  or a stale throttle after the Redis key expires), weakening a security control.
+- **Producer-scoped skipping (Fork A) rejected by default** — calling
+  `getMultiplier` only for `read_content` would couple the gateway to the exact set
+  of `setMultiplier` producers; a future producer for another operation, added
+  without updating gateway eligibility, would **silently bypass backpressure** — an
+  unacceptable silent-control-failure footgun for a government-grade layer.
+- **Combined `hit`+multiplier EVAL rejected** — reading both in one round-trip would
+  require changing `HIT_LUA` / `RedisRateLimitStore.hit` / the `RateLimitStore`
+  interface, all outside D2-B's safe scope.
+
+**Outcome.** No code change, no tests added. The governed **op-count budget is
+unchanged** (passing per-key = 2 `hit` + 1 `getMultiplier` + 0 `setMultiplier`;
+per-key 429 = 1 `hit`; swarm 429 = 2 `hit`); the **Redis round-trip budget is
+unchanged**. The next real performance lever is **D2-C (the authenticated STEP-1
+ip_whitelist `getOrgSettingsOrDefaults` DB read), deferred to GOVSEC.7**. GAP-O2
+remains optimization-verified under the documented local/manual p99 posture;
+**GAP-O7 remains open**; G4-C remains separate (tied to GOVSEC.5); GOVSEC.5 /
+GOVSEC.7 untouched. **No ADR-0002 amendment.**
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

@@ -1590,6 +1590,50 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-D-D2-B LANDED — getMultiplier Optimization (Fork B docs-only no-op) (GAP-O2) (2026-05-21)
+
+**Status:** GOVSEC.4 G4-D-D2-B `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing —
+**docs-only no-op** (5 MOD docs) per Founder Fork B LOCK at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D2B-GETMULTIPLIER-OPTIMIZATION-EXECUTE-VERIFY-AUTH]`.
+
+**`getMultiplier` has no safe further optimization at this phase — Fork B (no-op)
+chosen; Fork A (producer-scoped skipping) rejected by default. No code or tests
+change.**
+
+- **getMultiplier substrate:** already **one minimal Redis GET / O(1)**; exactly
+  **one production call site** (`apps/api/src/middleware/gateway.middleware.ts`
+  `store.getMultiplier(key)`); **G4-B2-B added no second `getMultiplier` call** (the
+  swarm path uses `store.hit` only).
+- **setMultiplier / Loop-5:** the only production producer remains Loop-5
+  (`apps/api/src/services/feedback/feedback.service.ts`
+  `setMultiplier("read_content:entity:<id>", 0.5, 3600)`); only `read_content` has a
+  producer; the TTL (3600s) + behavior are unchanged.
+- **Caching rejected** — stale-multiplier risk (delayed Loop-5 throttle observation,
+  stale `1.0`, or stale throttle after Redis expiry) weakens a security control.
+- **Producer-scoped skipping (Fork A) rejected by default** — coupling the gateway
+  to the producer set risks a silent backpressure bypass if a future producer targets
+  another operation without updating gateway eligibility.
+- **Combined `hit`+multiplier EVAL rejected** — would require forbidden `HIT_LUA` /
+  `RedisRateLimitStore.hit` / `RateLimitStore` interface changes.
+- **No code change; no tests added.** **Op-count budget unchanged** (passing per-key
+  = 2 hit + 1 getMultiplier + 0 setMultiplier; per-key 429 = 1 hit; swarm 429 = 2
+  hit); **Redis round-trip budget unchanged**.
+- **Next real performance lever = D2-C (the authenticated STEP-1 ip_whitelist
+  `getOrgSettingsOrDefaults` DB read), deferred to GOVSEC.7.** GAP-O2 stays
+  optimization-verified under the documented local/manual p99 posture; **GAP-O7
+  remains open**; no CI p99/timing assertions. G4-C separate (tied to GOVSEC.5);
+  GOVSEC.5 / GOVSEC.7 untouched.
+
+**Substrate sites (5, docs-only):** MOD `docs/reference/govsec-control-matrix.md` +
+MOD `docs/reference/govsec-perf-budget.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D2B-GETMULTIPLIER-OPTIMIZATION-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
