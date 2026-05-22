@@ -1,6 +1,8 @@
 # ADR-0050 — GOVSEC.5 Break-Glass / Time-Boxed Audit
 
-- **Status:** Proposed 2026-05-22
+- **Status:** Accepted 2026-05-22 (Proposed 2026-05-22 → Accepted 2026-05-22 at
+  the BG.3 closure cascade; accepted for break-glass / time-boxed audit (GAP-K1)
+  only — **NOT** GOVSEC.5 full closure; see §BG.3 Closure).
 - **Phase:** GOVSEC.5 (Admin privilege, break-glass, dual-control) — design-first
   ADR; **no code in this phase**.
 - **Gap:** GAP-K1 (insider threat / break-glass misuse — "no break-glass").
@@ -225,9 +227,60 @@ are LOCKED by Founder authorization at this ADR's landing.
   literal / `privileged-endpoints.ts` / platform-or-regulator-handler / gateway /
   `escalation.service.ts` change.** GAP-C1 self-approval guard untouched. **GAP-K1
   remains NOT closed; GOVSEC.5 remains OPEN** (closure is BG.3).
-- **BG.3 — closure (future):** ADR-0050 Proposed→Accepted + GAP-K1 closed + docs.
-- **GOVSEC.5 closure (future):** when self-approval (done) + break-glass code +
-  audit-completeness tests are all landed and verified.
+- **BG.3 — closure (2026-05-22):** LANDED. Docs-only closure cascade — ADR-0050
+  Status Proposed→Accepted; GAP-K1 marked CLOSED; ADR-0049 + control-matrix +
+  progress + build-state + README + CLAUDE.md catalogs refreshed. No code / schema
+  / audit / test change. **GOVSEC.5 held OPEN** (see §BG.3 Closure).
+- **GOVSEC.5 closure (future, separate Founder QLOCK):** GOVSEC.5 spans GAP-C1
+  (resolved) + GAP-K1 (CLOSED at BG.3) + GAP-K2 (least-privilege capability review,
+  open) and the broader org-admin `requireAdminCapability` route-set throttle
+  (follow-on). GOVSEC.5 closure requires those remaining items + a separate
+  explicit Founder authorization.
+
+## BG.3 Closure (2026-05-22)
+
+**GAP-K1 (break-glass / time-boxed audit) is CLOSED.** ADR-0050 is **Accepted** for
+break-glass / time-boxed audit only — acceptance does **not** close GOVSEC.5.
+
+**Closure evidence:**
+- **ADR-0050 design accepted** — the time-boxed emergency-grant model (not a
+  permanent role, not a general bypass, not a self-approval).
+- **BG.1 substrate landed** (`2f487fc`) — Prisma `BreakGlassGrant` + `BreakGlassStatus`
+  enum (db-push, Prisma-only); 4 `BREAK_GLASS_*` audit literals (no ADR-0002
+  amendment); `break-glass.service.ts` (create/validate/markUsed/expire/review);
+  service-level unit tests.
+- **BG.2 live integration landed** (`f5f0256`) — invoke + review routes
+  (`can_admin_niov`); the `dual-control.middleware.ts` Denied/PermanentFailure-branch
+  recognition seam; `validateBreakGlassGrant` + `markBreakGlassUsed`; integration
+  tests.
+- **Mandatory `valid_until`** — non-null at the schema tier; no perpetual grant;
+  past `valid_until` rejected at create.
+- **Explicit justification** — mandatory at create (empty/blank rejected).
+- **4-action scope** — grants restricted to the 4 dual-control `PRIVILEGED_ENDPOINTS`
+  action types; out-of-scope rejected.
+- **Self-review rejection** — `reviewer ≠ source` enforced
+  (`BREAK_GLASS_SELF_REVIEW_FORBIDDEN` → 403).
+- **Single-use grant consumption** — atomic ACTIVE→USED via `markBreakGlassUsed`;
+  the middleware delegates only if the consume succeeds (TOCTOU close); a second
+  request under the same grant is denied.
+- **Audit completeness** — `BREAK_GLASS_INVOKED`/`USED`/`EXPIRED`/`REVIEWED` emitted
+  in-tx + a `DUAL_CONTROL_BREAK_GLASS_DELEGATED` marker on the existing `ADMIN_ACTION`
+  event_type (no new `AuditEventType` literal).
+- **No justification leakage** — justification stored + audited but never returned in
+  a response body; audit metadata carries grant/action/route identifiers only.
+- **Green CI for BG.2** — run `26297686163` (Typecheck / Unit / Integration / Elixir)
+  on commit `f5f0256`.
+- **Denied-branch seam** — break-glass is reached only when no APPROVED dual-control
+  escalation exists; a normal APPROVED dual-control always wins first; the GAP-C1
+  self-approval guard is intact.
+
+**GOVSEC.5 remains OPEN.** ADR-0050 acceptance closes the break-glass mini-slice
+(GAP-K1) only. The broader GOVSEC.5 phase still has open items: the org-admin
+`requireAdminCapability` route-set throttle (follow-on, not started) and **GAP-K2**
+least-privilege capability review (open / undocumented). GAP-O7 remains open; D2-C /
+GOVSEC.7 deferred. **No code / schema / audit / test change in BG.3** (docs-only
+closure cascade). Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG3-CLOSURE-EXECUTE-VERIFY-AUTH]`.
 
 ## Founder authorization
 

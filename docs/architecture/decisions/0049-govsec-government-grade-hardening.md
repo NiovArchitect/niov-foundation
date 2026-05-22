@@ -1317,6 +1317,40 @@ a separate follow-on; GAP-O7 remains open; D2-C / GOVSEC.7 deferred. See ADR-005
 §Implementation lineage. Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG2-INTEGRATION-EXECUTE-VERIFY-AUTH]`.
 
+## GOVSEC.5 Break-Glass BG.3 Closure Note — GAP-K1 CLOSED (2026-05-22)
+
+**BG.3 (LANDED 2026-05-22)** is the docs-only closure cascade for the break-glass
+mini-slice. **GAP-K1 is CLOSED**: break-glass with mandatory time-boxed two-person
+audit is fully implemented across ADR-0050 (design) + BG.1 substrate (`2f487fc`) +
+BG.2 live integration (`f5f0256`), with mandatory `valid_until`, explicit
+justification, 4-action `PRIVILEGED_ENDPOINTS` scope, single-use ACTIVE→USED
+consumption, self-review rejection, audit completeness
+(`BREAK_GLASS_INVOKED`/`USED`/`EXPIRED`/`REVIEWED` + the
+`DUAL_CONTROL_BREAK_GLASS_DELEGATED` `ADMIN_ACTION` marker), no justification leakage,
+and green CI (run `26297686163`). **ADR-0050 is flipped Proposed→Accepted** (for
+break-glass / time-boxed audit only). No code/schema/audit/test change in BG.3.
+
+**GOVSEC.5 remains OPEN.** GOVSEC.5 spans GAP-C1 (resolved) + GAP-K1 (now CLOSED) +
+GAP-K2, plus the broader org-admin route-set throttle. Two GOVSEC.5 items remain
+open: the org-admin `requireAdminCapability` route-set throttle (follow-on, not
+started) and **GAP-K2** least-privilege capability review (open / undocumented).
+
+**RULE 13 substrate-honest drift surfaced.** The §closure-criteria line above
+("GOVSEC.5 CLOSED when: dual-control self-approval is resolved, break-glass exists
+with mandatory time-boxed audit, privileged routes are throttled; tests prove
+self-approval rejection + break-glass audit completeness") is a **narrow** checklist
+that now reads as **satisfied** (GAP-C1 resolved + break-glass landed + G4-C
+privileged-route throttle + the proving tests). The broader **GOVSEC.5 phase scope**
+(§Phase list: "Admin privilege, break-glass, dual-control self-approval resolution,
+**insider-threat controls**") plus the matrix's GOVSEC.5 gap set (GAP-C1 + GAP-K1 +
+**GAP-K2**) and the explicitly-deferred org-admin route-set throttle keep GOVSEC.5
+open. **Founder disposition: hold GOVSEC.5 OPEN** — BG.3 closes GAP-K1 only and is
+**not** a GOVSEC.5 closure. The narrow-checklist-vs-phase-scope drift is recorded
+here rather than silently resolved (RULE 13); reconciling the checklist wording with
+the phase scope is a separate Founder-authorized edit if desired. GAP-O7 remains
+open; D2-C / GOVSEC.7 deferred. Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG3-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

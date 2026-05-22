@@ -1900,6 +1900,51 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 Break-Glass BG.3 closure LANDED — GAP-K1 CLOSED; ADR-0050 Accepted (2026-05-22)
+
+**Status:** GOVSEC.5 break-glass BG.3 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` docs-only
+closure cascade per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG3-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+Canonical head remains `f5f0256` before this commit.
+
+**GAP-K1 (break-glass / time-boxed audit) is CLOSED. ADR-0050 is Accepted (for
+break-glass / time-boxed audit only). GOVSEC.5 remains OPEN.**
+
+- **GAP-K1 CLOSED** by docs-only closure: break-glass with mandatory time-boxed
+  two-person audit is implemented + accepted across ADR-0050 (Accepted 2026-05-22) +
+  BG.1 substrate (`2f487fc`) + BG.2 live integration (`f5f0256`) — mandatory
+  `valid_until` (no perpetual grant), explicit justification, 4-action
+  `PRIVILEGED_ENDPOINTS` scope, single-use ACTIVE→USED (markBreakGlassUsed-gated
+  delegation; second use denied), self-review rejection, audit completeness
+  (`BREAK_GLASS_INVOKED`/`USED`/`EXPIRED`/`REVIEWED` + `DUAL_CONTROL_BREAK_GLASS_DELEGATED`
+  marker), no justification leak, Denied-branch seam (APPROVED dual-control wins
+  first; GAP-C1 intact), green CI run `26297686163`.
+- **ADR-0050 flipped Proposed→Accepted** (catalogs in `docs/architecture/README.md` +
+  `CLAUDE.md` §5 refreshed under RULE-20 Founder authorization).
+- **GOVSEC.5 remains OPEN.** Remaining GOVSEC.5 items: (1) the broader org-admin
+  `requireAdminCapability` route-set throttle (follow-on, not started); (2) **GAP-K2**
+  least-privilege capability review (open / undocumented). GOVSEC.5 closure requires
+  those + a separate Founder QLOCK.
+- **RULE 13 drift surfaced** (ADR-0049): the narrow GOVSEC.5 §closure-criteria
+  checklist (self-approval + break-glass + privileged throttle + proving tests) now
+  reads as satisfied, but the broader GOVSEC.5 phase scope (insider-threat / org-admin
+  / GAP-K2) holds GOVSEC.5 open per Founder disposition — recorded, not silently
+  resolved.
+- GAP-O7 remains open; D2-C / ip_whitelist / `getOrgSettingsOrDefaults` deferred to
+  GOVSEC.7; GOVSEC.7 untouched; G4-C throttle + G4-B2-B swarm unchanged; GAP-C1
+  preserved. No new arc.
+
+**Docs-only — no code / schema / audit.ts / test / production change.** Substrate
+sites (7): MOD `docs/architecture/decisions/0050-…md` + MOD
+`docs/architecture/decisions/0049-…md` + MOD `docs/reference/govsec-control-matrix.md`
++ MOD `docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` +
+MOD `docs/architecture/README.md` + MOD `CLAUDE.md` (ADR-0050 catalog status).
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG3-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
