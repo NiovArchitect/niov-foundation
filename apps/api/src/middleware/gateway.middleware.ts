@@ -46,6 +46,17 @@ export const DEFAULT_LIMITS: Record<string, RateLimitPolicy> = {
   // dual-control (two-person) authorization is unchanged -- this is the
   // pre-auth gateway throttle layer only.
   privileged: { perMinute: 5, scope: "entity" },
+  // GOVSEC.5 org-admin route-set throttle (GAP-B4 follow-on): the broader
+  // requireAdminCapability admin surface (can_admin_org /api/v1/org/* + the
+  // non-privileged can_admin_niov /api/v1/platform/* reads + POST
+  // /auth/admin-register + POST /otzar/domain/vocabulary + the can_admin_niov
+  // break-glass routes) that G4-C left on the generous `default` fallback
+  // (300/min). A moderate entity-scoped limit -- well above legitimate admin
+  // (and emergency break-glass) cadence, well below the default ceiling. The 4
+  // dual-control PRIVILEGED_ENDPOINTS routes stay `privileged` (5/min) and
+  // admin-reset stays `admin_reset` (5/min) via earlier first-match rules; this
+  // is gateway throttle classification only (no auth / dual-control change).
+  admin: { perMinute: 60, scope: "entity" },
   negotiate: { perMinute: 100, scope: "entity" },
   read_metadata: { perMinute: 200, scope: "entity" },
   read_content: { perMinute: 50, scope: "entity" },
@@ -92,6 +103,9 @@ export const SWARM_DEFAULT_LIMITS: Record<string, number> = {
   login: 200,
   refresh: 400,
   admin_reset: 100,
+  // GOVSEC.5 org-admin route-set throttle: swarm threshold for the new `admin`
+  // op, following the established ~perMinute*20 convention (60/min -> 1200).
+  admin: 1200,
   negotiate: 2000,
   read_metadata: 4000,
   read_content: 1000,
@@ -191,6 +205,44 @@ const OPERATION_RULES: OperationRule[] = [
     pattern: /^\/api\/v1\/regulator\/access-revocations$/,
     operation: "privileged",
   },
+  // GOVSEC.5 org-admin route-set throttle (GAP-B4 follow-on): the broader
+  // requireAdminCapability admin surface, mapped to the `admin` policy (60/min,
+  // entity-scoped). APPENDED AFTER the privileged + admin_reset rules above so
+  // first-match ordering keeps the 4 dual-control PRIVILEGED_ENDPOINTS routes
+  // classified `privileged` and POST /auth/admin-reset classified `admin_reset`.
+  // detectOperation logic is unchanged (still first-match over this table).
+  // org admin surface (can_admin_org) -- /api/v1/org + /api/v1/org/* ; org.routes
+  // uses GET/POST/PATCH/DELETE.
+  { method: "GET", pattern: /^\/api\/v1\/org(\/|$)/, operation: "admin" },
+  { method: "POST", pattern: /^\/api\/v1\/org(\/|$)/, operation: "admin" },
+  { method: "PATCH", pattern: /^\/api\/v1\/org(\/|$)/, operation: "admin" },
+  { method: "DELETE", pattern: /^\/api\/v1\/org(\/|$)/, operation: "admin" },
+  // platform admin surface (can_admin_niov) -- /api/v1/platform/* . The
+  // privileged PATCH /platform/monetization/config + POST /platform/orgs match
+  // their earlier method-exact privileged rules first; the remaining platform
+  // routes (GET reads: /anomalies /audit /loops /stats) classify `admin`.
+  { method: "GET", pattern: /^\/api\/v1\/platform\//, operation: "admin" },
+  { method: "POST", pattern: /^\/api\/v1\/platform\//, operation: "admin" },
+  { method: "PATCH", pattern: /^\/api\/v1\/platform\//, operation: "admin" },
+  { method: "DELETE", pattern: /^\/api\/v1\/platform\//, operation: "admin" },
+  // auth admin-register (can_admin_org). admin-reset stays `admin_reset` (its
+  // earlier rule wins); refresh stays `refresh`.
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/auth\/admin-register$/,
+    operation: "admin",
+  },
+  // otzar domain vocabulary (can_admin_org) -- method-exact so /otzar/observe
+  // and /otzar/correction (not admin-gated) are NOT admin-throttled.
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/otzar\/domain\/vocabulary$/,
+    operation: "admin",
+  },
+  // break-glass invoke + review (can_admin_niov; both POST). 60/min is far above
+  // any legitimate emergency cadence -- bounds abuse without impeding emergencies.
+  // BG.2 behavior (the dual-control seam + service) is unchanged.
+  { method: "POST", pattern: /^\/api\/v1\/break-glass(\/|$)/, operation: "admin" },
 ];
 
 // WHAT: Pull the operation type out of an incoming request.

@@ -81,6 +81,9 @@ beforeAll(async () => {
       // GOVSEC.5 G4-C: a privileged-route override so the op-count case below is
       // deterministic. The op count is the same as any governed request.
       privileged: { perMinute: 2, scope: "entity" },
+      // GOVSEC.5 org-admin throttle: an admin-route override so the op-count case
+      // below is deterministic. Same store budget as any governed request.
+      admin: { perMinute: 2, scope: "entity" },
     },
   });
 });
@@ -186,6 +189,23 @@ describe("GOVSEC.4 G4-D-D1 gateway op-count perf budget (GAP-O2; CI-safe, no tim
     // gateway throttle ran (and passed at count 1); downstream may reject, but the
     // store budget is the gateway's: 2 hit (per-key + swarm) + 1 getMultiplier.
     expect(r.statusCode).not.toBe(200); // dual-control / auth rejects downstream
+    expect(counting.hitCalls).toBe(2);
+    expect(counting.getMultiplierCalls).toBe(1);
+    expect(counting.setMultiplierCalls).toBe(0);
+  });
+
+  it("GOVSEC.5 org-admin route (GET /api/v1/org/members) = same store budget (2 hit: per-key + swarm; 1 getMultiplier; 0 setMultiplier)", async () => {
+    // The new `admin` op classifies + counts at the gateway onRequest hook BEFORE
+    // the route handler and requireAdminCapability, so the store budget is the same
+    // as any governed request -- only the classification (admin), bucket, and limit
+    // differ from the default fallback. Adding `admin` does not change the
+    // privileged / admin_reset op-count budgets (those cases are unaffected above).
+    const r = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/members",
+      remoteAddress: "10.210.0.7",
+    });
+    expect(r.statusCode).not.toBe(200); // auth/admin-capability rejects downstream
     expect(counting.hitCalls).toBe(2);
     expect(counting.getMultiplierCalls).toBe(1);
     expect(counting.setMultiplierCalls).toBe(0);

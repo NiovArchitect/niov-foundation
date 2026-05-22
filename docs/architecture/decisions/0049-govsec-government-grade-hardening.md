@@ -1351,6 +1351,35 @@ the phase scope is a separate Founder-authorized edit if desired. GAP-O7 remains
 open; D2-C / GOVSEC.7 deferred. Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG3-CLOSURE-EXECUTE-VERIFY-AUTH]`.
 
+## GOVSEC.5 Org-Admin Route-Set Throttle Note — GAP-B4 follow-on CLOSED (2026-05-22)
+
+**LANDED 2026-05-22.** The broader org-admin `requireAdminCapability` route-set
+throttle — the GOVSEC.5 follow-on recorded at the GAP-B4 / G4-C and break-glass
+notes — is **CLOSED**. A NEW gateway `admin` operation class (`60/min`,
+entity-scoped; `DEFAULT_LIMITS.admin` + `SWARM_DEFAULT_LIMITS.admin = 1200`)
+classifies the admin surface that G4-C left on the generous `default` (300/min):
+`/api/v1/org/*` (GET/POST/PATCH/DELETE), the non-privileged `/api/v1/platform/*`
+reads, `POST /api/v1/auth/admin-register`, `POST /api/v1/otzar/domain/vocabulary`,
+and the `/api/v1/break-glass/*` routes. Gateway data-table only (`OPERATION_RULES`
+admin rules appended AFTER the privileged/admin_reset rules so first-match ordering
+preserves them); `detectOperation`, `rate-limit.ts`, `RedisRateLimitStore`,
+`HIT_LUA`, `RateLimitStore`, `getMultiplier`/`setMultiplier`, `admin.middleware.ts`,
+`dual-control.middleware.ts`, `privileged-endpoints.ts`, and route handlers
+unchanged. Reuses the `RATE_LIMITED` audit (no new literal, no ADR-0002 amendment).
+The 4 dual-control `PRIVILEGED_ENDPOINTS` routes stay `privileged` (5/min);
+`POST /auth/admin-reset` stays `admin_reset` (5/min); G4-C throttle + G4-B2-B swarm
+unchanged; GAP-C1 preserved; GAP-K1 remains CLOSED; ADR-0050 remains Accepted; BG.2
+behavior unchanged.
+
+**GOVSEC.5 remains OPEN.** With GAP-C1 (resolved) + GAP-K1 (CLOSED) + the org-admin
+route-set throttle (this commit) landed, the **only remaining GOVSEC.5 item is
+GAP-K2** least-privilege capability review (open / undocumented) — a rate-limit
+throttle is not a least-privilege capability review. GOVSEC.5 closure requires GAP-K2
++ a separate Founder QLOCK. GAP-O7 remains open; D2-C / GOVSEC.7 deferred; GOVSEC.7
+untouched. No code beyond the gateway data-table; no schema / audit-literal /
+ADR-0002 change. Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-ORG-ADMIN-THROTTLE-EXECUTE-VERIFY-AUTH]`.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

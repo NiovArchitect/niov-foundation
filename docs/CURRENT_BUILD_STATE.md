@@ -1945,6 +1945,56 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 Org-Admin Route-Set Throttle LANDED — new `admin` op; org-admin follow-on CLOSED (GAP-B4) (2026-05-22)
+
+**Status:** GOVSEC.5 org-admin route-set throttle `[GOVSEC-GOVERNMENT-GRADE-HARDENING]`
+landing — the broader `requireAdminCapability` admin surface is now throttled, per
+Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-ORG-ADMIN-THROTTLE-EXECUTE-VERIFY-AUTH]`.
+
+**The org-admin route-set throttle follow-on is CLOSED. GOVSEC.5 remains OPEN — the
+only remaining GOVSEC.5 item is GAP-K2 (least-privilege capability review).**
+
+- **New gateway `admin` op** (`DEFAULT_LIMITS.admin = { perMinute: 60, scope:
+  "entity" }` + `SWARM_DEFAULT_LIMITS.admin = 1200` per the ~perMinute×20
+  convention) classifies the admin surface G4-C left on the generous `default`
+  (300/min): `/api/v1/org/*` (GET/POST/PATCH/DELETE), the non-privileged
+  `/api/v1/platform/*` reads (`/anomalies` `/audit` `/loops` `/stats`), `POST
+  /api/v1/auth/admin-register`, `POST /api/v1/otzar/domain/vocabulary`
+  (method-exact), and the `/api/v1/break-glass/*` routes.
+- **Gateway data-table only.** `OPERATION_RULES` admin rules **appended AFTER** the
+  privileged + admin_reset rules so first-match ordering keeps the 4 dual-control
+  `PRIVILEGED_ENDPOINTS` routes `privileged` (5/min) and `POST /auth/admin-reset`
+  `admin_reset` (5/min); regulator grant/revoke stay `privileged`;
+  `/otzar/observe` + `/otzar/correction` are NOT admin-throttled. `detectOperation`
+  / `rate-limit.ts` / `RedisRateLimitStore` / `HIT_LUA` / `RateLimitStore` /
+  `getMultiplier` / `setMultiplier` / swarm algorithm / `admin.middleware.ts` /
+  `dual-control.middleware.ts` / `privileged-endpoints.ts` / route handlers all
+  unchanged.
+- **Audit**: reuses `RATE_LIMITED` (no new literal, no ADR-0002). **Op-count
+  budget unchanged** (admin = 2 hit + 1 getMultiplier + 0 setMultiplier).
+- **Tests**: NEW `tests/integration/gateway-org-admin-throttle.test.ts` (admin
+  families 429 at the admin limit; admin looser than privileged/admin_reset;
+  privileged routes still privileged; admin-reset still admin_reset; non-admin +
+  `/otzar/observe` not admin-throttled) + `gateway-perf-budget.test.ts` admin
+  op-count case.
+- **GAP-K1 remains CLOSED; ADR-0050 remains Accepted; BG.2 behavior unchanged;
+  GAP-C1 preserved; G4-C + G4-B2-B unchanged.** GAP-O7 remains open; D2-C /
+  ip_whitelist / `getOrgSettingsOrDefaults` deferred to GOVSEC.7; GOVSEC.7
+  untouched; no new arc.
+
+**Substrate sites (7):** MOD `apps/api/src/middleware/gateway.middleware.ts` + NEW
+`tests/integration/gateway-org-admin-throttle.test.ts` + MOD
+`tests/integration/gateway-perf-budget.test.ts` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-ORG-ADMIN-THROTTLE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
