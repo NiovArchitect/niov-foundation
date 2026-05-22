@@ -547,6 +547,24 @@ describe("approveEscalationForCaller", () => {
     ).rejects.toThrow(/ESCALATION_FORBIDDEN/);
   });
 
+  // GOVSEC.5 GAP-C1: the dual-control sub-phase E placeholder creates a SELF-TARGET
+  // escalation (target_entity_id === source_entity_id). Without the source-guard,
+  // caller === target would let the source self-resolve a hollow dual-control. The
+  // self-approval guard must forbid the source even when source === target.
+  it("forbids the source from self-approving a SELF-TARGET dual-control escalation (GAP-C1)", async () => {
+    const created = await createEscalationForCaller(sourceId, {
+      target_entity_id: sourceId, // self-target placeholder shape (source === target)
+      escalation_type: "DUAL_CONTROL_REQUIRED",
+      severity: "HIGH",
+      description: "no-self-approve-self-target",
+    });
+    expect(created.source_entity_id).toBe(sourceId);
+    expect(created.target_entity_id).toBe(sourceId);
+    await expect(
+      approveEscalationForCaller(sourceId, created.escalation_id),
+    ).rejects.toThrow(/ESCALATION_FORBIDDEN/);
+  });
+
   it("throws ESCALATION_INVALID_TRANSITION when approving an already-APPROVED row", async () => {
     const created = await createEscalationForCaller(sourceId, {
       target_entity_id: targetId,
@@ -627,6 +645,20 @@ describe("rejectEscalationForCaller", () => {
       escalation_type: "HUMAN_REVIEW_REQUIRED",
       severity: "HIGH",
       description: "no-self-reject",
+    });
+    await expect(
+      rejectEscalationForCaller(sourceId, created.escalation_id),
+    ).rejects.toThrow(/ESCALATION_FORBIDDEN/);
+  });
+
+  // GOVSEC.5 GAP-C1: the source-guard also forbids self-rejecting a SELF-TARGET
+  // (dual-control placeholder) escalation, where source === target.
+  it("forbids the source from self-rejecting a SELF-TARGET dual-control escalation (GAP-C1)", async () => {
+    const created = await createEscalationForCaller(sourceId, {
+      target_entity_id: sourceId, // self-target placeholder shape (source === target)
+      escalation_type: "DUAL_CONTROL_REQUIRED",
+      severity: "HIGH",
+      description: "no-self-reject-self-target",
     });
     await expect(
       rejectEscalationForCaller(sourceId, created.escalation_id),

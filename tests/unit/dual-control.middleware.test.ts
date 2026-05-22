@@ -198,24 +198,30 @@ async function dualControlActionsFor(entityId: string): Promise<string[]> {
     .filter((a) => a.startsWith("DUAL_CONTROL_"));
 }
 
-// WHAT: Create an APPROVED dual-control EscalationRequest for the caller.
+// WHAT: Create a genuinely two-person-APPROVED dual-control EscalationRequest
+//        whose SOURCE (initiator) is the caller.
 // INPUT: callerId + optional expiresAt (defaults to null -- non-expiring).
 // OUTPUT: The approved escalation_id.
-// WHY: Fixture for the APPROVED-path tests. caller === target === source so
-//      the §5.8 skeleton gate permits the self-resolve approve (the
-//      sub-phase E placeholder posture).
+// WHY: Fixture for the APPROVED-path tests. GOVSEC.5 GAP-C1: the source/initiator
+//      may NOT self-approve, so the target/approver is a DISTINCT second human
+//      (distinctApproverId !== callerId). findApprovedDualControlForCaller(callerId)
+//      still discovers the row because it is scoped by source_entity_id (= caller);
+//      evaluateDualControlState does not branch on the target, so the Approved
+//      outcome is unchanged. This proves the read-side over a REAL two-person
+//      approval rather than the former hollow self-approval.
 async function makeApprovedDualControl(
   callerId: string,
   expiresAt: Date | null = null,
 ): Promise<string> {
+  const distinctApproverId = await makeParty();
   const created = await createEscalationForCaller(callerId, {
-    target_entity_id: callerId,
+    target_entity_id: distinctApproverId,
     escalation_type: "DUAL_CONTROL_REQUIRED",
     severity: "HIGH",
     description: dualControlDescription(ACTION_TYPE),
     expires_at: expiresAt,
   });
-  await approveEscalationForCaller(callerId, created.escalation_id);
+  await approveEscalationForCaller(distinctApproverId, created.escalation_id);
   return created.escalation_id;
 }
 

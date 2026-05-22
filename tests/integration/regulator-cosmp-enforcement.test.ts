@@ -229,15 +229,25 @@ async function landGrant(
   } = {},
 ): Promise<{ basis_id: string; audit_id: string }> {
   // Approve dual-control for the grant action so the route lets
-  // executePhase0-equivalent through.
+  // executePhase0-equivalent through. GOVSEC.5 GAP-C1: the source/initiator
+  // (admin) may NOT self-approve, so a DISTINCT second human is the
+  // target/approver. The admin remains the source, so
+  // findApprovedDualControlForCaller(admin, …) — scoped by source_entity_id —
+  // still discovers the row. A genuine two-person approval.
+  const distinctApprover = await createEntity(
+    makeEntityInput({ entity_type: "PERSON" }),
+  );
   const approval = await createEscalationForCaller(admin.entityId, {
-    target_entity_id: admin.entityId,
+    target_entity_id: distinctApprover.entity_id,
     escalation_type: "DUAL_CONTROL_REQUIRED",
     severity: "HIGH",
     description: dualControlDescription(GRANT_ACTION_TYPE),
     expires_at: null,
   });
-  await approveEscalationForCaller(admin.entityId, approval.escalation_id);
+  await approveEscalationForCaller(
+    distinctApprover.entity_id,
+    approval.escalation_id,
+  );
 
   const validFrom = overrides.valid_from ?? new Date(Date.now() - 60 * 1000);
   const validUntil =
@@ -602,14 +612,21 @@ describe("C. LawfulBasis lifecycle (NEGOTIATE)", () => {
     // route. This avoids manual audit-row writes that could break
     // the chain. Approve dual-control for revoke.
     const REVOKE_ACTION = "REGULATOR_ACCESS_REVOKE" as const;
+    // GOVSEC.5 GAP-C1: distinct second human approves (admin is the source).
+    const revokeApprover = await createEntity(
+      makeEntityInput({ entity_type: "PERSON" }),
+    );
     const approval = await createEscalationForCaller(admin.entityId, {
-      target_entity_id: admin.entityId,
+      target_entity_id: revokeApprover.entity_id,
       escalation_type: "DUAL_CONTROL_REQUIRED",
       severity: "HIGH",
       description: dualControlDescription(REVOKE_ACTION),
       expires_at: null,
     });
-    await approveEscalationForCaller(admin.entityId, approval.escalation_id);
+    await approveEscalationForCaller(
+      revokeApprover.entity_id,
+      approval.escalation_id,
+    );
     const revRes = await app.inject({
       method: "POST",
       url: "/api/v1/regulator/access-revocations",
@@ -814,14 +831,21 @@ describe("F. TOCTOU defense (readContent re-check)", () => {
 
     // Step 2: revoke the basis via the sub-phase 5 revoke route
     const REVOKE_ACTION = "REGULATOR_ACCESS_REVOKE" as const;
+    // GOVSEC.5 GAP-C1: distinct second human approves (admin is the source).
+    const revokeApprover = await createEntity(
+      makeEntityInput({ entity_type: "PERSON" }),
+    );
     const approval = await createEscalationForCaller(admin.entityId, {
-      target_entity_id: admin.entityId,
+      target_entity_id: revokeApprover.entity_id,
       escalation_type: "DUAL_CONTROL_REQUIRED",
       severity: "HIGH",
       description: dualControlDescription(REVOKE_ACTION),
       expires_at: null,
     });
-    await approveEscalationForCaller(admin.entityId, approval.escalation_id);
+    await approveEscalationForCaller(
+      revokeApprover.entity_id,
+      approval.escalation_id,
+    );
     const revRes = await app.inject({
       method: "POST",
       url: "/api/v1/regulator/access-revocations",

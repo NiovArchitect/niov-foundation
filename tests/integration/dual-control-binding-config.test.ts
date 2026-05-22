@@ -170,22 +170,29 @@ async function makeAdminAndLogin(opts: {
 //        on the monetization-config action.
 // INPUT: callerEntityId + optional expiresAt (defaults to null).
 // OUTPUT: The approved escalation_id.
-// WHY: The APPROVED-path fixture. caller === target === source so the
-//      §5.8 skeleton gate permits the self-resolve approve -- the
-//      sub-phase E placeholder posture (Phase 2 substrate resolves the
-//      org-admin target set).
+// WHY: The APPROVED-path fixture. GOVSEC.5 GAP-C1: the source/initiator may NOT
+//      self-approve, so a DISTINCT second human is the target/approver. The caller
+//      remains the source, so findApprovedDualControlForCaller(caller, …) — scoped
+//      by source_entity_id — still discovers the row; evaluateDualControlState does
+//      not branch on the target. This is a genuine two-person approval.
 async function grantApproval(
   callerEntityId: string,
   expiresAt: Date | null = null,
 ): Promise<string> {
+  const distinctApprover = await createEntity(
+    makeEntityInput({ entity_type: "PERSON" }),
+  );
   const created = await createEscalationForCaller(callerEntityId, {
-    target_entity_id: callerEntityId,
+    target_entity_id: distinctApprover.entity_id,
     escalation_type: "DUAL_CONTROL_REQUIRED",
     severity: "HIGH",
     description: dualControlDescription(MONETIZATION_ACTION_TYPE),
     expires_at: expiresAt,
   });
-  await approveEscalationForCaller(callerEntityId, created.escalation_id);
+  await approveEscalationForCaller(
+    distinctApprover.entity_id,
+    created.escalation_id,
+  );
   return created.escalation_id;
 }
 

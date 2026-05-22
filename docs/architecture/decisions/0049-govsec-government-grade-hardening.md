@@ -1198,6 +1198,58 @@ working-set route p99 closure; no CI p99/timing assertions). `rate-limit.ts` /
 `setMultiplier` / `feedback.service.ts` / ip_whitelist / `getOrgSettingsOrDefaults`
 (D2-C → GOVSEC.7) / schema / dependencies are untouched. GOVSEC.7 untouched.
 
+## GOVSEC.5 Self-Approval Resolution Implementation Note — dual-control two-person invariant (GAP-C1) (2026-05-21)
+
+**GAP-C1 RESOLVED: the initiator (`source_entity_id`) can no longer approve or
+resolve their own dual-control escalation. GOVSEC.5 is NOT closed** — break-glass /
+time-boxed audit (GAP-K1) and the broader org-admin route set remain open.
+
+**The gap.** `requireDualControl` is read-side verification only; the approver
+semantics live upstream in `escalation.service.ts`. The dual-control sub-phase E
+placeholder `getOrCreatePendingDualControlForCaller` creates the
+`DUAL_CONTROL_REQUIRED` escalation with `target_entity_id = callerEntityId`
+(self-target). The transition gate allowed `caller === target ||
+caller === resolved_by_entity_id`, so for the self-target placeholder
+`caller === target` let the **source self-resolve** — a hollow two-person control
+on the 4 G4-C privileged routes.
+
+**The fix (smallest substrate-safe).** `transitionPendingForCaller` now enforces
+`caller === source_entity_id → ESCALATION_FORBIDDEN`, evaluated **before** the
+target/resolver gate so it holds even when `target === source`. The resolver is
+recorded in `resolved_by_entity_id` (= caller), so `caller === source` is, by
+construction, self-approval. **No new approver registry; no schema change** (the
+`EscalationRequest` model already has `source_entity_id` / `target_entity_id` /
+`resolved_by_entity_id`); the self-target placeholder is **not** replaced
+(org-admin-set resolution remains forward-queued). A distinct second human
+(target / designated resolver, `≠ source`) is still required, and the existing
+distinct-approver success path is preserved.
+
+**Read-side / audit unchanged.** `requireDualControl`, `evaluateDualControlState`,
+and `findApprovedDualControlForCaller` are untouched. The rejection reuses the
+existing `ESCALATION_FORBIDDEN` error (already mapped to 403 by
+`escalation.routes.ts`, whose comment already documents "dual-control: source !=
+resolver → ESCALATION_FORBIDDEN") and the `ADMIN_ACTION` audit — **no new audit
+literal, no `audit.ts` change, no ADR-0002 amendment**.
+
+**Substrate-honest consequence.** Because the distinct-approver-target *creation*
+path (org-admin-set resolution) is forward-queued, the self-target dual-control
+escalation is now **fail-closed** (un-approvable by anyone). This is the safe
+outcome — it closes the hollow self-approval rather than leaving it; the 4 G4-C
+privileged routes require a distinct approver, which the future org-admin-set
+resolution will provision.
+
+**Tests.** `tests/unit/escalation.test.ts` adds "forbids the source from
+self-approving a SELF-TARGET dual-control escalation (GAP-C1)" + the self-reject
+variant (both create `target === source` and assert `ESCALATION_FORBIDDEN`); the
+existing distinct-approver success + invalid-transition cases are preserved.
+
+**Scope held.** `gateway.middleware.ts` (G4-C throttle), the B2-B swarm counter,
+`rate-limit.ts` / `RedisRateLimitStore` / `HIT_LUA` / `RateLimitStore` interface /
+`getMultiplier` / `setMultiplier`, `dual-control.middleware.ts`, the platform/
+regulator route handlers, ip_whitelist / `getOrgSettingsOrDefaults` (D2-C →
+GOVSEC.7), schema / dependencies, and ADR-0002 are all untouched. GAP-O7 remains
+open; GOVSEC.7 untouched.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

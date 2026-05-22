@@ -1686,6 +1686,55 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 Self-Approval Resolution LANDED — dual-control two-person invariant (GAP-C1) (2026-05-21)
+
+**Status:** GOVSEC.5 self-approval resolution `[GOVSEC-GOVERNMENT-GRADE-HARDENING]`
+landing — code + tests + docs (6 files) per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-SELF-APPROVAL-RESOLUTION-EXECUTE-VERIFY-AUTH]`.
+
+**GAP-C1 RESOLVED — the initiator can no longer approve/resolve their own
+dual-control escalation. GOVSEC.5 remains OPEN** (break-glass / time-boxed audit
+GAP-K1 + broader org-admin route set remain).
+
+- **Fix:** `apps/api/src/services/governance/escalation.service.ts`
+  `transitionPendingForCaller` now enforces `caller === source_entity_id →
+  ESCALATION_FORBIDDEN`, checked **before** the target/resolver gate so it holds
+  even for the **self-target dual-control placeholder** (`target_entity_id ===
+  source_entity_id`, from `getOrCreatePendingDualControlForCaller`) that previously
+  let `caller === target` self-resolve a hollow dual-control.
+- **Approver model:** smallest substrate-safe — a hard `resolver ≠ source`
+  rejection at the existing transition gate. **No new approver registry; no schema
+  change** (the model already has `source_entity_id` / `target_entity_id` /
+  `resolved_by_entity_id`); the placeholder is **not** replaced (org-admin-set
+  resolution remains forward-queued).
+- **Distinct-approver path preserved:** a distinct target / designated resolver
+  (≠ source) still approves (existing `escalation.test.ts` cases unchanged).
+- **Read-side unchanged:** `requireDualControl` is untouched; reuses the existing
+  `ESCALATION_FORBIDDEN` error (already mapped to 403 by `escalation.routes.ts`) +
+  the `ADMIN_ACTION` audit. **No new audit literal, no `audit.ts` change, no
+  ADR-0002 amendment.**
+- **Substrate-honest note:** because the distinct-approver-target *creation* path
+  (org-admin-set resolution) is forward-queued, the self-target dual-control
+  escalation is now **fail-closed** (un-approvable) — safe; it closes the hollow
+  self-approval, and the 4 G4-C privileged routes require a distinct approver.
+- **Tests:** `tests/unit/escalation.test.ts` adds the self-target self-approval +
+  self-reject rejection cases (GAP-C1); existing distinct-approver success +
+  invalid-transition cases preserved.
+- **G4-C privileged throttle unchanged; G4-B2-B swarm unchanged.** GAP-O7 remains
+  open; no CI p99/timing assertions; D2-C / ip_whitelist / `getOrgSettingsOrDefaults`
+  untouched (→ GOVSEC.7); GOVSEC.7 untouched.
+
+**Substrate sites (6):** MOD `apps/api/src/services/governance/escalation.service.ts`
++ MOD `tests/unit/escalation.test.ts` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-SELF-APPROVAL-RESOLUTION-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

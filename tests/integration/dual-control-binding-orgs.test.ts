@@ -150,22 +150,30 @@ async function makeAdminAndLogin(opts: {
   return { entityId: entity.entity_id, token: body.token, ip };
 }
 
-// WHAT: Create + approve a dual-control EscalationRequest for the caller
-//        on the org-creation action. caller === target === source so the
-//        §5.8 skeleton gate permits the self-resolve approve (the
-//        sub-phase E placeholder posture).
+// WHAT: Create + approve a dual-control EscalationRequest for the caller on the
+//        org-creation action. GOVSEC.5 GAP-C1: the source/initiator may NOT
+//        self-approve, so a DISTINCT second human is the target/approver. The
+//        caller remains the source, so findApprovedDualControlForCaller(caller, …)
+//        — scoped by source_entity_id — still discovers the row. A genuine
+//        two-person approval.
 async function grantApproval(
   callerEntityId: string,
   expiresAt: Date | null = null,
 ): Promise<string> {
+  const distinctApprover = await createEntity(
+    makeEntityInput({ entity_type: "PERSON" }),
+  );
   const created = await createEscalationForCaller(callerEntityId, {
-    target_entity_id: callerEntityId,
+    target_entity_id: distinctApprover.entity_id,
     escalation_type: "DUAL_CONTROL_REQUIRED",
     severity: "HIGH",
     description: dualControlDescription(ORG_ACTION_TYPE),
     expires_at: expiresAt,
   });
-  await approveEscalationForCaller(callerEntityId, created.escalation_id);
+  await approveEscalationForCaller(
+    distinctApprover.entity_id,
+    created.escalation_id,
+  );
   return created.escalation_id;
 }
 

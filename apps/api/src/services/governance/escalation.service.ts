@@ -394,6 +394,18 @@ async function transitionPendingForCaller(
     if (existing === null) {
       throw new Error("ESCALATION_NOT_FOUND");
     }
+    // GOVSEC.5 GAP-C1 self-approval resolution: the initiator (source) may NEVER
+    // approve or resolve their own escalation -- the two-person invariant. This is
+    // enforced FIRST, before the target/resolver gate, so it holds even for a
+    // self-target dual-control escalation (target_entity_id == source_entity_id, the
+    // sub-phase E placeholder from getOrCreatePendingDualControlForCaller): without
+    // this guard, caller === target would let the source self-resolve a hollow
+    // dual-control. The resolver is recorded in resolved_by_entity_id (set to
+    // callerEntityId below), so caller === source is, by construction, self-approval.
+    // A distinct second human (target / designated resolver) is still required.
+    if (callerEntityId === existing.source_entity_id) {
+      throw new Error("ESCALATION_FORBIDDEN");
+    }
     // FORWARD QUEUE per §5.8 per-DMW-type sovereignty: skeleton gate.
     const mayTransition =
       callerEntityId === existing.target_entity_id ||
