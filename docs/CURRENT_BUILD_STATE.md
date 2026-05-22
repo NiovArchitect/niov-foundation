@@ -2081,6 +2081,63 @@ Founder authorization explicit at
 
 ---
 
+#### CONSOLE.1 P0 read-only Foundation Console backend endpoints LANDED (2026-05-22)
+
+**Status:** CONSOLE.1 P0 `[FOUNDATION-CONSOLE]` — the first read-only Foundation
+Console control-plane backend, per Founder LOCKs at
+`[FOUNDATION-CONSOLE-CONSOLE1-P0-READONLY-ENDPOINTS-EXECUTE-VERIFY-AUTH]`.
+
+**This is the backend contract layer for the Foundation Console; NO frontend app
+and NO Lovable prompt were created. Lovable remains the next step, only after
+these backend contracts pass.**
+
+- **NEW `/api/v1/console/*` namespace** (NEW `apps/api/src/routes/console.routes.ts`
+  + NEW `apps/api/src/services/console.service.ts`; registered in `server.ts`),
+  7 read-only GET endpoints, **all `requireAdminCapability(authService,
+  "can_admin_niov")`** (non-NIOV → 403; unauth → 401):
+  - `GET /api/v1/console/overview` — Foundation Command Center aggregate
+    (foundation status + substrate health + governance posture + wallet/entity +
+    capsule + gateway + compliance + exchange + agents + reports panel). Real
+    counts where available; non-live fields marked `readiness: "PARTIAL"/"FUTURE"`.
+  - `GET /api/v1/console/audit` — filterable `AuditEvent` read (event_type /
+    actor / target / outcome / from / to; maps `event_hash`→`chain_hash`,
+    `timestamp`→`created_at`).
+  - `GET /api/v1/console/entities` — wallet & entity explorer (Entity + Wallet +
+    TAR caps + active session count). **No raw capsule content.**
+  - `GET /api/v1/console/break-glass/grants` — break-glass list **excluding
+    `justification`** (private).
+  - `GET /api/v1/console/escalations` — NIOV-wide dual-control/escalation read.
+  - `GET /api/v1/console/reports` — static catalog of **18 reports** with
+    LIVE/PARTIAL/MOCK/FUTURE readiness badges; export options are **disabled
+    metadata only** (no export substrate in P0).
+  - `GET /api/v1/console/reports/:report_id` — one report envelope (sections);
+    unknown id → 404.
+- **Read-only:** no mutation endpoints; no schema/migration; no audit literal; no
+  ADR-0002 amendment. **Console reads audit** as the existing `ADMIN_ACTION`
+  event_type with `details.action = "CONSOLE_READ"` (route/report identifiers +
+  filter-key presence only; never raw sensitive payloads).
+- **Tests:** NEW `tests/integration/console-routes.test.ts` (auth/scope; shapes;
+  break-glass no-justification; 18-report catalog + IDs + readiness; report detail
+  + 404; CONSOLE_READ audit; no-capsule-content; `/platform/stats` + `/platform/audit`
+  regression).
+- **Scope boundaries preserved:** enterprise/org users do not get substrate-wide
+  Console access (org stays `can_admin_org` scoped); regulator proof = scoped
+  future portal (`regulator_proof` report = FUTURE/mock); developer = scoped
+  portal; students/educators = application-side; market pricing = MOCK (never live);
+  no `ConsoleOperatorRole` (P1/future). **No frontend / no Lovable / no Elixir /
+  no schema / no GOVSEC change.** GOVSEC.5 remains CLOSED; ADR-0049 remains
+  Proposed; GAP-O7 open; D2-C / GOVSEC.7 deferred; no new arc.
+
+**Substrate sites (6):** NEW `apps/api/src/routes/console.routes.ts` + NEW
+`apps/api/src/services/console.service.ts` + MOD `apps/api/src/server.ts`
+(registration only) + NEW `tests/integration/console-routes.test.ts` + MOD this
+`CURRENT_BUILD_STATE.md` + MOD `docs/reference/section-12-progress.md`.
+
+Founder authorization explicit at
+`[FOUNDATION-CONSOLE-CONSOLE1-P0-READONLY-ENDPOINTS-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

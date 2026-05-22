@@ -84,6 +84,9 @@ import { registerEscalationRoutes } from "./routes/escalation.routes.js";
 // invoke + review route surface (can_admin_niov tier). The live recognition
 // seam lives in dual-control.middleware.ts.
 import { registerBreakGlassRoutes } from "./routes/break-glass.routes.js";
+// CONSOLE.1 P0: read-only Foundation Console control-plane endpoints
+// (`/api/v1/console/*`, can_admin_niov tier). Read-only aggregation only.
+import { registerConsoleRoutes } from "./routes/console.routes.js";
 import { registerAuthAdminRoutes } from "./routes/auth-admin.routes.js";
 // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
 // Sub-decisions 6 + 7: tenant admin governance routes for REGULATOR
@@ -381,6 +384,7 @@ export async function buildApp(
   await registerOrgRoutes(app, authService);
   await registerEscalationRoutes(app, authService);
   await registerBreakGlassRoutes(app, authService);
+  await registerConsoleRoutes(app, authService);
   await registerAuthAdminRoutes(app, authService, jwtSecret);
   await registerRegulatorRoutes(app, authService);
   await registerOtzarRoutes(app, otzarService);
