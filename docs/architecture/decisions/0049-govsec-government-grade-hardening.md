@@ -1250,6 +1250,25 @@ regulator route handlers, ip_whitelist / `getOrgSettingsOrDefaults` (D2-C →
 GOVSEC.7), schema / dependencies, and ADR-0002 are all untouched. GAP-O7 remains
 open; GOVSEC.7 untouched.
 
+## GOVSEC.5 Break-Glass / Time-Boxed Audit Design Note — ADR-0050 (2026-05-22)
+
+The GOVSEC.5 break-glass closure criterion (GAP-K1) is **designed** in **ADR-0050
+(GOVSEC.5 Break-Glass / Time-Boxed Audit)** — a design-first ADR (Proposed
+2026-05-22) that locks the model before any code. Break-glass is greenfield: a
+**time-boxed emergency grant** (mandatory `valid_until`, explicit justification,
+scoped to the 4 dual-control `PRIVILEGED_ENDPOINTS` routes initially), with the
+normal dual-control path unchanged and the **GAP-C1 self-approval guard intact**
+(`caller === source_entity_id` remains forbidden — break-glass is not a
+self-approval). The future code phase will add a `BreakGlassGrant`-style table
+(mirroring `LawfulBasis`), new append-only audit literals in `audit.ts` (no
+ADR-0002 amendment per the additive-literal precedent), a service/route, and
+dual-control integration — under a **separate EXECUTE-VERIFY-AUTH**.
+
+**GAP-K1 is designed, not closed; GOVSEC.5 remains OPEN** until the break-glass
+code + audit-completeness tests land. The remaining GOVSEC.5 follow-on (broader
+org-admin `requireAdminCapability` route-set throttle) is separate. See ADR-0050
+(RULE 14 bidirectional citation).
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

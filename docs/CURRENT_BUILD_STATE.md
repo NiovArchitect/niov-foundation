@@ -1735,6 +1735,55 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 Break-Glass / Time-Boxed Audit ADR LANDED — design-first (GAP-K1) (2026-05-22)
+
+**Status:** GOVSEC.5 break-glass ADR phase `[GOVSEC-GOVERNMENT-GRADE-HARDENING]`
+landing — **docs-only design-first ADR** (NEW ADR-0050 + 6 MOD docs = 7 files) per
+Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-TIMEBOXED-AUDIT-ADR-AUTH]`.
+
+**Break-glass is greenfield (GAP-K1); this phase locks the DESIGN before any code.
+No code/schema/audit literal/tests. GAP-K1 = designed/not-closed; GOVSEC.5 remains
+OPEN.**
+
+- **NEW ADR-0050 (Proposed 2026-05-22)** — `docs/architecture/decisions/0050-govsec-break-glass-timeboxed-audit.md`.
+- **Model:** a time-boxed emergency grant — not a permanent role, not a general
+  bypass, **not a self-approval** — invoked with explicit justification, scoped to
+  a specific privileged action/route, **mandatory `valid_until`** (no perpetual
+  access).
+- **Scope:** the 4 dual-control `PRIVILEGED_ENDPOINTS` routes initially; broader
+  org-admin set is a separate GOVSEC.5 follow-on.
+- **Dual-control relationship:** normal path remains dual-control; break-glass is a
+  constrained emergency alternative; the GAP-C1 self-approval guard
+  (`caller === source_entity_id → ESCALATION_FORBIDDEN`) **remains intact**; chosen
+  relationship = authorized invoke + short time-box + **mandatory post-hoc
+  two-person audit/review** (or second-actor-before-activation, EXECUTE-QLOCK-
+  selected).
+- **Audit:** future append-only literals (`BREAK_GLASS_INVOKED`/`USED`/`EXPIRED`/
+  `REVIEWED`) in `audit.ts` with **no ADR-0002 amendment** for additive literals
+  (G4-B1 / Sub-box-3 / ADR-0042 precedent).
+- **Schema:** future `BreakGlassGrant`-style table mirroring `LawfulBasis`
+  (mandatory `valid_until`); `EscalationRequest.expires_at` is insufficient
+  (approval-validity, not an access grant).
+- **RULE 21 research arc** embedded (NIST SP 800-53 AC-3/AC-6/AU-6/AU-12 + NIST SP
+  800-207 ZTA + JIT access + break-glass PAM/HIPAA best practice + SOC 2 CC6 / ISO
+  27001 A.5.18 + LawfulBasis precedent).
+- **Code requires a separate EXECUTE-VERIFY-AUTH.** GAP-C1 remains resolved; GAP-O7
+  remains open; D2-C / ip_whitelist / `getOrgSettingsOrDefaults` deferred to
+  GOVSEC.7; GOVSEC.7 untouched. G4-C privileged throttle + G4-B2-B swarm unchanged.
+
+**Substrate sites (7, docs-only):** NEW
+`docs/architecture/decisions/0050-govsec-break-glass-timeboxed-audit.md` + MOD
+`docs/architecture/README.md` + MOD `CLAUDE.md` (ADR catalog) + MOD
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-TIMEBOXED-AUDIT-ADR-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
