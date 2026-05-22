@@ -1411,6 +1411,51 @@ No code / schema / audit-literal / ADR-0002 change. GAP-O7 remains open; D2-C /
 GOVSEC.7 deferred. Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-GAP-K2-LEAST-PRIVILEGE-EXECUTE-VERIFY-AUTH]`.
 
+## GOVSEC.5 Phase Closure — CLOSED 2026-05-22 (ADR-0049 umbrella remains Proposed)
+
+**GOVSEC.5 (Admin privilege, break-glass, dual-control self-approval resolution,
+insider-threat controls) is CLOSED as a phase 2026-05-22.** All GOVSEC.5-scoped
+items are complete, evidenced, and CI-green:
+
+- **GAP-C1 (self-approval resolution):** RESOLVED at `98c7351` — `escalation.service.ts`
+  `transitionPendingForCaller` rejects `caller === source_entity_id`
+  (`ESCALATION_FORBIDDEN`) before the target/resolver gate; evidenced by
+  `tests/unit/escalation.test.ts` (self-target GAP-C1 cases) + the dual-control-binding
+  integration tests.
+- **GAP-K1 (break-glass / time-boxed audit):** CLOSED — ADR-0050 **Accepted** across
+  BG.1 substrate (`2f487fc`, CI `26295014869`) + BG.2 live integration (`f5f0256`,
+  CI `26297686163`) + BG.3 closure (`877b3c0`, CI `26298824244`); evidenced by
+  `tests/unit/break-glass.test.ts` + `tests/integration/break-glass-integration.test.ts`.
+- **Org-admin route-set throttle (GAP-B4 follow-on):** CLOSED at `f06be71`
+  (CI `26301553439`) — the gateway `admin` op (60/min, entity-scoped); evidenced by
+  `tests/integration/gateway-org-admin-throttle.test.ts`.
+- **GAP-K2 (least-privilege capability review):** CLOSED / documented at `d491f21`
+  (CI `26302426953`) — `docs/reference/govsec-least-privilege-review.md`; no immediate
+  code change required.
+
+**RULE 13 drift reconciliation.** At BG.3 the §closure-criteria **narrow checklist**
+(L226–228: self-approval resolved + break-glass exists with time-boxed audit +
+privileged routes throttled + tests prove self-approval rejection + audit
+completeness) read as *satisfied*, while the **broader GOVSEC.5 phase scope**
+(matrix gap set GAP-C1 + GAP-K1 + GAP-K2, plus the org-admin route-set throttle
+follow-on, plus "insider-threat controls") still had open items — so GOVSEC.5 was
+held OPEN per Founder disposition. With the org-admin throttle and GAP-K2 now both
+landed, **both views are satisfied** and GOVSEC.5 has no remaining open scoped gap.
+The drift is **resolved by completion**, not by redefining the checklist.
+
+**ADR-0049 Status remains `Proposed`.** ADR-0049 is the **GOVSEC umbrella** spanning
+ten phases (GOVSEC.1–10); GOVSEC.5 is one **closed phase inside** the umbrella.
+Closing GOVSEC.5 is **not** full GOVSEC completion — GOVSEC.2/3-tail/4-tail/6/7/8/9/10
+remain forward-substrate, each gated by its own Founder QLOCK. ADR-0049 is therefore
+**not** flipped to Accepted, and the README / CLAUDE.md ADR catalogs are untouched.
+
+Docs-only closure cascade — no code / schema / audit.ts / test change; no new audit
+literal; no ADR-0002 amendment; ADR-0050 untouched. **GAP-O7 remains open** (a
+GOVSEC.4-tail optimization gap, not a GOVSEC.5 gap — GOVSEC.5 closure does not close
+it). D2-C / ip_whitelist / `getOrgSettingsOrDefaults` deferred to **GOVSEC.7**;
+GOVSEC.7 untouched. CONSOLE.1 not started; no new arc. Founder authorization explicit
+at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

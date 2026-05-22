@@ -2038,6 +2038,49 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 PHASE CLOSED — admin / break-glass / dual-control / insider-threat (2026-05-22)
+
+**Status:** GOVSEC.5 phase-closure cascade `[GOVSEC-GOVERNMENT-GRADE-HARDENING]`
+per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+Canonical head remains `d491f210848e6d5daded053b5e5f06cfb667e972` before this commit.
+
+**GOVSEC.5 is CLOSED as a phase. The ADR-0049 GOVSEC umbrella remains Proposed.**
+
+- **All GOVSEC.5-scoped items complete + CI-green:**
+  - **GAP-C1** self-approval resolution (`98c7351`; `escalation.service.ts` rejects
+    `caller === source_entity_id`).
+  - **GAP-K1** break-glass / time-boxed audit CLOSED (ADR-0050 **Accepted**; BG.1
+    `2f487fc` CI `26295014869` + BG.2 `f5f0256` CI `26297686163` + BG.3 `877b3c0`
+    CI `26298824244`).
+  - **Org-admin route-set throttle** follow-on CLOSED (`f06be71` CI `26301553439`;
+    gateway `admin` op 60/min entity-scoped).
+  - **GAP-K2** least-privilege capability review CLOSED/documented (`d491f21`
+    CI `26302426953`; `docs/reference/govsec-least-privilege-review.md`).
+- **Drift reconciled by completion:** at BG.3 the narrow §closure checklist read as
+  satisfied while the broader phase scope (org-admin throttle + GAP-K2) was open;
+  both are now satisfied — GOVSEC.5 has no remaining open scoped gap.
+- **ADR-0049 remains Status: Proposed** — it is the 10-phase GOVSEC umbrella;
+  GOVSEC.5 is a closed phase inside it (GOVSEC.2/3-tail/4-tail/6/7/8/9/10 remain).
+  README + CLAUDE.md ADR catalogs untouched (ADR-0049 Status unchanged).
+- **GAP-O7 remains open** (GOVSEC.4-tail optimization, not a GOVSEC.5 gap); D2-C /
+  ip_whitelist / `getOrgSettingsOrDefaults` deferred to GOVSEC.7; GOVSEC.7 untouched;
+  **CONSOLE.1 not started**; no new arc.
+- **Next clean move (after commit/push/CI), Founder's choice:** a
+  `[…-CONSOLE.1-HAWKSEYE-QLOCK]` (or any other GOVSEC phase / GAP-O7) — a separate
+  Founder-authorized arc.
+
+**Docs-only — no code / schema / audit.ts / test / production change; no new audit
+literal; no ADR-0002; no ADR-0050; no `govsec-least-privilege-review.md` change.**
+Substrate sites (4): MOD `docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
