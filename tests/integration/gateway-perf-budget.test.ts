@@ -101,26 +101,29 @@ describe("GOVSEC.4 G4-D-D1 gateway op-count perf budget (GAP-O2; CI-safe, no tim
     expect(counting.setMultiplierCalls).toBe(0);
   });
 
-  it("unauthenticated governed request (login) = 1 hit + 1 getMultiplier + 0 setMultiplier", async () => {
+  it("unauthenticated governed request (login) = 2 hit (per-key + G4-B2-B swarm cluster) + 1 getMultiplier + 0 setMultiplier", async () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
       payload: { email: "__niov_test__perf@niov.test", password: "x" },
       remoteAddress: "10.210.0.2",
     });
-    expect(counting.hitCalls).toBe(1);
+    // GOVSEC.4 G4-B2-B: a request that passes the per-key limit then incurs the
+    // aggregate swarm cluster counter -> 2 store.hit. getMultiplier is unchanged
+    // (1; D2-B remains deferred); setMultiplier never fires from the gateway.
+    expect(counting.hitCalls).toBe(2);
     expect(counting.getMultiplierCalls).toBe(1);
     expect(counting.setMultiplierCalls).toBe(0);
   });
 
-  it("default-fallback unauthenticated request = 1 hit + 1 getMultiplier + 0 setMultiplier", async () => {
+  it("default-fallback unauthenticated request = 2 hit (per-key + G4-B2-B swarm cluster) + 1 getMultiplier + 0 setMultiplier", async () => {
     await app.inject({ method: "GET", url: "/api/v1/wallet/balance", remoteAddress: "10.210.0.3" });
-    expect(counting.hitCalls).toBe(1);
+    expect(counting.hitCalls).toBe(2);
     expect(counting.getMultiplierCalls).toBe(1);
     expect(counting.setMultiplierCalls).toBe(0);
   });
 
-  it("authenticated governed request = same store budget (1 hit + 1 getMultiplier); the STEP-1 ip_whitelist getOrgSettingsOrDefaults DB read is the documented extra cost (see govsec-perf-budget.md)", async () => {
+  it("authenticated governed request = same store budget (2 hit: per-key + G4-B2-B swarm cluster; 1 getMultiplier); the STEP-1 ip_whitelist getOrgSettingsOrDefaults DB read is the documented extra cost (see govsec-perf-budget.md)", async () => {
     const entity = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
     const token = jwt.sign({ entity_id: entity.entity_id }, TEST_JWT_SECRET);
     counting.resetCounts();
@@ -130,32 +133,39 @@ describe("GOVSEC.4 G4-D-D1 gateway op-count perf budget (GAP-O2; CI-safe, no tim
       headers: { authorization: `Bearer ${token}` },
       remoteAddress: "10.210.0.4",
     });
-    // store-call budget is identical to unauthenticated; the authenticated DB
-    // read (getOrgSettingsOrDefaults for ip_whitelist) is a non-store hot-path
-    // cost documented in the runbook (D2 optimization target), not asserted here.
-    expect(counting.hitCalls).toBe(1);
+    // store-call budget is identical to unauthenticated (per-key + swarm = 2 hit);
+    // the authenticated DB read (getOrgSettingsOrDefaults for ip_whitelist) is a
+    // non-store hot-path cost documented in the runbook (D2-C, deferred to
+    // GOVSEC.7), not asserted here.
+    expect(counting.hitCalls).toBe(2);
     expect(counting.getMultiplierCalls).toBe(1);
     expect(counting.setMultiplierCalls).toBe(0);
   });
 
-  it("429 first-breach burst adds NO extra store calls beyond hit+getMultiplier per request, and NO setMultiplier", async () => {
+  it("per-key 429 short-circuits BEFORE the G4-B2-B swarm counter: the breaching request = 1 hit + 1 getMultiplier + 0 setMultiplier", async () => {
     const remoteAddress = "10.210.0.5";
-    let saw429 = false;
-    for (let i = 0; i < 3; i++) {
-      const r = await app.inject({
+    // Fill the per-key window (login override perMinute=2): both pass the per-key
+    // limit and each incurs per-key + swarm = 2 hit.
+    for (let i = 0; i < 2; i++) {
+      await app.inject({
         method: "POST",
         url: "/api/v1/auth/login",
         payload: { email: "__niov_test__perf429@niov.test", password: "x" },
         remoteAddress,
       });
-      if (r.statusCode === 429) saw429 = true;
     }
-    expect(saw429).toBe(true);
-    // 3 requests -> exactly 3 hit + 3 getMultiplier; the 429 path's logger + the
-    // (authenticated-only) RATE_LIMITED audit are NOT RateLimitStore calls, so
-    // they do not appear in this budget. setMultiplier never fires from the gateway.
-    expect(counting.hitCalls).toBe(3);
-    expect(counting.getMultiplierCalls).toBe(3);
+    counting.resetCounts();
+    // The 3rd request breaches the per-key limit and 429s BEFORE the swarm counter
+    // runs, so it costs exactly 1 hit (per-key) + 1 getMultiplier + 0 swarm hit.
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email: "__niov_test__perf429@niov.test", password: "x" },
+      remoteAddress,
+    });
+    expect(r.statusCode).toBe(429);
+    expect(counting.hitCalls).toBe(1);
+    expect(counting.getMultiplierCalls).toBe(1);
     expect(counting.setMultiplierCalls).toBe(0);
   });
 });

@@ -1063,6 +1063,59 @@ GOVSEC.5 / GOVSEC.7 untouched.
 schema / dependency / package / lockfile / CI / Elixir / `gateway.middleware.ts` /
 CLAUDE.md / README change.
 
+## GOVSEC.4 G4-B2-B Implementation Note — Production Swarm Counter (Fork α) (2026-05-21)
+
+**G4-B2-B closes the GAP-B2 residual** left open by G4-B2-A: a
+distributed-under-limit swarm (many sources, each within its own per-key limit) is
+now shed by an **aggregate cluster counter**, while the per-key limit remains the
+primary control. This is the production swarm counter the G4-B2-A note designed and
+deferred until G4-D measured + optimized the per-request budget.
+
+**Fork α — direct cluster shed (chosen).** On a cluster breach the gateway returns
+429 directly. Fork β (generalizing the Loop-5 `setMultiplier`/`getMultiplier`
+backpressure to a cluster key) was **not** chosen: it would add a second
+`getMultiplier` per request and couple to D2-B. Fork α touches **no** multiplier
+path, so **D2-B remains cleanly deferred**.
+
+**Mechanism.** For a governed request that **passes** the per-key check, the gateway
+computes `swarmKey = swarm:<op>:cluster:<bucket>` where `bucket = HMAC-SHA256(ip,
+jwtSecret) % N`, `N = 64` (the same JWT-keyed HMAC used for the G4-B1 `ip_hash`).
+It calls the **existing `store.hit(swarmKey, 60)`** — the D2-A atomic Lua EVAL
+fixed-window, **no interface change, no new Redis path** — and if the cluster count
+exceeds the per-operation threshold returns 429 (Retry-After from the cluster `hit`
+TTL). Placing the counter after the per-key check means a **per-key 429
+short-circuits before** the swarm op.
+
+**Bounded cardinality / no hot key.** Bucketing by `HMAC(ip) % 64` keeps the
+swarm-key space at ≈(operations × 64) keys per 60s window and avoids the
+operation-global single-hot-key collapse (GAP-O2). **No raw IP / user-agent / body
+/ token / entity ID / PII** appears in a swarm key.
+
+**Thresholds.** Conservative per-operation defaults (`SWARM_DEFAULT_LIMITS`,
+`SWARM_DEFAULT_FALLBACK`) and `SWARM_CLUSTER_COUNT = 64` live in
+`gateway.middleware.ts`; `buildApp({ swarmThresholdOverrides, swarmClusterCount })`
+injects low thresholds + `N = 1` for deterministic tests. **No DB read, no org
+settings, no `getOrgSettingsOrDefaults`, no schema** — ip_whitelist (STEP 1) and
+D2-C stay untouched.
+
+**Failure / audit.** The swarm `hit` error **propagates exactly like the per-key
+`hit`** (no new fail-open / fail-closed / retry). Swarm denials are **logger-only**
+(privacy-safe, hashed IP); there is **no `SWARM_DETECTED` literal** and **no
+ADR-0002 amendment**; the G4-B1 first-breach chain audit is unchanged.
+
+**Op-count budget (intentional, gated on G4-D).** A governed request that passes
+the per-key limit now costs **2 `hit` + 1 `getMultiplier` + 0 `setMultiplier`** (the
+2nd `hit` is the swarm cluster counter — a single atomic EVAL per D2-A); a per-key
+429 costs 1 `hit`; a swarm 429 costs 2 `hit`. The `gateway-perf-budget.test.ts`
+contract and `docs/reference/govsec-perf-budget.md` §3/§10 are updated accordingly.
+This is the budgeted cost, not a regression.
+
+**Scope held.** **GAP-O7 remains open** (no working-set route p99 closure, no CI
+p99/timing assertions). `rate-limit.ts` / `RedisRateLimitStore` / `HIT_LUA` /
+`MemoryRateLimitStore` / `feedback.service.ts` (Loop-5) / `audit.ts` / auth /
+schema / dependencies are untouched. D2-B / D2-C (→ GOVSEC.7) / G4-C (→ GOVSEC.5) /
+GOVSEC.5 / GOVSEC.7 untouched.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

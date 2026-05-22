@@ -60,6 +60,45 @@ export const DEFAULT_LIMITS: Record<string, RateLimitPolicy> = {
 //      governed even if DEFAULT_LIMITS.default were ever removed.
 export const DEFAULT_FALLBACK: RateLimitPolicy = { perMinute: 300, scope: "entity" };
 
+// WHAT: Number of HMAC-derived IP clusters per operation for the swarm counter.
+// INPUT: Used as a constant (overridable per build for deterministic tests).
+// OUTPUT: None.
+// WHY: GOVSEC.4 G4-B2-B (GAP-B2). The aggregate swarm counter buckets each source
+//      IP into one of N clusters via an HMAC (never the raw IP) so its cardinality
+//      stays bounded (~operations × N keys per 60s window) and no single
+//      operation-global Redis hot key forms (that hot-key class is GAP-O2).
+export const SWARM_CLUSTER_COUNT = 64;
+
+// WHAT: Conservative per-operation swarm cluster thresholds (cluster count per 60s
+//        window) for the G4-B2-B aggregate counter.
+// INPUT: Used as a constant (overridable per build / per test).
+// OUTPUT: None.
+// WHY: GOVSEC.4 G4-B2-B (GAP-B2, Fork α direct cluster shed). One cluster
+//      aggregates ~1/N of the source-IP space for an operation; the threshold sits
+//      generously above normal distributed traffic so it sheds only a coordinated
+//      swarm (many sources each within their own per-key limit), not legitimate
+//      load. Final tuning uses the local Redis runbook
+//      (docs/reference/govsec-perf-budget.md §6); CI cannot measure real p99
+//      (no Redis), so tests inject low thresholds to prove behavior deterministically.
+export const SWARM_DEFAULT_LIMITS: Record<string, number> = {
+  login: 200,
+  refresh: 400,
+  admin_reset: 100,
+  negotiate: 2000,
+  read_metadata: 4000,
+  read_content: 1000,
+  write: 600,
+  share: 400,
+  audit_query: 200,
+  default: 6000,
+};
+
+// WHAT: Fallback swarm cluster threshold for any op missing an explicit entry.
+// INPUT: Used as a constant.
+// OUTPUT: None.
+// WHY: GOVSEC.4 G4-B2-B -- a hard ceiling so every governed op has a swarm bound.
+export const SWARM_DEFAULT_FALLBACK = 6000;
+
 // WHAT: One pattern that matches a request to an operation type.
 // INPUT: Used as a parameter type only.
 // OUTPUT: None.
@@ -193,9 +232,16 @@ export function makeGatewayHook(args: {
   store: RateLimitStore;
   limits: Record<string, RateLimitPolicy>;
   jwtSecret: string;
+  // GOVSEC.4 G4-B2-B: optional per-operation swarm cluster thresholds and cluster
+  // count N. Merged over SWARM_DEFAULT_LIMITS / SWARM_CLUSTER_COUNT; tests inject
+  // low thresholds + small N to prove distributed-swarm shedding deterministically.
+  swarmThresholds?: Partial<Record<string, number>>;
+  swarmClusterCount?: number;
 }) {
   const { store, limits, jwtSecret } = args;
   const windowSeconds = 60;
+  const swarmLimits = { ...SWARM_DEFAULT_LIMITS, ...(args.swarmThresholds ?? {}) };
+  const clusterCount = args.swarmClusterCount ?? SWARM_CLUSTER_COUNT;
 
   return async function gatewayHook(
     request: FastifyRequest,
@@ -329,6 +375,58 @@ export function makeGatewayHook(args: {
           ok: false,
           error: "RATE_LIMIT_EXCEEDED",
           retry_after_seconds: result.ttl_seconds,
+        });
+      return;
+    }
+
+    // GOVSEC.4 G4-B2-B (Fork α, GAP-B2): aggregate swarm cluster counter. The
+    // per-key limit above is the PRIMARY control; this is additive
+    // defense-in-depth against a distributed-under-limit swarm (many sources, each
+    // within its own per-key limit). The source IP is bucketed into one of N
+    // clusters via an HMAC (never the raw IP) so cardinality stays bounded
+    // (~operations × N keys per window) and no operation-global hot key forms
+    // (GAP-O2). It fires only for requests that passed the per-key check, so a
+    // per-key 429 above costs no swarm op. Uses the existing store.hit fixed-window
+    // (60s) Lua EVAL -- no new Redis path, no setMultiplier, no second
+    // getMultiplier (D2-B stays deferred). Errors propagate exactly as the per-key
+    // hit does (no new fail-open / fail-closed / retry). Denials are logger-only
+    // (privacy-safe, hashed IP); the G4-B1 first-breach chain audit is unchanged
+    // and there is no SWARM_DETECTED literal.
+    const ipForCluster = request.ip ?? "unknown";
+    const clusterBucket =
+      parseInt(
+        createHmac("sha256", jwtSecret)
+          .update(ipForCluster)
+          .digest("hex")
+          .slice(0, 8),
+        16,
+      ) % clusterCount;
+    const swarmKey = `swarm:${opKey}:cluster:${clusterBucket}`;
+    const swarmResult = await store.hit(swarmKey, windowSeconds);
+    const swarmThreshold =
+      swarmLimits[opKey] ?? swarmLimits.default ?? SWARM_DEFAULT_FALLBACK;
+    if (swarmResult.count > swarmThreshold) {
+      const ipHash = createHmac("sha256", jwtSecret)
+        .update(ipForCluster)
+        .digest("hex");
+      request.log.warn(
+        {
+          event: "swarm_rate_limited",
+          operation: opKey,
+          cluster: clusterBucket,
+          cluster_count: swarmResult.count,
+          swarm_threshold: swarmThreshold,
+          ip_hash: ipHash,
+        },
+        "gateway swarm cluster limit exceeded",
+      );
+      await reply
+        .code(429)
+        .header("Retry-After", String(swarmResult.ttl_seconds))
+        .send({
+          ok: false,
+          error: "RATE_LIMIT_EXCEEDED",
+          retry_after_seconds: swarmResult.ttl_seconds,
         });
       return;
     }

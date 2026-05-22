@@ -103,6 +103,11 @@ export interface BuildAppConfig {
   contentEncryption?: ContentEncryption;
   rateLimitStore?: RateLimitStore;
   rateLimitOverrides?: Partial<Record<string, RateLimitPolicy>>;
+  // GOVSEC.4 G4-B2-B: deterministic test injection for the swarm cluster counter
+  // (per-operation cluster thresholds + cluster count N). Production uses the
+  // gateway-middleware defaults; tests inject low thresholds + small N.
+  swarmThresholdOverrides?: Partial<Record<string, number>>;
+  swarmClusterCount?: number;
   // Section 11B test injection points -- production reads from env.
   otzarCache?: import("./services/otzar/cache.js").KVCache;
   otzarLLM?: import("./services/llm/llm.service.js").LLMProvider;
@@ -333,6 +338,8 @@ export async function buildApp(
       store: rateLimitStore,
       limits: rateLimits,
       jwtSecret,
+      swarmThresholds: config.swarmThresholdOverrides,
+      swarmClusterCount: config.swarmClusterCount,
     }),
   );
 

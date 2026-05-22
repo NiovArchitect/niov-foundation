@@ -1533,6 +1533,63 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-B2-B LANDED — Production Swarm Counter (Fork α direct cluster shed) (GAP-B2 closure) (2026-05-21)
+
+**Status:** GOVSEC.4 G4-B2-B `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — code +
+tests + docs (9 files) per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4B2-B-PRODUCTION-SWARM-COUNTER-EXECUTE-VERIFY-AUTH]`.
+
+**GAP-B2 behaviorally CLOSED:** the distributed-under-limit swarm (many sources,
+each within its own per-key limit) is now shed by an aggregate cluster counter; the
+per-key limit stays the primary control.
+
+- **Fork α — direct cluster shed** (NOT Fork β multiplier-backpressure).
+- **Key shape:** `swarm:<op>:cluster:<bucket>`, `bucket = HMAC-SHA256(ip,
+  jwtSecret) % 64` (reuses the G4-B1 ip_hash HMAC). **No raw IP / UA / body / token
+  / entity ID / PII** in the key. Bounded cardinality ≈ operations × 64 keys per
+  60s window — no operation-global hot key (GAP-O2).
+- **Mechanism:** the gateway calls the existing `store.hit(swarmKey, 60)` (same
+  D2-A atomic Lua EVAL fixed-window) **only** for requests that passed the per-key
+  check; cluster count > per-op threshold → 429 (Retry-After from the cluster `hit`
+  TTL). **No `setMultiplier`, no second `getMultiplier`** (Fork α; **D2-B remains
+  deferred**). `RedisRateLimitStore` / `RateLimitStore` interface / `HIT_LUA` /
+  `MemoryRateLimitStore` **untouched**.
+- **Thresholds:** conservative per-op defaults (`SWARM_DEFAULT_LIMITS` /
+  `SWARM_DEFAULT_FALLBACK`) + `SWARM_CLUSTER_COUNT=64` in `gateway.middleware.ts`,
+  overridable per build (`buildApp({ swarmThresholdOverrides, swarmClusterCount })`)
+  for deterministic tests. No DB read, no org settings, no `getOrgSettingsOrDefaults`,
+  no schema.
+- **Failure:** the swarm `hit` error propagates exactly like the per-key `hit` (no
+  new fail-open / fail-closed / retry).
+- **Audit/logging:** swarm denials are logger-only (privacy-safe, hashed IP); **no
+  `SWARM_DETECTED` literal; no ADR-0002 amendment**; the G4-B1 first-breach chain
+  audit is unchanged.
+- **Op-count budget (intentional, gated on G4-D):** governed (passes per-key) now
+  **2 hit + 1 getMultiplier + 0 setMultiplier** (per-key 429 short-circuits before
+  the swarm counter = 1 hit; swarm 429 = 2 hit); health/unmapped stay as required.
+- **Tests:** `gateway-swarm.test.ts` flips the two G4-B2-A residual cases to SHED +
+  asserts the swarm key shape and that no raw IP appears in swarm keys
+  (deterministic via N=1 + low thresholds + a recording store);
+  `gateway-perf-budget.test.ts` op-count contract updated to 2 hit + 1
+  getMultiplier + 0 setMultiplier (per-key 429 = 1 hit).
+- **GAP-O7 remains open** — not closed; no route-p99 closure language; no CI
+  p99/timing assertions.
+- **Deferrals preserved:** D2-B / D2-C (→ GOVSEC.7) / G4-C (tied to GOVSEC.5) /
+  GOVSEC.5 / GOVSEC.7 untouched.
+
+**Substrate sites (9):** MOD `apps/api/src/middleware/gateway.middleware.ts` + MOD
+`apps/api/src/server.ts` (buildApp test-injection wiring) + MOD
+`tests/integration/gateway-swarm.test.ts` + MOD
+`tests/integration/gateway-perf-budget.test.ts` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD `docs/reference/govsec-perf-budget.md`
++ MOD `docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` +
+MOD `docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4B2-B-PRODUCTION-SWARM-COUNTER-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
