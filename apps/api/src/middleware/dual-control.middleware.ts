@@ -139,6 +139,16 @@ import {
   findApprovedDualControlForCaller,
   getOrCreatePendingDualControlForCaller,
 } from "../services/governance/escalation.service.js";
+// GOVSEC.5 break-glass / time-boxed audit (GAP-K1, ADR-0050) BG.2: the live
+// recognition seam consumes the BG.1 substrate. validateBreakGlassGrant is the
+// read-side check (ACTIVE + in-window + matching source/action; excludes
+// expired / used / mismatched); markBreakGlassUsed is the authoritative
+// single-use consume (atomic ACTIVE -> USED + BREAK_GLASS_USED audit in-tx) and
+// the TOCTOU guard -- the middleware delegates ONLY if it succeeds.
+import {
+  validateBreakGlassGrant,
+  markBreakGlassUsed,
+} from "../services/governance/break-glass.service.js";
 import { logger } from "../logger.js";
 
 /**
@@ -288,6 +298,12 @@ const AUDIT_ACTION = {
   HANDLER_DELEGATED: "DUAL_CONTROL_HANDLER_DELEGATED",
   HANDLER_DENIED: "DUAL_CONTROL_HANDLER_DENIED",
   TRANSIENT_FAILURE: "DUAL_CONTROL_TRANSIENT_FAILURE",
+  // GOVSEC.5 BG.2: marker on the existing ADMIN_ACTION event_type recording
+  // that a privileged request proceeded via a break-glass grant rather than an
+  // APPROVED dual-control escalation. NOT a new AuditEventType literal -- it is
+  // a details.action string (no audit.ts change, no ADR-0002 amendment). The
+  // BREAK_GLASS_USED literal is emitted separately, in-tx, by markBreakGlassUsed.
+  BREAK_GLASS_DELEGATED: "DUAL_CONTROL_BREAK_GLASS_DELEGATED",
 } as const;
 
 /**
@@ -409,13 +425,78 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
         return;
       }
 
-      // PermanentFailure. On ESCALATION_PENDING with no escalation yet,
-      // get-or-create the PENDING dual-control EscalationRequest so a
-      // second approver has something to APPROVE. The service helper
-      // dedups on (source, DUAL_CONTROL_REQUIRED, PENDING, description) so
-      // a caller retrying the endpoint does not flood the approver queue.
-      // (See the SUBSTRATE-STATE LIMITATION block in the file header re:
-      // target_entity_id.)
+      // PermanentFailure. Before creating/reusing a PENDING escalation and
+      // denying, check for a valid time-boxed break-glass grant (GOVSEC.5
+      // GAP-K1 / ADR-0050 BG.2). A normal APPROVED dual-control always wins
+      // first -- that path returned above in the Approved branch -- so
+      // break-glass is reached ONLY when no APPROVED escalation exists. The
+      // grant is scoped to (callerEntityId, actionDescriptor.type), i.e. the
+      // requesting actor and the privileged action; validateBreakGlassGrant
+      // returns null for expired / used / reviewed / revoked / mismatched
+      // grants. Single-use: markBreakGlassUsed is the authoritative consume
+      // AND the validate-then-use TOCTOU guard -- it atomically flips
+      // ACTIVE -> USED (throwing if the grant is no longer ACTIVE, e.g. a
+      // concurrent request won the race), and the middleware delegates to the
+      // privileged handler ONLY if it succeeds. A second privileged request
+      // under the same grant therefore finds it USED and is denied normally.
+      // The middleware does NOT call expireBreakGlassGrant -- expired grants
+      // are simply excluded by validateBreakGlassGrant; request-path expiry
+      // writes (and their audit noise) are deliberately avoided.
+      const breakGlassGrant = await validateBreakGlassGrant(
+        callerEntityId,
+        actionDescriptor.type,
+      );
+      if (breakGlassGrant !== null) {
+        let consumed = false;
+        try {
+          // Emits BREAK_GLASS_USED in-tx (RULE 4 + ADR-0002). Throws
+          // BREAK_GLASS_INVALID_TRANSITION if the grant is no longer ACTIVE.
+          await markBreakGlassUsed(breakGlassGrant.grant_id);
+          consumed = true;
+        } catch (bgErr) {
+          // Lost the single-use race / grant no longer ACTIVE. Do NOT delegate;
+          // fall through to the normal denied path below. This is an expected
+          // condition, not a TransientFailure -- it is handled here rather than
+          // thrown out to the 503 catch.
+          logger.warn(
+            {
+              bgErr,
+              callerEntityId,
+              action_descriptor_type: actionDescriptor.type,
+              grant_id: breakGlassGrant.grant_id,
+            },
+            "break-glass grant could not be consumed (raced / no longer active); denying",
+          );
+        }
+        if (consumed) {
+          // Marker on the existing ADMIN_ACTION event_type -- grant + action +
+          // route identifiers only; NEVER the justification or any private
+          // content. (No new AuditEventType literal; see AUDIT_ACTION.)
+          await writeAuditEvent({
+            event_type: "ADMIN_ACTION",
+            outcome: "SUCCESS",
+            actor_entity_id: callerEntityId,
+            details: {
+              action: AUDIT_ACTION.BREAK_GLASS_DELEGATED,
+              action_descriptor_type: actionDescriptor.type,
+              grant_id: breakGlassGrant.grant_id,
+              route: endpoint.route,
+              method: endpoint.method,
+            },
+          });
+          // Resolve without sending a reply -- Fastify proceeds to the route
+          // handler, which executes the privileged operation under break-glass.
+          return;
+        }
+      }
+
+      // No valid break-glass grant (or its consume lost the race). On
+      // ESCALATION_PENDING with no escalation yet, get-or-create the PENDING
+      // dual-control EscalationRequest so a second approver has something to
+      // APPROVE. The service helper dedups on (source, DUAL_CONTROL_REQUIRED,
+      // PENDING, description) so a caller retrying the endpoint does not flood
+      // the approver queue. (See the SUBSTRATE-STATE LIMITATION block in the
+      // file header re: target_entity_id.)
       let escalationId = failure.escalation_id;
       if (failure.reason === "ESCALATION_PENDING" && escalationId === undefined) {
         const pending = await getOrCreatePendingDualControlForCaller(

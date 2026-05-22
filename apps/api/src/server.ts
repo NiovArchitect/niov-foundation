@@ -80,6 +80,10 @@ import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerPlatformRoutes } from "./routes/platform.routes.js";
 import { registerOrgRoutes } from "./routes/org.routes.js";
 import { registerEscalationRoutes } from "./routes/escalation.routes.js";
+// GOVSEC.5 break-glass / time-boxed audit (GAP-K1, ADR-0050) BG.2: the
+// invoke + review route surface (can_admin_niov tier). The live recognition
+// seam lives in dual-control.middleware.ts.
+import { registerBreakGlassRoutes } from "./routes/break-glass.routes.js";
 import { registerAuthAdminRoutes } from "./routes/auth-admin.routes.js";
 // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036
 // Sub-decisions 6 + 7: tenant admin governance routes for REGULATOR
@@ -376,6 +380,7 @@ export async function buildApp(
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);
   await registerEscalationRoutes(app, authService);
+  await registerBreakGlassRoutes(app, authService);
   await registerAuthAdminRoutes(app, authService, jwtSecret);
   await registerRegulatorRoutes(app, authService);
   await registerOtzarRoutes(app, otzarService);

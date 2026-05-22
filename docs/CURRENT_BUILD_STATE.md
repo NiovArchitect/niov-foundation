@@ -1840,6 +1840,66 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 Break-Glass BG.2 live integration LANDED — routes + dual-control seam (GAP-K1) (2026-05-22)
+
+**Status:** GOVSEC.5 break-glass BG.2 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing —
+the live integration phase that makes valid, time-boxed, single-use break-glass
+grants usable in the dual-control request path, per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG2-INTEGRATION-EXECUTE-VERIFY-AUTH]`.
+
+**BG.2 wires the BG.1 substrate into the live path at the smallest safe seam.
+GAP-K1 remains NOT closed; GOVSEC.5 remains OPEN (closure is BG.3).**
+
+- **Routes (NEW `apps/api/src/routes/break-glass.routes.ts`):**
+  `POST /api/v1/break-glass/grants` (invoke) + `POST
+  /api/v1/break-glass/grants/:grant_id/review` (review), both
+  `requireAdminCapability("can_admin_niov")` (the tier of the 4 privileged
+  endpoints); registered in `server.ts`. Source/reviewer come from
+  `request.auth.entity_id`, never the body. Justification is stored + audited but
+  **never returned** in a response body. Error mapping: missing/empty
+  justification / missing or past `valid_until` / out-of-scope action → **400**;
+  self-review → **403**; not-found → **404**; invalid-transition → **409**.
+- **Live seam (MOD `dual-control.middleware.ts`):** fires **only in the
+  Denied/PermanentFailure branch**, after no APPROVED escalation is found and
+  **before** the get-or-create-PENDING + 403. `validateBreakGlassGrant(callerEntityId,
+  actionDescriptor.type)` then `markBreakGlassUsed` — **delegate only if the
+  consume succeeds**. The atomic ACTIVE→USED is the authoritative single-use gate
+  and closes the validate-then-use TOCTOU window (a lost race / non-ACTIVE grant
+  falls through to the normal 403). A normal **APPROVED dual-control always wins
+  first**. The middleware does **not** call `expireBreakGlassGrant` (expired
+  grants are excluded by `validateBreakGlassGrant`; no request-path expiry write).
+- **Single-use:** a second privileged request under the same grant finds it USED →
+  normal 403.
+- **Audit:** `BREAK_GLASS_USED` emitted in-tx by `markBreakGlassUsed`; a
+  `details.action = "DUAL_CONTROL_BREAK_GLASS_DELEGATED"` marker rides the existing
+  `ADMIN_ACTION` event_type (**no new `AuditEventType` literal, no `audit.ts`
+  change, no ADR-0002 amendment**). Metadata = grant/action/route identifiers only;
+  no justification leak.
+- **Tests:** NEW `tests/integration/break-glass-integration.test.ts` (invoke +
+  review routes; valid grant authorizes privileged route; single-use second-attempt
+  denied; expired/mismatched grants denied; normal APPROVED dual-control still wins;
+  approved-wins-over-grant leaves the grant ACTIVE; ordinary denied path unchanged;
+  self-review 403; no justification leak).
+- **No schema / audit-literal / `privileged-endpoints.ts` / platform-or-regulator
+  route-handler / `gateway.middleware.ts` / G4-C / `escalation.service.ts` change.**
+  GAP-C1 self-approval guard intact; G4-B2-B swarm + G4-C throttle unchanged;
+  org-admin throttle remains follow-on; GAP-O7 remains open; D2-C / ip_whitelist /
+  `getOrgSettingsOrDefaults` deferred to GOVSEC.7. **BG.3 closure (ADR-0050
+  Proposed→Accepted + GAP-K1 closed) is the future phase.**
+
+**Substrate sites (8):** NEW `apps/api/src/routes/break-glass.routes.ts` + MOD
+`apps/api/src/server.ts` + MOD `apps/api/src/middleware/dual-control.middleware.ts`
++ NEW `tests/integration/break-glass-integration.test.ts` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0050-govsec-break-glass-timeboxed-audit.md` (+ MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`).
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG2-INTEGRATION-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

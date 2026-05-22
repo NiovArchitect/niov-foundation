@@ -1291,6 +1291,32 @@ lineage. Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG1-SUBSTRATE-EXECUTE-VERIFY-AUTH]`
 + `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG1-API-BARREL-EXPORT-AUTH]`.
 
+## GOVSEC.5 Break-Glass BG.2 Live-Integration Implementation Note — GAP-K1 (2026-05-22)
+
+**BG.2 (LANDED 2026-05-22)** wires the BG.1 substrate into the live dual-control
+request path — the security-sensitive phase — at the smallest safe seam. NEW
+`apps/api/src/routes/break-glass.routes.ts` exposes `POST /api/v1/break-glass/grants`
+(invoke) + `POST /api/v1/break-glass/grants/:grant_id/review` (review), both
+`requireAdminCapability("can_admin_niov")` (registered in `server.ts`).
+`dual-control.middleware.ts` gains a recognition seam **only in the
+Denied/PermanentFailure branch**, after no APPROVED escalation is found and before
+the get-or-create-PENDING + 403: `validateBreakGlassGrant(callerEntityId,
+actionDescriptor.type)` then `markBreakGlassUsed` — **delegate only if the consume
+succeeds** (atomic ACTIVE→USED is the single-use gate + TOCTOU close). A normal
+APPROVED dual-control **always wins first**; expired/used/mismatched grants do not
+authorize; the middleware never calls `expireBreakGlassGrant` (no request-path
+expiry write). A `DUAL_CONTROL_BREAK_GLASS_DELEGATED` marker rides the existing
+`ADMIN_ACTION` event_type (no new literal, no `audit.ts` change, no ADR-0002
+amendment); `BREAK_GLASS_USED` is emitted in-tx; no justification leaks. NEW
+`tests/integration/break-glass-integration.test.ts`. **No schema /
+`privileged-endpoints.ts` / platform-or-regulator-handler / gateway / G4-C /
+`escalation.service.ts` change; GAP-C1 self-approval guard intact.** **GAP-K1
+remains NOT closed; GOVSEC.5 remains OPEN** — closure is BG.3 (ADR-0050
+Proposed→Accepted + GAP-K1 closed); the broader org-admin route-set throttle remains
+a separate follow-on; GAP-O7 remains open; D2-C / GOVSEC.7 deferred. See ADR-0050
+§Implementation lineage. Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG2-INTEGRATION-EXECUTE-VERIFY-AUTH]`.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

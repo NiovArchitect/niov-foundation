@@ -202,10 +202,29 @@ are LOCKED by Founder authorization at this ADR's landing.
   mandatory central-export surfaces (the latter under a focused barrel-export
   authorization). The chosen relationship model is **authorized invoke + short
   time-box + mandatory post-hoc two-person review** (`reviewer ≠ source`).
-- **BG.2 — integration (future, separately authorized):** the invoke/review
-  route + `dual-control.middleware.ts` recognition of a valid grant at the Denied
-  seam (the live bypass) + integration tests (privileged routes proceed under a
-  valid grant; audit completeness; self-approval guard intact).
+- **BG.2 — live integration (2026-05-22):** LANDED. NEW
+  `apps/api/src/routes/break-glass.routes.ts` — `POST /api/v1/break-glass/grants`
+  (invoke) + `POST /api/v1/break-glass/grants/:grant_id/review` (review), both
+  `requireAdminCapability("can_admin_niov")` (the tier of the 4 privileged
+  endpoints); registered in `server.ts`. The live recognition seam in
+  `dual-control.middleware.ts` fires **only in the Denied/PermanentFailure
+  branch, after** no APPROVED escalation is found and **before** the
+  get-or-create-PENDING + 403: it calls `validateBreakGlassGrant(callerEntityId,
+  actionDescriptor.type)` and, if a valid grant exists, `markBreakGlassUsed` —
+  delegating to the privileged handler **only if the consume succeeds** (the
+  atomic ACTIVE→USED is the authoritative single-use gate and closes the
+  validate-then-use TOCTOU window; a lost race / non-ACTIVE grant falls through
+  to the normal 403). A normal APPROVED dual-control **always wins first** (that
+  path returns earlier). The middleware does **not** call `expireBreakGlassGrant`
+  (expired grants are excluded by `validateBreakGlassGrant`; no request-path
+  expiry write). A `details.action = "DUAL_CONTROL_BREAK_GLASS_DELEGATED"` marker
+  is written on the existing `ADMIN_ACTION` event_type (no new `AuditEventType`
+  literal; `BREAK_GLASS_USED` is emitted in-tx by `markBreakGlassUsed`); audit
+  metadata carries grant/action/route identifiers only — never the justification.
+  NEW `tests/integration/break-glass-integration.test.ts`. **No schema / audit-
+  literal / `privileged-endpoints.ts` / platform-or-regulator-handler / gateway /
+  `escalation.service.ts` change.** GAP-C1 self-approval guard untouched. **GAP-K1
+  remains NOT closed; GOVSEC.5 remains OPEN** (closure is BG.3).
 - **BG.3 — closure (future):** ADR-0050 Proposed→Accepted + GAP-K1 closed + docs.
 - **GOVSEC.5 closure (future):** when self-approval (done) + break-glass code +
   audit-completeness tests are all landed and verified.
