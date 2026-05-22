@@ -1485,6 +1485,54 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-D-D3 LANDED — Post-Optimization Verification + Status Recording (GAP-O2) (2026-05-21)
+
+**Status:** GOVSEC.4 G4-D-D3 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing —
+**docs-only** (5 MOD docs) per Founder LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D3-POST-OPTIMIZATION-VERIFICATION-EXECUTE-VERIFY-AUTH]`.
+
+**G4-D-D3 verifies the D2-A Redis hit optimization and op-count budget, records GAP-O2 as optimization-verified under the documented local/manual p99 posture, keeps GAP-O7 open, and unblocks G4-B2-B without implementing it.**
+
+- **Docs-only.** Production behavior is already verified by the existing tests and
+  CI; no new code, no new test artifact. D3's only remaining work is
+  status/closure recording.
+- **Optimization landed.** G4-D-D2-A at `b6fe3b0aa84ac2630da0614041fcdfef344c7c51`;
+  CI run `26265354599` passed all four jobs (Typecheck, Unit, Integration, Elixir).
+- **D2-A evidence (re-confirmed):** `apps/api/src/rate-limit.ts` has `HIT_LUA`
+  (INCR + conditional EXPIRE when `count == 1` + TTL); `hit()` uses one
+  `this.client.eval` call; `ttl_seconds` fallback remains `ttl > 0 ? ttl :
+  ttlSeconds`; existing error propagation preserved; no separate `client.incr` /
+  `client.expire` / `client.ttl` hot-path calls remain; `tests/unit/rate-limit.test.ts`
+  verifies EVAL semantics + fallback; `tests/integration/gateway-perf-budget.test.ts`
+  verifies the gateway op-count budget (gateway still calls `hit` once; governed
+  budget remains 1 hit + 1 getMultiplier + 0 setMultiplier; 429 adds no extra store
+  calls); `gateway-swarm` green; full integration green; full CI green; the no-TTL
+  orphan-key race is fixed by the atomic Lua EVAL.
+- **GAP-O2 (conservative):** optimization verified; op-count budget verified;
+  G4-B2-B unblocked. **Redis p99 / wall-clock burst behavior remains the documented
+  local/manual runbook evidence (`docs/reference/govsec-perf-budget.md` §6/§9), NOT
+  asserted as CI-closed.** No CI p99/timing assertions added.
+- **GAP-O7 remains open** — working-set route p99 not solved, not closed.
+- **G4-B2-B unblocked after D3** (post-optimization budget verified) **but NOT
+  implemented** — a separate future phase. No production swarm counter, no
+  `swarm:op` keys, no gateway `setMultiplier` call, no multiplier / backpressure /
+  ip_whitelist change.
+- **Deferrals preserved:** D2-B (`getMultiplier`) deferred + co-designed with
+  G4-B2-B; D2-C (ip_whitelist DB read) deferred → GOVSEC.7; G4-C separate (tied to
+  GOVSEC.5); GOVSEC.5 / GOVSEC.7 untouched.
+- **No** production / test / schema / dependency / package / lockfile / CI /
+  Elixir / `gateway.middleware.ts` / ADR-0002 / CLAUDE.md / README change.
+
+**Substrate sites (5, docs-only)**: MOD `docs/reference/govsec-control-matrix.md`
++ MOD `docs/reference/govsec-perf-budget.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D3-POST-OPTIMIZATION-VERIFICATION-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

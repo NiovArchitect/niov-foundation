@@ -1015,6 +1015,54 @@ verification). **GAP-O7** (working-set route p99) is **not** closed here.
 **No ADR-0002 amendment** (no audit-architecture change). No schema / dependency /
 package / lockfile / CI / Elixir / `gateway.middleware.ts` change.
 
+## GOVSEC.4 G4-D-D3 Implementation Note — Post-Optimization Verification (2026-05-21)
+
+**G4-D-D3 verifies the D2-A Redis hit optimization and op-count budget, records GAP-O2 as optimization-verified under the documented local/manual p99 posture, keeps GAP-O7 open, and unblocks G4-B2-B without implementing it.**
+
+D3 is **docs-only**: production behavior is already verified by the existing tests
+and CI, no new code is needed, no new test artifact is needed, and D3's only
+remaining work is status/closure recording.
+
+**Optimization landed + CI-green.** G4-D-D2-A landed at
+`b6fe3b0aa84ac2630da0614041fcdfef344c7c51`; CI run `26265354599` passed all four
+jobs (Typecheck, Unit, Integration, Elixir).
+
+**Verification evidence (re-confirmed at D3).** `apps/api/src/rate-limit.ts`
+defines `HIT_LUA` performing `INCR` + conditional `EXPIRE` when `count == 1` +
+`TTL`; `RedisRateLimitStore.hit` issues **one** `this.client.eval` call; the
+`ttl_seconds` fallback remains `ttl > 0 ? ttl : ttlSeconds`; existing error
+propagation is preserved; **no** separate `client.incr` / `client.expire` /
+`client.ttl` hot-path calls remain. `tests/unit/rate-limit.test.ts` verifies the
+EVAL semantics + fallback; `tests/integration/gateway-perf-budget.test.ts`
+verifies the gateway op-count budget (the gateway still calls `hit` once per
+governed request; governed budget = 1 `hit` + 1 `getMultiplier` + 0
+`setMultiplier`; the 429 path adds no extra store calls). `gateway-swarm` is
+green, full integration is green, full CI is green. The no-TTL orphan-key race is
+fixed because INCR + first-hit EXPIRE + TTL are indivisible inside the atomic Lua
+EVAL.
+
+**GAP-O2 (conservative D3 wording).** Optimization verified; op-count budget
+verified; **G4-B2-B unblocked** (the post-optimization budget is verified). **Redis
+p99 / wall-clock burst behavior remains governed by the documented local/manual
+runbook (`docs/reference/govsec-perf-budget.md` §6/§9) and is NOT asserted as
+CI-closed.** No CI p99/timing assertions are added.
+
+**GAP-O7 remains open** — working-set route p99 under adversarial volume is not
+solved and not closed by D3.
+
+**G4-B2-B is unblocked but NOT implemented here** — it remains a separate future
+phase. No production swarm counter, `swarm:op` keys, gateway `setMultiplier` call,
+or multiplier / backpressure / ip_whitelist change is made.
+
+**Deferrals preserved.** D2-B (`getMultiplier` optimization) deferred + co-designed
+with G4-B2-B; D2-C (ip_whitelist / `getOrgSettingsOrDefaults` DB read) deferred to
+GOVSEC.7; G4-C (privileged-route throttle) separate, tied to GOVSEC.5 coordination;
+GOVSEC.5 / GOVSEC.7 untouched.
+
+**No ADR-0002 amendment** (no audit-architecture change). No production / test /
+schema / dependency / package / lockfile / CI / Elixir / `gateway.middleware.ts` /
+CLAUDE.md / README change.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
