@@ -977,6 +977,44 @@ by D1's gateway op-budget.
 
 **No ADR-0002 amendment** (no audit-architecture change; D1 is test + docs only).
 
+## GOVSEC.4 G4-D-D2-A Implementation Note — Redis `hit` Hot-Path Optimization (2026-05-21)
+
+**D2 is split.** **D2-A** (this commit) optimizes **only** `RedisRateLimitStore.hit`.
+**D2-B** (`getMultiplier`) and **D2-C** (the authenticated STEP-1
+`getOrgSettingsOrDefaults` ip_whitelist DB read) are **deferred**: D2-B is
+co-designed with **G4-B2-B** (the swarm counter) because both touch the multiplier
+key space, and today only the Loop-5 `read_content` path sets a multiplier;
+D2-C moves to **GOVSEC.7** (cache staleness / multi-instance / control-order risk).
+
+**What changed.** `hit` is now a **single atomic Lua `EVAL`** (`HIT_LUA` in
+`apps/api/src/rate-limit.ts`): `INCR` + conditional first-hit `EXPIRE` + `TTL`,
+returning `{count, ttl}` → **1 round-trip** (down from the ~2-3 of the prior
+non-pipelined `INCR` + first-hit `EXPIRE` + every-hit `TTL`). Lua is used rather
+than pipeline/MULTI because the `EXPIRE` is **conditional on the `INCR` result**
+(`if c == 1`), which a single pipeline cannot express; an unconditional pipelined
+`EXPIRE` would slide the window on every hit.
+
+**Latent-race fix.** Atomicity also removes a real bug in the prior form: a crash
+between the separate `INCR` and the first-hit `EXPIRE` could orphan a counter with
+**no TTL** — a permanent block for that key. The EVAL makes INCR + first-hit
+EXPIRE + TTL indivisible.
+
+**Behavior preserved.** `count`, `ttl_seconds` (same `> 0 ? ttl : ttlSeconds`
+fallback so the 429 `Retry-After` is unchanged), and error propagation (no new
+fail-open / fail-closed / retry) are identical. `MemoryRateLimitStore`,
+`setMultiplier`, `getMultiplier`, and `reset` are **untouched**, so the test
+environment (`MemoryRateLimitStore`) and the G4-D-D1 op-count contract
+(`gateway-perf-budget.test.ts` — the gateway still calls `hit` exactly once)
+stay green unchanged. NEW unit `tests/unit/rate-limit.test.ts` pins the EVAL
+contract with a hand-rolled fake ioredis client (no real Redis, no timing/p99).
+
+**Closure status.** **GAP-O2 closure remains pending D3** (post-optimization
+verification). **GAP-O7** (working-set route p99) is **not** closed here.
+**G4-B2-B** still lands after D3.
+
+**No ADR-0002 amendment** (no audit-architecture change). No schema / dependency /
+package / lockfile / CI / Elixir / `gateway.middleware.ts` change.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

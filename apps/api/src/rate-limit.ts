@@ -123,12 +123,27 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
 }
 
+// GOVSEC.4 G4-D-D2-A: the per-hit counter as ONE atomic Redis round-trip.
+// INCR + (first-hit only) EXPIRE + TTL, returning {count, ttl}. Lua is used
+// rather than pipeline/MULTI because the EXPIRE is conditional on the INCR
+// result, which a single pipeline cannot express. Atomicity also fixes a latent
+// risk in the prior 3-call form: a crash between INCR and the separate EXPIRE on
+// the first hit could orphan a counter with no TTL (a permanent block for that
+// key). KEYS[1] = the prefixed rate-limit key; ARGV[1] = the window TTL seconds.
+const HIT_LUA = `
+local c = redis.call('INCR', KEYS[1])
+if c == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local t = redis.call('TTL', KEYS[1])
+return { c, t }
+`;
+
 // WHAT: A RateLimitStore backed by a real ioredis client.
 // INPUT: An ioredis client + an optional key prefix.
 // OUTPUT: A RateLimitStore instance.
-// WHY: Production needs a shared counter across processes. INCR
-//      followed by EXPIRE on the first hit gives an atomic-enough
-//      fixed-window counter for our needs.
+// WHY: Production needs a shared counter across processes. A single atomic
+//      EVAL (HIT_LUA) does INCR + first-hit EXPIRE + TTL in one round-trip.
 export class RedisRateLimitStore implements RateLimitStore {
   private readonly keyPrefix: string;
   private readonly multPrefix: string;
@@ -143,11 +158,18 @@ export class RedisRateLimitStore implements RateLimitStore {
 
   async hit(key: string, ttlSeconds: number): Promise<RateLimitHit> {
     const k = this.keyPrefix + key;
-    const count = await this.client.incr(k);
-    if (count === 1) {
-      await this.client.expire(k, ttlSeconds);
-    }
-    const ttl = await this.client.ttl(k);
+    // Single atomic round-trip (GOVSEC.4 G4-D-D2-A): INCR + conditional first-hit
+    // EXPIRE + TTL via HIT_LUA. Errors propagate as before (no new fail-open /
+    // fail-closed / retry behavior). ttl_seconds keeps the same > 0 fallback so
+    // the 429 Retry-After is unchanged.
+    const result = (await this.client.eval(
+      HIT_LUA,
+      1,
+      k,
+      String(ttlSeconds),
+    )) as [number | string, number | string];
+    const count = Number(result[0]);
+    const ttl = Number(result[1]);
     return {
       count,
       ttl_seconds: ttl > 0 ? ttl : ttlSeconds,

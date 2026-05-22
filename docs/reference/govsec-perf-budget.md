@@ -37,11 +37,21 @@ is documented here (a D2 optimization target), not asserted via the store wrappe
 
 ## 4. Current Redis round-trip baseline (`RedisRateLimitStore`)
 
-`hit(key, ttl)` is **not pipelined**:
+**Pre-D2-A baseline.** `hit(key, ttl)` was **not pipelined**:
 - `INCR key`
 - `EXPIRE key ttl` (first hit only, when `count === 1`)
 - `TTL key` (**every** hit)
 → **~2-3 round-trips per `hit`.**
+
+**G4-D-D2-A (landed).** `hit` is now a **single atomic Lua `EVAL`** (`HIT_LUA`:
+`INCR` + conditional first-hit `EXPIRE` + `TTL`, returning `{count, ttl}`) →
+**1 round-trip** (down from ~2-3). The `TTL` is now inside the same EVAL, so it
+is no longer a separate round-trip. Atomicity also removes a latent race: a crash
+between the old separate `INCR` and the first-hit `EXPIRE` could orphan a no-TTL
+key (a permanent block for that key); the EVAL makes INCR + first-hit EXPIRE + TTL
+indivisible. `count` / `ttl_seconds` (same `> 0` fallback) / the 429 Retry-After
+are unchanged. `getMultiplier` (D2-B) and the ip_whitelist DB read (D2-C) are
+**unchanged at D2-A**.
 
 `getMultiplier(key)` = `GET mult:key` → **~1 round-trip** (returns `1.0` when
 absent — fires even when no multiplier is active).
@@ -50,19 +60,24 @@ absent — fires even when no multiplier is active).
 hot path).
 
 **Governed-request estimated Redis baseline ≈ 3-4 round-trips** (+ the
-authenticated `getOrgSettingsOrDefaults` DB read). A future G4-B2-B swarm counter
-would add **another** `hit`-style counter on top — which is exactly why it is
-gated on this budget.
+authenticated `getOrgSettingsOrDefaults` DB read). **Post-D2-A: `hit` = 1 →
+≈ 2 Redis round-trips (1 `hit` EVAL + 1 `getMultiplier` GET) + the DB read.** A
+future G4-B2-B swarm counter would add **another** `hit`-style counter on top —
+which is exactly why it is gated on this budget.
 
-## 5. D2 optimization targets (deferred — measure first)
+## 5. D2 optimization targets
 
-- Pipeline / Lua `RedisRateLimitStore.hit` (`INCR` + conditional `EXPIRE` + `TTL`)
-  into **one** round-trip.
-- Avoid the unconditional `TTL` round-trip where the TTL can be derived.
-- Evaluate skipping/caching `getMultiplier` `GET` **without** breaking the Loop-5
-  `read_content` backpressure path.
-- Cache/defer the authenticated STEP-1 `getOrgSettingsOrDefaults` ip_whitelist DB
-  read **without** weakening STEP-1 semantics.
+- ~~Pipeline / Lua `RedisRateLimitStore.hit`~~ **— LANDED at G4-D-D2-A** (single
+  atomic `EVAL`: `INCR` + conditional `EXPIRE` + `TTL` in **one** round-trip; also
+  closes the no-TTL orphan-key race). Verification = D3.
+- ~~Avoid the unconditional `TTL` round-trip~~ **— subsumed by D2-A** (the `TTL`
+  is now inside the single EVAL, not a separate round-trip).
+- **D2-B (deferred):** evaluate skipping/caching `getMultiplier` `GET` **without**
+  breaking the Loop-5 `read_content` backpressure path. Co-designed with
+  G4-B2-B (the swarm counter), since both touch the multiplier key space.
+- **D2-C (deferred → GOVSEC.7):** cache/defer the authenticated STEP-1
+  `getOrgSettingsOrDefaults` ip_whitelist DB read **without** weakening STEP-1
+  semantics (cache staleness / multi-instance / control-order risk).
 - Keep the health path zero-store.
 
 ## 6. Local Redis p99 benchmark runbook (manual; NOT CI)

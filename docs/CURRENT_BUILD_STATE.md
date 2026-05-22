@@ -1439,6 +1439,52 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-D-D2-A LANDED — Redis `hit` Hot-Path Optimization (single atomic Lua `EVAL`) (GAP-O2) (2026-05-21)
+
+**Status:** GOVSEC.4 G4-D-D2-A `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing —
+production code + test + docs (1 MOD production + 1 NEW unit test + 5 MOD docs =
+7 files) per Founder Q-GOVSEC4D-D2 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D2A-REDIS-HIT-OPTIMIZATION-EXECUTE-VERIFY-AUTH]`.
+
+- **D2 split.** D2-A = `RedisRateLimitStore.hit` only; **D2-B** (`getMultiplier`)
+  deferred (co-designed with G4-B2-B, the swarm counter); **D2-C** (ip_whitelist
+  DB read) deferred → GOVSEC.7.
+- **Optimization.** `hit` is now a **single atomic Lua `EVAL`** (`HIT_LUA`: `INCR`
+  + conditional first-hit `EXPIRE` + `TTL`, returning `{count, ttl}`) → **1
+  round-trip** (down from ~2-3, not pipelined). Lua over pipeline/MULTI because the
+  `EXPIRE` is conditional on the `INCR` result, which a single pipeline cannot
+  express.
+- **Latent-race fix.** A crash between the old separate `INCR` and the first-hit
+  `EXPIRE` could orphan a no-TTL key (a permanent block for that key); the EVAL
+  makes INCR + first-hit EXPIRE + TTL indivisible.
+- **Behavior unchanged.** `count` / `ttl_seconds` (same `> 0` fallback) / the 429
+  Retry-After are identical; errors propagate as before (no new fail-open /
+  fail-closed / retry). `MemoryRateLimitStore` / `setMultiplier` / `getMultiplier`
+  / `reset` **untouched**.
+- **Test.** NEW `tests/unit/rate-limit.test.ts` (hand-rolled fake ioredis client;
+  no real Redis, no timing/p99): exactly one `.eval` per `hit`; no separate
+  `incr`/`expire`/`ttl`; script has INCR + conditional EXPIRE + TTL; parses
+  `[count, ttl]` → `{count, ttl_seconds}` with the `<= 0` fallback; error
+  propagation; `getMultiplier`/`setMultiplier` still GET / SET-EX with no `eval`.
+  The G4-D-D1 `gateway-perf-budget.test.ts` op-count contract stays green
+  unchanged (the gateway still calls `hit` once).
+- **No** schema / dependency / package / lockfile / CI / Elixir / audit-architecture
+  change; **no** `gateway.middleware.ts` change; **no ADR-0002 amendment**.
+- **GAP-O2 closure still pending D3** (post-optimization verification). **GAP-O7**
+  (working-set route p99) is **NOT closed here**.
+- **G4-B2-B remains after D3; D2-B / D2-C / G4-C / GOVSEC.5 / GOVSEC.7 untouched.**
+
+**Substrate sites (7)**: MOD `apps/api/src/rate-limit.ts` + NEW
+`tests/unit/rate-limit.test.ts` + MOD `docs/reference/govsec-perf-budget.md` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D2A-REDIS-HIT-OPTIMIZATION-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
