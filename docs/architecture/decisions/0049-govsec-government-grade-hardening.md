@@ -944,6 +944,39 @@ when the production counter lands.
 perf/hot-key (GAP-O2/O7); G4-C owns privileged-route throttle (GAP-B4) with
 GOVSEC.5. GOVSEC.5/7 untouched.
 
+## GOVSEC.4 G4-D-D1 Implementation Note — Gateway Perf Op-Count Baseline (2026-05-21)
+
+GOVSEC.4 G4-D (gateway perf / hot-key hardening, GAP-O2 + GAP-O7) is **split**:
+**D1** = op-count baseline + p99 runbook + docs (this commit; test + docs only);
+**D2** = hot-path optimization; **D3** = post-optimization verification. G4-B2-B
+(the swarm counter) lands **after D3**.
+
+**Measure-first finding (RULE 13).** **CI has no Redis service, and the test
+environment uses `MemoryRateLimitStore`** (`makeDefaultRateLimitStore` →
+memory when `NODE_ENV=test`). So the real Redis `INCR`/hot-key behavior — the
+core GAP-O2 concern — is **not measurable in CI**. D1 therefore lands a
+**deterministic op-count contract** (CI-gated) + a **local Redis p99 runbook**
+(`docs/reference/govsec-perf-budget.md`, manual). No CI timing/p99 assertions.
+
+**Documented baseline.** `RedisRateLimitStore.hit` is **not pipelined**: `INCR` +
+(first-hit) `EXPIRE` + (every-hit) `TTL` ≈ **2-3 round-trips**; `getMultiplier`
+issues a `GET` even when no multiplier is active ≈ 1 round-trip; so a governed
+request ≈ **3-4 Redis round-trips**, plus the authenticated STEP-1
+`getOrgSettingsOrDefaults` ip_whitelist **DB read**. The op-count contract pins
+the per-request `store.*` call budget (health 0; governed 1 `hit` + 1
+`getMultiplier`; 429 adds no store calls).
+
+**D2 owns optimization** (pipeline `hit`; avoid the unconditional `TTL`;
+conditional/cached `getMultiplier` without breaking Loop-5 read_content
+backpressure; cache/defer the ip_whitelist DB read). **D3 owns verification.**
+**G4-B2-B waits until after D3** — a swarm counter must not stack a 3rd Redis op
+on an un-optimized hot path. **Operation-global swarm counter rejected**;
+**hashed-IP-cluster** preferred; final cluster count + thresholds after G4-D.
+**GAP-O7** (working-set route p99 under volume) is a focused follow-on, not closed
+by D1's gateway op-budget.
+
+**No ADR-0002 amendment** (no audit-architecture change; D1 is test + docs only).
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

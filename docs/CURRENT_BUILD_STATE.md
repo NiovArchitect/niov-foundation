@@ -1400,6 +1400,45 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.4 G4-D-D1 LANDED — Gateway Perf Op-Count Baseline + p99 Runbook (GAP-O2/O7) (2026-05-21)
+
+**Status:** GOVSEC.4 G4-D-D1 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — test +
+docs only (1 NEW test + 1 NEW runbook + 4 docs = 6 files) per Founder
+Q-GOVSEC4D-α α-5 + β-3/β-4 + γ-2/γ-3 + δ-1 + ε-3 + ζ-1/ζ-2 + η-3 LOCKS at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D1-PERF-BASELINE-EXECUTE-VERIFY-AUTH]`.
+
+- **Measure-first.** G4-D split: D1 = op-count baseline + p99 runbook + docs; D2 =
+  optimization; D3 = post-optimization verification; G4-B2-B after D3.
+- **No production code.** No gateway.middleware.ts / rate-limit.ts / redis.ts /
+  feedback.service.ts / audit.ts change; no auth/schema/dependency/package/
+  lockfile/CI change; no optimization.
+- **CI cannot measure Redis** (no Redis service; tests use `MemoryRateLimitStore`)
+  → CI gates a **deterministic op-count contract**; real Redis p99 is a
+  **local/manual runbook**.
+- **Op-count contract** (`tests/integration/gateway-perf-budget.test.ts`, via a
+  test-only `CountingRateLimitStore`): health = **0** store calls; unauth
+  governed / fallback = **1 hit + 1 getMultiplier + 0 setMultiplier**;
+  authenticated governed = same store budget + the documented STEP-1 ip_whitelist
+  `getOrgSettingsOrDefaults` **DB read**; 429-first-breach adds **no extra store
+  calls** + **0 setMultiplier**. No timing/p99 in CI.
+- **Runbook** (`docs/reference/govsec-perf-budget.md`): Redis round-trip baseline
+  (`hit` = INCR + first-EXPIRE + TTL, **not pipelined**, ~2-3 round-trips;
+  `getMultiplier` GET; ~3-4 round-trips/governed req), the D2 optimization
+  targets, the local p99 procedure, privacy constraints, and G4-B2-B gating.
+- **GAP-O2 closure pending D2/D3.** **GAP-O7** (working-set route p99) is a focused
+  follow-on, **NOT closed by D1**.
+- **G4-B2-B blocked until D3; G4-C / GOVSEC.5 / GOVSEC.7 remain separate.**
+
+**Substrate sites (6)**: NEW `tests/integration/gateway-perf-budget.test.ts` + NEW
+`docs/reference/govsec-perf-budget.md` + MOD `docs/reference/govsec-control-matrix.md`
++ MOD `docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` +
+MOD `docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-G4D-D1-PERF-BASELINE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
