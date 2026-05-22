@@ -1380,6 +1380,37 @@ untouched. No code beyond the gateway data-table; no schema / audit-literal /
 ADR-0002 change. Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-ORG-ADMIN-THROTTLE-EXECUTE-VERIFY-AUTH]`.
 
+## GOVSEC.5 GAP-K2 Least-Privilege Capability Review Note — GAP-K2 documented (2026-05-22)
+
+**LANDED 2026-05-22 (docs-only).** GAP-K2 (least-privilege capability review) is a
+**policy-runbook** gap whose closure criterion is "least-privilege review
+documented." That review record is now landed at
+`docs/reference/govsec-least-privilege-review.md` and **GAP-K2 is CLOSED /
+documented**. The review inventories the TAR capability model (8 `can_*` flags +
+`clearance_ceiling`), the `requireAdminCapability` two-tier admin model
+(`can_admin_niov` NIOV-platform / `can_admin_org` org-tenant), the
+route-to-capability mapping, and the least-privilege posture of the 4
+PRIVILEGED_ENDPOINTS + break-glass + org-admin surfaces + clearance_ceiling.
+
+**Finding: no immediate code change required.** No route grants more authority
+than its action needs once layered defense-in-depth is accounted for (dual-control
++ GAP-C1 self-approval guard + break-glass time-box/single-use/two-person-review +
+`privileged`/`admin_reset` 5/min + `admin` 60/min throttle + default-deny
+capabilities + RULE 0 AI ceilings + ADR-0002 append-only audit). The model is
+coarse (two admin tiers) but defensible. **Forward-substrate only (NOT
+implemented):** a future Founder-authorized ADR + code phase could split
+`can_admin_org` into narrower org sub-capabilities and/or per-action capability
+tokens — a Sev Low / Like Low enhancement, not a GAP-K2 closure blocker.
+
+**GOVSEC.5 remains OPEN.** With GAP-C1 (resolved) + GAP-K1 (CLOSED) + the org-admin
+route-set throttle (CLOSED) + GAP-K2 (documented) all landed, GOVSEC.5 has no
+remaining open gap, but its OPEN→CLOSED flip is **not** performed here — it is a
+separate Founder-authorized GOVSEC.5 closure cascade that also reconciles the
+§closure-criteria narrow-checklist-vs-broader-phase-scope drift surfaced at BG.3.
+No code / schema / audit-literal / ADR-0002 change. GAP-O7 remains open; D2-C /
+GOVSEC.7 deferred. Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-GAP-K2-LEAST-PRIVILEGE-EXECUTE-VERIFY-AUTH]`.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

@@ -1995,6 +1995,49 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 GAP-K2 Least-Privilege Capability Review LANDED — GAP-K2 documented (2026-05-22)
+
+**Status:** GOVSEC.5 GAP-K2 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` docs-only
+policy-runbook review record per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-GAP-K2-LEAST-PRIVILEGE-EXECUTE-VERIFY-AUTH]`.
+
+**GAP-K2 is CLOSED / documented. GOVSEC.5 remains OPEN — closure is the next
+separate Founder-authorized cascade.**
+
+- **Review record (NEW `docs/reference/govsec-least-privilege-review.md`)**
+  satisfies the matrix closure criterion ("least-privilege review documented"):
+  capability inventory (8 TAR `can_*` flags + `clearance_ceiling`), the
+  `requireAdminCapability` two-tier admin model (`can_admin_niov` /
+  `can_admin_org`), route-to-capability mapping, and least-privilege assessment
+  of the 4 PRIVILEGED_ENDPOINTS + break-glass + org-admin surfaces + clearance.
+- **Finding:** no immediate least-privilege violation requiring code — the model
+  is coarse (two admin tiers) but defensible under layered defense-in-depth
+  (dual-control + GAP-C1 self-approval guard + break-glass time-box/single-use/
+  two-person-review + `privileged` 5/min + `admin_reset` 5/min + `admin` 60/min
+  throttle + default-deny capabilities + RULE 0 AI ceilings + ADR-0002 audit).
+- **Forward-substrate (NOT implemented):** a future Founder-authorized ADR + code
+  phase could split `can_admin_org` into narrower org sub-capabilities — Sev Low
+  / Like Low enhancement, not a GAP-K2 closure blocker.
+- **GOVSEC.5 status:** OPEN. With GAP-C1 + GAP-K1 + org-admin throttle + GAP-K2
+  all landed, GOVSEC.5 has no remaining open gap; its OPEN→CLOSED flip + the
+  ADR-0049 narrow-checklist-vs-broader-scope drift reconciliation are a **separate
+  closure cascade**, not performed here.
+- **Next clean move:** `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-CLOSURE-HAWKSEYE-QLOCK]`.
+- GAP-O7 remains open; D2-C / ip_whitelist / `getOrgSettingsOrDefaults` deferred
+  to GOVSEC.7; GOVSEC.7 untouched; no new arc.
+
+**Docs-only — no code / schema / audit.ts / test / production change; no new audit
+literal; no ADR-0002; no ADR-0050.** Substrate sites (5): NEW
+`docs/reference/govsec-least-privilege-review.md` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD
+`docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-GAP-K2-LEAST-PRIVILEGE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`
