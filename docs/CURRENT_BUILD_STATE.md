@@ -1634,6 +1634,58 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 G4-C LANDED — Privileged-Route Throttle (4 dual-control PRIVILEGED_ENDPOINTS routes) (GAP-B4 slice) (2026-05-21)
+
+**Status:** GOVSEC.5 G4-C `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing — code +
+tests + docs (8 files) per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-G4C-PRIVILEGED-ROUTE-THROTTLE-EXECUTE-VERIFY-AUTH]`.
+
+**GAP-B4 throttle slice CLOSED for the 4 dual-control `PRIVILEGED_ENDPOINTS`
+routes.** G4-C is a GOVSEC.4-tail throttle slice coordinated with GOVSEC.5;
+**GOVSEC.5 is NOT closed.**
+
+- **Routes** (method-exact, mirroring `apps/api/src/security/privileged-endpoints.ts`):
+  `PATCH /api/v1/platform/monetization/config`, `POST /api/v1/platform/orgs`,
+  `POST /api/v1/regulator/access-grants`, `POST /api/v1/regulator/access-revocations`.
+- **Framing correction:** post-G4-A these were governed by the generous `default`
+  fallback (300/min), not literally unthrottled; G4-C maps them to a strict
+  `privileged` gateway op (**5/min, entity-scoped**, matching the admin_reset posture).
+- **Placement:** gateway data-table only — NEW `DEFAULT_LIMITS.privileged` (5/min) +
+  4 NEW method-exact `OPERATION_RULES` patterns in `gateway.middleware.ts`.
+  `detectOperation` logic, dual-control middleware, `requireDualControl`, admin
+  middleware, auth-admin routes, route preHandlers, and the `privileged-endpoints.ts`
+  registry are **unchanged** — two-person authorization is untouched; the gateway is
+  the pre-auth throttle layer.
+- **Op-count budget UNCHANGED** (these routes already passed through the gateway
+  fallback): passing privileged request = 2 hit + 1 getMultiplier + 0 setMultiplier;
+  per-key 429 = 1 hit; swarm 429 = 2 hit; the B2-B swarm counter still runs after the
+  per-key check.
+- **Audit:** reuses the G4-B1 `RATE_LIMITED` first-breach audit + logger; **no new
+  audit literal** (no `PRIVILEGED_RATE_LIMITED`, no `SWARM_DETECTED`); **no ADR-0002
+  amendment**.
+- **Tests:** NEW `tests/integration/gateway-privileged-throttle.test.ts` (each of the
+  4 routes 429s at the strict privileged limit; an ordinary unmapped route at the
+  same volume does NOT 429 — distinct classification; method-exactness); MOD
+  `tests/integration/gateway-perf-budget.test.ts` (privileged op-count case = 2 hit +
+  1 getMultiplier + 0 setMultiplier + a `privileged` override).
+- **GOVSEC.5 NOT closed** — broader org-admin `requireAdminCapability` route set +
+  dual-control self-approval resolution + break-glass / time-boxed audit remain open
+  follow-ons.
+- **GAP-O7 remains open**; no CI p99/timing assertions; D2-C / ip_whitelist /
+  `getOrgSettingsOrDefaults` untouched (→ GOVSEC.7); GOVSEC.7 untouched.
+
+**Substrate sites (8):** MOD `apps/api/src/middleware/gateway.middleware.ts` + MOD
+`tests/integration/gateway-perf-budget.test.ts` + NEW
+`tests/integration/gateway-privileged-throttle.test.ts` + MOD
+`docs/reference/govsec-control-matrix.md` + MOD `docs/reference/govsec-perf-budget.md`
++ MOD `docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` +
+MOD `docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-G4C-PRIVILEGED-ROUTE-THROTTLE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

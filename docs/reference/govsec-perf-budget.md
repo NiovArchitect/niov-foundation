@@ -256,3 +256,34 @@ is chosen; Fork A (producer-scoped skipping) is rejected by default.**
   optimization-verified under the documented local/manual p99 posture; **GAP-O7
   remains open**; no CI p99/timing assertions. G4-C remains separate (tied to
   GOVSEC.5); GOVSEC.5 / GOVSEC.7 untouched.
+
+## 12. GOVSEC.5 G4-C privileged-route throttle (GAP-B4 slice) (2026-05-21)
+
+**G4-C maps the 4 dual-control `PRIVILEGED_ENDPOINTS` routes to a strict
+`privileged` gateway operation (5/min, entity-scoped) instead of the generous
+`default` fallback (300/min). It is a GOVSEC.4-tail throttle slice coordinated with
+GOVSEC.5; GOVSEC.5 is NOT closed.**
+
+- **Routes** (method-exact, mirroring `apps/api/src/security/privileged-endpoints.ts`):
+  `PATCH /api/v1/platform/monetization/config`, `POST /api/v1/platform/orgs`,
+  `POST /api/v1/regulator/access-grants`, `POST /api/v1/regulator/access-revocations`.
+- **Framing correction:** post-G4-A these were never literally unthrottled — G4-A
+  governed them at the `default` fallback (300/min). G4-C tightens them to the
+  `privileged` limit (5/min).
+- **Placement:** gateway data-table only (`OPERATION_RULES` + `DEFAULT_LIMITS` in
+  `gateway.middleware.ts`). `detectOperation` logic, dual-control middleware,
+  `requireDualControl`, admin middleware, auth-admin routes, and route preHandlers
+  are unchanged — this is the pre-auth gateway throttle layer; two-person
+  authorization is untouched.
+- **Op-count budget UNCHANGED:** these routes already passed through the gateway
+  fallback (1 hit + 1 getMultiplier + swarm hit). G4-C changes only the operation
+  classification, bucket key (`privileged:…` vs `default:…`), and limit — not the
+  store-call count. Passing privileged request = **2 hit + 1 getMultiplier + 0
+  setMultiplier** (per-key 429 = 1 hit; swarm 429 = 2 hit). The B2-B swarm counter
+  still runs after the per-key check.
+- **Audit:** reuses the G4-B1 `RATE_LIMITED` first-breach audit + logger; **no new audit literal** (no `PRIVILEGED_RATE_LIMITED`), **no ADR-0002 amendment**.
+- **Scope held:** the broader org-admin `requireAdminCapability` route set is a
+  **GOVSEC.5 follow-on**; GOVSEC.5 broader controls (dual-control self-approval
+  resolution + break-glass / time-boxed audit) remain open. GAP-O7 remains open; no
+  CI p99/timing assertions; D2-C / ip_whitelist / `getOrgSettingsOrDefaults`
+  untouched (→ GOVSEC.7); GOVSEC.7 untouched.

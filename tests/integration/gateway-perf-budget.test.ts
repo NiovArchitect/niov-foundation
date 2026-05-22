@@ -78,6 +78,9 @@ beforeAll(async () => {
     rateLimitOverrides: {
       login: { perMinute: 2, scope: "ip" },
       default: { perMinute: 2, scope: "entity" },
+      // GOVSEC.5 G4-C: a privileged-route override so the op-count case below is
+      // deterministic. The op count is the same as any governed request.
+      privileged: { perMinute: 2, scope: "entity" },
     },
   });
 });
@@ -165,6 +168,25 @@ describe("GOVSEC.4 G4-D-D1 gateway op-count perf budget (GAP-O2; CI-safe, no tim
     });
     expect(r.statusCode).toBe(429);
     expect(counting.hitCalls).toBe(1);
+    expect(counting.getMultiplierCalls).toBe(1);
+    expect(counting.setMultiplierCalls).toBe(0);
+  });
+
+  it("GOVSEC.5 G4-C privileged route (PATCH /platform/monetization/config) = same store budget (2 hit: per-key + swarm; 1 getMultiplier; 0 setMultiplier)", async () => {
+    // The gateway onRequest hook classifies + counts BEFORE the route handler and
+    // before requireDualControl, so the store budget is observable regardless of the
+    // downstream dual-control outcome. A privileged route incurs the same op-count as
+    // any governed request -- only its classification (privileged), bucket, and limit
+    // differ from the default fallback.
+    const r = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/platform/monetization/config",
+      remoteAddress: "10.210.0.6",
+    });
+    // gateway throttle ran (and passed at count 1); downstream may reject, but the
+    // store budget is the gateway's: 2 hit (per-key + swarm) + 1 getMultiplier.
+    expect(r.statusCode).not.toBe(200); // dual-control / auth rejects downstream
+    expect(counting.hitCalls).toBe(2);
     expect(counting.getMultiplierCalls).toBe(1);
     expect(counting.setMultiplierCalls).toBe(0);
   });

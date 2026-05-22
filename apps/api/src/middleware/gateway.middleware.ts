@@ -38,6 +38,14 @@ export const DEFAULT_LIMITS: Record<string, RateLimitPolicy> = {
   // -> very restrictive.
   refresh: { perMinute: 20, scope: "entity" },
   admin_reset: { perMinute: 5, scope: "entity" },
+  // GOVSEC.5 G4-C / GAP-B4: the 4 dual-control PRIVILEGED_ENDPOINTS routes
+  // (platform monetization-config, platform org-creation, regulator access
+  // grant/revoke -- see apps/api/src/security/privileged-endpoints.ts). These were
+  // governed only by the generous `default` fallback (300/min) after G4-A; G4-C
+  // gives them a strict privileged limit matching the admin_reset posture. The
+  // dual-control (two-person) authorization is unchanged -- this is the
+  // pre-auth gateway throttle layer only.
+  privileged: { perMinute: 5, scope: "entity" },
   negotiate: { perMinute: 100, scope: "entity" },
   read_metadata: { perMinute: 200, scope: "entity" },
   read_content: { perMinute: 50, scope: "entity" },
@@ -156,6 +164,32 @@ const OPERATION_RULES: OperationRule[] = [
     method: "DELETE",
     pattern: /^\/api\/v1\/cosmp\/share\/[^/]+$/,
     operation: "share",
+  },
+  // GOVSEC.5 G4-C / GAP-B4: the 4 dual-control PRIVILEGED_ENDPOINTS routes
+  // (apps/api/src/security/privileged-endpoints.ts). Method-exact, mirroring the
+  // registry, so a different method on the same path is NOT classified privileged.
+  // These map to the strict `privileged` policy (5/min) instead of the generous
+  // `default` fallback (300/min). Dual-control verification (requireDualControl) is
+  // unchanged -- this is gateway throttle classification only.
+  {
+    method: "PATCH",
+    pattern: /^\/api\/v1\/platform\/monetization\/config$/,
+    operation: "privileged",
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/platform\/orgs$/,
+    operation: "privileged",
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/regulator\/access-grants$/,
+    operation: "privileged",
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/regulator\/access-revocations$/,
+    operation: "privileged",
   },
 ];
 

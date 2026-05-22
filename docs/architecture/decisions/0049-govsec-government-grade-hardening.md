@@ -1154,6 +1154,50 @@ remains optimization-verified under the documented local/manual p99 posture;
 **GAP-O7 remains open**; G4-C remains separate (tied to GOVSEC.5); GOVSEC.5 /
 GOVSEC.7 untouched. **No ADR-0002 amendment.**
 
+## GOVSEC.5 G4-C Implementation Note — Privileged-Route Throttle (GAP-B4 slice) (2026-05-21)
+
+**G4-C maps the 4 dual-control `PRIVILEGED_ENDPOINTS` routes to a strict
+`privileged` gateway operation (5/min, entity-scoped) instead of the generous
+`default` fallback (300/min). It is a GOVSEC.4-tail throttle slice coordinated with
+GOVSEC.5; GOVSEC.5 is NOT closed.**
+
+**Routes** (method-exact, mirroring `apps/api/src/security/privileged-endpoints.ts`):
+`PATCH /api/v1/platform/monetization/config`, `POST /api/v1/platform/orgs`,
+`POST /api/v1/regulator/access-grants`, `POST /api/v1/regulator/access-revocations`.
+
+**Framing correction (RULE 13).** The GAP-B4 row historically said "privileged
+endpoints unthrottled." Post-G4-A that was inaccurate — G4-A governed every route,
+so these routes were on the generous `default` fallback (300/min). The real residual
+was the absence of a *stricter* privileged limit. G4-C closes that for the
+dual-control set by tightening them to 5/min (the admin_reset posture).
+
+**Placement.** Gateway data-table only: a NEW `DEFAULT_LIMITS.privileged` entry
+(5/min, entity-scoped) + 4 NEW method-exact `OPERATION_RULES` patterns in
+`gateway.middleware.ts`. `detectOperation` *logic* is unchanged (only its data
+table). The dual-control middleware (`requireDualControl`), the admin middleware,
+the auth-admin routes, the platform/regulator route handlers, the route preHandlers,
+and the `PRIVILEGED_ENDPOINTS` registry are all untouched — the gateway is the
+pre-auth throttle layer; two-person authorization is unaffected.
+
+**Op-count budget unchanged.** These routes already passed through the gateway
+fallback (1 `hit` + 1 `getMultiplier` + the B2-B swarm `hit`); G4-C changes only the
+operation classification, the bucket key (`privileged:…` vs `default:…`), and the
+limit — not the store-call count. Passing privileged request = 2 `hit` + 1
+`getMultiplier` + 0 `setMultiplier`; per-key 429 = 1 `hit`; swarm 429 = 2 `hit`. The
+B2-B swarm counter still runs after the per-key check.
+
+**Audit.** Reuses the G4-B1 `RATE_LIMITED` first-breach audit + logger. **No new
+audit literal** (no `PRIVILEGED_RATE_LIMITED`, no `SWARM_DETECTED`); **no ADR-0002
+amendment.**
+
+**Scope held.** **GOVSEC.5 is NOT closed** — the broader org-admin
+`requireAdminCapability` route set, dual-control self-approval resolution, and
+break-glass / time-boxed audit remain open follow-ons. **GAP-O7 remains open** (no
+working-set route p99 closure; no CI p99/timing assertions). `rate-limit.ts` /
+`RedisRateLimitStore` / `HIT_LUA` / `RateLimitStore` interface / `getMultiplier` /
+`setMultiplier` / `feedback.service.ts` / ip_whitelist / `getOrgSettingsOrDefaults`
+(D2-C → GOVSEC.7) / schema / dependencies are untouched. GOVSEC.7 untouched.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
