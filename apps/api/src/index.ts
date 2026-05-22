@@ -404,6 +404,20 @@ export {
 } from "./services/governance/escalation.service.js";
 export type { CreateEscalationInput } from "./services/governance/escalation.service.js";
 
+// break-glass.service.ts re-exports -- GOVSEC.5 break-glass (GAP-K1, ADR-0050)
+// BG.1 substrate. External consumers (tests, sibling packages) reach these via
+// "@niov/api"; the future BG.2 integration (dual-control.middleware.ts / an
+// invoke+review route) will consume them via deep relative imports. BG.1 exports
+// the substrate API only -- NO middleware/route wiring (no live bypass).
+export {
+  createBreakGlassGrant,
+  validateBreakGlassGrant,
+  markBreakGlassUsed,
+  expireBreakGlassGrant,
+  reviewBreakGlassGrant,
+} from "./services/governance/break-glass.service.js";
+export type { CreateBreakGlassInput } from "./services/governance/break-glass.service.js";
+
 export { requireAdminCapability } from "./middleware/admin.middleware.js";
 export type { AdminCapability } from "./middleware/admin.middleware.js";
 

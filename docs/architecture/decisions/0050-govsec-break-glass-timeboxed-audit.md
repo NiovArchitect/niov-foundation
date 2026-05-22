@@ -187,10 +187,26 @@ are LOCKED by Founder authorization at this ADR's landing.
 
 ## Implementation lineage
 
-- **ADR phase (this commit):** docs-only — ADR-0050 Proposed + catalog/back-
+- **ADR phase (`05c334d`):** docs-only — ADR-0050 Proposed + catalog/back-
   citation updates. No code, schema, audit literal, or tests.
-- **EXECUTE phase (future, separately authorized):** schema migration + audit
-  literals + service/route + dual-control integration + tests.
+- **BG.1 — substrate-first (2026-05-22):** LANDED. Prisma `BreakGlassGrant` table
+  (mandatory `valid_until`, `action_type` scope, review fields; db-push,
+  Prisma-only, no migration) + `BreakGlassStatus` enum + the 4 additive
+  `BREAK_GLASS_*` audit literals (no ADR-0002 amendment) + the break-glass service
+  (`break-glass.service.ts`: create/validate/markUsed/expire/review; mandatory
+  justification + future `valid_until`; 4-action `PRIVILEGED_ENDPOINTS` scope;
+  single-use; **reviewer ≠ source** self-review prohibition; per-mutation audit
+  in-tx) + service-level unit tests + the `@niov/api` barrel export. **No
+  middleware/route wiring — NO live bypass.** Database-barrel re-export of the
+  model types and the API-barrel re-export of the service functions were the
+  mandatory central-export surfaces (the latter under a focused barrel-export
+  authorization). The chosen relationship model is **authorized invoke + short
+  time-box + mandatory post-hoc two-person review** (`reviewer ≠ source`).
+- **BG.2 — integration (future, separately authorized):** the invoke/review
+  route + `dual-control.middleware.ts` recognition of a valid grant at the Denied
+  seam (the live bypass) + integration tests (privileged routes proceed under a
+  valid grant; audit completeness; self-approval guard intact).
+- **BG.3 — closure (future):** ADR-0050 Proposed→Accepted + GAP-K1 closed + docs.
 - **GOVSEC.5 closure (future):** when self-approval (done) + break-glass code +
   audit-completeness tests are all landed and verified.
 

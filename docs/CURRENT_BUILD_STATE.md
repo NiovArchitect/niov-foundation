@@ -1784,6 +1784,62 @@ Founder authorization explicit at
 
 ---
 
+#### GOVSEC.5 Break-Glass BG.1 substrate-first LANDED — schema + audit + service (GAP-K1) (2026-05-22)
+
+**Status:** GOVSEC.5 break-glass BG.1 `[GOVSEC-GOVERNMENT-GRADE-HARDENING]` landing —
+schema + audit + service + tests + docs (11 files) per Founder LOCKs at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG1-SUBSTRATE-EXECUTE-VERIFY-AUTH]`
++ the API-barrel-export extension at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG1-API-BARREL-EXPORT-AUTH]`.
+
+**BG.1 builds the break-glass SUBSTRATE without activating any live emergency
+bypass. GAP-K1 remains NOT closed; GOVSEC.5 remains OPEN.**
+
+- **Schema:** NEW Prisma `BreakGlassGrant` model (mirrors `LawfulBasis`: mandatory
+  `valid_until`, `action_type` scope, justification, status, review fields, 4
+  `*_audit_id` columns; `@@map("break_glass_grants")`) + NEW `BreakGlassStatus`
+  enum (ACTIVE/USED/EXPIRED/REVIEWED/REVOKED). **Prisma-only** (no Elixir/Ecto
+  mirror per ADR-0033); **db-push discipline** (ADR-0025; NO migration).
+- **Audit:** 4 additive append-only literals (`BREAK_GLASS_INVOKED`/`USED`/
+  `EXPIRED`/`REVIEWED`) in `audit.ts` union + `AUDIT_EVENT_TYPE_VALUES`; **no
+  ADR-0002 amendment**.
+- **Barrels:** `packages/database/src/index.ts` re-exports `BreakGlassGrant` +
+  `BreakGlassStatus` (model-type central export); `apps/api/src/index.ts` narrow
+  re-export of the 5 service fns + `CreateBreakGlassInput` (the documented
+  `@niov/api` import convention for tests/sibling packages).
+- **Service** (NEW `break-glass.service.ts`): `createBreakGlassGrant` (rejects
+  empty justification / missing+past `valid_until` / out-of-scope action;
+  `BREAK_GLASS_INVOKED` in-tx), `validateBreakGlassGrant` (ACTIVE + in-window +
+  matching source/action; **NOT called by middleware in BG.1**),
+  `markBreakGlassUsed` (single-use ACTIVE→USED), `expireBreakGlassGrant`
+  (ACTIVE→EXPIRED), `reviewBreakGlassGrant` (mandatory two-person; **reviewer ≠
+  source** else `BREAK_GLASS_SELF_REVIEW_FORBIDDEN`; →REVIEWED). Per-mutation
+  audit in-tx (ADR-0002 + RULE 4).
+- **Tests:** NEW `tests/unit/break-glass.test.ts` (mandatory `valid_until`,
+  justification, 4-action scope, active validation, expired/mismatch null, 4
+  audit emissions, self-review rejection, distinct-reviewer success).
+- **NO middleware/route integration; NO live bypass.** `dual-control.middleware.ts`
+  / `gateway.middleware.ts` / platform-regulator routes / `escalation.service.ts`
+  unchanged.
+- **GAP-K1 NOT closed** (BG.2 integration + BG.3 closure required). **GOVSEC.5
+  remains OPEN.** GAP-C1 remains resolved; G4-C throttle + G4-B2-B swarm unchanged;
+  org-admin throttle remains follow-on; GAP-O7 remains open; D2-C / ip_whitelist /
+  `getOrgSettingsOrDefaults` deferred to GOVSEC.7.
+
+**Substrate sites (11):** MOD `packages/database/prisma/schema.prisma` + MOD
+`packages/database/src/index.ts` + MOD `packages/database/src/queries/audit.ts` +
+MOD `apps/api/src/index.ts` + NEW
+`apps/api/src/services/governance/break-glass.service.ts` + NEW
+`tests/unit/break-glass.test.ts` + MOD `docs/reference/govsec-control-matrix.md` +
+MOD `docs/reference/section-12-progress.md` + MOD this `CURRENT_BUILD_STATE.md` +
+MOD `docs/architecture/decisions/0050-govsec-break-glass-timeboxed-audit.md` + MOD
+`docs/architecture/decisions/0049-govsec-government-grade-hardening.md`.
+
+Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG1-SUBSTRATE-EXECUTE-VERIFY-AUTH]`.
+
+---
+
 ## CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036): CLOSED 2026-05-15
 
 CAR Sub-box 3 mini-arc CLOSED at sub-phase 7 `[SUB-BOX-3-CLOSURE]`

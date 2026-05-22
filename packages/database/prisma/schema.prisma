@@ -1279,3 +1279,54 @@ model LawfulBasis {
   @@index([created_at])
   @@map("lawful_bases")
 }
+
+// GOVSEC.5 break-glass (GAP-K1, ADR-0050) BG.1 substrate. A time-boxed
+// EMERGENCY GRANT that an authorized actor invokes (with explicit
+// justification) to obtain short-lived access to one of the 4 dual-control
+// PRIVILEGED_ENDPOINTS actions when the normal two-person dual-control cannot
+// complete. Mirrors the LawfulBasis time-boxed pattern: mandatory valid_until
+// (no perpetual grant). source_entity_id / reviewed_by_entity_id are stored as
+// plain UUIDs (no Entity FK relation -- same governance-record posture as
+// LawfulBasis). Prisma-only per ADR-0033 (no Elixir/Ecto mirror; cosmp_router
+// does not touch dual-control/break-glass). BG.1 is substrate-only: this table +
+// the break-glass service exist, but NOTHING wires a live bypass into
+// dual-control.middleware.ts (deferred to BG.2). action_type is the
+// PRIVILEGED_ENDPOINTS actionDescriptor.type scope key. Single-use semantics:
+// status ACTIVE -> USED on consumption; -> EXPIRED on expiry; -> REVIEWED after
+// the mandatory post-hoc two-person review (reviewer != source). REVOKED is
+// reserved for a future explicit-cancel path.
+model BreakGlassGrant {
+  grant_id              String           @id @default(uuid()) @db.Uuid
+  source_entity_id      String           @db.Uuid
+  action_type           String
+  justification         String
+  status                BreakGlassStatus @default(ACTIVE)
+  valid_from            DateTime         @default(now())
+  valid_until           DateTime
+  used_at               DateTime?
+  expired_at            DateTime?
+  reviewed_at           DateTime?
+  reviewed_by_entity_id String?          @db.Uuid
+  invocation_audit_id   String?          @db.Uuid
+  used_audit_id         String?          @db.Uuid
+  expired_audit_id      String?          @db.Uuid
+  reviewed_audit_id     String?          @db.Uuid
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([source_entity_id])
+  @@index([action_type])
+  @@index([status])
+  @@index([valid_until])
+  @@index([created_at])
+  @@map("break_glass_grants")
+}
+
+enum BreakGlassStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  REVIEWED
+  REVOKED
+}

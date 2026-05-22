@@ -1269,6 +1269,28 @@ code + audit-completeness tests land. The remaining GOVSEC.5 follow-on (broader
 org-admin `requireAdminCapability` route-set throttle) is separate. See ADR-0050
 (RULE 14 bidirectional citation).
 
+## GOVSEC.5 Break-Glass BG.1 Substrate-First Implementation Note — GAP-K1 (2026-05-22)
+
+ADR-0050's EXECUTE phase is split **substrate-first** (BG.1) / integration (BG.2) /
+closure (BG.3) to contain blast radius — the GAP-C1 self-approval resolution proved
+dual-control-path changes ripple across the regulator + platform integration test
+files, so the **live emergency bypass is deferred to BG.2**. **BG.1 (LANDED
+2026-05-22)** builds the storage + audit vocabulary + service substrate **with no
+middleware/route wiring**: Prisma `BreakGlassGrant` table + `BreakGlassStatus` enum
+(mirrors `LawfulBasis`; mandatory `valid_until`; Prisma-only, db-push, no migration,
+no Ecto mirror per ADR-0033/ADR-0025); the 4 additive `BREAK_GLASS_*` audit literals
+in `audit.ts` (no ADR-0002 amendment); `break-glass.service.ts`
+(create/validate/markUsed/expire/review, scoped to the 4 dual-control
+`PRIVILEGED_ENDPOINTS` actions, single-use, **reviewer ≠ source** post-hoc two-person
+review, per-mutation audit in-tx); service unit tests; the `@niov/database` +
+`@niov/api` barrel re-exports. **No live bypass exists after BG.1.** GAP-C1 stays
+resolved (break-glass is not self-approval). **GAP-K1 remains NOT closed; GOVSEC.5
+remains OPEN** pending BG.2 (route + middleware Denied-seam recognition + integration
+tests) and BG.3 (ADR-0050 Accepted + GAP-K1 closure). See ADR-0050 §Implementation
+lineage. Founder authorization explicit at
+`[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG1-SUBSTRATE-EXECUTE-VERIFY-AUTH]`
++ `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG1-API-BARREL-EXPORT-AUTH]`.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:

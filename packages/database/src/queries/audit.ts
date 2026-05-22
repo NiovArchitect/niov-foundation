@@ -135,7 +135,24 @@ export type AuditEventType =
   | "CONTEXT_USED_MANIFEST_RECORDED"
   | "PERSONALIZATION_DEGRADED"
   | "CROSS_ENTITY_CONTEXT_REQUESTED"
-  | "PERSONALIZATION_SIGNAL_RECORDED";
+  | "PERSONALIZATION_SIGNAL_RECORDED"
+  // GOVSEC.5 break-glass / time-boxed audit (GAP-K1) per ADR-0050, BG.1
+  // substrate. 4 NEW append-only literals for the emergency-grant lifecycle,
+  // emitted by apps/api/src/services/governance/break-glass.service.ts:
+  // INVOKED (grant created) / USED (grant consumed for a privileged action) /
+  // EXPIRED (grant time-box elapsed) / REVIEWED (mandatory post-hoc two-person
+  // review; reviewer != source). BG.1 is substrate-only -- no middleware/route
+  // wiring -- so BREAK_GLASS_USED is emitted only by the service substrate
+  // (markBreakGlassUsed), NOT from dual-control.middleware.ts (deferred to BG.2).
+  // Append-only per ADR-0042 §Q-γ.1; additive literals require no ADR-0002
+  // amendment (ADR-0002 governs the chain mechanism + BEFORE-DELETE trigger).
+  // SAFE audit metadata: grant_id + action_type (scope) + status + reviewer/
+  // source ids + timestamps; FORBIDDEN (RULE 0): no raw justification leakage
+  // beyond what the grant record already holds, no private content.
+  | "BREAK_GLASS_INVOKED"
+  | "BREAK_GLASS_USED"
+  | "BREAK_GLASS_EXPIRED"
+  | "BREAK_GLASS_REVIEWED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -209,6 +226,12 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "PERSONALIZATION_DEGRADED",
   "CROSS_ENTITY_CONTEXT_REQUESTED",
   "PERSONALIZATION_SIGNAL_RECORDED",
+  // GOVSEC.5 break-glass (GAP-K1, ADR-0050) BG.1. Append-only per Q-γ.1; emitted
+  // by break-glass.service.ts (BG.1 substrate; no middleware wiring until BG.2).
+  "BREAK_GLASS_INVOKED",
+  "BREAK_GLASS_USED",
+  "BREAK_GLASS_EXPIRED",
+  "BREAK_GLASS_REVIEWED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

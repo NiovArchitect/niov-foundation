@@ -196,6 +196,9 @@ export type {
   // CAR Sub-box 3 — REGULATOR + Lawful-Basis (ADR-0036) tables.
   LawfulBasis,
   LawfulBasisType,
+  // GOVSEC.5 break-glass (ADR-0050) BG.1 substrate table.
+  BreakGlassGrant,
+  BreakGlassStatus,
   Prisma,
 } from "@prisma/client";
 
