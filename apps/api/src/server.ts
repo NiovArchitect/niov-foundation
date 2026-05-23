@@ -125,6 +125,54 @@ export interface BuildAppConfig {
   embeddingProvider?: EmbeddingProvider;
 }
 
+// WHAT: The local-development origins the API accepts cross-origin by default.
+// INPUT: None (compile-time constant).
+// OUTPUT: A frozen list of exact dev origins.
+// WHY: Vite dev (otzar-control-tower) defaults to :5173; TanStack/Cloudflare
+//      dev (foundation-command) commonly uses :3000. Exact origins only --
+//      never a wildcard -- so local dev works without weakening prod posture.
+const LOCAL_DEV_CORS_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+] as const;
+
+// WHAT: Assemble the exact-origin CORS allowlist from env + local dev defaults.
+// INPUT: None (reads CONTROL_TOWER_URL + FOUNDATION_COMMAND_URL from env at call).
+// OUTPUT: A deduplicated array of exact origin strings (no wildcards, no regex).
+// WHY: Two sibling frontends (otzar-control-tower + foundation-command) plus
+//      local dev call the API cross-origin. CORS is browser-origin enforcement
+//      only -- it is NEVER authorization (auth stays Bearer + can_admin_niov).
+//      Empty env values are trimmed out; origins are de-duplicated; no `*` and
+//      no suffix/regex match, so CORS can only ever narrow, never broaden.
+function buildCorsAllowedOrigins(): string[] {
+  const candidates = [
+    process.env.CONTROL_TOWER_URL,
+    process.env.FOUNDATION_COMMAND_URL,
+    ...LOCAL_DEV_CORS_ORIGINS,
+  ];
+  const cleaned = candidates
+    .map((origin) => (typeof origin === "string" ? origin.trim() : ""))
+    .filter((origin) => origin.length > 0);
+  return Array.from(new Set(cleaned));
+}
+
+// WHAT: Decide whether a request Origin is permitted by the allowlist.
+// INPUT: The request Origin header (string | undefined) + the exact-origin allowlist.
+// OUTPUT: true if allowed (or absent), false otherwise.
+// WHY: Requests with no Origin (curl, server-to-server, health checks) must not
+//      be blocked by browser-oriented CORS logic, so an absent Origin is allowed.
+//      A present Origin is allowed only on exact membership -- the disallowed
+//      Origin is never reflected back into Access-Control-Allow-Origin.
+function isAllowedCorsOrigin(
+  origin: string | undefined,
+  allowlist: readonly string[],
+): boolean {
+  if (origin === undefined) return true;
+  return allowlist.includes(origin);
+}
+
 // WHAT: Construct a fully wired Fastify instance ready for inject()
 //        or listen().
 // INPUT: An optional BuildAppConfig. Defaults read from env.
@@ -330,11 +378,20 @@ export async function buildApp(
 
   // CORS registered next, still before the gateway hook so preflight
   // OPTIONS responses are not subject to rate limiting and the CORS
-  // plugin's own headers layer on top of helmet baseline.
+  // plugin's own headers layer on top of helmet baseline. The origin is
+  // an EXACT-ORIGIN allowlist (CONTROL_TOWER_URL + FOUNDATION_COMMAND_URL +
+  // local dev) -- not a wildcard. The origin callback reflects only an
+  // allow-listed Origin; a disallowed Origin is never reflected. CORS is
+  // browser-origin enforcement only and never replaces the Bearer +
+  // can_admin_niov authorization that every Console route enforces.
+  const corsAllowedOrigins = buildCorsAllowedOrigins();
   await app.register(cors, {
-    origin: process.env.CONTROL_TOWER_URL ?? "http://localhost:5173",
+    origin: (origin, cb) => {
+      cb(null, isAllowedCorsOrigin(origin ?? undefined, corsAllowedOrigins));
+    },
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
   });
 
   // Gateway hook -- IP whitelist + rate limits run before any
