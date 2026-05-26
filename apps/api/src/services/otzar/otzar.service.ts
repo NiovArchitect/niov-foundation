@@ -117,6 +117,101 @@ export interface CloseConversationSuccess {
   topics: string[];
 }
 
+// WHAT: Inputs for getMyTwin.
+export interface GetMyTwinInput {
+  token: string;
+}
+
+// WHAT: One safe skill-package view for the My Twin contract.
+// INPUT: Used as a value type only.
+// OUTPUT: None.
+// WHY: Friendly name + category ONLY. SkillPackage.capability_flags
+//      (the raw capability envelope) is NEVER projected to the
+//      employee-facing surface.
+export interface MyTwinSkillView {
+  name: string;
+  category: string;
+}
+
+// WHAT: The employee's optional approver identity (the human who
+//        approves this twin's escalations).
+// INPUT: Used as a value type only.
+// OUTPUT: None.
+// WHY: entity_id + display_name ONLY -- no org-hierarchy internals.
+export interface MyTwinApproverView {
+  entity_id: string;
+  display_name: string;
+}
+
+// WHAT: The safe, product-facing projection of the caller's OWN twin.
+// INPUT: Used as a value type only.
+// OUTPUT: None.
+// WHY: Identity + alignment fields only. Deliberately EXCLUDES
+//      AgentTemplate.template_content (the system prompt),
+//      SkillPackage.capability_flags (the raw capability envelope),
+//      permission bridge IDs, and any memory / capsule / vector data.
+export interface MyTwinView {
+  twin_id: string;
+  display_name: string;
+  role_title: string | null;
+  autonomy_mode: string;
+  swarm_enabled: boolean;
+  role_template: string | null;
+  is_admin_twin: boolean;
+  status: string;
+  skills: MyTwinSkillView[];
+  approver: MyTwinApproverView | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// WHAT: Successful getMyTwin return.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: One deterministic primary twin plus multi-twin metadata so a
+//      future UI can expand when an owner has more than one twin.
+export interface MyTwinSuccess {
+  ok: true;
+  twin: MyTwinView;
+  has_multiple_twins: boolean;
+  twin_count: number;
+}
+
+// WHAT: Conversation status filter accepted by listConversations.
+export type ConversationStatus = "ACTIVE" | "CLOSED";
+
+// WHAT: Inputs for listConversations.
+export interface ListConversationsInput {
+  token: string;
+  skip: number;
+  take: number;
+  status?: ConversationStatus;
+}
+
+// WHAT: One conversation's metadata-only projection.
+// INPUT: Used as a value type only.
+// OUTPUT: None.
+// WHY: Continuity metadata ONLY -- NO transcript, NO message bodies,
+//      NO conversation_history, NO capsule references (OtzarConversation
+//      stores none of those).
+export interface ConversationListItem {
+  conversation_id: string;
+  twin_id: string;
+  source_type: string;
+  status: string;
+  message_count: number;
+  started_at: Date;
+  closed_at: Date | null;
+}
+
+// WHAT: Successful listConversations return (paginated).
+export interface ConversationListSuccess {
+  ok: true;
+  items: ConversationListItem[];
+  total: number;
+  has_more: boolean;
+}
+
 // WHAT: The Otzar service.
 // INPUT: AuthService, COEService, LLMProvider, KVCache.
 // OUTPUT: A class with conductSession, closeConversation, and
@@ -160,12 +255,18 @@ export class OtzarService {
       select: { child_id: true },
     });
     const childIds = memberships.map((m) => m.child_id);
+    // Deterministic primary-twin selection: oldest active twin by
+    // created_at ASC, entity_id ASC tie-break. getMyTwin uses the
+    // IDENTICAL orderBy so the twin a user SEES (/otzar/my-twin) is the
+    // same twin they TALK TO here (QLOCK D-OTZ-2 alignment). Behavior is
+    // otherwise unchanged -- we still take twins[0].
     const twins = await prisma.entity.findMany({
       where: {
         entity_id: { in: childIds },
         entity_type: "AI_AGENT",
         deleted_at: null,
       },
+      orderBy: [{ created_at: "asc" }, { entity_id: "asc" }],
     });
     const twin = twins[0];
     if (twin === undefined) {
@@ -607,6 +708,177 @@ export class OtzarService {
       capsule_id: newCapsuleId,
       conversation_id: input.conversation_id,
       topics,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // getMyTwin -- the employee's own aligned-twin identity.
+  //
+  // WHAT: Resolve + return the caller's OWN primary digital twin.
+  // INPUT: GetMyTwinInput { token }.
+  // OUTPUT: MyTwinSuccess (200) or OtzarFailure (SESSION_* / TWIN_NOT_FOUND).
+  // WHY: Self-read; "read" capability only (no admin gate, no org
+  //      scope -- the twin is the caller's own AI_AGENT child). Resolves
+  //      the SAME primary twin conductSession talks to (oldest active by
+  //      created_at ASC, entity_id ASC tie-break) so the twin a user
+  //      SEES equals the twin they TALK TO. Returns identity + alignment
+  //      fields ONLY -- never the role-template body
+  //      (AgentTemplate.template_content), capability flags, permission
+  //      bridge IDs, or any memory / capsule / vector data. When the
+  //      owner has more than one twin we do NOT error: we return the
+  //      primary twin plus has_multiple_twins + twin_count.
+  // ──────────────────────────────────────────────────────────────
+  async getMyTwin(
+    input: GetMyTwinInput,
+  ): Promise<MyTwinSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "My Twin denied" };
+    }
+    const ownerEntityId = session.entity_id;
+
+    // Active memberships of the caller. role_title travels with the
+    // membership row; twin identity travels with the child entity.
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: ownerEntityId, is_active: true },
+      select: { child_id: true, role_title: true },
+    });
+    const childIds = memberships.map((m) => m.child_id);
+    // IDENTICAL orderBy to conductSession (QLOCK D-OTZ-2 alignment) so
+    // the seen twin == the talked-to twin.
+    const twins = await prisma.entity.findMany({
+      where: {
+        entity_id: { in: childIds },
+        entity_type: "AI_AGENT",
+        deleted_at: null,
+      },
+      orderBy: [{ created_at: "asc" }, { entity_id: "asc" }],
+    });
+    const primary = twins[0];
+    if (primary === undefined) {
+      return {
+        ok: false,
+        code: "TWIN_NOT_FOUND",
+        message: "Caller has no digital twin",
+      };
+    }
+
+    const config = await prisma.twinConfig.findUnique({
+      where: { twin_id: primary.entity_id },
+    });
+
+    // Friendly skill name + category ONLY. capability_flags is NOT
+    // selected -- the raw capability envelope stays server-side.
+    const twinSkills = await prisma.twinSkill.findMany({
+      where: { twin_id: primary.entity_id },
+      include: { package: { select: { name: true, category: true } } },
+      orderBy: { assigned_at: "asc" },
+    });
+    const skills: MyTwinSkillView[] = twinSkills.map((s) => ({
+      name: s.package.name,
+      category: s.package.category,
+    }));
+
+    // Approver identity (the human who approves this twin's
+    // escalations): entity_id + display_name ONLY, and only when set +
+    // still live.
+    let approver: MyTwinApproverView | null = null;
+    if (config?.approver_entity_id != null) {
+      const approverEntity = await prisma.entity.findFirst({
+        where: { entity_id: config.approver_entity_id, deleted_at: null },
+        select: { entity_id: true, display_name: true },
+      });
+      if (approverEntity !== null) {
+        approver = {
+          entity_id: approverEntity.entity_id,
+          display_name: approverEntity.display_name,
+        };
+      }
+    }
+
+    const roleTitle =
+      memberships.find((m) => m.child_id === primary.entity_id)?.role_title ??
+      null;
+
+    const twin: MyTwinView = {
+      twin_id: primary.entity_id,
+      display_name: primary.display_name,
+      role_title: roleTitle,
+      autonomy_mode: config?.autonomy_level ?? "APPROVAL_REQUIRED",
+      swarm_enabled: config?.swarm_enabled ?? false,
+      role_template: config?.role_template ?? null,
+      is_admin_twin: config?.is_admin_twin ?? false,
+      status: primary.status,
+      skills,
+      approver,
+      created_at: primary.created_at,
+      updated_at: config?.updated_at ?? primary.updated_at,
+    };
+
+    return {
+      ok: true,
+      twin,
+      has_multiple_twins: twins.length > 1,
+      twin_count: twins.length,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // listConversations -- metadata-only continuity feed.
+  //
+  // WHAT: List the caller's OWN OtzarConversation rows, metadata only.
+  // INPUT: ListConversationsInput { token, skip, take, status? }.
+  // OUTPUT: ConversationListSuccess (200) or OtzarFailure (SESSION_*).
+  // WHY: Self-scoped (entity_id === caller; no admin gate, no org
+  //      scope). Returns conversation metadata ONLY -- NO transcript, NO
+  //      message bodies, NO conversation_history, NO capsule references
+  //      (OtzarConversation persists none of those). Newest first,
+  //      paginated (skip / take / has_more), optional ACTIVE/CLOSED
+  //      status filter. An empty result is a SUCCESS with items: [].
+  // ──────────────────────────────────────────────────────────────
+  async listConversations(
+    input: ListConversationsInput,
+  ): Promise<ConversationListSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Conversations denied" };
+    }
+    const ownerEntityId = session.entity_id;
+
+    // Self-scope: caller's own conversations only. Status filter (when
+    // supplied) is composed AS AND with the entity_id predicate -- it
+    // never broadens scope.
+    const where = {
+      entity_id: ownerEntityId,
+      ...(input.status !== undefined ? { status: input.status } : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.otzarConversation.findMany({
+        where,
+        orderBy: { started_at: "desc" },
+        skip: input.skip,
+        take: input.take,
+        // Metadata-only projection. Deliberately omits `participants`
+        // and never touches message/transcript content (none stored).
+        select: {
+          conversation_id: true,
+          twin_id: true,
+          source_type: true,
+          status: true,
+          message_count: true,
+          started_at: true,
+          closed_at: true,
+        },
+      }),
+      prisma.otzarConversation.count({ where }),
+    ]);
+
+    return {
+      ok: true,
+      items,
+      total,
+      has_more: input.skip + input.take < total,
     };
   }
 

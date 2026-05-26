@@ -16,11 +16,34 @@ import type { OtzarService } from "../services/otzar/otzar.service.js";
 const MAX_BUDGET = 50_000;
 const DEFAULT_BUDGET = 8_000;
 
+// WHAT: Pagination defaults for GET /otzar/conversations. Mirrors the
+//        org.routes convention (DEFAULT_TAKE 50, MAX_TAKE 200) so the
+//        client contract is consistent across the API surface.
+const DEFAULT_TAKE = 50;
+const MAX_TAKE = 200;
+
 // WHAT: Pull the bearer token out of an Authorization header.
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
   const token = value.slice("Bearer ".length).trim();
   return token.length === 0 ? null : token;
+}
+
+// WHAT: Parse skip/take from the conversations querystring with safe
+//        bounds. Invalid / missing values fall back to defaults; take
+//        is clamped to [1, MAX_TAKE]. Mirrors org.routes' parsePagination.
+function parseConvPagination(query: { skip?: string; take?: string }): {
+  skip: number;
+  take: number;
+} {
+  const skipNum = Number.parseInt(query.skip ?? "0", 10);
+  const takeNum = Number.parseInt(query.take ?? String(DEFAULT_TAKE), 10);
+  const skip = Number.isFinite(skipNum) && skipNum >= 0 ? skipNum : 0;
+  const take = Math.max(
+    1,
+    Math.min(MAX_TAKE, Number.isFinite(takeNum) ? takeNum : DEFAULT_TAKE),
+  );
+  return { skip, take };
 }
 
 // WHAT: Map an OtzarService failure code to HTTP status.
@@ -156,6 +179,71 @@ export async function registerOtzarRoutes(
       conversation_id: body.conversation_id,
       capsule_ids_used: capsuleIdsUsed,
       conversation_history: history,
+    });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
+  // GET /api/v1/otzar/my-twin -- the caller's OWN aligned-twin identity.
+  // Self-read: bearer + "read" capability only. No admin middleware, no
+  // can_admin_org / can_admin_niov requirement. Returns the SAME primary
+  // twin conductSession talks to. Identity + alignment fields only --
+  // never the role-template body, capability flags, permission bridge
+  // IDs, or any memory/capsule/vector data (the service enforces the
+  // projection).
+  app.get("/api/v1/otzar/my-twin", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const result = await otzarService.getMyTwin({ token });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
+  // GET /api/v1/otzar/conversations -- metadata-only continuity feed for
+  // the caller's OWN conversations. Self-scoped: bearer + "read"
+  // capability only (no admin gate). ?skip= & ?take= pagination (take
+  // clamped to MAX_TAKE); optional ?status=ACTIVE|CLOSED filter (invalid
+  // value -> 400 INVALID_STATUS). No transcript / message bodies / capsule
+  // references in the response.
+  app.get<{
+    Querystring: { skip?: string; take?: string; status?: string };
+  }>("/api/v1/otzar/conversations", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const rawStatus = request.query.status;
+    let status: "ACTIVE" | "CLOSED" | undefined;
+    if (typeof rawStatus === "string" && rawStatus.length > 0) {
+      if (rawStatus !== "ACTIVE" && rawStatus !== "CLOSED") {
+        return reply.code(400).send({
+          ok: false,
+          code: "INVALID_STATUS",
+          message: "status must be ACTIVE or CLOSED",
+        });
+      }
+      status = rawStatus;
+    }
+    const { skip, take } = parseConvPagination(request.query);
+    const result = await otzarService.listConversations({
+      token,
+      skip,
+      take,
+      status,
     });
     if (!result.ok) {
       return reply.code(statusForCode(result.code)).send(result);

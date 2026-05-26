@@ -47,6 +47,7 @@ import {
   ensureAuditTriggers,
   makeEntityInput,
   makeFixtureProvider,
+  TEST_PREFIX,
 } from "../helpers.js";
 import unitOtzarConductHappy from "../fixtures/llm/unit-otzar-conduct-session-happy-path.json";
 import unitOtzarL7Brief from "../fixtures/llm/unit-otzar-l7-morning-brief.json";
@@ -788,5 +789,325 @@ describe("conductSession + closeConversation -- audit emission (TP9)", () => {
     expect(unitOtzarCloseTopics.fixtureKey).toBe(
       "unit-otzar-close-conversation-topics",
     );
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// GET MY TWIN -- self-read identity contract
+// ──────────────────────────────────────────────────────────────────
+
+// Build a twin and pin its child Entity.created_at so deterministic
+// oldest-active selection is testable without insertion-order luck.
+async function attachTwinAt(
+  ownerEntityId: string,
+  createdAt: Date,
+): Promise<string> {
+  const twinId = await attachTwin(ownerEntityId);
+  await prisma.entity.update({
+    where: { entity_id: twinId },
+    data: { created_at: createdAt },
+  });
+  return twinId;
+}
+
+describe("getMyTwin", () => {
+  it("returns TWIN_NOT_FOUND when caller has no AI_AGENT child", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await otzar.getMyTwin({ token: owner.token });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("TWIN_NOT_FOUND");
+  });
+
+  it("happy path returns safe identity fields + single-twin metadata", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const twinId = await attachTwin(owner.entity.entity_id);
+    const result = await otzar.getMyTwin({ token: owner.token });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.twin.twin_id).toBe(twinId);
+    expect(result.twin.role_title).toBe("Digital Twin");
+    expect(result.twin.autonomy_mode).toBe("APPROVAL_REQUIRED");
+    expect(result.twin.swarm_enabled).toBe(false);
+    expect(result.twin.role_template).toBeNull();
+    expect(result.twin.is_admin_twin).toBe(false);
+    expect(result.twin.status).toBe("ACTIVE");
+    expect(Array.isArray(result.twin.skills)).toBe(true);
+    expect(result.twin.skills).toEqual([]);
+    expect(result.has_multiple_twins).toBe(false);
+    expect(result.twin_count).toBe(1);
+  });
+
+  it("maps skills to friendly name/category only; NEVER leaks capability_flags or internals", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const twinId = await attachTwin(owner.entity.entity_id);
+    const pkg = await prisma.skillPackage.create({
+      data: {
+        name: `${TEST_PREFIX}pkg_${randomUUID()}`,
+        category: "ANALYSIS",
+        description: "test package",
+        capability_flags: ["SECRET_FLAG_DO_NOT_LEAK"],
+      },
+    });
+    await prisma.twinSkill.create({
+      data: { twin_id: twinId, package_id: pkg.package_id },
+    });
+    const result = await otzar.getMyTwin({ token: owner.token });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.twin.skills).toEqual([
+      { name: pkg.name, category: "ANALYSIS" },
+    ]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("SECRET_FLAG_DO_NOT_LEAK");
+    expect(serialized).not.toContain("capability_flags");
+    expect(serialized).not.toContain("bridge_id");
+    expect(serialized).not.toContain("template_content");
+    expect(serialized).not.toContain("storage_location");
+  });
+
+  it("self-isolation: caller A only ever sees A's twin", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await loginAs(auth);
+    const b = await loginAs(auth);
+    const aTwin = await attachTwin(a.entity.entity_id);
+    const bTwin = await attachTwin(b.entity.entity_id);
+    const ra = await otzar.getMyTwin({ token: a.token });
+    expect(ra.ok).toBe(true);
+    if (!ra.ok) return;
+    expect(ra.twin.twin_id).toBe(aTwin);
+    expect(ra.twin.twin_id).not.toBe(bTwin);
+  });
+
+  it("surfaces approver identity (entity_id + display_name only) when set", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const approver = await createEntity(
+      makeEntityInput({ entity_type: "PERSON" }),
+    );
+    const twinInput = makeEntityInput({ entity_type: "AI_AGENT" });
+    const twin = await createEntity(twinInput);
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: owner.entity.entity_id,
+        child_id: twin.entity_id,
+        role_title: "Digital Twin",
+        is_active: true,
+      },
+    });
+    await prisma.twinConfig.create({
+      data: {
+        twin_id: twin.entity_id,
+        autonomy_level: "APPROVAL_REQUIRED",
+        is_admin_twin: false,
+        role_template: null,
+        approver_entity_id: approver.entity_id,
+      },
+    });
+    const result = await otzar.getMyTwin({ token: owner.token });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.twin.approver).toEqual({
+      entity_id: approver.entity_id,
+      display_name: approver.display_name,
+    });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// DETERMINISTIC PRIMARY-TWIN SELECTION (QLOCK D-OTZ-2 alignment)
+// ──────────────────────────────────────────────────────────────────
+
+describe("conductSession + getMyTwin -- deterministic primary-twin selection", () => {
+  it("both resolve the oldest active twin; getMyTwin reports has_multiple_twins", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const oldTwin = await attachTwinAt(
+      owner.entity.entity_id,
+      new Date("2020-01-01T00:00:00.000Z"),
+    );
+    const newTwin = await attachTwinAt(
+      owner.entity.entity_id,
+      new Date("2024-01-01T00:00:00.000Z"),
+    );
+    // The twin a user SEES.
+    const seen = await otzar.getMyTwin({ token: owner.token });
+    expect(seen.ok).toBe(true);
+    if (!seen.ok) return;
+    expect(seen.twin.twin_id).toBe(oldTwin);
+    expect(seen.twin.twin_id).not.toBe(newTwin);
+    expect(seen.has_multiple_twins).toBe(true);
+    expect(seen.twin_count).toBe(2);
+    // The twin a user TALKS TO must equal the twin they SEE.
+    const conv = await otzar.conductSession({
+      token: owner.token,
+      message: "hello",
+    });
+    expect(conv.ok).toBe(true);
+    if (!conv.ok) return;
+    const row = await prisma.otzarConversation.findUnique({
+      where: { conversation_id: conv.conversation_id },
+    });
+    expect(row?.twin_id).toBe(seen.twin.twin_id);
+    expect(row?.twin_id).toBe(oldTwin);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// LIST CONVERSATIONS -- metadata-only continuity feed
+// ──────────────────────────────────────────────────────────────────
+
+describe("listConversations", () => {
+  async function makeConv(
+    ownerEntityId: string,
+    status: string,
+    startedAt: Date,
+  ): Promise<string> {
+    const id = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: id,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId, // dummy ref; listConversations never validates it
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 1,
+        status,
+        started_at: startedAt,
+        ...(status === "CLOSED" ? { closed_at: new Date() } : {}),
+      },
+    });
+    return id;
+  }
+
+  it("returns 200 with empty items for a caller with no conversations", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await otzar.listConversations({
+      token: owner.token,
+      skip: 0,
+      take: 50,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.has_more).toBe(false);
+  });
+
+  it("lists only the caller's own conversations (self-isolation)", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await loginAs(auth);
+    const b = await loginAs(auth);
+    const aConv = await makeConv(a.entity.entity_id, "ACTIVE", new Date());
+    const bConv = await makeConv(b.entity.entity_id, "ACTIVE", new Date());
+    const result = await otzar.listConversations({
+      token: a.token,
+      skip: 0,
+      take: 50,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.total).toBe(1);
+    expect(result.items.map((i) => i.conversation_id)).toEqual([aConv]);
+    expect(
+      result.items.find((i) => i.conversation_id === bConv),
+    ).toBeUndefined();
+  });
+
+  it("orders newest-first and paginates with has_more", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const c1 = await makeConv(
+      owner.entity.entity_id,
+      "ACTIVE",
+      new Date("2024-01-01T00:00:00.000Z"),
+    );
+    const c2 = await makeConv(
+      owner.entity.entity_id,
+      "ACTIVE",
+      new Date("2024-02-01T00:00:00.000Z"),
+    );
+    const c3 = await makeConv(
+      owner.entity.entity_id,
+      "ACTIVE",
+      new Date("2024-03-01T00:00:00.000Z"),
+    );
+    const page1 = await otzar.listConversations({
+      token: owner.token,
+      skip: 0,
+      take: 2,
+    });
+    expect(page1.ok).toBe(true);
+    if (!page1.ok) return;
+    expect(page1.total).toBe(3);
+    expect(page1.items.map((i) => i.conversation_id)).toEqual([c3, c2]);
+    expect(page1.has_more).toBe(true);
+    const page2 = await otzar.listConversations({
+      token: owner.token,
+      skip: 2,
+      take: 2,
+    });
+    expect(page2.ok).toBe(true);
+    if (!page2.ok) return;
+    expect(page2.items.map((i) => i.conversation_id)).toEqual([c1]);
+    expect(page2.has_more).toBe(false);
+  });
+
+  it("?status filter returns only matching rows", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    await makeConv(owner.entity.entity_id, "ACTIVE", new Date());
+    await makeConv(owner.entity.entity_id, "CLOSED", new Date());
+    const active = await otzar.listConversations({
+      token: owner.token,
+      skip: 0,
+      take: 50,
+      status: "ACTIVE",
+    });
+    expect(active.ok).toBe(true);
+    if (!active.ok) return;
+    expect(active.total).toBe(1);
+    expect(active.items.every((i) => i.status === "ACTIVE")).toBe(true);
+    const closed = await otzar.listConversations({
+      token: owner.token,
+      skip: 0,
+      take: 50,
+      status: "CLOSED",
+    });
+    expect(closed.ok).toBe(true);
+    if (!closed.ok) return;
+    expect(closed.total).toBe(1);
+    expect(closed.items.every((i) => i.status === "CLOSED")).toBe(true);
+  });
+
+  it("items are metadata-only (no transcript / message / capsule / participants fields)", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    await makeConv(owner.entity.entity_id, "ACTIVE", new Date());
+    const result = await otzar.listConversations({
+      token: owner.token,
+      skip: 0,
+      take: 50,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const item = result.items[0]!;
+    expect(Object.keys(item).sort()).toEqual([
+      "closed_at",
+      "conversation_id",
+      "message_count",
+      "source_type",
+      "started_at",
+      "status",
+      "twin_id",
+    ]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("conversation_history");
+    expect(serialized).not.toContain("transcript");
+    expect(serialized).not.toContain("participants");
+    expect(serialized).not.toContain("payload_summary");
   });
 });

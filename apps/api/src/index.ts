@@ -316,6 +316,15 @@ export type {
   CloseConversationInput,
   CloseConversationSuccess,
   OtzarFailure,
+  GetMyTwinInput,
+  MyTwinSkillView,
+  MyTwinApproverView,
+  MyTwinView,
+  MyTwinSuccess,
+  ConversationStatus,
+  ListConversationsInput,
+  ConversationListItem,
+  ConversationListSuccess,
 } from "./services/otzar/otzar.service.js";
 
 export {

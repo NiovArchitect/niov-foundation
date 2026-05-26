@@ -12,7 +12,7 @@
 //              describe blocks per Track A Gate 5 Decision 6 (Drift
 //              G5b-G).
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   buildApp,
@@ -231,5 +231,413 @@ describe("POST /otzar/conversation/close", () => {
     expect(otzarCloseWithTopics.fixtureKey).toBe(
       "otzar-conversation-close-with-topics",
     );
+  });
+});
+
+// WHAT: Log in a PERSON WITHOUT attaching a twin. Returns the token +
+//        the owner's entity_id + the IP used (for the gateway hook).
+// WHY: My Twin / Conversations tests need a twin-less and a
+//      conversation-less caller; these GET routes never call the LLM,
+//      so they do NOT consume the sequenced fixture provider.
+async function loginNoTwin(opts?: {
+  grantAdminOrg?: boolean;
+}): Promise<{ ownerId: string; token: string; ip: string }> {
+  const password = "correct-horse-battery";
+  const input = makeEntityInput({ entity_type: "PERSON", password });
+  const owner = await createEntity(input);
+  if (opts?.grantAdminOrg === true) {
+    // Grant can_admin_org BEFORE login so the session snapshots the
+    // current (unchanged) tar_hash; the My Twin route is NOT
+    // admin-gated, so this proves can_admin_org is allowed but not
+    // required. (Mutating the TAR after login would invalidate the
+    // session via tar_hash_mismatch.)
+    await prisma.tokenAttributeRepository.update({
+      where: { entity_id: owner.entity_id },
+      data: { can_admin_org: true },
+    });
+  }
+  const ip = `10.99.${Math.floor(Math.random() * 200) + 1}.${Math.floor(Math.random() * 254) + 1}`;
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    payload: { email: input.email, password, requested_operations: ["read"] },
+    remoteAddress: ip,
+  });
+  if (login.statusCode !== 200) {
+    throw new Error(`login failed: ${login.statusCode}`);
+  }
+  const token = (login.json() as { token: string }).token;
+  return { ownerId: owner.entity_id, token, ip };
+}
+
+// WHAT: Attach one AI_AGENT twin to an existing owner, optionally
+//        pinning its child Entity.created_at for deterministic
+//        oldest-active selection.
+async function attachTwinTo(
+  ownerEntityId: string,
+  createdAt?: Date,
+): Promise<string> {
+  const twin = await createEntity(makeEntityInput({ entity_type: "AI_AGENT" }));
+  await prisma.entityMembership.create({
+    data: {
+      parent_id: ownerEntityId,
+      child_id: twin.entity_id,
+      role_title: "Digital Twin",
+      is_active: true,
+    },
+  });
+  await prisma.twinConfig.create({
+    data: {
+      twin_id: twin.entity_id,
+      autonomy_level: "APPROVAL_REQUIRED",
+      is_admin_twin: false,
+      role_template: null,
+    },
+  });
+  if (createdAt !== undefined) {
+    await prisma.entity.update({
+      where: { entity_id: twin.entity_id },
+      data: { created_at: createdAt },
+    });
+  }
+  return twin.entity_id;
+}
+
+describe("GET /otzar/my-twin", () => {
+  it("401 when bearer is missing", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/my-twin",
+      remoteAddress: "10.99.1.1",
+    });
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { code: string }).code).toBe("SESSION_INVALID");
+  });
+
+  it("200 returns safe twin identity fields + single-twin metadata", async () => {
+    const ctx = await loginAndAttachTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/my-twin",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      twin: {
+        twin_id: string;
+        role_title: string | null;
+        autonomy_mode: string;
+        is_admin_twin: boolean;
+        status: string;
+        skills: unknown[];
+      };
+      has_multiple_twins: boolean;
+      twin_count: number;
+    };
+    expect(body.ok).toBe(true);
+    expect(typeof body.twin.twin_id).toBe("string");
+    expect(body.twin.role_title).toBe("Digital Twin");
+    expect(body.twin.autonomy_mode).toBe("APPROVAL_REQUIRED");
+    expect(body.twin.is_admin_twin).toBe(false);
+    expect(body.twin.status).toBe("ACTIVE");
+    expect(Array.isArray(body.twin.skills)).toBe(true);
+    expect(body.has_multiple_twins).toBe(false);
+    expect(body.twin_count).toBe(1);
+  });
+
+  it("response excludes template_content, capability_flags, bridge IDs, capsule/vector internals", async () => {
+    const ctx = await loginAndAttachTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/my-twin",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const raw = response.payload;
+    expect(raw).not.toContain("template_content");
+    expect(raw).not.toContain("capability_flags");
+    expect(raw).not.toContain("bridge_id");
+    expect(raw).not.toContain("storage_location");
+    expect(raw).not.toContain("embedding");
+    expect(raw).not.toContain("content_hash");
+  });
+
+  it("404 TWIN_NOT_FOUND when caller has no twin", async () => {
+    const ctx = await loginNoTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/my-twin",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(404);
+    expect((response.json() as { code: string }).code).toBe("TWIN_NOT_FOUND");
+  });
+
+  it("multiple twins: returns the deterministic oldest twin + has_multiple_twins", async () => {
+    const ctx = await loginNoTwin();
+    // newer twin first, then an explicitly older twin.
+    await attachTwinTo(ctx.ownerId, new Date("2024-01-01T00:00:00.000Z"));
+    const olderTwin = await attachTwinTo(
+      ctx.ownerId,
+      new Date("2000-01-01T00:00:00.000Z"),
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/my-twin",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      twin: { twin_id: string };
+      has_multiple_twins: boolean;
+      twin_count: number;
+    };
+    expect(body.twin.twin_id).toBe(olderTwin);
+    expect(body.has_multiple_twins).toBe(true);
+    expect(body.twin_count).toBe(2);
+  });
+
+  it("can_admin_org caller can read their own twin (admin allowed, not required)", async () => {
+    const ctx = await loginNoTwin({ grantAdminOrg: true });
+    await attachTwinTo(ctx.ownerId);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/my-twin",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("self-isolation: caller A's response never carries caller B's twin", async () => {
+    const a = await loginNoTwin();
+    const b = await loginNoTwin();
+    const aTwin = await attachTwinTo(a.ownerId);
+    const bTwin = await attachTwinTo(b.ownerId);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/my-twin",
+      headers: { authorization: `Bearer ${a.token}` },
+      remoteAddress: a.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { twin: { twin_id: string } };
+    expect(body.twin.twin_id).toBe(aTwin);
+    expect(response.payload).not.toContain(bTwin);
+  });
+});
+
+describe("GET /otzar/conversations", () => {
+  // Insert a metadata row directly (no LLM) so these tests do not
+  // consume the shared sequenced fixture provider.
+  async function makeConv(
+    ownerEntityId: string,
+    status: string,
+    startedAt: Date,
+  ): Promise<string> {
+    const id = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: id,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId,
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 1,
+        status,
+        started_at: startedAt,
+        ...(status === "CLOSED" ? { closed_at: new Date() } : {}),
+      },
+    });
+    return id;
+  }
+
+  it("401 when bearer is missing", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations",
+      remoteAddress: "10.99.1.2",
+    });
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { code: string }).code).toBe("SESSION_INVALID");
+  });
+
+  it("200 empty list for a caller with no conversations", async () => {
+    const ctx = await loginNoTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      items: unknown[];
+      total: number;
+      has_more: boolean;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+    expect(body.has_more).toBe(false);
+  });
+
+  it("lists only the caller's own conversations (self-isolation)", async () => {
+    const a = await loginNoTwin();
+    const b = await loginNoTwin();
+    const aConv = await makeConv(a.ownerId, "ACTIVE", new Date());
+    const bConv = await makeConv(b.ownerId, "ACTIVE", new Date());
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations",
+      headers: { authorization: `Bearer ${a.token}` },
+      remoteAddress: a.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      total: number;
+      items: { conversation_id: string }[];
+    };
+    expect(body.total).toBe(1);
+    expect(body.items.map((i) => i.conversation_id)).toEqual([aConv]);
+    expect(response.payload).not.toContain(bConv);
+  });
+
+  it("paginates with skip/take/has_more (newest first)", async () => {
+    const ctx = await loginNoTwin();
+    const c1 = await makeConv(
+      ctx.ownerId,
+      "ACTIVE",
+      new Date("2024-01-01T00:00:00.000Z"),
+    );
+    const c2 = await makeConv(
+      ctx.ownerId,
+      "ACTIVE",
+      new Date("2024-02-01T00:00:00.000Z"),
+    );
+    const c3 = await makeConv(
+      ctx.ownerId,
+      "ACTIVE",
+      new Date("2024-03-01T00:00:00.000Z"),
+    );
+    const page1 = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations?skip=0&take=2",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(page1.statusCode).toBe(200);
+    const b1 = page1.json() as {
+      items: { conversation_id: string }[];
+      total: number;
+      has_more: boolean;
+    };
+    expect(b1.total).toBe(3);
+    expect(b1.items.map((i) => i.conversation_id)).toEqual([c3, c2]);
+    expect(b1.has_more).toBe(true);
+    const page2 = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations?skip=2&take=2",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    const b2 = page2.json() as {
+      items: { conversation_id: string }[];
+      has_more: boolean;
+    };
+    expect(b2.items.map((i) => i.conversation_id)).toEqual([c1]);
+    expect(b2.has_more).toBe(false);
+  });
+
+  it("take above MAX_TAKE is clamped (no error)", async () => {
+    const ctx = await loginNoTwin();
+    await makeConv(ctx.ownerId, "ACTIVE", new Date());
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations?take=99999",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("?status=ACTIVE returns active only; ?status=CLOSED returns closed only", async () => {
+    const ctx = await loginNoTwin();
+    await makeConv(ctx.ownerId, "ACTIVE", new Date());
+    await makeConv(ctx.ownerId, "CLOSED", new Date());
+    const active = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations?status=ACTIVE",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    const ab = active.json() as {
+      total: number;
+      items: { status: string }[];
+    };
+    expect(ab.total).toBe(1);
+    expect(ab.items.every((i) => i.status === "ACTIVE")).toBe(true);
+    const closed = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations?status=CLOSED",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    const cb = closed.json() as {
+      total: number;
+      items: { status: string }[];
+    };
+    expect(cb.total).toBe(1);
+    expect(cb.items.every((i) => i.status === "CLOSED")).toBe(true);
+  });
+
+  it("invalid ?status returns 400 INVALID_STATUS", async () => {
+    const ctx = await loginNoTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations?status=BOGUS",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(400);
+    expect((response.json() as { code: string }).code).toBe("INVALID_STATUS");
+  });
+
+  it("response is metadata-only (no transcript/message/conversation_history/capsule fields)", async () => {
+    const ctx = await loginNoTwin();
+    await makeConv(ctx.ownerId, "ACTIVE", new Date());
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/otzar/conversations",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const raw = response.payload;
+    expect(raw).not.toContain("conversation_history");
+    expect(raw).not.toContain("transcript");
+    expect(raw).not.toContain("participants");
+    expect(raw).not.toContain("payload_summary");
+    expect(raw).not.toContain("storage_location");
+    const body = response.json() as {
+      items: Record<string, unknown>[];
+    };
+    expect(Object.keys(body.items[0]!).sort()).toEqual([
+      "closed_at",
+      "conversation_id",
+      "message_count",
+      "source_type",
+      "started_at",
+      "status",
+      "twin_id",
+    ]);
   });
 });
