@@ -5,10 +5,14 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-15 ([SUB-BOX-3-CLOSURE] minimum-touch
-update per Sub-phase 7 Q-NEW-1 LOCKED Option α — adds the CAR
-Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036) closure entry
-canonical at substantive register substantively without
+**Last updated:** 2026-05-25 ([FOUNDATION-CONSOLE-LIVE-BROWSER-SMOKE]
+minimum-touch update — adds the CONSOLE.1 Foundation Console live
+browser smoke SUCCESS entry below. This is a verification milestone;
+the smoke itself produced no committed code change in this repo. Does
+not refresh other stale sections. Prior minimum-touch update was
+2026-05-15 [SUB-BOX-3-CLOSURE] per Sub-phase 7 Q-NEW-1 LOCKED Option α
+— adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
+closure entry canonical at substantive register substantively without
 performing a broader staleness refresh. Substrate-honest scope:
 Sub-box 1 + Sub-box 2 Phase 1 + Block B Phase 2 + ADRs 0023-0035
 remain stale at this entry register; broader refresh forward-queued
@@ -16,6 +20,62 @@ as a separate substrate-honest mini-arc canonical at substantive
 register substantively when substrate justifies. Prior `**Last
 updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH] post-Track A
 + RAA 12.8 canonicalization).
+
+## CONSOLE.1 Foundation Console — Live Browser Smoke SUCCESS 2026-05-25
+
+**Status: VERIFIED (live browser smoke attempt #3 SUCCESS).** End-to-end
+proof that the read-only Foundation Console frontend reaches the real
+backend `/api/v1/console/*` endpoints under live `can_admin_niov` auth.
+
+**Committed backend substrate (this repo, origin/main `e711494`):**
+- `0220697` `[FOUNDATION-CONSOLE-CONSOLE1-P0-READONLY-ENDPOINTS]` — CONSOLE.1
+  P0: 7 read-only, `can_admin_niov`-gated GET endpoints
+  (`/api/v1/console/overview|audit|entities|break-glass/grants|escalations|reports|reports/:report_id`)
+  + 18-report catalog + report-object model. Every read is audited as
+  `ADMIN_ACTION` with `details.action=CONSOLE_READ`.
+- `e711494` `[FOUNDATION-CONSOLE-BACKEND-CORS-ALLOWLIST]` — exact-origin CORS
+  allowlist (`CONTROL_TOWER_URL` + `FOUNDATION_COMMAND_URL` + localhost dev
+  origins), `credentials: true`, `Authorization` allowed; CI-green. CORS is
+  browser-origin enforcement only and never substitutes for auth.
+
+**Frontend (sibling repo `foundation-command` — NOT this repo):** origin/main
+`afa9f77`. LIVE MODE via `VITE_CONSOLE_USE_MOCK=false` +
+`VITE_CONSOLE_API_BASE_URL`; memory-only Bearer token bridge with a
+backend-verification probe (token presence ≠ verified); `DataModeBanner`
+shows MOCK/LIVE + API base + token state; token set/clear purges the
+`["console"]` query cache (fail-closed). The two repos connect over HTTP only.
+
+**Live smoke result (local-only; test DB `localhost:5433/foundation_test`):**
+A real Fastify server on `127.0.0.1:3100` (injected in-memory stores, no real
+Redis) with a disposable `can_admin_niov` operator. Curl pre-checks passed —
+overview+Bearer 200, no-auth 401, non-admin 403, CORS preflight from
+`http://localhost:8080` reflected, evil origin not reflected, no break-glass
+justification leak. Browser navigation in LIVE MODE raised the operator's
+`CONSOLE_READ` audit count from a baseline of 4 (curl pre-checks only) to 22
+(+18), across multiple non-overview routes — `entities`, `audit`,
+`break-glass/grants`, `escalations`, `reports` (plus `overview`). This is
+positive proof of genuine authenticated, `can_admin_niov`-gated COSMP Console
+reads originating from the browser, each written to the append-only audit chain.
+
+**Path to success (attempts #1–#3):** #1 stayed in mock mode (zero backend
+reads); #2 used an unverified random token (zero successful reads); a backend
+diagnostic found the #3 token had simply expired (8-hour TTL). The frontend
+token-verification fix (`afa9f77`) plus a freshly minted in-window token closed
+the loop on attempt #3.
+
+**Verification was throwaway:** no committed code in this repo resulted from
+the smoke itself — all smoke scripts were created locally, run, and removed;
+the disposable operator and its audit rows were cleaned up; both repos returned
+clean (backend `e711494`, frontend `afa9f77`). No production data, tokens, or
+`.env` were touched at any point (local `.env.test` only, fail-closed safety
+gate on every step).
+
+**Forward-substrate (not yet done):** token-bridge backend-verification states
+(present / verified / rejected / not-yet-verified) are partially landed
+(`afa9f77` added the probe); broader Console route/tab/nav coherence follow-ups
+remain in `foundation-command`. Production wiring (CORS allowlist of the
+deployed frontend origin + a real operator token-acquisition path) is a
+separate future arc.
 
 ## Phase 3 Sub-Arc 3 — Foundation/COSMP Personalization-Orchestration Substrate IN FLIGHT 2026-05-19 at PERS.1 -- ADR-0048 NEW Proposed; PERS.2-PERS.6 forward-substrate
 
