@@ -193,3 +193,7 @@ Bidirectional citations (cited from):
   Drift-Prevention Foundations) — the Wave 2 contract ADR governed by
   this doctrine's build order (step 3) and DGI principles
   (self-scoped, no surveillance, governance before autonomy).
+- ADR-0054 (Otzar Conversation Look-back and Safe Continuity
+  Surfacing) — the Wave 2B contract ADR for build-order step 4
+  (Conversations/look-back), honoring the same DGI principles
+  (self-scoped, no transcripts, no fabricated signals).

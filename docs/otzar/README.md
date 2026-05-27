@@ -21,6 +21,15 @@ layer for the Autonomous Enterprise.
 
 ## Canonical decision records
 
+- **ADR-0054** — Otzar Conversation Look-back and Safe Continuity
+  Surfacing
+  (`docs/architecture/decisions/0054-otzar-conversation-lookback-and-safe-continuity-surfacing.md`)
+  — the Wave 2B contract (design-only): a self-scoped
+  `GET /otzar/conversations/:id` detail surfacing metadata + close
+  summary + topics via an additive `summary_capsule_id` link
+  (build-order step 4). No transcripts; per-conversation transparency
+  and corrections are honestly deferred (`transparency_available`
+  false). Not yet implemented.
 - **ADR-0053** — Otzar Employee AI Twin Role-Scope Profile and
   Drift-Prevention Foundations
   (`docs/architecture/decisions/0053-otzar-employee-ai-twin-role-scope-profile.md`)

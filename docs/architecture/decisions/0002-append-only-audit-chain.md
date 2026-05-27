@@ -143,3 +143,7 @@ Bidirectional citations (cited from):
   drift foundations rely on this append-only audit chain as the
   governance/proof backbone (RULE 4); the profile is a read-only
   projection and adds no new audit literal in Wave 2A.
+- ADR-0054 (Otzar Conversation Look-back and Safe Continuity
+  Surfacing) — the Wave 2B look-back notes the `CONVERSATION_CLOSED`
+  event in this chain already records the summary capsule link; the
+  read-only detail endpoint adds no new audit literal.

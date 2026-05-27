@@ -306,3 +306,7 @@ Bidirectional citations (cited from):
   Drift-Prevention Foundations) — the Wave 2 contract follows this
   ADR's additive, backward-compatible extension precedent (extends
   `getMyTwin` without changing existing fields).
+- ADR-0054 (Otzar Conversation Look-back and Safe Continuity
+  Surfacing) — the Wave 2B look-back cites this ADR for why
+  transparency / context_provenance are live response-only (not
+  persisted), so `transparency_available` is always false in look-back.
