@@ -189,3 +189,7 @@ Bidirectional citations (cited from):
 - `docs/otzar/DOMAIN_GENERAL_INTELLIGENCE_DOCTRINE.md` (companion
   doctrine; cites this ADR as its canonical decision)
 - `docs/otzar/README.md` (Otzar docs index)
+- ADR-0053 (Otzar Employee AI Twin Role-Scope Profile and
+  Drift-Prevention Foundations) — the Wave 2 contract ADR governed by
+  this doctrine's build order (step 3) and DGI principles
+  (self-scoped, no surveillance, governance before autonomy).

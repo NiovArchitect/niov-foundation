@@ -963,6 +963,152 @@ describe("getMyTwin", () => {
       display_name: approver.display_name,
     });
   });
+
+  // ── ADR-0053 Wave 2A: role_scope_profile (additive, self-scoped) ──
+
+  it("includes a safe role_scope_profile derived from membership/profile/counts; existing fields preserved", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    // The human owner's OWN org membership (child_id = owner): department,
+    // hierarchy, role within the org.
+    const org = await createEntity(makeEntityInput({ entity_type: "COMPANY" }));
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: org.entity_id,
+        child_id: owner.entity.entity_id,
+        role_title: "Senior Engineer",
+        department: "Platform",
+        hierarchy_level: 3,
+        is_admin: false,
+        is_active: true,
+      },
+    });
+    await prisma.entityProfile.create({
+      data: { entity_id: owner.entity.entity_id, job_title: "Staff Engineer" },
+    });
+    const twinId = await attachTwin(owner.entity.entity_id);
+
+    const result = await otzar.getMyTwin({ token: owner.token });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Backward-compat: existing flat fields preserved.
+    expect(result.twin.twin_id).toBe(twinId);
+    expect(result.twin.autonomy_mode).toBe("APPROVAL_REQUIRED");
+    expect(result.twin.is_admin_twin).toBe(false);
+
+    const p = result.twin.role_scope_profile;
+    expect(p).toBeDefined();
+    if (p === undefined) return;
+    // identity
+    expect(p.identity.twin_id).toBe(twinId);
+    // role (employee place in org, derived)
+    expect(p.role.job_title).toBe("Staff Engineer");
+    expect(p.role.department).toBe("Platform");
+    expect(p.role.hierarchy_level).toBe(3);
+    expect(p.role.is_admin_twin).toBe(false);
+    // scope summary
+    expect(p.scope_summary.scope_label).toBe("Role-scoped enterprise context");
+    expect(p.scope_summary.membership_count).toBe(1);
+    expect(p.scope_summary.active_membership_count).toBe(1);
+    expect(p.scope_summary.department_count).toBe(1);
+    expect(p.scope_summary.has_department_scope).toBe(true);
+    expect(p.scope_summary.has_multiple_memberships).toBe(false);
+    expect(typeof p.scope_summary.permission_posture).toBe("string");
+    expect(typeof p.scope_summary.approval_posture).toBe("string");
+    // assistance
+    expect(p.assistance_profile.autonomy_mode).toBe("APPROVAL_REQUIRED");
+    expect(p.assistance_profile.role_template_status).toBe("NOT_CONFIGURED");
+    expect(p.assistance_profile.skills_status).toBe("NOT_CONFIGURED");
+    expect(p.assistance_profile.current_assistance_boundaries.length).toBeGreaterThan(0);
+    // governance literals
+    expect(p.governance.sensitive_actions_require).toBe(
+      "PERMISSION_POLICY_OR_APPROVAL",
+    );
+    expect(p.governance.observation_mode).toBe(
+      "PERMISSIONED_WORK_CONTEXT_NOT_SURVEILLANCE",
+    );
+    // continuity counts (numbers/booleans only)
+    expect(typeof p.continuity.recent_conversation_count).toBe("number");
+    expect(typeof p.continuity.recent_correction_count).toBe("number");
+    expect(typeof p.continuity.recent_learning_summary_count).toBe("number");
+    expect(typeof p.continuity.alignment_signals_available).toBe("boolean");
+
+    // No raw internals anywhere in the serialized response.
+    const json = JSON.stringify(result);
+    expect(json).not.toContain("clearance");
+    expect(json).not.toContain("capability_flags");
+    expect(json).not.toContain("bridge_id");
+    expect(json).not.toContain("can_share_forward");
+    expect(json).not.toContain('"conditions"');
+    expect(json).not.toContain("storage_location");
+    expect(json).not.toContain("content_hash");
+  });
+
+  it("alignment_signals_available true after a CORRECTION; counts are self-scoped with no raw content", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+    const ownerWallet = await prisma.wallet.findUnique({
+      where: { entity_id: owner.entity.entity_id },
+    });
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: randomUUID(),
+        wallet_id: ownerWallet!.wallet_id,
+        entity_id: owner.entity.entity_id,
+        version: 1,
+        capsule_type: "CORRECTION",
+        topic_tags: ["correction"],
+        decay_type: "TIME_BASED",
+        payload_summary: "SECRET_CORRECTION_BODY_DO_NOT_LEAK",
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:c-${randomUUID()}`,
+      },
+    });
+    const result = await otzar.getMyTwin({ token: owner.token });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const p = result.twin.role_scope_profile;
+    expect(p).toBeDefined();
+    if (p === undefined) return;
+    expect(p.continuity.recent_correction_count).toBeGreaterThanOrEqual(1);
+    expect(p.continuity.alignment_signals_available).toBe(true);
+    // Raw correction body is NEVER serialized.
+    expect(JSON.stringify(result)).not.toContain("SECRET_CORRECTION_BODY_DO_NOT_LEAK");
+  });
+
+  it("self-isolation: role_scope_profile reflects only the caller's own scope", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await loginAs(auth);
+    const b = await loginAs(auth);
+    // B has an org membership (department Sales, admin); A does not.
+    const org = await createEntity(makeEntityInput({ entity_type: "COMPANY" }));
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: org.entity_id,
+        child_id: b.entity.entity_id,
+        role_title: "Manager",
+        department: "Sales",
+        hierarchy_level: 5,
+        is_admin: true,
+        is_active: true,
+      },
+    });
+    await attachTwin(a.entity.entity_id);
+    const ra = await otzar.getMyTwin({ token: a.token });
+    expect(ra.ok).toBe(true);
+    if (!ra.ok) return;
+    const p = ra.twin.role_scope_profile;
+    expect(p).toBeDefined();
+    if (p === undefined) return;
+    // A has no org membership → personal scope; never B's Sales/admin scope.
+    expect(p.scope_summary.active_membership_count).toBe(0);
+    expect(p.scope_summary.scope_label).toBe("Personal work scope");
+    expect(p.role.department).toBeNull();
+    expect(JSON.stringify(ra)).not.toContain("Sales");
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────

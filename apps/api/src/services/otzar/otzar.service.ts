@@ -154,6 +154,92 @@ export interface MyTwinApproverView {
   display_name: string;
 }
 
+// ──────────────────────────────────────────────────────────────────
+// ADR-0053 Wave 2A: the employee AI Twin role-scope profile.
+//
+// Every sub-shape below is a SAFE, SELF-SCOPED projection or a calm,
+// product-facing label. These types NEVER carry raw permission internals,
+// bridge IDs, capability flags, raw clearance values, permission-condition
+// JSON, can_share_forward, capsule IDs, storage locations, transcript /
+// message content, or any other employee's / cross-tenant data. No
+// surveillance / monitoring / productivity-policing framing.
+// ──────────────────────────────────────────────────────────────────
+
+// WHAT: Identity block of the role-scope profile (mirrors safe twin fields).
+export interface RoleScopeIdentity {
+  twin_id: string;
+  display_name: string;
+  status: string;
+}
+
+// WHAT: Role block. Describes the EMPLOYEE's place (job_title / department /
+//        hierarchy from the caller's own org membership) plus the twin's
+//        role_title + admin flag. Self-scoped to the caller only.
+export interface RoleScopeRole {
+  role_title: string | null;
+  job_title: string | null;
+  department: string | null;
+  hierarchy_level: number | null;
+  is_admin_twin: boolean;
+}
+
+// WHAT: Scope summary. Counts + calm posture LABELS derived from the
+//        caller's own active memberships. permission_posture /
+//        approval_posture are friendly labels — NEVER raw RBAC/ABAC rows,
+//        clearance, capability flags, or permission envelopes.
+export interface RoleScopeSummary {
+  scope_label: string;
+  membership_count: number;
+  active_membership_count: number;
+  department_count: number;
+  has_department_scope: boolean;
+  has_multiple_memberships: boolean;
+  permission_posture: string;
+  approval_posture: string;
+}
+
+// WHAT: Assistance profile. What the twin is configured to help with.
+export interface RoleScopeAssistanceProfile {
+  autonomy_mode: string;
+  swarm_enabled: boolean;
+  role_template_status: "CONFIGURED" | "NOT_CONFIGURED";
+  skills_status: "AVAILABLE" | "NOT_CONFIGURED";
+  current_assistance_boundaries: string[];
+}
+
+// WHAT: Governance block. States the human-in-control posture in fixed,
+//        safe literals — sensitive actions require permission/policy/
+//        approval; observation is permissioned work context, NOT surveillance.
+export interface RoleScopeGovernance {
+  approver_configured: boolean;
+  approver: MyTwinApproverView | null;
+  sensitive_actions_require: "PERMISSION_POLICY_OR_APPROVAL";
+  observation_mode: "PERMISSIONED_WORK_CONTEXT_NOT_SURVEILLANCE";
+}
+
+// WHAT: Continuity block. SELF-SCOPED COUNTS ONLY (caller's own
+//        conversations + own-wallet CORRECTION / CONVERSATION_LEARNING
+//        capsules). No raw content, no capsule IDs, no storage locations.
+//        Wave 2A uses total self-scoped counts; the `recent_` prefix
+//        reserves a future time-window refinement without a contract change.
+export interface RoleScopeContinuity {
+  recent_conversation_count: number;
+  recent_correction_count: number;
+  recent_learning_summary_count: number;
+  alignment_signals_available: boolean;
+}
+
+// WHAT: The full role-scope profile (ADR-0053 Wave 2A). Additive, optional,
+//        self-scoped projection attached to MyTwinView.
+export interface MyTwinRoleScopeProfile {
+  identity: RoleScopeIdentity;
+  role: RoleScopeRole;
+  scope_summary: RoleScopeSummary;
+  assistance_profile: RoleScopeAssistanceProfile;
+  governance: RoleScopeGovernance;
+  continuity: RoleScopeContinuity;
+}
+
 // WHAT: The safe, product-facing projection of the caller's OWN twin.
 // INPUT: Used as a value type only.
 // OUTPUT: None.
@@ -174,6 +260,9 @@ export interface MyTwinView {
   approver: MyTwinApproverView | null;
   created_at: Date;
   updated_at: Date;
+  // ADR-0053 Wave 2A: additive, optional, self-scoped role-scope profile.
+  // Existing fields above are unchanged (backward-compatible).
+  role_scope_profile?: MyTwinRoleScopeProfile;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -823,6 +912,141 @@ export class OtzarService {
       memberships.find((m) => m.child_id === primary.entity_id)?.role_title ??
       null;
 
+    // ── ADR-0053 Wave 2A: safe, self-scoped role-scope profile ──
+    // Derived ONLY from the caller's own substrate. NEVER exposes raw
+    // permission internals, bridge IDs, capability flags, clearance
+    // values, permission-condition JSON, can_share_forward, transcript /
+    // message content, capsule IDs, or storage locations. No surveillance
+    // framing. derive-first per ADR-0053 (no new models/migrations).
+
+    // The HUMAN owner's OWN org memberships (owner as the CHILD of an org /
+    // parent). role_title / department / hierarchy here describe the
+    // human's place in the org — distinct from the twin's "Digital Twin"
+    // role (which is the parent=owner -> child=twin membership above).
+    const ownerMemberships = await prisma.entityMembership.findMany({
+      where: { child_id: ownerEntityId },
+      select: {
+        is_active: true,
+        department: true,
+        hierarchy_level: true,
+        is_admin: true,
+      },
+      orderBy: { created_at: "asc" },
+    });
+    const activeOwnerMemberships = ownerMemberships.filter((m) => m.is_active);
+    const ownerDepartments = Array.from(
+      new Set(
+        activeOwnerMemberships
+          .map((m) => m.department)
+          .filter((d): d is string => typeof d === "string" && d.length > 0),
+      ),
+    );
+    const ownerIsOrgAdmin = activeOwnerMemberships.some((m) => m.is_admin);
+    const primaryOwnerMembership = activeOwnerMemberships[0] ?? null;
+
+    const ownerProfile = await prisma.entityProfile.findUnique({
+      where: { entity_id: ownerEntityId },
+      select: { job_title: true },
+    });
+
+    // Self-scoped continuity COUNTS only (no content, no IDs, no storage
+    // locations). Wave 2A uses total self-scoped counts; the `recent_`
+    // prefix reserves a future time-window without a contract change.
+    const profileWallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+      select: { wallet_id: true },
+    });
+    const [
+      recentConversationCount,
+      recentCorrectionCount,
+      recentLearningCount,
+    ] = await Promise.all([
+      prisma.otzarConversation.count({ where: { entity_id: ownerEntityId } }),
+      profileWallet === null
+        ? Promise.resolve(0)
+        : prisma.memoryCapsule.count({
+            where: {
+              wallet_id: profileWallet.wallet_id,
+              capsule_type: "CORRECTION",
+              deleted_at: null,
+            },
+          }),
+      profileWallet === null
+        ? Promise.resolve(0)
+        : prisma.memoryCapsule.count({
+            where: {
+              wallet_id: profileWallet.wallet_id,
+              capsule_type: "CONVERSATION_LEARNING",
+              deleted_at: null,
+            },
+          }),
+    ]);
+
+    const scopeLabel = ownerIsOrgAdmin
+      ? "Organization-admin scoped context"
+      : activeOwnerMemberships.length > 0
+        ? "Role-scoped enterprise context"
+        : "Personal work scope";
+
+    const roleScopeProfile: MyTwinRoleScopeProfile = {
+      identity: {
+        twin_id: primary.entity_id,
+        display_name: primary.display_name,
+        status: primary.status,
+      },
+      role: {
+        role_title: roleTitle,
+        job_title: ownerProfile?.job_title ?? null,
+        department: primaryOwnerMembership?.department ?? null,
+        hierarchy_level: primaryOwnerMembership?.hierarchy_level ?? null,
+        is_admin_twin: config?.is_admin_twin ?? false,
+      },
+      scope_summary: {
+        scope_label: scopeLabel,
+        membership_count: ownerMemberships.length,
+        active_membership_count: activeOwnerMemberships.length,
+        department_count: ownerDepartments.length,
+        has_department_scope: ownerDepartments.length > 0,
+        has_multiple_memberships: activeOwnerMemberships.length > 1,
+        permission_posture:
+          activeOwnerMemberships.length > 0
+            ? "Governed by role and organization access rules"
+            : "Personal work scope only",
+        approval_posture:
+          approver !== null
+            ? "Approval required for sensitive actions"
+            : "No approver configured",
+      },
+      assistance_profile: {
+        autonomy_mode: config?.autonomy_level ?? "APPROVAL_REQUIRED",
+        swarm_enabled: config?.swarm_enabled ?? false,
+        role_template_status:
+          typeof config?.role_template === "string" &&
+          config.role_template.length > 0
+            ? "CONFIGURED"
+            : "NOT_CONFIGURED",
+        skills_status: skills.length > 0 ? "AVAILABLE" : "NOT_CONFIGURED",
+        current_assistance_boundaries: [
+          "Operates within your role and organization access scope",
+          "Sensitive actions require permission, policy, or approval",
+          "Observes permissioned work context to reduce drift and keep your work aligned",
+        ],
+      },
+      governance: {
+        approver_configured: approver !== null,
+        approver,
+        sensitive_actions_require: "PERMISSION_POLICY_OR_APPROVAL",
+        observation_mode: "PERMISSIONED_WORK_CONTEXT_NOT_SURVEILLANCE",
+      },
+      continuity: {
+        recent_conversation_count: recentConversationCount,
+        recent_correction_count: recentCorrectionCount,
+        recent_learning_summary_count: recentLearningCount,
+        alignment_signals_available:
+          recentCorrectionCount > 0 || recentLearningCount > 0,
+      },
+    };
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -836,6 +1060,7 @@ export class OtzarService {
       approver,
       created_at: primary.created_at,
       updated_at: config?.updated_at ?? primary.updated_at,
+      role_scope_profile: roleScopeProfile,
     };
 
     return {

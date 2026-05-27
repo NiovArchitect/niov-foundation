@@ -635,6 +635,10 @@ canonicalize them before app/UI consumption.
   Intelligence model on this ADR's principle that the Foundation
   constructs the governed working set before the LLM sees context;
   the LLM never decides what memory it is allowed to see.
+- ADR-0053 (Otzar Employee AI Twin Role-Scope Profile and
+  Drift-Prevention Foundations) — the Wave 2 role-scope profile
+  grounds an employee's twin in their governed scope, consistent with
+  this ADR's Foundation-decides-context principle.
 
 ## Founder Authorization
 
