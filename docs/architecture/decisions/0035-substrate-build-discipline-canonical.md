@@ -1580,3 +1580,8 @@ RULE 14 bidirectional citation discipline.
   manual register)
 - Future Elixir/BEAM ADRs (sub-phases 7-13 DBGI substrate; the
   substrate-build discipline carries forward)
+- ADR-0051 (Otzar Chat Transparency and COE-Governed Retrieval
+  Surfacing) — cites this ADR's §37 production-Supabase test trap;
+  ADR-0051 preserves the test-run safety boundary (verification runs
+  only via `--config vitest.unit.config.ts` / `npm run test:unit` /
+  `npm run test:integration`, never bare `vitest run`)

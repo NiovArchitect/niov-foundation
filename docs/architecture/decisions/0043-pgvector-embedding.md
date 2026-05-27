@@ -1592,3 +1592,14 @@ contract integration tests + G3.10 docs-only closure cascade.
 **Gap 3 CLOSED at canonical-state register substantively at G3.10.** G3 mini-
 arc 10/10. ADR-0043 Status `Accepted 2026-05-18`. Sub-arc 2 closure remains
 forward-substrate per ADR-0041 CL.1 scope patch register substantively.
+
+## Bidirectional Citations
+
+### Cited from
+
+- ADR-0051 (Otzar Chat Transparency and COE-Governed Retrieval
+  Surfacing) — cites this ADR's §Q-G3.6-ε similarity deferral;
+  ADR-0051 **does not wire `similarity.service` into
+  `conductSession`** and keeps similarity retrieval deferred pending
+  a future Founder-authorized ADR-0022 amendment, preserving this
+  ADR's deferral boundary.

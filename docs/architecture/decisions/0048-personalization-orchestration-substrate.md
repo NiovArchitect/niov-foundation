@@ -622,6 +622,15 @@ canonicalize them before app/UI consumption.
 - US 12,164,537 + US 12,399,904 (DMW + Foundation primitives;
   personal/enterprise DMW boundary)
 
+### Cited from
+
+- ADR-0051 (Otzar Chat Transparency and COE-Governed Retrieval
+  Surfacing) — cites this ADR for the COE-governed working-set path;
+  ADR-0051 **preserves `COE.assembleContext` as the canonical
+  governed context path** (no COE bypass, no parallel retrieval
+  engine) and only surfaces, additively, the governed context
+  metadata COE already produces.
+
 ## Founder Authorization
 
 Founder authorization explicit at PERS.1 docs-only ADR landing per

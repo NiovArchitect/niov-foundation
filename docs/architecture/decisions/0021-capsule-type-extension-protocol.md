@@ -151,3 +151,7 @@ ADR-0021's discipline propagates to:
 - `packages/database/prisma/schema.prisma` — CapsuleType enum (canonical source of truth)
 - `apps/api/src/services/monetization/monetization.service.ts:30` — PRICING_TABLE (the deliberate-blocker surface)
 - US 12,517,919 — COSMP/DMW patent (substrate-architecture coverage)
+
+Bidirectional citations (cited from):
+
+- ADR-0051 (Otzar Chat Transparency and COE-Governed Retrieval Surfacing) — cites this ADR for the CapsuleType extension protocol; ADR-0051 introduces **no new CapsuleType or source enum** in Wave 1 (ingestion stays on the existing `POST /cosmp/capsule` write path), preserving this ADR's extension-only invariant.
