@@ -630,6 +630,11 @@ canonicalize them before app/UI consumption.
   governed context path** (no COE bypass, no parallel retrieval
   engine) and only surfaces, additively, the governed context
   metadata COE already produces.
+- ADR-0052 (Otzar Domain General Intelligence and Governed
+  Synchronicity) — the doctrine ADR anchors its Domain General
+  Intelligence model on this ADR's principle that the Foundation
+  constructs the governed working set before the LLM sees context;
+  the LLM never decides what memory it is allowed to see.
 
 ## Founder Authorization
 

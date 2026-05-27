@@ -134,3 +134,7 @@ Bidirectional citations (cited from):
   adds **no new audit literal** (RULE 4 is satisfied by the existing
   `CAPSULE_CONTENT_READ` + `CONVERSATION_STARTED` events; no
   ADR-0002 amendment).
+- ADR-0052 (Otzar Domain General Intelligence and Governed
+  Synchronicity) — the doctrine ADR cites this append-only audit
+  chain as the governance / proof / RULE 4 backbone for governed,
+  auditable enterprise intelligence.

@@ -298,3 +298,7 @@ Bidirectional citations (cited from):
   RULE-20-restricted and outside this authorization's scope. The
   back-citations are surfaced for explicit Founder authorization
   before this ADR is committed (RULE 13).
+- ADR-0052 (Otzar Domain General Intelligence and Governed
+  Synchronicity) — the doctrine ADR frames this Wave 1 transparency
+  surface as "the first governed transparency surface in the larger
+  Domain General Intelligence path."
