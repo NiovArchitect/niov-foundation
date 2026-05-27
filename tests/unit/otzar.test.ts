@@ -387,6 +387,55 @@ describe("conductSession", () => {
     expect(typeof result.context_used).toBe("number");
   });
 
+  // ADR-0051 Wave 1: conductSession surfaces the additive transparency
+  // contract built from the governed COE metadata. Backward-compatible
+  // fields stay intact; transparency is a read-only projection.
+  it("includes ADR-0051 transparency + context_provenance without leaking internals", async () => {
+    const { auth, otzar } = makeServices({
+      llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+    });
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+    const result = await otzar.conductSession({
+      token: owner.token,
+      message: "what should I do today?",
+      conversation_history: [],
+      token_budget: 8000,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Backward-compatible fields preserved.
+    expect(typeof result.response).toBe("string");
+    expect(typeof result.context_used).toBe("number");
+    expect(typeof result.tokens_consumed).toBe("number");
+    expect(result.conversation_id).toMatch(/^[0-9a-f-]{36}$/);
+
+    // Additive transparency present + well-formed.
+    expect(result.transparency).toBeDefined();
+    const t = result.transparency!;
+    expect(t.retrieval_source).toBe("COE_ASSEMBLE_CONTEXT");
+    expect(["USED", "NO_MATCHES", "DEGRADED", "SKIPPED"]).toContain(
+      t.retrieval_status,
+    );
+    expect(typeof t.access_limited).toBe("boolean");
+    expect(t.context_items_used).toBe(result.context_used);
+    expect(t.memory_updated).toBe(false);
+    expect(t.tool_calls).toEqual([]);
+    expect(t.verification_status).toBe("NOT_ACTIVE");
+    expect(Array.isArray(result.context_provenance)).toBe(true);
+
+    // No internals leak in the serialized service response.
+    const json = JSON.stringify(result);
+    expect(json).not.toContain('"content":');
+    expect(json).not.toContain("capsules_denied_permission");
+    expect(json).not.toContain("vector");
+    expect(json).not.toContain("embedding");
+    expect(json).not.toContain("bridge_id");
+    expect(json).not.toContain("capability_flags");
+    expect(json).not.toContain("chain_of_thought");
+  });
+
   it("rejects L8 history > 50 messages with INVALID_HISTORY", async () => {
     const { auth, otzar } = makeServices();
     const owner = await loginAs(auth);

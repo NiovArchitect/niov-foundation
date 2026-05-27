@@ -29,6 +29,11 @@ import {
   TokenBudgetExceededError,
   type LayerBundle,
 } from "./truncation.js";
+import {
+  projectOtzarTransparency,
+  type ChatTransparency,
+  type ContextProvenanceItem,
+} from "./transparency.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -74,12 +79,18 @@ export interface ConductSessionInput {
 }
 
 // WHAT: Successful conductSession return.
+// ADR-0051 (Wave 1): `transparency` and `context_provenance` are ADDITIVE
+// OPTIONAL fields surfacing the governed context metadata COE already
+// produced. `ok`, `response`, `context_used`, `tokens_consumed`, and
+// `conversation_id` are unchanged (backward-compatible).
 export interface ConductSessionSuccess {
   ok: true;
   response: string;
   context_used: number;
   tokens_consumed: number;
   conversation_id: string;
+  transparency?: ChatTransparency;
+  context_provenance?: ContextProvenanceItem[];
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -563,12 +574,24 @@ export class OtzarService {
       (L4.length > 0 ? 1 : 0) +
       truncated.final.L5_items.length;
 
+    // ADR-0051 Wave 1: additive transparency projection. Pure mapping of
+    // the `coe` metadata already computed above (and the existing
+    // context_used count) -- no new retrieval, no scoring change, no COE
+    // re-call. The mapper never serializes raw content or the raw
+    // denied-permission count.
+    const { transparency, context_provenance } = projectOtzarTransparency({
+      coe,
+      context_items_used: contextUsed,
+    });
+
     return {
       ok: true,
       response: llmResult.text,
       context_used: contextUsed,
       tokens_consumed: truncated.total_tokens,
       conversation_id: conversationId,
+      transparency,
+      context_provenance,
     };
   }
 

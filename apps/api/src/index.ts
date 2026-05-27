@@ -337,6 +337,13 @@ export type {
   TruncateResult,
 } from "./services/otzar/truncation.js";
 
+export { projectOtzarTransparency } from "./services/otzar/transparency.js";
+export type {
+  ChatTransparency,
+  ContextProvenanceItem,
+  CoeTransparencyInput,
+} from "./services/otzar/transparency.js";
+
 export {
   MemoryKVCache,
   RedisKVCache,
