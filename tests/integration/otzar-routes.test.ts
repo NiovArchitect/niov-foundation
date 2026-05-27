@@ -351,6 +351,17 @@ describe("GET /otzar/my-twin", () => {
         is_admin_twin: boolean;
         status: string;
         skills: unknown[];
+        role_scope_profile?: {
+          identity: { twin_id: string };
+          role: { is_admin_twin: boolean };
+          scope_summary: { scope_label: string };
+          assistance_profile: { autonomy_mode: string };
+          governance: {
+            sensitive_actions_require: string;
+            observation_mode: string;
+          };
+          continuity: { recent_conversation_count: number };
+        };
       };
       has_multiple_twins: boolean;
       twin_count: number;
@@ -364,6 +375,23 @@ describe("GET /otzar/my-twin", () => {
     expect(Array.isArray(body.twin.skills)).toBe(true);
     expect(body.has_multiple_twins).toBe(false);
     expect(body.twin_count).toBe(1);
+    // ADR-0053 Wave 2A: role_scope_profile traverses the route.
+    expect(body.twin.role_scope_profile).toBeDefined();
+    expect(body.twin.role_scope_profile!.identity.twin_id).toBe(body.twin.twin_id);
+    expect(typeof body.twin.role_scope_profile!.scope_summary.scope_label).toBe("string");
+    expect(body.twin.role_scope_profile!.governance.sensitive_actions_require).toBe(
+      "PERMISSION_POLICY_OR_APPROVAL",
+    );
+    expect(body.twin.role_scope_profile!.governance.observation_mode).toBe(
+      "PERMISSIONED_WORK_CONTEXT_NOT_SURVEILLANCE",
+    );
+    expect(typeof body.twin.role_scope_profile!.continuity.recent_conversation_count).toBe("number");
+    // No raw internals leak across the wire.
+    expect(response.payload).not.toContain("clearance");
+    expect(response.payload).not.toContain("capability_flags");
+    expect(response.payload).not.toContain("bridge_id");
+    expect(response.payload).not.toContain("can_share_forward");
+    expect(response.payload).not.toContain("storage_location");
   });
 
   it("response excludes template_content, capability_flags, bridge IDs, capsule/vector internals", async () => {
