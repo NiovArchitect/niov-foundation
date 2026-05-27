@@ -34,6 +34,10 @@ import {
   type ChatTransparency,
   type ContextProvenanceItem,
 } from "./transparency.js";
+import {
+  projectConversationDetail,
+  type ConversationDetailView,
+} from "./conversation-detail.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -310,6 +314,18 @@ export interface ConversationListSuccess {
   items: ConversationListItem[];
   total: number;
   has_more: boolean;
+}
+
+// WHAT: Inputs for getConversationDetail (ADR-0054 Wave 2B).
+export interface GetConversationDetailInput {
+  token: string;
+  conversation_id: string;
+}
+
+// WHAT: Successful getConversationDetail return (single safe look-back).
+export interface ConversationDetailSuccess {
+  ok: true;
+  conversation: ConversationDetailView;
 }
 
 // WHAT: The Otzar service.
@@ -771,7 +787,14 @@ export class OtzarService {
     // Flip conversation status.
     await prisma.otzarConversation.update({
       where: { conversation_id: input.conversation_id },
-      data: { status: "CLOSED", closed_at: new Date() },
+      // ADR-0054 Wave 2B: link the conversation to the
+      // CONVERSATION_LEARNING summary capsule written above (additive;
+      // the canonical conversation->summary link for look-back detail).
+      data: {
+        status: "CLOSED",
+        closed_at: new Date(),
+        summary_capsule_id: newCapsuleId,
+      },
     });
 
     // Increment latest CompoundingMetrics.capsule_count for the org.
@@ -1130,6 +1153,101 @@ export class OtzarService {
     };
   }
 
+  // ──────────────────────────────────────────────────────────────
+  // getConversationDetail -- safe, self-scoped conversation look-back.
+  //
+  // WHAT: Return one of the caller's OWN conversations as a safe detail
+  //        view (metadata + close summary + topics).
+  // INPUT: GetConversationDetailInput { token, conversation_id }.
+  // OUTPUT: ConversationDetailSuccess (200) or OtzarFailure
+  //         (SESSION_* / CONVERSATION_NOT_FOUND / NOT_CONVERSATION_OWNER).
+  // WHY: ADR-0054 Wave 2B. Self-scoped (entity_id === caller; no admin
+  //      gate, no cross-tenant). The summary is resolved ONLY via the
+  //      explicit summary_capsule_id link (no storage_location parsing),
+  //      and only the capsule's payload_summary + topic_tags are read --
+  //      NEVER content / storage_location / vectors. transparency /
+  //      corrections / per-conversation continuity are NOT fabricated
+  //      (ADR-0051 transparency is response-only and not persisted). No
+  //      transcripts. Read-only projection -- no new audit literal.
+  // ──────────────────────────────────────────────────────────────
+  async getConversationDetail(
+    input: GetConversationDetailInput,
+  ): Promise<ConversationDetailSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return {
+        ok: false,
+        code: session.code,
+        message: "Conversation detail denied",
+      };
+    }
+    const ownerEntityId = session.entity_id;
+
+    const conv = await prisma.otzarConversation.findUnique({
+      where: { conversation_id: input.conversation_id },
+      select: {
+        conversation_id: true,
+        entity_id: true,
+        twin_id: true,
+        source_type: true,
+        status: true,
+        started_at: true,
+        closed_at: true,
+        message_count: true,
+        summary_capsule_id: true,
+      },
+    });
+    if (conv === null) {
+      return {
+        ok: false,
+        code: "CONVERSATION_NOT_FOUND",
+        message: "Conversation not found",
+      };
+    }
+    // Self-scope: caller may read only their OWN conversation.
+    if (conv.entity_id !== ownerEntityId) {
+      return {
+        ok: false,
+        code: "NOT_CONVERSATION_OWNER",
+        message: "Caller does not own this conversation",
+      };
+    }
+
+    // Resolve the summary capsule ONLY by the explicit summary_capsule_id
+    // link (ADR-0054; no storage_location parsing). Safe projection only --
+    // never selects content / storage_location / content_hash / vectors.
+    let summaryCapsule: { payload_summary: string; topic_tags: string[] } | null =
+      null;
+    if (conv.summary_capsule_id !== null) {
+      const cap = await prisma.memoryCapsule.findFirst({
+        where: { capsule_id: conv.summary_capsule_id, deleted_at: null },
+        select: { payload_summary: true, topic_tags: true },
+      });
+      if (cap !== null) {
+        summaryCapsule = {
+          payload_summary: cap.payload_summary,
+          topic_tags: cap.topic_tags,
+        };
+      }
+    }
+
+    const conversation = projectConversationDetail({
+      conversation: {
+        conversation_id: conv.conversation_id,
+        twin_id: conv.twin_id,
+        source_type: conv.source_type,
+        status: conv.status,
+        started_at: conv.started_at,
+        closed_at: conv.closed_at,
+        message_count: conv.message_count,
+        summary_capsule_id: conv.summary_capsule_id,
+      },
+      summaryCapsule,
+    });
+
+    return { ok: true, conversation };
+  }
+
   // WHAT: Extract conversation topics via the LLM, with robust
   //        fallbacks.
   // INPUT: Optional history string array.
@@ -1255,7 +1373,14 @@ export class OtzarService {
     });
     await prisma.otzarConversation.update({
       where: { conversation_id: conversationId },
-      data: { status: "CLOSED", closed_at: new Date() },
+      // ADR-0054 Wave 2B: link the conversation to the
+      // CONVERSATION_LEARNING summary capsule written above (additive;
+      // the canonical conversation->summary link for look-back detail).
+      data: {
+        status: "CLOSED",
+        closed_at: new Date(),
+        summary_capsule_id: newCapsuleId,
+      },
     });
     await this.cache.delete(`otzar:conv:${conversationId}:last_active`);
     await this.cache.delete(`otzar:prime:${ownerEntityId}`);

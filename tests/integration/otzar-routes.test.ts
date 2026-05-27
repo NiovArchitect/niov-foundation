@@ -688,3 +688,141 @@ describe("GET /otzar/conversations", () => {
     ]);
   });
 });
+
+describe("GET /otzar/conversations/:id", () => {
+  // Build a CLOSED conversation linked to a CONVERSATION_LEARNING summary
+  // capsule directly (no LLM) so these tests do not consume the sequenced
+  // fixture provider.
+  async function makeClosedWithSummary(
+    ownerEntityId: string,
+    summary: string,
+    topics: string[],
+  ): Promise<string> {
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+    });
+    const capsuleId = randomUUID();
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: capsuleId,
+        wallet_id: wallet!.wallet_id,
+        entity_id: ownerEntityId,
+        version: 1,
+        capsule_type: "CONVERSATION_LEARNING",
+        topic_tags: topics,
+        decay_type: "TIME_BASED",
+        payload_summary: summary,
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:cl-${randomUUID()}`,
+      },
+    });
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId,
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 3,
+        status: "CLOSED",
+        closed_at: new Date(),
+        summary_capsule_id: capsuleId,
+      },
+    });
+    return conversationId;
+  }
+
+  it("401 when bearer is missing", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${randomUUID()}`,
+      remoteAddress: "10.99.1.3",
+    });
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { code: string }).code).toBe("SESSION_INVALID");
+  });
+
+  it("200 SUMMARY_AVAILABLE returns metadata + summary + topics; no internals leak", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeClosedWithSummary(
+      ctx.ownerId,
+      "Conversation closed; topics: roadmap, hiring",
+      ["roadmap", "hiring"],
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      conversation: {
+        conversation_id: string;
+        status: string;
+        summary: string | null;
+        topics: string[];
+        summary_available: boolean;
+        detail_availability: string;
+        transparency_available: boolean;
+        continuity_note: string;
+      };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.conversation.conversation_id).toBe(conversationId);
+    expect(body.conversation.detail_availability).toBe("SUMMARY_AVAILABLE");
+    expect(body.conversation.summary).toBe(
+      "Conversation closed; topics: roadmap, hiring",
+    );
+    expect(body.conversation.topics).toEqual(["roadmap", "hiring"]);
+    expect(body.conversation.summary_available).toBe(true);
+    expect(body.conversation.transparency_available).toBe(false);
+    expect(body.conversation.continuity_note).toMatch(/not retained in Wave 2B/i);
+    // No raw internals across the wire. ("transcript" intentionally appears
+    // in continuity_note ("not a transcript") — not banned here.)
+    expect(response.payload).not.toContain("storage_location");
+    expect(response.payload).not.toContain("content_hash");
+    expect(response.payload).not.toContain("context_provenance");
+    expect(response.payload).not.toContain("bridge_id");
+    expect(response.payload).not.toContain("capability_flags");
+    expect(response.payload).not.toContain("embedding");
+  });
+
+  it("404 CONVERSATION_NOT_FOUND for an unknown id", async () => {
+    const ctx = await loginNoTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${randomUUID()}`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(404);
+    expect((response.json() as { code: string }).code).toBe(
+      "CONVERSATION_NOT_FOUND",
+    );
+  });
+
+  it("403 NOT_CONVERSATION_OWNER: caller A cannot read caller B's conversation", async () => {
+    const a = await loginNoTwin();
+    const b = await loginNoTwin();
+    const conversationId = await makeClosedWithSummary(
+      b.ownerId,
+      "B's private close summary",
+      ["confidential"],
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}`,
+      headers: { authorization: `Bearer ${a.token}` },
+      remoteAddress: a.ip,
+    });
+    expect(response.statusCode).toBe(403);
+    expect((response.json() as { code: string }).code).toBe(
+      "NOT_CONVERSATION_OWNER",
+    );
+    expect(response.payload).not.toContain("B's private close summary");
+  });
+});
