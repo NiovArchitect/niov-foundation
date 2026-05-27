@@ -235,3 +235,6 @@ Bidirectional citations (cited from):
 - `docs/architecture/README.md` §Architectural Decision Records
 - `CLAUDE.md` §5 (ADR quick-reference jump table)
 - `docs/otzar/README.md` (Otzar docs index)
+- ADR-0054 (Otzar Conversation Look-back and Safe Continuity
+  Surfacing) — the Wave 2B contract implements this ADR's §4
+  preferred `summary_capsule_id` link on `OtzarConversation`.

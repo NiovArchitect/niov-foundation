@@ -250,4 +250,33 @@ export async function registerOtzarRoutes(
     }
     return reply.code(200).send(result);
   });
+
+  // GET /api/v1/otzar/conversations/:id -- safe, self-scoped conversation
+  // look-back detail (ADR-0054 Wave 2B). Bearer + "read" only (no admin
+  // gate). Returns metadata + close summary + topics; NO transcript /
+  // message bodies / raw context / capsule internals. CONVERSATION_NOT_FOUND
+  // (404) for unknown id; NOT_CONVERSATION_OWNER (403) for a cross-caller.
+  // (Static `/conversations` and param `/conversations/:id` are distinct
+  // Fastify routes -- no conflict.)
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/otzar/conversations/:id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await otzarService.getConversationDetail({
+        token,
+        conversation_id: request.params.id,
+      });
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
 }

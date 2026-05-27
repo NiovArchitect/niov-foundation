@@ -332,7 +332,16 @@ export type {
   ListConversationsInput,
   ConversationListItem,
   ConversationListSuccess,
+  GetConversationDetailInput,
+  ConversationDetailSuccess,
 } from "./services/otzar/otzar.service.js";
+
+export { projectConversationDetail } from "./services/otzar/conversation-detail.js";
+export type {
+  ConversationDetailView,
+  ConversationDetailInput,
+  ConversationDetailAvailability,
+} from "./services/otzar/conversation-detail.js";
 
 export {
   truncateToTokenBudget,

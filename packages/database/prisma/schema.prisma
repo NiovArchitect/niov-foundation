@@ -1174,6 +1174,12 @@ model OtzarConversation {
   status          String   @default("ACTIVE")
   started_at      DateTime @default(now())
   closed_at       DateTime?
+  // ADR-0054 Wave 2B: explicit, nullable link to the CONVERSATION_LEARNING
+  // summary capsule written at close. Additive; null for pre-existing/active
+  // conversations (no backfill). Replaces fragile storage_location parsing
+  // (D-OTZ-3) as the canonical conversation->summary link. Set by
+  // closeConversation / degradedClose; read by getConversationDetail.
+  summary_capsule_id String? @db.Uuid
 
   @@index([entity_id])
   @@map("otzar_conversations")

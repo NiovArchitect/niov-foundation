@@ -1306,3 +1306,192 @@ describe("listConversations", () => {
     expect(serialized).not.toContain("payload_summary");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// GET CONVERSATION DETAIL -- ADR-0054 Wave 2B look-back
+// ──────────────────────────────────────────────────────────────────
+
+describe("getConversationDetail", () => {
+  // Create a CLOSED conversation directly linked to a CONVERSATION_LEARNING
+  // summary capsule (deterministic; no LLM).
+  async function makeClosedWithSummary(
+    ownerEntityId: string,
+    summary: string,
+    topics: string[],
+  ): Promise<{ conversationId: string; capsuleId: string }> {
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+    });
+    const capsuleId = randomUUID();
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: capsuleId,
+        wallet_id: wallet!.wallet_id,
+        entity_id: ownerEntityId,
+        version: 1,
+        capsule_type: "CONVERSATION_LEARNING",
+        topic_tags: topics,
+        decay_type: "TIME_BASED",
+        payload_summary: summary,
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:cl-${randomUUID()}`,
+      },
+    });
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId,
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 3,
+        status: "CLOSED",
+        closed_at: new Date(),
+        summary_capsule_id: capsuleId,
+      },
+    });
+    return { conversationId, capsuleId };
+  }
+
+  it("closeConversation sets summary_capsule_id on the conversation row", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+    const conv = await otzar.conductSession({
+      token: owner.token,
+      message: "hi",
+    });
+    if (!conv.ok) throw new Error("conductSession failed");
+    const close = await otzar.closeConversation({
+      token: owner.token,
+      conversation_id: conv.conversation_id,
+      capsule_ids_used: [],
+    });
+    expect(close.ok).toBe(true);
+    if (!close.ok) return;
+    const row = await prisma.otzarConversation.findUnique({
+      where: { conversation_id: conv.conversation_id },
+    });
+    expect(row?.summary_capsule_id).toBe(close.capsule_id);
+    expect(row?.status).toBe("CLOSED");
+  });
+
+  it("SUMMARY_AVAILABLE returns summary + topics for a closed linked conversation", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const { conversationId, capsuleId } = await makeClosedWithSummary(
+      owner.entity.entity_id,
+      "Conversation closed; topics: pricing, launch",
+      ["pricing", "launch"],
+    );
+    const result = await otzar.getConversationDetail({
+      token: owner.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const c = result.conversation;
+    expect(c.detail_availability).toBe("SUMMARY_AVAILABLE");
+    expect(c.summary).toBe("Conversation closed; topics: pricing, launch");
+    expect(c.topics).toEqual(["pricing", "launch"]);
+    expect(c.summary_available).toBe(true);
+    expect(c.summary_capsule_id).toBe(capsuleId);
+    expect(c.transparency_available).toBe(false);
+    expect(c.continuity_note).toMatch(/not retained in Wave 2B/i);
+    // No raw internals serialized (capsule has storage_location/content_hash,
+    // but the detail must not carry them).
+    const json = JSON.stringify(result);
+    expect(json).not.toContain("storage_location");
+    expect(json).not.toContain("content_hash");
+    expect(json).not.toContain("context_provenance");
+    expect(json).not.toContain("bridge_id");
+    expect(json).not.toContain("capability_flags");
+    expect(json).not.toContain("embedding");
+    // "transcript" intentionally appears in continuity_note ("not a
+    // transcript"); the field set carries no transcript/message content.
+  });
+
+  it("ACTIVE_NOT_CLOSED for an active conversation (summary null)", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: owner.entity.entity_id,
+        twin_id: owner.entity.entity_id,
+        source_type: "CHAT",
+        participants: [owner.entity.entity_id],
+        message_count: 2,
+        status: "ACTIVE",
+      },
+    });
+    const result = await otzar.getConversationDetail({
+      token: owner.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.conversation.detail_availability).toBe("ACTIVE_NOT_CLOSED");
+    expect(result.conversation.summary).toBeNull();
+    expect(result.conversation.summary_available).toBe(false);
+  });
+
+  it("NO_SUMMARY_YET for a closed conversation without summary_capsule_id", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: owner.entity.entity_id,
+        twin_id: owner.entity.entity_id,
+        source_type: "CHAT",
+        participants: [owner.entity.entity_id],
+        message_count: 4,
+        status: "CLOSED",
+        closed_at: new Date(),
+        // summary_capsule_id intentionally null (pre-existing / degraded)
+      },
+    });
+    const result = await otzar.getConversationDetail({
+      token: owner.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.conversation.detail_availability).toBe("NO_SUMMARY_YET");
+    expect(result.conversation.summary).toBeNull();
+    expect(result.conversation.summary_capsule_id).toBeNull();
+  });
+
+  it("CONVERSATION_NOT_FOUND for an unknown id", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await otzar.getConversationDetail({
+      token: owner.token,
+      conversation_id: randomUUID(),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  it("NOT_CONVERSATION_OWNER: caller A cannot read caller B's conversation (self-scope)", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await loginAs(auth);
+    const b = await loginAs(auth);
+    const { conversationId } = await makeClosedWithSummary(
+      b.entity.entity_id,
+      "B's private close summary",
+      ["confidential"],
+    );
+    const result = await otzar.getConversationDetail({
+      token: a.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("NOT_CONVERSATION_OWNER");
+  });
+});
