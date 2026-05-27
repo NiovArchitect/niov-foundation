@@ -128,6 +128,14 @@ describe("POST /otzar/conversation/message", () => {
       conversation_id: string;
       context_used: number;
       tokens_consumed: number;
+      transparency?: {
+        retrieval_source: string;
+        retrieval_status: string;
+        access_limited: boolean;
+        context_items_used: number;
+        verification_status: string;
+      };
+      context_provenance?: unknown[];
     };
     expect(body.ok).toBe(true);
     // Decision 1 Option C: exact-equality against recorded fixture
@@ -137,6 +145,17 @@ describe("POST /otzar/conversation/message", () => {
     expect(body.conversation_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(typeof body.tokens_consumed).toBe("number");
     expect(typeof body.context_used).toBe("number");
+    // ADR-0051 Wave 1: additive transparency contract traverses the route.
+    expect(body.transparency).toBeDefined();
+    expect(body.transparency!.retrieval_source).toBe("COE_ASSEMBLE_CONTEXT");
+    expect(body.transparency!.context_items_used).toBe(body.context_used);
+    expect(body.transparency!.verification_status).toBe("NOT_ACTIVE");
+    expect(Array.isArray(body.context_provenance)).toBe(true);
+    // No internals leak across the wire.
+    expect(response.payload).not.toContain('"content":');
+    expect(response.payload).not.toContain("capsules_denied_permission");
+    expect(response.payload).not.toContain("bridge_id");
+    expect(response.payload).not.toContain("capability_flags");
   });
 
   it("rejects token_budget > 50000 with BUDGET_TOO_LARGE 422", async () => {

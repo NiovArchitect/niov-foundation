@@ -128,3 +128,13 @@ Bidirectional citations (cited from):
   append-only chain; the BEFORE DELETE trigger here is the
   immutability the event-sourced-audit BEAM-compatibility pattern
   (ADR-0026 §Decision pattern 4) relies on.
+- ADR-0051 (Otzar Chat Transparency and COE-Governed Retrieval
+  Surfacing) — cites this ADR for the append-only audit chain;
+  ADR-0051 surfaces COE-governed context metadata additively and
+  adds **no new audit literal** (RULE 4 is satisfied by the existing
+  `CAPSULE_CONTENT_READ` + `CONVERSATION_STARTED` events; no
+  ADR-0002 amendment).
+- ADR-0052 (Otzar Domain General Intelligence and Governed
+  Synchronicity) — the doctrine ADR cites this append-only audit
+  chain as the governance / proof / RULE 4 backbone for governed,
+  auditable enterprise intelligence.

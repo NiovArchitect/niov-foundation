@@ -164,6 +164,8 @@ This ADR cites ADR-0041 (parent umbrella) at Sub-decision Q-μ G1.6 closure subs
 
 This ADR cites ADR-0033 substantively at Sub-decisions Q-α + Q-ζ + Q-ι + §References register substantively. ADR-0033 §Forward Queue substantively does not currently reference Gap 1 forward-substrate; no append-only back-citation amendment fires at G1.1 absent substrate-state evidence. If G1.4 conditional Elixir support-port substantively fires and surfaces substrate-state evidence at the canonical_record/1 register substantively that warrants an ADR-0033 cross-citation amendment substantively, that amendment fires at G1.4 register substantively per the ADR-0035 §Amendment Pattern discipline canonical.
 
+This ADR is cited by ADR-0051 (Otzar Chat Transparency and COE-Governed Retrieval Surfacing) for the capsule mutation-discrimination semantics. ADR-0051 introduces no ingestion `source_type` taxonomy and no new mutation semantics in Wave 1 — any future `source_type` taxonomy is deferred to a later ADR aligned with ADR-0021/ADR-0042 register substantively — so no append-only back-citation amendment to this ADR's body fires beyond this bidirectional reference.
+
 ## G1.2 RULE 13 Substrate-State Correction
 
 Status: Active
