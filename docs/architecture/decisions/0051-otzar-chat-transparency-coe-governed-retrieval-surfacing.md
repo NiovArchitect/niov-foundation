@@ -302,3 +302,7 @@ Bidirectional citations (cited from):
   Synchronicity) — the doctrine ADR frames this Wave 1 transparency
   surface as "the first governed transparency surface in the larger
   Domain General Intelligence path."
+- ADR-0053 (Otzar Employee AI Twin Role-Scope Profile and
+  Drift-Prevention Foundations) — the Wave 2 contract follows this
+  ADR's additive, backward-compatible extension precedent (extends
+  `getMyTwin` without changing existing fields).

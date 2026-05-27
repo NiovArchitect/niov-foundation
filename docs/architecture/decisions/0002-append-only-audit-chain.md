@@ -138,3 +138,8 @@ Bidirectional citations (cited from):
   Synchronicity) — the doctrine ADR cites this append-only audit
   chain as the governance / proof / RULE 4 backbone for governed,
   auditable enterprise intelligence.
+- ADR-0053 (Otzar Employee AI Twin Role-Scope Profile and
+  Drift-Prevention Foundations) — the Wave 2 role-scope profile and
+  drift foundations rely on this append-only audit chain as the
+  governance/proof backbone (RULE 4); the profile is a read-only
+  projection and adds no new audit literal in Wave 2A.

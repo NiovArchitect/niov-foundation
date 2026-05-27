@@ -21,6 +21,13 @@ layer for the Autonomous Enterprise.
 
 ## Canonical decision records
 
+- **ADR-0053** — Otzar Employee AI Twin Role-Scope Profile and
+  Drift-Prevention Foundations
+  (`docs/architecture/decisions/0053-otzar-employee-ai-twin-role-scope-profile.md`)
+  — the Wave 2 contract (design-only): additively deepen the employee
+  AI Twin into a safe, self-scoped role-scope profile (build-order
+  step 3); conversation look-back and drift-prevention foundations
+  are bounded follow-ons, not yet implemented.
 - **ADR-0052** — Otzar Domain General Intelligence and Governed
   Synchronicity (`docs/architecture/decisions/0052-otzar-domain-general-intelligence-and-governed-synchronicity.md`)
   — the canonical decision the doctrine record companions.
