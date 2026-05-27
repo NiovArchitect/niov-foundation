@@ -4,6 +4,10 @@ node_modules/
 dist/
 .DS_Store
 
+# TypeScript incremental build artifacts (tsc --incremental / composite).
+# Regenerable build cache; never committed.
+*.tsbuildinfo
+
 # Working-reference PDFs in docs/ are snapshots of evolving build
 # guides (often spanning multiple repos / sections). Keep them in
 # the working tree but never commit — pattern-match catches future
