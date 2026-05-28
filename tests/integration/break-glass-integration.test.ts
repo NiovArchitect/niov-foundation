@@ -169,6 +169,46 @@ async function makeAdminAndLogin(opts: {
   return { entityId: entity.entity_id, token: body.token, ip };
 }
 
+// Seed a distinct PERSON entity with can_admin_niov on its TAR so the
+// ADR-0026 Amendment 1 Phase E resolver can select a structurally independent
+// platform-admin approver. Tests that exercise the ordinary "no APPROVED ->
+// 403 ESCALATION_PENDING + PENDING row created" path (post-break-glass-consume
+// retry, expired grant, action mismatch, no grant at all) must seed a second
+// platform-admin so the resolver class C path succeeds; otherwise the single-
+// admin deployment fails closed at 503 with DUAL_CONTROL_NO_APPROVER_AVAILABLE.
+async function seedDistinctPlatformAdmin(): Promise<string> {
+  const entity = await createEntity(
+    makeEntityInput({ entity_type: "PERSON" }),
+  );
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entity.entity_id },
+    data: { can_admin_niov: true },
+  });
+  const fresh = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: entity.entity_id },
+  });
+  if (fresh === null) throw new Error("TAR vanished mid-seed");
+  const newHash = computeTARHash({
+    can_login: fresh.can_login,
+    can_read_capsules: fresh.can_read_capsules,
+    can_write_capsules: fresh.can_write_capsules,
+    can_share_capsules: fresh.can_share_capsules,
+    can_create_hives: fresh.can_create_hives,
+    can_access_external_api: fresh.can_access_external_api,
+    can_admin_niov: fresh.can_admin_niov,
+    can_admin_org: fresh.can_admin_org,
+    clearance_ceiling: fresh.clearance_ceiling,
+    monetization_role: fresh.monetization_role,
+    compliance_frameworks: fresh.compliance_frameworks,
+    status: fresh.status,
+  });
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entity.entity_id },
+    data: { tar_hash: newHash },
+  });
+  return entity.entity_id;
+}
+
 // Create + approve a dual-control EscalationRequest for the caller (distinct
 // approver -- GAP-C1: source may NOT self-approve). The APPROVED-wins fixture.
 async function grantApproval(callerEntityId: string): Promise<string> {
@@ -448,6 +488,10 @@ describe("GOVSEC.5 break-glass BG.2 live dual-control seam", () => {
 
   it("single-use: a second privileged request under the same grant is denied (403 ESCALATION_PENDING)", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    // Phase E: seed an independent approver so the post-consume retry's
+    // resolver class C succeeds and the ordinary 403 ESCALATION_PENDING path
+    // is reached rather than the 503 NO_APPROVER_AVAILABLE fail-closed path.
+    await seedDistinctPlatformAdmin();
     await invokeGrant(admin, {
       action_type: MONETIZATION_ACTION_TYPE,
       justification: "x",
@@ -464,6 +508,9 @@ describe("GOVSEC.5 break-glass BG.2 live dual-control seam", () => {
 
   it("an expired grant does NOT authorize the privileged route -> 403", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    // Phase E: independent approver so the ordinary 403 path is reached
+    // (else single-admin fails closed at 503).
+    await seedDistinctPlatformAdmin();
     const created = await invokeGrant(admin, {
       action_type: MONETIZATION_ACTION_TYPE,
       justification: "x",
@@ -485,6 +532,8 @@ describe("GOVSEC.5 break-glass BG.2 live dual-control seam", () => {
 
   it("a grant for a DIFFERENT action does NOT authorize the privileged route -> 403", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    // Phase E: independent approver so the ordinary 403 path is reached.
+    await seedDistinctPlatformAdmin();
     await invokeGrant(admin, {
       action_type: ORG_ACTION_TYPE,
       justification: "x",
@@ -528,6 +577,9 @@ describe("GOVSEC.5 break-glass BG.2 live dual-control seam", () => {
 
   it("the ordinary denied path is unchanged when no grant exists -> 403 ESCALATION_PENDING + a PENDING escalation is created", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    // Phase E: independent approver so the ordinary 403 path is reached
+    // (else single-admin fails closed at 503 NO_APPROVER_AVAILABLE).
+    const distinctApprover = await seedDistinctPlatformAdmin();
 
     const res = await patchConfig(admin, { niov_fee_share: 0.4, holder_share: 0.6 });
     expect(res.statusCode).toBe(403);
@@ -537,5 +589,9 @@ describe("GOVSEC.5 break-glass BG.2 live dual-control seam", () => {
     });
     expect(escRows).toHaveLength(1);
     expect(escRows[0]!.status).toBe("PENDING");
+    // ADR-0026 Amendment 1 Phase E: auto-created target is the independently
+    // resolved class-C approver, never the caller.
+    expect(escRows[0]!.target_entity_id).toBe(distinctApprover);
+    expect(escRows[0]!.target_entity_id).not.toBe(admin.entityId);
   });
 });

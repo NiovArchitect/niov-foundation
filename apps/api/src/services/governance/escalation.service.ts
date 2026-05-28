@@ -80,7 +80,10 @@ import type {
   EscalationType,
   Prisma,
 } from "@niov/database";
-import type { EscalationActionDescriptor } from "../../security/privileged-endpoints.js";
+import type {
+  EscalationActionDescriptor,
+  PrivilegedEndpoint,
+} from "../../security/privileged-endpoints.js";
 import { dualControlDescription } from "../../security/privileged-endpoints.js";
 import { logger } from "../../logger.js";
 
@@ -266,40 +269,200 @@ export async function findApprovedDualControlForCaller(
   });
 }
 
+// WHAT: Discriminated-union result of resolveDualControlTarget below. ok=true
+//        carries a non-caller approver and the resolution class that produced
+//        it; ok=false carries the structured fail-closed reason the middleware
+//        translates into the Zone U1 NO_APPROVER marker + 503 response.
+// INPUT: Used as a value/parameter type.
+// OUTPUT: None -- this is a type, not a value.
+// WHY: ADR-0026 Amendment 1 §5 + §10 contract. The class identifier
+//      (explicit-metadata / org-admin-pool / platform-admin-pool) is the
+//      Zone U1 target_resolution_reason field per §6; the fail-closed reason
+//      maps NO_ELIGIBLE_TARGET -> "no-eligible-target" marker, and
+//      INVALID_CANDIDATE -> structural violation surfaced for audit only
+//      (not user-facing). Both fail-closed branches drive the same 503-class
+//      middleware response (§Invariant 4): no fallback may silently target
+//      the caller, never delegates.
+export type DualControlTargetResolution =
+  | {
+      ok: true;
+      target_entity_id: string;
+      resolution_reason:
+        | "explicit-metadata"
+        | "org-admin-pool"
+        | "platform-admin-pool";
+    }
+  | {
+      ok: false;
+      reason: "NO_ELIGIBLE_TARGET" | "INVALID_CANDIDATE";
+    };
+
+// WHAT: Resolve a Phase E target entity for an auto-created dual-control
+//        EscalationRequest. Class A (explicit metadata) -> Class B (org-admin
+//        excluding caller, scoped to caller's org) -> Class C (NIOV
+//        platform-admin excluding caller) -> Class D fail-closed.
+// INPUT: callerEntityId (the request initiator -- the source of the dual-
+//        control escalation; never returned as a target) + endpoint (the
+//        full PrivilegedEndpoint -- actionDescriptor.metadata drives Class A,
+//        authTier drives Class B vs Class C).
+// OUTPUT: A DualControlTargetResolution: ok=true with the resolved
+//          target_entity_id and the resolution_reason class, or ok=false
+//          (NO_ELIGIBLE_TARGET / INVALID_CANDIDATE) when the policy cannot
+//          pick a structurally independent approver.
+// WHY: Replaces the sub-phase E placeholder (`target_entity_id: callerEntityId`)
+//      with a deterministic, auditable, fail-closed selection per ADR-0026
+//      Amendment 1 §2 + §3. Invariant 2 (target_entity_id !== source_entity_id)
+//      holds at create-time by construction here, not as a downstream
+//      defensive check. Invariant 6 (no cross-org leak): Class B is filtered
+//      structurally at the Prisma query tier by membership in the caller's
+//      parent org; Class C is the global NIOV platform-admin set and is not
+//      org-scoped by design (platform-tier operations cross orgs). Selection
+//      within each class is deterministic (lowest entity_id lexicographically)
+//      so Zone U1 replays reproduce the same target (Invariant 5). Eligible
+//      candidates exclude: caller, soft-deleted (deleted_at not null),
+//      non-ACTIVE entity status, non-ACTIVE TAR status. Class A explicit
+//      target additionally requires the candidate to satisfy the same active
+//      gates; a present-but-invalid candidate surfaces INVALID_CANDIDATE
+//      (forward-substrate hook -- no current LIVE PRIVILEGED_ENDPOINTS entry
+//      carries explicit metadata). Class B candidate query joins through
+//      EntityMembership (child_id = candidate, parent_id = caller's parent
+//      org) -- the same cross-org-leak structural defence as the DRIFT 9
+//      admin-routes filter narrowing pattern.
+export async function resolveDualControlTarget(
+  callerEntityId: string,
+  endpoint: PrivilegedEndpoint,
+): Promise<DualControlTargetResolution> {
+  // Class A -- explicit operation-specific target. No LIVE entry uses this
+  // today; the typing hook keeps the resolver substrate ready for the
+  // operation-specific designated-approver semantics referenced in
+  // ADR-0026 Amendment 1 §3 + §10.
+  const explicitTarget = endpoint.actionDescriptor.metadata?.target_entity_id;
+  if (typeof explicitTarget === "string" && explicitTarget.length > 0) {
+    if (explicitTarget === callerEntityId) {
+      return { ok: false, reason: "INVALID_CANDIDATE" };
+    }
+    const candidate = await prisma.entity.findFirst({
+      where: {
+        entity_id: explicitTarget,
+        status: "ACTIVE",
+        deleted_at: null,
+        tar: { status: "ACTIVE" },
+      },
+      select: { entity_id: true },
+    });
+    if (candidate === null) {
+      return { ok: false, reason: "INVALID_CANDIDATE" };
+    }
+    return {
+      ok: true,
+      target_entity_id: candidate.entity_id,
+      resolution_reason: "explicit-metadata",
+    };
+  }
+
+  // Class B -- org-level eligible approver excluding caller. Only fires for
+  // can_admin_org-tier endpoints. Cross-org structural defence: the
+  // candidate query joins through EntityMembership (the candidate must be
+  // an active child of the same parent org as the caller).
+  if (endpoint.authTier === "can_admin_org") {
+    const callerMembership = await prisma.entityMembership.findFirst({
+      where: { child_id: callerEntityId, is_active: true },
+      select: { parent_id: true },
+      orderBy: { hierarchy_level: "desc" },
+    });
+    if (callerMembership === null) {
+      return { ok: false, reason: "NO_ELIGIBLE_TARGET" };
+    }
+    const orgCandidate = await prisma.entity.findFirst({
+      where: {
+        status: "ACTIVE",
+        deleted_at: null,
+        entity_id: { not: callerEntityId },
+        tar: { status: "ACTIVE", can_admin_org: true },
+        child_memberships: {
+          some: { parent_id: callerMembership.parent_id, is_active: true },
+        },
+      },
+      select: { entity_id: true },
+      orderBy: { entity_id: "asc" },
+    });
+    if (orgCandidate === null) {
+      return { ok: false, reason: "NO_ELIGIBLE_TARGET" };
+    }
+    return {
+      ok: true,
+      target_entity_id: orgCandidate.entity_id,
+      resolution_reason: "org-admin-pool",
+    };
+  }
+
+  // Class C -- NIOV platform-admin approver excluding the caller. Production
+  // default for all 4 current LIVE PRIVILEGED_ENDPOINTS (all can_admin_niov).
+  if (endpoint.authTier === "can_admin_niov") {
+    const platformCandidate = await prisma.entity.findFirst({
+      where: {
+        status: "ACTIVE",
+        deleted_at: null,
+        entity_id: { not: callerEntityId },
+        tar: { status: "ACTIVE", can_admin_niov: true },
+      },
+      select: { entity_id: true },
+      orderBy: { entity_id: "asc" },
+    });
+    if (platformCandidate !== null) {
+      return {
+        ok: true,
+        target_entity_id: platformCandidate.entity_id,
+        resolution_reason: "platform-admin-pool",
+      };
+    }
+  }
+
+  // Class D -- fail closed.
+  return { ok: false, reason: "NO_ELIGIBLE_TARGET" };
+}
+
 // WHAT: Get-or-create a PENDING dual-control EscalationRequest for the
-//        caller matching a specific privileged-endpoint action descriptor.
+//        caller matching a specific privileged-endpoint action descriptor,
+//        using a resolved Phase E target.
 // INPUT: callerEntityId (the request initiator -- the source of the
 //        dual-control escalation) + actionDescriptor (the
 //        EscalationActionDescriptor for the privileged endpoint the
-//        requireDualControl preHandler matched).
+//        requireDualControl preHandler matched) + targetEntityId (the
+//        independent approver resolved by resolveDualControlTarget;
+//        MUST be distinct from callerEntityId -- callers must invoke the
+//        resolver first and bail to the fail-closed 503 path on
+//        { ok: false }).
 // OUTPUT: The PENDING EscalationRequest row. If a matching PENDING row
 //          already exists for this (callerEntityId, actionDescriptor) pair
 //          (matched via description === dualControlDescription(actionType)),
 //          returns the existing row WITHOUT writing a new ESCALATION_CREATED
 //          audit event. If no matching PENDING exists, delegates to
-//          createEscalationForCaller (which creates the PENDING row inside
-//          a transaction and writes the ESCALATION_CREATED audit event).
+//          createEscalationForCaller with target_entity_id = targetEntityId
+//          (Phase E real target, replacing the sub-phase E placeholder).
 // WHY: Prevents queue flooding when a restricted caller retries a
 //      privileged endpoint repeatedly -- each retry would otherwise create
 //      a duplicate PENDING dual-control escalation, polluting approver
 //      queues and the audit chain. Mirrors the createGateEscalationForCaller
 //      dedup pattern above (the requires_validation gate-fail path) which
 //      prevents the same flooding. Consumed by the requireDualControl
-//      Fastify preHandler (apps/api/src/middleware/dual-control.middleware.ts,
-//      sub-phase E [SEC-DUAL-CONTROL-MIDDLEWARE]) on the denied path.
-//
-//      SUBSTRATE-STATE LIMITATION: target_entity_id is set to the caller
-//      (self-target) as a sub-phase E placeholder. The dual-control
-//      canonical record (§3 step 6) specifies the target should be "a
-//      designated approver or the requesting org's admin set", but
-//      org-admin-set resolution is forward-queued (Sub-box 2 Phase 2). The
-//      transitionPendingForCaller skeleton gate below currently allows
-//      caller === target self-resolve per §5.8; ADR-0026 at sub-phase H +
-//      Phase 2 substrate resolve this to a distinct second human.
+//      Fastify preHandler (apps/api/src/middleware/dual-control.middleware.ts)
+//      on the denied path AFTER resolveDualControlTarget has selected an
+//      independent approver. Self-target invariant: a distinct second human
+//      is the structural create-time guarantee; GAP-C1 (the source-self-
+//      approval guard at transitionPendingForCaller) remains as defence in
+//      depth at the transition tier.
 export async function getOrCreatePendingDualControlForCaller(
   callerEntityId: string,
   actionDescriptor: EscalationActionDescriptor,
+  targetEntityId: string,
 ): Promise<EscalationRequest> {
+  if (targetEntityId === callerEntityId) {
+    // Structural Phase E Invariant 2 guard: callers MUST resolve a distinct
+    // target via resolveDualControlTarget before invoking this helper. A
+    // same-identity target here is a bug at the call site -- fail fast.
+    throw new Error("ESCALATION_TARGET_INVALID");
+  }
   const existing = await prisma.escalationRequest.findFirst({
     where: {
       source_entity_id: callerEntityId,
@@ -313,7 +476,7 @@ export async function getOrCreatePendingDualControlForCaller(
     return existing;
   }
   return createEscalationForCaller(callerEntityId, {
-    target_entity_id: callerEntityId, // placeholder; Phase 2 substrate resolves
+    target_entity_id: targetEntityId,
     escalation_type: "DUAL_CONTROL_REQUIRED",
     severity: "HIGH",
     description: dualControlDescription(actionDescriptor.type),

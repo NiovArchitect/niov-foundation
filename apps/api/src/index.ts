@@ -445,8 +445,12 @@ export {
   expireEscalation,
   findApprovedDualControlForCaller,
   getOrCreatePendingDualControlForCaller,
+  resolveDualControlTarget,
 } from "./services/governance/escalation.service.js";
-export type { CreateEscalationInput } from "./services/governance/escalation.service.js";
+export type {
+  CreateEscalationInput,
+  DualControlTargetResolution,
+} from "./services/governance/escalation.service.js";
 
 // break-glass.service.ts re-exports -- GOVSEC.5 break-glass (GAP-K1, ADR-0050)
 // BG.1 substrate. External consumers (tests, sibling packages) reach these via
