@@ -81,9 +81,9 @@ async function loginAs(
   const password = "correct-horse-battery";
   const input = makeEntityInput({ entity_type: "PERSON", password });
   const entity = await createEntity(input);
-  const login = (await auth.login(input.email!, password, ops, {
+  const login = await auth.login(input.email!, password, ops, {
     ip_address: null,
-  })) as LoginResult;
+  });
   if (!login.ok) throw new Error(`login failed: ${login.code}`);
   return { entity, token: login.token };
 }

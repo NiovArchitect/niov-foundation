@@ -57,9 +57,9 @@ echo "  ✓ db-push guard passed"
 echo "→ typecheck (tsc --noEmit; strict 12-error baseline per ADR-0015 Decision B)"
 npx tsc --noEmit -p tsconfig.json 2>&1 | tee /tmp/niov-precommit-tsc.log
 ERROR_COUNT=$(grep -c "error TS" /tmp/niov-precommit-tsc.log || echo 0)
-echo "  TS error count: $ERROR_COUNT (baseline: 12)"
-if [ "$ERROR_COUNT" -gt 12 ]; then
-  echo "  ::error:: TS error count $ERROR_COUNT exceeds baseline 12 — fix before commit"
+echo "  TS error count: $ERROR_COUNT (baseline: 4)"
+if [ "$ERROR_COUNT" -gt 4 ]; then
+  echo "  ::error:: TS error count $ERROR_COUNT exceeds baseline 4 — fix before commit"
   exit 1
 fi
 echo "  ✓ TS baseline preserved at $ERROR_COUNT errors"

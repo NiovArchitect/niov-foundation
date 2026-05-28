@@ -80,12 +80,53 @@ operator's Pacific-morning workday; operator can investigate
 fresh failures without competing with end-of-day fatigue.
 
 **Decision B**: TypeScript baseline enforcement = strict
-12-error threshold. CI fails if `tsc --noEmit` produces more
-than 12 errors. Rationale: 12 errors is the documented
-baseline preserved across Track A Gates 4-6; any new error
-is a regression. Future systematic reductions update the
-threshold by deliberate decision (a future ADR amendment),
-not auto-tracking.
+**4**-error threshold (**Amendment 1, Reconciled 2026-05-28**;
+prior 12-error threshold preserved verbatim below for
+historical context). CI fails if `tsc --noEmit` produces more
+than 4 errors. Rationale: 4 errors is the documented baseline
+after the 2026-05-28 `[TYPECHECK-LOGINRESULT-NARROWING-REFACTOR-EXECUTE-VERIFY-AUTH]`
+mechanical refactor mechanically removed 8 stale test-tier
+`LoginResult.code` discriminated-union narrowing errors by
+dropping the `as LoginResult` cast at 8 test-helper sites
+(`tests/integration/monetization.test.ts`, `tests/unit/coe.test.ts`,
+`tests/unit/compliance.test.ts`, `tests/unit/cosmp/{negotiate,read,write}.test.ts`,
+`tests/unit/governance.test.ts`, `tests/unit/hive.test.ts`).
+Any new error beyond 4 is a regression. Future systematic
+reductions update the threshold by deliberate decision (a
+future ADR amendment), not auto-tracking.
+
+The 4 remaining errors (as of Amendment 1) are:
+
+1. `apps/api/src/server.ts:299` — `Record<string, RateLimitPolicy>`
+   vs `RateLimitPolicy | undefined` index-signature drift
+   (safe-to-fix-soon technical debt).
+2. `apps/api/src/services/cosmp/write.service.ts:548` —
+   `ValidateFailure.entity_id` access on the failure branch of
+   the validateSession discriminated union
+   (safe-to-fix-soon technical debt).
+3. `apps/api/src/services/monetization/monetization.service.ts:30`
+   — `PRICING_TABLE: Record<CapsuleType, number>` missing 11
+   entries (`CONVERSATION_LEARNING`, `TASK_LEARNING`,
+   `WORK_PATTERN`, `COMMUNICATION_PREF`, + 7 more). **This is
+   the canonical deliberate-blocker per ADR-0021 §Step 3**;
+   pricing decisions for new CapsuleType values warrant
+   explicit consideration.
+4. `packages/database/src/queries/capsule.ts:242` — `CapsuleMetadata`
+   shape drift vs the Prisma `select` in `getCapsuleMetadata`
+   (missing `tokens`, `tokens_tokenizer`, `commitment_date`,
+   `embedding_content_hash`, + 9 more). **Architectural
+   decision required**; reconciliation queued as a separate
+   ADR-0017 Production Discipline-framed planning QLOCK.
+
+**Prior text (preserved for historical context):**
+
+> **Decision B**: TypeScript baseline enforcement = strict
+> 12-error threshold. CI fails if `tsc --noEmit` produces more
+> than 12 errors. Rationale: 12 errors is the documented
+> baseline preserved across Track A Gates 4-6; any new error
+> is a regression. Future systematic reductions update the
+> threshold by deliberate decision (a future ADR amendment),
+> not auto-tracking.
 
 **Decision C**: PR check coverage = unit + integration +
 typecheck only on PRs and pushes to main. Real-LLM tier is

@@ -45,9 +45,9 @@ jobs:
           npx tsc --noEmit -p tsconfig.json 2>&1 | tee tsc-output.log
           set -e
           ERROR_COUNT=$(grep -c "error TS" tsc-output.log || echo 0)
-          echo "TS error count: $ERROR_COUNT (baseline: 12)"
-          if [ "$ERROR_COUNT" -gt 12 ]; then
-            echo "::error::TS error count $ERROR_COUNT exceeds baseline 12"
+          echo "TS error count: $ERROR_COUNT (baseline: 4)"
+          if [ "$ERROR_COUNT" -gt 4 ]; then
+            echo "::error::TS error count $ERROR_COUNT exceeds baseline 4"
             exit 1
           fi
           echo "✓ TS baseline preserved at $ERROR_COUNT errors"
