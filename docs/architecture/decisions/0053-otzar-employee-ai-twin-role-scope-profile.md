@@ -238,3 +238,7 @@ Bidirectional citations (cited from):
 - ADR-0054 (Otzar Conversation Look-back and Safe Continuity
   Surfacing) — the Wave 2B contract implements this ADR's §4
   preferred `summary_capsule_id` link on `OtzarConversation`.
+- ADR-0055 (Otzar Correction Signals and Drift-Prevention
+  Continuity) — the Wave 2C contract is the per-conversation half
+  of this ADR's §5 "drift-prevention foundations"; full drift
+  detection remains the Wave 3 boundary §5 locked.
