@@ -5,21 +5,406 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-25 ([FOUNDATION-CONSOLE-LIVE-BROWSER-SMOKE]
-minimum-touch update — adds the CONSOLE.1 Foundation Console live
-browser smoke SUCCESS entry below. This is a verification milestone;
-the smoke itself produced no committed code change in this repo. Does
-not refresh other stale sections. Prior minimum-touch update was
-2026-05-15 [SUB-BOX-3-CLOSURE] per Sub-phase 7 Q-NEW-1 LOCKED Option α
-— adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
-closure entry canonical at substantive register substantively without
-performing a broader staleness refresh. Substrate-honest scope:
-Sub-box 1 + Sub-box 2 Phase 1 + Block B Phase 2 + ADRs 0023-0035
-remain stale at this entry register; broader refresh forward-queued
-as a separate substrate-honest mini-arc canonical at substantive
-register substantively when substrate justifies. Prior `**Last
-updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH] post-Track A
-+ RAA 12.8 canonicalization).
+**Last updated:** 2026-05-28 ([WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]
+minimum-touch refresh — adds the Wave 1 / 2A / 2B / 2C closeouts +
+catalog summary entries for ADRs 0049–0055 + the 12C.0 Foundation
+backend batch (D1–D4) closeout + the dual-control Phase-E
+target-resolution substrate-honest open-gap entry + the
+production-go-live "all 10 sections required, not MVP" framing per
+the Founder Directive 2026-05-28. Substrate-honest scope: this
+refresh adds one newest-first section and does NOT rewrite any
+prior content below. The existing GOVSEC.5 phase closure entry
+already canonical in this file (the `**GOVSEC.5 is CLOSED as a
+phase**` line below) is preserved verbatim and cross-referenced
+from the new section per Rule 0 (Documentation-First / No-Guessing).
+ADR-0050 §BG.3 carries language predating the GOVSEC.5 phase
+closure (`3a9cce6`) and the org-admin throttle follow-on
+(`f06be71`); ADR-0050 §BG.3 reconciliation is forward-queued as a
+separate ADR-0050 minor-amendment QLOCK. Prior minimum-touch update
+was 2026-05-25 [FOUNDATION-CONSOLE-LIVE-BROWSER-SMOKE] — adds the
+CONSOLE.1 Foundation Console live browser smoke SUCCESS entry
+below; that prior update was a verification milestone with no
+committed code change in this repo. Substrate-honest scope
+inherited from prior refreshes: Sub-box 1 + Sub-box 2 Phase 1 +
+Block B Phase 2 + ADRs 0023-0035 remain stale at this entry
+register; broader refresh forward-queued as a separate
+substrate-honest mini-arc canonical at substantive register
+substantively when substrate justifies. Prior to that, 2026-05-15
+[SUB-BOX-3-CLOSURE] per Sub-phase 7 Q-NEW-1 LOCKED Option α —
+adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
+closure entry without performing a broader staleness refresh.
+Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
+post-Track A + RAA 12.8 canonicalization).
+
+## [WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH] 2026-05-28
+
+**Status: VERIFIED docs-only refresh of substrate-state truth-of-record
+at Foundation HEAD `c56bd5764eb23d3b762b84b672c6d3bb26c37fcf`.** This
+entry is a minimum-touch refresh per the existing discipline: append
+newest-first, preserve all prior content below, cite file:line
+evidence for every substantive claim (Rule 0 — Documentation-First
+/ No-Guessing; if documentation conflicts with code, code with
+file:line evidence is current behavior).
+
+This refresh adds: (1) the Otzar Wave 1 / 2A / 2B / 2C closeouts;
+(2) catalog summary entries for ADRs 0049–0055; (3) the 12C.0
+Foundation backend batch (D1–D4) closeout with file:line evidence;
+(4) the dual-control Phase-E target-resolution substrate-honest
+open-gap entry; (5) a cross-reference to the existing GOVSEC.5
+phase closure entry already canonical below; (6) acknowledgment
+that ADR-0050 §BG.3 prose is now stale relative to later closure
+commits; (7) the production-go-live framing per the Founder
+Directive 2026-05-28.
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### Required production sections — all 10, none deferrable as "optional later"
+
+Per Founder Directive 2026-05-28, the following 10 sections are
+required production scope for the enterprise client launch. Hives,
+MCP / connectors, Agent Playground, billing, enterprise analytics,
+full audit viewer, and autonomous execution may NOT be framed as
+"later optional features"; sequencing may be staged, but the
+go-live architecture must account for all 10:
+
+1. **Employee Intelligence Core** — observe / correction / safe
+   context priority within scope; Wave 1 / 2A / 2B / 2C are the
+   first four real-content surfaces. **Currently the only
+   customer-shippable section end-to-end** across Foundation +
+   Control Tower.
+2. **Autonomous Execution Core** — bounded, governed, audit-aware.
+   **Partial**: dual-control approval gate live for 4
+   `PRIVILEGED_ENDPOINTS` (`apps/api/src/security/privileged-endpoints.ts`);
+   execution engine missing; `TwinConfig.autonomy_level` is
+   config-only, not enforced. Phase E target-resolution remains
+   open (see §Phase E below).
+3. **Hives / Team Intelligence** — Foundation backend live
+   (`apps/api/src/services/hive/hive.service.ts` +
+   `apps/api/src/routes/hive.routes.ts` + Loop 4 aggregate refresh
+   in `apps/api/src/services/feedback/feedback.service.ts`); CT
+   consumer **missing** (no CT page reads `api.org.hives.list`
+   today).
+4. **MCP / Connectors** — **missing**; no Foundation route, no
+   service; explicitly deferred by ADR-0052 sequencing guards and
+   ADR-0051/0053/0054/0055 non-goal lists. `IntegrationCredential`
+   model exists in schema but has no consumer.
+5. **Agent Playground** — **missing**; deferred by
+   ADR-0053/0054/0055 non-goal lists. `synthetic-dmw-simulation`
+   harness is a governance-validation test fixture, not a
+   user-facing playground.
+6. **Enterprise Analytics** — **partial**; org-admin read surface
+   live at `GET /api/v1/org/analytics`
+   (`apps/api/src/routes/org.routes.ts`); NIOV-tier
+   `GET /api/v1/console/overview`
+   (`apps/api/src/routes/console.routes.ts`) covers governance /
+   entities / capsules / compliance / monetization.
+   **Surface-truth gap**: `CompoundingMetrics.compound_score` is
+   stub-0 (no calculation service writes a real score).
+   `IntelligencePattern` populated by Loop 3 only; not
+   auto-populated from CORRECTION capsules.
+7. **Full Audit Viewer** — backend **complete**: append-only chain
+   per ADR-0002 (`audit_events_immutable()` Postgres trigger);
+   51 `AUDIT_EVENT_TYPE_VALUES` literals
+   (`packages/database/src/queries/audit.ts`); 7 console endpoints
+   under `/api/v1/console/*`; org-admin `GET /api/v1/org/audit`
+   with 12C.0 server-side filters (see §12C.0 D3 below). CT
+   consumer (`src/pages/Security.tsx`) is a placeholder targeting
+   12D.
+8. **Billing / Entitlements** — **partial**: monetization service
+   (`apps/api/src/services/monetization/monetization.service.ts`),
+   wallet routes (`apps/api/src/routes/wallet.routes.ts`), and
+   dual-control over `PATCH /api/v1/platform/monetization/config`
+   live; **no seat / plan / `Entitlement` / `Subscription` model**;
+   no per-org billing plan.
+9. **Admin / Governance Control Tower** — Foundation backend live
+   (12B.1–12B.4 + 12C.0 D1–D4 + dual-control + break-glass +
+   console + regulator + escalation); CT 12B sections closed
+   (`Home.tsx`, `Users.tsx`, `AITeammates.tsx`, `AccessControl.tsx`);
+   CT 12C–12F screens are placeholders.
+10. **Deployment / Security / Go-Live Operations** — hardened core
+    per ADRs 0013/0015/0018/0019/0024/0025/0033/0042/0043/0047/0049;
+    CI 4/4 gates (Typecheck / Unit / Integration / Elixir);
+    deployment runbook (`docs/operations/deployment-runbook.md`)
+    Accepted 2026-05-18; parity verifier
+    (`scripts/verify-production-parity.ts`); FIPS posture
+    (`docs/FIPS_DEPLOYMENT_POSTURE.md`); structured logging
+    SIEM-consumable (`docs/STRUCTURED_LOGGING_SCHEMA.md`).
+    GOVSEC.5 phase **CLOSED** (see cross-reference below); other
+    GOVSEC phases (2 / 3-tail / 4-tail / 6 / 7 / 8 / 9 / 10) remain
+    forward-substrate per ADR-0049 Status: Proposed.
+
+### Wave 1 Chat Transparency · CLOSED 2026-05-26
+
+- **Foundation commit:** `6bf54c7` "Add Otzar Wave 1 governed chat
+  transparency"
+- **ADR-0051** Accepted 2026-05-26 — Otzar Chat Transparency and
+  COE-Governed Retrieval Surfacing. Additive `transparency` +
+  `context_provenance` fields on `conductSession` success response
+  at `apps/api/src/services/otzar/otzar.service.ts`; pure mapper
+  at `apps/api/src/services/otzar/transparency.ts`. No parallel
+  similarity-service retrieval path; no new audit literal; no
+  `/otzar/context/ingest` route.
+- **Safe claims:** governed chat transparency surface is live;
+  CT consumes via `src/components/employee/TransparencyPanel.tsx`.
+- **Unsafe claims:** transparency is **response-only** and is NOT
+  persisted per conversation; do not claim retrospective
+  transparency history is stored.
+
+### Wave 2A My Twin Role-Scope Profile · CLOSED 2026-05-27
+
+- **Foundation commit:** `3bb773d` "Add Otzar My Twin role-scope
+  profile"
+- **ADR-0053** Accepted 2026-05-27 — Otzar Employee AI Twin
+  Role-Scope Profile and Drift-Prevention Foundations. Additive
+  extension of `getMyTwin` at
+  `apps/api/src/services/otzar/otzar.service.ts` into a safe,
+  self-scoped role-scope profile.
+- **Safe claims:** `GET /api/v1/otzar/my-twin` returns identity +
+  role + scope summary + assistance posture + governance +
+  continuity (`recent_conversation_count`,
+  `recent_correction_count`, `recent_learning_summary_count`); CT
+  consumes via `src/pages/app/MyTwin.tsx` +
+  `src/components/employee/RoleScopeProfilePanel.tsx`.
+- **Unsafe claims:** full drift detection (recurring CORRECTION →
+  `IntelligencePattern` write-side; stale-context warnings;
+  proactive suggestions) is locked to **Wave 3** by ADR-0053 §5;
+  do not claim Wave 3 is live.
+
+### Wave 2B Conversation Look-back · CLOSED 2026-05-27
+
+- **Foundation commit:** `1ffa01d` "Add Otzar conversation look-back
+  detail"
+- **ADR-0054** Accepted 2026-05-27 — Otzar Conversation Look-back
+  and Safe Continuity Surfacing. NEW self-scoped detail endpoint
+  `GET /api/v1/otzar/conversations/:id` at
+  `apps/api/src/routes/otzar.routes.ts`; additive nullable
+  `OtzarConversation.summary_capsule_id String? @db.Uuid` schema
+  column (`packages/database/prisma/schema.prisma`);
+  `closeConversation` / `degradedClose` setting the link; pure
+  mapper `projectConversationDetail` at
+  `apps/api/src/services/otzar/conversation-detail.ts`;
+  `getConversationDetail` service method.
+- **Safe claims:** metadata + close summary + topics + detail
+  availability + honest continuity note; CT consumes via
+  `src/components/employee/ConversationDetailDrawer.tsx`.
+- **Unsafe claims:** `transparency_available` is locked to `false`
+  in the response shape; do not claim retrospective transparency
+  is stored; no transcripts; no raw message replay; no
+  per-conversation continuity beyond the close summary.
+
+### Wave 2C Correction Signals · CLOSED 2026-05-28
+
+- **Foundation commit:** `c56bd57` "Add Otzar
+  correction-to-conversation linkage" (squash of feature branch
+  `feature/otzar-wave-2c-correction-signals` containing
+  `b0619d7` ADR-0055 + `7e4ecef` schema + `3a6b08c` implementation).
+- **ADR-0055** Accepted 2026-05-27 — Otzar Correction Signals and
+  Drift-Prevention Continuity. Optional `conversation_id` on
+  `POST /api/v1/otzar/correction` body
+  (`apps/api/src/routes/otzar-observation.routes.ts` +
+  `apps/api/src/services/otzar/observation.service.ts::processCorrection`);
+  `CONVERSATION_NOT_FOUND` / `NOT_CONVERSATION_OWNER` self-scope
+  failure codes; additive nullable
+  `MemoryCapsule.conversation_id String? @db.Uuid` + composite
+  index `@@index([wallet_id, capsule_type, conversation_id])` in
+  `packages/database/prisma/schema.prisma`; pure
+  `projectConversationCorrections` mapper at
+  `apps/api/src/services/otzar/conversation-corrections.ts`;
+  `getConversationCorrections` service method; NEW safe route
+  `GET /api/v1/otzar/conversations/:id/corrections` returning
+  `{ ok, conversation_id, corrections_count, has_corrections,
+  last_correction_at, drift_prevention_note, continuity_note }`.
+- **Safe claims:** correction signals are scoped, wallet-bound
+  continuity signals; submitted/available semantics, not
+  learned/applied.
+- **Unsafe claims:** any framing that implies learned-applied
+  semantics, permanent behavior correction, autonomous drift
+  prevention, or AI self-correction (see ADR-0055 §Decision 7 and
+  §Decision 9 forbidden-language list for the literal forbid set).
+  Full drift detection remains Wave 3 per ADR-0053 §5 +
+  ADR-0055 §Decision 1.
+
+### 12C.0 Foundation backend batch · LANDED on Foundation (CT consumer migration remains)
+
+All four 12C.0 backend items are live on Foundation at HEAD `c56bd57`
+per Rule 0 file:line evidence; the remaining 12C.0 work is
+Control Tower consumer migration (tracked on the CT operator
+continuity context `otzar-control-tower/CONTEXT.md`, untracked):
+
+- **D1 — `DELETE /api/v1/org/ai-teammates/:id/skills/:packageId`** at
+  `apps/api/src/routes/org.routes.ts:1877` (comment marker
+  "12C.0 (Item 1)"); response `{ ok: true, audit_event_id }` at
+  L1872; audit emits `ADMIN_ACTION
+  details.action="TWIN_SKILL_REMOVED"` at L1973. Integration test:
+  `tests/integration/audit-event-id-surfacing.test.ts:563-626`.
+  Closes the 12B.3 Q5 RemoveSkillButton deferral on the Foundation
+  side.
+- **D2 — `PATCH /api/v1/org/entities/:id` returns
+  `audit_event_id`** at `apps/api/src/routes/org.routes.ts:585-676`;
+  response `{ ok: true, audit_event_id }` at L673 (comment "Closes
+  the last sentinel" at L654); audit emits `ADMIN_ACTION
+  details.action="ORG_ENTITY_UPDATE"`. Closes the
+  `"pending-foundation-extension"` sentinel on the Foundation side
+  (CT-side sentinel sweep pending).
+- **D3 — `GET /api/v1/org/audit?event_type=&actor_entity_id=&target_entity_id=`**
+  server-side filters at `apps/api/src/routes/org.routes.ts:1020-1100+`
+  (comment "12C.0 (Item 3) added 3 optional filters" at L1023);
+  filters AND-narrow within OR-of-actor-or-target org-scope; never
+  widen (cross-org leak prevention is the architectural anchor).
+  `event_type` validated against `AUDIT_EVENT_TYPE_VALUES` (51
+  literals); UUID fields validated at the route layer. Integration
+  tests: `tests/integration/admin-routes.test.ts:483-619` (5
+  cases including cross-org leak guard at L596 "DRIFT 9").
+- **D4 — `GET /api/v1/org/permissions?bridge_id=`** server-side
+  filter at `apps/api/src/routes/org.routes.ts:915-985+` (comment
+  "12C.0 (Item 4) added optional ?bridge_id= filter" at L918);
+  AND-narrows within OR-of-grantor-or-grantee org-scope; never
+  widens (same invariant as D3). Integration test:
+  `tests/integration/admin-routes.test.ts:629+`.
+
+**Remaining 12C.0 work is Control Tower consumer migration** (Lane
+B in the `[ADMIN-RECONCILIATION-AND-12C0-FOUNDATION-BATCH-PLANNING-QLOCK]`
+planning packet): `api.org.aiTeammates.removeSkill` client method
++ `RemoveSkillButton` wiring; TwinDetailDrawer / MemberDetailDrawer
+/ Home audit-consumer migration to pass server-side filters;
+BridgeDetailDrawer `bridge_id` filter migration; sentinel sweep;
+MSW handler updates.
+
+### Dual-control substrate-honest gap update — Phase E open, GAP-C1 closed
+
+Per Rule 0 reading of `apps/api/src/services/governance/escalation.service.ts`
+at HEAD `c56bd57`:
+
+- **GAP-C1 (self-approval block) is CLOSED at service tier** —
+  `escalation.service.ts:397-407` enforces `caller ===
+  source_entity_id → ESCALATION_FORBIDDEN` FIRST, before the
+  target / resolver gate. Already canonical in this file at the
+  existing GOVSEC.5 closure entry below; this refresh adds the
+  Phase E framing.
+- **Phase E (target resolution for auto-created PENDING dual-control
+  escalations) remains OPEN** —
+  `apps/api/src/services/governance/escalation.service.ts:316`
+  carries `target_entity_id: callerEntityId, // placeholder; Phase 2
+  substrate resolves`; ADR-0026 §227 documents the placeholder.
+  `apps/api/src/middleware/dual-control.middleware.ts:41-46` carries
+  matching placeholder commentary. Functional consequence:
+  auto-created PENDING dual-control escalations cannot be approved
+  by anyone because GAP-C1 blocks caller-as-source and the other
+  gate-eligible identities collapse to caller (target placeholder)
+  and null (`resolved_by_entity_id` at create-time).
+- **Risk classification:** Phase E is a **liveness** gap
+  (no-one-can-approve), not a self-approval gap. Self-approval is
+  closed by GAP-C1. The 4 PRIVILEGED_ENDPOINTS
+  (`apps/api/src/security/privileged-endpoints.ts`) are
+  deadlocked-in-practice unless a separate `EscalationRequest` is
+  manually created via `POST /api/v1/escalations` with explicit
+  non-caller `target_entity_id`.
+- **Sequencing dependency:** Phase E SHOULD land before any new
+  privileged endpoint added by Sections §2 Autonomous Execution +
+  §4 MCP / Connectors would propagate the deadlock onto each new
+  privileged op.
+- **Planning packet:** `[ADMIN-RECONCILIATION-AND-12C0-FOUNDATION-BATCH-PLANNING-QLOCK]`
+  carries the Phase E closure plan as Lane A2 (ADR-0026
+  Amendment 1 docs-only) + Lane A3 (code + tests). Forward-queued
+  as separate QLOCKs; not implemented in this refresh.
+
+### GOVSEC.5 status — cross-reference to existing canonical entry below
+
+Per Rule 0, GOVSEC.5 status is **already canonical in this file
+below** at the existing GOVSEC.5 phase closure entry, which states
+verbatim:
+
+> **GOVSEC.5 is CLOSED as a phase. The ADR-0049 GOVSEC umbrella
+> remains Proposed.**
+
+That entry carries the file:line + CI evidence for all four scoped
+items: GAP-C1 self-approval resolution (`98c7351`); GAP-K1
+break-glass (ADR-0050 Accepted; BG.1 `2f487fc` + BG.2 `f5f0256`
++ BG.3 `877b3c0`); org-admin route-set throttle follow-on
+(`f06be71`); GAP-K2 least-privilege capability review (`d491f21`).
+This newest-first refresh **does not contradict** that entry; it
+cross-references it to surface the current-state framing more
+prominently for new sessions.
+
+**GOVSEC.5-phase closure does not close the broader GOVSEC umbrella.**
+ADR-0049 (Status: Proposed) is the 10-phase umbrella; GOVSEC.5 is
+one closed phase inside it. The remaining GOVSEC phases (GOVSEC.2,
+GOVSEC.3-tail, GOVSEC.4-tail, GOVSEC.6, GOVSEC.7, GOVSEC.8,
+GOVSEC.9, GOVSEC.10) remain forward-substrate, each gated by a
+separate Founder QLOCK per ADR-0049's phase decomposition.
+
+### ADR-0050 §BG.3 stale-relative-to-closure-commits acknowledgment
+
+Per Rule 0, ADR-0050 §BG.3 (the BG.3 docs-only closure cascade
+landed 2026-05-22 at commit `877b3c0`) carries the line "GOVSEC.5
+remains OPEN" at the time of ADR-0050 BG.3 acceptance. That was
+substrate-honest at that moment (GAP-B4 follow-on + GAP-K2 were
+both still open). The later commits `f06be71` (org-admin throttle
+follow-on CLOSED) + `d491f21` (GAP-K2 CLOSED) + `3a9cce6`
+(GOVSEC.5 phase closure docs-only cascade) landed AFTER
+ADR-0050 §BG.3 was written; ADR-0050 §BG.3 was not updated
+in-place.
+
+**ADR-0050 §BG.3 is therefore now stale relative to the GOVSEC.5
+phase closure** documented at the canonical entry below and the
+`3a9cce6` commit. Resolution path: forward-queue a separate
+ADR-0050 minor-amendment docs-only QLOCK that reconciles §BG.3's
+"GOVSEC.5 remains OPEN" prose with the actual closure state. This
+refresh **does not modify ADR-0050** (out of EXECUTE-VERIFY scope
+per the QLOCK auth).
+
+### ADR catalog summary entries (Status as of refresh)
+
+- **ADR-0049** Status: Proposed — Government-Grade Hardening and
+  Gap-Closure Program (10-phase GOVSEC umbrella; GOVSEC.5 phase
+  CLOSED inside it; remaining phases forward-substrate).
+- **ADR-0050** Status: Accepted 2026-05-22 — GOVSEC.5 Break-Glass /
+  Time-Boxed Audit (GAP-K1 CLOSED; BG.1 / BG.2 / BG.3
+  substrate-honest closure cascade; §BG.3 prose now stale relative
+  to GOVSEC.5 phase closure — see acknowledgment above).
+- **ADR-0051** Status: Accepted 2026-05-26 — Otzar Chat Transparency
+  and COE-Governed Retrieval Surfacing (Wave 1).
+- **ADR-0052** Status: Accepted 2026-05-27 — Otzar Domain General
+  Intelligence and Governed Synchronicity (doctrine record;
+  companion `docs/otzar/DOMAIN_GENERAL_INTELLIGENCE_DOCTRINE.md`).
+- **ADR-0053** Status: Accepted 2026-05-27 — Otzar Employee AI Twin
+  Role-Scope Profile and Drift-Prevention Foundations (Wave 2A).
+- **ADR-0054** Status: Accepted 2026-05-27 — Otzar Conversation
+  Look-back and Safe Continuity Surfacing (Wave 2B).
+- **ADR-0055** Status: Accepted 2026-05-27 — Otzar Correction Signals
+  and Drift-Prevention Continuity (Wave 2C).
+
+### Substrate-honest claims posture
+
+- **Safe to claim end-to-end today (Section 1 only):** Employee
+  Intelligence Core — Wave 1 + 2A + 2B + 2C all live across
+  Foundation + Control Tower.
+- **Do NOT claim:** "GOVSEC closure" (only GOVSEC.5 phase closed;
+  ADR-0049 umbrella remains Proposed); "break-glass wired into
+  every privileged route" (only the 4 PRIVILEGED_ENDPOINTS);
+  "dual-control is production-end-to-end" (Phase E target-resolution
+  remains open); "MCP / connectors are live"; "hives / team
+  collaboration is customer-live" (backend live; CT consumer
+  missing); "Agent Playground is live"; "autonomous execution is
+  live"; "enterprise reporting is complete"; "billing / entitlements
+  are complete"; "full audit viewer is complete" (CT consumer
+  placeholder); "MVP" — the Founder Directive explicitly rejects
+  MVP framing.
+
+### Forward-queued separate QLOCKs
+
+- `[ADR-0026-AMENDMENT-1-PHASE-E-TARGET-RESOLUTION-WRITE-AND-ACCEPT-AUTH]`
+  (Lane A2 of the planning packet)
+- Phase E code + tests EXECUTE-VERIFY (Lane A3)
+- `[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]` (Lane A4)
+- `[ADR-0056-CROSS-WALLET-MEMBER-CONSENT-WRITE-AND-ACCEPT-AUTH]`
+  (Lane A5; patent-relevant per CT CONTEXT.md L475)
+- `[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`
+  (reconcile §BG.3 stale "GOVSEC.5 remains OPEN" prose; docs-only)
+- Control Tower Lane B 12C.0 consumer migration (B1–B5 — separate
+  CT-side branches per CT CONTEXT.md operator workflow).
 
 ## CONSOLE.1 Foundation Console — Live Browser Smoke SUCCESS 2026-05-25
 
