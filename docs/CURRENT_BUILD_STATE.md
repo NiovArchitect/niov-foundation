@@ -5,15 +5,23 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-28 ([WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]
-minimum-touch refresh — adds the Wave 1 / 2A / 2B / 2C closeouts +
-catalog summary entries for ADRs 0049–0055 + the 12C.0 Foundation
-backend batch (D1–D4) closeout + the dual-control Phase-E
-target-resolution substrate-honest open-gap entry + the
-production-go-live "all 10 sections required, not MVP" framing per
-the Founder Directive 2026-05-28. Substrate-honest scope: this
-refresh adds one newest-first section and does NOT rewrite any
-prior content below. The existing GOVSEC.5 phase closure entry
+**Last updated:** 2026-05-28 ([ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED]
+minimum-touch refresh — supersedes the Phase-E "open-gap"
+framing recorded by the same-date earlier refresh
+`[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` below.
+ADR-0026 Amendment 1 implementation merged to `main` at PR #8
+squash commit `b097d4be56394731e6004e5543031dd10f7c24ce`; the
+dual-control Phase E target-resolution liveness gap is CLOSED at
+implementation tier. Prior same-date refresh
+`[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` adds the
+Wave 1 / 2A / 2B / 2C closeouts + catalog summary entries for
+ADRs 0049–0055 + the 12C.0 Foundation backend batch (D1–D4)
+closeout + the (now-superseded) dual-control Phase-E open-gap
+entry + the production-go-live "all 10 sections required, not
+MVP" framing per the Founder Directive 2026-05-28.
+Substrate-honest scope: this refresh adds one newest-first
+section, annotates four superseded paragraphs inline, and does
+NOT rewrite any prior content below. The existing GOVSEC.5 phase closure entry
 already canonical in this file (the `**GOVSEC.5 is CLOSED as a
 phase**` line below) is preserved verbatim and cross-referenced
 from the new section per Rule 0 (Documentation-First / No-Guessing).
@@ -35,6 +43,218 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED] 2026-05-28
+
+**Status: VERIFIED implementation-tier closure of the dual-control
+Phase E target-resolution liveness gap.** ADR-0026 Amendment 1 is
+implemented and merged to `main` at PR #8 squash commit
+`b097d4be56394731e6004e5543031dd10f7c24ce` (2026-05-28). This
+entry is the canonical superseding-state for the Phase E "open
+gap" framing recorded by the same-date earlier refresh
+`[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` below; that
+earlier framing was substrate-honest at HEAD `c56bd57` and is
+preserved verbatim for historical context per the docs-honesty
+discipline (Rule 0 — Documentation-First / No-Guessing).
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `b097d4b`
+
+Per Rule 0 reading of the merged code at `main`:
+
+- **`resolveDualControlTarget` exists** at
+  `apps/api/src/services/governance/escalation.service.ts:331`
+  with the documented Class A / B / C / D contract; the
+  `DualControlTargetResolution` discriminated union is at L286.
+- **The sub-phase E placeholder is gone from the active create
+  path.** The previous `target_entity_id: callerEntityId, //
+  placeholder; Phase 2 substrate resolves` line at
+  `escalation.service.ts:316` (pre-PR-8) has been replaced;
+  `getOrCreatePendingDualControlForCaller` now requires an
+  explicit, resolver-supplied `targetEntityId` and throws
+  `ESCALATION_TARGET_INVALID` on a same-identity caller-as-target
+  call site (the structural Invariant 2 guard).
+- **Class A — explicit operation-specific metadata** at
+  `escalation.service.ts:339-360`: forward-substrate hook; no
+  current LIVE `PRIVILEGED_ENDPOINTS` entry carries
+  `metadata.target_entity_id`, so this branch returns no
+  candidate today. Available for future designated-approver
+  semantics without re-ordering Class B / C.
+- **Class B — org-admin pool** at
+  `escalation.service.ts:365-393`: fires for `can_admin_org`-tier
+  endpoints; queries `EntityMembership` for the caller's parent
+  org and picks the deterministic lowest non-caller candidate
+  with `tar.can_admin_org = true` and `tar.status = ACTIVE`.
+  Cross-org candidates are excluded by construction at the query
+  tier (DRIFT-9-style structural defence).
+- **Class C — platform-admin pool** at
+  `escalation.service.ts:398-420`: production default for all 4
+  current LIVE `PRIVILEGED_ENDPOINTS` (all `can_admin_niov`-tier);
+  deterministic lowest `entity_id` non-caller candidate with
+  `tar.can_admin_niov = true` and `tar.status = ACTIVE`.
+- **Class D — fail closed** at
+  `escalation.service.ts:423-424`: returns
+  `{ ok: false, reason: "NO_ELIGIBLE_TARGET" }`.
+- **Fail-closed middleware behavior** at
+  `apps/api/src/middleware/dual-control.middleware.ts:509-549`:
+  on `{ ok: false }` emits the
+  `DUAL_CONTROL_NO_APPROVER_AVAILABLE` marker on the existing
+  `ADMIN_ACTION` event type (no new `AuditEventType` literal,
+  no `audit.ts` change, no ADR-0002 amendment) with safe
+  details (`action_descriptor_type`, `route`, `method`,
+  `target_resolution_reason: "no-eligible-target"`); replies 503
+  with a safe `{ ok: false, error: "ESCALATION_TARGET_NOT_FOUND" }`
+  envelope and a `retry-after: 5` header; never delegates to the
+  privileged route handler.
+- **BG.2 break-glass remains the first short-circuit, unchanged**
+  at `dual-control.middleware.ts:445-491`. A valid `BreakGlassGrant`
+  short-circuits Phase E entirely before `resolveDualControlTarget`
+  is invoked, preserving ADR-0050 / BG.2 semantics. Integration
+  proof: `tests/integration/dual-control-phase-e.test.ts` "BG.2
+  regression" case.
+- **GAP-C1 source-cannot-resolve invariant remains intact** at
+  `escalation.service.ts:397-407`. The transition-tier guard
+  remains defence-in-depth: even if a later edit accidentally
+  re-introduces a same-identity target, the source still cannot
+  self-resolve. Integration proof:
+  `tests/integration/dual-control-phase-e.test.ts` "GAP-C1
+  regression" case.
+
+### Production-section impact (substrate-honest)
+
+- **Section 2 Autonomous Execution Core** — the Phase E
+  liveness-prerequisite for adding new privileged endpoints
+  (ADR-0026 Amendment 1 §11) is now closed at implementation
+  tier. Future Autonomous Execution privileged actions routed
+  through dual-control no longer inherit the prior deadlock.
+  Section 2 itself is **still partial** — the execution engine
+  is unchanged; `TwinConfig.autonomy_level` is still config-only;
+  this PR does not deliver autonomous execution.
+- **Section 4 MCP / Connectors** — same lift on the dual-control
+  dependency only. Section 4 remains **missing** at the
+  Foundation surface today.
+- **Section 9 Admin / Governance Control Tower** — operator-facing
+  escalation queue UX can now safely surface auto-created PENDING
+  dual-control rows because they now carry a real
+  `target_entity_id` distinct from the caller, rather than
+  surfacing deadlocked self-target rows. The CT consumer is
+  unchanged in PR #8 — that is a separate Control Tower arc.
+
+### Verification (pre-merge + CI)
+
+- Targeted tests passed **110/110** pre-commit:
+  `npm run test:unit -- escalation`,
+  `npm run test:unit -- dual-control`,
+  `npm run test:unit -- no-console-in-api-src`,
+  `npm run test:integration -- dual-control`,
+  `npm run test:integration -- break-glass`,
+  `npm run test:integration -- escalation-routes`.
+- PR #8 CI **4 / 4 green** on Actions run `26602639652`:
+  Typecheck (strict 12-error baseline) 41s · Unit tier (371
+  tests) 1m16s · Integration tier (111 tests + 1 skipped)
+  1m36s · Elixir tier (compile + test) 2m0s.
+- TypeScript baseline preserved at the accepted **12 errors**
+  exactly (per ADR-0015 Decision B). PR #8 introduced no new TS
+  errors.
+- RULE 16 no-console anchor passed
+  (`tests/unit/no-console-in-api-src.test.ts`).
+- Pre-commit hooks ran and passed (ADR-0025 `db:push` guard +
+  TS baseline check + RULE 16 anchor).
+
+### Scope discipline (what PR #8 touched, and what it did not)
+
+PR #8 squash commit `b097d4b` touches exactly 9 implementation /
+test files:
+
+- `apps/api/src/services/governance/escalation.service.ts`
+- `apps/api/src/middleware/dual-control.middleware.ts`
+- `apps/api/src/index.ts`
+- `tests/unit/escalation-target-resolver.test.ts` (NEW)
+- `tests/unit/dual-control.middleware.test.ts`
+- `tests/integration/dual-control-binding-config.test.ts`
+- `tests/integration/dual-control-binding-orgs.test.ts`
+- `tests/integration/break-glass-integration.test.ts`
+- `tests/integration/dual-control-phase-e.test.ts` (NEW)
+
+No `AGENTS.md`, `CLAUDE.md`, `docs/CURRENT_BUILD_STATE.md`,
+`docs/architecture/decisions/*` ADR, `package.json`, lockfile,
+`.github/workflows/*` CI file, Control Tower file, schema
+migration, dependency install, or secret-access was touched in
+PR #8. ADR-0026 itself was not modified; the implementation
+honors ADR-0026 Amendment 1's six invariants (§2) and the
+Zone U1 audit-detail safety list (§6) verbatim.
+
+### Substrate-honest superseding pointers (inline annotations applied)
+
+The following prior paragraphs are now superseded for
+current-state framing; the prose remains verbatim below for
+historical context, with a one-line `**SUPERSEDED:** ...`
+preface inserted at each site:
+
+- §`Required production sections` item 2 (Autonomous Execution
+  Core) below — the "Phase E target-resolution remains open
+  (see §Phase E below)" tail of the bullet is now superseded.
+- §`Dual-control substrate-honest gap update — Phase E open,
+  GAP-C1 closed` section in
+  `[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` below —
+  Phase E open framing is superseded by this entry.
+- §`Substrate-honest claims posture` below — the
+  `"dual-control is production-end-to-end" (Phase E
+  target-resolution remains open)` Do-NOT-claim is superseded:
+  Phase E target-resolution itself is CLOSED at implementation
+  tier, but the broader "dual-control is production-end-to-end"
+  claim still requires customer-tested approval paths through
+  the 4 LIVE `PRIVILEGED_ENDPOINTS`, so the full
+  production-end-to-end claim remains **unsafe** to make.
+- §`Forward-queued separate QLOCKs` below — Lane A2 (ADR-0026
+  Amendment 1 docs-only) LANDED at `4233d6f` (PR #7); Lane A3
+  (Phase E code + tests EXECUTE-VERIFY) LANDED at `b097d4b`
+  (PR #8). Both lanes are now historical entries, not
+  forward-queue.
+
+### Substrate-honest claims that remain unsafe to make after this refresh
+
+This PR closes the Phase E liveness gap **at implementation
+tier**; it does not turn the Foundation into a finished
+customer-shippable product. Do NOT claim:
+
+- "Autonomous Execution is live" — Phase E unblocks adding new
+  privileged endpoints; it does not provide the execution
+  engine.
+- "MCP / Connectors are live."
+- "Billing / Entitlements are live."
+- "Full Audit Viewer is live" — backend is complete; the
+  Control Tower consumer is a placeholder.
+- "Hives are fully customer-live" — Foundation backend is live;
+  the Control Tower consumer is missing.
+- "Agent Playground is live."
+- "Enterprise Analytics are complete."
+- "All GOVSEC is closed" — only the GOVSEC.5 phase is closed;
+  the ADR-0049 GOVSEC umbrella remains `Status: Proposed`.
+- "TypeScript has zero errors" — the accepted 12-error
+  baseline per ADR-0015 Decision B remains.
+- "All 10 production sections are complete" — only Section 1
+  (Employee Intelligence Core) is end-to-end customer-shippable
+  today across Foundation + Control Tower.
+
+### Forward-substrate after this refresh
+
+- Operator-facing escalation queue UX (Section 9) can now
+  safely expose auto-created PENDING dual-control rows. The
+  Control Tower implementation is a separate arc.
+- A future production arc may add new LIVE `PRIVILEGED_ENDPOINTS`
+  for Autonomous Execution Core (Section 2), MCP / Connectors
+  (Section 4), or expanded admin / governance operations
+  (Section 9) without inheriting the Phase E deadlock.
+- A separate ADR-0050 minor-amendment QLOCK reconciling §BG.3's
+  "GOVSEC.5 remains OPEN" stale prose remains forward-queued
+  (unchanged from the prior refresh; out of scope for this
+  docs-only refresh).
+- The "all 10 production sections required, none deferrable"
+  Founder Directive 2026-05-28 remains in force.
 
 ## [WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH] 2026-05-28
 
@@ -78,8 +298,11 @@ go-live architecture must account for all 10:
    **Partial**: dual-control approval gate live for 4
    `PRIVILEGED_ENDPOINTS` (`apps/api/src/security/privileged-endpoints.ts`);
    execution engine missing; `TwinConfig.autonomy_level` is
-   config-only, not enforced. Phase E target-resolution remains
-   open (see §Phase E below).
+   config-only, not enforced. **SUPERSEDED (see
+   §[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED] above):** Phase E
+   target-resolution is now CLOSED at implementation tier at PR #8
+   squash commit `b097d4b`; the prior "Phase E target-resolution
+   remains open" tail is preserved here as historical context only.
 3. **Hives / Team Intelligence** — Foundation backend live
    (`apps/api/src/services/hive/hive.service.ts` +
    `apps/api/src/routes/hive.routes.ts` + Loop 4 aggregate refresh
@@ -274,6 +497,13 @@ MSW handler updates.
 
 ### Dual-control substrate-honest gap update — Phase E open, GAP-C1 closed
 
+**SUPERSEDED (see §[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED] at
+the top of this document):** Phase E target-resolution is now
+CLOSED at implementation tier at PR #8 squash commit `b097d4b`
+(2026-05-28). The "Phase E open" prose below is preserved
+verbatim as historical context — it was substrate-honest at
+HEAD `c56bd57`, immediately before PR #8 landed.
+
 Per Rule 0 reading of `apps/api/src/services/governance/escalation.service.ts`
 at HEAD `c56bd57`:
 
@@ -384,8 +614,13 @@ per the QLOCK auth).
 - **Do NOT claim:** "GOVSEC closure" (only GOVSEC.5 phase closed;
   ADR-0049 umbrella remains Proposed); "break-glass wired into
   every privileged route" (only the 4 PRIVILEGED_ENDPOINTS);
-  "dual-control is production-end-to-end" (Phase E target-resolution
-  remains open); "MCP / connectors are live"; "hives / team
+  "dual-control is production-end-to-end" — **SUPERSEDED rationale
+  (see §[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED] above):** Phase
+  E target-resolution itself is CLOSED at implementation tier at
+  PR #8 squash commit `b097d4b`; the broader "production-end-to-end"
+  claim still requires customer-tested approval paths through the
+  4 LIVE `PRIVILEGED_ENDPOINTS`, so the full claim remains unsafe
+  to make; "MCP / connectors are live"; "hives / team
   collaboration is customer-live" (backend live; CT consumer
   missing); "Agent Playground is live"; "autonomous execution is
   live"; "enterprise reporting is complete"; "billing / entitlements
@@ -396,8 +631,13 @@ per the QLOCK auth).
 ### Forward-queued separate QLOCKs
 
 - `[ADR-0026-AMENDMENT-1-PHASE-E-TARGET-RESOLUTION-WRITE-AND-ACCEPT-AUTH]`
-  (Lane A2 of the planning packet)
-- Phase E code + tests EXECUTE-VERIFY (Lane A3)
+  (Lane A2 of the planning packet) — **LANDED 2026-05-28 at
+  `4233d6f` (PR #7).** Historical entry; no longer
+  forward-queued.
+- Phase E code + tests EXECUTE-VERIFY (Lane A3) — **LANDED
+  2026-05-28 at `b097d4b` (PR #8); see
+  §[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED] above.**
+  Historical entry; no longer forward-queued.
 - `[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]` (Lane A4)
 - `[ADR-0056-CROSS-WALLET-MEMBER-CONSENT-WRITE-AND-ACCEPT-AUTH]`
   (Lane A5; patent-relevant per CT CONTEXT.md L475)
