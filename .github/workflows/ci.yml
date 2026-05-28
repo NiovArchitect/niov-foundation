@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   typecheck:
-    name: Typecheck (strict 12-error baseline)
+    name: Typecheck (strict 4-error baseline)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
