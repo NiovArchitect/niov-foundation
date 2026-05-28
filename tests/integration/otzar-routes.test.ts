@@ -826,3 +826,177 @@ describe("GET /otzar/conversations/:id", () => {
     expect(response.payload).not.toContain("B's private close summary");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// ADR-0055 Wave 2C: GET /otzar/conversations/:id/corrections
+// (safe, self-scoped per-conversation correction-signal projection)
+// ──────────────────────────────────────────────────────────────────
+
+describe("GET /otzar/conversations/:id/corrections", () => {
+  // Create an ACTIVE conversation owned by `ownerEntityId`. No LLM --
+  // deterministic so these tests do not consume the fixture provider.
+  async function makeOwnedConversation(ownerEntityId: string): Promise<string> {
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId,
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 1,
+        status: "ACTIVE",
+      },
+    });
+    return conversationId;
+  }
+
+  // Plant a CORRECTION capsule linked to `conversationId` in the
+  // caller's wallet. Mirrors the processCorrection write shape but is
+  // deterministic + DB-only.
+  async function writeLinkedCorrection(
+    ownerEntityId: string,
+    conversationId: string,
+    createdAt: Date,
+  ): Promise<string> {
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+    });
+    const capsuleId = randomUUID();
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: capsuleId,
+        wallet_id: wallet!.wallet_id,
+        entity_id: ownerEntityId,
+        version: 1,
+        capsule_type: "CORRECTION",
+        topic_tags: ["correction"],
+        decay_type: "TIME_BASED",
+        payload_summary: "a private correction summary",
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:c-${randomUUID()}`,
+        conversation_id: conversationId,
+        created_at: createdAt,
+      },
+    });
+    return capsuleId;
+  }
+
+  it("401 when bearer is missing", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${randomUUID()}/corrections`,
+      remoteAddress: "10.99.1.4",
+    });
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { code: string }).code).toBe("SESSION_INVALID");
+  });
+
+  it("200 zero state: own conversation with no linked corrections", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/corrections`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      conversation_id: string;
+      corrections_count: number;
+      has_corrections: boolean;
+      last_correction_at: string | null;
+      drift_prevention_note: string;
+      continuity_note: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.conversation_id).toBe(conversationId);
+    expect(body.corrections_count).toBe(0);
+    expect(body.has_corrections).toBe(false);
+    expect(body.last_correction_at).toBeNull();
+    expect(body.drift_prevention_note).toMatch(/not an employee score/i);
+    expect(body.continuity_note).toMatch(/not a transcript/i);
+  });
+
+  it("200 returns real count + ISO last_correction_at; no internals leak", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    const older = new Date("2026-05-26T08:00:00.000Z");
+    const newer = new Date("2026-05-27T08:00:00.000Z");
+    await writeLinkedCorrection(ctx.ownerId, conversationId, older);
+    await writeLinkedCorrection(ctx.ownerId, conversationId, newer);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/corrections`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      corrections_count: number;
+      has_corrections: boolean;
+      last_correction_at: string | null;
+    };
+    expect(body.corrections_count).toBe(2);
+    expect(body.has_corrections).toBe(true);
+    expect(body.last_correction_at).toBe(newer.toISOString());
+    // ADR-0055 §Decision 6 wire-level no-leak invariant.
+    expect(response.payload).not.toContain("payload_summary");
+    expect(response.payload).not.toContain("payload_content");
+    expect(response.payload).not.toContain("a private correction summary");
+    expect(response.payload).not.toContain("correction_capsule_id");
+    expect(response.payload).not.toContain("target_capsule_id");
+    expect(response.payload).not.toContain("storage_location");
+    expect(response.payload).not.toContain("content_hash");
+    expect(response.payload).not.toContain("embedding");
+    expect(response.payload).not.toContain("bridge_id");
+    expect(response.payload).not.toContain("capability_flags");
+    expect(response.payload).not.toContain("context_provenance");
+    expect(response.payload).not.toContain("drift_score");
+    expect(response.payload).not.toContain("employee_score");
+    expect(response.payload).not.toContain("best_practice_learned");
+    expect(response.payload).not.toContain("manager_visibility");
+  });
+
+  it("404 CONVERSATION_NOT_FOUND for an unknown id", async () => {
+    const ctx = await loginNoTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${randomUUID()}/corrections`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(404);
+    expect((response.json() as { code: string }).code).toBe(
+      "CONVERSATION_NOT_FOUND",
+    );
+  });
+
+  it("403 NOT_CONVERSATION_OWNER: caller A cannot read caller B's corrections", async () => {
+    const a = await loginNoTwin();
+    const b = await loginNoTwin();
+    const bConvId = await makeOwnedConversation(b.ownerId);
+    await writeLinkedCorrection(
+      b.ownerId,
+      bConvId,
+      new Date("2026-05-27T09:00:00.000Z"),
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${bConvId}/corrections`,
+      headers: { authorization: `Bearer ${a.token}` },
+      remoteAddress: a.ip,
+    });
+    expect(response.statusCode).toBe(403);
+    expect((response.json() as { code: string }).code).toBe(
+      "NOT_CONVERSATION_OWNER",
+    );
+    // No leak: even the count is suppressed for a cross-caller.
+    expect(response.payload).not.toContain("corrections_count");
+    expect(response.payload).not.toContain("a private correction summary");
+  });
+});

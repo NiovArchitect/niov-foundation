@@ -1495,3 +1495,202 @@ describe("getConversationDetail", () => {
     if (!result.ok) expect(result.code).toBe("NOT_CONVERSATION_OWNER");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// ADR-0055 Wave 2C: getConversationCorrections (safe, self-scoped
+// per-conversation correction-signal projection)
+// ──────────────────────────────────────────────────────────────────
+
+describe("getConversationCorrections", () => {
+  // Create a conversation owned by the given entity. No LLM.
+  async function makeOwnedConversation(ownerEntityId: string): Promise<string> {
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId,
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 1,
+        status: "ACTIVE",
+      },
+    });
+    return conversationId;
+  }
+
+  // Write a CORRECTION capsule owned by `ownerEntityId` linked to
+  // `conversationId` with a controllable created_at. Mirrors the
+  // processCorrection write shape but is deterministic and DB-only.
+  async function writeLinkedCorrection(
+    ownerEntityId: string,
+    conversationId: string,
+    createdAt: Date,
+  ): Promise<string> {
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+    });
+    const capsuleId = randomUUID();
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: capsuleId,
+        wallet_id: wallet!.wallet_id,
+        entity_id: ownerEntityId,
+        version: 1,
+        capsule_type: "CORRECTION",
+        topic_tags: ["correction"],
+        decay_type: "TIME_BASED",
+        payload_summary: "a private correction summary",
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:c-${randomUUID()}`,
+        conversation_id: conversationId,
+        created_at: createdAt,
+      },
+    });
+    return capsuleId;
+  }
+
+  it("zero state: own conversation with no linked corrections returns count 0, has_corrections false, last_correction_at null", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const conversationId = await makeOwnedConversation(owner.entity.entity_id);
+    const result = await otzar.getConversationCorrections({
+      token: owner.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.conversation_id).toBe(conversationId);
+    expect(result.corrections_count).toBe(0);
+    expect(result.has_corrections).toBe(false);
+    expect(result.last_correction_at).toBeNull();
+    expect(result.drift_prevention_note).toMatch(/not an employee score/i);
+    expect(result.continuity_note).toMatch(/not a transcript/i);
+  });
+
+  it("counts only linked corrections in the caller's own wallet; last_correction_at is most recent ISO string", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const conversationId = await makeOwnedConversation(owner.entity.entity_id);
+    const older = new Date("2026-05-26T10:00:00.000Z");
+    const newer = new Date("2026-05-27T10:00:00.000Z");
+    await writeLinkedCorrection(owner.entity.entity_id, conversationId, older);
+    await writeLinkedCorrection(owner.entity.entity_id, conversationId, newer);
+    // Also write an UNLINKED correction (conversation_id null) -- must NOT count.
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: owner.entity.entity_id },
+    });
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: randomUUID(),
+        wallet_id: wallet!.wallet_id,
+        entity_id: owner.entity.entity_id,
+        version: 1,
+        capsule_type: "CORRECTION",
+        topic_tags: ["correction"],
+        decay_type: "TIME_BASED",
+        payload_summary: "unlinked correction",
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:c-${randomUUID()}`,
+        // conversation_id intentionally absent → null
+      },
+    });
+    const result = await otzar.getConversationCorrections({
+      token: owner.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.corrections_count).toBe(2);
+    expect(result.has_corrections).toBe(true);
+    expect(result.last_correction_at).toBe(newer.toISOString());
+  });
+
+  it("excludes soft-deleted linked corrections (deleted_at IS NULL filter)", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const conversationId = await makeOwnedConversation(owner.entity.entity_id);
+    const at = new Date("2026-05-27T11:00:00.000Z");
+    const capsuleId = await writeLinkedCorrection(
+      owner.entity.entity_id,
+      conversationId,
+      at,
+    );
+    await prisma.memoryCapsule.update({
+      where: { capsule_id: capsuleId },
+      data: { deleted_at: new Date() },
+    });
+    const result = await otzar.getConversationCorrections({
+      token: owner.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.corrections_count).toBe(0);
+    expect(result.has_corrections).toBe(false);
+    expect(result.last_correction_at).toBeNull();
+  });
+
+  it("CONVERSATION_NOT_FOUND for an unknown id", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await otzar.getConversationCorrections({
+      token: owner.token,
+      conversation_id: randomUUID(),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  it("NOT_CONVERSATION_OWNER: caller A cannot read caller B's correction signals (self-scope)", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await loginAs(auth);
+    const b = await loginAs(auth);
+    const bConvId = await makeOwnedConversation(b.entity.entity_id);
+    await writeLinkedCorrection(
+      b.entity.entity_id,
+      bConvId,
+      new Date("2026-05-27T12:00:00.000Z"),
+    );
+    const result = await otzar.getConversationCorrections({
+      token: a.token,
+      conversation_id: bConvId,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("NOT_CONVERSATION_OWNER");
+  });
+
+  it("does not serialize raw correction payloads / target_capsule_id / storage_location / content_hash", async () => {
+    const { auth, otzar } = makeServices();
+    const owner = await loginAs(auth);
+    const conversationId = await makeOwnedConversation(owner.entity.entity_id);
+    await writeLinkedCorrection(
+      owner.entity.entity_id,
+      conversationId,
+      new Date("2026-05-27T13:00:00.000Z"),
+    );
+    const result = await otzar.getConversationCorrections({
+      token: owner.token,
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const json = JSON.stringify(result);
+    expect(json).not.toContain("payload_summary");
+    expect(json).not.toContain("payload_content");
+    expect(json).not.toContain("correction_capsule_id");
+    expect(json).not.toContain("target_capsule_id");
+    expect(json).not.toContain("storage_location");
+    expect(json).not.toContain("content_hash");
+    expect(json).not.toContain("embedding");
+    expect(json).not.toContain("bridge_id");
+    expect(json).not.toContain("capability_flags");
+    expect(json).not.toContain("context_provenance");
+    expect(json).not.toContain("drift_score");
+    expect(json).not.toContain("employee_score");
+    expect(json).not.toContain("best_practice_learned");
+    expect(json).not.toContain("manager_visibility");
+  });
+});

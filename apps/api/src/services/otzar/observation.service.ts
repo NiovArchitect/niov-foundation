@@ -60,7 +60,13 @@ export interface ObserveFailure {
     | "SESSION_INVALIDATED"
     | "OPERATION_NOT_PERMITTED"
     | "EXTRACTION_FAILED"
-    | "ORG_NOT_RESOLVED";
+    | "ORG_NOT_RESOLVED"
+    // ADR-0055 Wave 2C: processCorrection self-scope codes when an
+    // optional conversation_id is provided. Reuse the same codes as
+    // ADR-0054's getConversationDetail (same OtzarFailure family) to
+    // keep the cross-route contract consistent.
+    | "CONVERSATION_NOT_FOUND"
+    | "NOT_CONVERSATION_OWNER";
   message: string;
   details?: unknown;
 }
@@ -77,6 +83,11 @@ export interface CorrectionInput {
   incorrect_description: string;
   correct_behavior: string;
   target_capsule_id?: string;
+  // ADR-0055 Wave 2C: optional link to the caller's OWN OtzarConversation
+  // the correction was raised inside. When omitted, behavior is identical
+  // to pre-Wave-2C (capsule persists with conversation_id = null). When
+  // provided, the service validates self-scope before persisting.
+  conversation_id?: string;
 }
 export interface CorrectionSuccess {
   ok: true;
@@ -438,6 +449,36 @@ export class ObservationService {
         message: "caller has no wallet",
       };
     }
+    // ADR-0055 Wave 2C: validate optional conversation_id self-scope BEFORE
+    // writing the CORRECTION capsule. Same code shape as ADR-0054
+    // getConversationDetail (CONVERSATION_NOT_FOUND / NOT_CONVERSATION_OWNER).
+    // When omitted, behavior is unchanged (capsule persists with
+    // conversation_id = null).
+    const conversationId =
+      typeof input.conversation_id === "string" &&
+      input.conversation_id.length > 0
+        ? input.conversation_id
+        : null;
+    if (conversationId !== null) {
+      const conv = await prisma.otzarConversation.findUnique({
+        where: { conversation_id: conversationId },
+        select: { entity_id: true },
+      });
+      if (conv === null) {
+        return {
+          ok: false,
+          code: "CONVERSATION_NOT_FOUND",
+          message: "Conversation not found",
+        };
+      }
+      if (conv.entity_id !== callerEntityId) {
+        return {
+          ok: false,
+          code: "NOT_CONVERSATION_OWNER",
+          message: "Caller does not own this conversation",
+        };
+      }
+    }
     const summary = `${input.incorrect_description} → ${input.correct_behavior}`;
     const targetCapsuleId =
       typeof input.target_capsule_id === "string" &&
@@ -457,6 +498,7 @@ export class ObservationService {
       content_hash: dedupContentHash(summary),
       actor_entity_id: callerEntityId,
       commitment_date: null,
+      conversation_id: conversationId,
     });
     // Correction propagation chain (D-2D-D10-6). After the CORRECTION
     // capsule lands, fire the RAA 12.8 §5.2 chain: snap relevance to
@@ -671,6 +713,11 @@ export class ObservationService {
     content_hash: string;
     actor_entity_id: string;
     commitment_date: Date | null;
+    // ADR-0055 Wave 2C: optional, defaults to null. observe() callers
+    // (DECISION / COMMITMENT / WORK_PATTERN) pass undefined and persist
+    // conversation_id = null; processCorrection passes the validated id
+    // or null.
+    conversation_id?: string | null;
   }): Promise<string> {
     const newCapsuleId = randomUUID();
     const tokens = countTokensAnthropic(args.payload_summary);
@@ -691,6 +738,7 @@ export class ObservationService {
         content_hash: args.content_hash,
         commitment_date: args.commitment_date,
         created_by: args.actor_entity_id,
+        conversation_id: args.conversation_id ?? null,
       },
     });
     await writeAuditEvent({

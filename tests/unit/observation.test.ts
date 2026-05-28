@@ -674,6 +674,105 @@ describe("ObservationService.processCorrection", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────
+// ADR-0055 Wave 2C: processCorrection accepts optional conversation_id
+// ──────────────────────────────────────────────────────────────────
+
+describe("ObservationService.processCorrection -- conversation_id linkage (ADR-0055)", () => {
+  // Helper: create a real OtzarConversation row owned by the given
+  // entity. No LLM -- deterministic.
+  async function makeOwnedConversation(ownerEntityId: string): Promise<string> {
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId,
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 1,
+        status: "ACTIVE",
+      },
+    });
+    return conversationId;
+  }
+
+  it("persists conversation_id on the CORRECTION capsule when valid", async () => {
+    const { auth, observation } = makeServices();
+    const owner = await loginAs(auth);
+    const conversationId = await makeOwnedConversation(owner.entity.entity_id);
+    const result = await observation.processCorrection({
+      token: owner.token,
+      incorrect_description: "wrong tone",
+      correct_behavior: "formal tone",
+      conversation_id: conversationId,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const capsule = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: result.correction_capsule_id },
+    });
+    expect(capsule?.conversation_id).toBe(conversationId);
+    expect(capsule?.capsule_type).toBe("CORRECTION");
+  });
+
+  it("backward-compatible: omitted conversation_id persists null", async () => {
+    const { auth, observation } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await observation.processCorrection({
+      token: owner.token,
+      incorrect_description: "wrong A",
+      correct_behavior: "right A",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const capsule = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: result.correction_capsule_id },
+    });
+    expect(capsule?.conversation_id).toBeNull();
+  });
+
+  it("returns CONVERSATION_NOT_FOUND for an unknown conversation_id", async () => {
+    const { auth, observation } = makeServices();
+    const owner = await loginAs(auth);
+    const result = await observation.processCorrection({
+      token: owner.token,
+      incorrect_description: "wrong B",
+      correct_behavior: "right B",
+      conversation_id: randomUUID(),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  it("returns NOT_CONVERSATION_OWNER for a cross-caller conversation_id", async () => {
+    const { auth, observation } = makeServices();
+    const a = await loginAs(auth);
+    const b = await loginAs(auth);
+    const bConvId = await makeOwnedConversation(b.entity.entity_id);
+    const result = await observation.processCorrection({
+      token: a.token,
+      incorrect_description: "wrong C",
+      correct_behavior: "right C",
+      conversation_id: bConvId,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("NOT_CONVERSATION_OWNER");
+    // No CORRECTION capsule should have been written for A linked to B's
+    // conversation (cross-tenant linkage guard).
+    const leakCheck = await prisma.memoryCapsule.findFirst({
+      where: {
+        capsule_type: "CORRECTION",
+        conversation_id: bConvId,
+        entity_id: a.entity.entity_id,
+      },
+    });
+    expect(leakCheck).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
 // COMMITMENT_DATE WIRE-UP -- closes the loop on 11B priming stub
 // ──────────────────────────────────────────────────────────────────
 

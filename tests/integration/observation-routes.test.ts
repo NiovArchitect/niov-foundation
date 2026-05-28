@@ -172,6 +172,24 @@ describe("POST /otzar/observe", () => {
 });
 
 describe("POST /otzar/correction", () => {
+  // ADR-0055 Wave 2C: helper to make a conversation owned by `entityId`.
+  // No LLM -- deterministic.
+  async function makeOwnedConversation(entityId: string): Promise<string> {
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: entityId,
+        twin_id: entityId,
+        source_type: "CHAT",
+        participants: [entityId],
+        message_count: 1,
+        status: "ACTIVE",
+      },
+    });
+    return conversationId;
+  }
+
   it("writes a CORRECTION capsule and returns 200 + correction_capsule_id", async () => {
     const ctx = await loginWithOrg();
     const response = await app.inject({
@@ -195,5 +213,103 @@ describe("POST /otzar/correction", () => {
     });
     expect(capsule?.capsule_type).toBe("CORRECTION");
     expect(capsule?.entity_id).toBe(ctx.ownerId);
+  });
+
+  // ADR-0055 Wave 2C: optional conversation_id linkage on the POST body.
+  it("200 with conversation_id persists conversation_id on the capsule", async () => {
+    const ctx = await loginWithOrg();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/correction",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: {
+        incorrect_description: "wrong link",
+        correct_behavior: "right link",
+        conversation_id: conversationId,
+      },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      correction_capsule_id: string;
+    };
+    expect(body.ok).toBe(true);
+    const capsule = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: body.correction_capsule_id },
+    });
+    expect(capsule?.conversation_id).toBe(conversationId);
+  });
+
+  it("200 without conversation_id (backward-compat) persists conversation_id null", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/correction",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: {
+        incorrect_description: "backward-compat wrong",
+        correct_behavior: "backward-compat right",
+      },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      correction_capsule_id: string;
+    };
+    expect(body.ok).toBe(true);
+    const capsule = await prisma.memoryCapsule.findUnique({
+      where: { capsule_id: body.correction_capsule_id },
+    });
+    expect(capsule?.conversation_id).toBeNull();
+  });
+
+  it("404 CONVERSATION_NOT_FOUND for an unknown conversation_id", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/correction",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: {
+        incorrect_description: "wrong unknown",
+        correct_behavior: "right unknown",
+        conversation_id: randomUUID(),
+      },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(404);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  it("403 NOT_CONVERSATION_OWNER for a cross-caller conversation_id", async () => {
+    const a = await loginWithOrg();
+    const b = await loginWithOrg();
+    const bConvId = await makeOwnedConversation(b.ownerId);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/correction",
+      headers: { authorization: `Bearer ${a.token}` },
+      payload: {
+        incorrect_description: "wrong cross",
+        correct_behavior: "right cross",
+        conversation_id: bConvId,
+      },
+      remoteAddress: a.ip,
+    });
+    expect(response.statusCode).toBe(403);
+    const body = response.json() as { code: string };
+    expect(body.code).toBe("NOT_CONVERSATION_OWNER");
+    // No leak: no CORRECTION capsule written for A linked to B's conv.
+    const leakCheck = await prisma.memoryCapsule.findFirst({
+      where: {
+        capsule_type: "CORRECTION",
+        conversation_id: bConvId,
+        entity_id: a.ownerId,
+      },
+    });
+    expect(leakCheck).toBeNull();
   });
 });
