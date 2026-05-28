@@ -2,7 +2,15 @@
 
 - **Status:** Accepted 2026-05-22 (Proposed 2026-05-22 → Accepted 2026-05-22 at
   the BG.3 closure cascade; accepted for break-glass / time-boxed audit (GAP-K1)
-  only — **NOT** GOVSEC.5 full closure; see §BG.3 Closure).
+  only — **NOT** GOVSEC.5 full closure; see §BG.3 Closure). **Amendment 1
+  (Reconciled 2026-05-28)** — see §Amendment 1 below: the "GOVSEC.5 remains
+  OPEN" language in §BG.3 Closure and §Decision item 7 and the
+  §Implementation lineage BG.2 / BG.3 / "GOVSEC.5 closure (future)" entries
+  was substrate-honest at 2026-05-22; the GOVSEC.5 phase has since been
+  CLOSED as a phase by later commits, so those paragraphs are now superseded
+  for current-state framing. The break-glass / BG.2 substrate decisions
+  themselves are unchanged; ADR-0050 remains controlling for BG.2
+  semantics.
 - **Phase:** GOVSEC.5 (Admin privilege, break-glass, dual-control) — design-first
   ADR; **no code in this phase**.
 - **Gap:** GAP-K1 (insider threat / break-glass misuse — "no break-glass").
@@ -281,6 +289,179 @@ least-privilege capability review (open / undocumented). GAP-O7 remains open; D2
 GOVSEC.7 deferred. **No code / schema / audit / test change in BG.3** (docs-only
 closure cascade). Founder authorization explicit at
 `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-BREAK-GLASS-BG3-CLOSURE-EXECUTE-VERIFY-AUTH]`.
+
+## Amendment 1 — GOVSEC.5 Phase Closure Reconciliation (Reconciled 2026-05-28)
+
+**Status:** Reconciled 2026-05-28 · Docs-only · **No code, schema, audit
+literal, route, service, middleware, or test change in this amendment.**
+Authorized by Founder per RULE 20 at
+`[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`. The
+break-glass / BG.2 substrate decisions in §Context, §Decision, §Non-goals,
+§Proposed future substrate, §Security properties, §Test plan, §Implementation
+lineage (BG.1 / BG.2 / BG.3 entries), and the §BG.3 Closure body are all
+preserved verbatim; this amendment reconciles only the GOVSEC.5-phase
+status framing that has since been superseded by later commits.
+
+### Why this amendment
+
+ADR-0050 was Accepted 2026-05-22 at the §BG.3 Closure cascade. At that
+moment, the broader GOVSEC.5 phase still had open items (the org-admin
+`requireAdminCapability` route-set throttle follow-on and GAP-K2
+least-privilege capability review), so multiple paragraphs in this ADR
+correctly stated "GOVSEC.5 remains OPEN". Those paragraphs were
+substrate-honest at 2026-05-22.
+
+After 2026-05-22, the remaining GOVSEC.5 items landed in separate commits
+(per `docs/CURRENT_BUILD_STATE.md` §`GOVSEC.5 status — cross-reference to
+existing canonical entry below` and the entry it cross-references):
+
+- the org-admin `requireAdminCapability` route-set throttle follow-on
+  landed (the commit referenced in the build-state file as the org-admin
+  throttle follow-on);
+- GAP-K2 least-privilege capability review landed (the commit referenced
+  in the build-state file as the GAP-K2 closure);
+- the GOVSEC.5 phase closure docs-only cascade then landed and recorded
+  the canonical phase-closure statement.
+
+The build-state file now states verbatim:
+
+> **GOVSEC.5 is CLOSED as a phase. The ADR-0049 GOVSEC umbrella remains
+> Proposed.**
+
+ADR-0050 was not edited in-place at any of those commits. This amendment
+performs that in-place reconciliation per Rule 0 (Documentation-First /
+No-Guessing): documentation that conflicts with the implementation-proven
+substrate state should be reconciled, not left to silently mislead future
+sessions.
+
+### Current canonical state (as of 2026-05-28)
+
+- **GOVSEC.5 is CLOSED as a phase.** The "GOVSEC.5 remains OPEN" language
+  at §Decision item 7 (Status LOCK), §Implementation lineage (BG.2 entry
+  closing line; BG.3 entry "GOVSEC.5 held OPEN"; "GOVSEC.5 closure
+  (future, separate Founder QLOCK)" entry), §BG.3 Closure intro
+  ("acceptance does not close GOVSEC.5"), and §BG.3 Closure closing
+  paragraph ("GOVSEC.5 remains OPEN. ADR-0050 acceptance closes the
+  break-glass mini-slice (GAP-K1) only.") is **superseded** for
+  current-state framing. The historical prose is preserved verbatim in
+  those sections; readers should interpret it as substrate-honest at
+  2026-05-22, not as the current GOVSEC.5 phase status.
+- **ADR-0049 (GOVSEC umbrella) remains Proposed.** The GOVSEC.5 phase
+  closure does not close the broader umbrella. The remaining GOVSEC
+  phases enumerated by ADR-0049 (GOVSEC.2 / GOVSEC.3-tail / GOVSEC.4-tail
+  / GOVSEC.6 / GOVSEC.7 / GOVSEC.8 / GOVSEC.9 / GOVSEC.10) remain
+  forward-substrate, each gated by a separate Founder QLOCK per
+  ADR-0049's phase decomposition.
+- **BG.2 break-glass middleware integration is LIVE.** Per Rule 0 reading
+  of the merged code on `main`:
+  - The dual-control middleware short-circuits to BG.2 on the denied
+    branch at `apps/api/src/middleware/dual-control.middleware.ts:445-491`,
+    calling `validateBreakGlassGrant(callerEntityId,
+    actionDescriptor.type)` and on success `markBreakGlassUsed(grant_id)`
+    inside the existing dual-control Zone U1 sequence. The
+    `DUAL_CONTROL_BREAK_GLASS_DELEGATED` marker is written on the existing
+    `ADMIN_ACTION` event type (no new `AuditEventType` literal); the
+    `BREAK_GLASS_USED` literal is emitted in-tx by `markBreakGlassUsed`.
+    A valid grant short-circuits ADR-0026 Phase E target resolution
+    entirely (the resolver is not invoked under the break-glass path).
+  - The break-glass route surface lives at
+    `apps/api/src/routes/break-glass.routes.ts` (invoke + review,
+    `can_admin_niov`-gated; self-review rejected with
+    `BREAK_GLASS_SELF_REVIEW_FORBIDDEN`).
+  - The service substrate lives at
+    `apps/api/src/services/governance/break-glass.service.ts`
+    (`createBreakGlassGrant` / `validateBreakGlassGrant` /
+    `markBreakGlassUsed` / `expireBreakGlassGrant` / `markBreakGlassReviewed`
+    with the four `BREAK_GLASS_INVOKED` / `USED` / `EXPIRED` / `REVIEWED`
+    audit literals).
+  - The Prisma `BreakGlassGrant` model + `BreakGlassStatus` enum and the
+    mandatory non-null `valid_until` constraint at the schema tier remain
+    canonical at `packages/database/prisma/schema.prisma`.
+  - Integration coverage lives at
+    `tests/integration/break-glass-integration.test.ts` and exercises
+    the BG.2 seam end-to-end (a valid grant short-circuits the denied
+    path; expired / mismatched-action / single-use-consumed / no-grant
+    paths all deny; a normal APPROVED dual-control wins over a present
+    grant without consuming it; self-review is rejected). The Phase E
+    BG.2 regression at
+    `tests/integration/dual-control-phase-e.test.ts` independently
+    asserts that a valid grant short-circuits Phase E and that
+    `DUAL_CONTROL_NO_APPROVER_AVAILABLE` is NOT emitted on the
+    break-glass path.
+- **ADR-0050 remains controlling for break-glass / BG.2 semantics.** The
+  §Context, §Standards / Source Basis, §Decision (7 numbered items with
+  the LOCK statement at item 7 read in the GAP-K1 sense, not as a
+  GOVSEC.5-phase-open assertion), §Non-goals, §Proposed future substrate,
+  §Security properties, §Test plan, and §Implementation lineage entries
+  for BG.1 / BG.2 / BG.3 remain the canonical break-glass design record.
+
+### Break-glass framing preserved (no relaxation)
+
+Reconciling GOVSEC.5 phase-closure status does NOT relax any break-glass
+property. Break-glass remains:
+
+- **time-boxed** by mandatory non-null `valid_until` at the schema tier;
+- **single-use** via atomic `ACTIVE → USED` consumption in
+  `markBreakGlassUsed` (TOCTOU close);
+- **explicitly justified** by a mandatory non-empty justification at
+  create-time;
+- **scoped** to the 4 dual-control `PRIVILEGED_ENDPOINTS` action types
+  enumerated in `apps/api/src/security/privileged-endpoints.ts`;
+- **auditable** via the four `BREAK_GLASS_*` audit literals
+  (`INVOKED` / `USED` / `EXPIRED` / `REVIEWED`) plus the
+  `DUAL_CONTROL_BREAK_GLASS_DELEGATED` marker, with no justification leak
+  in any response body;
+- **subject to two-person review** via `BREAK_GLASS_REVIEWED` with
+  `reviewer ≠ source` enforced; and
+- **not a general bypass** — break-glass remains the constrained
+  emergency alternative when no APPROVED dual-control is available and a
+  valid time-boxed grant exists. A normal APPROVED dual-control always
+  wins first. The ADR-0026 GAP-C1 source-cannot-self-resolve guard at
+  `apps/api/src/services/governance/escalation.service.ts:397-407`
+  remains intact and is unaffected by this amendment.
+
+### Out of scope (substrate-honest)
+
+This amendment closes the §BG.3 stale-prose reconciliation only. It does
+**NOT** make any of the following claims:
+
+- "All GOVSEC is closed" — only the GOVSEC.5 phase is closed; ADR-0049
+  remains Proposed; the other GOVSEC phases remain forward-substrate.
+- "Break-glass covers every privileged route" — break-glass is scoped to
+  the 4 LIVE `PRIVILEGED_ENDPOINTS` (`PLATFORM_MONETIZATION_CONFIG_UPDATE`,
+  `PLATFORM_ORG_CREATION`, `REGULATOR_ACCESS_GRANT`,
+  `REGULATOR_ACCESS_REVOKE`); future privileged endpoints would need
+  separate explicit scope coverage.
+- "Autonomous Execution is live" — Section 2 of the 10 required
+  production sections remains partial; the execution engine is unchanged
+  by this amendment.
+- "MCP / Connectors are live" — Section 4 remains missing.
+- "All 10 production sections are complete" — only Section 1 (Employee
+  Intelligence Core) is end-to-end customer-shippable today across
+  Foundation + Control Tower.
+- "Break-glass is a general bypass" — break-glass is the constrained,
+  time-boxed, accountable, auditable emergency alternative documented
+  above; it is NOT a way to skip the two-person rule routinely.
+
+### Why a minor amendment, not a re-issue
+
+ADR-0050's break-glass / BG.2 substrate decisions are unchanged. The
+substrate-honest issue is purely status framing on the GOVSEC.5 phase
+("OPEN" → "CLOSED as a phase") at a small number of paragraphs. Per the
+Foundation ADR Lifecycle discipline, a minor amendment with inline
+supersession at the top + a single docs-only §Amendment N at the end is
+the canonical pattern (cf. ADR-0001 §Amendment 1, ADR-0026 §Amendment 1,
+ADR-0039 §Amendment 1 + §Amendment 2, ADR-0041 §Sub-decision 6
+Amendment, ADR-0046 §Amendment 1). This amendment follows that pattern
+and does not modify the design, security properties, or test plan.
+
+### Founder authorization for this amendment
+
+Created under explicit Founder authorization per RULE 20 at
+`[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`
+(2026-05-28). Docs-only; no code / schema / audit literal / route /
+service / middleware / test change. ADR-0050 remains the controlling
+ADR for break-glass / BG.2 semantics.
 
 ## Founder authorization
 
