@@ -166,6 +166,51 @@ async function makeAdminAndLogin(opts: {
   return { entityId: entity.entity_id, token: body.token, ip };
 }
 
+// WHAT: Seed a distinct PERSON entity with can_admin_niov on its TAR so the
+//        ADR-0026 Amendment 1 Phase E resolver can select a structurally
+//        independent platform-admin approver. Does NOT log the entity in --
+//        the resolver queries the persisted TAR/Entity state directly.
+// INPUT: None.
+// OUTPUT: The new platform-admin's entity_id.
+// WHY: The resolver fails closed (503 ESCALATION_TARGET_NOT_FOUND + the
+//      DUAL_CONTROL_NO_APPROVER_AVAILABLE marker) when the calling admin is
+//      the only can_admin_niov entity. Tests that exercise the normal
+//      "no APPROVED escalation -> 403 ESCALATION_PENDING + PENDING row created"
+//      path must seed a second platform-admin so the resolver class C path
+//      succeeds. Same TAR-hash recompute discipline as makeAdminAndLogin.
+async function seedDistinctPlatformAdmin(): Promise<string> {
+  const entity = await createEntity(
+    makeEntityInput({ entity_type: "PERSON" }),
+  );
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entity.entity_id },
+    data: { can_admin_niov: true },
+  });
+  const fresh = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: entity.entity_id },
+  });
+  if (fresh === null) throw new Error("TAR vanished mid-seed");
+  const newHash = computeTARHash({
+    can_login: fresh.can_login,
+    can_read_capsules: fresh.can_read_capsules,
+    can_write_capsules: fresh.can_write_capsules,
+    can_share_capsules: fresh.can_share_capsules,
+    can_create_hives: fresh.can_create_hives,
+    can_access_external_api: fresh.can_access_external_api,
+    can_admin_niov: fresh.can_admin_niov,
+    can_admin_org: fresh.can_admin_org,
+    clearance_ceiling: fresh.clearance_ceiling,
+    monetization_role: fresh.monetization_role,
+    compliance_frameworks: fresh.compliance_frameworks,
+    status: fresh.status,
+  });
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entity.entity_id },
+    data: { tar_hash: newHash },
+  });
+  return entity.entity_id;
+}
+
 // WHAT: Create + approve a dual-control EscalationRequest for the caller
 //        on the monetization-config action.
 // INPUT: callerEntityId + optional expiresAt (defaults to null).
@@ -269,6 +314,7 @@ beforeEach(async () => {
 describe("PATCH /platform/monetization/config + dual-control binding", () => {
   it("no APPROVED escalation -> 403, creates a PENDING one, writes PRE+LOOKUP+HANDLER_DENIED, handler never runs", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    const distinctApprover = await seedDistinctPlatformAdmin();
     const res = await app.inject({
       method: "PATCH",
       url: ROUTE_URL,
@@ -290,6 +336,15 @@ describe("PATCH /platform/monetization/config + dual-control binding", () => {
     expect(escRows[0]!.status).toBe("PENDING");
     expect(escRows[0]!.description).toBe(dualControlDescription(MONETIZATION_ACTION_TYPE));
     expect(escRows[0]!.escalation_id).toBe(body.escalation_id);
+    // ADR-0026 Amendment 1 Phase E (Test 7 of §9): auto-created target is a
+    // structurally independent approver, never the caller. Class C selects
+    // the lowest-entity_id non-caller can_admin_niov; with two admins, that
+    // is whichever of {admin, distinctApprover} sorts first excluding admin
+    // -- i.e. distinctApprover.
+    expect(escRows[0]!.target_entity_id).not.toBe(admin.entityId);
+    expect(escRows[0]!.target_entity_id).toBe(distinctApprover);
+    expect(escRows[0]!.source_entity_id).toBe(admin.entityId);
+    expect(escRows[0]!.resolved_by_entity_id).toBeNull();
 
     expect(await dualControlActionsFor(admin.entityId)).toEqual([
       "DUAL_CONTROL_VERIFICATION_PRE",
@@ -348,8 +403,14 @@ describe("PATCH /platform/monetization/config + dual-control binding", () => {
 
   it("a PENDING escalation already exists -> 403, references the existing one, does NOT create a duplicate", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    const preSeededApprover = await seedDistinctPlatformAdmin();
+    // Pre-seed a PENDING dual-control row with a real distinct approver
+    // (Phase E target shape -- target_entity_id !== source_entity_id is the
+    // structural Invariant 2). The dedup query keys on
+    // (source, escalation_type, status, description); the auto-create path
+    // still finds and returns this row without writing a duplicate.
     const original = await createEscalationForCaller(admin.entityId, {
-      target_entity_id: admin.entityId,
+      target_entity_id: preSeededApprover,
       escalation_type: "DUAL_CONTROL_REQUIRED",
       severity: "HIGH",
       description: dualControlDescription(MONETIZATION_ACTION_TYPE),

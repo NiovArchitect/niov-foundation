@@ -37,23 +37,21 @@
 //          upstream when the second approver calls
 //          POST /api/v1/escalations/:id/approve.
 //
-//          SUBSTRATE-STATE LIMITATION (sub-phase E):
-//          createEscalationForCaller is called with target_entity_id =
-//          callerEntityId as a placeholder. The dual-control canonical
-//          record (§3 step 6) specifies the auto-created PENDING
-//          escalation's target should be "a designated approver or the
-//          requesting org's admin set" -- but org-admin-set resolution is
-//          forward-queued (Sub-box 2 Phase 2). Until then the auto-created
-//          escalation targets the caller, who CAN self-approve (the
-//          escalation.service.ts skeleton gate allows caller === target).
-//          So at sub-phase E the dual-control gate is STRUCTURALLY present
-//          (the preHandler binds, the Zone U1 audit sequence fires, the
-//          EscalationRequest lifecycle works, sub-phases F + G bind it to
-//          PATCH /platform/monetization/config and POST /platform/orgs)
-//          but does not yet enforce a distinct second human. This is not a
-//          regression -- the prior state had no gate at all. ADR-0026
-//          (sub-phase H) and Sub-box 2 Phase 2 resolve the org-admin
-//          target set.
+//          PHASE E TARGET RESOLUTION (ADR-0026 Amendment 1):
+//          On the denied path, the middleware first calls
+//          resolveDualControlTarget(callerEntityId, endpoint) to select a
+//          structurally independent approver per the Class A -> B -> C ->
+//          D policy. On { ok: false } the middleware emits the Zone U1
+//          DUAL_CONTROL_NO_APPROVER_AVAILABLE marker (still on the existing
+//          ADMIN_ACTION event_type -- no new AuditEventType literal) and
+//          returns 503 ESCALATION_TARGET_NOT_FOUND; the privileged handler
+//          is NEVER invoked under the fail-closed path. On { ok: true } the
+//          resolved target_entity_id is passed to
+//          getOrCreatePendingDualControlForCaller, which creates the row
+//          with a distinct second human at create-time (Invariant 2). The
+//          existing GAP-C1 source-cannot-resolve guard at
+//          escalation.service.ts:transitionPendingForCaller remains intact
+//          as defence in depth at the transition tier.
 //
 //          THE 6 BEAM-COMPATIBILITY PATTERNS (per the canonical record §5;
 //          chosen so a future Elixir/BEAM port per ADR-0028 is a port, not
@@ -138,6 +136,7 @@ import type {
 import {
   findApprovedDualControlForCaller,
   getOrCreatePendingDualControlForCaller,
+  resolveDualControlTarget,
 } from "../services/governance/escalation.service.js";
 // GOVSEC.5 break-glass / time-boxed audit (GAP-K1, ADR-0050) BG.2: the live
 // recognition seam consumes the BG.1 substrate. validateBreakGlassGrant is the
@@ -304,6 +303,13 @@ const AUDIT_ACTION = {
   // a details.action string (no audit.ts change, no ADR-0002 amendment). The
   // BREAK_GLASS_USED literal is emitted separately, in-tx, by markBreakGlassUsed.
   BREAK_GLASS_DELEGATED: "DUAL_CONTROL_BREAK_GLASS_DELEGATED",
+  // ADR-0026 Amendment 1 §6: fail-closed Zone U1 marker on the existing
+  // ADMIN_ACTION event_type recording that Phase E target resolution returned
+  // no eligible approver (Class A through Class C all empty). NOT a new
+  // AuditEventType literal (no audit.ts change, no ADR-0002 amendment). The
+  // privileged handler is NEVER invoked on this path; the middleware returns
+  // 503 with the safe ESCALATION_TARGET_NOT_FOUND envelope.
+  NO_APPROVER_AVAILABLE: "DUAL_CONTROL_NO_APPROVER_AVAILABLE",
 } as const;
 
 /**
@@ -491,17 +497,59 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
       }
 
       // No valid break-glass grant (or its consume lost the race). On
-      // ESCALATION_PENDING with no escalation yet, get-or-create the PENDING
-      // dual-control EscalationRequest so a second approver has something to
-      // APPROVE. The service helper dedups on (source, DUAL_CONTROL_REQUIRED,
+      // ESCALATION_PENDING with no escalation yet, run Phase E target
+      // resolution (ADR-0026 Amendment 1 §3) and get-or-create the PENDING
+      // dual-control EscalationRequest with a structurally independent
+      // approver. The service helper dedups on (source, DUAL_CONTROL_REQUIRED,
       // PENDING, description) so a caller retrying the endpoint does not flood
-      // the approver queue. (See the SUBSTRATE-STATE LIMITATION block in the
-      // file header re: target_entity_id.)
+      // the approver queue. The fail-closed path (no eligible target) emits
+      // the DUAL_CONTROL_NO_APPROVER_AVAILABLE Zone U1 marker and returns 503
+      // with a safe envelope; the privileged handler is NEVER invoked.
       let escalationId = failure.escalation_id;
       if (failure.reason === "ESCALATION_PENDING" && escalationId === undefined) {
+        const resolution = await resolveDualControlTarget(
+          callerEntityId,
+          endpoint,
+        );
+        if (!resolution.ok) {
+          // ADR-0026 Amendment 1 §6: fail-closed Zone U1 marker. Safe details
+          // only -- action descriptor, route/method, and the
+          // target_resolution_reason class. Audit MUST NOT carry candidate-
+          // pool size, non-chosen candidate identities, secrets, request
+          // bodies, header values, permission envelope internals, or cross-
+          // org data.
+          await writeAuditEvent({
+            event_type: "ADMIN_ACTION",
+            outcome: "DENIED",
+            actor_entity_id: callerEntityId,
+            denial_reason: "ESCALATION_TARGET_NOT_FOUND",
+            details: {
+              action: AUDIT_ACTION.NO_APPROVER_AVAILABLE,
+              action_descriptor_type: actionDescriptor.type,
+              route: endpoint.route,
+              method: endpoint.method,
+              target_resolution_reason: "no-eligible-target",
+            },
+          });
+          await reply
+            .code(503)
+            .header("retry-after", "5")
+            .send({
+              ok: false,
+              error: "ESCALATION_TARGET_NOT_FOUND",
+              message:
+                "Dual-control verification unavailable: no eligible " +
+                "independent approver could be resolved for this operation. " +
+                "Retry after an approver becomes available, or use a " +
+                "break-glass grant under ADR-0050 if accountable emergency " +
+                "access is justified.",
+            });
+          return;
+        }
         const pending = await getOrCreatePendingDualControlForCaller(
           callerEntityId,
           actionDescriptor,
+          resolution.target_entity_id,
         );
         escalationId = pending.escalation_id;
       }

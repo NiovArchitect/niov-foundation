@@ -49,7 +49,7 @@ import {
 } from "@niov/api";
 import type { DualControlEscalationView, PrivilegedEndpoint } from "@niov/api";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { createEntity, prisma } from "@niov/database";
+import { computeTARHash, createEntity, prisma } from "@niov/database";
 import {
   cleanupTestData,
   ensureAuditTriggers,
@@ -97,6 +97,49 @@ async function cleanupTestEscalations(): Promise<void> {
 // WHY: The escalation_requests FKs (source / target) point at entities.
 async function makeParty(): Promise<string> {
   const e = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
+  return e.entity_id;
+}
+
+// WHAT: Seed a distinct PERSON entity with can_admin_niov on its TAR so the
+//        ADR-0026 Amendment 1 Phase E resolver can select a structurally
+//        independent platform-admin approver for tests that exercise the
+//        ordinary "no APPROVED -> auto-create PENDING -> 403" path.
+// INPUT: None.
+// OUTPUT: The new platform-admin's entity_id.
+// WHY: Without a second can_admin_niov entity the resolver class C returns
+//      NO_ELIGIBLE_TARGET and the middleware fails closed at 503 with the
+//      DUAL_CONTROL_NO_APPROVER_AVAILABLE marker. Tests covering the 403
+//      ESCALATION_PENDING path must seed this second admin so the resolver
+//      succeeds and the structural Phase E Invariant 2 (target_entity_id !==
+//      source_entity_id) holds at auto-create time.
+async function seedDistinctPlatformAdmin(): Promise<string> {
+  const e = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: e.entity_id },
+    data: { can_admin_niov: true },
+  });
+  const fresh = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: e.entity_id },
+  });
+  if (fresh === null) throw new Error("TAR vanished mid-seed");
+  const newHash = computeTARHash({
+    can_login: fresh.can_login,
+    can_read_capsules: fresh.can_read_capsules,
+    can_write_capsules: fresh.can_write_capsules,
+    can_share_capsules: fresh.can_share_capsules,
+    can_create_hives: fresh.can_create_hives,
+    can_access_external_api: fresh.can_access_external_api,
+    can_admin_niov: fresh.can_admin_niov,
+    can_admin_org: fresh.can_admin_org,
+    clearance_ceiling: fresh.clearance_ceiling,
+    monetization_role: fresh.monetization_role,
+    compliance_frameworks: fresh.compliance_frameworks,
+    status: fresh.status,
+  });
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: e.entity_id },
+    data: { tar_hash: newHash },
+  });
   return e.entity_id;
 }
 
@@ -335,6 +378,7 @@ describe("requireDualControl preHandler", () => {
   });
 
   it("no escalation exists -> creates a PENDING one, returns 403, writes PRE+LOOKUP+HANDLER_DENIED, ESCALATION_CREATED count 1", async () => {
+    const distinctApprover = await seedDistinctPlatformAdmin();
     const preHandler = requireDualControl(ENDPOINT);
     const { reply, state } = makeFakeReply();
     await preHandler(makeFakeRequest(callerId), reply);
@@ -352,6 +396,10 @@ describe("requireDualControl preHandler", () => {
     expect(rows[0]!.status).toBe("PENDING");
     expect(rows[0]!.description).toBe(dualControlDescription(ACTION_TYPE));
     expect(rows[0]!.escalation_id).toBe(body.escalation_id);
+    // ADR-0026 Amendment 1 Phase E Invariant 2: auto-created target is the
+    // structurally independent class-C approver, never the caller.
+    expect(rows[0]!.target_entity_id).toBe(distinctApprover);
+    expect(rows[0]!.target_entity_id).not.toBe(callerId);
 
     expect(await dualControlActionsFor(callerId)).toEqual([
       "DUAL_CONTROL_VERIFICATION_PRE",
@@ -366,8 +414,9 @@ describe("requireDualControl preHandler", () => {
   });
 
   it("a PENDING escalation already exists -> returns 403, does NOT create a duplicate, ESCALATION_CREATED count stays 1", async () => {
+    const preSeededApprover = await seedDistinctPlatformAdmin();
     const original = await createEscalationForCaller(callerId, {
-      target_entity_id: callerId,
+      target_entity_id: preSeededApprover,
       escalation_type: "DUAL_CONTROL_REQUIRED",
       severity: "HIGH",
       description: dualControlDescription(ACTION_TYPE),
