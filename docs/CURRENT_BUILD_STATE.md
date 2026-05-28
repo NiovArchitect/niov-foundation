@@ -5,10 +5,19 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-28 ([ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED]
-minimum-touch refresh — supersedes the Phase-E "open-gap"
-framing recorded by the same-date earlier refresh
-`[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` below.
+**Last updated:** 2026-05-28 ([ADR-0050-AMENDMENT-1-LANDED]
+minimum-touch refresh — supersedes the prior
+`[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` framing of
+ADR-0050 §BG.3 as "stale relative to GOVSEC.5 phase closure";
+ADR-0050 Amendment 1 — GOVSEC.5 Phase Closure Reconciliation —
+landed at PR #10 squash commit
+`cc4683d87150a14724295b0ba8a74cf6e8728a60`. The prior
+forward-queued ADR-0050 minor-amendment QLOCK
+(`[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`)
+is now closed. Prior same-date refresh
+`[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED]` supersedes the
+Phase-E "open-gap" framing recorded by the earlier same-date
+refresh `[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]`.
 ADR-0026 Amendment 1 implementation merged to `main` at PR #8
 squash commit `b097d4be56394731e6004e5543031dd10f7c24ce`; the
 dual-control Phase E target-resolution liveness gap is CLOSED at
@@ -25,10 +34,13 @@ NOT rewrite any prior content below. The existing GOVSEC.5 phase closure entry
 already canonical in this file (the `**GOVSEC.5 is CLOSED as a
 phase**` line below) is preserved verbatim and cross-referenced
 from the new section per Rule 0 (Documentation-First / No-Guessing).
-ADR-0050 §BG.3 carries language predating the GOVSEC.5 phase
+ADR-0050 §BG.3 reconciliation is now LANDED in-ADR via
+Amendment 1 at PR #10 squash commit
+`cc4683d87150a14724295b0ba8a74cf6e8728a60`; the prior framing of
+ADR-0050 §BG.3 as "carries language predating the GOVSEC.5 phase
 closure (`3a9cce6`) and the org-admin throttle follow-on
 (`f06be71`); ADR-0050 §BG.3 reconciliation is forward-queued as a
-separate ADR-0050 minor-amendment QLOCK. Prior minimum-touch update
+separate ADR-0050 minor-amendment QLOCK" is now superseded. Prior minimum-touch update
 was 2026-05-25 [FOUNDATION-CONSOLE-LIVE-BROWSER-SMOKE] — adds the
 CONSOLE.1 Foundation Console live browser smoke SUCCESS entry
 below; that prior update was a verification milestone with no
@@ -43,6 +55,188 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0050-AMENDMENT-1-LANDED] 2026-05-28
+
+**Status: VERIFIED docs-only closure of the ADR-0050 §BG.3
+GOVSEC.5 phase-status reconciliation lane.** ADR-0050 Amendment 1
+— GOVSEC.5 Phase Closure Reconciliation — landed at PR #10
+squash commit `cc4683d87150a14724295b0ba8a74cf6e8728a60`
+(2026-05-28). This entry is the canonical superseding-state for
+the §`ADR-0050 §BG.3 stale-relative-to-closure-commits
+acknowledgment` framing recorded by the prior refresh
+`[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` below; that
+prior framing was substrate-honest at HEAD `c56bd57` and is
+preserved verbatim for historical context per the docs-honesty
+discipline (Rule 0 — Documentation-First / No-Guessing).
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `cc4683d`
+
+Per Rule 0 reading of the merged ADR file
+`docs/architecture/decisions/0050-govsec-break-glass-timeboxed-audit.md`
+on `main`:
+
+- **ADR-0050 top-line Status carries an inline Amendment 1 note**
+  at the document head: "Amendment 1 (Reconciled 2026-05-28) —
+  see §Amendment 1 below: the 'GOVSEC.5 remains OPEN' language
+  in §BG.3 Closure and §Decision item 7 and the §Implementation
+  lineage BG.2 / BG.3 / 'GOVSEC.5 closure (future)' entries was
+  substrate-honest at 2026-05-22; the GOVSEC.5 phase has since
+  been CLOSED as a phase by later commits, so those paragraphs
+  are now superseded for current-state framing. The break-glass /
+  BG.2 substrate decisions themselves are unchanged; ADR-0050
+  remains controlling for BG.2 semantics."
+- **NEW §Amendment 1 — GOVSEC.5 Phase Closure Reconciliation**
+  between §BG.3 Closure and §Founder authorization, with six
+  `###` subsections:
+  - *Why this amendment* — explains the 2026-05-22 substrate-
+    honest framing vs the subsequent GOVSEC.5 landings cited
+    via the `docs/CURRENT_BUILD_STATE.md` cross-reference; cites
+    Rule 0 as the rationale for in-place reconciliation.
+  - *Current canonical state (as of 2026-05-28)* — states
+    (a) GOVSEC.5 CLOSED as a phase; (b) ADR-0049 GOVSEC umbrella
+    remains Proposed; (c) BG.2 break-glass middleware
+    integration is LIVE with file:line evidence for
+    `dual-control.middleware.ts:445-491`, `break-glass.routes.ts`,
+    `break-glass.service.ts`, `BreakGlassGrant` model in
+    `schema.prisma`, `break-glass-integration.test.ts`, and the
+    Phase E `dual-control-phase-e.test.ts` BG.2 regression;
+    (d) ADR-0050 remains controlling for break-glass / BG.2
+    semantics.
+  - *Break-glass framing preserved (no relaxation)* — reasserts
+    the seven break-glass invariants: time-boxed (mandatory
+    non-null `valid_until` at schema tier), single-use (atomic
+    `ACTIVE → USED` in `markBreakGlassUsed`), explicitly
+    justified (mandatory non-empty justification at create-time),
+    scoped (4 LIVE `PRIVILEGED_ENDPOINTS` action types),
+    auditable (four `BREAK_GLASS_*` audit literals +
+    `DUAL_CONTROL_BREAK_GLASS_DELEGATED` marker with no
+    justification leak), subject to two-person review
+    (`reviewer ≠ source` enforced), and **not a general bypass**.
+    Explicitly preserves the ADR-0026 GAP-C1 source-cannot-self-
+    resolve guard at `escalation.service.ts:397-407`.
+  - *Out of scope (substrate-honest)* — enumerates six explicit
+    "does NOT claim" assertions: "All GOVSEC is closed";
+    "Break-glass covers every privileged route" (4 LIVE
+    endpoints only); "Autonomous Execution is live";
+    "MCP / Connectors are live"; "All 10 production sections
+    are complete"; "Break-glass is a general bypass".
+  - *Why a minor amendment, not a re-issue* — documents the
+    Foundation ADR Lifecycle minor-amendment pattern with
+    precedent citations (ADR-0001 §Amendment 1,
+    ADR-0026 §Amendment 1, ADR-0039 §Amendments 1+2,
+    ADR-0041 §Sub-decision 6 Amendment,
+    ADR-0046 §Amendment 1).
+  - *Founder authorization for this amendment* — explicit at
+    `[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`
+    (2026-05-28); docs-only; no code / schema / audit literal /
+    route / service / middleware / test change.
+
+The full historical body of ADR-0050 — §Context, §Standards /
+Source Basis, §Decision (7 items), §Non-goals, §Proposed future
+substrate, §Security properties, §Test plan, §Implementation
+lineage (BG.1 / BG.2 / BG.3 / "GOVSEC.5 closure (future)"
+entries), §BG.3 Closure (intro + closure-evidence bullets +
+closing "GOVSEC.5 remains OPEN" paragraph), and the original
+§Founder authorization — is preserved **verbatim**.
+
+### Verification (pre-merge + CI)
+
+- Single commit on PR #10 (`21e98b7`).
+- PR #10 CI **4 / 4 green** on Actions run `26604265175`:
+  Typecheck (strict 12-error baseline) 43s · Unit tier (371
+  tests) 1m27s · Integration tier (111 tests + 1 skipped)
+  1m42s · Elixir tier (compile + test) 2m4s.
+- TypeScript baseline preserved at the accepted **12 errors**
+  exactly (per ADR-0015 Decision B). PR #10 introduced no new
+  TS errors.
+- RULE 16 no-console anchor passed
+  (`tests/unit/no-console-in-api-src.test.ts`).
+- Pre-commit hooks ran and passed (ADR-0025 `db:push` guard +
+  TS baseline check + RULE 16 anchor).
+
+### Scope discipline (what PR #10 touched, and what it did not)
+
+PR #10 squash commit `cc4683d` touches exactly one file:
+
+- `docs/architecture/decisions/0050-govsec-break-glass-timeboxed-audit.md`
+
+No source / schema / route / service / middleware / test / other
+ADR / `docs/CURRENT_BUILD_STATE.md` / AGENTS.md / CLAUDE.md /
+`package.json` / lockfile / CI workflow / Control Tower /
+Foundation-Command file was touched in PR #10. No migrations,
+installs, or secret access occurred.
+
+### Substrate-honest superseding pointers (inline annotations applied)
+
+The following prior paragraphs are now superseded for
+current-state framing; the prose remains verbatim below for
+historical context, with `**SUPERSEDED ...**` prefaces inserted
+at each site:
+
+- §`Forward-substrate after this refresh` in
+  `[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED]` below — the
+  "A separate ADR-0050 minor-amendment QLOCK reconciling §BG.3's
+  'GOVSEC.5 remains OPEN' stale prose remains forward-queued"
+  bullet is now superseded by Amendment 1 landing at PR #10.
+- §`ADR-0050 §BG.3 stale-relative-to-closure-commits
+  acknowledgment` in
+  `[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` below —
+  the "Resolution path: forward-queue a separate ADR-0050 minor-
+  amendment docs-only QLOCK that reconciles §BG.3's 'GOVSEC.5
+  remains OPEN' prose" framing is now superseded; the resolution
+  has landed at PR #10.
+- §`ADR catalog summary entries` ADR-0050 line below — the
+  "§BG.3 prose now stale relative to GOVSEC.5 phase closure —
+  see acknowledgment above" tail is now superseded; the
+  reconciliation has landed at PR #10.
+- §`Forward-queued separate QLOCKs` below — the
+  `[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`
+  bullet is now LANDED at PR #10 (`cc4683d`).
+
+### Substrate-honest claims that remain unsafe to make after this refresh
+
+PR #10 closes the ADR-0050 §BG.3 reconciliation gap **at
+documentation tier only**; it does not change the implementation
+substrate. Do NOT claim:
+
+- "All GOVSEC is closed" — only GOVSEC.5 is closed as a phase;
+  ADR-0049 GOVSEC umbrella remains Proposed; other GOVSEC phases
+  (2 / 3-tail / 4-tail / 6 / 7 / 8 / 9 / 10) remain forward-
+  substrate.
+- "Break-glass covers every privileged route" — scoped to the 4
+  LIVE `PRIVILEGED_ENDPOINTS` (`PLATFORM_MONETIZATION_CONFIG_UPDATE`,
+  `PLATFORM_ORG_CREATION`, `REGULATOR_ACCESS_GRANT`,
+  `REGULATOR_ACCESS_REVOKE`).
+- "Break-glass is a general bypass" — break-glass remains the
+  time-boxed, single-use, explicitly-justified, scoped,
+  auditable, accountable emergency alternative; never a routine
+  way to skip the two-person rule.
+- "Autonomous Execution is live" — Section 2 remains partial.
+- "MCP / Connectors are live" — Section 4 remains missing.
+- "All 10 production sections are complete" — only Section 1
+  (Employee Intelligence Core) is end-to-end customer-shippable
+  today across Foundation + Control Tower.
+- "TypeScript has zero errors" — the accepted 12-error baseline
+  per ADR-0015 Decision B remains.
+
+### Forward-substrate after this refresh
+
+- The "all 10 production sections required, none deferrable"
+  Founder Directive 2026-05-28 remains in force.
+- Remaining forward-queued lanes (unchanged): Lane A4
+  `[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]`; Lane A5
+  `[ADR-0056-CROSS-WALLET-MEMBER-CONSENT-WRITE-AND-ACCEPT-AUTH]`;
+  Control Tower Lane B 12C.0 consumer migration (CT-repo
+  branches).
+- The natural next strategic arc per the Founder Directive
+  remains Autonomous Execution Core planning (Section 2), now
+  fully unblocked by ADR-0026 Phase E target resolution at
+  `b097d4b` (PR #8).
 
 ## [ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED] 2026-05-28
 
@@ -249,10 +443,14 @@ customer-shippable product. Do NOT claim:
   for Autonomous Execution Core (Section 2), MCP / Connectors
   (Section 4), or expanded admin / governance operations
   (Section 9) without inheriting the Phase E deadlock.
-- A separate ADR-0050 minor-amendment QLOCK reconciling §BG.3's
-  "GOVSEC.5 remains OPEN" stale prose remains forward-queued
-  (unchanged from the prior refresh; out of scope for this
-  docs-only refresh).
+- **SUPERSEDED (see §[ADR-0050-AMENDMENT-1-LANDED] at the top of
+  this document):** A separate ADR-0050 minor-amendment QLOCK
+  reconciling §BG.3's "GOVSEC.5 remains OPEN" stale prose remains
+  forward-queued (unchanged from the prior refresh; out of scope
+  for this docs-only refresh). Current state: the reconciliation
+  has LANDED in-ADR via Amendment 1 at PR #10 squash commit
+  `cc4683d`; the prior "remains forward-queued" framing is
+  preserved here as historical context only.
 - The "all 10 production sections required, none deferrable"
   Founder Directive 2026-05-28 remains in force.
 
@@ -567,6 +765,13 @@ separate Founder QLOCK per ADR-0049's phase decomposition.
 
 ### ADR-0050 §BG.3 stale-relative-to-closure-commits acknowledgment
 
+**SUPERSEDED (see §[ADR-0050-AMENDMENT-1-LANDED] at the top of
+this document):** ADR-0050 §BG.3 reconciliation has LANDED in-ADR
+via Amendment 1 at PR #10 squash commit `cc4683d` (2026-05-28).
+The "stale relative to GOVSEC.5 phase closure" framing below is
+preserved verbatim as historical context — it was substrate-
+honest at HEAD `c56bd57`, immediately before PR #10 landed.
+
 Per Rule 0, ADR-0050 §BG.3 (the BG.3 docs-only closure cascade
 landed 2026-05-22 at commit `877b3c0`) carries the line "GOVSEC.5
 remains OPEN" at the time of ADR-0050 BG.3 acceptance. That was
@@ -590,10 +795,13 @@ per the QLOCK auth).
 - **ADR-0049** Status: Proposed — Government-Grade Hardening and
   Gap-Closure Program (10-phase GOVSEC umbrella; GOVSEC.5 phase
   CLOSED inside it; remaining phases forward-substrate).
-- **ADR-0050** Status: Accepted 2026-05-22 — GOVSEC.5 Break-Glass /
-  Time-Boxed Audit (GAP-K1 CLOSED; BG.1 / BG.2 / BG.3
-  substrate-honest closure cascade; §BG.3 prose now stale relative
-  to GOVSEC.5 phase closure — see acknowledgment above).
+- **ADR-0050** Status: Accepted 2026-05-22; **Amendment 1
+  (Reconciled 2026-05-28)** LANDED at PR #10 squash commit
+  `cc4683d` — GOVSEC.5 Break-Glass / Time-Boxed Audit (GAP-K1
+  CLOSED; BG.1 / BG.2 / BG.3 substrate-honest closure cascade;
+  §BG.3 GOVSEC.5-phase-status framing reconciled in-ADR via
+  §Amendment 1; ADR-0050 remains controlling for break-glass /
+  BG.2 semantics).
 - **ADR-0051** Status: Accepted 2026-05-26 — Otzar Chat Transparency
   and COE-Governed Retrieval Surfacing (Wave 1).
 - **ADR-0052** Status: Accepted 2026-05-27 — Otzar Domain General
@@ -642,7 +850,10 @@ per the QLOCK auth).
 - `[ADR-0056-CROSS-WALLET-MEMBER-CONSENT-WRITE-AND-ACCEPT-AUTH]`
   (Lane A5; patent-relevant per CT CONTEXT.md L475)
 - `[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`
-  (reconcile §BG.3 stale "GOVSEC.5 remains OPEN" prose; docs-only)
+  (reconcile §BG.3 stale "GOVSEC.5 remains OPEN" prose;
+  docs-only) — **LANDED 2026-05-28 at `cc4683d` (PR #10); see
+  §[ADR-0050-AMENDMENT-1-LANDED] above.** Historical entry; no
+  longer forward-queued.
 - Control Tower Lane B 12C.0 consumer migration (B1–B5 — separate
   CT-side branches per CT CONTEXT.md operator workflow).
 
