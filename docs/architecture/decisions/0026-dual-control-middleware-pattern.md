@@ -320,6 +320,544 @@ operator confirmation before edits chained.
   `description`-as-carrier substrate; until then `dualControlDescription` is the
   carrier.
 
+## Amendment 1 — Phase E Target Resolution for Auto-Created Dual-Control Escalations (Accepted 2026-05-28)
+
+**Status**: Accepted 2026-05-28 · Docs-only design amendment ·
+**No code, schema, route, service, middleware, or test change in this
+QLOCK.** Authorized by Founder per RULE 20 at
+`[ADR-0026-AMENDMENT-1-PHASE-E-TARGET-RESOLUTION-WRITE-AND-ACCEPT-AUTH]`.
+Implementation is the explicit scope of a separate next-phase
+EXECUTE-VERIFY QLOCK (see §11). This amendment lands the canonical
+Phase E target-resolution **policy**; it does not modify the
+substrate-state-truth `docs/CURRENT_BUILD_STATE.md`, the implementation
+in `apps/api/src/services/governance/escalation.service.ts` +
+`apps/api/src/middleware/dual-control.middleware.ts` +
+`apps/api/src/security/privileged-endpoints.ts`, or any other ADR
+(specifically not ADR-0050 — its §BG.3 prose reconciliation is queued
+as a separate amendment per `docs/CURRENT_BUILD_STATE.md` 2026-05-28
+refresh).
+
+### 1. Rule 0 substrate correction (current behavior, file:line evidence)
+
+Per Rule 0 — Documentation-First / No-Guessing — the following are
+implementation-proven, not architectural intent:
+
+- **GAP-C1 self-approval block is CLOSED at service tier.**
+  `apps/api/src/services/governance/escalation.service.ts:397-407`
+  enforces `if (callerEntityId === existing.source_entity_id) throw
+  new Error("ESCALATION_FORBIDDEN")` *first*, before the
+  target/resolver gate. The two-person invariant is intact: a caller
+  cannot transition a row whose `source_entity_id` equals their own
+  `entity_id`, even when the row's `target_entity_id` is also the
+  caller (the §Consequences placeholder).
+- **The Phase E target placeholder is LIVE on `main`.**
+  `apps/api/src/services/governance/escalation.service.ts:316`:
+  `target_entity_id: callerEntityId, // placeholder; Phase 2
+  substrate resolves`. The placeholder is also documented in the
+  middleware JSDoc at
+  `apps/api/src/middleware/dual-control.middleware.ts:38-50`
+  ("SUBSTRATE-STATE LIMITATION (sub-phase E)") and in this ADR's
+  §Consequences ("Harder") + §Forward Queue.
+- **The transition gate is `caller === target_entity_id || caller ===
+  resolved_by_entity_id`.** `escalation.service.ts:410-412`. With
+  `target_entity_id` set to the caller (placeholder) and
+  `resolved_by_entity_id` defaulting to `null` at create-time, the
+  only identity that could satisfy `mayTransition` is the caller
+  themselves — who is blocked first by GAP-C1.
+- **Net consequence is liveness, not self-approval.** Auto-created
+  PENDING dual-control `EscalationRequest` rows cannot be approved
+  by any independent party via the API. The 4 PRIVILEGED_ENDPOINTS
+  (`apps/api/src/security/privileged-endpoints.ts:PRIVILEGED_ENDPOINTS`
+  — Operation A `PLATFORM_MONETIZATION_CONFIG_UPDATE`, Operation B
+  `PLATFORM_ORG_CREATION`, Operation C `REGULATOR_ACCESS_GRANT`,
+  Operation D `REGULATOR_ACCESS_REVOKE`) are **deadlocked in
+  practice** under the auto-create path unless an operator manually
+  pre-creates a row via `POST /api/v1/escalations` with an explicit
+  non-caller `target_entity_id`.
+- **The risk this amendment closes is the liveness deadlock, not the
+  self-approval risk** (which GAP-C1 has already closed at the
+  service tier).
+
+This amendment lands the **target-resolution policy** that, once
+implemented in a next-phase EXECUTE-VERIFY QLOCK, replaces the
+placeholder at `escalation.service.ts:316` with a real independent
+target and removes the deadlock.
+
+### 2. Decision — Phase E Target-Resolution Policy
+
+The canonical Phase E target-resolution policy is the following six
+invariants. All six must hold at the implementation tier (next QLOCK)
+or the implementation is non-conformant.
+
+**Invariant 1 — Source preservation.** Auto-created
+`EscalationRequest.source_entity_id` MUST remain the
+caller/requester's `entity_id`. The source is the identity that
+initiated the privileged request; it is the source of record and is
+already the input to the GAP-C1 self-approval guard at
+`escalation.service.ts:406-407`. No part of Phase E may rewrite the
+source.
+
+**Invariant 2 — Target independence.** Auto-created
+`target_entity_id` MUST be resolved to an independent eligible
+approver entity_id that is NOT the caller. Specifically:
+`target_entity_id !== source_entity_id` MUST hold at the database
+write. This is the structural distinct-second-human invariant; the
+service-tier GAP-C1 guard prevents the source from transitioning even
+if a later code change accidentally re-introduces a same-identity
+target, but the amendment policy is that the target must be
+structurally independent **at create-time**, not relied on a
+downstream guard.
+
+**Invariant 3 — Resolver null on creation.**
+`resolved_by_entity_id` MUST remain `null` at create-time and MUST
+only be set when an approver transitions PENDING → APPROVED/REJECTED
+(the existing behavior at `escalation.service.ts:439`). Phase E does
+not change resolver semantics; it only changes how target is
+selected.
+
+**Invariant 4 — Fail-closed on no eligible target.** If the target
+resolver cannot identify any independent eligible approver under the
+policy below (§3), the middleware MUST fail closed with a clear
+error envelope and a Zone U1 audit event. No fallback may silently
+target the caller. No fallback may silently allow self-approval. No
+fallback may bypass dual-control. The middleware MUST NOT delegate
+to the route handler under any fail-closed path.
+
+**Invariant 5 — Deterministic + auditable selection.** The target
+resolver MUST be a pure function over `(callerEntityId,
+actionDescriptor, repository state)` returning either a single
+non-caller `entity_id` or a `null`-class failure. Determinism is
+required for testability (BEAM-compatibility pattern 6, pure
+transformation, mirroring this ADR §5) and for auditability (Zone U1
+events must reproduce the same target on replay).
+
+**Invariant 6 — Policy-bound and org-scoped (no cross-org leak).**
+Target candidates MUST be filtered to entities within the caller's
+own organisation (for operations with org scope) or within the NIOV
+platform admin set (for platform-tier operations). Cross-org
+candidates MUST be excluded by construction at the repository query
+tier. The amendment policy never widens scope; org-scope guards in
+the candidate query are the source-of-truth for cross-org leak
+prevention (same architectural anchor as `admin-routes.test.ts:596+`
+"DRIFT 9" cross-org leak guard).
+
+### 3. Target-resolution order
+
+The target resolver MUST attempt the following candidate classes in
+order. The first class that yields exactly one eligible non-caller
+candidate wins; if a class yields zero or ambiguous results, the
+resolver advances to the next class. If all classes are exhausted,
+the resolver returns the fail-closed result (§Invariant 4).
+
+**Class A — Explicit operation-specific target in the privileged
+endpoint metadata.** If the `EscalationActionDescriptor.metadata` for
+the matched `PrivilegedEndpoint` carries an explicit target_entity_id
+(future-substrate; not present today in `privileged-endpoints.ts`),
+the resolver uses that candidate. **Today this class always returns
+no candidate** because no current entry in `PRIVILEGED_ENDPOINTS`
+carries explicit target metadata; it is documented as the highest
+precedence so future operation-specific routing (e.g., per-customer
+designated approver) lands cleanly without re-ordering.
+
+**Class B — Org-level eligible approver excluding the caller.** For
+operations whose `authTier` is `can_admin_org`, the resolver queries
+the caller's organisation for entities holding the required admin
+capability (same `authTier` as the matched `PrivilegedEndpoint`),
+excluding `entity_id = callerEntityId`. Today **no Category (1) LIVE
+entry in `PRIVILEGED_ENDPOINTS` has `authTier = can_admin_org`** —
+all 4 LIVE entries are `can_admin_niov`. This class is documented to
+land cleanly when org-tier privileged operations enter the registry
+(per the canonical-record doc's forward-substrate operations).
+
+**Class C — NIOV platform-admin approver excluding the caller.** For
+operations whose `authTier` is `can_admin_niov` (all 4 LIVE entries
+today: Operations A/B/C/D), the resolver queries the set of entities
+holding `can_admin_niov = true` on their TAR, excluding `entity_id =
+callerEntityId`. Selection within Class C uses deterministic
+tie-breaking (lowest `entity_id` lexicographically) for testability
++ Zone U1 audit replay parity. The TAR query MUST be the
+service-tier read; the middleware MUST NOT touch Prisma per this
+ADR's §Decision RULE-9 invariant.
+
+**Class D — Fail closed.** If Class A through Class C all return
+zero candidates (e.g., a single-`can_admin_niov` deployment where
+the only candidate IS the caller, or a TAR-query failure), the
+resolver returns the fail-closed result. The middleware emits the
+fail-closed Zone U1 audit event (§7) and returns a 503-class error
+to the caller. The privileged route handler is NEVER invoked under
+this path.
+
+Class A is documented as highest-precedence (forward-substrate) so
+that operation-specific designated-approver semantics can land
+without re-ordering. Class C is the production default for all 4
+current LIVE PRIVILEGED_ENDPOINTS.
+
+### 4. Operation-tier mapping (the 4 current LIVE PRIVILEGED_ENDPOINTS)
+
+Per `apps/api/src/security/privileged-endpoints.ts:PRIVILEGED_ENDPOINTS`
+at HEAD `fee777f` (the 4 Category (1) LIVE entries):
+
+| Op | Endpoint | Action descriptor | Source | Target class | Approver capability | Fail-closed behavior | Audit expectation |
+|---|---|---|---|---|---|---|---|
+| **A** | `PATCH /api/v1/platform/monetization/config` | `PLATFORM_MONETIZATION_CONFIG_UPDATE` | caller (`callerEntityId`) | Class C (platform-admin) | `can_admin_niov` | 503; no handler invocation; emit fail-closed Zone U1 event | Existing `DUAL_CONTROL_VERIFICATION_PRE → DUAL_CONTROL_ESCALATION_LOOKUP → DUAL_CONTROL_HANDLER_DENIED` sequence + NEW Zone U1 marker (see §7) when target resolution fails |
+| **B** | `POST /api/v1/platform/orgs` | `PLATFORM_ORG_CREATION` | caller | Class C | `can_admin_niov` | 503; no `executePhase0`; no Dandelion bootstrapping | Same shape as A |
+| **C** | `POST /api/v1/regulator/access-grants` | `REGULATOR_ACCESS_GRANT` | caller | Class C | `can_admin_niov` | 503; no `createLawfulBasisInTx` invocation; no audit chain extension | Same shape as A |
+| **D** | `POST /api/v1/regulator/access-revocations` | `REGULATOR_ACCESS_REVOKE` | caller | Class C | `can_admin_niov` | 503; no `LawfulBasis.revoked_at` write; no `REGULATOR_ACCESS_REVOKED` event | Same shape as A |
+
+All 4 LIVE entries map to Class C today because all 4 are
+`can_admin_niov`-tier. Class B (org-admin) becomes load-bearing when
+the canonical-record doc's forward-substrate org-tier operations
+(e.g., operation 6 TAR clearance-ceiling per the
+`docs/architecture/dual-control-operations-canonical-record.md`
+enumeration) enter the registry. Class A becomes load-bearing if any
+LIVE entry adds explicit target metadata.
+
+### 5. Failure semantics
+
+The target resolver MUST surface the following failure classes
+distinctly so middleware behavior + audit telemetry remain
+substrate-honest:
+
+- **No eligible target (Class A–C all empty)** → fail closed.
+  Suggested error code: `ESCALATION_TARGET_NOT_FOUND`. Middleware
+  returns 503 with retry-after hint (consistent with this ADR's
+  existing `DualControlFailure.TransientFailure` envelope shape for
+  503-class responses). Zone U1 marker per §7.
+- **Caller is the only eligible approver (single-admin deployment)**
+  → fail closed; treat as `ESCALATION_TARGET_NOT_FOUND` semantically
+  (the operator must add a second admin or use break-glass per
+  ADR-0050; both paths remain accountable).
+- **Cross-org candidate surfaced by a buggy query** → fail closed
+  by construction. The org-scope filter MUST run at the repository
+  query tier; if the resolver receives a cross-org candidate it MUST
+  reject it and treat the result as `ESCALATION_TARGET_INVALID`.
+- **Stale / soft-deleted / inactive candidate** → excluded at the
+  query tier (`deleted_at IS NULL`, `status = ACTIVE`); if surfaced
+  due to a race, the resolver MUST treat as `ESCALATION_TARGET_INVALID`.
+- **Class C ambiguous resolution (multiple equal-priority approvers
+  beyond the deterministic tie-breaker)** → deterministic
+  tie-breaking (lowest `entity_id` lexicographically) eliminates
+  ambiguity by construction. No `ESCALATION_TARGET_AMBIGUOUS` code
+  is required today; reserved for future Class-B / Class-A semantics
+  where multiple designated approvers could legitimately satisfy
+  the policy.
+- **Resolver internal error (DB timeout, TAR-query exception)** →
+  modeled as `DualControlFailure.TransientFailure` per this ADR's
+  existing discriminated-union pattern; 503 + retry-after; Zone U1
+  `DUAL_CONTROL_TRANSIENT_FAILURE` marker per the existing §4 of the
+  canonical record.
+
+Error codes naming convention follows existing patterns in the
+`escalation.service.ts` error vocabulary (`ESCALATION_NOT_FOUND`,
+`ESCALATION_FORBIDDEN`, `ESCALATION_INVALID_TRANSITION`). The exact
+introduction of `ESCALATION_TARGET_NOT_FOUND` /
+`ESCALATION_TARGET_INVALID` is part of the next EXECUTE-VERIFY scope;
+this amendment proposes them and does not introduce them.
+
+### 6. Audit requirements (forward-substrate for next code QLOCK)
+
+The next EXECUTE-VERIFY QLOCK MUST extend the Zone U1 sequence to
+cover the fail-closed path without breaking the existing 5-event +
+1-failure-mode taxonomy. Specifically:
+
+- The middleware-tier auto-create path MUST record
+  `source_entity_id`, the resolved `target_entity_id`, the
+  `actionDescriptor.type`, the route + method, and a
+  `target_resolution_reason` in safe details metadata. The
+  `target_resolution_reason` is one of: `"explicit-metadata"` (Class
+  A), `"org-admin-pool"` (Class B), `"platform-admin-pool"` (Class
+  C), or `"no-eligible-target"` (Class D / fail-closed).
+- Audit details MUST NOT carry secrets, request bodies, raw header
+  values, permission envelope internals, cross-org data, or any
+  candidate identities beyond the chosen target. The audit MUST NOT
+  enumerate the candidate-pool size or non-chosen candidate
+  `entity_id`s (no candidate-pool disclosure).
+- The fail-closed path MUST emit a Zone U1 ADMIN_ACTION event with
+  `outcome: "DENIED"` and `details.action =
+  "DUAL_CONTROL_NO_APPROVER_AVAILABLE"` (NEW marker name proposed
+  here; uses the existing `event_type: "ADMIN_ACTION"` literal —
+  **no new `AuditEventType` literal**, consistent with this ADR's
+  existing marker discipline at §Implementation Detail "the same
+  pattern the existing escalation events use"). The marker details
+  carry `actionDescriptor.type`, route, method, and
+  `target_resolution_reason: "no-eligible-target"`. No new
+  `AUDIT_EVENT_TYPE_VALUES` entry is required.
+- The fail-closed event MUST be written even if the in-tx audit
+  write itself fails; in that case the middleware falls into the
+  existing `TransientFailure` envelope (`DUAL_CONTROL_TRANSIENT_FAILURE`
+  marker) per this ADR's existing handling. The two markers
+  (`DUAL_CONTROL_NO_APPROVER_AVAILABLE` for policy fail-closed;
+  `DUAL_CONTROL_TRANSIENT_FAILURE` for I/O fail-closed) are
+  distinguishable downstream.
+- The privileged route handler MUST NEVER be invoked under either
+  fail-closed path. The substrate-integrity assertion is the same as
+  the existing throw-guard on registry drift: structural by
+  construction, not request-path branching.
+- The approve / reject path retains the existing GAP-C1 source-cannot-
+  resolve invariant at `escalation.service.ts:406-407`. Phase E does
+  not weaken it; it complements it by guaranteeing that the target
+  at create-time is structurally distinct from the source. The two
+  guards together provide defense in depth.
+
+### 7. Break-glass relationship (no modification to ADR-0050)
+
+Per Rule 0 substrate state at HEAD `fee777f`:
+
+- **ADR-0050 BG.2 is LIVE.** The dual-control middleware
+  (`apps/api/src/middleware/dual-control.middleware.ts:445-487`)
+  calls `validateBreakGlassGrant(callerEntityId,
+  actionDescriptor.type)` and on success `markBreakGlassUsed`,
+  delegating to the route handler under a `BREAK_GLASS_DELEGATED`
+  marker per ADR-0050 §BG.3 closure evidence. This amendment does
+  **NOT** modify break-glass.
+- **Phase E does not weaken break-glass.** Break-glass remains
+  time-boxed (mandatory `valid_until`), single-use (atomic
+  `markBreakGlassUsed`), explicitly-justified, and audited
+  (`BREAK_GLASS_INVOKED` / `BREAK_GLASS_USED` / `BREAK_GLASS_EXPIRED`
+  / `BREAK_GLASS_REVIEWED` audit literals + the
+  `BREAK_GLASS_DELEGATED` marker). Phase E's fail-closed target-
+  resolution path runs AFTER break-glass validation in the same
+  middleware order as today: a valid grant short-circuits Phase E
+  entirely (break-glass delegates directly to the handler before
+  any escalation lookup or target-resolution path executes).
+- **Break-glass is not a general bypass for target resolution.**
+  Break-glass remains an emergency time-boxed alternative to the
+  normal approve-flow, NOT a way to skip the target-resolver
+  altogether outside emergencies. A future GOVSEC.5-follow-on may
+  reconsider grant-issuance ergonomics if Phase E's deadlock-removal
+  creates routine traffic; that is forward-substrate and out of
+  scope for this amendment.
+- **ADR-0050 §BG.3 prose remains stale relative to GOVSEC.5 phase
+  closure** per `docs/CURRENT_BUILD_STATE.md` 2026-05-28 refresh.
+  A separate ADR-0050 minor-amendment QLOCK reconciles that; this
+  amendment does **NOT** modify ADR-0050.
+
+### 8. Non-goals
+
+This amendment does not, and the next EXECUTE-VERIFY QLOCK
+implementing Phase E MUST not:
+
+- modify code, schema, routes, services, middleware, tests, package
+  files, CI workflows, AGENTS.md, CLAUDE.md, or `docs/CURRENT_BUILD_STATE.md`
+  in this docs-only QLOCK
+- expand the set of `PRIVILEGED_ENDPOINTS` beyond the 4 current LIVE
+  entries
+- modify break-glass (ADR-0050) or BG.2 wiring
+- modify the GOVSEC.5 closure record or ADR-0049 umbrella status
+- introduce Autonomous Execution Core privileged actions
+- introduce MCP / Connector write actions
+- modify Control Tower (`otzar-control-tower`) UI surfaces
+- modify entitlement / billing surfaces
+- perform a broad rewrite of dual-control middleware semantics
+  beyond the target-resolution change
+- weaken the GAP-C1 self-approval guard at
+  `escalation.service.ts:406-407`
+- enumerate candidate-pool size in audit details (no candidate-pool
+  disclosure)
+- ship without the fail-closed Zone U1 marker
+
+### 9. Tests required for the next EXECUTE-VERIFY QLOCK
+
+The next QLOCK MUST add or update at least the following tests. Test
+file locations follow existing repo precedent (real containerized
+Postgres at the unit + integration tiers; no `vi.mock` per the
+sub-phase E catch #5 substrate precedent).
+
+**Unit tier (`tests/unit/escalation.test.ts` extend, or new
+`tests/unit/escalation-target-resolver.test.ts`):**
+
+1. Target resolver picks the deterministic lowest-`entity_id`
+   non-caller candidate from a multi-admin pool (Class C).
+2. Target resolver excludes the caller from the candidate set even
+   when the caller IS a `can_admin_niov` entity.
+3. Target resolver returns the fail-closed sentinel when the
+   candidate set after caller-exclusion is empty
+   (single-admin org).
+4. Target resolver never returns a cross-org candidate (org-scope
+   filter is structural at the query tier).
+5. Class A explicit-metadata target (forward-substrate hook) is
+   chosen ahead of Class B/C when present.
+6. Soft-deleted / inactive admin candidates are excluded.
+
+**Integration tier (`tests/integration/dual-control-binding-config.test.ts`
++ `tests/integration/dual-control-binding-orgs.test.ts` extend, or
+new `tests/integration/dual-control-phase-e.test.ts`):**
+
+7. End-to-end privileged request → auto-created PENDING escalation
+   has `target_entity_id` != `source_entity_id` for all 4 LIVE
+   PRIVILEGED_ENDPOINTS (Operations A/B/C/D).
+8. The independently-resolved target can approve the escalation;
+   re-issued privileged request now delegates to the handler.
+9. GAP-C1 still rejects source-side self-approval **after** Phase E
+   (even when source coincidentally matches a candidate in the pool
+   due to a misconfigured admin set, GAP-C1 trumps target match).
+10. Single-admin deployment fails closed at the privileged route with
+    503-class response + `DUAL_CONTROL_NO_APPROVER_AVAILABLE` Zone
+    U1 marker; no privileged handler invocation.
+11. Break-glass regression: a valid `BreakGlassGrant` for
+    `actionDescriptor.type` still short-circuits Phase E and
+    delegates to the handler; Phase E target resolution is NOT
+    invoked on the break-glass path.
+12. No-leak wire test: response envelope on fail-closed contains no
+    candidate `entity_id`s, no cross-org data, no candidate-pool
+    size, no organisation membership information.
+13. Audit details verification: `details.action =
+    "DUAL_CONTROL_NO_APPROVER_AVAILABLE"` + `target_resolution_reason
+    = "no-eligible-target"` + only the route/method/actionDescriptor
+    fields documented in §6.
+14. Cross-org leak guard: caller in org A; cross-org admin in org B;
+    target resolver MUST NOT return org-B candidate even if org-B
+    admin has `can_admin_niov`. (Mirrors `admin-routes.test.ts:596+`
+    "DRIFT 9" anchor pattern.)
+
+**Regression (must continue to pass):**
+
+15. All existing tests in `tests/unit/escalation.test.ts` + the
+    binding test files (`dual-control-binding-config.test.ts`,
+    `dual-control-binding-orgs.test.ts`,
+    `dual-control-binding-regulator.test.ts` if present) +
+    `break-glass-integration.test.ts` + the BG.2-path tests.
+16. RULE 16 no-console anchor (`tests/unit/no-console-in-api-src.test.ts`).
+17. TS 12-error baseline preserved.
+
+### 10. Implementation guidance for the next EXECUTE-VERIFY QLOCK
+
+This amendment is design-only and intentionally does not write code.
+The next QLOCK implementer MUST:
+
+- Re-read this Amendment 1 + the §Decision substrate above + the
+  updated `docs/CURRENT_BUILD_STATE.md` 2026-05-28 entry before
+  any implementation.
+- Surface any Rule 0 conflicts inline per RULE 13 (substrate-honest
+  pre-flight) before implementing.
+
+**Likely files to change** (the future QLOCK MUST re-verify each at
+pre-flight and adjust as substrate evolves):
+
+- `apps/api/src/services/governance/escalation.service.ts` — add the
+  target resolver helper (likely `resolveDualControlTarget(
+  callerEntityId, actionDescriptor, prismaClient)` returning a
+  discriminated union `{ ok: true; target_entity_id: string;
+  resolution_reason: ResolutionReason } | { ok: false; reason:
+  "NO_ELIGIBLE_TARGET" | "INVALID_CANDIDATE" }`); replace the
+  placeholder at line 316.
+- `apps/api/src/middleware/dual-control.middleware.ts` — invoke the
+  resolver before `getOrCreatePendingDualControlForCaller`; on
+  `{ ok: false }` emit the Zone U1 fail-closed marker and return
+  503-class with the safe error envelope; never delegate. Remove
+  the SUBSTRATE-STATE LIMITATION block at lines 38-50 once the
+  placeholder is gone.
+- `apps/api/src/security/privileged-endpoints.ts` — optionally extend
+  `EscalationActionDescriptor.metadata` typing if Class A
+  explicit-metadata routing lands in the same EXECUTE-VERIFY; if
+  not, leave the registry untouched (forward-substrate only).
+- Tests — extend per §9.
+- `docs/architecture/dual-control-operations-canonical-record.md` —
+  update §3 step 6 if the canonical-record's target-resolution prose
+  needs aligning to the resolver's name. **Optional**; out of scope
+  for this amendment.
+
+**Branch suggestion for the next EXECUTE-VERIFY QLOCK:**
+`feature/adr-0026-phase-e-target-resolver-execute-verify-{yyyy-mm-dd}`.
+
+**Verification commands for the next EXECUTE-VERIFY QLOCK** (per
+repo precedent):
+
+- `npx tsc --noEmit -p tsconfig.json` — TS 12-error baseline preserved
+- `npm run test:unit -- escalation` (and any new resolver test file)
+- `npm run test:unit -- no-console-in-api-src` — RULE 16 anchor
+- `npm run test:integration -- dual-control` — extend coverage
+- `npm run test:integration -- break-glass` — BG.2 regression
+- `tests/integration/admin-routes.test.ts` Drift-9 cross-org leak
+  guard regression (any test referencing org-scope filter parity)
+
+### 11. Production dependency — Phase E lands before new privileged surfaces
+
+This amendment formalises the §Forward Queue dependency: Phase E
+target-resolution MUST land at the implementation tier (via a
+separate next-phase EXECUTE-VERIFY QLOCK) **before** any of the
+following:
+
+- Adding a 5th or higher entry to `PRIVILEGED_ENDPOINTS` (every new
+  privileged endpoint inherits the current deadlock under the
+  placeholder).
+- Autonomous Execution Core privileged actions (Production Section
+  §2; whatever privileged surface lands MUST already have a real
+  Phase E target).
+- MCP / Connector write actions that route through dual-control
+  (Production Section §4; same reason).
+- Expanded admin / governance operations relying on dual-control
+  (Production Section §9).
+- Any operator-facing UX in Control Tower that exposes the
+  EscalationRequest queue (otherwise the queue surfaces deadlocked
+  rows).
+
+This is the substrate-honest hard-block: Phase E is a **liveness
+prerequisite** for expansion, per the Founder Directive "all 10
+production sections required, none deferrable as optional later"
+recorded in `docs/CURRENT_BUILD_STATE.md` 2026-05-28 refresh.
+
+### 12. Safe / unsafe claims after this amendment
+
+**Safe to claim** after this amendment is Accepted:
+
+- ADR-0026 Phase E target-resolution **policy** is canonical and
+  accepted.
+- The 4 LIVE PRIVILEGED_ENDPOINTS will use Class C platform-admin
+  pool selection once the next EXECUTE-VERIFY QLOCK lands code.
+- The dual-control self-approval block (GAP-C1) remains closed at
+  the service tier per `escalation.service.ts:406-407`.
+- The Phase E liveness gap is fully documented and ready for
+  implementation; no further design QLOCK is required before code.
+- Break-glass (ADR-0050 / BG.2) remains live and unchanged.
+
+**Unsafe to claim** (until the next EXECUTE-VERIFY QLOCK lands and
+tests pass): any framing that asserts Phase E has shipped as code,
+that auto-created dual-control escalations have been unblocked at
+runtime, that the dual-control surface has production-grade
+end-to-end coverage for customer flows, that the 4 PRIVILEGED_ENDPOINTS
+have customer-tested approval paths, that Autonomous Execution Core
+/ MCP / Connectors are live, or that all 10 production sections are
+launch-ready. See `docs/CURRENT_BUILD_STATE.md` 2026-05-28 refresh
+for the canonical substrate-honest claims posture across the 10
+production sections; the unsafe-claim phrasing forbidden in this
+repo is enumerated there and in ADR-0055 §Decision 9.
+
+### 13. Forward queue from this amendment
+
+The next QLOCKs in sequence, none implemented here:
+
+- `[ADR-0026-AMENDMENT-1-PHASE-E-COMMIT-AND-PUSH-AUTH]` — docs-only
+  commit + push of this amendment.
+- `[ADR-0026-AMENDMENT-1-PHASE-E-PR-AUTH]` — PR.
+- `[ADR-0026-AMENDMENT-1-PHASE-E-PR-REVIEW-STATUS-QLOCK]` — review
+  status.
+- `[ADR-0026-AMENDMENT-1-PHASE-E-FOUNDER-MERGE-AUTH]` — merge.
+- `[ADR-0026-PHASE-E-TARGET-RESOLVER-EXECUTE-VERIFY-AUTH]` (NEW;
+  code QLOCK that implements §3 + §6 + §9) — this is the QLOCK that
+  removes the deadlock.
+
+**Founder authorization for this amendment** explicit at
+`[ADR-0026-AMENDMENT-1-PHASE-E-TARGET-RESOLUTION-WRITE-AND-ACCEPT-AUTH]`
+per RULE 20.
+
+**Rule 21 research-arc note for this amendment:** Online research
+was **not performed** in this session (no operator-confirmed online
+access). The amendment proceeds from repo-internal authoritative
+substrate only: ADR-0026 §Decision + §Forward Queue, ADR-0050 §BG.3,
+COMPLIANCE_ARCHITECTURE_REVIEW.md Tension 3, RAA 12.8 §5.2 (HITL
+escalation chain), `docs/CURRENT_BUILD_STATE.md` 2026-05-28 refresh,
+and implementation-proven file:line evidence cited inline. No
+external four-eyes / segregation-of-duties / enterprise-IAM source
+was consulted; the canonical principles (source ≠ approver,
+fail-closed target selection, auditability, break-glass
+accountability + time-boxing, distinct-second-human invariant) are
+already canonical in the repo substrate cited above. A future
+Founder-authorized QLOCK MAY add a research-arc preface to this
+amendment if external corroboration is required for
+audit/certification purposes (e.g., SOC 2 CC6.3 segregation of
+duties evidence pack); that is forward-substrate.
+
 Bidirectional citations (cited from):
 
 - `docs/architecture/dual-control-operations-canonical-record.md` — the
