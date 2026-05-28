@@ -5,9 +5,20 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-28 ([ADR-0057-LANDED] minimum-touch
-refresh — ADR-0057 — Autonomous Execution Core Substrate —
-landed at PR #12 squash commit
+**Last updated:** 2026-05-28
+([TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED] minimum-
+touch refresh — TypeScript baseline reduced from **12 errors
+to 4 errors** by mechanical refactor of 8 stale test-tier
+`LoginResult.code` discriminated-union narrowing errors in
+this branch. ADR-0015 Decision B Amendment 1 records the
+baseline reduction; CI + pre-commit thresholds updated
+inline. The remaining 4 errors are: (1) `server.ts:299`
+rateLimits index-signature drift; (2) `write.service.ts:548`
+`ValidateFailure.entity_id` narrowing; (3) PRICING_TABLE
+deliberate-blocker per ADR-0021; (4) `CapsuleMetadata` shape
+drift architectural decision. Prior same-date refresh
+`[ADR-0057-LANDED]` — ADR-0057 — Autonomous Execution Core
+Substrate — landed at PR #12 squash commit
 `6ad53ca39623432afbf7d40bfd19a66360f1df46`. Design-only
 acceptance: ADR-0057 canonicalizes Section 2 of the 10 required
 production sections at the documentation tier; Autonomous
@@ -61,6 +72,138 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED] 2026-05-28
+
+**Status: VERIFIED TypeScript baseline reduction from 12 to 4
+errors.** A mechanical refactor in the `feature/typecheck-loginresult-narrowing-baseline-4-2026-05-28`
+branch removed 8 stale test-tier `LoginResult.code`
+discriminated-union narrowing errors by dropping the `as
+LoginResult` cast at 8 test-helper sites. The cast was
+collapsing the `LoginResult | LoginFailure` union returned by
+`AuthService.login()` (per `apps/api/src/services/auth.service.ts:139-147`)
+into the success-only `LoginResult` shape; the subsequent
+`if (!login.ok) throw new Error(...login.code)` then read a
+field that no longer existed on the narrowed type. Removing
+the cast restored the discriminated union and the narrowing
+became valid by construction. The 8 sites were uniform:
+
+- `tests/integration/monetization.test.ts:86-89`
+- `tests/unit/coe.test.ts:96-99`
+- `tests/unit/compliance.test.ts:87-90`
+- `tests/unit/cosmp/negotiate.test.ts:130-133`
+- `tests/unit/cosmp/read.test.ts:86-89`
+- `tests/unit/cosmp/write.test.ts:108-111`
+- `tests/unit/governance.test.ts:84-87`
+- `tests/unit/hive.test.ts:82-85`
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed
+
+- **ADR-0015 Decision B Amendment 1 (Reconciled 2026-05-28)** —
+  records the baseline reduction from 12 to 4 errors,
+  enumerates the 4 remaining errors, and preserves the prior
+  12-error wording verbatim for historical context.
+- **CI threshold updated inline at `.github/workflows/ci.yml:48-53`**:
+  the `typecheck` job now fails if `tsc --noEmit` reports more
+  than 4 errors.
+- **Pre-commit threshold updated inline at `.husky/pre-commit:60-65`**:
+  the typecheck step now fails if more than 4 errors.
+- **8 test-helper refactors** dropping `as LoginResult` and
+  restoring discriminated-union narrowing per the
+  `auth.service.ts` `LoginResult | LoginFailure` return type.
+  No `as any`, no `@ts-ignore`, no `@ts-expect-error` used.
+- **Zero source-tier changes.** `apps/**`, `packages/**`,
+  `prisma/schema.prisma`, `package.json`, lockfiles, other ADRs,
+  AGENTS.md, CLAUDE.md, and Control Tower files are all
+  unchanged.
+
+### Remaining 4 TypeScript errors
+
+1. `apps/api/src/server.ts:299` — TS2322 — `{ [x: string]:
+   RateLimitPolicy | undefined }` not assignable to
+   `Record<string, RateLimitPolicy>` (rateLimits index-signature
+   drift). **Classification:** safe-to-fix-soon technical debt;
+   queued as a separate small QLOCK.
+2. `apps/api/src/services/cosmp/write.service.ts:548` — TS2339
+   — `Property 'entity_id' does not exist on type
+   'ValidateFailure'` (discriminated-union narrowing on the
+   failure branch). **Classification:** safe-to-fix-soon
+   technical debt; queued as a separate small QLOCK.
+3. `apps/api/src/services/monetization/monetization.service.ts:30`
+   — TS2740 — `PRICING_TABLE: Record<CapsuleType, number>`
+   missing 11 entries (`CONVERSATION_LEARNING`, `TASK_LEARNING`,
+   `WORK_PATTERN`, `COMMUNICATION_PREF`, + 7 more). **This is
+   the canonical PRICING_TABLE deliberate-blocker per ADR-0021
+   §Step 3 + ADR-0015 Decision B (now Amendment 1).** Pricing
+   decisions for new CapsuleType values warrant explicit
+   consideration; the 4-error baseline tolerance absorbs the
+   exhaustiveness gap by design. Resolution requires a
+   Founder-authorized monetization-policy QLOCK.
+4. `packages/database/src/queries/capsule.ts:242` — TS2322 —
+   `CapsuleMetadata` shape drift vs the Prisma `select` in
+   `getCapsuleMetadata` (missing `tokens`, `tokens_tokenizer`,
+   `commitment_date`, `embedding_content_hash`, + 9 more).
+   **Architectural decision required**; reconciliation queued
+   as a separate ADR-0017 Production Discipline-framed planning
+   QLOCK to determine whether `CapsuleMetadata` widens, the
+   Prisma `select` widens, or the helper gets split for
+   different consumers.
+
+### Scope discipline (what this refresh touched, and what it did not)
+
+This branch touches:
+
+- `tests/integration/monetization.test.ts` (1 cast removal)
+- `tests/unit/coe.test.ts` (1 cast removal)
+- `tests/unit/compliance.test.ts` (1 cast removal)
+- `tests/unit/cosmp/negotiate.test.ts` (1 cast removal)
+- `tests/unit/cosmp/read.test.ts` (1 cast removal)
+- `tests/unit/cosmp/write.test.ts` (1 cast removal)
+- `tests/unit/governance.test.ts` (1 cast removal)
+- `tests/unit/hive.test.ts` (1 cast removal)
+- `.github/workflows/ci.yml` (threshold 12 → 4)
+- `.husky/pre-commit` (threshold 12 → 4)
+- `docs/architecture/decisions/0015-ci-workflow-architecture.md`
+  (Decision B Amendment 1)
+- `docs/CURRENT_BUILD_STATE.md` (this entry)
+
+No source, schema, package, lockfile, AGENTS.md, CLAUDE.md,
+other ADR, Control Tower, or Foundation-Command files were
+touched. No migrations, installs, or secret access occurred.
+
+### Verification
+
+- Typecheck before: 12 errors (12-error baseline preserved
+  across PR #7 through PR #13).
+- Typecheck after: **4 errors** exactly (the 4 enumerated
+  above).
+- 8 LoginResult.code TS2339 errors removed.
+- Targeted test suites unchanged (the cast removal is a pure
+  type-level refactor; no runtime behavior change).
+- No `as any`, no `@ts-ignore`, no `@ts-expect-error`
+  introduced.
+- RULE 16 no-console anchor preserved.
+
+### Forward-substrate after this refresh
+
+- Per ADR-0057 §16 step 2, the next canonical step before any
+  Section-2 code remains **`[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]`**.
+  This baseline reduction tightens the safety net for that
+  guard: new TS errors are now harder to hide.
+- The 2 safe-to-fix source-tier errors (server.ts rateLimits,
+  write.service.ts ValidateFailure) can land as a follow-on
+  small QLOCK if/when convenient; not blocking.
+- The PRICING_TABLE deliberate-blocker (error #3) requires
+  Founder-authorized monetization-policy authorization per
+  ADR-0021 §Step 3.
+- The `CapsuleMetadata` drift (error #4) requires an
+  architectural-decision planning QLOCK; not blocking.
+- The "all 10 production sections required, none deferrable"
+  Founder Directive 2026-05-28 remains in force.
 
 ## [ADR-0057-LANDED] 2026-05-28
 

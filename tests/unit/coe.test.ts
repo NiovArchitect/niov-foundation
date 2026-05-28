@@ -93,9 +93,9 @@ async function loginAs(auth: AuthService) {
   const password = "correct-horse-battery";
   const input = makeEntityInput({ entity_type: "PERSON", password });
   const entity = await createEntity(input);
-  const login = (await auth.login(input.email!, password, ["read", "write"], {
+  const login = await auth.login(input.email!, password, ["read", "write"], {
     ip_address: null,
-  })) as LoginResult;
+  });
   if (!login.ok) throw new Error(`login failed in test setup: ${login.code}`);
   return { entity, token: login.token };
 }
