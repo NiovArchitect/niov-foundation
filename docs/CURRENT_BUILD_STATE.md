@@ -5,8 +5,14 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-28 ([ADR-0050-AMENDMENT-1-LANDED]
-minimum-touch refresh — supersedes the prior
+**Last updated:** 2026-05-28 ([ADR-0057-LANDED] minimum-touch
+refresh — ADR-0057 — Autonomous Execution Core Substrate —
+landed at PR #12 squash commit
+`6ad53ca39623432afbf7d40bfd19a66360f1df46`. Design-only
+acceptance: ADR-0057 canonicalizes Section 2 of the 10 required
+production sections at the documentation tier; Autonomous
+Execution Core is NOT live in code. Prior same-date refresh
+`[ADR-0050-AMENDMENT-1-LANDED]` supersedes the
 `[WAVE-AND-12C0-AND-PHASE-E-RECONCILIATION-REFRESH]` framing of
 ADR-0050 §BG.3 as "stale relative to GOVSEC.5 phase closure";
 ADR-0050 Amendment 1 — GOVSEC.5 Phase Closure Reconciliation —
@@ -55,6 +61,275 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-LANDED] 2026-05-28
+
+**Status: VERIFIED docs-only acceptance of the Autonomous
+Execution Core substrate design.** ADR-0057 — Autonomous
+Execution Core Substrate — landed at PR #12 squash commit
+`6ad53ca39623432afbf7d40bfd19a66360f1df46` (2026-05-28). This
+entry is the canonical superseding-state for the framing of
+Section 2 (Autonomous Execution Core) as "no accepted design
+substrate exists" recorded by the prior refreshes
+`[ADR-0050-AMENDMENT-1-LANDED]` and
+`[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED]` below; those prior
+framings were substrate-honest at HEAD `3e81038` and `b097d4b`
+respectively and are preserved verbatim for historical context
+per the docs-honesty discipline (Rule 0 — Documentation-First /
+No-Guessing).
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `6ad53ca`
+
+Per Rule 0 reading of the merged ADR file
+`docs/architecture/decisions/0057-autonomous-execution-core-substrate.md`
+on `main`:
+
+- **ADR-0057 is design-only / docs-only.** Status: Accepted
+  2026-05-28; phase: Section 2 design-first ADR; **no code,
+  schema, audit literal, route, service, middleware, or test
+  change in this ADR.** Authorized under
+  `[ADR-0057-AUTONOMOUS-EXECUTION-CORE-WRITE-AND-ACCEPT-AUTH]`
+  per RULE 20.
+- **NEW canonical 18-subsection Decision body** that
+  canonicalizes:
+  - the 10-state Action lifecycle (`PROPOSED`, `APPROVED`,
+    `SCHEDULED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`,
+    `TIMED_OUT`, `REJECTED`, `EXPIRED`) with terminal-state
+    immutability and audit-visible-every-transition guarantee;
+  - design intent for 4 new models (`Action`, `ActionAttempt`,
+    `ActionResult`, `ActionPolicy`) and 5 new enums
+    (`ActionStatus`, `ActionType`, `ActionRiskTier`,
+    `ActionDecision`, `ActionAttemptOutcome`) — schema EXECUTE
+    deferred to a later QLOCK per §16 build sequence;
+  - the deterministic policy evaluator (pure function;
+    discriminated-union return `AUTO_APPROVE` /
+    `REQUIRE_DUAL_CONTROL` / `REQUIRE_BREAK_GLASS` /
+    `FORBIDDEN`; fail-closed on `POLICY_UNRESOLVED` /
+    `ENVELOPE_INVALID`);
+  - the 6-rung autonomy ladder
+    (`OrgSettings.require_human_approval = true` overrides
+    everything; `CRITICAL` always requires dual-control at
+    minimum; `OBSERVE_ONLY` forbids all; `APPROVAL_REQUIRED`
+    is HITL by default; `EXECUTIVE_OVERRIDE` auto-approves
+    LOW+MEDIUM only with `AUTO_APPROVE` policy row +
+    `auto_approve_low_risk` for LOW);
+  - the **Phase E target resolver reuse** for Actions
+    requiring dual-control (paired `EscalationRequest`;
+    `source_entity_id` is the requester per Phase E Invariant
+    1; `target_entity_id` is resolved by
+    `resolveDualControlTarget` Class A → B → C → D; fail-closed
+    503 `ESCALATION_TARGET_NOT_FOUND` for single-admin orgs;
+    GAP-C1 source-cannot-self-resolve preserved);
+  - the **BG.2 break-glass reuse** with all 7 safety
+    invariants verbatim from ADR-0050 Amendment 1 (time-boxed,
+    single-use, explicitly justified, scoped, auditable,
+    subject to two-person review with `reviewer ≠ source`,
+    not a general bypass);
+  - the **first proposed Class B LIVE PRIVILEGED_ENDPOINTS
+    entry**: `ORG_ACTION_POLICY_UPDATE` for
+    `PUT /api/v1/org/action-policies` at `can_admin_org` tier
+    (binds in a later EXECUTE-VERIFY);
+  - 10 NEW additive `ACTION_*` audit literals
+    (`ACTION_PROPOSED`, `ACTION_APPROVED`, `ACTION_REJECTED`,
+    `ACTION_SCHEDULED`, `ACTION_STARTED`, `ACTION_SUCCEEDED`,
+    `ACTION_FAILED`, `ACTION_CANCELLED`, `ACTION_EXPIRED`,
+    `ACTION_POLICY_UPDATE`) — same precedent as
+    `CAPSULE_MUTATION_*` and `BREAK_GLASS_*`; no ADR-0002
+    amendment needed;
+  - the safe-details allowlist (`action_id`, `action_type`,
+    `risk_tier`, `decision`, `policy_envelope_hash`,
+    `actor/source_entity_id`, `target_entity_id` only where
+    safe, `escalation_id`, `attempt_number`, `outcome`,
+    `error_class` enum-bound only, `route`, `method`,
+    `grant_id`) and the 13-item forbidden-fields list (raw
+    payload, full envelope JSON, raw API responses, secrets,
+    headers, credentials, capsule content, embeddings,
+    candidate identities, candidate-pool size, raw error text,
+    justification text);
+  - DB-backed in-process executor posture (FOR UPDATE SKIP
+    LOCKED; IDs not raw objects; idempotency keys UNIQUE;
+    ActionAttempt per retry; BullMQ / pg-boss / BEAM deferred
+    with explicit migration triggers pinned);
+  - idempotency / retry / timeout / cancellation posture
+    (RUNNING cancellation privileged; terminal-state
+    immutability per RULE 10);
+  - 7 intended routes (`POST /actions`, `GET /actions`,
+    `GET /actions/:id`, `POST /actions/:id/cancel`,
+    `GET /org/actions`, `GET /org/action-policies`,
+    `PUT /org/action-policies`) with exact auth / dual-control
+    / audit posture per route;
+  - Control Tower dependency map enumerating 6 future CT
+    surfaces (Actions Inbox, Action Detail drawer, Pending
+    Approvals bridge, Org Action Policy editor, Admin Action
+    Audit view, safe status / outcome display) — CT
+    implementation deferred to a separate CT planning QLOCK;
+  - 16-item Non-goals list + 13-item Unsafe-claims list;
+  - 10-step build sequence (CI no-leak guard before any
+    Section-2 code → schema/enums/audit literals → policy
+    evaluator → read routes → write routes + in-process
+    executor → `ORG_ACTION_POLICY_UPDATE` binding → CBS
+    refresh → CT Lane B planning → ADR-0058);
+  - **ADR-0058 Connector / Executor Contract deferral**:
+    Section 4 (MCP / Connectors) remains a separate ADR;
+    ADR-0057 explicitly does NOT collapse connectors into
+    Section 2.
+
+### Production-section impact (substrate-honest)
+
+- **Section 2 Autonomous Execution Core** — Section 2 now has
+  **accepted architecture at the documentation tier** (ADR-0057
+  Accepted 2026-05-28). Section 2 implementation is **NOT
+  live**:
+  - `TwinConfig.autonomy_level` remains config-only at
+    `packages/database/prisma/schema.prisma:879`. The validator
+    at `apps/api/src/routes/org.routes.ts:1645` accepts
+    `APPROVAL_REQUIRED | EXECUTIVE_OVERRIDE | OBSERVE_ONLY`,
+    but no runtime gate consults it.
+  - `Workflow` (`schema.prisma:937-950`) remains CRUD/config-only.
+    The three routes at `apps/api/src/routes/org.routes.ts:1220-1328`
+    persist and read but never trigger or execute anything.
+  - `IntegrationCredential` (`schema.prisma:983`) has no
+    runtime consumer; the only repo reference is the
+    console-catalog entry at `console.service.ts:828`.
+  - **No `Action` / `ActionAttempt` / `ActionResult` /
+    `ActionPolicy` models exist.** No executor, no queue, no
+    worker, no `ACTION_*` audit literal in
+    `AUDIT_EVENT_TYPE_VALUES`.
+  - The existing 4 LIVE PRIVILEGED_ENDPOINTS remain unchanged
+    by ADR-0057 (per §7 of the ADR).
+- **Section 4 MCP / Connectors** — explicitly deferred to
+  ADR-0058 Connector / Executor Contract per ADR-0057 §17.
+  Section 4 remains missing today.
+- **Section 9 Admin / Governance Control Tower** — operator-
+  facing Action surfaces (Actions Inbox, Approvals bridge,
+  Policy editor) are forward-substrate for a separate CT
+  planning QLOCK per ADR-0057 §12; CT implementation does NOT
+  begin until Foundation backend Sections 2 routes are stable.
+
+### Verification (pre-merge + CI)
+
+- Single commit on PR #12 (`440db59`).
+- PR #12 CI **4 / 4 green** on Actions run `26606244511`:
+  Typecheck (strict 12-error baseline) 46s · Unit tier (371
+  tests) 1m23s · Integration tier (111 tests + 1 skipped)
+  1m37s · Elixir tier (compile + test) 2m1s.
+- TypeScript baseline preserved at the accepted **12 errors**
+  exactly (per ADR-0015 Decision B). PR #12 introduced no new
+  TS errors.
+- RULE 16 no-console anchor passed
+  (`tests/unit/no-console-in-api-src.test.ts`).
+- Pre-commit hooks ran and passed (ADR-0025 `db:push` guard +
+  TS baseline check + RULE 16 anchor).
+
+### Scope discipline (what PR #12 touched, and what it did not)
+
+PR #12 squash commit `6ad53ca` touches exactly one file:
+
+- `docs/architecture/decisions/0057-autonomous-execution-core-substrate.md`
+  (NEW; 817 lines)
+
+No source / schema / route / service / middleware / test / other
+ADR / `docs/CURRENT_BUILD_STATE.md` / AGENTS.md / CLAUDE.md /
+`package.json` / lockfile / CI workflow / Control Tower /
+Foundation-Command file was touched in PR #12. No migrations,
+installs, or secret access occurred.
+
+### Substrate-honest superseding pointers (inline annotations applied)
+
+The following prior paragraphs are now superseded for
+current-state framing; the prose remains verbatim below for
+historical context, with `**SUPERSEDED ...**` prefaces inserted
+at each site:
+
+- §`Required production sections — all 10, none deferrable as
+  "optional later"` item 2 (Autonomous Execution Core) below —
+  the "Section 2 itself is **still partial**" framing is
+  superseded by the addition of ADR-0057 as the accepted
+  design substrate; the underlying "execution engine is
+  unchanged" + "`TwinConfig.autonomy_level` is still
+  config-only" facts remain substrate-honest because ADR-0057
+  is docs-only.
+- §`Production-section impact (substrate-honest)` Section 2
+  bullet in `[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED]` below
+  — "the Phase E liveness-prerequisite ... is now closed at
+  implementation tier" framing remains correct; the
+  "Autonomous Execution Core remains partial" tail is now
+  partially superseded — design substrate is accepted, but
+  implementation remains forward-substrate.
+- §`Forward-substrate after this refresh` in
+  `[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED]` below — "The
+  natural next strategic arc per the Founder Directive
+  remains Autonomous Execution Core planning (Section 2)"
+  framing is superseded: Section-2 planning has now landed as
+  ADR-0057; the natural next step is the CI no-leak guard
+  (Lane A4) before Section-2 schema/code work.
+- §`Forward-queued separate QLOCKs` below — the
+  `[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]` lane remains
+  forward-queued and is now the immediate next step per
+  ADR-0057 §16 build sequence step 2.
+
+### Substrate-honest claims that remain unsafe to make after this refresh
+
+ADR-0057 lands as **design-only / docs-only**; it does NOT make
+Section 2 live. Do NOT claim:
+
+- "Autonomous Execution is live."
+- "AI Twin can execute actions."
+- "`TwinConfig.autonomy_level` is enforced."
+- "Workflows run."
+- "Connectors / MCP are live."
+- "Action queue exists."
+- "Action audit trail exists."
+- "Control Tower action UX exists."
+- "Billing / entitlement gating for actions exists."
+- "All 10 production sections are complete."
+- "All GOVSEC is closed."
+- "Break-glass is a general bypass."
+- "TypeScript has zero errors."
+- "ADR-0057 schema is in `schema.prisma`." (it is not; schema
+  EXECUTE lands per §16 step 3 in a later QLOCK)
+- "`ACTION_*` audit literals exist." (they do not; literal
+  extension lands per §16 step 3 in a later QLOCK)
+- "Class B PRIVILEGED_ENDPOINTS are exercised at integration
+  tier." (Class B is unit-tier-covered only; integration-tier
+  coverage lands with the `ORG_ACTION_POLICY_UPDATE` binding
+  per §16 step 7)
+
+### Forward-substrate after this refresh
+
+- **Next recommended step per ADR-0057 §16 build sequence:**
+  the CI no-leak guard EXECUTE-VERIFY
+  (`[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]`, Lane A4). Per
+  ADR-0057 §16 step 2, this MUST land BEFORE any Section-2
+  code so the CI guard catches regressions in audit/response
+  shapes when the `ACTION_*` literals and route shapes go
+  live.
+- **Then per ADR-0057 §16 step 3:** schema + enums + audit
+  literals EXECUTE-VERIFY (Prisma model additions for
+  `Action` / `ActionAttempt` / `ActionResult` / `ActionPolicy`
+  + 5 enums + 10 NEW `ACTION_*` audit literals +
+  `db:push:test` per ADR-0025). Smoke tests only at that
+  phase.
+- **Then per ADR-0057 §16 steps 4–7:** policy evaluator +
+  read routes + write routes + in-process executor +
+  `ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding —
+  each its own QLOCK.
+- **Section 4 / ADR-0058 Connector / Executor Contract**
+  remains later Section 4 work per ADR-0057 §17. Connectors
+  cannot land until Section 2 is live and stable.
+- **Control Tower Lane B planning** remains separate CT-repo
+  planning QLOCK after Foundation backend Sections 2 routes
+  are stable.
+- **Remaining forward-queued lanes (unchanged):** Lane A5
+  `[ADR-0056-CROSS-WALLET-MEMBER-CONSENT-WRITE-AND-ACCEPT-AUTH]`;
+  Control Tower Lane B 12C.0 consumer migration (CT-repo
+  branches).
+- The "all 10 production sections required, none deferrable"
+  Founder Directive 2026-05-28 remains in force.
 
 ## [ADR-0050-AMENDMENT-1-LANDED] 2026-05-28
 
@@ -501,6 +776,16 @@ go-live architecture must account for all 10:
    target-resolution is now CLOSED at implementation tier at PR #8
    squash commit `b097d4b`; the prior "Phase E target-resolution
    remains open" tail is preserved here as historical context only.
+   **SUPERSEDED IN PART (see §[ADR-0057-LANDED] above):** Section 2
+   now has accepted design substrate via ADR-0057 at PR #12 squash
+   commit `6ad53ca`; Action lifecycle / schema intent / policy
+   evaluator / autonomy semantics / Phase E + BG.2 reuse / Control
+   Tower dependency map / 10-step build sequence / ADR-0058
+   deferral are canonical at the documentation tier. The
+   "execution engine missing" + "`TwinConfig.autonomy_level` is
+   config-only, not enforced" facts above remain substrate-honest
+   because ADR-0057 is docs-only; Autonomous Execution Core
+   implementation is NOT live.
 3. **Hives / Team Intelligence** — Foundation backend live
    (`apps/api/src/services/hive/hive.service.ts` +
    `apps/api/src/routes/hive.routes.ts` + Loop 4 aggregate refresh
@@ -846,7 +1131,16 @@ per the QLOCK auth).
   2026-05-28 at `b097d4b` (PR #8); see
   §[ADR-0026-PHASE-E-TARGET-RESOLVER-LANDED] above.**
   Historical entry; no longer forward-queued.
-- `[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]` (Lane A4)
+- `[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]` (Lane A4) — **NOW
+  THE IMMEDIATE NEXT STEP per ADR-0057 §16 build sequence
+  step 2; see §[ADR-0057-LANDED] above.** Must land BEFORE any
+  Section-2 schema/code work so the CI guard catches
+  regressions in audit / response shapes when the `ACTION_*`
+  literals and route shapes go live.
+- `[ADR-0057-AUTONOMOUS-EXECUTION-CORE-WRITE-AND-ACCEPT-AUTH]`
+  (Section 2 design-only ADR) — **LANDED 2026-05-28 at
+  `6ad53ca` (PR #12); see §[ADR-0057-LANDED] above.**
+  Historical entry; no longer forward-queued.
 - `[ADR-0056-CROSS-WALLET-MEMBER-CONSENT-WRITE-AND-ACCEPT-AUTH]`
   (Lane A5; patent-relevant per CT CONTEXT.md L475)
 - `[ADR-0050-MINOR-AMENDMENT-BG3-RECONCILIATION-WRITE-AND-ACCEPT-AUTH]`
@@ -854,8 +1148,21 @@ per the QLOCK auth).
   docs-only) — **LANDED 2026-05-28 at `cc4683d` (PR #10); see
   §[ADR-0050-AMENDMENT-1-LANDED] above.** Historical entry; no
   longer forward-queued.
+- ADR-0057 §16 build sequence steps 3-7 (schema + enums +
+  audit literals → policy evaluator + Action service → read
+  routes → write routes + in-process executor →
+  `ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding) —
+  each a separate forward-queued EXECUTE-VERIFY QLOCK after
+  Lane A4 CI no-leak guard lands.
+- `[ADR-0058-CONNECTOR-EXECUTOR-CONTRACT-WRITE-AND-ACCEPT-AUTH]`
+  (Section 4; deferred per ADR-0057 §17 until Section 2 is
+  live and stable).
 - Control Tower Lane B 12C.0 consumer migration (B1–B5 — separate
   CT-side branches per CT CONTEXT.md operator workflow).
+- Control Tower Section-2 surface planning QLOCK (Actions
+  Inbox + Approvals bridge + Policy editor + Admin Audit
+  view) — deferred per ADR-0057 §12 until Foundation backend
+  Section-2 routes are stable.
 
 ## CONSOLE.1 Foundation Console — Live Browser Smoke SUCCESS 2026-05-25
 
