@@ -334,6 +334,8 @@ export type {
   ConversationListSuccess,
   GetConversationDetailInput,
   ConversationDetailSuccess,
+  GetConversationCorrectionsInput,
+  ConversationCorrectionsSuccess,
 } from "./services/otzar/otzar.service.js";
 
 export { projectConversationDetail } from "./services/otzar/conversation-detail.js";
@@ -342,6 +344,16 @@ export type {
   ConversationDetailInput,
   ConversationDetailAvailability,
 } from "./services/otzar/conversation-detail.js";
+
+export {
+  projectConversationCorrections,
+  CORRECTION_DRIFT_PREVENTION_NOTE,
+  CORRECTION_CONTINUITY_NOTE,
+} from "./services/otzar/conversation-corrections.js";
+export type {
+  ConversationCorrectionsView,
+  ConversationCorrectionsInput,
+} from "./services/otzar/conversation-corrections.js";
 
 export {
   truncateToTokenBudget,

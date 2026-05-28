@@ -38,6 +38,10 @@ import {
   projectConversationDetail,
   type ConversationDetailView,
 } from "./conversation-detail.js";
+import {
+  projectConversationCorrections,
+  type ConversationCorrectionsView,
+} from "./conversation-corrections.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -326,6 +330,21 @@ export interface GetConversationDetailInput {
 export interface ConversationDetailSuccess {
   ok: true;
   conversation: ConversationDetailView;
+}
+
+// WHAT: Inputs for getConversationCorrections (ADR-0055 Wave 2C).
+export interface GetConversationCorrectionsInput {
+  token: string;
+  conversation_id: string;
+}
+
+// WHAT: Successful getConversationCorrections return (per-conversation
+//        correction-signal projection — counts + last-seen freshness +
+//        anti-overclaim notes). The fields live at the top level (not
+//        nested under `corrections`) per ADR-0055 §Decision 5.
+export interface ConversationCorrectionsSuccess
+  extends ConversationCorrectionsView {
+  ok: true;
 }
 
 // WHAT: The Otzar service.
@@ -1246,6 +1265,117 @@ export class OtzarService {
     });
 
     return { ok: true, conversation };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // getConversationCorrections -- safe, self-scoped per-conversation
+  // correction-signal projection (ADR-0055 Wave 2C).
+  //
+  // WHAT: Return the caller's OWN per-conversation correction signal
+  //        count + last-seen freshness + anti-overclaim notes.
+  // INPUT: GetConversationCorrectionsInput { token, conversation_id }.
+  // OUTPUT: ConversationCorrectionsSuccess (200) or OtzarFailure
+  //         (SESSION_* / CONVERSATION_NOT_FOUND / NOT_CONVERSATION_OWNER /
+  //         OPERATION_NOT_PERMITTED).
+  // WHY: ADR-0055 closes ADR-0054's deferred conversation→correction
+  //      linkage non-goal. Self-scoped (entity_id === caller; no admin
+  //      gate, no cross-tenant). Counts only CORRECTION capsules in the
+  //      caller's own wallet linked to this conversation. NEVER selects
+  //      payload_summary / payload_content / target_capsule_id /
+  //      storage_location / content_hash / vectors. ConversationDetailView
+  //      is unchanged. Submitted/available — NOT learned/applied. Read-
+  //      only projection — no new audit literal.
+  // ──────────────────────────────────────────────────────────────
+  async getConversationCorrections(
+    input: GetConversationCorrectionsInput,
+  ): Promise<ConversationCorrectionsSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return {
+        ok: false,
+        code: session.code,
+        message: "Conversation corrections denied",
+      };
+    }
+    const ownerEntityId = session.entity_id;
+
+    // Conversation existence + self-scope BEFORE the count query so we
+    // never disclose another caller's correction footprint via the count.
+    const conv = await prisma.otzarConversation.findUnique({
+      where: { conversation_id: input.conversation_id },
+      select: { conversation_id: true, entity_id: true },
+    });
+    if (conv === null) {
+      return {
+        ok: false,
+        code: "CONVERSATION_NOT_FOUND",
+        message: "Conversation not found",
+      };
+    }
+    if (conv.entity_id !== ownerEntityId) {
+      return {
+        ok: false,
+        code: "NOT_CONVERSATION_OWNER",
+        message: "Caller does not own this conversation",
+      };
+    }
+
+    // Resolve the caller's wallet so the count is wallet-bound (per
+    // ADR-0055 §Decision 5 + §Patent-Implementation Evidence — scoped
+    // wallet-bound continuity signal).
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+      select: { wallet_id: true },
+    });
+    if (wallet === null) {
+      // Caller authenticated but has no wallet — same shape as a
+      // zero-state response (no corrections possible). Honest absence.
+      const view = projectConversationCorrections({
+        conversation_id: conv.conversation_id,
+        corrections_count: 0,
+        last_correction_at: null,
+      });
+      return { ok: true, ...view };
+    }
+
+    // ADR-0055 §Decision 5: real Prisma count of CORRECTION capsules in
+    // the caller's wallet linked to this conversation; deleted_at IS NULL
+    // (RULE 10 soft-delete-aware). The composite
+    // @@index([wallet_id, capsule_type, conversation_id]) added at the
+    // schema phase supports this query.
+    const corrections_count = await prisma.memoryCapsule.count({
+      where: {
+        wallet_id: wallet.wallet_id,
+        capsule_type: "CORRECTION",
+        conversation_id: conv.conversation_id,
+        deleted_at: null,
+      },
+    });
+    // last_correction_at: created_at of the most-recent linked
+    // CORRECTION capsule, or null when count is 0. SAFE projection —
+    // select only created_at; never payload_summary / target_capsule_id /
+    // storage_location / content_hash.
+    let last_correction_at: Date | null = null;
+    if (corrections_count > 0) {
+      const latest = await prisma.memoryCapsule.findFirst({
+        where: {
+          wallet_id: wallet.wallet_id,
+          capsule_type: "CORRECTION",
+          conversation_id: conv.conversation_id,
+          deleted_at: null,
+        },
+        select: { created_at: true },
+        orderBy: { created_at: "desc" },
+      });
+      last_correction_at = latest?.created_at ?? null;
+    }
+
+    const view = projectConversationCorrections({
+      conversation_id: conv.conversation_id,
+      corrections_count,
+      last_correction_at,
+    });
+    return { ok: true, ...view };
   }
 
   // WHAT: Extract conversation topics via the LLM, with robust

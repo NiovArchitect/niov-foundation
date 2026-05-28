@@ -279,4 +279,35 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // GET /api/v1/otzar/conversations/:id/corrections -- safe, self-scoped
+  // per-conversation correction-signal projection (ADR-0055 Wave 2C).
+  // Bearer + "read" only (no admin gate). Returns counts + last-seen +
+  // honest notes; NEVER raw correction payloads, target_capsule_id,
+  // capsule IDs, vectors, storage_location, content_hash, permission
+  // internals, drift/employee score, or manager-visibility fields.
+  // CONVERSATION_NOT_FOUND (404) for unknown id; NOT_CONVERSATION_OWNER
+  // (403) for a cross-caller. ConversationDetailView (`/conversations/:id`)
+  // is unchanged.
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/otzar/conversations/:id/corrections",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await otzarService.getConversationCorrections({
+        token,
+        conversation_id: request.params.id,
+      });
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
 }

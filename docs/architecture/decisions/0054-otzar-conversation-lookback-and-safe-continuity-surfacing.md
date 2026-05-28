@@ -269,3 +269,8 @@ Bidirectional citations (cited from):
 - `docs/architecture/README.md` §Architectural Decision Records
 - `CLAUDE.md` §5 (ADR quick-reference jump table)
 - `docs/otzar/README.md` (Otzar docs index)
+- ADR-0055 (Otzar Correction Signals and Drift-Prevention
+  Continuity) — Wave 2C closes this ADR's explicitly-deferred
+  `conversation→correction linkage` non-goal without modifying the
+  Wave 2B `ConversationDetailView`; correction signals live on a
+  sibling `/conversations/:id/corrections` sub-resource.

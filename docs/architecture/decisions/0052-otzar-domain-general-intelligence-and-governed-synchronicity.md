@@ -197,3 +197,9 @@ Bidirectional citations (cited from):
   Surfacing) — the Wave 2B contract ADR for build-order step 4
   (Conversations/look-back), honoring the same DGI principles
   (self-scoped, no transcripts, no fabricated signals).
+- ADR-0055 (Otzar Correction Signals and Drift-Prevention
+  Continuity) — the Wave 2C contract ADR for build-order steps 5–6
+  (correction signals supporting drift prevention), honoring §5
+  (watching-is-not-surveillance), §6 (drift prevention is
+  first-class but bounded), and §7 (governed best-practice learning
+  without overclaiming).

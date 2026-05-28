@@ -165,6 +165,12 @@ model MemoryCapsule {
   updated_session_id String?  @db.Uuid
   previous_version   Int?
   mutation_type      MutationType?
+  // ADR-0055 Wave 2C: optional, nullable link to the OtzarConversation
+  // a CORRECTION capsule was raised inside. Additive; null for pre-existing
+  // capsules and for non-CORRECTION capsules. No FK to OtzarConversation;
+  // service code (processCorrection / getConversationCorrections) owns the
+  // existence + self-scope check (Section 9 pattern). No backfill.
+  conversation_id    String?  @db.Uuid
   embedding          Unsupported("vector(1536)")?
 
   created_at       DateTime  @default(now())
@@ -200,6 +206,10 @@ model MemoryCapsule {
   @@index([deleted_at])
   @@index([jurisdiction])
   @@index([topic_tags], type: Gin)
+  // ADR-0055 Wave 2C: composite index supporting the per-conversation
+  // CORRECTION count + last-seen query for
+  // GET /api/v1/otzar/conversations/:id/corrections.
+  @@index([wallet_id, capsule_type, conversation_id])
   @@map("memory_capsules")
 }
 

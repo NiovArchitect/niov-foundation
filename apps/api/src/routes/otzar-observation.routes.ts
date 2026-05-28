@@ -26,8 +26,13 @@ function statusForCode(code: string): number {
     case "SESSION_INVALIDATED":
       return 401;
     case "OPERATION_NOT_PERMITTED":
+    // ADR-0055 Wave 2C: processCorrection self-scope failure when an
+    // optional conversation_id is provided but the caller does not own
+    // the conversation. Mirrors ADR-0054 getConversationDetail mapping.
+    case "NOT_CONVERSATION_OWNER":
       return 403;
     case "ORG_NOT_RESOLVED":
+    case "CONVERSATION_NOT_FOUND":
       return 404;
     case "EXTRACTION_FAILED":
       return 502;
@@ -89,11 +94,17 @@ export async function registerOtzarObservationRoutes(
   });
 
   // POST /otzar/correction -- write CORRECTION to employee wallet.
+  // ADR-0055 Wave 2C: body accepts an OPTIONAL conversation_id. Omitted
+  // = backward-compatible (capsule persists with conversation_id null).
+  // Provided = service validates self-scope before persisting; cross-
+  // caller or unknown id maps to NOT_CONVERSATION_OWNER / CONVERSATION_
+  // NOT_FOUND.
   app.post<{
     Body: {
       incorrect_description?: unknown;
       correct_behavior?: unknown;
       target_capsule_id?: unknown;
+      conversation_id?: unknown;
     };
   }>("/api/v1/otzar/correction", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
@@ -130,11 +141,17 @@ export async function registerOtzarObservationRoutes(
       body.target_capsule_id.length > 0
         ? body.target_capsule_id
         : undefined;
+    const conversationId =
+      typeof body.conversation_id === "string" &&
+      body.conversation_id.length > 0
+        ? body.conversation_id
+        : undefined;
     const result = await observationService.processCorrection({
       token,
       incorrect_description: body.incorrect_description,
       correct_behavior: body.correct_behavior,
       target_capsule_id: targetCapsuleId,
+      conversation_id: conversationId,
     });
     if (!result.ok) {
       return reply.code(statusForCode(result.code)).send(result);

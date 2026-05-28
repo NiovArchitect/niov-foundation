@@ -21,6 +21,19 @@ layer for the Autonomous Enterprise.
 
 ## Canonical decision records
 
+- **ADR-0055** — Otzar Correction Signals and Drift-Prevention
+  Continuity
+  (`docs/architecture/decisions/0055-otzar-correction-signals-and-drift-prevention-continuity.md`)
+  — the Wave 2C contract (design-only): closes ADR-0054's
+  explicitly-deferred `conversation→correction linkage` non-goal via
+  one additive nullable `MemoryCapsule.conversation_id` column +
+  extending `POST /otzar/correction` with optional `conversation_id`
+  + a new self-scoped sub-resource
+  `GET /otzar/conversations/:id/corrections` returning safe counts +
+  last-seen freshness. Locks the submitted-vs-learned/applied
+  distinction; no IntelligencePattern auto-write; no drift score; no
+  manager visibility; no org-wide aggregation. Full drift detection
+  remains Wave 3 per ADR-0053 §5. Not yet implemented.
 - **ADR-0054** — Otzar Conversation Look-back and Safe Continuity
   Surfacing
   (`docs/architecture/decisions/0054-otzar-conversation-lookback-and-safe-continuity-surfacing.md`)
