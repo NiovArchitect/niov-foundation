@@ -16,11 +16,13 @@ bypass.
 
 Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-substrate.md`](../../architecture/decisions/0057-autonomous-execution-core-substrate.md).
 
-## Current status (PRODUCTION-GRADE COMPLETE for current internal-only production scope)
+## Current status (PRODUCTION-GRADE COMPLETE for internal Foundation autonomous-execution-substrate scope)
+
+> **Founder-clarified framing:** "production-grade complete for internal Foundation autonomous-execution-substrate scope" means the internal autonomous execution substrate (Action runtime, in-process notification handler, internal notification inbox routes, audit emitters) is complete. It does NOT mean Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) are **required future production capabilities** under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation those external adapters must consume; it is not a substitute for them.
 
 Substrate landed across 18 implementation PRs (#18, #20, #22,
 #24, #26, #28, #30, #32, #35, #37, #39, #41, #47, #49, #51, #54, #56, #58) + 1 research-arc PR (#53) + 13 docs-refresh
-PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48, #50, #52, #55, #57). Section 2 closeout recommended after PR #58 per the Wave 12 wave-close NEXT_ACTION recommendation. The
+PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48, #50, #52, #55, #57). Section 2 closed after PR #58 per the Wave 12 wave-close NEXT_ACTION recommendation; active focus shifted to Section 7 at PR #60. The
 Action runtime is fully live end-to-end: create → policy
 decision → optional dual-control pairing → scheduler admission
 → executor claim → in-tick retry → terminalization → expiry

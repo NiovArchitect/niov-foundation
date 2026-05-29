@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `2acd5c767a90a38dcfc243e6ad1194e5d7714878`
-- **Latest merged PR:** [#58](https://github.com/NiovArchitect/niov-foundation/pull/58) — ADR-0057 notification inbox routes (Wave 12 internal-only read surface).
-- **Active branch / PR:** `refresh-docs-wave12-notification-inbox` (Wave 12 wave-close docs refresh).
-- **Active production section:** Section 2 — Autonomous Execution Core.
+- **Main HEAD:** `10155b94ba10a49e525981ccf0b103ffdcac256e`
+- **Latest merged PR:** [#60](https://github.com/NiovArchitect/niov-foundation/pull/60) — Section 7 Wave 1 unified self-scope audit-events viewer.
+- **Active branch / PR:** `refresh-docs-section-7-wave-1` (Section 7 Wave 1 wave-close docs refresh).
+- **Active production section:** **Section 7 — Full Audit Viewer** (Section 2 closed for current internal Foundation autonomous-execution-substrate scope; external integrations remain required future production work, especially Section 4 MCP / Connectors).
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -23,46 +23,31 @@
 
 ## Exact next action
 
-After this docs refresh merges:
+**Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 2 closeout recommendation
+## Section 7 Wave 1 LANDED (PR #60)
 
-Section 2 (Autonomous Execution Core) is **production-grade COMPLETE for current internal-only production scope.** Recommend marking Section 2 closed and shifting to Section 7 (Full Audit Viewer) — or whichever section the Founder picks — as the next production-section focus. Do NOT continue Section 2 polish slices autonomously.
+`GET /api/v1/audit/events` + `GET /:id` + `GET /verify-chain` LIVE — unified self-scope audit-events viewer + hash-chain verification surface. Self-scope only at sub-phase 1; org-admin + niov-admin scopes intentional future-substrate (next waves).
 
-**What is production-grade complete now:**
-- 6 Action HTTP routes (create / cancel / GET viewer / GET list / GET attempt-detail / GET attempt-list) LIVE.
-- 3 of 3 real per-`ActionType` handlers LIVE (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION-internal-only).
-- 10 of 10 `ACTION_*` audit emitters LIVE.
-- 2 admin `/org/action-policies` routes (GET list + PUT dual-control-gated) LIVE with operator-tunable `retry_budget` + `attempt_timeout_ms_override`.
-- Executor / scheduler / expiry sweep runtime + AbortController plumbing + LOCK-GAP-1/2 schema fields + forensic `timeout_ms` visibility loop CLOSED end-to-end.
-- 3 internal-only notification routes (GET inbox + PUT read + PUT dismiss) LIVE per Wave 12 with RULE 0 self-scope + enumeration-safe 404 + SAFE projection (no body_redacted leak).
-- Cancel-via-GOVSEC.5 break-glass LIVE.
+## Section 7 next slices (priority order)
 
-**What is intentionally future-substrate (do NOT auto-implement):**
-- External notification delivery (email / SMS / Slack / push) — each adapter requires its own Founder QLOCK + RULE 21 research arc.
-- `NotificationPreference` opt-out model — RULE 20-gated.
-- Per-Notification audit literals (`NOTIFICATION_DISPATCHED` / `_DELIVERY_FAILED` / `_OPT_OUT_RESPECTED`) — RULE 20-gated.
-- Admin / cross-recipient notification list path — needs QLOCK + opt-out integration review.
-- Notification-detail-view route (would surface `body_redacted` to recipient) — needs separate no-leak review.
-- GOVSEC.5 follow-on `requireAdminCapability` throttle — RULE 20-gated (ADR-0050 amendment).
-- Per-action `ActionPolicy` lookup cache — premature optimization; "measure first" per ADR-0016.
-- Active AbortSignal consumption by handlers — plumbed but no current handler wraps long-running connector work.
-- Connectors / MCP / Control Tower UX / voice / ambient / lens UX.
+  1. **Section 7 Wave 2 — org-admin scope on `/api/v1/audit/events`** (mirrors `/api/v1/org/audit` pattern but on the unified surface; cross-org leak guard tested per the `admin-routes.test.ts:454` precedent).
+  2. **Section 7 Wave 3 — niov-admin scope on `/api/v1/audit/events`** (mirrors `/platform/audit` + `/console/audit` patterns).
+  3. **Section 7 Wave 4 — export surface** (CSV / NDJSON streaming for regulator-tier review; rate-limited).
+  4. **Section 7 Wave 5 — regulator-tier audit access** via `REGULATOR` principal + `LawfulBasis` attestation per ADR-0036.
+  5. **Section 7 Wave 6 — Control Tower audit-viewer UX** (frontend; lives in `otzar-control-tower`; out of Foundation scope).
 
-**Wave 13 explicit `GET /api/v1/org/actions` alias — worth doing before closeout?** **No.** The `?org_scope=true` flag on the unified `GET /api/v1/actions` route already serves the same use case; an alias is pure URL convenience for callers that prefer the dedicated path. Marginal value; not a production-readiness blocker; can be added later as a follow-on slice if Control Tower or Otzar consumers explicitly request it.
+## Other sections waiting on Founder direction
 
-**Section 2 closeout verdict: CLOSE.** Recommend pausing Section 2 + shifting to the next production section. Highest-leverage next section per the post-Wave-11 checkpoint = **Section 7 (Full Audit Viewer)**.
+- **Section 1 Wave 3 drift detection ADR** — RULE 20-gated.
+- **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated (ADR-0050 amendment).
+- **Section 4 — MCP / Connectors** — the canonical home for external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.). Required production work; each adapter wave needs its own QLOCK + RULE 21 research arc.
 
-## Next-section candidates (after Section 2 closeout)
+→ Continuing Section 7 Wave 2 (org-admin scope) on the next autonomous block, unless Founder redirects.
 
-  1. **Section 7 — Full Audit Viewer** (highest leverage; the canonical compliance / forensic surface every regulated customer will need; primitives are LIVE; viewer route + UX is the gap).
-  2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized doctrine slice. RULE 20-gated.
-  3. **GOVSEC.5 follow-on throttle** — RULE 20-gated.
-  4. **Section 9 — Admin / Governance Control Tower backend contracts** — partially LIVE via org admin routes; modest "new substantive surface" leverage.
+**Section 7 Wave 1 summary (PR #60):** unified self-scope audit-events viewer. NEW `audit-view.service.ts` + `audit.routes.ts` with 3 routes (`GET /events` paginated + filterable; `GET /events/:id` single-event drilldown with prev/next chain refs; `GET /verify-chain` exposes the LIVE `verifyAuditChain` primitive at HTTP). Self-scope only at sub-phase 1; RULE 0 isolation tested. Read-audit emission via existing `ADMIN_ACTION` + `details.action="AUDIT_VIEW_*"` per the `CONSOLE_READ` precedent (no new audit literal). SAFE projection re-asserts no-leak at read tier. 19 NEW integration tests; existing `/platform/audit` + `/org/audit` + `/console/audit` routes remain LIVE for admin tiers — Wave 1 ADDS the per-caller surface they don't cover.
 
-→ Standing by for Founder direction on next-section pick. Section 2 work pauses here.
-
-**Wave 6 / 7 / 8 / 9 / 10 / 11 / 12 summary (Section 2 production-grade COMPLETE for current internal-only scope):**
+**Wave 6 / 7 / 8 / 9 / 10 / 11 / 12 summary (Section 2 production-grade COMPLETE for internal Foundation autonomous-execution-substrate scope):**
 
 - **Wave 12 (PR #58):** Notification inbox routes. NEW `notification-read.service.ts` + 3 routes (`GET /api/v1/notifications` paginated self-scope list with `unread_only` + `notification_class` filters + SAFE projection excluding `body_redacted`; `PUT /:id/read` idempotent; `PUT /:id/dismiss` RULE 10 soft-delete). 21 NEW integration tests; enumeration-safe 404 throughout.
 
@@ -94,6 +79,12 @@ Section 2 (Autonomous Execution Core) is **production-grade COMPLETE for current
 **Not stop conditions:** normal section boundary; completed PR; completed docs refresh; discovered gap when research provides a clear safe recommendation.
 
 ## Key live / not-live truth
+
+**LIVE (Section 7 Wave 1 — unified self-scope audit viewer; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
+- `GET /api/v1/audit/events` — paginated self-scope audit-event list; `event_type` + `target_entity_id` + `target_capsule_id` + `outcome` + `start_time` + `end_time` filters; ORDER BY timestamp DESC; cap 100; SAFE projection.
+- `GET /api/v1/audit/events/:id` — single-event drilldown with `previous_event` + `next_event` chain refs (audit_id + event_hash + timestamp only); enumeration-safe 404.
+- `GET /api/v1/audit/verify-chain` — verifies caller's own audit chain via the LIVE `verifyAuditChain` primitive; returns `{ valid, total_events, broken_at }`.
+- Read-audit emission: every GET fires `ADMIN_ACTION` + `details.action="AUDIT_VIEW_*"` on the caller's chain.
 
 **LIVE (Section 2 — full surface; see [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) for detail):**
 - 9 HTTP routes: `POST /api/v1/actions` + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt-detail + GET attempt-list + GET/PUT `/api/v1/org/action-policies` (dual-control gated; PR #49 accepts the override fields).
