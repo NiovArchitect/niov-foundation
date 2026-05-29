@@ -40,11 +40,11 @@ import { prisma } from "@niov/database";
 import type { Action } from "@prisma/client";
 import { executeActionHandler } from "./handlers.js";
 import {
-  ATTEMPT_TIMEOUT_MS_DEFAULT,
-  RETRY_BUDGET,
   createActionAttempt,
   createActionResult,
   emitLifecycleAudit,
+  resolveAttemptTimeoutMs,
+  resolveRetryBudget,
   terminalizeActionAttempt,
   transitionActionStatus,
 } from "./lifecycle.service.js";
@@ -180,8 +180,6 @@ export async function tickActionExecutor(
   const now = options.now ?? new Date();
   const workerId = options.workerId ?? defaultWorkerId();
   const maxBatch = options.maxBatch ?? EXECUTOR_DEFAULT_BATCH;
-  const attemptTimeoutMs =
-    options.attemptTimeoutMs ?? ATTEMPT_TIMEOUT_MS_DEFAULT;
 
   let claimed = 0;
   let succeeded = 0;
@@ -233,7 +231,30 @@ export async function tickActionExecutor(
   // stays in RUNNING through all attempts; only the per-attempt
   // ActionAttempt rows terminalize FAILED / TIMED_OUT mid-loop.
   for (const action of claimedActions) {
-    const retryBudget = RETRY_BUDGET[action.action_type];
+    // ADR-0057 Wave 6: look up the (org, action_type, risk_tier)
+    // ActionPolicy row to resolve retry_budget +
+    // attempt_timeout_ms_override. Null fields fall back to the
+    // service-tier RETRY_BUDGET[action_type] /
+    // ATTEMPT_TIMEOUT_MS_DEFAULT constants via the
+    // resolveRetryBudget / resolveAttemptTimeoutMs helpers. The
+    // caller-supplied attemptTimeoutMs option (used by tests) still
+    // wins if provided — preserves the existing test ergonomics.
+    const matchedPolicy = await prisma.actionPolicy.findUnique({
+      where: {
+        org_entity_id_action_type_risk_tier: {
+          org_entity_id: action.org_entity_id,
+          action_type: action.action_type,
+          risk_tier: action.risk_tier,
+        },
+      },
+      select: {
+        retry_budget: true,
+        attempt_timeout_ms_override: true,
+      },
+    });
+    const retryBudget = resolveRetryBudget(matchedPolicy, action.action_type);
+    const resolvedAttemptTimeoutMs =
+      options.attemptTimeoutMs ?? resolveAttemptTimeoutMs(matchedPolicy);
     let lastResult:
       | {
           outcome: "SUCCESS";
@@ -259,6 +280,7 @@ export async function tickActionExecutor(
         createActionAttempt(tx, {
           action_id: action.action_id,
           worker_id: workerId,
+          timeout_ms: resolvedAttemptTimeoutMs,
         }),
       );
       attemptsTaken += 1;
@@ -287,7 +309,7 @@ export async function tickActionExecutor(
           payload_redacted: action.payload_redacted,
           abort_signal: abortController.signal,
         }),
-        attemptTimeoutMs,
+        resolvedAttemptTimeoutMs,
       ).finally(() => {
         releaseActionAbort(action.action_id);
       });
@@ -297,7 +319,7 @@ export async function tickActionExecutor(
           ? {
               outcome: "TIMEOUT" as const,
               error_class: EXECUTOR_TIMEOUT_ERROR_CLASS,
-              error_summary: `executor timed out after ${attemptTimeoutMs}ms`,
+              error_summary: `executor timed out after ${resolvedAttemptTimeoutMs}ms`,
             }
           : raced.value;
 

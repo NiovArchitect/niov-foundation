@@ -1466,6 +1466,13 @@ model ActionAttempt {
   worker_id      String?
   error_class    String?
   error_summary  String?
+  // ADR-0057 Wave 6: per-attempt timeout in milliseconds. NULL =
+  // attempt was started under the service-tier
+  // ATTEMPT_TIMEOUT_MS_DEFAULT (30_000); non-null records the
+  // resolved override from the matched ActionPolicy at
+  // dispatch time. Forensic field; the executor uses the
+  // resolved value for the race-against-timer.
+  timeout_ms     Int?
   deleted_at     DateTime?
 
   @@index([action_id, attempt_number])
@@ -1511,6 +1518,18 @@ model ActionPolicy {
   risk_tier                  ActionRiskTier
   default_decision           ActionDecision
   require_admin_capability   String?
+  // ADR-0057 Wave 6: optional per-(org, action_type, risk_tier)
+  // overrides for the executor's retry budget and per-attempt
+  // timeout (LOCK-GAP-1 / LOCK-GAP-2 promotion). When NULL the
+  // executor falls back to the service-tier
+  // RETRY_BUDGET[action_type] and ATTEMPT_TIMEOUT_MS_DEFAULT
+  // constants. retry_budget is the TOTAL number of attempts
+  // (first attempt counts; e.g. 3 = up to 3 attempts before
+  // terminalization). attempt_timeout_ms_override is the
+  // per-attempt timeout ceiling in milliseconds. Either field
+  // independently nullable.
+  retry_budget                 Int?
+  attempt_timeout_ms_override  Int?
   updated_by                 String          @db.Uuid
   created_at                 DateTime        @default(now())
   updated_at                 DateTime        @updatedAt
