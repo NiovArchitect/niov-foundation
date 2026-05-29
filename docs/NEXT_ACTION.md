@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `026300fe9830a82fa7a5d82197103ff9dee5c812`
-- **Latest merged PR:** [#62](https://github.com/NiovArchitect/niov-foundation/pull/62) — Section 7 Wave 2 org-admin scope on `/api/v1/audit/events` + `/:id`.
-- **Active branch / PR:** `refresh-docs-section-7-wave-2` (Section 7 Wave 2 wave-close docs refresh).
+- **Main HEAD:** `e914480e57a2a8d33ddae8d655965c7cdf055862`
+- **Latest merged PR:** [#64](https://github.com/NiovArchitect/niov-foundation/pull/64) — Section 7 Wave 3 niov-admin/platform scope on unified audit viewer.
+- **Active branch / PR:** `refresh-docs-section-7-wave-3` (Section 7 Wave 3 wave-close docs refresh; continuing to Wave 4 export surface).
 - **Active production section:** **Section 7 — Full Audit Viewer** (Section 2 closed for current internal Foundation autonomous-execution-substrate scope; external integrations remain required future production work, especially Section 4 MCP / Connectors).
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
@@ -25,19 +25,21 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 7 Waves 1+2 LANDED (PRs #60 + #62)
+## Section 7 Waves 1+2+3 LANDED (PRs #60 + #62 + #64)
 
-- **Wave 1:** `GET /api/v1/audit/events` + `GET /:id` + `GET /verify-chain` — unified self-scope viewer + chain-verification.
-- **Wave 2:** `?scope=org` on list + detail routes — TAR-authoritative `can_admin_org` gate; OR-fence (actor OR target IN org-scope); cross-org leak guard; enumeration-safe 404 on cross-org detail. `verify-chain` stays self-only (cross-chain verification = leakage / perf risk per Founder direction; forward-substrate).
-- Read-audit emission via `ADMIN_ACTION:AUDIT_VIEW_LIST` / `_EVENT` / `_VERIFY_CHAIN` / `_ORG_LIST` / `_ORG_EVENT` — all on the existing `ADMIN_ACTION` literal (no new audit literal).
+- **Wave 1:** unified self-scope viewer + chain-verification.
+- **Wave 2:** `?scope=org` (TAR `can_admin_org` gate; OR-fence; cross-org leak guard; enumeration-safe 404).
+- **Wave 3:** `?scope=platform` (TAR `can_admin_niov` gate; unfenced cross-org visibility; mirrors `/platform/audit` + `/console/audit` precedent at the unified entry point).
+- `verify-chain` remains self-only across all 3 waves (cross-chain verification = leakage / perf risk per Founder direction; forward-substrate).
+- Read-audit emission via `ADMIN_ACTION` + `details.action` ∈ `{ AUDIT_VIEW_LIST, AUDIT_VIEW_EVENT, AUDIT_VIEW_VERIFY_CHAIN, AUDIT_VIEW_ORG_LIST, AUDIT_VIEW_ORG_EVENT, AUDIT_VIEW_PLATFORM_LIST, AUDIT_VIEW_PLATFORM_EVENT }` — all on the existing `ADMIN_ACTION` literal (no new audit literal).
 
 ## Section 7 next slices (priority order)
 
-  1. **Section 7 Wave 3 — niov-admin scope** on `/api/v1/audit/events` + `/:id` (mirrors `/platform/audit` + `/console/audit` patterns; would add `scope=platform` requiring `can_admin_niov`; same OR-fence semantics widened to all orgs).
-  2. **Section 7 Wave 4 — export surface** (CSV / NDJSON streaming for regulator-tier review; rate-limited; chunked response).
-  3. **Section 7 Wave 5 — regulator-tier audit access** via `REGULATOR` principal + `LawfulBasis` attestation per ADR-0036.
-  4. **Section 7 Wave 6 — Control Tower audit-viewer UX** (frontend; lives in `otzar-control-tower`; out of Foundation scope).
-  5. **Section 7 forward-substrate — org-admin verify-chain** (separate QLOCK; cross-chain verification needs leakage + perf review before design).
+  1. **Section 7 Wave 4 — export surface** (NDJSON first for safe streaming; rate-limited; chunked; reuses unified scope=self|org|platform gate; SAFE projection; existing rate-limit middleware precedent).
+  2. **Section 7 Wave 5 — regulator-tier audit access** via `REGULATOR` principal + `LawfulBasis` attestation per ADR-0036.
+  3. **Section 7 Wave 6 — Section 7 closeout** docs + production-grade-complete recommendation.
+  4. **Section 7 forward-substrate — Control Tower audit-viewer UX** (frontend; lives in `otzar-control-tower`; out of Foundation scope).
+  5. **Section 7 forward-substrate — org-admin / platform verify-chain** (separate QLOCK; cross-chain verification needs leakage + perf review).
 
 ## Other sections waiting on Founder direction
 
@@ -46,6 +48,8 @@
 - **Section 4 — MCP / Connectors** — the canonical home for external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.). Required production work; each adapter wave needs its own QLOCK + RULE 21 research arc.
 
 → Continuing Section 7 Wave 2 (org-admin scope) on the next autonomous block, unless Founder redirects.
+
+**Section 7 Wave 3 summary (PR #64):** niov-admin/platform scope on unified viewer. `AuditViewScope` enum extended to `self|org|platform`; NEW `callerHasNiovAdminCapability` TAR helper; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on platform scope with empty fence (every audit_events row visible); filters still AND-narrow; enumeration-safe 404 preserved. `verify-chain` UNCHANGED (still self-only). 10 NEW integration tests + Wave 1+2 regression preserved + 96/96 combined Section 7 + admin-routes + console-routes regression.
 
 **Section 7 Wave 2 summary (PR #62):** org-admin scope on the unified viewer. NEW `AuditViewScope` type + `callerHasAdminCapability` + `resolveOrgScopeVector` helpers; `validateListAuditEventsQuery` accepts `scope` enum; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on scope; `scope=org` pre-flights `can_admin_org` + org resolution BEFORE any audit-row lookup (non-admin probes for org-scope `audit_ids` impossible by construction); OR-fence + AND-narrow composition; enumeration-safe 404 on cross-org detail. `verify-chain` UNCHANGED (self-only). 14 NEW integration tests + Wave 1 19/19 regression preserved + audit unit 23/23 preserved + admin-routes / console-routes / audit-event-id-surfacing / notification-inbox 116/116 combined regression preserved.
 
@@ -84,11 +88,11 @@
 
 ## Key live / not-live truth
 
-**LIVE (Section 7 Waves 1+2 — unified self-scope + org-admin audit viewer; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
-- `GET /api/v1/audit/events[?scope=org]` — paginated audit-event list. Self-scope by default; `scope=org` requires `can_admin_org` (TAR-authoritative; 403 `ORG_SCOPE_FORBIDDEN` on miss; 404 `NOT_IN_ANY_ORG` on orgless admin). Org-scope uses OR-fence (actor OR target IN org-scope vector); cross-org leak guard tested. Filters: `event_type` + `target_entity_id` + `target_capsule_id` + `outcome` + `start_time` + `end_time`; AND-narrow under both scopes; cap 100; SAFE projection.
-- `GET /api/v1/audit/events/:id[?scope=org]` — single-event drilldown. Self-scope default; `scope=org` admin path with same gate. `previous_event` + `next_event` chain refs scoped to the same fence as the row lookup. Enumeration-safe 404 collapses cross-org + cross-actor + unknown id.
-- `GET /api/v1/audit/verify-chain` — verifies caller's OWN audit chain via LIVE `verifyAuditChain` primitive. **Self-only at Waves 1+2** per Founder direction (cross-chain verification = leakage / perf risk; forward-substrate).
-- Read-audit emission: `ADMIN_ACTION` + `details.action` ∈ `{ AUDIT_VIEW_LIST, AUDIT_VIEW_EVENT, AUDIT_VIEW_VERIFY_CHAIN, AUDIT_VIEW_ORG_LIST, AUDIT_VIEW_ORG_EVENT }` (no new audit literal).
+**LIVE (Section 7 Waves 1+2+3 — unified self / org / platform audit viewer; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
+- `GET /api/v1/audit/events[?scope=self|org|platform]` — paginated audit-event list. Default self-scope; `scope=org` requires `can_admin_org` (403 `ORG_SCOPE_FORBIDDEN` / 404 `NOT_IN_ANY_ORG`); `scope=platform` requires `can_admin_niov` (403 `PLATFORM_SCOPE_FORBIDDEN`); all TAR-authoritative. Filters AND-narrow under all 3 scopes; cap 100; SAFE projection.
+- `GET /api/v1/audit/events/:id[?scope=self|org|platform]` — single-event drilldown. Same scope gate on all 3 paths. `previous_event` + `next_event` chain refs scoped to the same fence (org-scope refs walk org timeline; platform-scope refs walk full timeline). Enumeration-safe 404 collapses cross-scope + unknown id.
+- `GET /api/v1/audit/verify-chain` — verifies caller's OWN audit chain. **Self-only across all 3 waves** per Founder direction (cross-chain verification = leakage / perf risk; forward-substrate).
+- Read-audit emission: `ADMIN_ACTION` + `details.action` ∈ `{ AUDIT_VIEW_LIST, AUDIT_VIEW_EVENT, AUDIT_VIEW_VERIFY_CHAIN, AUDIT_VIEW_ORG_LIST, AUDIT_VIEW_ORG_EVENT, AUDIT_VIEW_PLATFORM_LIST, AUDIT_VIEW_PLATFORM_EVENT }` (no new audit literal).
 
 **LIVE (Section 2 — full surface; see [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) for detail):**
 - 9 HTTP routes: `POST /api/v1/actions` + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt-detail + GET attempt-list + GET/PUT `/api/v1/org/action-policies` (dual-control gated; PR #49 accepts the override fields).
