@@ -1,58 +1,56 @@
 // FILE: handlers.ts
-// PURPOSE: Stub per-ActionType executor handlers for the ADR-0057
-//          lifecycle substrate slice. Returns a discriminated success /
-//          failure / timeout shape consumed by the executor; never
-//          performs real business work in this slice (no COSMP write, no
-//          Permission grant, no notification delivery, no connector
-//          execution, no MCP, no browser/native automation, no voice,
-//          no edge UI).
+// PURPOSE: Per-ActionType executor handler registry for the ADR-0057
+//          Action runtime. Returns a discriminated SUCCESS / FAILURE /
+//          TIMEOUT shape consumed by the executor. As of the
+//          [ADR-0057-RECORD-CAPSULE-HANDLER-EXECUTE-VERIFY-AUTH]
+//          wave, RECORD_CAPSULE is a REAL handler wired to
+//          WriteService.createCapsuleForActionRunner;
+//          SEND_INTERNAL_NOTIFICATION and PROPOSE_PERMISSION_GRANT
+//          remain stubs pending their own future capability waves.
 // CONNECTS TO:
-//   - apps/api/src/services/action/executor.ts (the only caller; the
-//     executor wraps the handler with the attempt timeout + retry
-//     budget per ADR-0057 §11)
-//   - apps/api/src/services/action/lifecycle.service.ts (defines the
-//     RETRY_BUDGET + ATTEMPT_TIMEOUT_MS_DEFAULT the executor consults)
+//   - apps/api/src/services/action/executor.ts (calls the registry's
+//     execute method; the executor wraps the call with the
+//     per-attempt timeout + retry budget per ADR-0057 §11)
+//   - apps/api/src/services/action/lifecycle.service.ts
+//     (RETRY_BUDGET + ATTEMPT_TIMEOUT_MS_DEFAULT)
+//   - apps/api/src/services/action/action-payload-validators.ts
+//     (the RECORD_CAPSULE handler re-runs the same validator the
+//     create-time service used so the typed RecordCapsulePayload
+//     shape is the single source of truth)
+//   - apps/api/src/services/cosmp/write.service.ts
+//     (createCapsuleForActionRunner — the system-path variant)
+//   - apps/api/src/server.ts (constructs the registry with
+//     WriteService injected; wires it into the executor)
 //   - packages/database/prisma/schema.prisma (ActionType enum)
 //   - ADR-0057 §11 (idempotency / retries / timeout / cancellation)
 //
-// FOUNDER LOCKS (per [ADR-0057-EXECUTOR-WORKER-SCHEDULER-EXECUTE-VERIFY-
-//                AUTH-WITH-GAP-LOCKS]):
-//   - LOCK-GAP-3 (ActionType handlers): STUB handlers for all 3 initial
-//     ActionTypes. RECORD_CAPSULE / SEND_INTERNAL_NOTIFICATION /
-//     PROPOSE_PERMISSION_GRANT all return success with safe stub
-//     metadata. Forward-substrate for real per-ActionType handlers is
-//     a separate QLOCK.
-//   - Test-only failure/timeout markers: the executor needs an
-//     end-to-end way to exercise the FAILED + TIMED_OUT branches.
-//     Inspecting `Action.payload_redacted` for a controlled marker
-//     (`__test_force_failure__` / `__test_force_timeout__`) lets the
-//     integration tests drive the failure paths without inventing a
-//     side-channel. The markers are never echoed in audit / result
-//     metadata; the handler just translates them to the
-//     corresponding outcome.
+// DESIGN NOTE:
+//   Pre-wave, handlers.ts was a pure module exporting
+//   executeActionHandler(action) directly. The introduction of a
+//   real handler that needs WriteService forced a transition to a
+//   dependency-injected registry. The executor accepts the registry
+//   via a module-level default that server.ts replaces at boot, so
+//   existing call sites (and the test-marker contract) remain
+//   unchanged at the executor boundary.
 
 import type { Action, ActionType } from "@prisma/client";
+import type { WriteService } from "../cosmp/write.service.js";
+import { validateRecordCapsulePayload } from "./action-payload-validators.js";
 
 // WHAT: The handler outcome discriminator. SUCCESS produces an
 //        ActionResult row; FAILURE produces an ActionAttempt row with
-//        outcome=FAILED and an error_class; TIMEOUT is what the executor
-//        synthesizes when the per-attempt timer fires before the handler
-//        resolves (handlers can also self-report TIMEOUT via the test
-//        marker so integration tests don't need a real wall-clock wait).
-// INPUT: Used as a return type.
-// OUTPUT: None.
-// WHY: One discriminated shape so the executor's retry / terminal logic
-//      has a single switch instead of three argument shapes.
+//        outcome=FAILED + error_class; TIMEOUT is what the executor
+//        synthesizes when the per-attempt timer fires, or what a
+//        handler can self-report via the test marker.
 export type ActionHandlerOutcome = "SUCCESS" | "FAILURE" | "TIMEOUT";
 
 // WHAT: The discriminated handler-result the executor consumes.
-// INPUT: Used as a return type.
-// OUTPUT: None.
-// WHY: result_summary + result_metadata land on ActionResult on SUCCESS;
-//      error_class + error_summary land on ActionAttempt on FAILURE /
-//      TIMEOUT. None of these fields ever echo raw payload, raw envelope,
-//      or stack traces (the executor + lifecycle.service.ts re-assert
-//      the audit allowlist on top of this contract).
+//        SUCCESS carries result_summary + result_metadata that land
+//        on ActionResult. FAILURE / TIMEOUT carry error_class +
+//        error_summary that land on ActionAttempt. None of these
+//        ever echo raw payload / raw envelope / stack traces — the
+//        executor + lifecycle.service.ts re-assert the audit
+//        allowlist on top of this contract.
 export type ActionHandlerResult =
   | {
       outcome: "SUCCESS";
@@ -70,37 +68,44 @@ export type ActionHandlerResult =
       error_summary: string;
     };
 
-// WHAT: Test-only marker key inspected on `Action.payload_redacted`.
+// WHAT: Test-only marker keys inspected on Action.payload_redacted.
 // INPUT: None.
-// OUTPUT: A literal string.
-// WHY: Centralized so integration tests can drive failure / timeout
-//      paths through the create route (which writes the payload through)
-//      without smuggling state via env vars. Production callers never
-//      include these keys because they originate in test fixtures only.
+// OUTPUT: Literal strings.
+// WHY: Integration tests need to drive FAILURE / TIMEOUT paths
+//      through the create route. Inspecting Action.payload_redacted
+//      for these markers is the controlled side-channel. Production
+//      callers never set these keys (the create-time validator for
+//      RECORD_CAPSULE rejects unknown payload fields by NOT
+//      validating them, but the marker-only stub paths never reach
+//      the RECORD_CAPSULE validator because the integration tests
+//      using markers target action_types whose validator is the
+//      no-op stub).
 export const TEST_MARKER_FORCE_FAILURE = "__test_force_failure__";
 export const TEST_MARKER_FORCE_TIMEOUT = "__test_force_timeout__";
 
-// WHAT: The minimum Action fields the handler reads.
-// INPUT: Used as a parameter type.
-// OUTPUT: None.
-// WHY: The handler should never reach into the full Prisma Action shape
-//      (forbidden fields like policy_envelope live there); this narrow
-//      Pick locks the read surface at the type level.
-type HandlerActionInput = Pick<
+// WHAT: The Action fields a handler reads. Widened from the prior
+//        wave's Pick (action_id, action_type, payload_redacted) to
+//        include source_entity_id because the real RECORD_CAPSULE
+//        handler attributes the capsule write to the source entity
+//        via WriteService.createCapsuleForActionRunner.
+export type HandlerActionInput = Pick<
   Action,
-  "action_id" | "action_type" | "payload_redacted"
+  "action_id" | "action_type" | "source_entity_id" | "payload_redacted"
 >;
 
 // WHAT: Inspect Action.payload_redacted for a test-only marker.
 // INPUT: An Action row (only payload_redacted is consulted).
 // OUTPUT: The marker outcome to synthesize, or null if no marker.
-// WHY: Pure, internal helper. The marker is opt-in: integration tests
-//      construct the create-input with the marker key set to true; real
-//      production callers never set these keys so the handler proceeds
-//      to the SUCCESS stub.
-function detectTestMarker(action: HandlerActionInput): "FAILURE" | "TIMEOUT" | null {
+// WHY: Pure, internal helper.
+function detectTestMarker(
+  action: HandlerActionInput,
+): "FAILURE" | "TIMEOUT" | null {
   const payload = action.payload_redacted;
-  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+  if (
+    payload === null ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
+  ) {
     return null;
   }
   const obj = payload as Record<string, unknown>;
@@ -109,12 +114,46 @@ function detectTestMarker(action: HandlerActionInput): "FAILURE" | "TIMEOUT" | n
   return null;
 }
 
-// WHAT: Build the canonical safe stub-success metadata. The metadata
-//        intentionally omits any payload-derived field.
-// INPUT: action_type (string echoed back as a typed enum-bound label).
-// OUTPUT: A small frozen-ish object suitable for ActionResult.result_metadata.
-// WHY: One builder so every ActionType handler produces the same shape;
-//      future per-type handlers can extend the shape additively.
+// WHAT: Map a WriteService failure code to a stable handler
+//        error_class string. The handler's error_class is the
+//        forensic key the audit row exposes (SAFE-allowlisted by
+//        lifecycle.service.ts); using a stable enum-bound prefix
+//        prevents WriteService's internal code evolutions from
+//        leaking into the audit chain.
+function writeFailureToErrorClass(code: string): string {
+  return `WRITE_${code}`;
+}
+
+// WHAT: The single handler dispatch contract every per-ActionType
+//        handler implementation must satisfy.
+// INPUT: A HandlerActionInput.
+// OUTPUT: A Promise<ActionHandlerResult>.
+// WHY: Pure function shape so the registry stays simple. Handlers
+//      that need dependencies receive them via closure at
+//      registry-construction time (see makeActionHandlerRegistry).
+export type ActionHandlerFn = (
+  action: HandlerActionInput,
+) => Promise<ActionHandlerResult>;
+
+// WHAT: The dispatch registry the executor calls into.
+// INPUT: Used as a return type.
+// OUTPUT: None.
+// WHY: One shape so the executor's call site stays one line
+//      (`await registry.execute(action)`).
+export interface ActionHandlerRegistry {
+  execute(action: HandlerActionInput): Promise<ActionHandlerResult>;
+}
+
+// WHAT: The dependencies a registry needs to operate. Optional
+//        because the default registry exposes stubs only (no
+//        WriteService) when constructed outside server.ts (e.g. in
+//        early tests).
+export interface ActionHandlerRegistryDeps {
+  writeService?: WriteService;
+}
+
+// WHAT: Build the canonical safe stub-success metadata. Used by the
+//        two ActionTypes whose real handler has not yet landed.
 function stubSuccessMetadata(actionType: ActionType): {
   result_summary: string;
   result_metadata: Record<string, unknown>;
@@ -129,106 +168,195 @@ function stubSuccessMetadata(actionType: ActionType): {
   };
 }
 
-// WHAT: The 3 stub handlers per ActionType. All return SUCCESS by
-//        default; integration tests drive FAILURE / TIMEOUT through
-//        payload markers.
+// WHAT: The shared marker-aware stub handler. If the action's
+//        payload carries a test marker, return the corresponding
+//        FAILURE / TIMEOUT shape. Otherwise return the canonical
+//        stub success.
+function makeStubHandler(actionType: ActionType): ActionHandlerFn {
+  return async (action) => {
+    const marker = detectTestMarker(action);
+    if (marker === "FAILURE") {
+      return {
+        outcome: "FAILURE",
+        error_class: "STUB_FORCED_FAILURE",
+        error_summary: "stub handler forced failure for test",
+      };
+    }
+    if (marker === "TIMEOUT") {
+      return {
+        outcome: "TIMEOUT",
+        error_class: "STUB_FORCED_TIMEOUT",
+        error_summary: "stub handler forced timeout for test",
+      };
+    }
+    const built = stubSuccessMetadata(actionType);
+    return {
+      outcome: "SUCCESS",
+      result_summary: built.result_summary,
+      result_metadata: built.result_metadata,
+    };
+  };
+}
+
+// WHAT: The real RECORD_CAPSULE handler. Unpacks
+//        Action.payload_redacted through the same validator
+//        action.service.ts ran at create-time (single source of
+//        truth), then calls WriteService.createCapsuleForActionRunner
+//        with the typed input. Returns SAFE result_metadata
+//        containing capsule_id + capsule_type only — never the raw
+//        content / payload / embedding.
+function makeRecordCapsuleHandler(
+  writeService: WriteService,
+): ActionHandlerFn {
+  return async (action) => {
+    // Test markers take precedence so integration tests can still
+    // exercise FAILURE / TIMEOUT paths without dispatching a real
+    // write. Production callers never include these keys.
+    const marker = detectTestMarker(action);
+    if (marker === "FAILURE") {
+      return {
+        outcome: "FAILURE",
+        error_class: "STUB_FORCED_FAILURE",
+        error_summary: "test-forced failure",
+      };
+    }
+    if (marker === "TIMEOUT") {
+      return {
+        outcome: "TIMEOUT",
+        error_class: "STUB_FORCED_TIMEOUT",
+        error_summary: "test-forced timeout",
+      };
+    }
+    // Re-run the canonical create-time validator so the typed
+    // RecordCapsulePayload shape is the single source of truth. The
+    // action.service.ts already validated at create-time; this
+    // re-run is belt-and-suspenders against future drift and gives
+    // us the typed normalized input without re-parsing.
+    const validated = validateRecordCapsulePayload(action.payload_redacted);
+    if (validated.ok === false) {
+      return {
+        outcome: "FAILURE",
+        error_class: "PAYLOAD_INVALID_AT_EXECUTE",
+        error_summary: `payload failed re-validation: ${validated.invalid_fields.join(",")}`,
+      };
+    }
+    try {
+      const result = await writeService.createCapsuleForActionRunner({
+        actor_entity_id: action.source_entity_id,
+        action_id: action.action_id,
+        input: validated.normalized,
+      });
+      if (result.ok === true) {
+        // SAFE result_metadata: capsule_id + capsule_type ONLY. No
+        // content, no payload_summary, no payload_redacted, no
+        // storage_location, no content_hash (the audit row carries
+        // content_hash + payload_size_tokens; the action result is
+        // the caller-visible surface and must stay payload-free).
+        return {
+          outcome: "SUCCESS",
+          result_summary: `record_capsule_ok:${result.capsule_id.slice(0, 8)}`,
+          result_metadata: {
+            handler: "record_capsule",
+            action_type: "RECORD_CAPSULE",
+            capsule_id: result.capsule_id,
+            capsule_type: validated.normalized.capsule_type,
+          },
+        };
+      }
+      // Map WriteFailure to handler FAILURE. Stable error_class
+      // prefix + bounded error_summary; lifecycle.service.ts will
+      // additionally clamp.
+      const errorClass =
+        result.code === "OPERATION_NOT_PERMITTED"
+          ? "TAR_DEMOTED"
+          : writeFailureToErrorClass(result.code);
+      return {
+        outcome: "FAILURE",
+        error_class: errorClass,
+        error_summary: result.message,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        outcome: "FAILURE",
+        error_class: "WRITE_EXCEPTION",
+        // error_summary is clamped at 200 chars by
+        // lifecycle.service.ts; safe to pass through.
+        error_summary: msg,
+      };
+    }
+  };
+}
+
+// WHAT: Build the per-ActionType handler dispatch map for the
+//        registry. RECORD_CAPSULE wires to the real handler when
+//        writeService is provided; otherwise falls back to the
+//        stub. Other ActionTypes stay stubs.
+function buildHandlerMap(
+  deps: ActionHandlerRegistryDeps,
+): Record<ActionType, ActionHandlerFn> {
+  const recordCapsuleHandler: ActionHandlerFn =
+    deps.writeService !== undefined
+      ? makeRecordCapsuleHandler(deps.writeService)
+      : makeStubHandler("RECORD_CAPSULE");
+  return {
+    RECORD_CAPSULE: recordCapsuleHandler,
+    SEND_INTERNAL_NOTIFICATION: makeStubHandler("SEND_INTERNAL_NOTIFICATION"),
+    PROPOSE_PERMISSION_GRANT: makeStubHandler("PROPOSE_PERMISSION_GRANT"),
+  };
+}
+
+// WHAT: Construct an ActionHandlerRegistry with the supplied
+//        dependencies. Called from server.ts at boot to inject
+//        WriteService, and from tests that want the stub-only
+//        registry.
+export function makeActionHandlerRegistry(
+  deps: ActionHandlerRegistryDeps = {},
+): ActionHandlerRegistry {
+  const map = buildHandlerMap(deps);
+  return {
+    async execute(action) {
+      const handler = map[action.action_type];
+      if (handler === undefined) {
+        return {
+          outcome: "FAILURE",
+          error_class: "UNKNOWN_ACTION_TYPE",
+          error_summary: `no handler registered for action_type=${String(action.action_type)}`,
+        };
+      }
+      return handler(action);
+    },
+  };
+}
+
+// WHAT: Module-level default registry. The executor uses this when
+//        no override is supplied. server.ts replaces it at boot via
+//        setDefaultActionHandlerRegistry so the real RECORD_CAPSULE
+//        handler is wired in production; tests can replace it via
+//        the executor's options or by calling
+//        setDefaultActionHandlerRegistry directly.
+let defaultRegistry: ActionHandlerRegistry = makeActionHandlerRegistry({});
+
+// WHAT: Replace the module-level default registry. Called from
+//        server.ts at boot after WriteService is constructed; can
+//        also be called from tests that need the real
+//        RECORD_CAPSULE handler under buildApp.
+export function setDefaultActionHandlerRegistry(
+  registry: ActionHandlerRegistry,
+): void {
+  defaultRegistry = registry;
+}
+
+// WHAT: The legacy executeActionHandler surface preserved for
+//        backwards compatibility with the prior wave's executor
+//        call. Internally dispatches through the module-level
+//        default registry.
 // INPUT: A HandlerActionInput.
 // OUTPUT: A Promise<ActionHandlerResult>.
-// WHY: Per-type dispatch lives in the registry so adding the real
-//      handler later (a separate QLOCK) is a single-line swap.
-const HANDLERS: Record<
-  ActionType,
-  (action: HandlerActionInput) => Promise<ActionHandlerResult>
-> = {
-  RECORD_CAPSULE: async (action) => {
-    const marker = detectTestMarker(action);
-    if (marker === "FAILURE") {
-      return {
-        outcome: "FAILURE",
-        error_class: "STUB_FORCED_FAILURE",
-        error_summary: "stub handler forced failure for test",
-      };
-    }
-    if (marker === "TIMEOUT") {
-      return {
-        outcome: "TIMEOUT",
-        error_class: "STUB_FORCED_TIMEOUT",
-        error_summary: "stub handler forced timeout for test",
-      };
-    }
-    const built = stubSuccessMetadata("RECORD_CAPSULE");
-    return {
-      outcome: "SUCCESS",
-      result_summary: built.result_summary,
-      result_metadata: built.result_metadata,
-    };
-  },
-  SEND_INTERNAL_NOTIFICATION: async (action) => {
-    const marker = detectTestMarker(action);
-    if (marker === "FAILURE") {
-      return {
-        outcome: "FAILURE",
-        error_class: "STUB_FORCED_FAILURE",
-        error_summary: "stub handler forced failure for test",
-      };
-    }
-    if (marker === "TIMEOUT") {
-      return {
-        outcome: "TIMEOUT",
-        error_class: "STUB_FORCED_TIMEOUT",
-        error_summary: "stub handler forced timeout for test",
-      };
-    }
-    const built = stubSuccessMetadata("SEND_INTERNAL_NOTIFICATION");
-    return {
-      outcome: "SUCCESS",
-      result_summary: built.result_summary,
-      result_metadata: built.result_metadata,
-    };
-  },
-  PROPOSE_PERMISSION_GRANT: async (action) => {
-    const marker = detectTestMarker(action);
-    if (marker === "FAILURE") {
-      return {
-        outcome: "FAILURE",
-        error_class: "STUB_FORCED_FAILURE",
-        error_summary: "stub handler forced failure for test",
-      };
-    }
-    if (marker === "TIMEOUT") {
-      return {
-        outcome: "TIMEOUT",
-        error_class: "STUB_FORCED_TIMEOUT",
-        error_summary: "stub handler forced timeout for test",
-      };
-    }
-    const built = stubSuccessMetadata("PROPOSE_PERMISSION_GRANT");
-    return {
-      outcome: "SUCCESS",
-      result_summary: built.result_summary,
-      result_metadata: built.result_metadata,
-    };
-  },
-};
-
-// WHAT: Dispatch a single attempt on the per-ActionType handler.
-// INPUT: An Action row (only the SAFE subset the handler reads).
-// OUTPUT: A Promise<ActionHandlerResult>.
-// WHY: The executor passes the Action row through; this function is
-//      the only place that knows which stub to call. If a future
-//      QLOCK adds a new ActionType, both the schema enum AND this map
-//      must be extended in the same slice (ADR-0021 deliberate-blocker
-//      pattern).
+// WHY: The executor.ts call site uses executeActionHandler(action);
+//      preserving that surface keeps the executor edit narrow.
 export async function executeActionHandler(
   action: HandlerActionInput,
 ): Promise<ActionHandlerResult> {
-  const handler = HANDLERS[action.action_type];
-  if (handler === undefined) {
-    return {
-      outcome: "FAILURE",
-      error_class: "UNKNOWN_ACTION_TYPE",
-      error_summary: `no handler registered for action_type=${String(action.action_type)}`,
-    };
-  }
-  return handler(action);
+  return defaultRegistry.execute(action);
 }

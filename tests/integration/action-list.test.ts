@@ -211,13 +211,13 @@ async function seedAutoApprovePolicy(
     where: {
       org_entity_id_action_type_risk_tier: {
         org_entity_id: orgEntityId,
-        action_type: "RECORD_CAPSULE",
+        action_type: "SEND_INTERNAL_NOTIFICATION",
         risk_tier: "LOW",
       },
     },
     create: {
       org_entity_id: orgEntityId,
-      action_type: "RECORD_CAPSULE",
+      action_type: "SEND_INTERNAL_NOTIFICATION",
       risk_tier: "LOW",
       default_decision: "AUTO_APPROVE",
       require_admin_capability: null,
@@ -236,7 +236,7 @@ async function createApprovedAction(caller: {
     url: "/api/v1/actions",
     headers: { authorization: `Bearer ${caller.token}` },
     payload: {
-      action_type: "RECORD_CAPSULE",
+      action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-list-summary-secret",
       payload_redacted: { kind: "capsule", title: "list-secret-title" },

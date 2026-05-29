@@ -236,13 +236,19 @@ async function seedPolicy(
   });
 }
 
-// WHAT: Make a minimal valid request body.
+// WHAT: Make a minimal valid request body. Default action_type is
+//        SEND_INTERNAL_NOTIFICATION so the body passes the
+//        [ADR-0057-RECORD-CAPSULE-HANDLER] per-type validator (the
+//        stub validator accepts any object payload). Tests that need
+//        RECORD_CAPSULE-specific create-flow assertions override
+//        action_type AND supply a properly-shaped CapsuleCreateInput
+//        payload.
 function body(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    action_type: "RECORD_CAPSULE",
+    action_type: "SEND_INTERNAL_NOTIFICATION",
     idempotency_key: `ik-${randomUUID()}`,
     payload_summary: "test-summary",
-    payload_redacted: { kind: "capsule", title: "test" },
+    payload_redacted: { kind: "notification", title: "test" },
     ...overrides,
   };
 }
@@ -317,7 +323,7 @@ describe("POST /api/v1/actions — AUTO_APPROVE happy path", () => {
       orgId,
       autonomy_level: "EXECUTIVE_OVERRIDE",
     });
-    await seedPolicy(orgId, "RECORD_CAPSULE", "LOW", "AUTO_APPROVE", caller.entityId);
+    await seedPolicy(orgId, "SEND_INTERNAL_NOTIFICATION", "LOW", "AUTO_APPROVE", caller.entityId);
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/actions",
@@ -515,7 +521,7 @@ describe("POST /api/v1/actions — idempotency replay", () => {
       orgId,
       autonomy_level: "EXECUTIVE_OVERRIDE",
     });
-    await seedPolicy(orgId, "RECORD_CAPSULE", "LOW", "AUTO_APPROVE", caller.entityId);
+    await seedPolicy(orgId, "SEND_INTERNAL_NOTIFICATION", "LOW", "AUTO_APPROVE", caller.entityId);
     const sharedKey = `ik-replay-${randomUUID()}`;
     const first = await app.inject({
       method: "POST",
@@ -561,7 +567,7 @@ describe("POST /api/v1/actions — idempotency replay", () => {
       orgId,
       autonomy_level: "EXECUTIVE_OVERRIDE",
     });
-    await seedPolicy(orgId, "RECORD_CAPSULE", "LOW", "AUTO_APPROVE", callerA.entityId);
+    await seedPolicy(orgId, "SEND_INTERNAL_NOTIFICATION", "LOW", "AUTO_APPROVE", callerA.entityId);
     const sharedKey = `ik-collide-${randomUUID()}`;
     const first = await app.inject({
       method: "POST",
@@ -593,7 +599,7 @@ describe("POST /api/v1/actions — cross-org ActionPolicy isolation", () => {
       autonomy_level: "EXECUTIVE_OVERRIDE",
     });
     // Seed AUTO_APPROVE for (org B, RECORD_CAPSULE, LOW) — but caller is in org A.
-    await seedPolicy(orgB, "RECORD_CAPSULE", "LOW", "AUTO_APPROVE", caller.entityId);
+    await seedPolicy(orgB, "SEND_INTERNAL_NOTIFICATION", "LOW", "AUTO_APPROVE", caller.entityId);
     // Org A has no policy → falls through to APPROVAL_REQUIRED-tier default.
     const response = await app.inject({
       method: "POST",
@@ -625,7 +631,7 @@ describe("POST /api/v1/actions — audit details no-leak", () => {
       orgId,
       autonomy_level: "EXECUTIVE_OVERRIDE",
     });
-    await seedPolicy(orgId, "RECORD_CAPSULE", "LOW", "AUTO_APPROVE", caller.entityId);
+    await seedPolicy(orgId, "SEND_INTERNAL_NOTIFICATION", "LOW", "AUTO_APPROVE", caller.entityId);
     const secretSummary = "SECRET_TEXT_THAT_MUST_NOT_LEAK";
     const secretRedacted = { secret_marker: "REDACTED_TEXT_THAT_MUST_NOT_LEAK" };
     await app.inject({

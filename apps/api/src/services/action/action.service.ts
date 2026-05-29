@@ -78,6 +78,7 @@ import type {
   PrivilegedEndpoint,
 } from "../../security/privileged-endpoints.js";
 import { projectActionView, type SafeActionView } from "./views.js";
+import { validatePayloadForActionType } from "./action-payload-validators.js";
 
 // WHAT: The set of 3 initial canonical ActionType values per ADR-0057 §2.
 // INPUT: Used as a value namespace.
@@ -205,6 +206,25 @@ export function validateCreateActionBody(body: Record<string, unknown>): {
   }
   if (invalid.length > 0) {
     return { ok: false, code: "INVALID_FIELD", invalid_fields: invalid };
+  }
+  // Per-ActionType payload validation. The route-tier shape check
+  // above ensured payload_redacted is a non-null object; this
+  // dispatcher additionally enforces the action-type-specific
+  // contract (e.g. RECORD_CAPSULE requires capsule_type + topic_tags
+  // + payload_summary + content). Rejection here means the Action
+  // would have entered the executor queue malformed and burned a
+  // retry budget before terminalizing FAILED — far better to reject
+  // at create-time with 422.
+  const perTypeValidation = validatePayloadForActionType(
+    action_type as string,
+    payload_redacted,
+  );
+  if (perTypeValidation.ok === false) {
+    return {
+      ok: false,
+      code: "INVALID_FIELD",
+      invalid_fields: perTypeValidation.invalid_fields,
+    };
   }
   return {
     ok: true,

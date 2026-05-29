@@ -68,6 +68,10 @@ import {
   startActionScheduler,
   type ActionSchedulerHandle,
 } from "./services/action/scheduler.js";
+import {
+  makeActionHandlerRegistry,
+  setDefaultActionHandlerRegistry,
+} from "./services/action/handlers.js";
 import { OtzarService } from "./services/otzar/otzar.service.js";
 import { ObservationService } from "./services/otzar/observation.service.js";
 import { makeDefaultKVCache } from "./services/otzar/cache.js";
@@ -488,6 +492,18 @@ export async function buildApp(
   // scheduler state) can reach it without a second buildApp return
   // value.
   (app as unknown as { scheduler: SchedulerHandle }).scheduler = scheduler;
+
+  // [ADR-0057-RECORD-CAPSULE-HANDLER] install the per-ActionType
+  // handler registry with WriteService injected. The registry replaces
+  // the module-level default at handlers.ts so that the executor (which
+  // imports the default executeActionHandler surface) routes
+  // RECORD_CAPSULE actions through the real
+  // WriteService.createCapsuleForActionRunner system path.
+  // SEND_INTERNAL_NOTIFICATION and PROPOSE_PERMISSION_GRANT remain
+  // stubs pending their own future capability waves.
+  setDefaultActionHandlerRegistry(
+    makeActionHandlerRegistry({ writeService }),
+  );
 
   // ADR-0057 §1 + §11 -- start the Action lifecycle scheduler
   // (admission + executor + expiry sweep). NO-OP under NODE_ENV=test;

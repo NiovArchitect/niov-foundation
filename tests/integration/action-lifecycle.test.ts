@@ -235,7 +235,7 @@ async function seedPolicy(
   action_type:
     | "RECORD_CAPSULE"
     | "PROPOSE_PERMISSION_GRANT"
-    | "SEND_INTERNAL_NOTIFICATION" = "RECORD_CAPSULE",
+    | "SEND_INTERNAL_NOTIFICATION" = "SEND_INTERNAL_NOTIFICATION",
   risk_tier: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" = "LOW",
 ): Promise<void> {
   await prisma.actionPolicy.upsert({
@@ -275,11 +275,16 @@ async function createApprovedAction(
     url: "/api/v1/actions",
     headers: { authorization: `Bearer ${caller.token}` },
     payload: {
-      action_type: opts.action_type ?? "RECORD_CAPSULE",
+      // [ADR-0057-RECORD-CAPSULE-HANDLER] wave: SEND_INTERNAL_NOTIFICATION
+      // is the stub-validator default so this lifecycle test stays
+      // focused on lifecycle semantics (admission/execution/retry/
+      // expiry/concurrency) — the real RECORD_CAPSULE handler is
+      // tested at tests/integration/action-record-capsule-handler.test.ts.
+      action_type: opts.action_type ?? "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-summary",
       payload_redacted: opts.payload_redacted ?? {
-        kind: "capsule",
+        kind: "notification",
         title: "test",
       },
     },
@@ -374,10 +379,10 @@ describe("ADR-0057 §1 + §11 — admission + executor + success", () => {
       where: { attempt_id: attempts[0]?.attempt_id ?? "" },
     });
     expect(result).not.toBeNull();
-    expect(result?.result_summary).toBe("stub_record_capsule_ok");
+    expect(result?.result_summary).toBe("stub_send_internal_notification_ok");
     expect(result?.result_metadata).toMatchObject({
       handler: "stub",
-      action_type: "RECORD_CAPSULE",
+      action_type: "SEND_INTERNAL_NOTIFICATION",
       status: "completed_stub",
     });
     // result_metadata MUST NOT leak payload-derived data.
@@ -404,7 +409,7 @@ describe("ADR-0057 §1 + §11 — admission + executor + success", () => {
 });
 
 describe("ADR-0057 §11 — retry budget exhaustion → ACTION_FAILED", () => {
-  it("FAILURE marker loops in-tick up to RETRY_BUDGET (RECORD_CAPSULE=3) then terminalizes FAILED", async () => {
+  it("FAILURE marker loops in-tick up to RETRY_BUDGET (SEND_INTERNAL_NOTIFICATION=3) then terminalizes FAILED", async () => {
     const orgId = await makeTestOrg();
     const caller = await makeOrgMember({
       orgId,

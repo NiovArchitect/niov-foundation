@@ -217,13 +217,13 @@ async function seedAutoApprovePolicy(
     where: {
       org_entity_id_action_type_risk_tier: {
         org_entity_id: orgEntityId,
-        action_type: "RECORD_CAPSULE",
+        action_type: "SEND_INTERNAL_NOTIFICATION",
         risk_tier: "LOW",
       },
     },
     create: {
       org_entity_id: orgEntityId,
-      action_type: "RECORD_CAPSULE",
+      action_type: "SEND_INTERNAL_NOTIFICATION",
       risk_tier: "LOW",
       default_decision: "AUTO_APPROVE",
       require_admin_capability: null,
@@ -242,7 +242,7 @@ async function createApprovedAction(caller: {
     url: "/api/v1/actions",
     headers: { authorization: `Bearer ${caller.token}` },
     payload: {
-      action_type: "RECORD_CAPSULE",
+      action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-summary-secret",
       payload_redacted: { kind: "capsule", title: "secret-title" },
@@ -339,7 +339,7 @@ describe("GET /api/v1/actions/:id — self-scope happy path + safe view", () => 
     expect(b.ok).toBe(true);
     expect(b.action.action_id).toBe(actionId);
     expect(b.action.status).toBe("APPROVED");
-    expect(b.action.action_type).toBe("RECORD_CAPSULE");
+    expect(b.action.action_type).toBe("SEND_INTERNAL_NOTIFICATION");
     expect(b.action.risk_tier).toBe("LOW");
     expect(b.action.attempt_count).toBe(0);
     expect(b.action.last_result_summary).toBe(null);
@@ -376,7 +376,7 @@ describe("GET /api/v1/actions/:id — self-scope happy path + safe view", () => 
     };
     expect(b.action.status).toBe("SUCCEEDED");
     expect(b.action.attempt_count).toBe(1);
-    expect(b.action.last_result_summary).toBe("stub_record_capsule_ok");
+    expect(b.action.last_result_summary).toBe("stub_send_internal_notification_ok");
     for (const forbidden of FORBIDDEN_TOKENS) {
       expect(r.rawBody.includes(forbidden)).toBe(false);
     }
