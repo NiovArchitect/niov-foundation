@@ -1,9 +1,11 @@
 # NIOV Foundation pre-commit hook
 # Enforces (in order): db-push guard (ADR-0025) -> typecheck (strict 4-error
 #   baseline per ADR-0015 Decision B Amendment 1) -> RULE 16 no-console invariant
+#   -> no-leak guard (ADR-0057 §16 step 2; runtime response/audit-safe surfaces)
 # Canonical ADRs: docs/architecture/decisions/0024-pre-commit-hook-posture.md
 #   (the hook itself) + docs/architecture/decisions/0025-schema-push-target-discipline.md
-#   (the db-push guard)
+#   (the db-push guard) + docs/architecture/decisions/0057-autonomous-execution-core-substrate.md
+#   §10 + §16 (the no-leak guard's forbidden-token canonical list + build-sequence ordering)
 # RULE 13 -- surface substrate truth before edits chain
 # Bypass: git commit --no-verify (emergency override preserved)
 # POSIX sh-safe: no bash-only syntax ([[ ]], arrays) -- the hook runs under
@@ -66,3 +68,6 @@ echo "  ✓ TS baseline preserved at $ERROR_COUNT errors"
 
 echo "→ RULE 16 no-console invariant (DRIFT 2 Option C anchor)"
 npx vitest run tests/unit/no-console-in-api-src.test.ts --config vitest.unit.config.ts
+
+echo "→ no-leak guard (runtime response/audit-safe surfaces; ADR-0057 §16 step 2)"
+npx vitest run tests/unit/no-leak-guard.test.ts --config vitest.unit.config.ts
