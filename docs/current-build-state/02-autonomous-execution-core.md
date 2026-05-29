@@ -18,9 +18,9 @@ Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-sub
 
 ## Current status (PARTIAL — production-grade)
 
-Substrate landed across 15 implementation PRs (#18, #20, #22,
-#24, #26, #28, #30, #32, #35, #37, #39, #41, #47, #49, #51) + 10 docs-refresh
-PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48, #50). The
+Substrate landed across 16 implementation PRs (#18, #20, #22,
+#24, #26, #28, #30, #32, #35, #37, #39, #41, #47, #49, #51, #54) + 1 research-arc PR (#53) + 11 docs-refresh
+PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48, #50, #52). The
 Action runtime is fully live end-to-end: create → policy
 decision → optional dual-control pairing → scheduler admission
 → executor claim → in-tick retry → terminalization → expiry
@@ -90,6 +90,7 @@ any in-flight attempt short-circuits.
 | `GET` | `/api/v1/actions/:id` | bearer + `read` | `apps/api/src/services/action/get.service.ts` (`getActionForCaller`) |
 | `GET` | `/api/v1/actions` | bearer + `read` | `apps/api/src/services/action/list.service.ts` (`listActionsForCaller`) |
 | `GET` | `/api/v1/actions/:id/attempts/:attempt_id` | bearer + `read` | `apps/api/src/services/action/attempt.service.ts` (`getActionAttemptForCaller`) |
+| `GET` | `/api/v1/actions/:id/attempts` | bearer + `read` | `apps/api/src/services/action/attempt-list.service.ts` (`listActionAttemptsForCaller`) — paginated SafeActionAttemptView list for one parent Action; `attempt_number` ASC; outcome filter; soft-delete invisibility |
 | `GET` | `/api/v1/org/action-policies` | bearer + `can_admin_org` | `apps/api/src/routes/org.routes.ts` (response projects `retry_budget` + `attempt_timeout_ms_override` per PR #49) |
 | `PUT` | `/api/v1/org/action-policies` | bearer + dual-control gated | `apps/api/src/routes/org.routes.ts` (allowlist + typed validator extended for `retry_budget` + `attempt_timeout_ms_override` per PR #49 — positive Int or explicit null; `0` / negative / float / string rejected 422 `INVALID_FIELD`) |
 
@@ -221,7 +222,7 @@ any in-flight attempt short-circuits.
   filters + cross-source / cross-org leak prevention at the QUERY
   tier.
 - **`apps/api/src/services/action/attempt.service.ts`**
-  (NEW in PR #39; extended in PR #51) —
+  (NEW in PR #39; extended in PR #51 + PR #54) —
   `getActionAttemptForCaller(callerEntityId, actionId, attemptId)`.
   Same authorization spine as `get.service.ts` (source
   self-scope OR can_admin_org-over-same-org; TAR-authoritative;
@@ -232,8 +233,22 @@ any in-flight attempt short-circuits.
   outcome != SUCCEEDED) -> projects to SafeActionAttemptView.
   **PR #51 adds `timeout_ms: number | null`** to the projected
   view (the Wave 6 forensic field; null only for attempts that
-  landed before PR #47). Forbidden-fields contract per ADR-0057
-  §10 enforced by construction.
+  landed before PR #47). **PR #54 exports
+  `projectActionAttemptView`** so the new attempt-list service
+  consumes the same projection. Forbidden-fields contract per
+  ADR-0057 §10 enforced by construction.
+- **`apps/api/src/services/action/attempt-list.service.ts`**
+  (NEW in PR #54) — `listActionAttemptsForCaller(callerEntityId,
+  actionId, filters)` + `validateListAttemptsQuery(query)`.
+  Same authorization spine as `attempt.service.ts`. Pagination
+  (page + page_size; clamped to `[1, MAX_ATTEMPTS_PAGE_SIZE=100]`;
+  defaults 1 / 50) + optional `outcome` filter (single value OR
+  array) composing AS AND with the action_id scope predicate;
+  soft-delete invisibility; sort by `attempt_number` ASC. ONE
+  bulk `actionResult.findMany` per page (not per-row); map-by-
+  attempt-id with desc-orderBy + set-on-first-encounter for
+  latest-only semantics. Reuses `projectActionAttemptView` so
+  no-leak projection is identical across detail + list surfaces.
 
 ### Live audit literals (10 of 10)
 
@@ -315,6 +330,7 @@ any in-flight attempt short-circuits.
 | [#47](https://github.com/NiovArchitect/niov-foundation/pull/47) | `ae01289` | **ActionPolicy retry_budget + ActionAttempt timeout_ms schema fields** — Wave 6 LOCK-GAP-1 + LOCK-GAP-2 promotion from service-tier constants to schema. NEW resolver helpers `resolveRetryBudget` + `resolveAttemptTimeoutMs`; executor adds per-action `ActionPolicy` point-lookup at retry-loop entry; resolved timeout persists onto `ActionAttempt.timeout_ms` for forensic visibility. Non-positive override values fall back to constants (operator-misconfiguration guard). 14 NEW unit + 5 NEW integration tests. Substrate-architectural; tier-4 build-log [`../build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md`](../build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md). |
 | [#49](https://github.com/NiovArchitect/niov-foundation/pull/49) | `28b2cd8` | **ActionPolicy override admin write-path** — Wave 7 closes RULE 13 drift surfaced post-PR-48: PR #47 added the schema fields but the `PUT /api/v1/org/action-policies` allowlist still rejected the two override fields with 422 UNKNOWN_FIELD. NEW `isOptionalPositiveIntOrNull` helper (positive Int or explicit null; 0 / negative / float / string rejected 422); conditional upsert spread (undefined → preserves existing column value); GET list + PUT response projections gain both columns; audit details gain `retry_budget_set` + `attempt_timeout_ms_override_set` boolean indicators (numeric values NEVER recorded). 10 NEW integration tests + no-leak `KNOWN_LEGITIMATE_HITS` line bumped from 1089 → 1175 (same substrate justification per the entry's own precedent format). Substrate-coherent extension of PR #47; no tier-4 build-log (no new architectural primitive). |
 | [#51](https://github.com/NiovArchitect/niov-foundation/pull/51) | `8fa0658` | **ActionAttempt.timeout_ms surfaced on attempt-detail viewer** — Wave 8 closes the Section 2 forensic-visibility loop end-to-end. `SafeActionAttemptView` gains `timeout_ms: number | null`; `projectActionAttemptView` passes the row column through unchanged. 2 NEW integration tests (executor-option-wins case + policy-override-wins-when-option-omitted case) proving the row + projected view agree under both precedence tiers. Same authorization spine as PR #39; null-safe for pre-PR-47 attempts. Substrate-coherent extension of PR #47 + PR #49; no tier-4 build-log (no new architectural primitive). |
+| [#54](https://github.com/NiovArchitect/niov-foundation/pull/54) | `470c43c` | **ActionAttempt list route** — Wave 10. NEW `GET /api/v1/actions/:id/attempts` paginated SafeActionAttemptView list. NEW `apps/api/src/services/action/attempt-list.service.ts` (`listActionAttemptsForCaller` + `validateListAttemptsQuery` + `MAX_ATTEMPTS_PAGE_SIZE` + `DEFAULT_ATTEMPTS_PAGE_SIZE`). Pagination clamped to `[1, 100]`; optional `outcome` filter (single value OR array); sort by `attempt_number` ASC; soft-delete invisibility. ONE bulk `actionResult.findMany` per page (not per-row). Reuses `projectActionAttemptView` (now exported from `attempt.service.ts`) so the no-leak projection contract is identical across detail + list. Same authorization spine as PR #39 + PR #51. 16 NEW integration tests. Substrate-coherent extension; no tier-4 build-log (no new architectural primitive). |
 
 ## Founder gap-locks active in this substrate
 
@@ -432,20 +448,21 @@ any in-flight attempt short-circuits.
    explicit `GET /api/v1/org/actions` route (lower priority;
    `?org_scope=true` on the unified list already covers the
    same need).
-2. **SEND_INTERNAL_NOTIFICATION real handler** — requires
-   building the notification substrate from scratch (no
-   `notification.service.ts` exists in the repo as of PR #35).
-   Defer until product clarity on internal-notification
-   substrate (in-app vs email vs both).
+2. **SEND_INTERNAL_NOTIFICATION real handler** — Wave 9 RULE 21
+   research arc landed at
+   `docs/research/2026-05-29-send-internal-notification-substrate-research.md`
+   (PR #53). The arc inventoried substrate-state (no backing
+   notification primitives beyond the `DeviceToken` +
+   `IntegrationCredential` schemas; zero TS-side consumer code),
+   enumerated 5 delivery backends + 4 routing axes + 3 opt-out
+   granularities, and queued the §6 product-clarity question
+   for Founder direction. Implementation wave (post-Founder
+   QLOCK) recommended at in-app default with provider-pluggable
+   abstraction per the ADR-0043 G3.4 precedent.
 3. **Active AbortSignal consumption** in future real handlers
    wrapping long-running connector work — the plumbing landed
    in PR #37; consumption is per-handler discipline.
-4. **ActionAttempt list-of-attempts route** — callers can
-   query the DB directly via `Action.action_id`; a route
-   alias would unlock Control Tower attempt-list UX. No
-   architectural boundary; lowest priority among Section 2
-   reads.
-5. **Per-action `ActionPolicy` lookup cache** — currently one
+4. **Per-action `ActionPolicy` lookup cache** — currently one
    indexed point-lookup per claimed Action. ETS-style
    read-optimized cache is forward-substrate per ADR-0036 /
    ADR-0039 precedent if hot-path contention surfaces in
