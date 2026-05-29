@@ -64,17 +64,44 @@ export async function registerAuditRoutes(
   );
 
   // GET /api/v1/audit/events/:id — single-event drilldown.
-  // Self-scope; cross-actor + unknown id collapse to
-  // enumeration-safe 404 AUDIT_EVENT_NOT_FOUND. Surfaces
-  // previous_event + next_event references for hand-tracing.
-  app.get<{ Params: { id: string } }>(
+  // Self-scope by default; scope=org enables the can_admin_org
+  // path (Section 7 Wave 2). Cross-actor / cross-org / unknown
+  // id all collapse to enumeration-safe 404
+  // AUDIT_EVENT_NOT_FOUND. Surfaces previous_event +
+  // next_event references for hand-tracing (refs scoped to the
+  // same caller-or-org scope as the row lookup).
+  app.get<{
+    Params: { id: string };
+    Querystring: { scope?: string };
+  }>(
     "/api/v1/audit/events/:id",
     {
       preHandler: requireAuth(authService, "read"),
     },
     async (request, reply) => {
       const callerId = request.auth!.entity_id;
-      const result = await getAuditEventForCaller(callerId, request.params.id);
+      // Validate scope at the route tier — service accepts the
+      // typed enum, so reject anything other than "self" / "org"
+      // / omitted with a 422 INVALID_FIELD to keep the surface
+      // honest.
+      const rawScope = request.query.scope;
+      if (
+        rawScope !== undefined &&
+        rawScope !== "self" &&
+        rawScope !== "org"
+      ) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_FIELD",
+          invalid_fields: ["scope"],
+        });
+      }
+      const scope: "self" | "org" = rawScope === "org" ? "org" : "self";
+      const result = await getAuditEventForCaller(
+        callerId,
+        request.params.id,
+        scope,
+      );
       if (result.ok === true) {
         return reply.code(result.httpStatus).send({
           ok: true,
