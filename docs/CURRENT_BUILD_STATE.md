@@ -9,23 +9,25 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-([FOUNDATION-CURRENT-BUILD-STATE-SPLIT-ARCHITECTURE-QLOCK]).
+([ADR-0057-RECORD-CAPSULE-HANDLER-EXECUTE-VERIFY-AUTH]
+wave-close).
 
 ## Current state
 
-- **Latest main HEAD:** `75933ad0e608aa18ed51b6d664b7eb51febe6f93`
-- **Latest merged PR:** [#32](https://github.com/NiovArchitect/niov-foundation/pull/32) — Add ADR-0057 GET actions list route (2026-05-29).
-- **Active branch / PR:** docs split slice (this commit).
+- **Latest main HEAD:** `4ef4ed43ffa65a8bbfc094874ffd58f13fcdaf07`
+- **Latest merged PR:** [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) — Add ADR-0057 RECORD_CAPSULE real handler capability (2026-05-29).
+- **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
+- **Real per-`ActionType` handlers:** 1 of 3 (RECORD_CAPSULE live; SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT stub).
 
 ## 10 production section status
 
 | # | Section | Status | Detail |
 |---|---|---|---|
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; Otzar Wave 2A/B/C designs accepted (code forward-substrate). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
-| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel + GET viewer + GET list LIVE; 10 of 10 `ACTION_*` emitters LIVE; stub handlers only. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
+| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel + GET viewer + GET list LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE real handler LIVE** (1 of 3 real handlers); SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT remain stubs. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
@@ -39,6 +41,8 @@ Tier 4 PR-specific build-log:
 
 | PR | Commit | Description |
 |---|---|---|
+| [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) | `4ef4ed4` | Add ADR-0057 RECORD_CAPSULE real handler capability |
+| [#34](https://github.com/NiovArchitect/niov-foundation/pull/34) | `d001e13` | Split CURRENT_BUILD_STATE into section indexes |
 | [#32](https://github.com/NiovArchitect/niov-foundation/pull/32) | `75933ad` | Add ADR-0057 GET actions list route |
 | [#31](https://github.com/NiovArchitect/niov-foundation/pull/31) | `bcdacc7` | Docs refresh for #30 |
 | [#30](https://github.com/NiovArchitect/niov-foundation/pull/30) | `8af6f77` | Add ADR-0057 GET action viewer route |
@@ -47,14 +51,12 @@ Tier 4 PR-specific build-log:
 | [#27](https://github.com/NiovArchitect/niov-foundation/pull/27) | `910b286` | Docs refresh for #26 |
 | [#26](https://github.com/NiovArchitect/niov-foundation/pull/26) | `fe46e22` | Add ADR-0057 action lifecycle executor substrate |
 | [#25](https://github.com/NiovArchitect/niov-foundation/pull/25) | `7949841` | Docs refresh for #24 |
-| [#24](https://github.com/NiovArchitect/niov-foundation/pull/24) | `487fce1` | Add ADR-0057 action create route |
-| [#23](https://github.com/NiovArchitect/niov-foundation/pull/23) | `7f30f5b` | Docs refresh for #22 |
 
 ## Immediate next work queue
 
-1. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`** — first real per-`ActionType` handler. `RECORD_CAPSULE` is the natural first surface (wires Action runtime to COSMP WRITE). RULE 21 research arc REQUIRED (crosses Action↔COSMP boundary). Details: [Section 2](current-build-state/02-autonomous-execution-core.md#next-slices-priority-order).
-2. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`** — privileged `RUNNING → CANCELLED` on the GOVSEC.5 break-glass substrate (ADR-0050) + `AbortController` plumbing.
-3. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields.
+1. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`** — privileged `RUNNING → CANCELLED` on the GOVSEC.5 break-glass substrate (ADR-0050; landed) + `AbortController` plumbing for mid-attempt handler interruption.
+2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields (Prisma migration via `db:push:test` per ADR-0025; cross-language Ecto parity check per ADR-0033).
+3. **PROPOSE_PERMISSION_GRANT real handler** — second real per-`ActionType` handler (MEDIUM-risk; dual-control by default; own RULE 21 research arc).
 4. Wave 2A/B/C Otzar employee-twin route implementations (Section 1 priority).
 5. GOVSEC.5 follow-on `requireAdminCapability` throttle.
 

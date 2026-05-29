@@ -18,17 +18,24 @@ Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-sub
 
 ## Current status (PARTIAL — production-grade)
 
-Substrate landed across 8 implementation PRs (#18, #20, #22, #24,
-#26, #28, #30, #32) + 6 docs-refresh PRs (#19, #21, #23, #25,
-#27, #29, #31). The Action runtime is fully live end-to-end
-through stub handlers: create → policy decision → optional
-dual-control pairing → scheduler admission → executor claim →
-in-tick retry → terminalization → expiry sweep → caller-initiated
-non-RUNNING cancellation, with read-side detail + list surfaces
-for the Action Inbox UX.
+Substrate landed across 9 implementation PRs (#18, #20, #22, #24,
+#26, #28, #30, #32, #35) + 6 docs-refresh PRs (#19, #21, #23, #25,
+#27, #29, #31). The Action runtime is fully live end-to-end:
+create → policy decision → optional dual-control pairing →
+scheduler admission → executor claim → in-tick retry →
+terminalization → expiry sweep → caller-initiated non-RUNNING
+cancellation, with read-side detail + list surfaces for the Action
+Inbox UX, and **RECORD_CAPSULE actions now execute through the real
+`WriteService.createCapsuleForActionRunner` system-path** producing
+real `MemoryCapsule` rows in the source entity's wallet.
 
 **Live `ACTION_*` audit emitters: 10 of 10.** The canonical
 ADR-0057 §10 vocabulary is fully wired.
+
+**Real per-`ActionType` handlers: 1 of 3.** RECORD_CAPSULE is the
+first and currently only real handler. SEND_INTERNAL_NOTIFICATION
++ PROPOSE_PERMISSION_GRANT remain stubs pending their own future
+capability waves.
 
 ## What is live
 
@@ -58,11 +65,37 @@ ADR-0057 §10 vocabulary is fully wired.
 - **`apps/api/src/services/action/state-machine.ts`** — pure
   transition guard (`assertActionTransition`, `canTransitionAction`,
   `isTerminalActionStatus`, `ActionInvalidTransitionError`).
-- **`apps/api/src/services/action/handlers.ts`** — 3 stub handlers
-  for `RECORD_CAPSULE` / `SEND_INTERNAL_NOTIFICATION` /
-  `PROPOSE_PERMISSION_GRANT`. Returns safe `result_metadata = {
-  handler: "stub", action_type, status: "completed_stub" }`. Real
-  per-`ActionType` business handlers are forward-substrate.
+- **`apps/api/src/services/action/handlers.ts`** —
+  `ActionHandlerRegistry` with DI: **RECORD_CAPSULE is now a real
+  handler** that unpacks `payload_redacted` through
+  `validateRecordCapsulePayload` (single source of truth with the
+  create-time validator) and calls
+  `WriteService.createCapsuleForActionRunner`. Returns SAFE
+  `result_metadata = { handler: "record_capsule", action_type,
+  capsule_id, capsule_type }` — NEVER content, payload_summary,
+  payload_redacted, content_hash, embedding. SEND_INTERNAL_NOTIFICATION
+  + PROPOSE_PERMISSION_GRANT remain stubs returning `result_metadata = {
+  handler: "stub", action_type, status: "completed_stub" }`. Future
+  capability waves replace each stub with a real handler.
+- **`apps/api/src/services/action/action-payload-validators.ts`**
+  (NEW in PR #35) — per-`ActionType` create-time payload validator
+  dispatcher. `validateRecordCapsulePayload` enforces the
+  `CapsuleCreateInput` contract (required fields + bounded content
+  size + optional-field shapes). Stub validators no-op for the two
+  unland-ed handlers. Dispatcher called from
+  `validateCreateActionBody` so 422 INVALID_FIELD fires at
+  create-time on malformed RECORD_CAPSULE payload — no malformed
+  Action enters the executor queue.
+- **`apps/api/src/services/cosmp/write.service.ts`** — adds
+  `createCapsuleForActionRunner` system-path variant in PR #35.
+  Bypasses session-token validation (gate = Action passed policy
+  evaluator + dual-control). Defensive TAR re-check at
+  execute-time. Owner-write to actor's wallet with jurisdiction
+  cascade + storage upload + embedding + transactional
+  CAPSULE_MUTATION_ADD audit carrying `details.action_id`
+  back-reference + `session_id: null`. Callable only from the
+  action handler registry; no route exposes it. Mirrors the
+  canonical `createSystemPermission` system-path precedent.
 - **`apps/api/src/services/action/lifecycle.service.ts`** — shared
   transition + audit helpers, `RETRY_BUDGET` constants (LOCK-GAP-1),
   `ATTEMPT_TIMEOUT_MS_DEFAULT = 30_000` (LOCK-GAP-2),
@@ -125,10 +158,17 @@ ADR-0057 §10 vocabulary is fully wired.
 
 ## What is NOT live
 
-- **Real per-`ActionType` business handlers** — `handlers.ts`
-  returns stubs only. The first real handler (`RECORD_CAPSULE`
-  → COSMP WRITE) is the priority-1 next slice; requires a RULE 21
-  research arc because it crosses the Action↔COSMP boundary.
+- **SEND_INTERNAL_NOTIFICATION real handler** — no backing
+  notification substrate exists in `apps/api/src/services` (grep
+  returned 0 hits for `sendNotification` / `notification.service`
+  before the wave). Future wave will need to build the substrate
+  from scratch first.
+- **PROPOSE_PERMISSION_GRANT real handler** — `createPermission`
+  DB query exists at `packages/database/src/queries/permission.ts`;
+  the handler crosses multiple entities' DMW boundaries with
+  RULE 0 sovereignty implications + MEDIUM-risk default
+  REQUIRE_DUAL_CONTROL. Higher blast-radius than RECORD_CAPSULE;
+  warrants its own RULE 21 research arc.
 - **`RUNNING → CANCELLED` privileged cancellation** —
   `cancel.service.ts` returns 403 `RUNNING_CANCEL_PRIVILEGED`;
   the state-machine permits the edge but no caller drives it.
@@ -167,6 +207,7 @@ ADR-0057 §10 vocabulary is fully wired.
 | [#30](https://github.com/NiovArchitect/niov-foundation/pull/30) | `8af6f77` | GET viewer route `GET /api/v1/actions/:id` + `SafeActionDetailView` + `attempt_count` + `last_result_summary` aggregates |
 | [#31](https://github.com/NiovArchitect/niov-foundation/pull/31) | `bcdacc7` | Docs refresh for #30 (GET viewer landed) |
 | [#32](https://github.com/NiovArchitect/niov-foundation/pull/32) | `75933ad` | GET list route `GET /api/v1/actions` + self-scope default + `?org_scope=true` admin path + pagination + enum filters |
+| [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) | `4ef4ed4` | **RECORD_CAPSULE real handler capability** — per-`ActionType` payload validators + `WriteService.createCapsuleForActionRunner` system-path + `ActionHandlerRegistry` DI + `server.ts` registry installation; 1 of 3 real handlers LIVE. See [`../build-log/2026-05-29-pr-35-record-capsule-handler.md`](../build-log/2026-05-29-pr-35-record-capsule-handler.md). |
 
 ## Founder gap-locks active in this substrate
 
@@ -236,9 +277,30 @@ ADR-0057 §10 vocabulary is fully wired.
   cannot drain the whole table.
 - **Stub handler `result_metadata` is exactly** `{ handler:
   "stub", action_type, status: "completed_stub" }`. No
-  payload-derived field appears. The forward-substrate
-  transition to real handlers must preserve this no-leak
-  contract.
+  payload-derived field appears. **The transition to real
+  handlers preserves this no-leak contract — RECORD_CAPSULE's
+  real `result_metadata` is exactly `{ handler:
+  "record_capsule", action_type, capsule_id, capsule_type }`;
+  integration test asserts secret values from both outer
+  Action.payload_summary AND inner payload_redacted.content are
+  absent from result_metadata + all 3 audit rows.**
+- **System-path gating (RECORD_CAPSULE, PR #35)**:
+  `WriteService.createCapsuleForActionRunner` bypasses session
+  validation; the gate is that the Action passed policy
+  evaluator + dual-control before reaching the executor. Audit
+  attribution carries `actor_entity_id = source_entity_id` +
+  `details.action_id` back-reference for forensic traceability.
+  Callable only from the action handler registry — no route
+  exposes it. Defensive TAR re-check at execute-time
+  (status === ACTIVE + can_write_capsules === true) catches
+  any drift between create-time policy decision and
+  execute-time mutation.
+- **TAR_DEMOTED mapping**: NOT in the closed
+  `WriteFailure.code` union. The method returns
+  `OPERATION_NOT_PERMITTED` and the handler maps to
+  `error_class = "TAR_DEMOTED"`. Audit denial_reason carries
+  TAR_DEMOTED separately. Keeps the WriteFailure union closed
+  by construction.
 - **Synthetic internal PrivilegedEndpoint** used at the create-
   time service for dual-control target resolution. NOT added to
   the live `PRIVILEGED_ENDPOINTS` registry (which holds 5
@@ -251,27 +313,27 @@ ADR-0057 §10 vocabulary is fully wired.
 
 ## Next slices (priority order)
 
-1. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`** — first
-   real per-`ActionType` handler. `RECORD_CAPSULE` is the
-   natural first surface because it wires the Action runtime to
-   existing COSMP WRITE semantics
-   (`apps/api/src/services/cosmp/write.service.ts`). RULE 21
-   research arc REQUIRED because the handler crosses the
-   Action↔COSMP architectural boundary.
-2. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`**
+1. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`**
    — privileged `RUNNING → CANCELLED` cancellation on the
    GOVSEC.5 break-glass substrate (ADR-0050; landed). The
    state-machine already permits the edge; this slice wires a
    separate privileged route that consumes a break-glass grant
    and adds `AbortController` plumbing for mid-attempt handler
-   interruption.
-3. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+   interruption. Substrate-architectural; tier-4 build-log
+   entry expected.
+2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
    — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
    constants to `ActionPolicy.retry_budget` +
    `ActionAttempt.timeout_ms` schema fields; defaults preserved
-   from the current constants. Requires a Prisma migration
-   QLOCK + cross-language Ecto schema parity check per
-   ADR-0033.
+   from the current constants. Requires a Prisma migration via
+   `db:push:test` per ADR-0025 + cross-language Ecto schema
+   parity check per ADR-0033.
+3. **PROPOSE_PERMISSION_GRANT real handler** — second real
+   per-`ActionType` handler. `createPermission` substrate
+   exists at `packages/database/src/queries/permission.ts`;
+   MEDIUM-risk default REQUIRE_DUAL_CONTROL; touches multiple
+   entities' DMW boundaries with RULE 0 sovereignty
+   implications. Own RULE 21 research arc required.
 4. **`[ADR-0057-ATTEMPT-DETAIL-ROUTE-EXECUTE-VERIFY-AUTH]`** —
    `GET /api/v1/actions/:id/attempts/:attempt_id` for detail
    drilldown.
@@ -279,6 +341,11 @@ ADR-0057 §10 vocabulary is fully wired.
    explicit `GET /api/v1/org/actions` route (lower priority;
    `?org_scope=true` on the unified list already covers the
    same need).
+6. **SEND_INTERNAL_NOTIFICATION real handler** — requires
+   building the notification substrate from scratch (no
+   `notification.service.ts` exists in the repo as of PR #35).
+   Defer until product clarity on internal-notification
+   substrate (in-app vs email vs both).
 
 ## Risks / forward-substrate
 
