@@ -5,8 +5,37 @@ progresses. Future Claude Code sessions should view this document
 at session start to load current build state regardless of
 conversation context loss.
 
-**Last updated:** 2026-05-28
-([CI-NO-LEAK-GUARD-LANDED] minimum-touch refresh —
+**Last updated:** 2026-05-29
+([ADR-0057-SCHEMA-AUDIT-LITERALS-LANDED] minimum-touch refresh —
+**ADR-0057 §16 step 3 is now PARTIAL / SUBSTRATE DECLARED
+ONLY**. PR #18 squash commit
+`78e764269c5f25f53c0c42485969d53ca2fe6513` (merged
+2026-05-29T05:45:40Z) lands the first additive Section 2
+schema + audit-literal slice on main. Three files merged:
+`packages/database/prisma/schema.prisma` (+236 — 4 NEW
+Action models + 5 NEW Action enums); `packages/database/src/queries/audit.ts`
+(+78 / -1 — 10 NEW append-only `ACTION_*` audit literals in
+both the `AuditEventType` union and the `AUDIT_EVENT_TYPE_VALUES`
+runtime const); `tests/unit/audit.test.ts` (+37 — 3 NEW
+verification tests mirroring the AUDIT.1 personalization
+precedent). 4 schema models landed: `Action`, `ActionAttempt`,
+`ActionResult`, `ActionPolicy`. 5 enums landed: `ActionStatus`,
+`ActionType`, `ActionRiskTier`, `ActionDecision`,
+`ActionAttemptOutcome`. 10 literals landed: `ACTION_PROPOSED`,
+`ACTION_APPROVED`, `ACTION_REJECTED`, `ACTION_SCHEDULED`,
+`ACTION_STARTED`, `ACTION_SUCCEEDED`, `ACTION_FAILED`,
+`ACTION_CANCELLED`, `ACTION_EXPIRED`, `ACTION_POLICY_UPDATE`.
+Verification: 4/4 CI green (Typecheck 38s + Unit 1m21s +
+Integration 1m36s + Elixir 1m55s); TypeScript baseline
+preserved at exactly 4 canonical residuals. **Runtime Section
+2 is NOT live** — no migrations applied, no Prisma client
+regenerated, no routes, no services, no policy evaluator, no
+executor, no worker, no scheduler, no connectors / MCP, no
+Control Tower action UX, no `ACTION_*` audit emissions, no
+`ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding. The
+substrate is declared at the schema-and-vocabulary tier
+ONLY. Prior same-date refresh
+`[CI-NO-LEAK-GUARD-LANDED]` minimum-touch refresh —
 **ADR-0057 §16 step 2 is now COMPLETE**. The CI no-leak guard
 landed at PR #16 squash commit
 `cfda28aec4a2512fae30b9d7269260d19031d2ac`. Three files merged:
@@ -94,6 +123,464 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-SCHEMA-AUDIT-LITERALS-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §16 step 3 is PARTIAL /
+SUBSTRATE DECLARED ONLY.** PR #18 squash commit
+`78e764269c5f25f53c0c42485969d53ca2fe6513` (merged
+2026-05-29T05:45:40Z) landed the first additive Section 2
+implementation slice on main. The substrate is declared at
+the **Prisma schema declaration tier** and the **TypeScript
+audit-literal vocabulary tier** — and ONLY at those two
+tiers. **Runtime Section 2 Autonomous Execution Core is NOT
+live in code, NOT applied to any database, and NOT consumed
+by any service / route / executor / worker / scheduler.**
+This entry supersedes the forward-substrate framing of
+`[ADR-0057-ACTION-SCHEMA-ENUMS-AUDIT-LITERALS-EXECUTE-VERIFY-AUTH]`
+as "the first additive Section 2 implementation slice" recorded
+in the prior `[CI-NO-LEAK-GUARD-LANDED]` refresh below; that
+prior framing was substrate-honest at HEAD `cfda28a` and is
+preserved verbatim for historical context per Rule 0
+(Documentation-First / No-Guessing).
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `78e7642`
+
+Per Rule 0 reading of the merged commit, PR #18 added exactly
+three files (`3 files changed, 351 insertions(+), 1 deletion(-)`):
+
+- **`packages/database/prisma/schema.prisma` (MOD; +236)** —
+  appended at end of file (after `BreakGlassStatus`) the 4
+  canonical Action models + 5 supporting enums per ADR-0057
+  §2 schema intent. Plain UUID columns for entity / escalation
+  references (no Prisma `@relation` blocks); follows the
+  LawfulBasis (ADR-0036) + BreakGlassGrant (ADR-0050 BG.1)
+  governance-record precedent. Indexes per ADR-0057 §2
+  (cross-org listing surface; self-scope listing; idempotency;
+  attempt history). Comment block at the model header cites
+  ADR-0057 §10 forbidden-fields list verbatim and documents
+  the no-leak posture each `Json`/`String` field obeys at the
+  service tier (forward-substrate).
+
+- **`packages/database/src/queries/audit.ts` (MOD; +78 / -1)** —
+  extended the `AuditEventType` discriminated-union with 10 NEW
+  `ACTION_*` literals AND extended the runtime
+  `AUDIT_EVENT_TYPE_VALUES` const array with the same 10
+  literals. The `as const satisfies readonly AuditEventType[]`
+  compile-time check enforces drift-free consistency between
+  the type-level union and the runtime-iterable list. Each
+  block carries a comment citing ADR-0057 §10 and enumerating
+  the per-event emitter mapping (forward-substrate), the SAFE
+  audit-details allowlist, and the FORBIDDEN details list.
+
+- **`tests/unit/audit.test.ts` (MOD; +37)** — appended a NEW
+  `describe("ADR-0057 §10 — Action audit literals defined (no
+  emission)")` block with 3 verification tests mirroring the
+  AUDIT.1 personalization-literals precedent verbatim:
+  (1) all 10 literals are present in `AUDIT_EVENT_TYPE_VALUES`;
+  (2) `isKnownAuditEventType` recognizes all 10;
+  (3) the literal set has no duplicates after the append.
+
+### Schema substrate now declared (4 models)
+
+- **`model Action`** — `action_id` (PK uuid) + `source_entity_id`
+  + `org_entity_id` + `target_entity_id?` + `action_type`
+  (ActionType enum) + `risk_tier` (ActionRiskTier enum) +
+  `policy_envelope` (Json — frozen snapshot per ADR-0057 §3) +
+  `payload_summary` (String — SAFE allowlisted per ADR-0057
+  §10) + `payload_redacted` (Json — SAFE per-action-type
+  allowlist) + `idempotency_key` (String UNIQUE per ADR-0057
+  §11) + `escalation_id?` (UUID; pairs with EscalationRequest
+  when policy evaluator decides REQUIRE_DUAL_CONTROL per
+  ADR-0057 §5) + `status` (ActionStatus default `PROPOSED`) +
+  `expires_at?` + `created_at` + `updated_at` + `deleted_at?`
+  (soft delete per RULE 10). 9 indexes including
+  `(org_entity_id, status, created_at)` for cross-org listing.
+  `@@map("actions")`.
+
+- **`model ActionAttempt`** — `attempt_id` (PK uuid) +
+  `action_id` (FK uuid) + `attempt_number` (Int — monotonic
+  per Action per ADR-0057 §11) + `started_at` + `ended_at?` +
+  `outcome?` (ActionAttemptOutcome — null while running) +
+  `worker_id?` (in-process worker identity) + `error_class?`
+  (enum-literal-bound at service tier; NEVER free-form text) +
+  `error_summary?` (SAFE pre-canonicalized) + `deleted_at?`.
+  3 indexes. `@@map("action_attempts")`.
+
+- **`model ActionResult`** — `result_id` (PK uuid) +
+  `attempt_id` (FK uuid) + `result_summary` (String — SAFE) +
+  `result_metadata` (Json — per-action-type allowlist;
+  NEVER raw external API responses, NEVER raw HTTP headers,
+  NEVER secrets, NEVER capsule content, NEVER embeddings /
+  vectors per ADR-0057 §10) + `created_at`. 1 index
+  `(attempt_id)`. `@@map("action_results")`.
+
+- **`model ActionPolicy`** — `policy_id` (PK uuid) +
+  `org_entity_id` (FK uuid) + `action_type` (ActionType) +
+  `risk_tier` (ActionRiskTier) + `default_decision`
+  (ActionDecision) + `require_admin_capability?` (String —
+  cap-bit name; nullable) + `updated_by` (FK uuid) +
+  `created_at` + `updated_at`. **UNIQUE
+  `(org_entity_id, action_type, risk_tier)`** — at most one
+  policy row per org per action-type per risk-tier per
+  ADR-0057 §3. 3 supporting indexes.
+  `@@map("action_policies")`.
+
+### Enums now declared (5)
+
+- **`enum ActionStatus`** — 10 lifecycle states per
+  ADR-0057 §1 state machine: `PROPOSED`, `APPROVED`,
+  `SCHEDULED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`,
+  `TIMED_OUT`, `REJECTED`, `EXPIRED`.
+
+- **`enum ActionType`** — 3 initial canonical values per
+  ADR-0057 §2 (intentionally small): `RECORD_CAPSULE`,
+  `PROPOSE_PERMISSION_GRANT`, `SEND_INTERNAL_NOTIFICATION`.
+  Extension follows the ADR-0021 Capsule Type Extension
+  Protocol pattern (deliberate-blocker per-type validator +
+  per-type safe-field allowlist).
+
+- **`enum ActionRiskTier`** — `LOW`, `MEDIUM`, `HIGH`,
+  `CRITICAL`. CRITICAL is always `REQUIRE_DUAL_CONTROL` at
+  minimum per ADR-0057 §4.
+
+- **`enum ActionDecision`** — `AUTO_APPROVE`,
+  `REQUIRE_DUAL_CONTROL`, `REQUIRE_BREAK_GLASS`, `FORBIDDEN`.
+  Per ADR-0057 §3 policy-evaluator discriminated decision.
+
+- **`enum ActionAttemptOutcome`** — `SUCCEEDED`, `FAILED`,
+  `TIMED_OUT`, `CANCELLED`. Per-attempt terminal outcomes per
+  ADR-0057 §11.
+
+### Audit literals now declared (10)
+
+These 10 NEW append-only literals extend `AuditEventType`
+union + `AUDIT_EVENT_TYPE_VALUES` const, mirroring the
+`CAPSULE_MUTATION_*` (4) + `BREAK_GLASS_*` (4) extension
+precedent. No ADR-0002 amendment required (ADR-0002 governs
+the chain mechanism + BEFORE-DELETE trigger; additive
+literals are append-only per ADR-0042 §Q-γ.1). **DEFINED
+ONLY; no emitter exists at this slice.** Per-event emitter
+mapping is forward-substrate per ADR-0057 §16 step 4-7:
+
+- `ACTION_PROPOSED` — POST /api/v1/actions create-time
+- `ACTION_APPROVED` — EscalationRequest PENDING → APPROVED
+  transition + the AUTO_APPROVE short-circuit
+- `ACTION_REJECTED` — policy evaluator FORBIDDEN /
+  POLICY_UNRESOLVED / EscalationRequest REJECTED /
+  NO_ELIGIBLE_TARGET
+- `ACTION_SCHEDULED` — scheduler moves APPROVED → SCHEDULED
+- `ACTION_STARTED` — worker picks SCHEDULED row + begins attempt
+- `ACTION_SUCCEEDED` — terminal attempt outcome SUCCEEDED
+- `ACTION_FAILED` — terminal attempt outcome FAILED /
+  TIMED_OUT
+- `ACTION_CANCELLED` — cancel route or worker-cancel
+  transition
+- `ACTION_EXPIRED` — expires_at elapsed before pick-up
+- `ACTION_POLICY_UPDATE` — PUT /api/v1/org/action-policies
+  admin event (paired with the NEW PRIVILEGED_ENDPOINTS
+  `ORG_ACTION_POLICY_UPDATE` binding per ADR-0057 §7;
+  also forward-substrate)
+
+### RULE 13 substrate-honest disclosures (preserved at the docs tier)
+
+1. **Model-count drift from the planning QLOCK.** The original
+   EXECUTE-VERIFY QLOCK draft named **5 models** including
+   `ActionApproval` and `ActionExecution`. During substrate
+   verification per RULE 0 documentation-first, ADR-0057 was
+   read as the accepted ground truth and canonically enumerates
+   **4 models**: `Action`, `ActionAttempt`, `ActionResult`,
+   `ActionPolicy`. ADR-0057 §5 explicitly says approvals reuse
+   `EscalationRequest` (so no `ActionApproval` table); ADR-0057
+   §1 + §11 say execution attempts are captured in
+   `ActionAttempt` rows with monotonic `attempt_number` (so no
+   separate `ActionExecution` table). This refresh followed
+   ADR-0057 verbatim and did NOT invent `ActionApproval` or
+   `ActionExecution`. The 4-model canonical landing IS the
+   substrate now on main.
+
+2. **Plain UUID columns over Prisma `@relation` blocks
+   (governance-record precedent).** ADR-0057 §2 says
+   "FK Entity" for `Action.source_entity_id`,
+   `Action.org_entity_id`, `Action.target_entity_id?`,
+   `ActionPolicy.org_entity_id`, `ActionPolicy.updated_by`,
+   and `Action.escalation_id?`. Two LIVE precedents exist in
+   the schema for entity references: (a) `EscalationRequest`
+   uses Prisma `@relation` blocks with explicit back-refs on
+   `Entity` (5 back-ref entries); (b) `LawfulBasis` (ADR-0036)
+   + `BreakGlassGrant` (ADR-0050 BG.1) use plain UUID columns
+   + zero Prisma relations + zero back-refs on Entity. PR #18
+   chose pattern (b) — the freshest governance-record
+   precedent — because it (i) keeps the schema diff strictly
+   additive (zero edits to `Entity` or `EscalationRequest`
+   model bodies, honoring RULE 1); (ii) mirrors the
+   most-recent substrate-tier precedent for new
+   governance / audit-adjacent tables; (iii) the consuming
+   forward-substrate code (action.service.ts) will join via
+   explicit UUID lookups, matching ADR-0026 BEAM-compatibility
+   pattern 3 ("state reconstructible from durable storage").
+   A later QLOCK can tighten to Postgres-tier FK constraints
+   (via `prisma db push` migration) or add Prisma `@relation`
+   blocks if/when the substrate demands cascade behavior.
+
+3. **No Prisma client regenerated.** The PR diff is purely
+   declarative Prisma DDL. `prisma generate` was deliberately
+   NOT run because: (i) it would update the generated
+   `@prisma/client` types and surface
+   `action`/`actionAttempt`/`actionResult`/`actionPolicy` model
+   accessors to TS code with NO TS consumer existing yet
+   (no routes, no services); (ii) regenerating would inflate
+   the diff with `node_modules/@prisma/client/**` regen
+   artifacts without any TS consumer benefit; (iii) the next
+   QLOCK that adds Action service / route code naturally
+   runs `prisma generate` as part of its scope.
+
+### No-leak posture (preserved)
+
+PR #18 added audit-literal vocabulary ONLY. No `ACTION_*`
+emissions exist anywhere in source code. Safe audit details
+are limited to the allowlisted set:
+`action_id` / `action_type` / `risk_tier` / `decision` /
+`policy_envelope_hash` (SHA-256 of canonicalized envelope;
+NEVER the envelope itself) / `actor_entity_id` (or
+`source_entity_id`) / `target_entity_id` (only where
+structurally safe; never disclosed in a fail-closed envelope
+per Phase E Invariant 6) / `escalation_id` (when paired) /
+`attempt_number` (for `_STARTED / _SUCCEEDED / _FAILED`) /
+`outcome` (enum-bound `ActionAttemptOutcome`) / `error_class`
+(enum-literal-only: `EXECUTOR_TIMEOUT / POLICY_DRIFT /
+ENVELOPE_INVALID / PERMISSION_DENIED / INTERNAL_ERROR`;
+NEVER free-form text) / `route` + `method` (for
+ACTION_POLICY_UPDATE admin events) / `grant_id` (when
+break-glass-delegated per ADR-0050 §Amendment 1).
+
+Forbidden audit details (the no-leak guard at
+`tests/unit/no-leak-guard.test.ts` already enforces these as
+object property keys in routes + middleware + security +
+safe-projection mappers): raw payloads / raw external API
+responses / raw HTTP headers / secrets / credentials / API
+keys / capsule content (`payload_summary` / `payload_content` /
+`storage_location` / `content_hash`) / embeddings / vectors /
+candidate-pool identities / candidate-pool size / full policy
+envelope JSON / raw error text / stack traces / break-glass
+justification text.
+
+### Verification
+
+- **PR #18 CI run `26620264768`** — all 4 jobs **pass**:
+  Typecheck (38s) + Unit tier 371 tests (1m21s) + Integration
+  tier 111 tests + 1 skipped (1m36s) + Elixir tier compile +
+  test (1m55s).
+- **Local pre-commit hook gates** ran during the commit
+  itself: db-push guard ✓ + TypeScript baseline 4 errors ✓ +
+  RULE 16 no-console anchor 1/1 ✓ + no-leak guard 2/2 ✓.
+- **Audit literal tests** (the 3 NEW verification tests at
+  `tests/unit/audit.test.ts:391` block) pass as part of the
+  Unit tier 23/23 audit.test.ts run (the 3 new tests are
+  absorbed into the existing job-name label; total passing
+  test count rose from 371 to 374).
+- **TypeScript baseline preserved at exactly 4 canonical
+  residuals** — the schema diff is declarative-only (no
+  `prisma generate`); the audit-literal additions are
+  typesafe by construction via the `as const satisfies`
+  clause.
+
+### Scope discipline (what this PR touched, and what it did not)
+
+This PR touched exactly:
+
+- `packages/database/prisma/schema.prisma` (+236)
+- `packages/database/src/queries/audit.ts` (+78 / -1)
+- `tests/unit/audit.test.ts` (+37)
+
+NOT touched: `apps/**`, all other `packages/**`,
+`tests/integration/**`, all other `tests/unit/**`, `docs/**`,
+`docs/architecture/decisions/**`, `.github/**` (no CI workflow
+changes), `.husky/**`, `prisma/migrations/**` (no migration
+files), `package.json`, `package-lock.json`, `AGENTS.md`,
+`CLAUDE.md`, Control Tower files, Foundation-Command files,
+legacy quarantine files. No migrations applied. No
+`prisma generate` run. No installs. No secret access.
+
+### What remains NOT live after this refresh
+
+Section 2 Autonomous Execution Core implementation is still
+**NOT live in code anywhere**. The schema substrate exists as
+Prisma DDL declarations in `schema.prisma`, but:
+
+- **Autonomous Execution Core is NOT live.**
+- **AI Twins cannot execute actions.** No executor exists.
+- **`autonomy_level` is NOT enforced for actions.** No policy
+  evaluator runtime exists. `TwinConfig.autonomy_level` is
+  read at the Twin layer but never reaches an action.
+- **Workflows do not run.** No workflow engine; `Workflow`
+  model exists but the orchestration is forward-substrate.
+- **Connectors / MCP are NOT live.** Per ADR-0057 §17 +
+  ADR-0058 (future); cannot land until Section 2 is live and
+  stable.
+- **Action queue does NOT exist.** No `Action` table in any
+  database; no `SCHEDULED → RUNNING` worker; no
+  `FOR UPDATE SKIP LOCKED` polling.
+- **Action audit trail emissions do NOT exist.** The 10
+  `ACTION_*` literals are vocabulary only; no
+  `writeAuditEvent({ event_type: "ACTION_*", ... })` call site
+  exists anywhere in source code.
+- **Control Tower action UX does NOT exist.** Per ADR-0057
+  §12; all CT-side action surfaces (Actions Inbox, Action
+  Detail drawer, action-policy admin UI) remain
+  forward-substrate.
+- **Routes do NOT exist.** No `POST /api/v1/actions`, no
+  `GET /api/v1/actions[/...]`, no
+  `POST /api/v1/actions/:id/cancel`, no
+  `GET /api/v1/org/actions`, no
+  `GET|PUT /api/v1/org/action-policies`.
+- **Services do NOT exist.** No `action.service.ts`, no
+  `evaluateActionPolicy` pure function, no `ActionStateMachine`,
+  no `projectActionView` / `projectActionResult` mappers.
+- **Executor does NOT exist.** No `setInterval`-driven
+  worker, no attempt creation, no terminal-state transitions.
+- **Worker does NOT exist.** No in-process worker, no
+  external broker integration.
+- **Scheduler does NOT exist.** No `APPROVED → SCHEDULED`
+  transition, no `expires_at` enforcement, no expiry-emitter.
+- **`ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding
+  does NOT exist.** Per ADR-0057 §7 + §16 step 4-7; lands
+  with the routes phase.
+- **Migrations were NOT applied.** Neither `prisma db push`
+  nor `prisma migrate` was run. The `actions` /
+  `action_attempts` / `action_results` / `action_policies`
+  Postgres tables do NOT yet exist in the operator's
+  Supabase database, the test container, or any sovereign
+  deployment.
+- **Prisma client was NOT generated.** `prisma generate` was
+  not run as part of PR #18. The generated `@prisma/client`
+  does NOT yet expose `prisma.action.*` /
+  `prisma.actionAttempt.*` / `prisma.actionResult.*` /
+  `prisma.actionPolicy.*` properties. Any service-tier
+  consumer must wait for a future QLOCK that explicitly
+  runs `npm run db:push:test` + `prisma generate`.
+- **TypeScript does NOT have zero errors.** The accepted
+  baseline remains exactly 4 canonical residual errors
+  enumerated below.
+- **All 10 production sections are NOT complete.** Only
+  Section 1 Employee Intelligence Core is canonical (and
+  Section 2 is now CI-guarded + has schema vocabulary
+  declared but is not implemented at the runtime tier).
+
+### TypeScript baseline (preserved)
+
+The accepted TypeScript baseline remains **exactly 4
+canonical errors**, byte-identical to the prior refresh:
+
+1. `apps/api/src/server.ts:299` — TS2322 rateLimits
+   index-signature drift
+2. `apps/api/src/services/cosmp/write.service.ts:548` —
+   TS2339 `ValidateFailure.entity_id` narrowing
+3. `apps/api/src/services/monetization/monetization.service.ts:30`
+   — TS2740 PRICING_TABLE deliberate-blocker per ADR-0021
+   §Step 3
+4. `packages/database/src/queries/capsule.ts:242` — TS2322
+   `CapsuleMetadata` shape drift
+
+### Founder Directive (preserved)
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch.**
+
+The 10 required production sections remain required for
+production-grade launch. None is optional. None is "later."
+The correct response to complexity is to chunk more
+coherently, not defer.
+
+1. **Employee Intelligence Core** — bounded, governed,
+   scoped per-employee Twin intelligence.
+2. **Autonomous Execution Core** — bounded, governed,
+   audit-aware action substrate. **CI-protected + schema
+   declared at this refresh; runtime forward-substrate.**
+3. **Hives / Team Intelligence** — scoped group intelligence.
+4. **MCP / Connectors** — governed external execution.
+5. **Agent Playground** — scoped Twin development surface.
+6. **Enterprise Analytics** — operational signals.
+7. **Full Audit Viewer** — governed audit consumption.
+8. **Billing / Entitlements** — monetization + access tier.
+9. **Admin / Governance Control Tower** — operator surface
+   for ALL of the above.
+10. **Deployment / Security / Go-Live Operations** —
+    sovereign + multi-tenant + multi-region deployment
+    posture.
+
+Do NOT frame any of these as optional later MVP features.
+
+### Forward-substrate next options
+
+**Do NOT start runtime Section 2 implementation until this
+docs refresh is merged.** After merge, two coherent
+next-step options exist; each requires substrate verification
+before choosing:
+
+**Option A — `[ADR-0057-ACTION-PRISMA-GENERATE-AND-DB-PUSH-TEST-EXECUTE-VERIFY-AUTH]`**
+
+Purpose: regenerate the Prisma client and apply the schema
+DDL to the test container ONLY (via `npm run db:push:test`
+per ADR-0025 schema-push-target discipline; NEVER bare
+`prisma db push`). Outcome: `prisma.action.*` /
+`prisma.actionAttempt.*` / `prisma.actionResult.*` /
+`prisma.actionPolicy.*` become available as typed Prisma
+accessors so future service-tier code can consume the
+declared substrate. Scope: must be tightly bounded — no
+production migration; no routes; no services; no executor;
+no worker; no scheduler.
+
+**Option B — `[ADR-0057-ACTION-POLICY-EVALUATOR-EXECUTE-VERIFY-AUTH]`**
+
+Purpose: implement the pure deterministic
+`evaluateActionPolicy` function per ADR-0057 §3 + §4
+autonomy ladder. Pure function, discriminated-union return,
+no DB writes, no routes. The autonomy ladder honors
+`OrgSettings.require_human_approval` first;
+`risk_tier=CRITICAL` always `REQUIRE_DUAL_CONTROL` at
+minimum; `autonomy_level=OBSERVE_ONLY` always `FORBIDDEN`;
+`autonomy_level=APPROVAL_REQUIRED` always
+`REQUIRE_DUAL_CONTROL` unless ActionPolicy explicitly grants
+`AUTO_APPROVE`; `autonomy_level=EXECUTIVE_OVERRIDE` is
+*permission to be auto-approved subject to policy*, not
+permission to skip policy. Scope: no routes, no executor,
+no worker, no DB writes unless explicitly authorized in the
+QLOCK.
+
+Either option requires the Founder to authorize. Neither
+should run automatically.
+
+### Do NOT claim
+
+- "Autonomous Execution is live." — runtime is NOT
+  implemented; only schema vocabulary + audit-literal
+  vocabulary exist.
+- "AI Twins can execute actions." — no executor; no
+  service layer.
+- "`autonomy_level` is enforced for actions." — no policy
+  evaluator runtime.
+- "Workflows run." — no workflow engine.
+- "Connectors / MCP are live." — deferred per ADR-0057
+  §17 + ADR-0058.
+- "Action queue exists." — no `actions` table in any
+  database; no worker.
+- "Action audit trail emissions exist." — no
+  `writeAuditEvent` call site for any `ACTION_*` literal.
+- "Control Tower action UX exists." — deferred per
+  ADR-0057 §12.
+- "Migrations were applied." — `prisma db push` was NOT
+  run; the 4 new tables do NOT exist in any database.
+- "Prisma client was regenerated." — `prisma generate` was
+  NOT run; `prisma.action.*` accessors do NOT exist.
+- "TypeScript has zero errors." — baseline remains 4
+  canonical residuals.
+- "All 10 production sections are complete." — only
+  Section 1 + the CI-guard pre-arm for Section 2.
 
 ## [CI-NO-LEAK-GUARD-LANDED] 2026-05-28
 
