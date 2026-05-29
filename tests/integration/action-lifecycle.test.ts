@@ -267,26 +267,31 @@ interface CreateOpts {
 }
 
 async function createApprovedAction(
-  caller: { token: string; ip: string },
+  caller: { entityId: string; token: string; ip: string },
   opts: CreateOpts = {},
 ): Promise<string> {
+  // Wave 11 made SEND_INTERNAL_NOTIFICATION payload validation real
+  // (validateSendInternalNotificationPayload requires
+  // recipient_entity_id + notification_class + body_summary). The
+  // self-notification default below keeps these lifecycle tests
+  // focused on lifecycle semantics (admission/execution/retry/
+  // expiry/concurrency) while still passing the create-time
+  // validator: source caller is the recipient, and self is
+  // trivially a member of source's org.
+  const defaultPayload: Record<string, unknown> = {
+    recipient_entity_id: caller.entityId,
+    notification_class: "lifecycle-test",
+    body_summary: "lifecycle-test-body",
+  };
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/actions",
     headers: { authorization: `Bearer ${caller.token}` },
     payload: {
-      // [ADR-0057-RECORD-CAPSULE-HANDLER] wave: SEND_INTERNAL_NOTIFICATION
-      // is the stub-validator default so this lifecycle test stays
-      // focused on lifecycle semantics (admission/execution/retry/
-      // expiry/concurrency) — the real RECORD_CAPSULE handler is
-      // tested at tests/integration/action-record-capsule-handler.test.ts.
       action_type: opts.action_type ?? "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-summary",
-      payload_redacted: opts.payload_redacted ?? {
-        kind: "notification",
-        title: "test",
-      },
+      payload_redacted: opts.payload_redacted ?? defaultPayload,
     },
     remoteAddress: caller.ip,
   });
@@ -379,11 +384,16 @@ describe("ADR-0057 §1 + §11 — admission + executor + success", () => {
       where: { attempt_id: attempts[0]?.attempt_id ?? "" },
     });
     expect(result).not.toBeNull();
-    expect(result?.result_summary).toBe("stub_send_internal_notification_ok");
+    // Wave 11: SEND_INTERNAL_NOTIFICATION is a REAL handler.
+    // result_summary is `internal_notification_dispatched:<id>`;
+    // result_metadata mirrors the prod-equivalent SAFE shape.
+    expect(result?.result_summary).toMatch(
+      /^internal_notification_dispatched:/,
+    );
     expect(result?.result_metadata).toMatchObject({
-      handler: "stub",
+      handler: "send_internal_notification",
       action_type: "SEND_INTERNAL_NOTIFICATION",
-      status: "completed_stub",
+      status: "dispatched_internal",
     });
     // result_metadata MUST NOT leak payload-derived data.
     const metaJson = JSON.stringify(result?.result_metadata);
@@ -417,7 +427,12 @@ describe("ADR-0057 §11 — retry budget exhaustion → ACTION_FAILED", () => {
     });
     await seedPolicy(orgId, caller.entityId);
     const actionId = await createApprovedAction(caller, {
-      payload_redacted: { [TEST_MARKER_FORCE_FAILURE]: true },
+      payload_redacted: {
+        recipient_entity_id: caller.entityId,
+        notification_class: "force-fail-test",
+        body_summary: "force-fail",
+        [TEST_MARKER_FORCE_FAILURE]: true,
+      },
     });
 
     // One admit + one execute. The executor loops in-tick across the

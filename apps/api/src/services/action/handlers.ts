@@ -36,9 +36,11 @@
 import type { Action, ActionType } from "@prisma/client";
 import { createPermission, writeAuditEvent } from "@niov/database";
 import type { WriteService } from "../cosmp/write.service.js";
+import type { NotificationService } from "../notification/notification.service.js";
 import {
   validateProposePermissionGrantPayload,
   validateRecordCapsulePayload,
+  validateSendInternalNotificationPayload,
 } from "./action-payload-validators.js";
 
 // WHAT: The handler outcome discriminator. SUCCESS produces an
@@ -99,7 +101,11 @@ export const TEST_MARKER_FORCE_TIMEOUT = "__test_force_timeout__";
 //        the cancel service fires the signal via the abort-registry).
 export type HandlerActionInput = Pick<
   Action,
-  "action_id" | "action_type" | "source_entity_id" | "payload_redacted"
+  | "action_id"
+  | "action_type"
+  | "source_entity_id"
+  | "org_entity_id"
+  | "payload_redacted"
 > & {
   // Optional so unit tests + early consumers can still construct a
   // HandlerActionInput without an abort_signal. Production executor
@@ -164,6 +170,7 @@ export interface ActionHandlerRegistry {
 //        early tests).
 export interface ActionHandlerRegistryDeps {
   writeService?: WriteService;
+  notificationService?: NotificationService;
 }
 
 // WHAT: Build the canonical safe stub-success metadata. Used by the
@@ -429,10 +436,98 @@ function makeProposePermissionGrantHandler(): ActionHandlerFn {
   };
 }
 
+// WHAT: Make the SEND_INTERNAL_NOTIFICATION real handler. Wave 11
+//        Founder-direction-locked: internal-only Otzar-native
+//        notification record; NO external delivery; cross-org
+//        DENY enforced at the NotificationService tier.
+// INPUT: A NotificationService.
+// OUTPUT: An ActionHandlerFn.
+// WHY: Mirrors makeRecordCapsuleHandler / makeProposePermissionGrantHandler.
+//      Re-runs validateSendInternalNotificationPayload (single source
+//      of truth with the create-time validator) then calls
+//      NotificationService.createInternalNotification. SAFE
+//      result_metadata: notification_id + recipient_entity_id +
+//      notification_class + status — NEVER body_summary /
+//      body_redacted / source_entity_id details / org_entity_id;
+//      content stays on the Notification row, not in the
+//      long-lived ActionResult row.
+function makeSendInternalNotificationHandler(
+  notificationService: NotificationService,
+): ActionHandlerFn {
+  return async (action) => {
+    const marker = detectTestMarker(action);
+    if (marker === "TIMEOUT") {
+      return {
+        outcome: "TIMEOUT",
+        error_class: "STUB_FORCED_TIMEOUT",
+        error_summary: "test marker forced timeout outcome",
+      };
+    }
+    if (marker === "FAILURE") {
+      return {
+        outcome: "FAILURE",
+        error_class: "STUB_FORCED_FAILURE",
+        error_summary: "test marker forced failure outcome",
+      };
+    }
+    const validated = validateSendInternalNotificationPayload(
+      action.payload_redacted,
+    );
+    if (!validated.ok) {
+      return {
+        outcome: "FAILURE",
+        error_class: "NOTIFICATION_PAYLOAD_INVALID",
+        error_summary: `invalid send_internal_notification payload: ${validated.invalid_fields.join(",")}`,
+      };
+    }
+    const result = await notificationService.createInternalNotification({
+      org_entity_id: action.org_entity_id,
+      recipient_entity_id: validated.normalized.recipient_entity_id,
+      source_entity_id: action.source_entity_id,
+      notification_class: validated.normalized.notification_class,
+      body_summary: validated.normalized.body_summary,
+      body_redacted: validated.normalized.body_redacted ?? null,
+      action_id: action.action_id,
+    });
+    if (!result.ok) {
+      // Map service-tier codes to stable handler error_class
+      // strings the audit row can carry.
+      const errorClass = ((): string => {
+        switch (result.code) {
+          case "RECIPIENT_NOT_FOUND":
+            return "NOTIFICATION_RECIPIENT_NOT_FOUND";
+          case "RECIPIENT_NOT_ACTIVE":
+            return "NOTIFICATION_RECIPIENT_NOT_ACTIVE";
+          case "CROSS_ORG_DENIED":
+            return "NOTIFICATION_CROSS_ORG_DENIED";
+        }
+      })();
+      return {
+        outcome: "FAILURE",
+        error_class: errorClass,
+        error_summary: `internal notification creation failed: ${result.code}`,
+      };
+    }
+    return {
+      outcome: "SUCCESS",
+      result_summary: `internal_notification_dispatched:${result.notification.notification_id.slice(0, 8)}`,
+      result_metadata: {
+        handler: "send_internal_notification",
+        action_type: "SEND_INTERNAL_NOTIFICATION",
+        notification_id: result.notification.notification_id,
+        recipient_entity_id: result.notification.recipient_entity_id,
+        notification_class: result.notification.notification_class,
+        status: "dispatched_internal",
+      },
+    };
+  };
+}
+
 // WHAT: Build the per-ActionType handler dispatch map for the
-//        registry. RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT are
-//        real handlers. SEND_INTERNAL_NOTIFICATION remains stub
-//        pending its own future capability wave.
+//        registry. Wave 11: all 3 ActionTypes have real handlers
+//        when their deps are injected (every prod path supplies
+//        all three at server boot). Early test consumers without
+//        deps still fall back to stubs.
 function buildHandlerMap(
   deps: ActionHandlerRegistryDeps,
 ): Record<ActionType, ActionHandlerFn> {
@@ -440,9 +535,13 @@ function buildHandlerMap(
     deps.writeService !== undefined
       ? makeRecordCapsuleHandler(deps.writeService)
       : makeStubHandler("RECORD_CAPSULE");
+  const sendInternalNotificationHandler: ActionHandlerFn =
+    deps.notificationService !== undefined
+      ? makeSendInternalNotificationHandler(deps.notificationService)
+      : makeStubHandler("SEND_INTERNAL_NOTIFICATION");
   return {
     RECORD_CAPSULE: recordCapsuleHandler,
-    SEND_INTERNAL_NOTIFICATION: makeStubHandler("SEND_INTERNAL_NOTIFICATION"),
+    SEND_INTERNAL_NOTIFICATION: sendInternalNotificationHandler,
     PROPOSE_PERMISSION_GRANT: makeProposePermissionGrantHandler(),
   };
 }

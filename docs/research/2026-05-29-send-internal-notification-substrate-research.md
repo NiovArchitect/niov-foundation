@@ -15,6 +15,74 @@ every Section 2 status surface since PR #41 (2026-05-29).
 land (research is not modification per RULE 20). Subsequent
 implementation wave requires QLOCK + product-clarity direction.
 
+---
+
+## ⭐ FOUNDER DIRECTION (received 2026-05-29; RESOLVES §6)
+
+**§6 product-clarity question is RESOLVED — option (1) at
+sub-phase 1.**
+
+- SEND_INTERNAL_NOTIFICATION must be **INTERNAL-ONLY** for the
+  first implementation.
+- Creates a **governed internal Otzar notification only** —
+  in-app / Otzar-native notification record.
+- **NO email delivery.** NO SMS delivery. NO Slack delivery.
+  NO push notification delivery. NO external app delivery. NO
+  external side effects.
+- External apps connected to Otzar may become **optional future
+  delivery adapters / integrations**, but they are NOT part of
+  the first implementation.
+
+**Product framing locked:**
+
+- Internal notification substrate first.
+- Provider-pluggable external adapters later (per the
+  EmbeddingProvider precedent at ADR-0043 G3.4).
+- In-app / Otzar-native notification record is the first
+  canonical substrate.
+- The notification must remain scoped, audited, permissioned,
+  no-leak, and enterprise-safe.
+- Do NOT claim external delivery is live.
+
+**Implementation direction for the Wave 11 implementation wave:**
+
+- Build the minimal internal notification substrate needed for
+  the `SEND_INTERNAL_NOTIFICATION` ActionType handler.
+- Prefer an internal database-backed notification model + service
+  (no existing model exists per §2 grep).
+- Handler creates an internal notification record scoped to the
+  correct recipient entity / org.
+- Emit safe audit events (ride existing `ACTION_*` literals; new
+  literals like `NOTIFICATION_DISPATCHED` remain forward-substrate
+  per RULE 20).
+- Return safe `result_metadata` only — `notification_id`,
+  `recipient_entity_id`, `notification_class`, `status`. Do NOT
+  include notification body / content in long-lived ActionResult
+  metadata if that content could be sensitive.
+- Preserve RULE 0 sovereignty (cross-org default DENY; recipient
+  must be member of the source's org); scoped auth; dual-control
+  preserved at the existing ActionPolicy seam; no-leak projection;
+  audit discipline.
+- Tests: happy path; unauthorized / cross-org prevention; missing
+  recipient; recipient TAR not ACTIVE; malformed payload; no-leak;
+  audit.
+
+**Founder authorization captured:** the schema-design decision
+"NEW `Notification` Prisma model" is explicitly authorized at
+the substantive Wave 11 implementation wave. Any NEW audit
+literals (`NOTIFICATION_DISPATCHED` / `NOTIFICATION_DELIVERY_FAILED`
+/ `NOTIFICATION_OPT_OUT_RESPECTED` per §4 item 5) remain
+forward-substrate requiring their own RULE 20 QLOCK.
+
+**Stop conditions reaffirmed:** if implementation cannot be done
+safely WITHOUT external providers; if MCP/connectors/Control
+Tower UX/billing/analytics/voice/ambient/lens scope creep
+surfaces; if schema design beyond the authorized
+single-model + single-service-extension warrants ADR or QLOCK;
+if no-leak / auth boundary is uncertain.
+
+---
+
 ## 1. Why this arc exists
 
 ADR-0057 Section 2 (Autonomous Execution Core) defines three

@@ -223,7 +223,11 @@ async function seedAutoApprovePolicy(
 const SECRET_SUMMARY = "ATTEMPT_DETAIL_SECRET_SUMMARY";
 const SECRET_REDACTED_TITLE = "ATTEMPT_DETAIL_SECRET_TITLE";
 
-async function postCreate(caller: { token: string; ip: string }): Promise<string> {
+async function postCreate(caller: {
+  entityId: string;
+  token: string;
+  ip: string;
+}): Promise<string> {
   const r = await app.inject({
     method: "POST",
     url: "/api/v1/actions",
@@ -232,7 +236,16 @@ async function postCreate(caller: { token: string; ip: string }): Promise<string
       action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: SECRET_SUMMARY,
-      payload_redacted: { kind: "notification", title: SECRET_REDACTED_TITLE },
+      // Wave 11: valid SEND_INTERNAL_NOTIFICATION payload. The
+      // SECRET_REDACTED_TITLE marker stays inside body_redacted so
+      // the no-leak assertions still catch any leakage of the
+      // body content into audit / result_metadata.
+      payload_redacted: {
+        recipient_entity_id: caller.entityId,
+        notification_class: "attempt-detail-test",
+        body_summary: "attempt-detail-body",
+        body_redacted: { title: SECRET_REDACTED_TITLE },
+      },
     },
     remoteAddress: caller.ip,
   });
@@ -342,11 +355,14 @@ describe("GET /api/v1/actions/:id/attempts/:attempt_id — happy path", () => {
     expect(b.attempt.outcome).toBe("SUCCEEDED");
     expect(b.attempt.worker_id).toBe("test-attempt-worker");
     expect(b.attempt.error_class).toBe(null);
-    expect(b.attempt.result_summary).toBe("stub_send_internal_notification_ok");
+    // Wave 11 made SEND_INTERNAL_NOTIFICATION a REAL handler.
+    expect(b.attempt.result_summary).toMatch(
+      /^internal_notification_dispatched:/,
+    );
     expect(b.attempt.result_metadata).toMatchObject({
-      handler: "stub",
+      handler: "send_internal_notification",
       action_type: "SEND_INTERNAL_NOTIFICATION",
-      status: "completed_stub",
+      status: "dispatched_internal",
     });
     for (const tok of FORBIDDEN_TOKENS) {
       expect(r.raw.includes(tok)).toBe(false);

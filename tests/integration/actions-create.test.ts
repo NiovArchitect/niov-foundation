@@ -243,12 +243,26 @@ async function seedPolicy(
 //        RECORD_CAPSULE-specific create-flow assertions override
 //        action_type AND supply a properly-shaped CapsuleCreateInput
 //        payload.
+// Wave 11 made validateSendInternalNotificationPayload real. The
+// default payload now carries the three required fields
+// (recipient_entity_id + notification_class + body_summary). These
+// tests are pure create-time-validation tests — none of them tick
+// the executor — so a syntactically-valid stable UUID for
+// recipient_entity_id is sufficient (no membership check fires at
+// create-time).
+const ACTIONS_CREATE_TEST_RECIPIENT_UUID =
+  "00000000-0000-0000-8000-000000000001";
+
 function body(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     action_type: "SEND_INTERNAL_NOTIFICATION",
     idempotency_key: `ik-${randomUUID()}`,
     payload_summary: "test-summary",
-    payload_redacted: { kind: "notification", title: "test" },
+    payload_redacted: {
+      recipient_entity_id: ACTIONS_CREATE_TEST_RECIPIENT_UUID,
+      notification_class: "actions-create-test",
+      body_summary: "actions-create-test-body",
+    },
     ...overrides,
   };
 }
@@ -633,7 +647,16 @@ describe("POST /api/v1/actions — audit details no-leak", () => {
     });
     await seedPolicy(orgId, "SEND_INTERNAL_NOTIFICATION", "LOW", "AUTO_APPROVE", caller.entityId);
     const secretSummary = "SECRET_TEXT_THAT_MUST_NOT_LEAK";
-    const secretRedacted = { secret_marker: "REDACTED_TEXT_THAT_MUST_NOT_LEAK" };
+    const secretRedacted = {
+      // Wave 11: SEND_INTERNAL_NOTIFICATION payload now has required
+      // fields. Include them alongside the secret marker so the
+      // create-time validator passes; the no-leak assertion below
+      // still proves none of the body content leaks into audit.
+      recipient_entity_id: ACTIONS_CREATE_TEST_RECIPIENT_UUID,
+      notification_class: "no-leak-test",
+      body_summary: "no-leak-test-body",
+      secret_marker: "REDACTED_TEXT_THAT_MUST_NOT_LEAK",
+    };
     await app.inject({
       method: "POST",
       url: "/api/v1/actions",

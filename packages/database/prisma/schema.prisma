@@ -993,6 +993,59 @@ model IntegrationCredential {
   @@map("integration_credentials")
 }
 
+// ADR-0057 Wave 11 (SEND_INTERNAL_NOTIFICATION internal-only
+// handler). Internal-only governed notification — Otzar-native /
+// in-app record. NO external delivery (no email / SMS / Slack /
+// push); external providers are future optional adapters per
+// the Founder direction recorded at
+// docs/research/2026-05-29-send-internal-notification-substrate-research.md.
+//
+// Cross-org default DENY: the recipient_entity_id MUST be a
+// member of org_entity_id (enforced at NotificationService);
+// notifications never cross tenant boundaries without a future
+// explicit RULE 0 Permission row.
+//
+// Read state is derived from columns rather than an enum:
+//   * UNREAD: deleted_at IS NULL AND read_at IS NULL
+//   * READ: deleted_at IS NULL AND read_at IS NOT NULL
+//   * DISMISSED: deleted_at IS NOT NULL (RULE 10 soft-delete)
+//
+// body_redacted holds the safe-redacted full body (Json|null);
+// callers MUST redact sensitive content before persistence.
+// body_summary is a short bounded string for inbox-list views.
+model Notification {
+  notification_id      String    @id @default(uuid()) @db.Uuid
+  org_entity_id        String    @db.Uuid
+  recipient_entity_id  String    @db.Uuid
+  source_entity_id     String    @db.Uuid
+  // Back-link to the originating Action when the notification was
+  // dispatched via the ADR-0057 action runtime. Nullable so future
+  // direct-API notification creation paths can persist without a
+  // synthetic Action wrapper.
+  action_id            String?   @db.Uuid
+  // Free-form class label (e.g., "ACTION_PROPOSED",
+  // "DUAL_CONTROL_REQUEST"). Open string at sub-phase 1; a future
+  // wave may promote to a NotificationClass enum per the
+  // CapsuleType extension protocol precedent (ADR-0021).
+  notification_class   String
+  body_summary         String
+  body_redacted        Json?
+  created_at           DateTime  @default(now())
+  read_at              DateTime?
+  deleted_at           DateTime?
+
+  // Recipient inbox list — covers the canonical
+  // "unread notifications for me" + "all notifications for me"
+  // queries scoped to deleted_at + ordered by recency.
+  @@index([recipient_entity_id, deleted_at, created_at])
+  // Org-scoped admin views (future Control Tower surface;
+  // not exposed via any route at sub-phase 1).
+  @@index([org_entity_id, deleted_at])
+  // Back-link traversal from an Action to its notifications.
+  @@index([action_id])
+  @@map("notifications")
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // SECTION 9 — Schema Part B: Domain-intelligence tables (4 models)
 //

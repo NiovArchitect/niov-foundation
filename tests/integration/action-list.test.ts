@@ -228,6 +228,7 @@ async function seedAutoApprovePolicy(
 }
 
 async function createApprovedAction(caller: {
+  entityId: string;
   token: string;
   ip: string;
 }): Promise<string> {
@@ -239,7 +240,12 @@ async function createApprovedAction(caller: {
       action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-list-summary-secret",
-      payload_redacted: { kind: "capsule", title: "list-secret-title" },
+      // Wave 11: valid SEND_INTERNAL_NOTIFICATION payload.
+      payload_redacted: {
+        recipient_entity_id: caller.entityId,
+        notification_class: "list-test",
+        body_summary: "list-test-body-secret",
+      },
     },
     remoteAddress: caller.ip,
   });

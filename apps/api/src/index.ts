@@ -66,6 +66,19 @@ export type {
   WriteFailure,
 } from "./services/cosmp/write.service.js";
 
+// ADR-0057 Wave 11 — internal-only notification substrate.
+// Internal-only governed Otzar-native record; NO external delivery
+// (no email / SMS / Slack / push); external providers are future
+// optional adapters per the Founder direction recorded at
+// docs/research/2026-05-29-send-internal-notification-substrate-research.md.
+export { makeNotificationService } from "./services/notification/notification.service.js";
+export type {
+  CreateInternalNotificationInput,
+  CreateInternalNotificationResult,
+  CreatedNotificationProjection,
+  NotificationService,
+} from "./services/notification/notification.service.js";
+
 export { ShareService } from "./services/cosmp/share.service.js";
 export type {
   CapsuleGrant,
