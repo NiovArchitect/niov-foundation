@@ -79,6 +79,28 @@ export type {
   NotificationService,
 } from "./services/notification/notification.service.js";
 
+// ADR-0057 Wave 12 — internal-only notification inbox read surface.
+// Self-scope only at sub-phase 1; SAFE projection excludes
+// body_redacted by default; mark-as-read + dismiss are idempotent
+// with enumeration-safe 404.
+export {
+  DEFAULT_NOTIFICATIONS_PAGE_SIZE,
+  MAX_NOTIFICATIONS_PAGE_SIZE,
+  dismissNotificationForCaller,
+  listNotificationsForCaller,
+  markNotificationReadForCaller,
+  validateListNotificationsQuery,
+} from "./services/notification/notification-read.service.js";
+export type {
+  ListNotificationsQuery,
+  ListNotificationsResult,
+  ListNotificationsView,
+  NormalizedListNotificationsFilters,
+  NotificationMutationResult,
+  NotificationStatusLabel,
+  SafeNotificationView,
+} from "./services/notification/notification-read.service.js";
+
 export { ShareService } from "./services/cosmp/share.service.js";
 export type {
   CapsuleGrant,
