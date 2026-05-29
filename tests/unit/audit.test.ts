@@ -381,3 +381,40 @@ describe("AUDIT.1 — personalization audit literals defined (no emission)", () 
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// ADR-0057 §10 Autonomous Execution Core (Section 2): the 10 ACTION_*
+// literals are DEFINED as append-only forward-substrate. No emitter exists
+// in this slice (emission is forward-substrate per ADR-0057 §16 step 4-7);
+// these tests only assert the literal vocabulary is present + recognized +
+// non-duplicated. Mirrors the AUDIT.1 personalization-literals precedent
+// exactly.
+describe("ADR-0057 §10 — Action audit literals defined (no emission)", () => {
+  const ACTION_LITERALS = [
+    "ACTION_PROPOSED",
+    "ACTION_APPROVED",
+    "ACTION_REJECTED",
+    "ACTION_SCHEDULED",
+    "ACTION_STARTED",
+    "ACTION_SUCCEEDED",
+    "ACTION_FAILED",
+    "ACTION_CANCELLED",
+    "ACTION_EXPIRED",
+    "ACTION_POLICY_UPDATE",
+  ] as const;
+
+  it("all 10 literals are present in AUDIT_EVENT_TYPE_VALUES", () => {
+    for (const lit of ACTION_LITERALS) {
+      expect(AUDIT_EVENT_TYPE_VALUES).toContain(lit);
+    }
+  });
+
+  it("isKnownAuditEventType recognizes all 10 literals", () => {
+    for (const lit of ACTION_LITERALS) {
+      expect(isKnownAuditEventType(lit)).toBe(true);
+    }
+  });
+
+  it("the literal set has no duplicates after the append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

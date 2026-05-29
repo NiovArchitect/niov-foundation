@@ -152,7 +152,68 @@ export type AuditEventType =
   | "BREAK_GLASS_INVOKED"
   | "BREAK_GLASS_USED"
   | "BREAK_GLASS_EXPIRED"
-  | "BREAK_GLASS_REVIEWED";
+  | "BREAK_GLASS_REVIEWED"
+  // ADR-0057 §10 Autonomous Execution Core (Section 2). 10 NEW append-only
+  // literals for the Action lifecycle, mirroring the CAPSULE_MUTATION_* (4) +
+  // BREAK_GLASS_* (4) extension precedent. No ADR-0002 amendment needed
+  // (ADR-0002 governs the chain mechanism + BEFORE-DELETE trigger; additive
+  // literals are append-only per ADR-0042 §Q-γ.1 clean-transition discipline).
+  //
+  // This slice DEFINES the literals only; emission is forward-substrate per
+  // ADR-0057 §16 step 4-7 (action.service.ts + executor + scheduler land in
+  // later QLOCKs). Per-event emitter mapping per ADR-0057 §10:
+  //   ACTION_PROPOSED       - POST /api/v1/actions create-time (or _APPROVED
+  //                           if AUTO_APPROVE decision short-circuits)
+  //   ACTION_APPROVED       - EscalationRequest PENDING -> APPROVED transition
+  //                           per ADR-0057 §5 + the AUTO_APPROVE short-circuit
+  //   ACTION_REJECTED       - policy evaluator FORBIDDEN / POLICY_UNRESOLVED /
+  //                           EscalationRequest REJECTED / NO_ELIGIBLE_TARGET
+  //   ACTION_SCHEDULED      - scheduler moves APPROVED -> SCHEDULED
+  //   ACTION_STARTED        - worker picks SCHEDULED row and begins attempt
+  //   ACTION_SUCCEEDED      - terminal attempt outcome SUCCEEDED
+  //   ACTION_FAILED         - terminal attempt outcome FAILED / TIMED_OUT
+  //                           (error_class is enum-literal-bound)
+  //   ACTION_CANCELLED      - cancel route or worker-cancel transition
+  //   ACTION_EXPIRED        - expires_at elapsed before pick-up
+  //   ACTION_POLICY_UPDATE  - PUT /api/v1/org/action-policies admin event
+  //                           (paired with the NEW PRIVILEGED_ENDPOINTS
+  //                           ORG_ACTION_POLICY_UPDATE binding per ADR-0057 §7)
+  //
+  // SAFE audit-details allowlist per ADR-0057 §10 (the per-event details JSON
+  // is constrained to this set; emission sites enforce by construction):
+  //   action_id / action_type / risk_tier / decision / policy_envelope_hash
+  //   (SHA-256 of canonicalized envelope; NEVER the envelope itself) /
+  //   actor_entity_id (a.k.a. source_entity_id) / target_entity_id
+  //   (only where structurally safe; never disclosed in a fail-closed envelope
+  //   per Phase E Invariant 6) / escalation_id (when paired) / attempt_number
+  //   (for _STARTED / _SUCCEEDED / _FAILED) / outcome (enum-bound
+  //   ActionAttemptOutcome) / error_class (enum-literal-only:
+  //   EXECUTOR_TIMEOUT / POLICY_DRIFT / ENVELOPE_INVALID / PERMISSION_DENIED /
+  //   INTERNAL_ERROR; NEVER free-form text) / route + method (for
+  //   ACTION_POLICY_UPDATE admin events) / grant_id (when the path is
+  //   break-glass-delegated per ADR-0050 §Amendment 1 +
+  //   DUAL_CONTROL_BREAK_GLASS_DELEGATED precedent).
+  //
+  // FORBIDDEN audit-details per ADR-0057 §10 (the no-leak guard at
+  // tests/unit/no-leak-guard.test.ts already enforces these as object
+  // property keys in routes + middleware + security + safe-projection mappers):
+  //   raw payload_summary body text / full payload_redacted JSON / raw
+  //   external API responses / raw HTTP headers / secrets / credentials /
+  //   API keys / capsule content (payload_summary / payload_content /
+  //   storage_location / content_hash) / embeddings / vectors /
+  //   per-dimension stats / candidate-pool identities / candidate-pool size /
+  //   full policy envelope JSON / raw error text / stack traces / break-glass
+  //   justification text (grant_id only).
+  | "ACTION_PROPOSED"
+  | "ACTION_APPROVED"
+  | "ACTION_REJECTED"
+  | "ACTION_SCHEDULED"
+  | "ACTION_STARTED"
+  | "ACTION_SUCCEEDED"
+  | "ACTION_FAILED"
+  | "ACTION_CANCELLED"
+  | "ACTION_EXPIRED"
+  | "ACTION_POLICY_UPDATE";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -232,6 +293,22 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "BREAK_GLASS_USED",
   "BREAK_GLASS_EXPIRED",
   "BREAK_GLASS_REVIEWED",
+  // ADR-0057 §10 Autonomous Execution Core (Section 2). 10 NEW append-only
+  // literals. DEFINED here only; emission is forward-substrate per ADR-0057
+  // §16 step 4-7 (action.service.ts + executor + scheduler + ORG_ACTION_
+  // POLICY_UPDATE binding land in later QLOCKs). Append-only per ADR-0042
+  // §Q-γ.1. The SAFE allowlist + FORBIDDEN list for per-event details are
+  // documented at the union-type extension above.
+  "ACTION_PROPOSED",
+  "ACTION_APPROVED",
+  "ACTION_REJECTED",
+  "ACTION_SCHEDULED",
+  "ACTION_STARTED",
+  "ACTION_SUCCEEDED",
+  "ACTION_FAILED",
+  "ACTION_CANCELLED",
+  "ACTION_EXPIRED",
+  "ACTION_POLICY_UPDATE",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
