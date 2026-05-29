@@ -360,9 +360,23 @@ describe("validatePayloadForActionType dispatcher", () => {
     const r = validatePayloadForActionType("RECORD_CAPSULE", VALID_BASE);
     expect(r.ok).toBe(true);
   });
-  it("SEND_INTERNAL_NOTIFICATION -> stub accepts any object", () => {
+  it("SEND_INTERNAL_NOTIFICATION -> real validator rejects shape-only payload (Wave 11)", () => {
+    // Wave 11 promoted SEND_INTERNAL_NOTIFICATION from stub validator
+    // to validateSendInternalNotificationPayload. Arbitrary shapes
+    // that worked under the stub now correctly fail.
     const r = validatePayloadForActionType("SEND_INTERNAL_NOTIFICATION", {
       to: "anyone",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.invalid_fields).toContain("recipient_entity_id");
+    }
+  });
+  it("SEND_INTERNAL_NOTIFICATION -> accepts a valid Wave 11 payload", () => {
+    const r = validatePayloadForActionType("SEND_INTERNAL_NOTIFICATION", {
+      recipient_entity_id: "11111111-1111-1111-8111-111111111111",
+      notification_class: "test",
+      body_summary: "test-body",
     });
     expect(r.ok).toBe(true);
   });
