@@ -31,6 +31,7 @@ import {
   listActionsForCaller,
   validateListActionsQuery,
 } from "../services/action/list.service.js";
+import { getActionAttemptForCaller } from "../services/action/attempt.service.js";
 
 // WHAT: Register the POST /api/v1/actions route on the Fastify app.
 // INPUT: A Fastify instance + the shared AuthService.
@@ -191,6 +192,38 @@ export async function registerActionsRoutes(
         return reply.code(result.httpStatus).send({
           ok: true,
           ...result.view,
+        });
+      }
+      const responseBody: Record<string, unknown> = {
+        ok: false,
+        code: result.code,
+      };
+      if (result.message !== undefined) responseBody.message = result.message;
+      return reply.code(result.httpStatus).send(responseBody);
+    },
+  );
+
+  // ADR-0057 §9 ActionAttempt detail route. Bearer + "read"-gated.
+  // Same authorization spine as the GET viewer (source self-scope
+  // OR can_admin_org-over-same-org). Returns the SAFE ActionAttempt
+  // view + the attempt's latest ActionResult (when present).
+  // Forbidden fields per ADR-0057 §10 are NEVER in the response.
+  app.get<{ Params: { id: string; attempt_id: string } }>(
+    "/api/v1/actions/:id/attempts/:attempt_id",
+    {
+      preHandler: requireAuth(authService, "read"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const result = await getActionAttemptForCaller(
+        callerId,
+        request.params.id,
+        request.params.attempt_id,
+      );
+      if (result.ok === true) {
+        return reply.code(result.httpStatus).send({
+          ok: true,
+          attempt: result.view,
         });
       }
       const responseBody: Record<string, unknown> = {

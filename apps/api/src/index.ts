@@ -728,6 +728,15 @@ export type {
   SafeActionDetailView,
 } from "./services/action/get.service.js";
 
+// ADR-0057 §9 ActionAttempt detail service — drilldown read surface
+// for an individual ActionAttempt + its latest ActionResult.
+// Same authorization spine as the GET viewer.
+export { getActionAttemptForCaller } from "./services/action/attempt.service.js";
+export type {
+  GetActionAttemptResult,
+  SafeActionAttemptView,
+} from "./services/action/attempt.service.js";
+
 // ADR-0057 §9 list service — self-scope by default; ?org_scope=true
 // requires can_admin_org. Standard pagination + optional filters.
 export {
