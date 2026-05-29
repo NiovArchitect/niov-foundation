@@ -9,14 +9,14 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-(`[ADR-0057-ATTEMPT-DETAIL-TIMEOUT-MS-PROJECTION]` wave-close —
-Wave 8 closes the Section 2 forensic-visibility loop end-to-end by
-surfacing `ActionAttempt.timeout_ms` on the per-attempt viewer).
+(Wave 9 — SEND_INTERNAL_NOTIFICATION RULE 21 pre-authorization
+research arc landed; Founder direction queued on §6
+product-clarity question).
 
 ## Current state
 
-- **Latest main HEAD:** `8fa065849ae3aab7fa055f0ba7460665c06248ec`
-- **Latest merged PR:** [#51](https://github.com/NiovArchitect/niov-foundation/pull/51) — Surface ActionAttempt.timeout_ms on attempt-detail viewer (2026-05-29).
+- **Latest main HEAD:** `f214e871860eac6f662b9975a26e8dd80a7d81c0`
+- **Latest merged PR:** [#52](https://github.com/NiovArchitect/niov-foundation/pull/52) — Wave-close docs refresh for ActionAttempt.timeout_ms attempt-detail surfacing (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
@@ -58,13 +58,13 @@ surfacing `ActionAttempt.timeout_ms` on the per-attempt viewer).
 
 ## Immediate next work queue
 
-> Wave 6 + Wave 7 + Wave 8 (PRs #47/49/51) closed the Section 2 forensic-visibility loop end-to-end (schema fields + operator write-path + audit + list projection + attempt-detail projection). Queue re-prioritized:
+> Wave 9 SEND_INTERNAL_NOTIFICATION RULE 21 pre-authorization research arc LANDED at [`research/2026-05-29-send-internal-notification-substrate-research.md`](research/2026-05-29-send-internal-notification-substrate-research.md). Queue re-prioritized:
 
-1. **SEND_INTERNAL_NOTIFICATION substrate research arc** (RULE 21; research-only docs slice). Would close the "2 of 3 real handlers" gap that has appeared on every status surface since PR #41; surfaces in-app vs email vs both product clarity question for Founder direction; substantive build needs Founder QLOCK after the research arc lands.
-2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR for Section 1 Wave 3 (recurring-correction → `IntelligencePattern` auto-write, stale-context warnings, drift-signal contract, proactive-suggestion contract). RULE 20-gated (Founder QLOCK needed). Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
-3. **GOVSEC.5 follow-on `requireAdminCapability` throttle.** Broader org-admin route-set throttle per ADR-0050's still-OPEN GOVSEC.5 scope.
-4. **`GET /api/v1/org/actions` explicit route** (substrate-coherent; `?org_scope=true` on the unified list already covers the same need).
-5. **ActionAttempt list-of-attempts route** — callers can query the DB via `Action.action_id`; route alias would unlock Control Tower attempt-list UX.
+1. **Founder direction on §6 product-clarity question** (in-app only vs email vs push vs Slack vs combinations). UNBLOCKS the SEND_INTERNAL_NOTIFICATION sub-phase 1 implementation wave. Research arc recommendation: option 1 (in-app only at sub-phase 1; provider-pluggable abstraction). RULE 20-gated.
+2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR for Section 1 Wave 3 (recurring-correction → `IntelligencePattern` auto-write, stale-context warnings, drift-signal contract, proactive-suggestion contract). RULE 20-gated. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
+3. **GOVSEC.5 follow-on `requireAdminCapability` throttle.** Broader org-admin route-set throttle per ADR-0050's still-OPEN GOVSEC.5 scope. RULE 20-gated.
+4. **`GET /api/v1/org/actions` explicit route** (substrate-coherent; `?org_scope=true` on the unified list already covers the same need; lowest leverage). Autonomous-safe.
+5. **ActionAttempt list-of-attempts route** — callers can query the DB via `Action.action_id`; route alias would unlock Control Tower attempt-list UX. Autonomous-safe.
 6. **Per-action `ActionPolicy` lookup cache** — ETS-style read-optimized cache forward-substrate per ADR-0036 / ADR-0039 precedent if hot-path contention surfaces; "measure first" per ADR-0016.
 
 ## Critical Do-NOT-claim list (global truths)
@@ -89,7 +89,7 @@ surfacing `ActionAttempt.timeout_ms` on the per-attempt viewer).
 
 ## Docs architecture rule (mandatory)
 
-5-tier hierarchy: tier 1 [`NEXT_ACTION.md`](NEXT_ACTION.md) → tier 2 this file → tier 3 [`current-build-state/XX-section.md`](current-build-state/) → tier 4 [`build-log/`](build-log/) → tier 5 [`architecture/decisions/`](architecture/decisions/).
+5-tier hierarchy: tier 1 [`NEXT_ACTION.md`](NEXT_ACTION.md) → tier 2 this file → tier 3 [`current-build-state/XX-section.md`](current-build-state/) → tier 4 [`build-log/`](build-log/) → tier 5 [`architecture/decisions/`](architecture/decisions/). Companion: [`research/`](research/) holds RULE 21 pre-authorization research arcs for future substrate-architectural pastes — research is not modification, so AI assistants land arcs autonomously; the substantive implementation wave that consumes an arc requires Founder QLOCK per RULE 20.
 
 Per `[FOUNDATION-VELOCITY-CORRECTION]`, docs refresh fires **once per completed wave**, not after every individual PR. Update **all** of:
 

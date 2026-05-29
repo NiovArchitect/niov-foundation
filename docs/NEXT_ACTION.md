@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `8fa065849ae3aab7fa055f0ba7460665c06248ec`
-- **Latest merged PR:** [#51](https://github.com/NiovArchitect/niov-foundation/pull/51) — Surface ActionAttempt.timeout_ms on attempt-detail viewer.
-- **Active branch / PR:** `refresh-docs-wave8-attempt-detail-timeout-ms` (this wave-close docs refresh).
+- **Main HEAD:** `f214e871860eac6f662b9975a26e8dd80a7d81c0`
+- **Latest merged PR:** [#52](https://github.com/NiovArchitect/niov-foundation/pull/52) — Wave-close docs refresh for ActionAttempt.timeout_ms attempt-detail surfacing.
+- **Active branch / PR:** `wave9-send-internal-notification-research-arc` (Wave 9 — RULE 21 pre-authorization research arc; no code; no schema; no ADR).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **2 of 3** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT live; SEND_INTERNAL_NOTIFICATION remains stub — no backing notification substrate).
@@ -25,20 +25,24 @@
 
 After this docs refresh merges:
 
-→ Start **Wave 9** — pick between:
+**Wave 9 ARC LANDED — research-only docs slice** at [`research/2026-05-29-send-internal-notification-substrate-research.md`](research/2026-05-29-send-internal-notification-substrate-research.md). Per RULE 21 pre-authorization discipline. **Founder QLOCK required next** — §6 product-clarity question (in-app vs email vs push vs Slack vs SMS) is the unblock for the substantive sub-phase 1 implementation. The arc inventoried substrate-state ground truth (only `DeviceToken` + `IntegrationCredential` schemas exist; ZERO TS-side consumer code; no email/push/Slack/SMS backend; no in-app `Notification` model); enumerated 5 delivery backends + 4 routing axes + 3 opt-out granularities; recommended in-app default with provider-pluggable abstraction (EmbeddingProvider precedent per ADR-0043 G3.4); pre-queued RULE 0 sovereignty disclosures; pre-queued an NEW ADR draft + 4-6-PR sub-phase 1 plan for the post-QLOCK implementation wave.
 
-  1. **SEND_INTERNAL_NOTIFICATION substrate research arc** — would unlock the third + final real ActionType handler. No backing notification service in repo. RULE 21 research arc required first. Product clarity question (in-app vs email vs both) would surface for Founder direction. Research-only slice is autonomous-safe (just `docs/research/` + queued forward-substrate); substantive build needs Founder QLOCK.
-  2. **GOVSEC.5 follow-on `requireAdminCapability` throttle.** Broader org-admin route-set throttle per ADR-0050's still-OPEN GOVSEC.5 scope. Implementation slice; would likely need an ADR amendment (RULE 20-gated).
-  3. **Explicit `GET /api/v1/org/actions` route** — substrate-coherent alias; `?org_scope=true` on the unified list already covers the same need; lowest leverage.
-  4. **`ActionAttempt` list-of-attempts route** — callers can query the DB via `Action.action_id`; route alias would unlock Control Tower attempt-list UX. No architectural boundary.
+→ Next steps after Wave 9 arc lands:
 
-  Recommendation per protocol: **Wave 9 = SEND_INTERNAL_NOTIFICATION research arc (research-only)**. Highest leverage among the autonomous-safe slices: closes the "2 of 3 real handlers" gap that has appeared on every status surface since PR #41. Research-only docs slice (`docs/research/2026-05-29-send-internal-notification-substrate-research.md` per RULE 21 precedent at ADR-0048 §Context) — no code, no schema, no ADR. Output: in-app vs email vs both decision-matrix + repo-search inventory of existing notification primitives + cost projections + queued forward-substrate items for the implementation wave. Implementation wave needs Founder QLOCK + Founder direction on product clarity question.
+  1. **Founder direction on §6 product-clarity question** — required before any code authorizes. Recommendation: option 1 (in-app only at sub-phase 1) per the arc.
+  2. **Subsequent autonomous Wave 10 candidates** (post-Wave-9-arc, pre-Founder-direction):
+     - **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated (ADR-0050 amendment needed).
+     - **Explicit `GET /api/v1/org/actions` route** — substrate-coherent alias; lowest leverage.
+     - **ActionAttempt list-of-attempts route** — substrate-coherent; would unlock Control Tower attempt-list UX.
+
+  Recommendation per protocol: **stand by for Founder direction on §6** OR continue with one of the lower-leverage substrate-coherent slices above. The autonomous protocol should not draft + land the SEND_INTERNAL_NOTIFICATION implementation ADR without Founder direction on the product-clarity question.
 
 **Wave 6 / 7 / 8 summary (Section 2 forensic-visibility loop CLOSED end-to-end):**
 
 - **Wave 6 (PR #47):** LOCK-GAP-1 + LOCK-GAP-2 schema promotion to `ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override` + `ActionAttempt.timeout_ms`. NEW resolver helpers; executor adds per-action policy point-lookup. Tier-4 build-log at [`build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md`](build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md).
 - **Wave 7 (PR #49):** Admin write-path closure. `PUT /api/v1/org/action-policies` allowlist + typed validator; GET list response projects both override columns; audit boolean `_set` flags (NEVER numeric values). Closed RULE 13 drift surfaced post-PR-48.
-- **Wave 8 (just landed; PR #51):** Attempt-detail viewer projection. `SafeActionAttemptView.timeout_ms` surfaces the resolved value on `GET /api/v1/actions/:id/attempts/:attempt_id`. 2 NEW integration tests (executor-option-wins case + policy-override-wins-when-option-omitted case). Closes the last forensic-visibility surface.
+- **Wave 8 (PR #51):** Attempt-detail viewer projection. `SafeActionAttemptView.timeout_ms` surfaces the resolved value on `GET /api/v1/actions/:id/attempts/:attempt_id`. 2 NEW integration tests. Closed the last forensic-visibility surface.
+- **Wave 9 (this slice):** SEND_INTERNAL_NOTIFICATION RULE 21 research arc landed; product-clarity question queued for Founder.
 
 ## Current stop conditions
 
