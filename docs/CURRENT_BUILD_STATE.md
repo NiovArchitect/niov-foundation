@@ -9,13 +9,14 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-(`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`
-wave-close — Wave 6 LOCK-GAP-1 + LOCK-GAP-2 schema promotion).
+(`[ADR-0057-ACTIONPOLICY-OVERRIDE-ADMIN-WRITE-PATH]` wave-close —
+Wave 7 closes the RULE 13 drift surfaced post-PR-48 by adding the
+admin write-path for the PR #47 schema fields).
 
 ## Current state
 
-- **Latest main HEAD:** `ae012896ee80748f8d06417369fe7635d6bea5d9`
-- **Latest merged PR:** [#47](https://github.com/NiovArchitect/niov-foundation/pull/47) — Add ADR-0057 ActionPolicy retry_budget + ActionAttempt timeout_ms schema fields (2026-05-29).
+- **Latest main HEAD:** `28b2cd82d930ceffe53ae8bed89b494011633664`
+- **Latest merged PR:** [#49](https://github.com/NiovArchitect/niov-foundation/pull/49) — Add ADR-0057 ActionPolicy override admin write-path (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
@@ -30,7 +31,7 @@ wave-close — Wave 6 LOCK-GAP-1 + LOCK-GAP-2 schema promotion).
 | # | Section | Status | Detail |
 |---|---|---|---|
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; **Otzar Wave 2A/B/C all LIVE on main** (`3bb773d` / `1ffa01d` / `c56bd57`, 2026-05-27/28). Wave 3 drift detection remains forward-substrate (no ADR yet). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
-| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT real handlers LIVE** (2 of 3); SEND_INTERNAL_NOTIFICATION remains stub (no backing substrate); AbortController plumbing LIVE (no active consumers yet); **LOCK-GAP-1 + LOCK-GAP-2 CLOSED at PR #47** — `ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override` schema fields operator-tunable, resolved timeout persists onto `ActionAttempt.timeout_ms`. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
+| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT real handlers LIVE** (2 of 3); SEND_INTERNAL_NOTIFICATION remains stub (no backing substrate); AbortController plumbing LIVE (no active consumers yet); **LOCK-GAP-1 + LOCK-GAP-2 CLOSED at PR #47** — `ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override` schema fields, resolved timeout persists onto `ActionAttempt.timeout_ms`; **admin write-path for both override fields LIVE at PR #49** (typed validator + audit boolean `_set` flags + GET list projection). | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
@@ -44,6 +45,8 @@ wave-close — Wave 6 LOCK-GAP-1 + LOCK-GAP-2 schema promotion).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#49](https://github.com/NiovArchitect/niov-foundation/pull/49) | `28b2cd8` | Add ADR-0057 ActionPolicy override admin write-path |
+| [#48](https://github.com/NiovArchitect/niov-foundation/pull/48) | `3a45b70` | Wave-close docs refresh for #47 |
 | [#47](https://github.com/NiovArchitect/niov-foundation/pull/47) | `ae01289` | Add ADR-0057 ActionPolicy retry_budget + ActionAttempt timeout_ms schema fields |
 | [#46](https://github.com/NiovArchitect/niov-foundation/pull/46) | `6c95bee` | RULE 13 substrate-honest docs reconciliation for Section 1 |
 | [#45](https://github.com/NiovArchitect/niov-foundation/pull/45) | `c186bb2` | Wave-close docs refresh for #41 + public-repo posture |
@@ -52,19 +55,17 @@ wave-close — Wave 6 LOCK-GAP-1 + LOCK-GAP-2 schema promotion).
 | [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) | `fe8c095` | Add ADR-0057 ActionAttempt detail route |
 | [#38](https://github.com/NiovArchitect/niov-foundation/pull/38) | `58a476b` | Wave-close docs refresh for #37 |
 | [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) | `4e3805d` | Add ADR-0057 RUNNING-cancel break-glass capability |
-| [#36](https://github.com/NiovArchitect/niov-foundation/pull/36) | `952d60c` | Wave-close docs refresh for #35 |
-| [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) | `4ef4ed4` | Add ADR-0057 RECORD_CAPSULE real handler capability |
 
 ## Immediate next work queue
 
-> Wave 6 LOCK-GAP-1 + LOCK-GAP-2 schema promotion CLOSED at PR #47. Queue re-prioritized:
+> Wave 6 (PR #47) + Wave 7 (PR #49) LOCK-GAP-1/2 schema promotion + admin write-path CLOSED. Queue re-prioritized:
 
-1. **Wave 3 drift detection ADR** — Founder-authorized ADR for Section 1 Wave 3 (recurring-correction → `IntelligencePattern` auto-write, stale-context warnings, drift-signal contract, proactive-suggestion contract). Required before any Wave 3 code lands. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
-2. **SEND_INTERNAL_NOTIFICATION substrate research arc** (RULE 21; would unlock the 3rd real ActionType handler — currently 2 of 3 LIVE).
-3. **GOVSEC.5 follow-on `requireAdminCapability` throttle.**
-4. **`GET /api/v1/org/actions` explicit route** (substrate-coherent; `?org_scope=true` on the unified list already covers the same need).
-5. **`PUT /api/v1/org/action-policies` typed-validator update for PR #47 override fields** — the route accepts the new columns through Prisma's authoritative row shape; a typed body validator would make the envelope explicit for Control Tower UX.
-6. **Per-action `ActionPolicy` lookup cache** — ETS-style read-optimized cache forward-substrate per ADR-0036 / ADR-0039 precedent if hot-path contention surfaces.
+1. **`ActionAttempt.timeout_ms` surfaced on `GET /api/v1/actions/:id/attempts/:attempt_id`** — substrate-coherent extension; closes the forensic-visibility loop from Wave 6/7 (schema-tier value exists + operator-tunable + audit-flag visible + GET list visible — but the per-attempt viewer doesn't project it yet). Same authorization spine; no new ADR; no schema.
+2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR for Section 1 Wave 3 (recurring-correction → `IntelligencePattern` auto-write, stale-context warnings, drift-signal contract, proactive-suggestion contract). Required before any Wave 3 code lands. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
+3. **SEND_INTERNAL_NOTIFICATION substrate research arc** (RULE 21; would unlock the 3rd real ActionType handler — currently 2 of 3 LIVE).
+4. **GOVSEC.5 follow-on `requireAdminCapability` throttle.**
+5. **`GET /api/v1/org/actions` explicit route** (substrate-coherent; `?org_scope=true` on the unified list already covers the same need).
+6. **Per-action `ActionPolicy` lookup cache** — ETS-style read-optimized cache forward-substrate per ADR-0036 / ADR-0039 precedent if hot-path contention surfaces; "measure first" per ADR-0016.
 
 ## Critical Do-NOT-claim list (global truths)
 
