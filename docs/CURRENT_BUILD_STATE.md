@@ -6,7 +6,56 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-29
-([ADR-0057-ORG-ACTION-POLICY-UPDATE-LANDED] minimum-touch
+([ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-LANDED]
+minimum-touch refresh — **ADR-0057 §9 create-time substrate
+is now LIVE on main** — the first end-to-end runtime trace of
+Section 2 is now live: `request → evaluateActionPolicy →
+Action row → EscalationRequest pairing when required →
+ACTION_* audit chain → safe-projected response`. PR #24
+squash commit `487fce1ee435ff32107cc11f09498dd81fa5184e`
+(merged 2026-05-29T08:19:40Z) lands `POST /api/v1/actions`,
+`apps/api/src/services/action/action.service.ts` (the
+create-time service), `apps/api/src/services/action/views.ts`
+(safe projection mapper), and the first three runtime
+emitters of `ACTION_PROPOSED` / `ACTION_APPROVED` /
+`ACTION_REJECTED` audit literals. **Live `ACTION_*` emitters
+are now 4 of 10**: `ACTION_POLICY_UPDATE` (PR #22) +
+`ACTION_PROPOSED` + `ACTION_APPROVED` + `ACTION_REJECTED`
+(PR #24). The remaining 6 literals — `ACTION_SCHEDULED`,
+`ACTION_STARTED`, `ACTION_SUCCEEDED`, `ACTION_FAILED`,
+`ACTION_CANCELLED`, `ACTION_EXPIRED` — remain vocabulary
+only. Eight files merged in PR #24:
+`apps/api/src/services/action/action.service.ts` (NEW;
++772), `tests/integration/actions-create.test.ts` (NEW;
++672; 12/12 passing), `tests/unit/action-create.test.ts`
+(NEW; +283; 23/23 passing), `apps/api/src/services/action/views.ts`
+(NEW; +90), `apps/api/src/routes/actions.routes.ts` (NEW;
++76), `apps/api/src/services/governance/escalation.service.ts`
+(MOD; +56 / -30; Q4 backward-compatible optional-tx refactor),
+`apps/api/src/index.ts` (MOD; +19; barrel re-exports), and
+`apps/api/src/server.ts` (MOD; +4; route registration).
+**Verification:** CI run `26626258955` 4/4 green (Typecheck
+39s + Unit 1m31s + Integration 1m40s + Elixir 1m56s);
+TypeScript baseline preserved at exactly 4 canonical
+residuals. **RULE 13 substrate-honest disclosures preserved
+at the docs tier:** (a) synthetic internal PrivilegedEndpoint
+constructed at service tier for create-time dual-control
+(NOT added to live `PRIVILEGED_ENDPOINTS` registry);
+(b) `createEscalationForCaller` optional-tx refactor is
+backward-compatible (19/19 `dual-control-binding-orgs`
+regression preserved); (c) `risk_tier` is constant-derived
+per initial ActionType (`RECORD_CAPSULE`=LOW,
+`SEND_INTERNAL_NOTIFICATION`=LOW,
+`PROPOSE_PERMISSION_GRANT`=MEDIUM). **Runtime Section 2 is
+now PARTIALLY live at create-time only** — `POST
+/api/v1/actions` exists, Action rows can be created,
+EscalationRequest rows can be paired for dual-control, but
+the executor, worker, scheduler, and lifecycle execution
+beyond creation/negotiation do NOT exist. Connectors / MCP
+and Control Tower UX remain forward-substrate. No production
+migrations; no `prisma generate` run; no `db:push:test` run
+in PR #24 slice. Prior same-date refresh
+`[ADR-0057-ORG-ACTION-POLICY-UPDATE-LANDED]` minimum-touch
 refresh — **ADR-0057 §7 + §10 are now PARTIAL — Operation E
 `ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding LIVE
 on main + `ACTION_POLICY_UPDATE` audit emission LIVE on main
@@ -210,6 +259,477 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §9 create-time substrate is LIVE
+on main.** PR #24 squash commit
+`487fce1ee435ff32107cc11f09498dd81fa5184e` (merged
+2026-05-29T08:19:40Z) landed the **first end-to-end runtime
+trace of Section 2** — `POST /api/v1/actions` accepts a
+request, builds the policy envelope, calls the pure evaluator
+(PR #20), creates an Action row + paired EscalationRequest
+(for REQUIRE_DUAL_CONTROL paths) in one transaction, and
+emits the appropriate `ACTION_*` audit literal chain. **Live
+`ACTION_*` emitters are now 4 of 10**: `ACTION_POLICY_UPDATE`
+(PR #22) + `ACTION_PROPOSED` + `ACTION_APPROVED` +
+`ACTION_REJECTED` (PR #24). The substrate is now:
+schema (PR #18) + audit-literal vocabulary (PR #18) + pure
+evaluator (PR #20) + ActionPolicy admin tier + first
+`ACTION_*` emitter (PR #22) + create-time runtime + three
+NEW `ACTION_*` emitters (PR #24). **Runtime Section 2 is
+partially live at create-time only.** The executor, worker,
+scheduler, and lifecycle execution beyond
+creation/negotiation do NOT exist. This entry supersedes the
+forward-substrate framing of `[ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-EXECUTE-VERIFY-AUTH]`
+as "Option E — the largest single substrate landing in the
+Section 2 arc so far" recorded in the prior
+`[ADR-0057-ORG-ACTION-POLICY-UPDATE-LANDED]` refresh below;
+that prior framing was substrate-honest at HEAD `7f30f5b`
+and is preserved verbatim for historical context per Rule 0.
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `487fce1`
+
+Per Rule 0 reading of the merged commit, PR #24 added or
+modified exactly eight files (`8 files changed, 1972
+insertions(+), 30 deletions(-)`):
+
+- **`apps/api/src/services/action/action.service.ts`
+  (NEW; +772)** — the create-time service. Exports
+  `createActionForCaller`, `buildPolicyEnvelope`,
+  `computePolicyEnvelopeHash`, `deriveRiskTier`,
+  `validateCreateActionBody`. Wires the pure evaluator
+  (PR #20), the Action schema (PR #18), the ActionPolicy
+  admin substrate (PR #22), and the EscalationRequest /
+  dual-control substrate (existing governance) into one
+  atomic create-time boundary. All transactional work
+  runs inside a single `prisma.$transaction` per branch.
+- **`tests/integration/actions-create.test.ts` (NEW; +672)** —
+  12 integration tests against real Postgres covering
+  auth (401), body validation (422 UNKNOWN_FIELD /
+  INVALID_FIELD), AUTO_APPROVE happy path (Action.status
+  APPROVED + ACTION_PROPOSED + ACTION_APPROVED emit),
+  REQUIRE_DUAL_CONTROL with eligible target (Action.status
+  PROPOSED + EscalationRequest paired + ACTION_PROPOSED),
+  REQUIRE_DUAL_CONTROL with no eligible target (Action.status
+  REJECTED + ACTION_REJECTED + 503), FORBIDDEN OBSERVE_ONLY
+  (Action.status REJECTED + ACTION_REJECTED + 403),
+  idempotency replay (same key returns same action_id, no
+  duplicate audit), 409 ACTION_IDEMPOTENCY_CONFLICT across
+  callers, cross-org ActionPolicy isolation, and audit
+  details no-leak (9 forbidden tokens asserted absent).
+- **`tests/unit/action-create.test.ts` (NEW; +283)** —
+  23 pure-function unit tests covering risk-tier derivation
+  (Q1 LOCK constants), canonical-JSON SHA-256 hash stability
+  (Q5 LOCK), projectActionView safe-projection (10 forbidden
+  tokens stripped), and full body-validation matrix.
+- **`apps/api/src/services/action/views.ts` (NEW; +90)** —
+  the safe projection mapper. `projectActionView(action,
+  decision_reason?)` returns `SafeActionView` with action_id,
+  status, action_type, risk_tier, requires_approval (derived
+  from status), optional escalation_id + decision_reason,
+  and timestamps ONLY.
+- **`apps/api/src/routes/actions.routes.ts` (NEW; +76)** —
+  Fastify route handler for `POST /api/v1/actions`. Bearer +
+  `write`-gated. NO dual-control preHandler (evaluator
+  decides). Maps service results to safe HTTP responses.
+- **`apps/api/src/services/governance/escalation.service.ts`
+  (MOD; +56 / -30)** — Q4 backward-compatible refactor:
+  `createEscalationForCaller(callerEntityId, input, tx?:
+  Prisma.TransactionClient)`. Single-arg call sites continue
+  to start their own transaction internally; new two-arg
+  form lets the Action service compose the EscalationRequest
+  write inside the outer Action transaction. Proven
+  backward-compatible by 19/19 `dual-control-binding-orgs`
+  regression preserved.
+- **`apps/api/src/index.ts` (MOD; +19)** — barrel re-exports
+  for the new service, view, and helpers so the test tier
+  can import from `@niov/api`.
+- **`apps/api/src/server.ts` (MOD; +4)** — registers
+  `registerActionsRoutes(app, authService)` in the boot
+  sequence at L446.
+
+### Route now live
+
+**`POST /api/v1/actions`** — bearer + `"write"`-gated
+preHandler via `requireAuth(authService, "write")`. **NO
+dual-control preHandler.** The evaluator decides whether
+dual-control pairing is required; if so, the service creates
+the EscalationRequest in-transaction with the Action row.
+
+### Service shape
+
+```ts
+createActionForCaller(callerEntityId: string, input: CreateActionInput): Promise<CreateActionResult>
+buildPolicyEnvelope(callerEntityId, orgEntityId, action_type, risk_tier): Promise<PolicyEnvelope>
+computePolicyEnvelopeHash(envelope: PolicyEnvelope): string  // SHA-256 alphabetical-canonical JSON
+deriveRiskTier(action_type): ActionRiskTier  // Q1 LOCK constant map
+validateCreateActionBody(body): { ok: true, normalized } | { ok: false, code, ... }
+projectActionView(action, decision_reason?): SafeActionView
+```
+
+`CreateActionResult` is a discriminated union with
+`httpStatus` literal types (`200 | 401 | 403 | 404 | 409 |
+422 | 503`) for compile-time route mapping.
+
+### Request / response contract
+
+**Allowed body:** `action_type`, `target_entity_id?`,
+`idempotency_key`, `payload_summary`, `payload_redacted`.
+
+**Forbidden body:** `risk_tier`, `policy_envelope`, `status`,
+`source_entity_id`, `org_entity_id`, `escalation_id`,
+`created_at`, `updated_at`.
+
+**Response (200):** `{ ok: true, action: SafeActionView }`
+where `SafeActionView` carries `action_id, status,
+action_type, risk_tier, requires_approval, escalation_id?,
+decision_reason?, created_at, updated_at`. NO `payload_*`,
+NO `policy_envelope*`, NO routing internals.
+
+**Error envelopes:** 401 SESSION_INVALID, 403
+ACTION_FORBIDDEN, 404 NO_ORG_FOR_CALLER, 409
+ACTION_IDEMPOTENCY_CONFLICT, 422 UNKNOWN_FIELD /
+INVALID_FIELD / ENVELOPE_INVALID / POLICY_UNRESOLVED, 503
+DUAL_CONTROL_NO_APPROVER_AVAILABLE.
+
+### Action status mapping per evaluator decision
+
+| Evaluator decision | Action.status | Audits emitted | HTTP |
+|---|---|---|---|
+| AUTO_APPROVE | APPROVED | ACTION_PROPOSED + ACTION_APPROVED | 200 |
+| REQUIRE_DUAL_CONTROL + eligible | PROPOSED | ACTION_PROPOSED | 200 + escalation_id |
+| REQUIRE_DUAL_CONTROL + no target | REJECTED | ACTION_REJECTED (decision_reason=no-eligible-target) | 503 |
+| REQUIRE_BREAK_GLASS | PROPOSED | ACTION_PROPOSED (decision_reason=policy-require-break-glass) | 200 |
+| FORBIDDEN | REJECTED | ACTION_REJECTED | 403 |
+| ENVELOPE_INVALID / POLICY_UNRESOLVED | (no row) | (none) | 422 |
+
+### Audit metadata SAFE allowlist
+
+Every `ACTION_*` emission carries only:
+
+```ts
+{
+  event_type: "ACTION_PROPOSED" | "ACTION_APPROVED" | "ACTION_REJECTED",
+  outcome: "SUCCESS" | "DENIED",
+  actor_entity_id: callerId,
+  target_entity_id: <Q8 LOCK; null for NO_ELIGIBLE_TARGET>,
+  details: {
+    action_id, action_type, risk_tier, decision,
+    policy_envelope_hash,  // SHA-256, NEVER raw envelope
+    route: "/api/v1/actions", method: "POST",
+    escalation_id?, decision_reason?  // REASON_CODE enum-bound
+  }
+}
+```
+
+**Forbidden audit details** (proven absent at integration tier):
+raw `payload_summary` text, full `payload_redacted` JSON, raw
+policy envelope JSON, secrets / credentials / API keys,
+capsule content (`payload_summary`, `payload_content`,
+`storage_location`, `content_hash`), embeddings / vectors,
+candidate-pool identities or size, break-glass justification
+text, raw error text / stack traces.
+
+### Idempotency behavior
+
+- `Action.idempotency_key` is GLOBAL UNIQUE per schema.
+- Service queries by key FIRST. If found + same caller →
+  return existing view at 200, **no new audit emission**.
+- If found + different caller → 409 `ACTION_IDEMPOTENCY_CONFLICT`
+  (no row disclosure).
+- If not found → full create-time flow.
+
+### RULE 13 substrate-honest disclosures (preserved at the docs tier)
+
+Three substrate-state observations from PR #24:
+
+1. **Synthetic internal `PrivilegedEndpoint` for create-time
+   dual-control.** The service constructs a `PrivilegedEndpoint`
+   at call site for `resolveDualControlTarget` only — `{ method:
+   "POST", route: "/api/v1/actions", authTier: "can_admin_org",
+   actionDescriptor: { type: "ACTION_CREATE_<action_type>" } }`.
+   **NOT added to `PRIVILEGED_ENDPOINTS`** because the route is
+   NOT preHandler dual-control-gated; the evaluator decides
+   when to invoke dual-control. Registry still contains the 5
+   LIVE entries from PR #22.
+2. **`createEscalationForCaller` optional-tx refactor is
+   backward-compatible.** Added optional third parameter
+   `tx?: Prisma.TransactionClient`. Single-arg call sites
+   (negotiate.service.ts gate-fail + dual-control middleware
+   + admin routes) continue to start their own transaction
+   internally. Two-arg form lets the Action service compose
+   inside the outer transaction. **19/19
+   `dual-control-binding-orgs` regression preserved** — proves
+   backward-compatibility at the integration tier.
+3. **`risk_tier` is constant-derived per initial ActionType.**
+   `RECORD_CAPSULE` = `LOW`, `SEND_INTERNAL_NOTIFICATION` =
+   `LOW`, `PROPOSE_PERMISSION_GRANT` = `MEDIUM`. Caller does
+   NOT submit risk_tier. Forward-substrate note at
+   `action.service.ts:87`: a future per-action-type
+   payload-shape resolver may take over when additional
+   ActionTypes land.
+
+### Verification
+
+**CI verification at PR #24:** CI run `26626258955` —
+all 4 jobs **PASS**:
+
+| Job | Result | Duration |
+|---|---|---|
+| Typecheck (strict 4-error baseline) | pass | 39s |
+| Unit tier (371 tests) | pass | 1m31s |
+| Integration tier (111 tests + 1 skipped) | pass | 1m40s |
+| Elixir tier (compile + test) | pass | 1m56s |
+
+The Unit + Integration tier passes confirm 23 NEW
+action-create unit tests + 12 NEW actions-create
+integration tests + 19/19 `dual-control-binding-orgs`
+regression preserved against the CI test container.
+
+### TypeScript baseline (preserved)
+
+The accepted TypeScript baseline remains **exactly 4
+canonical errors**, byte-identical to the prior refresh:
+
+1. `apps/api/src/server.ts:299` — TS2322 rateLimits index-signature
+2. `apps/api/src/services/cosmp/write.service.ts:548` — TS2339 ValidateFailure.entity_id
+3. `apps/api/src/services/monetization/monetization.service.ts:30` — TS2740 PRICING_TABLE deliberate-blocker
+4. `packages/database/src/queries/capsule.ts:242` — TS2322 CapsuleMetadata shape drift
+
+### What remains NOT live after this refresh
+
+Section 2 Autonomous Execution Core implementation is now
+**PARTIALLY runtime-live at create-time only**. The substrate
+is: schema declarations (PR #18) + audit-literal vocabulary
+(PR #18) + pure decision oracle (PR #20) + org ActionPolicy
+admin tier + first ACTION_* emitter (PR #22) + create-time
+runtime + 3 NEW ACTION_* emitters (PR #24).
+
+The lifecycle execution beyond creation/negotiation does NOT exist:
+
+- **Autonomous Execution Core is PARTIALLY runtime-live at
+  create-time only.** Lifecycle execution NOT live.
+- **Executor still does NOT exist.** No
+  `apps/api/src/services/action/executor.ts`. No
+  `setInterval`-driven worker. No `FOR UPDATE SKIP LOCKED`
+  polling.
+- **Worker still does NOT exist.** No in-process worker
+  identity, no broker integration.
+- **Scheduler still does NOT exist.** No `APPROVED →
+  SCHEDULED` transition.
+- **Connectors / MCP still NOT live.** Per ADR-0057 §17,
+  deferred to ADR-0058 + Section 4.
+- **Control Tower action UX still NOT live.** Per ADR-0057
+  §12, deferred.
+- **Lifecycle execution beyond creation/negotiation is NOT
+  live.** `ActionAttempt` and `ActionResult` rows are NOT
+  created by runtime (Action create-time alone does not
+  create attempts or results).
+- **Remaining 6 `ACTION_*` literals remain vocabulary only**:
+  `ACTION_SCHEDULED`, `ACTION_STARTED`, `ACTION_SUCCEEDED`,
+  `ACTION_FAILED`, `ACTION_CANCELLED`, `ACTION_EXPIRED`.
+- **No production migrations were applied.** PR #24
+  consumed schema substrate already on main from PR #18.
+- **Prisma generate was NOT run in PR #24.** Typed accessors
+  used by the service were generated by Option A's local
+  enablement; CI regenerates at job start.
+- **`db:push:test` was NOT run in PR #24.** CI test
+  container creates the schema at job start per established
+  pattern.
+- **TypeScript does NOT have zero errors.** Baseline remains
+  4 canonical residuals.
+- **All 10 production sections are NOT complete.** Only
+  Section 1 + CI-guard pre-arm + Section 2 partial
+  (schema + vocabulary + pure evaluator + admin tier +
+  4 of 10 `ACTION_*` emitters + create-time runtime).
+
+### Founder Directive (preserved)
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch.**
+
+The 10 required production sections remain required. None
+is optional. None is "later."
+
+1. **Employee Intelligence Core**
+2. **Autonomous Execution Core** — schema + vocabulary +
+   evaluator + admin tier + create-time runtime + 4 of 10
+   `ACTION_*` emitters landed (PRs #18 + #20 + #22 + #24);
+   executor + worker + scheduler runtime forward-substrate.
+3. **Hives / Team Intelligence**
+4. **MCP / Connectors**
+5. **Agent Playground**
+6. **Enterprise Analytics**
+7. **Full Audit Viewer**
+8. **Billing / Entitlements**
+9. **Admin / Governance Control Tower**
+10. **Deployment / Security / Go-Live Operations**
+
+### Forward product architecture: voice-first / ambient / wearable directive
+
+**Founder directive recorded at this refresh as forward
+product architecture context. NOT implemented in any backend
+slice; the architectural path is preserved by the governed
+Action runtime that landed in PR #24.**
+
+- **Otzar is voice-first, low-click, ambient,
+  desktop/laptop edge-native, and wearable-ready.**
+- **Desktop/laptop should use ambient screen-edge
+  confirmations, risks, approvals, blockers, and next
+  actions** so users stay inside their daily tools
+  instead of being pulled into another dashboard.
+- **Sesame-style voice should map to the governed Action
+  runtime** and must NEVER bypass policy, scoped
+  permissions, audit, dual-control, or approvals.
+- **Future lens UX should feel like Otzar moved from the
+  edge of the screen to the edge of vision.** The
+  desktop/laptop ambient screen-edge model is the training
+  ground for the future wearable/lens experience.
+- **Otzar Comm / voice-first interaction is strategically
+  important**, but must land through governed Action
+  runtime and scoped enterprise policy.
+- The governed Action substrate landed in PR #24
+  (evaluator → ActionPolicy → Action.create with
+  idempotency + dual-control pairing + audit chain) is
+  exactly the seam future voice / ambient / lens UX must
+  consume — never bypass.
+
+**Strategic product line to preserve:**
+
+- **Voice is the interface.**
+- **COSM/governance is the law.**
+- **Otzar is the agentic enterprise brain.**
+- **Actions are the body.**
+- **The ambient edge is the daily surface.**
+
+### Competitive context — Perplexity Computer / Comet
+
+**Recorded at this refresh as a competitive forcing function,
+NOT a feature directive.**
+
+Perplexity Computer / Comet-style agents target local files,
+installed apps, native apps, web tools, connectors, personal
+context, and voice. That overlaps with the surface area
+Otzar must eventually support — **but those capabilities are
+becoming table stakes**.
+
+**Otzar's moat is not generic browser automation or personal
+computer-use assistance.** Otzar must be stronger through:
+
+- governed enterprise autonomy
+- scoped memory (DMW / Memory Capsules)
+- Action runtime + ActionPolicy + dual-control
+- role hierarchy / org membership
+- audit (append-only chain per ADR-0002)
+- voice-first interaction
+- ambient edge UX (desktop/laptop screen-edge → wearable
+  lens edge-of-vision)
+- team / hive intelligence (Section 3)
+- safe for teams, not just individuals
+- enterprise-context native
+
+**Perplexity may win "personal AI computer." Otzar must win
+"governed autonomous enterprise."**
+
+The competitive forcing function is recorded here so future
+product architecture decisions preserve the governed-enterprise
+moat. **No browser automation / native-app automation / MCP
+connectors / voice / Sesame / desktop edge UX / wearable lens
+UX implementation in any current backend slice.** Those
+surfaces require their own future authorized slices.
+
+### Forward-substrate next strategic option
+
+**Do NOT start executor / worker / scheduler / connectors /
+MCP / Control Tower until this docs refresh is merged.**
+After merge, the natural successor is:
+
+**`[ADR-0057-EXECUTOR-WORKER-SCHEDULER-RESEARCH-ARC-QLOCK]`**
+
+Purpose: read-only substrate-architectural research arc per
+RULE 21 BEFORE implementing the lifecycle execution layer.
+Research must cover:
+
+- ADR-0057 §1 lifecycle state transitions (PROPOSED →
+  APPROVED → SCHEDULED → RUNNING → SUCCEEDED / FAILED /
+  TIMED_OUT / CANCELLED)
+- transition legality + terminal-state immutability per
+  RULE 10 + ADR-0002
+- APPROVED → SCHEDULED transition triggering
+- worker pick semantics (`FOR UPDATE SKIP LOCKED`
+  Postgres-native row-level locking per ADR-0057 §8)
+- ActionAttempt creation per pick + monotonic
+  `attempt_number` per ADR-0057 §11
+- ActionResult creation on terminal attempt
+- `ACTION_SCHEDULED` / `ACTION_STARTED` / `ACTION_SUCCEEDED`
+  / `ACTION_FAILED` / `ACTION_CANCELLED` / `ACTION_EXPIRED`
+  audit emission with SAFE allowlisted details per
+  ADR-0057 §10
+- retry budgets (per-ActionPolicy)
+- worker identity tracking
+- dead-letter behavior
+- scheduler interval / execution loop strategy
+- `Action.expires_at` enforcement (terminalize to EXPIRED
+  if not picked up)
+- per-attempt timeout (terminalize ActionAttempt.outcome to
+  TIMED_OUT)
+- idempotency interaction with execution (retry creates new
+  ActionAttempt; Action stays RUNNING until terminal)
+- no-leak constraints (audit details + ActionResult.result_metadata)
+- local test strategy (containerized Postgres; test-tier
+  worker lifecycle)
+- CI safety (worker must shut down cleanly between test
+  cycles)
+- NO connector / MCP execution unless separately authorized
+- NO Control Tower UX unless separately authorized
+
+This research arc lands BEFORE implementation per RULE 21
+substrate-architectural pre-authorization discipline. After
+the research arc completes and produces an
+implementation-ready plan, a separate
+`[ADR-0057-EXECUTOR-WORKER-SCHEDULER-EXECUTE-VERIFY-AUTH]`
+QLOCK will fire.
+
+### Do NOT claim
+
+- "Autonomous Execution is fully live." — runtime is
+  PARTIALLY live at create-time only.
+- "AI Twins can fully execute actions." — create-time
+  works; execution lifecycle does NOT.
+- "Workflows run." — no workflow engine; no executor.
+- "Connectors / MCP are live." — deferred per ADR-0057
+  §17 + ADR-0058.
+- "Action queue executes." — Action rows can be created
+  (PROPOSED / APPROVED / REJECTED); no executor picks them
+  up.
+- "Action lifecycle emits end-to-end." — only 4 of 10
+  `ACTION_*` literals emit (`ACTION_POLICY_UPDATE`,
+  `_PROPOSED`, `_APPROVED`, `_REJECTED`); the 6 lifecycle
+  literals remain vocabulary only.
+- "Control Tower action UX exists." — deferred per
+  ADR-0057 §12.
+- "ActionAttempt / ActionResult rows are created by
+  runtime." — false; the Action service does NOT create
+  attempts or results (that's the executor's responsibility).
+- "Sesame / voice / desktop edge / wearable lens UX is
+  live." — false; recorded as forward product architecture
+  context only.
+- "Otzar supports browser automation / native-app
+  automation / MCP connectors." — false; deferred to
+  future authorized slices.
+- "Migrations were applied." — `prisma db push` was NOT
+  run during PR #24.
+- "Prisma client was regenerated in PR #24." — `prisma
+  generate` was NOT run.
+- "TypeScript has zero errors." — baseline remains 4
+  canonical residuals.
+- "All 10 production sections are complete." — only
+  Section 1 + CI-guard pre-arm + Section 2 partial.
 
 ## [ADR-0057-ORG-ACTION-POLICY-UPDATE-LANDED] 2026-05-29
 
