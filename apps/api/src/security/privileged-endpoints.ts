@@ -63,7 +63,15 @@ export type EscalationActionDescriptor = {
     // (preserves the Tension 3 Category (1) invariant per Q8 LOCKED
     // Option α canonical at substantive register substantively).
     | "REGULATOR_ACCESS_GRANT"
-    | "REGULATOR_ACCESS_REVOKE";
+    | "REGULATOR_ACCESS_REVOKE"
+    // ADR-0057 §7 Operation E — the first LIVE entry to exercise
+    // Class B (`can_admin_org` tier) at the integration tier. Binds
+    // to PUT /api/v1/org/action-policies — the org admin surface
+    // for upserting ActionPolicy rows that the future
+    // evaluateActionPolicy consumer at action.service.ts (forward-
+    // substrate per ADR-0057 §16 step 4-7) reads from. Privileged
+    // because it changes the autonomy contract.
+    | "ORG_ACTION_POLICY_UPDATE";
   metadata?: Record<string, unknown>;
 };
 
@@ -142,6 +150,40 @@ export const PRIVILEGED_ENDPOINTS: readonly PrivilegedEndpoint[] = [
     route: "/api/v1/regulator/access-revocations",
     authTier: "can_admin_niov",
     actionDescriptor: { type: "REGULATOR_ACCESS_REVOKE" },
+  },
+  {
+    // ADR-0057 §7 Operation E -- ORG_ACTION_POLICY_UPDATE: the org
+    // admin surface for upserting ActionPolicy rows (UNIQUE
+    // (org_entity_id, action_type, risk_tier) per ADR-0057 §2). This
+    // is the FIRST LIVE entry to exercise Class B at the integration
+    // tier (Class B target resolver picks the org-admin pool member;
+    // deterministic-lowest-`entity_id`; cross-org candidates excluded
+    // structurally per ADR-0026 Amendment 1 §6).
+    //
+    // RULE 13 substrate-state observation: this entry introduces the
+    // FIRST `can_admin_org`-tier LIVE registry entry. The prior
+    // tests/unit/privileged-endpoints.test.ts invariant
+    // "contains only can_admin_niov-gated entries (per Tension 3
+    // Category (1))" was authored before ADR-0057 §7 introduced
+    // Category (1) Class B expansion; that test is updated in this
+    // same slice to reflect the new tier mix.
+    //
+    // Fail-closed: single-admin org -> 503 ESCALATION_TARGET_NOT_FOUND
+    // + DUAL_CONTROL_NO_APPROVER_AVAILABLE marker per ADR-0026
+    // Amendment 1 §6 + GAP-C1 source-cannot-self-resolve guard at
+    // escalation.service.ts:397-407.
+    //
+    // Audit emission (forward-substrate via the route handler) is
+    // ACTION_POLICY_UPDATE per ADR-0057 §10 -- the
+    // safe-allowlisted details surface is: policy_id, action_type,
+    // risk_tier, default_decision, route, method, actor_entity_id.
+    // FORBIDDEN per ADR-0057 §10: raw request body, raw policy
+    // envelope JSON, secrets, capsule content, embeddings/vectors,
+    // candidate-pool data, break-glass justification text.
+    method: "PUT",
+    route: "/api/v1/org/action-policies",
+    authTier: "can_admin_org",
+    actionDescriptor: { type: "ORG_ACTION_POLICY_UPDATE" },
   },
 ] as const;
 
