@@ -1,10 +1,12 @@
 # NIOV Foundation — Current Build State
 
-**Status:** Master operational index. Lean by design. Detailed
-per-section history lives in
-[`docs/current-build-state/`](current-build-state/). Operational
-baton for the next session lives in
-[`docs/NEXT_ACTION.md`](NEXT_ACTION.md).
+**Status:** Tier 2 of the Foundation 5-tier docs hierarchy.
+Lean master index by design. Tier 1 operational baton:
+[`docs/NEXT_ACTION.md`](NEXT_ACTION.md). Tier 3 per-section
+detail: [`docs/current-build-state/`](current-build-state/).
+Tier 4 PR-specific build-log:
+[`docs/build-log/`](build-log/). Tier 5 ADRs:
+[`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
 ([FOUNDATION-CURRENT-BUILD-STATE-SPLIT-ARCHITECTURE-QLOCK]).
@@ -78,13 +80,20 @@ baton for the next session lives in
 
 ## Docs architecture rule (mandatory)
 
-- For every future implementation landing, update **both**:
-  1. [`docs/NEXT_ACTION.md`](NEXT_ACTION.md) — operational baton (≤ 150 lines).
-  2. The relevant `docs/current-build-state/XX-section.md` — detailed canonical record.
-- Update this master file ONLY for: latest main HEAD, latest merged PR, 10-section status row changes, next-work-queue re-order, global do-not-claim list changes.
-- **Do not** bloat this master with per-PR file-by-file detail. That belongs in the section file.
-- Master target size: ≤ 500 lines. Cap: 1,000 lines.
-- See [`current-build-state/README.md`](current-build-state/README.md) for the full refresh discipline.
+5-tier hierarchy: tier 1 [`NEXT_ACTION.md`](NEXT_ACTION.md) → tier 2 this file → tier 3 [`current-build-state/XX-section.md`](current-build-state/) → tier 4 [`build-log/`](build-log/) → tier 5 [`architecture/decisions/`](architecture/decisions/).
+
+Per `[FOUNDATION-VELOCITY-CORRECTION]`, docs refresh fires **once per completed wave**, not after every individual PR. Update **all** of:
+
+1. [`docs/NEXT_ACTION.md`](NEXT_ACTION.md) — operational baton (≤ 150 lines).
+2. The relevant `docs/current-build-state/XX-section.md` — detailed canonical record (don't starve of necessary detail).
+3. This master file ONLY for: latest main HEAD, latest merged PR, 10-section status row changes, next-work-queue re-order, global do-not-claim list changes.
+4. A tier-4 `docs/build-log/YYYY-MM-DD-pr-XX-slug.md` entry ONLY for **major** architectural landings (new substrate cluster, security/governance landing, schema change, cross-section integration, complex runtime behavior, RULE 21 paste). Routine routes skip this.
+
+**Do not** bloat this master with per-PR file-by-file detail. That belongs in the section file or the build-log entry.
+
+Master target size: ≤ 500 lines. Cap: 1,000 lines.
+
+Lean docs ≠ less rigorous docs. Move detail to the correct layer; do not delete clarity. See [`current-build-state/README.md`](current-build-state/README.md) + [`build-log/README.md`](build-log/README.md) for the full refresh discipline.
 
 ## Founder authorization
 

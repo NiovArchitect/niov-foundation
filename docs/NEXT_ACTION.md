@@ -1,8 +1,11 @@
 # NEXT ACTION — Operational Baton
 
-> Read this first in every new session. ≤ 150 lines by design.
-> Master index: [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
-> Section detail: [`current-build-state/`](current-build-state/).
+> Tier 1 of the Foundation 5-tier docs hierarchy. Read first in
+> every new session. ≤ 150 lines by design.
+> Tier 2 master index: [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
+> Tier 3 section detail: [`current-build-state/`](current-build-state/).
+> Tier 4 build-log: [`build-log/`](build-log/).
+> Tier 5 ADRs: [`architecture/decisions/`](architecture/decisions/).
 
 ## Where we are
 
@@ -99,8 +102,9 @@ For the cited ADR substrate:
 
 ## Update rule (mandatory)
 
-After every merge or docs refresh:
+After every wave-close (not per individual PR for routine work):
 1. Update this file's "Where we are" + "Exact next action" + "Recent merges" implications.
 2. Keep this file ≤ 150 lines.
-3. Update the relevant `current-build-state/XX-section.md` with detailed notes.
+3. Update the relevant `current-build-state/XX-section.md` with detailed notes (don't starve of necessary detail).
 4. Update `CURRENT_BUILD_STATE.md` only for: HEAD / latest-PR / status-row / queue-order / global-truth changes.
+5. For a **major** architectural landing (new substrate cluster, security/governance landing, schema change, cross-section integration, complex runtime behavior, RULE 21 paste), also write a tier-4 `build-log/YYYY-MM-DD-pr-XX-slug.md` entry. Routine routes do NOT need build-log entries.
