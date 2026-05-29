@@ -701,6 +701,15 @@ export type {
   CancelActionResult,
 } from "./services/action/cancel.service.js";
 
+// ADR-0057 §9 GET viewer service — safe Action detail view with
+// ActionAttempt count + last ActionResult.result_summary. Self-scope
+// OR can_admin_org-over-same-org authorization.
+export { getActionForCaller } from "./services/action/get.service.js";
+export type {
+  GetActionResult,
+  SafeActionDetailView,
+} from "./services/action/get.service.js";
+
 // ADR-0057 §1 lifecycle state machine — pure transition guards.
 // No DB, no I/O, no audit. Used by lifecycle.service.ts +
 // scheduler.ts + executor.ts to gate every status update.

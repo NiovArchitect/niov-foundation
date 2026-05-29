@@ -26,6 +26,7 @@ import {
   cancelActionForCaller,
   validateCancelActionBody,
 } from "../services/action/cancel.service.js";
+import { getActionForCaller } from "../services/action/get.service.js";
 
 // WHAT: Register the POST /api/v1/actions route on the Fastify app.
 // INPUT: A Fastify instance + the shared AuthService.
@@ -130,6 +131,34 @@ export async function registerActionsRoutes(
       };
       if (result.message !== undefined) responseBody.message = result.message;
       if (result.view !== undefined) responseBody.action = result.view;
+      return reply.code(result.httpStatus).send(responseBody);
+    },
+  );
+
+  // ADR-0057 §9 GET viewer route. Bearer + "read"-gated.
+  // Self-scope OR can_admin_org-over-same-org authorization at the
+  // service tier. Returns the safe Action view + ActionAttempt
+  // count + last ActionResult.result_summary. Forbidden fields per
+  // ADR-0057 §10 are NEVER in the response.
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/actions/:id",
+    {
+      preHandler: requireAuth(authService, "read"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const result = await getActionForCaller(callerId, request.params.id);
+      if (result.ok === true) {
+        return reply.code(result.httpStatus).send({
+          ok: true,
+          action: result.view,
+        });
+      }
+      const responseBody: Record<string, unknown> = {
+        ok: false,
+        code: result.code,
+      };
+      if (result.message !== undefined) responseBody.message = result.message;
       return reply.code(result.httpStatus).send(responseBody);
     },
   );
