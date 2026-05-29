@@ -18,9 +18,9 @@ Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-sub
 
 ## Current status (PARTIAL — production-grade)
 
-Substrate landed across 12 implementation PRs (#18, #20, #22,
-#24, #26, #28, #30, #32, #35, #37, #39, #41) + 8 docs-refresh
-PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40). The
+Substrate landed across 13 implementation PRs (#18, #20, #22,
+#24, #26, #28, #30, #32, #35, #37, #39, #41, #47) + 8 docs-refresh
+PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45). The
 Action runtime is fully live end-to-end: create → policy
 decision → optional dual-control pairing → scheduler admission
 → executor claim → in-tick retry → terminalization → expiry
@@ -30,14 +30,19 @@ read-side surface**: GET Action viewer (PR #30), GET Action
 list (PR #32), and GET ActionAttempt detail drilldown
 (PR #39). **Two of three `ActionType` handlers are real:**
 RECORD_CAPSULE actions execute through
-`WriteService.createCapsuleForActionRunner` (PR #35); **as of
-PR #41 PROPOSE_PERMISSION_GRANT actions call existing
+`WriteService.createCapsuleForActionRunner` (PR #35);
+PROPOSE_PERMISSION_GRANT actions (PR #41) call existing
 `createPermission` and produce real `Permission` rows with
 RULE 0 sovereignty enforced in code + canonical
 `PERMISSION_CREATED` AuditEvent back-referenced to the
-originating action_id**. The executor wires an
+originating action_id. The executor wires an
 **AbortController per attempt** so RUNNING-cancel via
-break-glass can short-circuit in-flight work promptly.
+break-glass can short-circuit in-flight work promptly. **As of
+PR #47 the retry budget and per-attempt timeout are
+operator-tunable per (org, action_type, risk_tier) via the
+`ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override`
+schema fields; the resolved timeout is persisted onto
+`ActionAttempt.timeout_ms` for forensic visibility.**
 
 **Live `ACTION_*` audit emitters: 10 of 10.** The canonical
 ADR-0057 §10 vocabulary is fully wired.
@@ -140,18 +145,34 @@ any in-flight attempt short-circuits.
   action handler registry; no route exposes it. Mirrors the
   canonical `createSystemPermission` system-path precedent.
 - **`apps/api/src/services/action/lifecycle.service.ts`** — shared
-  transition + audit helpers, `RETRY_BUDGET` constants (LOCK-GAP-1),
-  `ATTEMPT_TIMEOUT_MS_DEFAULT = 30_000` (LOCK-GAP-2),
-  `LIFECYCLE_FIELD_MAX_CHARS = 200` clamp, `transitionActionStatus`,
-  `emitLifecycleAudit`, `createActionAttempt`,
-  `terminalizeActionAttempt`, `createActionResult`.
+  transition + audit helpers, `RETRY_BUDGET` constants
+  (LOCK-GAP-1 fallback path), `ATTEMPT_TIMEOUT_MS_DEFAULT = 30_000`
+  (LOCK-GAP-2 fallback path), `LIFECYCLE_FIELD_MAX_CHARS = 200`
+  clamp, `transitionActionStatus`, `emitLifecycleAudit`,
+  `createActionAttempt` (accepts optional `timeout_ms` persisted
+  onto the row per PR #47), `terminalizeActionAttempt`,
+  `createActionResult`. **PR #47 adds** `resolveRetryBudget(policy,
+  action_type)` (returns `policy.retry_budget` when set + positive,
+  else the constant) + `resolveAttemptTimeoutMs(policy)` (returns
+  `policy.attempt_timeout_ms_override` when set + positive, else
+  the 30 000 default). Non-positive override values fall back to
+  the constants (operator-misconfiguration guard).
 - **`apps/api/src/services/action/executor.ts`** —
   `tickActionExecutor` claims SCHEDULED via `SELECT FOR UPDATE
   SKIP LOCKED`, transitions to RUNNING inside the claim tx
   (early-transition pattern), loops attempts in-tick under
-  `withTimeout(handler, attemptTimeoutMs)`, parent stays in
-  RUNNING per ADR-0057 §11, terminalizes to SUCCEEDED / FAILED /
-  TIMED_OUT.
+  `withTimeout(handler, resolvedAttemptTimeoutMs)`, parent stays
+  in RUNNING per ADR-0057 §11, terminalizes to SUCCEEDED /
+  FAILED / TIMED_OUT. **PR #47 adds a per-action `ActionPolicy`
+  point-lookup** at retry-loop entry against the composite
+  unique key `(org_entity_id, action_type, risk_tier)` selecting
+  only the two override columns; the resolved retry budget +
+  per-attempt timeout drive the loop and persist onto
+  `ActionAttempt.timeout_ms`. `options.attemptTimeoutMs` still
+  wins absolutely (test ergonomics preserved). One indexed
+  point-lookup per claimed Action; cache is forward-substrate
+  per ADR-0036 / ADR-0039 precedent if hot-path contention
+  surfaces.
 - **`apps/api/src/services/action/scheduler.ts`** —
   `tickActionScheduler` (APPROVED → SCHEDULED) +
   `tickActionExpirySweep` (SCHEDULED + `expires_at ≤ now` →
@@ -214,12 +235,16 @@ any in-flight attempt short-circuits.
 
 `packages/database/prisma/schema.prisma`:
 - `Action` model (PR #18) — 16 columns + 9 indexes.
-- `ActionAttempt` model (PR #18) — monotonic `attempt_number` +
-  worker_id + `outcome` (`ActionAttemptOutcome`).
+- `ActionAttempt` model (PR #18; **extended PR #47**) — monotonic
+  `attempt_number` + worker_id + `outcome`
+  (`ActionAttemptOutcome`) + nullable `timeout_ms Int?` (PR #47
+  — forensic per-attempt timeout-in-force).
 - `ActionResult` model (PR #18) — `result_summary` +
   `result_metadata` JSON.
-- `ActionPolicy` model (PR #18) — per-(org, action_type,
-  risk_tier) tuple.
+- `ActionPolicy` model (PR #18; **extended PR #47**) — per-(org,
+  action_type, risk_tier) tuple + nullable `retry_budget Int?` +
+  nullable `attempt_timeout_ms_override Int?` (PR #47 —
+  operator-tunable override fields).
 - `ActionStatus` enum (10 values), `ActionType` enum (3 values),
   `ActionRiskTier` enum (4 values), `ActionDecision` enum (4
   values), `ActionAttemptOutcome` enum (4 values).
@@ -240,11 +265,6 @@ any in-flight attempt short-circuits.
   (PROPOSE_PERMISSION_GRANT, future MCP/connector handlers) will
   consume the signal to short-circuit promptly on
   RUNNING-cancel-via-break-glass.
-- **`ActionPolicy.retry_budget` + `ActionAttempt.timeout_ms`
-  schema fields** — currently service-tier constants
-  (LOCK-GAP-1 + LOCK-GAP-2). Promotion to schema requires a
-  Prisma migration QLOCK + cross-language Ecto parity check per
-  ADR-0033.
 - **Explicit `GET /api/v1/org/actions` route** — currently served
   via `?org_scope=true` on the unified list route. Dedicated
   alias is a separate slice.
@@ -277,16 +297,25 @@ any in-flight attempt short-circuits.
 | [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) | `4e3805d` | **RUNNING-cancel break-glass capability** — `abort-registry.ts` process-local `AbortController` map + `executor` register/release per attempt + `HandlerActionInput.abort_signal` widening + cancel.service RUNNING branch validates ACTIVE GOVSEC.5 break-glass grant + marks USED + emits `ACTION_CANCELLED` with `grant_id` back-reference + fires `abortAction` outside tx. Single-use grant enforcement; concurrent-race 409 envelopes. See [`../build-log/2026-05-29-pr-37-running-cancel-break-glass.md`](../build-log/2026-05-29-pr-37-running-cancel-break-glass.md). |
 | [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) | `fe8c095` | **ActionAttempt detail route** — `GET /api/v1/actions/:id/attempts/:attempt_id` substrate-coherent read drilldown. SAFE projection of `ActionAttempt` + optional latest `ActionResult`. Same authorization spine as GET viewer (source self-scope OR `can_admin_org`-over-same-org; RULE 0 enumeration-prevention 404). 9 integration tests; no architectural boundary; no tier-4 build-log needed per the wave-based discipline. |
 | [#41](https://github.com/NiovArchitect/niov-foundation/pull/41) | `67df915` | **PROPOSE_PERMISSION_GRANT real handler capability** — second real per-`ActionType` handler. NEW `validateProposePermissionGrantPayload` + real handler calling existing `createPermission` (RULE 0 sovereignty enforced in code) + canonical `PERMISSION_CREATED` AuditEvent with action_id back-reference. Error-class mapping for sovereignty / not-found / generic failures. SAFE result_metadata payload-free contract. 11 unit + 7 integration tests. Substrate-coherent extension of Wave 1's ActionHandlerRegistry pattern; no tier-4 build-log (pattern boundary already established by PR #35). |
+| [#47](https://github.com/NiovArchitect/niov-foundation/pull/47) | `ae01289` | **ActionPolicy retry_budget + ActionAttempt timeout_ms schema fields** — Wave 6 LOCK-GAP-1 + LOCK-GAP-2 promotion from service-tier constants to schema. NEW resolver helpers `resolveRetryBudget` + `resolveAttemptTimeoutMs`; executor adds per-action `ActionPolicy` point-lookup at retry-loop entry; resolved timeout persists onto `ActionAttempt.timeout_ms` for forensic visibility. Non-positive override values fall back to constants (operator-misconfiguration guard). 14 NEW unit + 5 NEW integration tests. Substrate-architectural; tier-4 build-log [`../build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md`](../build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md). |
 
 ## Founder gap-locks active in this substrate
 
-- **LOCK-GAP-1 (retry budget)** — service-tier constants:
-  `RECORD_CAPSULE: 3`, `SEND_INTERNAL_NOTIFICATION: 3`,
-  `PROPOSE_PERMISSION_GRANT: 1`. Forward-substrate to
-  `ActionPolicy.retry_budget` schema field.
-- **LOCK-GAP-2 (per-attempt timeout)** — service-tier constant
-  `ATTEMPT_TIMEOUT_MS_DEFAULT = 30_000`. Forward-substrate to
-  `ActionAttempt.timeout_ms` schema field.
+- **LOCK-GAP-1 (retry budget)** — **CLOSED at PR #47**. Schema
+  promotion landed: `ActionPolicy.retry_budget Int?` overrides
+  the service-tier constants (`RECORD_CAPSULE: 3`,
+  `SEND_INTERNAL_NOTIFICATION: 3`,
+  `PROPOSE_PERMISSION_GRANT: 1`). Null override = constant
+  fallback; non-positive override = constant fallback
+  (misconfiguration guard).
+- **LOCK-GAP-2 (per-attempt timeout)** — **CLOSED at PR #47**.
+  Schema promotion landed:
+  `ActionPolicy.attempt_timeout_ms_override Int?` overrides the
+  service-tier `ATTEMPT_TIMEOUT_MS_DEFAULT = 30_000` constant;
+  resolved value persists onto `ActionAttempt.timeout_ms Int?`
+  for forensic visibility. Executor option
+  (`options.attemptTimeoutMs`) still wins absolutely (test
+  ergonomics preserved).
 - **LOCK-GAP-3 (handlers)** — STUB handlers only. Real
   per-`ActionType` handlers are a separate QLOCK.
 - **LOCK-GAP-4 (cancel route scope)** — non-RUNNING only.
@@ -382,30 +411,34 @@ any in-flight attempt short-circuits.
 
 ## Next slices (priority order)
 
-1. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
-   — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
-   constants to `ActionPolicy.retry_budget` +
-   `ActionAttempt.timeout_ms` schema fields; defaults preserved
-   from the current constants. Requires a Prisma migration via
-   `db:push:test` per ADR-0025 + cross-language Ecto schema
-   parity check per ADR-0033.
-2. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
+1. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
    explicit `GET /api/v1/org/actions` route (lower priority;
    `?org_scope=true` on the unified list already covers the
    same need).
-3. **SEND_INTERNAL_NOTIFICATION real handler** — requires
+2. **SEND_INTERNAL_NOTIFICATION real handler** — requires
    building the notification substrate from scratch (no
    `notification.service.ts` exists in the repo as of PR #35).
    Defer until product clarity on internal-notification
    substrate (in-app vs email vs both).
-4. **Active AbortSignal consumption** in future real handlers
+3. **Active AbortSignal consumption** in future real handlers
    wrapping long-running connector work — the plumbing landed
    in PR #37; consumption is per-handler discipline.
-5. **ActionAttempt list-of-attempts route** — callers can
+4. **ActionAttempt list-of-attempts route** — callers can
    query the DB directly via `Action.action_id`; a route
    alias would unlock Control Tower attempt-list UX. No
    architectural boundary; lowest priority among Section 2
    reads.
+5. **`PUT /api/v1/org/action-policies` typed-validator update
+   for the PR #47 override fields** — currently the route
+   accepts the new columns because Prisma is the authoritative
+   row shape; a typed body validator would make the envelope
+   explicit for Control Tower UX. Lowest priority; no
+   substrate gap.
+6. **Per-action `ActionPolicy` lookup cache** — currently one
+   indexed point-lookup per claimed Action. ETS-style
+   read-optimized cache is forward-substrate per ADR-0036 /
+   ADR-0039 precedent if hot-path contention surfaces in
+   production telemetry.
 
 ## Risks / forward-substrate
 
