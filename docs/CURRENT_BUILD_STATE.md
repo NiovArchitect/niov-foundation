@@ -9,26 +9,27 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-([ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]
+([ADR-0057-ATTEMPT-DETAIL-ROUTE-EXECUTE-VERIFY-AUTH]
 wave-close).
 
 ## Current state
 
-- **Latest main HEAD:** `4e3805df6de59452c8cecb221f1fb305a4e934f0`
-- **Latest merged PR:** [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) — Add ADR-0057 RUNNING-cancel break-glass capability (2026-05-29).
+- **Latest main HEAD:** `fe8c09566ed8f207d57cee3045ceaa479b93e93e`
+- **Latest merged PR:** [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) — Add ADR-0057 ActionAttempt detail route (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
 - **Real per-`ActionType` handlers:** 1 of 3 (RECORD_CAPSULE live; SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT stub).
 - **Cancel surface:** non-RUNNING (any source caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050) + process-local AbortController plumbing for mid-attempt interruption.
+- **Read surface:** create + cancel + GET viewer + GET list + **GET attempt detail** — Action Inbox / Detail / Attempt drilldown complete.
 
 ## 10 production section status
 
 | # | Section | Status | Detail |
 |---|---|---|---|
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; Otzar Wave 2A/B/C designs accepted (code forward-substrate). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
-| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE real handler LIVE** (1 of 3 real handlers); SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT remain stubs; AbortController plumbing LIVE (no active consumers yet). | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
+| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + **GET attempt detail** LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE real handler LIVE** (1 of 3 real handlers); SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT remain stubs; AbortController plumbing LIVE (no active consumers yet). | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
@@ -42,6 +43,8 @@ wave-close).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) | `fe8c095` | Add ADR-0057 ActionAttempt detail route |
+| [#38](https://github.com/NiovArchitect/niov-foundation/pull/38) | `58a476b` | Wave-close docs refresh for #37 |
 | [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) | `4e3805d` | Add ADR-0057 RUNNING-cancel break-glass capability |
 | [#36](https://github.com/NiovArchitect/niov-foundation/pull/36) | `952d60c` | Wave-close docs refresh for #35 |
 | [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) | `4ef4ed4` | Add ADR-0057 RECORD_CAPSULE real handler capability |
@@ -50,16 +53,13 @@ wave-close).
 | [#31](https://github.com/NiovArchitect/niov-foundation/pull/31) | `bcdacc7` | Docs refresh for #30 |
 | [#30](https://github.com/NiovArchitect/niov-foundation/pull/30) | `8af6f77` | Add ADR-0057 GET action viewer route |
 | [#29](https://github.com/NiovArchitect/niov-foundation/pull/29) | `1254f6d` | Docs refresh for #28 |
-| [#28](https://github.com/NiovArchitect/niov-foundation/pull/28) | `8d9c1bc` | Add ADR-0057 action cancel route (non-RUNNING) |
-| [#27](https://github.com/NiovArchitect/niov-foundation/pull/27) | `910b286` | Docs refresh for #26 |
 
 ## Immediate next work queue
 
-1. **ActionAttempt detail route** (`GET /api/v1/actions/:id/attempts/:attempt_id`) — substrate-coherent extension; no architectural boundary; no schema. Unlocks Control Tower attempt-drilldown.
+1. **PROPOSE_PERMISSION_GRANT real handler** — second real per-`ActionType` handler. Substrate exists (`createPermission` DB query). MEDIUM-risk default REQUIRE_DUAL_CONTROL; touches multiple entities' DMW boundaries with RULE 0 sovereignty implications. Substrate-coherent extension of the established ActionHandlerRegistry pattern from Wave 1.
 2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields (Prisma migration via `db:push:test` per ADR-0025; cross-language Ecto parity check per ADR-0033).
-3. **PROPOSE_PERMISSION_GRANT real handler** — second real per-`ActionType` handler (MEDIUM-risk; dual-control by default; own RULE 21 research arc).
-4. Wave 2A/B/C Otzar employee-twin route implementations (Section 1 priority).
-5. GOVSEC.5 follow-on `requireAdminCapability` throttle.
+3. Wave 2A/B/C Otzar employee-twin route implementations (Section 1 priority).
+4. GOVSEC.5 follow-on `requireAdminCapability` throttle.
 
 ## Critical Do-NOT-claim list (global truths)
 

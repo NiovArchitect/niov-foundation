@@ -9,27 +9,26 @@
 
 ## Where we are
 
-- **Main HEAD:** `4e3805df6de59452c8cecb221f1fb305a4e934f0`
-- **Latest merged PR:** [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) — ADR-0057 RUNNING-cancel break-glass capability.
-- **Active branch / PR:** `refresh-docs-wave2-running-cancel-break-glass` (this wave-close docs refresh).
+- **Main HEAD:** `fe8c09566ed8f207d57cee3045ceaa479b93e93e`
+- **Latest merged PR:** [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) — ADR-0057 ActionAttempt detail route.
+- **Active branch / PR:** `refresh-docs-wave3-attempt-detail-route` (this wave-close docs refresh).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** 1 of 3 (RECORD_CAPSULE live; SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT stub).
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
+- **Read surface:** create, cancel, GET viewer, GET list, **GET attempt detail** — full Action Inbox + Detail + Attempt drilldown.
 - **TypeScript baseline:** exactly 4 canonical residual errors.
 
 ## Exact next action
 
 After this docs refresh merges:
 
-→ Start **Wave 3 — ActionAttempt detail route** (substrate-coherent extension; no architectural boundary; no schema migration).
+→ Start **Wave 4** — pick between (preference order; pick the safest highest-leverage Section 2 slice given current substrate):
 
-  - `GET /api/v1/actions/:id/attempts/:attempt_id` per ADR-0057 §9. Bearer + `"read"`-gated; same ownership / `can_admin_org` cross-scope authorization as the GET viewer; SAFE projection of `ActionAttempt` row (no error stack traces; bounded `error_summary`; no payload) + the attempt's `ActionResult.result_metadata` if present.
-  - Unlocks Control Tower Action Detail drilldown.
+  1. **PROPOSE_PERMISSION_GRANT real handler** (second real per-`ActionType` handler). Substrate exists (`createPermission` DB query at `packages/database/src/queries/permission.ts`). MEDIUM-risk default REQUIRE_DUAL_CONTROL; touches multiple entities' DMW boundaries with RULE 0 sovereignty implications. Wraps in RULE 21 research arc inline (per the established ActionHandlerRegistry pattern from Wave 1 — the substrate-architectural boundary was already established by RECORD_CAPSULE; this is "second handler" not "first crossing"). Substrate-coherent extension of the registry pattern; no schema; no migration.
+  2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields. Requires `db:push:test` migration per ADR-0025 (authorized dev/test pattern); cross-language Ecto parity per ADR-0033. Substrate-architectural; tier-4 build-log expected. Deferred to lower priority because it requires schema work; per protocol, prefer no-migration path while operating autonomously.
 
-  Alternative Wave 3 candidates (deferred):
-  - **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 to schema. Requires `db:push:test` migration per ADR-0025 (authorized dev/test pattern); cross-language Ecto parity per ADR-0033. Substrate-architectural; tier-4 build-log expected.
-  - **PROPOSE_PERMISSION_GRANT real handler** — MEDIUM-risk; touches multiple entities' DMW boundaries; own RULE 21 research arc required.
+  Recommendation per protocol: **Wave 4 = PROPOSE_PERMISSION_GRANT real handler** (preference #1; substrate exists; substrate-coherent extension of the established ActionHandlerRegistry pattern from Wave 1; no schema; higher product leverage than read-side aliases).
 
 ## Current stop conditions
 
@@ -58,6 +57,7 @@ After this docs refresh merges:
 - `POST /api/v1/actions/:id/cancel` (non-RUNNING for any source caller; **RUNNING via valid GOVSEC.5 break-glass grant for action_type=`ACTION_RUNNING_CANCEL`**).
 - `GET /api/v1/actions/:id` (safe detail view + aggregates).
 - `GET /api/v1/actions` (self-scope default; `?org_scope=true` admin).
+- **`GET /api/v1/actions/:id/attempts/:attempt_id`** (attempt drilldown + latest result; same ownership / admin scoping).
 - `GET /api/v1/org/action-policies` + `PUT /api/v1/org/action-policies` (dual-control gated).
 - Executor + scheduler + expiry sweep runtime (`tickActionExecutor` + `tickActionScheduler` + `tickActionExpirySweep`).
 - All 10 `ACTION_*` audit emitters.
@@ -70,7 +70,7 @@ After this docs refresh merges:
 - PROPOSE_PERMISSION_GRANT real handler (MEDIUM-risk; separate future wave).
 - `ActionPolicy.retry_budget` + `ActionAttempt.timeout_ms` schema fields (service-tier constants only).
 - Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list).
-- ActionAttempt detail route.
+- ActionAttempt list-of-attempts route (callers query DB if needed; future slice if Control Tower needs).
 - Active AbortSignal consumption by handlers (plumbed but RECORD_CAPSULE + stubs don't listen yet; future real handlers wrapping long-running connector work will consume).
 - Connectors / MCP / Control Tower UX / voice / ambient / lens UX.
 
