@@ -27,6 +27,10 @@ import {
   validateCancelActionBody,
 } from "../services/action/cancel.service.js";
 import { getActionForCaller } from "../services/action/get.service.js";
+import {
+  listActionsForCaller,
+  validateListActionsQuery,
+} from "../services/action/list.service.js";
 
 // WHAT: Register the POST /api/v1/actions route on the Fastify app.
 // INPUT: A Fastify instance + the shared AuthService.
@@ -152,6 +156,41 @@ export async function registerActionsRoutes(
         return reply.code(result.httpStatus).send({
           ok: true,
           action: result.view,
+        });
+      }
+      const responseBody: Record<string, unknown> = {
+        ok: false,
+        code: result.code,
+      };
+      if (result.message !== undefined) responseBody.message = result.message;
+      return reply.code(result.httpStatus).send(responseBody);
+    },
+  );
+
+  // ADR-0057 §9 list route. Bearer + "read"-gated.
+  // Self-scope by default; ?org_scope=true requires can_admin_org.
+  // Standard pagination + optional status / risk_tier / action_type
+  // filters. Safe-view-only projection per ADR-0057 §10.
+  app.get<{ Querystring: Record<string, unknown> }>(
+    "/api/v1/actions",
+    {
+      preHandler: requireAuth(authService, "read"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const validation = validateListActionsQuery(request.query);
+      if (validation.ok === false) {
+        return reply.code(422).send({
+          ok: false,
+          code: validation.code,
+          invalid_fields: validation.invalid_fields,
+        });
+      }
+      const result = await listActionsForCaller(callerId, validation.normalized);
+      if (result.ok === true) {
+        return reply.code(result.httpStatus).send({
+          ok: true,
+          ...result.view,
         });
       }
       const responseBody: Record<string, unknown> = {
