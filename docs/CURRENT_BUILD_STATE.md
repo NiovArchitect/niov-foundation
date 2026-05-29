@@ -6,17 +6,39 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-28
-([TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED] minimum-
-touch refresh — TypeScript baseline reduced from **12 errors
-to 4 errors** by mechanical refactor of 8 stale test-tier
-`LoginResult.code` discriminated-union narrowing errors in
-this branch. ADR-0015 Decision B Amendment 1 records the
-baseline reduction; CI + pre-commit thresholds updated
-inline. The remaining 4 errors are: (1) `server.ts:299`
-rateLimits index-signature drift; (2) `write.service.ts:548`
-`ValidateFailure.entity_id` narrowing; (3) PRICING_TABLE
-deliberate-blocker per ADR-0021; (4) `CapsuleMetadata` shape
-drift architectural decision. Prior same-date refresh
+([CI-NO-LEAK-GUARD-LANDED] minimum-touch refresh —
+**ADR-0057 §16 step 2 is now COMPLETE**. The CI no-leak guard
+landed at PR #16 squash commit
+`cfda28aec4a2512fae30b9d7269260d19031d2ac`. Three files merged:
+`tests/unit/no-leak-guard.test.ts` (NEW; 372-line vitest
+filesystem scanner asserting zero forbidden tokens appear as
+object property keys in Foundation runtime response/audit-safe
+surfaces), `package.json` (+1 line — `test:no-leak` script),
+and `.husky/pre-commit` (+6 / -1 — header annotation + the
+no-leak guard step appended after the RULE 16 no-console
+anchor). The pre-commit chain is now
+`db-push guard → TypeScript baseline 4 → RULE 16 no-console →
+no-leak guard`. Post-merge verification: `npm run test:no-leak`
+2/2 passed; no-console anchor 1/1 passed; TypeScript baseline
+remains exactly 4 errors (the four canonical residuals from
+the prior refresh). Section 2 Autonomous Execution Core
+implementation remains NOT live — no Action schema, no
+`ACTION_*` audit literals, no `/actions/*` routes, no policy
+evaluator, no executor, no connectors, no Control Tower
+action UX; the guard pre-arms CI to fail-fast against any
+future regression that would expose forbidden response /
+audit-safe fields. Prior same-date refresh
+`[TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED]` —
+TypeScript baseline reduced from **12 errors to 4 errors** by
+mechanical refactor of 8 stale test-tier `LoginResult.code`
+discriminated-union narrowing errors. ADR-0015 Decision B
+Amendment 1 records the baseline reduction; CI + pre-commit
+thresholds updated inline. The remaining 4 errors are:
+(1) `server.ts:299` rateLimits index-signature drift;
+(2) `write.service.ts:548` `ValidateFailure.entity_id`
+narrowing; (3) PRICING_TABLE deliberate-blocker per ADR-0021;
+(4) `CapsuleMetadata` shape drift architectural decision.
+Prior same-date refresh
 `[ADR-0057-LANDED]` — ADR-0057 — Autonomous Execution Core
 Substrate — landed at PR #12 squash commit
 `6ad53ca39623432afbf7d40bfd19a66360f1df46`. Design-only
@@ -72,6 +94,296 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [CI-NO-LEAK-GUARD-LANDED] 2026-05-28
+
+**Status: VERIFIED ADR-0057 §16 step 2 is COMPLETE.** The CI
+no-leak guard landed at PR #16 squash commit
+`cfda28aec4a2512fae30b9d7269260d19031d2ac` (2026-05-29 UTC
+merge timestamp; logical 2026-05-28 work session). The guard
+is now live in pre-commit AND CI (via the existing
+`test:unit` tier which already runs every `tests/unit/*.test.ts`
+file). The Foundation backend is now CI-protected against
+silent regressions that expose forbidden runtime
+response / audit-safe fields BEFORE any Section 2 Autonomous
+Execution Core schema/code work begins — exactly the
+pre-arm contract ADR-0057 §16 step 2 specifies. This entry
+supersedes the forward-substrate framing of `[CI-NO-LEAK-GUARD-EXECUTE-VERIFY-AUTH]`
+as "the next canonical step before any Section-2 code"
+recorded in the prior refreshes `[TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED]`
+and `[ADR-0057-LANDED]` below; those prior framings were
+substrate-honest at HEAD `3c44760` and `6ad53ca` respectively
+and are preserved verbatim for historical context per Rule 0
+(Documentation-First / No-Guessing).
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `cfda28a`
+
+Per Rule 0 reading of the merged commit, PR #16 added exactly
+three files (`3 files changed, 379 insertions(+), 1 deletion(-)`):
+
+- **`tests/unit/no-leak-guard.test.ts` (NEW; 372 lines)** —
+  a vitest unit test that performs a deterministic filesystem
+  scan against a focused set of Foundation output-shape
+  surfaces. The scanner looks for any of 17 forbidden tokens
+  used as object property keys (regex `\b<token>\s*[:,]`).
+  Comments (single-line `//` and JSDoc `*` continuations) are
+  skipped. Lines with an explicit same-line `// allow: <token>`
+  opt-out marker are skipped. Five specific
+  `KNOWN_LEGITIMATE_HITS` allowlist entries (substrate-justified
+  per ADR-0009 hash-chain identifiers + ADR-0054 mapper input
+  type annotations + Prisma admin-route column selects +
+  service input arguments) are skipped. The test file also
+  includes a scanner self-test verifying regex behavior,
+  comment skipping, prefix collision avoidance (the `\b`
+  word-boundary prevents `vector` from matching `vectorize_input`),
+  optional-property-annotation exclusion (`target_capsule_id?:`
+  does NOT match because `?` is not in `[:,]`), and
+  `// allow:` marker capture. No database, no network, no
+  secrets. Total scan + self-test runs in under 700 ms.
+
+- **`package.json` (MOD; +1 line)** — adds
+  `"test:no-leak": "vitest run tests/unit/no-leak-guard.test.ts"`
+  at line 17, between `test:real-llm` and `test:all`. No other
+  scripts changed, no dependency changes, no `package-lock.json`
+  changes.
+
+- **`.husky/pre-commit` (MOD; +6 / -1)** — extends the header
+  annotation block (L2-8) to cite ADR-0057 §16 step 2 + §10
+  alongside the existing ADR-0024 + ADR-0025 + ADR-0015
+  citations. Appends two new lines at the bottom (L72-73):
+  the section banner echo and `npx vitest run
+  tests/unit/no-leak-guard.test.ts --config vitest.unit.config.ts`.
+  Pre-commit step order is now (in order):
+  **db-push guard (ADR-0025) → TypeScript baseline 4 errors
+  (ADR-0015 Decision B Amendment 1) → RULE 16 no-console
+  invariant (ADR-0005 / DRIFT 2 Option C) → no-leak guard
+  (ADR-0057 §16 step 2)**. The hook self-tested during the
+  commit itself: all four gates passed.
+
+### Forbidden-token canonical categories
+
+The 17 forbidden tokens are sourced from ADR-0057 §10
+forbidden-audit-details list + ADR-0057 §17 future
+action / executor / connector leak set + ADR-0026 §6 dual-control
+candidate-pool non-leak + the planning QLOCK source list.
+Grouped:
+
+- **Capsule payload / storage internals (ADR-0026 §6 +
+  ADR-0057 §10):**
+  - `payload_summary`
+  - `payload_content`
+  - `target_capsule_id`
+  - `storage_location`
+  - `content_hash`
+- **Embeddings / vectors (ADR-0043 §G3.9 privacy proofs +
+  ADR-0057 §10):**
+  - `embedding`
+  - `vector`
+- **Permission / candidate-pool internals (ADR-0026 §6
+  Phase E candidate-pool non-leak + capability flags):**
+  - `capability_flags`
+  - `candidate_pool`
+- **Raw passthrough (ADR-0057 §10):**
+  - `raw_payload`
+  - `raw_request`
+  - `raw_response`
+  - `raw_error`
+- **Future action / connector / tool raw response (ADR-0057
+  §17):**
+  - `action_result_raw`
+  - `external_response_raw`
+  - `connector_response_raw`
+  - `tool_response_raw`
+
+The future action / connector / tool tokens are pre-armed —
+they will be live forbidden as soon as Section 2 schema /
+routes / executor land, with zero subsequent CI-config work
+required.
+
+### Scanned surfaces
+
+- All `apps/api/src/routes/**/*.ts` — every HTTP route
+  handler / `reply.send` site.
+- All `apps/api/src/middleware/**/*.ts` — request-scoped
+  audit-details and error-envelope construction.
+- All `apps/api/src/security/**/*.ts` — `PRIVILEGED_ENDPOINTS`
+  registry + dual-control preHandler wiring.
+- Five specific safe-projection / audit-emitter service
+  files:
+  - `apps/api/src/services/otzar/transparency.ts`
+  - `apps/api/src/services/otzar/conversation-detail.ts`
+  - `apps/api/src/services/otzar/conversation-corrections.ts`
+  - `apps/api/src/services/governance/escalation.service.ts`
+  - `apps/api/src/services/governance/break-glass.service.ts`
+
+### RULE 13 substrate-honest disclosure (preserved at the docs tier)
+
+The scan roots were deliberately narrowed from the planning
+QLOCK's broader "preferred" list. Preflight inventory before
+implementation found many legitimate persistence-tier hits
+across `apps/api/src/services/{coe,feedback,hive,monetization,compliance,llm,personalization,cosmp,otzar/otzar.service.ts}/**`
+and `packages/database/src/queries/**` — service-implementation
+code that legitimately reads/writes schema columns of the
+same names. Scanning those layers would have required either
+flooding the `KNOWN_LEGITIMATE_HITS` allowlist or sprinkling
+`// allow:` markers across half the service tier, eroding
+the guard's signal. The guard therefore targets the
+**API / output-shape boundary** where forbidden tokens become
+response / audit-safe surfaces, rather than the persistence
+boundary where schema-column names are legitimate. This is
+consistent with the ADR-0026 §5 layered-defense posture and
+the ADR-0033 §Decision 7 + Q-5BII-EXEC-5 cross-language data
+ownership posture, and mirrors the ADR-0051 / ADR-0054 /
+ADR-0055 mapper-tier safe-projection precedent (the canonical
+projection point IS the boundary where the guard fires).
+Future expansion of the scan roots (e.g., into specific service
+files that surface response shapes, or into Elixir/BEAM
+response paths once Section 2 introduces cross-language
+action surfaces) remains forward-substrate and must land
+under a separate Founder-authorized QLOCK.
+
+### Verification
+
+- `npm run test:no-leak` post-merge: **2/2 passed** in
+  ~620 ms (1 live scan + 1 scanner self-test).
+- RULE 16 no-console anchor post-merge: **1/1 passed**.
+- TypeScript baseline post-merge: **exactly 4 errors** —
+  identical to the prior `[TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED]`
+  baseline. The four canonical residuals are unchanged:
+  1. `apps/api/src/server.ts:299` — TS2322 rateLimits index
+     signature
+  2. `apps/api/src/services/cosmp/write.service.ts:548` —
+     TS2339 `ValidateFailure.entity_id` narrowing
+  3. `apps/api/src/services/monetization/monetization.service.ts:30`
+     — TS2740 PRICING_TABLE deliberate-blocker per ADR-0021
+     §Step 3
+  4. `packages/database/src/queries/capsule.ts:242` — TS2322
+     `CapsuleMetadata` shape drift
+- The PR #16 commit hook ran all four gates locally during
+  the commit itself: db-push guard ✓ + typecheck 4 ✓ +
+  RULE 16 no-console 1/1 ✓ + new no-leak guard 2/2 ✓.
+- All 4 CI tier checks on PR #16 passed: Typecheck (40 s),
+  Unit (371 tests, 1m24s), Integration (111 tests +
+  1 skipped, 1m41s), Elixir (compile + test, 2m6s).
+
+### Scope discipline (what this PR touched, and what it did not)
+
+This PR touched exactly:
+
+- `tests/unit/no-leak-guard.test.ts` (NEW; 372 lines)
+- `package.json` (+1 line)
+- `.husky/pre-commit` (+6 lines / -1 line)
+
+NOT touched: `apps/**`, `packages/**`, `tests/integration/**`,
+`tests/unit/*` other than the new file, `docs/**`,
+`docs/architecture/decisions/**`, `.github/**` (CI workflow
+unchanged — the existing `test:unit` job picks up the new
+file automatically), `prisma/schema.prisma`,
+`package-lock.json`, `AGENTS.md`, `CLAUDE.md`, Control Tower
+files, Foundation-Command files, legacy quarantine files. No
+migrations, installs, or secret access occurred.
+
+### What remains NOT live after this refresh
+
+Section 2 Autonomous Execution Core implementation is still
+NOT live in code. The guard pre-arms CI for Section 2 work
+but does NOT itself land any Section 2 substrate. Specifically:
+
+- **No Action schema** in `prisma/schema.prisma` — no
+  `Action`, `ActionPolicy`, `ActionApproval`,
+  `ActionExecution`, `ActionAttempt` models.
+- **No Action routes** — no `POST /actions/propose`, no
+  `POST /actions/approve`, no `POST /actions/reject`, no
+  `POST /actions/cancel`, no `GET /actions/:id`, no
+  `GET /actions/queue`, no `POST /actions/execute`.
+- **No Action services** — no policy evaluator, no Action
+  state machine, no executor / worker.
+- **No `ACTION_*` audit literals** in
+  `packages/database/src/queries/audit.ts` — the
+  10 reserved literals (`ACTION_PROPOSED`, `ACTION_APPROVED`,
+  `ACTION_REJECTED`, `ACTION_SCHEDULED`, `ACTION_STARTED`,
+  `ACTION_SUCCEEDED`, `ACTION_FAILED`, `ACTION_CANCELLED`,
+  `ACTION_EXPIRED`, `ACTION_POLICY_UPDATE`) per ADR-0057 §10
+  do not exist yet.
+- **No connectors / MCP / tool executors** — per ADR-0057
+  §17, connectors / MCP are deferred to ADR-0058 + Section 4
+  and cannot land until Section 2 is live and stable.
+- **No Control Tower action UX** — deferred per ADR-0057 §12.
+- **No `ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding** —
+  per ADR-0057 §16 build sequence steps 4–7.
+
+### Forward-substrate after this refresh
+
+Next production step after this docs refresh — only if
+explicitly Founder-authorized — is the first Section 2
+implementation slice. The natural candidate per ADR-0057 §16
+build sequence step 3 is:
+
+> `[ADR-0057-ACTION-SCHEMA-ENUMS-AUDIT-LITERALS-EXECUTE-VERIFY-AUTH]`
+
+which would land the additive `Action` + `ActionPolicy` +
+`ActionApproval` + `ActionExecution` + `ActionAttempt` Prisma
+models + 5 supporting enums + the 10 NEW `ACTION_*` audit
+literals + their per-literal safe / forbidden-metadata
+contract comments. That slice is design-substrate-ready per
+ADR-0057 §6, §8, §10 and is naturally CI-protected by the
+no-leak guard landed in this entry.
+
+Alternative-ordering option: the Founder may choose to clean
+up one of the remaining 4 TypeScript baseline errors first.
+The two safe-to-fix source-tier errors (server.ts rateLimits
+index signature; write.service.ts ValidateFailure narrowing)
+can each land as a small follow-on QLOCK without touching
+schema or runtime semantics. The PRICING_TABLE deliberate-
+blocker (error #3) and the `CapsuleMetadata` shape drift
+(error #4) require their own Founder-authorized
+monetization-policy / architectural-decision QLOCKs and are
+not blocking.
+
+The "all 10 production sections required, none deferrable"
+Founder Directive 2026-05-28 remains in force. None of the
+production sections (1. Employee Intelligence Core,
+2. Autonomous Execution Core, 3. Hives / Team Intelligence,
+4. MCP / Connectors, 5. Agent Playground, 6. Enterprise
+Analytics, 7. Full Audit Viewer, 8. Billing / Entitlements,
+9. Admin / Governance Control Tower,
+10. Deployment / Security / Go-Live Operations) is complete;
+this docs refresh changes none of that.
+
+### Do NOT claim
+
+- "Autonomous Execution is live." — Section 2 implementation
+  is still not landed; only the CI safety substrate for
+  Section 2 is live.
+- "AI Twins can execute actions." — no executor exists; the
+  Twin layer cannot dispatch actions because the Action
+  schema / routes / services / audit literals do not exist.
+- "`autonomy_level` is enforced." — `autonomy_level` is not
+  yet a field on `TwinConfig`; it lands with the Section 2
+  schema slice per ADR-0057 §6.
+- "Workflows run." — no workflow engine.
+- "Connectors / MCP are live." — deferred per ADR-0057 §17 +
+  ADR-0058 (future).
+- "Action queue exists." — no `Action` table, no
+  `action_queue` materialized view, no worker.
+- "Action audit trail exists." — no `ACTION_*` audit literal
+  emitters; the audit chain has no Section 2 entries.
+- "Control Tower action UX exists." — deferred per ADR-0057
+  §12.
+- "All 10 production sections are complete." — only Section 1
+  Employee Intelligence Core is canonical (and Section 2 is
+  now CI-guarded but not implemented).
+- "TypeScript has zero errors." — the baseline remains
+  exactly 4 errors per the canonical residuals enumerated
+  above and in `[TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED]`
+  below.
+- "The CI no-leak guard scans persistence-tier code." — it
+  scans API / output-shape surfaces only per the RULE 13
+  substrate-honest disclosure above.
 
 ## [TYPECHECK-LOGINRESULT-NARROWING-BASELINE-4-LANDED] 2026-05-28
 
