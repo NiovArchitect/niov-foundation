@@ -228,12 +228,19 @@ const SECRET_SUMMARY = "ATTEMPT_LIST_SECRET_SUMMARY";
 const SECRET_REDACTED_TITLE = "ATTEMPT_LIST_SECRET_TITLE";
 
 async function postCreate(
-  caller: { token: string; ip: string },
-  payload_redacted: Record<string, unknown> = {
-    kind: "notification",
-    title: SECRET_REDACTED_TITLE,
-  },
+  caller: { entityId: string; token: string; ip: string },
+  payload_redacted?: Record<string, unknown>,
 ): Promise<string> {
+  // Wave 11: valid SEND_INTERNAL_NOTIFICATION payload (self-notif).
+  // SECRET_REDACTED_TITLE retained inside body_redacted so the
+  // no-leak assertions still prove no body content leaks into the
+  // attempt-list response or audit details.
+  const resolvedPayload: Record<string, unknown> = payload_redacted ?? {
+    recipient_entity_id: caller.entityId,
+    notification_class: "attempt-list-test",
+    body_summary: "attempt-list-body-secret",
+    body_redacted: { title: SECRET_REDACTED_TITLE },
+  };
   const r = await app.inject({
     method: "POST",
     url: "/api/v1/actions",
@@ -242,7 +249,7 @@ async function postCreate(
       action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: SECRET_SUMMARY,
-      payload_redacted,
+      payload_redacted: resolvedPayload,
     },
     remoteAddress: caller.ip,
   });
@@ -376,6 +383,9 @@ describe("GET /api/v1/actions/:id/attempts — happy paths", () => {
     });
     await seedAutoApprovePolicy(orgId, caller.entityId);
     const actionId = await postCreate(caller, {
+      recipient_entity_id: caller.entityId,
+      notification_class: "attempt-list-force-fail",
+      body_summary: "attempt-list-fail",
       [TEST_MARKER_FORCE_FAILURE]: true,
     });
     await runOnceFailingThreeAttempts();
@@ -443,6 +453,9 @@ describe("GET /api/v1/actions/:id/attempts — happy paths", () => {
     });
     await seedAutoApprovePolicy(orgId, caller.entityId);
     const actionId = await postCreate(caller, {
+      recipient_entity_id: caller.entityId,
+      notification_class: "attempt-list-force-fail",
+      body_summary: "attempt-list-fail",
       [TEST_MARKER_FORCE_FAILURE]: true,
     });
     await runOnceFailingThreeAttempts();
@@ -466,6 +479,9 @@ describe("GET /api/v1/actions/:id/attempts — happy paths", () => {
     });
     await seedAutoApprovePolicy(orgId, caller.entityId);
     const actionId = await postCreate(caller, {
+      recipient_entity_id: caller.entityId,
+      notification_class: "attempt-list-force-fail",
+      body_summary: "attempt-list-fail",
       [TEST_MARKER_FORCE_FAILURE]: true,
     });
     await runOnceFailingThreeAttempts();
@@ -484,6 +500,9 @@ describe("GET /api/v1/actions/:id/attempts — happy paths", () => {
     });
     await seedAutoApprovePolicy(orgId, caller.entityId);
     const actionId = await postCreate(caller, {
+      recipient_entity_id: caller.entityId,
+      notification_class: "attempt-list-force-fail",
+      body_summary: "attempt-list-fail",
       [TEST_MARKER_FORCE_FAILURE]: true,
     });
     await runOnceFailingThreeAttempts();
@@ -529,13 +548,14 @@ describe("GET /api/v1/actions/:id/attempts — happy paths", () => {
     };
     expect(b.total).toBe(1);
     expect(b.attempts[0]?.outcome).toBe("SUCCEEDED");
-    expect(b.attempts[0]?.result_summary).toBe(
-      "stub_send_internal_notification_ok",
+    // Wave 11 made SEND_INTERNAL_NOTIFICATION a REAL handler.
+    expect(b.attempts[0]?.result_summary).toMatch(
+      /^internal_notification_dispatched:/,
     );
     expect(b.attempts[0]?.result_metadata).toMatchObject({
-      handler: "stub",
+      handler: "send_internal_notification",
       action_type: "SEND_INTERNAL_NOTIFICATION",
-      status: "completed_stub",
+      status: "dispatched_internal",
     });
   });
 });
@@ -616,6 +636,9 @@ describe("GET /api/v1/actions/:id/attempts — soft-delete invisibility", () => 
     });
     await seedAutoApprovePolicy(orgId, caller.entityId);
     const actionId = await postCreate(caller, {
+      recipient_entity_id: caller.entityId,
+      notification_class: "attempt-list-force-fail",
+      body_summary: "attempt-list-fail",
       [TEST_MARKER_FORCE_FAILURE]: true,
     });
     await runOnceFailingThreeAttempts();

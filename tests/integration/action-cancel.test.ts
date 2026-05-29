@@ -227,6 +227,7 @@ async function seedAutoApprovePolicy(
 }
 
 async function createApprovedAction(caller: {
+  entityId: string;
   token: string;
   ip: string;
 }): Promise<string> {
@@ -238,7 +239,15 @@ async function createApprovedAction(caller: {
       action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-summary",
-      payload_redacted: { kind: "capsule", title: "test" },
+      // Wave 11: SEND_INTERNAL_NOTIFICATION payload requires
+      // recipient_entity_id + notification_class + body_summary.
+      // Self-notification (recipient = source caller) is the
+      // simplest valid payload for cancel-flow tests.
+      payload_redacted: {
+        recipient_entity_id: caller.entityId,
+        notification_class: "cancel-test",
+        body_summary: "cancel-test-body",
+      },
     },
     remoteAddress: caller.ip,
   });

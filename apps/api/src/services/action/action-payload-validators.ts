@@ -321,14 +321,115 @@ export function validateRecordCapsulePayload(
 // INPUT: The payload_redacted value.
 // OUTPUT: ok:true with an empty normalized record.
 // WHY: Preserves the stub-handler contract for ActionTypes whose
-//      real handler has not yet landed. As of the
-//      [ADR-0057-PROPOSE-PERMISSION-GRANT-HANDLER] wave, only
-//      SEND_INTERNAL_NOTIFICATION uses this — RECORD_CAPSULE and
-//      PROPOSE_PERMISSION_GRANT have real type-specific validators.
+//      real handler has not yet landed. After Wave 11 every canonical
+//      ActionType has a real type-specific validator; this stub is
+//      kept available for future ActionType additions that land
+//      in stub mode first per the ADR-0021 extension-protocol
+//      precedent.
 export function validateStubPayload(
   _payload: unknown,
 ): ActionPayloadValidationResult<Record<string, never>> {
   return { ok: true, normalized: {} };
+}
+
+// WHAT: Maximum body_summary length. Mirrors the
+//        LIFECYCLE_FIELD_MAX_CHARS = 200 clamp at
+//        apps/api/src/services/action/lifecycle.service.ts —
+//        long bodies don't belong in inbox-list views.
+const NOTIFICATION_BODY_SUMMARY_MAX_CHARS = 200;
+// WHAT: Maximum notification_class length. Short label suitable
+//        for indexing + filter UX (e.g., "DUAL_CONTROL_REQUEST").
+const NOTIFICATION_CLASS_MAX_CHARS = 64;
+// WHAT: Maximum body_redacted JSON-stringified size in bytes.
+//        Bounds the request envelope; the operator is responsible
+//        for redaction (the validator enforces shape + bounds).
+const NOTIFICATION_BODY_REDACTED_MAX_BYTES = 4_096;
+
+// WHAT: Normalized SEND_INTERNAL_NOTIFICATION payload returned by
+//        validateSendInternalNotificationPayload.
+// INPUT: Used as a return type.
+// OUTPUT: None.
+// WHY: Locks the surface so the handler's call into
+//      NotificationService.createInternalNotification cannot omit a
+//      required field nor sneak an unsafe field through.
+export interface SendInternalNotificationPayload {
+  recipient_entity_id: string;
+  notification_class: string;
+  body_summary: string;
+  body_redacted?: Record<string, unknown> | null;
+}
+
+// WHAT: Validate a SEND_INTERNAL_NOTIFICATION payload at create-time.
+// INPUT: payload_redacted (typically the route-tier
+//        validateCreateActionBody output).
+// OUTPUT: { ok: true, normalized } | { ok: false, invalid_fields }.
+// WHY: ADR-0057 Wave 11 — internal-only notification handler. Required
+//      fields are recipient_entity_id (UUID) + notification_class
+//      (1..NOTIFICATION_CLASS_MAX_CHARS chars) + body_summary
+//      (1..NOTIFICATION_BODY_SUMMARY_MAX_CHARS chars). body_redacted
+//      is optional (plain object; capped at
+//      NOTIFICATION_BODY_REDACTED_MAX_BYTES JSON-stringified).
+//      Cross-org DENY + recipient-ACTIVE checks are at the service
+//      tier (need DB lookups; not validator scope).
+export function validateSendInternalNotificationPayload(
+  payload: unknown,
+): ActionPayloadValidationResult<SendInternalNotificationPayload> {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    return { ok: false, invalid_fields: ["payload_redacted"] };
+  }
+  const obj = payload as Record<string, unknown>;
+  const invalid: string[] = [];
+
+  // recipient_entity_id — required; UUID.
+  if (
+    typeof obj.recipient_entity_id !== "string" ||
+    !UUID_RE.test(obj.recipient_entity_id)
+  ) {
+    invalid.push("recipient_entity_id");
+  }
+  // notification_class — required; bounded string.
+  if (
+    typeof obj.notification_class !== "string" ||
+    obj.notification_class.length === 0 ||
+    obj.notification_class.length > NOTIFICATION_CLASS_MAX_CHARS
+  ) {
+    invalid.push("notification_class");
+  }
+  // body_summary — required; bounded string.
+  if (
+    typeof obj.body_summary !== "string" ||
+    obj.body_summary.length === 0 ||
+    obj.body_summary.length > NOTIFICATION_BODY_SUMMARY_MAX_CHARS
+  ) {
+    invalid.push("body_summary");
+  }
+  // body_redacted — optional; plain object; bounded size.
+  if (obj.body_redacted !== undefined && obj.body_redacted !== null) {
+    if (
+      typeof obj.body_redacted !== "object" ||
+      Array.isArray(obj.body_redacted)
+    ) {
+      invalid.push("body_redacted");
+    } else {
+      const serialized = JSON.stringify(obj.body_redacted);
+      if (serialized.length > NOTIFICATION_BODY_REDACTED_MAX_BYTES) {
+        invalid.push("body_redacted");
+      }
+    }
+  }
+
+  if (invalid.length > 0) {
+    return { ok: false, invalid_fields: invalid };
+  }
+  const normalized: SendInternalNotificationPayload = {
+    recipient_entity_id: obj.recipient_entity_id as string,
+    notification_class: obj.notification_class as string,
+    body_summary: obj.body_summary as string,
+  };
+  if (obj.body_redacted !== undefined && obj.body_redacted !== null) {
+    normalized.body_redacted = obj.body_redacted as Record<string, unknown>;
+  }
+  return { ok: true, normalized };
 }
 
 // WHAT: Canonical AccessScope enum mirror (per the Prisma enum).
@@ -469,7 +570,7 @@ export function validatePayloadForActionType(
       return r.ok ? { ok: true } : { ok: false, invalid_fields: r.invalid_fields };
     }
     case "SEND_INTERNAL_NOTIFICATION": {
-      const r = validateStubPayload(payload);
+      const r = validateSendInternalNotificationPayload(payload);
       return r.ok ? { ok: true } : { ok: false, invalid_fields: r.invalid_fields };
     }
     default:

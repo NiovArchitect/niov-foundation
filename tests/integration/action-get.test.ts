@@ -234,6 +234,7 @@ async function seedAutoApprovePolicy(
 }
 
 async function createApprovedAction(caller: {
+  entityId: string;
   token: string;
   ip: string;
 }): Promise<string> {
@@ -245,7 +246,14 @@ async function createApprovedAction(caller: {
       action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-summary-secret",
-      payload_redacted: { kind: "capsule", title: "secret-title" },
+      // Wave 11: valid SEND_INTERNAL_NOTIFICATION payload
+      // (self-notification keeps the GET-viewer test focused on
+      // read-side semantics, not recipient setup).
+      payload_redacted: {
+        recipient_entity_id: caller.entityId,
+        notification_class: "get-test",
+        body_summary: "get-test-body-secret",
+      },
     },
     remoteAddress: caller.ip,
   });
@@ -376,7 +384,10 @@ describe("GET /api/v1/actions/:id — self-scope happy path + safe view", () => 
     };
     expect(b.action.status).toBe("SUCCEEDED");
     expect(b.action.attempt_count).toBe(1);
-    expect(b.action.last_result_summary).toBe("stub_send_internal_notification_ok");
+    // Wave 11: SEND_INTERNAL_NOTIFICATION is a REAL handler.
+    expect(b.action.last_result_summary).toMatch(
+      /^internal_notification_dispatched:/,
+    );
     for (const forbidden of FORBIDDEN_TOKENS) {
       expect(r.rawBody.includes(forbidden)).toBe(false);
     }

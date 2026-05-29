@@ -239,12 +239,17 @@ async function seedPolicyWithOverrides(opts: {
 }
 
 async function createApprovedAction(
-  caller: { token: string; ip: string },
-  payload_redacted: Record<string, unknown> = {
-    kind: "notification",
-    title: "test",
-  },
+  caller: { entityId: string; token: string; ip: string },
+  payload_redacted?: Record<string, unknown>,
 ): Promise<string> {
+  // Wave 11: valid SEND_INTERNAL_NOTIFICATION payload (self-notif)
+  // as the default; tests that need FORCE_FAILURE override with
+  // the marker + required fields.
+  const resolvedPayload: Record<string, unknown> = payload_redacted ?? {
+    recipient_entity_id: caller.entityId,
+    notification_class: "policy-overrides-test",
+    body_summary: "policy-overrides-body",
+  };
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/actions",
@@ -253,7 +258,7 @@ async function createApprovedAction(
       action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "wave-6-overrides-test",
-      payload_redacted,
+      payload_redacted: resolvedPayload,
     },
     remoteAddress: caller.ip,
   });
@@ -282,6 +287,9 @@ describe("ADR-0057 Wave 6 — ActionPolicy.retry_budget override", () => {
       retry_budget: 1,
     });
     const actionId = await createApprovedAction(caller, {
+      recipient_entity_id: caller.entityId,
+      notification_class: "force-fail-test",
+      body_summary: "force-fail",
       [TEST_MARKER_FORCE_FAILURE]: true,
     });
 
@@ -319,6 +327,9 @@ describe("ADR-0057 Wave 6 — ActionPolicy.retry_budget override", () => {
       retry_budget: null,
     });
     const actionId = await createApprovedAction(caller, {
+      recipient_entity_id: caller.entityId,
+      notification_class: "force-fail-test",
+      body_summary: "force-fail",
       [TEST_MARKER_FORCE_FAILURE]: true,
     });
 

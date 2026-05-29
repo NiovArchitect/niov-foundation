@@ -18,6 +18,7 @@ import { ReadService } from "./services/cosmp/read.service.js";
 import { WriteService } from "./services/cosmp/write.service.js";
 import { ShareService } from "./services/cosmp/share.service.js";
 import { SimilarityService } from "./services/cosmp/similarity.service.js";
+import { makeNotificationService } from "./services/notification/notification.service.js";
 import { COEService } from "./services/coe/coe.service.js";
 import { registerCoeRoutes } from "./routes/coe.routes.js";
 import { WorkingSetService } from "./services/personalization/working-set.service.js";
@@ -495,14 +496,15 @@ export async function buildApp(
 
   // [ADR-0057-RECORD-CAPSULE-HANDLER] install the per-ActionType
   // handler registry with WriteService injected. The registry replaces
-  // the module-level default at handlers.ts so that the executor (which
-  // imports the default executeActionHandler surface) routes
-  // RECORD_CAPSULE actions through the real
-  // WriteService.createCapsuleForActionRunner system path.
-  // SEND_INTERNAL_NOTIFICATION and PROPOSE_PERMISSION_GRANT remain
-  // stubs pending their own future capability waves.
+  // the module-level default at handlers.ts so the executor routes
+  // each ActionType to its real handler (RECORD_CAPSULE via
+  // WriteService; PROPOSE_PERMISSION_GRANT via createPermission;
+  // SEND_INTERNAL_NOTIFICATION via NotificationService per Wave 11
+  // Founder-direction-locked internal-only delivery — no external
+  // providers).
+  const notificationService = makeNotificationService();
   setDefaultActionHandlerRegistry(
-    makeActionHandlerRegistry({ writeService }),
+    makeActionHandlerRegistry({ writeService, notificationService }),
   );
 
   // ADR-0057 §1 + §11 -- start the Action lifecycle scheduler
