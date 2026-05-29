@@ -83,15 +83,25 @@ export type ActionHandlerResult =
 export const TEST_MARKER_FORCE_FAILURE = "__test_force_failure__";
 export const TEST_MARKER_FORCE_TIMEOUT = "__test_force_timeout__";
 
-// WHAT: The Action fields a handler reads. Widened from the prior
-//        wave's Pick (action_id, action_type, payload_redacted) to
-//        include source_entity_id because the real RECORD_CAPSULE
-//        handler attributes the capsule write to the source entity
-//        via WriteService.createCapsuleForActionRunner.
+// WHAT: The Action fields a handler reads, plus the optional
+//        AbortSignal the executor wires in for the
+//        [ADR-0057-RUNNING-CANCEL-BREAK-GLASS] Wave 2 plumbing.
+//        Widened from the prior wave's Pick to include
+//        source_entity_id (so the real RECORD_CAPSULE handler can
+//        attribute the capsule write via
+//        WriteService.createCapsuleForActionRunner) AND abort_signal
+//        (so future handlers that wrap long-running work — real
+//        connectors, real permission grants — can short-circuit when
+//        the cancel service fires the signal via the abort-registry).
 export type HandlerActionInput = Pick<
   Action,
   "action_id" | "action_type" | "source_entity_id" | "payload_redacted"
->;
+> & {
+  // Optional so unit tests + early consumers can still construct a
+  // HandlerActionInput without an abort_signal. Production executor
+  // always supplies one via registerActionAbort.
+  abort_signal?: AbortSignal;
+};
 
 // WHAT: Inspect Action.payload_redacted for a test-only marker.
 // INPUT: An Action row (only payload_redacted is consulted).
