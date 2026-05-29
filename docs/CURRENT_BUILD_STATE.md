@@ -9,19 +9,21 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-(Wave 10 — ActionAttempt list route landed; closes the
-"callers must query DB directly for attempt history" gap on
-the NOT-LIVE list since PR #39).
+(Wave 11 — SEND_INTERNAL_NOTIFICATION internal-only real
+handler landed per Founder-direction-locked product framing;
+**Section 2 handler tier COMPLETE — 3 of 3 real handlers
+LIVE**; closes the "2 of 3" gap on every status surface
+since PR #41).
 
 ## Current state
 
-- **Latest main HEAD:** `470c43ca34807b88e7dba2f16ef41dbcd6c5cb0a`
-- **Latest merged PR:** [#54](https://github.com/NiovArchitect/niov-foundation/pull/54) — Add ADR-0057 ActionAttempt list route (2026-05-29).
+- **Latest main HEAD:** `e2ebfe84df1bfe3f08c307d68290f4347a9ddde2`
+- **Latest merged PR:** [#56](https://github.com/NiovArchitect/niov-foundation/pull/56) — Add ADR-0057 SEND_INTERNAL_NOTIFICATION internal-only real handler (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
-- **Real per-`ActionType` handlers:** **2 of 3** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT live; SEND_INTERNAL_NOTIFICATION remains stub — no backing notification substrate).
+- **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION per Wave 11 internal-only handler).
 - **Cancel surface:** non-RUNNING (any source caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050) + process-local AbortController plumbing for mid-attempt interruption.
 - **Read surface:** create + cancel + GET viewer + GET list + GET attempt detail — Action Inbox / Detail / Attempt drilldown complete.
 - **Repo posture:** PUBLIC. Branch protection on `main`: 4 required canonical CI checks + force-push blocked + admin-enforced + secret scanning + push protection + dependabot security updates enabled. `required_approving_review_count = 0` (solo-developer pragmatic).
@@ -31,7 +33,7 @@ the NOT-LIVE list since PR #39).
 | # | Section | Status | Detail |
 |---|---|---|---|
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; **Otzar Wave 2A/B/C all LIVE on main** (`3bb773d` / `1ffa01d` / `c56bd57`, 2026-05-27/28). Wave 3 drift detection remains forward-substrate (no ADR yet). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
-| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + **GET attempt list (PR #54)** LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT real handlers LIVE** (2 of 3); SEND_INTERNAL_NOTIFICATION remains stub (Wave 9 research arc landed PR #53; Founder direction needed on §6 product-clarity); AbortController plumbing LIVE (no active consumers yet); **LOCK-GAP-1 + LOCK-GAP-2 CLOSED at PR #47**; **admin write-path LIVE at PR #49**; **attempt-detail viewer surfaces `timeout_ms` per PR #51** — forensic-visibility loop CLOSED end-to-end. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
+| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; **3 of 3 real handlers LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION-internal-only per Wave 11 PR #56 — handler tier COMPLETE; external notification delivery is forward-substrate per Founder direction); AbortController plumbing LIVE (no active consumers yet); LOCK-GAP-1 + LOCK-GAP-2 CLOSED at PR #47; admin write-path LIVE at PR #49; attempt-detail viewer surfaces `timeout_ms` per PR #51 — forensic-visibility loop CLOSED end-to-end. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
@@ -45,6 +47,8 @@ the NOT-LIVE list since PR #39).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#56](https://github.com/NiovArchitect/niov-foundation/pull/56) | `e2ebfe8` | Add ADR-0057 SEND_INTERNAL_NOTIFICATION internal-only real handler |
+| [#55](https://github.com/NiovArchitect/niov-foundation/pull/55) | `870cb70` | Wave-close docs refresh for #54 |
 | [#54](https://github.com/NiovArchitect/niov-foundation/pull/54) | `470c43c` | Add ADR-0057 ActionAttempt list route |
 | [#53](https://github.com/NiovArchitect/niov-foundation/pull/53) | `9a4ca09` | Add Wave 9 SEND_INTERNAL_NOTIFICATION RULE 21 research arc |
 | [#52](https://github.com/NiovArchitect/niov-foundation/pull/52) | `f214e87` | Wave-close docs refresh for #51 |
@@ -53,16 +57,14 @@ the NOT-LIVE list since PR #39).
 | [#49](https://github.com/NiovArchitect/niov-foundation/pull/49) | `28b2cd8` | Add ADR-0057 ActionPolicy override admin write-path |
 | [#48](https://github.com/NiovArchitect/niov-foundation/pull/48) | `3a45b70` | Wave-close docs refresh for #47 |
 | [#47](https://github.com/NiovArchitect/niov-foundation/pull/47) | `ae01289` | Add ADR-0057 ActionPolicy retry_budget + ActionAttempt timeout_ms schema fields |
-| [#46](https://github.com/NiovArchitect/niov-foundation/pull/46) | `6c95bee` | RULE 13 substrate-honest docs reconciliation for Section 1 |
-| [#45](https://github.com/NiovArchitect/niov-foundation/pull/45) | `c186bb2` | Wave-close docs refresh for #41 + public-repo posture |
 
 ## Immediate next work queue
 
-> Wave 10 ActionAttempt list route LANDED at PR #54. Section 2 substrate complete except for SEND_INTERNAL_NOTIFICATION real handler (Wave 9 research arc landed; Founder direction on §6 needed). Queue re-prioritized:
+> Wave 11 SEND_INTERNAL_NOTIFICATION internal-only real handler LANDED at PR #56 per Founder-direction-locked product framing. **Section 2 handler tier COMPLETE — 3 of 3 real handlers LIVE.** Queue re-prioritized:
 
-1. **Founder direction on §6 product-clarity question** (in-app only vs email vs push vs Slack vs combinations) per [`research/2026-05-29-send-internal-notification-substrate-research.md`](research/2026-05-29-send-internal-notification-substrate-research.md). UNBLOCKS the SEND_INTERNAL_NOTIFICATION sub-phase 1 implementation wave. RULE 20-gated.
-2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR. RULE 20-gated. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
-3. **GOVSEC.5 follow-on `requireAdminCapability` throttle.** Broader org-admin route-set throttle per ADR-0050's still-OPEN GOVSEC.5 scope. RULE 20-gated.
+1. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR. RULE 20-gated. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
+2. **GOVSEC.5 follow-on `requireAdminCapability` throttle.** Broader org-admin route-set throttle per ADR-0050's still-OPEN GOVSEC.5 scope. RULE 20-gated.
+3. **Notification inbox routes** (`GET /api/v1/notifications` + `PUT /api/v1/notifications/:id/read`) — substrate persists per Wave 11; UX surface is the next coherent autonomous-safe block (SAFE projection contract + RULE 0 self-scope spine + RULE 20 acknowledgment that opt-out remains forward-substrate).
 4. **`GET /api/v1/org/actions` explicit route** (substrate-coherent; `?org_scope=true` on the unified list already covers the same need; lowest leverage). Autonomous-safe.
 5. **Per-action `ActionPolicy` lookup cache** — ETS-style read-optimized cache forward-substrate per ADR-0036 / ADR-0039 precedent if hot-path contention surfaces; "measure first" per ADR-0016. Autonomous-safe; premature without measurement.
 
