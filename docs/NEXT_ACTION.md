@@ -24,13 +24,15 @@
 
 After this docs refresh merges:
 
-→ Start **Wave 5** — pick between:
+→ Start **Wave 6** — pick between:
 
-  1. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields. Requires `db:push:test` migration per ADR-0025 (authorized dev/test pattern); cross-language Ecto parity per ADR-0033. Substrate-architectural; tier-4 build-log expected. With Wave 4 complete this becomes the natural next substrate slice.
-  2. **Section 1 Wave 2A** — Otzar employee twin role-scope profile route per ADR-0053. Cross-section pivot from Section 2 to Section 1. Substrate-coherent (consumes existing twin.service.ts surface); no schema; no architectural boundary. Higher product leverage for client-readiness (Control Tower needs).
-  3. **SEND_INTERNAL_NOTIFICATION substrate research arc** — would unlock the third real handler. Currently no backing notification service exists in repo; would need to design notification substrate first (in-app vs email vs both); RULE 21 research arc required.
+  1. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields. Requires `db:push:test` migration per ADR-0025 (authorized dev/test pattern); cross-language Ecto parity per ADR-0033. Substrate-architectural; tier-4 build-log expected.
+  2. **Section 1 Wave 3 drift detection ADR** (doctrine-only) — Founder-authorized ADR designing recurring-correction → `IntelligencePattern` auto-write, stale-context warnings, drift-signal contract, proactive-suggestion contract. ADR-only slice; no code; canonicalizes the line between "drift coaching for the employee's benefit" and "manager surveillance" per ADR-0052 forbidden framing.
+  3. **SEND_INTERNAL_NOTIFICATION substrate research arc** — would unlock the third real handler. No backing notification service in repo; RULE 21 research arc required.
 
-  Recommendation per protocol: **Wave 5 = Section 1 Wave 2A Otzar employee twin profile route** — substrate-coherent extension within Section 1; no migration; unlocks Control Tower; rotates section focus per the founder's 10-section production discipline.
+  Recommendation per protocol: **Wave 6 = ADR-0057 retry/timeout schema promotion** — highest substrate leverage; the only Section 2 substrate-architectural slice remaining at this priority tier. The `db:push:test` migration is the canonical authorized dev/test pattern per ADR-0025; no production migration risk.
+
+**Wave 5 note:** the originally-planned Wave 5 (Section 1 Wave 2A Otzar twin profile) was discovered already-LIVE on main during reconnaissance — implementation landed at commits `3bb773d` / `1ffa01d` / `c56bd57` (2026-05-27/28) but the section 01 file claimed forward-substrate. The Wave 5 work pivoted to a docs-only RULE 13 reconciliation of the section 01 file (this refresh).
 
 ## Current stop conditions
 

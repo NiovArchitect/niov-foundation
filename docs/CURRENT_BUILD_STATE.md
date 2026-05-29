@@ -29,7 +29,7 @@ wave-close + repo-now-public security audit).
 
 | # | Section | Status | Detail |
 |---|---|---|---|
-| 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; Otzar Wave 2A/B/C designs accepted (code forward-substrate). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
+| 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; **Otzar Wave 2A/B/C all LIVE on main** (`3bb773d` / `1ffa01d` / `c56bd57`, 2026-05-27/28). Wave 3 drift detection remains forward-substrate (no ADR yet). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
 | 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT real handlers LIVE** (2 of 3); SEND_INTERNAL_NOTIFICATION remains stub (no backing substrate); AbortController plumbing LIVE (no active consumers yet). | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
@@ -57,11 +57,13 @@ wave-close + repo-now-public security audit).
 
 ## Immediate next work queue
 
-1. **Section 1 Wave 2A** — Otzar employee twin role-scope profile route per ADR-0053. Substrate-coherent (consumes existing `twin.service.ts` surface); no schema; rotates section focus per the 10-section production discipline.
-2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields (Prisma migration via `db:push:test` per ADR-0025; cross-language Ecto parity check per ADR-0033).
-3. **Section 1 Wave 2B + 2C** — conversation look-back + correction-conversation linkage (ADR-0054 + ADR-0055).
-4. SEND_INTERNAL_NOTIFICATION substrate research arc (RULE 21; would unlock the 3rd real ActionType handler).
-5. GOVSEC.5 follow-on `requireAdminCapability` throttle.
+> **Section 1 Wave 2A + 2B + 2C all LIVE** per substrate audit during Wave 5 reconnaissance. Section 01 file was previously stale (RULE 13 drift). Queue re-prioritized:
+
+1. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields (Prisma migration via `db:push:test` per ADR-0025; cross-language Ecto parity check per ADR-0033). Substrate-architectural; tier-4 build-log expected.
+2. **Wave 3 drift detection ADR** — Founder-authorized ADR for Section 1 Wave 3 (recurring-correction → `IntelligencePattern` auto-write, stale-context warnings, drift-signal contract, proactive-suggestion contract). Required before any Wave 3 code lands. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
+3. **SEND_INTERNAL_NOTIFICATION substrate research arc** (RULE 21; would unlock the 3rd real ActionType handler).
+4. **GOVSEC.5 follow-on `requireAdminCapability` throttle.**
+5. **`GET /api/v1/org/actions` explicit route** (substrate-coherent; lowest priority among Section 2 routes).
 
 ## Critical Do-NOT-claim list (global truths)
 
