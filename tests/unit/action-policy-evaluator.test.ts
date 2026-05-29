@@ -116,6 +116,11 @@ function policy(
     risk_tier,
     default_decision,
     require_admin_capability: null,
+    // ADR-0057 Wave 6: new ActionPolicy override fields default null
+    // (= service-tier RETRY_BUDGET / ATTEMPT_TIMEOUT_MS_DEFAULT
+    // fallback).
+    retry_budget: null,
+    attempt_timeout_ms_override: null,
     updated_by: UPDATED_BY,
     created_at: new Date("2026-05-29T00:00:00.000Z"),
     updated_at: new Date("2026-05-29T00:00:00.000Z"),

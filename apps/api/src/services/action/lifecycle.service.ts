@@ -268,7 +268,18 @@ export interface CreatedActionAttempt {
 //      same numbering convention.
 export async function createActionAttempt(
   tx: Prisma.TransactionClient,
-  args: { action_id: string; worker_id: string },
+  args: {
+    action_id: string;
+    worker_id: string;
+    // ADR-0057 Wave 6: the resolved per-attempt timeout in
+    // milliseconds (from ActionPolicy.attempt_timeout_ms_override
+    // when set; otherwise ATTEMPT_TIMEOUT_MS_DEFAULT). Persisted
+    // forensically on the attempt row so audit reconstruction can
+    // tell whether an attempt ran under default or override.
+    // Optional for backward-compat with early/test callers that
+    // don't supply a value; production executor always does.
+    timeout_ms?: number;
+  },
 ): Promise<CreatedActionAttempt> {
   const aggregate = await tx.actionAttempt.aggregate({
     where: { action_id: args.action_id, deleted_at: null },
@@ -280,10 +291,61 @@ export async function createActionAttempt(
       action_id: args.action_id,
       attempt_number: nextNumber,
       worker_id: args.worker_id,
+      ...(args.timeout_ms !== undefined ? { timeout_ms: args.timeout_ms } : {}),
     },
     select: { attempt_id: true, attempt_number: true, started_at: true },
   });
   return row;
+}
+
+// WHAT: Resolve the retry budget for an action given an optional
+//        per-(org, action_type, risk_tier) ActionPolicy override.
+// INPUT: actionPolicy (the matched row or null) + action_type
+//         (the canonical fallback key).
+// OUTPUT: A positive integer count of TOTAL attempts the executor
+//         will perform before terminalizing FAILED. (First attempt
+//         counts; e.g. 3 = up to 3 attempts.)
+// WHY: ADR-0057 Wave 6 — LOCK-GAP-1 promotion. When an
+//      ActionPolicy row exists with a non-null retry_budget, the
+//      executor honors that override; otherwise it falls back to
+//      the service-tier RETRY_BUDGET[action_type] constant.
+//      Centralized so the fallback semantics are testable in
+//      isolation.
+export function resolveRetryBudget(
+  actionPolicy: { retry_budget: number | null } | null | undefined,
+  action_type: ActionType,
+): number {
+  if (
+    actionPolicy !== null &&
+    actionPolicy !== undefined &&
+    typeof actionPolicy.retry_budget === "number" &&
+    actionPolicy.retry_budget > 0
+  ) {
+    return actionPolicy.retry_budget;
+  }
+  return RETRY_BUDGET[action_type];
+}
+
+// WHAT: Resolve the per-attempt timeout for an action given an
+//        optional ActionPolicy override.
+// INPUT: actionPolicy (the matched row or null).
+// OUTPUT: A positive integer count of milliseconds.
+// WHY: ADR-0057 Wave 6 — LOCK-GAP-2 promotion. Mirrors
+//      resolveRetryBudget. When the policy row's
+//      attempt_timeout_ms_override is null the executor falls
+//      back to the ATTEMPT_TIMEOUT_MS_DEFAULT (30_000) constant.
+export function resolveAttemptTimeoutMs(
+  actionPolicy: { attempt_timeout_ms_override: number | null } | null | undefined,
+): number {
+  if (
+    actionPolicy !== null &&
+    actionPolicy !== undefined &&
+    typeof actionPolicy.attempt_timeout_ms_override === "number" &&
+    actionPolicy.attempt_timeout_ms_override > 0
+  ) {
+    return actionPolicy.attempt_timeout_ms_override;
+  }
+  return ATTEMPT_TIMEOUT_MS_DEFAULT;
 }
 
 // WHAT: Terminalize a still-open ActionAttempt (ended_at + outcome +
