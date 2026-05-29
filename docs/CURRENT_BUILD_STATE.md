@@ -9,17 +9,17 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-(Section 7 Wave 3 LANDED — niov-admin/platform scope on the
-unified viewer. Section 2 remains production-grade complete
-for the internal Foundation autonomous-execution-substrate
-scope; external tool integrations remain required future
-production work under Section 4 — MCP / Connectors per
-Founder clarification.).
+(Section 7 Wave 4 LANDED — NDJSON audit export surface.
+Section 2 remains production-grade complete for the internal
+Foundation autonomous-execution-substrate scope; external
+tool integrations remain required future production work
+under Section 4 — MCP / Connectors per Founder
+clarification.).
 
 ## Current state
 
-- **Latest main HEAD:** `e914480e57a2a8d33ddae8d655965c7cdf055862`
-- **Latest merged PR:** [#64](https://github.com/NiovArchitect/niov-foundation/pull/64) — Add Section 7 Wave 3 niov-admin/platform scope on unified audit viewer (2026-05-29).
+- **Latest main HEAD:** `f316a518b2c1d65b7fcd7cc53b4f0d1d08d1cdb1`
+- **Latest merged PR:** [#66](https://github.com/NiovArchitect/niov-foundation/pull/66) — Add Section 7 Wave 4 NDJSON audit export surface (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
@@ -39,7 +39,7 @@ Founder clarification.).
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
 | 6 | Enterprise Analytics | Not started. Forward-substrate after Section 3. | [`06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md) |
-| 7 | Full Audit Viewer | **PARTIAL — Waves 1+2+3 LIVE.** Primitives LIVE; unified self+org+platform viewer LIVE at `GET /api/v1/audit/events[?scope=...]` + `/:id[?scope=...]`; `GET /verify-chain` self-only. `scope=org`: TAR `can_admin_org` gate + OR-fence + cross-org leak guard. `scope=platform`: TAR `can_admin_niov` gate + unfenced cross-org visibility (mirrors `/platform/audit` + `/console/audit` at unified entry point). Filters AND-narrow under all 3 scopes; enumeration-safe 404 preserved. Read-audit emission via `ADMIN_ACTION:AUDIT_VIEW_*` (no new audit literal). Export + regulator-tier access + Control Tower UX + cross-chain verify-chain = forward-substrate (Waves 4-6 + forward-substrate). | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
+| 7 | Full Audit Viewer | **PARTIAL — Waves 1+2+3+4 LIVE.** Primitives LIVE; unified self+org+platform viewer LIVE at `GET /api/v1/audit/events[?scope=...]` + `/:id[?scope=...]`; `GET /verify-chain` self-only; NEW NDJSON export at `GET /api/v1/audit/events/export` with `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` hard cap + truncated flag (Wave 4 PR #66). Scope gates TAR-authoritative; filters AND-narrow; enumeration-safe 404 preserved; read-audit emission via `ADMIN_ACTION:AUDIT_VIEW_*` (no new audit literal). Regulator-tier access + Section 7 closeout + Control Tower UX + cross-chain verify-chain + CSV export = forward-substrate (Waves 5-6 + forward-substrate). | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
 | 8 | Billing / Entitlements | Monetization substrate partial (`PRICING_TABLE`, 70/30 split). Entitlements layer forward-substrate. | [`08-billing-entitlements.md`](current-build-state/08-billing-entitlements.md) |
 | 9 | Admin / Governance Control Tower | Backend contracts consumed by frontend partially LIVE; CT frontend lives in [`otzar-control-tower`](https://github.com/NiovArchitect/otzar-control-tower). | [`09-admin-governance-control-tower.md`](current-build-state/09-admin-governance-control-tower.md) |
 | 10 | Deployment / Security / Go-Live | Track A closed; ADR-0011/0013/0015/0018/0019/0024/0025/0047 substrate LIVE; GOVSEC.5 (ADR-0050) Accepted; GOVSEC.2–4 + GOVSEC.6–10 forward-substrate. | [`10-deployment-security-go-live.md`](current-build-state/10-deployment-security-go-live.md) |
@@ -48,6 +48,8 @@ Founder clarification.).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#66](https://github.com/NiovArchitect/niov-foundation/pull/66) | `f316a51` | Add Section 7 Wave 4 NDJSON audit export surface |
+| [#65](https://github.com/NiovArchitect/niov-foundation/pull/65) | `786b8ed` | Wave-close docs refresh for #64 |
 | [#64](https://github.com/NiovArchitect/niov-foundation/pull/64) | `e914480` | Add Section 7 Wave 3 niov-admin/platform scope on unified audit viewer |
 | [#63](https://github.com/NiovArchitect/niov-foundation/pull/63) | `78fcdb9` | Wave-close docs refresh for #62 |
 | [#62](https://github.com/NiovArchitect/niov-foundation/pull/62) | `026300f` | Add Section 7 Wave 2 org-admin scope on /api/v1/audit/events + /:id |
@@ -61,14 +63,14 @@ Founder clarification.).
 
 ## Immediate next work queue
 
-> **Section 7 Waves 1+2+3 LANDED** at PRs #60 + #62 + #64 (unified viewer with self + org-admin + niov-admin/platform scope + chain verification). **Active focus: Section 7.** Continuing through Waves 4-6 per Founder autonomous authorization.
+> **Section 7 Waves 1+2+3+4 LANDED** at PRs #60 + #62 + #64 + #66 (unified viewer with self+org+platform scope + chain verification + NDJSON export). **Active focus: Section 7.** Continuing to Waves 5-6 per Founder autonomous authorization.
 
 **Section 7 next slices:**
 
-1. **Section 7 Wave 4 — export surface** (NDJSON first for safe streaming; rate-limited; chunked; reuses unified scope=self|org|platform gate).
-2. **Section 7 Wave 5 — regulator-tier audit access** via ADR-0036 REGULATOR + LawfulBasis attestation.
-3. **Section 7 Wave 6 — Section 7 closeout** docs + production-grade-complete recommendation.
-4. **Section 7 forward-substrate — Control Tower audit-viewer UX** (frontend; lives in `otzar-control-tower`; out of Foundation scope).
+1. **Section 7 Wave 5 — regulator-tier audit access** via ADR-0036 REGULATOR + LawfulBasis attestation.
+2. **Section 7 Wave 6 — Section 7 closeout** docs + production-grade-complete recommendation.
+3. **Section 7 forward-substrate — CSV export** (NDJSON precedent established; CSV optional).
+4. **Section 7 forward-substrate — Control Tower audit-viewer UX** (frontend; out of Foundation scope).
 5. **Section 7 forward-substrate — org-admin / platform verify-chain** (cross-chain verification = leakage / perf risk; separate QLOCK).
 
 **Other sections waiting on Founder direction:**
