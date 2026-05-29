@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `f214e871860eac6f662b9975a26e8dd80a7d81c0`
-- **Latest merged PR:** [#52](https://github.com/NiovArchitect/niov-foundation/pull/52) — Wave-close docs refresh for ActionAttempt.timeout_ms attempt-detail surfacing.
-- **Active branch / PR:** `wave9-send-internal-notification-research-arc` (Wave 9 — RULE 21 pre-authorization research arc; no code; no schema; no ADR).
+- **Main HEAD:** `470c43ca34807b88e7dba2f16ef41dbcd6c5cb0a`
+- **Latest merged PR:** [#54](https://github.com/NiovArchitect/niov-foundation/pull/54) — ADR-0057 ActionAttempt list route.
+- **Active branch / PR:** `refresh-docs-wave10-attempt-list-route` (Wave 10 wave-close docs refresh).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **2 of 3** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT live; SEND_INTERNAL_NOTIFICATION remains stub — no backing notification substrate).
@@ -25,24 +25,23 @@
 
 After this docs refresh merges:
 
-**Wave 9 ARC LANDED — research-only docs slice** at [`research/2026-05-29-send-internal-notification-substrate-research.md`](research/2026-05-29-send-internal-notification-substrate-research.md). Per RULE 21 pre-authorization discipline. **Founder QLOCK required next** — §6 product-clarity question (in-app vs email vs push vs Slack vs SMS) is the unblock for the substantive sub-phase 1 implementation. The arc inventoried substrate-state ground truth (only `DeviceToken` + `IntegrationCredential` schemas exist; ZERO TS-side consumer code; no email/push/Slack/SMS backend; no in-app `Notification` model); enumerated 5 delivery backends + 4 routing axes + 3 opt-out granularities; recommended in-app default with provider-pluggable abstraction (EmbeddingProvider precedent per ADR-0043 G3.4); pre-queued RULE 0 sovereignty disclosures; pre-queued an NEW ADR draft + 4-6-PR sub-phase 1 plan for the post-QLOCK implementation wave.
+→ Start **Wave 11** — pick between:
 
-→ Next steps after Wave 9 arc lands:
+  1. **Founder direction on §6 product-clarity question** (in-app vs email vs push vs Slack vs SMS) per the Wave 9 research arc at [`research/2026-05-29-send-internal-notification-substrate-research.md`](research/2026-05-29-send-internal-notification-substrate-research.md). UNBLOCKS the SEND_INTERNAL_NOTIFICATION sub-phase 1 implementation wave. RULE 20-gated.
+  2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized doctrine slice. RULE 20-gated.
+  3. **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated.
+  4. **Explicit `GET /api/v1/org/actions` route** — substrate-coherent alias; `?org_scope=true` on the unified list already covers the same need; lowest leverage; autonomous-safe.
+  5. **Per-action `ActionPolicy` lookup cache** — ETS-style read-optimized cache forward-substrate per ADR-0036 / ADR-0039 precedent; "measure first" per ADR-0016. Premature optimization without measured contention. Autonomous-safe but lowest priority.
 
-  1. **Founder direction on §6 product-clarity question** — required before any code authorizes. Recommendation: option 1 (in-app only at sub-phase 1) per the arc.
-  2. **Subsequent autonomous Wave 10 candidates** (post-Wave-9-arc, pre-Founder-direction):
-     - **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated (ADR-0050 amendment needed).
-     - **Explicit `GET /api/v1/org/actions` route** — substrate-coherent alias; lowest leverage.
-     - **ActionAttempt list-of-attempts route** — substrate-coherent; would unlock Control Tower attempt-list UX.
+  Recommendation per protocol: **autonomous protocol may stand by for Founder direction on items 1-3 (all RULE 20-gated)**. Among autonomous-safe slices remaining, the `GET /api/v1/org/actions` route alias is the next-highest-leverage; even so, the marginal product value is small because `?org_scope=true` on the unified list already covers the same need. The Section 2 substrate is now mature — most autonomous-safe extensions remaining are marginal polish, not substrate gaps. Strongly recommend pause for Founder review of accumulated work waves 6-10.
 
-  Recommendation per protocol: **stand by for Founder direction on §6** OR continue with one of the lower-leverage substrate-coherent slices above. The autonomous protocol should not draft + land the SEND_INTERNAL_NOTIFICATION implementation ADR without Founder direction on the product-clarity question.
-
-**Wave 6 / 7 / 8 summary (Section 2 forensic-visibility loop CLOSED end-to-end):**
+**Wave 6 / 7 / 8 / 9 / 10 summary (Section 2 substrate complete except for SEND_INTERNAL_NOTIFICATION real handler):**
 
 - **Wave 6 (PR #47):** LOCK-GAP-1 + LOCK-GAP-2 schema promotion to `ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override` + `ActionAttempt.timeout_ms`. NEW resolver helpers; executor adds per-action policy point-lookup. Tier-4 build-log at [`build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md`](build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md).
 - **Wave 7 (PR #49):** Admin write-path closure. `PUT /api/v1/org/action-policies` allowlist + typed validator; GET list response projects both override columns; audit boolean `_set` flags (NEVER numeric values). Closed RULE 13 drift surfaced post-PR-48.
 - **Wave 8 (PR #51):** Attempt-detail viewer projection. `SafeActionAttemptView.timeout_ms` surfaces the resolved value on `GET /api/v1/actions/:id/attempts/:attempt_id`. 2 NEW integration tests. Closed the last forensic-visibility surface.
-- **Wave 9 (this slice):** SEND_INTERNAL_NOTIFICATION RULE 21 research arc landed; product-clarity question queued for Founder.
+- **Wave 9 (PR #53):** SEND_INTERNAL_NOTIFICATION RULE 21 research arc landed at [`research/2026-05-29-send-internal-notification-substrate-research.md`](research/2026-05-29-send-internal-notification-substrate-research.md); product-clarity question queued for Founder.
+- **Wave 10 (PR #54):** ActionAttempt list route `GET /api/v1/actions/:id/attempts`. Closes the "callers must query DB directly for attempt history" gap. Same authorization spine as PR #39 + PR #51; pagination + outcome filter + soft-delete invisibility; 16 NEW integration tests; no schema; no architectural primitive.
 
 ## Current stop conditions
 
@@ -80,7 +79,10 @@ After this docs refresh merges:
 - **RUNNING-cancel break-glass plumbing** — cancel.service validates ACTIVE break-glass grant + marks USED + emits ACTION_CANCELLED with grant_id back-reference + fires process-local AbortController so in-flight attempts short-circuit.
 - **PROPOSE_PERMISSION_GRANT real handler** — calls existing `createPermission` (which enforces RULE 0 sovereignty in code) + emits canonical `PERMISSION_CREATED` AuditEvent with action_id back-reference. SAFE result_metadata (permission_id + bridge_id + capsule_id + grantee_entity_id + access_scope + duration_type only).
 
-**NEW LIVE (Wave 8 / PR #51):**
+**NEW LIVE (Wave 10 / PR #54):**
+- `GET /api/v1/actions/:id/attempts` — paginated SafeActionAttemptView list for one parent Action. Same authorization spine as PR #39 + PR #51 (source self-scope OR `can_admin_org`-over-same-org; RULE 0 enumeration-prevention 404). Pagination + optional outcome filter + soft-delete invisibility + chronological sort (`attempt_number` ASC) + per-row timeout_ms surfacing (Wave 8 carry-through).
+
+**LIVE (Wave 8 / PR #51):**
 - `SafeActionAttemptView.timeout_ms: number | null` projects the per-attempt timeout-in-force on `GET /api/v1/actions/:id/attempts/:attempt_id`. Null only for attempts that landed before PR #47. Forensic-visibility loop CLOSED end-to-end.
 
 **LIVE (Wave 7 / PR #49):**
@@ -94,9 +96,8 @@ After this docs refresh merges:
 - `resolveRetryBudget` + `resolveAttemptTimeoutMs` pure resolver helpers in `apps/api/src/services/action/lifecycle.service.ts`.
 
 **NOT LIVE:**
-- SEND_INTERNAL_NOTIFICATION real handler (no backing notification substrate exists; future wave needs RULE 21 research arc + Founder direction on product clarity).
+- SEND_INTERNAL_NOTIFICATION real handler — Wave 9 research arc landed; Founder direction on §6 product-clarity question needed before implementation wave.
 - Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list).
-- ActionAttempt list-of-attempts route (callers query DB if needed; future slice if Control Tower needs).
 - Active AbortSignal consumption by handlers (plumbed but RECORD_CAPSULE + stubs don't listen yet; future real handlers wrapping long-running connector work will consume).
 - Per-action `ActionPolicy` lookup cache (one indexed point-lookup per claimed Action; cache is forward-substrate if hot-path contention surfaces; "measure first" per ADR-0016).
 - Connectors / MCP / Control Tower UX / voice / ambient / lens UX.
