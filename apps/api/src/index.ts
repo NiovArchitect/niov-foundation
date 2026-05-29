@@ -79,6 +79,32 @@ export type {
   NotificationService,
 } from "./services/notification/notification.service.js";
 
+// Section 7 Wave 1 — unified self-scope audit-events viewer.
+// Read-only over the LIVE audit primitives (`queryAuditEvents` +
+// `verifyAuditChain`); self-scope only at sub-phase 1; org-admin
+// + niov-admin scopes intentional future-substrate. Every viewer
+// read emits an ADMIN_ACTION:AUDIT_VIEW_* audit per the
+// CONSOLE_READ precedent (no new audit literal).
+export {
+  DEFAULT_AUDIT_EVENTS_PAGE_SIZE,
+  getAuditEventForCaller,
+  listAuditEventsForCaller,
+  validateListAuditEventsQuery,
+  verifyAuditChainForCaller,
+} from "./services/audit/audit-view.service.js";
+export type {
+  AuditEventChainRef,
+  GetAuditEventResult,
+  ListAuditEventsQuery,
+  ListAuditEventsResult,
+  ListAuditEventsView,
+  NormalizedListAuditEventsFilters,
+  SafeAuditEventDetailView,
+  SafeAuditEventView,
+  VerifyAuditChainCallerResult,
+  VerifyAuditChainView,
+} from "./services/audit/audit-view.service.js";
+
 // ADR-0057 Wave 12 — internal-only notification inbox read surface.
 // Self-scope only at sub-phase 1; SAFE projection excludes
 // body_redacted by default; mark-as-read + dismiss are idempotent
