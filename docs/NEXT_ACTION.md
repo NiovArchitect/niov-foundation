@@ -9,31 +9,25 @@
 
 ## Where we are
 
-- **Main HEAD:** `75933ad0e608aa18ed51b6d664b7eb51febe6f93`
-- **Latest merged PR:** [#32](https://github.com/NiovArchitect/niov-foundation/pull/32) — ADR-0057 GET actions list route.
-- **Active branch / PR:** `docs-current-build-state-section-split` (the docs split this baton lands in).
+- **Main HEAD:** `4ef4ed43ffa65a8bbfc094874ffd58f13fcdaf07`
+- **Latest merged PR:** [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) — ADR-0057 RECORD_CAPSULE real handler capability.
+- **Active branch / PR:** `refresh-docs-wave1-record-capsule-handler` (this wave-close docs refresh).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **Live `ACTION_*` emitters:** 10 of 10.
+- **Real per-`ActionType` handlers:** 1 of 3 (RECORD_CAPSULE live; SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT stub).
 - **TypeScript baseline:** exactly 4 canonical residual errors.
 
 ## Exact next action
 
-After the docs-split PR merges:
+After this docs refresh merges:
 
-→ Start **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`**.
-  This is the first real per-`ActionType` handler. `RECORD_CAPSULE`
-  is the natural first surface — it wires the Action runtime to
-  existing COSMP WRITE semantics. **RULE 21 research arc REQUIRED**
-  because the handler crosses the Action↔COSMP architectural
-  boundary. The research arc lands as a docs-only deliverable
-  FIRST; then a separate Founder-authorized
-  `EXECUTE-VERIFY-AUTH` slice implements.
+→ Start **Wave 2** — choose between (preference order; pick the safest highest-leverage Section 2 slice given current substrate):
 
-## Next 3 work items (after the handler arc)
+  1. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`** — privileged `RUNNING → CANCELLED` on the GOVSEC.5 break-glass substrate (ADR-0050; landed) + `AbortController` plumbing for mid-attempt handler interruption. Substrate-architectural; tier-4 build-log entry expected. Crosses Action ↔ Break-glass boundary.
+  2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 (`RETRY_BUDGET`, `ATTEMPT_TIMEOUT_MS_DEFAULT`) from service-tier constants to schema fields. **Requires Prisma migration + cross-language Ecto parity check per ADR-0033.** Per protocol: stop unless repo discipline clearly authorizes the test-DB-only migration pattern (ADR-0025 `db:push:test` is the canonical path; this is a legitimate dev/test migration, not production).
+  3. **PROPOSE_PERMISSION_GRANT real handler** — MEDIUM-risk; dual-control by default; touches multiple entities' DMW boundaries; RULE 0 sovereignty implications. Higher blast-radius than RECORD_CAPSULE; substrate exists (`createPermission` DB query) but warrants its own RULE 21 research arc.
 
-1. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`** — privileged `RUNNING → CANCELLED` on the GOVSEC.5 break-glass substrate (ADR-0050; landed) + `AbortController` plumbing.
-2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants (`RETRY_BUDGET`, `ATTEMPT_TIMEOUT_MS_DEFAULT`) to `ActionPolicy.retry_budget` + `ActionAttempt.timeout_ms` schema fields. Requires a Prisma migration + cross-language Ecto parity check per ADR-0033.
-3. **Wave 2A/B/C Otzar employee-twin route implementations** (Section 1). Designs are accepted at ADR-0053 / ADR-0054 / ADR-0055; code forward-substrate.
+  Recommendation per protocol: **Wave 2 = RUNNING-cancel break-glass** (preference order #1; clear substrate; ADR-0050 already landed; AbortController plumbing is a known pattern). Document the decision note inline before starting.
 
 ## Current stop conditions
 
@@ -65,9 +59,12 @@ After the docs-split PR merges:
 - `GET /api/v1/org/action-policies` + `PUT /api/v1/org/action-policies` (dual-control gated).
 - Executor + scheduler + expiry sweep runtime (`tickActionExecutor` + `tickActionScheduler` + `tickActionExpirySweep`).
 - All 10 `ACTION_*` audit emitters.
+- **RECORD_CAPSULE real handler** — RECORD_CAPSULE actions now execute through `WriteService.createCapsuleForActionRunner` and produce real `MemoryCapsule` rows in the source entity's wallet with back-referenced `CAPSULE_MUTATION_ADD` audit + SAFE `ActionResult.result_metadata` (capsule_id + capsule_type only).
+- Per-`ActionType` create-time payload validator dispatcher — RECORD_CAPSULE payloads validated for `CapsuleCreateInput` shape at create-time (422 INVALID_FIELD on malformed body).
 
 **NOT LIVE:**
-- Real per-`ActionType` business handlers (stubs only).
+- SEND_INTERNAL_NOTIFICATION real handler (no backing substrate exists; future wave).
+- PROPOSE_PERMISSION_GRANT real handler (MEDIUM-risk; separate future wave).
 - `RUNNING → CANCELLED` privileged cancellation.
 - `ActionPolicy.retry_budget` + `ActionAttempt.timeout_ms` schema fields (service-tier constants only).
 - Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list).
