@@ -9,15 +9,17 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-(Wave 12 — notification inbox routes landed; **Section 2
-production-grade COMPLETE for current internal-only
-production scope** — recommend marking Section 2 closed and
-shifting next-section focus per Founder direction).
+(Section 7 Wave 1 LANDED — unified self-scope audit viewer
++ verify-chain. Section 2 remains production-grade complete
+for the internal Foundation autonomous-execution-substrate
+scope; external tool integrations remain required future
+production work under Section 4 — MCP / Connectors per
+Founder clarification.).
 
 ## Current state
 
-- **Latest main HEAD:** `2acd5c767a90a38dcfc243e6ad1194e5d7714878`
-- **Latest merged PR:** [#58](https://github.com/NiovArchitect/niov-foundation/pull/58) — Add ADR-0057 notification inbox routes (Wave 12 internal-only read surface) (2026-05-29).
+- **Latest main HEAD:** `10155b94ba10a49e525981ccf0b103ffdcac256e`
+- **Latest merged PR:** [#60](https://github.com/NiovArchitect/niov-foundation/pull/60) — Add Section 7 Wave 1 unified self-scope audit-events viewer (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
@@ -32,12 +34,12 @@ shifting next-section focus per Founder direction).
 | # | Section | Status | Detail |
 |---|---|---|---|
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; **Otzar Wave 2A/B/C all LIVE on main** (`3bb773d` / `1ffa01d` / `c56bd57`, 2026-05-27/28). Wave 3 drift detection remains forward-substrate (no ADR yet). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
-| 2 | Autonomous Execution Core | **PRODUCTION-GRADE COMPLETE for current internal-only production scope** (Wave 12 closeout). Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; 3 of 3 real handlers LIVE; admin `/org/action-policies` LIVE with operator-tunable retry_budget + attempt_timeout_ms_override; forensic-visibility loop CLOSED end-to-end; 3 internal-only notification inbox routes LIVE per PR #58 (GET list + PUT read + PUT dismiss; SAFE projection; enumeration-safe 404). External delivery / opt-out / per-Notification audit literals / admin-cross-recipient list / cache / connectors all intentional future-substrate. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
+| 2 | Autonomous Execution Core | **PRODUCTION-GRADE COMPLETE for internal Foundation autonomous-execution-substrate scope** (Wave 12 closeout). Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; 3 of 3 real handlers LIVE; admin `/org/action-policies` LIVE with operator-tunable retry_budget + attempt_timeout_ms_override; forensic-visibility loop CLOSED end-to-end; 3 internal-only notification inbox routes LIVE per PR #58 (GET list + PUT read + PUT dismiss; SAFE projection; enumeration-safe 404). Internal-only = the Foundation autonomous-execution-substrate is complete; external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** under **Section 4 — MCP / Connectors** as governed adapters. Per-Notification audit literals / admin-cross-recipient list / cache / `NotificationPreference` opt-out intentional future-substrate. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
 | 6 | Enterprise Analytics | Not started. Forward-substrate after Section 3. | [`06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md) |
-| 7 | Full Audit Viewer | Primitives LIVE (`queryAuditEvents`, `verifyAuditChain`). Viewer route + UX forward-substrate. | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
+| 7 | Full Audit Viewer | **PARTIAL — Wave 1 LIVE per PR #60.** Primitives LIVE (`queryAuditEvents`, `verifyAuditChain`, BEFORE DELETE trigger, hash chain); unified self-scope viewer LIVE at `GET /api/v1/audit/events` + `/:id` + `/verify-chain` (Section 7 Wave 1; read-audit emission via existing `ADMIN_ACTION:AUDIT_VIEW_*` per the CONSOLE_READ precedent — no new audit literal). Org-admin + niov-admin scopes on the unified surface + export + regulator-tier access + Control Tower UX = forward-substrate (Section 7 Waves 2-6). | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
 | 8 | Billing / Entitlements | Monetization substrate partial (`PRICING_TABLE`, 70/30 split). Entitlements layer forward-substrate. | [`08-billing-entitlements.md`](current-build-state/08-billing-entitlements.md) |
 | 9 | Admin / Governance Control Tower | Backend contracts consumed by frontend partially LIVE; CT frontend lives in [`otzar-control-tower`](https://github.com/NiovArchitect/otzar-control-tower). | [`09-admin-governance-control-tower.md`](current-build-state/09-admin-governance-control-tower.md) |
 | 10 | Deployment / Security / Go-Live | Track A closed; ADR-0011/0013/0015/0018/0019/0024/0025/0047 substrate LIVE; GOVSEC.5 (ADR-0050) Accepted; GOVSEC.2–4 + GOVSEC.6–10 forward-substrate. | [`10-deployment-security-go-live.md`](current-build-state/10-deployment-security-go-live.md) |
@@ -46,6 +48,8 @@ shifting next-section focus per Founder direction).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#60](https://github.com/NiovArchitect/niov-foundation/pull/60) | `10155b9` | Add Section 7 Wave 1 unified self-scope audit-events viewer |
+| [#59](https://github.com/NiovArchitect/niov-foundation/pull/59) | `58f6ddc` | Wave-close docs refresh for #58 + Section 2 closeout |
 | [#58](https://github.com/NiovArchitect/niov-foundation/pull/58) | `2acd5c7` | Add ADR-0057 notification inbox routes (Wave 12 internal-only read surface) |
 | [#57](https://github.com/NiovArchitect/niov-foundation/pull/57) | `e9611c3` | Wave-close docs refresh for #56 |
 | [#56](https://github.com/NiovArchitect/niov-foundation/pull/56) | `e2ebfe8` | Add ADR-0057 SEND_INTERNAL_NOTIFICATION internal-only real handler |
@@ -54,19 +58,25 @@ shifting next-section focus per Founder direction).
 | [#53](https://github.com/NiovArchitect/niov-foundation/pull/53) | `9a4ca09` | Add Wave 9 SEND_INTERNAL_NOTIFICATION RULE 21 research arc |
 | [#52](https://github.com/NiovArchitect/niov-foundation/pull/52) | `f214e87` | Wave-close docs refresh for #51 |
 | [#51](https://github.com/NiovArchitect/niov-foundation/pull/51) | `8fa0658` | Surface ActionAttempt.timeout_ms on attempt-detail viewer |
-| [#50](https://github.com/NiovArchitect/niov-foundation/pull/50) | `c90d434` | Wave-close docs refresh for #49 |
-| [#49](https://github.com/NiovArchitect/niov-foundation/pull/49) | `28b2cd8` | Add ADR-0057 ActionPolicy override admin write-path |
 
 ## Immediate next work queue
 
-> Wave 12 notification inbox routes LANDED at PR #58. **Section 2 PRODUCTION-GRADE COMPLETE for current internal-only production scope.** Recommend marking Section 2 closed and shifting next-section focus per Founder direction. Next-section queue:
+> **Section 7 Wave 1 LANDED** at PR #60 (unified self-scope audit viewer + verify-chain). **Active focus: Section 7.** Section 2 remains closed for the internal Foundation autonomous-execution-substrate scope. Founder clarification re-asserted: external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain required future production capabilities under **Section 4 — MCP / Connectors**.
 
-1. **Section 7 — Full Audit Viewer** — highest leverage. Audit primitives (`queryAuditEvents` + `verifyAuditChain` + the 10-literal `ACTION_*` vocabulary + BEFORE DELETE trigger) are LIVE; viewer route + UX is the gap. Canonical compliance / forensic surface every regulated customer needs.
-2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR. RULE 20-gated.
-3. **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated (ADR-0050 amendment).
-4. **Section 9 — Admin / Governance Control Tower backend contracts** — partially LIVE via org admin routes; modest "new substantive surface" leverage.
+**Section 7 next slices:**
 
-Section 2 intentional future-substrate (do NOT auto-implement; each needs its own QLOCK): external notification adapters; `NotificationPreference` opt-out; per-Notification audit literals; admin / cross-recipient notification list; notification detail-view route; explicit `GET /api/v1/org/actions` alias; ActionPolicy lookup cache; AbortSignal active consumers; connectors / MCP / Control Tower UX / voice / ambient / lens UX.
+1. **Section 7 Wave 2 — org-admin scope on `/api/v1/audit/events`** (cross-org leak guard tested per the existing `admin-routes.test.ts` precedent).
+2. **Section 7 Wave 3 — niov-admin scope** on the unified surface.
+3. **Section 7 Wave 4 — export surface** (CSV / NDJSON streaming; rate-limited).
+4. **Section 7 Wave 5 — regulator-tier audit access** via ADR-0036 REGULATOR + LawfulBasis attestation.
+5. **Section 7 Wave 6 — Control Tower audit-viewer UX** (frontend; lives in `otzar-control-tower`; out of Foundation scope).
+
+**Other sections waiting on Founder direction:**
+
+- **Section 4 — MCP / Connectors** — canonical home for external tool integrations. Each adapter wave = its own Founder QLOCK + RULE 21 research arc.
+- **Section 1 Wave 3 drift detection ADR** — RULE 20-gated.
+- **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated.
+- **Section 9 — Admin / Governance Control Tower backend contracts** — partially LIVE.
 
 ## Critical Do-NOT-claim list (global truths)
 
