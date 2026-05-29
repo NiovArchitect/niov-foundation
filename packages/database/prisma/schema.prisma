@@ -1346,3 +1346,239 @@ enum BreakGlassStatus {
   REVIEWED
   REVOKED
 }
+
+// =============================================================================
+// ADR-0057 Autonomous Execution Core Substrate (Section 2)
+// =============================================================================
+// 4 models + 5 enums per ADR-0057 §2 canonical schema intent. Schema-only
+// substrate landing: NO routes, NO services, NO executor, NO worker, NO
+// scheduler, NO policy evaluator runtime. The 10 NEW append-only ACTION_*
+// audit literals land alongside this in packages/database/src/queries/audit.ts
+// per ADR-0057 §10 (same precedent as CAPSULE_MUTATION_* (4) + BREAK_GLASS_*
+// (4); no ADR-0002 amendment required for additive literals).
+//
+// Approvals reuse EscalationRequest per ADR-0057 §5 (NO ActionApproval table).
+// Execution attempts are captured in ActionAttempt per §1 + §11 (NO separate
+// ActionExecution table). The single ActionPolicy row per (org, action_type,
+// risk_tier) carries the per-org default decision per §3 + §4.
+//
+// Entity / EscalationRequest references are stored as plain UUID columns
+// (no Prisma @relation blocks) following the LawfulBasis (ADR-0036) +
+// BreakGlassGrant (ADR-0050 BG.1) governance-record precedent. This keeps
+// the schema landing strictly additive (no edits to Entity or
+// EscalationRequest model bodies; RULE 1 honored) and mirrors the same
+// pattern the freshest governance-record substrate already uses. Service-tier
+// code (forward-substrate per ADR-0057 §16 step 4-7) joins via the UUID
+// columns explicitly; Postgres-tier referential constraints can be tightened
+// in a later QLOCK if/when the substrate demands cascade behavior.
+//
+// No-leak posture per ADR-0057 §10 forbidden-audit-details list:
+// - payload_summary is constrained to safe, allowlisted fields by service-tier
+//   discipline at create-time (per-action-type allowlist).
+// - payload_redacted is Json containing only safe-fields-only at create-time
+//   (per-action-type allowlist; NEVER raw external content, NEVER secrets,
+//   NEVER raw request/response passthrough).
+// - policy_envelope is the frozen snapshot of TAR/OrgSettings/TwinConfig/
+//   Permission inputs to the evaluator (per §3); raw envelope content is
+//   substrate-internal and NEVER returned in response bodies or audit
+//   details (the hash only is exposed via policy_envelope_hash).
+// - error_class on ActionAttempt is enum-bound (enum-literal-only;
+//   NEVER free-form error text).
+// - result_metadata on ActionResult is per-action-type allowlist (NEVER raw
+//   external API responses, NEVER raw HTTP headers, NEVER secrets,
+//   NEVER capsule content, NEVER embeddings/vectors,
+//   NEVER candidate-pool identities or size, NEVER raw error text/stack
+//   traces, NEVER break-glass justification text).
+// - The mapper-tier projectActionView / projectActionResult pattern (per
+//   ADR-0051 / ADR-0054 / ADR-0055 mapper precedent) lands in a later QLOCK
+//   to enforce forbidden-field stripping by construction; the route never
+//   reaches into the ORM-shaped object.
+
+// An Action is a discrete unit of autonomous-execution intent governed by
+// the COSMP policy envelope. Every Action carries a frozen snapshot of the
+// policy inputs at create-time so the policy evaluator decides on the
+// substrate that existed at intent-formation time (not at execution time).
+// Lifecycle per ADR-0057 §1: PROPOSED → APPROVED|REJECTED|EXPIRED →
+// SCHEDULED → RUNNING → SUCCEEDED|FAILED|TIMED_OUT|CANCELLED. Terminal
+// states are immutable except for audit append per RULE 10 + ADR-0002.
+// Soft delete via deleted_at; the row stays, audit chain preserved.
+//
+// payload_summary / payload_redacted are SAFE by service-tier discipline
+// per ADR-0057 §10 forbidden-fields list. policy_envelope is the SHA-256-
+// hashable canonical input snapshot (raw envelope is substrate-internal;
+// audit emits policy_envelope_hash only).
+//
+// idempotency_key is UNIQUE per ADR-0057 §11; duplicate POST returns the
+// existing action_id (no duplicate Action). Indexed for ORG-tier listing
+// (org_entity_id, status, created_at) per the DRIFT-9 cross-org leak guard
+// pattern at ADR-0006 + Self-scope listing (source_entity_id, status).
+//
+// escalation_id pairs with the optional EscalationRequest created when the
+// policy evaluator decides REQUIRE_DUAL_CONTROL per ADR-0057 §5.
+// target_entity_id is structurally nullable; it MUST NEVER silently fall
+// back to source_entity_id (GAP-C1 self-resolution guard preserved).
+model Action {
+  action_id          String           @id @default(uuid()) @db.Uuid
+  source_entity_id   String           @db.Uuid
+  org_entity_id      String           @db.Uuid
+  target_entity_id   String?          @db.Uuid
+  action_type        ActionType
+  risk_tier          ActionRiskTier
+  policy_envelope    Json
+  payload_summary    String
+  payload_redacted   Json
+  idempotency_key    String           @unique
+  escalation_id      String?          @db.Uuid
+  status             ActionStatus     @default(PROPOSED)
+  expires_at         DateTime?
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+  deleted_at         DateTime?
+
+  @@index([org_entity_id, status, created_at])
+  @@index([source_entity_id, status])
+  @@index([target_entity_id])
+  @@index([escalation_id])
+  @@index([action_type])
+  @@index([risk_tier])
+  @@index([status])
+  @@index([expires_at])
+  @@index([deleted_at])
+  @@map("actions")
+}
+
+// An ActionAttempt is one immutable execution attempt per Action. Retries
+// create new rows with monotonic attempt_number per ADR-0057 §11.
+// worker_id is the in-process worker identity (set at pick-time). outcome
+// is enum-bound per ActionAttemptOutcome. error_class is enum-literal-only
+// (NEVER free-form text); error_summary is SAFE pre-canonicalized text
+// constrained by the service-tier emitter. Soft delete via deleted_at.
+//
+// (action_id, attempt_number) is unique-by-construction at the service tier;
+// the indexed composite supports the per-action attempt-history listing.
+model ActionAttempt {
+  attempt_id     String                @id @default(uuid()) @db.Uuid
+  action_id      String                @db.Uuid
+  attempt_number Int
+  started_at     DateTime              @default(now())
+  ended_at       DateTime?
+  outcome        ActionAttemptOutcome?
+  worker_id      String?
+  error_class    String?
+  error_summary  String?
+  deleted_at     DateTime?
+
+  @@index([action_id, attempt_number])
+  @@index([outcome])
+  @@index([deleted_at])
+  @@map("action_attempts")
+}
+
+// An ActionResult is the SAFE outcome record for one ActionAttempt. result_
+// summary is SAFE pre-canonicalized text; result_metadata is per-action-type
+// allowlist Json (NEVER raw external API responses, NEVER raw HTTP headers,
+// NEVER secrets, NEVER capsule content, NEVER embeddings/vectors, NEVER
+// candidate-pool identities or size, NEVER raw error text). The mapper-tier
+// projectActionResult pattern (per ADR-0051 / ADR-0054 / ADR-0055 mapper
+// precedent) lands in a later QLOCK to enforce by construction.
+model ActionResult {
+  result_id       String   @id @default(uuid()) @db.Uuid
+  attempt_id      String   @db.Uuid
+  result_summary  String
+  result_metadata Json
+  created_at      DateTime @default(now())
+
+  @@index([attempt_id])
+  @@map("action_results")
+}
+
+// An ActionPolicy is the per-org default decision for a given (action_type,
+// risk_tier) tuple. The policy evaluator (forward-substrate per ADR-0057 §3)
+// consumes this row plus the frozen policy_envelope to return a
+// discriminated-union decision. require_admin_capability is nullable; when
+// non-null it carries the capability bit needed for AUTO_APPROVE within the
+// matched policy (e.g., "can_admin_org" for ORG_ACTION_POLICY_UPDATE-class
+// actions, "can_admin_niov" for the existing PRIVILEGED_ENDPOINTS-class
+// actions). updated_by is the entity_id of the admin who last changed this
+// policy row; updates emit the ACTION_POLICY_UPDATE audit literal.
+//
+// (org_entity_id, action_type, risk_tier) is UNIQUE — at most one policy
+// row per org per action-type per risk-tier.
+model ActionPolicy {
+  policy_id                  String          @id @default(uuid()) @db.Uuid
+  org_entity_id              String          @db.Uuid
+  action_type                ActionType
+  risk_tier                  ActionRiskTier
+  default_decision           ActionDecision
+  require_admin_capability   String?
+  updated_by                 String          @db.Uuid
+  created_at                 DateTime        @default(now())
+  updated_at                 DateTime        @updatedAt
+
+  @@unique([org_entity_id, action_type, risk_tier])
+  @@index([org_entity_id])
+  @@index([action_type])
+  @@index([risk_tier])
+  @@map("action_policies")
+}
+
+// 10 canonical lifecycle states per ADR-0057 §1 state machine. Terminal
+// states (SUCCEEDED / FAILED / CANCELLED / TIMED_OUT / REJECTED / EXPIRED)
+// are immutable except audit append. Transitions are guarded at the
+// service tier (forward-substrate per ADR-0057 §16 step 4-7).
+enum ActionStatus {
+  PROPOSED
+  APPROVED
+  SCHEDULED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+  REJECTED
+  EXPIRED
+}
+
+// Initial canonical set per ADR-0057 §2 (intentionally small). Enum
+// extension follows the ADR-0021 Capsule Type Extension Protocol pattern
+// (deliberate-blocker per-type validator + per-type safe-field allowlist
+// at the service tier). Adding a new ActionType requires updating the
+// per-type allowlist + per-type policy-evaluator behavior + per-type
+// monetization decisions in a future QLOCK.
+enum ActionType {
+  RECORD_CAPSULE
+  PROPOSE_PERMISSION_GRANT
+  SEND_INTERNAL_NOTIFICATION
+}
+
+// Per-action risk tier per ADR-0057 §2 + §4. CRITICAL is always
+// REQUIRE_DUAL_CONTROL at minimum (no autonomy level, not even
+// EXECUTIVE_OVERRIDE, auto-approves CRITICAL).
+enum ActionRiskTier {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Policy-evaluator discriminated decision per ADR-0057 §3. AUTO_APPROVE
+// is permissive (action proceeds without an EscalationRequest);
+// REQUIRE_DUAL_CONTROL pairs with EscalationRequest per §5;
+// REQUIRE_BREAK_GLASS pairs with BreakGlassGrant per §6;
+// FORBIDDEN terminalizes the Action to REJECTED at create-time.
+enum ActionDecision {
+  AUTO_APPROVE
+  REQUIRE_DUAL_CONTROL
+  REQUIRE_BREAK_GLASS
+  FORBIDDEN
+}
+
+// Per-attempt terminal outcome per ADR-0057 §11. SUCCEEDED + FAILED +
+// TIMED_OUT + CANCELLED are the only terminal outcomes; a still-running
+// attempt has outcome = NULL until terminalization.
+enum ActionAttemptOutcome {
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  CANCELLED
+}
