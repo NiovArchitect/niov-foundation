@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `f316a518b2c1d65b7fcd7cc53b4f0d1d08d1cdb1`
-- **Latest merged PR:** [#66](https://github.com/NiovArchitect/niov-foundation/pull/66) — Section 7 Wave 4 NDJSON audit export surface.
-- **Active branch / PR:** `refresh-docs-section-7-wave-4` (Section 7 Wave 4 wave-close docs refresh; continuing to Wave 5 regulator-tier access).
-- **Active production section:** **Section 7 — Full Audit Viewer** (Section 2 closed for current internal Foundation autonomous-execution-substrate scope; external integrations remain required future production work, especially Section 4 MCP / Connectors).
+- **Main HEAD:** `9ec214e1ce895f877b60cc0b73b7d6069f234b37`
+- **Latest merged PR:** [#68](https://github.com/NiovArchitect/niov-foundation/pull/68) — Section 7 Wave 5 regulator-tier audit access via ADR-0036.
+- **Active branch / PR:** `section-7-wave-6-closeout` (Section 7 Wave 6 closeout — docs refresh + production-grade-complete recommendation).
+- **Active production section:** Section 7 closeout (Section 7 production-grade complete for Foundation backend scope; next recommended section is **Section 4 — MCP / Connectors**, RULE 20-gated).
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,40 +25,38 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 7 Waves 1+2+3+4 LANDED (PRs #60 + #62 + #64 + #66)
+## Section 7 PRODUCTION-GRADE COMPLETE for Foundation backend scope (Waves 1+2+3+4+5 LANDED at PRs #60 + #62 + #64 + #66 + #68)
 
-- **Wave 1:** unified self-scope viewer + chain-verification.
+- **Wave 1:** unified self-scope viewer + chain verification.
 - **Wave 2:** `?scope=org` (TAR `can_admin_org`; OR-fence; cross-org leak guard).
 - **Wave 3:** `?scope=platform` (TAR `can_admin_niov`; unfenced).
-- **Wave 4:** `GET /api/v1/audit/events/export` NDJSON streaming (reuses self|org|platform gate; `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` hard cap + operator-controlled `max_rows`; `application/x-ndjson` content-type; `x-audit-row-count`/`x-audit-truncated`/`x-audit-scope` headers).
-- `verify-chain` remains self-only across all 4 waves (cross-chain verification = leakage / perf risk; forward-substrate).
-- Read-audit emission via `ADMIN_ACTION` + `details.action` ∈ `{ AUDIT_VIEW_LIST, AUDIT_VIEW_EVENT, AUDIT_VIEW_VERIFY_CHAIN, AUDIT_VIEW_ORG_LIST, AUDIT_VIEW_ORG_EVENT, AUDIT_VIEW_PLATFORM_LIST, AUDIT_VIEW_PLATFORM_EVENT, AUDIT_VIEW_EXPORT }` — all on the existing `ADMIN_ACTION` literal (no new audit literal).
+- **Wave 4:** `GET /api/v1/audit/events/export` NDJSON (self|org|platform gate; `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` cap; truncated header).
+- **Wave 5:** `GET /api/v1/audit/events/regulator-view` via ADR-0036 LawfulBasis 9-condition enforcement; cross-basis isolation tested; 8 enforcement codes → 404 / 403 / 500.
+- `verify-chain` remains self-only across all 5 waves (cross-chain = leakage / perf risk; forward-substrate).
+- Read-audit emission via `ADMIN_ACTION` + `details.action` ∈ `{ AUDIT_VIEW_LIST, AUDIT_VIEW_EVENT, AUDIT_VIEW_VERIFY_CHAIN, AUDIT_VIEW_ORG_LIST, AUDIT_VIEW_ORG_EVENT, AUDIT_VIEW_PLATFORM_LIST, AUDIT_VIEW_PLATFORM_EVENT, AUDIT_VIEW_EXPORT, AUDIT_VIEW_REGULATOR }` — all on `ADMIN_ACTION` (no new audit literal across any of the 5 waves).
 
-## Section 7 next slices (priority order)
+## Recommended next production section: Section 4 — MCP / Connectors (RULE 20-gated)
 
-  1. **Section 7 Wave 5 — regulator-tier audit access** via `REGULATOR` principal + `LawfulBasis` attestation per ADR-0036.
-  2. **Section 7 Wave 6 — Section 7 closeout** docs + production-grade-complete recommendation.
-  3. **Section 7 forward-substrate — CSV export** (bounded-size NDJSON precedent established; CSV may follow if a downstream consumer requires it).
-  4. **Section 7 forward-substrate — Control Tower audit-viewer UX** (frontend; out of Foundation scope).
-  5. **Section 7 forward-substrate — org-admin / platform verify-chain** (cross-chain verification needs leakage + perf review; separate QLOCK).
+Section 4 is the canonical home for external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce). It gates Section 2 external delivery + Section 9 Control Tower outbound; both substrate ends are now ready. Each adapter = its own Founder QLOCK + RULE 21 research arc; this recommendation is sequencing only.
 
-## Other sections waiting on Founder direction
+Alternative next slices (each RULE 20-gated):
 
-- **Section 1 Wave 3 drift detection ADR** — RULE 20-gated.
-- **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated (ADR-0050 amendment).
-- **Section 4 — MCP / Connectors** — the canonical home for external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.). Required production work; each adapter wave needs its own QLOCK + RULE 21 research arc.
+  1. **Section 1 Wave 3 — Otzar drift detection ADR** — tighter customer-visible value per dev-hour than Section 4.
+  2. **GOVSEC.5 follow-on `requireAdminCapability` throttle** — hardens dual-control; security-relevant.
+  3. **Section 9 backend contracts** — keeps Control Tower consumption parity caught up.
 
-→ Continuing Section 7 Wave 2 (org-admin scope) on the next autonomous block, unless Founder redirects.
+## Section 7 forward-substrate (optional)
 
-**Section 7 Wave 4 summary (PR #66):** NDJSON audit export surface. NEW `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` hard cap; NEW `resolveAuditScopePredicate` helper (pulled scope gate logic into one shared function consumed by list + export); NEW `validateExportAuditEventsQuery` validator (format=ndjson only at sub-phase 1; CSV forward-substrate); NEW `exportAuditEventsForCaller` function emits `ADMIN_ACTION:AUDIT_VIEW_EXPORT` audit; NEW `GET /api/v1/audit/events/export` route returns `application/x-ndjson` + truncated header. 13 NEW integration tests + 56/56 combined Section 7 regression preserved.
+  - **CSV export** (NDJSON Wave 4 precedent established; CSV optional if downstream consumer requires it).
+  - **Control Tower audit-viewer UX** (frontend; lives in `otzar-control-tower`; out of Foundation scope).
+  - **Org-admin / platform / regulator `verify-chain`** (cross-chain = perf + leakage; separate QLOCK).
+  - **Proactive `REGULATOR_ACCESS_EXPIRED` emitter** via SCHEDULER sweep at `valid_until` crossing per ADR-0036 Sub-decision 4.
 
-**Section 7 Wave 3 summary (PR #64):** niov-admin/platform scope on unified viewer. `AuditViewScope` enum extended to `self|org|platform`; NEW `callerHasNiovAdminCapability` TAR helper; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on platform scope with empty fence (every audit_events row visible); filters still AND-narrow; enumeration-safe 404 preserved. `verify-chain` UNCHANGED (still self-only). 10 NEW integration tests + Wave 1+2 regression preserved + 96/96 combined Section 7 + admin-routes + console-routes regression.
+→ Awaiting Founder QLOCK on the next production section. Per the active autonomous-execution authorization, Section 7 work is complete; new sections need explicit RULE 20 authorization.
 
-**Section 7 Wave 2 summary (PR #62):** org-admin scope on the unified viewer. NEW `AuditViewScope` type + `callerHasAdminCapability` + `resolveOrgScopeVector` helpers; `validateListAuditEventsQuery` accepts `scope` enum; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on scope; `scope=org` pre-flights `can_admin_org` + org resolution BEFORE any audit-row lookup (non-admin probes for org-scope `audit_ids` impossible by construction); OR-fence + AND-narrow composition; enumeration-safe 404 on cross-org detail. `verify-chain` UNCHANGED (self-only). 14 NEW integration tests + Wave 1 19/19 regression preserved + audit unit 23/23 preserved + admin-routes / console-routes / audit-event-id-surfacing / notification-inbox 116/116 combined regression preserved.
+**Section 7 Wave 5 summary (PR #68):** regulator-tier audit access via ADR-0036. NEW `validateListRegulatorAuditEventsQuery` (required UUID `lawful_basis_id`); NEW `listRegulatorAuditEventsForCaller` calls LIVE `getActiveLawfulBasisForRegulator` 9-condition enforcement; maps 8 enforcement failure codes to HTTP (404 / 403 / 500); on success queries `audit_events WHERE lawful_basis_id = :basis_id` + SAFE projection + AND-narrow filters. NEW `GET /api/v1/audit/events/regulator-view`; emits `ADMIN_ACTION:AUDIT_VIEW_REGULATOR`. 12 NEW integration tests + 68/68 Section 7 5-file regression + 23/23 regulator-routes regression preserved. No schema; no new audit literals; no new RULE / ADR landings.
 
-**Section 7 Wave 1 summary (PR #60):** unified self-scope audit-events viewer. NEW `audit-view.service.ts` + `audit.routes.ts` with 3 routes (`GET /events` paginated + filterable; `GET /events/:id` single-event drilldown with prev/next chain refs; `GET /verify-chain` exposes the LIVE `verifyAuditChain` primitive at HTTP). Self-scope only at sub-phase 1; RULE 0 isolation tested. Read-audit emission via existing `ADMIN_ACTION` + `details.action="AUDIT_VIEW_*"` per the `CONSOLE_READ` precedent (no new audit literal). SAFE projection re-asserts no-leak at read tier. 19 NEW integration tests; existing `/platform/audit` + `/org/audit` + `/console/audit` routes remain LIVE for admin tiers — Wave 1 ADDS the per-caller surface they don't cover.
-
-**Section 2 Waves 6-12 summary** (production-grade COMPLETE for internal Foundation autonomous-execution-substrate scope): LOCK-GAP-1/2 schema promotion + admin write-path + attempt-detail surfacing + SEND_INTERNAL_NOTIFICATION research arc + ActionAttempt list route + SEND_INTERNAL_NOTIFICATION internal-only real handler + notification inbox routes. Tier-4 build-logs at [`build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md`](build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md) + [`build-log/2026-05-29-pr-56-send-internal-notification-handler.md`](build-log/2026-05-29-pr-56-send-internal-notification-handler.md). Full detail at [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md).
+**Earlier waves + Section 2 detail:** [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) + [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md).
 
 ## Current stop conditions
 
@@ -82,12 +80,13 @@
 
 ## Key live / not-live truth
 
-**LIVE (Section 7 Waves 1+2+3+4 — unified self / org / platform audit viewer + NDJSON export; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
-- `GET /api/v1/audit/events[?scope=self|org|platform]` — paginated audit-event list. Scope gates TAR-authoritative. Filters AND-narrow under all 3 scopes; cap 100; SAFE projection.
+**LIVE (Section 7 Waves 1+2+3+4+5 — unified self / org / platform / regulator audit viewer + NDJSON export; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
+- `GET /api/v1/audit/events[?scope=self|org|platform]` — paginated audit-event list. Scope gates TAR-authoritative. Filters AND-narrow; cap 100; SAFE projection.
 - `GET /api/v1/audit/events/:id[?scope=self|org|platform]` — single-event drilldown with prev/next chain refs scoped to the same fence; enumeration-safe 404.
 - `GET /api/v1/audit/events/export[?scope=self|org|platform&format=ndjson&max_rows=...]` — bounded NDJSON export. Hard cap `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` + optional smaller `max_rows`; `application/x-ndjson` content-type; `x-audit-row-count` / `x-audit-truncated` / `x-audit-scope` response headers; one JSON line per row + `\n`.
-- `GET /api/v1/audit/verify-chain` — caller's OWN audit chain. **Self-only across all 4 waves** per Founder direction.
-- Read-audit emission: `ADMIN_ACTION` + `details.action` ∈ all 8 `AUDIT_VIEW_*` labels (no new audit literal).
+- `GET /api/v1/audit/events/regulator-view?lawful_basis_id=...` — regulator-tier read via ADR-0036 LawfulBasis 9-condition enforcement; cross-basis isolation; 8 enforcement failure codes → 404 / 403 / 500.
+- `GET /api/v1/audit/verify-chain` — caller's OWN audit chain. **Self-only across all 5 waves** per Founder direction.
+- Read-audit emission: `ADMIN_ACTION` + `details.action` ∈ all 9 `AUDIT_VIEW_*` labels (no new audit literal across any wave).
 
 **LIVE (Section 2 — full surface; see [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) for detail):**
 - 9 HTTP routes: `POST /api/v1/actions` + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt-detail + GET attempt-list + GET/PUT `/api/v1/org/action-policies` (dual-control gated; PR #49 accepts the override fields).
