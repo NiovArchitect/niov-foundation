@@ -91,8 +91,10 @@ export {
   exportAuditEventsForCaller,
   getAuditEventForCaller,
   listAuditEventsForCaller,
+  listRegulatorAuditEventsForCaller,
   validateExportAuditEventsQuery,
   validateListAuditEventsQuery,
+  validateListRegulatorAuditEventsQuery,
   verifyAuditChainForCaller,
 } from "./services/audit/audit-view.service.js";
 export type {
@@ -105,8 +107,12 @@ export type {
   ListAuditEventsQuery,
   ListAuditEventsResult,
   ListAuditEventsView,
+  ListRegulatorAuditEventsQuery,
+  ListRegulatorAuditEventsResult,
+  ListRegulatorAuditEventsView,
   NormalizedExportAuditEventsFilters,
   NormalizedListAuditEventsFilters,
+  NormalizedListRegulatorAuditEventsFilters,
   SafeAuditEventDetailView,
   SafeAuditEventView,
   VerifyAuditChainCallerResult,

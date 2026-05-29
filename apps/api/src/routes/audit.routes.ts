@@ -14,8 +14,10 @@ import {
   exportAuditEventsForCaller,
   getAuditEventForCaller,
   listAuditEventsForCaller,
+  listRegulatorAuditEventsForCaller,
   validateExportAuditEventsQuery,
   validateListAuditEventsQuery,
+  validateListRegulatorAuditEventsQuery,
   verifyAuditChainForCaller,
 } from "../services/audit/audit-view.service.js";
 
@@ -191,6 +193,47 @@ export async function registerAuditRoutes(
           .header("x-audit-truncated", result.view.truncated ? "true" : "false")
           .header("x-audit-scope", result.view.scope)
           .send(result.view.body);
+      }
+      const responseBody: Record<string, unknown> = {
+        ok: false,
+        code: result.code,
+      };
+      if (result.message !== undefined) responseBody.message = result.message;
+      return reply.code(result.httpStatus).send(responseBody);
+    },
+  );
+
+  // ADR-0036 Section 7 Wave 5 regulator-tier audit access.
+  // Bearer + "read"-gated. lawful_basis_id required; the
+  // service calls into getActiveLawfulBasisForRegulator for
+  // the 9-condition LawfulBasis enforcement check; on success
+  // returns audit_events bound to that grant. Read-audit
+  // emission via ADMIN_ACTION:AUDIT_VIEW_REGULATOR — no new
+  // audit literal.
+  app.get<{ Querystring: Record<string, unknown> }>(
+    "/api/v1/audit/events/regulator-view",
+    {
+      preHandler: requireAuth(authService, "read"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const validation = validateListRegulatorAuditEventsQuery(request.query);
+      if (validation.ok === false) {
+        return reply.code(422).send({
+          ok: false,
+          code: validation.code,
+          invalid_fields: validation.invalid_fields,
+        });
+      }
+      const result = await listRegulatorAuditEventsForCaller(
+        callerId,
+        validation.normalized,
+      );
+      if (result.ok === true) {
+        return reply.code(result.httpStatus).send({
+          ok: true,
+          ...result.view,
+        });
       }
       const responseBody: Record<string, unknown> = {
         ok: false,
