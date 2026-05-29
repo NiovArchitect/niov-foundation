@@ -6,7 +6,75 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-29
-([ADR-0057-CANCEL-ROUTE-LANDED] minimum-touch refresh —
+([ADR-0057-GET-VIEWER-LANDED] minimum-touch refresh —
+**ADR-0057 §9 GET viewer route is now LIVE on main** —
+`GET /api/v1/actions/:id` is the first read-side surface
+of Section 2. Bearer + `"read"`-gated at the route tier;
+self-scope (caller is `source_entity_id`) OR
+`can_admin_org`-over-same-org at the service tier. The
+response carries the safe `SafeActionDetailView` shape:
+`SafeActionView` base + `attempt_count` (Prisma aggregate
+of `ActionAttempt` rows excluding soft-delete) +
+`last_result_summary` (the most-recent SUCCEEDED
+attempt's `ActionResult.result_summary`, or `null` when
+no success has happened yet). Forbidden fields per
+ADR-0057 §10 are NEVER in the response: no
+`payload_summary`, no `payload_redacted`, no
+`policy_envelope`, no `policy_envelope_hash`, no
+`source_entity_id`, no `org_entity_id`, no
+`target_entity_id`, no `deleted_at`, no raw errors, no
+stack traces. PR #30 squash commit
+`8af6f7722a110c87bfb7370f9d1af2603299c27d` (merged
+2026-05-29T~10:30Z) added four files
+(`4 files changed, 696 insertions(+)`):
+`apps/api/src/services/action/get.service.ts` (NEW;
+`getActionForCaller` + `callerHasAdminScopeOverOrg`
+helper + `SafeActionDetailView` + discriminated
+`GetActionResult`),
+`apps/api/src/routes/actions.routes.ts` (MOD; thin
+route handler delegating to the service),
+`apps/api/src/index.ts` (MOD; barrel re-exports), and
+`tests/integration/action-get.test.ts` (NEW; 9
+integration tests).
+**RULE 13 substrate-honest disclosures preserved at
+the docs tier:** (a) non-source non-admin callers get
+`404 ACTION_NOT_FOUND` — NOT 403 FORBIDDEN — per RULE 0
+enumeration-prevention discipline; the same 404 the
+unknown-id branch produces. This prevents a non-admin
+stranger from learning which action_ids exist in the
+system by probing. (b) `can_admin_org`-over-same-org is
+the cross-scope admin gate; admins in a DIFFERENT org
+also get 404 (cross-org enumeration prevention). The
+TAR is consulted authoritatively (`status === ACTIVE
+&& can_admin_org === true`) rather than relying on
+stale bearer-token claims. (c) Soft-deleted rows
+(`deleted_at !== null`) return 404 per RULE 10. (d)
+The aggregates compute on-demand per request (no
+materialized counter on the Action row), so the
+response always reflects current state without
+caching invalidation concerns. (e) `attempt_count`
+counts only non-soft-deleted `ActionAttempt` rows;
+`last_result_summary` walks the most-recent SUCCEEDED
+attempt then its most-recent `ActionResult` row,
+returning `null` when no success has happened (e.g.
+APPROVED row that hasn't been scheduled yet, FAILED
+row that exhausted retries, EXPIRED row).
+**Verification:** CI run `26634807967` 4/4 green
+(Typecheck 45 s + Unit 1m 30 s + Integration 1m 46 s
++ Elixir 2m 2 s); TypeScript baseline preserved at
+exactly 4 canonical residuals; pre-commit chain green.
+**Runtime Section 2 now exposes the first read-side
+detail surface.** Future Control Tower Action Detail
+drawer consumes this route. **List/filter routes
+(`GET /api/v1/actions`, `GET /api/v1/org/actions`),
+real per-`ActionType` business handlers, the
+RUNNING-cancellation break-glass route, connectors /
+MCP, Control Tower UX, voice / ambient / lens UX all
+remain forward-substrate; no production migrations
+applied; no `prisma generate` run; no `db:push:test`
+run in PR #30 slice.**
+Prior same-date refresh
+`[ADR-0057-CANCEL-ROUTE-LANDED]` minimum-touch refresh —
 **ADR-0057 §6 non-RUNNING cancel route is now LIVE on
 main + the canonical 10-literal `ACTION_*` vocabulary is
 now 10-of-10 LIVE.** PR #28 squash commit
@@ -492,6 +560,185 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-GET-VIEWER-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §9 GET viewer route is LIVE
+on main.** PR #30 squash commit
+`8af6f7722a110c87bfb7370f9d1af2603299c27d` (merged
+2026-05-29T~10:30Z) lands `GET /api/v1/actions/:id` as
+the first read-side surface of Section 2. The route is
+bearer + `"read"`-gated at the route tier; the service
+tier enforces self-scope (caller is `source_entity_id`)
+OR `can_admin_org`-over-same-org. The response carries
+the safe `SafeActionDetailView` shape — `SafeActionView`
+base + `attempt_count` (Prisma aggregate of non-soft-
+deleted `ActionAttempt` rows) + `last_result_summary`
+(the most-recent SUCCEEDED attempt's
+`ActionResult.result_summary`, or `null` when no
+success has happened yet). The route never returns any
+forbidden field per ADR-0057 §10. The integration tests
+prove the no-leak contract by asserting absence of 10
+forbidden tokens (`payload_summary`, `payload_redacted`,
+`policy_envelope`, `policy_envelope_hash`,
+`source_entity_id`, `org_entity_id`,
+`target_entity_id`, `deleted_at`, plus two
+payload-derived values seeded in the fixture) in the
+raw response body across the happy-path tests.
+
+### What landed at `8af6f77`
+
+Per Rule 0 reading of the merged commit, PR #30 added
+exactly four files (`4 files changed, 696 insertions(+)`):
+
+- **`apps/api/src/services/action/get.service.ts`
+  (NEW; +205)** — `getActionForCaller(callerEntityId,
+  actionId)`. Step-wise:
+  1. action_id shape check (`UUID_RE`) → 400
+     `INVALID_ACTION_ID`.
+  2. `prisma.action.findUnique` → 404
+     `ACTION_NOT_FOUND` when null.
+  3. Soft-delete check (`action.deleted_at !== null`) →
+     404 `ACTION_NOT_FOUND` per RULE 10.
+  4. Ownership check: `source_entity_id ===
+     callerEntityId` → allow. Otherwise
+     `callerHasAdminScopeOverOrg` (TAR
+     `status === ACTIVE && can_admin_org === true` AND
+     `getOrgEntityId(caller) === action.org_entity_id`)
+     → allow. Otherwise → 404 `ACTION_NOT_FOUND` per
+     RULE 0 enumeration-prevention (same 404 the
+     unknown-id branch returns; no distinguishing
+     signal leaks to non-admins).
+  5. `attempt_count` via
+     `prisma.actionAttempt.count({ where: { action_id,
+     deleted_at: null } })`.
+  6. `last_result_summary`: when `attempt_count > 0`,
+     find the latest SUCCEEDED attempt (descending
+     `attempt_number`), then its latest
+     `ActionResult.result_summary`. `null` otherwise.
+  7. Project to `SafeActionDetailView` (extends
+     `SafeActionView` at the type level so the
+     forbidden-fields contract stays locked at compile
+     time).
+  - `callerHasAdminScopeOverOrg` is the helper that
+    consults TAR + `getOrgEntityId` — the TAR is
+    authoritative; we do NOT consult bearer-token
+    claims because TAR is the live truth and a stale
+    token could otherwise leak access after a TAR
+    demote.
+
+- **`apps/api/src/routes/actions.routes.ts` (MOD; +28)**
+  — adds `GET /api/v1/actions/:id` after the existing
+  cancel-route handler. Bearer + `"read"`-gated; thin
+  delegation to `getActionForCaller`; discriminated
+  result → HTTP status + safe JSON body.
+
+- **`apps/api/src/index.ts` (MOD; +9)** — barrel
+  re-exports: `getActionForCaller`, `GetActionResult`,
+  `SafeActionDetailView`.
+
+- **`tests/integration/action-get.test.ts` (NEW; +454)**
+  — 9 integration tests against the containerized
+  Postgres test database:
+  1. 401 SESSION_INVALID when bearer is missing.
+  2. 400 INVALID_ACTION_ID when path id is not a UUID.
+  3. 404 ACTION_NOT_FOUND for unknown action_id.
+  4. Source caller reads APPROVED row:
+     `attempt_count = 0`, `last_result_summary = null`,
+     no-leak proof against 10 forbidden tokens
+     (including two payload-derived values:
+     `"test-summary-secret"` and `"secret-title"`
+     seeded in the fixture's `payload_summary` and
+     `payload_redacted.title`).
+  5. Source caller reads SUCCEEDED row after
+     `tickActionScheduler()` + `tickActionExecutor()`:
+     `attempt_count = 1`,
+     `last_result_summary = "stub_record_capsule_ok"`,
+     no-leak proof again.
+  6. Non-source non-admin same-org caller gets 404
+     (RULE 0 enumeration-prevention).
+  7. `can_admin_org` same-org caller reads the row +
+     no-leak proof.
+  8. `can_admin_org` DIFFERENT-org caller gets 404
+     (cross-org enumeration-prevention).
+  9. Soft-deleted Action (`deleted_at !== null`)
+     returns 404.
+
+**Verification:** CI run `26634807967` 4/4 green
+(Typecheck 45 s + Unit 1m 30 s + Integration 1m 46 s +
+Elixir 2m 2 s); TypeScript baseline preserved at
+exactly 4 canonical residuals; pre-commit chain green
+(db-push guard + TS baseline 4 + RULE 16 no-console +
+no-leak guard).
+
+**RULE 13 substrate-honest disclosures preserved at the
+docs tier:**
+
+- **(a)** Non-source non-admin callers receive
+  `404 ACTION_NOT_FOUND` — NOT 403 — per RULE 0
+  enumeration-prevention. The same 404 the unknown-id
+  branch returns. This prevents a non-admin stranger
+  from learning which `action_id` values exist in the
+  system by probing the route.
+- **(b)** `can_admin_org`-over-same-org is the
+  cross-scope admin gate; admins in a DIFFERENT org
+  also get 404 (cross-org enumeration prevention via
+  `getOrgEntityId(caller) === action.org_entity_id`
+  check inside `callerHasAdminScopeOverOrg`).
+- **(c)** TAR is consulted authoritatively
+  (`status === ACTIVE && can_admin_org === true`)
+  rather than relying on stale bearer-token claims; a
+  TAR demote takes effect on the next request.
+- **(d)** Soft-deleted rows (`deleted_at !== null`)
+  return 404 per RULE 10; the soft-deleted Action is
+  invisible to readers.
+- **(e)** The aggregates compute on-demand per
+  request — no materialized counter on the Action row
+  — so the response always reflects current state
+  without cache-invalidation concerns.
+- **(f)** `attempt_count` excludes soft-deleted
+  attempts; `last_result_summary` walks the most-recent
+  SUCCEEDED attempt then its most-recent
+  `ActionResult` row, returning `null` when no SUCCESS
+  has happened (e.g. APPROVED row not yet scheduled,
+  FAILED-exhausted row, EXPIRED row). The integration
+  test pins both states.
+
+**Runtime Section 2 now exposes the first read-side
+detail surface.** The Action lifecycle accepts
+create-time intent (PR #24), gates on policy +
+dual-control (PR #20 + #22), admits + executes + retries
++ terminates + expires through stub handlers (PR #26),
+accepts caller-initiated non-RUNNING cancellation
+(PR #28), and now surfaces a safe read-side detail view
+for source-entity callers + `can_admin_org` operators
+(PR #30). **List/filter routes (`GET /api/v1/actions`,
+`GET /api/v1/org/actions`), real per-`ActionType`
+business handlers, the privileged RUNNING-cancellation
+break-glass route, connectors / MCP, browser
+automation, native-app automation, voice / Sesame,
+desktop edge UX, wearable lens UX, and Control Tower
+UX all remain forward-substrate; no production
+migrations applied; no `prisma generate` run; no
+`db:push:test` run in PR #30 slice.**
+
+### Forward-substrate after this refresh (priority order)
+
+1. **`[ADR-0057-LIST-ROUTE-EXECUTE-VERIFY-AUTH]`** —
+   `GET /api/v1/actions` per ADR-0057 §9 (self-scope
+   by default; `?org_scope=true` requires
+   `can_admin_org`; pagination + per-status /
+   per-risk-tier filters). Substrate-coherent
+   extension of the GET viewer.
+2. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`**
+   — first real per-`ActionType` handler. RULE 21
+   research arc required.
+3. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`**
+   — privileged `RUNNING → CANCELLED` on the
+   GOVSEC.5 break-glass substrate + `AbortController`
+   plumbing.
+4. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+   — promote LOCK-GAP-1 + LOCK-GAP-2 to schema fields.
 
 ## [ADR-0057-CANCEL-ROUTE-LANDED] 2026-05-29
 
@@ -1302,7 +1549,8 @@ The lifecycle execution beyond creation/negotiation does NOT exist:
   Section 1 + CI-guard pre-arm + Section 2 partial
   (schema + vocabulary + pure evaluator + admin tier +
   create-time runtime + governed-stub lifecycle runtime +
-  non-RUNNING cancel route + 10 of 10 `ACTION_*` emitters).
+  non-RUNNING cancel route + GET viewer route +
+  10 of 10 `ACTION_*` emitters).
 
 ### Founder Directive (preserved)
 
@@ -1316,10 +1564,11 @@ is optional. None is "later."
 2. **Autonomous Execution Core** — schema + vocabulary +
    evaluator + admin tier + create-time runtime +
    governed-stub lifecycle runtime + non-RUNNING cancel
-   route + 10 of 10 `ACTION_*` emitters landed (PRs #18 +
-   #20 + #22 + #24 + #26 + #28); real per-`ActionType`
-   business handlers + RUNNING-cancellation break-glass
-   route + Action viewer route + connectors / MCP remain
+   route + GET viewer route + 10 of 10 `ACTION_*`
+   emitters landed (PRs #18 + #20 + #22 + #24 + #26 +
+   #28 + #30); real per-`ActionType` business handlers +
+   RUNNING-cancellation break-glass route + list/filter
+   read routes + connectors / MCP remain
    forward-substrate.
 3. **Hives / Team Intelligence**
 4. **MCP / Connectors**
@@ -1405,23 +1654,18 @@ surfaces require their own future authorized slices.
 
 ### Forward-substrate next strategic option
 
-The ADR-0057 §1 + §6 + §11 Action runtime is now LIVE on
-main with the canonical 10-of-10 `ACTION_*` vocabulary
-fully wired (PR #28 closed `ACTION_CANCELLED`). The natural
-successors after this docs refresh merges are (in
-implementation-priority order, each gated by its own
-Founder-authorized QLOCK):
+`GET /api/v1/actions/:id` is now live (PR #30 closed the
+first read surface). The natural successors after this
+docs refresh merges are (in implementation-priority
+order, each gated by its own Founder-authorized QLOCK):
 
-1. **`[ADR-0057-GET-ROUTE-AND-VIEWER-EXECUTE-VERIFY-AUTH]`**
-   — `GET /api/v1/actions/:id` per ADR-0057 §9 (safe
-   Action view + ActionAttempt count + last
-   `ActionResult.result_summary`). Bearer + `"read"`-gated;
-   source-entity / org-admin ownership at the service
-   tier. Substrate-coherent extension of the existing
-   `SafeActionView` mapper; no schema changes; unlocks the
-   Control Tower Action viewer downstream. Forward
-   substrate for `GET /api/v1/actions?...` list/filter
-   surface (separate slice).
+1. **`[ADR-0057-LIST-ROUTE-EXECUTE-VERIFY-AUTH]`** —
+   `GET /api/v1/actions` per ADR-0057 §9 (self-scope by
+   default; `?org_scope=true` requires `can_admin_org`;
+   standard pagination + safe-view-only projection +
+   per-status / per-risk-tier filters). Substrate-coherent
+   extension of the GET-detail viewer; no schema changes;
+   unlocks the Control Tower Actions Inbox downstream.
 2. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`** —
    the first real per-`ActionType` handler.
    `RECORD_CAPSULE` is the natural first surface because
