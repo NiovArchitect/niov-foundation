@@ -6,7 +6,110 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-29
-([ADR-0057-EXECUTOR-WORKER-SCHEDULER-LIFECYCLE-LANDED]
+([ADR-0057-CANCEL-ROUTE-LANDED] minimum-touch refresh —
+**ADR-0057 §6 non-RUNNING cancel route is now LIVE on
+main + the canonical 10-literal `ACTION_*` vocabulary is
+now 10-of-10 LIVE.** PR #28 squash commit
+`8d9c1bc9f6393ad01ee0522d92359e42d4684064` (merged
+2026-05-29T~09:50Z) lands `POST
+/api/v1/actions/:id/cancel` per ADR-0057 §6 and the
+last vocabulary-only `ACTION_*` literal —
+`ACTION_CANCELLED` — now emits on the source-entity's
+audit chain on every successful non-RUNNING
+cancellation. Five files merged
+(`5 files changed, 970 insertions(+), 7 deletions(-)`):
+`apps/api/src/services/action/cancel.service.ts` (NEW;
++316 — `validateCancelActionBody` +
+`cancelActionForCaller` with ownership check +
+state-machine guard + idempotent CANCELLED replay +
+RUNNING-deferral 403 + terminal-state 409 + safe audit
+emission on the actor chain),
+`apps/api/src/routes/actions.routes.ts` (MOD; +66 / -8
+— route registration + thin handler delegating to the
+service), `apps/api/src/index.ts` (MOD; +14 — barrel
+re-exports for `cancelActionForCaller` +
+`validateCancelActionBody` + `CancelActionInput` +
+`CancelActionResult`),
+`tests/unit/action-cancel-body.test.ts` (NEW; +75 —
+9 unit tests covering undefined / null / empty body,
+unknown field, non-string reason, length-bound clamp at
+`LIFECYCLE_FIELD_MAX_CHARS`),
+`tests/integration/action-cancel.test.ts` (NEW; +500 —
+10 integration tests covering 401 auth / 400
+INVALID_ACTION_ID / 422 UNKNOWN_FIELD / APPROVED →
+CANCELLED happy path with safe audit + no-leak runtime
+proof / SCHEDULED → CANCELLED post-scheduler-admission
+/ idempotent replay with no second audit / 403
+NOT_ACTION_OWNER with no field leak / 404
+ACTION_NOT_FOUND / 403 RUNNING_CANCEL_PRIVILEGED / 409
+ACTION_ALREADY_TERMINAL). The route is bearer +
+`"write"`-gated with NO dual-control preHandler; the
+source-entity ownership check at the service tier IS
+the gate. `RUNNING → CANCELLED` is intentionally
+rejected with 403 `RUNNING_CANCEL_PRIVILEGED`; the
+state-machine permits the edge so a future
+break-glass-gated route can drive it without
+state-machine changes (forward-substrate on
+ADR-0050). Idempotent replay returns 200 with the
+existing safe view + `decision_reason =
+"already_cancelled"` + NO second audit row.
+**Live `ACTION_*` emitters are now 10 of 10**:
+`ACTION_POLICY_UPDATE` (PR #22) + `ACTION_PROPOSED` +
+`ACTION_APPROVED` + `ACTION_REJECTED` (PR #24) +
+`ACTION_SCHEDULED` + `ACTION_STARTED` +
+`ACTION_SUCCEEDED` + `ACTION_FAILED` +
+`ACTION_EXPIRED` (PR #26) + `ACTION_CANCELLED`
+(PR #28). The canonical ADR-0057 §10 vocabulary is
+fully wired.
+**RULE 13 substrate-honest disclosures preserved at
+the docs tier:** (a) cancel emits on the
+`actor_entity_id = callerEntityId` chain (NOT
+`SYSTEM_PRINCIPALS.SCHEDULER`) because the
+cancellation is initiated by the human / AI source,
+not by a scheduled process; (b) cross-caller 403
+`NOT_ACTION_OWNER` response body deliberately omits
+every Action field (no `status`, no `action_type`, no
+`payload_*`, no `source_entity_id`) — only `{ ok:
+false, code }` — per RULE 0 sovereignty + ADR-0057
+§10 forbidden-fields list; integration test asserts
+the absence of all of these tokens in the raw
+response body; (c) the inner-transaction re-read
+catches a concurrent executor that flipped SCHEDULED
+→ RUNNING between our load and our update, returning
+409 `RUNNING_CANCEL_PRIVILEGED` rather than crashing
+on the state-machine guard; (d) `decision_reason` on
+the audit row defaults to `"cancelled_by_source"`
+when the caller omits the optional `reason` field,
+and is clamped at `LIFECYCLE_FIELD_MAX_CHARS = 200`
+on every write to bound the audit row size; (e) the
+idempotent-CANCELLED-replay test asserts that exactly
+ONE `ACTION_CANCELLED` audit row exists per Action
+even after multiple cancel POSTs, preserving the
+ADR-0002 append-only chain economy.
+**Verification:** CI run `26632036169` 4/4 green
+(Typecheck 43s + Unit 1m 30s + Integration 1m 50s +
+Elixir 1m 59s); TypeScript baseline preserved at
+exactly 4 canonical residuals; pre-commit chain green
+(db-push guard + TS baseline 4 + RULE 16 no-console +
+no-leak guard).
+**Runtime Section 2 reaches its canonical
+vocabulary-completeness milestone**: every audit
+literal declared in PR #18 now has a live emitter.
+The Action lifecycle accepts create-time intent
+(PR #24), gates on policy + dual-control (PR #20 +
+#22), admits + executes + retries + terminates +
+expires through stub handlers (PR #26), and now
+accepts caller-initiated non-RUNNING cancellation
+(PR #28). **Real per-`ActionType` business handlers,
+the RUNNING-cancellation break-glass route,
+connectors / MCP, browser automation, native-app
+automation, voice / Sesame, desktop edge UX, wearable
+lens UX, and Control Tower UX all remain
+forward-substrate; no production migrations applied;
+no `prisma generate` run; no `db:push:test` run in
+PR #28 slice.**
+Prior same-date refresh
+`[ADR-0057-EXECUTOR-WORKER-SCHEDULER-LIFECYCLE-LANDED]`
 minimum-touch refresh — **ADR-0057 §1 + §11 lifecycle
 execution substrate is now LIVE on main** — the Action
 runtime now runs end-to-end inside Foundation: the
@@ -389,6 +492,236 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-CANCEL-ROUTE-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §6 non-RUNNING cancel route is
+LIVE on main + the canonical 10-literal `ACTION_*`
+vocabulary is now 10-of-10 LIVE.** PR #28 squash commit
+`8d9c1bc9f6393ad01ee0522d92359e42d4684064` (merged
+2026-05-29T~09:50Z) lands `POST /api/v1/actions/:id/cancel`
+per ADR-0057 §6 and flips the last vocabulary-only
+`ACTION_*` literal — `ACTION_CANCELLED` — to a live
+emitter. The Action runtime now accepts every canonical
+lifecycle transition the ADR specifies (create-time
+intent at PR #24, dual-control gating at PR #20 + #22,
+admission + execution + retry + termination + expiry at
+PR #26, caller-initiated non-RUNNING cancellation at
+PR #28); 10 of 10 `ACTION_*` audit literals declared in
+PR #18 now have live emitters. The `RUNNING → CANCELLED`
+edge remains in the state-machine but is intentionally
+not wired by this slice — the cancel route returns 403
+`RUNNING_CANCEL_PRIVILEGED` for RUNNING rows so a future
+privileged route on the GOVSEC.5 break-glass substrate
+(ADR-0050; landed) can drive that edge without
+state-machine changes.
+
+### What landed at `8d9c1bc`
+
+Per Rule 0 reading of the merged commit, PR #28 added
+exactly five files (`5 files changed, 970 insertions(+),
+7 deletions(-)`):
+
+- **`apps/api/src/services/action/cancel.service.ts`
+  (NEW; +316)** — `validateCancelActionBody(body)` +
+  `cancelActionForCaller(callerEntityId, actionId,
+  input)`. Mirrors the create-time validator + service
+  shape per ADR-0057 §6 + §10. Step-wise:
+  1. action_id shape check (`UUID_RE`) → 400
+     `INVALID_ACTION_ID`.
+  2. Load Action by id → 404 `ACTION_NOT_FOUND`.
+  3. Ownership check: `source_entity_id ===
+     callerEntityId` → 403 `NOT_ACTION_OWNER` with NO
+     field leak in the response (the 403 envelope is
+     exactly `{ ok: false, code }` — no `status`, no
+     `action_type`, no `payload_*` per RULE 0 +
+     ADR-0057 §10).
+  4. RUNNING → 403 `RUNNING_CANCEL_PRIVILEGED` (deferred
+     to break-glass; preserves the safe view for
+     UX so the caller knows what state the row is in).
+  5. Already CANCELLED → idempotent 200 with the
+     existing safe view + `decision_reason =
+     "already_cancelled"` + NO second audit emission.
+  6. Other terminal (SUCCEEDED / FAILED / TIMED_OUT /
+     REJECTED / EXPIRED) → 409 `ACTION_ALREADY_TERMINAL`
+     with the safe view.
+  7. Otherwise (PROPOSED / APPROVED / SCHEDULED) →
+     inner-transaction re-read (catches a concurrent
+     executor that flipped SCHEDULED → RUNNING between
+     load and update) → `assertActionTransition` →
+     update to CANCELLED → emit `ACTION_CANCELLED` on
+     the actor chain with safe details (`action_id`,
+     `action_type`, `previous_status`, `next_status`,
+     `decision_reason` clamped at
+     `LIFECYCLE_FIELD_MAX_CHARS = 200`) → return 200 +
+     safe view.
+
+- **`apps/api/src/routes/actions.routes.ts`
+  (MOD; +66 / -8)** — adds the route handler after the
+  existing create-route handler. Bearer +
+  `"write"`-gated; NO dual-control preHandler (the
+  source-entity ownership check at the service tier IS
+  the gate). Thin delegation to
+  `validateCancelActionBody` + `cancelActionForCaller`;
+  maps discriminated-union result to HTTP status + safe
+  JSON body via the same shape family as the create
+  handler.
+
+- **`apps/api/src/index.ts` (MOD; +14)** — barrel
+  re-exports: `cancelActionForCaller`,
+  `validateCancelActionBody`, `CancelActionInput`,
+  `CancelActionResult`.
+
+- **`tests/unit/action-cancel-body.test.ts` (NEW; +75)**
+  — 9 pure-function validator tests: undefined / null /
+  empty-object body (all accepted as no-op), reason
+  accepted within length bound, non-object body rejected
+  (array → INVALID_FIELD), unknown field rejected
+  (UNKNOWN_FIELD), non-string reason rejected, reason
+  over `LIFECYCLE_FIELD_MAX_CHARS` rejected, reason at
+  exactly `LIFECYCLE_FIELD_MAX_CHARS` accepted.
+
+- **`tests/integration/action-cancel.test.ts`
+  (NEW; +500)** — 10 integration tests against the
+  containerized Postgres test database:
+  1. 401 SESSION_INVALID when bearer is missing.
+  2. 400 INVALID_ACTION_ID when path id is not a UUID.
+  3. 422 UNKNOWN_FIELD when body has an extra field.
+  4. APPROVED → CANCELLED happy path: 200 + safe view +
+     1 `ACTION_CANCELLED` audit row with
+     `previous_status = "APPROVED"`, `next_status =
+     "CANCELLED"`, `decision_reason = "user changed
+     mind"`, `action_type = "RECORD_CAPSULE"`; raw
+     response body asserted to NOT contain
+     `payload_summary` / `payload_redacted` /
+     `policy_envelope` / `policy_envelope_hash` /
+     `source_entity_id` substrings.
+  5. SCHEDULED → CANCELLED after `tickActionScheduler`
+     admission: 200 + safe view + 1
+     `ACTION_CANCELLED` audit row with
+     `previous_status = "SCHEDULED"`, `decision_reason
+     = "cancelled_by_source"` default.
+  6. Idempotent replay: cancelling an already-CANCELLED
+     action returns 200 with `decision_reason =
+     "already_cancelled"` + the
+     `ACTION_CANCELLED` audit-row count stays at
+     exactly 1.
+  7. 403 NOT_ACTION_OWNER when caller is not the source
+     entity: raw response body asserted to NOT contain
+     `status` / `action_type` / `payload_summary` /
+     `payload_redacted` / `source_entity_id`
+     substrings.
+  8. 404 ACTION_NOT_FOUND for unknown action_id.
+  9. 403 RUNNING_CANCEL_PRIVILEGED when the row is
+     RUNNING (forced via direct Prisma update to keep
+     the test deterministic; the executor would
+     normally drive this state).
+  10. 409 ACTION_ALREADY_TERMINAL for terminal non-
+      CANCELLED states (forced via direct Prisma update
+      to SUCCEEDED).
+
+**Verification:** CI run `26632036169` 4/4 green
+(Typecheck 43 s + Unit 1m 30 s + Integration 1m 50 s +
+Elixir 1m 59 s); TypeScript baseline preserved at
+exactly 4 canonical residuals; pre-commit chain green
+(db-push guard + TS baseline 4 + RULE 16 no-console +
+no-leak guard).
+
+**RULE 13 substrate-honest disclosures preserved at the
+docs tier:**
+
+- **(a)** Cancel emits on the `actor_entity_id =
+  callerEntityId` chain (NOT
+  `SYSTEM_PRINCIPALS.SCHEDULER`) because the
+  cancellation is initiated by the human / AI source,
+  not by a scheduled process. The lifecycle audit
+  emissions from the scheduler / executor / expiry
+  sweep continue to ride the SCHEDULER chain.
+- **(b)** Cross-caller 403 `NOT_ACTION_OWNER` response
+  body deliberately omits every Action field per RULE 0
+  + ADR-0057 §10 forbidden-fields list. Only `{ ok:
+  false, code }` is returned; the integration test
+  asserts the absence of `status`, `action_type`, and
+  every payload-derived token in the raw response body.
+- **(c)** The inner-transaction re-read inside
+  `prisma.$transaction` catches a concurrent executor
+  that flipped SCHEDULED → RUNNING between our load
+  and our update, returning 409
+  `RUNNING_CANCEL_PRIVILEGED` rather than crashing on
+  the state-machine guard. Defense-in-depth above the
+  state-machine `assertActionTransition`.
+- **(d)** `decision_reason` defaults to
+  `"cancelled_by_source"` when the caller omits the
+  optional `reason` field. The audit emitter clamps
+  every variable-length string field at
+  `LIFECYCLE_FIELD_MAX_CHARS = 200` so a runaway
+  caller-supplied `reason` cannot inflate the audit
+  row.
+- **(e)** Idempotent CANCELLED replay returns 200
+  with the existing safe view + `decision_reason =
+  "already_cancelled"` + NO second audit emission. The
+  integration test pins this invariant by counting
+  `ACTION_CANCELLED` audit rows after multiple
+  cancel POSTs against the same action_id.
+- **(f)** The state-machine permits `RUNNING →
+  CANCELLED` (per ADR-0057 §6) so a future
+  privileged route can drive it. This slice does NOT
+  drive that edge; the future slice rides on the
+  GOVSEC.5 break-glass substrate (ADR-0050; landed)
+  and adds `AbortController` plumbing for mid-attempt
+  handler interruption (the executor currently uses
+  `Promise.race` `withTimeout` which is
+  fire-and-forget; the inner promise cannot be
+  cancelled).
+
+**Live `ACTION_*` emitters are now 10 of 10**:
+`ACTION_POLICY_UPDATE` (PR #22) + `ACTION_PROPOSED` +
+`ACTION_APPROVED` + `ACTION_REJECTED` (PR #24) +
+`ACTION_SCHEDULED` + `ACTION_STARTED` +
+`ACTION_SUCCEEDED` + `ACTION_FAILED` +
+`ACTION_EXPIRED` (PR #26) + `ACTION_CANCELLED`
+(PR #28). The canonical ADR-0057 §10 vocabulary is
+fully wired.
+
+**Runtime Section 2 reaches its canonical
+vocabulary-completeness milestone**: the create-time +
+admin-tier + governed-stub-lifecycle +
+non-RUNNING-cancel surfaces are all live, and every
+audit literal declared in PR #18 now has a live
+emitter. **Real per-`ActionType` business handlers,
+the privileged RUNNING-cancellation break-glass route,
+the GET-action viewer route, connectors / MCP,
+browser automation, native-app automation, voice /
+Sesame, desktop edge UX, wearable lens UX, and Control
+Tower UX all remain forward-substrate; no production
+migrations applied; no `prisma generate` run; no
+`db:push:test` run in PR #28 slice.**
+
+### Forward-substrate after this refresh (priority order)
+
+1. **`[ADR-0057-GET-ROUTE-AND-VIEWER-EXECUTE-VERIFY-AUTH]`**
+   — `GET /api/v1/actions/:id` per ADR-0057 §9. Bearer +
+   `"read"`-gated; safe Action view + ActionAttempt
+   count + last `ActionResult.result_summary`. Unlocks
+   the Control Tower Action viewer downstream.
+2. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`**
+   — first real per-`ActionType` handler
+   (`RECORD_CAPSULE` → COSMP WRITE). RULE 21 research
+   arc required because the handler crosses the
+   Action ↔ COSMP architectural boundary.
+3. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`**
+   — privileged RUNNING-cancellation route on the
+   GOVSEC.5 break-glass substrate (ADR-0050) +
+   `AbortController` plumbing.
+4. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+   — promote LOCK-GAP-1 + LOCK-GAP-2 to schema fields.
+
+The voice / ambient / desktop-edge / wearable-lens
+product directive recorded in earlier refreshes remains
+forward product architecture context; the governed
+Action runtime that now executes inside Foundation —
+including the safe cancel surface landed here — is the
+seam those future product UX layers will consume.
 
 ## [ADR-0057-EXECUTOR-WORKER-SCHEDULER-LIFECYCLE-LANDED] 2026-05-29
 
@@ -969,7 +1302,7 @@ The lifecycle execution beyond creation/negotiation does NOT exist:
   Section 1 + CI-guard pre-arm + Section 2 partial
   (schema + vocabulary + pure evaluator + admin tier +
   create-time runtime + governed-stub lifecycle runtime +
-  9 of 10 `ACTION_*` emitters).
+  non-RUNNING cancel route + 10 of 10 `ACTION_*` emitters).
 
 ### Founder Directive (preserved)
 
@@ -982,10 +1315,12 @@ is optional. None is "later."
 1. **Employee Intelligence Core**
 2. **Autonomous Execution Core** — schema + vocabulary +
    evaluator + admin tier + create-time runtime +
-   governed-stub lifecycle runtime + 9 of 10 `ACTION_*`
-   emitters landed (PRs #18 + #20 + #22 + #24 + #26); real
-   per-`ActionType` business handlers + cancel route +
-   `ACTION_CANCELLED` emitter remain forward-substrate.
+   governed-stub lifecycle runtime + non-RUNNING cancel
+   route + 10 of 10 `ACTION_*` emitters landed (PRs #18 +
+   #20 + #22 + #24 + #26 + #28); real per-`ActionType`
+   business handlers + RUNNING-cancellation break-glass
+   route + Action viewer route + connectors / MCP remain
+   forward-substrate.
 3. **Hives / Team Intelligence**
 4. **MCP / Connectors**
 5. **Agent Playground**
@@ -1070,52 +1405,54 @@ surfaces require their own future authorized slices.
 
 ### Forward-substrate next strategic option
 
-The ADR-0057 §1 + §11 lifecycle execution substrate is now
-LIVE on main as of PR #26
-(`fe46e228bd3f5ea9ca30438142bb386657b90725`). The natural
+The ADR-0057 §1 + §6 + §11 Action runtime is now LIVE on
+main with the canonical 10-of-10 `ACTION_*` vocabulary
+fully wired (PR #28 closed `ACTION_CANCELLED`). The natural
 successors after this docs refresh merges are (in
 implementation-priority order, each gated by its own
 Founder-authorized QLOCK):
 
-1. **`[ADR-0057-CANCEL-ROUTE-EXECUTE-VERIFY-AUTH]`** — adds
-   `POST /api/v1/actions/:id/cancel` and the
-   `ACTION_CANCELLED` emitter per ADR-0057 §1 + §6 + §10.
-   `PROPOSED / APPROVED / SCHEDULED → CANCELLED` non-RUNNING
-   paths are simple; `RUNNING → CANCELLED` is privileged and
-   should ride on the GOVSEC.5 break-glass substrate
-   (ADR-0050; landed). Scope: route handler + state-machine
-   exercise + `ACTION_CANCELLED` audit emission + tests.
-   Out of scope: graceful in-flight handler interruption
-   (the executor's current `withTimeout` race is
-   best-effort; mid-attempt cancellation requires
-   `AbortController` plumbing which is a separate slice).
+1. **`[ADR-0057-GET-ROUTE-AND-VIEWER-EXECUTE-VERIFY-AUTH]`**
+   — `GET /api/v1/actions/:id` per ADR-0057 §9 (safe
+   Action view + ActionAttempt count + last
+   `ActionResult.result_summary`). Bearer + `"read"`-gated;
+   source-entity / org-admin ownership at the service
+   tier. Substrate-coherent extension of the existing
+   `SafeActionView` mapper; no schema changes; unlocks the
+   Control Tower Action viewer downstream. Forward
+   substrate for `GET /api/v1/actions?...` list/filter
+   surface (separate slice).
 2. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`** —
-   the first real per-`ActionType` handler. `RECORD_CAPSULE`
-   is the natural first surface because it wires the
-   Action runtime to existing COSMP WRITE semantics
-   (`apps/api/src/services/cosmp/write.service.ts`); the
-   handler should consume `payload_redacted` as a
-   capsule-create envelope and return the capsule_id in
+   the first real per-`ActionType` handler.
+   `RECORD_CAPSULE` is the natural first surface because
+   it wires the Action runtime to existing COSMP WRITE
+   semantics (`apps/api/src/services/cosmp/write.service.ts`);
+   the handler should consume `payload_redacted` as a
+   capsule-create envelope and return the `capsule_id` in
    `result_metadata` without leaking content. Requires its
-   own research arc per RULE 21 because it crosses the
-   Action↔COSMP boundary.
-3. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+   own RULE 21 research arc because it crosses the
+   Action↔COSMP architectural boundary.
+3. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`**
+   — privileged `RUNNING → CANCELLED` cancellation
+   ridden on the GOVSEC.5 break-glass substrate
+   (ADR-0050; landed). The state-machine already permits
+   the edge; this slice wires a separate privileged route
+   that consumes a break-glass grant and adds
+   `AbortController` plumbing for mid-attempt handler
+   interruption.
+4. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
    — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
    constants to `ActionPolicy.retry_budget` +
    `ActionAttempt.timeout_ms` schema fields; defaults
-   preserved from the current constants. Requires a Prisma
-   migration QLOCK + cross-language Ecto schema parity check
-   per ADR-0033.
-4. **`[ADR-0057-GET-ROUTE-AND-VIEWER-EXECUTE-VERIFY-AUTH]`**
-   — `GET /api/v1/actions/:id` (safe Action view + attempt
-   count + last result_summary per ADR-0057 §9). Unlocks
-   the Control Tower Action viewer downstream.
+   preserved from the current constants. Requires a
+   Prisma migration QLOCK + cross-language Ecto schema
+   parity check per ADR-0033.
 
 Any of these may proceed without further research arc when
 existing ADR-0057 + implementation-proven repo state +
 Founder gap-locks already cover the path. Path #2 is the
-canonical RULE 21 trigger because it crosses an
-architectural boundary (Action ↔ COSMP); #1, #3, #4 are
+canonical RULE 21 trigger because it crosses the
+Action↔COSMP architectural boundary; #1, #3, #4 are
 substrate-coherent extensions.
 
 ### Do NOT claim
@@ -1139,15 +1476,20 @@ substrate-coherent extensions.
   executor claims via `FOR UPDATE SKIP LOCKED`, and the
   parent terminalizes through the retry/timeout budget. What
   the queue does NOT do is dispatch real business handlers.
-- "Action lifecycle emits end-to-end." — 9 of 10
+- "Action lifecycle emits end-to-end." — 10 of 10
   `ACTION_*` literals emit (`ACTION_POLICY_UPDATE`,
   `_PROPOSED`, `_APPROVED`, `_REJECTED`, `_SCHEDULED`,
-  `_STARTED`, `_SUCCEEDED`, `_FAILED`, `_EXPIRED`);
-  `ACTION_CANCELLED` remains vocabulary only pending the
-  cancel-route QLOCK.
-- "Cancel route works." — false; no `POST
-  /api/v1/actions/:id/cancel` route exists; the
-  state-machine permits the edges but no caller drives them.
+  `_STARTED`, `_SUCCEEDED`, `_FAILED`, `_EXPIRED`,
+  `_CANCELLED`). The canonical ADR-0057 §10 vocabulary is
+  fully wired.
+- "Cancel route works for RUNNING actions." — false; the
+  cancel route handles non-RUNNING states only
+  (PROPOSED / APPROVED / SCHEDULED → CANCELLED).
+  `RUNNING → CANCELLED` returns 403
+  `RUNNING_CANCEL_PRIVILEGED`; that path requires the
+  GOVSEC.5 break-glass substrate (ADR-0050) in a separate
+  slice + `AbortController` plumbing for mid-attempt
+  handler interruption.
 - "ACTION_TIMED_OUT is an audit literal." — false; the
   canonical 10-literal `ACTION_*` vocabulary does not
   include `ACTION_TIMED_OUT`. Per-attempt timeout
