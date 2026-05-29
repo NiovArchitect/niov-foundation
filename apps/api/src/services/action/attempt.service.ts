@@ -119,8 +119,10 @@ async function callerHasAdminScopeOverOrg(
 // INPUT: The attempt row + the optional ActionResult row.
 // OUTPUT: A SafeActionAttemptView.
 // WHY: One projector so the forbidden-fields contract is enforced
-//      by construction.
-function projectActionAttemptView(
+//      by construction. Exported so the Wave 10 attempt-list
+//      service consumes the same projection (one mapper; one
+//      no-leak contract).
+export function projectActionAttemptView(
   attempt: ActionAttempt,
   result: { result_summary: string; result_metadata: unknown } | null,
 ): SafeActionAttemptView {

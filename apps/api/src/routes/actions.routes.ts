@@ -32,6 +32,10 @@ import {
   validateListActionsQuery,
 } from "../services/action/list.service.js";
 import { getActionAttemptForCaller } from "../services/action/attempt.service.js";
+import {
+  listActionAttemptsForCaller,
+  validateListAttemptsQuery,
+} from "../services/action/attempt-list.service.js";
 
 // WHAT: Register the POST /api/v1/actions route on the Fastify app.
 // INPUT: A Fastify instance + the shared AuthService.
@@ -224,6 +228,50 @@ export async function registerActionsRoutes(
         return reply.code(result.httpStatus).send({
           ok: true,
           attempt: result.view,
+        });
+      }
+      const responseBody: Record<string, unknown> = {
+        ok: false,
+        code: result.code,
+      };
+      if (result.message !== undefined) responseBody.message = result.message;
+      return reply.code(result.httpStatus).send(responseBody);
+    },
+  );
+
+  // ADR-0057 Wave 10 ActionAttempt list route. Bearer + "read"-gated.
+  // Same authorization spine as the GET viewer + attempt-detail
+  // (source self-scope OR can_admin_org-over-same-org). Returns a
+  // paginated list of SafeActionAttemptView for the parent Action.
+  // Standard pagination + optional outcome filter. Forbidden fields
+  // per ADR-0057 §10 are NEVER in any item or page envelope.
+  app.get<{
+    Params: { id: string };
+    Querystring: Record<string, unknown>;
+  }>(
+    "/api/v1/actions/:id/attempts",
+    {
+      preHandler: requireAuth(authService, "read"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const validation = validateListAttemptsQuery(request.query);
+      if (validation.ok === false) {
+        return reply.code(422).send({
+          ok: false,
+          code: validation.code,
+          invalid_fields: validation.invalid_fields,
+        });
+      }
+      const result = await listActionAttemptsForCaller(
+        callerId,
+        request.params.id,
+        validation.normalized,
+      );
+      if (result.ok === true) {
+        return reply.code(result.httpStatus).send({
+          ok: true,
+          ...result.view,
         });
       }
       const responseBody: Record<string, unknown> = {
