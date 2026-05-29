@@ -18,30 +18,36 @@ Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-sub
 
 ## Current status (PARTIAL — production-grade)
 
-Substrate landed across 11 implementation PRs (#18, #20, #22,
-#24, #26, #28, #30, #32, #35, #37, #39) + 8 docs-refresh PRs
-(#19, #21, #23, #25, #27, #29, #31, #36, #38). The Action
-runtime is fully live end-to-end: create → policy decision →
-optional dual-control pairing → scheduler admission → executor
-claim → in-tick retry → terminalization → expiry sweep →
-caller-initiated cancellation (non-RUNNING unconditional +
-**RUNNING via GOVSEC.5 break-glass grant**), with **complete
+Substrate landed across 12 implementation PRs (#18, #20, #22,
+#24, #26, #28, #30, #32, #35, #37, #39, #41) + 8 docs-refresh
+PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40). The
+Action runtime is fully live end-to-end: create → policy
+decision → optional dual-control pairing → scheduler admission
+→ executor claim → in-tick retry → terminalization → expiry
+sweep → caller-initiated cancellation (non-RUNNING unconditional
++ **RUNNING via GOVSEC.5 break-glass grant**), with **complete
 read-side surface**: GET Action viewer (PR #30), GET Action
-list (PR #32), and **GET ActionAttempt detail drilldown
-(PR #39)**. **RECORD_CAPSULE actions execute through the real
-`WriteService.createCapsuleForActionRunner` system-path**
-producing real `MemoryCapsule` rows in the source entity's
-wallet. The executor wires an **AbortController per attempt** so
-RUNNING-cancel via break-glass can short-circuit in-flight work
-promptly.
+list (PR #32), and GET ActionAttempt detail drilldown
+(PR #39). **Two of three `ActionType` handlers are real:**
+RECORD_CAPSULE actions execute through
+`WriteService.createCapsuleForActionRunner` (PR #35); **as of
+PR #41 PROPOSE_PERMISSION_GRANT actions call existing
+`createPermission` and produce real `Permission` rows with
+RULE 0 sovereignty enforced in code + canonical
+`PERMISSION_CREATED` AuditEvent back-referenced to the
+originating action_id**. The executor wires an
+**AbortController per attempt** so RUNNING-cancel via
+break-glass can short-circuit in-flight work promptly.
 
 **Live `ACTION_*` audit emitters: 10 of 10.** The canonical
 ADR-0057 §10 vocabulary is fully wired.
 
-**Real per-`ActionType` handlers: 1 of 3.** RECORD_CAPSULE is the
-first and currently only real handler. SEND_INTERNAL_NOTIFICATION
-+ PROPOSE_PERMISSION_GRANT remain stubs pending their own future
-capability waves.
+**Real per-`ActionType` handlers: 2 of 3.** RECORD_CAPSULE
+(PR #35) + PROPOSE_PERMISSION_GRANT (PR #41) live.
+SEND_INTERNAL_NOTIFICATION remains stub — no backing
+notification substrate exists in repo; future wave will need
+to build the substrate first (in-app vs email vs both is a
+product clarity decision).
 
 **Cancel surface: complete for source callers.** Non-RUNNING
 cancellation is unconditional for the source entity; RUNNING
@@ -90,19 +96,39 @@ any in-flight attempt short-circuits.
   `WriteService.createCapsuleForActionRunner`. Returns SAFE
   `result_metadata = { handler: "record_capsule", action_type,
   capsule_id, capsule_type }` — NEVER content, payload_summary,
-  payload_redacted, content_hash, embedding. SEND_INTERNAL_NOTIFICATION
-  + PROPOSE_PERMISSION_GRANT remain stubs returning `result_metadata = {
-  handler: "stub", action_type, status: "completed_stub" }`. Future
-  capability waves replace each stub with a real handler.
+  payload_redacted, content_hash, embedding. **As of PR #41
+  PROPOSE_PERMISSION_GRANT is a REAL handler** that re-runs
+  `validateProposePermissionGrantPayload` (single source of
+  truth) then calls package-level `createPermission` (which
+  enforces RULE 0 sovereignty in code: grantor owns capsule;
+  LONG_TERM/PERMANENT require PERSON; AI_AGENT cannot grant to
+  AI_AGENT) + emits canonical `PERMISSION_CREATED` AuditEvent
+  with action_id back-reference. SAFE `result_metadata = {
+  handler: "propose_permission_grant", action_type,
+  permission_id, bridge_id, capsule_id, grantee_entity_id,
+  access_scope, duration_type }` — NEVER conditions content,
+  grantor/grantee personal details, or capsule content.
+  Sovereignty / not-found / generic errors mapped to stable
+  error_class strings (PERMISSION_SOVEREIGNTY_VIOLATION,
+  PERMISSION_CAPSULE_NOT_FOUND, PERMISSION_GRANTOR_NOT_FOUND,
+  PERMISSION_GRANTEE_NOT_FOUND, PERMISSION_CREATE_FAILED).
+  SEND_INTERNAL_NOTIFICATION remains stub returning
+  `result_metadata = { handler: "stub", action_type, status:
+  "completed_stub" }` pending future capability wave that
+  designs the notification substrate.
 - **`apps/api/src/services/action/action-payload-validators.ts`**
-  (NEW in PR #35) — per-`ActionType` create-time payload validator
-  dispatcher. `validateRecordCapsulePayload` enforces the
-  `CapsuleCreateInput` contract (required fields + bounded content
-  size + optional-field shapes). Stub validators no-op for the two
-  unland-ed handlers. Dispatcher called from
-  `validateCreateActionBody` so 422 INVALID_FIELD fires at
-  create-time on malformed RECORD_CAPSULE payload — no malformed
-  Action enters the executor queue.
+  (NEW in PR #35; extended in PR #41) — per-`ActionType`
+  create-time payload validator dispatcher.
+  `validateRecordCapsulePayload` enforces the
+  `CapsuleCreateInput` contract.
+  `validateProposePermissionGrantPayload` (NEW in PR #41)
+  enforces required capsule_id (UUID) + grantee_entity_id (UUID)
+  + access_scope (AccessScope enum); optional duration_type
+  (DurationType enum), can_share_forward (bool), conditions
+  (object). Stub validator no-ops for SEND_INTERNAL_NOTIFICATION.
+  Dispatcher called from `validateCreateActionBody` so 422
+  INVALID_FIELD fires at create-time on malformed payload —
+  no malformed Action enters the executor queue.
 - **`apps/api/src/services/cosmp/write.service.ts`** — adds
   `createCapsuleForActionRunner` system-path variant in PR #35.
   Bypasses session-token validation (gate = Action passed policy
@@ -202,15 +228,9 @@ any in-flight attempt short-circuits.
 
 - **SEND_INTERNAL_NOTIFICATION real handler** — no backing
   notification substrate exists in `apps/api/src/services` (grep
-  returned 0 hits for `sendNotification` / `notification.service`
-  before the wave). Future wave will need to build the substrate
-  from scratch first.
-- **PROPOSE_PERMISSION_GRANT real handler** — `createPermission`
-  DB query exists at `packages/database/src/queries/permission.ts`;
-  the handler crosses multiple entities' DMW boundaries with
-  RULE 0 sovereignty implications + MEDIUM-risk default
-  REQUIRE_DUAL_CONTROL. Higher blast-radius than RECORD_CAPSULE;
-  warrants its own RULE 21 research arc.
+  returned 0 hits for `sendNotification` / `notification.service`).
+  Future wave will need to build the substrate from scratch
+  (in-app vs email vs both is a product clarity decision).
 - **Active AbortSignal consumption by handlers** — the executor
   wires an `AbortController` per attempt and passes the signal
   through `HandlerActionInput.abort_signal` (PR #37), but the
@@ -256,6 +276,7 @@ any in-flight attempt short-circuits.
 | [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) | `4ef4ed4` | **RECORD_CAPSULE real handler capability** — per-`ActionType` payload validators + `WriteService.createCapsuleForActionRunner` system-path + `ActionHandlerRegistry` DI + `server.ts` registry installation; 1 of 3 real handlers LIVE. See [`../build-log/2026-05-29-pr-35-record-capsule-handler.md`](../build-log/2026-05-29-pr-35-record-capsule-handler.md). |
 | [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) | `4e3805d` | **RUNNING-cancel break-glass capability** — `abort-registry.ts` process-local `AbortController` map + `executor` register/release per attempt + `HandlerActionInput.abort_signal` widening + cancel.service RUNNING branch validates ACTIVE GOVSEC.5 break-glass grant + marks USED + emits `ACTION_CANCELLED` with `grant_id` back-reference + fires `abortAction` outside tx. Single-use grant enforcement; concurrent-race 409 envelopes. See [`../build-log/2026-05-29-pr-37-running-cancel-break-glass.md`](../build-log/2026-05-29-pr-37-running-cancel-break-glass.md). |
 | [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) | `fe8c095` | **ActionAttempt detail route** — `GET /api/v1/actions/:id/attempts/:attempt_id` substrate-coherent read drilldown. SAFE projection of `ActionAttempt` + optional latest `ActionResult`. Same authorization spine as GET viewer (source self-scope OR `can_admin_org`-over-same-org; RULE 0 enumeration-prevention 404). 9 integration tests; no architectural boundary; no tier-4 build-log needed per the wave-based discipline. |
+| [#41](https://github.com/NiovArchitect/niov-foundation/pull/41) | `67df915` | **PROPOSE_PERMISSION_GRANT real handler capability** — second real per-`ActionType` handler. NEW `validateProposePermissionGrantPayload` + real handler calling existing `createPermission` (RULE 0 sovereignty enforced in code) + canonical `PERMISSION_CREATED` AuditEvent with action_id back-reference. Error-class mapping for sovereignty / not-found / generic failures. SAFE result_metadata payload-free contract. 11 unit + 7 integration tests. Substrate-coherent extension of Wave 1's ActionHandlerRegistry pattern; no tier-4 build-log (pattern boundary already established by PR #35). |
 
 ## Founder gap-locks active in this substrate
 
@@ -361,39 +382,26 @@ any in-flight attempt short-circuits.
 
 ## Next slices (priority order)
 
-1. **PROPOSE_PERMISSION_GRANT real handler** — second real
-   per-`ActionType` handler. Substrate exists at
-   `packages/database/src/queries/permission.ts`
-   (`createPermission` DB query). MEDIUM-risk default
-   REQUIRE_DUAL_CONTROL; touches multiple entities' DMW
-   boundaries with RULE 0 sovereignty implications.
-   Substrate-coherent extension of the established
-   `ActionHandlerRegistry` pattern from Wave 1 (PR #35).
-   Per-type create-time validator dispatch already in place
-   from PR #35; new validator will land at
-   `action-payload-validators.ts`. New handler in
-   `handlers.ts`; service-tier signing in `server.ts` registry
-   construction.
-2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+1. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
    — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
    constants to `ActionPolicy.retry_budget` +
    `ActionAttempt.timeout_ms` schema fields; defaults preserved
    from the current constants. Requires a Prisma migration via
    `db:push:test` per ADR-0025 + cross-language Ecto schema
    parity check per ADR-0033.
-3. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
+2. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
    explicit `GET /api/v1/org/actions` route (lower priority;
    `?org_scope=true` on the unified list already covers the
    same need).
-4. **SEND_INTERNAL_NOTIFICATION real handler** — requires
+3. **SEND_INTERNAL_NOTIFICATION real handler** — requires
    building the notification substrate from scratch (no
    `notification.service.ts` exists in the repo as of PR #35).
    Defer until product clarity on internal-notification
    substrate (in-app vs email vs both).
-5. **Active AbortSignal consumption** in future real handlers
+4. **Active AbortSignal consumption** in future real handlers
    wrapping long-running connector work — the plumbing landed
    in PR #37; consumption is per-handler discipline.
-6. **ActionAttempt list-of-attempts route** — callers can
+5. **ActionAttempt list-of-attempts route** — callers can
    query the DB directly via `Action.action_id`; a route
    alias would unlock Control Tower attempt-list UX. No
    architectural boundary; lowest priority among Section 2
