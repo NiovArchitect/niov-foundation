@@ -737,6 +737,23 @@ export type {
   SafeActionAttemptView,
 } from "./services/action/attempt.service.js";
 
+// ADR-0057 Wave 10 ActionAttempt list service — paginated read
+// surface for all attempts under one parent Action. Same
+// authorization spine as the detail service. Standard pagination
+// + optional outcome filter.
+export {
+  DEFAULT_ATTEMPTS_PAGE_SIZE,
+  MAX_ATTEMPTS_PAGE_SIZE,
+  listActionAttemptsForCaller,
+  validateListAttemptsQuery,
+} from "./services/action/attempt-list.service.js";
+export type {
+  ListActionAttemptsResult,
+  ListActionAttemptsView,
+  ListAttemptsQuery,
+  NormalizedListAttemptsFilters,
+} from "./services/action/attempt-list.service.js";
+
 // ADR-0057 §9 list service — self-scope by default; ?org_scope=true
 // requires can_admin_org. Standard pagination + optional filters.
 export {
