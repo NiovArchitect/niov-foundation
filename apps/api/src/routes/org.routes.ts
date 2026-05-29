@@ -120,6 +120,24 @@ function asNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+// WHAT: Type-narrowing validator for the ADR-0057 Wave 7 ActionPolicy
+//        override fields (retry_budget + attempt_timeout_ms_override).
+// INPUT: A body value parsed off the inbound JSON envelope.
+// OUTPUT: true when the value is a finite positive integer OR
+//          explicit null; false otherwise.
+// WHY: The resolver helpers fall back to the service-tier constants
+//      on null OR non-positive values; this validator rejects
+//      non-positive integers up-front so operators get a clear
+//      422 INVALID_FIELD instead of the silent fallback. Number-typed
+//      booleans, floats, NaN, Infinity, and strings all fail.
+function isOptionalPositiveIntOrNull(value: unknown): boolean {
+  if (value === null) return true;
+  if (typeof value !== "number") return false;
+  if (!Number.isFinite(value)) return false;
+  if (!Number.isInteger(value)) return false;
+  return value > 0;
+}
+
 // WHAT: Resolve the caller's org or write a 404 and return null.
 // INPUT: The entity_id from req.auth.
 // OUTPUT: The org's entity_id when resolvable, null when not (with
@@ -814,6 +832,14 @@ export async function registerOrgRoutes(
     "risk_tier",
     "default_decision",
     "require_admin_capability",
+    // ADR-0057 Wave 7: operator-tunable overrides landed at PR #47.
+    // The resolver helpers in lifecycle.service.ts fall back to the
+    // service-tier constants on null or non-positive values; the
+    // validator below rejects non-positive integers up-front so
+    // operators get clear feedback instead of silent constant
+    // fallback.
+    "retry_budget",
+    "attempt_timeout_ms_override",
   ]);
 
   // GET /org/action-policies -- org-scoped read-only list. The DRIFT-9
@@ -838,6 +864,8 @@ export async function registerOrgRoutes(
           risk_tier: true,
           default_decision: true,
           require_admin_capability: true,
+          retry_budget: true,
+          attempt_timeout_ms_override: true,
           updated_by: true,
           created_at: true,
           updated_at: true,
@@ -887,6 +915,18 @@ export async function registerOrgRoutes(
         body.require_admin_capability === undefined
           ? null
           : body.require_admin_capability;
+      // ADR-0057 Wave 7: undefined → not-touched-on-update (preserves
+      // existing value); explicit null → clears the override and the
+      // resolver falls back to the service-tier constant.
+      const retry_budget_provided = "retry_budget" in body;
+      const retry_budget = retry_budget_provided
+        ? body.retry_budget
+        : undefined;
+      const attempt_timeout_ms_override_provided =
+        "attempt_timeout_ms_override" in body;
+      const attempt_timeout_ms_override = attempt_timeout_ms_override_provided
+        ? body.attempt_timeout_ms_override
+        : undefined;
       // Enum validation against the canonical Prisma enum value sets
       // declared at packages/database/prisma/schema.prisma per PR #18.
       const VALID_ACTION_TYPES = new Set([
@@ -919,6 +959,20 @@ export async function registerOrgRoutes(
       if (!VALID_ADMIN_CAPS.has(require_admin_capability)) {
         invalid.push("require_admin_capability");
       }
+      // ADR-0057 Wave 7: retry_budget + attempt_timeout_ms_override
+      // must be a positive Int OR explicit null. Non-positive integers
+      // are operator-misconfiguration; reject up-front so the operator
+      // gets a clear 422 instead of the resolver's silent
+      // constant-fallback.
+      if (retry_budget_provided && !isOptionalPositiveIntOrNull(retry_budget)) {
+        invalid.push("retry_budget");
+      }
+      if (
+        attempt_timeout_ms_override_provided &&
+        !isOptionalPositiveIntOrNull(attempt_timeout_ms_override)
+      ) {
+        invalid.push("attempt_timeout_ms_override");
+      }
       if (invalid.length > 0) {
         return reply.code(422).send({
           ok: false,
@@ -927,9 +981,20 @@ export async function registerOrgRoutes(
           invalid_fields: invalid,
         });
       }
+      // Narrow the validated override values to the Prisma column
+      // type. The validator guarantees null OR positive integer.
+      const retry_budget_value =
+        retry_budget === undefined ? undefined : (retry_budget as number | null);
+      const attempt_timeout_ms_override_value =
+        attempt_timeout_ms_override === undefined
+          ? undefined
+          : (attempt_timeout_ms_override as number | null);
       // Upsert per ADR-0057 §2 UNIQUE (org_entity_id, action_type,
       // risk_tier). Type-narrowed casts via Prisma enum types are
       // safe here because the value sets above gate every input.
+      // ADR-0057 Wave 7: retry_budget + attempt_timeout_ms_override
+      // included only when the operator provided them (undefined →
+      // not-touched-on-update; existing column value preserved).
       const upserted = await prisma.actionPolicy.upsert({
         where: {
           org_entity_id_action_type_risk_tier: {
@@ -944,11 +1009,23 @@ export async function registerOrgRoutes(
           risk_tier: risk_tier as Prisma.ActionPolicyCreateInput["risk_tier"],
           default_decision: default_decision as Prisma.ActionPolicyCreateInput["default_decision"],
           require_admin_capability: require_admin_capability as string | null,
+          ...(retry_budget_value !== undefined
+            ? { retry_budget: retry_budget_value }
+            : {}),
+          ...(attempt_timeout_ms_override_value !== undefined
+            ? { attempt_timeout_ms_override: attempt_timeout_ms_override_value }
+            : {}),
           updated_by: callerId,
         },
         update: {
           default_decision: default_decision as Prisma.ActionPolicyCreateInput["default_decision"],
           require_admin_capability: require_admin_capability as string | null,
+          ...(retry_budget_value !== undefined
+            ? { retry_budget: retry_budget_value }
+            : {}),
+          ...(attempt_timeout_ms_override_value !== undefined
+            ? { attempt_timeout_ms_override: attempt_timeout_ms_override_value }
+            : {}),
           updated_by: callerId,
         },
         select: {
@@ -958,12 +1035,19 @@ export async function registerOrgRoutes(
           risk_tier: true,
           default_decision: true,
           require_admin_capability: true,
+          retry_budget: true,
+          attempt_timeout_ms_override: true,
           updated_by: true,
           created_at: true,
           updated_at: true,
         },
       });
       // Audit emission per ADR-0057 §10. SAFE allowlisted details only.
+      // ADR-0057 Wave 7: retry_budget_set + attempt_timeout_ms_override_set
+      // are boolean indicators (NOT the numeric values) so the audit row
+      // records that an override was touched without leaking the
+      // operator-specific tuning numbers into a long-lived audit trail.
+      // The current value remains queryable via the GET list route.
       await writeAuditEvent({
         event_type: "ACTION_POLICY_UPDATE",
         outcome: "SUCCESS",
@@ -974,6 +1058,8 @@ export async function registerOrgRoutes(
           action_type: upserted.action_type,
           risk_tier: upserted.risk_tier,
           default_decision: upserted.default_decision,
+          retry_budget_set: retry_budget_provided,
+          attempt_timeout_ms_override_set: attempt_timeout_ms_override_provided,
           route: "/api/v1/org/action-policies",
           method: "PUT",
         },
