@@ -6,9 +6,49 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-29
-([ADR-0057-SCHEMA-AUDIT-LITERALS-LANDED] minimum-touch refresh —
-**ADR-0057 §16 step 3 is now PARTIAL / SUBSTRATE DECLARED
-ONLY**. PR #18 squash commit
+([ADR-0057-ACTION-POLICY-EVALUATOR-LANDED] minimum-touch
+refresh — **ADR-0057 §16 step 4 is now PARTIAL — pure
+policy evaluator landed; action.service.ts consumer is NOT
+live**. PR #20 squash commit
+`489fc607e9bd519a528e465e69f135a637031958` (merged
+2026-05-29T06:39:35Z) lands the pure deterministic
+`evaluateActionPolicy(input): ActionDecisionResult` function
+per ADR-0057 §3 + §4 autonomy ladder. Three files merged:
+`apps/api/src/services/action/policy-evaluator.ts` (+449 — the
+pure-function evaluator + structured `PolicyEnvelope`,
+`EvaluateActionPolicyInput`, discriminated-union
+`ActionDecisionResult`, stable `REASON_CODES` enum-bound set);
+`tests/unit/action-policy-evaluator.test.ts` (+531 — 34 NEW
+pure-function unit tests covering all 6 autonomy-ladder rungs
++ structural fail-closed cases + RULE 13 §4.4-vs-§4.5
+HIGH-risk asymmetry + determinism + input purity);
+`apps/api/src/index.ts` (+16 — barrel re-export block). The
+evaluator does NOT instantiate PrismaClient, does NOT query
+the DB, does NOT write the DB, does NOT create Action rows,
+does NOT create EscalationRequest rows, does NOT emit
+`ACTION_*` audit events, does NOT call external APIs, does
+NOT create routes, does NOT create executor / worker /
+scheduler. The 34 NEW unit tests execute in <100ms (pure
+function speed). Verification: 4/4 CI green (Typecheck 42s +
+Unit 1m25s + Integration 1m47s + Elixir 2m5s; CI run
+`26622167628`); TypeScript baseline preserved at exactly 4
+canonical residuals. **RULE 13 substrate-honest §4.4-vs-§4.5
+HIGH-risk asymmetry implemented literally + documented at
+evaluator file header + locked by Case 11a + Case 11b tests;
+candidate for future Founder-authorized ADR-0057 amendment.**
+**Runtime Section 2 is still NOT live** — no action.service.ts,
+no `POST /api/v1/actions` route, no Action rows created, no
+EscalationRequest pairing wired, no `ACTION_*` audit
+emissions, no executor, no worker, no scheduler, no
+connectors / MCP, no Control Tower action UX, no
+`ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding, no
+production migrations applied, no `prisma generate` run in
+PR #20 slice. The substrate is now: schema declared (PR #18)
++ vocabulary declared (PR #18) + pure decision oracle landed
+(PR #20). Prior same-date refresh
+`[ADR-0057-SCHEMA-AUDIT-LITERALS-LANDED]` minimum-touch
+refresh — **ADR-0057 §16 step 3 is now PARTIAL / SUBSTRATE
+DECLARED ONLY**. PR #18 squash commit
 `78e764269c5f25f53c0c42485969d53ca2fe6513` (merged
 2026-05-29T05:45:40Z) lands the first additive Section 2
 schema + audit-literal slice on main. Three files merged:
@@ -123,6 +163,429 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-ACTION-POLICY-EVALUATOR-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §16 step 4 is PARTIAL — pure
+policy evaluator landed; action.service.ts consumer is NOT
+live.** PR #20 squash commit
+`489fc607e9bd519a528e465e69f135a637031958` (merged
+2026-05-29T06:39:35Z) landed the first runtime-substrate
+slice of ADR-0057 §16 step 4: a pure deterministic
+`evaluateActionPolicy(input): ActionDecisionResult` function
+per ADR-0057 §3 + §4 autonomy ladder. The substrate is now
+**a pure decision oracle, isolated by construction**: no DB
+access, no audit emissions, no route handlers, no Action row
+creation, no EscalationRequest pairing. The Action runtime
+itself remains NOT live. This entry supersedes the
+forward-substrate framing of `[ADR-0057-ACTION-POLICY-EVALUATOR-EXECUTE-VERIFY-AUTH]`
+as "the first runtime-substrate slice for Section 2" recorded
+in the prior `[ADR-0057-SCHEMA-AUDIT-LITERALS-LANDED]`
+refresh below; that prior framing was substrate-honest at
+HEAD `82a0d34` and is preserved verbatim for historical
+context per Rule 0.
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `489fc60`
+
+Per Rule 0 reading of the merged commit, PR #20 added exactly
+three files (`3 files changed, 996 insertions(+)`):
+
+- **`apps/api/src/services/action/policy-evaluator.ts`
+  (NEW; +449)** — the pure deterministic policy evaluator per
+  ADR-0057 §3. Signature:
+  `evaluateActionPolicy(input: EvaluateActionPolicyInput): ActionDecisionResult`.
+  No DB access (no `from "@niov/database"` import; no
+  PrismaClient instantiation). No audit emission. No route
+  binding. Pure-function transformation — same shape as
+  `resolveDualControlTarget` per ADR-0026 §5 BEAM-compatibility
+  pattern 6. Portable to the future BEAM / Elixir COSMP
+  coordination layer per ADR-0028 §Forward Queue +
+  ADR-0030 by construction.
+
+- **`tests/unit/action-policy-evaluator.test.ts`
+  (NEW; +531)** — 34 NEW pure-function unit tests with zero
+  DB setup / teardown, mirroring the
+  `tests/unit/moment-context.test.ts` /
+  `tests/unit/degraded-mode-contract.test.ts` pure-function
+  unit-tier precedent. Total execution time <100ms.
+
+- **`apps/api/src/index.ts` (MOD; +16)** — barrel re-export
+  block exposing `evaluateActionPolicy`, `REASON_CODES`,
+  `PolicyEnvelope`, `EvaluateActionPolicyInput`,
+  `ActionDecisionResult` via `@niov/api` so test code and
+  future consumers can import from one path per the existing
+  workspace pattern.
+
+### Evaluator substrate now declared
+
+**Function signature** (matching ADR-0057 §3 verbatim):
+
+```ts
+evaluateActionPolicy(input: EvaluateActionPolicyInput): ActionDecisionResult;
+```
+
+**Input types**:
+
+- **`EvaluateActionPolicyInput`** — `callerEntityId` +
+  `org_entity_id` + `action_type` (ActionType) + `risk_tier`
+  (ActionRiskTier) + `policy_envelope` (PolicyEnvelope).
+- **`PolicyEnvelope`** — frozen create-time snapshot:
+  `twin_autonomy_level` (`"APPROVAL_REQUIRED" |
+  "EXECUTIVE_OVERRIDE" | "OBSERVE_ONLY"`) +
+  `org_require_human_approval` + `org_auto_approve_low_risk` +
+  `org_audit_ai_actions` + `entity_profile_safe_view` (no
+  PII beyond `getMyTwin`) + `tar_capability_bits` (4 bits) +
+  `permission_set_summary` (count + bridges) +
+  `action_policy_row` (ActionPolicy | null).
+
+**Return shape** — discriminated union per ADR-0057 §3:
+
+- `{ ok: true; decision: "AUTO_APPROVE"; reason: string }`
+- `{ ok: true; decision: "REQUIRE_DUAL_CONTROL"; reason: string }`
+- `{ ok: true; decision: "REQUIRE_BREAK_GLASS"; reason: string }`
+- `{ ok: true; decision: "FORBIDDEN"; reason: string }`
+- `{ ok: false; reason: "POLICY_UNRESOLVED" | "ENVELOPE_INVALID" }`
+
+**Stable `REASON_CODES` enum-bound set** (13 identifiers,
+SAFE for future audit-details surfaces per ADR-0057 §10
+no-leak boundary; NEVER free-form text):
+`ORG_REQUIRE_HUMAN_APPROVAL`, `POLICY_FORBIDDEN`,
+`OBSERVE_ONLY_TWIN`, `POLICY_REQUIRE_BREAK_GLASS`,
+`CRITICAL_TIER_DUAL_CONTROL_FLOOR`,
+`POLICY_REQUIRE_DUAL_CONTROL`,
+`APPROVAL_REQUIRED_DEFAULT_DUAL_CONTROL`,
+`APPROVAL_REQUIRED_EXPLICIT_AUTO_APPROVE`,
+`EXECUTIVE_OVERRIDE_AUTO_APPROVE_LOW_RISK`,
+`EXECUTIVE_OVERRIDE_AUTO_APPROVE_MEDIUM_RISK`,
+`EXECUTIVE_OVERRIDE_DUAL_CONTROL_LOW_RISK_NO_ORG_GATE`,
+`EXECUTIVE_OVERRIDE_DUAL_CONTROL_HIGH_RISK`,
+`EXECUTIVE_OVERRIDE_DUAL_CONTROL_NO_POLICY_GRANT`.
+
+### What the evaluator does NOT do
+
+The evaluator is **a pure decision oracle by construction**:
+
+- does NOT instantiate `PrismaClient` (no
+  `from "@niov/database"` import; verified via grep at the
+  evaluator file).
+- does NOT query the DB.
+- does NOT write the DB.
+- does NOT create Action rows.
+- does NOT create EscalationRequest rows.
+- does NOT emit `ACTION_*` audit events (no
+  `writeAuditEvent({ event_type: "ACTION_*", ... })` call site
+  exists anywhere in source code).
+- does NOT call external APIs.
+- does NOT create routes (no `POST /api/v1/actions` handler).
+- does NOT create executor / worker / scheduler.
+- does NOT mutate its input (verified at "the evaluator does
+  not mutate its input" test).
+- is deterministic (verified at "identical inputs produce
+  identical outputs across repeated invocations" test).
+
+### Test coverage
+
+**34 NEW pure-function unit tests** added at
+`tests/unit/action-policy-evaluator.test.ts`. Coverage groups:
+
+- **Rung 3 (§4.3) — OBSERVE_ONLY twin** — 4 cases (LOW +
+  MEDIUM + HIGH + CRITICAL all → FORBIDDEN; OBSERVE_ONLY wins
+  over CRITICAL DUAL_CONTROL floor).
+- **Rung 2 (§4.2) — CRITICAL risk_tier floor** — 3 cases
+  (CRITICAL + EXECUTIVE_OVERRIDE + AUTO_APPROVE → DUAL_CONTROL;
+  CRITICAL + APPROVAL_REQUIRED + AUTO_APPROVE → DUAL_CONTROL;
+  CRITICAL + explicit FORBIDDEN policy → FORBIDDEN).
+- **Rung 1 (§4.1) — org_require_human_approval** — 2 cases
+  (forces DUAL_CONTROL at LOW; forces DUAL_CONTROL at HIGH
+  even with EXECUTIVE_OVERRIDE + AUTO_APPROVE).
+- **Rung 4 (§4.4) — APPROVAL_REQUIRED** — 4 cases (missing
+  policy default DUAL_CONTROL; policy-row mismatch falls
+  through; explicit AUTO_APPROVE at LOW + MEDIUM).
+- **Rung 5 (§4.5) + Rung 6 (§4.6) — EXECUTIVE_OVERRIDE** —
+  6 cases (LOW + AUTO_APPROVE + org gate combos; MEDIUM +
+  AUTO_APPROVE; HIGH + AUTO_APPROVE → DUAL_CONTROL per literal
+  §4.5; no-policy-grant default; explicit DUAL_CONTROL policy
+  precedence).
+- **Explicit policy decisions (precedence)** — 4 cases
+  (FORBIDDEN at LOW; FORBIDDEN overrides require_human_approval;
+  explicit DUAL_CONTROL; explicit BREAK_GLASS; OBSERVE_ONLY
+  overrides BREAK_GLASS).
+- **RULE 13 §4.4-vs-§4.5 HIGH-risk asymmetry** — 1 case
+  (HIGH + APPROVAL_REQUIRED + AUTO_APPROVE → AUTO_APPROVE per
+  literal §4.4).
+- **Policy-row mismatch** — 2 cases (action_type mismatch +
+  risk_tier mismatch → autonomy-level default).
+- **ENVELOPE_INVALID structural fail-closed** — 5 cases
+  (missing autonomy_level; empty callerEntityId; bad
+  risk_tier; null envelope; null input).
+- **Determinism + purity** — 2 cases (3 invocations
+  identical; input not mutated).
+
+**CI verification at PR #20:** CI run `26622167628` —
+all 4 jobs **PASS**:
+
+| Job | Result | Duration |
+|---|---|---|
+| Typecheck (strict 4-error baseline) | pass | 42s |
+| Unit tier (371 tests) | pass | 1m25s |
+| Integration tier (111 tests + 1 skipped) | pass | 1m47s |
+| Elixir tier (compile + test) | pass | 2m5s |
+
+Note: the Unit tier job label "371 tests" reflects the static
+CI job-name convention; the actual passing test count under
+the unit tier is 371 (pre-#16 baseline) + 2 no-leak guard
+(PR #16) + 3 ADR-0057 §10 audit-literal verification (PR #18)
++ 34 ADR-0057 §3+§4 policy-evaluator (PR #20) = 410 passing
+unit-tier tests on main as of `489fc60`.
+
+### RULE 13 substrate-honest disclosure (preserved at the docs tier)
+
+**ADR-0057 §4.4 vs §4.5 HIGH-risk asymmetry** — mirror of the
+file-header observation now on main:
+
+- **§4.4 (APPROVAL_REQUIRED) strict reading:** "all actions
+  are REQUIRE_DUAL_CONTROL unless the ActionPolicy row for
+  the (action_type, risk_tier) pair explicitly grants
+  AUTO_APPROVE." Strict reading: APPROVAL_REQUIRED +
+  ActionPolicy.AUTO_APPROVE on HIGH risk → **AUTO_APPROVE**.
+- **§4.5 (EXECUTIVE_OVERRIDE) explicit text:** "HIGH always
+  REQUIRE_DUAL_CONTROL." Under EXECUTIVE_OVERRIDE +
+  ActionPolicy.AUTO_APPROVE on HIGH risk →
+  **REQUIRE_DUAL_CONTROL**.
+
+This is logically inconsistent if the autonomy_level ordering
+(APPROVAL_REQUIRED restrictive → EXECUTIVE_OVERRIDE permissive)
+is meant to be monotonic — APPROVAL_REQUIRED would somehow
+be MORE permissive on HIGH than EXECUTIVE_OVERRIDE.
+
+PR #20 implements the **LITERAL ADR text** for both branches
+rather than silently choosing a coherent-but-non-canonical
+interpretation. The asymmetry is:
+
+- **documented** in the evaluator file header
+  (`apps/api/src/services/action/policy-evaluator.ts` lines
+  56–78 of the committed file)
+- **implemented literally** — both §4.4 and §4.5 paths exist
+  in the evaluator code
+- **tested explicitly** — Case 11a (literal §4.5: HIGH +
+  EXECUTIVE_OVERRIDE + AUTO_APPROVE → REQUIRE_DUAL_CONTROL) +
+  Case 11b (literal §4.4: HIGH + APPROVAL_REQUIRED +
+  AUTO_APPROVE → AUTO_APPROVE) both lock the behavior
+- **flagged as a candidate for future Founder-authorized
+  ADR-0057 amendment** — if the Founder later decides the
+  coherent interpretation should be canonicalized, the
+  natural amendment becomes: "HIGH always REQUIRE_DUAL_CONTROL
+  under any autonomy_level + any policy." Until then, the
+  literal ADR semantics stand and are tested.
+
+### TypeScript baseline (preserved)
+
+The accepted TypeScript baseline remains **exactly 4
+canonical errors**, byte-identical to the prior refresh:
+
+1. `apps/api/src/server.ts:299` — TS2322 rateLimits
+   index-signature drift
+2. `apps/api/src/services/cosmp/write.service.ts:548` —
+   TS2339 `ValidateFailure.entity_id` narrowing
+3. `apps/api/src/services/monetization/monetization.service.ts:30`
+   — TS2740 PRICING_TABLE deliberate-blocker per ADR-0021
+4. `packages/database/src/queries/capsule.ts:242` — TS2322
+   `CapsuleMetadata` shape drift
+
+### Scope discipline (what this PR touched, and what it did not)
+
+PR #20 touched exactly:
+
+- `apps/api/src/services/action/policy-evaluator.ts` (NEW; +449)
+- `tests/unit/action-policy-evaluator.test.ts` (NEW; +531)
+- `apps/api/src/index.ts` (MOD; +16)
+
+NOT touched: `apps/api/src/routes/**`, all other
+`apps/api/src/services/**` (except the index barrel),
+`apps/api/src/middleware/**`, `apps/api/src/security/**`,
+`packages/**`, `tests/integration/**`, all other
+`tests/unit/**`, `docs/**`,
+`docs/architecture/decisions/**`, `.github/**`, `.husky/**`,
+`prisma/schema.prisma`, `prisma/migrations/**`,
+`package.json`, `package-lock.json`, `AGENTS.md`,
+`CLAUDE.md`, Control Tower files, Foundation-Command files,
+legacy quarantine files. No migrations applied. No
+`prisma generate` run during this slice. No installs. No
+secret access.
+
+### What remains NOT live after this refresh
+
+Section 2 Autonomous Execution Core implementation is still
+**NOT live at the runtime tier**. The substrate now consists
+of: schema declarations (PR #18) + audit-literal vocabulary
+(PR #18) + pure decision oracle (PR #20). The actual
+runtime — service layer, route handler, executor, worker,
+scheduler, audit emitter — does not exist:
+
+- **Autonomous Execution Core is NOT live.**
+- **AI Twins cannot execute actions.** No executor exists.
+- **`autonomy_level` is only evaluated by a pure function;
+  it is NOT enforced by an action runtime yet.** Future
+  consumers of `evaluateActionPolicy` (e.g., `action.service.ts`)
+  do not exist; the function is callable but no caller wires
+  it to a route, audit event, or DB row.
+- **Workflows do not run.**
+- **Connectors / MCP are NOT live.** Per ADR-0057 §17 +
+  ADR-0058 (future); deferred to Section 4.
+- **Action queue does NOT exist.** No `actions` rows
+  created; no `SCHEDULED → RUNNING` worker.
+- **Action audit trail emissions do NOT exist.** The 10
+  `ACTION_*` literals are vocabulary only (per PR #18); no
+  `writeAuditEvent({ event_type: "ACTION_*", ... })` call
+  site exists.
+- **Control Tower action UX does NOT exist.** Per ADR-0057
+  §12, deferred.
+- **Routes do NOT exist.** No `POST /api/v1/actions`, no
+  `GET /api/v1/actions[/...]`, no
+  `POST /api/v1/actions/:id/cancel`, no
+  `GET /api/v1/org/actions`, no
+  `GET|PUT /api/v1/org/action-policies`.
+- **`action.service.ts` does NOT exist.** No
+  `apps/api/src/services/action.service.ts` file; no
+  `apps/api/src/services/action/` directory contains any
+  service-layer module other than `policy-evaluator.ts`.
+- **Action rows are NOT created.** No `prisma.action.create`
+  call site anywhere.
+- **EscalationRequest pairing is NOT live.** The evaluator
+  returns `REQUIRE_DUAL_CONTROL` but no caller creates the
+  paired escalation row.
+- **Executor does NOT exist.** No worker, no
+  `FOR UPDATE SKIP LOCKED` polling, no attempt creation.
+- **Worker does NOT exist.**
+- **Scheduler does NOT exist.**
+- **`ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding
+  does NOT exist.** Per ADR-0057 §7 + §16 step 4-7; lands
+  with the routes phase.
+- **No production migrations were applied.**
+- **Prisma generate was NOT run in PR #20.** The Option A
+  local-substrate-enablement that produced typed
+  `prisma.action.*` accessors at the local machine remains
+  local-only; CI regenerates the client from PR-#18 schema
+  declarations at job-start.
+- **TypeScript does NOT have zero errors.** Baseline remains
+  4 canonical residuals.
+- **All 10 production sections are NOT complete.** Only
+  Section 1 + the CI-guard pre-arm + Section 2 schema /
+  vocabulary / pure decision oracle.
+
+### Founder Directive (preserved)
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch.**
+
+The 10 required production sections remain required for
+production-grade launch. None is optional. None is "later."
+
+1. **Employee Intelligence Core**
+2. **Autonomous Execution Core** — schema + vocabulary +
+   pure evaluator declared (PRs #18 + #20); runtime
+   forward-substrate.
+3. **Hives / Team Intelligence**
+4. **MCP / Connectors**
+5. **Agent Playground**
+6. **Enterprise Analytics**
+7. **Full Audit Viewer**
+8. **Billing / Entitlements**
+9. **Admin / Governance Control Tower**
+10. **Deployment / Security / Go-Live Operations**
+
+Do NOT frame hives, Agent Playground, MCP/connectors,
+billing, enterprise analytics, full audit viewer, autonomous
+execution, or governance/admin as optional later MVP
+features.
+
+### Forward-substrate next options
+
+**Do NOT start routes / services / executor / worker /
+scheduler / connector work until this docs refresh is
+merged.** After merge, two coherent next-step options exist
+per ADR-0057 §16 step 4-7; each requires substrate
+verification before choosing:
+
+**Option C — `[ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-EXECUTE-VERIFY-AUTH]`**
+
+Purpose: wire `evaluateActionPolicy` into a new
+`action.service.ts` create-time boundary that:
+
+- Creates `Action` rows via `prisma.action.create` at
+  POST `/api/v1/actions`
+- Pairs `EscalationRequest` rows where the evaluator returns
+  `REQUIRE_DUAL_CONTROL`
+- Emits `ACTION_PROPOSED` at create-time, plus `ACTION_APPROVED`
+  on the AUTO_APPROVE short-circuit, plus `ACTION_REJECTED` on
+  policy FORBIDDEN / POLICY_UNRESOLVED / NO_ELIGIBLE_TARGET
+- Exposes `POST /api/v1/actions` per ADR-0057 §9
+
+Scope discipline: this slice must explicitly EXCLUDE the
+executor, worker, scheduler, and Control Tower UX. The
+`SCHEDULED → RUNNING → SUCCEEDED/FAILED` lifecycle stays
+forward-substrate per ADR-0057 §16 step 5-7.
+
+**Option D — `[ADR-0057-ORG-ACTION-POLICY-UPDATE-PRIVILEGED-BINDING-EXECUTE-VERIFY-AUTH]`**
+
+Purpose: add the `ORG_ACTION_POLICY_UPDATE`
+PrivilegedEndpoint binding + the
+`GET|PUT /api/v1/org/action-policies` routes per ADR-0057
+§7. This is the dual-control-tier admin surface for
+ActionPolicy row creation / updates / deletes. Independent
+of Option C — Option D can land before, after, or in
+parallel.
+
+Scope discipline: no executor, no worker, no scheduler, no
+Control Tower UX, no `action.service.ts` wiring. The
+admin-binding slice is pure CRUD over `ActionPolicy` +
+dual-control + `ACTION_POLICY_UPDATE` audit emission.
+
+Either option requires Founder authorization. Neither
+should fire automatically.
+
+### Do NOT claim
+
+- "Autonomous Execution is live." — runtime is NOT
+  implemented; only schema vocabulary + audit-literal
+  vocabulary + the pure evaluator exist.
+- "AI Twins can execute actions." — no executor; no
+  service layer.
+- "`autonomy_level` is enforced end-to-end." — only the
+  pure evaluator exists; no service consumes it.
+- "Workflows run." — no workflow engine.
+- "Connectors / MCP are live." — deferred per ADR-0057
+  §17 + ADR-0058.
+- "Action queue exists." — no `prisma.action.create` call
+  site exists.
+- "Action audit trail emissions exist." — no
+  `writeAuditEvent` call site for any `ACTION_*` literal.
+- "Control Tower action UX exists." — deferred per
+  ADR-0057 §12.
+- "POST /api/v1/actions exists." — no route handler.
+- "The evaluator queries the DB." — false; it is pure.
+- "The evaluator emits audit events." — false; the
+  evaluator returns advisory `reason` strings only.
+- "The evaluator creates Action rows." — false; pure
+  function.
+- "The evaluator creates EscalationRequest rows." —
+  false; pure function.
+- "Action runtime is live." — false.
+- "Autonomy is enforced end-to-end." — false; only the
+  pure evaluator exists.
+- "Migrations were applied." — `prisma db push` was NOT
+  run during PR #20.
+- "Prisma client was regenerated in PR #20." — `prisma
+  generate` was NOT run during PR #20.
+- "TypeScript has zero errors." — baseline remains 4
+  canonical residuals.
+- "All 10 production sections are complete." — only
+  Section 1 + CI-guard pre-arm + Section 2 schema /
+  vocabulary / pure decision oracle.
 
 ## [ADR-0057-SCHEMA-AUDIT-LITERALS-LANDED] 2026-05-29
 
