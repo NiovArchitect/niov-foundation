@@ -6,7 +6,54 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-29
-([ADR-0057-ACTION-POLICY-EVALUATOR-LANDED] minimum-touch
+([ADR-0057-ORG-ACTION-POLICY-UPDATE-LANDED] minimum-touch
+refresh — **ADR-0057 §7 + §10 are now PARTIAL — Operation E
+`ORG_ACTION_POLICY_UPDATE` PrivilegedEndpoint binding LIVE
+on main + `ACTION_POLICY_UPDATE` audit emission LIVE on main
+(1 of 10 `ACTION_*` literals now has a real emitter); the
+other 9 `ACTION_*` literals remain vocabulary only; the
+Action runtime itself remains NOT live**. PR #22 squash
+commit `da5b3286e14eec4169f7ba9ed492df9263ce916c` (merged
+2026-05-29T07:27:09Z) landed the org ActionPolicy admin
+substrate on main. Five files merged:
+`apps/api/src/security/privileged-endpoints.ts` (+44 / -2 —
+extends `EscalationActionDescriptor.type` union with
+`"ORG_ACTION_POLICY_UPDATE"` + adds 5th `PRIVILEGED_ENDPOINTS`
+entry); `apps/api/src/routes/org.routes.ts` (+191 — GET + PUT
+`/api/v1/org/action-policies` with safe-projection + body
+validation + UNIQUE upsert + `ACTION_POLICY_UPDATE` audit
+emission); `tests/integration/org-action-policies.test.ts`
+(+651 — 11 NEW integration tests covering capability gating
++ cross-org leak prevention + body validation 422 surfaces +
+dual-control happy path + audit emission + safe projection);
+`tests/unit/privileged-endpoints.test.ts` (+73 / -12 —
+4 NEW unit tests: count flip 4 → 5, canonical authTier
+invariant, Class B / Class C tier distribution, Operation E
+type-guard, GET-not-privileged guard); `tests/unit/no-leak-guard.test.ts`
+(+4 / -2 — `KNOWN_LEGITIMATE_HITS` line re-anchor 898 → 1089
+for the `payload_summary: true` Prisma select hit; same
+canonical code, shifted by the +191-line route insertion).
+**RULE 13 substrate-honest disclosures (preserved at the docs
+tier):** (a) privileged endpoint count flips 4 → 5 mirroring
+the prior 2 → 4 precedent at sub-phase 5 [SUB-BOX-3-ROUTES]
+per ADR-0036; (b) `ORG_ACTION_POLICY_UPDATE` is the FIRST
+LIVE `can_admin_org` / Class B privileged endpoint exercising
+ADR-0026 Amendment 1 §3 target-resolution Class B at the
+integration tier; (c) no-leak allowlist line re-anchored
+898 → 1089 with reason-text update. Verification: 4/4 CI
+green (Typecheck 43s + Unit 1m23s + Integration 1m32s +
+Elixir 1m55s; CI run `26624056596`); TypeScript baseline
+preserved at exactly 4 canonical residuals. **Runtime
+Section 2 is still NOT live** — no `POST /api/v1/actions`,
+no `action.service.ts`, no Action rows created, no
+ActionAttempt rows, no ActionResult rows, no executor, no
+worker, no scheduler, no connectors / MCP, no Control Tower
+action UX, no production migrations applied, no `prisma
+generate` run in PR #22 slice. Substrate is now: schema +
+vocabulary declared (PR #18) + pure decision oracle (PR #20)
++ org ActionPolicy admin tier + `ACTION_POLICY_UPDATE` audit
+emitter (PR #22). Prior same-date refresh
+`[ADR-0057-ACTION-POLICY-EVALUATOR-LANDED]` minimum-touch
 refresh — **ADR-0057 §16 step 4 is now PARTIAL — pure
 policy evaluator landed; action.service.ts consumer is NOT
 live**. PR #20 squash commit
@@ -163,6 +210,456 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-ORG-ACTION-POLICY-UPDATE-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §7 + §10 are PARTIAL — Operation E
+PrivilegedEndpoint binding LIVE on main + `ACTION_POLICY_UPDATE`
+audit emission LIVE on main (1 of 10 `ACTION_*` literals now
+emits); the other 9 `ACTION_*` literals remain vocabulary
+only; the Action runtime itself remains NOT live.** PR #22
+squash commit `da5b3286e14eec4169f7ba9ed492df9263ce916c`
+(merged 2026-05-29T07:27:09Z) landed the org ActionPolicy
+admin substrate on main: the first LIVE `can_admin_org` /
+Class B privileged endpoint per ADR-0057 §7 + ADR-0026
+Amendment 1 §3, paired with the canonical org-admin
+GET + PUT route surface for ActionPolicy row CRUD and the
+first real emitter of an `ACTION_*` audit literal anywhere
+in the source tree (`writeAuditEvent({ event_type:
+"ACTION_POLICY_UPDATE", ... })` at the PUT handler). The
+substrate now consists of: schema declarations (PR #18) +
+audit-literal vocabulary (PR #18) + pure decision oracle
+(PR #20) + org ActionPolicy admin tier + `ACTION_POLICY_UPDATE`
+emitter (PR #22). The Action runtime itself (`POST
+/api/v1/actions`, `action.service.ts`, executor, worker,
+scheduler) remains NOT live. This entry supersedes the
+forward-substrate framing of `[ADR-0057-ORG-ACTION-POLICY-UPDATE-PRIVILEGED-BINDING-EXECUTE-VERIFY-AUTH]`
+as "Option D — the org admin surface for ActionPolicy row
+creation / updates / deletes" recorded in the prior
+`[ADR-0057-ACTION-POLICY-EVALUATOR-LANDED]` refresh below;
+that prior framing was substrate-honest at HEAD `7d6f785`
+and is preserved verbatim for historical context per Rule 0.
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch. The correct response to
+> complexity is to chunk more coherently, not defer.**
+
+### What landed at `da5b328`
+
+Per Rule 0 reading of the merged commit, PR #22 added exactly
+five files (`5 files changed, 947 insertions(+), 16 deletions(-)`):
+
+- **`apps/api/src/security/privileged-endpoints.ts`
+  (MOD; +44 / -2)** — extends `EscalationActionDescriptor.type`
+  union with `"ORG_ACTION_POLICY_UPDATE"`; appends a 5th
+  entry to the `PRIVILEGED_ENDPOINTS` runtime registry
+  carrying `{ method: "PUT", route: "/api/v1/org/action-policies",
+  authTier: "can_admin_org", actionDescriptor: { type:
+  "ORG_ACTION_POLICY_UPDATE" } }`. The registry now contains
+  4 Class C (`can_admin_niov`) + 1 NEW Class B
+  (`can_admin_org`) entries.
+- **`apps/api/src/routes/org.routes.ts` (MOD; +191)** —
+  adds two routes immediately after the existing
+  `PATCH /api/v1/org/settings` precedent. GET is read-only
+  org-scoped listing; PUT is dual-control gated + body
+  allowlist validation + enum validation + `prisma.actionPolicy.upsert`
+  + `writeAuditEvent({ event_type: "ACTION_POLICY_UPDATE",
+  ... })` + safe response projection.
+- **`tests/integration/org-action-policies.test.ts`
+  (NEW; +651)** — 11 NEW integration tests against a real
+  Postgres test container. Coverage: GET 403 without
+  `can_admin_org`, GET empty-list, GET org-scope (cross-org
+  leak prevention), GET safe-projection (12 forbidden tokens
+  asserted absent from response body), PUT 403 without
+  `can_admin_org`, PUT 422 UNKNOWN_FIELD, PUT 422
+  INVALID_FIELD for invalid `action_type` / `risk_tier` /
+  `default_decision`, PUT happy path (upsert + audit
+  emission with 9 forbidden tokens asserted absent from audit
+  details), PUT UNIQUE-tuple in-place update.
+- **`tests/unit/privileged-endpoints.test.ts`
+  (MOD; +73 / -12)** — 4 NEW unit tests: count flip 4 → 5;
+  canonical authTier invariant (`can_admin_niov` OR
+  `can_admin_org`); Class B / Class C tier distribution
+  (1 Class B = `ORG_ACTION_POLICY_UPDATE`; 4 Class C); type-
+  guard for `PUT /api/v1/org/action-policies`;
+  GET-not-privileged guard.
+- **`tests/unit/no-leak-guard.test.ts` (MOD; +4 / -2)** —
+  `KNOWN_LEGITIMATE_HITS` entry for `apps/api/src/routes/org.routes.ts`
+  re-anchored from line 898 to line 1089; same canonical
+  `payload_summary: true` Prisma select hit, shifted by
+  the +191-line route insertion. Reason-text updated inline.
+
+### Privileged binding now live
+
+```ts
+{
+  method: "PUT",
+  route: "/api/v1/org/action-policies",
+  authTier: "can_admin_org",
+  actionDescriptor: { type: "ORG_ACTION_POLICY_UPDATE" },
+}
+```
+
+`EscalationActionDescriptor.type` union extended with
+`"ORG_ACTION_POLICY_UPDATE"`. **The runtime registry now
+contains 5 LIVE entries on main:**
+
+| # | Operation | Method | Route | authTier | Class |
+|---|---|---|---|---|---|
+| A | `PLATFORM_MONETIZATION_CONFIG_UPDATE` | PATCH | `/api/v1/platform/monetization/config` | `can_admin_niov` | C |
+| B | `PLATFORM_ORG_CREATION` | POST | `/api/v1/platform/orgs` | `can_admin_niov` | C |
+| C | `REGULATOR_ACCESS_GRANT` | POST | `/api/v1/regulator/access-grants` | `can_admin_niov` | C |
+| D | `REGULATOR_ACCESS_REVOKE` | POST | `/api/v1/regulator/access-revocations` | `can_admin_niov` | C |
+| **E** | **`ORG_ACTION_POLICY_UPDATE`** | **PUT** | **`/api/v1/org/action-policies`** | **`can_admin_org`** | **B** |
+
+**Operation E is the FIRST LIVE Class B (`can_admin_org`) entry
+exercising the ADR-0026 Amendment 1 §3 target resolver at the
+integration tier.** Class A explicit-metadata + Class C
+platform-admin entries remain canonical at their prior
+substantive registers; Class B is now live by integration-tier
+proof at PR #22 CI run `26624056596`.
+
+### Routes now live
+
+- **`GET /api/v1/org/action-policies`**
+  - bearer + `can_admin_org`
+  - read-only org-scoped list of `ActionPolicy` rows
+  - `where: { org_entity_id: orgEntityId }` resolved from
+    the caller's session, NOT from the request body or
+    query string (DRIFT-9 cross-org leak guard per ADR-0006)
+  - safe projection only: `policy_id`, `org_entity_id`,
+    `action_type`, `risk_tier`, `default_decision`,
+    `require_admin_capability`, `updated_by`, `created_at`,
+    `updated_at`
+  - NOT a privileged endpoint (read-only listings bypass
+    dual-control per ADR-0057 §9)
+
+- **`PUT /api/v1/org/action-policies`**
+  - bearer + `can_admin_org`
+  - dual-control via the Operation E
+    `ORG_ACTION_POLICY_UPDATE` binding
+  - validates writable fields against the canonical
+    allowlist (`action_type`, `risk_tier`, `default_decision`,
+    `require_admin_capability`); returns 422 `UNKNOWN_FIELD`
+    on overflow
+  - validates enum fields against `ActionType` (3 values),
+    `ActionRiskTier` (4 values), `ActionDecision` (4 values),
+    and the canonical `require_admin_capability` set
+    (`"can_admin_org"` / `"can_admin_niov"` / `null`);
+    returns 422 `INVALID_FIELD` on enum miss
+  - upserts by UNIQUE `(org_entity_id, action_type, risk_tier)`
+    via `prisma.actionPolicy.upsert`
+  - emits `ACTION_POLICY_UPDATE` per ADR-0057 §10
+  - returns safe policy projection (same shape as GET)
+
+### Audit emission now live
+
+`ACTION_POLICY_UPDATE` is the **FIRST `ACTION_*` audit literal
+with a real emitter anywhere in source code**. The emitter
+shape:
+
+```ts
+{
+  event_type: "ACTION_POLICY_UPDATE",
+  outcome: "SUCCESS",
+  actor_entity_id: callerId,
+  target_entity_id: orgEntityId,
+  details: {
+    policy_id: upserted.policy_id,
+    action_type: upserted.action_type,
+    risk_tier: upserted.risk_tier,
+    default_decision: upserted.default_decision,
+    route: "/api/v1/org/action-policies",
+    method: "PUT",
+  },
+}
+```
+
+All 6 details fields are in the ADR-0057 §10 SAFE allowlist.
+
+**FORBIDDEN audit-details remain excluded** (proven at the
+integration tier by `JSON.stringify(details).includes(forbidden) === false`
+assertions against 9 forbidden tokens):
+
+- raw request body
+- raw policy envelope JSON
+- raw errors
+- secrets / credentials / API keys
+- capsule content (`payload_summary`, `payload_content`,
+  `storage_location`, `content_hash`)
+- embeddings / vectors / per-dimension stats
+- candidate-pool identities / candidate-pool size
+- break-glass justification text (`grant_id` only)
+- raw error text / stack traces
+
+### Test coverage
+
+| Tier | File | Count | Notes |
+|---|---|---|---|
+| Unit | `tests/unit/privileged-endpoints.test.ts` | 15/15 (was 11; +4 NEW) | count-flip + tier-distribution + Operation E type-guard + GET-not-privileged guard |
+| Integration | `tests/integration/org-action-policies.test.ts` | **11/11 NEW** | GET (4 cases) + PUT validation (5 cases) + PUT happy path (2 cases) |
+| Unit (preserve PR #18) | `tests/unit/audit.test.ts` | 23/23 | PR #18 audit-literal verification preserved |
+| Unit (preserve PR #20) | `tests/unit/action-policy-evaluator.test.ts` | 34/34 | PR #20 pure-function evaluator preserved |
+| Unit (no-leak) | `tests/unit/no-leak-guard.test.ts` | 2/2 | after allowlist line re-anchor 898 → 1089 |
+| Unit (RULE 16) | `tests/unit/no-console-in-api-src.test.ts` | 1/1 | preserved |
+
+**CI verification at PR #22:** CI run `26624056596` —
+all 4 jobs **PASS**:
+
+| Job | Result | Duration |
+|---|---|---|
+| Typecheck (strict 4-error baseline) | pass | 43s |
+| Unit tier (371 tests) | pass | 1m23s |
+| Integration tier (111 tests + 1 skipped) | pass | 1m32s |
+| Elixir tier (compile + test) | pass | 1m55s |
+
+### RULE 13 substrate-honest disclosures (preserved at the docs tier)
+
+Three substrate-state observations surfaced during PR #22
+implementation; all preserved at the file-header + report
+tier:
+
+1. **Privileged endpoint count flips 4 → 5.** The existing
+   `tests/unit/privileged-endpoints.test.ts` invariant
+   `expect(PRIVILEGED_ENDPOINTS).toHaveLength(4)` updated to
+   `5`, mirroring the prior **2 → 4 precedent** at
+   sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036 (REGULATOR
+   access grant + revoke additions). The same canonical
+   pattern repeats here. The previous test file's own
+   comment block already anticipated this transition:
+   "Future LIVE entries land here when their target
+   sub-phase ships."
+
+2. **First LIVE `can_admin_org` / Class B privileged
+   endpoint added.** The previous test invariant
+   `it("contains only can_admin_niov-gated entries (per
+   Tension 3 Category (1))")` replaced with
+   `it("entries use only the canonical authTier values
+   (can_admin_niov | can_admin_org)")` + 2 NEW tests
+   asserting the Class B (1 entry:
+   `ORG_ACTION_POLICY_UPDATE`) vs Class C (4 entries) tier
+   distribution. The dual-control middleware already
+   handled both tiers; this slice exercises Class B at the
+   integration tier for the first time, locking the
+   integration-tier coverage ADR-0057 §7 specifies.
+
+3. **No-leak allowlist line re-anchored 898 → 1089.** The
+   +191-line route insertion in `org.routes.ts` shifted the
+   canonical `payload_summary: true` Prisma select hit by
+   191 lines. The `KNOWN_LEGITIMATE_HITS` entry was
+   re-anchored with an inline `reason:` note explaining the
+   shift; same code, same substrate justification (Prisma
+   `select` column read inside admin route).
+
+### TypeScript baseline (preserved)
+
+The accepted TypeScript baseline remains **exactly 4
+canonical errors**, byte-identical to the prior refresh:
+
+1. `apps/api/src/server.ts:299` — TS2322 rateLimits
+   index-signature drift
+2. `apps/api/src/services/cosmp/write.service.ts:548` —
+   TS2339 `ValidateFailure.entity_id` narrowing
+3. `apps/api/src/services/monetization/monetization.service.ts:30`
+   — TS2740 PRICING_TABLE deliberate-blocker per ADR-0021
+4. `packages/database/src/queries/capsule.ts:242` — TS2322
+   `CapsuleMetadata` shape drift
+
+### Scope discipline (what PR #22 touched, and what it did not)
+
+PR #22 touched exactly:
+
+- `apps/api/src/security/privileged-endpoints.ts` (+44 / -2)
+- `apps/api/src/routes/org.routes.ts` (+191)
+- `tests/integration/org-action-policies.test.ts` (NEW; +651)
+- `tests/unit/privileged-endpoints.test.ts` (+73 / -12)
+- `tests/unit/no-leak-guard.test.ts` (+4 / -2)
+
+NOT touched: `apps/api/src/routes/actions.routes.ts` (does
+NOT exist), `apps/api/src/services/action.service.ts` (does
+NOT exist), `apps/api/src/services/action/executor.ts` (does
+NOT exist), `apps/api/src/services/action/scheduler.ts`
+(does NOT exist), all other `apps/api/src/services/**`
+(including the PR #20 `policy-evaluator.ts` which remains
+pure and unchanged), `packages/**`, `docs/**`, `docs/architecture/decisions/**`,
+`.github/**`, `.husky/**`, `prisma/schema.prisma`,
+`prisma/migrations/**`, `package.json`, `package-lock.json`,
+`AGENTS.md`, `CLAUDE.md`, Control Tower files,
+Foundation-Command files, legacy quarantine files.
+
+No migrations applied. No `prisma generate` run during this
+slice. No installs. No secret access.
+
+### What remains NOT live after this refresh
+
+Section 2 Autonomous Execution Core implementation is still
+**NOT fully live**. The admin tier for ActionPolicy rows is
+now live (GET + PUT + `ACTION_POLICY_UPDATE` emission); the
+substrate now consists of:
+
+- schema declarations (PR #18)
+- audit-literal vocabulary (PR #18)
+- pure decision oracle (PR #20)
+- org ActionPolicy admin CRUD + first `ACTION_*` emitter
+  (PR #22)
+
+The actual Action runtime — service layer, route handler,
+executor, worker, scheduler — does not exist:
+
+- **Autonomous Execution Core is not fully live.** Admin
+  tier is live; runtime is NOT.
+- **Admin tier for ActionPolicy rows is live.** Org admins
+  can now seed per-(action_type, risk_tier) policy rows
+  that the future `action.service.ts` consumer will read at
+  evaluator call time.
+- **Action runtime is NOT live.**
+- **No `POST /api/v1/actions`** — no action creation route
+  exists.
+- **No general Action creation runtime** — no
+  `action.service.ts`.
+- **`action.service.ts` does NOT exist.**
+- **No Action rows created** — `prisma.action.create` not
+  called anywhere.
+- **No ActionAttempt rows created** — `prisma.actionAttempt.create`
+  not called.
+- **No ActionResult rows created** — `prisma.actionResult.create`
+  not called.
+- **No executor** — no `setInterval`-driven worker, no
+  `FOR UPDATE SKIP LOCKED` polling.
+- **No worker** — no in-process worker, no broker.
+- **No scheduler** — no `APPROVED → SCHEDULED` transition.
+- **No connectors / MCP** — per ADR-0057 §17, deferred to
+  ADR-0058 + Section 4.
+- **No Control Tower action UX** — per ADR-0057 §12,
+  deferred.
+- **Other 9 `ACTION_*` literals remain vocabulary only.**
+  Only `ACTION_POLICY_UPDATE` has a real emitter. The 9
+  remaining literals (`ACTION_PROPOSED`, `_APPROVED`,
+  `_REJECTED`, `_SCHEDULED`, `_STARTED`, `_SUCCEEDED`,
+  `_FAILED`, `_CANCELLED`, `_EXPIRED`) await the
+  `action.service.ts` consumer + executor / worker /
+  scheduler.
+- **No production migrations were applied.** The
+  `action_policies` table on the local test container was
+  created via Option A (`local-test-db-refresh.sh`);
+  production databases remain unchanged. CI test containers
+  create it at job start via `db:push:test`.
+- **Prisma generate was NOT run in PR #22.** The typed
+  `prisma.actionPolicy.*` accessor used by the new PUT
+  handler was generated during the prior Option A local
+  substrate enablement. CI regenerates the client at job
+  start.
+- **TypeScript does NOT have zero errors.** Baseline
+  remains 4 canonical residuals.
+- **All 10 production sections are NOT complete.** Only
+  Section 1 + CI-guard pre-arm + Section 2 schema /
+  vocabulary / pure decision oracle / org admin tier /
+  first `ACTION_*` emitter.
+
+### Founder Directive (preserved)
+
+> **This is not an MVP path. The target is a premium,
+> production-grade enterprise client launch.**
+
+The 10 required production sections remain required for
+production-grade launch. None is optional. None is "later."
+
+1. **Employee Intelligence Core**
+2. **Autonomous Execution Core** — schema + vocabulary +
+   pure evaluator + admin tier landed (PRs #18 + #20 + #22);
+   action.service.ts consumer + executor + worker +
+   scheduler runtime forward-substrate.
+3. **Hives / Team Intelligence**
+4. **MCP / Connectors**
+5. **Agent Playground**
+6. **Enterprise Analytics**
+7. **Full Audit Viewer**
+8. **Billing / Entitlements**
+9. **Admin / Governance Control Tower**
+10. **Deployment / Security / Go-Live Operations**
+
+Do NOT frame hives, Agent Playground, MCP/connectors,
+billing, enterprise analytics, full audit viewer, autonomous
+execution, or governance/admin as optional later MVP
+features.
+
+### Forward-substrate next strategic option
+
+**Do NOT start `POST /api/v1/actions` or executor / worker /
+scheduler work until this docs refresh is merged.** After
+merge, the natural successor is:
+
+**Option E — `[ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-EXECUTE-VERIFY-AUTH]`**
+
+Purpose: wire the evaluator from PR #20 plus the
+ActionPolicy admin substrate from PR #22 into an
+`action.service.ts` create-time boundary that:
+
+- Creates `Action` rows via `prisma.action.create` at
+  `POST /api/v1/actions`
+- Pairs `EscalationRequest` rows where the evaluator
+  returns `REQUIRE_DUAL_CONTROL`
+- Emits `ACTION_PROPOSED` at create-time, plus
+  `ACTION_APPROVED` on the AUTO_APPROVE short-circuit, plus
+  `ACTION_REJECTED` on policy FORBIDDEN / POLICY_UNRESOLVED
+  / NO_ELIGIBLE_TARGET
+- Exposes `POST /api/v1/actions` per ADR-0057 §9
+
+**Scope warning:** this is the largest single substrate
+landing in the Section 2 arc so far. It must explicitly
+EXCLUDE the executor, worker, scheduler, connectors / MCP,
+and Control Tower UX. The `SCHEDULED → RUNNING → SUCCEEDED /
+FAILED` lifecycle stays forward-substrate per ADR-0057 §16
+step 5-7.
+
+This option requires Founder authorization. It should NOT
+fire automatically.
+
+### Do NOT claim
+
+- "Autonomous Execution is live." — runtime is NOT
+  implemented; only schema vocabulary + audit-literal
+  vocabulary + pure evaluator + admin tier + 1 of 10
+  `ACTION_*` emitters exist.
+- "AI Twins can execute actions." — no executor; no
+  service layer.
+- "`autonomy_level` is enforced end-to-end." — only the
+  pure evaluator + admin tier exist; no service consumes
+  the evaluator.
+- "Workflows run." — no workflow engine.
+- "Connectors / MCP are live." — deferred per ADR-0057
+  §17 + ADR-0058.
+- "Action queue exists." — no `prisma.action.create` call
+  site exists.
+- "Action audit trail emissions exist end-to-end." — only
+  `ACTION_POLICY_UPDATE` is wired.
+- "The `ACTION_*` lifecycle emits end-to-end." — false;
+  only `ACTION_POLICY_UPDATE` is wired.
+- "Control Tower action UX exists." — deferred per
+  ADR-0057 §12.
+- "`/api/v1/actions` exists." — false; no route handler.
+- "POST /api/v1/actions exists." — false.
+- "Action runtime is live." — false; admin tier only.
+- "ActionPolicy admin surface means actions can execute." —
+  false; admin tier seeds the policy substrate the future
+  consumer reads, but the consumer does not exist.
+- "All 10 `ACTION_*` audit literals emit." — false; only
+  1 of 10 emits.
+- "The evaluator queries the DB." — false; it remains
+  pure (PR #20 unchanged by PR #22).
+- "The evaluator emits audit events." — false; the new
+  emitter is in the org-routes PUT handler, NOT in the
+  evaluator.
+- "Migrations were applied." — `prisma db push` was NOT
+  run during PR #22.
+- "Prisma client was regenerated in PR #22." — `prisma
+  generate` was NOT run during PR #22.
+- "TypeScript has zero errors." — baseline remains 4
+  canonical residuals.
+- "All 10 production sections are complete." — only
+  Section 1 + CI-guard pre-arm + Section 2 schema /
+  vocabulary / pure decision oracle / org admin tier /
+  first `ACTION_*` emitter.
 
 ## [ADR-0057-ACTION-POLICY-EVALUATOR-LANDED] 2026-05-29
 
