@@ -793,11 +793,13 @@ export type {
 export {
   RECORD_CAPSULE_MAX_CONTENT_BYTES,
   validatePayloadForActionType,
+  validateProposePermissionGrantPayload,
   validateRecordCapsulePayload,
   validateStubPayload,
 } from "./services/action/action-payload-validators.js";
 export type {
   ActionPayloadValidationResult,
+  ProposePermissionGrantPayload,
   RecordCapsulePayload,
 } from "./services/action/action-payload-validators.js";
 

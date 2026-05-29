@@ -34,8 +34,12 @@
 //   unchanged at the executor boundary.
 
 import type { Action, ActionType } from "@prisma/client";
+import { createPermission, writeAuditEvent } from "@niov/database";
 import type { WriteService } from "../cosmp/write.service.js";
-import { validateRecordCapsulePayload } from "./action-payload-validators.js";
+import {
+  validateProposePermissionGrantPayload,
+  validateRecordCapsulePayload,
+} from "./action-payload-validators.js";
 
 // WHAT: The handler outcome discriminator. SUCCESS produces an
 //        ActionResult row; FAILURE produces an ActionAttempt row with
@@ -298,10 +302,137 @@ function makeRecordCapsuleHandler(
   };
 }
 
+// WHAT: The real PROPOSE_PERMISSION_GRANT handler. Unpacks
+//        Action.payload_redacted through the same validator
+//        action.service.ts ran at create-time (single source of
+//        truth), then calls the package-level `createPermission` DB
+//        query at packages/database/src/queries/permission.ts. The
+//        grantor is Action.source_entity_id (the caller's identity
+//        at create-time); the grantee + capsule + access_scope +
+//        optional duration / can_share_forward / conditions come
+//        from the validated payload.
+//
+// RULE 0 sovereignty:
+//   `createPermission` already enforces the three sovereignty rules
+//   in code (RULE 0; ADR-0001): grantor must own the capsule;
+//   LONG_TERM / PERMANENT require the grantor to be a PERSON;
+//   AI_AGENT cannot grant to AI_AGENT. Sovereignty violations
+//   throw at execute-time and are mapped to handler FAILURE here.
+//
+// Audit chain:
+//   1. `createPermission` writes a legacy `PERMISSION_CREATE` audit
+//      row to auditLog inside its own tx (RULE 4).
+//   2. This handler additionally emits the canonical
+//      `PERMISSION_CREATED` AuditEvent (ADR-0002 chain) with the
+//      action_id back-reference for forensic traceability across
+//      the Action audit chain.
+//
+// SAFE result_metadata: { handler: "propose_permission_grant",
+//   action_type, permission_id, bridge_id, capsule_id,
+//   grantee_entity_id, access_scope, duration_type }. NEVER raw
+//   conditions content, never grantor/grantee personal details,
+//   never capsule content.
+function makeProposePermissionGrantHandler(): ActionHandlerFn {
+  return async (action) => {
+    const marker = detectTestMarker(action);
+    if (marker === "FAILURE") {
+      return {
+        outcome: "FAILURE",
+        error_class: "STUB_FORCED_FAILURE",
+        error_summary: "test-forced failure",
+      };
+    }
+    if (marker === "TIMEOUT") {
+      return {
+        outcome: "TIMEOUT",
+        error_class: "STUB_FORCED_TIMEOUT",
+        error_summary: "test-forced timeout",
+      };
+    }
+    const validated = validateProposePermissionGrantPayload(
+      action.payload_redacted,
+    );
+    if (validated.ok === false) {
+      return {
+        outcome: "FAILURE",
+        error_class: "PAYLOAD_INVALID_AT_EXECUTE",
+        error_summary: `payload failed re-validation: ${validated.invalid_fields.join(",")}`,
+      };
+    }
+    try {
+      const permission = await createPermission({
+        capsule_id: validated.normalized.capsule_id,
+        grantor_entity_id: action.source_entity_id,
+        grantee_entity_id: validated.normalized.grantee_entity_id,
+        access_scope: validated.normalized.access_scope,
+        duration_type: validated.normalized.duration_type,
+        can_share_forward: validated.normalized.can_share_forward,
+        conditions: validated.normalized.conditions,
+        actor_id: action.source_entity_id,
+      });
+      // Canonical AuditEvent chain (ADR-0002) PERMISSION_CREATED
+      // with action_id back-reference. createPermission already
+      // wrote the legacy auditLog row in its tx; this row joins
+      // the AuditEvent chain so the Action audit chain has a
+      // direct back-reference.
+      await writeAuditEvent({
+        event_type: "PERMISSION_CREATED",
+        outcome: "SUCCESS",
+        actor_entity_id: action.source_entity_id,
+        target_entity_id: validated.normalized.grantee_entity_id,
+        target_capsule_id: validated.normalized.capsule_id,
+        details: {
+          via: "ACTION_RUNNER",
+          action_id: action.action_id,
+          permission_id: permission.permission_id,
+          bridge_id: permission.bridge_id,
+          access_scope: permission.access_scope,
+          duration_type: permission.duration_type,
+        },
+      });
+      return {
+        outcome: "SUCCESS",
+        result_summary: `propose_permission_grant_ok:${permission.permission_id.slice(0, 8)}`,
+        result_metadata: {
+          handler: "propose_permission_grant",
+          action_type: "PROPOSE_PERMISSION_GRANT",
+          permission_id: permission.permission_id,
+          bridge_id: permission.bridge_id,
+          capsule_id: permission.capsule_id,
+          grantee_entity_id: permission.grantee_entity_id,
+          access_scope: permission.access_scope,
+          duration_type: permission.duration_type,
+        },
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Map createPermission's known error patterns to stable
+      // error_class strings the audit row can carry. The message
+      // text is bounded by lifecycle.service.ts clamp; we still
+      // pre-classify so forensic queries can filter by class.
+      let errorClass = "PERMISSION_CREATE_FAILED";
+      if (msg.includes("Sovereignty:")) {
+        errorClass = "PERMISSION_SOVEREIGNTY_VIOLATION";
+      } else if (msg.includes("Capsule") && msg.includes("not found")) {
+        errorClass = "PERMISSION_CAPSULE_NOT_FOUND";
+      } else if (msg.includes("Grantor entity") && msg.includes("not found")) {
+        errorClass = "PERMISSION_GRANTOR_NOT_FOUND";
+      } else if (msg.includes("Grantee entity") && msg.includes("not found")) {
+        errorClass = "PERMISSION_GRANTEE_NOT_FOUND";
+      }
+      return {
+        outcome: "FAILURE",
+        error_class: errorClass,
+        error_summary: msg,
+      };
+    }
+  };
+}
+
 // WHAT: Build the per-ActionType handler dispatch map for the
-//        registry. RECORD_CAPSULE wires to the real handler when
-//        writeService is provided; otherwise falls back to the
-//        stub. Other ActionTypes stay stubs.
+//        registry. RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT are
+//        real handlers. SEND_INTERNAL_NOTIFICATION remains stub
+//        pending its own future capability wave.
 function buildHandlerMap(
   deps: ActionHandlerRegistryDeps,
 ): Record<ActionType, ActionHandlerFn> {
@@ -312,7 +443,7 @@ function buildHandlerMap(
   return {
     RECORD_CAPSULE: recordCapsuleHandler,
     SEND_INTERNAL_NOTIFICATION: makeStubHandler("SEND_INTERNAL_NOTIFICATION"),
-    PROPOSE_PERMISSION_GRANT: makeStubHandler("PROPOSE_PERMISSION_GRANT"),
+    PROPOSE_PERMISSION_GRANT: makeProposePermissionGrantHandler(),
   };
 }
 

@@ -391,7 +391,7 @@ describe("POST /api/v1/actions — REQUIRE_DUAL_CONTROL paths", () => {
       method: "POST",
       url: "/api/v1/actions",
       headers: { authorization: `Bearer ${caller.token}` },
-      payload: body({ action_type: "PROPOSE_PERMISSION_GRANT" }),
+      payload: body({ action_type: "PROPOSE_PERMISSION_GRANT", payload_redacted: { capsule_id: "11111111-1111-1111-1111-111111111111", grantee_entity_id: "22222222-2222-2222-2222-222222222222", access_scope: "FULL" } }),
       remoteAddress: caller.ip,
     });
     expect(response.statusCode).toBe(200);
@@ -455,7 +455,7 @@ describe("POST /api/v1/actions — REQUIRE_DUAL_CONTROL paths", () => {
       method: "POST",
       url: "/api/v1/actions",
       headers: { authorization: `Bearer ${caller.token}` },
-      payload: body({ action_type: "PROPOSE_PERMISSION_GRANT" }),
+      payload: body({ action_type: "PROPOSE_PERMISSION_GRANT", payload_redacted: { capsule_id: "11111111-1111-1111-1111-111111111111", grantee_entity_id: "22222222-2222-2222-2222-222222222222", access_scope: "FULL" } }),
       remoteAddress: caller.ip,
     });
     expect(response.statusCode).toBe(503);

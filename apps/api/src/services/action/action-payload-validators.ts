@@ -27,7 +27,14 @@
 //   typed shape the handler reuses at execute-time (single source of
 //   truth for the payload contract).
 
-import type { ActionType, CapsuleType, DecayType, StorageTier } from "@prisma/client";
+import type {
+  AccessScope,
+  ActionType,
+  CapsuleType,
+  DecayType,
+  DurationType,
+  StorageTier,
+} from "@prisma/client";
 
 // WHAT: Discriminated-union result returned by every per-type
 //        payload validator.
@@ -313,17 +320,131 @@ export function validateRecordCapsulePayload(
 //        route validator already rejected non-object payloads).
 // INPUT: The payload_redacted value.
 // OUTPUT: ok:true with an empty normalized record.
-// WHY: Preserves the current stub-handler contract for
-//      SEND_INTERNAL_NOTIFICATION and PROPOSE_PERMISSION_GRANT while
-//      RECORD_CAPSULE becomes the first real handler. When a future
-//      slice lands a real handler, the placeholder is replaced with a
-//      type-specific validator and the deliberate-blocker pattern
-//      catches any mismatch at TypeScript exhaustiveness check time.
+// WHY: Preserves the stub-handler contract for ActionTypes whose
+//      real handler has not yet landed. As of the
+//      [ADR-0057-PROPOSE-PERMISSION-GRANT-HANDLER] wave, only
+//      SEND_INTERNAL_NOTIFICATION uses this — RECORD_CAPSULE and
+//      PROPOSE_PERMISSION_GRANT have real type-specific validators.
 export function validateStubPayload(
   _payload: unknown,
 ): ActionPayloadValidationResult<Record<string, never>> {
   return { ok: true, normalized: {} };
 }
+
+// WHAT: Canonical AccessScope enum mirror (per the Prisma enum).
+const VALID_ACCESS_SCOPES: ReadonlySet<string> = new Set<string>([
+  "METADATA_ONLY",
+  "SUMMARY",
+  "FULL",
+]);
+
+// WHAT: Canonical DurationType enum mirror (per the Prisma enum).
+const VALID_DURATION_TYPES: ReadonlySet<string> = new Set<string>([
+  "TEMPORARY",
+  "SHORT_TERM",
+  "LONG_TERM",
+  "PERMANENT",
+  "SESSION_ONLY",
+  "NONE",
+]);
+
+// WHAT: Normalized PROPOSE_PERMISSION_GRANT payload returned by
+//        validateProposePermissionGrantPayload. Mirrors a subset of
+//        the canonical `CreatePermissionInput` shape at
+//        packages/database/src/queries/permission.ts — the grantor
+//        is set by the handler (= Action.source_entity_id), not by
+//        the caller, so it is intentionally absent here.
+export interface ProposePermissionGrantPayload {
+  capsule_id: string;
+  grantee_entity_id: string;
+  access_scope: AccessScope;
+  duration_type?: DurationType;
+  can_share_forward?: boolean;
+  conditions?: Record<string, unknown>;
+}
+
+// WHAT: Validate a PROPOSE_PERMISSION_GRANT payload at create-time.
+// INPUT: payload_redacted.
+// OUTPUT: { ok: true, normalized } | { ok: false, invalid_fields }.
+// WHY: Sovereignty checks (grantor owns capsule, LONG_TERM/PERMANENT
+//      restricted to PERSON, AI_AGENT cannot grant to AI_AGENT) are
+//      enforced at execute-time by `createPermission` per RULE 0.
+//      The validator here checks shape only — the handler treats
+//      sovereignty violations as runtime FAILURE rather than
+//      create-time INVALID_FIELD because the grantor + grantee +
+//      capsule rows are needed to evaluate the sovereignty rules
+//      and we don't want to do a 3-row read at the route tier.
+export function validateProposePermissionGrantPayload(
+  payload: unknown,
+): ActionPayloadValidationResult<ProposePermissionGrantPayload> {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    return { ok: false, invalid_fields: ["payload_redacted"] };
+  }
+  const obj = payload as Record<string, unknown>;
+  const invalid: string[] = [];
+
+  if (typeof obj.capsule_id !== "string" || !UUID_RE.test(obj.capsule_id)) {
+    invalid.push("payload_redacted.capsule_id");
+  }
+  if (
+    typeof obj.grantee_entity_id !== "string" ||
+    !UUID_RE.test(obj.grantee_entity_id)
+  ) {
+    invalid.push("payload_redacted.grantee_entity_id");
+  }
+  if (
+    typeof obj.access_scope !== "string" ||
+    !VALID_ACCESS_SCOPES.has(obj.access_scope)
+  ) {
+    invalid.push("payload_redacted.access_scope");
+  }
+  if (obj.duration_type !== undefined) {
+    if (
+      typeof obj.duration_type !== "string" ||
+      !VALID_DURATION_TYPES.has(obj.duration_type)
+    ) {
+      invalid.push("payload_redacted.duration_type");
+    }
+  }
+  if (
+    obj.can_share_forward !== undefined &&
+    typeof obj.can_share_forward !== "boolean"
+  ) {
+    invalid.push("payload_redacted.can_share_forward");
+  }
+  if (obj.conditions !== undefined) {
+    if (
+      obj.conditions === null ||
+      typeof obj.conditions !== "object" ||
+      Array.isArray(obj.conditions)
+    ) {
+      invalid.push("payload_redacted.conditions");
+    }
+  }
+
+  if (invalid.length > 0) {
+    return { ok: false, invalid_fields: invalid };
+  }
+  const normalized: ProposePermissionGrantPayload = {
+    capsule_id: obj.capsule_id as string,
+    grantee_entity_id: obj.grantee_entity_id as string,
+    access_scope: obj.access_scope as AccessScope,
+  };
+  if (obj.duration_type !== undefined) {
+    normalized.duration_type = obj.duration_type as DurationType;
+  }
+  if (obj.can_share_forward !== undefined) {
+    normalized.can_share_forward = obj.can_share_forward as boolean;
+  }
+  if (obj.conditions !== undefined) {
+    normalized.conditions = obj.conditions as Record<string, unknown>;
+  }
+  return { ok: true, normalized };
+}
+
+// WHAT: Loose UUID regex shared with the validators above.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // WHAT: Per-ActionType validator dispatcher. Called from
 //        validateCreateActionBody after the route-shape check
@@ -343,8 +464,11 @@ export function validatePayloadForActionType(
       const r = validateRecordCapsulePayload(payload);
       return r.ok ? { ok: true } : { ok: false, invalid_fields: r.invalid_fields };
     }
-    case "SEND_INTERNAL_NOTIFICATION":
     case "PROPOSE_PERMISSION_GRANT": {
+      const r = validateProposePermissionGrantPayload(payload);
+      return r.ok ? { ok: true } : { ok: false, invalid_fields: r.invalid_fields };
+    }
+    case "SEND_INTERNAL_NOTIFICATION": {
       const r = validateStubPayload(payload);
       return r.ok ? { ok: true } : { ok: false, invalid_fields: r.invalid_fields };
     }
