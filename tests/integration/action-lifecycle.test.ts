@@ -476,7 +476,16 @@ describe("ADR-0057 §11 — per-attempt timeout → TIMED_OUT + ACTION_FAILED", 
     );
     const actionId = await createApprovedAction(caller, {
       action_type: "PROPOSE_PERMISSION_GRANT",
-      payload_redacted: { [TEST_MARKER_FORCE_TIMEOUT]: true },
+      payload_redacted: {
+        // Wave 4 validator requires capsule_id + grantee_entity_id +
+        // access_scope; the test marker bypasses the real handler
+        // dispatch at execute-time but the create-time validator
+        // still runs.
+        capsule_id: "11111111-1111-1111-1111-111111111111",
+        grantee_entity_id: "22222222-2222-2222-2222-222222222222",
+        access_scope: "FULL",
+        [TEST_MARKER_FORCE_TIMEOUT]: true,
+      },
     });
 
     // PROPOSE_PERMISSION_GRANT budget is 1: a single TIMEOUT

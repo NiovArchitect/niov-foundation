@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import {
   RECORD_CAPSULE_MAX_CONTENT_BYTES,
   validatePayloadForActionType,
+  validateProposePermissionGrantPayload,
   validateRecordCapsulePayload,
   validateStubPayload,
 } from "@niov/api";
@@ -230,6 +231,118 @@ describe("validateStubPayload", () => {
   });
 });
 
+describe("validateProposePermissionGrantPayload", () => {
+  const VALID_PPG = {
+    capsule_id: "11111111-1111-1111-1111-111111111111",
+    grantee_entity_id: "22222222-2222-2222-2222-222222222222",
+    access_scope: "FULL",
+  };
+  it("accepts canonical valid payload", () => {
+    const r = validateProposePermissionGrantPayload(VALID_PPG);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.normalized.capsule_id).toBe(VALID_PPG.capsule_id);
+      expect(r.normalized.grantee_entity_id).toBe(VALID_PPG.grantee_entity_id);
+      expect(r.normalized.access_scope).toBe("FULL");
+    }
+  });
+  it("rejects null payload", () => {
+    const r = validateProposePermissionGrantPayload(null);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.invalid_fields).toContain("payload_redacted");
+  });
+  it("rejects missing capsule_id", () => {
+    const { capsule_id: _u, ...rest } = VALID_PPG;
+    void _u;
+    const r = validateProposePermissionGrantPayload(rest);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.invalid_fields).toContain("payload_redacted.capsule_id");
+    }
+  });
+  it("rejects non-UUID capsule_id", () => {
+    const r = validateProposePermissionGrantPayload({
+      ...VALID_PPG,
+      capsule_id: "not-a-uuid",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.invalid_fields).toContain("payload_redacted.capsule_id");
+    }
+  });
+  it("rejects missing grantee_entity_id", () => {
+    const { grantee_entity_id: _u, ...rest } = VALID_PPG;
+    void _u;
+    const r = validateProposePermissionGrantPayload(rest);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.invalid_fields).toContain("payload_redacted.grantee_entity_id");
+    }
+  });
+  it("rejects unknown access_scope value", () => {
+    const r = validateProposePermissionGrantPayload({
+      ...VALID_PPG,
+      access_scope: "MADE_UP",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.invalid_fields).toContain("payload_redacted.access_scope");
+    }
+  });
+  it("accepts valid optional duration_type", () => {
+    const r = validateProposePermissionGrantPayload({
+      ...VALID_PPG,
+      duration_type: "PERMANENT",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.normalized.duration_type).toBe("PERMANENT");
+  });
+  it("rejects unknown duration_type", () => {
+    const r = validateProposePermissionGrantPayload({
+      ...VALID_PPG,
+      duration_type: "FOREVER",
+    });
+    expect(r.ok).toBe(false);
+  });
+  it("rejects non-boolean can_share_forward", () => {
+    const r = validateProposePermissionGrantPayload({
+      ...VALID_PPG,
+      can_share_forward: "yes",
+    });
+    expect(r.ok).toBe(false);
+  });
+  it("accepts conditions object", () => {
+    const r = validateProposePermissionGrantPayload({
+      ...VALID_PPG,
+      conditions: { context: "test" },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.normalized.conditions).toEqual({ context: "test" });
+  });
+  it("rejects conditions array", () => {
+    const r = validateProposePermissionGrantPayload({
+      ...VALID_PPG,
+      conditions: ["bad"],
+    });
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe("validatePayloadForActionType — PROPOSE_PERMISSION_GRANT dispatch", () => {
+  it("dispatches to the real validator (rejects invalid)", () => {
+    const r = validatePayloadForActionType("PROPOSE_PERMISSION_GRANT", {});
+    expect(r.ok).toBe(false);
+  });
+  it("dispatches to the real validator (accepts valid)", () => {
+    const r = validatePayloadForActionType("PROPOSE_PERMISSION_GRANT", {
+      capsule_id: "11111111-1111-1111-1111-111111111111",
+      grantee_entity_id: "22222222-2222-2222-2222-222222222222",
+      access_scope: "FULL",
+    });
+    expect(r.ok).toBe(true);
+  });
+});
+
 describe("validatePayloadForActionType dispatcher", () => {
   it("RECORD_CAPSULE -> rejects invalid payload", () => {
     const r = validatePayloadForActionType("RECORD_CAPSULE", {
@@ -253,11 +366,14 @@ describe("validatePayloadForActionType dispatcher", () => {
     });
     expect(r.ok).toBe(true);
   });
-  it("PROPOSE_PERMISSION_GRANT -> stub accepts any object", () => {
+  it("PROPOSE_PERMISSION_GRANT -> real validator rejects shape-only payload", () => {
+    // Wave 4 promoted PROPOSE_PERMISSION_GRANT from stub validator to
+    // the real validator at action-payload-validators.ts; arbitrary
+    // shapes that worked under the stub now correctly fail.
     const r = validatePayloadForActionType("PROPOSE_PERMISSION_GRANT", {
       grantee: "x",
     });
-    expect(r.ok).toBe(true);
+    expect(r.ok).toBe(false);
   });
   it("unknown action_type -> rejected", () => {
     const r = validatePayloadForActionType("MADE_UP" as never, {});
