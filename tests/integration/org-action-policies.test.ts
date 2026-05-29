@@ -649,3 +649,332 @@ describe("PUT /api/v1/org/action-policies — happy path with APPROVED escalatio
     expect(rows[0]?.default_decision).toBe("REQUIRE_DUAL_CONTROL");
   });
 });
+
+describe("PUT /api/v1/org/action-policies — ADR-0057 Wave 7 retry_budget + attempt_timeout_ms_override admin write-path", () => {
+  it("accepts retry_budget + attempt_timeout_ms_override positive integers + persists on the row + projects on the response", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "SEND_INTERNAL_NOTIFICATION",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: 2,
+        attempt_timeout_ms_override: 12_345,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: true;
+      policy: {
+        policy_id: string;
+        retry_budget: number | null;
+        attempt_timeout_ms_override: number | null;
+      };
+    };
+    expect(body.policy.retry_budget).toBe(2);
+    expect(body.policy.attempt_timeout_ms_override).toBe(12_345);
+    const row = await prisma.actionPolicy.findUnique({
+      where: { policy_id: body.policy.policy_id },
+    });
+    expect(row?.retry_budget).toBe(2);
+    expect(row?.attempt_timeout_ms_override).toBe(12_345);
+  });
+
+  it("explicit null on retry_budget + attempt_timeout_ms_override clears the override + the resolver will fall back to the constant", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    // Seed an existing override.
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const seed = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: 5,
+        attempt_timeout_ms_override: 9_999,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(seed.statusCode).toBe(200);
+    // Now clear both overrides.
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const cleared = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: null,
+        attempt_timeout_ms_override: null,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(cleared.statusCode).toBe(200);
+    const clearedBody = cleared.json() as {
+      policy: {
+        policy_id: string;
+        retry_budget: number | null;
+        attempt_timeout_ms_override: number | null;
+      };
+    };
+    expect(clearedBody.policy.retry_budget).toBeNull();
+    expect(clearedBody.policy.attempt_timeout_ms_override).toBeNull();
+  });
+
+  it("omitting retry_budget + attempt_timeout_ms_override on update preserves the existing column values", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    // Seed an existing override.
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const seed = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: 7,
+        attempt_timeout_ms_override: 4_242,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(seed.statusCode).toBe(200);
+    // Update only the default_decision; omit the overrides.
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const partial = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "REQUIRE_DUAL_CONTROL",
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(partial.statusCode).toBe(200);
+    const partialBody = partial.json() as {
+      policy: {
+        retry_budget: number | null;
+        attempt_timeout_ms_override: number | null;
+        default_decision: string;
+      };
+    };
+    // Overrides preserved.
+    expect(partialBody.policy.retry_budget).toBe(7);
+    expect(partialBody.policy.attempt_timeout_ms_override).toBe(4_242);
+    expect(partialBody.policy.default_decision).toBe("REQUIRE_DUAL_CONTROL");
+  });
+
+  it("rejects retry_budget = 0 with 422 INVALID_FIELD (non-positive guard)", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: 0,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as {
+      code: string;
+      invalid_fields: string[];
+    };
+    expect(body.code).toBe("INVALID_FIELD");
+    expect(body.invalid_fields).toContain("retry_budget");
+  });
+
+  it("rejects attempt_timeout_ms_override = -1 with 422 INVALID_FIELD (non-positive guard)", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        attempt_timeout_ms_override: -1,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as {
+      code: string;
+      invalid_fields: string[];
+    };
+    expect(body.code).toBe("INVALID_FIELD");
+    expect(body.invalid_fields).toContain("attempt_timeout_ms_override");
+  });
+
+  it("rejects non-integer (float) retry_budget with 422 INVALID_FIELD", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: 1.5,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { invalid_fields: string[] };
+    expect(body.invalid_fields).toContain("retry_budget");
+  });
+
+  it("rejects string retry_budget with 422 INVALID_FIELD", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: "3",
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { invalid_fields: string[] };
+    expect(body.invalid_fields).toContain("retry_budget");
+  });
+
+  it("emits ACTION_POLICY_UPDATE with retry_budget_set + attempt_timeout_ms_override_set boolean flags + NEVER leaks the numeric override values into audit details", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "PROPOSE_PERMISSION_GRANT",
+        risk_tier: "MEDIUM",
+        default_decision: "REQUIRE_DUAL_CONTROL",
+        retry_budget: 4,
+        attempt_timeout_ms_override: 8_888,
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const audits = await prisma.auditEvent.findMany({
+      where: {
+        event_type: "ACTION_POLICY_UPDATE",
+        actor_entity_id: caller.entityId,
+      },
+      orderBy: { timestamp: "desc" },
+    });
+    expect(audits.length).toBeGreaterThanOrEqual(1);
+    const latest = audits[0]!;
+    const details = latest.details as Record<string, unknown>;
+    expect(details.retry_budget_set).toBe(true);
+    expect(details.attempt_timeout_ms_override_set).toBe(true);
+    // CRITICAL no-leak: the numeric tuning values must NOT appear
+    // anywhere in the audit details JSON.
+    const detailsRaw = JSON.stringify(details);
+    expect(detailsRaw.includes('"retry_budget":')).toBe(false);
+    expect(detailsRaw.includes('"attempt_timeout_ms_override":')).toBe(false);
+    expect(detailsRaw.includes("8888")).toBe(false);
+    expect(detailsRaw.includes("4242")).toBe(false);
+  });
+
+  it("emits ACTION_POLICY_UPDATE with retry_budget_set=false + attempt_timeout_ms_override_set=false when neither override is touched", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "SEND_INTERNAL_NOTIFICATION",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const audits = await prisma.auditEvent.findMany({
+      where: {
+        event_type: "ACTION_POLICY_UPDATE",
+        actor_entity_id: caller.entityId,
+      },
+      orderBy: { timestamp: "desc" },
+    });
+    const latest = audits[0]!;
+    const details = latest.details as Record<string, unknown>;
+    expect(details.retry_budget_set).toBe(false);
+    expect(details.attempt_timeout_ms_override_set).toBe(false);
+  });
+});
+
+describe("GET /api/v1/org/action-policies — ADR-0057 Wave 7 projection includes the override columns", () => {
+  it("response projects retry_budget + attempt_timeout_ms_override for every row", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgAdmin({ orgId, can_admin_org: true });
+    await grantPolicyUpdateApproval(caller.entityId, orgId);
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "RECORD_CAPSULE",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        retry_budget: 3,
+        attempt_timeout_ms_override: 11_111,
+      },
+      remoteAddress: caller.ip,
+    });
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/action-policies",
+      headers: { authorization: `Bearer ${caller.token}` },
+      remoteAddress: caller.ip,
+    });
+    expect(list.statusCode).toBe(200);
+    const body = list.json() as {
+      ok: true;
+      policies: Array<{
+        action_type: string;
+        retry_budget: number | null;
+        attempt_timeout_ms_override: number | null;
+      }>;
+    };
+    const seeded = body.policies.find((p) => p.action_type === "RECORD_CAPSULE");
+    expect(seeded).toBeDefined();
+    expect(seeded?.retry_budget).toBe(3);
+    expect(seeded?.attempt_timeout_ms_override).toBe(11_111);
+  });
+});
