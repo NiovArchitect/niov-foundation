@@ -141,8 +141,10 @@ export interface ListAuditEventsQuery {
 }
 
 // WHAT: The viewer-scope enum. Self is the default (Wave 1
-//        contract); org enables the Wave 2 org-admin path.
-export type AuditViewScope = "self" | "org";
+//        contract); org enables the Wave 2 org-admin path;
+//        platform enables the Wave 3 niov-admin path (read all
+//        audit rows across the substrate).
+export type AuditViewScope = "self" | "org" | "platform";
 
 // WHAT: The normalized + clamped filter shape after validation.
 export interface NormalizedListAuditEventsFilters {
@@ -268,15 +270,16 @@ export function validateListAuditEventsQuery(
     if (d === null) invalid.push("end_time");
     else end_time = d;
   }
-  // Section 7 Wave 2: scope coercion. Accept "self" (default
-  // when omitted) or "org" (admin path). Any other string is
-  // an INVALID_FIELD; numeric / boolean / object values also
-  // rejected.
+  // Section 7 Wave 2/3: scope coercion. Accept "self" (default
+  // when omitted), "org" (org-admin path), or "platform"
+  // (niov-admin path). Anything else is INVALID_FIELD.
   let scope: AuditViewScope = "self";
   if (query.scope !== undefined) {
     if (
       typeof query.scope !== "string" ||
-      (query.scope !== "self" && query.scope !== "org")
+      (query.scope !== "self" &&
+        query.scope !== "org" &&
+        query.scope !== "platform")
     ) {
       invalid.push("scope");
     } else {
@@ -394,7 +397,9 @@ async function emitAuditViewerRead(
     | "AUDIT_VIEW_EVENT"
     | "AUDIT_VIEW_VERIFY_CHAIN"
     | "AUDIT_VIEW_ORG_LIST"
-    | "AUDIT_VIEW_ORG_EVENT",
+    | "AUDIT_VIEW_ORG_EVENT"
+    | "AUDIT_VIEW_PLATFORM_LIST"
+    | "AUDIT_VIEW_PLATFORM_EVENT",
   meta: Record<string, unknown> = {},
 ): Promise<void> {
   await writeAuditEvent({
@@ -423,6 +428,25 @@ async function callerHasAdminCapability(
   });
   if (tar === null) return false;
   return tar.status === "ACTIVE" && tar.can_admin_org === true;
+}
+
+// WHAT: TAR-authoritative check that the caller currently holds
+//        can_admin_niov. Mirrors the existing /platform/audit +
+//        /console/audit niov-admin gate.
+// INPUT: callerEntityId.
+// OUTPUT: Boolean.
+// WHY: scope=platform branch needs the broader admin gate. Same
+//      live-TAR-not-stale-token-claims rule as
+//      callerHasAdminCapability — RULE 13 anchor.
+async function callerHasNiovAdminCapability(
+  callerEntityId: string,
+): Promise<boolean> {
+  const tar = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: callerEntityId },
+    select: { can_admin_niov: true, status: true },
+  });
+  if (tar === null) return false;
+  return tar.status === "ACTIVE" && tar.can_admin_niov === true;
 }
 
 // WHAT: Resolve the (org + member) scope vector for an
@@ -462,15 +486,31 @@ export async function listAuditEventsForCaller(
   callerEntityId: string,
   filters: NormalizedListAuditEventsFilters,
 ): Promise<ListAuditEventsResult> {
-  // Section 7 Wave 2: resolve the scope predicate. scope=self
-  // narrows to the caller's actor_entity_id (Wave 1 contract,
-  // unchanged). scope=org narrows to actor_entity_id OR
-  // target_entity_id IN the caller's org-scope vector (org +
-  // active members), matching the /org/audit OR-fence at
-  // org.routes.ts:1378-1384.
+  // Section 7 Wave 2/3: resolve the scope predicate.
+  //   scope=self     → caller's own actor_entity_id (Wave 1).
+  //   scope=org      → actor OR target IN caller's org-scope
+  //                    vector (Wave 2; /org/audit precedent).
+  //   scope=platform → no scope fence (Wave 3; niov-admin reads
+  //                    every audit row in the substrate; mirrors
+  //                    /platform/audit + /console/audit pattern).
   let scopePredicate: Prisma.AuditEventWhereInput;
   let orgEntityIdForAudit: string | null = null;
-  if (filters.scope === "org") {
+  if (filters.scope === "platform") {
+    const hasNiovAdmin =
+      await callerHasNiovAdminCapability(callerEntityId);
+    if (!hasNiovAdmin) {
+      return {
+        ok: false,
+        httpStatus: 403,
+        code: "PLATFORM_SCOPE_FORBIDDEN",
+        message:
+          "scope=platform requires can_admin_niov on the caller's TAR.",
+      };
+    }
+    // Platform-scope predicate is the empty object — every
+    // audit_events row matches. Filters still AND-narrow.
+    scopePredicate = {};
+  } else if (filters.scope === "org") {
     const hasAdmin = await callerHasAdminCapability(callerEntityId);
     if (!hasAdmin) {
       return {
@@ -557,11 +597,13 @@ export async function listAuditEventsForCaller(
   if (filters.scope === "org" && orgEntityIdForAudit !== null) {
     auditMeta.org_entity_id = orgEntityIdForAudit;
   }
-  await emitAuditViewerRead(
-    callerEntityId,
-    filters.scope === "org" ? "AUDIT_VIEW_ORG_LIST" : "AUDIT_VIEW_LIST",
-    auditMeta,
-  );
+  const listAction =
+    filters.scope === "platform"
+      ? "AUDIT_VIEW_PLATFORM_LIST"
+      : filters.scope === "org"
+        ? "AUDIT_VIEW_ORG_LIST"
+        : "AUDIT_VIEW_LIST";
+  await emitAuditViewerRead(callerEntityId, listAction, auditMeta);
   return {
     ok: true,
     httpStatus: 200,
@@ -592,14 +634,30 @@ export async function getAuditEventForCaller(
   if (typeof auditId !== "string" || !UUID_RE.test(auditId)) {
     return { ok: false, httpStatus: 400, code: "INVALID_AUDIT_ID" };
   }
-  // Section 7 Wave 2: scope=org branch. Pre-resolve the
-  // org-scope vector + assert can_admin_org before any row
-  // lookup so non-admin callers can't probe for org-scope
-  // audit_ids.
+  // Section 7 Wave 2/3: scope branch. Each scope pre-flights
+  // its admin gate BEFORE the row lookup so callers cannot
+  // probe for audit_ids outside their authorized scope.
   let rowQueryWhere: Prisma.AuditEventWhereInput;
   let chainScopeWhere: Prisma.AuditEventWhereInput;
   let orgEntityIdForAudit: string | null = null;
-  if (scope === "org") {
+  if (scope === "platform") {
+    const hasNiovAdmin =
+      await callerHasNiovAdminCapability(callerEntityId);
+    if (!hasNiovAdmin) {
+      return {
+        ok: false,
+        httpStatus: 403,
+        code: "PLATFORM_SCOPE_FORBIDDEN",
+        message:
+          "scope=platform requires can_admin_niov on the caller's TAR.",
+      };
+    }
+    // Platform-scope detail = any audit_id; chain refs walk
+    // the unconstrained timeline (mirrors the platform-scope
+    // list semantics).
+    rowQueryWhere = { audit_id: auditId };
+    chainScopeWhere = {};
+  } else if (scope === "org") {
     const hasAdmin = await callerHasAdminCapability(callerEntityId);
     if (!hasAdmin) {
       return {
@@ -660,11 +718,13 @@ export async function getAuditEventForCaller(
   if (scope === "org" && orgEntityIdForAudit !== null) {
     auditMeta.org_entity_id = orgEntityIdForAudit;
   }
-  await emitAuditViewerRead(
-    callerEntityId,
-    scope === "org" ? "AUDIT_VIEW_ORG_EVENT" : "AUDIT_VIEW_EVENT",
-    auditMeta,
-  );
+  const detailAction =
+    scope === "platform"
+      ? "AUDIT_VIEW_PLATFORM_EVENT"
+      : scope === "org"
+        ? "AUDIT_VIEW_ORG_EVENT"
+        : "AUDIT_VIEW_EVENT";
+  await emitAuditViewerRead(callerEntityId, detailAction, auditMeta);
   return {
     ok: true,
     httpStatus: 200,

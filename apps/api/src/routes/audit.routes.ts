@@ -88,7 +88,8 @@ export async function registerAuditRoutes(
       if (
         rawScope !== undefined &&
         rawScope !== "self" &&
-        rawScope !== "org"
+        rawScope !== "org" &&
+        rawScope !== "platform"
       ) {
         return reply.code(422).send({
           ok: false,
@@ -96,7 +97,12 @@ export async function registerAuditRoutes(
           invalid_fields: ["scope"],
         });
       }
-      const scope: "self" | "org" = rawScope === "org" ? "org" : "self";
+      const scope: "self" | "org" | "platform" =
+        rawScope === "platform"
+          ? "platform"
+          : rawScope === "org"
+            ? "org"
+            : "self";
       const result = await getAuditEventForCaller(
         callerId,
         request.params.id,
