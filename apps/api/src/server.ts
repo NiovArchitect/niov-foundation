@@ -80,6 +80,9 @@ import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerPlatformRoutes } from "./routes/platform.routes.js";
 import { registerOrgRoutes } from "./routes/org.routes.js";
 import { registerEscalationRoutes } from "./routes/escalation.routes.js";
+// ADR-0057 §9 Option E — POST /api/v1/actions create-time substrate.
+// Bearer + "write"-gated; NO dual-control preHandler (evaluator decides).
+import { registerActionsRoutes } from "./routes/actions.routes.js";
 // GOVSEC.5 break-glass / time-boxed audit (GAP-K1, ADR-0050) BG.2: the
 // invoke + review route surface (can_admin_niov tier). The live recognition
 // seam lives in dual-control.middleware.ts.
@@ -440,6 +443,7 @@ export async function buildApp(
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);
   await registerEscalationRoutes(app, authService);
+  await registerActionsRoutes(app, authService);
   await registerBreakGlassRoutes(app, authService);
   await registerConsoleRoutes(app, authService);
   await registerAuthAdminRoutes(app, authService, jwtSecret);
