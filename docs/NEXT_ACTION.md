@@ -9,25 +9,27 @@
 
 ## Where we are
 
-- **Main HEAD:** `4ef4ed43ffa65a8bbfc094874ffd58f13fcdaf07`
-- **Latest merged PR:** [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) — ADR-0057 RECORD_CAPSULE real handler capability.
-- **Active branch / PR:** `refresh-docs-wave1-record-capsule-handler` (this wave-close docs refresh).
+- **Main HEAD:** `4e3805df6de59452c8cecb221f1fb305a4e934f0`
+- **Latest merged PR:** [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) — ADR-0057 RUNNING-cancel break-glass capability.
+- **Active branch / PR:** `refresh-docs-wave2-running-cancel-break-glass` (this wave-close docs refresh).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** 1 of 3 (RECORD_CAPSULE live; SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT stub).
+- **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
 - **TypeScript baseline:** exactly 4 canonical residual errors.
 
 ## Exact next action
 
 After this docs refresh merges:
 
-→ Start **Wave 2** — choose between (preference order; pick the safest highest-leverage Section 2 slice given current substrate):
+→ Start **Wave 3 — ActionAttempt detail route** (substrate-coherent extension; no architectural boundary; no schema migration).
 
-  1. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`** — privileged `RUNNING → CANCELLED` on the GOVSEC.5 break-glass substrate (ADR-0050; landed) + `AbortController` plumbing for mid-attempt handler interruption. Substrate-architectural; tier-4 build-log entry expected. Crosses Action ↔ Break-glass boundary.
-  2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 (`RETRY_BUDGET`, `ATTEMPT_TIMEOUT_MS_DEFAULT`) from service-tier constants to schema fields. **Requires Prisma migration + cross-language Ecto parity check per ADR-0033.** Per protocol: stop unless repo discipline clearly authorizes the test-DB-only migration pattern (ADR-0025 `db:push:test` is the canonical path; this is a legitimate dev/test migration, not production).
-  3. **PROPOSE_PERMISSION_GRANT real handler** — MEDIUM-risk; dual-control by default; touches multiple entities' DMW boundaries; RULE 0 sovereignty implications. Higher blast-radius than RECORD_CAPSULE; substrate exists (`createPermission` DB query) but warrants its own RULE 21 research arc.
+  - `GET /api/v1/actions/:id/attempts/:attempt_id` per ADR-0057 §9. Bearer + `"read"`-gated; same ownership / `can_admin_org` cross-scope authorization as the GET viewer; SAFE projection of `ActionAttempt` row (no error stack traces; bounded `error_summary`; no payload) + the attempt's `ActionResult.result_metadata` if present.
+  - Unlocks Control Tower Action Detail drilldown.
 
-  Recommendation per protocol: **Wave 2 = RUNNING-cancel break-glass** (preference order #1; clear substrate; ADR-0050 already landed; AbortController plumbing is a known pattern). Document the decision note inline before starting.
+  Alternative Wave 3 candidates (deferred):
+  - **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 to schema. Requires `db:push:test` migration per ADR-0025 (authorized dev/test pattern); cross-language Ecto parity per ADR-0033. Substrate-architectural; tier-4 build-log expected.
+  - **PROPOSE_PERMISSION_GRANT real handler** — MEDIUM-risk; touches multiple entities' DMW boundaries; own RULE 21 research arc required.
 
 ## Current stop conditions
 
@@ -53,22 +55,23 @@ After this docs refresh merges:
 
 **LIVE (Section 2):**
 - `POST /api/v1/actions` (create + policy eval + dual-control pairing).
-- `POST /api/v1/actions/:id/cancel` (non-RUNNING only).
+- `POST /api/v1/actions/:id/cancel` (non-RUNNING for any source caller; **RUNNING via valid GOVSEC.5 break-glass grant for action_type=`ACTION_RUNNING_CANCEL`**).
 - `GET /api/v1/actions/:id` (safe detail view + aggregates).
 - `GET /api/v1/actions` (self-scope default; `?org_scope=true` admin).
 - `GET /api/v1/org/action-policies` + `PUT /api/v1/org/action-policies` (dual-control gated).
 - Executor + scheduler + expiry sweep runtime (`tickActionExecutor` + `tickActionScheduler` + `tickActionExpirySweep`).
 - All 10 `ACTION_*` audit emitters.
-- **RECORD_CAPSULE real handler** — RECORD_CAPSULE actions now execute through `WriteService.createCapsuleForActionRunner` and produce real `MemoryCapsule` rows in the source entity's wallet with back-referenced `CAPSULE_MUTATION_ADD` audit + SAFE `ActionResult.result_metadata` (capsule_id + capsule_type only).
-- Per-`ActionType` create-time payload validator dispatcher — RECORD_CAPSULE payloads validated for `CapsuleCreateInput` shape at create-time (422 INVALID_FIELD on malformed body).
+- **RECORD_CAPSULE real handler** — RECORD_CAPSULE actions execute through `WriteService.createCapsuleForActionRunner` producing real `MemoryCapsule` rows + back-referenced `CAPSULE_MUTATION_ADD` audit + SAFE `ActionResult.result_metadata` (capsule_id + capsule_type only).
+- Per-`ActionType` create-time payload validator dispatcher.
+- **RUNNING-cancel break-glass plumbing** — cancel.service validates ACTIVE break-glass grant + marks USED + emits ACTION_CANCELLED with grant_id back-reference + fires process-local AbortController so in-flight attempts short-circuit.
 
 **NOT LIVE:**
 - SEND_INTERNAL_NOTIFICATION real handler (no backing substrate exists; future wave).
 - PROPOSE_PERMISSION_GRANT real handler (MEDIUM-risk; separate future wave).
-- `RUNNING → CANCELLED` privileged cancellation.
 - `ActionPolicy.retry_budget` + `ActionAttempt.timeout_ms` schema fields (service-tier constants only).
 - Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list).
 - ActionAttempt detail route.
+- Active AbortSignal consumption by handlers (plumbed but RECORD_CAPSULE + stubs don't listen yet; future real handlers wrapping long-running connector work will consume).
 - Connectors / MCP / Control Tower UX / voice / ambient / lens UX.
 
 ## Which section file to read next
