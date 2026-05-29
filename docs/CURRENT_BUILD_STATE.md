@@ -6,7 +6,137 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-29
-([ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-LANDED]
+([ADR-0057-EXECUTOR-WORKER-SCHEDULER-LIFECYCLE-LANDED]
+minimum-touch refresh — **ADR-0057 §1 + §11 lifecycle
+execution substrate is now LIVE on main** — the Action
+runtime now runs end-to-end inside Foundation: the
+scheduler tick admits `APPROVED → SCHEDULED` (emitting
+`ACTION_SCHEDULED`), the executor tick claims SCHEDULED
+rows via `SELECT FOR UPDATE SKIP LOCKED` and transitions
+to RUNNING (emitting `ACTION_STARTED`), dispatches the
+per-`ActionType` stub handler under a 30s per-attempt
+timeout, creates `ActionAttempt` + `ActionResult` rows,
+loops attempts in-tick across the per-`ActionType` retry
+budget while the parent Action stays in RUNNING per
+ADR-0057 §11, and terminalizes to `SUCCEEDED` /
+`FAILED` / `TIMED_OUT` (emitting `ACTION_SUCCEEDED` /
+`ACTION_FAILED`); the expiry sweep terminalizes
+`SCHEDULED` rows whose `expires_at` has elapsed to
+`EXPIRED` (emitting `ACTION_EXPIRED`). PR #26 squash
+commit `fe46e228bd3f5ea9ca30438142bb386657b90725`
+(merged 2026-05-29T09:21Z) lands seven new files +
+two modified files (2247 insertions; no deletions):
+`apps/api/src/services/action/state-machine.ts` (NEW;
+pure transition guard + `assertActionTransition` +
+`canTransitionAction` + `isTerminalActionStatus` +
+`ActionInvalidTransitionError`),
+`apps/api/src/services/action/handlers.ts` (NEW; 3
+stub handlers + `TEST_MARKER_FORCE_FAILURE` /
+`TEST_MARKER_FORCE_TIMEOUT` payload markers),
+`apps/api/src/services/action/lifecycle.service.ts`
+(NEW; `RETRY_BUDGET` + `ATTEMPT_TIMEOUT_MS_DEFAULT` +
+`LIFECYCLE_FIELD_MAX_CHARS` + `transitionActionStatus`
++ `emitLifecycleAudit` + `createActionAttempt` +
+`terminalizeActionAttempt` + `createActionResult`),
+`apps/api/src/services/action/executor.ts` (NEW;
+`tickActionExecutor` with `FOR UPDATE SKIP LOCKED`
+claim + in-tick retry loop + `withTimeout` per-attempt
+guard + `EXECUTOR_TIMEOUT` error class),
+`apps/api/src/services/action/scheduler.ts` (NEW;
+`tickActionScheduler` + `tickActionExpirySweep` +
+`startActionScheduler` + `stopActionScheduler` with
+NO-OP under NODE_ENV=test + 30s admission + 30s
+executor + 60s expiry cron tasks via node-cron 4.2.1
+6-field syntax), `tests/unit/action-state-machine.test.ts`
+(NEW; 133/133 unit tests pinning every legal /
+illegal edge + terminal-state immutability),
+`tests/integration/action-lifecycle.test.ts` (NEW;
+6/6 integration tests covering scheduler admission +
+executor success + retry-exhaustion FAILED +
+timeout-marker TIMED_OUT + expiry sweep EXPIRED +
+concurrent SKIP LOCKED safety + no-`ACTION_CANCELLED`
+emission), `apps/api/src/index.ts` (MOD; barrel
+exports for new substrate), and `apps/api/src/server.ts`
+(MOD; `startActionScheduler` wiring + graceful
+shutdown).
+**Live `ACTION_*` emitters are now 9 of 10**:
+`ACTION_POLICY_UPDATE` (PR #22) + `ACTION_PROPOSED` +
+`ACTION_APPROVED` + `ACTION_REJECTED` (PR #24) +
+`ACTION_SCHEDULED` + `ACTION_STARTED` +
+`ACTION_SUCCEEDED` + `ACTION_FAILED` +
+`ACTION_EXPIRED` (PR #26). The only remaining
+vocabulary-only literal is `ACTION_CANCELLED` —
+deferred per Founder LOCK-GAP-4 to a separate
+focused `cancel route` QLOCK.
+**Founder gap-locks landed in this PR:** LOCK-GAP-1
+(service-tier `RETRY_BUDGET = { RECORD_CAPSULE: 3,
+SEND_INTERNAL_NOTIFICATION: 3, PROPOSE_PERMISSION_GRANT:
+1 }`; no schema change; `ActionPolicy.retry_budget`
+schema field forward-substrate) + LOCK-GAP-2
+(service-tier `ATTEMPT_TIMEOUT_MS_DEFAULT = 30_000`;
+no schema change; `ActionAttempt.timeout_ms` schema
+field forward-substrate) + LOCK-GAP-3 (3 STUB
+handlers; never expose raw payload; safe
+`result_metadata = { handler: "stub", action_type,
+status: "completed_stub" }` only; real per-`ActionType`
+business handlers are forward-substrate) + LOCK-GAP-4
+(cancel route NOT implemented; `ACTION_CANCELLED`
+remains vocabulary only; the state-machine permits
+`PROPOSED/APPROVED/SCHEDULED → CANCELLED` edges for
+future use) + LOCK-GAP-5 (expiry sweep landed
+in this slice; emits `ACTION_EXPIRED` with
+`decision_reason = "expires_at_elapsed"`).
+**RULE 13 substrate-honest disclosures preserved at
+the docs tier:** (a) the parent Action stays in
+RUNNING through all attempts per ADR-0057 §11 — the
+executor loops in-tick across the retry budget rather
+than flipping the parent back to SCHEDULED, so the
+`RUNNING → SCHEDULED` edge is intentionally NOT in
+the canonical legal-edges map; (b) timeout
+terminalization emits `ACTION_FAILED` (not
+`ACTION_TIMED_OUT`) because the canonical 10-literal
+`ACTION_*` vocabulary does not include
+`ACTION_TIMED_OUT`; the `ActionStatus` enum DOES
+have `TIMED_OUT` as a terminal state and
+`ActionAttempt.outcome` records the per-attempt
+distinction; (c) retry transition logic counts every
+attempt against the per-`ActionType` budget so
+`RECORD_CAPSULE` performs up to 3 total attempts
+before terminalizing FAILED, and
+`PROPOSE_PERMISSION_GRANT` terminalizes immediately
+on a single FAILURE / TIMEOUT outcome; (d) the
+executor's "early-transition" pattern (transition
+SCHEDULED → RUNNING inside the SKIP LOCKED claim tx
+before releasing the lock) prevents double-claim
+under concurrent workers — the test asserts two
+parallel `tickActionExecutor` calls never produce
+more than one `ActionAttempt` per Action; (e) the
+node-cron 4.2.1 6-field syntax is used for
+sub-minute schedules (admission + executor at 30s,
+expiry at 60s); (f) `startActionScheduler` is
+NO-OP under `NODE_ENV=test` (tests call the tick
+functions directly so cron timers cannot fire
+mid-test, mirroring the existing feedback/scheduler
+pattern). **Verification:** CI run `26628961836`
+4/4 green (Typecheck 43s + Unit 1m23s + Integration
+1m36s + Elixir 2m3s); TypeScript baseline preserved
+at exactly 4 canonical residuals.
+**Runtime Section 2 is now FULLY LIVE for the
+governed-stub lifecycle** — `POST /api/v1/actions`
+creates Action rows + EscalationRequest pairings,
+the scheduler admits them, the executor runs stub
+handlers under the retry/timeout budget, the expiry
+sweep enforces `expires_at`, and 9 of 10
+`ACTION_*` literals emit safe audit rows under
+`SYSTEM_PRINCIPALS.SCHEDULER`. **Real per-`ActionType`
+business handlers, the cancel route, connectors /
+MCP, browser automation, native-app automation,
+voice / Sesame, desktop edge UX, wearable lens UX,
+and Control Tower UX all remain forward-substrate;
+no production migrations applied; no `prisma generate`
+run; no `db:push:test` run in PR #26 slice.**
+Prior same-date refresh
+`[ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-LANDED]`
 minimum-touch refresh — **ADR-0057 §9 create-time substrate
 is now LIVE on main** — the first end-to-end runtime trace of
 Section 2 is now live: `request → evaluateActionPolicy →
@@ -259,6 +389,298 @@ adds the CAR Sub-box 3 (REGULATOR + Lawful-Basis per ADR-0036)
 closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
+
+## [ADR-0057-EXECUTOR-WORKER-SCHEDULER-LIFECYCLE-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §1 + §11 lifecycle execution
+substrate is LIVE on main.** PR #26 squash commit
+`fe46e228bd3f5ea9ca30438142bb386657b90725` (merged
+2026-05-29T09:21Z) lands the executor + worker + scheduler
+runtime per the `[ADR-0057-EXECUTOR-WORKER-SCHEDULER-EXECUTE-VERIFY-AUTH-WITH-GAP-LOCKS]`
+QLOCK. The runtime now drives Action rows through the full
+lifecycle inside Foundation: the scheduler admits
+`APPROVED → SCHEDULED` (emitting `ACTION_SCHEDULED`), the
+executor claims `SCHEDULED` via `SELECT FOR UPDATE SKIP
+LOCKED` and transitions to `RUNNING` (emitting
+`ACTION_STARTED`) inside the same claim transaction
+(early-transition pattern; no double-claim under
+concurrent workers), dispatches the per-`ActionType` stub
+handler under a `withTimeout(handler, attemptTimeoutMs)`
+race, creates an `ActionAttempt` row per attempt and an
+`ActionResult` row per success, loops attempts in-tick
+across the per-`ActionType` retry budget while the parent
+Action stays in `RUNNING` per ADR-0057 §11, and
+terminalizes to `SUCCEEDED` / `FAILED` / `TIMED_OUT`
+(emitting `ACTION_SUCCEEDED` / `ACTION_FAILED`); the
+expiry sweep terminalizes `SCHEDULED` rows whose
+`expires_at` has elapsed to `EXPIRED` (emitting
+`ACTION_EXPIRED` with `decision_reason =
+"expires_at_elapsed"`). The substrate now consists of:
+schema declarations (PR #18) + audit-literal vocabulary
+(PR #18) + pure decision oracle (PR #20) + org
+ActionPolicy admin tier + `ACTION_POLICY_UPDATE` emitter
+(PR #22) + create-time runtime + 3 `ACTION_*` emitters
+(PR #24) + lifecycle execution runtime + 5 `ACTION_*`
+emitters (PR #26). `ACTION_CANCELLED` is the only
+remaining vocabulary-only literal; the cancel route is
+deferred to a separate Founder-authorized QLOCK
+(LOCK-GAP-4).
+
+### What landed at `fe46e22`
+
+Per Rule 0 reading of the merged commit, PR #26 added
+exactly nine files (`9 files changed, 2247 insertions(+)`):
+
+- **`apps/api/src/services/action/state-machine.ts`
+  (NEW; +166)** — pure transition guard per ADR-0057 §1.
+  Exports `assertActionTransition(from, to)`,
+  `canTransitionAction(from, to)`,
+  `isTerminalActionStatus(status)`,
+  `ActionInvalidTransitionError`, and the
+  `ACTION_INVALID_TRANSITION` error-class string.
+  Canonical legal-edges map per ADR-0057 §1 with terminal
+  set `{ SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REJECTED,
+  EXPIRED }`. Retries do NOT flip the parent back to
+  SCHEDULED per ADR-0057 §11 strict reading; the executor
+  loops in-tick.
+- **`apps/api/src/services/action/handlers.ts`
+  (NEW; +198)** — 3 stub handlers per Founder LOCK-GAP-3.
+  `executeActionHandler(action)` dispatches by
+  `action.action_type` to one of three stubs returning a
+  discriminated `ActionHandlerResult` (SUCCESS /
+  FAILURE / TIMEOUT). Test-only payload markers
+  (`TEST_MARKER_FORCE_FAILURE = "__test_force_failure__"`
+  + `TEST_MARKER_FORCE_TIMEOUT = "__test_force_timeout__"`)
+  let integration tests drive FAILURE / TIMEOUT paths
+  without inventing a side-channel; markers are detected
+  on `Action.payload_redacted` but never echoed in audit
+  or result metadata.
+- **`apps/api/src/services/action/lifecycle.service.ts`
+  (NEW; +307)** — shared transition + audit composables.
+  Exports `RETRY_BUDGET` constant (LOCK-GAP-1:
+  `RECORD_CAPSULE: 3`, `SEND_INTERNAL_NOTIFICATION: 3`,
+  `PROPOSE_PERMISSION_GRANT: 1`),
+  `ATTEMPT_TIMEOUT_MS_DEFAULT = 30_000` (LOCK-GAP-2),
+  `LIFECYCLE_FIELD_MAX_CHARS = 200`,
+  `clampLifecycleField`, `transitionActionStatus`,
+  `emitLifecycleAudit`, `createActionAttempt`,
+  `terminalizeActionAttempt`, `createActionResult`.
+  Typed `LifecycleAuditDetails` allowlist (`action_id` +
+  `action_type` + `previous_status` + `next_status` +
+  optional `attempt_id` + `attempt_number` + `worker_id`
+  + `decision_reason` + `error_class` + `error_summary`)
+  prevents any forbidden field from reaching the audit
+  row by construction. Emissions ride under
+  `SYSTEM_PRINCIPALS.SCHEDULER` (the same sentinel the
+  feedback loops use); the chain count does not grow.
+- **`apps/api/src/services/action/executor.ts`
+  (NEW; +346)** — `tickActionExecutor({ workerId,
+  maxBatch, now, attemptTimeoutMs })` claims up to
+  `maxBatch` SCHEDULED `action_ids` via `SELECT action_id
+  FROM actions WHERE status = 'SCHEDULED' AND deleted_at
+  IS NULL AND (expires_at IS NULL OR expires_at > $1)
+  ORDER BY created_at ASC LIMIT $2 FOR UPDATE SKIP
+  LOCKED`, re-reads the full rows inside the same
+  transaction, and transitions each from SCHEDULED to
+  RUNNING (emitting `ACTION_STARTED`) inside the claim tx.
+  For each promoted row the executor loops attempts up to
+  `RETRY_BUDGET[action.action_type]`: creates an
+  `ActionAttempt` row (monotonic `attempt_number` =
+  max+1) → races the stub handler against `setTimeout` →
+  persists the attempt outcome (`SUCCEEDED` /
+  `FAILED` / `TIMED_OUT`) → on SUCCESS creates an
+  `ActionResult` row with SAFE `result_metadata`. The
+  parent Action terminalizes ONCE based on the final
+  attempt outcome: SUCCESS → `SUCCEEDED` + emit
+  `ACTION_SUCCEEDED`; FAILURE-exhausted → `FAILED` + emit
+  `ACTION_FAILED`; TIMEOUT-exhausted → `TIMED_OUT` +
+  emit `ACTION_FAILED` with `error_class =
+  "EXECUTOR_TIMEOUT"` (the canonical 10-literal
+  vocabulary does not include `ACTION_TIMED_OUT`).
+- **`apps/api/src/services/action/scheduler.ts`
+  (NEW; +234)** — `tickActionScheduler({ now, maxBatch })`
+  selects up to `maxBatch` `APPROVED + deleted_at IS NULL
+  + (expires_at IS NULL OR expires_at > now)` rows ordered
+  by `created_at ASC` and transitions each to `SCHEDULED`
+  (emitting `ACTION_SCHEDULED`).
+  `tickActionExpirySweep({ now, maxBatch })` selects up
+  to `maxBatch` `SCHEDULED + deleted_at IS NULL +
+  expires_at <= now` rows ordered by `expires_at ASC` and
+  transitions each to `EXPIRED` (emitting
+  `ACTION_EXPIRED` with `decision_reason =
+  "expires_at_elapsed"`). `startActionScheduler()` is
+  NO-OP under `NODE_ENV=test`; production registers 3
+  cron tasks via node-cron 4.2.1 6-field syntax
+  (`*/30 * * * * *` for admission + executor at 30 s;
+  `0 * * * * *` for expiry at 60 s) and returns an
+  idempotent `ActionSchedulerHandle` with `stop()` +
+  `isRunning()`. `stopActionScheduler()` is safe to call
+  even when start was never invoked.
+- **`apps/api/src/server.ts` (MOD; +17)** — imports
+  `startActionScheduler` + `ActionSchedulerHandle`,
+  starts the action scheduler immediately after the
+  feedback scheduler, attaches the handle to `app` for
+  graceful shutdown, and stops it inside the
+  `shutdown(signal)` handler before `app.close()`.
+- **`apps/api/src/index.ts` (MOD; +74)** — barrels the
+  new substrate: state-machine helpers + Error class +
+  `TEST_MARKER_FORCE_*` constants + `executeActionHandler`
+  + lifecycle constants + `transitionActionStatus` +
+  attempt/result helpers + `tickActionExecutor` +
+  `tickActionScheduler` + `tickActionExpirySweep` +
+  `startActionScheduler` + `stopActionScheduler` + every
+  exported type.
+- **`tests/unit/action-state-machine.test.ts`
+  (NEW; +159)** — 133 pure-function unit tests pinning
+  every legal canonical edge + every illegal edge in the
+  100-pair Cartesian product + terminal-state
+  immutability + scheduler/executor/expiry edge
+  exhaustiveness + `ActionInvalidTransitionError` shape.
+- **`tests/integration/action-lifecycle.test.ts`
+  (NEW; +610)** — 6 NEW integration tests against a real
+  Postgres test container:
+  1. scheduler admits AUTO_APPROVE landings + executor
+     drives success (`ACTION_SCHEDULED` →
+     `ACTION_STARTED` → `ACTION_SUCCEEDED` chain
+     verified row-by-row; `ActionAttempt.worker_id` +
+     `ActionResult.result_summary = "stub_record_capsule_ok"`
+     asserted; audit-details safe-key allowlist enforced;
+     `payload_summary` / `payload_redacted` /
+     `policy_envelope` substrings asserted absent from
+     `ActionResult.result_metadata`).
+  2. FAILURE-marker drives in-tick retry up to
+     `RETRY_BUDGET["RECORD_CAPSULE"] = 3` then
+     terminalizes FAILED (3 `ActionAttempt` rows with
+     `outcome = FAILED` + `error_class =
+     "STUB_FORCED_FAILURE"`; exactly one `ACTION_FAILED`
+     audit row; `TEST_MARKER_FORCE_FAILURE` substring
+     asserted absent from audit details).
+  3. TIMEOUT-marker terminalizes `PROPOSE_PERMISSION_GRANT`
+     (budget=1) to `TIMED_OUT` on the single attempt
+     (`ActionAttempt.outcome = TIMED_OUT` + `error_class
+     = "STUB_FORCED_TIMEOUT"`; `ACTION_FAILED` audit
+     row with `next_status = "TIMED_OUT"`).
+  4. expiry sweep terminalizes `SCHEDULED + expires_at <
+     now` to `EXPIRED` with `ACTION_EXPIRED` audit row.
+  5. two parallel `tickActionExecutor` calls
+     (`Promise.all`) never produce more than one
+     `ActionAttempt` per Action (SKIP LOCKED concurrency
+     proof).
+  6. no `ACTION_CANCELLED` audit row is ever produced by
+     any lifecycle tick (LOCK-GAP-4 enforcement).
+
+**Verification:** CI run `26628961836` 4/4 green
+(Typecheck 43 s + Unit 1m 23 s + Integration 1m 36 s +
+Elixir 2m 3 s); TypeScript baseline preserved at exactly
+4 canonical residuals; pre-commit chain green (db-push
+guard + TS baseline 4 + RULE 16 no-console + no-leak
+guard).
+
+**RULE 13 substrate-honest disclosures preserved at the
+docs tier:**
+
+- **(a)** The parent Action stays in `RUNNING` through
+  all attempts per ADR-0057 §11 strict reading. The
+  executor loops in-tick across the retry budget rather
+  than flipping the parent back to `SCHEDULED`. The
+  canonical legal-edges map intentionally omits
+  `RUNNING → SCHEDULED`. (Initial implementation had this
+  edge; surfaced and corrected pre-commit per RULE 13.)
+- **(b)** Timeout terminalization emits `ACTION_FAILED`
+  (not `ACTION_TIMED_OUT`) because the canonical
+  10-literal `ACTION_*` vocabulary does not include
+  `ACTION_TIMED_OUT`. The `ActionStatus` enum DOES have
+  `TIMED_OUT` as a terminal state and
+  `ActionAttempt.outcome` records the per-attempt
+  distinction; the audit literal uses `ACTION_FAILED` +
+  `error_class = "EXECUTOR_TIMEOUT"` to preserve the
+  vocabulary contract.
+- **(c)** Retry transition logic counts every attempt
+  against the per-`ActionType` budget: `RECORD_CAPSULE`
+  + `SEND_INTERNAL_NOTIFICATION` perform up to 3 total
+  attempts before terminalizing FAILED;
+  `PROPOSE_PERMISSION_GRANT` terminalizes immediately on
+  a single FAILURE / TIMEOUT outcome (budget = 1).
+- **(d)** The executor's "early-transition" pattern
+  (transition `SCHEDULED → RUNNING` inside the SKIP
+  LOCKED claim tx, before releasing the lock) prevents
+  double-claim under concurrent workers. The test
+  asserts two parallel `tickActionExecutor` calls never
+  produce more than one `ActionAttempt` per Action.
+- **(e)** The node-cron 4.2.1 6-field syntax is used for
+  sub-minute schedules. The repo's existing
+  `feedback/scheduler.ts` uses the 5-field minute-granular
+  syntax (the smallest interval there is `*/30 * * * *`
+  for 30 minutes); the action scheduler's 30-second
+  admission + executor cadence requires the 6-field
+  optional-seconds form. Verified node-cron 4.2.1
+  supports this per `node_modules/node-cron/README.md`.
+- **(f)** `startActionScheduler` is NO-OP under
+  `NODE_ENV=test` (tests call `tickActionScheduler` /
+  `tickActionExecutor` / `tickActionExpirySweep`
+  directly so cron timers cannot fire mid-test), mirroring
+  the existing `feedback/scheduler.ts` test-mode
+  short-circuit precedent.
+- **(g)** The audit details allowlist enforces that no
+  raw payload, raw envelope, stack trace, or secret can
+  reach an audit row via the lifecycle helpers. The
+  audit emitter injects `system_principal` into the
+  details object (per `writeAuditEvent` behavior at
+  `packages/database/src/queries/audit.ts:625-628`), so
+  test allowlists include `"system_principal"` as a
+  known-safe key.
+- **(h)** Stub handler `result_metadata` is exactly
+  `{ handler: "stub", action_type: <ActionType>, status:
+  "completed_stub" }`. No payload-derived field appears.
+  The forward-substrate transition to real handlers must
+  preserve this no-leak contract.
+
+**Runtime Section 2 is now FULLY LIVE for the
+governed-stub lifecycle:** `POST /api/v1/actions` creates
+Action rows + EscalationRequest pairings, the scheduler
+admits them, the executor runs stub handlers under the
+retry/timeout budget, the expiry sweep enforces
+`expires_at`, and 9 of 10 `ACTION_*` literals emit safe
+audit rows under `SYSTEM_PRINCIPALS.SCHEDULER`. **Real
+per-`ActionType` business handlers, the cancel route,
+connectors / MCP, browser automation, native-app
+automation, voice / Sesame, desktop edge UX, wearable
+lens UX, and Control Tower UX all remain forward-substrate;
+no production migrations applied; no `prisma generate`
+run; no `db:push:test` run in PR #26 slice.**
+
+### Forward-substrate after this refresh
+
+- **`[ADR-0057-CANCEL-ROUTE-EXECUTE-VERIFY-AUTH]`** —
+  adds `POST /api/v1/actions/:id/cancel` +
+  `ACTION_CANCELLED` emitter; flips the last
+  vocabulary-only `ACTION_*` literal live. The
+  state-machine already permits the edges; only the
+  route handler + audit emission + tests are needed.
+  `RUNNING → CANCELLED` should ride on the GOVSEC.5
+  break-glass substrate (ADR-0050; landed).
+- **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`**
+  — the first real per-`ActionType` handler.
+  `RECORD_CAPSULE` is the natural first surface because
+  it wires the Action runtime to existing COSMP WRITE
+  semantics. RULE 21 research arc required because the
+  handler crosses the Action↔COSMP architectural
+  boundary.
+- **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+  — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
+  constants to schema fields (`ActionPolicy.retry_budget`
+  + `ActionAttempt.timeout_ms`). Requires Prisma
+  migration + Ecto schema parity check per ADR-0033.
+- **`[ADR-0057-GET-ROUTE-AND-VIEWER-EXECUTE-VERIFY-AUTH]`**
+  — `GET /api/v1/actions/:id` (safe Action view + attempt
+  count + last `result_summary`) per ADR-0057 §9.
+  Unlocks the Control Tower Action viewer downstream.
+
+The voice / ambient / desktop-edge / wearable-lens
+product directive recorded in the prior refresh remains
+forward product architecture context; the governed Action
+runtime that now executes inside Foundation is the seam
+those surfaces will consume.
 
 ## [ADR-0057-ACTION-SERVICE-CREATE-AND-NEGOTIATE-ROUTE-LANDED] 2026-05-29
 
@@ -546,7 +968,8 @@ The lifecycle execution beyond creation/negotiation does NOT exist:
 - **All 10 production sections are NOT complete.** Only
   Section 1 + CI-guard pre-arm + Section 2 partial
   (schema + vocabulary + pure evaluator + admin tier +
-  4 of 10 `ACTION_*` emitters + create-time runtime).
+  create-time runtime + governed-stub lifecycle runtime +
+  9 of 10 `ACTION_*` emitters).
 
 ### Founder Directive (preserved)
 
@@ -558,9 +981,11 @@ is optional. None is "later."
 
 1. **Employee Intelligence Core**
 2. **Autonomous Execution Core** — schema + vocabulary +
-   evaluator + admin tier + create-time runtime + 4 of 10
-   `ACTION_*` emitters landed (PRs #18 + #20 + #22 + #24);
-   executor + worker + scheduler runtime forward-substrate.
+   evaluator + admin tier + create-time runtime +
+   governed-stub lifecycle runtime + 9 of 10 `ACTION_*`
+   emitters landed (PRs #18 + #20 + #22 + #24 + #26); real
+   per-`ActionType` business handlers + cancel route +
+   `ACTION_CANCELLED` emitter remain forward-substrate.
 3. **Hives / Team Intelligence**
 4. **MCP / Connectors**
 5. **Agent Playground**
@@ -645,77 +1070,97 @@ surfaces require their own future authorized slices.
 
 ### Forward-substrate next strategic option
 
-**Do NOT start executor / worker / scheduler / connectors /
-MCP / Control Tower until this docs refresh is merged.**
-After merge, the natural successor is:
+The ADR-0057 §1 + §11 lifecycle execution substrate is now
+LIVE on main as of PR #26
+(`fe46e228bd3f5ea9ca30438142bb386657b90725`). The natural
+successors after this docs refresh merges are (in
+implementation-priority order, each gated by its own
+Founder-authorized QLOCK):
 
-**`[ADR-0057-EXECUTOR-WORKER-SCHEDULER-RESEARCH-ARC-QLOCK]`**
+1. **`[ADR-0057-CANCEL-ROUTE-EXECUTE-VERIFY-AUTH]`** — adds
+   `POST /api/v1/actions/:id/cancel` and the
+   `ACTION_CANCELLED` emitter per ADR-0057 §1 + §6 + §10.
+   `PROPOSED / APPROVED / SCHEDULED → CANCELLED` non-RUNNING
+   paths are simple; `RUNNING → CANCELLED` is privileged and
+   should ride on the GOVSEC.5 break-glass substrate
+   (ADR-0050; landed). Scope: route handler + state-machine
+   exercise + `ACTION_CANCELLED` audit emission + tests.
+   Out of scope: graceful in-flight handler interruption
+   (the executor's current `withTimeout` race is
+   best-effort; mid-attempt cancellation requires
+   `AbortController` plumbing which is a separate slice).
+2. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`** —
+   the first real per-`ActionType` handler. `RECORD_CAPSULE`
+   is the natural first surface because it wires the
+   Action runtime to existing COSMP WRITE semantics
+   (`apps/api/src/services/cosmp/write.service.ts`); the
+   handler should consume `payload_redacted` as a
+   capsule-create envelope and return the capsule_id in
+   `result_metadata` without leaking content. Requires its
+   own research arc per RULE 21 because it crosses the
+   Action↔COSMP boundary.
+3. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+   — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
+   constants to `ActionPolicy.retry_budget` +
+   `ActionAttempt.timeout_ms` schema fields; defaults
+   preserved from the current constants. Requires a Prisma
+   migration QLOCK + cross-language Ecto schema parity check
+   per ADR-0033.
+4. **`[ADR-0057-GET-ROUTE-AND-VIEWER-EXECUTE-VERIFY-AUTH]`**
+   — `GET /api/v1/actions/:id` (safe Action view + attempt
+   count + last result_summary per ADR-0057 §9). Unlocks
+   the Control Tower Action viewer downstream.
 
-Purpose: read-only substrate-architectural research arc per
-RULE 21 BEFORE implementing the lifecycle execution layer.
-Research must cover:
-
-- ADR-0057 §1 lifecycle state transitions (PROPOSED →
-  APPROVED → SCHEDULED → RUNNING → SUCCEEDED / FAILED /
-  TIMED_OUT / CANCELLED)
-- transition legality + terminal-state immutability per
-  RULE 10 + ADR-0002
-- APPROVED → SCHEDULED transition triggering
-- worker pick semantics (`FOR UPDATE SKIP LOCKED`
-  Postgres-native row-level locking per ADR-0057 §8)
-- ActionAttempt creation per pick + monotonic
-  `attempt_number` per ADR-0057 §11
-- ActionResult creation on terminal attempt
-- `ACTION_SCHEDULED` / `ACTION_STARTED` / `ACTION_SUCCEEDED`
-  / `ACTION_FAILED` / `ACTION_CANCELLED` / `ACTION_EXPIRED`
-  audit emission with SAFE allowlisted details per
-  ADR-0057 §10
-- retry budgets (per-ActionPolicy)
-- worker identity tracking
-- dead-letter behavior
-- scheduler interval / execution loop strategy
-- `Action.expires_at` enforcement (terminalize to EXPIRED
-  if not picked up)
-- per-attempt timeout (terminalize ActionAttempt.outcome to
-  TIMED_OUT)
-- idempotency interaction with execution (retry creates new
-  ActionAttempt; Action stays RUNNING until terminal)
-- no-leak constraints (audit details + ActionResult.result_metadata)
-- local test strategy (containerized Postgres; test-tier
-  worker lifecycle)
-- CI safety (worker must shut down cleanly between test
-  cycles)
-- NO connector / MCP execution unless separately authorized
-- NO Control Tower UX unless separately authorized
-
-This research arc lands BEFORE implementation per RULE 21
-substrate-architectural pre-authorization discipline. After
-the research arc completes and produces an
-implementation-ready plan, a separate
-`[ADR-0057-EXECUTOR-WORKER-SCHEDULER-EXECUTE-VERIFY-AUTH]`
-QLOCK will fire.
+Any of these may proceed without further research arc when
+existing ADR-0057 + implementation-proven repo state +
+Founder gap-locks already cover the path. Path #2 is the
+canonical RULE 21 trigger because it crosses an
+architectural boundary (Action ↔ COSMP); #1, #3, #4 are
+substrate-coherent extensions.
 
 ### Do NOT claim
 
 - "Autonomous Execution is fully live." — runtime is
-  PARTIALLY live at create-time only.
-- "AI Twins can fully execute actions." — create-time
-  works; execution lifecycle does NOT.
-- "Workflows run." — no workflow engine; no executor.
+  PARTIALLY live at create-time + governed-stub lifecycle
+  only; real per-`ActionType` business handlers, the cancel
+  route, connectors / MCP, and Control Tower UX are
+  forward-substrate.
+- "AI Twins can fully execute actions on real systems." —
+  the lifecycle runs through stub handlers only;
+  real business effects (capsule writes, permission grants,
+  notifications) are forward-substrate.
+- "Workflows run on real connectors." — no real connectors;
+  the executor + scheduler are LIVE but every handler is a
+  stub returning `{ handler: "stub", status: "completed_stub" }`.
 - "Connectors / MCP are live." — deferred per ADR-0057
   §17 + ADR-0058.
-- "Action queue executes." — Action rows can be created
-  (PROPOSED / APPROVED / REJECTED); no executor picks them
-  up.
-- "Action lifecycle emits end-to-end." — only 4 of 10
+- "Action queue is empty / passive." — the queue IS live:
+  Action rows admit through `APPROVED → SCHEDULED`, the
+  executor claims via `FOR UPDATE SKIP LOCKED`, and the
+  parent terminalizes through the retry/timeout budget. What
+  the queue does NOT do is dispatch real business handlers.
+- "Action lifecycle emits end-to-end." — 9 of 10
   `ACTION_*` literals emit (`ACTION_POLICY_UPDATE`,
-  `_PROPOSED`, `_APPROVED`, `_REJECTED`); the 6 lifecycle
-  literals remain vocabulary only.
+  `_PROPOSED`, `_APPROVED`, `_REJECTED`, `_SCHEDULED`,
+  `_STARTED`, `_SUCCEEDED`, `_FAILED`, `_EXPIRED`);
+  `ACTION_CANCELLED` remains vocabulary only pending the
+  cancel-route QLOCK.
+- "Cancel route works." — false; no `POST
+  /api/v1/actions/:id/cancel` route exists; the
+  state-machine permits the edges but no caller drives them.
+- "ACTION_TIMED_OUT is an audit literal." — false; the
+  canonical 10-literal `ACTION_*` vocabulary does not
+  include `ACTION_TIMED_OUT`. Per-attempt timeout
+  terminalizes the parent Action to `TIMED_OUT` (an
+  `ActionStatus` enum value) and emits `ACTION_FAILED` with
+  `error_class = EXECUTOR_TIMEOUT`.
 - "Control Tower action UX exists." — deferred per
   ADR-0057 §12.
-- "ActionAttempt / ActionResult rows are created by
-  runtime." — false; the Action service does NOT create
-  attempts or results (that's the executor's responsibility).
+- "ActionAttempt / ActionResult rows are NOT created." —
+  false; the executor now creates `ActionAttempt` per
+  attempt (with monotonic `attempt_number` + `worker_id`)
+  and one `ActionResult` per successful attempt with
+  SAFE-allowlisted `result_metadata`.
 - "Sesame / voice / desktop edge / wearable lens UX is
   live." — false; recorded as forward product architecture
   context only.
