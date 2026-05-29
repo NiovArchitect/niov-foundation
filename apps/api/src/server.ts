@@ -64,6 +64,10 @@ import {
   startScheduler,
   type SchedulerHandle,
 } from "./services/feedback/scheduler.js";
+import {
+  startActionScheduler,
+  type ActionSchedulerHandle,
+} from "./services/action/scheduler.js";
 import { OtzarService } from "./services/otzar/otzar.service.js";
 import { ObservationService } from "./services/otzar/observation.service.js";
 import { makeDefaultKVCache } from "./services/otzar/cache.js";
@@ -485,6 +489,15 @@ export async function buildApp(
   // value.
   (app as unknown as { scheduler: SchedulerHandle }).scheduler = scheduler;
 
+  // ADR-0057 §1 + §11 -- start the Action lifecycle scheduler
+  // (admission + executor + expiry sweep). NO-OP under NODE_ENV=test;
+  // tests call tickActionScheduler / tickActionExecutor / tickActionExpirySweep
+  // directly so cron timers cannot fire mid-test.
+  const actionScheduler: ActionSchedulerHandle = startActionScheduler();
+  (
+    app as unknown as { actionScheduler: ActionSchedulerHandle }
+  ).actionScheduler = actionScheduler;
+
   return app;
 }
 
@@ -503,10 +516,14 @@ async function main(): Promise<void> {
   // closes so an in-flight loop fire doesn't outlive the server.
   const scheduler = (app as unknown as { scheduler?: SchedulerHandle })
     .scheduler;
+  const actionScheduler = (
+    app as unknown as { actionScheduler?: ActionSchedulerHandle }
+  ).actionScheduler;
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, "[server] received shutdown signal");
     try {
       scheduler?.stop();
+      actionScheduler?.stop();
       await app.close();
     } finally {
       process.exit(0);
