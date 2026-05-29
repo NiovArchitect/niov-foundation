@@ -6,7 +6,98 @@ at session start to load current build state regardless of
 conversation context loss.
 
 **Last updated:** 2026-05-29
-([ADR-0057-GET-VIEWER-LANDED] minimum-touch refresh —
+([ADR-0057-LIST-ROUTE-LANDED] minimum-touch refresh —
+**ADR-0057 §9 GET list route is now LIVE on main** —
+`GET /api/v1/actions` lands the read-side LIST surface
+that pairs with the GET detail viewer (PR #30) to give
+Section 2 a complete read contract. Bearer +
+`"read"`-gated at the route tier. Self-scope by default
+(only `source_entity_id = caller` rows); `?org_scope=true`
+requires `can_admin_org`-ACTIVE on the caller's TAR AND
+resolves to the caller's org via `getOrgEntityId` so
+cross-org rows are never returned. Standard pagination:
+`page` (1-based, default 1) + `page_size` (default 50,
+capped at 100). Optional enum filters: `status`,
+`risk_tier`, `action_type` — each accepts a single value
+or a comma-separated list; unknown enum values return
+`422 INVALID_FIELD`. Results ordered by `created_at DESC`
+(newest first, matching the Action Inbox UX intent in
+ADR-0057 §12). Response envelope is `{ ok, items, page,
+page_size, total }`. Each `items[i]` is a SAFE
+`SafeActionView` — forbidden fields per ADR-0057 §10
+(no `payload_summary`, no `payload_redacted`, no
+`policy_envelope`, no `policy_envelope_hash`, no
+`source_entity_id`, no `org_entity_id`, no
+`target_entity_id`, no `deleted_at`, no raw errors, no
+stack traces) are NEVER in the response on either the
+self-scope OR org-scope path. PR #32 squash commit
+`75933ad0e608aa18ed51b6d664b7eb51febe6f93` (merged
+2026-05-29T~11:10Z) added five files
+(`5 files changed, 1095 insertions(+)`):
+`apps/api/src/services/action/list.service.ts` (NEW;
+`validateListActionsQuery` + `listActionsForCaller` +
+`callerHasAdminCapability` helper +
+`DEFAULT_ACTIONS_PAGE_SIZE = 50` +
+`MAX_ACTIONS_PAGE_SIZE = 100`),
+`apps/api/src/routes/actions.routes.ts` (MOD; thin
+route handler delegating to the service),
+`apps/api/src/index.ts` (MOD; barrel re-exports),
+`tests/unit/action-list-query.test.ts` (NEW; 22 unit
+tests for the validator), and
+`tests/integration/action-list.test.ts` (NEW; 10
+integration tests).
+**RULE 13 substrate-honest disclosures preserved at the
+docs tier:** (a) the self-scope predicate (`{ source_entity_id:
+callerEntityId, deleted_at: null }`) prevents cross-source
+leak at the QUERY tier — even if the route forgot to
+project, the rows would never reach the projection
+because the query never returns other users' Action
+rows. The integration test pins this by seeding two
+distinct owners' Actions in the same org and asserting
+the list response from owner A excludes owner B's rows.
+(b) `?org_scope=true` is gated TWICE: (i) the TAR check
+(`status === ACTIVE && can_admin_org === true`) rejects
+non-admins with 403 ORG_SCOPE_FORBIDDEN; (ii) the
+`getOrgEntityId(caller)` resolution scopes the query to
+the caller's org, so a cross-org admin in org B sees ZERO
+rows from org A — the integration test pins this. (c)
+`getOrgEntityId` throws `NOT_IN_ANY_ORG` for a caller
+with no parent COMPANY entity; the service translates
+that to 404 NOT_IN_ANY_ORG. (d) the pagination cap at
+100 mirrors the `MAX_AUDIT_EVENTS_PAGE_SIZE` precedent —
+a malicious / buggy caller cannot drain the whole
+table. (e) the enum-list parser accepts either a single
+value (`?status=APPROVED`), an array
+(`?status=APPROVED&status=REJECTED`), or a comma-
+separated string (`?status=APPROVED,REJECTED`); any
+unknown enum value is rejected with 422 INVALID_FIELD
+and the offending field name surfaces in
+`invalid_fields`. (f) the soft-delete invariant
+(`deleted_at: null`) is composed AS-AND with every scope
+predicate so a soft-deleted Action is invisible to
+list — the integration test pins this. (g) the order
+clause (`{ created_at: 'desc' }`) is intentional UX
+choice for the Action Inbox; future per-status-or-
+risk-tier secondary sorts are forward-substrate.
+**Verification:** CI run `26637407861` 4/4 green
+(Typecheck 41 s + Unit 1m 23 s + Integration 1m 46 s +
+Elixir 1m 57 s); TypeScript baseline preserved at
+exactly 4 canonical residuals; pre-commit chain green.
+**Runtime Section 2 now exposes a complete read
+contract**: detail viewer (PR #30) + list (PR #32),
+both safe-view-only, both with TAR-authoritative admin
+gating, both with cross-source / cross-org leak
+prevention at the query tier. **\`GET /api/v1/org/actions\`
+explicit org-scoped route (currently served via
+?org_scope=true on the unified route), real
+per-`ActionType` business handlers, the
+RUNNING-cancellation break-glass route, connectors /
+MCP, Control Tower UX, voice / ambient / lens UX all
+remain forward-substrate; no production migrations
+applied; no `prisma generate` run; no `db:push:test` run
+in PR #32 slice.**
+Prior same-date refresh
+`[ADR-0057-GET-VIEWER-LANDED]` minimum-touch refresh —
 **ADR-0057 §9 GET viewer route is now LIVE on main** —
 `GET /api/v1/actions/:id` is the first read-side surface
 of Section 2. Bearer + `"read"`-gated at the route tier;
@@ -561,6 +652,215 @@ closure entry without performing a broader staleness refresh.
 Prior `**Last updated:**` was 2026-05-11 [DOCS-BUILD-STATE-REFRESH]
 post-Track A + RAA 12.8 canonicalization).
 
+## [ADR-0057-LIST-ROUTE-LANDED] 2026-05-29
+
+**Status: VERIFIED ADR-0057 §9 GET list route is LIVE on
+main.** PR #32 squash commit
+`75933ad0e608aa18ed51b6d664b7eb51febe6f93` (merged
+2026-05-29T~11:10Z) lands `GET /api/v1/actions` as the
+LIST surface that pairs with the GET detail viewer
+(PR #30) to complete Section 2's read contract. The
+route is bearer + `"read"`-gated at the route tier; the
+service tier enforces self-scope by default (only
+`source_entity_id = caller`) AND offers an opt-in
+`?org_scope=true` admin path that requires
+`can_admin_org`-ACTIVE on the caller's TAR AND scopes to
+the caller's resolved org via `getOrgEntityId`.
+
+### What landed at `75933ad`
+
+Per Rule 0 reading of the merged commit, PR #32 added
+exactly five files (`5 files changed, 1095 insertions(+)`):
+
+- **`apps/api/src/services/action/list.service.ts`
+  (NEW; +334)** — the validator + service:
+  - `validateListActionsQuery(query)`:
+    - org_scope: accepts boolean true/false or string
+      "true"/"false"; any other value → INVALID_FIELD.
+    - page: 1-based integer; <1 or non-integer → INVALID_FIELD.
+    - page_size: integer in [1, MAX_ACTIONS_PAGE_SIZE=100];
+      default DEFAULT_ACTIONS_PAGE_SIZE=50; out of range
+      → INVALID_FIELD.
+    - status / risk_tier / action_type: accept single
+      enum string, comma-separated string, or array.
+      Unknown enum values → INVALID_FIELD with the
+      offending field name surfaced in `invalid_fields`.
+      Empty after trim → INVALID_FIELD.
+    - Multiple invalid fields surfaced together in one
+      response (no first-error short-circuit).
+  - `listActionsForCaller(callerEntityId, filters)`:
+    - org_scope=false → scope predicate is
+      `{ source_entity_id: callerEntityId }`.
+    - org_scope=true → TAR check
+      (`status === ACTIVE && can_admin_org === true`)
+      via `callerHasAdminCapability`; failure → 403
+      ORG_SCOPE_FORBIDDEN. Then `getOrgEntityId(caller)`;
+      failure → 404 NOT_IN_ANY_ORG. Success → scope
+      predicate is `{ org_entity_id: callerOrgId }`.
+    - AS-AND compose: `deleted_at: null` + filter
+      clauses (status / risk_tier / action_type as
+      `{ in: [...] }`).
+    - Order: `{ created_at: 'desc' }` (newest first).
+    - Pagination: `skip = (page-1) * page_size`,
+      `take = page_size`.
+    - Concurrent `findMany` + `count` for the page +
+      total via `Promise.all`.
+    - Project each row through `projectActionView`
+      (the same mapper the create + cancel + GET
+      detail routes use), then return
+      `{ items, page, page_size, total }`.
+
+- **`apps/api/src/routes/actions.routes.ts` (MOD; +36)**
+  — adds `GET /api/v1/actions` after the existing GET
+  detail route. Bearer + `"read"`-gated; 422
+  INVALID_FIELD on bad query; spreads the view envelope
+  flat into the response (`{ ok: true, items, page,
+  page_size, total }`).
+
+- **`apps/api/src/index.ts` (MOD; +14)** — barrel
+  re-exports: `listActionsForCaller`,
+  `validateListActionsQuery`, `MAX_ACTIONS_PAGE_SIZE`,
+  `DEFAULT_ACTIONS_PAGE_SIZE`, `ListActionsQuery`,
+  `NormalizedListFilters`, `ListActionsView`,
+  `ListActionsResult`.
+
+- **`tests/unit/action-list-query.test.ts`
+  (NEW; +176)** — 22 pure-function validator tests
+  covering defaults, org_scope coercion (string/bool
+  variants), page/page_size clamping + edge cases
+  (page<1, page non-integer, page_size=0, page_size at
+  MAX, page_size>MAX), enum-list parsing (single,
+  comma, array, unknown value, empty-after-trim),
+  multi-field INVALID_FIELD surfacing.
+
+- **`tests/integration/action-list.test.ts`
+  (NEW; +535)** — 10 integration tests against the
+  containerized Postgres test database:
+  1. 401 SESSION_INVALID when bearer is missing.
+  2. 422 INVALID_FIELD for unknown status enum.
+  3. 422 INVALID_FIELD when page_size exceeds MAX.
+  4. Self-scope happy path: owner A sees only their
+     own Actions (cross-source leak prevention
+     proven at the QUERY tier), `page=1` +
+     `page_size=50`, `total >= 2`, no-leak proof on
+     10 forbidden tokens.
+  5. Pagination + status filter respect: page=1
+     and page=2 with `page_size=2 + status=APPROVED`
+     return non-overlapping page slices.
+  6. Status filter excludes non-matching rows
+     (action forced to SCHEDULED + filter on REJECTED
+     returns no matching ids).
+  7. 403 ORG_SCOPE_FORBIDDEN when caller lacks
+     can_admin_org and requests `?org_scope=true`.
+  8. can_admin_org caller sees every Action in the org
+     (cross-source admin view) with no leak on 10
+     forbidden tokens.
+  9. Cross-org admin (admin in org A requesting
+     org_scope=true) does NOT see Actions from org B
+     (cross-org leak prevention at the QUERY tier).
+  10. Soft-deleted Actions are excluded from list
+      results.
+
+**Verification:** CI run `26637407861` 4/4 green
+(Typecheck 41 s + Unit 1m 23 s + Integration 1m 46 s +
+Elixir 1m 57 s); TypeScript baseline preserved at
+exactly 4 canonical residuals; pre-commit chain green
+(db-push guard + TS baseline 4 + RULE 16 no-console +
+no-leak guard).
+
+**RULE 13 substrate-honest disclosures preserved at the
+docs tier:**
+
+- **(a)** The self-scope predicate (`{ source_entity_id:
+  callerEntityId, deleted_at: null }`) prevents
+  cross-source leak at the QUERY tier — even if the
+  route forgot to project, the rows would never reach
+  the projection because the query never returns other
+  users' Action rows. Test #4 pins this by seeding two
+  distinct owners' Actions in the same org and asserting
+  the list response from owner A excludes owner B's
+  rows.
+- **(b)** `?org_scope=true` is gated TWICE: (i) the
+  TAR check (`status === ACTIVE && can_admin_org ===
+  true`) rejects non-admins with 403
+  ORG_SCOPE_FORBIDDEN; (ii) the `getOrgEntityId(caller)`
+  resolution scopes the query to the caller's resolved
+  org, so a cross-org admin in org B sees ZERO rows
+  from org A. Test #9 pins this.
+- **(c)** `getOrgEntityId` throws `NOT_IN_ANY_ORG` for
+  a caller with no parent COMPANY entity; the service
+  translates that to `404 NOT_IN_ANY_ORG` so the
+  route does not leak the bare exception message.
+- **(d)** The pagination cap at 100 mirrors the
+  `MAX_AUDIT_EVENTS_PAGE_SIZE` precedent — a
+  malicious / buggy caller cannot drain the whole
+  table in one request.
+- **(e)** The enum-list parser accepts either a single
+  value (`?status=APPROVED`), an array
+  (`?status=APPROVED&status=REJECTED`), or a comma-
+  separated string (`?status=APPROVED,REJECTED`). Any
+  unknown enum value is rejected with `422
+  INVALID_FIELD` and the offending field name
+  surfaces in `invalid_fields`.
+- **(f)** The soft-delete invariant (`deleted_at:
+  null`) is composed AS-AND with every scope
+  predicate so a soft-deleted Action is invisible to
+  list — test #10 pins this.
+- **(g)** The order clause (`{ created_at: 'desc' }`)
+  is the intentional UX choice for the Action Inbox;
+  future per-status-or-risk-tier secondary sorts are
+  forward-substrate.
+
+**Runtime Section 2 now exposes a complete read
+contract:** GET detail viewer (PR #30) + GET list
+(PR #32), both safe-view-only, both with
+TAR-authoritative admin gating, both with cross-source /
+cross-org leak prevention at the QUERY tier. The Action
+runtime now supports the full Inbox+Detail UX surface
+the Control Tower will consume. **Real per-`ActionType`
+business handlers, the privileged
+RUNNING-cancellation break-glass route, an explicit
+\`GET /api/v1/org/actions\` route (currently served via
+\`?org_scope=true\` on the unified route), connectors /
+MCP, browser automation, native-app automation,
+voice / Sesame, desktop edge UX, wearable lens UX,
+and Control Tower UX all remain forward-substrate; no
+production migrations applied; no `prisma generate`
+run; no `db:push:test` run in PR #32 slice.**
+
+### Forward-substrate after this refresh (priority order)
+
+1. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`**
+   — first real per-`ActionType` handler.
+   `RECORD_CAPSULE` is the natural first surface
+   because it wires the Action runtime to existing
+   COSMP WRITE semantics
+   (`apps/api/src/services/cosmp/write.service.ts`).
+   RULE 21 research arc REQUIRED because the handler
+   crosses the Action↔COSMP architectural boundary.
+2. **`[ADR-0057-RUNNING-CANCEL-BREAK-GLASS-EXECUTE-VERIFY-AUTH]`**
+   — privileged `RUNNING → CANCELLED` cancellation on
+   the GOVSEC.5 break-glass substrate (ADR-0050;
+   landed). The state-machine already permits the
+   edge; this slice wires a separate privileged route
+   that consumes a break-glass grant and adds
+   `AbortController` plumbing for mid-attempt
+   handler interruption.
+3. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
+   — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
+   constants to `ActionPolicy.retry_budget` +
+   `ActionAttempt.timeout_ms` schema fields; defaults
+   preserved from the current constants. Requires a
+   Prisma migration QLOCK + cross-language Ecto
+   schema parity check per ADR-0033.
+4. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`**
+   — explicit `GET /api/v1/org/actions` route per
+   ADR-0057 §9. Lower priority because
+   `?org_scope=true` on the unified list already
+   covers the same need; this slice would add the
+   canonical route alias + lock the org-scoped
+   filter as the default behavior on a separate URL.
+
 ## [ADR-0057-GET-VIEWER-LANDED] 2026-05-29
 
 **Status: VERIFIED ADR-0057 §9 GET viewer route is LIVE
@@ -730,6 +1030,8 @@ migrations applied; no `prisma generate` run; no
    `can_admin_org`; pagination + per-status /
    per-risk-tier filters). Substrate-coherent
    extension of the GET viewer.
+   **LANDED in PR #32 (see `[ADR-0057-LIST-ROUTE-LANDED]`
+   above).**
 2. **`[ADR-0057-PER-TYPE-HANDLERS-RESEARCH-ARC-QLOCK]`**
    — first real per-`ActionType` handler. RULE 21
    research arc required.
@@ -1549,8 +1851,8 @@ The lifecycle execution beyond creation/negotiation does NOT exist:
   Section 1 + CI-guard pre-arm + Section 2 partial
   (schema + vocabulary + pure evaluator + admin tier +
   create-time runtime + governed-stub lifecycle runtime +
-  non-RUNNING cancel route + GET viewer route +
-  10 of 10 `ACTION_*` emitters).
+  non-RUNNING cancel route + GET viewer route + GET list
+  route + 10 of 10 `ACTION_*` emitters).
 
 ### Founder Directive (preserved)
 
@@ -1564,12 +1866,11 @@ is optional. None is "later."
 2. **Autonomous Execution Core** — schema + vocabulary +
    evaluator + admin tier + create-time runtime +
    governed-stub lifecycle runtime + non-RUNNING cancel
-   route + GET viewer route + 10 of 10 `ACTION_*`
-   emitters landed (PRs #18 + #20 + #22 + #24 + #26 +
-   #28 + #30); real per-`ActionType` business handlers +
-   RUNNING-cancellation break-glass route + list/filter
-   read routes + connectors / MCP remain
-   forward-substrate.
+   route + GET viewer route + GET list route + 10 of 10
+   `ACTION_*` emitters landed (PRs #18 + #20 + #22 + #24
+   + #26 + #28 + #30 + #32); real per-`ActionType`
+   business handlers + RUNNING-cancellation break-glass
+   route + connectors / MCP remain forward-substrate.
 3. **Hives / Team Intelligence**
 4. **MCP / Connectors**
 5. **Agent Playground**
