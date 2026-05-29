@@ -18,9 +18,9 @@ Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-sub
 
 ## Current status (PARTIAL — production-grade)
 
-Substrate landed across 14 implementation PRs (#18, #20, #22,
-#24, #26, #28, #30, #32, #35, #37, #39, #41, #47, #49) + 9 docs-refresh
-PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48). The
+Substrate landed across 15 implementation PRs (#18, #20, #22,
+#24, #26, #28, #30, #32, #35, #37, #39, #41, #47, #49, #51) + 10 docs-refresh
+PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48, #50). The
 Action runtime is fully live end-to-end: create → policy
 decision → optional dual-control pairing → scheduler admission
 → executor claim → in-tick retry → terminalization → expiry
@@ -51,7 +51,13 @@ spread (undefined preserves existing column value), GET list +
 PUT response projections, and `ACTION_POLICY_UPDATE` audit
 details carry boolean `_set` flags only (the numeric override
 values NEVER appear in audit details; queryable via GET list by
-the same admin tier).
+the same admin tier). **As of PR #51 the resolved `timeout_ms`
+also surfaces on the per-attempt detail viewer**
+(`GET /api/v1/actions/:id/attempts/:attempt_id` →
+`SafeActionAttemptView.timeout_ms: number | null`); the
+forensic-visibility loop is CLOSED end-to-end (policy →
+operator write → audit → list projection → row-level execution
+→ per-attempt viewer).
 
 **Live `ACTION_*` audit emitters: 10 of 10.** The canonical
 ADR-0057 §10 vocabulary is fully wired.
@@ -215,17 +221,19 @@ any in-flight attempt short-circuits.
   filters + cross-source / cross-org leak prevention at the QUERY
   tier.
 - **`apps/api/src/services/action/attempt.service.ts`**
-  (NEW in PR #39) — `getActionAttemptForCaller(callerEntityId,
-  actionId, attemptId)`. Same authorization spine as
-  `get.service.ts` (source self-scope OR
-  can_admin_org-over-same-org; TAR-authoritative; RULE 0
-  enumeration-prevention 404 for non-source non-admin). Loads
-  parent Action -> ownership check -> loads ActionAttempt
+  (NEW in PR #39; extended in PR #51) —
+  `getActionAttemptForCaller(callerEntityId, actionId, attemptId)`.
+  Same authorization spine as `get.service.ts` (source
+  self-scope OR can_admin_org-over-same-org; TAR-authoritative;
+  RULE 0 enumeration-prevention 404 for non-source non-admin).
+  Loads parent Action -> ownership check -> loads ActionAttempt
   (404 ATTEMPT_NOT_FOUND on missing / soft-delete / action_id
   mismatch) -> loads latest ActionResult (may be null when
   outcome != SUCCEEDED) -> projects to SafeActionAttemptView.
-  Forbidden-fields contract per ADR-0057 §10 enforced by
-  construction.
+  **PR #51 adds `timeout_ms: number | null`** to the projected
+  view (the Wave 6 forensic field; null only for attempts that
+  landed before PR #47). Forbidden-fields contract per ADR-0057
+  §10 enforced by construction.
 
 ### Live audit literals (10 of 10)
 
@@ -277,7 +285,6 @@ any in-flight attempt short-circuits.
 - **Explicit `GET /api/v1/org/actions` route** — currently served
   via `?org_scope=true` on the unified list route. Dedicated
   alias is a separate slice.
-- **`ActionAttempt.timeout_ms` surfaced on `GET /api/v1/actions/:id/attempts/:attempt_id`** — the column is persisted per PR #47 and operator-tunable per PR #49, but the attempt-detail viewer doesn't project it yet. Substrate-coherent forensic-visibility closure; Wave 8 candidate.
 - **Connectors / MCP** (per ADR-0057 §17 + ADR-0058).
 - **Browser automation, native-app automation, voice / Sesame,
   desktop edge UI, wearable lens UX, Control Tower UX**.
@@ -307,6 +314,7 @@ any in-flight attempt short-circuits.
 | [#41](https://github.com/NiovArchitect/niov-foundation/pull/41) | `67df915` | **PROPOSE_PERMISSION_GRANT real handler capability** — second real per-`ActionType` handler. NEW `validateProposePermissionGrantPayload` + real handler calling existing `createPermission` (RULE 0 sovereignty enforced in code) + canonical `PERMISSION_CREATED` AuditEvent with action_id back-reference. Error-class mapping for sovereignty / not-found / generic failures. SAFE result_metadata payload-free contract. 11 unit + 7 integration tests. Substrate-coherent extension of Wave 1's ActionHandlerRegistry pattern; no tier-4 build-log (pattern boundary already established by PR #35). |
 | [#47](https://github.com/NiovArchitect/niov-foundation/pull/47) | `ae01289` | **ActionPolicy retry_budget + ActionAttempt timeout_ms schema fields** — Wave 6 LOCK-GAP-1 + LOCK-GAP-2 promotion from service-tier constants to schema. NEW resolver helpers `resolveRetryBudget` + `resolveAttemptTimeoutMs`; executor adds per-action `ActionPolicy` point-lookup at retry-loop entry; resolved timeout persists onto `ActionAttempt.timeout_ms` for forensic visibility. Non-positive override values fall back to constants (operator-misconfiguration guard). 14 NEW unit + 5 NEW integration tests. Substrate-architectural; tier-4 build-log [`../build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md`](../build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md). |
 | [#49](https://github.com/NiovArchitect/niov-foundation/pull/49) | `28b2cd8` | **ActionPolicy override admin write-path** — Wave 7 closes RULE 13 drift surfaced post-PR-48: PR #47 added the schema fields but the `PUT /api/v1/org/action-policies` allowlist still rejected the two override fields with 422 UNKNOWN_FIELD. NEW `isOptionalPositiveIntOrNull` helper (positive Int or explicit null; 0 / negative / float / string rejected 422); conditional upsert spread (undefined → preserves existing column value); GET list + PUT response projections gain both columns; audit details gain `retry_budget_set` + `attempt_timeout_ms_override_set` boolean indicators (numeric values NEVER recorded). 10 NEW integration tests + no-leak `KNOWN_LEGITIMATE_HITS` line bumped from 1089 → 1175 (same substrate justification per the entry's own precedent format). Substrate-coherent extension of PR #47; no tier-4 build-log (no new architectural primitive). |
+| [#51](https://github.com/NiovArchitect/niov-foundation/pull/51) | `8fa0658` | **ActionAttempt.timeout_ms surfaced on attempt-detail viewer** — Wave 8 closes the Section 2 forensic-visibility loop end-to-end. `SafeActionAttemptView` gains `timeout_ms: number | null`; `projectActionAttemptView` passes the row column through unchanged. 2 NEW integration tests (executor-option-wins case + policy-override-wins-when-option-omitted case) proving the row + projected view agree under both precedence tiers. Same authorization spine as PR #39; null-safe for pre-PR-47 attempts. Substrate-coherent extension of PR #47 + PR #49; no tier-4 build-log (no new architectural primitive). |
 
 ## Founder gap-locks active in this substrate
 
@@ -437,13 +445,7 @@ any in-flight attempt short-circuits.
    alias would unlock Control Tower attempt-list UX. No
    architectural boundary; lowest priority among Section 2
    reads.
-5. **`ActionAttempt.timeout_ms` surfaced on `GET /api/v1/actions/:id/attempts/:attempt_id`** —
-   substrate-coherent forensic-visibility closure. The column is
-   persisted per PR #47 + operator-tunable per PR #49 + visible
-   in audit details + projected on the GET list response, but
-   the per-attempt viewer doesn't show it yet. Tiny scope; same
-   authorization spine.
-6. **Per-action `ActionPolicy` lookup cache** — currently one
+5. **Per-action `ActionPolicy` lookup cache** — currently one
    indexed point-lookup per claimed Action. ETS-style
    read-optimized cache is forward-substrate per ADR-0036 /
    ADR-0039 precedent if hot-path contention surfaces in
