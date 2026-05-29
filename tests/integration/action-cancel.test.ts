@@ -210,13 +210,13 @@ async function seedAutoApprovePolicy(
     where: {
       org_entity_id_action_type_risk_tier: {
         org_entity_id: orgEntityId,
-        action_type: "RECORD_CAPSULE",
+        action_type: "SEND_INTERNAL_NOTIFICATION",
         risk_tier: "LOW",
       },
     },
     create: {
       org_entity_id: orgEntityId,
-      action_type: "RECORD_CAPSULE",
+      action_type: "SEND_INTERNAL_NOTIFICATION",
       risk_tier: "LOW",
       default_decision: "AUTO_APPROVE",
       require_admin_capability: null,
@@ -235,7 +235,7 @@ async function createApprovedAction(caller: {
     url: "/api/v1/actions",
     headers: { authorization: `Bearer ${caller.token}` },
     payload: {
-      action_type: "RECORD_CAPSULE",
+      action_type: "SEND_INTERNAL_NOTIFICATION",
       idempotency_key: `ik-${randomUUID()}`,
       payload_summary: "test-summary",
       payload_redacted: { kind: "capsule", title: "test" },
@@ -338,7 +338,7 @@ describe("POST /api/v1/actions/:id/cancel — happy paths", () => {
     expect(details.previous_status).toBe("APPROVED");
     expect(details.next_status).toBe("CANCELLED");
     expect(details.decision_reason).toBe("user changed mind");
-    expect(details.action_type).toBe("RECORD_CAPSULE");
+    expect(details.action_type).toBe("SEND_INTERNAL_NOTIFICATION");
     // No-leak: response body excludes payload / envelope tokens.
     for (const forbidden of [
       "payload_summary",

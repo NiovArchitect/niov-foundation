@@ -736,17 +736,43 @@ export {
   isTerminalActionStatus,
 } from "./services/action/state-machine.js";
 
-// ADR-0057 §11 stub handlers for the 3 initial ActionTypes per
-// LOCK-GAP-3. Returns SAFE-allowlisted result_metadata only.
+// ADR-0057 §11 per-ActionType handler registry. As of the
+// [ADR-0057-RECORD-CAPSULE-HANDLER] wave, RECORD_CAPSULE is a REAL
+// handler wired to WriteService.createCapsuleForActionRunner;
+// SEND_INTERNAL_NOTIFICATION and PROPOSE_PERMISSION_GRANT remain
+// stubs. The default registry (stub-only) is installed at module
+// load; server.ts replaces it at boot via
+// setDefaultActionHandlerRegistry to inject WriteService.
 export {
   TEST_MARKER_FORCE_FAILURE,
   TEST_MARKER_FORCE_TIMEOUT,
   executeActionHandler,
+  makeActionHandlerRegistry,
+  setDefaultActionHandlerRegistry,
 } from "./services/action/handlers.js";
 export type {
+  ActionHandlerFn,
   ActionHandlerOutcome,
+  ActionHandlerRegistry,
+  ActionHandlerRegistryDeps,
   ActionHandlerResult,
+  HandlerActionInput,
 } from "./services/action/handlers.js";
+
+// ADR-0057 per-ActionType create-time payload validators. Runs at
+// validateCreateActionBody after the route-shape check. Rejects
+// malformed payloads with 422 INVALID_FIELD at create-time so no
+// malformed Action enters the executor queue.
+export {
+  RECORD_CAPSULE_MAX_CONTENT_BYTES,
+  validatePayloadForActionType,
+  validateRecordCapsulePayload,
+  validateStubPayload,
+} from "./services/action/action-payload-validators.js";
+export type {
+  ActionPayloadValidationResult,
+  RecordCapsulePayload,
+} from "./services/action/action-payload-validators.js";
 
 // ADR-0057 §10 + §11 lifecycle helpers — transition + audit
 // composables shared by scheduler.ts + executor.ts. Service-tier

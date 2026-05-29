@@ -187,11 +187,21 @@ describe("ADR-0057 §9 — Action create-time pure helpers", () => {
   });
 
   describe("validateCreateActionBody (route-tier body validation)", () => {
+    // [ADR-0057-RECORD-CAPSULE-HANDLER] wave introduced per-type
+    // payload validation: RECORD_CAPSULE now requires capsule_type +
+    // topic_tags + payload_summary + content inside payload_redacted.
+    // Tests that need to exercise route-tier-only behavior use this
+    // properly-shaped payload.
     const validBody = {
       action_type: "RECORD_CAPSULE",
       idempotency_key: "ik-good",
       payload_summary: "summary text",
-      payload_redacted: { kind: "capsule" },
+      payload_redacted: {
+        capsule_type: "DOMAIN_KNOWLEDGE",
+        topic_tags: ["t"],
+        payload_summary: "inner-summary",
+        content: "the capsule body",
+      },
     };
     it("accepts a fully-valid body", () => {
       const r = validateCreateActionBody({ ...validBody });

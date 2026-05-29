@@ -780,6 +780,265 @@ export class WriteService {
     };
   }
 
+  // WHAT: System-path variant of createCapsule consumed by the
+  //        ADR-0057 Action runtime RECORD_CAPSULE handler. Mirrors
+  //        createCapsule step-wise but bypasses session-token
+  //        validation — the gate is that the Action has already
+  //        passed the policy evaluator + dual-control (if required)
+  //        before reaching the executor. The actor_entity_id is the
+  //        Action.source_entity_id; audit attribution carries the
+  //        back-reference action_id so any misuse is forensically
+  //        visible. Mirrors the precedent at
+  //        apps/api/src/services/governance/system-permission.ts
+  //        (createSystemPermission) for narrow server-side flows
+  //        that need to write on an entity's behalf without a live
+  //        session.
+  // INPUT: { actor_entity_id, action_id, input, context? }.
+  // OUTPUT: WriteSuccess on success, WriteFailure otherwise.
+  // WHY: The executor handler has no session token; rather than
+  //      mint a synthetic session (security hazard) or persist the
+  //      original caller's token (credential-storage anti-pattern),
+  //      we expose a narrow system-path that the handler can call.
+  //      The method intentionally lives on WriteService (not the
+  //      action service) so the COSMP write pipeline — encryption,
+  //      embedding, storage upload, jurisdiction cascade, audit
+  //      emission, transaction boundaries — stays in one place.
+  // GATING: This method is callable only from the action executor's
+  //         handler registry. There is no route that exposes it;
+  //         adding one would require a separate Founder-authorized
+  //         QLOCK + ADR amendment.
+  // AUDIT: Emits CAPSULE_MUTATION_ADD with actor_entity_id =
+  //        actor_entity_id, target_entity_id = actor_entity_id
+  //        (owner-write), and details.action_id back-reference for
+  //        forensic traceability.
+  async createCapsuleForActionRunner(args: {
+    actor_entity_id: string;
+    action_id: string;
+    input: CapsuleCreateInput;
+    context?: { ip_address?: string | null };
+  }): Promise<WriteSuccess | WriteFailure> {
+    const actor_entity_id = args.actor_entity_id;
+    const action_id = args.action_id;
+    const input = args.input;
+    const ip_address = args.context?.ip_address ?? null;
+
+    // Defensive re-validation at execute-time. The create-time
+    // validator already ran at action.service.ts but a long delay
+    // between create and execute could theoretically allow a future
+    // refactor to introduce drift; re-validating here keeps the
+    // contract self-contained.
+    const errors = validateCreateInput(input);
+    if (errors.length > 0) {
+      await this.auditDenial(
+        "CAPSULE_MUTATION_ADD",
+        null,
+        actor_entity_id,
+        "CAPSULE_DATA_INVALID",
+        ip_address,
+        { errors, action_id },
+      );
+      return {
+        ok: false,
+        code: "CAPSULE_DATA_INVALID",
+        message: "Capsule data is invalid",
+        errors,
+      };
+    }
+
+    // Defensive TAR re-check: can_write_capsules must still be true
+    // and the actor's TAR must still be ACTIVE at execute-time. The
+    // policy evaluator gated this at create-time, but a TAR demote
+    // between create and execute would otherwise allow the write
+    // through. RULE 0 + RULE 5 (auth -> clearance -> permission ->
+    // conditions): re-verify before mutation.
+    const tar = await prisma.tokenAttributeRepository.findUnique({
+      where: { entity_id: actor_entity_id },
+      select: { can_write_capsules: true, status: true },
+    });
+    if (tar === null || tar.status !== "ACTIVE" || tar.can_write_capsules !== true) {
+      // RULE 13: the WriteFailure.code union does not include
+      // "TAR_DEMOTED"; using OPERATION_NOT_PERMITTED (the
+      // semantically-closest existing code) lets the union stay
+      // closed. The action handler maps this to error_class =
+      // "TAR_DEMOTED" so the audit + result error_class still
+      // carries the specific reason. The auditDenial reason field
+      // ("TAR_DEMOTED") is a string-typed denial_reason and is
+      // independent of the WriteFailure code union.
+      await this.auditDenial(
+        "CAPSULE_MUTATION_ADD",
+        null,
+        actor_entity_id,
+        "TAR_DEMOTED",
+        ip_address,
+        { action_id },
+      );
+      return {
+        ok: false,
+        code: "OPERATION_NOT_PERMITTED",
+        message: "Actor TAR does not permit capsule writes at execute time",
+      };
+    }
+
+    // Owner-write: capsule lands in the actor's own wallet. Defensive
+    // wallet lookup mirrors createCapsule (every entity should have a
+    // wallet per Section 1B).
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: actor_entity_id },
+      select: { wallet_id: true },
+    });
+    if (wallet === null) {
+      await this.auditDenial(
+        "CAPSULE_MUTATION_ADD",
+        null,
+        actor_entity_id,
+        "WALLET_MISSING",
+        ip_address,
+        { action_id },
+      );
+      return {
+        ok: false,
+        code: "CAPSULE_DATA_INVALID",
+        message: "Owner wallet not found",
+        errors: ["wallet_missing"],
+      };
+    }
+
+    // Jurisdiction cascade per ADR-0037 Sub-decision 5 (inherits
+    // from actor Entity at create-time; immutable thereafter).
+    const requesterForCascade = await getEntityById(actor_entity_id);
+    const cascadedJurisdiction = requesterForCascade?.jurisdiction ?? null;
+
+    const capsuleId = randomUUID();
+    const storageLocation = `niov://capsule/${capsuleId}`;
+    const processed = processContentForStorage(input.content, this.encryption);
+
+    // Storage upload BEFORE the database row so a failed upload does
+    // not leave a dangling row pointing to nothing (preserves the
+    // pre-existing D-STORAGE-DB-ATOMICITY-BOUNDARY discipline; outbox
+    // pattern remains forward-substrate).
+    await this.contentStore.write(storageLocation, processed.ciphertext);
+
+    // Embedding generation outside the transaction so a provider
+    // outage degrades gracefully (capsule write still succeeds;
+    // embedding column remains NULL).
+    const embeddingResult: EmbeddingResult = await this.embeddingProvider
+      .generateEmbedding(
+        { text: input.content },
+        { fixtureKey: capsuleId },
+      )
+      .catch((err): EmbeddingResult => ({
+        ok: false,
+        error_class: "PROVIDER_ERROR",
+        message: err instanceof Error ? err.message : String(err),
+      }));
+
+    const decayType: DecayType = input.decay_type ?? "TIME_BASED";
+    const storageTier: StorageTier =
+      decayType === "FOUNDATIONAL" ? "HOT" : input.storage_tier ?? "WARM";
+
+    const created = await prisma.$transaction(async (tx) => {
+      const row = await tx.memoryCapsule.create({
+        data: {
+          capsule_id: capsuleId,
+          wallet_id: wallet.wallet_id,
+          entity_id: actor_entity_id,
+          version: 1,
+          mutation_type: "ADD",
+          capsule_type: input.capsule_type,
+          topic_tags: input.topic_tags,
+          decay_type: decayType,
+          decay_rate: input.decay_rate ?? 0.01,
+          payload_summary: input.payload_summary,
+          payload_size_tokens: processed.payload_size_tokens,
+          tokens: processed.tokens,
+          tokens_tokenizer: processed.tokens_tokenizer,
+          storage_location: storageLocation,
+          storage_tier: storageTier,
+          clearance_required: input.clearance_required ?? 0,
+          content_hash: processed.content_hash,
+          connected_capsule_ids: input.connected_capsule_ids ?? [],
+          connected_entity_ids: input.connected_entity_ids ?? [],
+          monetization_enabled: input.monetization_enabled ?? false,
+          monetization_category: input.monetization_category ?? null,
+          expires_at: input.expires_at ?? null,
+          ai_access_blocked: input.ai_access_blocked ?? false,
+          requires_validation: input.requires_validation ?? false,
+          jurisdiction: cascadedJurisdiction,
+
+          created_by: actor_entity_id,
+          // System-path has no session_id (no live session); audit
+          // attribution rides actor_entity_id + action_id back-ref.
+          created_session_id: null,
+          write_reason: input.write_reason ?? null,
+
+          ...(embeddingResult.ok
+            ? {
+                embedding_content_hash: processed.content_hash,
+                embedding_generated_at: new Date(),
+              }
+            : {}),
+        },
+      });
+
+      if (embeddingResult.ok) {
+        const vectorLiteral = `[${embeddingResult.vector.join(",")}]`;
+        await tx.$executeRawUnsafe(
+          `UPDATE memory_capsules SET embedding = $1::vector(1536) WHERE capsule_id = $2::uuid`,
+          vectorLiteral,
+          capsuleId,
+        );
+      }
+
+      await writeAuditEvent({
+        event_type: "CAPSULE_MUTATION_ADD",
+        outcome: "SUCCESS",
+        actor_entity_id: actor_entity_id,
+        target_entity_id: actor_entity_id,
+        target_capsule_id: capsuleId,
+        // No session_id at system-path; the action_id in details is
+        // the forensic back-reference.
+        session_id: null,
+        ip_address,
+        jurisdiction: row.jurisdiction,
+        details: {
+          mutation_type: "ADD",
+          write_type: "OWNER",
+          capsule_type: input.capsule_type,
+          content_hash: processed.content_hash,
+          payload_size_tokens: processed.payload_size_tokens,
+          write_reason: input.write_reason ?? null,
+          // ADR-0057 back-reference: every system-path write carries
+          // the originating action_id so the audit chain ties the
+          // CAPSULE_MUTATION_ADD row to the ACTION_* chain.
+          action_id,
+          ...(embeddingResult.ok
+            ? {
+                embedding_generated: true,
+                embedding_model: embeddingResult.model,
+                embedding_dimensions: embeddingResult.dimensions,
+                embedding_tokens_used: embeddingResult.tokens_used,
+              }
+            : {
+                embedding_generated: false,
+                embedding_failure_class: embeddingResult.error_class,
+                embedding_failure_message: embeddingResult.message,
+              }),
+        },
+      }, tx);
+
+      return row;
+    });
+
+    return {
+      ok: true,
+      capsule_id: created.capsule_id,
+      version: created.version,
+      content_hash: created.content_hash,
+      storage_location: created.storage_location,
+      write_type: "OWNER",
+    };
+  }
+
   // WHAT: Update an existing MemoryCapsule with G1.3 mutation
   //        discrimination (ADD / UPDATE / MERGE / NOOP) per ADR-0042.
   //        Owner-write when the session entity owns the capsule;

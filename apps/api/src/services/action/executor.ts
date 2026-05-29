@@ -265,6 +265,7 @@ export async function tickActionExecutor(
         executeActionHandler({
           action_id: action.action_id,
           action_type: action.action_type,
+          source_entity_id: action.source_entity_id,
           payload_redacted: action.payload_redacted,
         }),
         attemptTimeoutMs,
