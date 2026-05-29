@@ -9,27 +9,28 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-([ADR-0057-ATTEMPT-DETAIL-ROUTE-EXECUTE-VERIFY-AUTH]
-wave-close).
+([ADR-0057-PROPOSE-PERMISSION-GRANT-HANDLER-EXECUTE-VERIFY-AUTH]
+wave-close + repo-now-public security audit).
 
 ## Current state
 
-- **Latest main HEAD:** `fe8c09566ed8f207d57cee3045ceaa479b93e93e`
-- **Latest merged PR:** [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) — Add ADR-0057 ActionAttempt detail route (2026-05-29).
+- **Latest main HEAD:** `67df915d98f417dd2652016f4e350229c4ef1fb6`
+- **Latest merged PR:** [#41](https://github.com/NiovArchitect/niov-foundation/pull/41) — Add ADR-0057 PROPOSE_PERMISSION_GRANT real handler capability (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
-- **Real per-`ActionType` handlers:** 1 of 3 (RECORD_CAPSULE live; SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT stub).
+- **Real per-`ActionType` handlers:** **2 of 3** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT live; SEND_INTERNAL_NOTIFICATION remains stub — no backing notification substrate).
 - **Cancel surface:** non-RUNNING (any source caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050) + process-local AbortController plumbing for mid-attempt interruption.
-- **Read surface:** create + cancel + GET viewer + GET list + **GET attempt detail** — Action Inbox / Detail / Attempt drilldown complete.
+- **Read surface:** create + cancel + GET viewer + GET list + GET attempt detail — Action Inbox / Detail / Attempt drilldown complete.
+- **Repo posture:** PUBLIC. Branch protection on `main`: 4 required canonical CI checks + force-push blocked + admin-enforced + secret scanning + push protection + dependabot security updates enabled. `required_approving_review_count = 0` (solo-developer pragmatic).
 
 ## 10 production section status
 
 | # | Section | Status | Detail |
 |---|---|---|---|
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; Otzar Wave 2A/B/C designs accepted (code forward-substrate). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
-| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + **GET attempt detail** LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE real handler LIVE** (1 of 3 real handlers); SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT remain stubs; AbortController plumbing LIVE (no active consumers yet). | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
+| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail LIVE; 10 of 10 `ACTION_*` emitters LIVE; **RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT real handlers LIVE** (2 of 3); SEND_INTERNAL_NOTIFICATION remains stub (no backing substrate); AbortController plumbing LIVE (no active consumers yet). | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
@@ -43,6 +44,8 @@ wave-close).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#41](https://github.com/NiovArchitect/niov-foundation/pull/41) | `67df915` | Add ADR-0057 PROPOSE_PERMISSION_GRANT real handler capability |
+| [#40](https://github.com/NiovArchitect/niov-foundation/pull/40) | `66ff448` | Wave-close docs refresh for #39 |
 | [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) | `fe8c095` | Add ADR-0057 ActionAttempt detail route |
 | [#38](https://github.com/NiovArchitect/niov-foundation/pull/38) | `58a476b` | Wave-close docs refresh for #37 |
 | [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) | `4e3805d` | Add ADR-0057 RUNNING-cancel break-glass capability |
@@ -51,15 +54,14 @@ wave-close).
 | [#34](https://github.com/NiovArchitect/niov-foundation/pull/34) | `d001e13` | Split CURRENT_BUILD_STATE into section indexes |
 | [#32](https://github.com/NiovArchitect/niov-foundation/pull/32) | `75933ad` | Add ADR-0057 GET actions list route |
 | [#31](https://github.com/NiovArchitect/niov-foundation/pull/31) | `bcdacc7` | Docs refresh for #30 |
-| [#30](https://github.com/NiovArchitect/niov-foundation/pull/30) | `8af6f77` | Add ADR-0057 GET action viewer route |
-| [#29](https://github.com/NiovArchitect/niov-foundation/pull/29) | `1254f6d` | Docs refresh for #28 |
 
 ## Immediate next work queue
 
-1. **PROPOSE_PERMISSION_GRANT real handler** — second real per-`ActionType` handler. Substrate exists (`createPermission` DB query). MEDIUM-risk default REQUIRE_DUAL_CONTROL; touches multiple entities' DMW boundaries with RULE 0 sovereignty implications. Substrate-coherent extension of the established ActionHandlerRegistry pattern from Wave 1.
+1. **Section 1 Wave 2A** — Otzar employee twin role-scope profile route per ADR-0053. Substrate-coherent (consumes existing `twin.service.ts` surface); no schema; rotates section focus per the 10-section production discipline.
 2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields (Prisma migration via `db:push:test` per ADR-0025; cross-language Ecto parity check per ADR-0033).
-3. Wave 2A/B/C Otzar employee-twin route implementations (Section 1 priority).
-4. GOVSEC.5 follow-on `requireAdminCapability` throttle.
+3. **Section 1 Wave 2B + 2C** — conversation look-back + correction-conversation linkage (ADR-0054 + ADR-0055).
+4. SEND_INTERNAL_NOTIFICATION substrate research arc (RULE 21; would unlock the 3rd real ActionType handler).
+5. GOVSEC.5 follow-on `requireAdminCapability` throttle.
 
 ## Critical Do-NOT-claim list (global truths)
 

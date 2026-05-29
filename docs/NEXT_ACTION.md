@@ -9,26 +9,28 @@
 
 ## Where we are
 
-- **Main HEAD:** `fe8c09566ed8f207d57cee3045ceaa479b93e93e`
-- **Latest merged PR:** [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) — ADR-0057 ActionAttempt detail route.
-- **Active branch / PR:** `refresh-docs-wave3-attempt-detail-route` (this wave-close docs refresh).
+- **Main HEAD:** `67df915d98f417dd2652016f4e350229c4ef1fb6`
+- **Latest merged PR:** [#41](https://github.com/NiovArchitect/niov-foundation/pull/41) — ADR-0057 PROPOSE_PERMISSION_GRANT real handler capability.
+- **Active branch / PR:** `refresh-docs-wave4-propose-permission-grant` (this wave-close docs refresh).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **Live `ACTION_*` emitters:** 10 of 10.
-- **Real per-`ActionType` handlers:** 1 of 3 (RECORD_CAPSULE live; SEND_INTERNAL_NOTIFICATION + PROPOSE_PERMISSION_GRANT stub).
+- **Real per-`ActionType` handlers:** **2 of 3** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT live; SEND_INTERNAL_NOTIFICATION remains stub — no backing notification substrate).
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
-- **Read surface:** create, cancel, GET viewer, GET list, **GET attempt detail** — full Action Inbox + Detail + Attempt drilldown.
+- **Read surface:** create, cancel, GET viewer, GET list, GET attempt detail — full Action Inbox + Detail + Attempt drilldown.
 - **TypeScript baseline:** exactly 4 canonical residual errors.
+- **Repo visibility:** PUBLIC. Branch protection: 4 required canonical CI checks + force-push blocked + admin-enforced + secret scanning + push protection + dependabot updates enabled. Required-review count: 0 (solo-developer pragmatic; see PR #41 merge notes).
 
 ## Exact next action
 
 After this docs refresh merges:
 
-→ Start **Wave 4** — pick between (preference order; pick the safest highest-leverage Section 2 slice given current substrate):
+→ Start **Wave 5** — pick between:
 
-  1. **PROPOSE_PERMISSION_GRANT real handler** (second real per-`ActionType` handler). Substrate exists (`createPermission` DB query at `packages/database/src/queries/permission.ts`). MEDIUM-risk default REQUIRE_DUAL_CONTROL; touches multiple entities' DMW boundaries with RULE 0 sovereignty implications. Wraps in RULE 21 research arc inline (per the established ActionHandlerRegistry pattern from Wave 1 — the substrate-architectural boundary was already established by RECORD_CAPSULE; this is "second handler" not "first crossing"). Substrate-coherent extension of the registry pattern; no schema; no migration.
-  2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields. Requires `db:push:test` migration per ADR-0025 (authorized dev/test pattern); cross-language Ecto parity per ADR-0033. Substrate-architectural; tier-4 build-log expected. Deferred to lower priority because it requires schema work; per protocol, prefer no-migration path while operating autonomously.
+  1. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`** — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier constants to schema fields. Requires `db:push:test` migration per ADR-0025 (authorized dev/test pattern); cross-language Ecto parity per ADR-0033. Substrate-architectural; tier-4 build-log expected. With Wave 4 complete this becomes the natural next substrate slice.
+  2. **Section 1 Wave 2A** — Otzar employee twin role-scope profile route per ADR-0053. Cross-section pivot from Section 2 to Section 1. Substrate-coherent (consumes existing twin.service.ts surface); no schema; no architectural boundary. Higher product leverage for client-readiness (Control Tower needs).
+  3. **SEND_INTERNAL_NOTIFICATION substrate research arc** — would unlock the third real handler. Currently no backing notification service exists in repo; would need to design notification substrate first (in-app vs email vs both); RULE 21 research arc required.
 
-  Recommendation per protocol: **Wave 4 = PROPOSE_PERMISSION_GRANT real handler** (preference #1; substrate exists; substrate-coherent extension of the established ActionHandlerRegistry pattern from Wave 1; no schema; higher product leverage than read-side aliases).
+  Recommendation per protocol: **Wave 5 = Section 1 Wave 2A Otzar employee twin profile route** — substrate-coherent extension within Section 1; no migration; unlocks Control Tower; rotates section focus per the founder's 10-section production discipline.
 
 ## Current stop conditions
 
@@ -64,10 +66,10 @@ After this docs refresh merges:
 - **RECORD_CAPSULE real handler** — RECORD_CAPSULE actions execute through `WriteService.createCapsuleForActionRunner` producing real `MemoryCapsule` rows + back-referenced `CAPSULE_MUTATION_ADD` audit + SAFE `ActionResult.result_metadata` (capsule_id + capsule_type only).
 - Per-`ActionType` create-time payload validator dispatcher.
 - **RUNNING-cancel break-glass plumbing** — cancel.service validates ACTIVE break-glass grant + marks USED + emits ACTION_CANCELLED with grant_id back-reference + fires process-local AbortController so in-flight attempts short-circuit.
+- **PROPOSE_PERMISSION_GRANT real handler** — calls existing `createPermission` (which enforces RULE 0 sovereignty in code) + emits canonical `PERMISSION_CREATED` AuditEvent with action_id back-reference. SAFE result_metadata (permission_id + bridge_id + capsule_id + grantee_entity_id + access_scope + duration_type only).
 
 **NOT LIVE:**
-- SEND_INTERNAL_NOTIFICATION real handler (no backing substrate exists; future wave).
-- PROPOSE_PERMISSION_GRANT real handler (MEDIUM-risk; separate future wave).
+- SEND_INTERNAL_NOTIFICATION real handler (no backing notification substrate exists; future wave).
 - `ActionPolicy.retry_budget` + `ActionAttempt.timeout_ms` schema fields (service-tier constants only).
 - Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list).
 - ActionAttempt list-of-attempts route (callers query DB if needed; future slice if Control Tower needs).
