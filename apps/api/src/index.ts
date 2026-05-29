@@ -687,6 +687,20 @@ export type {
 export { projectActionView } from "./services/action/views.js";
 export type { SafeActionView } from "./services/action/views.js";
 
+// ADR-0057 §6 cancel service — non-RUNNING caller-initiated
+// cancellation (PROPOSED / APPROVED / SCHEDULED -> CANCELLED) with
+// ACTION_CANCELLED emission. RUNNING -> CANCELLED is privileged and
+// is rejected here; a future break-glass-gated route will use the
+// state-machine edge.
+export {
+  cancelActionForCaller,
+  validateCancelActionBody,
+} from "./services/action/cancel.service.js";
+export type {
+  CancelActionInput,
+  CancelActionResult,
+} from "./services/action/cancel.service.js";
+
 // ADR-0057 §1 lifecycle state machine — pure transition guards.
 // No DB, no I/O, no audit. Used by lifecycle.service.ts +
 // scheduler.ts + executor.ts to gate every status update.
