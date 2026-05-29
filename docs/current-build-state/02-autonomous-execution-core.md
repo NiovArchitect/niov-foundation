@@ -18,15 +18,17 @@ Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-sub
 
 ## Current status (PARTIAL — production-grade)
 
-Substrate landed across 10 implementation PRs (#18, #20, #22,
-#24, #26, #28, #30, #32, #35, #37) + 7 docs-refresh PRs (#19,
-#21, #23, #25, #27, #29, #31, #36). The Action runtime is fully
-live end-to-end: create → policy decision → optional dual-control
-pairing → scheduler admission → executor claim → in-tick retry →
-terminalization → expiry sweep → caller-initiated cancellation
-(non-RUNNING unconditional + **RUNNING via GOVSEC.5 break-glass
-grant**), with read-side detail + list surfaces for the Action
-Inbox UX, and **RECORD_CAPSULE actions execute through the real
+Substrate landed across 11 implementation PRs (#18, #20, #22,
+#24, #26, #28, #30, #32, #35, #37, #39) + 8 docs-refresh PRs
+(#19, #21, #23, #25, #27, #29, #31, #36, #38). The Action
+runtime is fully live end-to-end: create → policy decision →
+optional dual-control pairing → scheduler admission → executor
+claim → in-tick retry → terminalization → expiry sweep →
+caller-initiated cancellation (non-RUNNING unconditional +
+**RUNNING via GOVSEC.5 break-glass grant**), with **complete
+read-side surface**: GET Action viewer (PR #30), GET Action
+list (PR #32), and **GET ActionAttempt detail drilldown
+(PR #39)**. **RECORD_CAPSULE actions execute through the real
 `WriteService.createCapsuleForActionRunner` system-path**
 producing real `MemoryCapsule` rows in the source entity's
 wallet. The executor wires an **AbortController per attempt** so
@@ -61,6 +63,7 @@ any in-flight attempt short-circuits.
 | `POST` | `/api/v1/actions/:id/cancel` | bearer + `write` | `apps/api/src/services/action/cancel.service.ts` (`cancelActionForCaller` — non-RUNNING unconditional; RUNNING via GOVSEC.5 break-glass grant) |
 | `GET` | `/api/v1/actions/:id` | bearer + `read` | `apps/api/src/services/action/get.service.ts` (`getActionForCaller`) |
 | `GET` | `/api/v1/actions` | bearer + `read` | `apps/api/src/services/action/list.service.ts` (`listActionsForCaller`) |
+| `GET` | `/api/v1/actions/:id/attempts/:attempt_id` | bearer + `read` | `apps/api/src/services/action/attempt.service.ts` (`getActionAttemptForCaller`) |
 | `GET` | `/api/v1/org/action-policies` | bearer + `can_admin_org` | `apps/api/src/routes/org.routes.ts` |
 | `PUT` | `/api/v1/org/action-policies` | bearer + dual-control gated | `apps/api/src/routes/org.routes.ts` |
 
@@ -155,6 +158,18 @@ any in-flight attempt short-circuits.
   default + `?org_scope=true` admin path + pagination + enum
   filters + cross-source / cross-org leak prevention at the QUERY
   tier.
+- **`apps/api/src/services/action/attempt.service.ts`**
+  (NEW in PR #39) — `getActionAttemptForCaller(callerEntityId,
+  actionId, attemptId)`. Same authorization spine as
+  `get.service.ts` (source self-scope OR
+  can_admin_org-over-same-org; TAR-authoritative; RULE 0
+  enumeration-prevention 404 for non-source non-admin). Loads
+  parent Action -> ownership check -> loads ActionAttempt
+  (404 ATTEMPT_NOT_FOUND on missing / soft-delete / action_id
+  mismatch) -> loads latest ActionResult (may be null when
+  outcome != SUCCEEDED) -> projects to SafeActionAttemptView.
+  Forbidden-fields contract per ADR-0057 §10 enforced by
+  construction.
 
 ### Live audit literals (10 of 10)
 
@@ -240,6 +255,7 @@ any in-flight attempt short-circuits.
 | [#32](https://github.com/NiovArchitect/niov-foundation/pull/32) | `75933ad` | GET list route `GET /api/v1/actions` + self-scope default + `?org_scope=true` admin path + pagination + enum filters |
 | [#35](https://github.com/NiovArchitect/niov-foundation/pull/35) | `4ef4ed4` | **RECORD_CAPSULE real handler capability** — per-`ActionType` payload validators + `WriteService.createCapsuleForActionRunner` system-path + `ActionHandlerRegistry` DI + `server.ts` registry installation; 1 of 3 real handlers LIVE. See [`../build-log/2026-05-29-pr-35-record-capsule-handler.md`](../build-log/2026-05-29-pr-35-record-capsule-handler.md). |
 | [#37](https://github.com/NiovArchitect/niov-foundation/pull/37) | `4e3805d` | **RUNNING-cancel break-glass capability** — `abort-registry.ts` process-local `AbortController` map + `executor` register/release per attempt + `HandlerActionInput.abort_signal` widening + cancel.service RUNNING branch validates ACTIVE GOVSEC.5 break-glass grant + marks USED + emits `ACTION_CANCELLED` with `grant_id` back-reference + fires `abortAction` outside tx. Single-use grant enforcement; concurrent-race 409 envelopes. See [`../build-log/2026-05-29-pr-37-running-cancel-break-glass.md`](../build-log/2026-05-29-pr-37-running-cancel-break-glass.md). |
+| [#39](https://github.com/NiovArchitect/niov-foundation/pull/39) | `fe8c095` | **ActionAttempt detail route** — `GET /api/v1/actions/:id/attempts/:attempt_id` substrate-coherent read drilldown. SAFE projection of `ActionAttempt` + optional latest `ActionResult`. Same authorization spine as GET viewer (source self-scope OR `can_admin_org`-over-same-org; RULE 0 enumeration-prevention 404). 9 integration tests; no architectural boundary; no tier-4 build-log needed per the wave-based discipline. |
 
 ## Founder gap-locks active in this substrate
 
@@ -345,13 +361,19 @@ any in-flight attempt short-circuits.
 
 ## Next slices (priority order)
 
-1. **`[ADR-0057-ATTEMPT-DETAIL-ROUTE-EXECUTE-VERIFY-AUTH]`** —
-   `GET /api/v1/actions/:id/attempts/:attempt_id` for detail
-   drilldown. Substrate-coherent extension of the GET viewer;
-   same ownership + admin scoping; SAFE projection of
-   `ActionAttempt` row + the attempt's `ActionResult.result_metadata`
-   when present. No architectural boundary; no schema; unlocks
-   Control Tower attempt-drilldown.
+1. **PROPOSE_PERMISSION_GRANT real handler** — second real
+   per-`ActionType` handler. Substrate exists at
+   `packages/database/src/queries/permission.ts`
+   (`createPermission` DB query). MEDIUM-risk default
+   REQUIRE_DUAL_CONTROL; touches multiple entities' DMW
+   boundaries with RULE 0 sovereignty implications.
+   Substrate-coherent extension of the established
+   `ActionHandlerRegistry` pattern from Wave 1 (PR #35).
+   Per-type create-time validator dispatch already in place
+   from PR #35; new validator will land at
+   `action-payload-validators.ts`. New handler in
+   `handlers.ts`; service-tier signing in `server.ts` registry
+   construction.
 2. **`[ADR-0057-ACTIONPOLICY-RETRY-BUDGET-AND-TIMEOUT-SCHEMA-QLOCK]`**
    — promote LOCK-GAP-1 + LOCK-GAP-2 from service-tier
    constants to `ActionPolicy.retry_budget` +
@@ -359,24 +381,23 @@ any in-flight attempt short-circuits.
    from the current constants. Requires a Prisma migration via
    `db:push:test` per ADR-0025 + cross-language Ecto schema
    parity check per ADR-0033.
-3. **PROPOSE_PERMISSION_GRANT real handler** — second real
-   per-`ActionType` handler. `createPermission` substrate
-   exists at `packages/database/src/queries/permission.ts`;
-   MEDIUM-risk default REQUIRE_DUAL_CONTROL; touches multiple
-   entities' DMW boundaries with RULE 0 sovereignty
-   implications. Own RULE 21 research arc required.
-4. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
+3. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
    explicit `GET /api/v1/org/actions` route (lower priority;
    `?org_scope=true` on the unified list already covers the
    same need).
-5. **SEND_INTERNAL_NOTIFICATION real handler** — requires
+4. **SEND_INTERNAL_NOTIFICATION real handler** — requires
    building the notification substrate from scratch (no
    `notification.service.ts` exists in the repo as of PR #35).
    Defer until product clarity on internal-notification
    substrate (in-app vs email vs both).
-6. **Active AbortSignal consumption** in future real handlers
+5. **Active AbortSignal consumption** in future real handlers
    wrapping long-running connector work — the plumbing landed
    in PR #37; consumption is per-handler discipline.
+6. **ActionAttempt list-of-attempts route** — callers can
+   query the DB directly via `Action.action_id`; a route
+   alias would unlock Control Tower attempt-list UX. No
+   architectural boundary; lowest priority among Section 2
+   reads.
 
 ## Risks / forward-substrate
 
