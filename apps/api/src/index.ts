@@ -686,3 +686,77 @@ export type {
 } from "./services/action/action.service.js";
 export { projectActionView } from "./services/action/views.js";
 export type { SafeActionView } from "./services/action/views.js";
+
+// ADR-0057 §1 lifecycle state machine — pure transition guards.
+// No DB, no I/O, no audit. Used by lifecycle.service.ts +
+// scheduler.ts + executor.ts to gate every status update.
+export {
+  ACTION_INVALID_TRANSITION,
+  ActionInvalidTransitionError,
+  assertActionTransition,
+  canTransitionAction,
+  isTerminalActionStatus,
+} from "./services/action/state-machine.js";
+
+// ADR-0057 §11 stub handlers for the 3 initial ActionTypes per
+// LOCK-GAP-3. Returns SAFE-allowlisted result_metadata only.
+export {
+  TEST_MARKER_FORCE_FAILURE,
+  TEST_MARKER_FORCE_TIMEOUT,
+  executeActionHandler,
+} from "./services/action/handlers.js";
+export type {
+  ActionHandlerOutcome,
+  ActionHandlerResult,
+} from "./services/action/handlers.js";
+
+// ADR-0057 §10 + §11 lifecycle helpers — transition + audit
+// composables shared by scheduler.ts + executor.ts. Service-tier
+// RETRY_BUDGET + ATTEMPT_TIMEOUT_MS_DEFAULT per LOCK-GAP-1 +
+// LOCK-GAP-2.
+export {
+  ATTEMPT_TIMEOUT_MS_DEFAULT,
+  LIFECYCLE_FIELD_MAX_CHARS,
+  RETRY_BUDGET,
+  clampLifecycleField,
+  createActionAttempt,
+  createActionResult,
+  emitLifecycleAudit,
+  terminalizeActionAttempt,
+  transitionActionStatus,
+} from "./services/action/lifecycle.service.js";
+export type {
+  ActionLifecycleAuditEventType,
+  CreatedActionAttempt,
+  LifecycleAuditDetails,
+} from "./services/action/lifecycle.service.js";
+
+// ADR-0057 §1 + §11 worker tick — claims SCHEDULED via SELECT
+// FOR UPDATE SKIP LOCKED, dispatches stub handlers, terminalizes
+// per retry budget.
+export {
+  EXECUTOR_DEFAULT_BATCH,
+  EXECUTOR_TIMEOUT_ERROR_CLASS,
+  tickActionExecutor,
+} from "./services/action/executor.js";
+export type {
+  TickActionExecutorOptions,
+  TickActionExecutorResult,
+} from "./services/action/executor.js";
+
+// ADR-0057 §1 + §11 scheduler — admission tick + expiry sweep +
+// cron lifecycle (NO-OP under NODE_ENV=test). The cron task drives
+// tickActionExecutor on a schedule; tests call the ticks directly.
+export {
+  SCHEDULER_DEFAULT_BATCH,
+  startActionScheduler,
+  stopActionScheduler,
+  tickActionExpirySweep,
+  tickActionScheduler,
+} from "./services/action/scheduler.js";
+export type {
+  ActionSchedulerHandle,
+  TickActionExpirySweepResult,
+  TickActionSchedulerResult,
+  TickSchedulerOptions,
+} from "./services/action/scheduler.js";
