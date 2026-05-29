@@ -651,3 +651,19 @@ export type {
   AdminWorkingSetView,
   ConsumerWorkingSetView,
 } from "./services/personalization/working-set-views.js";
+
+// ADR-0057 §3 + §4 Action policy evaluator — pure deterministic
+// discriminated-union evaluator implementing the autonomy ladder.
+// No DB reads, no DB writes, no audit emissions, no routes. The forward
+// consumer is action.service.ts at create-time (per ADR-0057 §16 step 4)
+// and the future scheduler/executor (steps 5-7), neither of which
+// exists yet. Action runtime remains NOT live after this export.
+export {
+  evaluateActionPolicy,
+  REASON_CODES,
+} from "./services/action/policy-evaluator.js";
+export type {
+  PolicyEnvelope,
+  EvaluateActionPolicyInput,
+  ActionDecisionResult,
+} from "./services/action/policy-evaluator.js";
