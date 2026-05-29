@@ -53,6 +53,7 @@ import {
 } from "@niov/database";
 import type { AuditEventType } from "@niov/database";
 import type { AuditEvent, AuditOutcome, Prisma } from "@prisma/client";
+import { getOrgEntityId } from "../governance/org.js";
 
 // WHAT: Default page size for the list route. Mirrors the
 //        existing MAX_AUDIT_EVENTS_PAGE_SIZE = 100 cap (declared
@@ -131,10 +132,21 @@ export interface ListAuditEventsQuery {
   outcome?: unknown;
   start_time?: unknown;
   end_time?: unknown;
+  // Section 7 Wave 2: scope=self (default) | scope=org. scope=org
+  // requires can_admin_org on the caller's TAR; mirrors the
+  // ?org_scope=true precedent from list.service.ts. The query-
+  // string-shaped field stays string-only here; the validator
+  // coerces "org" / "self" to the typed AuditViewScope enum.
+  scope?: unknown;
 }
+
+// WHAT: The viewer-scope enum. Self is the default (Wave 1
+//        contract); org enables the Wave 2 org-admin path.
+export type AuditViewScope = "self" | "org";
 
 // WHAT: The normalized + clamped filter shape after validation.
 export interface NormalizedListAuditEventsFilters {
+  scope: AuditViewScope;
   page: number;
   page_size: number;
   event_type?: AuditEventType;
@@ -256,10 +268,29 @@ export function validateListAuditEventsQuery(
     if (d === null) invalid.push("end_time");
     else end_time = d;
   }
+  // Section 7 Wave 2: scope coercion. Accept "self" (default
+  // when omitted) or "org" (admin path). Any other string is
+  // an INVALID_FIELD; numeric / boolean / object values also
+  // rejected.
+  let scope: AuditViewScope = "self";
+  if (query.scope !== undefined) {
+    if (
+      typeof query.scope !== "string" ||
+      (query.scope !== "self" && query.scope !== "org")
+    ) {
+      invalid.push("scope");
+    } else {
+      scope = query.scope;
+    }
+  }
   if (invalid.length > 0) {
     return { ok: false, code: "INVALID_FIELD", invalid_fields: invalid };
   }
-  const normalized: NormalizedListAuditEventsFilters = { page, page_size };
+  const normalized: NormalizedListAuditEventsFilters = {
+    scope,
+    page,
+    page_size,
+  };
   if (event_type !== undefined) normalized.event_type = event_type;
   if (target_entity_id !== undefined) {
     normalized.target_entity_id = target_entity_id;
@@ -361,7 +392,9 @@ async function emitAuditViewerRead(
   action:
     | "AUDIT_VIEW_LIST"
     | "AUDIT_VIEW_EVENT"
-    | "AUDIT_VIEW_VERIFY_CHAIN",
+    | "AUDIT_VIEW_VERIFY_CHAIN"
+    | "AUDIT_VIEW_ORG_LIST"
+    | "AUDIT_VIEW_ORG_EVENT",
   meta: Record<string, unknown> = {},
 ): Promise<void> {
   await writeAuditEvent({
@@ -370,6 +403,47 @@ async function emitAuditViewerRead(
     actor_entity_id: callerEntityId,
     details: { action, ...meta },
   });
+}
+
+// WHAT: TAR-authoritative check that the caller currently holds
+//        can_admin_org. Mirrors callerHasAdminCapability at
+//        apps/api/src/services/action/list.service.ts:289.
+// INPUT: callerEntityId.
+// OUTPUT: Boolean.
+// WHY: scope=org branch needs an admin gate; we MUST consult the
+//      TAR live (not the stale token claims) per the RULE 13
+//      audit-chain disclosure ("the viewer MUST enforce TAR-
+//      authoritative scope checks at every request").
+async function callerHasAdminCapability(
+  callerEntityId: string,
+): Promise<boolean> {
+  const tar = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: callerEntityId },
+    select: { can_admin_org: true, status: true },
+  });
+  if (tar === null) return false;
+  return tar.status === "ACTIVE" && tar.can_admin_org === true;
+}
+
+// WHAT: Resolve the (org + member) scope vector for an
+//        org-admin caller. Mirrors /api/v1/org/audit at
+//        org.routes.ts:1369-1373 — every member's entity_id
+//        joins the org_entity_id itself as a candidate for the
+//        actor / target OR-fence.
+// INPUT: orgEntityId.
+// OUTPUT: A non-empty string[] containing the org_entity_id +
+//          every active-member child_id.
+// WHY: An org-admin should see audit rows where their org OR
+//      any of their org's members appears as actor OR target —
+//      that's the canonical "org audit chain" semantics from
+//      Section 1F + the existing /org/audit cross-tenant test
+//      at admin-routes.test.ts:454.
+async function resolveOrgScopeVector(orgEntityId: string): Promise<string[]> {
+  const memberships = await prisma.entityMembership.findMany({
+    where: { parent_id: orgEntityId, is_active: true },
+    select: { child_id: true },
+  });
+  return [orgEntityId, ...memberships.map((m) => m.child_id)];
 }
 
 // WHAT: List the caller's own audit-event rows. Self-scope only
@@ -388,26 +462,67 @@ export async function listAuditEventsForCaller(
   callerEntityId: string,
   filters: NormalizedListAuditEventsFilters,
 ): Promise<ListAuditEventsResult> {
-  const where: Prisma.AuditEventWhereInput = {
-    actor_entity_id: callerEntityId,
-  };
-  if (filters.event_type !== undefined) where.event_type = filters.event_type;
+  // Section 7 Wave 2: resolve the scope predicate. scope=self
+  // narrows to the caller's actor_entity_id (Wave 1 contract,
+  // unchanged). scope=org narrows to actor_entity_id OR
+  // target_entity_id IN the caller's org-scope vector (org +
+  // active members), matching the /org/audit OR-fence at
+  // org.routes.ts:1378-1384.
+  let scopePredicate: Prisma.AuditEventWhereInput;
+  let orgEntityIdForAudit: string | null = null;
+  if (filters.scope === "org") {
+    const hasAdmin = await callerHasAdminCapability(callerEntityId);
+    if (!hasAdmin) {
+      return {
+        ok: false,
+        httpStatus: 403,
+        code: "ORG_SCOPE_FORBIDDEN",
+        message:
+          "scope=org requires can_admin_org on the caller's TAR.",
+      };
+    }
+    let callerOrgId: string;
+    try {
+      callerOrgId = await getOrgEntityId(callerEntityId);
+    } catch {
+      return { ok: false, httpStatus: 404, code: "NOT_IN_ANY_ORG" };
+    }
+    orgEntityIdForAudit = callerOrgId;
+    const orgScope = await resolveOrgScopeVector(callerOrgId);
+    scopePredicate = {
+      OR: [
+        { actor_entity_id: { in: orgScope } },
+        { target_entity_id: { in: orgScope } },
+      ],
+    };
+  } else {
+    scopePredicate = { actor_entity_id: callerEntityId };
+  }
+  // Optional filters AND-compose with the scope predicate via
+  // the top-level AND[] array — every additional filter NARROWS
+  // the result. Filters cannot widen (Prisma where semantics)
+  // and never escape the scope fence. Mirrors the /org/audit
+  // pattern at org.routes.ts:1378-1395.
+  const filterClauses: Prisma.AuditEventWhereInput[] = [scopePredicate];
+  if (filters.event_type !== undefined) {
+    filterClauses.push({ event_type: filters.event_type });
+  }
   if (filters.target_entity_id !== undefined) {
-    where.target_entity_id = filters.target_entity_id;
+    filterClauses.push({ target_entity_id: filters.target_entity_id });
   }
   if (filters.target_capsule_id !== undefined) {
-    where.target_capsule_id = filters.target_capsule_id;
+    filterClauses.push({ target_capsule_id: filters.target_capsule_id });
   }
-  if (filters.outcome !== undefined) where.outcome = filters.outcome;
+  if (filters.outcome !== undefined) {
+    filterClauses.push({ outcome: filters.outcome });
+  }
   if (filters.start_time !== undefined || filters.end_time !== undefined) {
-    where.timestamp = {};
-    if (filters.start_time !== undefined) {
-      where.timestamp.gte = filters.start_time;
-    }
-    if (filters.end_time !== undefined) {
-      where.timestamp.lte = filters.end_time;
-    }
+    const ts: { gte?: Date; lte?: Date } = {};
+    if (filters.start_time !== undefined) ts.gte = filters.start_time;
+    if (filters.end_time !== undefined) ts.lte = filters.end_time;
+    filterClauses.push({ timestamp: ts });
   }
+  const where: Prisma.AuditEventWhereInput = { AND: filterClauses };
   const skip = (filters.page - 1) * filters.page_size;
   const [rows, total] = await Promise.all([
     prisma.auditEvent.findMany({
@@ -419,19 +534,34 @@ export async function listAuditEventsForCaller(
     prisma.auditEvent.count({ where }),
   ]);
   // Read-audit emission. Records only the filter keys (presence,
-  // not values) per the CONSOLE_READ pattern.
+  // not values) per the CONSOLE_READ pattern. Scope variant
+  // discriminated by the AUDIT_VIEW_LIST vs AUDIT_VIEW_ORG_LIST
+  // action label so a reviewer can trivially distinguish self-
+  // reads from org-admin reads.
   const filterKeys = Object.entries(filters)
     .filter(
       ([k, v]) =>
-        k !== "page" && k !== "page_size" && v !== undefined && v !== null,
+        k !== "scope" &&
+        k !== "page" &&
+        k !== "page_size" &&
+        v !== undefined &&
+        v !== null,
     )
     .map(([k]) => k);
-  await emitAuditViewerRead(callerEntityId, "AUDIT_VIEW_LIST", {
+  const auditMeta: Record<string, unknown> = {
     filter_keys: filterKeys,
     page: filters.page,
     page_size: filters.page_size,
     result_count: rows.length,
-  });
+  };
+  if (filters.scope === "org" && orgEntityIdForAudit !== null) {
+    auditMeta.org_entity_id = orgEntityIdForAudit;
+  }
+  await emitAuditViewerRead(
+    callerEntityId,
+    filters.scope === "org" ? "AUDIT_VIEW_ORG_LIST" : "AUDIT_VIEW_LIST",
+    auditMeta,
+  );
   return {
     ok: true,
     httpStatus: 200,
@@ -457,41 +587,84 @@ export async function listAuditEventsForCaller(
 export async function getAuditEventForCaller(
   callerEntityId: string,
   auditId: string,
+  scope: AuditViewScope = "self",
 ): Promise<GetAuditEventResult> {
   if (typeof auditId !== "string" || !UUID_RE.test(auditId)) {
     return { ok: false, httpStatus: 400, code: "INVALID_AUDIT_ID" };
   }
-  const row = await prisma.auditEvent.findFirst({
-    where: { audit_id: auditId, actor_entity_id: callerEntityId },
-  });
+  // Section 7 Wave 2: scope=org branch. Pre-resolve the
+  // org-scope vector + assert can_admin_org before any row
+  // lookup so non-admin callers can't probe for org-scope
+  // audit_ids.
+  let rowQueryWhere: Prisma.AuditEventWhereInput;
+  let chainScopeWhere: Prisma.AuditEventWhereInput;
+  let orgEntityIdForAudit: string | null = null;
+  if (scope === "org") {
+    const hasAdmin = await callerHasAdminCapability(callerEntityId);
+    if (!hasAdmin) {
+      return {
+        ok: false,
+        httpStatus: 403,
+        code: "ORG_SCOPE_FORBIDDEN",
+        message:
+          "scope=org requires can_admin_org on the caller's TAR.",
+      };
+    }
+    let callerOrgId: string;
+    try {
+      callerOrgId = await getOrgEntityId(callerEntityId);
+    } catch {
+      return { ok: false, httpStatus: 404, code: "NOT_IN_ANY_ORG" };
+    }
+    orgEntityIdForAudit = callerOrgId;
+    const orgScope = await resolveOrgScopeVector(callerOrgId);
+    const orgScopeFence: Prisma.AuditEventWhereInput = {
+      OR: [
+        { actor_entity_id: { in: orgScope } },
+        { target_entity_id: { in: orgScope } },
+      ],
+    };
+    rowQueryWhere = { AND: [{ audit_id: auditId }, orgScopeFence] };
+    chainScopeWhere = orgScopeFence;
+  } else {
+    rowQueryWhere = { audit_id: auditId, actor_entity_id: callerEntityId };
+    chainScopeWhere = { actor_entity_id: callerEntityId };
+  }
+  const row = await prisma.auditEvent.findFirst({ where: rowQueryWhere });
   if (row === null) {
+    // Enumeration-safe 404. Cross-actor / cross-org / unknown
+    // id collapse to the same envelope. A non-owner cannot
+    // probe for which audit_ids exist outside their scope.
     return { ok: false, httpStatus: 404, code: "AUDIT_EVENT_NOT_FOUND" };
   }
-  // Previous + next references scoped to the same caller's
-  // chain. Both queries narrow to actor_entity_id ==
-  // callerEntityId so they can never traverse into another
-  // entity's chain.
+  // Previous + next references scoped to the same caller-or-org
+  // chain. The chainScopeWhere predicate keeps the refs from
+  // traversing into rows outside the caller's authorized scope.
   const [previousRow, nextRow] = await Promise.all([
     prisma.auditEvent.findFirst({
       where: {
-        actor_entity_id: callerEntityId,
-        timestamp: { lt: row.timestamp },
+        AND: [chainScopeWhere, { timestamp: { lt: row.timestamp } }],
       },
       orderBy: { timestamp: "desc" },
       select: { audit_id: true, event_hash: true, timestamp: true },
     }),
     prisma.auditEvent.findFirst({
       where: {
-        actor_entity_id: callerEntityId,
-        timestamp: { gt: row.timestamp },
+        AND: [chainScopeWhere, { timestamp: { gt: row.timestamp } }],
       },
       orderBy: { timestamp: "asc" },
       select: { audit_id: true, event_hash: true, timestamp: true },
     }),
   ]);
-  await emitAuditViewerRead(callerEntityId, "AUDIT_VIEW_EVENT", {
-    audit_id: auditId,
-  });
+  const auditMeta: Record<string, unknown> = { audit_id: auditId };
+  if (scope === "org" && orgEntityIdForAudit !== null) {
+    auditMeta.org_entity_id = orgEntityIdForAudit;
+  }
+  await emitAuditViewerRead(
+    callerEntityId,
+    scope === "org" ? "AUDIT_VIEW_ORG_EVENT" : "AUDIT_VIEW_EVENT",
+    auditMeta,
+  );
   return {
     ok: true,
     httpStatus: 200,

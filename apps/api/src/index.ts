@@ -94,6 +94,7 @@ export {
 } from "./services/audit/audit-view.service.js";
 export type {
   AuditEventChainRef,
+  AuditViewScope,
   GetAuditEventResult,
   ListAuditEventsQuery,
   ListAuditEventsResult,
