@@ -456,3 +456,83 @@ describe("GET /api/v1/actions/:id/attempts/:attempt_id — defensive paths", () 
     expect((r.body as { code: string }).code).toBe("ACTION_NOT_FOUND");
   });
 });
+
+describe("GET /api/v1/actions/:id/attempts/:attempt_id — ADR-0057 Wave 8 timeout_ms forensic visibility", () => {
+  it("projects timeout_ms = the executor-option value when option wins absolutely", async () => {
+    // runOnce passes attemptTimeoutMs: 2_000 to tickActionExecutor;
+    // per the PR #47 + #49 precedence the option wins over any policy
+    // override and over the default. The resolved value persists onto
+    // the row + must surface on the attempt-detail viewer per Wave 8.
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgMember({
+      orgId,
+      autonomy_level: "EXECUTIVE_OVERRIDE",
+    });
+    await seedAutoApprovePolicy(orgId, caller.entityId);
+    const actionId = await postCreate(caller);
+    await runOnce();
+    const attempt = await prisma.actionAttempt.findFirstOrThrow({
+      where: { action_id: actionId },
+      orderBy: { attempt_number: "asc" },
+    });
+    expect(attempt.timeout_ms).toBe(2_000);
+    const r = await getAttempt(caller, actionId, attempt.attempt_id);
+    expect(r.statusCode).toBe(200);
+    const b = r.body as {
+      ok: true;
+      attempt: { timeout_ms: number | null };
+    };
+    expect(b.attempt.timeout_ms).toBe(2_000);
+  });
+
+  it("projects timeout_ms = the ActionPolicy.attempt_timeout_ms_override when executor option is omitted", async () => {
+    // Seed an ActionPolicy with a positive override + drive the
+    // executor WITHOUT the option override. Wave 6 PR #47 resolver
+    // path makes the row carry the policy value; Wave 8 surfaces it
+    // on the attempt-detail viewer.
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgMember({
+      orgId,
+      autonomy_level: "EXECUTIVE_OVERRIDE",
+    });
+    await prisma.actionPolicy.upsert({
+      where: {
+        org_entity_id_action_type_risk_tier: {
+          org_entity_id: orgId,
+          action_type: "SEND_INTERNAL_NOTIFICATION",
+          risk_tier: "LOW",
+        },
+      },
+      create: {
+        org_entity_id: orgId,
+        action_type: "SEND_INTERNAL_NOTIFICATION",
+        risk_tier: "LOW",
+        default_decision: "AUTO_APPROVE",
+        require_admin_capability: null,
+        attempt_timeout_ms_override: 6_543,
+        updated_by: caller.entityId,
+      },
+      update: {
+        default_decision: "AUTO_APPROVE",
+        attempt_timeout_ms_override: 6_543,
+        updated_by: caller.entityId,
+      },
+    });
+    const actionId = await postCreate(caller);
+    await tickActionScheduler();
+    // No attemptTimeoutMs option — the policy override resolves.
+    await tickActionExecutor({ workerId: "test-attempt-worker-wave8" });
+    const attempt = await prisma.actionAttempt.findFirstOrThrow({
+      where: { action_id: actionId },
+      orderBy: { attempt_number: "asc" },
+    });
+    expect(attempt.timeout_ms).toBe(6_543);
+    const r = await getAttempt(caller, actionId, attempt.attempt_id);
+    expect(r.statusCode).toBe(200);
+    const b = r.body as {
+      ok: true;
+      attempt: { timeout_ms: number | null };
+    };
+    expect(b.attempt.timeout_ms).toBe(6_543);
+  });
+});
