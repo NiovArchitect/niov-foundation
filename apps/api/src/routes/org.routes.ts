@@ -791,6 +791,197 @@ export async function registerOrgRoutes(
     },
   );
 
+  // ADR-0057 §7 + §9 ORG_ACTION_POLICY_UPDATE admin surface.
+  //
+  // GET /api/v1/org/action-policies -- read-only org-scoped list of
+  // ActionPolicy rows (the per-(org_entity_id, action_type, risk_tier)
+  // policy snapshot the future action.service.ts policy evaluator
+  // consumes). Bearer + can_admin_org; no dual-control binding (read-
+  // only listings bypass the middleware per ADR-0057 §9). Response
+  // shape projects safe fields ONLY -- no policy_envelope content,
+  // no secrets, no raw inputs.
+  //
+  // PUT /api/v1/org/action-policies -- upsert one ActionPolicy row
+  // for the (org_entity_id, action_type, risk_tier) UNIQUE tuple per
+  // ADR-0057 §2. Bearer + can_admin_org + dual-control via the LIVE
+  // PRIVILEGED_ENDPOINTS Operation E binding at privileged-endpoints.ts
+  // -- a same-org second admin must have an APPROVED EscalationRequest
+  // for the (org_entity_id, ORG_ACTION_POLICY_UPDATE) pair before the
+  // route handler runs. Emits ACTION_POLICY_UPDATE per ADR-0057 §10
+  // with SAFE allowlisted details only.
+  const ACTION_POLICY_PUT_WRITABLE: ReadonlySet<string> = new Set([
+    "action_type",
+    "risk_tier",
+    "default_decision",
+    "require_admin_capability",
+  ]);
+
+  // GET /org/action-policies -- org-scoped read-only list. The DRIFT-9
+  // cross-org leak guard is the where: { org_entity_id: orgEntityId }
+  // filter resolved from the caller's session, NEVER from the request.
+  app.get(
+    "/api/v1/org/action-policies",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const rows = await prisma.actionPolicy.findMany({
+        where: { org_entity_id: orgEntityId },
+        orderBy: [{ action_type: "asc" }, { risk_tier: "asc" }],
+        select: {
+          policy_id: true,
+          org_entity_id: true,
+          action_type: true,
+          risk_tier: true,
+          default_decision: true,
+          require_admin_capability: true,
+          updated_by: true,
+          created_at: true,
+          updated_at: true,
+        },
+      });
+      return reply.code(200).send({ ok: true, policies: rows });
+    },
+  );
+
+  // PUT /org/action-policies -- upsert one row. Body validation:
+  //  - allowlisted fields ONLY (422 UNKNOWN_FIELD per the org-settings
+  //    precedent at L760-767);
+  //  - action_type / risk_tier / default_decision enum-validated
+  //    against the runtime Prisma value sets (422 INVALID_FIELD);
+  //  - require_admin_capability is OPTIONAL and limited to the two
+  //    canonical capability names ("can_admin_org" | "can_admin_niov")
+  //    or null (per ADR-0057 §2).
+  // Audit emission (ACTION_POLICY_UPDATE) carries SAFE allowlisted
+  // details ONLY per ADR-0057 §10 (NEVER raw body / raw error text /
+  // policy envelope JSON / secrets / capsule content / embeddings).
+  app.put<{ Body: Record<string, unknown> }>(
+    "/api/v1/org/action-policies",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const body = request.body ?? {};
+      const incomingKeys = Object.keys(body);
+      const unknown = incomingKeys.filter(
+        (k) => !ACTION_POLICY_PUT_WRITABLE.has(k),
+      );
+      if (unknown.length > 0) {
+        return reply.code(422).send({
+          ok: false,
+          code: "UNKNOWN_FIELD",
+          message: `Unknown / immutable action-policy fields: ${unknown.join(", ")}`,
+          unknown_fields: unknown,
+        });
+      }
+      const action_type = body.action_type;
+      const risk_tier = body.risk_tier;
+      const default_decision = body.default_decision;
+      const require_admin_capability =
+        body.require_admin_capability === undefined
+          ? null
+          : body.require_admin_capability;
+      // Enum validation against the canonical Prisma enum value sets
+      // declared at packages/database/prisma/schema.prisma per PR #18.
+      const VALID_ACTION_TYPES = new Set([
+        "RECORD_CAPSULE",
+        "PROPOSE_PERMISSION_GRANT",
+        "SEND_INTERNAL_NOTIFICATION",
+      ]);
+      const VALID_RISK_TIERS = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
+      const VALID_DECISIONS = new Set([
+        "AUTO_APPROVE",
+        "REQUIRE_DUAL_CONTROL",
+        "REQUIRE_BREAK_GLASS",
+        "FORBIDDEN",
+      ]);
+      const VALID_ADMIN_CAPS: ReadonlySet<unknown> = new Set([
+        "can_admin_org",
+        "can_admin_niov",
+        null,
+      ]);
+      const invalid: string[] = [];
+      if (typeof action_type !== "string" || !VALID_ACTION_TYPES.has(action_type)) {
+        invalid.push("action_type");
+      }
+      if (typeof risk_tier !== "string" || !VALID_RISK_TIERS.has(risk_tier)) {
+        invalid.push("risk_tier");
+      }
+      if (typeof default_decision !== "string" || !VALID_DECISIONS.has(default_decision)) {
+        invalid.push("default_decision");
+      }
+      if (!VALID_ADMIN_CAPS.has(require_admin_capability)) {
+        invalid.push("require_admin_capability");
+      }
+      if (invalid.length > 0) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_FIELD",
+          message: `Invalid action-policy fields: ${invalid.join(", ")}`,
+          invalid_fields: invalid,
+        });
+      }
+      // Upsert per ADR-0057 §2 UNIQUE (org_entity_id, action_type,
+      // risk_tier). Type-narrowed casts via Prisma enum types are
+      // safe here because the value sets above gate every input.
+      const upserted = await prisma.actionPolicy.upsert({
+        where: {
+          org_entity_id_action_type_risk_tier: {
+            org_entity_id: orgEntityId,
+            action_type: action_type as Prisma.ActionPolicyCreateInput["action_type"],
+            risk_tier: risk_tier as Prisma.ActionPolicyCreateInput["risk_tier"],
+          },
+        },
+        create: {
+          org_entity_id: orgEntityId,
+          action_type: action_type as Prisma.ActionPolicyCreateInput["action_type"],
+          risk_tier: risk_tier as Prisma.ActionPolicyCreateInput["risk_tier"],
+          default_decision: default_decision as Prisma.ActionPolicyCreateInput["default_decision"],
+          require_admin_capability: require_admin_capability as string | null,
+          updated_by: callerId,
+        },
+        update: {
+          default_decision: default_decision as Prisma.ActionPolicyCreateInput["default_decision"],
+          require_admin_capability: require_admin_capability as string | null,
+          updated_by: callerId,
+        },
+        select: {
+          policy_id: true,
+          org_entity_id: true,
+          action_type: true,
+          risk_tier: true,
+          default_decision: true,
+          require_admin_capability: true,
+          updated_by: true,
+          created_at: true,
+          updated_at: true,
+        },
+      });
+      // Audit emission per ADR-0057 §10. SAFE allowlisted details only.
+      await writeAuditEvent({
+        event_type: "ACTION_POLICY_UPDATE",
+        outcome: "SUCCESS",
+        actor_entity_id: callerId,
+        target_entity_id: orgEntityId,
+        details: {
+          policy_id: upserted.policy_id,
+          action_type: upserted.action_type,
+          risk_tier: upserted.risk_tier,
+          default_decision: upserted.default_decision,
+          route: "/api/v1/org/action-policies",
+          method: "PUT",
+        },
+      });
+      return reply.code(200).send({ ok: true, policy: upserted });
+    },
+  );
+
   // GET /org/report -- summary counts.
   app.get(
     "/api/v1/org/report",

@@ -137,10 +137,10 @@ type LegitimateHit = { line: number; token: string; reason: string };
 const KNOWN_LEGITIMATE_HITS: Readonly<Record<string, readonly LegitimateHit[]>> = {
   "apps/api/src/routes/org.routes.ts": [
     {
-      line: 898,
+      line: 1089,
       token: "payload_summary",
       reason:
-        "Prisma select inside admin route — column read, not response shape; mapper-tier projection strips it before response",
+        "Prisma select inside admin route — column read, not response shape; mapper-tier projection strips it before response. Line shifted 898 → 1089 by the ADR-0057 §7 Operation E PUT /api/v1/org/action-policies insertion (+191 lines); same canonical code, same substrate justification.",
     },
   ],
   "apps/api/src/routes/cosmp.routes.ts": [

@@ -22,20 +22,21 @@ import {
 } from "@niov/api";
 
 describe("PRIVILEGED_ENDPOINTS registry", () => {
-  it("contains exactly 4 LIVE Category (1) entries (Operations A + B + C + D)", () => {
+  it("contains exactly 5 LIVE entries (Operations A + B + C + D + E)", () => {
     // Substrate-state verification: the runtime registry consumes ONLY
     // the LIVE entries per the three-artifact substrate split. Future
     // LIVE entries land here when their target sub-phase ships.
     //
-    // Sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036 Sub-decision 6:
-    // count grew 2 -> 4 with the addition of REGULATOR_ACCESS_GRANT
-    // (Operation C; POST /api/v1/regulator/access-grants) and
-    // REGULATOR_ACCESS_REVOKE (Operation D;
-    // POST /api/v1/regulator/access-revocations). Both are
-    // can_admin_niov-tier per Q8 LOCKED Option α (preserves the
-    // Tension 3 Category (1) invariant canonical at substantive
-    // register substantively).
-    expect(PRIVILEGED_ENDPOINTS).toHaveLength(4);
+    // Lineage:
+    //   2 -> 4 at CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per
+    //     ADR-0036 Sub-decision 6 (REGULATOR_ACCESS_GRANT +
+    //     REGULATOR_ACCESS_REVOKE; both can_admin_niov per Q8 LOCKED).
+    //   4 -> 5 at this slice [ADR-0057-ORG-ACTION-POLICY-UPDATE-
+    //     PRIVILEGED-BINDING] per ADR-0057 §7 — Operation E
+    //     ORG_ACTION_POLICY_UPDATE (PUT /api/v1/org/action-policies);
+    //     can_admin_org-tier; the FIRST LIVE entry to exercise
+    //     Class B at the integration tier.
+    expect(PRIVILEGED_ENDPOINTS).toHaveLength(5);
   });
 
   it("has no duplicate (method, route) entries", () => {
@@ -48,11 +49,36 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     expect(new Set(types).size).toBe(PRIVILEGED_ENDPOINTS.length);
   });
 
-  it("contains only can_admin_niov-gated entries (per Tension 3 Category (1))", () => {
-    const allCanAdminNiov = PRIVILEGED_ENDPOINTS.every(
+  it("entries use only the canonical authTier values (can_admin_niov | can_admin_org)", () => {
+    // Substrate-state observation: the universal can_admin_niov
+    // invariant from sub-phase 5 [SUB-BOX-3-ROUTES] is no longer
+    // universal after ADR-0057 §7 Operation E lands the first
+    // can_admin_org-tier entry. The runtime registry now mixes
+    // Class B (can_admin_org) + Class C (can_admin_niov) entries
+    // per ADR-0026 Amendment 1 §3 target-resolution order, with the
+    // dual-control middleware handling each tier deterministically.
+    const allCanonical = PRIVILEGED_ENDPOINTS.every(
+      (e: PrivilegedEndpoint) =>
+        e.authTier === "can_admin_niov" || e.authTier === "can_admin_org",
+    );
+    expect(allCanonical).toBe(true);
+  });
+
+  it("Class B (can_admin_org) entries are the org-admin-tier surfaces (currently exactly 1: ORG_ACTION_POLICY_UPDATE)", () => {
+    const classB = PRIVILEGED_ENDPOINTS.filter(
+      (e: PrivilegedEndpoint) => e.authTier === "can_admin_org",
+    );
+    expect(classB).toHaveLength(1);
+    expect(classB[0]?.actionDescriptor.type).toBe("ORG_ACTION_POLICY_UPDATE");
+    expect(classB[0]?.method).toBe("PUT");
+    expect(classB[0]?.route).toBe("/api/v1/org/action-policies");
+  });
+
+  it("Class C (can_admin_niov) entries remain the platform-admin-tier surfaces (currently exactly 4)", () => {
+    const classC = PRIVILEGED_ENDPOINTS.filter(
       (e: PrivilegedEndpoint) => e.authTier === "can_admin_niov",
     );
-    expect(allCanAdminNiov).toBe(true);
+    expect(classC).toHaveLength(4);
   });
 });
 
@@ -100,6 +126,27 @@ describe("isPrivilegedEndpoint type guard", () => {
     expect(entry).toBeDefined();
     expect(entry?.actionDescriptor.type).toBe("REGULATOR_ACCESS_REVOKE");
     expect(entry?.authTier).toBe("can_admin_niov");
+  });
+
+  it("returns the matching entry for PUT /api/v1/org/action-policies (Operation E)", () => {
+    // ADR-0057 §7 Operation E -- the FIRST LIVE entry to exercise
+    // Class B (can_admin_org) at the integration tier. The PUT method
+    // is the canonical upsert binding for the (org_entity_id,
+    // action_type, risk_tier) UNIQUE tuple per ADR-0057 §2.
+    const entry = isPrivilegedEndpoint("PUT", "/api/v1/org/action-policies");
+    expect(entry).toBeDefined();
+    expect(entry?.actionDescriptor.type).toBe("ORG_ACTION_POLICY_UPDATE");
+    expect(entry?.authTier).toBe("can_admin_org");
+  });
+
+  it("GET /api/v1/org/action-policies is NOT a privileged endpoint (only PUT is)", () => {
+    // Substrate-state observation: per ADR-0057 §9 the GET surface
+    // is read-only and bypasses the dual-control middleware; only
+    // PUT carries the dual-control binding because PUT changes the
+    // autonomy contract.
+    expect(
+      isPrivilegedEndpoint("GET", "/api/v1/org/action-policies"),
+    ).toBeUndefined();
   });
 
   it("returns undefined for an unregistered route", () => {
