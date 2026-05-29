@@ -12,21 +12,40 @@ and (in future waves) export. Per ADR-0002 the audit chain is
 sacrosanct; this section adds the read surface, never the write
 surface.
 
-## Current status (PARTIAL — Waves 1+2 LIVE)
+## Current status (PARTIAL — Waves 1+2+3 LIVE)
 
-**Read substrate + unified self-scope + org-admin viewer LIVE per
-PRs #60 + #62.** Foundation primitives (`queryAuditEvents`,
-`verifyAuditChain`, `MAX_AUDIT_EVENTS_PAGE_SIZE = 100`,
-`writeAuditEvent` with per-chain advisory locks, BEFORE DELETE
-trigger, hash chain) are LIVE in
-`packages/database/src/queries/audit.ts`. Wave 1 added the
-per-caller unified read surface at `/api/v1/audit/*`; Wave 2
-extended it with the `scope=org` admin path. Niov-admin scope +
-export + regulator-tier access + Control Tower UX +
-cross-chain org-admin verify-chain are forward-substrate
-(Waves 3-6 + verify-chain forward-substrate).
+**Read substrate + unified self / org-admin / niov-admin viewer
+LIVE per PRs #60 + #62 + #64.** Foundation primitives
+(`queryAuditEvents`, `verifyAuditChain`,
+`MAX_AUDIT_EVENTS_PAGE_SIZE = 100`, `writeAuditEvent` with
+per-chain advisory locks, BEFORE DELETE trigger, hash chain)
+LIVE. Wave 1 added the per-caller unified read surface at
+`/api/v1/audit/*`; Wave 2 added the `scope=org` admin path;
+Wave 3 added the `scope=platform` niov-admin path. Export +
+regulator-tier access + Control Tower UX + cross-chain
+verify-chain are forward-substrate (Waves 4-6 + verify-chain
+forward-substrate).
 
 ## What is live
+
+### Wave 3 (PR #64) — niov-admin/platform scope on the unified viewer
+
+- `GET /api/v1/audit/events?scope=platform` — bearer + `read`;
+  TAR-authoritative `can_admin_niov` gate (403
+  `PLATFORM_SCOPE_FORBIDDEN` on miss); unfenced cross-org
+  visibility — every audit_events row matches. Filters still
+  AND-narrow.
+- `GET /api/v1/audit/events/:id?scope=platform` — bearer +
+  `read`; same admin gate; unconstrained row lookup (any
+  audit_id viewable); chain refs walk the full timeline.
+  Enumeration-safe 404 on unknown UUIDs preserved.
+- Read-audit emission for platform-scope reads uses
+  `details.action` ∈ `{ AUDIT_VIEW_PLATFORM_LIST,
+  AUDIT_VIEW_PLATFORM_EVENT }`. **No new audit literal**;
+  still on the canonical `ADMIN_ACTION`.
+- `GET /api/v1/audit/verify-chain` — **UNCHANGED**. Self-only
+  across all 3 waves (cross-chain verification = leakage / perf
+  risk; forward-substrate).
 
 ### Wave 2 (PR #62) — org-admin scope on the unified viewer
 
@@ -104,12 +123,11 @@ cross-chain org-admin verify-chain are forward-substrate
 
 ## What is NOT live
 
-- **Niov-admin scope on the unified surface** (Wave 3). Would
-  add `scope=platform` requiring `can_admin_niov`; same OR-fence
-  semantics widened to all orgs. Mirrors `/platform/audit` +
-  `/console/audit` patterns.
-- **Export surface** (Wave 4) — CSV / NDJSON streaming for
-  regulator-tier review; rate-limited.
+- **Export surface** (Wave 4) — NDJSON streaming first for
+  safe chunked transfer; CSV may follow if bounded-size + safe.
+  Rate-limited; reuses unified `scope=self|org|platform` gate;
+  SAFE projection; chunked response to avoid Fastify OOM on
+  large windows.
 - **Regulator-tier audit access** (Wave 5) — through the
   `REGULATOR` principal + `LawfulBasis` attestation per
   ADR-0036.
@@ -119,11 +137,11 @@ cross-chain org-admin verify-chain are forward-substrate
   chains — `verifyAuditChain` currently walks one entity's
   chain; system-principal chains + the legacy `SYSTEM_CHAIN_KEY`
   chain require their own verification surface (future wave).
-- **Org-admin verify-chain** — Wave 2 deliberately left
-  `verify-chain` self-only per Founder direction. Walking every
-  member's chain in one call has perf risk; accepting an
-  `entity_id` query param has mild leakage risk (would surface
-  whether a given entity has a chain at all). Separate
+- **Org-admin / platform verify-chain** — Waves 2+3 deliberately
+  left `verify-chain` self-only per Founder direction. Walking
+  every member's (or every entity's) chain in one call has perf
+  risk; accepting an `entity_id` query param has mild leakage
+  risk (would surface whether a given entity has a chain). Separate
   forward-substrate slice with its own QLOCK + design review.
 
 ## RULE 13 disclosures specific to Section 7
@@ -160,6 +178,7 @@ cross-chain org-admin verify-chain are forward-substrate
 |---|---|---|
 | [#60](https://github.com/NiovArchitect/niov-foundation/pull/60) | `10155b9` | **Section 7 Wave 1 unified self-scope audit-events viewer** — NEW `apps/api/src/services/audit/audit-view.service.ts` (`listAuditEventsForCaller` + `getAuditEventForCaller` + `verifyAuditChainForCaller` + `validateListAuditEventsQuery` + `SafeAuditEventView` + `SafeAuditEventDetailView` + 9 types) + NEW `apps/api/src/routes/audit.routes.ts` (3 routes). Self-scope only; SAFE projection; enumeration-safe 404; read-audit emission via existing `ADMIN_ACTION:AUDIT_VIEW_*`. 19 NEW integration tests + 23/23 existing audit unit regression preserved + 89/89 admin-routes / console-routes / audit-event-id-surfacing / notification-inbox / action-lifecycle regression preserved. No schema; no new audit literals; no new RULE / ADR landings. Substrate-coherent extension of LIVE audit primitives. |
 | [#62](https://github.com/NiovArchitect/niov-foundation/pull/62) | `026300f` | **Section 7 Wave 2 org-admin scope on /api/v1/audit/events + /:id** — NEW `AuditViewScope` type + `callerHasAdminCapability` + `resolveOrgScopeVector` helpers; `validateListAuditEventsQuery` accepts `scope` enum; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on scope; `scope=org` pre-flights `can_admin_org` (403 `ORG_SCOPE_FORBIDDEN`) + org resolution (404 `NOT_IN_ANY_ORG`) BEFORE row lookup; OR-fence + AND-narrow Prisma composition; enumeration-safe 404 on cross-org detail. `verify-chain` UNCHANGED (self-only per Founder direction). 14 NEW integration tests + Wave 1 19/19 regression preserved + audit unit 23/23 preserved + 116/116 combined regression across 6 audit-touching files. No schema; no new audit literals; no new RULE / ADR landings. Substrate-coherent extension of Wave 1 surface. |
+| [#64](https://github.com/NiovArchitect/niov-foundation/pull/64) | `e914480` | **Section 7 Wave 3 niov-admin/platform scope on unified audit viewer** — `AuditViewScope` extended to `self|org|platform`; NEW `callerHasNiovAdminCapability` TAR-authoritative helper; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on platform scope with empty fence (every audit_events row visible across orgs); filters still AND-narrow; enumeration-safe 404 on unknown UUID preserved. `verify-chain` UNCHANGED (self-only carries over from Wave 2). 10 NEW integration tests + Wave 1+2 regression preserved + 96/96 combined Section 7 + admin-routes + console-routes regression. No schema; no new audit literals; no new RULE / ADR landings. Substrate-coherent extension of Waves 1+2. |
 
 ## Next slices (priority order)
 
@@ -167,28 +186,27 @@ cross-chain org-admin verify-chain are forward-substrate
 > new audit literal). Each remains gated only by operator
 > direction on sequencing.
 
-1. **Section 7 Wave 3 — niov-admin scope** on the unified
-   surface. Would add `?scope=platform` requiring
-   `can_admin_niov`; widens OR-fence to all orgs. Replaces
-   `/platform/audit` + `/console/audit` patterns at the
-   unified entry point; same SAFE projection contract +
-   read-audit emission discipline.
-2. **Section 7 Wave 4 — export surface** (CSV / NDJSON
-   streaming for regulator-tier review). Rate-limited per
-   the existing rate-limit middleware precedent; chunked
-   response so a 100 K-row export doesn't OOM Fastify.
-3. **Section 7 Wave 5 — regulator-tier audit access** via
+1. **Section 7 Wave 4 — export surface.** NDJSON streaming
+   first for safe chunked transfer; CSV may follow if
+   bounded-size + safe. Rate-limited per existing rate-limit
+   middleware; reuses unified `scope=self|org|platform` gate;
+   SAFE projection; chunked response.
+2. **Section 7 Wave 5 — regulator-tier audit access** via
    ADR-0036 REGULATOR + LawfulBasis attestation. Each
    regulator-tier read requires an ACTIVE LawfulBasis row
    per the existing regulator.routes.ts pattern.
-4. **Section 7 Wave 6 — Control Tower audit-viewer UX**
-   (out of Foundation scope; tracked here for cross-repo
+3. **Section 7 Wave 6 — Section 7 closeout docs** +
+   production-grade-complete recommendation for the Foundation
+   backend audit-viewer surface.
+4. **Section 7 forward-substrate — Control Tower audit-viewer
+   UX** (out of Foundation scope; tracked here for cross-repo
    awareness).
-5. **Section 7 forward-substrate — org-admin verify-chain.**
-   Wave 2 deliberately left `verify-chain` self-only.
-   Walking every org-member's chain in one call has perf
-   risk; accepting an `entity_id` query param has mild
-   leakage risk. Separate QLOCK + design review needed.
+5. **Section 7 forward-substrate — org-admin / platform
+   verify-chain.** Waves 2+3 deliberately left `verify-chain`
+   self-only. Walking every member's (or every entity's)
+   chain in one call has perf risk; accepting an `entity_id`
+   query param has mild leakage risk. Separate QLOCK + design
+   review needed.
 
 ## Risks / forward-substrate
 
