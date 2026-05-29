@@ -107,47 +107,73 @@ export interface CreateEscalationInput {
 
 // WHAT: Create a new PENDING escalation; the caller is the source.
 // INPUT: callerEntityId (becomes source_entity_id) + a
-//        CreateEscalationInput.
+//        CreateEscalationInput + optional outer transaction client.
 // OUTPUT: The created EscalationRequest row (status = PENDING).
 // WHY: Closes D-2D-D10 -- the storage-side write the priming-context
 //      consumer-side EscalationItem shape has been waiting on. Audit
 //      is written inside the same transaction (ADR-0002 + RULE 4).
+//      The optional `tx` parameter (added per ADR-0057 §5 Option E
+//      Q4 LOCK) lets a caller compose this function inside an outer
+//      transaction (e.g., the Action create-time service at
+//      apps/api/src/services/action/action.service.ts that pairs an
+//      Action row + EscalationRequest + ACTION_PROPOSED audit in one
+//      atomic write). Backward-compatible: existing single-arg call
+//      sites continue to start their own $transaction internally.
 export async function createEscalationForCaller(
   callerEntityId: string,
   input: CreateEscalationInput,
+  tx?: Prisma.TransactionClient,
 ): Promise<EscalationRequest> {
-  return prisma.$transaction(async (tx) => {
-    const created = await tx.escalationRequest.create({
-      data: {
-        source_entity_id: callerEntityId,
-        target_entity_id: input.target_entity_id,
-        capsule_id: input.capsule_id ?? null,
+  if (tx !== undefined) {
+    return doCreateEscalationInTx(callerEntityId, input, tx);
+  }
+  return prisma.$transaction(async (innerTx) => {
+    return doCreateEscalationInTx(callerEntityId, input, innerTx);
+  });
+}
+
+// WHAT: The inner shared body that the tx-aware + tx-owning callers
+//        both invoke. Pure body extraction; identical writes either
+//        way.
+// INPUT: callerEntityId + input + a Prisma.TransactionClient.
+// OUTPUT: The created EscalationRequest row.
+// WHY: Avoid duplicating the EscalationRequest.create + writeAuditEvent
+//      body across the two callers above.
+async function doCreateEscalationInTx(
+  callerEntityId: string,
+  input: CreateEscalationInput,
+  tx: Prisma.TransactionClient,
+): Promise<EscalationRequest> {
+  const created = await tx.escalationRequest.create({
+    data: {
+      source_entity_id: callerEntityId,
+      target_entity_id: input.target_entity_id,
+      capsule_id: input.capsule_id ?? null,
+      escalation_type: input.escalation_type,
+      severity: input.severity,
+      description: input.description,
+      resolved_by_entity_id: input.resolver_entity_id ?? null,
+      expires_at: input.expires_at ?? null,
+    },
+  });
+  await writeAuditEvent(
+    {
+      event_type: "ADMIN_ACTION",
+      outcome: "SUCCESS",
+      actor_entity_id: callerEntityId,
+      target_entity_id: input.target_entity_id,
+      details: {
+        action: "ESCALATION_CREATED",
+        escalation_id: created.escalation_id,
         escalation_type: input.escalation_type,
         severity: input.severity,
-        description: input.description,
-        resolved_by_entity_id: input.resolver_entity_id ?? null,
-        expires_at: input.expires_at ?? null,
+        capsule_id: input.capsule_id ?? null,
+        resolver_entity_id: input.resolver_entity_id ?? null,
       },
-    });
-    await writeAuditEvent(
-      {
-        event_type: "ADMIN_ACTION",
-        outcome: "SUCCESS",
-        actor_entity_id: callerEntityId,
-        target_entity_id: input.target_entity_id,
-        details: {
-          action: "ESCALATION_CREATED",
-          escalation_id: created.escalation_id,
-          escalation_type: input.escalation_type,
-          severity: input.severity,
-          capsule_id: input.capsule_id ?? null,
-          resolver_entity_id: input.resolver_entity_id ?? null,
-        },
-      },
-      tx,
-    );
-    return created;
-  });
+    },
+    tx,
+  );
+  return created;
 }
 
 // WHAT: Gate-fail escalation get-or-create helper. A restricted-class

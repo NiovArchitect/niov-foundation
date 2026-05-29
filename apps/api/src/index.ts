@@ -667,3 +667,22 @@ export type {
   EvaluateActionPolicyInput,
   ActionDecisionResult,
 } from "./services/action/policy-evaluator.js";
+
+// ADR-0057 §3 + §9 + §10 Option E Action create-time service: pure
+// helpers (validateCreateActionBody / deriveRiskTier /
+// computePolicyEnvelopeHash) consumable from the unit-tier without a
+// database, plus the full createActionForCaller service consumed by
+// the route handler at routes/actions.routes.ts. Runtime Section 2
+// reaches create-time only; no executor / worker / scheduler.
+export {
+  computePolicyEnvelopeHash,
+  createActionForCaller,
+  deriveRiskTier,
+  validateCreateActionBody,
+} from "./services/action/action.service.js";
+export type {
+  CreateActionInput,
+  CreateActionResult,
+} from "./services/action/action.service.js";
+export { projectActionView } from "./services/action/views.js";
+export type { SafeActionView } from "./services/action/views.js";
