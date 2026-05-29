@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `e2ebfe84df1bfe3f08c307d68290f4347a9ddde2`
-- **Latest merged PR:** [#56](https://github.com/NiovArchitect/niov-foundation/pull/56) — ADR-0057 SEND_INTERNAL_NOTIFICATION internal-only real handler.
-- **Active branch / PR:** `refresh-docs-wave11-send-internal-notification-handler` (Wave 11 wave-close docs refresh).
+- **Main HEAD:** `2acd5c767a90a38dcfc243e6ad1194e5d7714878`
+- **Latest merged PR:** [#58](https://github.com/NiovArchitect/niov-foundation/pull/58) — ADR-0057 notification inbox routes (Wave 12 internal-only read surface).
+- **Active branch / PR:** `refresh-docs-wave12-notification-inbox` (Wave 12 wave-close docs refresh).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
@@ -25,17 +25,46 @@
 
 After this docs refresh merges:
 
-→ Start **Wave 12** — pick between:
+## Section 2 closeout recommendation
 
-  1. **Section 1 Wave 3 drift detection ADR** — Founder-authorized doctrine slice. RULE 20-gated. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
-  2. **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated (ADR-0050 amendment needed).
-  3. **Notification inbox routes** (`GET /api/v1/notifications` + `PUT /api/v1/notifications/:id/read`) — substrate exists per Wave 11 PR #56; routes are forward-substrate UX slice. Autonomous-safe (no schema change; same self-scope spine; SAFE projection contract per the Wave 11 build-log §What this PR did NOT do).
-  4. **`GET /api/v1/org/actions` explicit route** — substrate-coherent alias; lowest leverage; autonomous-safe.
-  5. **Per-action `ActionPolicy` lookup cache** — premature optimization without measured contention; "measure first" per ADR-0016.
+Section 2 (Autonomous Execution Core) is **production-grade COMPLETE for current internal-only production scope.** Recommend marking Section 2 closed and shifting to Section 7 (Full Audit Viewer) — or whichever section the Founder picks — as the next production-section focus. Do NOT continue Section 2 polish slices autonomously.
 
-  Recommendation per protocol: **autonomous protocol may now pause** — Section 2 handler tier is COMPLETE (3 of 3 real handlers LIVE per Wave 11) + Wave 9 product-clarity question RESOLVED + accumulated 6 substantive waves on main since session-start (PRs #47 / #49 / #51 / #53 / #54 / #56). The remaining high-leverage items are RULE 20-gated; the remaining autonomous-safe items are marginal polish. Strongly recommend pause for Founder review of accumulated Wave 6-11 work; the notification inbox routes (item 3) is the next coherent autonomous-safe block if continuation is requested.
+**What is production-grade complete now:**
+- 6 Action HTTP routes (create / cancel / GET viewer / GET list / GET attempt-detail / GET attempt-list) LIVE.
+- 3 of 3 real per-`ActionType` handlers LIVE (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION-internal-only).
+- 10 of 10 `ACTION_*` audit emitters LIVE.
+- 2 admin `/org/action-policies` routes (GET list + PUT dual-control-gated) LIVE with operator-tunable `retry_budget` + `attempt_timeout_ms_override`.
+- Executor / scheduler / expiry sweep runtime + AbortController plumbing + LOCK-GAP-1/2 schema fields + forensic `timeout_ms` visibility loop CLOSED end-to-end.
+- 3 internal-only notification routes (GET inbox + PUT read + PUT dismiss) LIVE per Wave 12 with RULE 0 self-scope + enumeration-safe 404 + SAFE projection (no body_redacted leak).
+- Cancel-via-GOVSEC.5 break-glass LIVE.
 
-**Wave 6 / 7 / 8 / 9 / 10 / 11 summary (Section 2 handler tier COMPLETE — 3 of 3 real handlers LIVE):**
+**What is intentionally future-substrate (do NOT auto-implement):**
+- External notification delivery (email / SMS / Slack / push) — each adapter requires its own Founder QLOCK + RULE 21 research arc.
+- `NotificationPreference` opt-out model — RULE 20-gated.
+- Per-Notification audit literals (`NOTIFICATION_DISPATCHED` / `_DELIVERY_FAILED` / `_OPT_OUT_RESPECTED`) — RULE 20-gated.
+- Admin / cross-recipient notification list path — needs QLOCK + opt-out integration review.
+- Notification-detail-view route (would surface `body_redacted` to recipient) — needs separate no-leak review.
+- GOVSEC.5 follow-on `requireAdminCapability` throttle — RULE 20-gated (ADR-0050 amendment).
+- Per-action `ActionPolicy` lookup cache — premature optimization; "measure first" per ADR-0016.
+- Active AbortSignal consumption by handlers — plumbed but no current handler wraps long-running connector work.
+- Connectors / MCP / Control Tower UX / voice / ambient / lens UX.
+
+**Wave 13 explicit `GET /api/v1/org/actions` alias — worth doing before closeout?** **No.** The `?org_scope=true` flag on the unified `GET /api/v1/actions` route already serves the same use case; an alias is pure URL convenience for callers that prefer the dedicated path. Marginal value; not a production-readiness blocker; can be added later as a follow-on slice if Control Tower or Otzar consumers explicitly request it.
+
+**Section 2 closeout verdict: CLOSE.** Recommend pausing Section 2 + shifting to the next production section. Highest-leverage next section per the post-Wave-11 checkpoint = **Section 7 (Full Audit Viewer)**.
+
+## Next-section candidates (after Section 2 closeout)
+
+  1. **Section 7 — Full Audit Viewer** (highest leverage; the canonical compliance / forensic surface every regulated customer will need; primitives are LIVE; viewer route + UX is the gap).
+  2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized doctrine slice. RULE 20-gated.
+  3. **GOVSEC.5 follow-on throttle** — RULE 20-gated.
+  4. **Section 9 — Admin / Governance Control Tower backend contracts** — partially LIVE via org admin routes; modest "new substantive surface" leverage.
+
+→ Standing by for Founder direction on next-section pick. Section 2 work pauses here.
+
+**Wave 6 / 7 / 8 / 9 / 10 / 11 / 12 summary (Section 2 production-grade COMPLETE for current internal-only scope):**
+
+- **Wave 12 (PR #58):** Notification inbox routes. NEW `notification-read.service.ts` + 3 routes (`GET /api/v1/notifications` paginated self-scope list with `unread_only` + `notification_class` filters + SAFE projection excluding `body_redacted`; `PUT /:id/read` idempotent; `PUT /:id/dismiss` RULE 10 soft-delete). 21 NEW integration tests; enumeration-safe 404 throughout.
 
 - **Wave 6 (PR #47):** LOCK-GAP-1 + LOCK-GAP-2 schema promotion to `ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override` + `ActionAttempt.timeout_ms`. NEW resolver helpers; executor adds per-action policy point-lookup. Tier-4 build-log at [`build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md`](build-log/2026-05-29-pr-47-actionpolicy-retry-budget-timeout-schema.md).
 - **Wave 7 (PR #49):** Admin write-path closure. `PUT /api/v1/org/action-policies` allowlist + typed validator; GET list response projects both override columns; audit boolean `_set` flags (NEVER numeric values). Closed RULE 13 drift surfaced post-PR-48.
@@ -66,47 +95,23 @@ After this docs refresh merges:
 
 ## Key live / not-live truth
 
-**LIVE (Section 2):**
-- `POST /api/v1/actions` (create + policy eval + dual-control pairing).
-- `POST /api/v1/actions/:id/cancel` (non-RUNNING for any source caller; **RUNNING via valid GOVSEC.5 break-glass grant for action_type=`ACTION_RUNNING_CANCEL`**).
-- `GET /api/v1/actions/:id` (safe detail view + aggregates).
-- `GET /api/v1/actions` (self-scope default; `?org_scope=true` admin).
-- **`GET /api/v1/actions/:id/attempts/:attempt_id`** (attempt drilldown + latest result; same ownership / admin scoping).
-- `GET /api/v1/org/action-policies` + `PUT /api/v1/org/action-policies` (dual-control gated).
-- Executor + scheduler + expiry sweep runtime (`tickActionExecutor` + `tickActionScheduler` + `tickActionExpirySweep`).
-- All 10 `ACTION_*` audit emitters.
-- **RECORD_CAPSULE real handler** — RECORD_CAPSULE actions execute through `WriteService.createCapsuleForActionRunner` producing real `MemoryCapsule` rows + back-referenced `CAPSULE_MUTATION_ADD` audit + SAFE `ActionResult.result_metadata` (capsule_id + capsule_type only).
-- Per-`ActionType` create-time payload validator dispatcher.
-- **RUNNING-cancel break-glass plumbing** — cancel.service validates ACTIVE break-glass grant + marks USED + emits ACTION_CANCELLED with grant_id back-reference + fires process-local AbortController so in-flight attempts short-circuit.
-- **PROPOSE_PERMISSION_GRANT real handler** — calls existing `createPermission` (which enforces RULE 0 sovereignty in code) + emits canonical `PERMISSION_CREATED` AuditEvent with action_id back-reference. SAFE result_metadata (permission_id + bridge_id + capsule_id + grantee_entity_id + access_scope + duration_type only).
+**LIVE (Section 2 — full surface; see [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) for detail):**
+- 9 HTTP routes: `POST /api/v1/actions` + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt-detail + GET attempt-list + GET/PUT `/api/v1/org/action-policies` (dual-control gated; PR #49 accepts the override fields).
+- 3 notification inbox routes (Wave 12 / PR #58): `GET /api/v1/notifications` + `PUT /:id/read` + `PUT /:id/dismiss` — self-scope only; SAFE projection (no `body_redacted`); enumeration-safe 404.
+- 3 of 3 real per-`ActionType` handlers LIVE: RECORD_CAPSULE (PR #35) + PROPOSE_PERMISSION_GRANT (PR #41) + SEND_INTERNAL_NOTIFICATION-internal-only (PR #56 — `Notification` model + `NotificationService` + RULE 0 cross-org DENY).
+- 10 of 10 `ACTION_*` audit emitters LIVE.
+- Executor + scheduler + expiry sweep runtime + per-attempt AbortController plumbing.
+- Operator-tunable `ActionPolicy.retry_budget` + `attempt_timeout_ms_override` (Wave 6/7 PR #47/49); resolved `timeout_ms` persists onto `ActionAttempt` + projects onto attempt-detail (Wave 8 PR #51); forensic-visibility loop CLOSED end-to-end.
 
-**NEW LIVE (Wave 11 / PR #56) — 3 of 3 real handlers LIVE:**
-- **SEND_INTERNAL_NOTIFICATION real handler** — internal-only governed Otzar-native notification record per the Founder direction at [`research/2026-05-29-send-internal-notification-substrate-research.md`](research/2026-05-29-send-internal-notification-substrate-research.md). NEW `Notification` Prisma model + NEW `NotificationService` with RULE 0 cross-org default DENY + recipient TAR-ACTIVE check + SAFE result_metadata (notification_id + recipient_entity_id + notification_class + status only; NEVER body content). NO external delivery; external adapters are forward-substrate.
-
-**LIVE (Wave 10 / PR #54):**
-- `GET /api/v1/actions/:id/attempts` — paginated SafeActionAttemptView list for one parent Action. Same authorization spine as PR #39 + PR #51 (source self-scope OR `can_admin_org`-over-same-org; RULE 0 enumeration-prevention 404). Pagination + optional outcome filter + soft-delete invisibility + chronological sort (`attempt_number` ASC) + per-row timeout_ms surfacing (Wave 8 carry-through).
-
-**LIVE (Wave 8 / PR #51):**
-- `SafeActionAttemptView.timeout_ms: number | null` projects the per-attempt timeout-in-force on `GET /api/v1/actions/:id/attempts/:attempt_id`. Null only for attempts that landed before PR #47. Forensic-visibility loop CLOSED end-to-end.
-
-**LIVE (Wave 7 / PR #49):**
-- `PUT /api/v1/org/action-policies` admin write-path accepts `retry_budget` + `attempt_timeout_ms_override` (typed validation; positive Int OR explicit null; 0 / negative / float / string rejected 422).
-- `GET /api/v1/org/action-policies` response projects both columns for round-trip visibility.
-- `ACTION_POLICY_UPDATE` audit details gain `retry_budget_set` + `attempt_timeout_ms_override_set` boolean indicators; numeric tuning values NEVER appear in audit details (queryable via GET list by same admin tier).
-
-**LIVE (Wave 6 / PR #47):**
-- `ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override` per-(org, action_type, risk_tier) operator-tunable overrides. Null override = service-tier constant fallback; non-positive override = constant fallback (operator-misconfiguration guard). Executor option still wins absolutely.
-- `ActionAttempt.timeout_ms` records the resolved per-attempt timeout-in-force on every attempt row (forensic).
-- `resolveRetryBudget` + `resolveAttemptTimeoutMs` pure resolver helpers in `apps/api/src/services/action/lifecycle.service.ts`.
-
-**NOT LIVE:**
-- External notification delivery (email / SMS / Slack / push) — Founder-direction-locked at internal-only for sub-phase 1; external providers are forward-substrate as optional adapters (per the EmbeddingProvider precedent at ADR-0043 G3.4); each future adapter wave needs its own QLOCK + RULE 21 research arc.
-- Notification inbox routes (`GET /api/v1/notifications` + `PUT /api/v1/notifications/:id/read`) — substrate persists per Wave 11; UX surface is the next Wave 12 candidate.
-- Receiver-owned opt-out (`NotificationPreference` model) — forward-substrate per the Founder direction's "sub-phase 1 minimal" framing.
+**NOT LIVE (intentional future-substrate; do NOT auto-implement):**
+- External notification delivery (email / SMS / Slack / push) — Founder-direction-locked at internal-only; each adapter = own QLOCK + RULE 21 research arc.
+- Receiver-owned opt-out (`NotificationPreference` model) — RULE 20-gated.
 - Per-Notification audit literals (`NOTIFICATION_DISPATCHED` / `_DELIVERY_FAILED` / `_OPT_OUT_RESPECTED`) — RULE 20-gated.
-- Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list).
-- Active AbortSignal consumption by handlers (plumbed but RECORD_CAPSULE + stubs don't listen yet; future real handlers wrapping long-running connector work will consume).
-- Per-action `ActionPolicy` lookup cache (one indexed point-lookup per claimed Action; cache is forward-substrate if hot-path contention surfaces; "measure first" per ADR-0016).
+- Admin / cross-recipient notification list path — needs QLOCK + opt-out integration review.
+- Notification detail-view route (would surface `body_redacted`) — needs separate no-leak review.
+- Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list; marginal value).
+- Active AbortSignal consumption by handlers (plumbed but unused).
+- Per-action `ActionPolicy` lookup cache ("measure first" per ADR-0016).
 - Connectors / MCP / Control Tower UX / voice / ambient / lens UX.
 
 ## Which section file to read next

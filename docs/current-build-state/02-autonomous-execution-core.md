@@ -16,11 +16,11 @@ bypass.
 
 Canonical ADR: [`../../architecture/decisions/0057-autonomous-execution-core-substrate.md`](../../architecture/decisions/0057-autonomous-execution-core-substrate.md).
 
-## Current status (PARTIAL — production-grade)
+## Current status (PRODUCTION-GRADE COMPLETE for current internal-only production scope)
 
-Substrate landed across 17 implementation PRs (#18, #20, #22,
-#24, #26, #28, #30, #32, #35, #37, #39, #41, #47, #49, #51, #54, #56) + 1 research-arc PR (#53) + 12 docs-refresh
-PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48, #50, #52, #55). The
+Substrate landed across 18 implementation PRs (#18, #20, #22,
+#24, #26, #28, #30, #32, #35, #37, #39, #41, #47, #49, #51, #54, #56, #58) + 1 research-arc PR (#53) + 13 docs-refresh
+PRs (#19, #21, #23, #25, #27, #29, #31, #36, #38, #40, #45, #48, #50, #52, #55, #57). Section 2 closeout recommended after PR #58 per the Wave 12 wave-close NEXT_ACTION recommendation. The
 Action runtime is fully live end-to-end: create → policy
 decision → optional dual-control pairing → scheduler admission
 → executor claim → in-tick retry → terminalization → expiry
@@ -96,6 +96,9 @@ any in-flight attempt short-circuits.
 | `GET` | `/api/v1/actions/:id/attempts` | bearer + `read` | `apps/api/src/services/action/attempt-list.service.ts` (`listActionAttemptsForCaller`) — paginated SafeActionAttemptView list for one parent Action; `attempt_number` ASC; outcome filter; soft-delete invisibility |
 | `GET` | `/api/v1/org/action-policies` | bearer + `can_admin_org` | `apps/api/src/routes/org.routes.ts` (response projects `retry_budget` + `attempt_timeout_ms_override` per PR #49) |
 | `PUT` | `/api/v1/org/action-policies` | bearer + dual-control gated | `apps/api/src/routes/org.routes.ts` (allowlist + typed validator extended for `retry_budget` + `attempt_timeout_ms_override` per PR #49 — positive Int or explicit null; `0` / negative / float / string rejected 422 `INVALID_FIELD`) |
+| `GET` | `/api/v1/notifications` | bearer + `read` | `apps/api/src/routes/notification.routes.ts` → `apps/api/src/services/notification/notification-read.service.ts` (`listNotificationsForCaller`) — Wave 12; self-scope only; SAFE projection excludes `body_redacted`; pagination + `unread_only` + `notification_class` filters; soft-deleted rows excluded |
+| `PUT` | `/api/v1/notifications/:id/read` | bearer + `write` | `apps/api/src/routes/notification.routes.ts` → `markNotificationReadForCaller` — Wave 12; idempotent (no `read_at` re-fire); enumeration-safe 404 on cross-recipient / unknown / dismissed |
+| `PUT` | `/api/v1/notifications/:id/dismiss` | bearer + `write` | `apps/api/src/routes/notification.routes.ts` → `dismissNotificationForCaller` — Wave 12; RULE 10 soft-delete (sets `deleted_at`); idempotent enumeration-safe 404 on re-dismiss / cross-recipient |
 
 ### Live services / substrate
 
@@ -325,16 +328,20 @@ any in-flight attempt short-circuits.
   adapters per the EmbeddingProvider precedent at ADR-0043 G3.4;
   each future adapter wave needs its own QLOCK + RULE 21
   research arc.
-- **Notification inbox routes** (`GET /api/v1/notifications` +
-  `PUT /api/v1/notifications/:id/read` + read-receipt /
-  dismissed-toggle) — `Notification` substrate exists per
-  Wave 11 PR #56; UX surface is the next coherent autonomous-
-  safe block. Each route needs SAFE projection contract + RULE 0
-  self-scope authorization spine + integration tests.
 - **Receiver-owned opt-out** (`NotificationPreference` model) —
   forward-substrate per the Wave 11 Founder direction's
   "sub-phase 1 minimal" framing. Future per-receiver opt-out
   wave needs its own QLOCK.
+- **Admin / cross-recipient notification list path** — Wave 12
+  is self-scope only at sub-phase 1 per Founder direction. An
+  admin path that surfaces other entities' inbox rows needs its
+  own QLOCK + an integration review with the future opt-out
+  model (admin readability must not bypass receiver opt-out).
+- **Notification detail-view route** — would surface
+  `body_redacted` to the recipient. Wave 12 deliberately omits
+  this; needs its own no-leak review + a separate Wave (the
+  `Notification.body_redacted` column exists per Wave 11, but
+  no read-side route projects it).
 - **Per-Notification audit literals**
   (`NOTIFICATION_DISPATCHED` / `_DELIVERY_FAILED` /
   `_OPT_OUT_RESPECTED`) — forward-substrate per Wave 9 research
@@ -385,6 +392,7 @@ any in-flight attempt short-circuits.
 | [#51](https://github.com/NiovArchitect/niov-foundation/pull/51) | `8fa0658` | **ActionAttempt.timeout_ms surfaced on attempt-detail viewer** — Wave 8 closes the Section 2 forensic-visibility loop end-to-end. `SafeActionAttemptView` gains `timeout_ms: number | null`; `projectActionAttemptView` passes the row column through unchanged. 2 NEW integration tests (executor-option-wins case + policy-override-wins-when-option-omitted case) proving the row + projected view agree under both precedence tiers. Same authorization spine as PR #39; null-safe for pre-PR-47 attempts. Substrate-coherent extension of PR #47 + PR #49; no tier-4 build-log (no new architectural primitive). |
 | [#54](https://github.com/NiovArchitect/niov-foundation/pull/54) | `470c43c` | **ActionAttempt list route** — Wave 10. NEW `GET /api/v1/actions/:id/attempts` paginated SafeActionAttemptView list. NEW `apps/api/src/services/action/attempt-list.service.ts` (`listActionAttemptsForCaller` + `validateListAttemptsQuery` + `MAX_ATTEMPTS_PAGE_SIZE` + `DEFAULT_ATTEMPTS_PAGE_SIZE`). Pagination clamped to `[1, 100]`; optional `outcome` filter (single value OR array); sort by `attempt_number` ASC; soft-delete invisibility. ONE bulk `actionResult.findMany` per page (not per-row). Reuses `projectActionAttemptView` (now exported from `attempt.service.ts`) so the no-leak projection contract is identical across detail + list. Same authorization spine as PR #39 + PR #51. 16 NEW integration tests. Substrate-coherent extension; no tier-4 build-log (no new architectural primitive). |
 | [#56](https://github.com/NiovArchitect/niov-foundation/pull/56) | `e2ebfe8` | **SEND_INTERNAL_NOTIFICATION internal-only real handler** — Wave 11 closes the "2 of 3 real handlers" gap per the Founder-direction-locked product framing at `docs/research/2026-05-29-send-internal-notification-substrate-research.md`. NEW `Notification` Prisma model (8 columns + 3 indexes) + NEW `apps/api/src/services/notification/notification.service.ts` (`makeNotificationService` + `createInternalNotification` with RULE 0 cross-org default DENY via `EntityMembership` lookup + recipient TAR-ACTIVE check + SAFE projection) + NEW `validateSendInternalNotificationPayload` (recipient_entity_id UUID + notification_class 1..64 + body_summary 1..200 + optional body_redacted ≤4096-byte Json) + NEW `makeSendInternalNotificationHandler` factory replacing the stub + executor org_entity_id pass-through + server DI. Internal-only delivery; NO external providers; receiver-owned opt-out + per-Notification audit literals + inbox routes all forward-substrate. 15 NEW unit + 7 NEW integration tests + 9 pre-existing test files updated for the now-real validator. Substrate-architectural; tier-4 build-log [`../build-log/2026-05-29-pr-56-send-internal-notification-handler.md`](../build-log/2026-05-29-pr-56-send-internal-notification-handler.md). |
+| [#58](https://github.com/NiovArchitect/niov-foundation/pull/58) | `2acd5c7` | **Notification inbox routes (internal-only read surface)** — Wave 12 Section 2 closeout. NEW `apps/api/src/services/notification/notification-read.service.ts` (`listNotificationsForCaller` + `markNotificationReadForCaller` + `dismissNotificationForCaller` + `validateListNotificationsQuery` + `SafeNotificationView`). NEW `apps/api/src/routes/notification.routes.ts` with 3 routes: `GET /api/v1/notifications` (paginated self-scope; `unread_only` + `notification_class` filters; SAFE projection deliberately omits `body_redacted` + `source_entity_id` + `org_entity_id` + `recipient_entity_id` + `deleted_at`) + `PUT /:id/read` (idempotent; no `read_at` re-fire) + `PUT /:id/dismiss` (RULE 10 soft-delete; idempotent enumeration-safe 404 on re-dismiss). Self-scope only at sub-phase 1; cross-recipient / unknown / dismissed all collapse to enumeration-safe 404 `NOTIFICATION_NOT_FOUND`. 21 NEW integration tests; no schema; no new audit literals; no external side effects. Substrate-coherent extension of PR #56; no tier-4 build-log (no new architectural primitive). |
 
 ## Founder gap-locks active in this substrate
 
@@ -498,33 +506,41 @@ any in-flight attempt short-circuits.
 
 ## Next slices (priority order)
 
-1. **Notification inbox routes** (`GET /api/v1/notifications` +
-   `PUT /api/v1/notifications/:id/read` + dismissed-toggle) —
-   substrate exists per Wave 11 PR #56; UX surface is the next
-   coherent autonomous-safe block. Each route needs SAFE
-   projection contract + RULE 0 self-scope authorization spine
-   + integration tests; receiver-owned opt-out
-   (`NotificationPreference`) is deliberately deferred to a
-   future QLOCK-gated wave per the Wave 11 Founder direction's
-   "sub-phase 1 minimal" framing.
-2. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
-   explicit `GET /api/v1/org/actions` route (lower priority;
-   `?org_scope=true` on the unified list already covers the
-   same need).
-3. **Active AbortSignal consumption** in future real handlers
-   wrapping long-running connector work — the plumbing landed
-   in PR #37; consumption is per-handler discipline.
-4. **Per-action `ActionPolicy` lookup cache** — currently one
-   indexed point-lookup per claimed Action. ETS-style
-   read-optimized cache is forward-substrate per ADR-0036 /
-   ADR-0039 precedent if hot-path contention surfaces in
-   production telemetry. "Measure first" per ADR-0016.
-5. **External notification delivery adapters** (email / SMS /
+> **Section 2 production-grade closeout recommended after PR #58.**
+> All items below are intentional future-substrate; none are
+> required for current internal-only production readiness. Do
+> NOT auto-implement; each item below requires its own Founder
+> QLOCK + (where applicable) RULE 21 research arc.
+
+1. **External notification delivery adapters** (email / SMS /
    Slack / push) — forward-substrate as optional adapters per
    the Wave 11 Founder direction. Each future adapter wave
    needs its own QLOCK + RULE 21 research arc. Pluggable
    `NotificationProvider` abstraction would mirror the
    EmbeddingProvider precedent at ADR-0043 G3.4.
+2. **Receiver-owned opt-out** (`NotificationPreference` model)
+   — RULE 20-gated; integrates with the admin / cross-
+   recipient notification list path's design.
+3. **Per-Notification audit literals**
+   (`NOTIFICATION_DISPATCHED` / `_DELIVERY_FAILED` /
+   `_OPT_OUT_RESPECTED`) — RULE 20-gated per Wave 9 research
+   arc §4 item 5.
+4. **Admin / cross-recipient notification list path** — QLOCK +
+   no-leak / opt-out integration review.
+5. **Notification detail-view route** (surfaces `body_redacted`)
+   — separate no-leak review + QLOCK.
+6. **`[ADR-0057-ORG-ACTIONS-ROUTE-EXECUTE-VERIFY-AUTH]`** —
+   explicit `GET /api/v1/org/actions` route. Marginal value;
+   `?org_scope=true` on the unified list already covers the
+   same need. Add only if a Control Tower or Otzar consumer
+   explicitly requests the dedicated path.
+7. **Active AbortSignal consumption** in future real handlers
+   wrapping long-running connector work — the plumbing landed
+   in PR #37; consumption is per-handler discipline.
+8. **Per-action `ActionPolicy` lookup cache** — ETS-style
+   read-optimized cache forward-substrate per ADR-0036 /
+   ADR-0039 precedent if hot-path contention surfaces in
+   production telemetry. "Measure first" per ADR-0016.
 
 ## Risks / forward-substrate
 

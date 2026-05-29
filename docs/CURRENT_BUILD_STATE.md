@@ -9,16 +9,15 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-29
-(Wave 11 — SEND_INTERNAL_NOTIFICATION internal-only real
-handler landed per Founder-direction-locked product framing;
-**Section 2 handler tier COMPLETE — 3 of 3 real handlers
-LIVE**; closes the "2 of 3" gap on every status surface
-since PR #41).
+(Wave 12 — notification inbox routes landed; **Section 2
+production-grade COMPLETE for current internal-only
+production scope** — recommend marking Section 2 closed and
+shifting next-section focus per Founder direction).
 
 ## Current state
 
-- **Latest main HEAD:** `e2ebfe84df1bfe3f08c307d68290f4347a9ddde2`
-- **Latest merged PR:** [#56](https://github.com/NiovArchitect/niov-foundation/pull/56) — Add ADR-0057 SEND_INTERNAL_NOTIFICATION internal-only real handler (2026-05-29).
+- **Latest main HEAD:** `2acd5c767a90a38dcfc243e6ad1194e5d7714878`
+- **Latest merged PR:** [#58](https://github.com/NiovArchitect/niov-foundation/pull/58) — Add ADR-0057 notification inbox routes (Wave 12 internal-only read surface) (2026-05-29).
 - **Active branch / PR:** wave-close docs refresh (this commit).
 - **Active production section:** Section 2 — Autonomous Execution Core.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
@@ -33,7 +32,7 @@ since PR #41).
 | # | Section | Status | Detail |
 |---|---|---|---|
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; **Otzar Wave 2A/B/C all LIVE on main** (`3bb773d` / `1ffa01d` / `c56bd57`, 2026-05-27/28). Wave 3 drift detection remains forward-substrate (no ADR yet). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
-| 2 | Autonomous Execution Core | **PARTIAL — production-grade.** Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; **3 of 3 real handlers LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION-internal-only per Wave 11 PR #56 — handler tier COMPLETE; external notification delivery is forward-substrate per Founder direction); AbortController plumbing LIVE (no active consumers yet); LOCK-GAP-1 + LOCK-GAP-2 CLOSED at PR #47; admin write-path LIVE at PR #49; attempt-detail viewer surfaces `timeout_ms` per PR #51 — forensic-visibility loop CLOSED end-to-end. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
+| 2 | Autonomous Execution Core | **PRODUCTION-GRADE COMPLETE for current internal-only production scope** (Wave 12 closeout). Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; 3 of 3 real handlers LIVE; admin `/org/action-policies` LIVE with operator-tunable retry_budget + attempt_timeout_ms_override; forensic-visibility loop CLOSED end-to-end; 3 internal-only notification inbox routes LIVE per PR #58 (GET list + PUT read + PUT dismiss; SAFE projection; enumeration-safe 404). External delivery / opt-out / per-Notification audit literals / admin-cross-recipient list / cache / connectors all intentional future-substrate. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | Not started. Deferred per ADR-0057 §17 + ADR-0058. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
@@ -47,6 +46,8 @@ since PR #41).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#58](https://github.com/NiovArchitect/niov-foundation/pull/58) | `2acd5c7` | Add ADR-0057 notification inbox routes (Wave 12 internal-only read surface) |
+| [#57](https://github.com/NiovArchitect/niov-foundation/pull/57) | `e9611c3` | Wave-close docs refresh for #56 |
 | [#56](https://github.com/NiovArchitect/niov-foundation/pull/56) | `e2ebfe8` | Add ADR-0057 SEND_INTERNAL_NOTIFICATION internal-only real handler |
 | [#55](https://github.com/NiovArchitect/niov-foundation/pull/55) | `870cb70` | Wave-close docs refresh for #54 |
 | [#54](https://github.com/NiovArchitect/niov-foundation/pull/54) | `470c43c` | Add ADR-0057 ActionAttempt list route |
@@ -55,18 +56,17 @@ since PR #41).
 | [#51](https://github.com/NiovArchitect/niov-foundation/pull/51) | `8fa0658` | Surface ActionAttempt.timeout_ms on attempt-detail viewer |
 | [#50](https://github.com/NiovArchitect/niov-foundation/pull/50) | `c90d434` | Wave-close docs refresh for #49 |
 | [#49](https://github.com/NiovArchitect/niov-foundation/pull/49) | `28b2cd8` | Add ADR-0057 ActionPolicy override admin write-path |
-| [#48](https://github.com/NiovArchitect/niov-foundation/pull/48) | `3a45b70` | Wave-close docs refresh for #47 |
-| [#47](https://github.com/NiovArchitect/niov-foundation/pull/47) | `ae01289` | Add ADR-0057 ActionPolicy retry_budget + ActionAttempt timeout_ms schema fields |
 
 ## Immediate next work queue
 
-> Wave 11 SEND_INTERNAL_NOTIFICATION internal-only real handler LANDED at PR #56 per Founder-direction-locked product framing. **Section 2 handler tier COMPLETE — 3 of 3 real handlers LIVE.** Queue re-prioritized:
+> Wave 12 notification inbox routes LANDED at PR #58. **Section 2 PRODUCTION-GRADE COMPLETE for current internal-only production scope.** Recommend marking Section 2 closed and shifting next-section focus per Founder direction. Next-section queue:
 
-1. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR. RULE 20-gated. Doctrine boundary: surveillance / productivity-policing framing explicitly forbidden per ADR-0052.
-2. **GOVSEC.5 follow-on `requireAdminCapability` throttle.** Broader org-admin route-set throttle per ADR-0050's still-OPEN GOVSEC.5 scope. RULE 20-gated.
-3. **Notification inbox routes** (`GET /api/v1/notifications` + `PUT /api/v1/notifications/:id/read`) — substrate persists per Wave 11; UX surface is the next coherent autonomous-safe block (SAFE projection contract + RULE 0 self-scope spine + RULE 20 acknowledgment that opt-out remains forward-substrate).
-4. **`GET /api/v1/org/actions` explicit route** (substrate-coherent; `?org_scope=true` on the unified list already covers the same need; lowest leverage). Autonomous-safe.
-5. **Per-action `ActionPolicy` lookup cache** — ETS-style read-optimized cache forward-substrate per ADR-0036 / ADR-0039 precedent if hot-path contention surfaces; "measure first" per ADR-0016. Autonomous-safe; premature without measurement.
+1. **Section 7 — Full Audit Viewer** — highest leverage. Audit primitives (`queryAuditEvents` + `verifyAuditChain` + the 10-literal `ACTION_*` vocabulary + BEFORE DELETE trigger) are LIVE; viewer route + UX is the gap. Canonical compliance / forensic surface every regulated customer needs.
+2. **Section 1 Wave 3 drift detection ADR** — Founder-authorized ADR. RULE 20-gated.
+3. **GOVSEC.5 follow-on `requireAdminCapability` throttle** — RULE 20-gated (ADR-0050 amendment).
+4. **Section 9 — Admin / Governance Control Tower backend contracts** — partially LIVE via org admin routes; modest "new substantive surface" leverage.
+
+Section 2 intentional future-substrate (do NOT auto-implement; each needs its own QLOCK): external notification adapters; `NotificationPreference` opt-out; per-Notification audit literals; admin / cross-recipient notification list; notification detail-view route; explicit `GET /api/v1/org/actions` alias; ActionPolicy lookup cache; AbortSignal active consumers; connectors / MCP / Control Tower UX / voice / ambient / lens UX.
 
 ## Critical Do-NOT-claim list (global truths)
 
