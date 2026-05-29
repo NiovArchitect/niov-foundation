@@ -689,10 +689,16 @@ export type { SafeActionView } from "./services/action/views.js";
 
 // ADR-0057 §6 cancel service — non-RUNNING caller-initiated
 // cancellation (PROPOSED / APPROVED / SCHEDULED -> CANCELLED) with
-// ACTION_CANCELLED emission. RUNNING -> CANCELLED is privileged and
-// is rejected here; a future break-glass-gated route will use the
-// state-machine edge.
+// ACTION_CANCELLED emission, plus RUNNING -> CANCELLED via GOVSEC.5
+// break-glass grant (ADR-0050; [ADR-0057-RUNNING-CANCEL-BREAK-GLASS]
+// Wave 2). The caller must hold an ACTIVE break-glass grant with
+// action_type = BREAK_GLASS_ACTION_TYPE_RUNNING_CANCEL within its
+// window; on success the grant is marked USED + ACTION_CANCELLED
+// audit carries grant_id back-reference + the executor's
+// abort-registry signal is fired so any in-flight attempt
+// short-circuits.
 export {
+  BREAK_GLASS_ACTION_TYPE_RUNNING_CANCEL,
   cancelActionForCaller,
   validateCancelActionBody,
 } from "./services/action/cancel.service.js";
@@ -700,6 +706,18 @@ export type {
   CancelActionInput,
   CancelActionResult,
 } from "./services/action/cancel.service.js";
+
+// [ADR-0057-RUNNING-CANCEL-BREAK-GLASS] Wave 2 abort-registry.
+// Process-local AbortController registry the executor uses to allow
+// the cancel service to short-circuit an in-flight attempt. The
+// _testRegistrySize helper is exported only for unit-test
+// assertions.
+export {
+  abortAction,
+  registerActionAbort,
+  releaseActionAbort,
+  _testRegistrySize as _testAbortRegistrySize,
+} from "./services/action/abort-registry.js";
 
 // ADR-0057 §9 GET viewer service — safe Action detail view with
 // ActionAttempt count + last ActionResult.result_summary. Self-scope

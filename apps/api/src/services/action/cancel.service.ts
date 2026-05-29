@@ -22,11 +22,18 @@
 //   - ADR-0057 §11 (RUNNING → CANCELLED privileged; deferred)
 //
 // FOUNDER LOCK (per the [ADR-0057-CANCEL-ROUTE-EXECUTE-VERIFY-AUTH]
-// continuation): non-RUNNING source-caller cancellation only at this
-// slice. RUNNING → CANCELLED is forward-substrate on the break-glass
-// substrate (ADR-0050) and is intentionally not implemented here.
-// The state-machine permits the RUNNING → CANCELLED edge so a future
-// privileged route can use it without state-machine changes.
+// continuation + Wave 2 [ADR-0057-RUNNING-CANCEL-BREAK-GLASS-
+// EXECUTE-VERIFY-AUTH]): non-RUNNING cancellation is unconditional
+// for the source entity. RUNNING → CANCELLED is privileged: the
+// source entity must hold a valid GOVSEC.5 break-glass grant
+// (ADR-0050) for action_type = "ACTION_RUNNING_CANCEL" within its
+// valid_from..valid_until window. On successful RUNNING-cancel, the
+// service marks the grant USED (emits BREAK_GLASS_USED + sets
+// status=USED), emits ACTION_CANCELLED with grant_id back-reference,
+// and fires the executor's abort-registry signal so any in-flight
+// attempt short-circuits promptly rather than waiting for the
+// per-attempt timeout. The state-machine permits the
+// RUNNING → CANCELLED edge by construction.
 
 import { prisma, writeAuditEvent, SYSTEM_PRINCIPALS } from "@niov/database";
 import type { Action, Prisma } from "@prisma/client";
@@ -40,6 +47,11 @@ import {
   ActionInvalidTransitionError,
   isTerminalActionStatus,
 } from "./state-machine.js";
+import {
+  markBreakGlassUsed,
+  validateBreakGlassGrant,
+} from "../governance/break-glass.service.js";
+import { abortAction } from "./abort-registry.js";
 
 // WHAT: RFC 4122 UUID regex (mirrors the create-time validator at
 //        action.service.ts).
@@ -49,6 +61,17 @@ import {
 //      route handler never has to.
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// WHAT: Canonical action_type string the break-glass substrate uses
+//        for the RUNNING-cancel privilege. ADR-0050 BreakGlassGrant
+//        stores action_type as a free-form string; this constant
+//        pins the literal so the cancel service + integration tests
+//        + future Control Tower UI all agree on the same value.
+// INPUT: None.
+// OUTPUT: A literal string.
+// WHY: Defense-in-depth against typos at call sites.
+export const BREAK_GLASS_ACTION_TYPE_RUNNING_CANCEL =
+  "ACTION_RUNNING_CANCEL" as const;
 
 // WHAT: Optional body fields accepted by the cancel route.
 // INPUT: Used as a parameter type.
@@ -136,6 +159,10 @@ interface CancelAuditDetails {
   previous_status: Action["status"];
   next_status: "CANCELLED";
   decision_reason: string;
+  // Set only on RUNNING-cancel via break-glass; absent otherwise.
+  // Forensic back-reference to the GOVSEC.5 grant that authorized
+  // the privileged transition.
+  grant_id?: string;
 }
 
 // WHAT: Emit ACTION_CANCELLED with safe-allowlisted details under
@@ -153,21 +180,115 @@ async function emitCancelAudit(
   actorEntityId: string,
   details: CancelAuditDetails,
 ): Promise<void> {
+  const auditDetails: Record<string, unknown> = {
+    action_id: details.action_id,
+    action_type: details.action_type,
+    previous_status: String(details.previous_status),
+    next_status: String(details.next_status),
+    decision_reason: clampLifecycleField(details.decision_reason),
+  };
+  if (details.grant_id !== undefined) {
+    auditDetails.grant_id = details.grant_id;
+  }
   await writeAuditEvent(
     {
       event_type: "ACTION_CANCELLED",
       outcome: "SUCCESS",
       actor_entity_id: actorEntityId,
-      details: {
-        action_id: details.action_id,
-        action_type: details.action_type,
-        previous_status: String(details.previous_status),
-        next_status: String(details.next_status),
-        decision_reason: clampLifecycleField(details.decision_reason),
-      },
+      details: auditDetails,
     },
     tx,
   );
+}
+
+// WHAT: Privileged RUNNING-cancel helper. Called only from the
+//        cancelActionForCaller flow after a valid break-glass grant
+//        has been validated AND marked USED. Transitions
+//        RUNNING → CANCELLED in a transaction, emits ACTION_CANCELLED
+//        with grant_id back-reference, fires the executor's abort
+//        signal so any in-flight attempt short-circuits.
+// INPUT: callerEntityId + actionId + the loaded Action row + the
+//         consumed grant_id + optional reason.
+// OUTPUT: A CancelActionResult — 200 on success; 409 on concurrent
+//         state-machine drift.
+// WHY: Separated from the main cancel flow because RUNNING-cancel
+//      has additional steps (grant back-reference in audit details,
+//      AbortSignal firing) that the non-RUNNING path doesn't need.
+async function cancelRunningWithGrant(
+  callerEntityId: string,
+  actionId: string,
+  loaded: Action,
+  grantId: string,
+  reasonOpt: string | undefined,
+): Promise<CancelActionResult> {
+  const reasonRaw = reasonOpt ?? "running_cancel_via_break_glass";
+  const result = await prisma.$transaction(async (tx) => {
+    const current = await tx.action.findUnique({
+      where: { action_id: actionId },
+    });
+    if (current === null) {
+      return {
+        ok: false as const,
+        httpStatus: 404 as const,
+        code: "ACTION_NOT_FOUND",
+      };
+    }
+    if (current.status !== "RUNNING") {
+      // Concurrent terminalization (executor's success/failure path
+      // landed between our load and our update). Return 409 with
+      // the latest safe view so the caller can decide what to do.
+      return {
+        ok: false as const,
+        httpStatus: 409 as const,
+        code: "ACTION_ALREADY_TERMINAL",
+        message:
+          "Action transitioned to terminal state in a concurrent flow.",
+        view: projectActionView(current),
+      };
+    }
+    try {
+      assertActionTransition(current.status, "CANCELLED");
+    } catch (err) {
+      if (err instanceof ActionInvalidTransitionError) {
+        return {
+          ok: false as const,
+          httpStatus: 409 as const,
+          code: "ACTION_INVALID_TRANSITION",
+          view: projectActionView(current),
+        };
+      }
+      throw err;
+    }
+    const updated = await tx.action.update({
+      where: { action_id: actionId },
+      data: { status: "CANCELLED" },
+    });
+    await emitCancelAudit(tx, callerEntityId, {
+      action_id: updated.action_id,
+      action_type: String(updated.action_type),
+      previous_status: current.status,
+      next_status: "CANCELLED",
+      decision_reason: reasonRaw,
+      grant_id: grantId,
+    });
+    return {
+      ok: true as const,
+      httpStatus: 200 as const,
+      view: projectActionView(updated, "running_cancel_via_break_glass"),
+    };
+  });
+  // Fire the abort signal outside the transaction so any handler
+  // listener sees it after the state-machine has committed. The
+  // executor's attempt loop will observe status != RUNNING on its
+  // next re-check and skip terminalization of the parent (the
+  // parent is already CANCELLED).
+  if (result.ok === true) {
+    abortAction(actionId, "ACTION_CANCELLED_VIA_BREAK_GLASS");
+  }
+  // Suppress unused-import warning (loaded is the pre-tx snapshot;
+  // we re-read inside the tx).
+  void loaded;
+  return result;
 }
 
 // WHAT: Cancel an Action row owned by the caller.
@@ -220,14 +341,58 @@ export async function cancelActionForCaller(
     return { ok: false, httpStatus: 403, code: "NOT_ACTION_OWNER" };
   }
   if (existing.status === "RUNNING") {
-    return {
-      ok: false,
-      httpStatus: 403,
-      code: "RUNNING_CANCEL_PRIVILEGED",
-      message:
-        "RUNNING actions require a privileged cancel path (break-glass); not supported by this route.",
-      view: projectActionView(existing),
-    };
+    // [ADR-0057-RUNNING-CANCEL-BREAK-GLASS] Wave 2: privileged path.
+    // The source entity may cancel a RUNNING action only when they
+    // hold an ACTIVE GOVSEC.5 break-glass grant (ADR-0050) for
+    // action_type = "ACTION_RUNNING_CANCEL" within its
+    // valid_from..valid_until window. validateBreakGlassGrant
+    // already enforces ACTIVE + window + source + action_type
+    // match.
+    const grant = await validateBreakGlassGrant(
+      callerEntityId,
+      BREAK_GLASS_ACTION_TYPE_RUNNING_CANCEL,
+    );
+    if (grant === null) {
+      return {
+        ok: false,
+        httpStatus: 403,
+        code: "RUNNING_CANCEL_PRIVILEGED",
+        message:
+          "RUNNING actions require an ACTIVE break-glass grant (ACTION_RUNNING_CANCEL) for the caller.",
+        view: projectActionView(existing),
+      };
+    }
+    // Grant exists. Mark it USED (emits BREAK_GLASS_USED in the same
+    // tx) BEFORE transitioning the Action so the audit chain captures
+    // the grant consumption first. markBreakGlassUsed throws on
+    // race (grant already USED / EXPIRED) — translate that to a
+    // clean 409 envelope rather than a 500.
+    try {
+      await markBreakGlassUsed(grant.grant_id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg === "BREAK_GLASS_NOT_FOUND" ||
+        msg === "BREAK_GLASS_INVALID_TRANSITION"
+      ) {
+        return {
+          ok: false,
+          httpStatus: 409,
+          code: "BREAK_GLASS_INVALID_TRANSITION",
+          message:
+            "Break-glass grant was consumed or expired in a concurrent flow.",
+          view: projectActionView(existing),
+        };
+      }
+      throw err;
+    }
+    return cancelRunningWithGrant(
+      callerEntityId,
+      actionId,
+      existing,
+      grant.grant_id,
+      input.reason,
+    );
   }
   if (existing.status === "CANCELLED") {
     // Idempotent replay: the row is already cancelled. Return 200

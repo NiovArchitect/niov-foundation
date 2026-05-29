@@ -49,6 +49,10 @@ import {
   transitionActionStatus,
 } from "./lifecycle.service.js";
 import { isTerminalActionStatus } from "./state-machine.js";
+import {
+  registerActionAbort,
+  releaseActionAbort,
+} from "./abort-registry.js";
 
 // WHAT: The error_class string emitted on attempt timeout.
 // INPUT: None.
@@ -261,15 +265,32 @@ export async function tickActionExecutor(
       lastAttemptId = attempt.attempt_id;
       lastAttemptNumber = attempt.attempt_number;
 
+      // [ADR-0057-RUNNING-CANCEL-BREAK-GLASS] Wave 2: register an
+      // AbortController for this attempt so the cancel service (when
+      // granted RUNNING-cancel via break-glass) can fire the signal
+      // and short-circuit the in-flight handler. The signal is passed
+      // through to the handler via HandlerActionInput.abort_signal;
+      // handlers that wrap long-running work (real connectors, real
+      // permission grants, etc) listen for `aborted` to terminate
+      // promptly. The stub handlers + the current RECORD_CAPSULE
+      // handler are short by construction so the signal is recorded
+      // but not actively consumed in the current wave — the
+      // executor's withTimeout race still terminates the attempt and
+      // the parent Action transitions to CANCELLED via the cancel
+      // service's state-machine path.
+      const abortController = registerActionAbort(action.action_id);
       const raced = await withTimeout(
         executeActionHandler({
           action_id: action.action_id,
           action_type: action.action_type,
           source_entity_id: action.source_entity_id,
           payload_redacted: action.payload_redacted,
+          abort_signal: abortController.signal,
         }),
         attemptTimeoutMs,
-      );
+      ).finally(() => {
+        releaseActionAbort(action.action_id);
+      });
 
       const handlerResult =
         raced.kind === "timeout"
