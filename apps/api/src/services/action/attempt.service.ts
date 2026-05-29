@@ -60,6 +60,12 @@ export interface SafeActionAttemptView {
   worker_id: string | null;
   error_class: string | null;
   error_summary: string | null;
+  // ADR-0057 Wave 8: per-attempt timeout-in-force when the executor
+  // race fired (resolved from ActionPolicy.attempt_timeout_ms_override
+  // per PR #49, else the ATTEMPT_TIMEOUT_MS_DEFAULT 30 000 ms constant
+  // per PR #47). Forensic field; null only for attempts that landed
+  // before PR #47 (backfill-safe by construction — nullable column).
+  timeout_ms: number | null;
   // Present only when the attempt has a SUCCEEDED outcome AND an
   // ActionResult row was created. result_metadata is the SAFE
   // metadata payload the handler returned (per the
@@ -129,6 +135,7 @@ function projectActionAttemptView(
     worker_id: attempt.worker_id,
     error_class: attempt.error_class,
     error_summary: attempt.error_summary,
+    timeout_ms: attempt.timeout_ms,
     result_summary: result === null ? null : result.result_summary,
     result_metadata:
       result === null
