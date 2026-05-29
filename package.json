@@ -14,6 +14,7 @@
     "test:unit": "vitest --config vitest.unit.config.ts --run",
     "test:integration": "vitest --config vitest.integration.config.ts --run",
     "test:real-llm": "vitest --config vitest.real-llm.config.ts --run",
+    "test:no-leak": "vitest run tests/unit/no-leak-guard.test.ts",
     "test:all": "npm run test:unit && npm run test:integration",
     "test:db-push-wrapper": "bash scripts/test-db-push-wrapper.sh",
     "db:test:up": "bash scripts/test-db-up.sh",
