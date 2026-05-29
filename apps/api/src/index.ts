@@ -710,6 +710,21 @@ export type {
   SafeActionDetailView,
 } from "./services/action/get.service.js";
 
+// ADR-0057 §9 list service — self-scope by default; ?org_scope=true
+// requires can_admin_org. Standard pagination + optional filters.
+export {
+  DEFAULT_ACTIONS_PAGE_SIZE,
+  MAX_ACTIONS_PAGE_SIZE,
+  listActionsForCaller,
+  validateListActionsQuery,
+} from "./services/action/list.service.js";
+export type {
+  ListActionsQuery,
+  ListActionsResult,
+  ListActionsView,
+  NormalizedListFilters,
+} from "./services/action/list.service.js";
+
 // ADR-0057 §1 lifecycle state machine — pure transition guards.
 // No DB, no I/O, no audit. Used by lifecycle.service.ts +
 // scheduler.ts + executor.ts to gate every status update.
