@@ -60,6 +60,19 @@ import { getOrgEntityId } from "../governance/org.js";
 //        in packages/database; re-used here).
 export const DEFAULT_AUDIT_EVENTS_PAGE_SIZE = 50;
 
+// WHAT: Hard cap on the number of audit_events rows a single
+//        Wave 4 export can return. Defense-in-depth bound on
+//        memory + response time + bytes-on-the-wire.
+// INPUT: None.
+// OUTPUT: The number 10_000.
+// WHY: An unbounded export of every row in the chain could OOM
+//      Fastify, run for many seconds, and ship a hundreds-of-
+//      megabytes response. The cap is the canonical safety
+//      anchor; callers expecting larger windows can paginate by
+//      time-range (start_time + end_time) across multiple
+//      requests.
+export const EXPORT_AUDIT_EVENTS_MAX_ROWS = 10_000;
+
 // WHAT: UUID guard. Same canonical regex used by the other
 //        Foundation services.
 const UUID_RE =
@@ -350,6 +363,81 @@ export type VerifyAuditChainCallerResult =
       message?: string;
     };
 
+// WHAT: Internal result of scope resolution. Either a Prisma
+//        where-clause + optional org_entity_id metadata (for
+//        read-audit emission), or an error envelope.
+// WHY: Shared between list / detail / export so the gate logic
+//      lives in exactly one place and all three surfaces reject
+//      with identical http codes + envelope shapes.
+interface ScopeResolutionOk {
+  ok: true;
+  predicate: Prisma.AuditEventWhereInput;
+  orgEntityIdForAudit: string | null;
+}
+interface ScopeResolutionErr {
+  ok: false;
+  httpStatus: 403 | 404;
+  code:
+    | "ORG_SCOPE_FORBIDDEN"
+    | "PLATFORM_SCOPE_FORBIDDEN"
+    | "NOT_IN_ANY_ORG";
+  message?: string;
+}
+type ScopeResolution = ScopeResolutionOk | ScopeResolutionErr;
+
+async function resolveAuditScopePredicate(
+  callerEntityId: string,
+  scope: AuditViewScope,
+): Promise<ScopeResolution> {
+  if (scope === "platform") {
+    const hasNiovAdmin = await callerHasNiovAdminCapability(callerEntityId);
+    if (!hasNiovAdmin) {
+      return {
+        ok: false,
+        httpStatus: 403,
+        code: "PLATFORM_SCOPE_FORBIDDEN",
+        message:
+          "scope=platform requires can_admin_niov on the caller's TAR.",
+      };
+    }
+    return { ok: true, predicate: {}, orgEntityIdForAudit: null };
+  }
+  if (scope === "org") {
+    const hasAdmin = await callerHasAdminCapability(callerEntityId);
+    if (!hasAdmin) {
+      return {
+        ok: false,
+        httpStatus: 403,
+        code: "ORG_SCOPE_FORBIDDEN",
+        message:
+          "scope=org requires can_admin_org on the caller's TAR.",
+      };
+    }
+    let callerOrgId: string;
+    try {
+      callerOrgId = await getOrgEntityId(callerEntityId);
+    } catch {
+      return { ok: false, httpStatus: 404, code: "NOT_IN_ANY_ORG" };
+    }
+    const orgScope = await resolveOrgScopeVector(callerOrgId);
+    return {
+      ok: true,
+      predicate: {
+        OR: [
+          { actor_entity_id: { in: orgScope } },
+          { target_entity_id: { in: orgScope } },
+        ],
+      },
+      orgEntityIdForAudit: callerOrgId,
+    };
+  }
+  return {
+    ok: true,
+    predicate: { actor_entity_id: callerEntityId },
+    orgEntityIdForAudit: null,
+  };
+}
+
 // WHAT: Project a raw AuditEvent row to the SafeAuditEventView.
 // INPUT: An AuditEvent row.
 // OUTPUT: A SafeAuditEventView.
@@ -399,7 +487,8 @@ async function emitAuditViewerRead(
     | "AUDIT_VIEW_ORG_LIST"
     | "AUDIT_VIEW_ORG_EVENT"
     | "AUDIT_VIEW_PLATFORM_LIST"
-    | "AUDIT_VIEW_PLATFORM_EVENT",
+    | "AUDIT_VIEW_PLATFORM_EVENT"
+    | "AUDIT_VIEW_EXPORT",
   meta: Record<string, unknown> = {},
 ): Promise<void> {
   await writeAuditEvent({
@@ -777,6 +866,279 @@ export async function verifyAuditChainForCaller(
       valid: result.valid,
       total_events: result.totalEvents,
       broken_at: result.brokenAt,
+    },
+  };
+}
+
+// WHAT: The query-string-shaped input the export route accepts.
+//        Mirrors ListAuditEventsQuery minus `page` / `page_size`
+//        (export is bounded by EXPORT_AUDIT_EVENTS_MAX_ROWS,
+//        not by per-page pagination) plus an optional explicit
+//        `max_rows` operator-controlled smaller cap.
+export interface ExportAuditEventsQuery {
+  format?: unknown;
+  scope?: unknown;
+  event_type?: unknown;
+  target_entity_id?: unknown;
+  target_capsule_id?: unknown;
+  outcome?: unknown;
+  start_time?: unknown;
+  end_time?: unknown;
+  max_rows?: unknown;
+}
+
+// WHAT: The normalized + clamped filter shape after validation.
+export interface NormalizedExportAuditEventsFilters {
+  scope: AuditViewScope;
+  format: "ndjson";
+  max_rows: number;
+  event_type?: AuditEventType;
+  target_entity_id?: string;
+  target_capsule_id?: string;
+  outcome?: AuditOutcome;
+  start_time?: Date;
+  end_time?: Date;
+}
+
+// WHAT: Validate + normalize the export query string. Reuses
+//        the same shared sub-validators as the list route.
+//        format defaults to "ndjson" (currently the only
+//        supported value at Wave 4; CSV is forward-substrate);
+//        max_rows clamped to [1, EXPORT_AUDIT_EVENTS_MAX_ROWS];
+//        default EXPORT_AUDIT_EVENTS_MAX_ROWS.
+export function validateExportAuditEventsQuery(
+  query: ExportAuditEventsQuery,
+):
+  | { ok: true; normalized: NormalizedExportAuditEventsFilters }
+  | { ok: false; code: "INVALID_FIELD"; invalid_fields: string[] } {
+  const invalid: string[] = [];
+  let format: "ndjson" = "ndjson";
+  if (query.format !== undefined) {
+    if (typeof query.format !== "string" || query.format !== "ndjson") {
+      invalid.push("format");
+    } else {
+      format = query.format;
+    }
+  }
+  let max_rows = EXPORT_AUDIT_EVENTS_MAX_ROWS;
+  if (query.max_rows !== undefined) {
+    const n = asPositiveInt(query.max_rows);
+    if (n === null || n > EXPORT_AUDIT_EVENTS_MAX_ROWS) {
+      invalid.push("max_rows");
+    } else {
+      max_rows = n;
+    }
+  }
+  let event_type: AuditEventType | undefined;
+  if (query.event_type !== undefined) {
+    if (
+      typeof query.event_type !== "string" ||
+      !isKnownAuditEventType(query.event_type)
+    ) {
+      invalid.push("event_type");
+    } else {
+      event_type = query.event_type;
+    }
+  }
+  let target_entity_id: string | undefined;
+  if (query.target_entity_id !== undefined) {
+    if (
+      typeof query.target_entity_id !== "string" ||
+      !UUID_RE.test(query.target_entity_id)
+    ) {
+      invalid.push("target_entity_id");
+    } else {
+      target_entity_id = query.target_entity_id;
+    }
+  }
+  let target_capsule_id: string | undefined;
+  if (query.target_capsule_id !== undefined) {
+    if (
+      typeof query.target_capsule_id !== "string" ||
+      !UUID_RE.test(query.target_capsule_id)
+    ) {
+      invalid.push("target_capsule_id");
+    } else {
+      target_capsule_id = query.target_capsule_id;
+    }
+  }
+  let outcome: AuditOutcome | undefined;
+  if (query.outcome !== undefined) {
+    if (
+      typeof query.outcome !== "string" ||
+      !VALID_AUDIT_OUTCOMES.has(query.outcome)
+    ) {
+      invalid.push("outcome");
+    } else {
+      outcome = query.outcome as AuditOutcome;
+    }
+  }
+  let start_time: Date | undefined;
+  if (query.start_time !== undefined) {
+    const d = asIsoDate(query.start_time);
+    if (d === null) invalid.push("start_time");
+    else start_time = d;
+  }
+  let end_time: Date | undefined;
+  if (query.end_time !== undefined) {
+    const d = asIsoDate(query.end_time);
+    if (d === null) invalid.push("end_time");
+    else end_time = d;
+  }
+  let scope: AuditViewScope = "self";
+  if (query.scope !== undefined) {
+    if (
+      typeof query.scope !== "string" ||
+      (query.scope !== "self" &&
+        query.scope !== "org" &&
+        query.scope !== "platform")
+    ) {
+      invalid.push("scope");
+    } else {
+      scope = query.scope;
+    }
+  }
+  if (invalid.length > 0) {
+    return { ok: false, code: "INVALID_FIELD", invalid_fields: invalid };
+  }
+  const normalized: NormalizedExportAuditEventsFilters = {
+    scope,
+    format,
+    max_rows,
+  };
+  if (event_type !== undefined) normalized.event_type = event_type;
+  if (target_entity_id !== undefined) {
+    normalized.target_entity_id = target_entity_id;
+  }
+  if (target_capsule_id !== undefined) {
+    normalized.target_capsule_id = target_capsule_id;
+  }
+  if (outcome !== undefined) normalized.outcome = outcome;
+  if (start_time !== undefined) normalized.start_time = start_time;
+  if (end_time !== undefined) normalized.end_time = end_time;
+  return { ok: true, normalized };
+}
+
+// WHAT: Export envelope returned by exportAuditEventsForCaller
+//        when the export succeeds.
+export interface ExportAuditEventsView {
+  format: "ndjson";
+  scope: AuditViewScope;
+  // NDJSON body — one JSON-serialized SafeAuditEventView per
+  // line, terminated by \n. UTF-8 safe; never contains a
+  // standalone \r.
+  body: string;
+  row_count: number;
+  truncated: boolean;
+}
+
+// WHAT: Discriminated result.
+export type ExportAuditEventsResult =
+  | { ok: true; httpStatus: 200; view: ExportAuditEventsView }
+  | {
+      ok: false;
+      httpStatus: 400 | 401 | 403 | 404 | 422;
+      code: string;
+      message?: string;
+    };
+
+// WHAT: Bounded NDJSON export of the caller's audit chain
+//        (self / org / platform per scope) up to the
+//        max_rows cap.
+// INPUT: callerEntityId + normalized filters.
+// OUTPUT: An ExportAuditEventsResult carrying the NDJSON body
+//          + row_count + truncated flag.
+// WHY: Section 7 Wave 4 — regulator-tier review needs a
+//      machine-friendly bulk read. NDJSON is preferred over
+//      CSV for safe streaming (one row per line; opaque-shaped
+//      details JSON survives round-trip; no quoting hazards).
+//      The hard EXPORT_AUDIT_EVENTS_MAX_ROWS cap + the
+//      smaller-by-default max_rows operator-overridable cap
+//      bound memory + response time. truncated flag tells the
+//      caller whether they hit the cap so they can re-issue
+//      with a narrower time-range.
+export async function exportAuditEventsForCaller(
+  callerEntityId: string,
+  filters: NormalizedExportAuditEventsFilters,
+): Promise<ExportAuditEventsResult> {
+  const scopeRes = await resolveAuditScopePredicate(
+    callerEntityId,
+    filters.scope,
+  );
+  if (scopeRes.ok === false) {
+    return {
+      ok: false,
+      httpStatus: scopeRes.httpStatus,
+      code: scopeRes.code,
+      ...(scopeRes.message === undefined ? {} : { message: scopeRes.message }),
+    };
+  }
+  const filterClauses: Prisma.AuditEventWhereInput[] = [scopeRes.predicate];
+  if (filters.event_type !== undefined) {
+    filterClauses.push({ event_type: filters.event_type });
+  }
+  if (filters.target_entity_id !== undefined) {
+    filterClauses.push({ target_entity_id: filters.target_entity_id });
+  }
+  if (filters.target_capsule_id !== undefined) {
+    filterClauses.push({ target_capsule_id: filters.target_capsule_id });
+  }
+  if (filters.outcome !== undefined) {
+    filterClauses.push({ outcome: filters.outcome });
+  }
+  if (filters.start_time !== undefined || filters.end_time !== undefined) {
+    const ts: { gte?: Date; lte?: Date } = {};
+    if (filters.start_time !== undefined) ts.gte = filters.start_time;
+    if (filters.end_time !== undefined) ts.lte = filters.end_time;
+    filterClauses.push({ timestamp: ts });
+  }
+  const where: Prisma.AuditEventWhereInput = { AND: filterClauses };
+  // Take max_rows + 1 so we can compute the truncated flag
+  // (caller hit the cap iff we got max_rows + 1 rows back).
+  const rows = await prisma.auditEvent.findMany({
+    where,
+    orderBy: { timestamp: "desc" },
+    take: filters.max_rows + 1,
+  });
+  const truncated = rows.length > filters.max_rows;
+  const slice = truncated ? rows.slice(0, filters.max_rows) : rows;
+  // Build the NDJSON body. One JSON.stringify per row + \n
+  // terminator. Keeps the writer simple; the row cap bounds
+  // memory.
+  const body = slice
+    .map((r) => JSON.stringify(projectAuditEvent(r)))
+    .join("\n");
+  const filterKeys = Object.entries(filters)
+    .filter(
+      ([k, v]) =>
+        k !== "scope" &&
+        k !== "format" &&
+        k !== "max_rows" &&
+        v !== undefined &&
+        v !== null,
+    )
+    .map(([k]) => k);
+  const auditMeta: Record<string, unknown> = {
+    format: filters.format,
+    scope: filters.scope,
+    row_count: slice.length,
+    max_rows: filters.max_rows,
+    truncated,
+    filter_keys: filterKeys,
+  };
+  if (filters.scope === "org" && scopeRes.orgEntityIdForAudit !== null) {
+    auditMeta.org_entity_id = scopeRes.orgEntityIdForAudit;
+  }
+  await emitAuditViewerRead(callerEntityId, "AUDIT_VIEW_EXPORT", auditMeta);
+  return {
+    ok: true,
+    httpStatus: 200,
+    view: {
+      format: filters.format,
+      scope: filters.scope,
+      body,
+      row_count: slice.length,
+      truncated,
     },
   };
 }

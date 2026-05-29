@@ -87,18 +87,25 @@ export type {
 // CONSOLE_READ precedent (no new audit literal).
 export {
   DEFAULT_AUDIT_EVENTS_PAGE_SIZE,
+  EXPORT_AUDIT_EVENTS_MAX_ROWS,
+  exportAuditEventsForCaller,
   getAuditEventForCaller,
   listAuditEventsForCaller,
+  validateExportAuditEventsQuery,
   validateListAuditEventsQuery,
   verifyAuditChainForCaller,
 } from "./services/audit/audit-view.service.js";
 export type {
   AuditEventChainRef,
   AuditViewScope,
+  ExportAuditEventsQuery,
+  ExportAuditEventsResult,
+  ExportAuditEventsView,
   GetAuditEventResult,
   ListAuditEventsQuery,
   ListAuditEventsResult,
   ListAuditEventsView,
+  NormalizedExportAuditEventsFilters,
   NormalizedListAuditEventsFilters,
   SafeAuditEventDetailView,
   SafeAuditEventView,

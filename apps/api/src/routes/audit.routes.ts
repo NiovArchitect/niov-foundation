@@ -11,8 +11,10 @@ import type { FastifyInstance } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import {
+  exportAuditEventsForCaller,
   getAuditEventForCaller,
   listAuditEventsForCaller,
+  validateExportAuditEventsQuery,
   validateListAuditEventsQuery,
   verifyAuditChainForCaller,
 } from "../services/audit/audit-view.service.js";
@@ -138,6 +140,57 @@ export async function registerAuditRoutes(
           ok: true,
           ...result.view,
         });
+      }
+      const responseBody: Record<string, unknown> = {
+        ok: false,
+        code: result.code,
+      };
+      if (result.message !== undefined) responseBody.message = result.message;
+      return reply.code(result.httpStatus).send(responseBody);
+    },
+  );
+
+  // ADR-0057 Section 7 Wave 4 NDJSON audit export. Bearer +
+  // "read"-gated; same scope=self|org|platform gate as the list
+  // route; bounded by EXPORT_AUDIT_EVENTS_MAX_ROWS (10_000) hard
+  // cap with an optional smaller operator-controlled max_rows.
+  // Format is application/x-ndjson at sub-phase 1 (CSV is
+  // forward-substrate). Read-audit emission via
+  // ADMIN_ACTION:AUDIT_VIEW_EXPORT — no new audit literal.
+  app.get<{ Querystring: Record<string, unknown> }>(
+    "/api/v1/audit/events/export",
+    {
+      preHandler: requireAuth(authService, "read"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const validation = validateExportAuditEventsQuery(request.query);
+      if (validation.ok === false) {
+        return reply.code(422).send({
+          ok: false,
+          code: validation.code,
+          invalid_fields: validation.invalid_fields,
+        });
+      }
+      const result = await exportAuditEventsForCaller(
+        callerId,
+        validation.normalized,
+      );
+      if (result.ok === true) {
+        // NDJSON content-type per RFC 8259 + media-type
+        // convention (application/x-ndjson is the de-facto
+        // standard before the IETF formal registration). The
+        // body is plain UTF-8 text with one JSON value per
+        // line; no trailing newline. row_count + truncated
+        // surfaced as response headers so a streaming client
+        // can detect the truncation without parsing the body.
+        return reply
+          .code(200)
+          .header("content-type", "application/x-ndjson; charset=utf-8")
+          .header("x-audit-row-count", String(result.view.row_count))
+          .header("x-audit-truncated", result.view.truncated ? "true" : "false")
+          .header("x-audit-scope", result.view.scope)
+          .send(result.view.body);
       }
       const responseBody: Record<string, unknown> = {
         ok: false,
