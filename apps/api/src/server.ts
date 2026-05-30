@@ -33,6 +33,7 @@ import { HiveService } from "./services/hive/hive.service.js";
 import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
 import { PlaygroundService } from "./services/playground/playground.service.js";
+import { PlaygroundScenarioService } from "./services/playground/playground-scenario.service.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { AnalyticsService } from "./services/analytics/analytics.service.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
@@ -328,6 +329,16 @@ export async function buildApp(
   // Sub-decision §3 + Founder Wave 2 hard-wire constraint.
   const playgroundService = new PlaygroundService(authService, coeService);
 
+  // Section 5 Wave 4 ADR-0065 §7 — Agent Playground persistent
+  // named scenarios. Owner-first self-scoped CRUD; SAFE projection;
+  // ADMIN_ACTION + details.action discriminator audit on persistence
+  // boundaries (CREATED / UPDATED / ARCHIVED); no new audit literal.
+  // No execution / LLM / multi-agent / external provider / Action
+  // creation — Wave 4 is the persistence substrate that future
+  // Wave 5+ (candidate generation, outcome comparison, best-path
+  // recommender, governed transition) will compose against.
+  const playgroundScenarioService = new PlaygroundScenarioService(authService);
+
   // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE
   // projection service. No constructor dependencies at v1
   // (the service reads existing Prisma tables directly and
@@ -472,7 +483,11 @@ export async function buildApp(
   await registerWorkingSetRoutes(app, workingSetService, authService);
   await registerHiveRoutes(app, hiveService);
   await registerHiveAdminRoutes(app, authService, hiveService);
-  await registerPlaygroundRoutes(app, playgroundService);
+  await registerPlaygroundRoutes(
+    app,
+    playgroundService,
+    playgroundScenarioService,
+  );
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);

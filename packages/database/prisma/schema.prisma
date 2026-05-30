@@ -1702,3 +1702,45 @@ model ConnectorBinding {
   @@index([org_entity_id, enabled, deleted_at])
   @@map("connector_bindings")
 }
+
+// Section 5 Wave 4 — Agent Playground persistent named scenarios
+// per ADR-0065 §7 wave map. SAFE persistence layer for the future
+// candidate-generation (Wave 5), outcome-comparison (Wave 6),
+// best-path-recommender (Wave 7), and governed-transition (Wave 8)
+// substrate. Wave 4 itself implements NO execution, NO LLM
+// generation, NO multi-agent orchestration, NO external provider
+// calls, NO Action creation. status + scenario_type are
+// closed-vocab String (not Prisma enums) so future v1 additions
+// land via service-tier validation without a schema migration --
+// mirrors Hive.governance_terms + MemoryCapsule.capsule_type
+// String + closed-vocab service validation precedent. owner-first
+// self-scope at every gate; org_entity_id is recorded at create
+// time for future Wave 9+ org-admin browsing surfaces (NOT
+// implemented in Wave 4) and is enforced same-org on read /
+// update / archive when non-null. Soft-archive via archived_at +
+// status="ARCHIVED" (RULE 10). No raw transcripts / prompts /
+// chain-of-thought / raw memory / capsule / correction content /
+// embeddings / vectors / storage locations / content hashes /
+// bridge IDs / secret refs ever persist here (enforced at the
+// service tier).
+model PlaygroundScenario {
+  scenario_id          String    @id @default(uuid()) @db.Uuid
+  owner_entity_id      String    @db.Uuid
+  org_entity_id        String?   @db.Uuid
+  title                String
+  description          String?
+  goal_summary         String?
+  status               String    @default("DRAFT")
+  scenario_type        String    @default("MANUAL")
+  input_refs           Json      @default("{}")
+  constraints          Json      @default("{}")
+  expected_outputs     Json      @default("{}")
+  governance_findings  Json      @default("{}")
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  archived_at          DateTime?
+
+  @@index([org_entity_id, owner_entity_id, status])
+  @@index([owner_entity_id, archived_at, created_at])
+  @@map("playground_scenarios")
+}
