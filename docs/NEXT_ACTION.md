@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `3cda556` (after Hardening Wave B; this commit chain adds Wave C docs refresh)
-- **Latest merged PR:** [#77](https://github.com/NiovArchitect/niov-foundation/pull/77) — Add Hardening Wave B — Section 4 inbound HMAC verification helper.
-- **Active branch / PR:** `hardening-wave-c-section-9-docs` (Section 9 substrate-honest doc refresh + master + baton refresh).
-- **Active production section:** Hardening waves across closed sections (Section 7 CSV export + Section 4 inbound HMAC verifier + Section 9 doc-drift fix). Next-section autonomous start blocked across multiple sections by genuine Founder-product-decision + RULE 20 stop conditions surfaced at Phase 0 verification.
+- **Main HEAD:** `f26c88e` (after Section 4 Wave 7; this commit chain adds Wave 7 docs)
+- **Latest merged PR:** [#80](https://github.com/NiovArchitect/niov-foundation/pull/80) — Add Section 4 Wave 7 Action-routed fan-out variant (opt-in).
+- **Active branch / PR:** `section-4-wave-7-docs-refresh` (tier-2/3 docs reflecting Section 4 Wave 7 + Hardening Wave A/B/C/D landings).
+- **Active production section:** Section 4 Wave 7 docs refresh. Next-section autonomous start blocked across all remaining unstarted sections by genuine Founder-product-decision + new-ADR stop conditions. Section 4 forward-substrate also exhausted of autonomously-clean items.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,11 +25,13 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Hardening Wave A/B/C LANDED across closed sections (PRs #76 + #77 + this commit chain)
+## Hardening Wave A/B/C/D + Section 4 Wave 7 LANDED (PRs #76 / #77 / #78 / #79 / #80)
 
-- **Wave A (Section 7 CSV export; PR #76):** `format=csv` on `GET /api/v1/audit/events/export` alongside Wave 4 NDJSON. RFC 4180 escaping via `safeCsvCell`; 16-column frozen header; CRLF terminators; `text/csv` content-type + NEW `x-audit-format` header. Same scope gates / cap / audit emission.
-- **Wave B (Section 4 inbound HMAC verifier; PR #77):** NEW `verifyInboundHmac` pairs with Wave 4 OutboundWebhookProvider sender format. 8-reason closed enum; constant-time hex compare; default 5-min replay window. Pure substrate; no route consumer yet (ships ready for future inbound-webhook routes).
-- **Wave C (this commit chain):** Section 9 substrate-honest doc refresh — Otzar Wave 2A/B/C marked LIVE (per Section 1 line 113–116); Section 4 + Section 7 backend contracts added to "what is live" block; master + baton refresh.
+- **Wave A (Section 7 CSV export; PR #76):** `format=csv` on `GET /api/v1/audit/events/export`; RFC 4180; `text/csv` + `x-audit-format` header.
+- **Wave B (Section 4 inbound HMAC verifier; PR #77):** NEW `verifyInboundHmac` (8-reason closed enum; timing-safe; replay-window-bounded). Pure substrate.
+- **Wave C (Section 9 doc refresh; PR #78):** Otzar Wave 2A/B/C drift fixed; Section 4 + 7 backend contracts inventoried.
+- **Wave D (Section 7 REGULATOR_ACCESS_EXPIRED emitter; PR #79):** SCHEDULER sweep per ADR-0036 Sub-decision 4; idempotent; supersession-aware; cron-wired every 60s.
+- **Section 4 Wave 7 (PR #80):** Action-routed fan-out variant; opt-in via `config.fan_out_mode = "action"`; Wave 5 baseline preserved as default. Closes Wave 5 forward-substrate note.
 
 ## Why no next-section autonomous start
 
@@ -43,13 +45,11 @@ Phase 0 verification surfaced real stop conditions across every remaining unstar
 
 Per Founder direction "stop only for real stop conditions" — new ADR / Founder product decision IS a real stop condition. All remaining unstarted sections genuinely hit one.
 
-## Autonomously-safe remaining forward-substrate (within closed sections)
+## Autonomously-safe remaining forward-substrate (exhausted)
 
-  - **Section 7 proactive `REGULATOR_ACCESS_EXPIRED` emitter** via SCHEDULER sweep at `valid_until` crossing per ADR-0036 Sub-decision 4 (existing ADR; pure implementation).
-  - **Section 4 Action-runtime-integrated fan-out variant** — Wave 5 is fire-and-forget; Action-routed variant gives retry + cancellation guarantees at Section 2 ↔ Action runtime coupling cost.
-  - Both items are RULE 20-clean and could land autonomously if prioritized.
+Both items previously enumerated have now landed: Wave D shipped `REGULATOR_ACCESS_EXPIRED`; Wave 7 shipped the Action-routed fan-out variant. Remaining Section 4 forward-substrate items (encrypted-at-rest secret column = ADR-0019 amendment; SDK-bound connectors = new schema + real OAuth credentials) all hit real stop conditions (new ADR / secret/OAuth ambiguity / real external credentials). Section 7 forward-substrate (cross-chain `verify-chain`) requires Founder QLOCK per substrate.
 
-→ Awaiting Founder direction on either authorizing one of the RULE-20-gated sections OR proceeding with one of the autonomously-safe forward-substrate items above.
+→ Awaiting Founder direction on one of the RULE-20-gated next sections (Section 1 Wave 3 drift detection ADR / Section 4 Slack OAuth follow-on / GOVSEC.5 throttle / Section 9 AI-generated executive summaries) or other authorized substrate work.
 
 **Earlier waves + section detail:** [`current-build-state/`](current-build-state/) (Section 1 / Section 2 / Section 4 / Section 7 / Section 9 detail files).
 
@@ -75,13 +75,13 @@ Per Founder direction "stop only for real stop conditions" — new ADR / Founder
 
 ## Key live / not-live truth
 
-**LIVE (Section 4 Waves 1+2+3+4+5 + Hardening B — connector substrate; see [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md)):**
+**LIVE (Section 4 Waves 1+2+3+4+5+7 + Hardening B — connector substrate; see [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md)):**
 - `ConnectorBinding` Prisma model with `secret_ref` env-var-NAME pattern (never raw secret at rest); 5 admin routes on `/api/v1/org/connectors[/:id]` all `can_admin_org`-gated.
 - `INVOKE_CONNECTOR` ActionType rides full Action runtime lifecycle (LOW risk_tier; 8 provider error_class → handler `CONNECTOR_<class>`).
 - `OutboundWebhookProvider` real adapter (HTTPS POST + HMAC-SHA-256 signing; pure node stdlib).
-- `NotificationService.connectorFanOut` opt-in hook fires per matching binding (commit-then-hook order; metadata-only ping).
+- `NotificationService.connectorFanOut` opt-in hook fires per matching binding. Wave 5 direct mode (default) + Wave 7 action mode (opt-in via `config.fan_out_mode = "action"` — routes through Action runtime for full retry / cancellation / ACTION_* audit chain).
 - `verifyInboundHmac` reusable receive-side verifier (Hardening Wave B; 8-reason closed enum; timing-safe; replay-window-bounded).
-- Zero new audit literals across all waves — `ADMIN_ACTION` + `details.action` discriminator pattern preserved.
+- Zero new audit literals across all waves — `ADMIN_ACTION` + `details.action` discriminator pattern preserved (DISPATCHED / FAILED / ENQUEUED + 5 admin discriminators).
 
 **LIVE (Section 7 Waves 1+2+3+4+5 + Hardening A — unified audit viewer + NDJSON + CSV export; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
 - `GET /api/v1/audit/events[?scope=self|org|platform]` — paginated audit-event list. Scope gates TAR-authoritative. Filters AND-narrow; cap 100; SAFE projection.
