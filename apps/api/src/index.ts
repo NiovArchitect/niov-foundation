@@ -945,3 +945,24 @@ export type {
   TickActionSchedulerResult,
   TickSchedulerOptions,
 } from "./services/action/scheduler.js";
+
+// Section 4 Wave 1 — connector provider abstraction + registry.
+// Greenfield substrate mirroring the EmbeddingProvider + LLMProvider
+// canonical shape. Wave 2 adds the ConnectorBinding model; Wave 3
+// wires INVOKE_CONNECTOR into the Action runtime; Wave 4 ships the
+// first real provider (OutboundWebhookProvider). The Fixture provider
+// is the production default at Wave 1 because no real providers have
+// shipped yet.
+export {
+  CONNECTOR_REGISTRY,
+  FixtureBasedConnectorProvider,
+  getConnectorProvider,
+  getConnectorTypeDefinition,
+} from "./services/connector/index.js";
+export type {
+  ConnectorInvocation,
+  ConnectorProvider,
+  ConnectorResult,
+  ConnectorType,
+  ConnectorTypeDefinition,
+} from "./services/connector/index.js";
