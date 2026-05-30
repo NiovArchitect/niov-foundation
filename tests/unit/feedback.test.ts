@@ -71,16 +71,63 @@ function makeServices() {
 
 async function loginAs(
   auth: AuthService,
-  ops: string[] = ["read", "write", "share"],
+  ops: string[] = ["read", "write", "share", "create_hives"],
 ) {
   const password = "correct-horse-battery";
   const input = makeEntityInput({ entity_type: "PERSON", password });
   const entity = await createEntity(input);
+  // Section 3 Wave 2: every loginAs binds the entity into a fresh
+  // COMPANY org + grants TAR can_create_hives so subsequent
+  // hive.createHive calls satisfy the v1 enforcement (TAR gate +
+  // non-null org_entity_id derived via getOrgEntityId).
+  const { randomUUID } = await import("node:crypto");
+  const org = await createEntity({
+    entity_type: "COMPANY",
+    display_name: `feedback-test-org-${randomUUID()}`,
+    email: `feedback-test-org-${randomUUID()}@niov.test`,
+    public_key: "test-public-key",
+    clearance_level: 0,
+  });
+  await prisma.entityMembership.create({
+    data: {
+      parent_id: org.entity_id,
+      child_id: entity.entity_id,
+      role_title: "MEMBER",
+      is_active: true,
+    },
+  });
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entity.entity_id },
+    data: { can_create_hives: true },
+  });
+  const fresh = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: entity.entity_id },
+  });
+  if (fresh === null) throw new Error("TAR vanished");
+  const { computeTARHash } = await import("@niov/database");
+  const newHash = computeTARHash({
+    can_login: fresh.can_login,
+    can_read_capsules: fresh.can_read_capsules,
+    can_write_capsules: fresh.can_write_capsules,
+    can_share_capsules: fresh.can_share_capsules,
+    can_create_hives: fresh.can_create_hives,
+    can_access_external_api: fresh.can_access_external_api,
+    can_admin_niov: fresh.can_admin_niov,
+    can_admin_org: fresh.can_admin_org,
+    clearance_ceiling: fresh.clearance_ceiling,
+    monetization_role: fresh.monetization_role,
+    compliance_frameworks: fresh.compliance_frameworks,
+    status: fresh.status,
+  });
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entity.entity_id },
+    data: { tar_hash: newHash },
+  });
   const login = (await auth.login(input.email!, password, ops, {
     ip_address: null,
   })) as LoginResult;
   if (!login.ok) throw new Error("login failed");
-  return { entity, token: login.token };
+  return { entity, token: login.token, orgId: org.entity_id };
 }
 
 describe("Loop 1 -- Capsule Relevance", () => {
