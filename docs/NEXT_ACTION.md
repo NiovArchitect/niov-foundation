@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `6258f17f31a018e0dbcfa996c50de16e083f1b37`
-- **Latest merged PR:** [#74](https://github.com/NiovArchitect/niov-foundation/pull/74) — Section 4 Wave 5 NotificationService external fan-out bridge.
-- **Active branch / PR:** `section-4-wave-6-closeout` (Section 4 Wave 6 closeout — docs refresh + production-grade-complete recommendation).
-- **Active production section:** Section 4 closeout (Section 4 Foundation backend production-grade complete for `OUTBOUND_WEBHOOK` + HMAC-SHA-256 + fan-out bridge; recommended next production section is **Section 1 Wave 3 — Otzar drift detection ADR**, RULE 20-gated).
+- **Main HEAD:** `3cda556` (after Hardening Wave B; this commit chain adds Wave C docs refresh)
+- **Latest merged PR:** [#77](https://github.com/NiovArchitect/niov-foundation/pull/77) — Add Hardening Wave B — Section 4 inbound HMAC verification helper.
+- **Active branch / PR:** `hardening-wave-c-section-9-docs` (Section 9 substrate-honest doc refresh + master + baton refresh).
+- **Active production section:** Hardening waves across closed sections (Section 7 CSV export + Section 4 inbound HMAC verifier + Section 9 doc-drift fix). Next-section autonomous start blocked across multiple sections by genuine Founder-product-decision + RULE 20 stop conditions surfaced at Phase 0 verification.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,38 +25,33 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 4 PRODUCTION-GRADE COMPLETE for Foundation backend scope (Waves 1+2+3+4+5 LANDED at PRs #70 + #71 + #72 + #73 + #74)
+## Hardening Wave A/B/C LANDED across closed sections (PRs #76 + #77 + this commit chain)
 
-- **Wave 1:** ConnectorProvider abstraction + CONNECTOR_REGISTRY frozen-anchor + FixtureBasedConnectorProvider (mirrors EmbeddingProvider / LLMProvider canonical shape).
-- **Wave 2:** ConnectorBinding Prisma model (`secret_ref` env-var NAME only; never raw secret at rest) + 5 admin routes on `/api/v1/org/connectors[/:id]` (`can_admin_org`-gated; cross-org probes → enumeration-safe 404).
-- **Wave 3:** `INVOKE_CONNECTOR` ActionType + handler (LOW risk_tier; 8 provider error_class → handler `CONNECTOR_<class>` mapping). Rides existing 10 `ACTION_*` audit literals.
-- **Wave 4:** `OutboundWebhookProvider` — first real connector. HTTPS POST + HMAC-SHA-256 signing over `${timestamp}.${rawBody}` (defeats replay). Pure `node:https` + `node:crypto`; zero SDK dependency. Bounded 10_000ms timeout; HTTP status → error_class mapping; SAFE delivery_metadata.
-- **Wave 5:** `NotificationService` external fan-out bridge. Opt-in per binding via `config.notification_classes` (wildcard `*` supported); commit-then-hook order; production hook swallows downstream errors. Metadata-only ping (notification_id + notification_class) — body content never traverses the seam.
-- 5 admin `details.action` discriminators (Wave 2) + 2 fan-out discriminators (Wave 5) on existing `ADMIN_ACTION` literal — **zero new audit literals across any wave**.
+- **Wave A (Section 7 CSV export; PR #76):** `format=csv` on `GET /api/v1/audit/events/export` alongside Wave 4 NDJSON. RFC 4180 escaping via `safeCsvCell`; 16-column frozen header; CRLF terminators; `text/csv` content-type + NEW `x-audit-format` header. Same scope gates / cap / audit emission.
+- **Wave B (Section 4 inbound HMAC verifier; PR #77):** NEW `verifyInboundHmac` pairs with Wave 4 OutboundWebhookProvider sender format. 8-reason closed enum; constant-time hex compare; default 5-min replay window. Pure substrate; no route consumer yet (ships ready for future inbound-webhook routes).
+- **Wave C (this commit chain):** Section 9 substrate-honest doc refresh — Otzar Wave 2A/B/C marked LIVE (per Section 1 line 113–116); Section 4 + Section 7 backend contracts added to "what is live" block; master + baton refresh.
 
-## Recommended next production section: Section 1 Wave 3 — Otzar drift detection ADR (RULE 20-gated)
+## Why no next-section autonomous start
 
-Of the remaining sections, drift detection delivers the next-highest customer-visible value per dev-hour because (a) it leverages the Otzar Wave 2A/B/C correction substrate already live on main, (b) it's the natural pairing with Section 4 — once external adapters are firing, drift detection becomes the operator-trust loop, and (c) no new schema or external integration needed (pure Foundation + Otzar work).
+Phase 0 verification surfaced real stop conditions across every remaining unstarted section:
 
-Alternative next slices (each RULE 20-gated):
+  1. **Section 1 Wave 3** — substrate mandates Founder ADR before any Wave 3 code (surveillance-vs-coaching boundary is Founder product decision per ADR-0052 + Section 1 line 142–146).
+  2. **Section 3 Hives** — substrate explicitly requires "authorized research arc" + RULE 21 + likely new ADR.
+  3. **Section 5 / 6** — large new substrate; need ADRs.
+  4. **Section 8** — Founder-excluded scope.
+  5. **Section 10 GOVSEC.6–10** — each phase RULE 20-gated by ADR-0049 umbrella.
 
-  1. **Section 4 Slack OAuth follow-on** — first SDK-bound connector. Highest demand-side enterprise value; largest substrate surface (OAuth token storage requires schema + key-management).
-  2. **GOVSEC.5 follow-on `requireAdminCapability` throttle** — hardens dual-control; security-relevant.
-  3. **Section 9 backend contracts** — keeps Control Tower consumption parity caught up with new Section 4 surface.
+Per Founder direction "stop only for real stop conditions" — new ADR / Founder product decision IS a real stop condition. All remaining unstarted sections genuinely hit one.
 
-## Section 4 forward-substrate (optional)
+## Autonomously-safe remaining forward-substrate (within closed sections)
 
-  - **SDK-bound connectors** (Slack OAuth / Gmail / Microsoft Graph / Salesforce / Linear / Jira / SMS / Push) — each its own QLOCK + RULE 21 research arc.
-  - **Encrypted-at-rest secret column** for per-tenant credentials (current `secret_ref` env-var pattern unblocks generic webhook use).
-  - **Action-runtime-integrated fan-out variant** — current Wave 5 is fire-and-forget; an Action-routed variant gives retry + cancellation at the cost of coupling.
-  - **HMAC signature verification helper** for receiving inbound webhooks (Foundation currently SENDS signed webhooks).
-  - **Control Tower connector admin UX** (frontend; out of Foundation scope).
+  - **Section 7 proactive `REGULATOR_ACCESS_EXPIRED` emitter** via SCHEDULER sweep at `valid_until` crossing per ADR-0036 Sub-decision 4 (existing ADR; pure implementation).
+  - **Section 4 Action-runtime-integrated fan-out variant** — Wave 5 is fire-and-forget; Action-routed variant gives retry + cancellation guarantees at Section 2 ↔ Action runtime coupling cost.
+  - Both items are RULE 20-clean and could land autonomously if prioritized.
 
-→ Awaiting Founder QLOCK on the next production section. Per the active autonomous-execution authorization, Section 4 work is complete; new sections need explicit RULE 20 authorization.
+→ Awaiting Founder direction on either authorizing one of the RULE-20-gated sections OR proceeding with one of the autonomously-safe forward-substrate items above.
 
-**Section 4 Wave 5 summary (PR #74):** NotificationService external fan-out bridge. NEW `bindingMatchesNotificationClass` matcher + `dispatchNotificationFanOut` parallel per-binding invoke + `makeConnectorFanOutHook` builder swallows downstream errors. NotificationService accepts optional `connectorFanOut` hook; Wave 11 internal-only baseline preserved verbatim when hook absent. 2 `details.action` discriminators on existing `ADMIN_ACTION` literal. 13 NEW integration tests + Section 2 `SEND_INTERNAL_NOTIFICATION` regression 7/7 preserved.
-
-**Earlier waves + Section 7 + Section 2 detail:** [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) + [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) + [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md).
+**Earlier waves + section detail:** [`current-build-state/`](current-build-state/) (Section 1 / Section 2 / Section 4 / Section 7 / Section 9 detail files).
 
 ## Current stop conditions
 
@@ -80,17 +75,18 @@ Alternative next slices (each RULE 20-gated):
 
 ## Key live / not-live truth
 
-**LIVE (Section 4 Waves 1+2+3+4+5 — connector substrate; see [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md)):**
+**LIVE (Section 4 Waves 1+2+3+4+5 + Hardening B — connector substrate; see [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md)):**
 - `ConnectorBinding` Prisma model with `secret_ref` env-var-NAME pattern (never raw secret at rest); 5 admin routes on `/api/v1/org/connectors[/:id]` all `can_admin_org`-gated.
 - `INVOKE_CONNECTOR` ActionType rides full Action runtime lifecycle (LOW risk_tier; 8 provider error_class → handler `CONNECTOR_<class>`).
 - `OutboundWebhookProvider` real adapter (HTTPS POST + HMAC-SHA-256 signing; pure node stdlib).
 - `NotificationService.connectorFanOut` opt-in hook fires per matching binding (commit-then-hook order; metadata-only ping).
-- Zero new audit literals across all 5 waves — `ADMIN_ACTION` + `details.action` discriminator pattern preserved.
+- `verifyInboundHmac` reusable receive-side verifier (Hardening Wave B; 8-reason closed enum; timing-safe; replay-window-bounded).
+- Zero new audit literals across all waves — `ADMIN_ACTION` + `details.action` discriminator pattern preserved.
 
-**LIVE (Section 7 Waves 1+2+3+4+5 — unified self / org / platform / regulator audit viewer + NDJSON export; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
+**LIVE (Section 7 Waves 1+2+3+4+5 + Hardening A — unified audit viewer + NDJSON + CSV export; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
 - `GET /api/v1/audit/events[?scope=self|org|platform]` — paginated audit-event list. Scope gates TAR-authoritative. Filters AND-narrow; cap 100; SAFE projection.
 - `GET /api/v1/audit/events/:id[?scope=self|org|platform]` — single-event drilldown with prev/next chain refs scoped to the same fence; enumeration-safe 404.
-- `GET /api/v1/audit/events/export[?scope=self|org|platform&format=ndjson&max_rows=...]` — bounded NDJSON export. Hard cap `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` + optional smaller `max_rows`; `application/x-ndjson` content-type; `x-audit-row-count` / `x-audit-truncated` / `x-audit-scope` response headers; one JSON line per row + `\n`.
+- `GET /api/v1/audit/events/export[?scope=self|org|platform&format=ndjson|csv&max_rows=...]` — bounded NDJSON or CSV export (Hardening A added CSV). Hard cap `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` + optional smaller `max_rows`; `application/x-ndjson` or `text/csv` content-type; `x-audit-row-count` / `x-audit-truncated` / `x-audit-scope` / `x-audit-format` headers.
 - `GET /api/v1/audit/events/regulator-view?lawful_basis_id=...` — regulator-tier read via ADR-0036 LawfulBasis 9-condition enforcement; cross-basis isolation; 8 enforcement failure codes → 404 / 403 / 500.
 - `GET /api/v1/audit/verify-chain` — caller's OWN audit chain. **Self-only across all 5 waves** per Founder direction.
 - Read-audit emission: `ADMIN_ACTION` + `details.action` ∈ all 9 `AUDIT_VIEW_*` labels (no new audit literal across any wave).
