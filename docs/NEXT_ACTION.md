@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `7661ba9` (Section 1 Wave 5 implementation; closeout docs PR pending)
-- **Latest merged PR:** [#114](https://github.com/NiovArchitect/niov-foundation/pull/114) — Section 1 Wave 5 OtzarProposedPattern impl (36 tests).
-- **Active branch / PR:** `section-1-wave-5-closeout-docs` (Wave 5 closeout docs; design-only).
+- **Main HEAD:** `a1b7ca4` (Section 1 Wave 5 closeout docs)
+- **Latest merged PR:** [#115](https://github.com/NiovArchitect/niov-foundation/pull/115) — Section 1 Wave 5 closeout docs.
+- **Active branch / PR:** `section-7-rule13-regulator-expiry-doc-drift-fix` (RULE 13 substrate-honest docs-only correction; Hardening Wave D emitter has been LIVE since 2026-05-29 — Section 7 doc previously listed it as forward-substrate).
 - **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern substrate (2026-05-30)** — Wave 5 LANDED via ADR-0066 (PR #113) + implementation (PR #114; `7661ba9`). NEW `OtzarProposedPattern` Prisma model + 4 self-scoped review routes + `OtzarProposedPatternService` + recurrence-detection function + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit; owner-first; closed-vocab; ADMIN_ACTION + 5-discriminator audit; ZERO new audit literal; existing org-scoped `IntelligencePattern` untouched per RULE 1.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) — 4-aggregate arc closure.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
@@ -42,7 +42,7 @@ Section file: [`current-build-state/01-employee-intelligence-core.md`](current-b
 
 **Open product decision tier 2 (Section 5)**: Wave 5 candidate generation per ADR-0065 §7 — 4 Founder product decisions still outstanding (candidate storage model + generation source — fixture vs LLM autonomy + audit literal vocabulary + closed-vocab labels).
 
-**Safe alternatives (no Founder product decision required)**: Section 7 proactive `REGULATOR_ACCESS_EXPIRED` emitter per ADR-0036 Sub-decision 4 (existing ADR; pure implementation); Section 6 additional aggregates per ADR-0061 §8 (per-action-type runtime health + compliance-posture aggregate; SAFE projection precedent established). Both proceed without new product decisions.
+**Safe alternatives (no Founder product decision required)**: ~~Section 7 proactive REGULATOR_ACCESS_EXPIRED emitter~~ — **substrate-honest correction (RULE 13): already LIVE at Hardening Wave D (PR #79 / `dcff369`)**; Section 7 doc previously listed it as forward-substrate but the emitter has been on the cron host since 2026-05-29 with 7 passing integration tests. Section 6 additional aggregates per ADR-0061 §8 (per-action-type runtime health + compliance-posture aggregate; SAFE projection precedent established) remain the safe Tier-1 alternative.
 
 ## Founder Sleep Directive preferences — status
 
