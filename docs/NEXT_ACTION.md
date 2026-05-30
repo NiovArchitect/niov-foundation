@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `42569a4` (after Section 5 Wave 1 ADR-0060; this commit chain adds ADR-0061 Section 6 Wave 1)
-- **Latest merged PR:** [#86](https://github.com/NiovArchitect/niov-foundation/pull/86) — Add Section 5 Wave 1 — ADR-0060 Agent Playground v1 design boundary.
-- **Active branch / PR:** `section-6-wave-1-analytics-adr-0061` (ADR-0061 Enterprise Analytics SAFE projection pattern; design-only).
-- **Active production section:** Section 6 Wave 1 closeout. All 4 Founder Sleep Directive next-section preferences resolved (Section 3 Wave 1 ADR-0059 + Section 9 substantively complete + Section 5 Wave 1 ADR-0060 + Section 6 Wave 1 ADR-0061). Remaining unstarted/Wave 2 work all hits real stop conditions per Founder-listed criteria.
+- **Main HEAD:** `2b9ab7f` (Section 3 Wave 2 — Hives service-tier safety enforcement)
+- **Latest merged PR:** [#88](https://github.com/NiovArchitect/niov-foundation/pull/88) — Add Section 3 Wave 2 — Hives service-tier safety enforcement.
+- **Active branch / PR:** `section-3-wave-2-docs-closeout` (Wave 2 docs cascade; design-only).
+- **Active production section:** Section 3 Wave 2 docs closeout. All 5 ADR-0059 §7 Founder Authorization checkpoints landed; Section 3 is now PARTIAL with Waves 1+2 LIVE. Waves 3-8+ remain forward-substrate behind separate Founder authorization.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,26 +25,29 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 6 Wave 1 LANDED (ADR-0061 SAFE projection pattern; design-only)
+## Section 3 Wave 2 LANDED (service-tier safety enforcement; PR #88)
 
-- **ADR-0061 — Section 6 Enterprise Analytics v1 SAFE Projection Pattern**: closed-vocabulary counts/labels only; same-org scope mandatory; minimum-population threshold REQUIRED (default k=5 per HIPAA Safe Harbor 45 CFR §164.514(b)(1) regulatory precedent); cross-org explicit non-goal (CAR Sub-box 8 forward-substrate); derived-only from existing operational signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule metadata + EntityMembership + EntityComplianceProfile + hive aggregates); audit via ADMIN_ACTION + details.action = "ANALYTICS_READ"; can_admin_org TAR gate.
-- v1 ships ZERO concrete aggregates — each future aggregate is a Wave 2+ slice + 5 Founder Authorization checkpoints (aggregate selection / threshold posture / audit detail / cache posture / route prefix).
-- Wave 2-eligible substrate-derivable candidates: org-wide CORRECTION velocity 7d / action-runtime success rate 7d / connector-binding activity / hive participation rate.
+All 5 ADR-0059 §7 Founder Authorization checkpoints landed in one coherent BREAKING-tightening commit per Founder Sleep Directive Wave 2 authorization:
 
-## Earlier session work on main
+- **TAR `can_create_hives` gate** on POST /api/v1/hive — `validateSession` op switched from `"share"` to `"create_hives"`; absent capability → 403 `OPERATION_NOT_PERMITTED`.
+- **v1 hive_type allowlist** — `HIVE_TYPE_V1_ALLOWLIST` frozen-anchor (ENTERPRISE + PERSONAL_NETWORK only); CROSS_ORG/DEVICE/GOVERNMENT rejected → 422 `INVALID_HIVE_TYPE_FOR_V1`.
+- **Non-null `org_entity_id` required at create** — explicit null rejected; undefined derived via `getOrgEntityId(callerEntityId)`; orgless → 422 `ORG_ENTITY_ID_REQUIRED`.
+- **Same-org membership check on `inviteToHive`** — cross-org → 403 `CROSS_ORG_INVITE_DENIED` with no-info-leak message scrub (mirrors Wave 11 `notification.service.ts:99-109`); RULE 0 enforcement.
+- **AI_AGENT exclusion on `inviteToHive`** — invitee `entity_type === "AI_AGENT"` → 403 `AI_AGENT_NOT_ELIGIBLE_FOR_HIVE` per ADR-0046 + RULE 0 AI ceilings.
+- **`capsule_types_accessible` read-time enforcement on `getHiveIntelligence`** — empty access list → safe zero-state (`intelligence: null`) + `HIVE_INTELLIGENCE_READ` audit with `details.zero_state_reason = "EMPTY_CAPSULE_TYPES_ACCESSIBLE"`.
 
-- Section 3 Wave 1 ADR-0059 (#85) + Section 5 Wave 1 ADR-0060 (#86).
-- Section 1 Wave 3 (ADR-0058 + service + route + docs; #82/83/84).
-- Section 4 Wave 7 (#80) + Hardening A/B/C/D (#76/77/78/79).
+4 new failure codes; +15 integration tests; **no new audit literals**; no schema migration. Per ADR-0059 §3.c forward-substrate carve-out: `createTwin` standard-branch auto-join of AI_AGENT twins into default-enterprise Hives via internal `tx.hiveMembership.create` is intentionally NOT touched (would cascade-break twin-architecture); future Section 5 / Section 11 slice under separate Founder authorization.
 
-## All 4 Founder Sleep Directive next-section preferences resolved
+Earlier waves on main: Section 6 Wave 1 ADR-0061 + Section 5 Wave 1 ADR-0060 (#86) + Section 3 Wave 1 ADR-0059 (#85) + Section 1 Wave 3 (#82/83/84) + Section 4 Wave 7 (#80) + Hardening A/B/C/D (#76/77/78/79). Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
 
-  1. ~~**Section 3 Hives / Team Intelligence**~~ — Wave 1 ADR-0059 LANDED (#85); Wave 2 = Founder Authorization (5 BREAKING checkpoints).
-  2. ~~**Section 9 Admin / Governance backend contracts**~~ — substantively complete per Hardening Wave C; new AI-generated executive summaries = Founder product decision per ADR-0052.
-  3. ~~**Section 5 Agent Playground**~~ — Wave 1 ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
-  4. ~~**Section 6 Enterprise Analytics**~~ — Wave 1 ADR-0061 LANDED (this commit chain); Wave 2 = Founder Authorization (5 checkpoints).
+## Founder Sleep Directive preferences — status
 
-**All remaining work hits real stop conditions** (per Founder-listed criteria): Section 1 advanced drift signals (forward-substrate per ADR-0058 §9; each needs Founder slice authorization); Section 3 Wave 2 (5 BREAKING checkpoints per ADR-0059 §7); Section 4 SDK-bound connectors (OAuth + real credentials); Section 4 encrypted-at-rest secret column (ADR-0019 amendment); Section 5 Wave 2 (4 checkpoints per ADR-0060 §7); Section 6 Wave 2 (5 checkpoints per ADR-0061 §8); Section 7 cross-chain verify-chain (Founder QLOCK); Section 8 Founder-excluded; Section 10 GOVSEC.6–10 (RULE 20-gated per phase).
+  1. ~~Section 3 Hives~~ — Wave 1 ADR-0059 (#85) + Wave 2 enforcement (#88) LANDED. Wave 3 admin routes need Founder authorization.
+  2. ~~Section 9 Admin/Governance~~ — substantively complete per Hardening Wave C; AI-generated exec summaries = Founder product decision per ADR-0052.
+  3. ~~Section 5 Agent Playground~~ — ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
+  4. ~~Section 6 Enterprise Analytics~~ — ADR-0061 LANDED; Wave 2 = Founder Authorization (5 checkpoints).
+
+**Remaining work hits real stop conditions** (per Founder-listed criteria): Section 1 advanced drift signals + Section 3 Wave 3+ + Section 4 SDK-bound connectors + encrypted-at-rest secrets + Section 5/6 Wave 2 + Section 7 cross-chain verify-chain + Section 8 (Founder-excluded) + Section 10 GOVSEC.6–10 (RULE 20-gated per phase).
 
 **Earlier waves + section detail:** [`current-build-state/`](current-build-state/) (Section 1 / Section 2 / Section 4 / Section 7 / Section 9 detail files).
 
@@ -115,20 +118,9 @@
 
 ## Which section file to read next
 
-For the next slice (per-`ActionType` handler research arc):
-
-→ [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md)
-
-This file holds the full ADR-0057 PR #18 → #32 lineage, the
-Founder gap-locks, the RULE 13 disclosures, and the prioritized
-next-slices list.
-
-For broader product / governance context:
-- [`current-build-state/README.md`](current-build-state/README.md) — section-detail directory + refresh discipline.
-- [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md) — master 10-section status table + global do-not-claim list + product directives.
-
-For the cited ADR substrate:
-- [`architecture/decisions/0057-autonomous-execution-core-substrate.md`](architecture/decisions/0057-autonomous-execution-core-substrate.md) — the canonical ADR.
+→ [`current-build-state/03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) for Section 3 detail + ADR-0059 §7 Wave 3+ forward queue.
+→ [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) for ADR-0057 PR #18→#32 lineage + Founder gap-locks + RULE 13 disclosures.
+→ [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md) — master 10-section status + global do-not-claim list.
 
 ## Discipline reminders
 
