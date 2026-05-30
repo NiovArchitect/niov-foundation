@@ -31,6 +31,7 @@ import { registerWorkingSetRoutes } from "./routes/working-set.routes.js";
 import { prisma } from "@niov/database";
 import { HiveService } from "./services/hive/hive.service.js";
 import { registerHiveRoutes } from "./routes/hive.routes.js";
+import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
 import { MonetizationService } from "./services/monetization/monetization.service.js";
 import { registerWalletRoutes } from "./routes/wallet.routes.js";
 import {
@@ -451,6 +452,7 @@ export async function buildApp(
   await registerCoeRoutes(app, coeService);
   await registerWorkingSetRoutes(app, workingSetService, authService);
   await registerHiveRoutes(app, hiveService);
+  await registerHiveAdminRoutes(app, authService, hiveService);
   await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);
   await registerDeveloperRoutes(app, authService);
