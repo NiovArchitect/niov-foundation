@@ -15,7 +15,7 @@ same-org-scoped read-only aggregate projection at v1; cross-org
 hives + Twin-to-Twin proactive runtime are explicit non-goals
 deferred to forward-substrate.
 
-## Current status (PARTIAL — Waves 1+2+3 LIVE)
+## Current status (PARTIAL — Waves 1+2+3+4 LIVE)
 
 **Wave 1 (design)** — ADR-0059 LANDED 2026-05-30 (PR #85)
 locking v1 scope as same-org-scoped read-only aggregate
@@ -148,6 +148,68 @@ methods (`listHivesForOrg`, `getHiveAdminDetail`,
 discriminated union + 3 success shapes + 3 inline
 projection helpers.
 
+**Wave 4 (governance_terms policy evaluator)** — LANDED
+2026-05-30 (ADR-0063 design at PR #93 + implementation
+at PR #94). NEW pure-function evaluator at
+`apps/api/src/services/hive/governance-terms-evaluator.ts`;
+9 of 10 ADR-0063 v1 evaluable terms wired
+(`require_admin_approval_for_invites` DEFERRED per Founder
+direction — would hard-freeze `inviteToHive` because no
+admin invite path exists yet).
+
+**Wired v1 evaluable terms** at the 3 HiveService call
+sites:
+
+- `allowed_hive_types` at `createHive` — fail-closed with
+  `GOVERNANCE_HIVE_TYPE_FORBIDDEN`; Wave 2
+  `HIVE_TYPE_V1_ALLOWLIST` runs FIRST.
+- `allowed_member_entity_types` at `inviteToHive` —
+  fail-closed with `GOVERNANCE_INVITEE_TYPE_FORBIDDEN`;
+  Wave 2 AI_AGENT exclusion runs FIRST.
+- `allow_ai_agent_membership` (advisory at v1) — Wave 2
+  AI_AGENT exclusion always wins; defense-in-depth
+  rejection at evaluator if Wave 2 exclusion were ever
+  lifted with `false` set.
+- `max_member_count` at `inviteToHive` — fail-closed with
+  `GOVERNANCE_MAX_MEMBER_COUNT_EXCEEDED`.
+- `allowed_capsule_types_accessible` at `createHive` (creator
+  settings) + `inviteToHive` (invitee settings) — fail-closed
+  with `GOVERNANCE_CAPSULE_TYPE_ACCESSIBLE_FORBIDDEN`.
+- `allowed_capsule_types_contributed` at the same two sites
+  — fail-closed with `GOVERNANCE_CAPSULE_TYPE_CONTRIBUTED_FORBIDDEN`.
+- `dissolve_requires_admin` — no-op at v1 (Wave 3
+  `DELETE /api/v1/org/hives/:id` is already
+  `can_admin_org`-gated; no non-admin dissolve route exists).
+- `aggregate_min_member_count` at `getHiveIntelligence` —
+  zero-state when active member_count is below threshold;
+  reuses existing `HIVE_INTELLIGENCE_READ` audit literal
+  with new `details.zero_state_reason:
+  "BELOW_AGGREGATE_MIN_MEMBER_COUNT"` marker (mirrors
+  Wave 2 `EMPTY_CAPSULE_TYPES_ACCESSIBLE` pattern).
+- `policy_source_ref` — metadata-only at v1; persisted to
+  `governance_terms` but NOT validated against any
+  external source.
+
+`MALFORMED governance_terms` (non-object top-level value)
+fails closed with `GOVERNANCE_TERMS_MALFORMED` → 422
+route mapping. Lenient per-key parsing: unrecognized keys
+IGNORED at v1; per-key type-mismatch IGNORED. Cross-org
+facts never leaked in error messages; full governance_terms
+object never serialized to error responses or audit
+details (verified with secret-marker integration tests).
+
+**HiveFailure union extended** with 6 new violation codes
+(the 7th `INVITE_REQUIRES_ADMIN_APPROVAL` is NOT added
+because the term is deferred). `statusForCode` extended:
+5 governance denials → 403; `GOVERNANCE_TERMS_MALFORMED`
+→ 422.
+
+**No new audit literals. No schema migration. No new
+external dependencies.** Layers 2 + 3 (enterprise registry
++ external source feeds) intentionally NOT touched —
+forward-substrate behind separate Founder authorization
+per ADR-0063 §Forward queue.
+
 ## What is live
 
 Per the substrate-honest correction (Wave 1) + Wave 2
@@ -238,16 +300,26 @@ separate Founder authorization:
   regime mandates it; not at v1 per Section 4 precedent).
 - **Pagination on admin list** (if real orgs cross O(1000+)
   hives; measure-first per ADR-0016).
-- **`governance_terms` policy evaluation** — Wave 4 **design
-  LOCKED at ADR-0063** (2026-05-30; 3-layer governance
-  architecture canonical at substrate-architectural register;
-  10 v1 Layer 1 evaluable terms; monthly/quarterly default
-  Layer 3 review cadence; zero schema + zero new audit
-  literals at v1). Wave 4 v1 implementation slice
-  (pure-function evaluator + 7 new violation codes + 3
-  HiveService call-site wiring) requires separate Founder
-  authorization on the exact evaluable term set per
-  ADR-0063 Sub-decision 13.
+- **`require_admin_approval_for_invites` Layer 1 term** —
+  DEFERRED per Founder Wave 4 implementation authorization;
+  would hard-freeze `inviteToHive` because no admin invite
+  path exists yet. Future Founder slice can authorize the
+  term + admin invite path together.
+- **Layer 2 enterprise governance policy registry** —
+  forward-substrate per ADR-0063 §Sub-decision 1 + §Forward
+  queue; future `OrgGovernancePolicy` model analogous to
+  existing `ComplianceFramework` substrate; reusable named
+  policy templates across org's hives; versioned +
+  admin-approved.
+- **Layer 3 external governance source feeds** —
+  forward-substrate per ADR-0063 §Sub-decision 1 + §Forward
+  queue; future `GovernanceSource` + `GovernanceSourceVersion`
+  + `GovernanceReviewItem` models mirroring ADR-0036
+  LawfulBasis source-attributed + jurisdiction-aware pattern;
+  default monthly/quarterly review cadence (Founder explicit
+  lock); 7-step source-update lifecycle (review item →
+  admin/legal approval → policy version → enforcement);
+  RULE 21 research arc required at the implementation slice.
 - **Phoenix.PubSub fanout for hive aggregate updates** — Wave 5
   (consumes ADR-0039 Entry #28).
 - **Broadway pipeline at high-throughput register** — Wave 6
@@ -303,7 +375,8 @@ separate Founder authorization:
 | `2b9ab7f` (PR #88) | 2026-05-30 | Section 3 Wave 2 — service-tier safety enforcement (TAR gate + v1 allowlist + non-null org_entity_id + same-org membership + AI_AGENT exclusion + capsule_types_accessible read-time enforcement; 4 new failure codes; +15 integration tests) |
 | `0886211` (PR #90) | 2026-05-30 | Section 3 Wave 3 — ADR-0062 admin routes design (4 admin route surfaces + safe roster projection + idempotent dissolve/force-remove + AI_AGENT force-remove permitted + ADMIN_ACTION + HIVE_MEMBER_REMOVED reuse) |
 | `9a348be` (PR #91) | 2026-05-30 | Section 3 Wave 3 — admin routes implementation (4 routes + 4 admin service methods + 3 SAFE view projections + HiveAdminFailure union + +20 integration tests; RULE 13 BREAKING-tightening of prior leaky `GET /api/v1/org/hives` route at org.routes.ts that returned raw rows with forbidden fields) |
-| (this commit) | 2026-05-30 | Section 3 Wave 4 — ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary (ADR-only; design LOCKED; 10 v1 Layer 1 evaluable terms + monthly/quarterly default Layer 3 review cadence; zero schema + zero new audit literals at v1) |
+| `ebc56c5` (PR #93) | 2026-05-30 | Section 3 Wave 4 — ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary (ADR-only; design LOCKED; 10 v1 Layer 1 evaluable terms + monthly/quarterly default Layer 3 review cadence; zero schema + zero new audit literals at v1) |
+| `065e4f1` (PR #94) | 2026-05-30 | Section 3 Wave 4 v1 — governance_terms policy evaluator implementation (NEW pure-function evaluator + 9 of 10 v1 evaluable terms wired; `require_admin_approval_for_invites` DEFERRED; 6 new HiveFailure violation codes; statusForCode extension; 20 NEW integration tests; zero new audit literals; zero schema migration) |
 
 ## Next slices (per ADR-0059 §7 Forward Queue)
 
@@ -314,13 +387,12 @@ prompt; not autonomously executable:
    PR #88 2026-05-30.
 2. ~~**Wave 3 — hive admin routes**~~ — LANDED ADR-0062
    (PR #90) + implementation (PR #91) 2026-05-30.
-3. **Wave 4 — `governance_terms` policy evaluator** —
-   design LANDED at ADR-0063 (this commit). Wave 4 v1
-   implementation slice (pure-function evaluator +
-   `GovernanceViolationCode` union + 3 HiveService
-   call-site wiring per Sub-decision 13) requires
-   separate Founder authorization on the exact evaluable
-   term set.
+3. ~~**Wave 4 — `governance_terms` policy evaluator**~~ —
+   design LANDED at ADR-0063 (PR #93) + implementation
+   LANDED at PR #94. 9 of 10 v1 terms wired;
+   `require_admin_approval_for_invites` deferred until
+   admin invite path exists. Layer 2 + Layer 3
+   forward-substrate per ADR-0063.
 4. **Wave 5 — Phoenix.PubSub fanout** for hive aggregate
    updates (consumes ADR-0039 Entry #28).
 5. **Wave 6 — Broadway pipeline** at high-throughput register
