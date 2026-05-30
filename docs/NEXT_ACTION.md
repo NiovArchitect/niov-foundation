@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `11ae5e5` (after Section 3 Wave 1 ADR-0059; this commit chain adds ADR-0060 Section 5 Wave 1)
-- **Latest merged PR:** [#85](https://github.com/NiovArchitect/niov-foundation/pull/85) — Add Section 3 Wave 1 — ADR-0059 Hives v1 design boundary + substrate-honest doc correction.
-- **Active branch / PR:** `section-5-wave-1-agent-playground-adr-0060` (ADR-0060 Agent Playground v1 design-only).
-- **Active production section:** Section 5 Wave 1 closeout (ADR-only). Section 9 backend Phase 0 verdict: substantively complete per Hardening Wave C; AI-generated executive summaries per ADR-0052 require Founder product decision (real stop); advanced to Section 5 per Founder Sleep Directive preference #3. ADR-0060 locks v1 = 3 read-only inspector contracts; Wave 2 implementation requires Founder Authorization (4 checkpoints).
+- **Main HEAD:** `42569a4` (after Section 5 Wave 1 ADR-0060; this commit chain adds ADR-0061 Section 6 Wave 1)
+- **Latest merged PR:** [#86](https://github.com/NiovArchitect/niov-foundation/pull/86) — Add Section 5 Wave 1 — ADR-0060 Agent Playground v1 design boundary.
+- **Active branch / PR:** `section-6-wave-1-analytics-adr-0061` (ADR-0061 Enterprise Analytics SAFE projection pattern; design-only).
+- **Active production section:** Section 6 Wave 1 closeout. All 4 Founder Sleep Directive next-section preferences resolved (Section 3 Wave 1 ADR-0059 + Section 9 substantively complete + Section 5 Wave 1 ADR-0060 + Section 6 Wave 1 ADR-0061). Remaining unstarted/Wave 2 work all hits real stop conditions per Founder-listed criteria.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,27 +25,26 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 3 Wave 1 LANDED (ADR-0059 design-only)
+## Section 6 Wave 1 LANDED (ADR-0061 SAFE projection pattern; design-only)
 
-- **ADR-0059 — Section 3 Hives v1 Design Boundary**: substrate-honest canonicalization per Phase 0 verification 2026-05-30. Phase 0 surfaced that the prior `03-hives-team-intelligence.md` "Substrate not yet started" claim was canonical-truth drift — Hive + HiveMembership + HiveService (5 methods) + hive.routes.ts (4 routes) + 5 HIVE_* audit literals ALL LIVE on main pre-Section-12.
-- v1 scope: same-org-scoped read-only aggregate (counts/labels only); CROSS_ORGANIZATION/DEVICE_NETWORK/GOVERNMENT rejected at service tier (Wave 2); Twin-to-Twin runtime + Phoenix.PubSub fanout + governance_terms enforcement + admin routes all explicit non-goals deferred to Waves 2–8+. 5 Founder Authorization checkpoints required before Wave 2 (each = BREAKING tightening of currently un-gated routes). RULE 14 back-citations to ADR-0039 + ADR-0052.
+- **ADR-0061 — Section 6 Enterprise Analytics v1 SAFE Projection Pattern**: closed-vocabulary counts/labels only; same-org scope mandatory; minimum-population threshold REQUIRED (default k=5 per HIPAA Safe Harbor 45 CFR §164.514(b)(1) regulatory precedent); cross-org explicit non-goal (CAR Sub-box 8 forward-substrate); derived-only from existing operational signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule metadata + EntityMembership + EntityComplianceProfile + hive aggregates); audit via ADMIN_ACTION + details.action = "ANALYTICS_READ"; can_admin_org TAR gate.
+- v1 ships ZERO concrete aggregates — each future aggregate is a Wave 2+ slice + 5 Founder Authorization checkpoints (aggregate selection / threshold posture / audit detail / cache posture / route prefix).
+- Wave 2-eligible substrate-derivable candidates: org-wide CORRECTION velocity 7d / action-runtime success rate 7d / connector-binding activity / hive participation rate.
 
-## Earlier this session + prior session work on main
+## Earlier session work on main
 
-- Section 1 Wave 3 (ADR-0058 + drift signal service + route; PRs #82/83/84).
-- Section 4 Wave 7 action-routed fan-out variant (#80).
-- Hardening A/B/C/D (CSV export #76 / inbound HMAC #77 / Section 9 doc refresh #78 / REGULATOR_ACCESS_EXPIRED #79).
+- Section 3 Wave 1 ADR-0059 (#85) + Section 5 Wave 1 ADR-0060 (#86).
+- Section 1 Wave 3 (ADR-0058 + service + route + docs; #82/83/84).
+- Section 4 Wave 7 (#80) + Hardening A/B/C/D (#76/77/78/79).
 
-## Next-section autonomous continuation (per Founder Sleep Directive)
+## All 4 Founder Sleep Directive next-section preferences resolved
 
-Section 3 Wave 1 closed (design-only). Per Founder Sleep Directive next-section preference order, Section 9 backend contracts is next:
+  1. ~~**Section 3 Hives / Team Intelligence**~~ — Wave 1 ADR-0059 LANDED (#85); Wave 2 = Founder Authorization (5 BREAKING checkpoints).
+  2. ~~**Section 9 Admin / Governance backend contracts**~~ — substantively complete per Hardening Wave C; new AI-generated executive summaries = Founder product decision per ADR-0052.
+  3. ~~**Section 5 Agent Playground**~~ — Wave 1 ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
+  4. ~~**Section 6 Enterprise Analytics**~~ — Wave 1 ADR-0061 LANDED (this commit chain); Wave 2 = Founder Authorization (5 checkpoints).
 
-  1. ~~**Section 3 Hives / Team Intelligence**~~ — Wave 1 ADR LANDED at ADR-0059; Wave 2 implementation needs separate Founder Authorization (5 BREAKING checkpoints).
-  2. **Section 9 Admin / Governance backend contracts** — backend only; no Control Tower frontend. **NEXT — Phase 0 runs after this PR merges**.
-  3. **Section 5 Agent Playground** — research/design only unless substrate-safe.
-  4. **Section 6 Enterprise Analytics** — research/design only unless substrate-safe.
-
-Forward-substrate within closed/partial sections (each behind real stop conditions): Section 1 advanced drift signals; Section 3 Wave 2 implementation (Founder Authorization checkpoints); Section 4 SDK-bound connectors (OAuth + real credentials); Section 4 encrypted-at-rest secret column (ADR-0019 amendment); Section 7 cross-chain verify-chain (Founder QLOCK).
+**All remaining work hits real stop conditions** (per Founder-listed criteria): Section 1 advanced drift signals (forward-substrate per ADR-0058 §9; each needs Founder slice authorization); Section 3 Wave 2 (5 BREAKING checkpoints per ADR-0059 §7); Section 4 SDK-bound connectors (OAuth + real credentials); Section 4 encrypted-at-rest secret column (ADR-0019 amendment); Section 5 Wave 2 (4 checkpoints per ADR-0060 §7); Section 6 Wave 2 (5 checkpoints per ADR-0061 §8); Section 7 cross-chain verify-chain (Founder QLOCK); Section 8 Founder-excluded; Section 10 GOVSEC.6–10 (RULE 20-gated per phase).
 
 **Earlier waves + section detail:** [`current-build-state/`](current-build-state/) (Section 1 / Section 2 / Section 4 / Section 7 / Section 9 detail files).
 
