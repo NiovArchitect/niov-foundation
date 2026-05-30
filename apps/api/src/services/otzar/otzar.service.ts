@@ -53,6 +53,12 @@ import {
   type StaleContextSignalSuccess,
   type StaleContextSignalFailure,
 } from "./stale-context-signal.service.js";
+import {
+  analyzeDriftRollupForCaller,
+  type GetDriftRollupInput,
+  type DriftRollupSuccess,
+  type DriftRollupFailure,
+} from "./drift-rollup.service.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -1443,6 +1449,30 @@ export class OtzarService {
     input: GetStaleContextSignalInput,
   ): Promise<StaleContextSignalSuccess | StaleContextSignalFailure> {
     return analyzeStaleContextForCaller({
+      authService: this.authService,
+      input,
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Section 1 Wave 4C: cross-conversation drift rollup per
+  //                    ADR-0058 §9 + Founder Wave 4C direction.
+  //                    Self-scoped per-caller holistic posture
+  //                    label (AT_RISK / NORMAL / INSUFFICIENT_DATA)
+  //                    that folds in Wave 3 per-conversation
+  //                    correction-velocity signal + Wave 4A
+  //                    wallet-level stale-context signal. Reuses
+  //                    ADMIN_ACTION + DRIFT_SIGNAL_READ literal
+  //                    with source_signal:
+  //                    "CROSS_CONVERSATION_ROLLUP" discriminator
+  //                    (NO new audit literal). NEVER conversation
+  //                    IDs / capsule IDs / per-conversation
+  //                    attribution / transcripts / raw content.
+  // ──────────────────────────────────────────────────────────────
+  async analyzeDriftRollupForCaller(
+    input: GetDriftRollupInput,
+  ): Promise<DriftRollupSuccess | DriftRollupFailure> {
+    return analyzeDriftRollupForCaller({
       authService: this.authService,
       input,
     });
