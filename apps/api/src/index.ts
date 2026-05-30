@@ -263,6 +263,20 @@ export type {
   HiveEventName,
   HiveEventEnvelope,
 } from "./services/hive/hive-events.js";
+
+// Section 5 Wave 2 ADR-0060 — Agent Playground v1 barrel exports.
+export { PlaygroundService } from "./services/playground/playground.service.js";
+export type {
+  PlaygroundFailureCode,
+  PlaygroundFailure,
+  PolicyEvaluatorInput,
+  PolicyEvaluatorSuccess,
+  ConnectorDryRunInput,
+  ConnectorDryRunSuccess,
+  WorkingSetInspectorInput,
+  WorkingSetInspectorSuccess,
+  WorkingSetCapsuleSummary,
+} from "./services/playground/playground.service.js";
 export type {
   MembershipSettings,
   CreateHiveSuccess,
