@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `9ec214e1ce895f877b60cc0b73b7d6069f234b37`
-- **Latest merged PR:** [#68](https://github.com/NiovArchitect/niov-foundation/pull/68) — Section 7 Wave 5 regulator-tier audit access via ADR-0036.
-- **Active branch / PR:** `section-7-wave-6-closeout` (Section 7 Wave 6 closeout — docs refresh + production-grade-complete recommendation).
-- **Active production section:** Section 7 closeout (Section 7 production-grade complete for Foundation backend scope; next recommended section is **Section 4 — MCP / Connectors**, RULE 20-gated).
+- **Main HEAD:** `6258f17f31a018e0dbcfa996c50de16e083f1b37`
+- **Latest merged PR:** [#74](https://github.com/NiovArchitect/niov-foundation/pull/74) — Section 4 Wave 5 NotificationService external fan-out bridge.
+- **Active branch / PR:** `section-4-wave-6-closeout` (Section 4 Wave 6 closeout — docs refresh + production-grade-complete recommendation).
+- **Active production section:** Section 4 closeout (Section 4 Foundation backend production-grade complete for `OUTBOUND_WEBHOOK` + HMAC-SHA-256 + fan-out bridge; recommended next production section is **Section 1 Wave 3 — Otzar drift detection ADR**, RULE 20-gated).
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,38 +25,38 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 7 PRODUCTION-GRADE COMPLETE for Foundation backend scope (Waves 1+2+3+4+5 LANDED at PRs #60 + #62 + #64 + #66 + #68)
+## Section 4 PRODUCTION-GRADE COMPLETE for Foundation backend scope (Waves 1+2+3+4+5 LANDED at PRs #70 + #71 + #72 + #73 + #74)
 
-- **Wave 1:** unified self-scope viewer + chain verification.
-- **Wave 2:** `?scope=org` (TAR `can_admin_org`; OR-fence; cross-org leak guard).
-- **Wave 3:** `?scope=platform` (TAR `can_admin_niov`; unfenced).
-- **Wave 4:** `GET /api/v1/audit/events/export` NDJSON (self|org|platform gate; `EXPORT_AUDIT_EVENTS_MAX_ROWS=10000` cap; truncated header).
-- **Wave 5:** `GET /api/v1/audit/events/regulator-view` via ADR-0036 LawfulBasis 9-condition enforcement; cross-basis isolation tested; 8 enforcement codes → 404 / 403 / 500.
-- `verify-chain` remains self-only across all 5 waves (cross-chain = leakage / perf risk; forward-substrate).
-- Read-audit emission via `ADMIN_ACTION` + `details.action` ∈ `{ AUDIT_VIEW_LIST, AUDIT_VIEW_EVENT, AUDIT_VIEW_VERIFY_CHAIN, AUDIT_VIEW_ORG_LIST, AUDIT_VIEW_ORG_EVENT, AUDIT_VIEW_PLATFORM_LIST, AUDIT_VIEW_PLATFORM_EVENT, AUDIT_VIEW_EXPORT, AUDIT_VIEW_REGULATOR }` — all on `ADMIN_ACTION` (no new audit literal across any of the 5 waves).
+- **Wave 1:** ConnectorProvider abstraction + CONNECTOR_REGISTRY frozen-anchor + FixtureBasedConnectorProvider (mirrors EmbeddingProvider / LLMProvider canonical shape).
+- **Wave 2:** ConnectorBinding Prisma model (`secret_ref` env-var NAME only; never raw secret at rest) + 5 admin routes on `/api/v1/org/connectors[/:id]` (`can_admin_org`-gated; cross-org probes → enumeration-safe 404).
+- **Wave 3:** `INVOKE_CONNECTOR` ActionType + handler (LOW risk_tier; 8 provider error_class → handler `CONNECTOR_<class>` mapping). Rides existing 10 `ACTION_*` audit literals.
+- **Wave 4:** `OutboundWebhookProvider` — first real connector. HTTPS POST + HMAC-SHA-256 signing over `${timestamp}.${rawBody}` (defeats replay). Pure `node:https` + `node:crypto`; zero SDK dependency. Bounded 10_000ms timeout; HTTP status → error_class mapping; SAFE delivery_metadata.
+- **Wave 5:** `NotificationService` external fan-out bridge. Opt-in per binding via `config.notification_classes` (wildcard `*` supported); commit-then-hook order; production hook swallows downstream errors. Metadata-only ping (notification_id + notification_class) — body content never traverses the seam.
+- 5 admin `details.action` discriminators (Wave 2) + 2 fan-out discriminators (Wave 5) on existing `ADMIN_ACTION` literal — **zero new audit literals across any wave**.
 
-## Recommended next production section: Section 4 — MCP / Connectors (RULE 20-gated)
+## Recommended next production section: Section 1 Wave 3 — Otzar drift detection ADR (RULE 20-gated)
 
-Section 4 is the canonical home for external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce). It gates Section 2 external delivery + Section 9 Control Tower outbound; both substrate ends are now ready. Each adapter = its own Founder QLOCK + RULE 21 research arc; this recommendation is sequencing only.
+Of the remaining sections, drift detection delivers the next-highest customer-visible value per dev-hour because (a) it leverages the Otzar Wave 2A/B/C correction substrate already live on main, (b) it's the natural pairing with Section 4 — once external adapters are firing, drift detection becomes the operator-trust loop, and (c) no new schema or external integration needed (pure Foundation + Otzar work).
 
 Alternative next slices (each RULE 20-gated):
 
-  1. **Section 1 Wave 3 — Otzar drift detection ADR** — tighter customer-visible value per dev-hour than Section 4.
+  1. **Section 4 Slack OAuth follow-on** — first SDK-bound connector. Highest demand-side enterprise value; largest substrate surface (OAuth token storage requires schema + key-management).
   2. **GOVSEC.5 follow-on `requireAdminCapability` throttle** — hardens dual-control; security-relevant.
-  3. **Section 9 backend contracts** — keeps Control Tower consumption parity caught up.
+  3. **Section 9 backend contracts** — keeps Control Tower consumption parity caught up with new Section 4 surface.
 
-## Section 7 forward-substrate (optional)
+## Section 4 forward-substrate (optional)
 
-  - **CSV export** (NDJSON Wave 4 precedent established; CSV optional if downstream consumer requires it).
-  - **Control Tower audit-viewer UX** (frontend; lives in `otzar-control-tower`; out of Foundation scope).
-  - **Org-admin / platform / regulator `verify-chain`** (cross-chain = perf + leakage; separate QLOCK).
-  - **Proactive `REGULATOR_ACCESS_EXPIRED` emitter** via SCHEDULER sweep at `valid_until` crossing per ADR-0036 Sub-decision 4.
+  - **SDK-bound connectors** (Slack OAuth / Gmail / Microsoft Graph / Salesforce / Linear / Jira / SMS / Push) — each its own QLOCK + RULE 21 research arc.
+  - **Encrypted-at-rest secret column** for per-tenant credentials (current `secret_ref` env-var pattern unblocks generic webhook use).
+  - **Action-runtime-integrated fan-out variant** — current Wave 5 is fire-and-forget; an Action-routed variant gives retry + cancellation at the cost of coupling.
+  - **HMAC signature verification helper** for receiving inbound webhooks (Foundation currently SENDS signed webhooks).
+  - **Control Tower connector admin UX** (frontend; out of Foundation scope).
 
-→ Awaiting Founder QLOCK on the next production section. Per the active autonomous-execution authorization, Section 7 work is complete; new sections need explicit RULE 20 authorization.
+→ Awaiting Founder QLOCK on the next production section. Per the active autonomous-execution authorization, Section 4 work is complete; new sections need explicit RULE 20 authorization.
 
-**Section 7 Wave 5 summary (PR #68):** regulator-tier audit access via ADR-0036. NEW `validateListRegulatorAuditEventsQuery` (required UUID `lawful_basis_id`); NEW `listRegulatorAuditEventsForCaller` calls LIVE `getActiveLawfulBasisForRegulator` 9-condition enforcement; maps 8 enforcement failure codes to HTTP (404 / 403 / 500); on success queries `audit_events WHERE lawful_basis_id = :basis_id` + SAFE projection + AND-narrow filters. NEW `GET /api/v1/audit/events/regulator-view`; emits `ADMIN_ACTION:AUDIT_VIEW_REGULATOR`. 12 NEW integration tests + 68/68 Section 7 5-file regression + 23/23 regulator-routes regression preserved. No schema; no new audit literals; no new RULE / ADR landings.
+**Section 4 Wave 5 summary (PR #74):** NotificationService external fan-out bridge. NEW `bindingMatchesNotificationClass` matcher + `dispatchNotificationFanOut` parallel per-binding invoke + `makeConnectorFanOutHook` builder swallows downstream errors. NotificationService accepts optional `connectorFanOut` hook; Wave 11 internal-only baseline preserved verbatim when hook absent. 2 `details.action` discriminators on existing `ADMIN_ACTION` literal. 13 NEW integration tests + Section 2 `SEND_INTERNAL_NOTIFICATION` regression 7/7 preserved.
 
-**Earlier waves + Section 2 detail:** [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) + [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md).
+**Earlier waves + Section 7 + Section 2 detail:** [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) + [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) + [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md).
 
 ## Current stop conditions
 
@@ -79,6 +79,13 @@ Alternative next slices (each RULE 20-gated):
 **Not stop conditions:** normal section boundary; completed PR; completed docs refresh; discovered gap when research provides a clear safe recommendation.
 
 ## Key live / not-live truth
+
+**LIVE (Section 4 Waves 1+2+3+4+5 — connector substrate; see [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md)):**
+- `ConnectorBinding` Prisma model with `secret_ref` env-var-NAME pattern (never raw secret at rest); 5 admin routes on `/api/v1/org/connectors[/:id]` all `can_admin_org`-gated.
+- `INVOKE_CONNECTOR` ActionType rides full Action runtime lifecycle (LOW risk_tier; 8 provider error_class → handler `CONNECTOR_<class>`).
+- `OutboundWebhookProvider` real adapter (HTTPS POST + HMAC-SHA-256 signing; pure node stdlib).
+- `NotificationService.connectorFanOut` opt-in hook fires per matching binding (commit-then-hook order; metadata-only ping).
+- Zero new audit literals across all 5 waves — `ADMIN_ACTION` + `details.action` discriminator pattern preserved.
 
 **LIVE (Section 7 Waves 1+2+3+4+5 — unified self / org / platform / regulator audit viewer + NDJSON export; see [`current-build-state/07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md)):**
 - `GET /api/v1/audit/events[?scope=self|org|platform]` — paginated audit-event list. Scope gates TAR-authoritative. Filters AND-narrow; cap 100; SAFE projection.
