@@ -19,6 +19,7 @@ export type {
 } from "./inbound-hmac.js";
 
 export {
+  bindingFanOutMode,
   bindingMatchesNotificationClass,
   dispatchNotificationFanOut,
   makeConnectorFanOutHook,

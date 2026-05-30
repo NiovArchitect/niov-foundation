@@ -973,6 +973,7 @@ export type {
 // is the production default at Wave 1 because no real providers have
 // shipped yet.
 export {
+  bindingFanOutMode,
   bindingMatchesNotificationClass,
   CONNECTOR_REGISTRY,
   dispatchNotificationFanOut,
