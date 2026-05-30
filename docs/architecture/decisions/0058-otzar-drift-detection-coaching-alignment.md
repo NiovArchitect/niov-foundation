@@ -398,8 +398,24 @@ Service-tier constants (locked in this ADR):
 
 ## Forward queue
 
-- `IntelligencePattern` auto-write from recurring correction
-  themes (Section 1 future slice; separate Founder authorization).
+- ~~`IntelligencePattern` auto-write from recurring correction
+  themes~~ — **DESIGN LANDED at ADR-0066 (2026-05-30)** as
+  Section 1 Wave 5 `OtzarProposedPattern` review-gated
+  proposal lifecycle. ADR-0066 §3 specifies a NEW Prisma
+  model `OtzarProposedPattern` (separate from this repo's
+  existing org-scoped `IntelligencePattern` at
+  `schema.prisma:1100-1114`, which is preserved unchanged
+  per RULE 1). ADR-0066 §4 enumerates closed-vocab
+  `source_signal_type` + `pattern_label` + `confidence_label`
+  + `status` sets derived from the Wave 3B/4A/4C signals
+  this ADR canonicalizes. ADR-0066 §5 specifies recurrence-
+  detection criteria + deduplication. ADR-0066 §6 specifies
+  the 4 self-scoped routes. ADR-0066 §7 specifies the
+  ADMIN_ACTION + 5-discriminator audit posture (no new audit
+  literal). Wave 5 **implementation slice** (the actual
+  schema migration + service + routes + tests) requires a
+  separate Founder authorization per RULE 20 + ADR-0066
+  §11 ("ADR-only" authorization at this commit).
 - Stale-context drift signal (forward-substrate per §9).
 - Role-scope conflict drift (forward-substrate per §9).
 - Cross-conversation Twin-level rollup (forward-substrate per §9).

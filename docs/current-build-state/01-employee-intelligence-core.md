@@ -50,11 +50,19 @@ rollup Wave 4C).
 
 **Important scope wording**: closes the **Foundation backend
 drift-detection substrate** for v1 self-scoped coaching/alignment
-trust loop. Future capabilities (IntelligencePattern auto-write
-from recurring themes; operator-tunable thresholds per org; drift
-digest connector fan-out; Control Tower drift UX; role-scope-
-conflict signal pending a POLICY_DRIFT producer) continue as
-forward-substrate per ADR-0058 §"Forward queue".
+trust loop. Future capabilities continue as forward-substrate per
+ADR-0058 §"Forward queue" — except item 1 (`IntelligencePattern`
+auto-write from recurring correction themes) which now has its
+**design lifted to the canonical-record register at ADR-0066
+(2026-05-30)** as the Section 1 Wave 5 `OtzarProposedPattern`
+review-gated proposal lifecycle. The Wave 5 **implementation
+slice** (NEW Prisma model `OtzarProposedPattern` + service +
+4 routes + integration tests) remains forward-substrate behind
+a separate Founder authorization per RULE 20 + ADR-0066 §11.
+Remaining ADR-0058 §Forward queue items still forward-substrate:
+operator-tunable thresholds per org; drift digest connector
+fan-out; Control Tower drift UX; role-scope-conflict signal
+pending a POLICY_DRIFT producer.
 
 ## What is live
 
@@ -216,9 +224,20 @@ contracts).
    `summary_capsule_id` writer at `closeConversation` to produce
    higher-fidelity summaries (RULE 21 research arc required if
    the summarization crosses provider / LLM boundaries).
-7. **`IntelligencePattern` auto-write from recurring correction
-   themes** — separate slice + Founder authorization per
-   ADR-0053 §5 + ADR-0058 §9.
+7. ~~**`IntelligencePattern` auto-write from recurring correction
+   themes**~~ — **DESIGN LANDED at ADR-0066 (2026-05-30)** as
+   Section 1 Wave 5 `OtzarProposedPattern` review-gated proposal
+   lifecycle. ADR-0066 §3 specifies a NEW Prisma model
+   `OtzarProposedPattern` (separate from existing org-scoped
+   `IntelligencePattern` which stays unchanged per RULE 1).
+   ADR-0066 §4-§5 enumerate closed-vocab discriminators +
+   recurrence-detection criteria. ADR-0066 §6 specifies the
+   4-route self-scoped review surface. ADR-0066 §7 specifies the
+   ADMIN_ACTION + 5-discriminator audit posture (no new audit
+   literal). Wave 5 **implementation slice** (schema + service +
+   routes + integration tests) is forward-substrate behind a
+   separate Founder authorization per RULE 20 + ADR-0066 §11
+   ("ADR-only" authorization at this commit).
 8. **Cross-team aggregation governance** — design substrate for
    safe aggregation of permissioned signals across an org's
    employee twins (likely lands as a future CAR Sub-box; not yet
