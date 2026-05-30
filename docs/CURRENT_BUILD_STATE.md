@@ -9,8 +9,26 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-30
-(Section 5 Wave 2 LANDED — Agent Playground v1
-implementation per ADR-0060 + Founder Wave 2 authorization.
+(**Section 6 PRODUCTION-GRADE COMPLETE for Foundation backend
+scope (v1).** 4-aggregate arc closure on top of ADR-0061
+Wave 1 design: CORRECTION velocity 7d (PR #103) +
+action-runtime success rate (PR #104) + connector activity
+(PR #105) + hive participation (PR #106). All 4 aggregates
+SAFE-projected; same-org sovereignty enforced by construction;
+k=5 HIPAA Safe Harbor floor universal; can_admin_org gate
+universal; ADMIN_ACTION + ANALYTICS_READ audit universal; no
+new audit literal across any wave; zero schema migration;
+zero new external dependencies; 55 integration tests across
+4 test files. Foundation-strategic-context coherent (generic
+Entity model + no blockchain/payment surface + no surveillance
+framing). Plus Section 5 Waves 1+2+3 LIVE (inspector
+foundation + product-vision ADR-0065). Section 3
+PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend
+scope.
+
+Earlier last-updated context: Section 5 Wave 2 LANDED — Agent
+Playground v1 implementation per ADR-0060 + Founder Wave 2
+authorization.
 **Important framing**: this is the **first backend substrate /
 inspector foundation** for the long-term Agent Playground
 product vision (enterprise simulation + multi-agent scenario
@@ -37,10 +55,10 @@ backend scope from earlier today.).
 
 ## Current state
 
-- **Latest main HEAD:** `9c34151` (Section 5 Wave 2 docs closeout; Wave 3 ADR PR pending)
-- **Latest merged PR:** [#101](https://github.com/NiovArchitect/niov-foundation/pull/101) — Close out Section 5 Wave 2 — Agent Playground v1 docs.
-- **Active branch / PR:** `section-5-wave-3-agent-playground-product-vision-adr` (ADR-0065 product-vision design; design-only).
-- **Active production section:** Section 5 Wave 3 product-vision ADR. Section 5 PARTIAL with Waves 1+2+3 LIVE pending Wave 3 ADR merge. Section 3 PRODUCTION-GRADE COMPLETE earlier today.
+- **Latest main HEAD:** `a3d484c` (Section 6 Wave 5 hive-participation aggregate; closeout docs PR pending)
+- **Latest merged PR:** [#106](https://github.com/NiovArchitect/niov-foundation/pull/106) — Add Section 6 Wave 5 — hive-participation aggregate.
+- **Active branch / PR:** `section-6-closeout-docs` (Section 6 final closeout docs; design-only).
+- **Active production section:** Section 6 final closeout docs. Section 6 PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1). Section 5 PARTIAL with Waves 1+2+3 LIVE. Section 3 PRODUCTION-GRADE COMPLETE.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION per Wave 11 internal-only handler).
@@ -57,7 +75,7 @@ backend scope from earlier today.).
 | 3 | Hives / Team Intelligence | **PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope** (final closeout 2026-05-30). 5-wave arc closure: Wave 1 ADR-0059 design (#85); Wave 2 service-tier safety enforcement (#88, +15 tests, 4 new failure codes); Wave 3 admin routes (#90/#91, 4 admin routes + SAFE projections + idempotent dissolve/force-remove + AI_AGENT admin-tier cleanup, +20 tests); Wave 4 governance_terms policy evaluator (#93/#94, 9 of 10 v1 terms wired; `require_admin_approval_for_invites` deferred; 6 new HiveFailure codes; ADR-0063 3-layer governance architecture; +20 tests); Wave 5 Hive Events producer spine (#96/#97, NEW `hive-events.ts` module + `HiveEventBus` + 5 closed-vocab events on same-org topics + SAFE payload projection + fire-and-forget; +13 tests). 8 live routes (4 public + 4 admin). 10 HiveService methods. 82 Section-3-specific test cases. Zero schema migrations + zero new audit literals across all 5 waves. RULE 0 same-org sovereignty enforced at 6 distinct points; no-leak protections enforced at 6 distinct surfaces (verified with secret-marker integration tests). **Important scope wording**: closes the **Foundation backend substrate for v1 same-org Hives** — NOT all future Hives/Team Intelligence product work. **Forward-substrate** (separate Founder authorization at each slice): Wave 4 Layer 2 enterprise governance policy registry + Wave 4 Layer 3 external governance source feeds + `require_admin_approval_for_invites` term + `HIVE_GOVERNANCE_ZERO_STATE` event + default `HiveEventBus` instantiation at server.ts + BEAM bridge / Phoenix.PubSub consumer half + Broadway guaranteed delivery + hive weighting algorithm + Twin-to-Twin proactive runtime + Otzar Twin subscription + Control Tower WebSocket bridge + Section 4 connector fan-out bridge + cross-org Hives + AI-generated executive summaries + `createTwin` standard-branch AI_AGENT carve-out resolution. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5+7 LIVE + Hardening Wave B LIVE.** Provider abstraction + `ConnectorBinding` model (secret_ref env-var NAME only) + 5 admin routes + `INVOKE_CONNECTOR` ActionType + `OutboundWebhookProvider` (HTTPS POST + HMAC-SHA-256) + `NotificationService` fan-out bridge (Wave 5 direct-mode default + Wave 7 Action-routed opt-in via `config.fan_out_mode`) + `verifyInboundHmac` reusable receive-side verifier. 5 admin `ADMIN_ACTION` discriminators + 3 fan-out discriminators (DISPATCHED + FAILED + ENQUEUED) — **zero new audit literals**. SDK-bound connectors + encrypted-at-rest secret column = forward-substrate behind their own future QLOCKs. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | **PARTIAL with Waves 1+2+3 LIVE (first-substrate / inspector foundation + product-vision ADR).** Wave 1 ADR-0060 (#86) locks v1 inspector scope. Wave 2 (PR #100) ships 3 sandbox-only inspector routes (`POST /api/v1/playground/policy-evaluator` via pure `evaluateActionPolicy`; `POST /api/v1/playground/connector-dry-run` hard-wired to `FixtureBasedConnectorProvider` with production providers unreachable by construction; `POST /api/v1/playground/working-set` via `COE.assembleContext` with SAFE projection) + PlaygroundService + 17 integration tests; zero schema/audit/external-dep impact. **Wave 3 ADR-0065 LANDED 2026-05-30** as NEW ADR sitting ABOVE ADR-0060 at the product-vision tier — canonicalizes the long-term Agent Playground product vision: *"enterprise simulation and decision-testing environment where Otzar's AI teammates can explore possible strategies, compare outcomes, and recommend the best governed path before real execution"* (DGI substrate for the enterprise domain; multi-agent scenario exploration; alternative plan comparison; outcome comparison; best-path recommender; governed transition to Action runtime). ADR-0060 preserved verbatim as canonical Wave 2 implementation contract. 12 sub-decisions including 13-input canonical set, 10-output canonical set, human-in-the-loop doctrine, universal safety/no-leak doctrine, canonical 10-wave forward map (Waves 4-10 = persistent scenarios + candidate generation + outcome comparison + best-path recommender + governed transition + multi-agent orchestration + Control Tower frontend). All Wave 4+ implementation slices require separate Founder authorization. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
-| 6 | Enterprise Analytics | **PARTIAL with Wave 1 ADR LANDED (design-only).** ADR-0061 (2026-05-30) locks the analytics SAFE projection pattern at the substrate-architectural register: closed-vocabulary counts/labels only; same-org scope mandatory; minimum-population threshold REQUIRED (default k=5 per HIPAA Safe Harbor 45 CFR §164.514(b)(1) regulatory precedent); cross-org explicit non-goal (CAR Sub-box 8 forward-substrate); derived-only from existing operational signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule metadata + EntityMembership + EntityComplianceProfile + hive aggregates); audit via ADMIN_ACTION + details.action = "ANALYTICS_READ"; can_admin_org TAR gate. v1 ships ZERO concrete aggregates — each future aggregate = Wave 2+ slice + 5 Founder Authorization checkpoints per ADR-0061 §8. Wave 2-eligible candidates: org-wide correction velocity 7d / action-runtime success rate / connector activity / hive participation. | [`06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md) |
+| 6 | Enterprise Analytics | **PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1)** (final closeout 2026-05-30). 4-aggregate arc closure on top of ADR-0061 Wave 1 design (#87): Wave 2 CORRECTION velocity 7d (#103); Wave 3 action-runtime success rate (#104); Wave 4 connector activity (#105); Wave 5 hive participation (#106). All 4 aggregates SAFE-projected; same-org sovereignty enforced by construction; k=5 HIPAA Safe Harbor floor universal; `can_admin_org` gate universal; `ADMIN_ACTION + details.action="ANALYTICS_READ"` audit universal; no new audit literal across any wave; zero schema migration; zero new external dependencies; 55 integration tests. **Important scope wording**: closes the Foundation backend analytics substrate for v1 same-org admin reads — NOT all future analytics product work. **Forward-substrate**: additional aggregates + persistent projections + operator-tunable per-org threshold + cross-org analytics + differential privacy + AI-generated executive summaries + Control Tower UX + real-time/streaming + compliance-framework-specific aggregates (each its own slice + separate Founder authorization). Foundation-strategic-context coherent: generic Entity model preserved (AI_AGENT/DEVICE/APPLICATION/COMPANY aggregate identically), no blockchain/payment surface, no surveillance framing. | [`06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md) |
 | 7 | Full Audit Viewer | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 LIVE + Hardening Wave A (CSV export) LIVE.** Canonical 4-scope matrix (self / org-admin / niov-admin / regulator) live across 3 read shapes (list / single-event / export); `verify-chain` self-only. Regulator access via ADR-0036 LawfulBasis 9-condition enforcement (Wave 5 PR #68). Export supports both `format=ndjson` (Wave 4) and `format=csv` (Hardening A PR #76; RFC 4180; CRLF terminators; `x-audit-format` header). All gates TAR-authoritative; filters AND-narrow; cross-basis isolation tested; SAFE projection; ADMIN_ACTION:AUDIT_VIEW_* (no new audit literal across any wave). Control Tower UX + cross-chain verify-chain + proactive `REGULATOR_ACCESS_EXPIRED` emitter = forward-substrate. | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
 | 8 | Billing / Entitlements | Monetization substrate partial (`PRICING_TABLE`, 70/30 split). Entitlements layer forward-substrate. | [`08-billing-entitlements.md`](current-build-state/08-billing-entitlements.md) |
 | 9 | Admin / Governance Control Tower | **Backend contracts substantively complete for a Control Tower v1 frontend.** Live surfaces: Otzar Wave 2A/B/C (per Section 1 confirmation) + Action runtime (Section 2) + Audit viewer (Section 7 self/org/platform/regulator + NDJSON + CSV) + Connector admin (Section 4 — 5 routes + INVOKE_CONNECTOR + fan-out + inbound HMAC verifier) + break-glass + regulator window + escalations. AI-generated executive summary projections per ADR-0052 doctrine remain forward-substrate behind a Founder product decision. CT frontend lives in [`otzar-control-tower`](https://github.com/NiovArchitect/otzar-control-tower). | [`09-admin-governance-control-tower.md`](current-build-state/09-admin-governance-control-tower.md) |
@@ -67,26 +85,26 @@ backend scope from earlier today.).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#106](https://github.com/NiovArchitect/niov-foundation/pull/106) | `a3d484c` | Add Section 6 Wave 5 — hive-participation aggregate |
+| [#105](https://github.com/NiovArchitect/niov-foundation/pull/105) | `f629e23` | Add Section 6 Wave 4 — connector-activity aggregate |
+| [#104](https://github.com/NiovArchitect/niov-foundation/pull/104) | `c8362cd` | Add Section 6 Wave 3 — action-runtime success rate aggregate |
+| [#103](https://github.com/NiovArchitect/niov-foundation/pull/103) | `2d95597` | Add Section 6 Wave 2 — CORRECTION velocity 7d aggregate |
+| [#102](https://github.com/NiovArchitect/niov-foundation/pull/102) | `40c3e80` | Add Section 5 Wave 3 — ADR-0065 Agent Playground long-term product-vision |
+| [#101](https://github.com/NiovArchitect/niov-foundation/pull/101) | `9c34151` | Close out Section 5 Wave 2 — Agent Playground v1 docs |
 | [#100](https://github.com/NiovArchitect/niov-foundation/pull/100) | `fd35c62` | Add Section 5 Wave 2 — Agent Playground v1 implementation |
 | [#99](https://github.com/NiovArchitect/niov-foundation/pull/99) | `8807428` | Close out Section 3 — production-grade complete for v1 same-org Foundation backend scope |
 | [#98](https://github.com/NiovArchitect/niov-foundation/pull/98) | `5c2308f` | Close out Section 3 Wave 5 — Hive Events producer docs |
 | [#97](https://github.com/NiovArchitect/niov-foundation/pull/97) | `056c7c7` | Add Section 3 Wave 5 v1 — Hive Events producer substrate |
-| [#96](https://github.com/NiovArchitect/niov-foundation/pull/96) | `2a241f1` | Add Section 3 Wave 5 — ADR-0064 Hive Events Producer Substrate |
-| [#95](https://github.com/NiovArchitect/niov-foundation/pull/95) | `548539c` | Close out Section 3 Wave 4 — governance_terms evaluator docs |
-| [#94](https://github.com/NiovArchitect/niov-foundation/pull/94) | `065e4f1` | Add Section 3 Wave 4 v1 — governance_terms policy evaluator |
-| [#93](https://github.com/NiovArchitect/niov-foundation/pull/93) | `ebc56c5` | Add Section 3 Wave 4 — ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary |
-| [#92](https://github.com/NiovArchitect/niov-foundation/pull/92) | `d98dc9f` | Close out Section 3 Wave 3 — Hive admin routes docs |
-| [#91](https://github.com/NiovArchitect/niov-foundation/pull/91) | `9a348be` | Add Section 3 Wave 3 — Hive admin routes implementation |
 ## Immediate next work queue
 
-> **Section 5 Wave 2 LANDED** (PR #100, 2026-05-30) — Agent Playground v1 inspector-foundation implementation per ADR-0060 + Founder Wave 2 authorization. Important framing: first backend substrate, NOT full Agent Playground product (long-term vision = enterprise simulation + multi-agent scenario exploration + outcome comparison + best-path recommender + governed transition from simulation to Action runtime). Plus Section 3 PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope (PR #99) from earlier today.
+> **Section 6 PRODUCTION-GRADE COMPLETE** (Waves 2+3+4+5 LIVE on top of ADR-0061; PRs #103/#104/#105/#106, 2026-05-30). Plus Section 5 Waves 1+2+3 LIVE (inspector foundation + ADR-0065 long-term product-vision). Section 3 + Section 4 + Section 7 each PRODUCTION-GRADE COMPLETE for their Foundation backend scope.
 
-**Next-section preference order (per Founder Sleep Directive):**
+**Next-section preference order:**
 
-1. ~~**Section 3 Hives / Team Intelligence**~~ — **PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope** (final closeout 2026-05-30).
-2. ~~**Section 9 Admin / Governance backend contracts**~~ — substantively complete per Hardening Wave C; new AI-generated executive summaries per ADR-0052 require Founder product decision (real stop).
-3. ~~**Section 5 Agent Playground**~~ — Waves 1+2 LIVE (#86 + #100) as first-substrate / inspector foundation. Wave 3 Control Tower frontend consumer (out of Foundation scope) + Wave 4+ multi-agent simulation engine + outcome comparison + best-path recommender all forward-substrate. ADR-0060 broadening recommended before Wave 3+ to canonicalize the long-term product vision.
-4. ~~**Section 6 Enterprise Analytics**~~ — Wave 1 ADR LANDED at ADR-0061; Wave 2 implementation requires separate Founder Authorization (5 checkpoints per ADR-0061 §8: aggregate selection / threshold posture / audit detail content / cache posture / route prefix).
+1. ~~**Section 3 Hives / Team Intelligence**~~ — PRODUCTION-GRADE COMPLETE (closeout PR #99 2026-05-30).
+2. ~~**Section 9 Admin / Governance backend contracts**~~ — substantively complete per Hardening Wave C.
+3. ~~**Section 5 Agent Playground**~~ — Waves 1+2+3 LIVE; long-term product vision canonical at ADR-0065. Wave 4+ implementation (persistent named scenarios + candidate generation + outcome comparison + best-path recommender + governed transition to Action runtime + multi-agent orchestration + Control Tower frontend) requires separate Founder authorization at each slice per ADR-0065 §7.
+4. ~~**Section 6 Enterprise Analytics**~~ — **PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1)** (4-aggregate arc closure 2026-05-30; closeout PR TBD this commit).
 
 **Forward-substrate within closed/partial sections:**
 

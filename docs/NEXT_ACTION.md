@@ -9,10 +9,11 @@
 
 ## Where we are
 
-- **Main HEAD:** `9c34151` (Section 5 Wave 2 docs closeout; Wave 3 ADR PR pending)
-- **Latest merged PR:** [#101](https://github.com/NiovArchitect/niov-foundation/pull/101) — Close out Section 5 Wave 2 — Agent Playground v1 docs.
-- **Active branch / PR:** `section-5-wave-3-agent-playground-product-vision-adr` (ADR-0065 product-vision design; design-only).
-- **Section 5 status: PARTIAL with Waves 1+2+3 LIVE** (Wave 1 ADR-0060 + Wave 2 inspector-foundation implementation + Wave 3 long-term product-vision ADR-0065). Wave 4+ (persistent named scenarios + candidate generation + outcome comparison + best-path recommender + governed transition to Action runtime + multi-agent orchestration + Control Tower frontend) canonical at ADR-0065 §7 wave map; each requires separate Founder authorization.
+- **Main HEAD:** `a3d484c` (Section 6 Wave 5 hive-participation; closeout docs PR pending)
+- **Latest merged PR:** [#106](https://github.com/NiovArchitect/niov-foundation/pull/106) — Add Section 6 Wave 5 — hive-participation aggregate.
+- **Active branch / PR:** `section-6-closeout-docs` (Section 6 final closeout docs; design-only).
+- **Section 6 status: PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1)** — 4-aggregate arc closure (CORRECTION velocity 7d + action-runtime success rate + connector activity + hive participation) on top of ADR-0061 Wave 1 design; 55 integration tests; zero schema migration; zero new audit literals.
+- **Section 5 status: PARTIAL with Waves 1+2+3 LIVE** (Wave 1 ADR-0060 + Wave 2 inspector-foundation implementation + Wave 3 long-term product-vision ADR-0065). Wave 4+ canonical at ADR-0065 §7 wave map.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope** (closeout PR #99 earlier today).
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
@@ -25,6 +26,12 @@
 ## Exact next action
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
+
+## Section 6 PRODUCTION-GRADE COMPLETE — Enterprise Analytics (4-aggregate arc; v1)
+
+ADR-0061 Wave 1 design + Waves 2/3/4/5 implementations landed 2026-05-30. 4 live aggregates: CORRECTION velocity 7d (#103); action-runtime success rate (#104); connector activity (#105); hive participation (#106). All SAFE-projected; same-org sovereignty by construction; k=5 HIPAA Safe Harbor floor universal; `can_admin_org` gate universal; `ADMIN_ACTION + ANALYTICS_READ` audit universal; 55 integration tests; zero schema/audit-literal/external-dep impact.
+
+**Scope wording**: closes the Foundation backend analytics substrate for v1 same-org admin reads — NOT all future analytics product work. Forward-substrate (each its own slice + separate Founder authorization): additional aggregates + persistent projections + operator-tunable per-org threshold + cross-org analytics + differential privacy + AI-generated exec summaries + Control Tower frontend + real-time streaming + compliance-framework-specific aggregates. Foundation-strategic-context coherent (generic Entity model preserved; no blockchain/payment surface; no surveillance framing).
 
 ## Section 5 Wave 3 LANDED — Agent Playground long-term product-vision ADR (ADR-0065)
 
@@ -40,12 +47,13 @@ Earlier waves on main: Section 3 Waves 1-5 + closeout (#85-#99); Section 5 Wave 
 
 ## Recommended next production section
 
-**Section 6 Wave 2 — Enterprise Analytics first concrete aggregate** per ADR-0061 §8 (5 Founder Authorization checkpoints; substrate-derivable). Rationale: design ADR already landed; substrate-derivable from existing operational signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule metadata + EntityMembership + EntityComplianceProfile + hive aggregates); SAFE projection pattern locked; `can_admin_org` gate. **Alternative**: Section 5 Wave 4 first persistent-named-scenarios model per ADR-0065 §7 wave map (needs schema; ADR-0025 schema-push-target discipline; same-org / self-scope at every gate). **Alternative**: Section 1 Wave 4+ advanced drift signals (ADR-0058 §9; each signal own slice).
+**Section 1 Wave 4+ advanced drift signals** per ADR-0058 §9 (each signal own slice; Founder direction needed on signal class — stale-context per ADR-0044/0045; role-scope-conflict per Section 2 ActionAttempt POLICY_DRIFT; cross-conversation Twin rollup; operator-tunable thresholds; drift digest connector fan-out via Section 4). **Alternative**: Section 5 Wave 4 first persistent-named-scenarios model per ADR-0065 §7 wave map (needs schema; ADR-0025 schema-push-target discipline; same-org / self-scope at every gate). **Alternative**: Section 6 next aggregate (e.g. per-hive participation breakdown; per-action-type runtime health; compliance-posture aggregate per `EntityComplianceProfile`) per ADR-0061 §8 5-checkpoint pattern.
 
 ## Founder Sleep Directive preferences — status
 
   1. ~~Section 3 Hives~~ — **CLOSED 2026-05-30 production-grade complete for v1 same-org Foundation backend scope.**
   2. ~~Section 5 Agent Playground Waves 2+3~~ — LANDED 2026-05-30 (#100/#101 inspector foundation + ADR-0065 long-term product-vision ADR).
+  3. ~~Section 6 Enterprise Analytics~~ — **CLOSED 2026-05-30 production-grade complete for Foundation backend scope (v1)** (4-aggregate arc).
   2. ~~Section 9 Admin/Governance~~ — substantively complete per Hardening Wave C; AI-generated exec summaries = Founder product decision per ADR-0052.
   3. ~~Section 5 Agent Playground~~ — ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
   4. ~~Section 6 Enterprise Analytics~~ — ADR-0061 LANDED; Wave 2 = Founder Authorization (5 checkpoints).
@@ -109,15 +117,7 @@ Earlier waves on main: Section 3 Waves 1-5 + closeout (#85-#99); Section 5 Wave 
 - Operator-tunable `ActionPolicy.retry_budget` + `attempt_timeout_ms_override` (Wave 6/7 PR #47/49); resolved `timeout_ms` persists onto `ActionAttempt` + projects onto attempt-detail (Wave 8 PR #51); forensic-visibility loop CLOSED end-to-end.
 
 **NOT LIVE (intentional future-substrate; do NOT auto-implement):**
-- External notification delivery (email / SMS / Slack / push) — Founder-direction-locked at internal-only; each adapter = own QLOCK + RULE 21 research arc.
-- Receiver-owned opt-out (`NotificationPreference` model) — RULE 20-gated.
-- Per-Notification audit literals (`NOTIFICATION_DISPATCHED` / `_DELIVERY_FAILED` / `_OPT_OUT_RESPECTED`) — RULE 20-gated.
-- Admin / cross-recipient notification list path — needs QLOCK + opt-out integration review.
-- Notification detail-view route (would surface `body_redacted`) — needs separate no-leak review.
-- Explicit `GET /api/v1/org/actions` route (served via `?org_scope=true` on unified list; marginal value).
-- Active AbortSignal consumption by handlers (plumbed but unused).
-- Per-action `ActionPolicy` lookup cache ("measure first" per ADR-0016).
-- Connectors / MCP / Control Tower UX / voice / ambient / lens UX.
+External notification delivery (each adapter = own QLOCK + RULE 21 research arc) + `NotificationPreference` opt-out model + per-Notification audit literals + admin cross-recipient list + Notification detail-view + explicit `GET /api/v1/org/actions` + active AbortSignal consumption + per-action ActionPolicy cache + Control Tower UX / voice / ambient / lens UX. All RULE 20 / Founder-direction gated.
 
 ## Which section file to read next
 
