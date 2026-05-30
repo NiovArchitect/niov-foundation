@@ -275,6 +275,7 @@ export {
   ACTION_RUNTIME_SUCCESS_LABELS,
   ACTION_RUNTIME_MIN_VOLUME,
   CONNECTOR_ACTIVITY_LABELS,
+  HIVE_PARTICIPATION_LABELS,
 } from "./services/analytics/analytics.service.js";
 export type {
   AnalyticsFailureCode,
@@ -285,6 +286,8 @@ export type {
   ActionRuntimeSuccessLabel,
   ConnectorActivityAggregate,
   ConnectorActivityLabel,
+  HiveParticipationAggregate,
+  HiveParticipationLabel,
 } from "./services/analytics/analytics.service.js";
 
 // Section 5 Wave 2 ADR-0060 — Agent Playground v1 barrel exports.

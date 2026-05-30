@@ -155,6 +155,51 @@ export const CONNECTOR_ACTIVITY_LABELS = [
 export type ConnectorActivityLabel =
   (typeof CONNECTOR_ACTIVITY_LABELS)[number];
 
+// WHAT: Closed-vocab signal labels for hive-participation
+//        aggregate.
+// INPUT: Used as a value array + TS literal-union type.
+// OUTPUT: None.
+// WHY: ADR-0061 §1.a closed-vocab. Operators get the
+//      operational signal ("how widely are members
+//      participating in same-org Hives?") without per-member
+//      attribution. The label is policy-relevant; the raw
+//      ratio is also surfaced as derived aggregate quantity
+//      (count/count) per ADR-0061 §1.a allowance.
+export const HIVE_PARTICIPATION_LABELS = [
+  "BROAD_PARTICIPATION",
+  "MODERATE_PARTICIPATION",
+  "NARROW_PARTICIPATION",
+  "NO_HIVES",
+  "INSUFFICIENT_POPULATION",
+] as const;
+
+export type HiveParticipationLabel =
+  (typeof HIVE_PARTICIPATION_LABELS)[number];
+
+const HIVE_PARTICIPATION_BROAD_THRESHOLD = 0.5;
+const HIVE_PARTICIPATION_MODERATE_THRESHOLD = 0.2;
+
+// WHAT: SAFE projection envelope for the hive-participation
+//        aggregate.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Closed-vocab fields only. Org-level aggregate counts
+//      and one derived rate. NEVER includes hive_id, member
+//      entity_ids, hive_name, governance_terms, or any
+//      per-member attribution.
+export interface HiveParticipationAggregate {
+  ok: true;
+  aggregate: "HIVE_PARTICIPATION";
+  org_entity_id: string;
+  member_count: number;
+  redacted: boolean;
+  hive_count_active: number | null;
+  participating_member_count: number | null;
+  participation_rate: number | null;
+  signal_label: HiveParticipationLabel;
+  honest_note: string;
+}
+
 // WHAT: SAFE projection envelope for the connector-activity
 //        aggregate.
 // INPUT: Used as a return type only.
@@ -709,6 +754,144 @@ export class AnalyticsService {
         "INVOKE_CONNECTOR Action attempts within the window. " +
         "Signal label is operational only — not an employee " +
         "score, not a vendor performance index.",
+    };
+  }
+
+  // WHAT: Compute the org-wide hive-participation aggregate.
+  // INPUT: Pre-resolved org_entity_id + actor_entity_id for
+  //         audit emission (no window_days — participation is
+  //         a current-state snapshot, not a window aggregate).
+  // OUTPUT: HiveParticipationAggregate | AnalyticsFailure.
+  // WHY: Step-by-step:
+  //   1. Count active org members (k=5 gate).
+  //   2. If < 5 → SAFE redacted projection.
+  //   3. Count same-org Hives with status = ACTIVE.
+  //   4. If 0 active Hives → NO_HIVES (skip member-join).
+  //   5. Count DISTINCT members with at least one ACTIVE
+  //      HiveMembership in a same-org ACTIVE Hive.
+  //   6. Compute participation_rate = participating / member_count.
+  //   7. Map rate to closed-vocab label.
+  //   8. Audit emit; SAFE return.
+  async getHiveParticipationForOrg(args: {
+    org_entity_id: string;
+    actor_entity_id: string;
+    ip_address?: string | null;
+  }): Promise<HiveParticipationAggregate | AnalyticsFailure> {
+    // Step 1 — k=5 population gate.
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberEntityIds = memberships.map((m) => m.child_id);
+    const memberCount = memberEntityIds.length;
+    if (memberCount < ANALYTICS_MIN_POPULATION) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "HIVE_PARTICIPATION",
+        redacted: true,
+        result_count: 0,
+        filter_keys: [],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "HIVE_PARTICIPATION",
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        hive_count_active: null,
+        participating_member_count: null,
+        participation_rate: null,
+        signal_label: "INSUFFICIENT_POPULATION",
+        honest_note: HONEST_NOTE_BELOW_THRESHOLD,
+      };
+    }
+
+    // Step 3 — count same-org active Hives.
+    const activeHives = await prisma.hive.findMany({
+      where: { org_entity_id: args.org_entity_id, status: "ACTIVE" },
+      select: { hive_id: true },
+    });
+    const hiveCountActive = activeHives.length;
+    const activeHiveIds = activeHives.map((h) => h.hive_id);
+
+    if (hiveCountActive === 0) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "HIVE_PARTICIPATION",
+        redacted: false,
+        result_count: 0,
+        filter_keys: [],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "HIVE_PARTICIPATION",
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: false,
+        hive_count_active: 0,
+        participating_member_count: 0,
+        participation_rate: 0,
+        signal_label: "NO_HIVES",
+        honest_note:
+          "Org has zero active same-org Hives. Participation " +
+          "rate is 0 by construction.",
+      };
+    }
+
+    // Step 5 — DISTINCT members with at least one ACTIVE
+    // HiveMembership in same-org ACTIVE Hive.
+    const participatingMemberships = await prisma.hiveMembership.findMany({
+      where: {
+        hive_id: { in: activeHiveIds },
+        entity_id: { in: memberEntityIds },
+        status: "ACTIVE",
+      },
+      select: { entity_id: true },
+      distinct: ["entity_id"],
+    });
+    const participatingCount = participatingMemberships.length;
+
+    // Step 6–7 — rate + label.
+    const participationRate = participatingCount / memberCount;
+    let signalLabel: HiveParticipationLabel;
+    if (participationRate >= HIVE_PARTICIPATION_BROAD_THRESHOLD) {
+      signalLabel = "BROAD_PARTICIPATION";
+    } else if (participationRate >= HIVE_PARTICIPATION_MODERATE_THRESHOLD) {
+      signalLabel = "MODERATE_PARTICIPATION";
+    } else {
+      signalLabel = "NARROW_PARTICIPATION";
+    }
+
+    // Step 8 — audit + SAFE return.
+    await this.emitAnalyticsReadAudit({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      aggregate: "HIVE_PARTICIPATION",
+      redacted: false,
+      result_count: participatingCount,
+      filter_keys: [],
+      ip_address: args.ip_address ?? null,
+    });
+
+    return {
+      ok: true,
+      aggregate: "HIVE_PARTICIPATION",
+      org_entity_id: args.org_entity_id,
+      member_count: memberCount,
+      redacted: false,
+      hive_count_active: hiveCountActive,
+      participating_member_count: participatingCount,
+      participation_rate: Number(participationRate.toFixed(4)),
+      signal_label: signalLabel,
+      honest_note:
+        "DISTINCT same-org members with at least one ACTIVE " +
+        "HiveMembership in a same-org ACTIVE Hive. Signal " +
+        "label is operational only — not an employee score, " +
+        "not a manager dashboard.",
     };
   }
 
