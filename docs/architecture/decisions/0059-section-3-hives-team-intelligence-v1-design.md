@@ -407,7 +407,11 @@ required at its slice):
   service tier; add `org_entity_id` required-at-create check.
 - Wave 3: hive admin routes (org list, archive, dissolve,
   member roster); requires can_admin_org gating + the
-  Section 4 connector admin route pattern.
+  Section 4 connector admin route pattern. **CLOSED**
+  at ADR-0062 (2026-05-30) — 4 admin route surfaces +
+  safe roster projection + idempotent dissolve/force-remove
+  + AI_AGENT force-remove permitted + ADMIN_ACTION +
+  HIVE_MEMBER_REMOVED reuse (zero new audit literals).
 - Wave 4: governance_terms canonical schema + policy
   evaluator; canonical schema requires Founder product
   decision on which terms are evaluable.
