@@ -175,6 +175,41 @@ optional follow-on).
   `outcome` / `from` / `to`); emits the `ADMIN_ACTION`
   `CONSOLE_READ` audit on every read.
 
+### Hardening Wave D — proactive REGULATOR_ACCESS_EXPIRED emitter (PR #79; `dcff369`)
+
+- `tickRegulatorAccessExpirySweep` at
+  `apps/api/src/services/cosmp/regulator-expiry.service.ts`
+  runs on the canonical Action scheduler cron host every 60
+  seconds (offset 30s from the executor + expiry-sweep ticks
+  per `apps/api/src/services/action/scheduler.ts:217-224`).
+- Per tick: finds `LawfulBasis` rows where `valid_until <= now`;
+  bounded batch (`REGULATOR_EXPIRY_SWEEP_BATCH = 50`; oldest-first
+  by `valid_until ASC` for fairness); idempotent (skips any
+  basis with an existing `REGULATOR_ACCESS_EXPIRED` audit row);
+  supersession-aware (skips any basis with an existing
+  `REGULATOR_ACCESS_REVOKED` row — REVOKED is the canonical
+  terminal state).
+- Emits one `REGULATOR_ACCESS_EXPIRED` audit row per matching
+  basis with `actor_entity_id=null` + `system_principal=
+  SYSTEM_PRINCIPALS.SCHEDULER` + `target_entity_id=<the regulator
+  the grant was issued to>` + `lawful_basis_id` + `lawful_basis_chain_hash`
+  (preserving the CAR Sub-box 3 sub-phase 4 hash-chain binding).
+- Safe audit details only: `action=REGULATOR_ACCESS_EXPIRED` +
+  `basis_id` + `valid_until` (ISO string). NEVER `basis_reference`
+  or `jurisdiction_invoked` (those columns are accessible via
+  authorized regulator-tier reads; redundant noise on the
+  expiration row).
+- Audit literal `REGULATOR_ACCESS_EXPIRED` was canonically
+  reserved at CAR Sub-box 3 sub-phase 5 and is consumed here —
+  **no new audit literal landed at Wave D**.
+- 7 integration tests at
+  `tests/integration/regulator-access-expired-sweep.test.ts`
+  cover: happy path (SCHEDULER attribution + chain_hash carried +
+  target_entity_id resolved); idempotency on re-sweep (no
+  duplicate emission); supersession by REVOKED; not-yet-expired
+  filter; custom `now` clock override deterministic-test seam;
+  bounded batch.
+
 ## What is NOT live (intentional forward-substrate)
 
 - **CSV export** — NDJSON Wave 4 precedent established
@@ -197,12 +232,10 @@ optional follow-on).
   `entity_id` query param has mild leakage risk (would surface
   whether a given entity has a chain). Separate forward-
   substrate slice with its own QLOCK + design review.
-- **REGULATOR_ACCESS_EXPIRED audit-row emitter** — the
-  enforcement check denies expired bases at read time; the
-  *proactive* emission of an `REGULATOR_ACCESS_EXPIRED` row at
-  the moment a basis crosses `valid_until` is reserved per
-  ADR-0036 Sub-decision 4 and would be driven by a SCHEDULER
-  principal sweep. Forward-substrate.
+- *(closed)* **REGULATOR_ACCESS_EXPIRED audit-row emitter** —
+  this was previously listed as forward-substrate but LANDED
+  at Hardening Wave D (PR #79 / commit `dcff369`). See
+  "What is live" §Hardening Wave D below.
 
 ## RULE 13 disclosures specific to Section 7
 
@@ -240,6 +273,7 @@ optional follow-on).
 | [#62](https://github.com/NiovArchitect/niov-foundation/pull/62) | `026300f` | **Section 7 Wave 2 org-admin scope on /api/v1/audit/events + /:id** — NEW `AuditViewScope` type + `callerHasAdminCapability` + `resolveOrgScopeVector` helpers; `validateListAuditEventsQuery` accepts `scope` enum; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on scope; `scope=org` pre-flights `can_admin_org` (403 `ORG_SCOPE_FORBIDDEN`) + org resolution (404 `NOT_IN_ANY_ORG`) BEFORE row lookup; OR-fence + AND-narrow Prisma composition; enumeration-safe 404 on cross-org detail. `verify-chain` UNCHANGED (self-only per Founder direction). 14 NEW integration tests + Wave 1 19/19 regression preserved + audit unit 23/23 preserved + 116/116 combined regression across 6 audit-touching files. No schema; no new audit literals; no new RULE / ADR landings. Substrate-coherent extension of Wave 1 surface. |
 | [#64](https://github.com/NiovArchitect/niov-foundation/pull/64) | `e914480` | **Section 7 Wave 3 niov-admin/platform scope on unified audit viewer** — `AuditViewScope` extended to `self|org|platform`; NEW `callerHasNiovAdminCapability` TAR-authoritative helper; `listAuditEventsForCaller` + `getAuditEventForCaller` branch on platform scope with empty fence (every audit_events row visible across orgs); filters still AND-narrow; enumeration-safe 404 on unknown UUID preserved. `verify-chain` UNCHANGED (self-only carries over from Wave 2). 10 NEW integration tests + Wave 1+2 regression preserved + 96/96 combined Section 7 + admin-routes + console-routes regression. No schema; no new audit literals; no new RULE / ADR landings. Substrate-coherent extension of Waves 1+2. |
 | [#66](https://github.com/NiovArchitect/niov-foundation/pull/66) | `f316a51` | **Section 7 Wave 4 NDJSON audit export surface** — NEW `EXPORT_AUDIT_EVENTS_MAX_ROWS=10_000` hard cap; NEW `resolveAuditScopePredicate` helper (pulled scope gate logic into one shared function consumed by list + export); NEW `validateExportAuditEventsQuery` validator (format=ndjson only at sub-phase 1; CSV forward-substrate); NEW `exportAuditEventsForCaller` function emits `ADMIN_ACTION:AUDIT_VIEW_EXPORT` audit; NEW `GET /api/v1/audit/events/export` route returns `application/x-ndjson` + `x-audit-row-count`/`x-audit-truncated`/`x-audit-scope` headers. Bounded by `max_rows + 1` take pattern for truncation detection. 13 NEW integration tests + 56/56 combined Section 7 regression preserved. No schema; no new audit literals; no new RULE / ADR landings. Substrate-coherent extension of Waves 1+2+3. |
+| [#79](https://github.com/NiovArchitect/niov-foundation/pull/79) | `dcff369` | **Hardening Wave D — proactive REGULATOR_ACCESS_EXPIRED emitter per ADR-0036 Sub-decision 4** — NEW `apps/api/src/services/cosmp/regulator-expiry.service.ts` with `tickRegulatorAccessExpirySweep` (idempotent + supersession-aware; bounded batch `REGULATOR_EXPIRY_SWEEP_BATCH=50`; oldest-first by `valid_until ASC`); cron-scheduled every 60s on the Action scheduler host (`scheduler.ts:217-224`); emits one `REGULATOR_ACCESS_EXPIRED` audit per matching basis with SCHEDULER attribution + chain_hash carried + safe details only (action + basis_id + valid_until). Closes the previously forward-queued `REGULATOR_ACCESS_EXPIRED audit-row emitter` non-goal from Section 7's "What is NOT live" list. Reuses the canonical `REGULATOR_ACCESS_EXPIRED` audit literal reserved at CAR Sub-box 3 sub-phase 5 — **no new audit literal landed**. No schema migration. 7 NEW integration tests covering happy path + idempotency + REVOKED supersession + not-yet-expired filter + custom `now` clock override deterministic-test seam + bounded batch. |
 | [#68](https://github.com/NiovArchitect/niov-foundation/pull/68) | `9ec214e` | **Section 7 Wave 5 regulator-tier audit access via ADR-0036** — NEW `validateListRegulatorAuditEventsQuery` validator (`lawful_basis_id` required UUID); NEW `listRegulatorAuditEventsForCaller` function calls into the LIVE `getActiveLawfulBasisForRegulator` 9-condition enforcement check at `packages/database/src/queries/lawful-basis.ts`; maps 8 LawfulBasis enforcement failure codes to HTTP (404 `NOT_FOUND` / 403 `EXPIRED` / `NOT_YET_VALID` / `REVOKED` / `HASH_MISMATCH` / `REGULATOR_TARGET_MISMATCH` / 500 integrity); on success queries `audit_events WHERE lawful_basis_id = :basis_id` + SAFE projection + AND-narrow filters + pagination cap. NEW `GET /api/v1/audit/events/regulator-view` route; emits `ADMIN_ACTION:AUDIT_VIEW_REGULATOR`. 12 NEW integration tests covering full 9-condition gate + cross-basis isolation + filter narrowing + happy path. No schema; no new audit literals; no new RULE / ADR landings. Pure read-only consumer of ADR-0036 LawfulBasis attestation substrate. |
 
 ## Production-grade-complete recommendation (Section 7 closeout)
