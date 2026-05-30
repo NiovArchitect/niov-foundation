@@ -179,19 +179,28 @@ export async function registerAuditRoutes(
         validation.normalized,
       );
       if (result.ok === true) {
-        // NDJSON content-type per RFC 8259 + media-type
-        // convention (application/x-ndjson is the de-facto
-        // standard before the IETF formal registration). The
-        // body is plain UTF-8 text with one JSON value per
-        // line; no trailing newline. row_count + truncated
-        // surfaced as response headers so a streaming client
-        // can detect the truncation without parsing the body.
+        // Content-type per format:
+        //   NDJSON → application/x-ndjson per RFC 8259 + the
+        //     de-facto media-type convention (formal registration
+        //     pending at IETF).
+        //   CSV    → text/csv per RFC 4180 §3. Header row is
+        //     included; CRLF line terminators per the spec.
+        // Response headers x-audit-row-count / x-audit-truncated /
+        // x-audit-scope let streaming clients detect truncation +
+        // scope without parsing the body. x-audit-format echoes
+        // the chosen format so a generic operator client can
+        // dispatch on it.
+        const contentType =
+          result.view.format === "csv"
+            ? "text/csv; charset=utf-8"
+            : "application/x-ndjson; charset=utf-8";
         return reply
           .code(200)
-          .header("content-type", "application/x-ndjson; charset=utf-8")
+          .header("content-type", contentType)
           .header("x-audit-row-count", String(result.view.row_count))
           .header("x-audit-truncated", result.view.truncated ? "true" : "false")
           .header("x-audit-scope", result.view.scope)
+          .header("x-audit-format", result.view.format)
           .send(result.view.body);
       }
       const responseBody: Record<string, unknown> = {
