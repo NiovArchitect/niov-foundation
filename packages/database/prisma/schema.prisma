@@ -1621,6 +1621,14 @@ enum ActionType {
   RECORD_CAPSULE
   PROPOSE_PERMISSION_GRANT
   SEND_INTERNAL_NOTIFICATION
+  // Section 4 Wave 3 — INVOKE_CONNECTOR ActionType. The handler
+  // resolves the ConnectorBinding referenced in payload + dispatches
+  // through getConnectorProvider(type) inside the Action runtime so
+  // ADR-0057's 10 ACTION_* audit literals + policy evaluator + retry
+  // budget + AbortController plumbing all apply by construction. NO
+  // new audit literal is added for connector invocation — the action
+  // runtime's audit chain is authoritative.
+  INVOKE_CONNECTOR
 }
 
 // Per-action risk tier per ADR-0057 §2 + §4. CRITICAL is always

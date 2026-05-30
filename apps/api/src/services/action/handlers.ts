@@ -34,10 +34,23 @@
 //   unchanged at the executor boundary.
 
 import type { Action, ActionType } from "@prisma/client";
-import { createPermission, writeAuditEvent } from "@niov/database";
+import {
+  createPermission,
+  getConnectorBindingForOrg,
+  writeAuditEvent,
+} from "@niov/database";
 import type { WriteService } from "../cosmp/write.service.js";
 import type { NotificationService } from "../notification/notification.service.js";
 import {
+  getConnectorProvider,
+  getConnectorTypeDefinition,
+} from "../connector/connector.service.js";
+import type {
+  ConnectorProvider,
+  ConnectorType,
+} from "../connector/connector.service.js";
+import {
+  validateInvokeConnectorPayload,
   validateProposePermissionGrantPayload,
   validateRecordCapsulePayload,
   validateSendInternalNotificationPayload,
@@ -171,6 +184,13 @@ export interface ActionHandlerRegistry {
 export interface ActionHandlerRegistryDeps {
   writeService?: WriteService;
   notificationService?: NotificationService;
+  // Section 4 Wave 3 — optional injectable connector provider so
+  // tests can pass FixtureBasedConnectorProvider directly without
+  // routing through the production getConnectorProvider factory.
+  // When undefined, the handler resolves the provider via
+  // getConnectorProvider(type) at invocation time (Wave 4 swaps the
+  // factory for the real OutboundWebhookProvider).
+  connectorProvider?: ConnectorProvider;
 }
 
 // WHAT: Build the canonical safe stub-success metadata. Used by the
@@ -523,11 +543,142 @@ function makeSendInternalNotificationHandler(
   };
 }
 
+// WHAT: The real INVOKE_CONNECTOR handler. Resolves the
+//        ConnectorBinding referenced in the payload (scoped to the
+//        Action's org_entity_id), enforces enabled state, then
+//        dispatches through the connector provider (FixtureBased at
+//        Wave 3; OutboundWebhookProvider lands at Wave 4).
+//
+// Audit chain:
+//   - The Action runtime emits ACTION_STARTED / ACTION_SUCCEEDED /
+//     ACTION_FAILED automatically per ADR-0057 §11. The handler does
+//     NOT emit its own audit row — the action audit chain is
+//     authoritative for connector invocation. NO new audit literal
+//     is added for connector invocation.
+//
+// SAFE result_metadata:
+//   handler + action_type + binding_id + connector_type +
+//   delivery_metadata (provider-supplied). NEVER the raw
+//   invocation_payload, NEVER the resolved secret value, NEVER raw
+//   third-party response bodies — the provider's delivery_metadata
+//   is governed by the provider's own privacy invariant (see
+//   connector.service.ts).
+//
+// Failure mapping:
+//   binding lookup miss / soft-deleted   -> CONNECTOR_BINDING_NOT_FOUND
+//   binding disabled                     -> CONNECTOR_BINDING_DISABLED
+//   binding type not in registry         -> CONNECTOR_TYPE_UNKNOWN
+//   provider AUTH / NETWORK / TIMEOUT /
+//   RATE_LIMIT / PROVIDER_ERROR / etc.   -> CONNECTOR_<error_class>
+//   thrown exception                     -> CONNECTOR_EXCEPTION
+function makeInvokeConnectorHandler(
+  injectedProvider?: ConnectorProvider,
+): ActionHandlerFn {
+  return async (action) => {
+    const marker = detectTestMarker(action);
+    if (marker === "FAILURE") {
+      return {
+        outcome: "FAILURE",
+        error_class: "STUB_FORCED_FAILURE",
+        error_summary: "test-forced failure",
+      };
+    }
+    if (marker === "TIMEOUT") {
+      return {
+        outcome: "TIMEOUT",
+        error_class: "STUB_FORCED_TIMEOUT",
+        error_summary: "test-forced timeout",
+      };
+    }
+    const validated = validateInvokeConnectorPayload(action.payload_redacted);
+    if (validated.ok === false) {
+      return {
+        outcome: "FAILURE",
+        error_class: "PAYLOAD_INVALID_AT_EXECUTE",
+        error_summary: `payload failed re-validation: ${validated.invalid_fields.join(",")}`,
+      };
+    }
+    // Resolve the binding org-scoped: cross-org binding_ids embedded
+    // in a payload return BINDING_NOT_FOUND, never a cross-tenant
+    // dispatch.
+    const binding = await getConnectorBindingForOrg(
+      validated.normalized.binding_id,
+      action.org_entity_id,
+    );
+    if (binding === null) {
+      return {
+        outcome: "FAILURE",
+        error_class: "CONNECTOR_BINDING_NOT_FOUND",
+        error_summary: `no enabled binding for id=${validated.normalized.binding_id.slice(0, 8)} under this org`,
+      };
+    }
+    if (binding.enabled === false) {
+      return {
+        outcome: "FAILURE",
+        error_class: "CONNECTOR_BINDING_DISABLED",
+        error_summary: `binding ${binding.binding_id.slice(0, 8)} is disabled`,
+      };
+    }
+    const typeDef = getConnectorTypeDefinition(binding.type);
+    if (typeDef === null) {
+      return {
+        outcome: "FAILURE",
+        error_class: "CONNECTOR_TYPE_UNKNOWN",
+        error_summary: `binding ${binding.binding_id.slice(0, 8)} type ${binding.type} not in registry`,
+      };
+    }
+    const provider =
+      injectedProvider ?? getConnectorProvider(typeDef.type);
+    try {
+      const result = await provider.invoke({
+        binding_id: binding.binding_id,
+        type: typeDef.type,
+        config:
+          binding.config !== null &&
+          typeof binding.config === "object" &&
+          !Array.isArray(binding.config)
+            ? (binding.config as Record<string, unknown>)
+            : {},
+        secret_ref: binding.secret_ref,
+        payload: validated.normalized.invocation_payload,
+      });
+      if (result.ok === true) {
+        return {
+          outcome: "SUCCESS",
+          result_summary: `connector_invoked:${typeDef.type}:${binding.binding_id.slice(0, 8)}`,
+          result_metadata: {
+            handler: "invoke_connector",
+            action_type: "INVOKE_CONNECTOR",
+            binding_id: binding.binding_id,
+            connector_type: typeDef.type,
+            delivery_metadata: result.delivery_metadata,
+          },
+        };
+      }
+      return {
+        outcome: "FAILURE",
+        error_class: `CONNECTOR_${result.error_class}` as ConnectorErrorClassPrefixed,
+        error_summary: result.message,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        outcome: "FAILURE",
+        error_class: "CONNECTOR_EXCEPTION",
+        error_summary: msg,
+      };
+    }
+  };
+}
+
+// WHAT: Type-only alias used to satisfy strict literal typing on the
+//        connector failure prefix; the actual value is a runtime
+//        string of shape "CONNECTOR_${ConnectorErrorClass}".
+type ConnectorErrorClassPrefixed = string;
+
 // WHAT: Build the per-ActionType handler dispatch map for the
-//        registry. Wave 11: all 3 ActionTypes have real handlers
-//        when their deps are injected (every prod path supplies
-//        all three at server boot). Early test consumers without
-//        deps still fall back to stubs.
+//        registry. Wave 11 + Wave 3 (Section 4): all 4 ActionTypes
+//        have real handlers when their deps are injected.
 function buildHandlerMap(
   deps: ActionHandlerRegistryDeps,
 ): Record<ActionType, ActionHandlerFn> {
@@ -543,6 +694,7 @@ function buildHandlerMap(
     RECORD_CAPSULE: recordCapsuleHandler,
     SEND_INTERNAL_NOTIFICATION: sendInternalNotificationHandler,
     PROPOSE_PERMISSION_GRANT: makeProposePermissionGrantHandler(),
+    INVOKE_CONNECTOR: makeInvokeConnectorHandler(deps.connectorProvider),
   };
 }
 

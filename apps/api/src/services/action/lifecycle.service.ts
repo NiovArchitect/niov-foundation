@@ -75,6 +75,12 @@ export const RETRY_BUDGET: Readonly<Record<ActionType, number>> =
     RECORD_CAPSULE: 3,
     SEND_INTERNAL_NOTIFICATION: 3,
     PROPOSE_PERMISSION_GRANT: 1,
+    // Section 4 Wave 3 — connector invocations touch external
+    // boundary-of-trust resources. 3 attempts matches the
+    // SEND_INTERNAL_NOTIFICATION precedent; per-binding /
+    // per-connector-type tightening is forward-substrate via the
+    // ActionPolicy.retry_budget operator override (PR #47).
+    INVOKE_CONNECTOR: 3,
   } as const);
 
 // WHAT: The per-attempt timeout default (LOCK-GAP-2).

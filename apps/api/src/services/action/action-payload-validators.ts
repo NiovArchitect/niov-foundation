@@ -573,9 +573,69 @@ export function validatePayloadForActionType(
       const r = validateSendInternalNotificationPayload(payload);
       return r.ok ? { ok: true } : { ok: false, invalid_fields: r.invalid_fields };
     }
+    case "INVOKE_CONNECTOR": {
+      const r = validateInvokeConnectorPayload(payload);
+      return r.ok ? { ok: true } : { ok: false, invalid_fields: r.invalid_fields };
+    }
     default:
       // Unknown action_type — defensive; the route validator would
       // have already rejected this before we got here.
       return { ok: false, invalid_fields: ["action_type"] };
   }
+}
+
+// WHAT: Normalized INVOKE_CONNECTOR payload returned by
+//        validateInvokeConnectorPayload.
+// INPUT: Used as a return type.
+// OUTPUT: None — type only.
+// WHY: Section 4 Wave 3. binding_id identifies the ConnectorBinding
+//      row the handler will resolve at execute-time; invocation_payload
+//      is an opaque per-call body (the provider interprets it per
+//      connector type). NO secret material is ever in the payload —
+//      secrets live behind secret_ref on the binding row.
+export interface NormalizedInvokeConnectorPayload {
+  binding_id: string;
+  invocation_payload: Record<string, unknown>;
+}
+
+// WHAT: Validate an INVOKE_CONNECTOR payload at create-time.
+// INPUT: Raw payload value (typically Action.payload_redacted).
+// OUTPUT: Discriminated success + normalized | failure + invalid_fields.
+// WHY: Service-tier validator; the executor's handler re-runs this so
+//      the typed shape is the single source of truth.
+//      Required fields: binding_id (UUID). invocation_payload defaults
+//      to {} if absent; if present must be a plain JSON object.
+export function validateInvokeConnectorPayload(
+  payload: unknown,
+):
+  | { ok: true; normalized: NormalizedInvokeConnectorPayload }
+  | { ok: false; invalid_fields: string[] } {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    return { ok: false, invalid_fields: ["payload_redacted"] };
+  }
+  const obj = payload as Record<string, unknown>;
+  const invalid: string[] = [];
+  const binding_id = obj["binding_id"];
+  if (typeof binding_id !== "string" || !UUID_RE.test(binding_id)) {
+    invalid.push("binding_id");
+  }
+  let invocation_payload: Record<string, unknown> = {};
+  const raw = obj["invocation_payload"];
+  if (raw !== undefined) {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      invalid.push("invocation_payload");
+    } else {
+      invocation_payload = raw as Record<string, unknown>;
+    }
+  }
+  if (invalid.length > 0) {
+    return { ok: false, invalid_fields: invalid };
+  }
+  return {
+    ok: true,
+    normalized: {
+      binding_id: binding_id as string,
+      invocation_payload,
+    },
+  };
 }

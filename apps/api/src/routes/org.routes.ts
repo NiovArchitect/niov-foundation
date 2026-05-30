@@ -933,6 +933,7 @@ export async function registerOrgRoutes(
         "RECORD_CAPSULE",
         "PROPOSE_PERMISSION_GRANT",
         "SEND_INTERNAL_NOTIFICATION",
+        "INVOKE_CONNECTOR",
       ]);
       const VALID_RISK_TIERS = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
       const VALID_DECISIONS = new Set([
