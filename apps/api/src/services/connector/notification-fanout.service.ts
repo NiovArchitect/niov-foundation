@@ -52,6 +52,7 @@ import type {
   ConnectorProvider,
   ConnectorType,
 } from "./connector.service.js";
+import { createActionForCaller } from "../action/action.service.js";
 
 // WHAT: The minimum metadata the fan-out needs from a freshly-
 //        created notification. Mirrors the SAFE projection at
@@ -71,21 +72,30 @@ export interface NotificationFanOutInput {
 
 // WHAT: The shape returned by dispatchNotificationFanOut so callers
 //        (tests + future inbox-tier diagnostics) can inspect which
-//        bindings fired.
+//        bindings fired + which dispatch mode each used.
 // INPUT: Used as a return type.
 // OUTPUT: None — type only.
 // WHY: Fire-and-forget at the production caller level, but the
 //      function returns a structured summary so tests can assert
-//      the right bindings were matched without scraping audit
-//      rows.
+//      the right bindings were matched + the right mode chosen
+//      without scraping audit rows. Wave 7 adds the per-attempt
+//      `mode` discriminator + the optional `action_id` set when
+//      the action-routed variant succeeded in enqueueing the
+//      INVOKE_CONNECTOR Action.
 export interface NotificationFanOutResult {
   bindings_considered: number;
   bindings_matched: number;
   attempts: ReadonlyArray<{
     binding_id: string;
     connector_type: ConnectorType;
+    mode: "direct" | "action";
     ok: boolean;
     error_class: string | null;
+    // Set when mode="action" and the INVOKE_CONNECTOR Action was
+    // accepted by the Action runtime (note: SUCCEEDED/FAILED is
+    // determined later by the executor; this is just the
+    // create-time enqueue ack).
+    action_id?: string;
   }>;
 }
 
@@ -115,6 +125,28 @@ export function bindingMatchesNotificationClass(
   return false;
 }
 
+// WHAT: Resolve a binding's fan-out dispatch mode from its config.
+// INPUT: A ConnectorBinding.
+// OUTPUT: "direct" | "action".
+// WHY: Wave 7 (Section 4 follow-on per Wave 5 closeout
+//      "an Action-runtime-integrated fan-out variant is
+//      forward-substrate"). Per-binding opt-in via
+//      `config.fan_out_mode = "action"`; default "direct" preserves
+//      the Wave 5 baseline behavior for every binding that doesn't
+//      explicitly opt in. Any unrecognized value falls back to
+//      "direct" — defensive default for forward-compatibility.
+export function bindingFanOutMode(
+  binding: ConnectorBinding,
+): "direct" | "action" {
+  const cfg = binding.config;
+  if (cfg === null || typeof cfg !== "object" || Array.isArray(cfg)) {
+    return "direct";
+  }
+  const raw = (cfg as Record<string, unknown>)["fan_out_mode"];
+  if (raw === "action") return "action";
+  return "direct";
+}
+
 // WHAT: Dispatch external fan-out for a freshly-created internal
 //        Notification. Looks up matching enabled ConnectorBindings
 //        for the source org, awaits provider invocation in
@@ -141,64 +173,189 @@ export async function dispatchNotificationFanOut(
   const matched = all.filter((b) =>
     bindingMatchesNotificationClass(b, input.notification_class),
   );
-  // Step 3 — invoke each in parallel via the production provider
-  // factory (or providerOverride at test register).
+  // Step 3 — per-binding dispatch branches on bindingFanOutMode.
+  // "direct" (Wave 5 baseline; default) → invoke provider directly
+  // + emit ADMIN_ACTION:NOTIFICATION_FAN_OUT_DISPATCHED|FAILED.
+  // "action" (Wave 7 opt-in) → enqueue an INVOKE_CONNECTOR Action
+  // via createActionForCaller; the Action runtime then owns retry
+  // + cancellation + the ACTION_* audit chain.
   const attempts = await Promise.all(
     matched.map(async (binding) => {
-      const provider =
-        opts.providerOverride ??
-        (await getConnectorProviderAsync(binding.type as ConnectorType));
-      const result = await provider.invoke({
-        binding_id: binding.binding_id,
-        type: binding.type as ConnectorType,
-        config:
-          binding.config !== null &&
-          typeof binding.config === "object" &&
-          !Array.isArray(binding.config)
-            ? (binding.config as Record<string, unknown>)
-            : {},
-        secret_ref: binding.secret_ref,
-        payload: {
-          notification_id: input.notification_id,
-          notification_class: input.notification_class,
-        },
-      });
-      // Step 4 — emit per-attempt audit row. ADMIN_ACTION literal
-      // + details.action discriminator per Section 7 precedent.
-      // NO new audit literal. Outcome SUCCESS / FAILURE mirrors the
-      // canonical AuditEvent.outcome enum.
-      const action = result.ok
-        ? "NOTIFICATION_FAN_OUT_DISPATCHED"
-        : "NOTIFICATION_FAN_OUT_FAILED";
-      await writeAuditEvent({
-        event_type: "ADMIN_ACTION",
-        // AuditOutcome enum at schema.prisma is { SUCCESS, DENIED,
-        // ERROR }. Fan-out failures map to ERROR (a downstream
-        // provider error, not a sovereignty / RULE 0 denial).
-        outcome: result.ok ? "SUCCESS" : "ERROR",
-        actor_entity_id: input.source_entity_id,
-        target_entity_id: input.org_entity_id,
-        details: {
-          action,
-          binding_id: binding.binding_id,
-          connector_type: binding.type,
-          notification_id: input.notification_id,
-          notification_class: input.notification_class,
-          ...(result.ok ? {} : { error_class: result.error_class }),
-        },
-      });
-      return {
-        binding_id: binding.binding_id,
-        connector_type: binding.type as ConnectorType,
-        ok: result.ok,
-        error_class: result.ok ? null : result.error_class,
-      };
+      const mode = bindingFanOutMode(binding);
+      if (mode === "action") {
+        return dispatchActionRouted(binding, input);
+      }
+      return dispatchDirect(binding, input, opts.providerOverride);
     }),
   );
   return {
     bindings_considered: all.length,
     bindings_matched: matched.length,
     attempts,
+  };
+}
+
+// WHAT: The Wave 5 baseline direct-dispatch path, factored out so
+//        the Wave 7 mode branch in dispatchNotificationFanOut stays
+//        single-responsibility.
+// INPUT: ConnectorBinding + NotificationFanOutInput + optional
+//        providerOverride.
+// OUTPUT: One attempt-summary entry.
+// WHY: Preserves Wave 5 semantics verbatim (no behavior drift for
+//      bindings without fan_out_mode set).
+async function dispatchDirect(
+  binding: ConnectorBinding,
+  input: NotificationFanOutInput,
+  providerOverride: ConnectorProvider | undefined,
+): Promise<NotificationFanOutResult["attempts"][number]> {
+  const provider =
+    providerOverride ??
+    (await getConnectorProviderAsync(binding.type as ConnectorType));
+  const result = await provider.invoke({
+    binding_id: binding.binding_id,
+    type: binding.type as ConnectorType,
+    config:
+      binding.config !== null &&
+      typeof binding.config === "object" &&
+      !Array.isArray(binding.config)
+        ? (binding.config as Record<string, unknown>)
+        : {},
+    secret_ref: binding.secret_ref,
+    payload: {
+      notification_id: input.notification_id,
+      notification_class: input.notification_class,
+    },
+  });
+  const action = result.ok
+    ? "NOTIFICATION_FAN_OUT_DISPATCHED"
+    : "NOTIFICATION_FAN_OUT_FAILED";
+  await writeAuditEvent({
+    event_type: "ADMIN_ACTION",
+    // AuditOutcome enum at schema.prisma is { SUCCESS, DENIED,
+    // ERROR }. Fan-out failures map to ERROR (a downstream
+    // provider error, not a sovereignty / RULE 0 denial).
+    outcome: result.ok ? "SUCCESS" : "ERROR",
+    actor_entity_id: input.source_entity_id,
+    target_entity_id: input.org_entity_id,
+    details: {
+      action,
+      binding_id: binding.binding_id,
+      connector_type: binding.type,
+      notification_id: input.notification_id,
+      notification_class: input.notification_class,
+      mode: "direct",
+      ...(result.ok ? {} : { error_class: result.error_class }),
+    },
+  });
+  return {
+    binding_id: binding.binding_id,
+    connector_type: binding.type as ConnectorType,
+    mode: "direct",
+    ok: result.ok,
+    error_class: result.ok ? null : result.error_class,
+  };
+}
+
+// WHAT: The Wave 7 action-routed dispatch path. Creates an
+//        INVOKE_CONNECTOR Action via createActionForCaller with
+//        source_entity_id as the caller — the original entity that
+//        triggered the SEND_INTERNAL_NOTIFICATION. The Action
+//        runtime then takes over: policy evaluator decides
+//        AUTO_APPROVE / DUAL_CONTROL per the org's INVOKE_CONNECTOR
+//        ActionPolicy + autonomy_level + org_require_human_approval
+//        + org_auto_approve_low_risk; admission tick promotes
+//        SCHEDULED; executor tick runs the handler; ACTION_* audit
+//        chain captures the lifecycle.
+// INPUT: ConnectorBinding + NotificationFanOutInput.
+// OUTPUT: One attempt-summary entry. ok=true means the Action was
+//         accepted by the runtime (enqueued); actual provider
+//         invoke + ACTION_SUCCEEDED|FAILED happens later when the
+//         executor tick runs.
+// WHY: Per Wave 5 closeout forward-substrate note: "an
+//      Action-runtime-integrated fan-out variant gives retry +
+//      cancellation guarantees at the cost of coupling." Wave 7
+//      ships that variant as opt-in (per-binding
+//      config.fan_out_mode = "action").
+//
+// SAFETY:
+//   - source_entity_id is a real entity UUID, NOT the SCHEDULER
+//     sentinel — preserves the Action model's @db.Uuid contract
+//     + gives audit attribution to the entity that caused the
+//     fan-out.
+//   - target_entity_id is omitted (the Action's "subject" is a
+//     binding, not an entity; the binding is identified in
+//     payload_redacted).
+//   - idempotency_key is deterministic per (notification_id,
+//     binding_id) so a re-fire collapses to the prior Action.
+//   - payload_redacted carries binding_id + invocation_payload
+//     (notification_id + notification_class metadata-only ping);
+//     never body content (preserves Wave 5 privacy invariant).
+async function dispatchActionRouted(
+  binding: ConnectorBinding,
+  input: NotificationFanOutInput,
+): Promise<NotificationFanOutResult["attempts"][number]> {
+  const idempotency_key = `fanout:${input.notification_id}:${binding.binding_id}`;
+  const result = await createActionForCaller(input.source_entity_id, {
+    action_type: "INVOKE_CONNECTOR",
+    idempotency_key,
+    payload_summary: `connector_fanout:${binding.type}:${binding.binding_id.slice(0, 8)}`,
+    payload_redacted: {
+      binding_id: binding.binding_id,
+      invocation_payload: {
+        notification_id: input.notification_id,
+        notification_class: input.notification_class,
+      },
+    },
+  });
+  if (result.ok === true) {
+    await writeAuditEvent({
+      event_type: "ADMIN_ACTION",
+      outcome: "SUCCESS",
+      actor_entity_id: input.source_entity_id,
+      target_entity_id: input.org_entity_id,
+      details: {
+        action: "NOTIFICATION_FAN_OUT_ENQUEUED",
+        binding_id: binding.binding_id,
+        connector_type: binding.type,
+        notification_id: input.notification_id,
+        notification_class: input.notification_class,
+        mode: "action",
+        action_id: result.view.action_id,
+      },
+    });
+    return {
+      binding_id: binding.binding_id,
+      connector_type: binding.type as ConnectorType,
+      mode: "action",
+      ok: true,
+      error_class: null,
+      action_id: result.view.action_id,
+    };
+  }
+  // Action runtime refused the create (validation, policy denied,
+  // idempotency collision, etc.). Emit a FAILED audit so operators
+  // can monitor + diagnose.
+  await writeAuditEvent({
+    event_type: "ADMIN_ACTION",
+    outcome: "ERROR",
+    actor_entity_id: input.source_entity_id,
+    target_entity_id: input.org_entity_id,
+    details: {
+      action: "NOTIFICATION_FAN_OUT_FAILED",
+      binding_id: binding.binding_id,
+      connector_type: binding.type,
+      notification_id: input.notification_id,
+      notification_class: input.notification_class,
+      mode: "action",
+      error_class: `ACTION_RUNTIME_${result.code}`,
+    },
+  });
+  return {
+    binding_id: binding.binding_id,
+    connector_type: binding.type as ConnectorType,
+    mode: "action",
+    ok: false,
+    error_class: `ACTION_RUNTIME_${result.code}`,
   };
 }
 
