@@ -34,6 +34,10 @@ function statusForCode(code: string): number {
     case "NOT_HIVE_CREATOR":
     case "NOT_HIVE_MEMBER":
     case "HIVE_DISSOLVED":
+    // Section 3 Wave 2 — RULE 0 cross-org + AI_AGENT denials
+    // both map to 403; fail-closed with no extra info leakage.
+    case "CROSS_ORG_INVITE_DENIED":
+    case "AI_AGENT_NOT_ELIGIBLE_FOR_HIVE":
       return 403;
     case "HIVE_NOT_FOUND":
     case "INVITEE_NOT_FOUND":
@@ -42,8 +46,13 @@ function statusForCode(code: string): number {
     case "AGGREGATE_NOT_BUILT":
       return 404;
     case "ALREADY_MEMBER":
+    case "DEFAULT_HIVE_ALREADY_EXISTS":
       return 409;
     case "INVALID_REQUEST":
+    // Section 3 Wave 2 — v1 hive_type allowlist + non-null
+    // org_entity_id are request-shape violations → 422.
+    case "INVALID_HIVE_TYPE_FOR_V1":
+    case "ORG_ENTITY_ID_REQUIRED":
       return 422;
     default:
       return 400;

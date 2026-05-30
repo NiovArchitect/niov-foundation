@@ -21,6 +21,21 @@ import {
 } from "@niov/database";
 import type { ContentStore } from "../../content-store.js";
 import type { AuthService } from "../auth.service.js";
+import { getOrgEntityId } from "../governance/org.js";
+
+// WHAT: ADR-0059 v1 hive_type allowlist. CROSS_ORGANIZATION +
+//        DEVICE_NETWORK + GOVERNMENT enum values are reserved in
+//        the schema for forward-substrate use but explicitly
+//        rejected at the v1 service tier (cross-org Hives collide
+//        with RULE 0 three-wallet sovereignty; DEVICE_NETWORK +
+//        GOVERNMENT need their own design slices).
+// INPUT: Used as a value namespace + lookup set.
+// OUTPUT: None.
+// WHY: Section 3 Wave 2 enforcement per Founder Sleep Directive
+//      checkpoint #1. Frozen so a future addition is an explicit
+//      Founder-authorized substrate change at this anchor.
+export const HIVE_TYPE_V1_ALLOWLIST: ReadonlySet<HiveType> =
+  Object.freeze(new Set<HiveType>(["ENTERPRISE", "PERSONAL_NETWORK"]));
 
 // WHAT: Settings the hive creator (or invitee) supplies for one
 //        membership row.
@@ -122,6 +137,17 @@ export interface CreateHiveOptions {
 // INPUT: Used as a return type only.
 // OUTPUT: None -- this is a type.
 // WHY: Discriminated union keeps route mapping simple.
+//
+// SECTION 3 WAVE 2 NEW CODES (per ADR-0059 + Founder Sleep
+// Directive enforcement checkpoints):
+//   - INVALID_HIVE_TYPE_FOR_V1: hive_type not in HIVE_TYPE_V1_ALLOWLIST.
+//   - ORG_ENTITY_ID_REQUIRED: v1 hives MUST resolve a non-null
+//     org_entity_id (per-§1 same-org scope mandate).
+//   - CROSS_ORG_INVITE_DENIED: invitee is not a member of the
+//     Hive's org per EntityMembership; RULE 0 enforcement.
+//   - AI_AGENT_NOT_ELIGIBLE_FOR_HIVE: invitee.entity_type ===
+//     "AI_AGENT"; ADR-0046 + RULE 0 AI permission-ceiling
+//     enforcement on the public inviteToHive surface.
 export interface HiveFailure {
   ok: false;
   code:
@@ -140,7 +166,11 @@ export interface HiveFailure {
     | "ALREADY_MEMBER"
     | "MEMBERSHIP_NOT_FOUND"
     | "AGGREGATE_NOT_BUILT"
-    | "DEFAULT_HIVE_ALREADY_EXISTS";
+    | "DEFAULT_HIVE_ALREADY_EXISTS"
+    | "INVALID_HIVE_TYPE_FOR_V1"
+    | "ORG_ENTITY_ID_REQUIRED"
+    | "CROSS_ORG_INVITE_DENIED"
+    | "AI_AGENT_NOT_ELIGIBLE_FOR_HIVE";
   message: string;
 }
 
@@ -185,12 +215,75 @@ export class HiveService {
     if (typeof name !== "string" || name.length === 0) {
       return { ok: false, code: "INVALID_REQUEST", message: "hive_name is required" };
     }
+
+    // Section 3 Wave 2 ADR-0059 §3.b — TAR `can_create_hives`
+    // gate enforcement. validateSession with "create_hives"
+    // operation narrows to callers whose TAR carries
+    // can_create_hives = true; absent capability collapses to
+    // OPERATION_NOT_PERMITTED (existing failure code). This
+    // closes the prior un-gated POST /api/v1/hive substrate gap
+    // documented as a RULE 13 finding at ADR-0059 §Context.
     const session = await this.authService.validateSession(
       sessionToken,
-      "share",
+      "create_hives",
     );
     if (!session.valid) {
       return { ok: false, code: session.code, message: "Hive create denied" };
+    }
+
+    // Section 3 Wave 2 ADR-0059 §1 — v1 hive_type allowlist
+    // enforcement. ENTERPRISE + PERSONAL_NETWORK only at v1;
+    // CROSS_ORGANIZATION + DEVICE_NETWORK + GOVERNMENT are
+    // reserved in the schema enum but rejected at service tier
+    // per Founder Sleep Directive checkpoint #1.
+    if (!HIVE_TYPE_V1_ALLOWLIST.has(type)) {
+      return {
+        ok: false,
+        code: "INVALID_HIVE_TYPE_FOR_V1",
+        message:
+          "v1 Hives MUST be ENTERPRISE or PERSONAL_NETWORK; CROSS_ORGANIZATION + DEVICE_NETWORK + GOVERNMENT are forward-substrate per ADR-0059",
+      };
+    }
+
+    // Section 3 Wave 2 ADR-0059 §1 — non-null org_entity_id
+    // mandatory at v1 (RULE 0 same-org sovereignty). Resolution
+    // policy:
+    //   - options.org_entity_id === undefined → derive from the
+    //     caller's EntityMembership via getOrgEntityId (substrate-
+    //     derivable per "create requires/derives safe
+    //     org_entity_id per existing substrate pattern" — Founder
+    //     Sleep Directive Wave 2 implementation scope).
+    //   - options.org_entity_id === null → explicit rejection
+    //     (caller asked for cross-org / orgless; v1 forbids).
+    //   - options.org_entity_id === string → trust caller (used by
+    //     dandelion.service.ts Phase 0 default-enterprise hive
+    //     creation; the org_entity_id is the new org's own id).
+    let orgEntityId: string;
+    if (options.org_entity_id === null) {
+      return {
+        ok: false,
+        code: "ORG_ENTITY_ID_REQUIRED",
+        message:
+          "v1 Hives MUST have a non-null org_entity_id; orgless/cross-org Hives are forward-substrate per ADR-0059 §1",
+      };
+    }
+    if (options.org_entity_id === undefined) {
+      try {
+        orgEntityId = await getOrgEntityId(session.entity_id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "unknown";
+        if (msg === "NOT_IN_ANY_ORG" || msg === "ORG_HIERARCHY_TOO_DEEP") {
+          return {
+            ok: false,
+            code: "ORG_ENTITY_ID_REQUIRED",
+            message:
+              "Caller has no resolvable org; v1 Hives MUST be same-org scoped",
+          };
+        }
+        throw err;
+      }
+    } else {
+      orgEntityId = options.org_entity_id;
     }
 
     // Application-level uniqueness check for the per-org default-
@@ -200,19 +293,9 @@ export class HiveService {
     // API caller that creates a default Hive directly.
     const isDefaultEnterprise = options.is_default_enterprise === true;
     if (isDefaultEnterprise) {
-      if (
-        options.org_entity_id === undefined ||
-        options.org_entity_id === null
-      ) {
-        return {
-          ok: false,
-          code: "INVALID_REQUEST",
-          message: "org_entity_id is required when is_default_enterprise=true",
-        };
-      }
       const existingDefault = await prisma.hive.findFirst({
         where: {
-          org_entity_id: options.org_entity_id,
+          org_entity_id: orgEntityId,
           is_default_enterprise: true,
           status: "ACTIVE",
         },
@@ -239,7 +322,9 @@ export class HiveService {
           hive_type: type,
           governance_terms: terms as object,
           member_count: 1,
-          org_entity_id: options.org_entity_id ?? null,
+          // Section 3 Wave 2 — non-null org_entity_id per ADR-0059
+          // §1; resolved above to a real org id (never null at v1).
+          org_entity_id: orgEntityId,
           is_default_enterprise: isDefaultEnterprise,
         },
       }),
@@ -268,7 +353,9 @@ export class HiveService {
         hive_id,
         hive_name: name,
         hive_type: type,
-        org_entity_id: options.org_entity_id ?? null,
+        // Section 3 Wave 2 — org_entity_id now always non-null at
+        // v1 per ADR-0059 §1.
+        org_entity_id: orgEntityId,
         is_default_enterprise: isDefaultEnterprise,
       },
     });
@@ -352,6 +439,65 @@ export class HiveService {
         ok: false,
         code: "INVITEE_NOT_FOUND",
         message: "Invitee entity not found",
+      };
+    }
+
+    // Section 3 Wave 2 ADR-0059 §3.c — AI_AGENT exclusion on the
+    // public inviteToHive surface. Per ADR-0046 entity-type-
+    // discriminated routing + RULE 0 lower-default-permission
+    // ceilings for AI: AI_AGENT entities MUST NOT be admitted to
+    // a Hive via the public inviteToHive path. AI twins access
+    // hive intelligence via their owner's permission-bridge
+    // architecture, NOT via direct membership. The internal
+    // createTwin standard-branch auto-join at
+    // apps/api/src/services/governance/twin.service.ts (which
+    // bypasses HiveService entirely and uses tx.hiveMembership.create
+    // directly) is a legacy substrate carve-out — Wave 2 enforces
+    // the policy at the public surface; future slice may revisit
+    // the createTwin path under separate Founder authorization
+    // (per ADR-0059 §3.c forward-substrate disposition).
+    if (invitee.entity_type === "AI_AGENT") {
+      return {
+        ok: false,
+        code: "AI_AGENT_NOT_ELIGIBLE_FOR_HIVE",
+        message:
+          "AI_AGENT entities are not eligible for direct Hive membership at v1 per ADR-0046 + ADR-0059 §3.c",
+      };
+    }
+
+    // Section 3 Wave 2 ADR-0059 §3.b — same-org membership check.
+    // The Hive's org_entity_id is the v1 sovereignty boundary;
+    // invitees MUST be members of that same org via
+    // EntityMembership (parent_id = Hive.org_entity_id; child_id
+    // = invitee; is_active = true). Cross-org invitations are
+    // rejected with CROSS_ORG_INVITE_DENIED + no extra
+    // information leakage (mirrors the Wave 11 cross-org
+    // notification pattern at notification.service.ts:99-109).
+    if (hive.org_entity_id === null) {
+      // Legacy hives with no org_entity_id (pre-Wave-2) cannot
+      // be invited to under v1 same-org semantics; admin tooling
+      // would need to set an org first (forward-substrate).
+      return {
+        ok: false,
+        code: "ORG_ENTITY_ID_REQUIRED",
+        message:
+          "Hive predates Wave 2 v1 same-org enforcement; cannot invite until an org_entity_id is set",
+      };
+    }
+    const orgMembership = await prisma.entityMembership.findFirst({
+      where: {
+        parent_id: hive.org_entity_id,
+        child_id: inviteeId,
+        is_active: true,
+      },
+      select: { membership_id: true },
+    });
+    if (orgMembership === null) {
+      return {
+        ok: false,
+        code: "CROSS_ORG_INVITE_DENIED",
+        message:
+          "Invitee is not an active member of the Hive's org; v1 forbids cross-org Hive membership per RULE 0 + ADR-0059 §3.b",
       };
     }
 
@@ -578,6 +724,35 @@ export class HiveService {
         code: "NOT_HIVE_MEMBER",
         message: "Not an active member of this hive",
       };
+    }
+
+    // Section 3 Wave 2 ADR-0059 §3.d + Founder Sleep Directive
+    // checkpoint #5 — capsule_types_accessible read-time
+    // enforcement. If the caller's HiveMembership lists ZERO
+    // accessible capsule types, return a SAFE zero-state
+    // projection (intelligence: null) rather than the
+    // unfiltered aggregate. This is a tightening of the prior
+    // permissive behavior; existing memberships with the
+    // empty-default capsule_types_accessible now receive the
+    // zero-state response.
+    //
+    // The audit row is still emitted for forensic continuity;
+    // operators can monitor zero-state reads to identify
+    // memberships needing access-type configuration.
+    if (membership.capsule_types_accessible.length === 0) {
+      await writeAuditEvent({
+        event_type: "HIVE_INTELLIGENCE_READ",
+        outcome: "SUCCESS",
+        actor_entity_id: session.entity_id,
+        session_id: session.session_id,
+        ip_address: context.ip_address ?? null,
+        details: {
+          hive_id: hiveId,
+          aggregate_present: false,
+          zero_state_reason: "EMPTY_CAPSULE_TYPES_ACCESSIBLE",
+        },
+      });
+      return { ok: true, hive_id: hiveId, intelligence: null };
     }
 
     if (hive.aggregate_capsule_id === null) {
