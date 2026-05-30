@@ -985,4 +985,423 @@ export class HiveService {
       common_tags_count: commonTags.length,
     };
   }
+
+  // ----------------------------------------------------------------
+  // Section 3 Wave 3 — Admin route surface (ADR-0062)
+  //
+  // These 4 admin methods are reached via /api/v1/org/hives/* routes
+  // in hive-admin.routes.ts under the requireAdminCapability(
+  // authService, "can_admin_org") preHandler. The route is the
+  // authentication boundary; these methods assume the caller's
+  // org_entity_id has already been resolved via getOrgEntityId at
+  // the route tier and is passed in explicitly. Cross-org access
+  // collapses to enumeration-safe 404 HIVE_NOT_FOUND /
+  // MEMBERSHIP_NOT_FOUND mirroring the Section 4 connector pattern.
+  // ----------------------------------------------------------------
+
+  // WHAT: List all hives in an org with optional status filter.
+  // INPUT: org_entity_id (already resolved by route tier), optional
+  //         { status: HiveStatus } filter.
+  // OUTPUT: { ok: true; hives: HiveListItemView[] } |
+  //         { ok: false; code: "INVALID_FIELD"; ... }.
+  // WHY: Wave 3 admin governance surface per ADR-0062 Sub-decision 1
+  //      route #1; mirrors connector listConnectorBindingsForOrgService
+  //      pattern verbatim.
+  async listHivesForOrg(
+    orgEntityId: string,
+    filter: { status?: "ACTIVE" | "DISSOLVED" } = {},
+  ): Promise<
+    | { ok: true; hives: HiveListItemView[] }
+    | { ok: false; code: "INVALID_FIELD"; invalid_fields: string[]; message: string }
+  > {
+    if (
+      filter.status !== undefined &&
+      filter.status !== "ACTIVE" &&
+      filter.status !== "DISSOLVED"
+    ) {
+      return {
+        ok: false,
+        code: "INVALID_FIELD",
+        invalid_fields: ["status"],
+        message: "status must be ACTIVE or DISSOLVED",
+      };
+    }
+
+    const rows = await prisma.hive.findMany({
+      where: {
+        org_entity_id: orgEntityId,
+        ...(filter.status !== undefined ? { status: filter.status } : {}),
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    return { ok: true, hives: rows.map(projectHiveListItem) };
+  }
+
+  // WHAT: Fetch one hive's admin detail + safe member roster.
+  // INPUT: org_entity_id, hive_id.
+  // OUTPUT: { ok: true; hive; members } | HiveAdminFailure.
+  // WHY: Wave 3 admin governance surface per ADR-0062 Sub-decision 1
+  //      route #2; enumeration-safe 404 for cross-org id mirrors
+  //      connector pattern.
+  async getHiveAdminDetail(
+    orgEntityId: string,
+    hiveId: string,
+  ): Promise<HiveAdminDetailSuccess | HiveAdminFailure> {
+    const hive = await prisma.hive.findFirst({
+      where: { hive_id: hiveId, org_entity_id: orgEntityId },
+    });
+    if (hive === null) {
+      return {
+        ok: false,
+        code: "HIVE_NOT_FOUND",
+        message: "Hive not found in caller's org",
+      };
+    }
+
+    const memberRows = await prisma.hiveMembership.findMany({
+      where: { hive_id: hiveId },
+      orderBy: { joined_at: "asc" },
+    });
+
+    const entityIds = memberRows.map((m) => m.entity_id);
+    const entities =
+      entityIds.length === 0
+        ? []
+        : await prisma.entity.findMany({
+            where: { entity_id: { in: entityIds } },
+            select: { entity_id: true, entity_type: true, display_name: true },
+          });
+    const entityById = new Map(entities.map((e) => [e.entity_id, e]));
+
+    const members = memberRows.map((m) =>
+      projectHiveMembershipAdmin(m, entityById.get(m.entity_id) ?? null),
+    );
+
+    return {
+      ok: true,
+      hive: projectHiveAdminDetail(hive),
+      members,
+    };
+  }
+
+  // WHAT: Soft-archive a hive (status: ACTIVE → DISSOLVED).
+  // INPUT: org_entity_id, hive_id, actor_entity_id.
+  // OUTPUT: { ok: true; status; already_dissolved; audit_event_id }
+  //         | HiveAdminFailure.
+  // WHY: Wave 3 admin governance surface per ADR-0062 Sub-decision 1
+  //      route #3 + Sub-decision 3 idempotency; RULE 10 soft-delete;
+  //      emits ADMIN_ACTION + details.action = "HIVE_DISSOLVED" per
+  //      Sub-decision 5 (no new audit literal).
+  async dissolveHive(
+    orgEntityId: string,
+    hiveId: string,
+    actorEntityId: string,
+    context: { ip_address?: string | null } = {},
+  ): Promise<DissolveHiveSuccess | HiveAdminFailure> {
+    const hive = await prisma.hive.findFirst({
+      where: { hive_id: hiveId, org_entity_id: orgEntityId },
+    });
+    if (hive === null) {
+      return {
+        ok: false,
+        code: "HIVE_NOT_FOUND",
+        message: "Hive not found in caller's org",
+      };
+    }
+
+    // ADR-0062 Sub-decision 3 — idempotent on already-dissolved.
+    // Return success WITHOUT a new audit row (idempotent paths
+    // emit no audit; chain reflects state transitions only).
+    if (hive.status === "DISSOLVED") {
+      return {
+        ok: true,
+        status: "DISSOLVED",
+        already_dissolved: true,
+        audit_event_id: null,
+      };
+    }
+
+    await prisma.hive.update({
+      where: { hive_id: hiveId },
+      data: { status: "DISSOLVED" },
+    });
+
+    const audit = await writeAuditEvent({
+      event_type: "ADMIN_ACTION",
+      outcome: "SUCCESS",
+      actor_entity_id: actorEntityId,
+      target_entity_id: orgEntityId,
+      ip_address: context.ip_address ?? null,
+      details: {
+        action: "HIVE_DISSOLVED",
+        hive_id: hiveId,
+        org_entity_id: orgEntityId,
+        member_count_at_dissolve: hive.member_count,
+      },
+    });
+
+    return {
+      ok: true,
+      status: "DISSOLVED",
+      already_dissolved: false,
+      audit_event_id: audit.audit_id,
+    };
+  }
+
+  // WHAT: Admin force-remove a member from a hive.
+  // INPUT: org_entity_id, hive_id, member_entity_id, actor_entity_id.
+  // OUTPUT: { ok: true; membership_id; member_count; audit_event_id }
+  //         | HiveAdminFailure.
+  // WHY: Wave 3 admin governance surface per ADR-0062 Sub-decision 1
+  //      route #4; AI_AGENT permitted at admin tier (Sub-decision 4)
+  //      because this is a cleanup operation not an invite path.
+  //      Emits the existing HIVE_MEMBER_REMOVED literal + details.action
+  //      = "HIVE_MEMBER_FORCE_REMOVED" + actor_role = "ORG_ADMIN"
+  //      discriminator (Sub-decision 5; no new audit literal).
+  async forceRemoveMember(
+    orgEntityId: string,
+    hiveId: string,
+    memberEntityId: string,
+    actorEntityId: string,
+    context: { ip_address?: string | null } = {},
+  ): Promise<ForceRemoveMemberSuccess | HiveAdminFailure> {
+    const hive = await prisma.hive.findFirst({
+      where: { hive_id: hiveId, org_entity_id: orgEntityId },
+    });
+    if (hive === null) {
+      return {
+        ok: false,
+        code: "HIVE_NOT_FOUND",
+        message: "Hive not found in caller's org",
+      };
+    }
+
+    const membership = await prisma.hiveMembership.findUnique({
+      where: {
+        hive_id_entity_id: { hive_id: hiveId, entity_id: memberEntityId },
+      },
+    });
+    if (membership === null || membership.status !== "ACTIVE") {
+      // ADR-0062 Sub-decision 3 — enumeration-safe 404 covers both
+      // unknown and already-REMOVED cases. No new audit row.
+      return {
+        ok: false,
+        code: "MEMBERSHIP_NOT_FOUND",
+        message: "No active membership for that entity in this hive",
+      };
+    }
+
+    await prisma.$transaction([
+      prisma.hiveMembership.update({
+        where: { membership_id: membership.membership_id },
+        data: { status: "REMOVED" },
+      }),
+      prisma.hive.update({
+        where: { hive_id: hiveId },
+        data: { member_count: { decrement: 1 } },
+      }),
+    ]);
+
+    const updatedHive = await prisma.hive.findUnique({
+      where: { hive_id: hiveId },
+      select: { member_count: true },
+    });
+
+    const audit = await writeAuditEvent({
+      event_type: "HIVE_MEMBER_REMOVED",
+      outcome: "SUCCESS",
+      actor_entity_id: actorEntityId,
+      target_entity_id: memberEntityId,
+      ip_address: context.ip_address ?? null,
+      details: {
+        action: "HIVE_MEMBER_FORCE_REMOVED",
+        actor_role: "ORG_ADMIN",
+        hive_id: hiveId,
+        membership_id: membership.membership_id,
+        target_entity_id: memberEntityId,
+      },
+    });
+
+    return {
+      ok: true,
+      membership_id: membership.membership_id,
+      member_count: updatedHive?.member_count ?? 0,
+      audit_event_id: audit.audit_id,
+    };
+  }
+}
+
+// ----------------------------------------------------------------
+// Section 3 Wave 3 — Admin view projections + return types
+// (ADR-0062 Sub-decision 2)
+// ----------------------------------------------------------------
+
+// WHAT: SAFE projection of a Hive row for the admin list endpoint.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: ADR-0062 Sub-decision 2 — excludes governance_terms (Wave 4
+//      forward-substrate) + aggregate_capsule_id (internal pointer).
+export interface HiveListItemView {
+  hive_id: string;
+  hive_name: string;
+  hive_type: HiveType;
+  status: "ACTIVE" | "DISSOLVED";
+  is_default_enterprise: boolean;
+  member_count: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// WHAT: SAFE projection of a Hive row for the admin detail endpoint.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Same as HiveListItemView plus org_entity_id (admin tier only;
+//      same-org confirmed by route gate).
+export interface HiveAdminDetailView extends HiveListItemView {
+  org_entity_id: string | null;
+}
+
+// WHAT: SAFE projection of a HiveMembership row for the admin roster.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: ADR-0062 Sub-decision 2 — capsule_types_* exposed as COUNTS
+//      only (member-private values stay private); excludes all raw
+//      content / payload / wallet internals / permission internals /
+//      bridge IDs / secret refs / embeddings / storage locations.
+export interface HiveMembershipAdminView {
+  membership_id: string;
+  entity_id: string;
+  entity_type: string | null;
+  display_name: string | null;
+  status: "ACTIVE" | "REMOVED";
+  access_scope: AccessScope;
+  contribution_scope: AccessScope;
+  joined_at: string;
+  expires_at: string | null;
+  capsule_types_accessible_count: number;
+  capsule_types_contributed_count: number;
+}
+
+// WHAT: Admin detail success shape.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Hive metadata + safe member roster in one round-trip.
+export interface HiveAdminDetailSuccess {
+  ok: true;
+  hive: HiveAdminDetailView;
+  members: HiveMembershipAdminView[];
+}
+
+// WHAT: Dissolve success shape (carries idempotency flag).
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: ADR-0062 Sub-decision 3 — already_dissolved distinguishes
+//      "this call dissolved" (audit_event_id set) from "was already
+//      dissolved" (audit_event_id null).
+export interface DissolveHiveSuccess {
+  ok: true;
+  status: "DISSOLVED";
+  already_dissolved: boolean;
+  audit_event_id: string | null;
+}
+
+// WHAT: Force-remove success shape.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Mirrors creator-removeMember shape + audit_event_id (admin
+//      paths surface the audit id per Section 4 connector precedent).
+export interface ForceRemoveMemberSuccess {
+  ok: true;
+  membership_id: string;
+  member_count: number;
+  audit_event_id: string;
+}
+
+// WHAT: Unified failure shape for the Wave 3 admin surface.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: ADR-0062 Sub-decision 6 — discriminated union keeps the
+//      route-tier statusFor mapping simple.
+export interface HiveAdminFailure {
+  ok: false;
+  code:
+    | "HIVE_NOT_FOUND"
+    | "MEMBERSHIP_NOT_FOUND"
+    | "INVALID_FIELD"
+    | "INTERNAL_ERROR";
+  message: string;
+  invalid_fields?: string[];
+}
+
+// WHAT: Project a Hive row to the SAFE list view.
+// INPUT: A Prisma Hive row.
+// OUTPUT: HiveListItemView (forbidden fields stripped).
+// WHY: Single-source projection; the test surface asserts the
+//      response JSON does NOT contain governance_terms or
+//      aggregate_capsule_id (Sub-decision 2 + Sub-decision 8).
+function projectHiveListItem(hive: Hive): HiveListItemView {
+  return {
+    hive_id: hive.hive_id,
+    hive_name: hive.hive_name,
+    hive_type: hive.hive_type,
+    status: hive.status,
+    is_default_enterprise: hive.is_default_enterprise,
+    member_count: hive.member_count,
+    created_by: hive.created_by,
+    created_at: hive.created_at.toISOString(),
+    updated_at: hive.updated_at.toISOString(),
+  };
+}
+
+// WHAT: Project a Hive row to the SAFE admin detail view.
+// INPUT: A Prisma Hive row.
+// OUTPUT: HiveAdminDetailView (adds org_entity_id; still no
+//         governance_terms / aggregate_capsule_id).
+// WHY: Admin tier sees the same-org tag explicitly (route gate
+//      already enforced same-org by the time we project).
+function projectHiveAdminDetail(hive: Hive): HiveAdminDetailView {
+  return {
+    ...projectHiveListItem(hive),
+    org_entity_id: hive.org_entity_id,
+  };
+}
+
+// WHAT: Project a HiveMembership row + Entity to the SAFE admin
+//        roster view.
+// INPUT: A Prisma HiveMembership row + optional Entity row (entity
+//         may be null if the entity record was scrubbed).
+// OUTPUT: HiveMembershipAdminView (capsule_types as counts; no raw
+//         arrays).
+// WHY: ADR-0062 Sub-decision 2 — admin needs *that* a member
+//      contributes/consumes (governance signal) without exposing
+//      *what* (member-private signal).
+function projectHiveMembershipAdmin(
+  m: {
+    membership_id: string;
+    entity_id: string;
+    status: "ACTIVE" | "REMOVED";
+    access_scope: AccessScope;
+    contribution_scope: AccessScope;
+    joined_at: Date;
+    expires_at: Date | null;
+    capsule_types_accessible: string[];
+    capsule_types_contributed: string[];
+  },
+  entity: { entity_type: string; display_name: string | null } | null,
+): HiveMembershipAdminView {
+  return {
+    membership_id: m.membership_id,
+    entity_id: m.entity_id,
+    entity_type: entity?.entity_type ?? null,
+    display_name: entity?.display_name ?? null,
+    status: m.status,
+    access_scope: m.access_scope,
+    contribution_scope: m.contribution_scope,
+    joined_at: m.joined_at.toISOString(),
+    expires_at: m.expires_at === null ? null : m.expires_at.toISOString(),
+    capsule_types_accessible_count: m.capsule_types_accessible.length,
+    capsule_types_contributed_count: m.capsule_types_contributed.length,
+  };
 }

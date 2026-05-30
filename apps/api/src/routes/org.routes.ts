@@ -1267,33 +1267,19 @@ export async function registerOrgRoutes(
     },
   );
 
-  // GET /org/hives -- Hive rows scoped to org.
-  app.get<{ Querystring: { skip?: string; take?: string } }>(
-    "/api/v1/org/hives",
-    {
-      preHandler: requireAdminCapability(authService, "can_admin_org"),
-    },
-    async (request, reply) => {
-      const callerId = request.auth!.entity_id;
-      const orgEntityId = await resolveOrgOrFail(callerId, reply);
-      if (orgEntityId === null) return;
-      const { skip, take } = parsePagination(request.query);
-      const where: Prisma.HiveWhereInput = { org_entity_id: orgEntityId };
-      const [items, total] = await Promise.all([
-        prisma.hive.findMany({
-          where,
-          skip,
-          take,
-          orderBy: { created_at: "desc" },
-        }),
-        prisma.hive.count({ where }),
-      ]);
-      return reply.code(200).send({
-        ok: true,
-        ...paginatedResponse(items, total, skip, take),
-      });
-    },
-  );
+  // GET /api/v1/org/hives — superseded by hive-admin.routes.ts
+  // (Wave 3 / ADR-0062). The prior implementation here returned
+  // raw prisma.hive.findMany rows including governance_terms +
+  // aggregate_capsule_id (both forbidden fields per ADR-0062
+  // Sub-decision 2 SAFE projection). It also used pagination
+  // (skip/take) instead of the Section 4 connector flat-list
+  // pattern that ADR-0062 explicitly adopted. Substrate-honest
+  // RULE 13 finding surfaced at Wave 3 implementation: the prior
+  // route was untested + leaky. Removed in favor of the
+  // SAFE-projection route registered in hive-admin.routes.ts at
+  // server.ts:registerHiveAdminRoutes. BREAKING wire-shape change
+  // (pagination response shape → flat list; raw row → SAFE projection
+  // excluding governance_terms + aggregate_capsule_id).
 
   // GET /org/audit -- audit_events filtered to caller's org.
   // Caps at MAX_AUDIT_EVENTS_PAGE_SIZE per Section 1E.
