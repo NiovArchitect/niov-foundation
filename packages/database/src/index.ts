@@ -199,6 +199,9 @@ export type {
   // GOVSEC.5 break-glass (ADR-0050) BG.1 substrate table.
   BreakGlassGrant,
   BreakGlassStatus,
+  // Section 5 Wave 4 — Agent Playground persistent named scenarios
+  // (ADR-0065 §7 Wave 4).
+  PlaygroundScenario,
   Prisma,
 } from "@prisma/client";
 
