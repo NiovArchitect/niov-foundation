@@ -377,4 +377,36 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // Section 1 Wave 4C — Otzar cross-conversation drift rollup per
+  // ADR-0058 §9 + Founder Wave 4C direction. GET /api/v1/otzar/
+  // drift-rollup — self-scoped per-caller posture across the
+  // caller's conversations + the wallet-level stale-context
+  // signal. Bearer + "read" only (no admin gate; never a
+  // manager surface). Closed-vocab posture label (AT_RISK /
+  // NORMAL / INSUFFICIENT_DATA) + aggregate counts + locked
+  // coaching/boundary notes. NEVER conversation IDs / capsule
+  // IDs / per-conversation attribution / transcripts / raw
+  // corrections. Audit reuses ADMIN_ACTION + DRIFT_SIGNAL_READ
+  // with source_signal: "CROSS_CONVERSATION_ROLLUP".
+  app.get(
+    "/api/v1/otzar/drift-rollup",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await otzarService.analyzeDriftRollupForCaller({
+        token,
+      });
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
 }
