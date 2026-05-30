@@ -135,6 +135,47 @@ export const ACTION_RUNTIME_MIN_VOLUME = 10;
 const SUCCESS_RATE_HEALTHY_THRESHOLD = 0.9;
 const SUCCESS_RATE_DEGRADED_THRESHOLD = 0.6;
 
+// WHAT: Closed-vocab signal labels for the connector-activity
+//        aggregate.
+// INPUT: Used as a value array + TS literal-union type.
+// OUTPUT: None.
+// WHY: ADR-0061 §1.a closed-vocab. Operators see a stable
+//      label (ACTIVE / CONFIGURED_INACTIVE / NOT_CONFIGURED /
+//      INSUFFICIENT_POPULATION) instead of attempting to
+//      infer from raw counts. The label conveys the
+//      operationally-relevant question ("is the org actually
+//      using connectors?") without per-binding attribution.
+export const CONNECTOR_ACTIVITY_LABELS = [
+  "ACTIVE",
+  "CONFIGURED_INACTIVE",
+  "NOT_CONFIGURED",
+  "INSUFFICIENT_POPULATION",
+] as const;
+
+export type ConnectorActivityLabel =
+  (typeof CONNECTOR_ACTIVITY_LABELS)[number];
+
+// WHAT: SAFE projection envelope for the connector-activity
+//        aggregate.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Closed-vocab fields only. NEVER includes binding_id,
+//      display_name, secret_ref, config, or per-binding
+//      attribution. Only org-level aggregate counts surface.
+export interface ConnectorActivityAggregate {
+  ok: true;
+  aggregate: "CONNECTOR_ACTIVITY";
+  window_days: number;
+  org_entity_id: string;
+  member_count: number;
+  redacted: boolean;
+  binding_count_active: number | null;
+  binding_count_total: number | null;
+  invocation_count: number | null;
+  signal_label: ConnectorActivityLabel;
+  honest_note: string;
+}
+
 // WHAT: SAFE projection envelope for action-runtime success
 //        rate aggregate.
 // INPUT: Used as a return type only.
@@ -530,6 +571,144 @@ export class AnalyticsService {
         "ActionAttempt rows in the window. Signal label is " +
         "operational only — not an employee score, not a worker " +
         "performance index.",
+    };
+  }
+
+  // WHAT: Compute the org-wide connector-activity aggregate.
+  // INPUT: Pre-resolved org_entity_id + window_days +
+  //         actor_entity_id for audit emission.
+  // OUTPUT: ConnectorActivityAggregate | AnalyticsFailure.
+  // WHY: Step-by-step:
+  //   1. Validate window_days.
+  //   2. Count active org members (k=5 population gate).
+  //   3. If member_count < 5 → SAFE redacted projection
+  //      (INSUFFICIENT_POPULATION; counts null).
+  //   4. Count org ConnectorBinding rows (active = enabled +
+  //      not deleted; total = not deleted).
+  //   5. Count INVOKE_CONNECTOR ActionAttempts within window
+  //      via Action.org_entity_id join.
+  //   6. Map (active + invocation) to closed-vocab label.
+  //   7. Audit emit; SAFE return.
+  async getConnectorActivityForOrg(args: {
+    org_entity_id: string;
+    actor_entity_id: string;
+    window_days?: number;
+    ip_address?: string | null;
+  }): Promise<ConnectorActivityAggregate | AnalyticsFailure> {
+    const requestedWindow = args.window_days ?? ANALYTICS_WINDOW_DAYS_DEFAULT;
+    if (
+      !Number.isInteger(requestedWindow) ||
+      requestedWindow < ANALYTICS_WINDOW_DAYS_MIN ||
+      requestedWindow > ANALYTICS_WINDOW_DAYS_MAX
+    ) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: `window_days must be an integer in [${ANALYTICS_WINDOW_DAYS_MIN}, ${ANALYTICS_WINDOW_DAYS_MAX}]`,
+        invalid_fields: ["window_days"],
+      };
+    }
+    const windowDays = requestedWindow;
+
+    // Step 2 — k=5 population gate.
+    const memberCount = await prisma.entityMembership.count({
+      where: { parent_id: args.org_entity_id, is_active: true },
+    });
+    if (memberCount < ANALYTICS_MIN_POPULATION) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "CONNECTOR_ACTIVITY",
+        redacted: true,
+        result_count: 0,
+        filter_keys: ["window_days"],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "CONNECTOR_ACTIVITY",
+        window_days: windowDays,
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        binding_count_active: null,
+        binding_count_total: null,
+        invocation_count: null,
+        signal_label: "INSUFFICIENT_POPULATION",
+        honest_note: HONEST_NOTE_BELOW_THRESHOLD,
+      };
+    }
+
+    // Step 4 — binding counts.
+    const bindingTotal = await prisma.connectorBinding.count({
+      where: { org_entity_id: args.org_entity_id, deleted_at: null },
+    });
+    const bindingActive = await prisma.connectorBinding.count({
+      where: {
+        org_entity_id: args.org_entity_id,
+        deleted_at: null,
+        enabled: true,
+      },
+    });
+
+    // Step 5 — INVOKE_CONNECTOR attempts within window.
+    const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const orgInvokeActions = await prisma.action.findMany({
+      where: {
+        org_entity_id: args.org_entity_id,
+        action_type: "INVOKE_CONNECTOR",
+        deleted_at: null,
+      },
+      select: { action_id: true },
+    });
+    const invokeActionIds = orgInvokeActions.map((a) => a.action_id);
+    const invocationCount =
+      invokeActionIds.length === 0
+        ? 0
+        : await prisma.actionAttempt.count({
+            where: {
+              action_id: { in: invokeActionIds },
+              ended_at: { gte: cutoff, not: null },
+            },
+          });
+
+    // Step 6 — closed-vocab label.
+    let signalLabel: ConnectorActivityLabel;
+    if (bindingActive === 0) {
+      signalLabel = "NOT_CONFIGURED";
+    } else if (invocationCount > 0) {
+      signalLabel = "ACTIVE";
+    } else {
+      signalLabel = "CONFIGURED_INACTIVE";
+    }
+
+    // Step 7 — audit emit; SAFE return.
+    await this.emitAnalyticsReadAudit({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      aggregate: "CONNECTOR_ACTIVITY",
+      redacted: false,
+      result_count: invocationCount,
+      filter_keys: ["window_days"],
+      ip_address: args.ip_address ?? null,
+    });
+
+    return {
+      ok: true,
+      aggregate: "CONNECTOR_ACTIVITY",
+      window_days: windowDays,
+      org_entity_id: args.org_entity_id,
+      member_count: memberCount,
+      redacted: false,
+      binding_count_active: bindingActive,
+      binding_count_total: bindingTotal,
+      invocation_count: invocationCount,
+      signal_label: signalLabel,
+      honest_note:
+        "Aggregate counts of same-org ConnectorBinding rows and " +
+        "INVOKE_CONNECTOR Action attempts within the window. " +
+        "Signal label is operational only — not an employee " +
+        "score, not a vendor performance index.",
     };
   }
 
