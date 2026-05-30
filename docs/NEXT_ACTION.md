@@ -9,12 +9,12 @@
 
 ## Where we are
 
-- **Main HEAD:** `a2988ee` (Section 5 Wave 4 persistent named scenarios; closeout docs PR pending)
-- **Latest merged PR:** [#111](https://github.com/NiovArchitect/niov-foundation/pull/111) — Section 5 Wave 4 persistent named scenarios + safe CRUD.
-- **Active branch / PR:** `section-5-wave-4-closeout-docs` (Wave 4 closeout docs; design-only).
-- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 Foundation drift-detection backend scope** — 3 live drift-signal routes; 38 integration tests; zero schema migration; zero new audit literals. Wave 4B SKIPPED per RULE 13.
+- **Main HEAD:** `dbbe9c7` (Section 5 Wave 4 closeout docs)
+- **Latest merged PR:** [#112](https://github.com/NiovArchitect/niov-foundation/pull/112) — Section 5 Wave 4 closeout docs.
+- **Active branch / PR:** `section-1-wave-5-adr-otzar-proposed-pattern` (ADR-0066 design-only; no code; no schema; no new routes; no new audit literal).
+- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 Foundation drift-detection backend scope** — 3 live drift-signal routes; 38 integration tests; zero schema migration; zero new audit literals. Wave 4B SKIPPED per RULE 13. **Wave 5 ADR-0066 LANDED 2026-05-30 (design-only)** — `OtzarProposedPattern` review-gated proposal lifecycle; implementation slice forward-substrate behind separate Founder authorization.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) — 4-aggregate arc closure.
-- **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + `PlaygroundScenarioService` + 38 integration tests; ADMIN_ACTION + details.action discriminator audit; zero new audit literal; soft-archive per RULE 10; same-org enforcement when `org_entity_id` non-null; SAFE persistence layer for future Wave 5+ scenario engine.
+- **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope**.
 - **Live `ACTION_*` emitters:** 10 of 10. **Real per-`ActionType` handlers:** 3 of 3 LIVE.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -26,23 +26,21 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
+## Section 1 Wave 5 ADR LANDED design-only — Otzar Proposed-Pattern (ADR-0066)
+
+NEW ADR-0066 closes ADR-0058 §"Forward queue" item 1 (`IntelligencePattern` auto-write from recurring correction themes) at the design register. **No code; no schema; no new routes; no new audit literal** in this commit. Implementation slice is forward-substrate behind separate Founder authorization per RULE 20 + Founder Wave 5 direction ("If implementation requires new schema, stop after ADR and report exact model/fields needed").
+
+**Doctrine**: auto-write = **auto-propose, NOT auto-commit**. Owner-first self-scope; NEVER manager visibility; NEVER psychological profiling; NEVER autonomous memory mutation; NEVER LLM-generated text (closed-vocab template only). NEW Prisma model `OtzarProposedPattern` (separate from existing org-scoped `IntelligencePattern` which stays unchanged per RULE 1 — Phase 0 verified it's actively in use at `priming.ts:216` + `org.routes.ts:2369` and has wrong field shape for Wave 5). 14 fields + 2 indexes + `@@map("otzar_proposed_patterns")`. 4 closed-vocab discriminators (source_signal_type ∈ PER_CONVERSATION_DRIFT|WALLET_STALE_CONTEXT|CROSS_CONVERSATION_ROLLUP; pattern_label ∈ 3 v1 values; confidence_label ∈ LOW|MEDIUM|HIGH; status ∈ PROPOSED|ACCEPTED|REJECTED|ARCHIVED). Recurrence-detection criteria + deduplication policy locked. 4-route self-scoped review surface (POST sweep + GET list + GET detail + PATCH state-transition) on `/api/v1/otzar/my-twin/proposed-patterns`. ADMIN_ACTION + 5-discriminator audit (no new audit literal). All 12 v1 design questions resolved at this ADR; implementation slice requires no further Founder product decision, only RULE 20 authorization.
+
 ## Section 5 Wave 4 LANDED — Agent Playground persistent named scenarios (PR #111)
 
-`PlaygroundScenario` Prisma model + 5 owner-first CRUD routes on `/api/v1/playground/scenarios` (POST/GET list + GET/PUT/DELETE detail). `PlaygroundScenarioService` (5 methods; bearer + "read" scope). 38 integration tests. **SAFE persistence layer** for the future Wave 5+ candidate-generation, Wave 6 outcome-comparison, Wave 7 best-path-recommender, and Wave 8 governed-transition substrate.
-
-**Wave 4 implements NO** execution / LLM / multi-agent / external provider / Action creation / connector invocation / MemoryCapsule / OtzarConversation / live side effects — all remain forward-substrate per ADR-0065 §7.
-
-**Closed-vocab fields**: `status` ∈ DRAFT|READY|ARCHIVED; `scenario_type` ∈ MANUAL|FIXTURE|FUTURE_GENERATED. String-not-enum per ADR-0065 §7 Wave 4 + Hive/MemoryCapsule precedent. **Owner-first self-scope** (RULE 0); same-org enforcement when `org_entity_id` non-null; cross-owner/cross-org/unknown id all fold to enumeration-safe 404 `SCENARIO_NOT_FOUND`. **Forbidden-field rejection on PUT** (owner_entity_id / org_entity_id / scenario_id / created_at / updated_at / archived_at). **Soft-archive per RULE 10** (DELETE sets status=ARCHIVED + archived_at; idempotent on already-archived). **ADMIN_ACTION + details.action discriminator audit** (PLAYGROUND_SCENARIO_CREATED/UPDATED/ARCHIVED); ZERO new audit literal; safe details only (no title/description text; no raw Json payloads). **Schema migration via `npm run db:push:test`** per ADR-0025.
-
-Section file: [`current-build-state/05-agent-playground.md`](current-build-state/05-agent-playground.md).
+`PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + `PlaygroundScenarioService` + 38 integration tests. **SAFE persistence layer** for the future Wave 5+ candidate-generation, outcome-comparison, best-path-recommender, governed-transition substrate. Closed-vocab status + scenario_type; owner-first self-scope; soft-archive per RULE 10; ADMIN_ACTION discriminator audit (zero new audit literal); schema migration via `npm run db:push:test` per ADR-0025. Section file: [`current-build-state/05-agent-playground.md`](current-build-state/05-agent-playground.md).
 
 ## Recommended next production section
 
-**Section 5 Wave 5 — scenario candidate generation contract** per ADR-0065 §7 wave map. Likely fixture / deterministic first (operator enumerates candidates manually OR engine generates from a closed-vocab template library); **NO LLM autonomy unless separately Founder-authorized**. Contract: scenario input (an existing PlaygroundScenario row) → N scenario candidates per ADR-0065 §3 10-output set. The Wave 4 `PlaygroundScenario` substrate is the persistence target for the candidates.
+**Section 1 Wave 5 implementation slice** per ADR-0066 §3-§7 (NEW `OtzarProposedPattern` model + service + 4 routes + integration tests + recurrence-detection function). Requires explicit Founder authorization per ADR-0066 §11. The ADR resolves all design questions; the implementation slice can proceed once Founder gives the go-ahead.
 
-**Wave 5 stop conditions to surface for Founder before implementation**: (1) candidate storage model (extend PlaygroundScenario with a `candidates` Json column, OR add NEW `PlaygroundScenarioCandidate` model — schema-bearing); (2) candidate generation source (fixture template library vs LLM-backed — LLM autonomy is a Founder product decision); (3) audit literal vocabulary (CANDIDATE_GENERATED-style discriminator under ADMIN_ACTION vs NEW literal); (4) closed-vocab tradeoff/risk/dependency labels (Wave 6 substrate but Wave 5 emits the first labels).
-
-**Alternatives**: Section 1 Wave 5+ (IntelligencePattern auto-write from recurring drift themes per ADR-0058 §"Forward queue" — needs schema + admin-review surface); Section 6 additional aggregates per ADR-0061 §8; Section 4 SDK-bound connectors (each adapter own QLOCK + RULE 21 research arc; OAuth + real credentials = Founder product decision per slice).
+**Alternatives**: Section 5 Wave 5 scenario candidate generation contract (4 Founder product decisions outstanding per prior checkpoint); Section 6 additional aggregates per ADR-0061 §8; Section 7 proactive `REGULATOR_ACCESS_EXPIRED` emitter per ADR-0036 Sub-decision 4 (existing ADR; pure implementation); Section 4 SDK-bound connectors (each adapter own QLOCK + RULE 21 research arc; OAuth + real credentials = Founder product decision per slice).
 
 ## Founder Sleep Directive preferences — status
 
