@@ -27,6 +27,7 @@ import {
   evaluateGovernanceForCreate,
   evaluateGovernanceForInvite,
 } from "./governance-terms-evaluator.js";
+import type { HiveEventBus } from "./hive-events.js";
 
 // WHAT: ADR-0059 v1 hive_type allowlist. CROSS_ORGANIZATION +
 //        DEVICE_NETWORK + GOVERNMENT enum values are reserved in
@@ -225,7 +226,29 @@ export class HiveService {
     private readonly authService: AuthService,
     private readonly encryption: ContentEncryption,
     private readonly contentStore: ContentStore,
+    // Section 3 Wave 5 ADR-0064 Sub-decision 5 — optional 4th
+    // arg preserves backward compatibility with all Wave 2/3/4
+    // test fixtures that instantiate
+    // `new HiveService(auth, enc, store)` without an event bus.
+    // When undefined, every publishHiveEvent call is a no-op
+    // (the private helper guards on this.eventBus presence).
+    private readonly eventBus?: HiveEventBus,
   ) {}
+
+  // WHAT: Internal helper for fire-and-forget Hive event
+  //        publication.
+  // INPUT: A constructed HiveEventEnvelope.
+  // OUTPUT: void.
+  // WHY: ADR-0064 Sub-decision 4 + 5 — when eventBus is undefined
+  //      (the default Wave 2/3/4 test posture), this is a no-op.
+  //      When wired (production server boot per Sub-decision 13),
+  //      the publish is fire-and-forget; subscriber failures are
+  //      swallowed at the bus tier. Centralizing the
+  //      undefined-guard here keeps each HiveService method site
+  //      to a single line.
+  private emitHiveEvent(envelope: import("./hive-events.js").HiveEventEnvelope): void {
+    this.eventBus?.publishHiveEvent(envelope);
+  }
 
   // WHAT: Create a new hive and add the creator as the first
   //        member (with FULL contribution + access).
@@ -411,6 +434,22 @@ export class HiveService {
         org_entity_id: orgEntityId,
         is_default_enterprise: isDefaultEnterprise,
       },
+    });
+
+    // Section 3 Wave 5 ADR-0064 — publish HIVE_CREATED event.
+    // SAFE projection: never includes governance_terms (Wave 4
+    // discipline extended), never includes hive_name (operational
+    // label not safe for cross-org consumer), never includes
+    // is_default_enterprise (internal substrate flag).
+    this.emitHiveEvent({
+      event_name: "HIVE_CREATED",
+      org_entity_id: orgEntityId,
+      hive_id,
+      actor_entity_id: session.entity_id,
+      member_count: 1,
+      hive_status: "ACTIVE",
+      source_action: "createHive",
+      timestamp: new Date().toISOString(),
     });
 
     return { ok: true, hive_id, membership_id };
@@ -657,6 +696,21 @@ export class HiveService {
       },
     });
 
+    // Section 3 Wave 5 ADR-0064 — publish HIVE_MEMBER_ADDED.
+    // org_entity_id from hive row (non-null per Wave 2 guarantee
+    // + same-org check above; safe to assert).
+    this.emitHiveEvent({
+      event_name: "HIVE_MEMBER_ADDED",
+      org_entity_id: hive.org_entity_id!,
+      hive_id: hiveId,
+      actor_entity_id: session.entity_id,
+      target_entity_id: inviteeId,
+      member_count: updatedHive?.member_count ?? 0,
+      hive_status: "ACTIVE",
+      source_action: "inviteToHive",
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       ok: true,
       membership_id: membershipId,
@@ -743,6 +797,21 @@ export class HiveService {
         hive_id: hiveId,
         membership_id: membership.membership_id,
       },
+    });
+
+    // Section 3 Wave 5 ADR-0064 — publish HIVE_MEMBER_REMOVED
+    // (creator-self-remove path; Wave 3 admin force-remove emits
+    // the same event from a different call site below).
+    this.emitHiveEvent({
+      event_name: "HIVE_MEMBER_REMOVED",
+      org_entity_id: hive.org_entity_id!,
+      hive_id: hiveId,
+      actor_entity_id: session.entity_id,
+      target_entity_id: memberEntityId,
+      member_count: updatedHive?.member_count ?? 0,
+      hive_status: "ACTIVE",
+      source_action: "removeMember",
+      timestamp: new Date().toISOString(),
     });
 
     return {
@@ -1095,6 +1164,22 @@ export class HiveService {
       },
     });
 
+    // Section 3 Wave 5 ADR-0064 — publish HIVE_AGGREGATE_BUILT.
+    // aggregate_present: true reflects post-build state; the
+    // aggregate_capsule_id itself is NOT included in the
+    // envelope (internal pointer; SAFE projection per Wave 3
+    // precedent + Sub-decision 3 forbidden list).
+    this.emitHiveEvent({
+      event_name: "HIVE_AGGREGATE_BUILT",
+      org_entity_id: hive.org_entity_id!,
+      hive_id: hiveId,
+      member_count: memberships.length,
+      hive_status: "ACTIVE",
+      aggregate_present: true,
+      source_action: "buildHiveAggregate",
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       ok: true,
       hive_id: hiveId,
@@ -1259,6 +1344,22 @@ export class HiveService {
       },
     });
 
+    // Section 3 Wave 5 ADR-0064 — publish HIVE_DISSOLVED only on
+    // the active → DISSOLVED transition (idempotent already-
+    // DISSOLVED path returns earlier without emitting an audit
+    // row OR a Wave 5 event; both substrates report state
+    // transitions only per ADR-0064 Sub-decision 5).
+    this.emitHiveEvent({
+      event_name: "HIVE_DISSOLVED",
+      org_entity_id: orgEntityId,
+      hive_id: hiveId,
+      actor_entity_id: actorEntityId,
+      member_count: hive.member_count,
+      hive_status: "DISSOLVED",
+      source_action: "dissolveHive",
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       ok: true,
       status: "DISSOLVED",
@@ -1339,6 +1440,25 @@ export class HiveService {
         membership_id: membership.membership_id,
         target_entity_id: memberEntityId,
       },
+    });
+
+    // Section 3 Wave 5 ADR-0064 — publish HIVE_MEMBER_REMOVED
+    // (Wave 3 admin force-remove path; emits the same Wave 5
+    // event vocabulary as creator-self-remove above because the
+    // underlying state change is identical — membership flipped
+    // ACTIVE → REMOVED. source_action discriminates "forceRemoveMember"
+    // for consumers that need to distinguish admin force-removes
+    // from creator-self-removes at the event tier).
+    this.emitHiveEvent({
+      event_name: "HIVE_MEMBER_REMOVED",
+      org_entity_id: orgEntityId,
+      hive_id: hiveId,
+      actor_entity_id: actorEntityId,
+      target_entity_id: memberEntityId,
+      member_count: updatedHive?.member_count ?? 0,
+      hive_status: "ACTIVE",
+      source_action: "forceRemoveMember",
+      timestamp: new Date().toISOString(),
     });
 
     return {
