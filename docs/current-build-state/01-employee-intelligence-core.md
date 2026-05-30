@@ -49,20 +49,21 @@ external dependencies; 38 drift-arc integration tests total
 rollup Wave 4C).
 
 **Important scope wording**: closes the **Foundation backend
-drift-detection substrate** for v1 self-scoped coaching/alignment
-trust loop. Future capabilities continue as forward-substrate per
-ADR-0058 §"Forward queue" — except item 1 (`IntelligencePattern`
-auto-write from recurring correction themes) which now has its
-**design lifted to the canonical-record register at ADR-0066
-(2026-05-30)** as the Section 1 Wave 5 `OtzarProposedPattern`
-review-gated proposal lifecycle. The Wave 5 **implementation
-slice** (NEW Prisma model `OtzarProposedPattern` + service +
-4 routes + integration tests) remains forward-substrate behind
-a separate Founder authorization per RULE 20 + ADR-0066 §11.
-Remaining ADR-0058 §Forward queue items still forward-substrate:
-operator-tunable thresholds per org; drift digest connector
-fan-out; Control Tower drift UX; role-scope-conflict signal
-pending a POLICY_DRIFT producer.
+drift-detection substrate + the Wave 5 review-gated
+proposed-pattern substrate** for v1 self-scoped coaching/alignment
+trust loop. Wave 5 LANDED 2026-05-30 (PR #114 `7661ba9`):
+NEW `OtzarProposedPattern` Prisma model + service + 4
+self-scoped routes + 36 integration tests; closes ADR-0058
+§"Forward queue" item 1 + ADR-0066 §3-§7 at the implementation
+register. Remaining ADR-0058 §Forward queue items still
+forward-substrate: operator-tunable thresholds per org; drift
+digest connector fan-out; Control Tower drift UX; role-scope-
+conflict signal pending a POLICY_DRIFT producer. ADR-0066 §9
+non-goals continue as forward-substrate: active pattern
+consumption (Wave 6+ — how an ACCEPTED pattern informs the AI
+teammate's behavior); manager/admin review surface (forbidden);
+LLM-generated proposal text (forbidden); background scheduler;
+true consecutive-day tracking.
 
 ## What is live
 
@@ -106,6 +107,35 @@ pending a POLICY_DRIFT producer.
   Counts + labels only; no correction-text leakage; no cross-
   conversation aggregation. Service:
   `apps/api/src/services/otzar/conversation-corrections.ts`.
+- **Wave 5 — `/api/v1/otzar/my-twin/proposed-patterns/*` (PR #114;
+  ADR-0066)** — 4 self-scoped routes for the review-gated
+  proposed-pattern lifecycle:
+  - `POST /api/v1/otzar/my-twin/proposed-patterns/sweep` —
+    run on-demand recurrence detection; create any new PROPOSED
+    rows; deduplicate against existing PROPOSED|ACCEPTED non-
+    archived rows.
+  - `GET /api/v1/otzar/my-twin/proposed-patterns?status&limit&include_archived` —
+    list caller's proposed patterns (default excludes ARCHIVED).
+  - `GET /api/v1/otzar/my-twin/proposed-patterns/:id` —
+    owner-only detail.
+  - `PATCH /api/v1/otzar/my-twin/proposed-patterns/:id` —
+    owner state-transition (PROPOSED → ACCEPTED | REJECTED |
+    ARCHIVED; ACCEPTED|REJECTED → ARCHIVED; ARCHIVED terminal).
+  Service: `apps/api/src/services/otzar/proposed-pattern.service.ts`.
+  Recurrence-detection function reads ONLY the caller's own
+  drift substrate (CORRECTION capsules in caller's wallet +
+  caller's wallet capsule freshness). Auto-write = AUTO-PROPOSE,
+  NOT auto-commit. NEW `OtzarProposedPattern` Prisma model (14
+  columns + 2 indexes) deliberately separate from the existing
+  org-scoped `IntelligencePattern` (preserved unchanged per
+  RULE 1; verified untouched across full test cycle).
+  ADMIN_ACTION + 5-discriminator audit (PROPOSED / READ /
+  ACCEPTED / REJECTED / ARCHIVED); ZERO new audit literal;
+  safe details only (no safe_summary text; no raw correction/
+  transcript/capsule content; no conversation IDs; no numeric
+  scores). 36 integration tests; SAFE projection enforced by
+  enumeration.
+
 - **`GET /api/v1/otzar/conversations/:id/drift-signals` (Wave 3B —
   ADR-0058)** — per-conversation drift coaching/alignment trust
   loop. Self-scoped; closed-vocabulary signal labels
@@ -225,19 +255,17 @@ contracts).
    higher-fidelity summaries (RULE 21 research arc required if
    the summarization crosses provider / LLM boundaries).
 7. ~~**`IntelligencePattern` auto-write from recurring correction
-   themes**~~ — **DESIGN LANDED at ADR-0066 (2026-05-30)** as
-   Section 1 Wave 5 `OtzarProposedPattern` review-gated proposal
-   lifecycle. ADR-0066 §3 specifies a NEW Prisma model
-   `OtzarProposedPattern` (separate from existing org-scoped
-   `IntelligencePattern` which stays unchanged per RULE 1).
-   ADR-0066 §4-§5 enumerate closed-vocab discriminators +
-   recurrence-detection criteria. ADR-0066 §6 specifies the
-   4-route self-scoped review surface. ADR-0066 §7 specifies the
-   ADMIN_ACTION + 5-discriminator audit posture (no new audit
-   literal). Wave 5 **implementation slice** (schema + service +
-   routes + integration tests) is forward-substrate behind a
-   separate Founder authorization per RULE 20 + ADR-0066 §11
-   ("ADR-only" authorization at this commit).
+   themes**~~ — **IMPLEMENTATION LANDED at PR #114 `7661ba9`
+   (2026-05-30)** as Section 1 Wave 5 `OtzarProposedPattern`
+   review-gated proposal lifecycle per ADR-0066 §3-§7. NEW
+   Prisma model (separate from existing org-scoped
+   `IntelligencePattern` which stays unchanged per RULE 1;
+   verified untouched). 4-route self-scoped review surface;
+   ADMIN_ACTION + 5-discriminator audit (no new audit literal);
+   36 integration tests. Wave 6+ active-pattern-consumption
+   (how an ACCEPTED pattern informs the AI teammate's behavior)
+   remains forward-substrate behind separate Founder
+   authorization per ADR-0066 §9.
 8. **Cross-team aggregation governance** — design substrate for
    safe aggregation of permissioned signals across an org's
    employee twins (likely lands as a future CAR Sub-box; not yet
