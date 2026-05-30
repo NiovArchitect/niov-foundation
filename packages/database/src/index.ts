@@ -202,6 +202,9 @@ export type {
   // Section 5 Wave 4 — Agent Playground persistent named scenarios
   // (ADR-0065 §7 Wave 4).
   PlaygroundScenario,
+  // Section 1 Wave 5 — Otzar proposed-pattern from recurring drift
+  // (ADR-0066 §3).
+  OtzarProposedPattern,
   Prisma,
 } from "@prisma/client";
 

@@ -81,6 +81,7 @@ import {
   setDefaultActionHandlerRegistry,
 } from "./services/action/handlers.js";
 import { OtzarService } from "./services/otzar/otzar.service.js";
+import { OtzarProposedPatternService } from "./services/otzar/proposed-pattern.service.js";
 import { ObservationService } from "./services/otzar/observation.service.js";
 import { makeDefaultKVCache } from "./services/otzar/cache.js";
 import { getLLMProvider, MockLLMProvider } from "./services/llm/llm.service.js";
@@ -90,6 +91,7 @@ import {
   type EmbeddingProvider,
 } from "./services/embedding/embedding.service.js";
 import { registerOtzarRoutes } from "./routes/otzar.routes.js";
+import { registerOtzarProposedPatternRoutes } from "./routes/otzar-proposed-pattern.routes.js";
 import { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
@@ -373,6 +375,16 @@ export async function buildApp(
     otzarCache,
   );
 
+  // Section 1 Wave 5 ADR-0066 — Otzar proposed-pattern from
+  // recurring drift. Owner-first self-scoped CRUD over the NEW
+  // OtzarProposedPattern model; on-demand recurrence sweep reads
+  // only the caller's own drift substrate; auto-write = auto-
+  // propose, NOT auto-commit. No dependencies beyond AuthService
+  // (mirrors Wave 4 PlaygroundScenarioService precedent).
+  const otzarProposedPatternService = new OtzarProposedPatternService(
+    authService,
+  );
+
   // Section 11C observation pipeline. Reuses the same LLM provider
   // OtzarService uses (deterministic mock in NODE_ENV=test, real
   // provider otherwise).
@@ -504,6 +516,7 @@ export async function buildApp(
   await registerAuthAdminRoutes(app, authService, jwtSecret);
   await registerRegulatorRoutes(app, authService);
   await registerOtzarRoutes(app, otzarService);
+  await registerOtzarProposedPatternRoutes(app, otzarProposedPatternService);
   await registerOtzarObservationRoutes(app, observationService, authService);
 
   // Idempotent seed on every boot so a fresh DB has the seven

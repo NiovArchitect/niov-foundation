@@ -1744,3 +1744,48 @@ model PlaygroundScenario {
   @@index([owner_entity_id, archived_at, created_at])
   @@map("playground_scenarios")
 }
+
+// Section 1 Wave 5 — Otzar Proposed-Pattern from recurring
+// drift per ADR-0066 §3. SAFE persistence for review-gated
+// proposed patterns derived from the OWNER's own closed-vocab
+// drift signals (Wave 3B per-conversation + Wave 4A wallet-level
+// + Wave 4C cross-conversation rollup). Auto-write = AUTO-PROPOSE,
+// NOT auto-commit; owner reviews and accepts/rejects/archives
+// before any future Wave 6+ consumer activates the pattern.
+//
+// Deliberately SEPARATE from the existing org-scoped
+// IntelligencePattern model above (preserved unchanged per RULE
+// 1 + Phase 0 finding that the org model is actively used by
+// priming.ts + org.routes.ts and has incompatible field shape +
+// org-scope semantics).
+//
+// status + scenario_type-equivalent fields stored as String not
+// Prisma enum per Hive / MemoryCapsule / PlaygroundScenario
+// precedent (closed-vocab evolution requires no schema migration;
+// service-tier validation is the canonical enforcement site).
+//
+// NO description column + NO evidence Json + NO org_entity_id
+// column (all deliberate per ADR-0066 §3) — Wave 5 forbids raw
+// correction text, raw transcript excerpts, and cross-employee /
+// cross-org aggregation at v1.
+model OtzarProposedPattern {
+  pattern_id          String    @id @default(uuid()) @db.Uuid
+  owner_entity_id     String    @db.Uuid
+  source_signal_type  String    // closed-vocab per ADR-0066 §4
+  pattern_label       String    // closed-vocab per ADR-0066 §4
+  safe_summary        String    // canonical template only; never raw text
+  confidence_label    String    @default("MEDIUM") // closed-vocab LOW|MEDIUM|HIGH
+  status              String    @default("PROPOSED") // closed-vocab PROPOSED|ACCEPTED|REJECTED|ARCHIVED
+  occurrence_count    Int       @default(1)
+  first_signal_at     DateTime
+  last_signal_at      DateTime
+  proposed_at         DateTime  @default(now())
+  reviewed_at         DateTime?
+  archived_at         DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  @@index([owner_entity_id, status, proposed_at])
+  @@index([owner_entity_id, archived_at])
+  @@map("otzar_proposed_patterns")
+}
