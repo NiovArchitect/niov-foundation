@@ -84,6 +84,14 @@ before building. The load-bearing locks:
    through scoped, policy-governed channels. They exchange only the
    minimum relevant information needed to help their human
    collaborators."*
+
+   **Section 3 Hives v1 boundary landed at ADR-0059** (2026-05-30):
+   v1 Hives are same-org-scoped read-only aggregate projection
+   surfaces (counts/labels only; never raw content). Twin-to-Twin
+   proactive runtime per this §8 full vision is explicitly
+   deferred to forward-substrate Wave 8+ per ADR-0059's v1
+   non-goals; requires separate Founder authorization +
+   Phoenix.PubSub runtime per ADR-0039 entry #28.
 9. **Proactivity vs. autonomy.** *"Otzar can proactively prepare,
    coordinate, and recommend inside scope. It executes sensitive
    actions only under permission, policy, or approval."* No

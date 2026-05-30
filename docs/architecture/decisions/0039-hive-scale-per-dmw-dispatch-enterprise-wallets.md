@@ -762,6 +762,16 @@ register substantively at this commit register substantively per B.7
   substantively at forward-substrate register substantively at sub-
   phase c plus sub-phase d plus sub-arc 2 register substantively.
 
+- Cited by ADR-0059 (Section 3 Hives v1 Design Boundary; 2026-05-30).
+  ADR-0059 locks Section 3 Hives v1 scope as same-org-scoped
+  coordination substrate; explicitly defers Entry #28's
+  Phoenix.PubSub fanout + Broadway pipeline + hive algorithm
+  weighting to forward-substrate Waves 5/6/7 (each its own
+  Founder authorization). v1 Hive coordination is read-only
+  aggregate projection (counts/labels) per RULE 0 + ADR-0058 SAFE
+  projection pattern; no message-passing runtime ships at v1.
+  Entry #28 reservation stands unchanged at this register.
+
 ## Amendment 1: Sub-arc 1 sub-phase c — §Sub-decision 8 scope widened to PERSONAL-promoted
 
 Status: Active

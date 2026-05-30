@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `e7b4a17` (after Section 1 Wave 3B; this commit chain adds Wave 3C docs)
-- **Latest merged PR:** [#83](https://github.com/NiovArchitect/niov-foundation/pull/83) — Add Section 1 Wave 3B Otzar drift signal service + per-conversation route.
-- **Active branch / PR:** `section-1-wave-3c-closeout` (tier-1/2/3 docs reflecting Section 1 Wave 3 landings).
-- **Active production section:** Section 1 Wave 3 closeout (Section 1 PARTIAL with Wave 3 LIVE per ADR-0058 + Founder Sleep Directive boundary). Per Founder Sleep Directive next-section preference: Section 3 Hives Phase 0 verification runs next.
+- **Main HEAD:** `f70ea0d` (after Section 1 Wave 3C closeout; this commit chain adds ADR-0059 Section 3 Wave 1)
+- **Latest merged PR:** [#84](https://github.com/NiovArchitect/niov-foundation/pull/84) — Close out Section 1 Wave 3 — Otzar drift detection docs refresh.
+- **Active branch / PR:** `section-3-wave-1-hives-adr-0059` (ADR-0059 Hives v1 design-only + substrate-honest doc correction).
+- **Active production section:** Section 3 Wave 1 closeout. Section 3 PARTIAL with Wave 1 ADR LANDED (design-only). Phase 0 surfaced substrate-honest finding that on-main Hive substrate (Hive + HiveMembership + HiveService + hive.routes.ts + 5 HIVE_* audit literals) is substantially complete pre-Section-12; prior "Substrate not yet started" was canonical-truth drift. Per Founder Sleep Directive next-section preference: Section 9 backend contracts Phase 0 verification runs next.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,26 +25,27 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 1 Wave 3 LANDED (PRs #82 + #83 + this docs closeout)
+## Section 3 Wave 1 LANDED (ADR-0059 design-only)
 
-- **Wave 3A (ADR-0058 design + boundary; PR #82):** Founder-authorized via Sleep Directive. Locks the coaching/alignment-vs-surveillance boundary canonical; closed-vocabulary v1 signal labels (`CORRECTION_VELOCITY_ELEVATED` + `RECURRING_CORRECTION_THEME`); SAFE projection + forbidden fields; Wave 3B implementation contract. RULE 14 back-citations to ADR-0053 + ADR-0055.
-- **Wave 3B (drift signal service + per-conversation route; PR #83):** NEW `DriftSignalService.analyzeConversationDrift` + `GET /api/v1/otzar/conversations/:id/drift-signals` (bearer + read; mirrors Wave 2C `/corrections` self-scope verbatim). Pure derived read-only — no schema migration; no new audit literal (ADMIN_ACTION + details.action = DRIFT_SIGNAL_READ); no persisted drift profile row. Topic tag VALUES never traverse the wire (LABEL fires; tags stay in caller's wallet). 10 NEW integration tests covering 401/404/403 + empty/single/four/two-recurring/five-both/auto-tag-excluded + audit emission + wire-level no-leak.
+- **ADR-0059 — Section 3 Hives v1 Design Boundary**: substrate-honest canonicalization per Phase 0 verification 2026-05-30. Phase 0 surfaced that the prior `03-hives-team-intelligence.md` "Substrate not yet started" claim was canonical-truth drift — Hive + HiveMembership + HiveService (5 methods) + hive.routes.ts (4 routes) + 5 HIVE_* audit literals ALL LIVE on main pre-Section-12.
+- v1 scope: same-org-scoped read-only aggregate (counts/labels only); CROSS_ORGANIZATION/DEVICE_NETWORK/GOVERNMENT rejected at service tier (Wave 2); Twin-to-Twin runtime + Phoenix.PubSub fanout + governance_terms enforcement + admin routes all explicit non-goals deferred to Waves 2–8+. 5 Founder Authorization checkpoints required before Wave 2 (each = BREAKING tightening of currently un-gated routes). RULE 14 back-citations to ADR-0039 + ADR-0052.
 
-## Prior session waves still on main
+## Earlier this session + prior session work on main
 
-- Section 4 Wave 7 (action-routed fan-out variant; PR #80; opt-in via config.fan_out_mode).
-- Hardening A/B/C/D (CSV export #76 / inbound HMAC #77 / Section 9 doc refresh #78 / REGULATOR_ACCESS_EXPIRED emitter #79).
+- Section 1 Wave 3 (ADR-0058 + drift signal service + route; PRs #82/83/84).
+- Section 4 Wave 7 action-routed fan-out variant (#80).
+- Hardening A/B/C/D (CSV export #76 / inbound HMAC #77 / Section 9 doc refresh #78 / REGULATOR_ACCESS_EXPIRED #79).
 
 ## Next-section autonomous continuation (per Founder Sleep Directive)
 
-Section 1 Wave 3 closed. Per Founder Sleep Directive next-section preference order:
+Section 3 Wave 1 closed (design-only). Per Founder Sleep Directive next-section preference order, Section 9 backend contracts is next:
 
-  1. **Section 3 Hives / Team Intelligence** — begin with RULE 21 research + ADR/design only.
-  2. **Section 9 Admin / Governance backend contracts** — backend only; no Control Tower frontend.
+  1. ~~**Section 3 Hives / Team Intelligence**~~ — Wave 1 ADR LANDED at ADR-0059; Wave 2 implementation needs separate Founder Authorization (5 BREAKING checkpoints).
+  2. **Section 9 Admin / Governance backend contracts** — backend only; no Control Tower frontend. **NEXT — Phase 0 runs after this PR merges**.
   3. **Section 5 Agent Playground** — research/design only unless substrate-safe.
   4. **Section 6 Enterprise Analytics** — research/design only unless substrate-safe.
 
-Per the Sleep Directive's RULE-20-gated correction ("perform RULE 21 research, draft the ADR/design boundary, identify exact safety/product decisions, implement only if the ADR/design makes the substrate safe without new Founder input, otherwise stop at the narrowest unresolved Founder decision"), Section 3 Phase 0 verification runs next. Section 1 advanced drift signals + Section 4 SDK-bound connectors + Section 7 cross-chain verify-chain remain forward-substrate (each behind real stop conditions: new ADR / OAuth / Founder QLOCK respectively).
+Forward-substrate within closed/partial sections (each behind real stop conditions): Section 1 advanced drift signals; Section 3 Wave 2 implementation (Founder Authorization checkpoints); Section 4 SDK-bound connectors (OAuth + real credentials); Section 4 encrypted-at-rest secret column (ADR-0019 amendment); Section 7 cross-chain verify-chain (Founder QLOCK).
 
 **Earlier waves + section detail:** [`current-build-state/`](current-build-state/) (Section 1 / Section 2 / Section 4 / Section 7 / Section 9 detail files).
 
