@@ -342,4 +342,39 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // Section 1 Wave 4A — Otzar stale-context drift signal per
+  // ADR-0058 §9 + ADR-0045 G5.1 + Founder Wave 4A direction.
+  // GET /api/v1/otzar/stale-context-signal — self-scoped
+  // wallet-level signal indicating whether the caller's persisted
+  // capsule context embeddings are current (embedding_content_hash
+  // == content_hash) or lagging. Bearer + "read" only (no admin
+  // gate; never a manager surface). Returns closed-vocabulary
+  // signal label + safe counts + locked coaching/boundary notes;
+  // NEVER raw capsule content, capsule IDs, content_hash values,
+  // embedding_content_hash values, storage_location, or per-
+  // capsule attribution. Audit emission reuses existing
+  // ADMIN_ACTION + DRIFT_SIGNAL_READ literal with
+  // source_signal: "STALE_CONTEXT_WALLET" discriminator (no new
+  // audit literal).
+  app.get(
+    "/api/v1/otzar/stale-context-signal",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await otzarService.analyzeStaleContextForCaller({
+        token,
+      });
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
 }

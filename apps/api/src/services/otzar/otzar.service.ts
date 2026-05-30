@@ -47,6 +47,12 @@ import {
   type ConversationDriftSignalsSuccess,
   type GetConversationDriftSignalsInput,
 } from "./drift-signal.service.js";
+import {
+  analyzeStaleContextForCaller,
+  type GetStaleContextSignalInput,
+  type StaleContextSignalSuccess,
+  type StaleContextSignalFailure,
+} from "./stale-context-signal.service.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -1415,6 +1421,28 @@ export class OtzarService {
     input: GetConversationDriftSignalsInput,
   ): Promise<ConversationDriftSignalsSuccess | OtzarFailure> {
     return analyzeConversationDrift({
+      authService: this.authService,
+      input,
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Section 1 Wave 4A: stale-context drift signal per ADR-0058 §9 +
+  //                    ADR-0045 G5.1 + Founder Wave 4A direction.
+  //                    Self-scoped wallet-level signal; closed-vocab
+  //                    label set (FRESH_CONTEXT / STALE_CONTEXT_RISK /
+  //                    INSUFFICIENT_DATA); reuses existing
+  //                    ADMIN_ACTION:DRIFT_SIGNAL_READ audit with
+  //                    source_signal: "STALE_CONTEXT_WALLET"
+  //                    discriminator (NO new audit literal). NEVER
+  //                    raw capsule content, content_hash values,
+  //                    embedding_content_hash values, capsule IDs,
+  //                    or per-capsule attribution.
+  // ──────────────────────────────────────────────────────────────
+  async analyzeStaleContextForCaller(
+    input: GetStaleContextSignalInput,
+  ): Promise<StaleContextSignalSuccess | StaleContextSignalFailure> {
+    return analyzeStaleContextForCaller({
       authService: this.authService,
       input,
     });
