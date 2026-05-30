@@ -12,6 +12,16 @@ export {
 
 export { OutboundWebhookProvider } from "./outbound-webhook.provider.js";
 
+export {
+  bindingMatchesNotificationClass,
+  dispatchNotificationFanOut,
+  makeConnectorFanOutHook,
+} from "./notification-fanout.service.js";
+export type {
+  NotificationFanOutInput,
+  NotificationFanOutResult,
+} from "./notification-fanout.service.js";
+
 export type {
   ConnectorInvocation,
   ConnectorProvider,

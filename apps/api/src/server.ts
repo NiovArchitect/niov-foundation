@@ -19,6 +19,7 @@ import { WriteService } from "./services/cosmp/write.service.js";
 import { ShareService } from "./services/cosmp/share.service.js";
 import { SimilarityService } from "./services/cosmp/similarity.service.js";
 import { makeNotificationService } from "./services/notification/notification.service.js";
+import { makeConnectorFanOutHook } from "./services/connector/notification-fanout.service.js";
 import { COEService } from "./services/coe/coe.service.js";
 import { registerCoeRoutes } from "./routes/coe.routes.js";
 import { WorkingSetService } from "./services/personalization/working-set.service.js";
@@ -509,7 +510,15 @@ export async function buildApp(
   // SEND_INTERNAL_NOTIFICATION via NotificationService per Wave 11
   // Founder-direction-locked internal-only delivery — no external
   // providers).
-  const notificationService = makeNotificationService();
+  // Section 4 Wave 5 — wire the connector fan-out hook into the
+  // NotificationService at boot. The hook looks up matching
+  // ConnectorBindings (opt-in via config.notification_classes) and
+  // invokes their providers. Production uses
+  // getConnectorProviderAsync (FixtureBased for non-OUTBOUND_WEBHOOK
+  // types until each future provider lands behind its own QLOCK).
+  const notificationService = makeNotificationService({
+    connectorFanOut: makeConnectorFanOutHook(),
+  });
   setDefaultActionHandlerRegistry(
     makeActionHandlerRegistry({ writeService, notificationService }),
   );

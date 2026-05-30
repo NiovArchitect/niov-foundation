@@ -73,6 +73,10 @@ export type {
 // docs/research/2026-05-29-send-internal-notification-substrate-research.md.
 export { makeNotificationService } from "./services/notification/notification.service.js";
 export type {
+  ConnectorFanOutHook,
+  MakeNotificationServiceOptions,
+} from "./services/notification/notification.service.js";
+export type {
   CreateInternalNotificationInput,
   CreateInternalNotificationResult,
   CreatedNotificationProjection,
@@ -954,12 +958,19 @@ export type {
 // is the production default at Wave 1 because no real providers have
 // shipped yet.
 export {
+  bindingMatchesNotificationClass,
   CONNECTOR_REGISTRY,
+  dispatchNotificationFanOut,
   FixtureBasedConnectorProvider,
   getConnectorProvider,
   getConnectorProviderAsync,
   getConnectorTypeDefinition,
+  makeConnectorFanOutHook,
   OutboundWebhookProvider,
+} from "./services/connector/index.js";
+export type {
+  NotificationFanOutInput,
+  NotificationFanOutResult,
 } from "./services/connector/index.js";
 export type {
   ConnectorInvocation,

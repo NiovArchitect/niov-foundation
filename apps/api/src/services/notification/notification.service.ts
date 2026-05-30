@@ -77,16 +77,58 @@ export interface NotificationService {
   ): Promise<CreateInternalNotificationResult>;
 }
 
+// WHAT: Optional Section 4 Wave 5 external fan-out hook signature.
+//        When wired at server boot (production) or via test
+//        injection, this callback fires AFTER a Notification row is
+//        successfully created. It looks up any matching
+//        ConnectorBindings for the source org + invokes their
+//        external providers (one parallel attempt per binding;
+//        per-attempt ADMIN_ACTION audit row). When NOT wired, the
+//        Wave 11 internal-only behavior is preserved verbatim — no
+//        external side effects whatsoever.
+// INPUT: Used as a parameter type only.
+// OUTPUT: None — type only.
+// WHY: Keeps Section 4 concerns OUT of this Section 2 file. The
+//      hook signature carries notification_id + notification_class
+//      + org_entity_id + source_entity_id ONLY — never body content
+//      — so the connector substrate can never read body data
+//      through this seam.
+export type ConnectorFanOutHook = (input: {
+  notification_id: string;
+  notification_class: string;
+  org_entity_id: string;
+  source_entity_id: string;
+}) => Promise<void>;
+
+// WHAT: Options for makeNotificationService.
+// INPUT: Used as a parameter type.
+// OUTPUT: None — type only.
+// WHY: Single options bag so future deps (clock, id generator,
+//      additional hooks) extend additively without breaking
+//      callers.
+export interface MakeNotificationServiceOptions {
+  // Section 4 Wave 5 — optional external fan-out hook. Absent →
+  // internal-only Wave 11 behavior preserved. Present →
+  // ConnectorBinding-matched providers receive a metadata ping
+  // (notification_id + notification_class only; never body).
+  connectorFanOut?: ConnectorFanOutHook;
+}
+
 // WHAT: Construct the production NotificationService backed by
 //        prisma.notification.create. Same wallet/membership
 //        validation discipline as the other Foundation services.
-// INPUT: None today; future versions may accept a clock / id
-//        generator for deterministic tests.
+// INPUT: Optional MakeNotificationServiceOptions (Wave 5 added the
+//        connectorFanOut hook).
 // OUTPUT: A NotificationService.
 // WHY: The handler's executor + dual-control + audit chain remain
 //      authoritative; this service is the persistence + cross-org
-//      gate.
-export function makeNotificationService(): NotificationService {
+//      gate. The Wave 5 fan-out hook fires AFTER successful
+//      persistence, so a fan-out failure can never undo the
+//      Notification row.
+export function makeNotificationService(
+  opts: MakeNotificationServiceOptions = {},
+): NotificationService {
+  const connectorFanOut = opts.connectorFanOut;
   return {
     async createInternalNotification(
       input: CreateInternalNotificationInput,
@@ -148,6 +190,20 @@ export function makeNotificationService(): NotificationService {
           created_at: true,
         },
       });
+      // Section 4 Wave 5 — fire the connector fan-out hook AFTER
+      // successful persistence. Awaiting here is intentional so
+      // tests observe completion deterministically; the hook's
+      // production implementation swallows its own internal errors
+      // (per makeConnectorFanOutHook) so a downstream failure can
+      // never propagate back to undo the just-committed Notification.
+      if (connectorFanOut !== undefined) {
+        await connectorFanOut({
+          notification_id: row.notification_id,
+          notification_class: row.notification_class,
+          org_entity_id: input.org_entity_id,
+          source_entity_id: input.source_entity_id,
+        });
+      }
       return {
         ok: true,
         notification: row,
