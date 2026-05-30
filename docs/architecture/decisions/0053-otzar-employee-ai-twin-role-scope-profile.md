@@ -126,6 +126,15 @@ prevention is foundations-only. The locks:
    always under permissioned/governed scope) is a **Wave 3** capability,
    not Wave 2.
 
+   **Wave 3 drift-signal contract landed at ADR-0058** (2026-05-30) —
+   self-scoped per-conversation `GET /api/v1/otzar/conversations/:id/drift-signals`
+   surfacing closed-vocabulary coaching labels (`CORRECTION_VELOCITY_ELEVATED`
+   + `RECURRING_CORRECTION_THEME`); explicit anti-surveillance boundary +
+   no schema migration + no new audit literal + pure derived from existing
+   substrate. `IntelligencePattern` auto-write + stale-context drift +
+   proactive suggestions remain forward-substrate behind separate slice
+   authorizations.
+
 6. **Control Tower implication (deferred).** Control Tower will later
    consume the role-scope profile and eventually render AI-generated
    admin clarity, but Wave 2A does **not** build Control Tower reporting.

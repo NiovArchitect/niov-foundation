@@ -293,6 +293,15 @@ derivable. The locks:
   review: nothing in Wave 2C may write to `IntelligencePattern`
   from `CORRECTION` capsules, infer a drift score, or expose
   cross-employee aggregation.
+
+  **Wave 3 drift-signal contract landed at ADR-0058** (2026-05-30):
+  per-conversation `GET /api/v1/otzar/conversations/:id/drift-signals`
+  consumes the Wave 2C `MemoryCapsule.conversation_id` linkage to
+  surface closed-vocabulary coaching labels. Wave 3 honors the same
+  self-scoped + no-content-leak + no-employee-scoring + no-manager-
+  visibility boundary Wave 2C established. `IntelligencePattern`
+  auto-write + drift-score persistence + cross-employee aggregation
+  remain explicit non-goals through Wave 3.
 - The safe frontend language (§Decision 9) constrains UX phrasing —
   copy must be reviewed against the allowed/forbidden lists at
   Control Tower implementation time.
