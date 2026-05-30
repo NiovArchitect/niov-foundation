@@ -968,10 +968,13 @@ export {
   getConnectorTypeDefinition,
   makeConnectorFanOutHook,
   OutboundWebhookProvider,
+  verifyInboundHmac,
 } from "./services/connector/index.js";
 export type {
+  InboundHmacResult,
   NotificationFanOutInput,
   NotificationFanOutResult,
+  VerifyInboundHmacInput,
 } from "./services/connector/index.js";
 export type {
   ConnectorInvocation,

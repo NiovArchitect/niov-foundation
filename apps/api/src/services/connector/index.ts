@@ -12,6 +12,12 @@ export {
 
 export { OutboundWebhookProvider } from "./outbound-webhook.provider.js";
 
+export { verifyInboundHmac } from "./inbound-hmac.js";
+export type {
+  InboundHmacResult,
+  VerifyInboundHmacInput,
+} from "./inbound-hmac.js";
+
 export {
   bindingMatchesNotificationClass,
   dispatchNotificationFanOut,
