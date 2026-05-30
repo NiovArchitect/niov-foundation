@@ -202,33 +202,98 @@ authorization)**:
 ## Next slices (per ADR-0060 §Forward queue)
 
 1. ~~**Wave 2 — service-tier implementation**~~ — LANDED
-   PR #100 2026-05-30. 3 inspector routes + PlaygroundService
-   + 17 integration tests + barrel exports + server.ts
-   wiring. Zero schema migration; zero new audit literals.
-2. **Wave 3 — optional Control Tower frontend consumer**
-   (frontend; out of Foundation scope; lives in
-   `otzar-control-tower`).
-3. **Wave 4+** — broaden ADR-0060 (or land a new product-vision
-   ADR) covering the long-term Agent Playground enterprise-
-   simulation product surface; then persistent named scenarios
-   (separate ADR + schema); multi-agent scenario simulation
-   engine; outcome comparison + best-path recommender; governed
-   transition from simulation to Action runtime; real-provider
-   dry-run (Founder product decision; major safety review).
-   Each future wave is its own Founder authorization slice.
+   PR #100 2026-05-30.
+2. ~~**Wave 3 — long-term product-vision ADR**~~ — LANDED
+   2026-05-30 at ADR-0065 (new ADR sitting ABOVE
+   ADR-0060 at product-vision tier).
+3. **Wave 4 — persistent named scenarios model + safe
+   CRUD** (if schema-approved). Add `PlaygroundScenario`
+   Prisma model + CRUD routes; RULE 13 + ADR-0025
+   schema-push-target discipline; SAFE projection at
+   every read; same-org / self-scope at every gate.
+4. **Wave 5 — scenario candidate generation contract**.
+   Likely fixture / deterministic first; NO LLM autonomy
+   unless separately Founder-authorized.
+5. **Wave 6 — outcome comparison + scoring rubric**.
+   Closed-vocabulary; NO employee scoring.
+6. **Wave 7 — best-path recommender** with evidence and
+   governance findings.
+7. **Wave 8 — governed transition** from selected
+   scenario to proposed Action plan (through Section 2
+   Action runtime per §4 human-in-the-loop doctrine).
+8. **Wave 9 — multi-agent simulation orchestration**
+   (consuming ADR-0028 BEAM coordination layer).
+9. **Wave 10 — Control Tower frontend consumer**
+   (frontend; lives in `otzar-control-tower` repo).
 
-## Recommended ADR amendment / new ADR
+## Long-term product vision (canonical at ADR-0065)
 
-ADR-0060's v1 scope is intentionally narrow at the inspector
-tier and does NOT canonicalize the long-term Agent Playground
-product vision (multi-agent scenario exploration, enterprise
-decision simulation, outcome comparison, best-path
-recommender, governed transition from simulation to Action
-runtime). A future ADR amendment OR new product-vision ADR
-should land before Wave 3+ implementation so the long-term
-vision is on the architectural record and future waves have
-a single canonical reference. Author-time recommendation;
-requires Founder authorization at the next-section slice.
+**ADR-0065 LANDED 2026-05-30** as a NEW ADR sitting ABOVE
+ADR-0060 at the product-vision tier. Canonicalizes the
+long-term Agent Playground product vision verbatim;
+preserves ADR-0060 as the canonical Wave 2 implementation
+contract for the first backend substrate / inspector
+foundation.
+
+ADR-0065 locks:
+
+- **§1 long-term purpose** — DGI substrate for the
+  enterprise domain (NOT a toy sandbox); enterprise
+  simulation; multi-agent scenario exploration;
+  organizational decision simulation; alternative plan
+  comparison; outcome comparison; best-path
+  recommendation; governed transition from simulation to
+  Action runtime.
+- **§2 13-input canonical set** the future scenario
+  engine MAY consume (org goals + role-scoped context +
+  approved working sets + policy/governance_terms
+  constraints + connector capabilities + Hive/team
+  context + audit-derived signals + analytics aggregates
+  + corrections/drift signals + approved memory capsules
+  + dependency/blocker/cost/timing/risk/impact
+  estimations).
+- **§3 10-output canonical set** (scenario candidates +
+  recommended best path + reasons/evidence + tradeoffs +
+  risk flags + policy/governance findings + dependency
+  map + expected outcomes + required approvals +
+  proposed Action plan). Forbidden: organizational
+  scoring / employee rankings / psychological inferences
+  / fabricated probabilities / raw capsule content /
+  chain-of-thought / cross-org / secrets.
+- **§4 human-in-the-loop doctrine** — Playground NEVER
+  silently executes; MAY propose plans; transition MUST
+  go through Section 2 Action runtime + policy +
+  approvals + audit; no bypass.
+- **§5 universal safety / no-leak doctrine** — applies
+  at every Agent Playground tier; explicit forbidden
+  list (employee surveillance / org scoring / hidden
+  manager spy / psychological scoring / raw transcripts /
+  chain-of-thought / raw prompts / raw memory unless
+  scoped + projected / embeddings / vectors / storage
+  locations / content hashes / bridge IDs / secret refs /
+  cross-org / production provider calls / live external
+  side effects / unapproved Action creation / autonomous
+  execution).
+- **§6 relation to Wave 2** — Wave 2 inspector
+  foundation = 3 primitives future waves WILL compose
+  (policy evaluator + connector dry-run + working-set);
+  Wave 2 is NOT the full product.
+- **§7 canonical 10-wave forward map** (this Wave 3 +
+  Wave 4 persistent named scenarios + Wave 5 candidate
+  generation contract + Wave 6 outcome comparison +
+  Wave 7 best-path recommender + Wave 8 governed
+  transition to Action + Wave 9 multi-agent
+  orchestration + Wave 10 Control Tower frontend
+  consumer).
+- **§9 canonical naming + scope clarity** — Agent
+  Playground inspector foundation (Wave 2 LIVE) vs
+  Agent Playground scenario simulation substrate (Waves
+  4-9) vs Otzar Control Tower UI (Wave 10) vs Actual
+  execution (Section 2 Action runtime, NOT Playground).
+
+Future Wave 4+ implementation slices reference ADR-0065
+§7 wave map verbatim. Each wave requires separate Founder
+authorization at its slice.
 
 ## Risks / forward-substrate
 

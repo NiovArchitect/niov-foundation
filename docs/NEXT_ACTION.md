@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `fd35c62` (Section 5 Wave 2 — Agent Playground v1 implementation)
-- **Latest merged PR:** [#100](https://github.com/NiovArchitect/niov-foundation/pull/100) — Add Section 5 Wave 2 — Agent Playground v1 implementation.
-- **Active branch / PR:** `section-5-wave-2-docs-closeout` (Wave 2 docs cascade; design-only).
-- **Section 5 status: PARTIAL with Waves 1+2 LIVE (first-substrate / inspector foundation only).** 3 sandbox-only inspector routes shipped + PlaygroundService + 17 integration tests. **Important framing**: Wave 2 is the first backend substrate, NOT the full Agent Playground product. Long-term Agent Playground vision (multi-agent scenario exploration + outcome comparison + best-path recommender + governed transition from simulation to Action runtime; DGI-style enterprise domain) remains forward-substrate. ADR-0060 broadening recommended before Wave 3+.
+- **Main HEAD:** `9c34151` (Section 5 Wave 2 docs closeout; Wave 3 ADR PR pending)
+- **Latest merged PR:** [#101](https://github.com/NiovArchitect/niov-foundation/pull/101) — Close out Section 5 Wave 2 — Agent Playground v1 docs.
+- **Active branch / PR:** `section-5-wave-3-agent-playground-product-vision-adr` (ADR-0065 product-vision design; design-only).
+- **Section 5 status: PARTIAL with Waves 1+2+3 LIVE** (Wave 1 ADR-0060 + Wave 2 inspector-foundation implementation + Wave 3 long-term product-vision ADR-0065). Wave 4+ (persistent named scenarios + candidate generation + outcome comparison + best-path recommender + governed transition to Action runtime + multi-agent orchestration + Control Tower frontend) canonical at ADR-0065 §7 wave map; each requires separate Founder authorization.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope** (closeout PR #99 earlier today).
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
@@ -26,26 +26,26 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 5 Wave 2 LANDED — Agent Playground v1 (first-substrate / inspector foundation)
+## Section 5 Wave 3 LANDED — Agent Playground long-term product-vision ADR (ADR-0065)
 
-ADR-0060 design (Wave 1 #86) + Wave 2 implementation (PR #100) per Founder authorization. **Important framing**: Wave 2 is the safe first backend substrate / inspector foundation, NOT the full Agent Playground product vision.
+NEW ADR-0065 sits ABOVE ADR-0060 at the product-vision tier; canonicalizes the long-term Agent Playground vision verbatim while preserving ADR-0060 as the canonical Wave 2 implementation contract.
 
-**Long-term Agent Playground vision** (forward-substrate): *"Agent Playground is the enterprise simulation and decision-testing environment where Otzar's AI teammates can explore possible strategies, compare outcomes, and recommend the best governed path before real execution."* DGI-style enterprise scenario playground; multi-agent simulation; outcome comparison; best-path recommender with reasons + evidence; governed transition from simulation to Action runtime (only after approvals/policy checks; never autonomous execution from playground). Humans in the loop; auditability + no-leak + scoped permissions preserved.
+**Canonical product vision** (ADR-0065 §1): *"Agent Playground is the enterprise simulation and decision-testing environment where Otzar's AI teammates can explore possible strategies, compare outcomes, and recommend the best governed path before real execution."* DGI substrate for the enterprise domain (NOT a toy sandbox); multi-agent scenario exploration; alternative plan comparison; outcome comparison; best-path recommendation; governed transition to Action runtime.
 
-**Wave 2 scope (delivered)**: 3 sandbox-only inspector routes (`POST /api/v1/playground/policy-evaluator` via pure `evaluateActionPolicy`; `POST /api/v1/playground/connector-dry-run` hard-wired to `FixtureBasedConnectorProvider` with production providers unreachable; `POST /api/v1/playground/working-set` via `COE.assembleContext` with SAFE projection stripping raw `content`); PlaygroundService class; barrel exports; server.ts wiring; 17 integration tests. Zero side effects (no Action/ActionAttempt/Notification/OtzarConversation/MemoryCapsule/ConnectorBinding rows created). Zero schema migration; zero new audit literals; zero new external deps.
+**12 sub-decisions canonical**: §2 13-input set (org goals + role-scoped context + working sets + policy/governance_terms + connector capabilities + Hive/team context + audit signals + analytics + corrections/drift + memory capsules + dependency/blocker/cost/timing/risk/impact); §3 10-output set (scenario candidates + best path + reasons/evidence + tradeoffs + risk flags + governance findings + dependency map + outcomes + approvals + proposed Action plan); §4 human-in-the-loop (Playground NEVER silently executes; transition MUST go through Section 2 Action runtime + policy + approvals + audit); §5 universal safety / no-leak doctrine (forbidden: employee surveillance / org scoring / spy surfaces / psychological scoring / transcripts / chain-of-thought / prompts / raw memory unless scoped + projected / embeddings / cross-org / live external side effects / autonomous execution); §6 Wave 2 inspector foundation relation; §7 canonical 10-wave forward map (Wave 4 persistent named scenarios + Wave 5 candidate generation + Wave 6 outcome comparison + Wave 7 best-path recommender + Wave 8 governed transition + Wave 9 multi-agent orchestration + Wave 10 Control Tower frontend); §9 canonical naming + scope clarity; §11 patent-implementation evidence at US 12,517,919 + US 12,164,537 + US 12,399,904; §12 RULE 0 + no-leak universal.
 
-**ADR-0060 recommended broadening before Wave 3+** — the v1 ADR scope is intentionally narrow at the inspector tier and does not canonicalize the long-term product vision; future ADR amendment or new product-vision ADR should land before Wave 3+ implementation.
+ADR-0060 §Forward queue amended in-place with bidirectional back-citation per RULE 14.
 
-Earlier waves on main: Section 3 Waves 1-5 + closeout (#85-#99); Section 6 Wave 1 ADR-0061; Section 1 Wave 3 (#82/83/84); Section 4 Wave 7 (#80); Hardening A/B/C/D. Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
+Earlier waves on main: Section 3 Waves 1-5 + closeout (#85-#99); Section 5 Wave 2 (#100/#101); Section 6 Wave 1 ADR-0061; Section 1 Wave 3 (#82/83/84); Section 4 Wave 7 (#80); Hardening A/B/C/D. Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
 
 ## Recommended next production section
 
-**Section 6 Wave 2 — Enterprise Analytics first concrete aggregate** per ADR-0061 §8 (5 Founder Authorization checkpoints; substrate-derivable e.g. org-wide CORRECTION velocity 7d / action-runtime success rate / connector activity / hive participation). Rationale: design ADR already landed; substrate-derivable from existing operational signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule metadata + EntityMembership + EntityComplianceProfile + hive aggregates); SAFE projection pattern locked; can_admin_org gate. **Alternatives**: ADR-0060 broadening / new product-vision ADR for Agent Playground long-term vision (so Wave 3+ has canonical product framing); Section 1 Wave 4+ advanced drift signals (ADR-0058 §9; each signal own slice).
+**Section 6 Wave 2 — Enterprise Analytics first concrete aggregate** per ADR-0061 §8 (5 Founder Authorization checkpoints; substrate-derivable). Rationale: design ADR already landed; substrate-derivable from existing operational signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule metadata + EntityMembership + EntityComplianceProfile + hive aggregates); SAFE projection pattern locked; `can_admin_org` gate. **Alternative**: Section 5 Wave 4 first persistent-named-scenarios model per ADR-0065 §7 wave map (needs schema; ADR-0025 schema-push-target discipline; same-org / self-scope at every gate). **Alternative**: Section 1 Wave 4+ advanced drift signals (ADR-0058 §9; each signal own slice).
 
 ## Founder Sleep Directive preferences — status
 
   1. ~~Section 3 Hives~~ — **CLOSED 2026-05-30 production-grade complete for v1 same-org Foundation backend scope.**
-  2. ~~Section 5 Agent Playground Wave 2~~ — LANDED 2026-05-30 (#100) as first-substrate / inspector foundation only.
+  2. ~~Section 5 Agent Playground Waves 2+3~~ — LANDED 2026-05-30 (#100/#101 inspector foundation + ADR-0065 long-term product-vision ADR).
   2. ~~Section 9 Admin/Governance~~ — substantively complete per Hardening Wave C; AI-generated exec summaries = Founder product decision per ADR-0052.
   3. ~~Section 5 Agent Playground~~ — ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
   4. ~~Section 6 Enterprise Analytics~~ — ADR-0061 LANDED; Wave 2 = Founder Authorization (5 checkpoints).

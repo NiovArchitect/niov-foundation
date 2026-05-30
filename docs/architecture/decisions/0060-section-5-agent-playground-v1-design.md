@@ -261,12 +261,23 @@ implementation slice needs Founder confirmation:
   fixture-only connector wiring; pure-function policy
   tester behavior; working-set inspector returns transparency
   without persistence; no audit emission verification.
-- Wave 3: optional Control Tower frontend consumes Wave 2
-  routes (frontend; out of Foundation scope).
+  **LANDED 2026-05-30 at PR #100 (commit `fd35c62`).**
+- Wave 3: **Long-term product-vision ADR LANDED at
+  ADR-0065 (2026-05-30)** — canonicalizes the Agent
+  Playground enterprise-simulation / multi-agent /
+  outcome-comparison / best-path-recommender vision
+  ABOVE this ADR-0060 at the product-vision tier.
+  ADR-0060 remains the canonical Wave 2 implementation
+  contract; ADR-0065 sits above it. Bidirectional
+  citation per RULE 14.
 - Wave 4+: persistent named scenarios (separate ADR +
   schema); AI-suggested test scenarios (Founder product
   decision); real-provider dry-run (Founder product
-  decision; major safety review).
+  decision; major safety review). **All Wave 4+ now
+  canonical at ADR-0065 §7 forward wave map** (Waves
+  4-10 enumerated with contracts + safety constraints).
+  Original "optional Control Tower frontend consumer"
+  Wave 3 reservation absorbed into ADR-0065 Wave 10.
 
 ## Bidirectional citations
 
