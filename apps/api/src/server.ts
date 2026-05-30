@@ -34,6 +34,8 @@ import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
 import { PlaygroundService } from "./services/playground/playground.service.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
+import { AnalyticsService } from "./services/analytics/analytics.service.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { MonetizationService } from "./services/monetization/monetization.service.js";
 import { registerWalletRoutes } from "./routes/wallet.routes.js";
 import {
@@ -325,6 +327,12 @@ export async function buildApp(
   // unreachable from this path by construction per ADR-0060
   // Sub-decision §3 + Founder Wave 2 hard-wire constraint.
   const playgroundService = new PlaygroundService(authService, coeService);
+
+  // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE
+  // projection service. No constructor dependencies at v1
+  // (the service reads existing Prisma tables directly and
+  // emits audit via the shared writeAuditEvent helper).
+  const analyticsService = new AnalyticsService();
   const rateLimits: Record<string, RateLimitPolicy> = {
     ...DEFAULT_LIMITS,
     ...(config.rateLimitOverrides ?? {}),
@@ -465,6 +473,7 @@ export async function buildApp(
   await registerHiveRoutes(app, hiveService);
   await registerHiveAdminRoutes(app, authService, hiveService);
   await registerPlaygroundRoutes(app, playgroundService);
+  await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);
   await registerDeveloperRoutes(app, authService);
