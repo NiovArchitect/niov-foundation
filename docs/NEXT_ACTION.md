@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `f70ea0d` (after Section 1 Wave 3C closeout; this commit chain adds ADR-0059 Section 3 Wave 1)
-- **Latest merged PR:** [#84](https://github.com/NiovArchitect/niov-foundation/pull/84) — Close out Section 1 Wave 3 — Otzar drift detection docs refresh.
-- **Active branch / PR:** `section-3-wave-1-hives-adr-0059` (ADR-0059 Hives v1 design-only + substrate-honest doc correction).
-- **Active production section:** Section 3 Wave 1 closeout. Section 3 PARTIAL with Wave 1 ADR LANDED (design-only). Phase 0 surfaced substrate-honest finding that on-main Hive substrate (Hive + HiveMembership + HiveService + hive.routes.ts + 5 HIVE_* audit literals) is substantially complete pre-Section-12; prior "Substrate not yet started" was canonical-truth drift. Per Founder Sleep Directive next-section preference: Section 9 backend contracts Phase 0 verification runs next.
+- **Main HEAD:** `11ae5e5` (after Section 3 Wave 1 ADR-0059; this commit chain adds ADR-0060 Section 5 Wave 1)
+- **Latest merged PR:** [#85](https://github.com/NiovArchitect/niov-foundation/pull/85) — Add Section 3 Wave 1 — ADR-0059 Hives v1 design boundary + substrate-honest doc correction.
+- **Active branch / PR:** `section-5-wave-1-agent-playground-adr-0060` (ADR-0060 Agent Playground v1 design-only).
+- **Active production section:** Section 5 Wave 1 closeout (ADR-only). Section 9 backend Phase 0 verdict: substantively complete per Hardening Wave C; AI-generated executive summaries per ADR-0052 require Founder product decision (real stop); advanced to Section 5 per Founder Sleep Directive preference #3. ADR-0060 locks v1 = 3 read-only inspector contracts; Wave 2 implementation requires Founder Authorization (4 checkpoints).
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
