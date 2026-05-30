@@ -12,7 +12,7 @@ INVOKE_CONNECTOR Actions against per-org-registered external
 adapters, every call audited + every secret kept as an env-var
 reference (never raw-at-rest).
 
-## Current status (PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 LIVE)
+## Current status (PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5+7 LIVE + Hardening B LIVE)
 
 **Provider abstraction + ConnectorBinding model + admin routes +
 INVOKE_CONNECTOR ActionType + first real OutboundWebhookProvider
@@ -30,6 +30,38 @@ own future QLOCKs + RULE 21 research arcs — each adds its own
 auth-flow substrate that is intentionally out of Wave 5 scope.
 
 ## What is live
+
+### Wave 7 (PR #80) — Action-routed fan-out variant (opt-in)
+
+- NEW `bindingFanOutMode` pure matcher reads
+  `config.fan_out_mode ∈ {"direct", "action"}`; defaults to
+  `"direct"` when absent / unrecognized / non-object config.
+- `dispatchNotificationFanOut` refactored into a mode-branching
+  shape:
+  - `direct` (Wave 5 baseline; default) — extracted as
+    `dispatchDirect`; semantics verbatim; adds `mode: "direct"`
+    to audit details.
+  - `action` (Wave 7 opt-in) — `dispatchActionRouted` calls
+    `createActionForCaller(source_entity_id, INVOKE_CONNECTOR)`
+    with deterministic `idempotency_key =
+    fanout:${notification_id}:${binding_id}`. Action runtime
+    owns lifecycle (policy evaluator + admission + executor +
+    full ACTION_* audit chain). NEW `details.action =
+    NOTIFICATION_FAN_OUT_ENQUEUED` audit row bookmarks the
+    fan-out → Action handoff. No new audit literal (rides
+    existing `ADMIN_ACTION`).
+- `NotificationFanOutResult.attempts[]` extended with `mode` +
+  optional `action_id` for forensic / test inspection.
+- **Safety**: `source_entity_id` is a real entity UUID (the
+  original notification source), not the SCHEDULER sentinel —
+  preserves Action model `@db.Uuid` contract + audit
+  attribution to the entity that caused the fan-out.
+- **Idempotency**: deterministic key collapses re-fires of the
+  same `(notification_id, binding_id)` to one Action.
+- **Privacy invariant**: `payload_redacted` carries
+  `binding_id + invocation_payload (notification_id +
+  notification_class only)`; never `body_summary` /
+  `body_redacted` / `recipient_entity_id`.
 
 ### Wave 5 (PR #74) — NotificationService external fan-out bridge
 
@@ -318,6 +350,8 @@ for the canonical generic-adapter shape:
 | [#72](https://github.com/NiovArchitect/niov-foundation/pull/72) | `4009b25` | **Section 4 Wave 3 INVOKE_CONNECTOR ActionType + handler** — `ActionType` enum extended; LOW risk_tier; `validateInvokeConnectorPayload`; `makeInvokeConnectorHandler` with 8 provider error_class → handler error_class mapping; SAFE result_metadata. Rides existing 10 `ACTION_*` audit literals (no new audit literal). 15 NEW integration tests. |
 | [#73](https://github.com/NiovArchitect/niov-foundation/pull/73) | `c24dcc1` | **Section 4 Wave 4 OutboundWebhookProvider — first real connector** — HTTPS POST + HMAC-SHA-256 signing (defeats replay via `${timestamp}.${rawBody}`). Pure `node:https` + `node:crypto`; zero SDK dependency. Bounded timeout (10_000ms); HTTP status → error_class mapping; SAFE delivery_metadata. Factory swap: sync throws → async resolves real provider. 14 NEW integration tests via local Node http server fixture; no live external calls. |
 | [#74](https://github.com/NiovArchitect/niov-foundation/pull/74) | `6258f17` | **Section 4 Wave 5 NotificationService external fan-out bridge** — `bindingMatchesNotificationClass` matcher; `dispatchNotificationFanOut` parallel per-binding invoke + per-attempt audit; `makeConnectorFanOutHook` swallows downstream errors; `NotificationService` gains optional `connectorFanOut` hook (commit-then-hook order; payload locked to metadata ping). Wave 11 internal-only baseline preserved verbatim when hook absent. 2 `details.action` discriminators on `ADMIN_ACTION`. 13 NEW integration tests. |
+| [#77](https://github.com/NiovArchitect/niov-foundation/pull/77) | `3cda556` | **Hardening Wave B — Section 4 inbound HMAC verification helper** — `verifyInboundHmac` pairs with Wave 4 sender; 8-reason closed enum; timing-safe hex compare; default 5-min replay window. Pure substrate; no route consumer yet. 19 NEW unit tests. |
+| [#80](https://github.com/NiovArchitect/niov-foundation/pull/80) | `f26c88e` | **Section 4 Wave 7 Action-routed fan-out variant (opt-in)** — closes the Wave 5 closeout forward-substrate note. NEW `bindingFanOutMode` + `dispatchActionRouted` create real `INVOKE_CONNECTOR` Action via `createActionForCaller(source_entity_id, ...)`; deterministic idempotency key; Action runtime owns retry + cancellation + ACTION_* audit chain. NEW `NOTIFICATION_FAN_OUT_ENQUEUED` discriminator on `ADMIN_ACTION` (no new literal). Wave 5 direct-mode preserved as default. 10 NEW integration tests; Wave 5 regression 13/13 preserved. |
 
 ## Risks / forward-substrate
 

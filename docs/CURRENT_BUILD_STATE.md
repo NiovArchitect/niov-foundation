@@ -9,20 +9,21 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-30
-(Hardening Wave A/B/C LANDED across closed sections: Section 7
-CSV export (PR #76); Section 4 inbound HMAC verification helper
-(PR #77); Section 9 substrate-honest doc refresh (this commit
-chain). Section 4 + Section 7 + Section 2 remain production-grade
-complete for their scopes. Sections requiring new ADRs (Section 1
-Wave 3 surveillance-vs-coaching boundary; Section 3 Hives;
-GOVSEC phases) remain Founder-QLOCK-gated.).
+(Hardening Wave A/B/C/D LANDED across closed sections (CSV
+export #76; inbound HMAC verifier #77; Section 9 doc refresh
+#78; REGULATOR_ACCESS_EXPIRED emitter #79) + Section 4 Wave 7
+Action-routed fan-out variant (#80; opt-in via
+config.fan_out_mode). Section 4 + Section 7 + Section 2 remain
+production-grade complete for their scopes. Sections requiring
+new ADRs (Section 1 Wave 3; Section 3 Hives; GOVSEC phases)
+remain Founder-QLOCK-gated.).
 
 ## Current state
 
-- **Latest main HEAD:** `3cda556` (Hardening Wave B; this commit chain adds Wave C docs)
-- **Latest merged PR:** [#77](https://github.com/NiovArchitect/niov-foundation/pull/77) — Add Hardening Wave B — Section 4 inbound HMAC verification helper (2026-05-30).
-- **Active branch / PR:** `hardening-wave-c-section-9-docs` (Section 9 substrate-honest doc refresh + master + baton refresh).
-- **Active production section:** Hardening waves across closed sections (Section 7 CSV export + Section 4 inbound HMAC verifier + Section 9 doc-drift fix); next-section autonomous start is blocked by Founder-product-decision-required sections (Section 1 Wave 3 surveillance-vs-coaching boundary + Section 3 Hives ADR + GOVSEC phases). Awaiting Founder direction on next-section authorization OR additional forward-substrate work within closed sections.
+- **Latest main HEAD:** `f26c88e` (Section 4 Wave 7; this commit chain adds Wave 7 docs)
+- **Latest merged PR:** [#80](https://github.com/NiovArchitect/niov-foundation/pull/80) — Add Section 4 Wave 7 Action-routed fan-out variant (opt-in) (2026-05-30).
+- **Active branch / PR:** `section-4-wave-7-docs-refresh` (tier-2/3 docs reflecting Section 4 Wave 7 + Hardening Wave A/B/C/D landings).
+- **Active production section:** Section 4 Wave 7 docs refresh. Next-section autonomous start blocked by genuine Founder-product-decision + new-ADR stop conditions across all remaining unstarted sections (Section 1 Wave 3 surveillance-vs-coaching ADR; Section 3 Hives ADR + RULE 21 arc; Section 5/6 large ADRs; Section 8 Founder-excluded; Section 10 GOVSEC phases). Section 4 forward-substrate also exhausted of autonomously-clean items (encrypted-at-rest secret column = ADR-0019 amendment; SDK-bound connectors = OAuth + real credentials). Awaiting Founder direction.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION per Wave 11 internal-only handler).
@@ -37,7 +38,7 @@ GOVSEC phases) remain Founder-QLOCK-gated.).
 | 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; **Otzar Wave 2A/B/C all LIVE on main** (`3bb773d` / `1ffa01d` / `c56bd57`, 2026-05-27/28). Wave 3 drift detection remains forward-substrate (no ADR yet). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
 | 2 | Autonomous Execution Core | **PRODUCTION-GRADE COMPLETE for internal Foundation autonomous-execution-substrate scope** (Wave 12 closeout). Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; 3 of 3 real handlers LIVE; admin `/org/action-policies` LIVE with operator-tunable retry_budget + attempt_timeout_ms_override; forensic-visibility loop CLOSED end-to-end; 3 internal-only notification inbox routes LIVE per PR #58 (GET list + PUT read + PUT dismiss; SAFE projection; enumeration-safe 404). Internal-only = the Foundation autonomous-execution-substrate is complete; external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** under **Section 4 — MCP / Connectors** as governed adapters. Per-Notification audit literals / admin-cross-recipient list / cache / `NotificationPreference` opt-out intentional future-substrate. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
-| 4 | MCP / Connectors | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 LIVE + Hardening Wave B (inbound HMAC verification helper) LIVE.** Provider abstraction + `ConnectorBinding` model (secret_ref env-var NAME only; never raw secret) + 5 admin routes on `/api/v1/org/connectors[/:id]` + `INVOKE_CONNECTOR` ActionType + `OutboundWebhookProvider` (HTTPS POST + HMAC-SHA-256 signing; pure node stdlib) + `NotificationService` fan-out bridge + `verifyInboundHmac` reusable receive-side verifier (8-reason closed enum; timing-safe; replay-window-bounded). 5 admin `ADMIN_ACTION` discriminators + 2 fan-out discriminators — **zero new audit literals**. SDK-bound connectors + encrypted-at-rest secret column + Action-runtime-integrated fan-out variant = forward-substrate behind their own future QLOCKs. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
+| 4 | MCP / Connectors | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5+7 LIVE + Hardening Wave B LIVE.** Provider abstraction + `ConnectorBinding` model (secret_ref env-var NAME only) + 5 admin routes + `INVOKE_CONNECTOR` ActionType + `OutboundWebhookProvider` (HTTPS POST + HMAC-SHA-256) + `NotificationService` fan-out bridge (Wave 5 direct-mode default + Wave 7 Action-routed opt-in via `config.fan_out_mode`) + `verifyInboundHmac` reusable receive-side verifier. 5 admin `ADMIN_ACTION` discriminators + 3 fan-out discriminators (DISPATCHED + FAILED + ENQUEUED) — **zero new audit literals**. SDK-bound connectors + encrypted-at-rest secret column = forward-substrate behind their own future QLOCKs. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | Not started. Forward-substrate after Section 4. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
 | 6 | Enterprise Analytics | Not started. Forward-substrate after Section 3. | [`06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md) |
 | 7 | Full Audit Viewer | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 LIVE + Hardening Wave A (CSV export) LIVE.** Canonical 4-scope matrix (self / org-admin / niov-admin / regulator) live across 3 read shapes (list / single-event / export); `verify-chain` self-only. Regulator access via ADR-0036 LawfulBasis 9-condition enforcement (Wave 5 PR #68). Export supports both `format=ndjson` (Wave 4) and `format=csv` (Hardening A PR #76; RFC 4180; CRLF terminators; `x-audit-format` header). All gates TAR-authoritative; filters AND-narrow; cross-basis isolation tested; SAFE projection; ADMIN_ACTION:AUDIT_VIEW_* (no new audit literal across any wave). Control Tower UX + cross-chain verify-chain + proactive `REGULATOR_ACCESS_EXPIRED` emitter = forward-substrate. | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
@@ -49,6 +50,9 @@ GOVSEC phases) remain Founder-QLOCK-gated.).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#80](https://github.com/NiovArchitect/niov-foundation/pull/80) | `f26c88e` | Add Section 4 Wave 7 Action-routed fan-out variant (opt-in) |
+| [#79](https://github.com/NiovArchitect/niov-foundation/pull/79) | `dcff369` | Add Hardening Wave D — Section 7 proactive REGULATOR_ACCESS_EXPIRED emitter |
+| [#78](https://github.com/NiovArchitect/niov-foundation/pull/78) | `20ba156` | Add Hardening Wave C — Section 9 substrate-honest doc refresh |
 | [#77](https://github.com/NiovArchitect/niov-foundation/pull/77) | `3cda556` | Add Hardening Wave B — Section 4 inbound HMAC verification helper |
 | [#76](https://github.com/NiovArchitect/niov-foundation/pull/76) | `538bea8` | Add Hardening Wave A — Section 7 CSV export |
 | [#75](https://github.com/NiovArchitect/niov-foundation/pull/75) | `188ddb2` | Close out Section 4 (Wave 6) — production-grade complete for Foundation backend scope |
@@ -58,9 +62,6 @@ GOVSEC phases) remain Founder-QLOCK-gated.).
 | [#71](https://github.com/NiovArchitect/niov-foundation/pull/71) | `40b5e2e` | Add Section 4 Wave 2 ConnectorBinding model + admin routes + audit |
 | [#70](https://github.com/NiovArchitect/niov-foundation/pull/70) | `4142735` | Add Section 4 Wave 1 ConnectorProvider abstraction + registry |
 | [#69](https://github.com/NiovArchitect/niov-foundation/pull/69) | `ddd954a` | Close out Section 7 (Wave 6) — production-grade complete for Foundation backend scope |
-| [#68](https://github.com/NiovArchitect/niov-foundation/pull/68) | `9ec214e` | Add Section 7 Wave 5 regulator-tier audit access via ADR-0036 |
-| [#67](https://github.com/NiovArchitect/niov-foundation/pull/67) | `0c065f4` | Wave-close docs refresh for #66 |
-| [#66](https://github.com/NiovArchitect/niov-foundation/pull/66) | `f316a51` | Add Section 7 Wave 4 NDJSON audit export surface |
 
 ## Immediate next work queue
 
