@@ -272,12 +272,16 @@ export {
   ANALYTICS_WINDOW_DAYS_MIN,
   ANALYTICS_WINDOW_DAYS_MAX,
   CORRECTION_VELOCITY_LABELS,
+  ACTION_RUNTIME_SUCCESS_LABELS,
+  ACTION_RUNTIME_MIN_VOLUME,
 } from "./services/analytics/analytics.service.js";
 export type {
   AnalyticsFailureCode,
   AnalyticsFailure,
   CorrectionVelocityAggregate,
   CorrectionVelocityLabel,
+  ActionRuntimeSuccessRateAggregate,
+  ActionRuntimeSuccessLabel,
 } from "./services/analytics/analytics.service.js";
 
 // Section 5 Wave 2 ADR-0060 — Agent Playground v1 barrel exports.
