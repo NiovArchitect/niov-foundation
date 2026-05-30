@@ -9,34 +9,35 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-30
-(Section 3 Wave 4 LANDED — ADR-0063 design (PR #93) +
-implementation (PR #94). NEW pure-function evaluator at
-`apps/api/src/services/hive/governance-terms-evaluator.ts`;
-9 of 10 ADR-0063 v1 evaluable terms wired at 3 HiveService
-call sites (createHive, inviteToHive, getHiveIntelligence);
-`require_admin_approval_for_invites` DEFERRED per Founder
-direction (no admin invite path exists yet; would
-hard-freeze inviteToHive). 6 new HiveFailure violation
-codes (5 → 403; GOVERNANCE_TERMS_MALFORMED → 422). NEW
-`aggregate_min_member_count` zero-state reuses existing
-HIVE_INTELLIGENCE_READ literal with `details.zero_state_reason:
-"BELOW_AGGREGATE_MIN_MEMBER_COUNT"` marker. Lenient
-per-key parser; unrecognized keys IGNORED; MALFORMED only
-when top-level value is not a JSON object. No-leak
-invariants: error messages never contain full governance_terms
-object; audit details never contain governance_terms
-(secret-marker integration tests verify). +20 Wave 4
-integration tests; zero new audit literals; zero schema
-migration. Layer 2 (enterprise registry) + Layer 3
-(external source feeds) intentionally NOT touched per
-ADR-0063 §Forward queue.).
+(Section 3 Wave 5 LANDED — ADR-0064 design (PR #96) +
+producer implementation (PR #97). NEW pure-substrate
+module at `apps/api/src/services/hive/hive-events.ts`
+ships the Foundation TypeScript internal event spine.
+Substrate-honest framing: "Phoenix.PubSub" naming refers
+to the eventual cross-language consumer-side substrate
+at dbgi_supervisor; v1 ships TS-side Node EventEmitter
+producer abstraction with no live consumers; 5
+closed-vocabulary events (HIVE_CREATED + HIVE_MEMBER_ADDED
++ HIVE_MEMBER_REMOVED + HIVE_DISSOLVED + HIVE_AGGREGATE_BUILT)
+at 6 producer call sites; same-org-scoped topic schema
+(foundation:hives:org:* + foundation:hives:hive:*); SAFE
+payload projection (forbidden fields enforced by type
+construction); fire-and-forget; single-node-safe;
+HIVE_GOVERNANCE_ZERO_STATE deferred at v1 wiring per
+Founder "only if safe and not noisy"; HiveService 4th
+optional eventBus arg preserves Wave 2/3/4 backward-compat.
++13 Wave 5 integration tests; zero new audit literals;
+zero schema migration; zero new external dependencies
+(Node built-in EventEmitter); RULE 21 does NOT fire at v1.
+ADR-0059 §Forward queue Wave 5 + ADR-0039 §Forward queue
+entry #28 producer halves both CLOSED.).
 
 ## Current state
 
-- **Latest main HEAD:** `065e4f1` (Section 3 Wave 4 v1 governance_terms evaluator implementation)
-- **Latest merged PR:** [#94](https://github.com/NiovArchitect/niov-foundation/pull/94) — Add Section 3 Wave 4 v1 — governance_terms policy evaluator (2026-05-30).
-- **Active branch / PR:** `section-3-wave-4-docs-closeout` (Wave 4 docs cascade; design-only).
-- **Active production section:** Section 3 Wave 4 docs closeout. Section 3 PARTIAL with Waves 1+2+3+4 LIVE; ADR-0059 §Forward queue Wave 4 reservation now substantively CLOSED (Layer 1 v1 implemented; Layers 2/3 forward-substrate). Waves 5-8+ remain forward-substrate per ADR-0059.
+- **Latest main HEAD:** `056c7c7` (Section 3 Wave 5 v1 Hive Events producer substrate)
+- **Latest merged PR:** [#97](https://github.com/NiovArchitect/niov-foundation/pull/97) — Add Section 3 Wave 5 v1 — Hive Events producer substrate (2026-05-30).
+- **Active branch / PR:** `section-3-wave-5-docs-closeout` (Wave 5 docs cascade; design-only).
+- **Active production section:** Section 3 Wave 5 docs closeout. Section 3 PARTIAL with Waves 1+2+3+4+5 LIVE; ADR-0059 §Forward queue Wave 5 + ADR-0039 §Forward queue entry #28 producer halves both CLOSED. Wave 6+ (consumer-side + Broadway guaranteed delivery + cross-language BEAM bridge + Otzar Twin subscription + Control Tower WebSocket bridge + Section 4 connector fan-out bridge) remain forward-substrate per ADR-0064 + ADR-0059.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION per Wave 11 internal-only handler).
@@ -50,7 +51,7 @@ ADR-0063 §Forward queue.).
 |---|---|---|---|
 | 1 | Employee Intelligence Core | **PARTIAL with Wave 3 LIVE.** Otzar Wave 2A/B/C all LIVE on main (`3bb773d`/`1ffa01d`/`c56bd57`, 2026-05-27/28) + **Wave 3 drift detection LIVE** per ADR-0058 (`779a286`/`e7b4a17`, 2026-05-30 per Founder Sleep Directive). Wave 3B ships `GET /api/v1/otzar/conversations/:id/drift-signals` — pure derived read-only coaching/alignment trust loop with closed-vocabulary signal labels (`CORRECTION_VELOCITY_ELEVATED` + `RECURRING_CORRECTION_THEME`); self-scoped; no manager visibility; no employee scoring; no raw content. ADMIN_ACTION:DRIFT_SIGNAL_READ audit emission (no new audit literal). Advanced drift signals (stale-context, role-scope-conflict, cross-conversation rollup, IntelligencePattern auto-write, operator-tunable thresholds, drift digest fan-out) remain forward-substrate per ADR-0058 §9. | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
 | 2 | Autonomous Execution Core | **PRODUCTION-GRADE COMPLETE for internal Foundation autonomous-execution-substrate scope** (Wave 12 closeout). Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; 3 of 3 real handlers LIVE; admin `/org/action-policies` LIVE with operator-tunable retry_budget + attempt_timeout_ms_override; forensic-visibility loop CLOSED end-to-end; 3 internal-only notification inbox routes LIVE per PR #58 (GET list + PUT read + PUT dismiss; SAFE projection; enumeration-safe 404). Internal-only = the Foundation autonomous-execution-substrate is complete; external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** under **Section 4 — MCP / Connectors** as governed adapters. Per-Notification audit literals / admin-cross-recipient list / cache / `NotificationPreference` opt-out intentional future-substrate. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
-| 3 | Hives / Team Intelligence | **PARTIAL with Waves 1+2+3+4 LIVE.** Wave 1 (PR #85) ADR-0059 v1 design boundary. Wave 2 (PR #88) service-tier safety enforcement (5 ADR-0059 §7 checkpoints; 4 new failure codes; +15 integration tests). Wave 3 (PRs #90 + #91) admin routes design + implementation (4 admin route surfaces + SAFE projections + idempotent dissolve/force-remove + AI_AGENT admin-tier cleanup; +20 integration tests). **Wave 4 (PRs #93 + #94, 2026-05-30)** ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary design (Local Hive / Enterprise registry / External source feeds with monthly/quarterly default cadence) + Layer 1 v1 implementation: NEW pure-function evaluator at `apps/api/src/services/hive/governance-terms-evaluator.ts`; 9 of 10 v1 evaluable terms wired (`require_admin_approval_for_invites` DEFERRED per Founder direction — would hard-freeze `inviteToHive`); 6 new HiveFailure violation codes (5 → 403; `GOVERNANCE_TERMS_MALFORMED` → 422); `aggregate_min_member_count` zero-state reuses existing HIVE_INTELLIGENCE_READ literal with `details.zero_state_reason: "BELOW_AGGREGATE_MIN_MEMBER_COUNT"` marker; lenient per-key parser; no-leak invariants (governance_terms never serialized to error/audit; secret-marker integration tests verify); +20 Wave 4 integration tests; zero new audit literals; zero schema migration. Layer 2 (enterprise registry) + Layer 3 (external source feeds + monthly/quarterly default review + 7-step source-update lifecycle) remain forward-substrate per ADR-0063 §Forward queue. Waves 5-8+ (Phoenix.PubSub / Broadway / hive-weighting / Twin-to-Twin runtime) remain forward-substrate per ADR-0059. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
+| 3 | Hives / Team Intelligence | **PARTIAL with Waves 1+2+3+4+5 LIVE.** Wave 1 (PR #85) ADR-0059 v1 design boundary. Wave 2 (PR #88) service-tier safety enforcement (5 ADR-0059 §7 checkpoints; 4 new failure codes; +15 integration tests). Wave 3 (PRs #90 + #91) admin routes design + implementation (4 admin route surfaces + SAFE projections + idempotent dissolve/force-remove + AI_AGENT admin-tier cleanup; +20 integration tests). Wave 4 (PRs #93 + #94) ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary design + Layer 1 v1 implementation (9 of 10 terms wired; `require_admin_approval_for_invites` deferred; 6 new HiveFailure codes; +20 integration tests). **Wave 5 (PRs #96 + #97, 2026-05-30)** ADR-0064 Hive Events Producer Substrate design + producer implementation: NEW pure-substrate module at `apps/api/src/services/hive/hive-events.ts` ships Foundation TypeScript internal event spine (substrate-honest framing — "Phoenix.PubSub" naming refers to eventual cross-language consumer-side substrate at dbgi_supervisor; v1 ships TS-side Node `node:events.EventEmitter` producer abstraction); 5 closed-vocabulary events (HIVE_CREATED + HIVE_MEMBER_ADDED + HIVE_MEMBER_REMOVED + HIVE_DISSOLVED + HIVE_AGGREGATE_BUILT) at 6 producer call sites (createHive + inviteToHive + removeMember + dissolveHive + forceRemoveMember + buildHiveAggregate); same-org-scoped two-topic publish (`foundation:hives:org:*` + `foundation:hives:hive:*`); SAFE payload projection (HiveEventEnvelope; forbidden fields enforced by type construction); fire-and-forget delivery; single-node-safe at v1 (multi-node NOT claimed); HiveService 4th optional `eventBus` arg preserves all Wave 2/3/4 backward-compat; +13 integration tests; zero new audit literals; zero schema migration; zero new external dependencies; RULE 21 does NOT fire at v1. HIVE_GOVERNANCE_ZERO_STATE named in ADR-0064 vocabulary but DEFERRED at v1 wiring per Founder "only if safe and not noisy". Consumer half + cross-language BEAM bridge + Broadway guaranteed delivery + Otzar Twin subscription + Control Tower WebSocket bridge + Section 4 connector fan-out bridge all remain forward-substrate per ADR-0064. Layers 2/3 governance substrate (enterprise registry + external source feeds from Wave 4) + Waves 6-8+ (Broadway + hive-weighting + Twin-to-Twin runtime) remain forward-substrate per ADR-0063 + ADR-0059. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5+7 LIVE + Hardening Wave B LIVE.** Provider abstraction + `ConnectorBinding` model (secret_ref env-var NAME only) + 5 admin routes + `INVOKE_CONNECTOR` ActionType + `OutboundWebhookProvider` (HTTPS POST + HMAC-SHA-256) + `NotificationService` fan-out bridge (Wave 5 direct-mode default + Wave 7 Action-routed opt-in via `config.fan_out_mode`) + `verifyInboundHmac` reusable receive-side verifier. 5 admin `ADMIN_ACTION` discriminators + 3 fan-out discriminators (DISPATCHED + FAILED + ENQUEUED) — **zero new audit literals**. SDK-bound connectors + encrypted-at-rest secret column = forward-substrate behind their own future QLOCKs. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | **PARTIAL with Wave 1 ADR LANDED (design-only).** ADR-0060 locks v1 scope as read-only sandbox-only self-scoped operator inspector surface — 3 inspector contracts (policy-evaluator tester via pure `evaluateActionPolicy`; connector dry-run hard-wired to `FixtureBasedConnectorProvider`; working-set inspector via `COE.assembleContext` with no `OtzarConversation` persistence). Section 4 prerequisite ("reference handler") satisfied by Wave 4 `OutboundWebhookProvider`. Wave 2 implementation requires separate Founder Authorization (4 checkpoints per ADR-0060 §7). | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
 | 6 | Enterprise Analytics | **PARTIAL with Wave 1 ADR LANDED (design-only).** ADR-0061 (2026-05-30) locks the analytics SAFE projection pattern at the substrate-architectural register: closed-vocabulary counts/labels only; same-org scope mandatory; minimum-population threshold REQUIRED (default k=5 per HIPAA Safe Harbor 45 CFR §164.514(b)(1) regulatory precedent); cross-org explicit non-goal (CAR Sub-box 8 forward-substrate); derived-only from existing operational signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule metadata + EntityMembership + EntityComplianceProfile + hive aggregates); audit via ADMIN_ACTION + details.action = "ANALYTICS_READ"; can_admin_org TAR gate. v1 ships ZERO concrete aggregates — each future aggregate = Wave 2+ slice + 5 Founder Authorization checkpoints per ADR-0061 §8. Wave 2-eligible candidates: org-wide correction velocity 7d / action-runtime success rate / connector activity / hive participation. | [`06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md) |
@@ -63,6 +64,9 @@ ADR-0063 §Forward queue.).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#97](https://github.com/NiovArchitect/niov-foundation/pull/97) | `056c7c7` | Add Section 3 Wave 5 v1 — Hive Events producer substrate |
+| [#96](https://github.com/NiovArchitect/niov-foundation/pull/96) | `2a241f1` | Add Section 3 Wave 5 — ADR-0064 Hive Events Producer Substrate |
+| [#95](https://github.com/NiovArchitect/niov-foundation/pull/95) | `548539c` | Close out Section 3 Wave 4 — governance_terms evaluator docs |
 | [#94](https://github.com/NiovArchitect/niov-foundation/pull/94) | `065e4f1` | Add Section 3 Wave 4 v1 — governance_terms policy evaluator |
 | [#93](https://github.com/NiovArchitect/niov-foundation/pull/93) | `ebc56c5` | Add Section 3 Wave 4 — ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary |
 | [#92](https://github.com/NiovArchitect/niov-foundation/pull/92) | `d98dc9f` | Close out Section 3 Wave 3 — Hive admin routes docs |
@@ -70,16 +74,13 @@ ADR-0063 §Forward queue.).
 | [#90](https://github.com/NiovArchitect/niov-foundation/pull/90) | `0886211` | Add Section 3 Wave 3 — ADR-0062 hive admin routes design |
 | [#89](https://github.com/NiovArchitect/niov-foundation/pull/89) | `084e637` | Close out Section 3 Wave 2 — Hives service-tier safety enforcement docs |
 | [#88](https://github.com/NiovArchitect/niov-foundation/pull/88) | `2b9ab7f` | Add Section 3 Wave 2 — Hives service-tier safety enforcement |
-| [#86](https://github.com/NiovArchitect/niov-foundation/pull/86) | `42569a4` | Add Section 5 Wave 1 — ADR-0060 Agent Playground v1 design boundary |
-| [#85](https://github.com/NiovArchitect/niov-foundation/pull/85) | `11ae5e5` | Add Section 3 Wave 1 — ADR-0059 Hives v1 design boundary + substrate-honest doc correction |
-| [#84](https://github.com/NiovArchitect/niov-foundation/pull/84) | `f70ea0d` | Close out Section 1 Wave 3 — Otzar drift detection docs refresh |
 ## Immediate next work queue
 
-> **Section 3 Wave 4 LANDED** (PRs #93 + #94, 2026-05-30) — ADR-0063 design + Layer 1 v1 implementation per Founder Wave 4 authorization. ADR-0059 §Forward queue Wave 4 reservation substantively CLOSED (Layer 1 implemented; Layers 2/3 explicitly forward-substrate). Plus Section 3 Waves 1+2+3 earlier + 4 Sleep Directive next-section preferences earlier resolved. Remaining work hits real stop conditions per Founder-listed criteria.
+> **Section 3 Wave 5 LANDED** (PRs #96 + #97, 2026-05-30) — ADR-0064 design + producer implementation per Founder Wave 5 authorization. ADR-0059 §Forward queue Wave 5 + ADR-0039 §Forward queue entry #28 producer halves both CLOSED. Plus Section 3 Waves 1+2+3+4 earlier + 4 Sleep Directive next-section preferences earlier resolved. Remaining work hits real stop conditions per Founder-listed criteria.
 
 **Next-section preference order (per Founder Sleep Directive):**
 
-1. ~~**Section 3 Hives / Team Intelligence**~~ — Waves 1+2+3+4 LIVE (#85 + #88 + #90/#91 + #93/#94). Wave 4 Layer 2/3 substrate (enterprise registry + external source feeds) requires separate Founder authorization at each Layer slice; `require_admin_approval_for_invites` term deferred until admin invite path exists.
+1. ~~**Section 3 Hives / Team Intelligence**~~ — Waves 1+2+3+4+5 LIVE (#85 + #88 + #90/#91 + #93/#94 + #96/#97). Wave 4 Layer 2/3 substrate (enterprise registry + external source feeds) + Wave 5 consumer half (BEAM bridge + Broadway + Otzar Twin + Control Tower WebSocket + Section 4 connector fan-out) all require separate Founder authorization at each slice.
 2. ~~**Section 9 Admin / Governance backend contracts**~~ — substantively complete per Hardening Wave C; new AI-generated executive summaries per ADR-0052 require Founder product decision (real stop).
 3. ~~**Section 5 Agent Playground**~~ — Wave 1 ADR LANDED at ADR-0060; Wave 2 implementation requires separate Founder Authorization (4 checkpoints per ADR-0060 §7).
 4. ~~**Section 6 Enterprise Analytics**~~ — Wave 1 ADR LANDED at ADR-0061; Wave 2 implementation requires separate Founder Authorization (5 checkpoints per ADR-0061 §8: aggregate selection / threshold posture / audit detail content / cache posture / route prefix).

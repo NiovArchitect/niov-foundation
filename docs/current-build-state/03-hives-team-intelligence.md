@@ -15,7 +15,7 @@ same-org-scoped read-only aggregate projection at v1; cross-org
 hives + Twin-to-Twin proactive runtime are explicit non-goals
 deferred to forward-substrate.
 
-## Current status (PARTIAL — Waves 1+2+3+4 LIVE)
+## Current status (PARTIAL — Waves 1+2+3+4+5 LIVE)
 
 **Wave 1 (design)** — ADR-0059 LANDED 2026-05-30 (PR #85)
 locking v1 scope as same-org-scoped read-only aggregate
@@ -210,6 +210,84 @@ external dependencies.** Layers 2 + 3 (enterprise registry
 forward-substrate behind separate Founder authorization
 per ADR-0063 §Forward queue.
 
+**Wave 5 (Hive events producer substrate)** — LANDED
+2026-05-30 (ADR-0064 design at PR #96 + producer
+implementation at PR #97). NEW pure-substrate module at
+`apps/api/src/services/hive/hive-events.ts` ships the
+Foundation TypeScript internal event spine; **producer-only
+at v1** with no live consumers; fire-and-forget Node
+`node:events.EventEmitter` substrate; **single-node-safe**
+(multi-node delivery NOT claimed); **RULE 21 does NOT
+fire at v1** (Node built-in stdlib; no cross-language
+paste).
+
+**Substrate-honest framing**: the "Phoenix.PubSub" wave
+title refers to the *eventual cross-language consumer-side
+substrate* at `dbgi_supervisor` (Phase 0 verified LIVE at
+`apps/dbgi_supervisor/mix.exs:76`); Wave 5 v1 ships the
+producer-side TS abstraction; the BEAM bridge slice is
+forward-substrate at Wave 6+.
+
+**5 closed-vocabulary v1 events** at 6 producer call sites:
+
+- `HIVE_CREATED` ← `createHive`.
+- `HIVE_MEMBER_ADDED` ← `inviteToHive`.
+- `HIVE_MEMBER_REMOVED` ← `removeMember` (source_action:
+  "removeMember") + Wave 3 `forceRemoveMember` (source_action:
+  "forceRemoveMember"). Same event vocabulary; different
+  source_action discriminator.
+- `HIVE_DISSOLVED` ← Wave 3 `dissolveHive` (NOT on
+  idempotent already-DISSOLVED path; events report state
+  transitions only).
+- `HIVE_AGGREGATE_BUILT` ← `buildHiveAggregate`.
+
+`HIVE_GOVERNANCE_ZERO_STATE` named in ADR-0064 vocabulary
+but **DEFERRED at v1 wiring** per Founder "only if safe
+and not noisy" direction (zero-state paths fire on every
+read; no consumer use case yet justifies the volume).
+
+**Same-org-scoped topic schema** (parallel two-topic
+publish):
+
+- `foundation:hives:org:{org_entity_id}`
+- `foundation:hives:hive:{hive_id}`
+
+`org_entity_id` derived from Hive row, never caller
+context. Cross-org topics forbidden by construction per
+ADR-0059 §1 RULE 0.
+
+**SAFE payload projection** (`HiveEventEnvelope`
+interface; forbidden fields enforced by type construction):
+event_name + org_entity_id + hive_id + optional
+actor_entity_id / target_entity_id / member_count /
+hive_status / aggregate_present / reason_code /
+source_action / timestamp. Forbidden: raw capsule content,
+governance_terms object (Wave 4 evaluator no-leak
+discipline extended), wallet/permission internals,
+embeddings, storage locations, content hashes, secret
+refs, bridge IDs, cross-org data, session tokens, IP
+addresses.
+
+**HiveService constructor extended** with optional 4th
+`eventBus?: HiveEventBus` arg (backward-compat with all
+Wave 2/3/4 test fixtures; when undefined every publish is
+a no-op). NEW private `emitHiveEvent` helper centralizes
+the undefined-guard so each call site is single-line.
+
+**Production server posture**: `server.ts` is intentionally
+NOT modified at this slice (HiveService.eventBus stays
+undefined at production boot; substrate wired end-to-end
+but dormant pending a future consumer slice that authorizes
+default instantiation).
+
+**No new audit literals. No schema migration. No new
+external dependencies.** Layer 2 (enterprise registry from
+Wave 4) + Layer 3 (external source feeds from Wave 4) +
+cross-language BEAM bridge + Broadway guaranteed delivery
++ Otzar Twin subscription + Control Tower WebSocket bridge
++ Section 4 connector fan-out bridge all remain
+forward-substrate per ADR-0064 §Forward queue.
+
 ## What is live
 
 Per the substrate-honest correction (Wave 1) + Wave 2
@@ -377,6 +455,8 @@ separate Founder authorization:
 | `9a348be` (PR #91) | 2026-05-30 | Section 3 Wave 3 — admin routes implementation (4 routes + 4 admin service methods + 3 SAFE view projections + HiveAdminFailure union + +20 integration tests; RULE 13 BREAKING-tightening of prior leaky `GET /api/v1/org/hives` route at org.routes.ts that returned raw rows with forbidden fields) |
 | `ebc56c5` (PR #93) | 2026-05-30 | Section 3 Wave 4 — ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary (ADR-only; design LOCKED; 10 v1 Layer 1 evaluable terms + monthly/quarterly default Layer 3 review cadence; zero schema + zero new audit literals at v1) |
 | `065e4f1` (PR #94) | 2026-05-30 | Section 3 Wave 4 v1 — governance_terms policy evaluator implementation (NEW pure-function evaluator + 9 of 10 v1 evaluable terms wired; `require_admin_approval_for_invites` DEFERRED; 6 new HiveFailure violation codes; statusForCode extension; 20 NEW integration tests; zero new audit literals; zero schema migration) |
+| `2a241f1` (PR #96) | 2026-05-30 | Section 3 Wave 5 — ADR-0064 Hive Events Producer Substrate design (producer-only at v1; substrate-honest framing — Phoenix.PubSub naming refers to eventual BEAM-side consumer; v1 ships TS-side Node EventEmitter spine; 5 closed-vocab events + same-org topic schema + SAFE payload projection + fire-and-forget + single-node-safe; zero schema/audit/external-dep impact) |
+| `056c7c7` (PR #97) | 2026-05-30 | Section 3 Wave 5 v1 — Hive Events producer implementation (NEW hive-events.ts module + HiveEventBus class + 4th optional HiveService constructor arg + 5 publish call sites + barrel exports + 13 NEW integration tests; backward-compat preserved for all Wave 2/3/4 fixtures; server.ts intentionally not modified at this slice) |
 
 ## Next slices (per ADR-0059 §7 Forward Queue)
 
@@ -393,13 +473,16 @@ prompt; not autonomously executable:
    `require_admin_approval_for_invites` deferred until
    admin invite path exists. Layer 2 + Layer 3
    forward-substrate per ADR-0063.
-4. **Wave 5 — Phoenix.PubSub fanout** for hive aggregate
-   updates (consumes ADR-0039 Entry #28). **Producer half
-   design LOCKED at ADR-0064** (2026-05-30); Foundation
-   TypeScript `HiveEventBus` ships SAFE-projected envelopes
-   on closed-vocabulary topics; consumer half + cross-language
-   BEAM bridge + Broadway guaranteed delivery remain
-   forward-substrate at Wave 6+.
+4. ~~**Wave 5 — Phoenix.PubSub fanout** for hive aggregate
+   updates (consumes ADR-0039 Entry #28)~~ — **Producer
+   half LANDED** at ADR-0064 (PR #96) + implementation
+   (PR #97) 2026-05-30. Foundation TypeScript `HiveEventBus`
+   ships SAFE-projected envelopes on closed-vocabulary
+   topics; consumer half + cross-language BEAM bridge +
+   Broadway guaranteed delivery + Otzar Twin subscription +
+   Control Tower WebSocket bridge + Section 4 connector
+   fan-out bridge remain forward-substrate at Wave 6+ per
+   ADR-0064 §Forward queue.
 5. **Wave 6 — Broadway pipeline** at high-throughput register
    (consumes ADR-0039 Entry #28).
 6. **Wave 7 — hive algorithm at weighting architecture
