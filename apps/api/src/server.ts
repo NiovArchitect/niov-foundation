@@ -32,6 +32,8 @@ import { prisma } from "@niov/database";
 import { HiveService } from "./services/hive/hive.service.js";
 import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
+import { PlaygroundService } from "./services/playground/playground.service.js";
+import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { MonetizationService } from "./services/monetization/monetization.service.js";
 import { registerWalletRoutes } from "./routes/wallet.routes.js";
 import {
@@ -314,6 +316,15 @@ export async function buildApp(
     createSessionContextResolver(authService, prismaWalletContextLookup(prisma)),
     coeService,
   );
+
+  // Section 5 Wave 2 ADR-0060 — Agent Playground v1 sandbox-only
+  // operator inspector surface. No live consumers wire into this
+  // service; it's read by the three /api/v1/playground/* routes
+  // only. The internal FixtureBasedConnectorProvider is instantiated
+  // by the service constructor — production providers are
+  // unreachable from this path by construction per ADR-0060
+  // Sub-decision §3 + Founder Wave 2 hard-wire constraint.
+  const playgroundService = new PlaygroundService(authService, coeService);
   const rateLimits: Record<string, RateLimitPolicy> = {
     ...DEFAULT_LIMITS,
     ...(config.rateLimitOverrides ?? {}),
@@ -453,6 +464,7 @@ export async function buildApp(
   await registerWorkingSetRoutes(app, workingSetService, authService);
   await registerHiveRoutes(app, hiveService);
   await registerHiveAdminRoutes(app, authService, hiveService);
+  await registerPlaygroundRoutes(app, playgroundService);
   await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);
   await registerDeveloperRoutes(app, authService);
