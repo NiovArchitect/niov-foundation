@@ -42,7 +42,7 @@ import {
 import type { WriteService } from "../cosmp/write.service.js";
 import type { NotificationService } from "../notification/notification.service.js";
 import {
-  getConnectorProvider,
+  getConnectorProviderAsync,
   getConnectorTypeDefinition,
 } from "../connector/connector.service.js";
 import type {
@@ -628,7 +628,7 @@ function makeInvokeConnectorHandler(
       };
     }
     const provider =
-      injectedProvider ?? getConnectorProvider(typeDef.type);
+      injectedProvider ?? (await getConnectorProviderAsync(typeDef.type));
     try {
       const result = await provider.invoke({
         binding_id: binding.binding_id,

@@ -6,8 +6,11 @@ export {
   CONNECTOR_REGISTRY,
   FixtureBasedConnectorProvider,
   getConnectorProvider,
+  getConnectorProviderAsync,
   getConnectorTypeDefinition,
 } from "./connector.service.js";
+
+export { OutboundWebhookProvider } from "./outbound-webhook.provider.js";
 
 export type {
   ConnectorInvocation,

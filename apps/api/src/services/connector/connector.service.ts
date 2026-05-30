@@ -266,13 +266,48 @@ export class FixtureBasedConnectorProvider implements ConnectorProvider {
 //        a given connector type.
 // INPUT: ConnectorType.
 // OUTPUT: ConnectorProvider.
-// WHY: Wave 1 returns the FixtureBasedConnectorProvider for every
-//      type because no real providers have shipped yet — Wave 4
-//      replaces the OUTBOUND_WEBHOOK branch with a real
-//      OutboundWebhookProvider. Tests inject FixtureBasedConnectorProvider
-//      directly via constructor seams rather than going through
-//      this factory, which means swapping the production default
-//      in Wave 4 doesn't churn test substrate.
-export function getConnectorProvider(_type: ConnectorType): ConnectorProvider {
+// WHY: Wave 4 swap: OUTBOUND_WEBHOOK now returns the real
+//      OutboundWebhookProvider; FIXTURE_ECHO still returns
+//      FixtureBasedConnectorProvider (test-only type per
+//      CONNECTOR_REGISTRY entry). Tests still inject
+//      FixtureBasedConnectorProvider directly via constructor seams
+//      to keep CI deterministic (no real outbound HTTP); production
+//      INVOKE_CONNECTOR handler calls this factory at execute-time.
+//      The OutboundWebhookProvider is stateless; constructing a
+//      fresh one per call is cheap and avoids module-init ordering
+//      surprises.
+export function getConnectorProvider(type: ConnectorType): ConnectorProvider {
+  if (type === "OUTBOUND_WEBHOOK") {
+    // Inline-import wrapped to dodge the circular-import shape
+    // between this file and outbound-webhook.provider.ts (the
+    // provider imports types from here; constructing it from here
+    // requires the run-time class). Dynamic `await import()` works
+    // because every caller path is async (Action handler returns
+    // a Promise + provider.invoke is async); a static import would
+    // create a tsc-time cycle.
+    throw new Error(
+      "INTERNAL: getConnectorProvider(OUTBOUND_WEBHOOK) must be resolved via the async getConnectorProviderAsync helper at the Wave 4 register",
+    );
+  }
+  return new FixtureBasedConnectorProvider();
+}
+
+// WHAT: Async variant of getConnectorProvider that can resolve the
+//        real OutboundWebhookProvider. The INVOKE_CONNECTOR handler
+//        uses this; tests that pass an injected provider via
+//        ActionHandlerRegistryDeps never hit this path.
+// INPUT: ConnectorType.
+// OUTPUT: Promise<ConnectorProvider>.
+// WHY: Wave 4 wants the real provider in production. The static
+//      sync factory above stays as the test-default seam for callers
+//      that don't await — Wave 3's handler is already async so the
+//      switch is a no-op at the call site.
+export async function getConnectorProviderAsync(
+  type: ConnectorType,
+): Promise<ConnectorProvider> {
+  if (type === "OUTBOUND_WEBHOOK") {
+    const mod = await import("./outbound-webhook.provider.js");
+    return new mod.OutboundWebhookProvider();
+  }
   return new FixtureBasedConnectorProvider();
 }
