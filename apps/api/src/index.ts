@@ -951,6 +951,20 @@ export type {
   TickSchedulerOptions,
 } from "./services/action/scheduler.js";
 
+// Hardening Wave D — proactive REGULATOR_ACCESS_EXPIRED emitter
+// per ADR-0036 Sub-decision 4. SCHEDULER sweep over LawfulBasis
+// rows past valid_until; idempotent + bounded; wired into the
+// startActionScheduler cron host alongside the Action expiry
+// sweep.
+export {
+  REGULATOR_EXPIRY_SWEEP_BATCH,
+  tickRegulatorAccessExpirySweep,
+} from "./services/cosmp/regulator-expiry.service.js";
+export type {
+  TickRegulatorExpiryOptions,
+  TickRegulatorExpiryResult,
+} from "./services/cosmp/regulator-expiry.service.js";
+
 // Section 4 Wave 1 — connector provider abstraction + registry.
 // Greenfield substrate mirroring the EmbeddingProvider + LLMProvider
 // canonical shape. Wave 2 adds the ConnectorBinding model; Wave 3
