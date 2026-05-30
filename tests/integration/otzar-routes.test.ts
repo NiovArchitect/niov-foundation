@@ -1000,3 +1000,342 @@ describe("GET /otzar/conversations/:id/corrections", () => {
     expect(response.payload).not.toContain("a private correction summary");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// Section 1 Wave 3B — ADR-0058 Otzar drift detection coaching/
+// alignment trust loop:
+// GET /otzar/conversations/:id/drift-signals
+// ──────────────────────────────────────────────────────────────────
+
+describe("GET /otzar/conversations/:id/drift-signals (ADR-0058)", () => {
+  // Mirrors Wave 2C makeOwnedConversation; no LLM consumption.
+  async function makeOwnedConversation(ownerEntityId: string): Promise<string> {
+    const conversationId = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: conversationId,
+        entity_id: ownerEntityId,
+        twin_id: ownerEntityId,
+        source_type: "CHAT",
+        participants: [ownerEntityId],
+        message_count: 1,
+        status: "ACTIVE",
+      },
+    });
+    return conversationId;
+  }
+
+  // Plant a CORRECTION capsule linked to `conversationId`. Allows
+  // operator-supplied `extraTopicTags` so tests can exercise the
+  // RECURRING_CORRECTION_THEME branch. Default tags mirror
+  // ObservationService.processCorrection's auto-emitted tags
+  // (`correction` + `correction-of-<id>`) per ADR-0058 §5.
+  async function writeLinkedCorrection(
+    ownerEntityId: string,
+    conversationId: string,
+    extraTopicTags: string[] = [],
+  ): Promise<string> {
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: ownerEntityId },
+    });
+    const capsuleId = randomUUID();
+    const tags = [
+      "correction",
+      `correction-of-${randomUUID()}`,
+      ...extraTopicTags,
+    ];
+    await prisma.memoryCapsule.create({
+      data: {
+        capsule_id: capsuleId,
+        wallet_id: wallet!.wallet_id,
+        entity_id: ownerEntityId,
+        version: 1,
+        capsule_type: "CORRECTION",
+        topic_tags: tags,
+        decay_type: "TIME_BASED",
+        payload_summary: "secret correction body MUST NOT leak",
+        payload_size_tokens: 1,
+        storage_location: `niov://test/${randomUUID()}`,
+        content_hash: `sha256:c-${randomUUID()}`,
+        conversation_id: conversationId,
+      },
+    });
+    return capsuleId;
+  }
+
+  it("401 when bearer is missing", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${randomUUID()}/drift-signals`,
+      remoteAddress: "10.99.2.1",
+    });
+    expect(response.statusCode).toBe(401);
+    expect((response.json() as { code: string }).code).toBe(
+      "SESSION_INVALID",
+    );
+  });
+
+  it("404 CONVERSATION_NOT_FOUND for an unknown id", async () => {
+    const ctx = await loginNoTwin();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${randomUUID()}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(404);
+    expect((response.json() as { code: string }).code).toBe(
+      "CONVERSATION_NOT_FOUND",
+    );
+  });
+
+  it("403 NOT_CONVERSATION_OWNER: caller A cannot read caller B's drift signals", async () => {
+    const a = await loginNoTwin();
+    const b = await loginNoTwin();
+    const bConv = await makeOwnedConversation(b.ownerId);
+    await writeLinkedCorrection(b.ownerId, bConv, ["role-template"]);
+    await writeLinkedCorrection(b.ownerId, bConv, ["role-template"]);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${bConv}/drift-signals`,
+      headers: { authorization: `Bearer ${a.token}` },
+      remoteAddress: a.ip,
+    });
+    expect(response.statusCode).toBe(403);
+    expect((response.json() as { code: string }).code).toBe(
+      "NOT_CONVERSATION_OWNER",
+    );
+    // No leak: cross-caller never sees signal labels OR counts.
+    expect(response.payload).not.toContain("CORRECTION_VELOCITY_ELEVATED");
+    expect(response.payload).not.toContain("RECURRING_CORRECTION_THEME");
+    expect(response.payload).not.toContain("corrections_observed");
+    expect(response.payload).not.toContain("role-template");
+  });
+
+  it("200 empty conversation: no CORRECTION capsules → zero signals, coaching notes preserved", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      conversation_id: string;
+      drift_signals: ReadonlyArray<{ label: string; honest_note: string }>;
+      signal_count: number;
+      corrections_observed: number;
+      coaching_note: string;
+      boundary_note: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.conversation_id).toBe(conversationId);
+    expect(body.signal_count).toBe(0);
+    expect(body.drift_signals).toEqual([]);
+    expect(body.corrections_observed).toBe(0);
+    // Coaching framing is canonical copy locked at ADR-0058.
+    expect(body.coaching_note).toMatch(/coaching prompts/i);
+    expect(body.coaching_note).toMatch(/not employee evaluation/i);
+    expect(body.boundary_note).toMatch(/not a transcript/i);
+    expect(body.boundary_note).toMatch(/not an employee score/i);
+    expect(body.boundary_note).toMatch(/not a manager surface/i);
+  });
+
+  it("200 single correction: below velocity threshold → no labels fire", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    await writeLinkedCorrection(ctx.ownerId, conversationId);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      signal_count: number;
+      corrections_observed: number;
+      drift_signals: ReadonlyArray<{ label: string }>;
+    };
+    expect(body.corrections_observed).toBe(1);
+    expect(body.signal_count).toBe(0);
+    expect(body.drift_signals).toEqual([]);
+  });
+
+  it("200 four corrections: fires CORRECTION_VELOCITY_ELEVATED only (no recurring tag)", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    await writeLinkedCorrection(ctx.ownerId, conversationId);
+    await writeLinkedCorrection(ctx.ownerId, conversationId);
+    await writeLinkedCorrection(ctx.ownerId, conversationId);
+    await writeLinkedCorrection(ctx.ownerId, conversationId);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      signal_count: number;
+      corrections_observed: number;
+      drift_signals: ReadonlyArray<{ label: string; honest_note: string }>;
+    };
+    expect(body.corrections_observed).toBe(4);
+    expect(body.signal_count).toBe(1);
+    expect(body.drift_signals[0]!.label).toBe(
+      "CORRECTION_VELOCITY_ELEVATED",
+    );
+    expect(body.drift_signals[0]!.honest_note).toMatch(/multiple corrections/i);
+  });
+
+  it("200 two corrections sharing 'role-template' tag: fires RECURRING_CORRECTION_THEME (velocity below threshold)", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    await writeLinkedCorrection(ctx.ownerId, conversationId, ["role-template"]);
+    await writeLinkedCorrection(ctx.ownerId, conversationId, ["role-template"]);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      signal_count: number;
+      corrections_observed: number;
+      drift_signals: ReadonlyArray<{ label: string }>;
+    };
+    expect(body.corrections_observed).toBe(2);
+    expect(body.signal_count).toBe(1);
+    expect(body.drift_signals[0]!.label).toBe("RECURRING_CORRECTION_THEME");
+    // The theme tag VALUE itself is NEVER returned (privacy invariant
+    // per ADR-0058 §"Privacy invariant" — the LABEL fires but the
+    // tags stay in the caller's wallet).
+    expect(response.payload).not.toContain("role-template");
+  });
+
+  it("200 five corrections with shared theme: fires BOTH velocity + recurring labels", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    for (let i = 0; i < 5; i++) {
+      await writeLinkedCorrection(ctx.ownerId, conversationId, [
+        "naming-convention",
+      ]);
+    }
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      signal_count: number;
+      drift_signals: ReadonlyArray<{ label: string }>;
+    };
+    expect(body.signal_count).toBe(2);
+    const labels = body.drift_signals.map((s) => s.label).sort();
+    expect(labels).toEqual([
+      "CORRECTION_VELOCITY_ELEVATED",
+      "RECURRING_CORRECTION_THEME",
+    ]);
+    expect(response.payload).not.toContain("naming-convention");
+  });
+
+  it("200 auto-tags do NOT count toward recurring-theme (correction + correction-of-* excluded)", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    // Two corrections with ONLY the auto-tags + a same correction-of-
+    // <id> would normally collide; we use the same targetId to confirm
+    // even that doesn't fire RECURRING_CORRECTION_THEME.
+    await writeLinkedCorrection(ctx.ownerId, conversationId);
+    await writeLinkedCorrection(ctx.ownerId, conversationId);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      signal_count: number;
+      drift_signals: ReadonlyArray<{ label: string }>;
+    };
+    // 2 corrections is below velocity threshold (>3); auto-tags don't
+    // count toward recurring; expected signal_count = 0.
+    expect(body.signal_count).toBe(0);
+  });
+
+  it("emits ADMIN_ACTION:DRIFT_SIGNAL_READ audit row with closed-vocab labels (no tag values)", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    for (let i = 0; i < 4; i++) {
+      await writeLinkedCorrection(ctx.ownerId, conversationId, [
+        "private-tag-MUST-NOT-LEAK",
+      ]);
+    }
+    await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    const audits = await prisma.auditEvent.findMany({
+      where: {
+        actor_entity_id: ctx.ownerId,
+        event_type: "ADMIN_ACTION",
+      },
+      orderBy: { timestamp: "desc" },
+    });
+    const driftAudit = audits.find((a) => {
+      const d = a.details as Record<string, unknown> | null;
+      return d?.action === "DRIFT_SIGNAL_READ";
+    });
+    expect(driftAudit).toBeDefined();
+    const d = driftAudit!.details as Record<string, unknown>;
+    expect(d.action).toBe("DRIFT_SIGNAL_READ");
+    expect(d.conversation_id).toBe(conversationId);
+    expect(typeof d.signal_count).toBe("number");
+    expect(Array.isArray(d.signals_present)).toBe(true);
+    // Audit details NEVER carry the operator-supplied tag values.
+    expect(JSON.stringify(d)).not.toContain("private-tag-MUST-NOT-LEAK");
+  });
+
+  it("wire-level no-leak: response body never carries CORRECTION internals", async () => {
+    const ctx = await loginNoTwin();
+    const conversationId = await makeOwnedConversation(ctx.ownerId);
+    for (let i = 0; i < 4; i++) {
+      await writeLinkedCorrection(ctx.ownerId, conversationId, [
+        "secret-theme-tag",
+      ]);
+    }
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/otzar/conversations/${conversationId}/drift-signals`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    // ADR-0058 §7 FORBIDDEN-fields invariant. The seeded
+    // payload_summary, storage_location, content_hash, etc. must
+    // never traverse the wire.
+    expect(response.payload).not.toContain("secret correction body");
+    expect(response.payload).not.toContain("payload_summary");
+    expect(response.payload).not.toContain("payload_content");
+    expect(response.payload).not.toContain("target_capsule_id");
+    expect(response.payload).not.toContain("storage_location");
+    expect(response.payload).not.toContain("content_hash");
+    expect(response.payload).not.toContain("embedding");
+    expect(response.payload).not.toContain("capsule_id");
+    expect(response.payload).not.toContain("secret-theme-tag");
+    expect(response.payload).not.toContain("drift_score");
+    expect(response.payload).not.toContain("employee_score");
+    expect(response.payload).not.toContain("manager_visibility");
+    expect(response.payload).not.toContain("bridge_id");
+    expect(response.payload).not.toContain("capability_flags");
+  });
+});

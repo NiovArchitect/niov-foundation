@@ -310,4 +310,36 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // Section 1 Wave 3B — Otzar drift detection coaching/alignment
+  // trust loop per ADR-0058. GET /api/v1/otzar/conversations/:id/
+  // drift-signals — self-scoped per-conversation drift coaching
+  // projection. Bearer + "read" only (no admin gate; never a
+  // manager surface). Returns closed-vocabulary signal labels +
+  // safe counts + honest coaching/boundary notes; NEVER raw
+  // correction payloads, capsule IDs, topic tag values, transcripts,
+  // numeric scores, or per-employee comparison fields. Mirrors
+  // Wave 2C /corrections self-scope semantics verbatim:
+  // CONVERSATION_NOT_FOUND (404); NOT_CONVERSATION_OWNER (403).
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/otzar/conversations/:id/drift-signals",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const result = await otzarService.analyzeConversationDrift({
+        token,
+        conversation_id: request.params.id,
+      });
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
 }
