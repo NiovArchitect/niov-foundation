@@ -273,4 +273,34 @@ export async function registerAnalyticsRoutes(
       });
     },
   );
+
+  // POST /api/v1/analytics/hive-participation
+  // Body: {} (no window — participation is current-state)
+  app.post(
+    "/api/v1/analytics/hive-participation",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const result = await analytics.getHiveParticipationForOrg({
+        org_entity_id: orgEntityId,
+        actor_entity_id: callerId,
+        ip_address: request.ip ?? null,
+      });
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(statusFor(result)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
+      });
+    },
+  );
 }
