@@ -9,12 +9,13 @@
 
 ## Where we are
 
-- **Main HEAD:** `a3d484c` (Section 6 Wave 5 hive-participation; closeout docs PR pending)
-- **Latest merged PR:** [#106](https://github.com/NiovArchitect/niov-foundation/pull/106) — Add Section 6 Wave 5 — hive-participation aggregate.
-- **Active branch / PR:** `section-6-closeout-docs` (Section 6 final closeout docs; design-only).
-- **Section 6 status: PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1)** — 4-aggregate arc closure (CORRECTION velocity 7d + action-runtime success rate + connector activity + hive participation) on top of ADR-0061 Wave 1 design; 55 integration tests; zero schema migration; zero new audit literals.
-- **Section 5 status: PARTIAL with Waves 1+2+3 LIVE** (Wave 1 ADR-0060 + Wave 2 inspector-foundation implementation + Wave 3 long-term product-vision ADR-0065). Wave 4+ canonical at ADR-0065 §7 wave map.
-- **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope** (closeout PR #99 earlier today).
+- **Main HEAD:** `6bd0b70` (Section 1 Wave 4C cross-conversation drift rollup; closeout docs PR pending)
+- **Latest merged PR:** [#109](https://github.com/NiovArchitect/niov-foundation/pull/109) — Section 1 Wave 4C cross-conversation drift rollup.
+- **Active branch / PR:** `section-1-closeout-docs` (Section 1 drift-detection arc closeout docs; design-only).
+- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 Foundation drift-detection backend scope** — 3 live drift-signal routes (Wave 3 per-conversation + Wave 4A wallet stale-context + Wave 4C cross-conversation rollup); 38 integration tests; zero schema migration; zero new audit literals. Wave 4B SKIPPED per RULE 13 (POLICY_DRIFT producer not in substrate).
+- **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) — 4-aggregate arc closure.
+- **Section 5 status: PARTIAL with Waves 1+2+3 LIVE** (Wave 1 ADR-0060 + Wave 2 inspector + Wave 3 ADR-0065 product-vision).
+- **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope**.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -26,6 +27,10 @@
 ## Exact next action
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
+
+## Section 1 PRODUCTION-GRADE COMPLETE — Otzar drift detection (3-signal arc; v1)
+
+Wave 3 per-conversation drift + Wave 4A wallet-level stale-context (PR #108) + Wave 4C cross-conversation rollup (PR #109). All self-scoped + closed-vocab + locked coaching/boundary copy explicitly disclaiming surveillance framing; bearer + "read" only; ADMIN_ACTION + DRIFT_SIGNAL_READ audit + source_signal discriminator (zero new audit literals); zero schema migration; 38 integration tests. Wave 4B SKIPPED per RULE 13 (POLICY_DRIFT producer not in substrate). **Scope wording**: closes the Foundation backend drift-detection substrate for v1 self-scoped coaching loop — forward-substrate: IntelligencePattern auto-write + operator-tunable thresholds + drift digest connector fan-out + Control Tower drift UX + role-scope-conflict.
 
 ## Section 6 PRODUCTION-GRADE COMPLETE — Enterprise Analytics (4-aggregate arc; v1)
 
@@ -47,13 +52,14 @@ Earlier waves on main: Section 3 Waves 1-5 + closeout (#85-#99); Section 5 Wave 
 
 ## Recommended next production section
 
-**Section 1 Wave 4+ advanced drift signals** per ADR-0058 §9 (each signal own slice; Founder direction needed on signal class — stale-context per ADR-0044/0045; role-scope-conflict per Section 2 ActionAttempt POLICY_DRIFT; cross-conversation Twin rollup; operator-tunable thresholds; drift digest connector fan-out via Section 4). **Alternative**: Section 5 Wave 4 first persistent-named-scenarios model per ADR-0065 §7 wave map (needs schema; ADR-0025 schema-push-target discipline; same-org / self-scope at every gate). **Alternative**: Section 6 next aggregate (e.g. per-hive participation breakdown; per-action-type runtime health; compliance-posture aggregate per `EntityComplianceProfile`) per ADR-0061 §8 5-checkpoint pattern.
+**Section 5 Wave 4 — first persistent-named-scenarios model** per ADR-0065 §7 wave map (needs schema; `PlaygroundScenario` model + CRUD routes via `db:push:test` per ADR-0025; same-org / self-scope at every gate; SAFE projection). **Alternatives**: Section 6 next aggregate per ADR-0061 §8 (per-hive participation breakdown / per-action-type runtime health / compliance-posture aggregate); Section 1 Wave 5+ (IntelligencePattern auto-write from recurring drift themes per ADR-0058 §"Forward queue" — needs schema + admin-review surface; operator-tunable drift thresholds — would require ADR-0058 amendment); Section 4 SDK-bound connectors (each adapter own QLOCK + RULE 21 research arc; OAuth + real credentials = Founder product decision per slice).
 
 ## Founder Sleep Directive preferences — status
 
   1. ~~Section 3 Hives~~ — **CLOSED 2026-05-30 production-grade complete for v1 same-org Foundation backend scope.**
   2. ~~Section 5 Agent Playground Waves 2+3~~ — LANDED 2026-05-30 (#100/#101 inspector foundation + ADR-0065 long-term product-vision ADR).
   3. ~~Section 6 Enterprise Analytics~~ — **CLOSED 2026-05-30 production-grade complete for Foundation backend scope (v1)** (4-aggregate arc).
+  4. ~~Section 1 Employee Intelligence Core~~ — **CLOSED 2026-05-30 production-grade complete for v1 Foundation drift-detection backend scope** (3-signal arc; Wave 4B SKIPPED per RULE 13).
   2. ~~Section 9 Admin/Governance~~ — substantively complete per Hardening Wave C; AI-generated exec summaries = Founder product decision per ADR-0052.
   3. ~~Section 5 Agent Playground~~ — ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
   4. ~~Section 6 Enterprise Analytics~~ — ADR-0061 LANDED; Wave 2 = Founder Authorization (5 checkpoints).

@@ -13,20 +13,48 @@ COSMP 7 operations, audit chain, compliance routing — all gated
 through COSMP and DMW per the COSMP patent (US 12,517,919) and
 DMW patents (US 12,164,537 + US 12,399,904).
 
-## Current status (PARTIAL — production-grade; Wave 3 drift detection LIVE)
+## Current status — PRODUCTION-GRADE COMPLETE for v1 Foundation drift-detection backend scope
 
-Foundational substrate landed pre-Section-12 (Sections 1–11 closed
-substrate primitives), plus the Otzar Wave canon (ADR-0051 / 0052 /
-0053 / 0054 / 0055 / 0058) landed on main as live routes in commits
-`3bb773d` (Wave 2A — 2026-05-27), `1ffa01d` (Wave 2B — 2026-05-27),
-`c56bd57` (Wave 2C — 2026-05-28), `779a286` (Wave 3A — ADR-0058 —
-2026-05-30), and `a2f0498` (Wave 3B — drift signal service +
-per-conversation route — 2026-05-30). Wave 3 drift detection is
-now LIVE as a coaching/alignment trust loop per the Founder Sleep
-Directive boundary; advanced drift signals (stale-context,
-role-scope-conflict, cross-conversation rollup, IntelligencePattern
-auto-write) remain forward-substrate behind separate slice
-authorization.
+Foundational substrate landed pre-Section-12, plus Otzar Wave canon
+(ADR-0051/0052/0053/0054/0055/0058) landed 2026-05-27/28, plus the
+**drift-detection arc** completed 2026-05-30:
+
+- Wave 3A `779a286` — ADR-0058 design.
+- Wave 3B `a2f0498` — per-conversation drift signals
+  (CORRECTION_VELOCITY_ELEVATED + RECURRING_CORRECTION_THEME).
+- **Wave 4A (PR #108)** — stale-context drift signal
+  (wallet-level FRESH_CONTEXT / STALE_CONTEXT_RISK /
+  INSUFFICIENT_DATA; consumes ADR-0045 G5.1 embedding-lag
+  substrate).
+- **Wave 4B (POLICY_DRIFT role-scope conflict)** — **SKIPPED**
+  per RULE 13 substrate-honest Phase 0 finding: POLICY_DRIFT
+  error_class is NOT emitted by any current handler;
+  substrate-derivation impossible at v1 without separate
+  Founder slice authorization for a producer.
+- **Wave 4C (PR #109)** — cross-conversation drift rollup
+  (self-scoped AT_RISK / NORMAL / INSUFFICIENT_DATA; folds
+  Wave 3 per-conversation + Wave 4A wallet-level signals).
+
+**Section 1 drift-detection arc closeout 2026-05-30**: 3 live
+drift-signal routes, all self-scoped + closed-vocab + locked
+coaching/boundary copy explicitly disclaiming surveillance
+framing. Universal invariants: bearer + "read" only (NEVER admin
+gate; NEVER manager surface); `ADMIN_ACTION + DRIFT_SIGNAL_READ`
+audit with `source_signal` discriminator (3 values:
+no-discriminator-for-Wave-3-per-conversation / STALE_CONTEXT_WALLET /
+CROSS_CONVERSATION_ROLLUP); zero new audit literals across all 3
+signals; zero schema migration across all 3 signals; zero new
+external dependencies; 38 drift-arc integration tests total
+(13 per-conversation Wave 3 + 13 stale-context Wave 4A + 12
+rollup Wave 4C).
+
+**Important scope wording**: closes the **Foundation backend
+drift-detection substrate** for v1 self-scoped coaching/alignment
+trust loop. Future capabilities (IntelligencePattern auto-write
+from recurring themes; operator-tunable thresholds per org; drift
+digest connector fan-out; Control Tower drift UX; role-scope-
+conflict signal pending a POLICY_DRIFT producer) continue as
+forward-substrate per ADR-0058 §"Forward queue".
 
 ## What is live
 
