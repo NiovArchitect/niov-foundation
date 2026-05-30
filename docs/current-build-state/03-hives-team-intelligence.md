@@ -238,8 +238,16 @@ separate Founder authorization:
   regime mandates it; not at v1 per Section 4 precedent).
 - **Pagination on admin list** (if real orgs cross O(1000+)
   hives; measure-first per ADR-0016).
-- **`governance_terms` policy evaluation** — Wave 4; requires
-  canonical governance_terms schema + Founder product decision.
+- **`governance_terms` policy evaluation** — Wave 4 **design
+  LOCKED at ADR-0063** (2026-05-30; 3-layer governance
+  architecture canonical at substrate-architectural register;
+  10 v1 Layer 1 evaluable terms; monthly/quarterly default
+  Layer 3 review cadence; zero schema + zero new audit
+  literals at v1). Wave 4 v1 implementation slice
+  (pure-function evaluator + 7 new violation codes + 3
+  HiveService call-site wiring) requires separate Founder
+  authorization on the exact evaluable term set per
+  ADR-0063 Sub-decision 13.
 - **Phoenix.PubSub fanout for hive aggregate updates** — Wave 5
   (consumes ADR-0039 Entry #28).
 - **Broadway pipeline at high-throughput register** — Wave 6
@@ -295,6 +303,7 @@ separate Founder authorization:
 | `2b9ab7f` (PR #88) | 2026-05-30 | Section 3 Wave 2 — service-tier safety enforcement (TAR gate + v1 allowlist + non-null org_entity_id + same-org membership + AI_AGENT exclusion + capsule_types_accessible read-time enforcement; 4 new failure codes; +15 integration tests) |
 | `0886211` (PR #90) | 2026-05-30 | Section 3 Wave 3 — ADR-0062 admin routes design (4 admin route surfaces + safe roster projection + idempotent dissolve/force-remove + AI_AGENT force-remove permitted + ADMIN_ACTION + HIVE_MEMBER_REMOVED reuse) |
 | `9a348be` (PR #91) | 2026-05-30 | Section 3 Wave 3 — admin routes implementation (4 routes + 4 admin service methods + 3 SAFE view projections + HiveAdminFailure union + +20 integration tests; RULE 13 BREAKING-tightening of prior leaky `GET /api/v1/org/hives` route at org.routes.ts that returned raw rows with forbidden fields) |
+| (this commit) | 2026-05-30 | Section 3 Wave 4 — ADR-0063 governance_terms policy evaluator + 3-layer governance-source boundary (ADR-only; design LOCKED; 10 v1 Layer 1 evaluable terms + monthly/quarterly default Layer 3 review cadence; zero schema + zero new audit literals at v1) |
 
 ## Next slices (per ADR-0059 §7 Forward Queue)
 
@@ -305,10 +314,13 @@ prompt; not autonomously executable:
    PR #88 2026-05-30.
 2. ~~**Wave 3 — hive admin routes**~~ — LANDED ADR-0062
    (PR #90) + implementation (PR #91) 2026-05-30.
-3. **Wave 4 — `governance_terms` canonical schema + policy
-   evaluator**: requires Founder product decision on which
-   governance terms are evaluable + how policy violations are
-   surfaced.
+3. **Wave 4 — `governance_terms` policy evaluator** —
+   design LANDED at ADR-0063 (this commit). Wave 4 v1
+   implementation slice (pure-function evaluator +
+   `GovernanceViolationCode` union + 3 HiveService
+   call-site wiring per Sub-decision 13) requires
+   separate Founder authorization on the exact evaluable
+   term set.
 4. **Wave 5 — Phoenix.PubSub fanout** for hive aggregate
    updates (consumes ADR-0039 Entry #28).
 5. **Wave 6 — Broadway pipeline** at high-throughput register
