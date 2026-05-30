@@ -264,6 +264,22 @@ export type {
   HiveEventEnvelope,
 } from "./services/hive/hive-events.js";
 
+// Section 6 Wave 2 ADR-0061 — Enterprise Analytics v1 barrel exports.
+export {
+  AnalyticsService,
+  ANALYTICS_MIN_POPULATION,
+  ANALYTICS_WINDOW_DAYS_DEFAULT,
+  ANALYTICS_WINDOW_DAYS_MIN,
+  ANALYTICS_WINDOW_DAYS_MAX,
+  CORRECTION_VELOCITY_LABELS,
+} from "./services/analytics/analytics.service.js";
+export type {
+  AnalyticsFailureCode,
+  AnalyticsFailure,
+  CorrectionVelocityAggregate,
+  CorrectionVelocityLabel,
+} from "./services/analytics/analytics.service.js";
+
 // Section 5 Wave 2 ADR-0060 — Agent Playground v1 barrel exports.
 export { PlaygroundService } from "./services/playground/playground.service.js";
 export type {
