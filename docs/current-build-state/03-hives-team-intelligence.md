@@ -394,7 +394,12 @@ prompt; not autonomously executable:
    admin invite path exists. Layer 2 + Layer 3
    forward-substrate per ADR-0063.
 4. **Wave 5 — Phoenix.PubSub fanout** for hive aggregate
-   updates (consumes ADR-0039 Entry #28).
+   updates (consumes ADR-0039 Entry #28). **Producer half
+   design LOCKED at ADR-0064** (2026-05-30); Foundation
+   TypeScript `HiveEventBus` ships SAFE-projected envelopes
+   on closed-vocabulary topics; consumer half + cross-language
+   BEAM bridge + Broadway guaranteed delivery remain
+   forward-substrate at Wave 6+.
 5. **Wave 6 — Broadway pipeline** at high-throughput register
    (consumes ADR-0039 Entry #28).
 6. **Wave 7 — hive algorithm at weighting architecture
