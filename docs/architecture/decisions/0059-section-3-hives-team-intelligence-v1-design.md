@@ -414,7 +414,15 @@ required at its slice):
   HIVE_MEMBER_REMOVED reuse (zero new audit literals).
 - Wave 4: governance_terms canonical schema + policy
   evaluator; canonical schema requires Founder product
-  decision on which terms are evaluable.
+  decision on which terms are evaluable. **Design CLOSED**
+  at ADR-0063 (2026-05-30) — 3-layer architecture (Local
+  Hive / Enterprise registry / External source feeds) +
+  10 v1 evaluable terms at Layer 1 + monthly/quarterly
+  default review cadence for Layer 3 + 7-step source-update
+  lifecycle + zero schema migration + zero new audit
+  literals at v1. Wave 4 implementation slice requires
+  separate Founder authorization on the exact evaluable
+  term set.
 - Wave 5: Phoenix.PubSub fanout for hive aggregate updates
   (consumes ADR-0039 entry #28).
 - Wave 6: Broadway pipeline at high-throughput register
