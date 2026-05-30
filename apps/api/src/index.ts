@@ -252,6 +252,17 @@ export {
   HiveService,
   HIVE_AGGREGATE_TAG_FLOOR,
 } from "./services/hive/hive.service.js";
+// Section 3 Wave 5 ADR-0064 — Hive Events Producer Substrate barrel exports.
+export {
+  HiveEventBus,
+  HIVE_EVENT_NAMES,
+  hiveTopic,
+  orgTopic,
+} from "./services/hive/hive-events.js";
+export type {
+  HiveEventName,
+  HiveEventEnvelope,
+} from "./services/hive/hive-events.js";
 export type {
   MembershipSettings,
   CreateHiveSuccess,
