@@ -9,21 +9,21 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-30
-(Hardening Wave A/B/C/D LANDED across closed sections (CSV
-export #76; inbound HMAC verifier #77; Section 9 doc refresh
-#78; REGULATOR_ACCESS_EXPIRED emitter #79) + Section 4 Wave 7
-Action-routed fan-out variant (#80; opt-in via
-config.fan_out_mode). Section 4 + Section 7 + Section 2 remain
-production-grade complete for their scopes. Sections requiring
-new ADRs (Section 1 Wave 3; Section 3 Hives; GOVSEC phases)
-remain Founder-QLOCK-gated.).
+(Section 1 Wave 3 LANDED — Otzar drift detection coaching/
+alignment trust loop. Wave 3A ADR-0058 (#82) + Wave 3B service
++ per-conversation route + 10 NEW tests (#83) per Founder
+Sleep Directive boundary "coaching/alignment NOT surveillance."
+Prior hardening + Section 4 Wave 7 also LIVE on main. Section 1
++ 2 + 4 + 7 + 9 backend contracts all production-grade for
+their scopes. Section 3 Hives + GOVSEC.6–10 + Section 5/6 +
+advanced Wave 3 signals remain Founder-QLOCK-gated.).
 
 ## Current state
 
-- **Latest main HEAD:** `f26c88e` (Section 4 Wave 7; this commit chain adds Wave 7 docs)
-- **Latest merged PR:** [#80](https://github.com/NiovArchitect/niov-foundation/pull/80) — Add Section 4 Wave 7 Action-routed fan-out variant (opt-in) (2026-05-30).
-- **Active branch / PR:** `section-4-wave-7-docs-refresh` (tier-2/3 docs reflecting Section 4 Wave 7 + Hardening Wave A/B/C/D landings).
-- **Active production section:** Section 4 Wave 7 docs refresh. Next-section autonomous start blocked by genuine Founder-product-decision + new-ADR stop conditions across all remaining unstarted sections (Section 1 Wave 3 surveillance-vs-coaching ADR; Section 3 Hives ADR + RULE 21 arc; Section 5/6 large ADRs; Section 8 Founder-excluded; Section 10 GOVSEC phases). Section 4 forward-substrate also exhausted of autonomously-clean items (encrypted-at-rest secret column = ADR-0019 amendment; SDK-bound connectors = OAuth + real credentials). Awaiting Founder direction.
+- **Latest main HEAD:** `e7b4a17` (Section 1 Wave 3B; this commit chain adds Wave 3C docs)
+- **Latest merged PR:** [#83](https://github.com/NiovArchitect/niov-foundation/pull/83) — Add Section 1 Wave 3B Otzar drift signal service + per-conversation route (2026-05-30).
+- **Active branch / PR:** `section-1-wave-3c-closeout` (tier-1/2/3 docs reflecting Section 1 Wave 3 landings).
+- **Active production section:** Section 1 Wave 3 closeout. Section 1 PARTIAL with Wave 3 LIVE for v1 (coaching/alignment trust loop per Founder Sleep Directive boundary; closed-vocabulary signal labels + self-scoped + no-content-leak). Advanced drift signals (stale-context, role-scope-conflict, cross-conversation rollup, IntelligencePattern auto-write, operator-tunable thresholds, drift digest connector fan-out) remain forward-substrate per ADR-0058 §9.
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION per Wave 11 internal-only handler).
@@ -35,7 +35,7 @@ remain Founder-QLOCK-gated.).
 
 | # | Section | Status | Detail |
 |---|---|---|---|
-| 1 | Employee Intelligence Core | Foundational substrate landed pre-Section-12; **Otzar Wave 2A/B/C all LIVE on main** (`3bb773d` / `1ffa01d` / `c56bd57`, 2026-05-27/28). Wave 3 drift detection remains forward-substrate (no ADR yet). | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
+| 1 | Employee Intelligence Core | **PARTIAL with Wave 3 LIVE.** Otzar Wave 2A/B/C all LIVE on main (`3bb773d`/`1ffa01d`/`c56bd57`, 2026-05-27/28) + **Wave 3 drift detection LIVE** per ADR-0058 (`779a286`/`e7b4a17`, 2026-05-30 per Founder Sleep Directive). Wave 3B ships `GET /api/v1/otzar/conversations/:id/drift-signals` — pure derived read-only coaching/alignment trust loop with closed-vocabulary signal labels (`CORRECTION_VELOCITY_ELEVATED` + `RECURRING_CORRECTION_THEME`); self-scoped; no manager visibility; no employee scoring; no raw content. ADMIN_ACTION:DRIFT_SIGNAL_READ audit emission (no new audit literal). Advanced drift signals (stale-context, role-scope-conflict, cross-conversation rollup, IntelligencePattern auto-write, operator-tunable thresholds, drift digest fan-out) remain forward-substrate per ADR-0058 §9. | [`01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md) |
 | 2 | Autonomous Execution Core | **PRODUCTION-GRADE COMPLETE for internal Foundation autonomous-execution-substrate scope** (Wave 12 closeout). Create + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt detail + GET attempt list LIVE; 10 of 10 `ACTION_*` emitters LIVE; 3 of 3 real handlers LIVE; admin `/org/action-policies` LIVE with operator-tunable retry_budget + attempt_timeout_ms_override; forensic-visibility loop CLOSED end-to-end; 3 internal-only notification inbox routes LIVE per PR #58 (GET list + PUT read + PUT dismiss; SAFE projection; enumeration-safe 404). Internal-only = the Foundation autonomous-execution-substrate is complete; external tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** under **Section 4 — MCP / Connectors** as governed adapters. Per-Notification audit literals / admin-cross-recipient list / cache / `NotificationPreference` opt-out intentional future-substrate. | [`02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) |
 | 3 | Hives / Team Intelligence | Not started. Forward-substrate. | [`03-hives-team-intelligence.md`](current-build-state/03-hives-team-intelligence.md) |
 | 4 | MCP / Connectors | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5+7 LIVE + Hardening Wave B LIVE.** Provider abstraction + `ConnectorBinding` model (secret_ref env-var NAME only) + 5 admin routes + `INVOKE_CONNECTOR` ActionType + `OutboundWebhookProvider` (HTTPS POST + HMAC-SHA-256) + `NotificationService` fan-out bridge (Wave 5 direct-mode default + Wave 7 Action-routed opt-in via `config.fan_out_mode`) + `verifyInboundHmac` reusable receive-side verifier. 5 admin `ADMIN_ACTION` discriminators + 3 fan-out discriminators (DISPATCHED + FAILED + ENQUEUED) — **zero new audit literals**. SDK-bound connectors + encrypted-at-rest secret column = forward-substrate behind their own future QLOCKs. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
@@ -50,6 +50,9 @@ remain Founder-QLOCK-gated.).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#83](https://github.com/NiovArchitect/niov-foundation/pull/83) | `e7b4a17` | Add Section 1 Wave 3B — Otzar drift signal service + per-conversation route |
+| [#82](https://github.com/NiovArchitect/niov-foundation/pull/82) | `779a286` | Add Section 1 Wave 3A — ADR-0058 Otzar drift detection (coaching/alignment trust loop) |
+| [#81](https://github.com/NiovArchitect/niov-foundation/pull/81) | `691b44d` | Refresh Section 4 docs for Wave 7 Action-routed fan-out variant |
 | [#80](https://github.com/NiovArchitect/niov-foundation/pull/80) | `f26c88e` | Add Section 4 Wave 7 Action-routed fan-out variant (opt-in) |
 | [#79](https://github.com/NiovArchitect/niov-foundation/pull/79) | `dcff369` | Add Hardening Wave D — Section 7 proactive REGULATOR_ACCESS_EXPIRED emitter |
 | [#78](https://github.com/NiovArchitect/niov-foundation/pull/78) | `20ba156` | Add Hardening Wave C — Section 9 substrate-honest doc refresh |
@@ -59,22 +62,23 @@ remain Founder-QLOCK-gated.).
 | [#74](https://github.com/NiovArchitect/niov-foundation/pull/74) | `6258f17` | Add Section 4 Wave 5 NotificationService external fan-out bridge |
 | [#73](https://github.com/NiovArchitect/niov-foundation/pull/73) | `c24dcc1` | Add Section 4 Wave 4 OutboundWebhookProvider — first real connector |
 | [#72](https://github.com/NiovArchitect/niov-foundation/pull/72) | `4009b25` | Add Section 4 Wave 3 INVOKE_CONNECTOR ActionType + handler |
-| [#71](https://github.com/NiovArchitect/niov-foundation/pull/71) | `40b5e2e` | Add Section 4 Wave 2 ConnectorBinding model + admin routes + audit |
-| [#70](https://github.com/NiovArchitect/niov-foundation/pull/70) | `4142735` | Add Section 4 Wave 1 ConnectorProvider abstraction + registry |
-| [#69](https://github.com/NiovArchitect/niov-foundation/pull/69) | `ddd954a` | Close out Section 7 (Wave 6) — production-grade complete for Foundation backend scope |
 
 ## Immediate next work queue
 
-> **Hardening Wave A/B/C LANDED** across closed sections. Section 7 CSV export (PR #76) + Section 4 inbound HMAC verification helper (PR #77) + Section 9 substrate-honest doc refresh (this commit chain). **Section 4 + Section 7 + Section 2 + Section 9 backend contracts remain production-grade complete for their scopes.** Next-section autonomous start is blocked across multiple sections by real stop conditions surfaced at Phase 0 verification (see below).
+> **Section 1 Wave 3 LANDED** (Wave 3A ADR-0058 PR #82 + Wave 3B service + route PR #83 + this Wave 3C docs closeout). **Section 1 PARTIAL with Wave 3 LIVE for v1** (coaching/alignment trust loop per Founder Sleep Directive boundary; closed-vocabulary signal labels + self-scoped + no-content-leak). Per the Founder Sleep Directive next-section preference order, **Section 3 Hives** (RULE 21 research + ADR/design only) is the next autonomous-eligible candidate — Phase 0 verification runs on Section 3 next.
 
-**Section starts genuinely RULE-20-gated (Founder product decision required):**
+**Next-section preference order (per Founder Sleep Directive):**
 
-1. **Section 1 Wave 3 — Otzar drift detection ADR** — substrate explicitly mandates Founder ADR before any Wave 3 code lands (surveillance-vs-coaching boundary is Founder product decision per ADR-0052 + Section 1 line 142–146).
-2. **Section 3 Hives** — substrate explicitly requires "authorized research arc" + RULE 21 + likely new ADR before any implementation.
-3. **Section 5 Agent Playground** — large new substrate; needs ADR.
-4. **Section 6 Enterprise Analytics** — large new substrate; needs ADR.
-5. **Section 8 Billing / Entitlements** — Founder-excluded scope.
-6. **Section 10 GOVSEC.6–10** — each phase RULE 20-gated by ADR-0049 umbrella.
+1. **Section 3 Hives / Team Intelligence** — begin with RULE 21 research + ADR/design only.
+2. **Section 9 Admin / Governance backend contracts** — backend only; no Control Tower frontend.
+3. **Section 5 Agent Playground** — research/design only unless substrate-safe.
+4. **Section 6 Enterprise Analytics** — research/design only unless substrate-safe.
+
+**Forward-substrate within closed/partial sections:**
+
+- **Section 1 advanced drift signals** (stale-context per ADR-0044/0045; role-scope-conflict per Section 2 ActionAttempt POLICY_DRIFT; cross-conversation Twin rollup; operator-tunable thresholds; drift digest connector fan-out via Section 4) — all forward-substrate per ADR-0058 §9; each is its own slice.
+- **Section 8 Billing / Entitlements** — Founder-excluded scope (per session-start direction).
+- **Section 10 GOVSEC.6–10** — each phase RULE 20-gated by ADR-0049 umbrella.
 
 **Section 4 forward-substrate (RULE 20-gated; sequencing only):**
 

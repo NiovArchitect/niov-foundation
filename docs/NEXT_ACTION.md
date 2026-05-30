@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `f26c88e` (after Section 4 Wave 7; this commit chain adds Wave 7 docs)
-- **Latest merged PR:** [#80](https://github.com/NiovArchitect/niov-foundation/pull/80) — Add Section 4 Wave 7 Action-routed fan-out variant (opt-in).
-- **Active branch / PR:** `section-4-wave-7-docs-refresh` (tier-2/3 docs reflecting Section 4 Wave 7 + Hardening Wave A/B/C/D landings).
-- **Active production section:** Section 4 Wave 7 docs refresh. Next-section autonomous start blocked across all remaining unstarted sections by genuine Founder-product-decision + new-ADR stop conditions. Section 4 forward-substrate also exhausted of autonomously-clean items.
+- **Main HEAD:** `e7b4a17` (after Section 1 Wave 3B; this commit chain adds Wave 3C docs)
+- **Latest merged PR:** [#83](https://github.com/NiovArchitect/niov-foundation/pull/83) — Add Section 1 Wave 3B Otzar drift signal service + per-conversation route.
+- **Active branch / PR:** `section-1-wave-3c-closeout` (tier-1/2/3 docs reflecting Section 1 Wave 3 landings).
+- **Active production section:** Section 1 Wave 3 closeout (Section 1 PARTIAL with Wave 3 LIVE per ADR-0058 + Founder Sleep Directive boundary). Per Founder Sleep Directive next-section preference: Section 3 Hives Phase 0 verification runs next.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,31 +25,26 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Hardening Wave A/B/C/D + Section 4 Wave 7 LANDED (PRs #76 / #77 / #78 / #79 / #80)
+## Section 1 Wave 3 LANDED (PRs #82 + #83 + this docs closeout)
 
-- **Wave A (Section 7 CSV export; PR #76):** `format=csv` on `GET /api/v1/audit/events/export`; RFC 4180; `text/csv` + `x-audit-format` header.
-- **Wave B (Section 4 inbound HMAC verifier; PR #77):** NEW `verifyInboundHmac` (8-reason closed enum; timing-safe; replay-window-bounded). Pure substrate.
-- **Wave C (Section 9 doc refresh; PR #78):** Otzar Wave 2A/B/C drift fixed; Section 4 + 7 backend contracts inventoried.
-- **Wave D (Section 7 REGULATOR_ACCESS_EXPIRED emitter; PR #79):** SCHEDULER sweep per ADR-0036 Sub-decision 4; idempotent; supersession-aware; cron-wired every 60s.
-- **Section 4 Wave 7 (PR #80):** Action-routed fan-out variant; opt-in via `config.fan_out_mode = "action"`; Wave 5 baseline preserved as default. Closes Wave 5 forward-substrate note.
+- **Wave 3A (ADR-0058 design + boundary; PR #82):** Founder-authorized via Sleep Directive. Locks the coaching/alignment-vs-surveillance boundary canonical; closed-vocabulary v1 signal labels (`CORRECTION_VELOCITY_ELEVATED` + `RECURRING_CORRECTION_THEME`); SAFE projection + forbidden fields; Wave 3B implementation contract. RULE 14 back-citations to ADR-0053 + ADR-0055.
+- **Wave 3B (drift signal service + per-conversation route; PR #83):** NEW `DriftSignalService.analyzeConversationDrift` + `GET /api/v1/otzar/conversations/:id/drift-signals` (bearer + read; mirrors Wave 2C `/corrections` self-scope verbatim). Pure derived read-only — no schema migration; no new audit literal (ADMIN_ACTION + details.action = DRIFT_SIGNAL_READ); no persisted drift profile row. Topic tag VALUES never traverse the wire (LABEL fires; tags stay in caller's wallet). 10 NEW integration tests covering 401/404/403 + empty/single/four/two-recurring/five-both/auto-tag-excluded + audit emission + wire-level no-leak.
 
-## Why no next-section autonomous start
+## Prior session waves still on main
 
-Phase 0 verification surfaced real stop conditions across every remaining unstarted section:
+- Section 4 Wave 7 (action-routed fan-out variant; PR #80; opt-in via config.fan_out_mode).
+- Hardening A/B/C/D (CSV export #76 / inbound HMAC #77 / Section 9 doc refresh #78 / REGULATOR_ACCESS_EXPIRED emitter #79).
 
-  1. **Section 1 Wave 3** — substrate mandates Founder ADR before any Wave 3 code (surveillance-vs-coaching boundary is Founder product decision per ADR-0052 + Section 1 line 142–146).
-  2. **Section 3 Hives** — substrate explicitly requires "authorized research arc" + RULE 21 + likely new ADR.
-  3. **Section 5 / 6** — large new substrate; need ADRs.
-  4. **Section 8** — Founder-excluded scope.
-  5. **Section 10 GOVSEC.6–10** — each phase RULE 20-gated by ADR-0049 umbrella.
+## Next-section autonomous continuation (per Founder Sleep Directive)
 
-Per Founder direction "stop only for real stop conditions" — new ADR / Founder product decision IS a real stop condition. All remaining unstarted sections genuinely hit one.
+Section 1 Wave 3 closed. Per Founder Sleep Directive next-section preference order:
 
-## Autonomously-safe remaining forward-substrate (exhausted)
+  1. **Section 3 Hives / Team Intelligence** — begin with RULE 21 research + ADR/design only.
+  2. **Section 9 Admin / Governance backend contracts** — backend only; no Control Tower frontend.
+  3. **Section 5 Agent Playground** — research/design only unless substrate-safe.
+  4. **Section 6 Enterprise Analytics** — research/design only unless substrate-safe.
 
-Both items previously enumerated have now landed: Wave D shipped `REGULATOR_ACCESS_EXPIRED`; Wave 7 shipped the Action-routed fan-out variant. Remaining Section 4 forward-substrate items (encrypted-at-rest secret column = ADR-0019 amendment; SDK-bound connectors = new schema + real OAuth credentials) all hit real stop conditions (new ADR / secret/OAuth ambiguity / real external credentials). Section 7 forward-substrate (cross-chain `verify-chain`) requires Founder QLOCK per substrate.
-
-→ Awaiting Founder direction on one of the RULE-20-gated next sections (Section 1 Wave 3 drift detection ADR / Section 4 Slack OAuth follow-on / GOVSEC.5 throttle / Section 9 AI-generated executive summaries) or other authorized substrate work.
+Per the Sleep Directive's RULE-20-gated correction ("perform RULE 21 research, draft the ADR/design boundary, identify exact safety/product decisions, implement only if the ADR/design makes the substrate safe without new Founder input, otherwise stop at the narrowest unresolved Founder decision"), Section 3 Phase 0 verification runs next. Section 1 advanced drift signals + Section 4 SDK-bound connectors + Section 7 cross-chain verify-chain remain forward-substrate (each behind real stop conditions: new ADR / OAuth / Founder QLOCK respectively).
 
 **Earlier waves + section detail:** [`current-build-state/`](current-build-state/) (Section 1 / Section 2 / Section 4 / Section 7 / Section 9 detail files).
 
@@ -74,6 +69,14 @@ Both items previously enumerated have now landed: Wave D shipped `REGULATOR_ACCE
 **Not stop conditions:** normal section boundary; completed PR; completed docs refresh; discovered gap when research provides a clear safe recommendation.
 
 ## Key live / not-live truth
+
+**LIVE (Section 1 Wave 3 — Otzar drift detection per ADR-0058; see [`current-build-state/01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md)):**
+- `GET /api/v1/otzar/conversations/:id/drift-signals` — pure derived read-only coaching/alignment trust loop.
+- Closed-vocabulary v1 signal labels: `CORRECTION_VELOCITY_ELEVATED` (>3 corrections in conversation) + `RECURRING_CORRECTION_THEME` (2+ corrections share a non-generic topic tag; auto-tags excluded).
+- Self-scoped (entity_id match); cross-caller → 403 NOT_CONVERSATION_OWNER; unknown id → 404 CONVERSATION_NOT_FOUND; bearer absent → 401.
+- ADMIN_ACTION:DRIFT_SIGNAL_READ audit emission (no new audit literal).
+- Topic tag VALUES never traverse the wire (the LABEL fires; tags stay in caller's wallet — strictest no-leak interpretation).
+- Founder boundary preserved: NEVER manager visibility, NEVER employee scoring, NEVER psychological inference, NEVER punitive policy enforcement, NEVER raw conversation content.
 
 **LIVE (Section 4 Waves 1+2+3+4+5+7 + Hardening B — connector substrate; see [`current-build-state/04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md)):**
 - `ConnectorBinding` Prisma model with `secret_ref` env-var-NAME pattern (never raw secret at rest); 5 admin routes on `/api/v1/org/connectors[/:id]` all `can_admin_org`-gated.
