@@ -97,6 +97,74 @@ export interface CorrectionVelocityAggregate {
   honest_note: string;
 }
 
+// WHAT: Closed-vocab signal labels for the action-runtime
+//        success-rate aggregate.
+// INPUT: Used as a value array + TS literal-union type.
+// OUTPUT: None.
+// WHY: ADR-0061 §1.a closed-vocab outputs. HEALTHY at >=0.9
+//      success rate; DEGRADED at >=0.6 and <0.9; UNHEALTHY at
+//      <0.6; INSUFFICIENT_VOLUME at <ACTION_RUNTIME_MIN_VOLUME
+//      attempts (separate gate from k=5 population gate;
+//      protects against high-variance signal at low N).
+//      INSUFFICIENT_POPULATION when org member_count < k=5
+//      (same gate as correction-velocity aggregate).
+export const ACTION_RUNTIME_SUCCESS_LABELS = [
+  "HEALTHY",
+  "DEGRADED",
+  "UNHEALTHY",
+  "INSUFFICIENT_VOLUME",
+  "INSUFFICIENT_POPULATION",
+] as const;
+
+export type ActionRuntimeSuccessLabel =
+  (typeof ACTION_RUNTIME_SUCCESS_LABELS)[number];
+
+// WHAT: Minimum attempt-volume threshold below which the
+//        aggregate redacts to INSUFFICIENT_VOLUME. Distinct
+//        from k=5 population gate.
+// INPUT: Used as a constant.
+// OUTPUT: A number.
+// WHY: At low attempt volume, success-rate fluctuates wildly
+//      (1 fail in 3 attempts = 67% success; signal-noise too
+//      high to action). v1 picks 10 — enough samples for
+//      stable signal, low enough not to redact small but
+//      active orgs. Founder may raise per-aggregate
+//      sensitivity later per ADR-0061 §8 checkpoint #2.
+export const ACTION_RUNTIME_MIN_VOLUME = 10;
+
+const SUCCESS_RATE_HEALTHY_THRESHOLD = 0.9;
+const SUCCESS_RATE_DEGRADED_THRESHOLD = 0.6;
+
+// WHAT: SAFE projection envelope for action-runtime success
+//        rate aggregate.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Closed-vocab per ADR-0061 §1.a. Surfaces aggregate
+//      counts (attempt_count) + per-outcome counts (which are
+//      themselves aggregate counts, not per-attempt
+//      attribution); NEVER attempt IDs / action IDs / worker
+//      IDs / error_class / error_summary / payload_redacted.
+//      success_rate is a derived ratio (0..1) — already an
+//      aggregate quantity per ADR-0061 §1.a allowance for
+//      "integer counts" extended naturally to rates derived
+//      from those counts.
+export interface ActionRuntimeSuccessRateAggregate {
+  ok: true;
+  aggregate: "ACTION_RUNTIME_SUCCESS_RATE";
+  window_days: number;
+  org_entity_id: string;
+  member_count: number;
+  redacted: boolean;
+  attempt_count: number;
+  succeeded_count: number | null;
+  failed_count: number | null;
+  timed_out_count: number | null;
+  cancelled_count: number | null;
+  success_rate: number | null;
+  signal_label: ActionRuntimeSuccessLabel;
+  honest_note: string;
+}
+
 // WHAT: Failure shape for analytics service tier.
 // INPUT: Used as a return type only.
 // OUTPUT: None.
@@ -273,6 +341,195 @@ export class AnalyticsService {
       correction_count: correctionCount,
       signal_label: signalLabel,
       honest_note: HONEST_NOTE_ABOVE_THRESHOLD,
+    };
+  }
+
+  // WHAT: Compute the org-wide action-runtime success rate
+  //        aggregate over the requested window.
+  // INPUT: Pre-resolved org_entity_id + window_days +
+  //         actor_entity_id for audit emission.
+  // OUTPUT: ActionRuntimeSuccessRateAggregate |
+  //         AnalyticsFailure.
+  // WHY: Step-by-step:
+  //   1. Validate window_days (clamp 1..30; default 7).
+  //   2. Count active org members (k=5 population gate).
+  //   3. If member_count < k=5 → return SAFE redacted
+  //      projection (INSUFFICIENT_POPULATION label; no
+  //      attempt counts; no rate).
+  //   4. Resolve org Action ids in window (Action.org_entity_id
+  //      + deleted_at: null + created_at >= cutoff).
+  //   5. Count ActionAttempt outcomes for those Actions where
+  //      ended_at >= cutoff (the attempt completed within
+  //      window).
+  //   6. If attempt_count < ACTION_RUNTIME_MIN_VOLUME (10) →
+  //      return SAFE redacted projection
+  //      (INSUFFICIENT_VOLUME label; counts surfaced but
+  //      success_rate redacted to prevent high-variance
+  //      misinterpretation).
+  //   7. Compute success_rate = succeeded_count / attempt_count.
+  //   8. Map rate to closed-vocab signal_label.
+  //   9. Emit ADMIN_ACTION + ANALYTICS_READ audit.
+  //   10. Return SAFE projection envelope.
+  async getActionRuntimeSuccessRateForOrg(args: {
+    org_entity_id: string;
+    actor_entity_id: string;
+    window_days?: number;
+    ip_address?: string | null;
+  }): Promise<ActionRuntimeSuccessRateAggregate | AnalyticsFailure> {
+    const requestedWindow = args.window_days ?? ANALYTICS_WINDOW_DAYS_DEFAULT;
+    if (
+      !Number.isInteger(requestedWindow) ||
+      requestedWindow < ANALYTICS_WINDOW_DAYS_MIN ||
+      requestedWindow > ANALYTICS_WINDOW_DAYS_MAX
+    ) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: `window_days must be an integer in [${ANALYTICS_WINDOW_DAYS_MIN}, ${ANALYTICS_WINDOW_DAYS_MAX}]`,
+        invalid_fields: ["window_days"],
+      };
+    }
+    const windowDays = requestedWindow;
+
+    // Step 2 — k=5 population gate.
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberCount = memberships.length;
+    if (memberCount < ANALYTICS_MIN_POPULATION) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "ACTION_RUNTIME_SUCCESS_RATE",
+        redacted: true,
+        result_count: 0,
+        filter_keys: ["window_days"],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "ACTION_RUNTIME_SUCCESS_RATE",
+        window_days: windowDays,
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        attempt_count: 0,
+        succeeded_count: null,
+        failed_count: null,
+        timed_out_count: null,
+        cancelled_count: null,
+        success_rate: null,
+        signal_label: "INSUFFICIENT_POPULATION",
+        honest_note: HONEST_NOTE_BELOW_THRESHOLD,
+      };
+    }
+
+    // Step 4–5 — resolve org Action ids + count outcomes.
+    const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const orgActions = await prisma.action.findMany({
+      where: {
+        org_entity_id: args.org_entity_id,
+        deleted_at: null,
+      },
+      select: { action_id: true },
+    });
+    const orgActionIds = orgActions.map((a) => a.action_id);
+    const attempts =
+      orgActionIds.length === 0
+        ? []
+        : await prisma.actionAttempt.findMany({
+            where: {
+              action_id: { in: orgActionIds },
+              ended_at: { gte: cutoff, not: null },
+              outcome: { not: null },
+            },
+            select: { outcome: true },
+          });
+    const attemptCount = attempts.length;
+    const counts = {
+      SUCCEEDED: 0,
+      FAILED: 0,
+      TIMED_OUT: 0,
+      CANCELLED: 0,
+    };
+    for (const a of attempts) {
+      if (a.outcome === "SUCCEEDED") counts.SUCCEEDED++;
+      else if (a.outcome === "FAILED") counts.FAILED++;
+      else if (a.outcome === "TIMED_OUT") counts.TIMED_OUT++;
+      else if (a.outcome === "CANCELLED") counts.CANCELLED++;
+    }
+
+    // Step 6 — minimum-volume gate (separate from k=5 pop).
+    if (attemptCount < ACTION_RUNTIME_MIN_VOLUME) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "ACTION_RUNTIME_SUCCESS_RATE",
+        redacted: true,
+        result_count: attemptCount,
+        filter_keys: ["window_days"],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "ACTION_RUNTIME_SUCCESS_RATE",
+        window_days: windowDays,
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        attempt_count: attemptCount,
+        succeeded_count: null,
+        failed_count: null,
+        timed_out_count: null,
+        cancelled_count: null,
+        success_rate: null,
+        signal_label: "INSUFFICIENT_VOLUME",
+        honest_note: `Attempt volume below ${ACTION_RUNTIME_MIN_VOLUME}; success_rate redacted to prevent high-variance misinterpretation.`,
+      };
+    }
+
+    // Step 7–8 — rate + label.
+    const successRate = counts.SUCCEEDED / attemptCount;
+    let signalLabel: ActionRuntimeSuccessLabel;
+    if (successRate >= SUCCESS_RATE_HEALTHY_THRESHOLD) {
+      signalLabel = "HEALTHY";
+    } else if (successRate >= SUCCESS_RATE_DEGRADED_THRESHOLD) {
+      signalLabel = "DEGRADED";
+    } else {
+      signalLabel = "UNHEALTHY";
+    }
+
+    // Step 9 — audit.
+    await this.emitAnalyticsReadAudit({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      aggregate: "ACTION_RUNTIME_SUCCESS_RATE",
+      redacted: false,
+      result_count: attemptCount,
+      filter_keys: ["window_days"],
+      ip_address: args.ip_address ?? null,
+    });
+
+    return {
+      ok: true,
+      aggregate: "ACTION_RUNTIME_SUCCESS_RATE",
+      window_days: windowDays,
+      org_entity_id: args.org_entity_id,
+      member_count: memberCount,
+      redacted: false,
+      attempt_count: attemptCount,
+      succeeded_count: counts.SUCCEEDED,
+      failed_count: counts.FAILED,
+      timed_out_count: counts.TIMED_OUT,
+      cancelled_count: counts.CANCELLED,
+      success_rate: Number(successRate.toFixed(4)),
+      signal_label: signalLabel,
+      honest_note:
+        "Action-runtime outcome counts derived from same-org " +
+        "ActionAttempt rows in the window. Signal label is " +
+        "operational only — not an employee score, not a worker " +
+        "performance index.",
     };
   }
 
