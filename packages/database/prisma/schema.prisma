@@ -1654,3 +1654,43 @@ enum ActionAttemptOutcome {
   TIMED_OUT
   CANCELLED
 }
+
+// Section 4 Wave 2 — per-org connector enablement substrate.
+// Stores per-org bindings for connector types registered in
+// CONNECTOR_REGISTRY at apps/api/src/services/connector/connector.service.ts.
+// Critically: this model NEVER stores raw secret material — only a
+// `secret_ref` env-var NAME the provider resolves at invocation
+// time. Raw secrets live in the deployment environment per
+// ADR-0019; encryption-at-rest for per-tenant secrets is
+// forward-substrate and would require a separate Founder-authorized
+// schema amendment.
+//
+// Soft-delete via `deleted_at` per RULE 10; disabling a binding
+// uses `enabled = false` (the cheaper and more common case).
+// The unique constraint guarantees a single binding per
+// (org_entity_id, type, display_name) — disabled or soft-deleted
+// rows still count toward uniqueness so re-enablement is the canonical
+// path. The (org_entity_id, enabled, deleted_at) index supports the
+// list + invocation lookup hot paths.
+//
+// `type` is a string column validated by the service tier against
+// CONNECTOR_REGISTRY keys (NOT a Prisma enum — the registry is the
+// canonical source and grows behind Founder QLOCK; an enum would
+// add a migration per new connector type).
+model ConnectorBinding {
+  binding_id            String    @id @default(uuid()) @db.Uuid
+  org_entity_id         String    @db.Uuid
+  type                  String
+  display_name          String
+  config                Json      @default("{}")
+  secret_ref            String?
+  enabled               Boolean   @default(true)
+  created_by_entity_id  String    @db.Uuid
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  deleted_at            DateTime?
+
+  @@unique([org_entity_id, type, display_name])
+  @@index([org_entity_id, enabled, deleted_at])
+  @@map("connector_bindings")
+}

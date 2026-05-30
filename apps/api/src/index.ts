@@ -966,3 +966,26 @@ export type {
   ConnectorType,
   ConnectorTypeDefinition,
 } from "./services/connector/index.js";
+
+// Section 4 Wave 2 — ConnectorBinding service + admin routes.
+// All routes can_admin_org-gated + scoped to the caller's org;
+// audit emission via ADMIN_ACTION + details.action ∈
+// { CONNECTOR_REGISTERED, CONNECTOR_CONFIG_UPDATED,
+//   CONNECTOR_DISABLED, CONNECTOR_REENABLED, CONNECTOR_SOFT_DELETED }
+// (no new audit literal). SAFE projection never carries resolved
+// secret values; only secret_ref env-var NAMES are echoed.
+export {
+  getConnectorBindingForOrgService,
+  listConnectorBindingsForOrgService,
+  projectConnectorBinding,
+  registerConnectorBindingForOrg,
+  softDeleteConnectorBindingForOrgService,
+  updateConnectorBindingForOrgService,
+} from "./services/connector/index.js";
+export type {
+  ConnectorBindingFailure,
+  ConnectorBindingView,
+  RegisterConnectorBindingInput,
+  UpdateConnectorBindingInput,
+} from "./services/connector/index.js";
+export { registerConnectorRoutes } from "./routes/connector.routes.js";
