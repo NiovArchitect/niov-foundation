@@ -147,18 +147,19 @@ describe("FixtureBasedConnectorProvider — 8 forced error-class branches", () =
 });
 
 describe("getConnectorProvider — production factory", () => {
-  it("returns a usable provider for OUTBOUND_WEBHOOK at Wave 1", async () => {
-    const provider = getConnectorProvider("OUTBOUND_WEBHOOK");
-    // Wave 1's production default is the FixtureBased provider for
-    // every type — Wave 4 swaps the OUTBOUND_WEBHOOK branch for the
-    // real OutboundWebhookProvider. The contract here is that the
-    // factory returns something that satisfies the ConnectorProvider
-    // interface and can be invoked end-to-end without crashing.
-    const result = await provider.invoke(makeInvocation());
-    expect(result.ok).toBe(true);
+  it("throws on OUTBOUND_WEBHOOK after Wave 4 — callers must use getConnectorProviderAsync", () => {
+    // Wave 4 swap: the sync factory throws for OUTBOUND_WEBHOOK so
+    // accidental sync callers are loudly redirected to the async
+    // path that resolves the real OutboundWebhookProvider. The
+    // INVOKE_CONNECTOR action handler (handlers.ts) uses the async
+    // helper; tests inject FixtureBasedConnectorProvider via the
+    // ActionHandlerRegistryDeps constructor seam.
+    expect(() => getConnectorProvider("OUTBOUND_WEBHOOK")).toThrow(
+      /getConnectorProviderAsync/,
+    );
   });
 
-  it("returns a usable provider for FIXTURE_ECHO at Wave 1", async () => {
+  it("returns a usable FixtureBased provider for FIXTURE_ECHO synchronously", async () => {
     const provider = getConnectorProvider("FIXTURE_ECHO");
     const result = await provider.invoke(
       makeInvocation({ type: "FIXTURE_ECHO" }),

@@ -957,7 +957,9 @@ export {
   CONNECTOR_REGISTRY,
   FixtureBasedConnectorProvider,
   getConnectorProvider,
+  getConnectorProviderAsync,
   getConnectorTypeDefinition,
+  OutboundWebhookProvider,
 } from "./services/connector/index.js";
 export type {
   ConnectorInvocation,
