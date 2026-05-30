@@ -28,6 +28,7 @@
 //     substrate.
 
 import * as cron from "node-cron";
+import { tickRegulatorAccessExpirySweep } from "../cosmp/regulator-expiry.service.js";
 import { prisma } from "@niov/database";
 import { tickActionExecutor } from "./executor.js";
 import { transitionActionStatus } from "./lifecycle.service.js";
@@ -210,6 +211,15 @@ export function startActionScheduler(): ActionSchedulerHandle {
   tasks.push(
     cron.schedule("0 * * * * *", () => {
       void tickActionExpirySweep().catch(() => {});
+    }),
+  );
+
+  // Hardening Wave D — every 60 seconds sweeps LawfulBasis rows
+  // past valid_until and emits REGULATOR_ACCESS_EXPIRED audit
+  // rows per ADR-0036 Sub-decision 4. Idempotent + bounded batch.
+  tasks.push(
+    cron.schedule("30 * * * * *", () => {
+      void tickRegulatorAccessExpirySweep().catch(() => {});
     }),
   );
 
