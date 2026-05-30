@@ -424,7 +424,15 @@ required at its slice):
   separate Founder authorization on the exact evaluable
   term set.
 - Wave 5: Phoenix.PubSub fanout for hive aggregate updates
-  (consumes ADR-0039 entry #28).
+  (consumes ADR-0039 entry #28). **Producer half CLOSED**
+  at ADR-0064 (2026-05-30) — Foundation TypeScript
+  `HiveEventBus` at `apps/api/src/services/hive/hive-events.ts`
+  publishes SAFE-projected envelopes after every Hive
+  state transition; 5 closed-vocabulary event names;
+  same-org-scoped topic schema; fire-and-forget Node
+  EventEmitter at v1; zero schema migration + zero new
+  audit literals. Consumer half + Broadway + cross-language
+  BEAM bridge remain forward-substrate at Wave 6+.
 - Wave 6: Broadway pipeline at high-throughput register
   (consumes ADR-0039 entry #28).
 - Wave 7: hive algorithm at weighting architecture register

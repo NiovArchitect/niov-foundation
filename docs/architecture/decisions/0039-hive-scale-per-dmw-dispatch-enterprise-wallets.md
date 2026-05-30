@@ -73,7 +73,14 @@ substantively plus hive algorithm at weighting architecture register
 substantively per Entry #28 substantively all stay forward-substrate
 at sub-arc 1 sub-phase c plus sub-phase d plus sub-arc 2 register
 substantively per the hybrid hot/cold framing canonical at substantive
-register substantively.
+register substantively. **Producer half of Phoenix.PubSub hive fanout
+CLOSED at Section 3 Wave 5 ADR-0064 (2026-05-30)** — Foundation
+TypeScript `HiveEventBus` ships at `apps/api/src/services/hive/hive-events.ts`
+with 5 closed-vocabulary event names + same-org topic schema +
+SAFE payload projection + fire-and-forget Node EventEmitter at v1;
+cross-language BEAM bridge to dbgi_supervisor's Phoenix.PubSub +
+Broadway guaranteed-delivery + hive-weighting algorithm remain
+forward-substrate at Wave 6+ per ADR-0064 §Forward queue.
 
 ## Decision
 
