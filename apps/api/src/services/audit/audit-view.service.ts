@@ -892,7 +892,7 @@ export interface ExportAuditEventsQuery {
 // WHAT: The normalized + clamped filter shape after validation.
 export interface NormalizedExportAuditEventsFilters {
   scope: AuditViewScope;
-  format: "ndjson";
+  format: "ndjson" | "csv";
   max_rows: number;
   event_type?: AuditEventType;
   target_entity_id?: string;
@@ -904,9 +904,9 @@ export interface NormalizedExportAuditEventsFilters {
 
 // WHAT: Validate + normalize the export query string. Reuses
 //        the same shared sub-validators as the list route.
-//        format defaults to "ndjson" (currently the only
-//        supported value at Wave 4; CSV is forward-substrate);
-//        max_rows clamped to [1, EXPORT_AUDIT_EVENTS_MAX_ROWS];
+//        format defaults to "ndjson"; "csv" added at the
+//        Hardening Wave A register (Section 7 forward-substrate
+//        closure). max_rows clamped to [1, EXPORT_AUDIT_EVENTS_MAX_ROWS];
 //        default EXPORT_AUDIT_EVENTS_MAX_ROWS.
 export function validateExportAuditEventsQuery(
   query: ExportAuditEventsQuery,
@@ -914,9 +914,12 @@ export function validateExportAuditEventsQuery(
   | { ok: true; normalized: NormalizedExportAuditEventsFilters }
   | { ok: false; code: "INVALID_FIELD"; invalid_fields: string[] } {
   const invalid: string[] = [];
-  let format: "ndjson" = "ndjson";
+  let format: "ndjson" | "csv" = "ndjson";
   if (query.format !== undefined) {
-    if (typeof query.format !== "string" || query.format !== "ndjson") {
+    if (
+      typeof query.format !== "string" ||
+      (query.format !== "ndjson" && query.format !== "csv")
+    ) {
       invalid.push("format");
     } else {
       format = query.format;
@@ -1024,11 +1027,13 @@ export function validateExportAuditEventsQuery(
 // WHAT: Export envelope returned by exportAuditEventsForCaller
 //        when the export succeeds.
 export interface ExportAuditEventsView {
-  format: "ndjson";
+  format: "ndjson" | "csv";
   scope: AuditViewScope;
-  // NDJSON body — one JSON-serialized SafeAuditEventView per
-  // line, terminated by \n. UTF-8 safe; never contains a
-  // standalone \r.
+  // NDJSON body (one JSON-serialized SafeAuditEventView per
+  // line, terminated by \n) OR CSV body (header row + one row
+  // per audit event with RFC 4180 quoting per safeCsvCell).
+  // UTF-8 safe; never contains a standalone \r in NDJSON; CSV
+  // uses \r\n line terminators per RFC 4180.
   body: string;
   row_count: number;
   truncated: boolean;
@@ -1044,7 +1049,83 @@ export type ExportAuditEventsResult =
       message?: string;
     };
 
-// WHAT: Bounded NDJSON export of the caller's audit chain
+// WHAT: The canonical CSV header for an exported SafeAuditEventView
+//        slice. Locked at the value-pin tier so future
+//        SafeAuditEventView field additions are an explicit
+//        substrate-honest revisit (the field appears in NDJSON via
+//        JSON.stringify but the CSV writer is column-positional;
+//        adding a column requires updating this constant + the
+//        per-row builder below).
+// INPUT: None.
+// OUTPUT: A frozen tuple of column names.
+// WHY: RFC 4180 §2 header-row pattern; one column per safe field.
+const EXPORT_CSV_HEADER: ReadonlyArray<keyof SafeAuditEventView> =
+  Object.freeze([
+    "audit_id",
+    "event_type",
+    "actor_entity_id",
+    "target_entity_id",
+    "target_capsule_id",
+    "session_id",
+    "outcome",
+    "denial_reason",
+    "details",
+    "ip_address",
+    "timestamp",
+    "previous_event_hash",
+    "event_hash",
+    "lawful_basis_id",
+    "lawful_basis_chain_hash",
+    "jurisdiction",
+  ]);
+
+// WHAT: Escape one cell value into an RFC 4180 conforming CSV
+//        token. Strings with commas / quotes / line-breaks are
+//        wrapped in double-quotes; embedded double-quotes are
+//        doubled. null + undefined become empty strings. Objects
+//        (the audit `details` Json) are serialized via JSON.stringify
+//        first, then escaped.
+// INPUT: Any cell value.
+// OUTPUT: A CSV-safe string.
+// WHY: RFC 4180 §2.5 + §2.7 quoting discipline. Defense in
+//      depth — operator-supplied event_type / details / etc. that
+//      happen to contain commas / newlines / quotes survive a
+//      round-trip through any RFC-4180-compliant CSV reader
+//      (Excel, LibreOffice, jq -R, csvtool, pandas).
+export function safeCsvCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const raw =
+    typeof value === "string" ? value : JSON.stringify(value);
+  if (
+    raw.includes(",") ||
+    raw.includes("\"") ||
+    raw.includes("\n") ||
+    raw.includes("\r")
+  ) {
+    return `"${raw.replaceAll("\"", "\"\"")}"`;
+  }
+  return raw;
+}
+
+// WHAT: Build an RFC 4180 CSV body from a slice of
+//        SafeAuditEventView rows. Header row + one record per
+//        row + CRLF line terminators per RFC 4180 §2.1.
+// INPUT: A slice of SafeAuditEventView rows.
+// OUTPUT: A complete CSV body as a single string.
+// WHY: Centralizes the row-shaping so safeCsvCell is applied
+//      uniformly across every column. No trailing CRLF — empty
+//      slice → header-row-only body (callers can detect by
+//      row_count = 0).
+function buildCsvBody(rows: SafeAuditEventView[]): string {
+  const header = EXPORT_CSV_HEADER.join(",");
+  if (rows.length === 0) return header;
+  const lines = rows.map((row) =>
+    EXPORT_CSV_HEADER.map((col) => safeCsvCell(row[col])).join(","),
+  );
+  return [header, ...lines].join("\r\n");
+}
+
+// WHAT: Bounded NDJSON or CSV export of the caller's audit chain
 //        (self / org / platform per scope) up to the
 //        max_rows cap.
 // INPUT: callerEntityId + normalized filters.
@@ -1104,12 +1185,19 @@ export async function exportAuditEventsForCaller(
   });
   const truncated = rows.length > filters.max_rows;
   const slice = truncated ? rows.slice(0, filters.max_rows) : rows;
-  // Build the NDJSON body. One JSON.stringify per row + \n
-  // terminator. Keeps the writer simple; the row cap bounds
-  // memory.
-  const body = slice
-    .map((r) => JSON.stringify(projectAuditEvent(r)))
-    .join("\n");
+  const body =
+    filters.format === "ndjson"
+      ? // NDJSON body. One JSON.stringify per row + \n
+        // terminator. Keeps the writer simple; the row cap
+        // bounds memory.
+        slice.map((r) => JSON.stringify(projectAuditEvent(r))).join("\n")
+      : // CSV body per RFC 4180. Header row + one record per
+        // event with \r\n line terminators. Opaque
+        // `details` Json column serialized to a JSON string +
+        // wrapped in safeCsvCell so quoting / embedded
+        // delimiters / multi-line content survive round-trip.
+        // Same SAFE projection as NDJSON via projectAuditEvent.
+        buildCsvBody(slice.map((r) => projectAuditEvent(r)));
   const filterKeys = Object.entries(filters)
     .filter(
       ([k, v]) =>

@@ -96,6 +96,7 @@ export {
   getAuditEventForCaller,
   listAuditEventsForCaller,
   listRegulatorAuditEventsForCaller,
+  safeCsvCell,
   validateExportAuditEventsQuery,
   validateListAuditEventsQuery,
   validateListRegulatorAuditEventsQuery,
