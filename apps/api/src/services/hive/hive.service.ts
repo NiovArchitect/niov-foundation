@@ -22,6 +22,11 @@ import {
 import type { ContentStore } from "../../content-store.js";
 import type { AuthService } from "../auth.service.js";
 import { getOrgEntityId } from "../governance/org.js";
+import {
+  evaluateGovernanceForAggregateRead,
+  evaluateGovernanceForCreate,
+  evaluateGovernanceForInvite,
+} from "./governance-terms-evaluator.js";
 
 // WHAT: ADR-0059 v1 hive_type allowlist. CROSS_ORGANIZATION +
 //        DEVICE_NETWORK + GOVERNMENT enum values are reserved in
@@ -148,6 +153,26 @@ export interface CreateHiveOptions {
 //   - AI_AGENT_NOT_ELIGIBLE_FOR_HIVE: invitee.entity_type ===
 //     "AI_AGENT"; ADR-0046 + RULE 0 AI permission-ceiling
 //     enforcement on the public inviteToHive surface.
+//
+// SECTION 3 WAVE 4 NEW CODES (per ADR-0063 + Founder Wave 4
+// implementation authorization; 6 of the ADR's 7 codes — the
+// 7th INVITE_REQUIRES_ADMIN_APPROVAL is DEFERRED until an
+// admin invite path exists per Founder direction):
+//   - GOVERNANCE_HIVE_TYPE_FORBIDDEN: requested hive_type not
+//     in governance_terms.allowed_hive_types.
+//   - GOVERNANCE_INVITEE_TYPE_FORBIDDEN: invitee.entity_type
+//     not in governance_terms.allowed_member_entity_types
+//     (or allow_ai_agent_membership=false rejects AI_AGENT
+//     where reachable — defense in depth atop Wave 2).
+//   - GOVERNANCE_MAX_MEMBER_COUNT_EXCEEDED: invite would push
+//     member_count past governance_terms.max_member_count.
+//   - GOVERNANCE_CAPSULE_TYPE_ACCESSIBLE_FORBIDDEN: membership
+//     settings.capsule_types_accessible includes type(s) not in
+//     governance_terms.allowed_capsule_types_accessible.
+//   - GOVERNANCE_CAPSULE_TYPE_CONTRIBUTED_FORBIDDEN: same for
+//     capsule_types_contributed.
+//   - GOVERNANCE_TERMS_MALFORMED: governance_terms is not a
+//     JSON object (operator-state corruption).
 export interface HiveFailure {
   ok: false;
   code:
@@ -170,7 +195,13 @@ export interface HiveFailure {
     | "INVALID_HIVE_TYPE_FOR_V1"
     | "ORG_ENTITY_ID_REQUIRED"
     | "CROSS_ORG_INVITE_DENIED"
-    | "AI_AGENT_NOT_ELIGIBLE_FOR_HIVE";
+    | "AI_AGENT_NOT_ELIGIBLE_FOR_HIVE"
+    | "GOVERNANCE_HIVE_TYPE_FORBIDDEN"
+    | "GOVERNANCE_INVITEE_TYPE_FORBIDDEN"
+    | "GOVERNANCE_MAX_MEMBER_COUNT_EXCEEDED"
+    | "GOVERNANCE_CAPSULE_TYPE_ACCESSIBLE_FORBIDDEN"
+    | "GOVERNANCE_CAPSULE_TYPE_CONTRIBUTED_FORBIDDEN"
+    | "GOVERNANCE_TERMS_MALFORMED";
   message: string;
 }
 
@@ -308,6 +339,28 @@ export class HiveService {
           message: "This org already has a default-enterprise Hive",
         };
       }
+    }
+
+    // Section 3 Wave 4 ADR-0063 Sub-decision 4 — Layer 1
+    // governance_terms evaluator at createHive. Validates the
+    // seed terms object's internal consistency AND the
+    // requested hive_type against allowed_hive_types AND the
+    // creator's capsule_types_* against the allowlists. Wave 2
+    // HIVE_TYPE_V1_ALLOWLIST has already run above; this is
+    // tenant-policy enforcement layered on top.
+    const createGov = evaluateGovernanceForCreate(terms, {
+      requested_hive_type: type,
+      creator_capsule_types_accessible:
+        settings.capsule_types_accessible ?? [],
+      creator_capsule_types_contributed:
+        settings.capsule_types_contributed ?? [],
+    });
+    if (createGov.ok === false) {
+      return {
+        ok: false,
+        code: createGov.code,
+        message: createGov.message,
+      };
     }
 
     const hive_id = randomUUID();
@@ -512,9 +565,33 @@ export class HiveService {
       };
     }
 
-    // Governance-terms validation hook -- permissive for MVP. The
-    // hive's governance_terms JSON is recorded; future work can
-    // enforce it against settings here.
+    // Section 3 Wave 4 ADR-0063 Sub-decision 4 — Layer 1
+    // governance_terms evaluator at inviteToHive. Wave 2
+    // AI_AGENT exclusion + same-org check have already run
+    // above; this is tenant-policy enforcement layered on top.
+    // member_count passed here is the running count BEFORE the
+    // invitee row is added (the +1 happens inside the evaluator).
+    // For re-activation of a previously-REMOVED membership, the
+    // count is unchanged (the row already exists with REMOVED
+    // status; bringing it back to ACTIVE makes member_count
+    // jump by 1 vs hive.member_count). For a brand-new row,
+    // same arithmetic applies. The evaluator treats both the
+    // same.
+    const inviteGov = evaluateGovernanceForInvite(hive.governance_terms, {
+      invitee_entity_type: invitee.entity_type,
+      current_member_count: hive.member_count,
+      invitee_capsule_types_accessible:
+        settings.capsule_types_accessible ?? [],
+      invitee_capsule_types_contributed:
+        settings.capsule_types_contributed ?? [],
+    });
+    if (inviteGov.ok === false) {
+      return {
+        ok: false,
+        code: inviteGov.code,
+        message: inviteGov.message,
+      };
+    }
 
     const membershipId = existing?.membership_id ?? randomUUID();
     const operations: import("@prisma/client").Prisma.PrismaPromise<unknown>[] = [];
@@ -750,6 +827,47 @@ export class HiveService {
           hive_id: hiveId,
           aggregate_present: false,
           zero_state_reason: "EMPTY_CAPSULE_TYPES_ACCESSIBLE",
+        },
+      });
+      return { ok: true, hive_id: hiveId, intelligence: null };
+    }
+
+    // Section 3 Wave 4 ADR-0063 Sub-decision 4 + Sub-decision 5
+    // — Layer 1 governance_terms evaluator at getHiveIntelligence
+    // for aggregate_min_member_count. When the hive's active
+    // member_count is below the policy-required minimum, return
+    // a SAFE zero-state projection (mirrors the Wave 2
+    // empty-capsule_types_accessible behavior) with a new
+    // zero_state_reason marker. Reuses the existing
+    // HIVE_INTELLIGENCE_READ audit literal per ADR-0063
+    // Sub-decision 6 (no new audit literals).
+    //
+    // MALFORMED governance_terms is a hard failure
+    // (operator-state corruption); fall through to HiveFailure
+    // surface mapped to 422 at the route tier per ADR-0063
+    // Sub-decision 5.
+    const aggGate = evaluateGovernanceForAggregateRead(
+      hive.governance_terms,
+      { current_member_count: hive.member_count },
+    );
+    if (aggGate.ok === false) {
+      return {
+        ok: false,
+        code: aggGate.code,
+        message: aggGate.message,
+      };
+    }
+    if (aggGate.below_threshold === true) {
+      await writeAuditEvent({
+        event_type: "HIVE_INTELLIGENCE_READ",
+        outcome: "SUCCESS",
+        actor_entity_id: session.entity_id,
+        session_id: session.session_id,
+        ip_address: context.ip_address ?? null,
+        details: {
+          hive_id: hiveId,
+          aggregate_present: false,
+          zero_state_reason: "BELOW_AGGREGATE_MIN_MEMBER_COUNT",
         },
       });
       return { ok: true, hive_id: hiveId, intelligence: null };

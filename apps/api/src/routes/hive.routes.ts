@@ -38,6 +38,16 @@ function statusForCode(code: string): number {
     // both map to 403; fail-closed with no extra info leakage.
     case "CROSS_ORG_INVITE_DENIED":
     case "AI_AGENT_NOT_ELIGIBLE_FOR_HIVE":
+    // Section 3 Wave 4 — governance_terms hard policy denials
+    // (ADR-0063 Sub-decision 5) all map to 403; safe message
+    // includes the failed term name (canonical vocabulary;
+    // non-sensitive) but never the full governance_terms
+    // object or cross-org facts.
+    case "GOVERNANCE_HIVE_TYPE_FORBIDDEN":
+    case "GOVERNANCE_INVITEE_TYPE_FORBIDDEN":
+    case "GOVERNANCE_MAX_MEMBER_COUNT_EXCEEDED":
+    case "GOVERNANCE_CAPSULE_TYPE_ACCESSIBLE_FORBIDDEN":
+    case "GOVERNANCE_CAPSULE_TYPE_CONTRIBUTED_FORBIDDEN":
       return 403;
     case "HIVE_NOT_FOUND":
     case "INVITEE_NOT_FOUND":
@@ -53,6 +63,11 @@ function statusForCode(code: string): number {
     // org_entity_id are request-shape violations → 422.
     case "INVALID_HIVE_TYPE_FOR_V1":
     case "ORG_ENTITY_ID_REQUIRED":
+    // Section 3 Wave 4 — malformed governance_terms is a
+    // configuration-state violation (operator broke the JSON
+    // object shape); 422 matches the existing config-shape
+    // pattern.
+    case "GOVERNANCE_TERMS_MALFORMED":
       return 422;
     default:
       return 400;
