@@ -15,7 +15,7 @@ same-org-scoped read-only aggregate projection at v1; cross-org
 hives + Twin-to-Twin proactive runtime are explicit non-goals
 deferred to forward-substrate.
 
-## Current status (PARTIAL — Waves 1+2 LIVE)
+## Current status (PARTIAL — Waves 1+2+3 LIVE)
 
 **Wave 1 (design)** — ADR-0059 LANDED 2026-05-30 (PR #85)
 locking v1 scope as same-org-scoped read-only aggregate
@@ -85,6 +85,68 @@ landings.** The 5 existing `HIVE_*` audit literals cover the
 Wave 2 surface as-is. `HiveFailure` union extended with
 4 new failure codes; `statusForCode` route-tier mapping
 extended.
+
+**Wave 3 (admin governance routes)** — LANDED 2026-05-30
+(ADR-0062 design + PR #91 implementation). 4 admin route
+surfaces follow the Section 4 connector admin route pattern
+verbatim:
+
+- **`GET /api/v1/org/hives`** — list with optional
+  `?status=ACTIVE|DISSOLVED` filter; same-org scoped via
+  `getOrgEntityId`; no pagination at v1 (measure-first per
+  ADR-0016); 422 `INVALID_FIELD` on unknown status. **The
+  prior `org.routes.ts:1270-1296` leaky route was replaced
+  in-place at the same URL** per ADR-0062 + RULE 13
+  substrate-honest finding — the prior route returned raw
+  `prisma.hive.findMany` rows including `governance_terms`
+  + `aggregate_capsule_id` (both forbidden fields per
+  ADR-0062 Sub-decision 2). BREAKING wire-shape change
+  (pagination response shape → flat list; raw row → SAFE
+  projection).
+- **`GET /api/v1/org/hives/:id`** — detail + safe member
+  roster; enumeration-safe 404 `HIVE_NOT_FOUND` for unknown
+  or cross-org id.
+- **`DELETE /api/v1/org/hives/:id`** — soft-archive flipping
+  `HiveStatus.DISSOLVED` per RULE 10; idempotent on
+  already-DISSOLVED (response carries `already_dissolved:
+  true` + `audit_event_id: null`; no new audit row).
+- **`DELETE /api/v1/org/hives/:id/member/:entityId`** —
+  admin force-remove via `MembershipStatus.REMOVED` +
+  member_count decrement; enumeration-safe 404
+  `MEMBERSHIP_NOT_FOUND` covers unknown + already-REMOVED;
+  AI_AGENT permitted at admin tier (cleanup surface for
+  ADR-0059 §3.c carve-out; invite-surface AI_AGENT
+  exclusion preserved).
+
+All 4 routes `preHandler: requireAdminCapability(authService,
+"can_admin_org")` + local `resolveOrgOrFail` helper
+(mirrors `connector.routes.ts:36-54` verbatim) returning
+404 `NO_ORG_FOR_CALLER` for orgless callers.
+
+**SAFE view projections** (`HiveListItemView`,
+`HiveAdminDetailView`, `HiveMembershipAdminView`) exclude
+`governance_terms` (Wave 4 forward-substrate),
+`aggregate_capsule_id` (internal pointer), raw
+`capsule_types_accessible`/`capsule_types_contributed`
+arrays (counts only; member-private signal preserved),
+raw capsule content / payload summaries / wallet internals
+/ permission internals / bridge IDs / secret refs /
+embeddings / storage locations / content hashes.
+
+**Audit emission** (zero new literals; ADR-0062 Sub-decision 5):
+- DELETE hive emits `ADMIN_ACTION` + `details.action:
+  "HIVE_DISSOLVED"` + safe metadata.
+- DELETE member emits existing `HIVE_MEMBER_REMOVED` +
+  `details.action: "HIVE_MEMBER_FORCE_REMOVED"` +
+  `details.actor_role: "ORG_ADMIN"` discriminators.
+- GET list + GET detail emit NO audit row (Section 4
+  precedent).
+
+Service substrate added (`hive.service.ts`): 4 admin
+methods (`listHivesForOrg`, `getHiveAdminDetail`,
+`dissolveHive`, `forceRemoveMember`) + `HiveAdminFailure`
+discriminated union + 3 success shapes + 3 inline
+projection helpers.
 
 ## What is live
 
@@ -162,12 +224,20 @@ separate Founder authorization:
   default-enterprise hives** — internal `tx.hiveMembership.create`
   direct insert at `twin.service.ts:296-326` bypasses
   `HiveService.inviteToHive` and is intentionally NOT modified
-  by Wave 2 per ADR-0059 §3.c forward-substrate disposition
-  (would cascade into twin-architecture refactor). Future
-  Section 5 / Section 11 slice under separate Founder
+  by Wave 2 or Wave 3 per ADR-0059 §3.c forward-substrate
+  disposition (would cascade into twin-architecture refactor).
+  Wave 3 admin force-remove provides the *cleanup* surface
+  for the carve-out (admin can now remove what createTwin
+  auto-joined) but does NOT close the carve-out itself.
+  Future Section 5 / Section 11 slice under separate Founder
   authorization.
-- **Hive admin routes** (org list / archive / dissolve / member
-  roster) — Wave 3; require `can_admin_org` gate.
+- **Member `capsule_types_*` value visibility at admin tier**
+  (counts-only at v1 per ADR-0062 Sub-decision 2; if product
+  requires value strings later, separate Founder authorization).
+- **Read-audit emission** for admin list/detail (if regulatory
+  regime mandates it; not at v1 per Section 4 precedent).
+- **Pagination on admin list** (if real orgs cross O(1000+)
+  hives; measure-first per ADR-0016).
 - **`governance_terms` policy evaluation** — Wave 4; requires
   canonical governance_terms schema + Founder product decision.
 - **Phoenix.PubSub fanout for hive aggregate updates** — Wave 5
@@ -223,6 +293,8 @@ separate Founder authorization:
 | (pre-Section-12) | (legacy) | Hive + HiveMembership models + HiveService + hive.routes.ts + 5 HIVE_* audit literals landed in foundational substrate; not previously documented at this register |
 | `11ae5e5` (PR #85) | 2026-05-30 | Section 3 Wave 1 — ADR-0059 Hives v1 Design Boundary + substrate-honest doc correction |
 | `2b9ab7f` (PR #88) | 2026-05-30 | Section 3 Wave 2 — service-tier safety enforcement (TAR gate + v1 allowlist + non-null org_entity_id + same-org membership + AI_AGENT exclusion + capsule_types_accessible read-time enforcement; 4 new failure codes; +15 integration tests) |
+| `0886211` (PR #90) | 2026-05-30 | Section 3 Wave 3 — ADR-0062 admin routes design (4 admin route surfaces + safe roster projection + idempotent dissolve/force-remove + AI_AGENT force-remove permitted + ADMIN_ACTION + HIVE_MEMBER_REMOVED reuse) |
+| `9a348be` (PR #91) | 2026-05-30 | Section 3 Wave 3 — admin routes implementation (4 routes + 4 admin service methods + 3 SAFE view projections + HiveAdminFailure union + +20 integration tests; RULE 13 BREAKING-tightening of prior leaky `GET /api/v1/org/hives` route at org.routes.ts that returned raw rows with forbidden fields) |
 
 ## Next slices (per ADR-0059 §7 Forward Queue)
 
@@ -231,10 +303,8 @@ prompt; not autonomously executable:
 
 1. ~~**Wave 2 — service-tier safety enforcement**~~ — LANDED
    PR #88 2026-05-30.
-2. **Wave 3 — hive admin routes**: org list / archive /
-   dissolve / member roster admin surfaces; requires
-   `can_admin_org` gating + Section 4 connector admin route
-   pattern verbatim.
+2. ~~**Wave 3 — hive admin routes**~~ — LANDED ADR-0062
+   (PR #90) + implementation (PR #91) 2026-05-30.
 3. **Wave 4 — `governance_terms` canonical schema + policy
    evaluator**: requires Founder product decision on which
    governance terms are evaluable + how policy violations are

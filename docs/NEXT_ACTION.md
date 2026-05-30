@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `2b9ab7f` (Section 3 Wave 2 — Hives service-tier safety enforcement)
-- **Latest merged PR:** [#88](https://github.com/NiovArchitect/niov-foundation/pull/88) — Add Section 3 Wave 2 — Hives service-tier safety enforcement.
-- **Active branch / PR:** `section-3-wave-2-docs-closeout` (Wave 2 docs cascade; design-only).
-- **Active production section:** Section 3 Wave 2 docs closeout. All 5 ADR-0059 §7 Founder Authorization checkpoints landed; Section 3 is now PARTIAL with Waves 1+2 LIVE. Waves 3-8+ remain forward-substrate behind separate Founder authorization.
+- **Main HEAD:** `9a348be` (Section 3 Wave 3 — Hive admin routes implementation)
+- **Latest merged PR:** [#91](https://github.com/NiovArchitect/niov-foundation/pull/91) — Add Section 3 Wave 3 — Hive admin routes implementation.
+- **Active branch / PR:** `section-3-wave-3-docs-closeout` (Wave 3 docs cascade; design-only).
+- **Active production section:** Section 3 Wave 3 docs closeout. ADR-0062 design + implementation both LIVE; Section 3 is now PARTIAL with Waves 1+2+3 LIVE. ADR-0059 §Forward queue Wave 3 reservation now CLOSED. Waves 4-8+ remain forward-substrate behind separate Founder authorization.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,29 +25,29 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 3 Wave 2 LANDED (service-tier safety enforcement; PR #88)
+## Section 3 Wave 3 LANDED (admin routes design + implementation; PRs #90 + #91)
 
-All 5 ADR-0059 §7 Founder Authorization checkpoints landed in one coherent BREAKING-tightening commit per Founder Sleep Directive Wave 2 authorization:
+ADR-0062 (PR #90) + implementation (PR #91) landed per Founder Wave 3 authorization. 4 admin route surfaces following Section 4 connector admin pattern verbatim:
 
-- **TAR `can_create_hives` gate** on POST /api/v1/hive — `validateSession` op switched from `"share"` to `"create_hives"`; absent capability → 403 `OPERATION_NOT_PERMITTED`.
-- **v1 hive_type allowlist** — `HIVE_TYPE_V1_ALLOWLIST` frozen-anchor (ENTERPRISE + PERSONAL_NETWORK only); CROSS_ORG/DEVICE/GOVERNMENT rejected → 422 `INVALID_HIVE_TYPE_FOR_V1`.
-- **Non-null `org_entity_id` required at create** — explicit null rejected; undefined derived via `getOrgEntityId(callerEntityId)`; orgless → 422 `ORG_ENTITY_ID_REQUIRED`.
-- **Same-org membership check on `inviteToHive`** — cross-org → 403 `CROSS_ORG_INVITE_DENIED` with no-info-leak message scrub (mirrors Wave 11 `notification.service.ts:99-109`); RULE 0 enforcement.
-- **AI_AGENT exclusion on `inviteToHive`** — invitee `entity_type === "AI_AGENT"` → 403 `AI_AGENT_NOT_ELIGIBLE_FOR_HIVE` per ADR-0046 + RULE 0 AI ceilings.
-- **`capsule_types_accessible` read-time enforcement on `getHiveIntelligence`** — empty access list → safe zero-state (`intelligence: null`) + `HIVE_INTELLIGENCE_READ` audit with `details.zero_state_reason = "EMPTY_CAPSULE_TYPES_ACCESSIBLE"`.
+- **`GET /api/v1/org/hives`** — list with optional `?status=ACTIVE|DISSOLVED` filter; same-org scoped; no pagination at v1; 422 INVALID_FIELD on unknown status.
+- **`GET /api/v1/org/hives/:id`** — detail + safe member roster; enumeration-safe 404 HIVE_NOT_FOUND for unknown/cross-org id.
+- **`DELETE /api/v1/org/hives/:id`** — soft-archive via `HiveStatus.DISSOLVED` (RULE 10); idempotent on already-dissolved (no new audit row; `already_dissolved: true` flag).
+- **`DELETE /api/v1/org/hives/:id/member/:entityId`** — admin force-remove via `MembershipStatus.REMOVED` + member_count decrement; enumeration-safe 404 covers unknown + already-REMOVED; AI_AGENT permitted at admin tier per ADR-0062 Sub-decision 4 (cleanup surface for ADR-0059 §3.c carve-out).
 
-4 new failure codes; +15 integration tests; **no new audit literals**; no schema migration. Per ADR-0059 §3.c forward-substrate carve-out: `createTwin` standard-branch auto-join of AI_AGENT twins into default-enterprise Hives via internal `tx.hiveMembership.create` is intentionally NOT touched (would cascade-break twin-architecture); future Section 5 / Section 11 slice under separate Founder authorization.
+All 4 routes `preHandler: requireAdminCapability(authService, "can_admin_org")` + local `resolveOrgOrFail` helper. SAFE projections exclude `governance_terms` + `aggregate_capsule_id` + raw `capsule_types_*` arrays (counts only). Zero new audit literals (ADMIN_ACTION + HIVE_DISSOLVED + HIVE_MEMBER_FORCE_REMOVED discriminators). +20 integration tests.
 
-Earlier waves on main: Section 6 Wave 1 ADR-0061 + Section 5 Wave 1 ADR-0060 (#86) + Section 3 Wave 1 ADR-0059 (#85) + Section 1 Wave 3 (#82/83/84) + Section 4 Wave 7 (#80) + Hardening A/B/C/D (#76/77/78/79). Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
+**RULE 13 substrate-honest finding inline**: prior `GET /api/v1/org/hives` at `org.routes.ts:1270-1296` was UNTESTED and LEAKED forbidden fields (`governance_terms`, `aggregate_capsule_id`); replaced in-place at the same URL with the SAFE-projection ADR-0062 version. BREAKING wire-shape change (pagination → flat list; raw row → SAFE projection). Consistent with Wave 2 BREAKING-tightening precedent.
+
+Earlier waves on main: Section 3 Waves 1+2 (#85/#88/#89) + Section 6 Wave 1 ADR-0061 + Section 5 Wave 1 ADR-0060 (#86) + Section 1 Wave 3 (#82/83/84) + Section 4 Wave 7 (#80) + Hardening A/B/C/D. Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
 
 ## Founder Sleep Directive preferences — status
 
-  1. ~~Section 3 Hives~~ — Wave 1 ADR-0059 (#85) + Wave 2 enforcement (#88) LANDED. Wave 3 admin routes need Founder authorization.
+  1. ~~Section 3 Hives~~ — Wave 1 ADR-0059 (#85) + Wave 2 enforcement (#88) + Wave 3 admin routes (#90+#91) LANDED. Wave 4 governance_terms evaluator needs Founder product decision.
   2. ~~Section 9 Admin/Governance~~ — substantively complete per Hardening Wave C; AI-generated exec summaries = Founder product decision per ADR-0052.
   3. ~~Section 5 Agent Playground~~ — ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
   4. ~~Section 6 Enterprise Analytics~~ — ADR-0061 LANDED; Wave 2 = Founder Authorization (5 checkpoints).
 
-**Remaining work hits real stop conditions** (per Founder-listed criteria): Section 1 advanced drift signals + Section 3 Wave 3+ + Section 4 SDK-bound connectors + encrypted-at-rest secrets + Section 5/6 Wave 2 + Section 7 cross-chain verify-chain + Section 8 (Founder-excluded) + Section 10 GOVSEC.6–10 (RULE 20-gated per phase).
+**Remaining work hits real stop conditions** (per Founder-listed criteria): Section 1 advanced drift signals + Section 3 Wave 4+ (governance_terms + PubSub + Broadway + weighting + Twin-to-Twin) + Section 4 SDK-bound connectors + encrypted-at-rest secrets + Section 5/6 Wave 2 + Section 7 cross-chain verify-chain + Section 8 (Founder-excluded) + Section 10 GOVSEC.6–10 (RULE 20-gated per phase).
 
 **Earlier waves + section detail:** [`current-build-state/`](current-build-state/) (Section 1 / Section 2 / Section 4 / Section 7 / Section 9 detail files).
 
