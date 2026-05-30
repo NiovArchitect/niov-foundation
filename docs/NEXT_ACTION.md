@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `056c7c7` (Section 3 Wave 5 v1 — Hive Events producer substrate)
-- **Latest merged PR:** [#97](https://github.com/NiovArchitect/niov-foundation/pull/97) — Add Section 3 Wave 5 v1 — Hive Events producer substrate.
-- **Active branch / PR:** `section-3-wave-5-docs-closeout` (Wave 5 docs cascade; design-only).
-- **Active production section:** Section 3 Wave 5 docs closeout. ADR-0064 design + producer implementation both LIVE; Section 3 is now PARTIAL with Waves 1+2+3+4+5 LIVE. ADR-0059 §Forward queue Wave 5 + ADR-0039 §Forward queue entry #28 producer halves both CLOSED. Consumer half + cross-language BEAM bridge + Broadway + Wave 4 Layer 2/3 + Waves 6-8+ remain forward-substrate.
+- **Main HEAD:** `5c2308f` (Section 3 Wave 5 docs closeout; final closeout PR pending)
+- **Latest merged PR:** [#98](https://github.com/NiovArchitect/niov-foundation/pull/98) — Close out Section 3 Wave 5 — Hive Events producer docs.
+- **Active branch / PR:** `section-3-final-closeout-docs` (Section 3 final closeout docs wave; design-only).
+- **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope** (final closeout 2026-05-30 per Founder closeout-audit authorization). 5-wave arc complete: 8 live routes + 10 HiveService methods + governance evaluator + Hive Events producer spine + 82 test cases + zero schema migrations + zero new audit literals + RULE 0 same-org sovereignty + no-leak protections. Forward-substrate items canonicalized at ADR-0059/0062/0063/0064 forward queues.
 - **Live `ACTION_*` emitters:** 10 of 10.
 - **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
@@ -25,27 +25,21 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 3 Wave 5 LANDED (Hive Events producer substrate; PRs #96 + #97)
+## Section 3 CLOSED — production-grade complete for v1 same-org Foundation backend scope
 
-ADR-0064 design (PR #96) + producer implementation (PR #97) landed per Founder Wave 5 authorization. NEW pure-substrate module at `apps/api/src/services/hive/hive-events.ts` ships the Foundation TypeScript internal event spine; **producer-only at v1** (no live consumers).
+5-wave arc complete (PRs #85, #88/#89, #90/#91/#92, #93/#94/#95, #96/#97/#98): 8 live routes + 10 HiveService methods + Wave 4 governance evaluator (9 of 10 v1 terms wired) + Wave 5 Hive Events producer spine (5 closed-vocab events; same-org topics; SAFE projection; fire-and-forget; single-node-safe; dormant at server.ts pending consumer) + 82 Section-3-specific test cases. Zero schema migrations + zero new audit literals across all 5 waves. RULE 0 same-org sovereignty enforced at 6 distinct points; no-leak protections at 6 distinct surfaces.
 
-**Substrate-honest framing**: "Phoenix.PubSub" in the wave title refers to the *eventual cross-language consumer-side substrate* at `dbgi_supervisor`; v1 ships the TS-side producer abstraction via Node `node:events.EventEmitter` (standard library; no new external dep; **RULE 21 does NOT fire at v1**).
+**Important scope wording**: closes the **Foundation backend substrate for v1 same-org Hives** — NOT all future Hives/Team Intelligence product work. Future capabilities continue as forward-substrate behind separate Founder authorization per ADR-0059/0062/0063/0064 forward queues (`require_admin_approval_for_invites` + `HIVE_GOVERNANCE_ZERO_STATE` + default HiveEventBus instantiation + Layer 2 enterprise registry + Layer 3 external source feeds + BEAM bridge + Broadway + hive weighting + Twin-to-Twin + Otzar Twin subscription + Control Tower WebSocket + Section 4 connector fan-out + cross-org Hives + AI summaries + createTwin carve-out resolution).
 
-5 closed-vocabulary v1 events at 6 producer call sites: `HIVE_CREATED` (createHive) / `HIVE_MEMBER_ADDED` (inviteToHive) / `HIVE_MEMBER_REMOVED` (removeMember + Wave 3 forceRemoveMember; `source_action` discriminates) / `HIVE_DISSOLVED` (Wave 3 dissolveHive; NOT on idempotent already-DISSOLVED path) / `HIVE_AGGREGATE_BUILT` (buildHiveAggregate). `HIVE_GOVERNANCE_ZERO_STATE` named in ADR-0064 vocabulary but DEFERRED at v1 wiring per Founder "only if safe and not noisy".
+Earlier waves on main: Section 6 Wave 1 ADR-0061 + Section 5 Wave 1 ADR-0060 (#86) + Section 1 Wave 3 (#82/83/84) + Section 4 Wave 7 (#80) + Hardening A/B/C/D. Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
 
-Same-org-scoped two-topic publish: `foundation:hives:org:{org_entity_id}` + `foundation:hives:hive:{hive_id}`. `org_entity_id` derived from Hive row, never caller context. Cross-org topics forbidden by construction per ADR-0059 §1 RULE 0.
+## Recommended next production section
 
-SAFE payload projection (`HiveEventEnvelope` interface; forbidden fields enforced by type construction — `governance_terms` object NEVER serialized; verified with secret-marker integration tests).
-
-HiveService constructor extended with optional 4th `eventBus` arg (backward-compat with all Wave 2/3/4 fixtures). Fire-and-forget delivery; handler failures swallowed silently. Single-node-safe at v1; multi-node delivery NOT claimed. `server.ts` intentionally not modified at this slice (substrate wired but dormant pending future consumer).
-
-Zero new audit literals. Zero schema migration. +13 Wave 5 integration tests; Wave 2/3/4 regressions preserved. TypeScript baseline 4 canonical residuals preserved.
-
-Earlier waves on main: Section 3 Waves 1+2+3+4 (#85/#88/#89/#90/#91/#92/#93/#94/#95) + Section 6 Wave 1 ADR-0061 + Section 5 Wave 1 ADR-0060 (#86) + Section 1 Wave 3 (#82/83/84) + Section 4 Wave 7 (#80) + Hardening A/B/C/D. Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
+**Section 5 Wave 2 — Agent Playground implementation** per ADR-0060 §7 (4 Founder Authorization checkpoints). Rationale: design ADR already landed (#86); implementation well-scoped (3 read-only sandbox-only self-scoped operator inspector contracts — policy-evaluator tester / connector dry-run / working-set inspector); reuses existing Section 4 `FixtureBasedConnectorProvider` + COE `assembleContext`; zero schema; zero new audit literals at design tier. Alternatives: Section 6 Wave 2 first concrete aggregate (ADR-0061 §8 5 checkpoints; substrate-derivable e.g. org-wide CORRECTION velocity 7d); Section 1 Wave 4+ advanced drift signals (ADR-0058 §9; each signal own slice).
 
 ## Founder Sleep Directive preferences — status
 
-  1. ~~Section 3 Hives~~ — Waves 1+2+3+4+5 LANDED (#85, #88, #90/#91, #93/#94, #96/#97). Wave 4 Layer 2/3 + Wave 5 consumer half (BEAM bridge + Broadway + Otzar Twin + Control Tower WebSocket + Section 4 connector fan-out) forward-substrate per ADR-0064 + ADR-0063.
+  1. ~~Section 3 Hives~~ — **CLOSED 2026-05-30 production-grade complete for v1 same-org Foundation backend scope.**
   2. ~~Section 9 Admin/Governance~~ — substantively complete per Hardening Wave C; AI-generated exec summaries = Founder product decision per ADR-0052.
   3. ~~Section 5 Agent Playground~~ — ADR-0060 LANDED (#86); Wave 2 = Founder Authorization (4 checkpoints).
   4. ~~Section 6 Enterprise Analytics~~ — ADR-0061 LANDED; Wave 2 = Founder Authorization (5 checkpoints).

@@ -15,7 +15,106 @@ same-org-scoped read-only aggregate projection at v1; cross-org
 hives + Twin-to-Twin proactive runtime are explicit non-goals
 deferred to forward-substrate.
 
-## Current status (PARTIAL — Waves 1+2+3+4+5 LIVE)
+## Current status — PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope
+
+**Final closeout 2026-05-30.** Section 3 Foundation backend
+substrate for v1 same-org Hives / Team Intelligence is
+production-grade complete after the 5-wave arc closure
+(Waves 1+2+3+4+5 LIVE; closeout audit verified no remaining
+v1 backend blockers).
+
+**Important scope wording**: this does NOT mean all future
+Hives / Team Intelligence product work is complete. It means
+the **Foundation backend substrate for v1 same-org Hives** is
+production-grade complete. Future Hives / Team Intelligence
+product capabilities continue as forward-substrate behind
+separate Founder authorization at their respective slices.
+
+### Closeout summary
+
+- **8 live routes** — 4 public product surface
+  (`hive.routes.ts`) + 4 admin governance surface
+  (`hive-admin.routes.ts`).
+- **10 HiveService methods** — 6 public (`createHive`,
+  `findDefaultEnterpriseHive`, `inviteToHive`,
+  `removeMember`, `getHiveIntelligence`,
+  `buildHiveAggregate`) + 4 admin (`listHivesForOrg`,
+  `getHiveAdminDetail`, `dissolveHive`,
+  `forceRemoveMember`).
+- **Wave 4 governance evaluator** — pure-function
+  `governance-terms-evaluator.ts` with 9 of 10 v1 terms
+  wired (`require_admin_approval_for_invites` deferred
+  pending future admin invite path).
+- **Wave 5 Hive Events producer spine** — `hive-events.ts`
+  with `HiveEventBus` publishing 5 closed-vocab events on
+  same-org-scoped topics; SAFE payload projection
+  enforced by type construction; substrate wired but
+  dormant at `server.ts` pending first live consumer
+  slice.
+- **82 Section-3-specific test cases** (14 unit + 15
+  Wave 2 + 20 Wave 3 + 20 Wave 4 + 13 Wave 5) all green;
+  cross-section regressions (dandelion + feedback Loop 4)
+  green.
+- **Zero schema migrations** across all 5 waves.
+- **Zero new audit literals** across all 5 waves; 5
+  pre-existing HIVE_* literals + ADMIN_ACTION
+  discriminator pattern cover the full surface.
+- **RULE 0 same-org sovereignty** enforced at 6 distinct
+  enforcement points (createHive org_entity_id /
+  inviteToHive same-org membership / hive_type allowlist /
+  AI_AGENT exclusion / admin route `resolveOrgOrFail` /
+  Wave 5 topic-schema construction).
+- **No-leak protections** enforced at 6 distinct surfaces
+  (Wave 2 message scrub / Wave 3 SAFE view projections /
+  Wave 4 governance error messages / Wave 4 zero-state
+  audit / Wave 5 typed envelope / Wave 5 cross-org topic
+  isolation); each verified with wire-level
+  substring/secret-marker integration tests.
+- **TypeScript baseline** preserved at exactly 4
+  canonical residuals.
+
+### Closeout milestone PRs
+
+| PR | Wave | Commit |
+|---|---|---|
+| #85 | Wave 1 ADR-0059 design + substrate-honest correction | `11ae5e5` |
+| #88 / #89 | Wave 2 service-tier safety enforcement + docs | `2b9ab7f` / `084e637` |
+| #90 / #91 / #92 | Wave 3 admin routes design + impl + docs | `0886211` / `9a348be` / `d98dc9f` |
+| #93 / #94 / #95 | Wave 4 governance_terms evaluator design + impl + docs | `ebc56c5` / `065e4f1` / `548539c` |
+| #96 / #97 / #98 | Wave 5 Hive Events producer design + impl + docs | `2a241f1` / `056c7c7` / `5c2308f` |
+
+### Forward-substrate (NOT in v1 production scope)
+
+Each item is forward-substrate per ADR-0059 / ADR-0062 /
+ADR-0063 / ADR-0064 forward queues; requires separate
+Founder authorization at its slice:
+
+- `require_admin_approval_for_invites` Wave 4 term —
+  paired with future admin invite path.
+- `HIVE_GOVERNANCE_ZERO_STATE` Wave 5 event — paired with
+  future consumer use case.
+- Default `HiveEventBus` instantiation at `server.ts` —
+  paired with first live consumer slice.
+- Wave 4 Layer 2 enterprise governance policy registry
+  (`OrgGovernancePolicy` model).
+- Wave 4 Layer 3 external governance source feeds
+  (`GovernanceSource` + version + review-item models;
+  monthly/quarterly default cadence; 7-step lifecycle).
+- BEAM bridge / Phoenix.PubSub consumer half
+  (cross-language; RULE 21 fires at slice).
+- Broadway guaranteed delivery (Wave 6).
+- Hive weighting algorithm (Wave 7).
+- Twin-to-Twin proactive runtime (Wave 8+ per ADR-0052 §8).
+- Otzar Twin subscription.
+- Control Tower WebSocket bridge (frontend; lives in
+  `otzar-control-tower`).
+- Section 4 connector fan-out bridge.
+- Cross-org Hives.
+- AI-generated executive summaries (Founder product
+  decision).
+- `createTwin` standard-branch AI_AGENT carve-out
+  resolution (ADR-0059 §3.c; twin-architecture cascade
+  cost).
 
 **Wave 1 (design)** — ADR-0059 LANDED 2026-05-30 (PR #85)
 locking v1 scope as same-org-scoped read-only aggregate
