@@ -9,50 +9,40 @@
 
 ## Where we are
 
-- **Main HEAD:** `6bd0b70` (Section 1 Wave 4C cross-conversation drift rollup; closeout docs PR pending)
-- **Latest merged PR:** [#109](https://github.com/NiovArchitect/niov-foundation/pull/109) — Section 1 Wave 4C cross-conversation drift rollup.
-- **Active branch / PR:** `section-1-closeout-docs` (Section 1 drift-detection arc closeout docs; design-only).
-- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 Foundation drift-detection backend scope** — 3 live drift-signal routes (Wave 3 per-conversation + Wave 4A wallet stale-context + Wave 4C cross-conversation rollup); 38 integration tests; zero schema migration; zero new audit literals. Wave 4B SKIPPED per RULE 13 (POLICY_DRIFT producer not in substrate).
+- **Main HEAD:** `a2988ee` (Section 5 Wave 4 persistent named scenarios; closeout docs PR pending)
+- **Latest merged PR:** [#111](https://github.com/NiovArchitect/niov-foundation/pull/111) — Section 5 Wave 4 persistent named scenarios + safe CRUD.
+- **Active branch / PR:** `section-5-wave-4-closeout-docs` (Wave 4 closeout docs; design-only).
+- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 Foundation drift-detection backend scope** — 3 live drift-signal routes; 38 integration tests; zero schema migration; zero new audit literals. Wave 4B SKIPPED per RULE 13.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) — 4-aggregate arc closure.
-- **Section 5 status: PARTIAL with Waves 1+2+3 LIVE** (Wave 1 ADR-0060 + Wave 2 inspector + Wave 3 ADR-0065 product-vision).
+- **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + `PlaygroundScenarioService` + 38 integration tests; ADMIN_ACTION + details.action discriminator audit; zero new audit literal; soft-archive per RULE 10; same-org enforcement when `org_entity_id` non-null; SAFE persistence layer for future Wave 5+ scenario engine.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope**.
-- **Live `ACTION_*` emitters:** 10 of 10.
-- **Real per-`ActionType` handlers:** **3 of 3 LIVE** (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION). Wave 11 closed the "2 of 3" gap with Founder-direction-locked internal-only delivery; external providers remain forward-substrate as optional adapters.
+- **Live `ACTION_*` emitters:** 10 of 10. **Real per-`ActionType` handlers:** 3 of 3 LIVE.
 - **Cancel surface:** non-RUNNING (any caller) + RUNNING (caller with valid GOVSEC.5 break-glass grant; ADR-0050).
-- **Read surface:** create, cancel, GET viewer, GET list, GET attempt detail — full Action Inbox + Detail + Attempt drilldown.
-- **Operator-tunable runtime knobs:** `ActionPolicy.retry_budget` + `ActionPolicy.attempt_timeout_ms_override` LIVE per PR #47; the `PUT /api/v1/org/action-policies` admin write-path accepts both fields per PR #49 (dual-control gated; null clears; positive int sets; 0/negative/float/string rejected 422; audit captures `_set` boolean flags, never the numeric values). Resolved per-attempt timeout persists onto `ActionAttempt.timeout_ms` for forensic visibility, projected on `GET /api/v1/org/action-policies` (list) + `GET /api/v1/actions/:id/attempts/:attempt_id` (attempt detail, per PR #51) — forensic-visibility loop CLOSED end-to-end.
+- **Operator-tunable runtime knobs:** `ActionPolicy.retry_budget` + `attempt_timeout_ms_override` LIVE; forensic-visibility loop CLOSED end-to-end.
 - **TypeScript baseline:** exactly 4 canonical residual errors.
-- **Repo visibility:** PUBLIC. Branch protection: 4 required canonical CI checks + force-push blocked + admin-enforced + secret scanning + push protection + dependabot updates enabled. Required-review count: 0 (solo-developer pragmatic; see PR #41 merge notes).
+- **Repo visibility:** PUBLIC. Branch protection: 4 required canonical CI checks + force-push blocked + admin-enforced + secret scanning + push protection + dependabot updates enabled. Required-review count: 0 (solo-developer pragmatic).
 
 ## Exact next action
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
-## Section 1 PRODUCTION-GRADE COMPLETE — Otzar drift detection (3-signal arc; v1)
+## Section 5 Wave 4 LANDED — Agent Playground persistent named scenarios (PR #111)
 
-Wave 3 per-conversation drift + Wave 4A wallet-level stale-context (PR #108) + Wave 4C cross-conversation rollup (PR #109). All self-scoped + closed-vocab + locked coaching/boundary copy explicitly disclaiming surveillance framing; bearer + "read" only; ADMIN_ACTION + DRIFT_SIGNAL_READ audit + source_signal discriminator (zero new audit literals); zero schema migration; 38 integration tests. Wave 4B SKIPPED per RULE 13 (POLICY_DRIFT producer not in substrate). **Scope wording**: closes the Foundation backend drift-detection substrate for v1 self-scoped coaching loop — forward-substrate: IntelligencePattern auto-write + operator-tunable thresholds + drift digest connector fan-out + Control Tower drift UX + role-scope-conflict.
+`PlaygroundScenario` Prisma model + 5 owner-first CRUD routes on `/api/v1/playground/scenarios` (POST/GET list + GET/PUT/DELETE detail). `PlaygroundScenarioService` (5 methods; bearer + "read" scope). 38 integration tests. **SAFE persistence layer** for the future Wave 5+ candidate-generation, Wave 6 outcome-comparison, Wave 7 best-path-recommender, and Wave 8 governed-transition substrate.
 
-## Section 6 PRODUCTION-GRADE COMPLETE — Enterprise Analytics (4-aggregate arc; v1)
+**Wave 4 implements NO** execution / LLM / multi-agent / external provider / Action creation / connector invocation / MemoryCapsule / OtzarConversation / live side effects — all remain forward-substrate per ADR-0065 §7.
 
-ADR-0061 Wave 1 design + Waves 2/3/4/5 implementations landed 2026-05-30. 4 live aggregates: CORRECTION velocity 7d (#103); action-runtime success rate (#104); connector activity (#105); hive participation (#106). All SAFE-projected; same-org sovereignty by construction; k=5 HIPAA Safe Harbor floor universal; `can_admin_org` gate universal; `ADMIN_ACTION + ANALYTICS_READ` audit universal; 55 integration tests; zero schema/audit-literal/external-dep impact.
+**Closed-vocab fields**: `status` ∈ DRAFT|READY|ARCHIVED; `scenario_type` ∈ MANUAL|FIXTURE|FUTURE_GENERATED. String-not-enum per ADR-0065 §7 Wave 4 + Hive/MemoryCapsule precedent. **Owner-first self-scope** (RULE 0); same-org enforcement when `org_entity_id` non-null; cross-owner/cross-org/unknown id all fold to enumeration-safe 404 `SCENARIO_NOT_FOUND`. **Forbidden-field rejection on PUT** (owner_entity_id / org_entity_id / scenario_id / created_at / updated_at / archived_at). **Soft-archive per RULE 10** (DELETE sets status=ARCHIVED + archived_at; idempotent on already-archived). **ADMIN_ACTION + details.action discriminator audit** (PLAYGROUND_SCENARIO_CREATED/UPDATED/ARCHIVED); ZERO new audit literal; safe details only (no title/description text; no raw Json payloads). **Schema migration via `npm run db:push:test`** per ADR-0025.
 
-**Scope wording**: closes the Foundation backend analytics substrate for v1 same-org admin reads — NOT all future analytics product work. Forward-substrate (each its own slice + separate Founder authorization): additional aggregates + persistent projections + operator-tunable per-org threshold + cross-org analytics + differential privacy + AI-generated exec summaries + Control Tower frontend + real-time streaming + compliance-framework-specific aggregates. Foundation-strategic-context coherent (generic Entity model preserved; no blockchain/payment surface; no surveillance framing).
-
-## Section 5 Wave 3 LANDED — Agent Playground long-term product-vision ADR (ADR-0065)
-
-NEW ADR-0065 sits ABOVE ADR-0060 at the product-vision tier; canonicalizes the long-term Agent Playground vision verbatim while preserving ADR-0060 as the canonical Wave 2 implementation contract.
-
-**Canonical product vision** (ADR-0065 §1): *"Agent Playground is the enterprise simulation and decision-testing environment where Otzar's AI teammates can explore possible strategies, compare outcomes, and recommend the best governed path before real execution."* DGI substrate for the enterprise domain (NOT a toy sandbox); multi-agent scenario exploration; alternative plan comparison; outcome comparison; best-path recommendation; governed transition to Action runtime.
-
-**12 sub-decisions canonical**: §2 13-input set (org goals + role-scoped context + working sets + policy/governance_terms + connector capabilities + Hive/team context + audit signals + analytics + corrections/drift + memory capsules + dependency/blocker/cost/timing/risk/impact); §3 10-output set (scenario candidates + best path + reasons/evidence + tradeoffs + risk flags + governance findings + dependency map + outcomes + approvals + proposed Action plan); §4 human-in-the-loop (Playground NEVER silently executes; transition MUST go through Section 2 Action runtime + policy + approvals + audit); §5 universal safety / no-leak doctrine (forbidden: employee surveillance / org scoring / spy surfaces / psychological scoring / transcripts / chain-of-thought / prompts / raw memory unless scoped + projected / embeddings / cross-org / live external side effects / autonomous execution); §6 Wave 2 inspector foundation relation; §7 canonical 10-wave forward map (Wave 4 persistent named scenarios + Wave 5 candidate generation + Wave 6 outcome comparison + Wave 7 best-path recommender + Wave 8 governed transition + Wave 9 multi-agent orchestration + Wave 10 Control Tower frontend); §9 canonical naming + scope clarity; §11 patent-implementation evidence at US 12,517,919 + US 12,164,537 + US 12,399,904; §12 RULE 0 + no-leak universal.
-
-ADR-0060 §Forward queue amended in-place with bidirectional back-citation per RULE 14.
-
-Earlier waves on main: Section 3 Waves 1-5 + closeout (#85-#99); Section 5 Wave 2 (#100/#101); Section 6 Wave 1 ADR-0061; Section 1 Wave 3 (#82/83/84); Section 4 Wave 7 (#80); Hardening A/B/C/D. Full lineage in [`CURRENT_BUILD_STATE.md`](CURRENT_BUILD_STATE.md).
+Section file: [`current-build-state/05-agent-playground.md`](current-build-state/05-agent-playground.md).
 
 ## Recommended next production section
 
-**Section 5 Wave 4 — first persistent-named-scenarios model** per ADR-0065 §7 wave map (needs schema; `PlaygroundScenario` model + CRUD routes via `db:push:test` per ADR-0025; same-org / self-scope at every gate; SAFE projection). **Alternatives**: Section 6 next aggregate per ADR-0061 §8 (per-hive participation breakdown / per-action-type runtime health / compliance-posture aggregate); Section 1 Wave 5+ (IntelligencePattern auto-write from recurring drift themes per ADR-0058 §"Forward queue" — needs schema + admin-review surface; operator-tunable drift thresholds — would require ADR-0058 amendment); Section 4 SDK-bound connectors (each adapter own QLOCK + RULE 21 research arc; OAuth + real credentials = Founder product decision per slice).
+**Section 5 Wave 5 — scenario candidate generation contract** per ADR-0065 §7 wave map. Likely fixture / deterministic first (operator enumerates candidates manually OR engine generates from a closed-vocab template library); **NO LLM autonomy unless separately Founder-authorized**. Contract: scenario input (an existing PlaygroundScenario row) → N scenario candidates per ADR-0065 §3 10-output set. The Wave 4 `PlaygroundScenario` substrate is the persistence target for the candidates.
+
+**Wave 5 stop conditions to surface for Founder before implementation**: (1) candidate storage model (extend PlaygroundScenario with a `candidates` Json column, OR add NEW `PlaygroundScenarioCandidate` model — schema-bearing); (2) candidate generation source (fixture template library vs LLM-backed — LLM autonomy is a Founder product decision); (3) audit literal vocabulary (CANDIDATE_GENERATED-style discriminator under ADMIN_ACTION vs NEW literal); (4) closed-vocab tradeoff/risk/dependency labels (Wave 6 substrate but Wave 5 emits the first labels).
+
+**Alternatives**: Section 1 Wave 5+ (IntelligencePattern auto-write from recurring drift themes per ADR-0058 §"Forward queue" — needs schema + admin-review surface); Section 6 additional aggregates per ADR-0061 §8; Section 4 SDK-bound connectors (each adapter own QLOCK + RULE 21 research arc; OAuth + real credentials = Founder product decision per slice).
 
 ## Founder Sleep Directive preferences — status
 

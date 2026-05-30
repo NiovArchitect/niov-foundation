@@ -47,34 +47,172 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2 LIVE; first-substrate only)
+## Current status (PARTIAL — Waves 1+2+3+4 LIVE; persistence substrate landed)
 
-**Wave 1 ADR LANDED at ADR-0060** (2026-05-30; Founder Sleep
-Directive next-section preference #3). The Section 4
-prerequisite ("at least one reference handler") is satisfied
-by Wave 4 `OutboundWebhookProvider` (PR #73). ADR-0060 locks
-the v1 scope as a read-only sandbox-only self-scoped operator
+**Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
+scope locked: read-only sandbox-only self-scoped operator
 inspector surface.
 
 **Wave 2 implementation LANDED 2026-05-30 (PR #100)** —
 3 inspector contracts live behind 3 POST routes; all
 sandbox-only; all self-scoped; all read-only.
 
-**RULE 13 substrate-honest disclosure**: Wave 2 is the
-**first backend substrate / inspector foundation** for the
-long-term Agent Playground product vision (see Purpose). It
-is NOT the full Agent Playground product. The 3 v1 inspectors
-(policy-evaluator tester + connector dry-run + working-set
-inspector) provide the substrate-level primitives that
-future scenario-simulation waves will compose; the full
-multi-agent enterprise simulation / outcome-comparison /
-best-path recommender remains forward-substrate behind
-separate Founder authorization at each slice. ADR-0060's
-v1 scope is intentionally narrow at the inspector tier;
-future ADR amendment or new ADR may broaden the canonical
-product framing.
+**Wave 3 ADR-0065 LANDED 2026-05-30** — long-term Agent
+Playground product-vision ADR sitting ABOVE ADR-0060 at the
+product-vision tier; canonical 10-wave forward map; 13-input
+canonical set; 10-output canonical set; human-in-the-loop
+doctrine; universal safety / no-leak doctrine.
+
+**Wave 4 implementation LANDED 2026-05-30 (PR #111;
+commit `a2988ee`)** — `PlaygroundScenario` Prisma model +
+5 owner-first CRUD routes + `PlaygroundScenarioService` +
+38 integration tests. The first **persistent** Agent
+Playground substrate — SAFE persistence layer for the
+future candidate-generation (Wave 5), outcome-comparison
+(Wave 6), best-path-recommender (Wave 7), and
+governed-transition (Wave 8) substrate. Wave 4 itself
+implements NO execution / LLM / multi-agent / external
+provider calls / Action creation / connector invocation /
+MemoryCapsule creation / OtzarConversation creation / live
+side effects. ADMIN_ACTION + details.action discriminator
+audit on persistence boundaries (CREATED / UPDATED /
+ARCHIVED); ZERO new audit literal. Schema migration via
+`npm run db:push:test` per ADR-0025.
+
+**RULE 13 substrate-honest disclosure**: Waves 2+4 together
+constitute the **first backend substrate / inspector
+foundation + persistence layer** for the long-term Agent
+Playground product vision (see Purpose). They do NOT
+constitute the full Agent Playground product. The 3 Wave 2
+inspectors (policy-evaluator tester + connector dry-run +
+working-set inspector) provide the substrate-level
+primitives; Wave 4 provides the persistence layer for
+named scenarios that future scenario-simulation waves will
+hydrate, compare, and recommend against. The full
+multi-agent enterprise simulation / candidate generation /
+outcome-comparison / best-path recommender / governed
+transition remains forward-substrate behind separate
+Founder authorization at each slice per ADR-0065 §7
+Waves 5-10.
 
 ## What is live
+
+### Wave 4 — persistent named scenarios (PR #111; `a2988ee`)
+
+**Prisma model** (`packages/database/prisma/schema.prisma`):
+
+```
+model PlaygroundScenario {
+  scenario_id          String    @id @default(uuid()) @db.Uuid
+  owner_entity_id      String    @db.Uuid
+  org_entity_id        String?   @db.Uuid
+  title                String
+  description          String?
+  goal_summary         String?
+  status               String    @default("DRAFT")
+  scenario_type        String    @default("MANUAL")
+  input_refs           Json      @default("{}")
+  constraints          Json      @default("{}")
+  expected_outputs     Json      @default("{}")
+  governance_findings  Json      @default("{}")
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  archived_at          DateTime?
+
+  @@index([org_entity_id, owner_entity_id, status])
+  @@index([owner_entity_id, archived_at, created_at])
+  @@map("playground_scenarios")
+}
+```
+
+`status` ∈ `DRAFT | READY | ARCHIVED` (closed-vocab via
+service-tier validation). `scenario_type` ∈ `MANUAL | FIXTURE
+| FUTURE_GENERATED` (closed-vocab; `FUTURE_GENERATED`
+reserved for Wave 5 candidate generation). String columns
+chosen over Prisma enum per ADR-0065 §7 Wave 4 + Hive /
+MemoryCapsule String + service-validation precedent (no
+schema migration required when the closed-vocab set evolves).
+
+**5 Wave 4 routes** (`apps/api/src/routes/playground.routes.ts`):
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/v1/playground/scenarios` | POST | Create named scenario (201) |
+| `/api/v1/playground/scenarios?status&limit&include_archived` | GET | List caller's scenarios (default excludes ARCHIVED) |
+| `/api/v1/playground/scenarios/:id` | GET | Owner-only detail |
+| `/api/v1/playground/scenarios/:id` | PUT | Owner-only update (forbidden-field rejection) |
+| `/api/v1/playground/scenarios/:id` | DELETE | Owner-only soft-archive (status=ARCHIVED + archived_at; idempotent) |
+
+**PlaygroundScenarioService** (`apps/api/src/services/playground/playground-scenario.service.ts`):
+
+- 5 owner-first methods (`createScenario`, `listScenarios`,
+  `getScenario`, `updateScenario`, `archiveScenario`).
+- Bearer + `"read"` scope via `authService.validateSession`
+  (mirrors Wave 2 inspector pattern).
+- `owner_entity_id = session.entity_id` (RULE 0 self-scope).
+- `org_entity_id` resolved at create-time via
+  `getOrgEntityId()` with `NOT_IN_ANY_ORG` tolerated as null.
+- Cross-owner / cross-org / unknown id all fold to
+  `SCENARIO_NOT_FOUND` (enumeration-safe 404).
+- Forbidden-field rejection on PUT (`owner_entity_id` /
+  `org_entity_id` / `scenario_id` / `created_at` /
+  `updated_at` / `archived_at`) → 422 INVALID_REQUEST with
+  `invalid_fields` array.
+- Soft-archive only per RULE 10 — DELETE sets
+  `status="ARCHIVED" + archived_at = now`; row never
+  hard-deleted. Idempotent on already-archived (returns
+  `already_archived=true`; emits no new audit row, mirroring
+  the dissolveHive idempotent precedent).
+- 4 Json columns (`input_refs` / `constraints` /
+  `expected_outputs` / `governance_findings`) — object-only
+  inputs validated at the service tier (arrays / strings /
+  numbers / booleans / null rejected); default `{}`.
+- ZERO Action / ActionAttempt / Notification /
+  OtzarConversation / MemoryCapsule / ConnectorBinding row
+  ever created.
+
+**Audit posture** (ADR-0065 §10):
+
+- `ADMIN_ACTION` + `details.action` discriminator —
+  `PLAYGROUND_SCENARIO_CREATED` / `PLAYGROUND_SCENARIO_UPDATED`
+  / `PLAYGROUND_SCENARIO_ARCHIVED`.
+- **ZERO new audit literal.**
+- Safe details only: `action` + `scenario_id` +
+  `owner_entity_id` + `org_entity_id` + `status` +
+  `scenario_type`. **NO** `title` / `description` /
+  `goal_summary` text. **NO** raw `input_refs` /
+  `constraints` / `expected_outputs` / `governance_findings`
+  Json payloads.
+- ADR-0060 §2 audit non-goal preserved for the 3 Wave 2
+  inspector routes; Wave 4 emits on the persistence boundary
+  as ADR-0065 §10 explicitly approves.
+
+**Sandbox-only guarantees verified by 38 integration tests**
+(`tests/integration/playground-scenarios.test.ts`):
+
+- Auth enforcement on all 5 routes.
+- Create happy path + 4 validation failures + closed-vocab
+  acceptance + title trim.
+- List owner-scoped + ARCHIVED filter + include_archived +
+  invalid status query.
+- Detail owner-only + cross-owner 404 + unknown 404.
+- Update owner-only + forbidden-field rejection (6 fields) +
+  status-vocab + Json metadata verbatim.
+- Archive soft-delete + RULE 10 persistence proof +
+  idempotency + cross-owner 404.
+- No-leak (15 forbidden marker substrings absent from
+  create / list / detail wire responses).
+- ZERO Action / ActionAttempt / Notification /
+  OtzarConversation / MemoryCapsule / ConnectorBinding rows
+  created across the full CRUD cycle.
+- Audit emission (3 discriminators present + safe details
+  only + no title/description text + no new audit literal).
+
+`registerPlaygroundRoutes` signature extended to accept the
+second `PlaygroundScenarioService` instance; `server.ts`
+wiring updated.
+
+### Wave 2 — 3 sandbox-only inspector routes (PR #100; `fd35c62`)
 
 **3 v1 inspector routes** (`apps/api/src/routes/playground.routes.ts`):
 
@@ -199,18 +337,19 @@ authorization)**:
 - Playground operators see governed working-set construction
   but only for entities they are authorized to read.
 
-## Next slices (per ADR-0060 §Forward queue)
+## Next slices (per ADR-0065 §7 Wave map)
 
 1. ~~**Wave 2 — service-tier implementation**~~ — LANDED
    PR #100 2026-05-30.
 2. ~~**Wave 3 — long-term product-vision ADR**~~ — LANDED
    2026-05-30 at ADR-0065 (new ADR sitting ABOVE
    ADR-0060 at product-vision tier).
-3. **Wave 4 — persistent named scenarios model + safe
-   CRUD** (if schema-approved). Add `PlaygroundScenario`
-   Prisma model + CRUD routes; RULE 13 + ADR-0025
-   schema-push-target discipline; SAFE projection at
-   every read; same-org / self-scope at every gate.
+3. ~~**Wave 4 — persistent named scenarios model + safe
+   CRUD**~~ — LANDED PR #111 2026-05-30 (`a2988ee`).
+   `PlaygroundScenario` Prisma model + 5 owner-first CRUD
+   routes + `PlaygroundScenarioService` + 38 integration
+   tests; ADMIN_ACTION + details.action discriminator
+   audit; no new audit literal; soft-archive per RULE 10.
 4. **Wave 5 — scenario candidate generation contract**.
    Likely fixture / deterministic first; NO LLM autonomy
    unless separately Founder-authorized.
