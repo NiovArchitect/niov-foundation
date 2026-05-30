@@ -90,6 +90,12 @@ const VALID_ACTION_TYPES = new Set<string>([
   "RECORD_CAPSULE",
   "PROPOSE_PERMISSION_GRANT",
   "SEND_INTERNAL_NOTIFICATION",
+  // Section 4 Wave 3 — invoke a registered ConnectorBinding through
+  // the Action runtime. Risk tier MEDIUM (it touches external
+  // boundary-of-trust resources once Wave 4's real OutboundWebhookProvider
+  // lands; staying MEDIUM rather than LOW makes per-org policy
+  // tighten-down available without a future schema change).
+  "INVOKE_CONNECTOR",
 ]);
 
 // WHAT: Constant-per-action-type risk_tier map per Q1 LOCK.
@@ -102,6 +108,16 @@ const RISK_TIER_FOR_ACTION_TYPE: Readonly<Record<string, ActionRiskTier>> = {
   RECORD_CAPSULE: "LOW",
   PROPOSE_PERMISSION_GRANT: "MEDIUM",
   SEND_INTERNAL_NOTIFICATION: "LOW",
+  // Section 4 Wave 3 — LOW risk tier. The dual-control gate lives at
+  // binding REGISTRATION (Wave 2 can_admin_org + ADMIN_ACTION audit):
+  // an org member who invokes a binding is dispatching to a binding
+  // that an admin already approved + that can be disabled at any
+  // time. The Action runtime captures the invocation in its
+  // ACTION_* audit chain. Per-binding / per-org tightening is
+  // forward-substrate via ActionPolicy operator overrides (PR #47);
+  // a future wave can raise the default once OAuth-bearing connector
+  // types land behind their own QLOCK.
+  INVOKE_CONNECTOR: "LOW",
 };
 
 // WHAT: Writable allowlist for the POST /api/v1/actions body.

@@ -91,6 +91,7 @@ const VALID_ACTION_TYPES: ReadonlySet<string> = new Set<string>([
   "RECORD_CAPSULE",
   "PROPOSE_PERMISSION_GRANT",
   "SEND_INTERNAL_NOTIFICATION",
+  "INVOKE_CONNECTOR",
 ]);
 
 // WHAT: The query-string-shaped input the list route accepts. All
