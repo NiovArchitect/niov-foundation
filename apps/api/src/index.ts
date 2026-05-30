@@ -416,7 +416,26 @@ export type {
   ConversationDetailSuccess,
   GetConversationCorrectionsInput,
   ConversationCorrectionsSuccess,
+  ConversationDriftSignalsSuccess,
+  GetConversationDriftSignalsInput,
 } from "./services/otzar/otzar.service.js";
+
+// Section 1 Wave 3B — Otzar drift detection coaching/alignment trust
+// loop per ADR-0058. Pure derived read-only service surfacing
+// closed-vocabulary signal labels from the caller's own CORRECTION
+// capsules. Self-scoped; no manager visibility; no employee scoring;
+// no raw content; no persisted drift profile.
+export {
+  analyzeConversationDrift,
+  CORRECTION_VELOCITY_THRESHOLD_DEFAULT,
+  DRIFT_BOUNDARY_NOTE,
+  DRIFT_COACHING_NOTE,
+} from "./services/otzar/drift-signal.service.js";
+export type {
+  DriftSignalEntry,
+  DriftSignalLabel,
+  DriftSignalsView,
+} from "./services/otzar/drift-signal.service.js";
 
 export { projectConversationDetail } from "./services/otzar/conversation-detail.js";
 export type {

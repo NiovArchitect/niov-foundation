@@ -42,6 +42,11 @@ import {
   projectConversationCorrections,
   type ConversationCorrectionsView,
 } from "./conversation-corrections.js";
+import {
+  analyzeConversationDrift,
+  type ConversationDriftSignalsSuccess,
+  type GetConversationDriftSignalsInput,
+} from "./drift-signal.service.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -346,6 +351,13 @@ export interface ConversationCorrectionsSuccess
   extends ConversationCorrectionsView {
   ok: true;
 }
+
+// Section 1 Wave 3B — Otzar drift detection per ADR-0058. Inputs +
+// success-return symmetric with Wave 2C's correction surface.
+export type {
+  ConversationDriftSignalsSuccess,
+  GetConversationDriftSignalsInput,
+} from "./drift-signal.service.js";
 
 // WHAT: The Otzar service.
 // INPUT: AuthService, COEService, LLMProvider, KVCache.
@@ -1376,6 +1388,36 @@ export class OtzarService {
       last_correction_at,
     });
     return { ok: true, ...view };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Section 1 Wave 3B — Otzar drift detection coaching/alignment
+  // trust loop per ADR-0058.
+  //
+  // WHAT: Return the caller's OWN per-conversation drift signals.
+  // INPUT: GetConversationDriftSignalsInput { token, conversation_id }.
+  // OUTPUT: ConversationDriftSignalsSuccess (200) or OtzarFailure
+  //         (SESSION_* / CONVERSATION_NOT_FOUND / NOT_CONVERSATION_OWNER).
+  // WHY: ADR-0058 §"Implementation detail" — OtzarService surfaces
+  //      the analyzeConversationDrift seam alongside the Wave 2C
+  //      getConversationCorrections sibling. Pure delegation to the
+  //      analyzeConversationDrift helper which owns the indexed
+  //      query + closed-vocabulary signal evaluation + safe
+  //      projection + watching-the-watchers audit emission.
+  //      Self-scoped (entity_id === caller; no admin gate, no
+  //      cross-tenant). NEVER selects payload_summary, target_capsule_id,
+  //      capsule IDs list, topic tag values, transcripts, numeric
+  //      scores, or per-employee comparison fields. NO new audit
+  //      literal (rides ADMIN_ACTION + details.action = DRIFT_SIGNAL_READ
+  //      per Section 7 + Section 4 Wave 2/4/5/7 precedent).
+  // ──────────────────────────────────────────────────────────────
+  async analyzeConversationDrift(
+    input: GetConversationDriftSignalsInput,
+  ): Promise<ConversationDriftSignalsSuccess | OtzarFailure> {
+    return analyzeConversationDrift({
+      authService: this.authService,
+      input,
+    });
   }
 
   // WHAT: Extract conversation topics via the LLM, with robust
