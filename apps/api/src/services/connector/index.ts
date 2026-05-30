@@ -16,3 +16,19 @@ export type {
   ConnectorType,
   ConnectorTypeDefinition,
 } from "./connector.service.js";
+
+export {
+  getConnectorBindingForOrgService,
+  listConnectorBindingsForOrgService,
+  projectConnectorBinding,
+  registerConnectorBindingForOrg,
+  softDeleteConnectorBindingForOrgService,
+  updateConnectorBindingForOrgService,
+} from "./connector-binding.service.js";
+
+export type {
+  ConnectorBindingFailure,
+  ConnectorBindingView,
+  RegisterConnectorBindingInput,
+  UpdateConnectorBindingInput,
+} from "./connector-binding.service.js";

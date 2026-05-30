@@ -241,3 +241,15 @@ export type {
   RegulatorAccessRequest,
   RegulatorValidationResult,
 } from "./queries/regulator.js";
+
+// Section 4 Wave 2 — ConnectorBinding query helpers (per-org
+// connector enablement substrate; NEVER stores raw secret material).
+export {
+  createConnectorBinding,
+  getConnectorBindingForOrg,
+  listConnectorBindingsForOrg,
+  softDeleteConnectorBindingForOrg,
+  updateConnectorBindingForOrg,
+} from "./queries/connector-binding.js";
+
+export type { CreateConnectorBindingInput } from "./queries/connector-binding.js";
