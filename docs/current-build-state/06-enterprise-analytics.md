@@ -8,110 +8,216 @@
 Governed analytics surface — aggregate insights derived from
 permissioned operational signals + audit chain. Per ADR-0052
 doctrine: reports are summary projections, NEVER raw unpermitted
-data; executives get summaries without crossing the per-entity
-RULE 0 boundary.
+data; admins get same-org summary signals without crossing the
+per-entity RULE 0 boundary. SAFE projection (closed-vocab
+labels + integer counts + derived rates) with k=5
+HIPAA-Safe-Harbor minimum-population floor enforced at every
+aggregate.
 
-## Current status (PARTIAL — Wave 1 ADR LANDED; design-only)
+## Current status — PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1)
 
-**Wave 1 ADR LANDED at ADR-0061** (2026-05-30; Founder Sleep
-Directive next-section preference #4). Section 3 prerequisite
-satisfied (ADR-0059 LANDED 2026-05-30 / PR #85 locked the
-same-org hive-aggregate pattern that ADR-0061 mirrors for
-enterprise analytics). ADR-0061 locks the SAFE projection
-pattern at the substrate-architectural register:
-closed-vocabulary counts/labels only; same-org scope
-mandatory; minimum-population threshold REQUIRED (default
-**k=5 per HIPAA Safe Harbor 45 CFR §164.514(b)(1)** regulatory
-precedent); cross-org explicit non-goal (CAR Sub-box 8
-forward-substrate); derived-only from existing operational
-signals (Feedback Loops 1–7 + queryAuditEvents + MemoryCapsule
-metadata + EntityMembership + EntityComplianceProfile + hive
-aggregates).
+**Final closeout 2026-05-30.** Section 6 Enterprise Analytics
+backend substrate is production-grade complete after the
+4-aggregate arc closure (Waves 2+3+4+5 LIVE on top of Wave 1
+ADR-0061).
 
-v1 ships ZERO concrete aggregates — each future aggregate is
-a Wave 2+ slice requiring separate Founder Authorization
-(5 checkpoints per ADR-0061 §8: aggregate selection,
-threshold posture, audit detail content, cache posture,
-route prefix).
+**Important scope wording**: this closes the **Foundation
+backend analytics substrate** for v1 same-org admin reads. It
+does NOT mean all future analytics product work is complete.
+Future capabilities (Control Tower frontend, persistent
+caches, real-time streams, additional aggregates, cross-org
+benchmarking, differential privacy, AI-generated executive
+summaries) continue as forward-substrate per ADR-0061 §2 +
+§Forward queue.
+
+### Closeout summary
+
+- **4 live aggregates** + **4 admin routes** + **1
+  `AnalyticsService`** + **55 integration tests** across 4
+  test files.
+- **Universal invariants**: bearer + `can_admin_org` via
+  `requireAdminCapability`; same-org via `getOrgEntityId` +
+  local `resolveOrgOrFail` (404 `NO_ORG_FOR_CALLER`); k=5
+  HIPAA Safe Harbor floor (frozen anchor
+  `ANALYTICS_MIN_POPULATION = 5`); `ADMIN_ACTION +
+  details.action = "ANALYTICS_READ"` audit (no new audit
+  literal); SAFE projection enforced by type construction +
+  wire-level secret-marker tests.
+- **Zero schema migration. Zero new audit literals. Zero new
+  external dependencies.** TypeScript baseline preserved at
+  exactly 4 canonical residuals throughout.
 
 ## What is live
 
-- Feedback loops (Loops 1–7) produce per-entity / per-hive
-  aggregate scores; not yet surfaced as enterprise analytics.
-- Compliance posture per `EntityComplianceProfile`
-  (foundational substrate; no analytics surface).
+### 4 v1 aggregates
 
-## What is not live
+| # | Aggregate | Route | Signal labels |
+|---|---|---|---|
+| 1 | `CORRECTION_VELOCITY_7D` | `POST /api/v1/analytics/correction-velocity` | `ELEVATED` / `TYPICAL` / `QUIET` / `INSUFFICIENT_POPULATION` |
+| 2 | `ACTION_RUNTIME_SUCCESS_RATE` | `POST /api/v1/analytics/action-runtime-success-rate` | `HEALTHY` / `DEGRADED` / `UNHEALTHY` / `INSUFFICIENT_VOLUME` / `INSUFFICIENT_POPULATION` |
+| 3 | `CONNECTOR_ACTIVITY` | `POST /api/v1/analytics/connector-activity` | `ACTIVE` / `CONFIGURED_INACTIVE` / `NOT_CONFIGURED` / `INSUFFICIENT_POPULATION` |
+| 4 | `HIVE_PARTICIPATION` | `POST /api/v1/analytics/hive-participation` | `BROAD_PARTICIPATION` / `MODERATE_PARTICIPATION` / `NARROW_PARTICIPATION` / `NO_HIVES` / `INSUFFICIENT_POPULATION` |
 
-Per ADR-0061 v1 non-goals — each is forward-substrate behind
-separate Founder authorization:
+Each route accepts optional `{ window_days?: number = 7 }`
+body clamped to `[1, 30]` (except hive-participation which is
+a current-state snapshot with no window).
 
-- **Specific analytics aggregates** (zero shipped at v1; each
-  Wave 2+ slice picks ONE aggregate + requires Founder
-  confirmation on 5 checkpoints).
-- **Permissioned-aggregate query layer** + analytics service
-  tier + analytics routes (`/api/v1/analytics/*`) — Wave 2.
-- **Operator-tunable population threshold** (v1 hard-codes
-  k=5; per-org override forward-substrate).
-- **Cross-org analytics** (CAR Sub-box 8 forward-substrate +
-  separate Founder product decision).
-- **Differential-privacy guarantees** (k-anonymity at v1;
-  stronger guarantees forward-substrate).
+### Service substrate
+
+`apps/api/src/services/analytics/analytics.service.ts`:
+
+- `AnalyticsService` class with 4 methods (one per aggregate).
+- Frozen anchors: `ANALYTICS_MIN_POPULATION = 5`,
+  `ANALYTICS_WINDOW_DAYS_DEFAULT = 7`,
+  `ANALYTICS_WINDOW_DAYS_MIN = 1`,
+  `ANALYTICS_WINDOW_DAYS_MAX = 30`,
+  `ACTION_RUNTIME_MIN_VOLUME = 10`.
+- Closed-vocab signal-label arrays per aggregate
+  (`CORRECTION_VELOCITY_LABELS`,
+  `ACTION_RUNTIME_SUCCESS_LABELS`,
+  `CONNECTOR_ACTIVITY_LABELS`, `HIVE_PARTICIPATION_LABELS`).
+- SAFE projection envelopes (4 typed interfaces; forbidden
+  fields enforced by type construction).
+- Centralized `emitAnalyticsReadAudit` helper writes
+  `ADMIN_ACTION + details.action = "ANALYTICS_READ"` with
+  safe details (aggregate name + org_entity_id + redacted
+  flag + result_count + filter_keys); NEVER raw aggregated
+  values.
+- Honest-note copy on every aggregate explicitly disclaims
+  "employee score" / "performance index" / "manager
+  dashboard" / "worker performance index" framing.
+
+### Routes substrate
+
+`apps/api/src/routes/analytics.routes.ts`:
+
+- `registerAnalyticsRoutes(app, authService, analytics)`.
+- All 4 routes `preHandler: requireAdminCapability(authService,
+  "can_admin_org")`.
+- Local `resolveOrgOrFail` helper (canonical pattern mirrored
+  from `connector.routes.ts` + `hive-admin.routes.ts`).
+- `statusFor` mapping: `INVALID_REQUEST → 422`;
+  `INTERNAL_ERROR → 500`. Auth failures handled by middleware
+  (401 / 403).
+
+### Server wiring + barrel exports
+
+`apps/api/src/server.ts` instantiates `new AnalyticsService()`
+(no constructor deps) and registers `registerAnalyticsRoutes`
+adjacent to existing admin route registrations.
+`apps/api/src/index.ts` exports `AnalyticsService` + 5
+constants + 4 closed-vocab label arrays + 9 type re-exports.
+
+## What is NOT live (forward-substrate per ADR-0061 §2 + §Forward queue)
+
+Each forward-substrate behind separate Founder authorization:
+
+- **Operator-tunable population threshold** (per-org override
+  of k=5; lowering k requires ADR-0061 §1.c amendment).
+- **Cross-org analytics** (NIOV-tier benchmarking + industry
+  consortium intelligence + multi-tenant comparison surfaces;
+  CAR Sub-box 8 forward-substrate).
+- **Differential-privacy guarantees** (beyond k-anonymity).
 - **AI-generated executive summary projections** per ADR-0052
   doctrine (Founder product decision).
-- **Persistent analytics projections / caching / streaming**
-  — v1 is live-query only per "measure first" (ADR-0016).
-- **Compliance-framework-specific aggregates** (HIPAA / GDPR /
-  SOC 2 specific projections) — forward-substrate per future
-  compliance ADR.
-- **Analytics Control Tower UX** — frontend; lives in
-  `otzar-control-tower`.
+- **Analytics Control Tower UX** (frontend; lives in
+  `otzar-control-tower`).
+- **Persistent analytics projections** (cached aggregate rows
+  / dashboard data tables; "measure first" per ADR-0016).
+- **Real-time / streaming analytics** (forward-substrate via
+  Phoenix.PubSub per ADR-0039 entry #28).
+- **Compliance-framework-specific aggregates** (HIPAA / GDPR
+  / SOC 2 specific projections; per future compliance ADR).
+- **Additional aggregates** beyond the 4 LIVE — each is its
+  own Wave + 5-checkpoint Founder authorization per ADR-0061
+  §8.
 
 ## RULE 13 disclosures specific to Section 6
 
-- Analytics MUST NOT bypass RULE 0 sovereignty. Aggregates are
-  permissioned; aggregations over unpermitted source data MUST
-  NOT be possible at the query tier.
-- Reports MUST be derived from permissioned operational signals
-  per ADR-0052; raw employee data NEVER surfaces in executive
-  dashboards.
-- Aggregates MUST be projected through the same safe-view /
-  no-leak discipline as the rest of the substrate.
+- The 4 live aggregates are derived-only from existing
+  operational signals (MemoryCapsule + Wallet +
+  EntityMembership + Action + ActionAttempt + ConnectorBinding
+  + Hive + HiveMembership). No new operational signal added.
+- The hive-participation aggregate consumes Section 3 Hives
+  substrate (production-grade complete for v1 same-org
+  Foundation backend scope per PR #99).
+- The action-runtime-success-rate aggregate consumes Section
+  2 Action runtime substrate (production-grade complete for
+  internal Foundation autonomous-execution-substrate scope).
+- The connector-activity aggregate consumes Section 4
+  connector substrate (production-grade complete for
+  Foundation backend scope).
+- The correction-velocity aggregate consumes the existing
+  CORRECTION CapsuleType written by `otzar.service.ts` +
+  `observation.service.ts`.
+- All 4 aggregates respect the same-org sovereignty boundary;
+  cross-org reads are forbidden by construction at every
+  query.
 
-## Next slices (per ADR-0061 §Forward queue)
+## Landed work
 
-Each Wave 2+ analytics aggregate slice requires Founder
-authorization at its slice prompt (5 checkpoints per
-ADR-0061 §8):
+| Commit | PR | Description |
+|---|---|---|
+| `2c0230d` | #87 | Section 6 Wave 1 — ADR-0061 SAFE projection pattern (design-only) |
+| `2d95597` | #103 | Section 6 Wave 2 — CORRECTION velocity 7d aggregate |
+| `c8362cd` | #104 | Section 6 Wave 3 — action-runtime success rate aggregate |
+| `f629e23` | #105 | Section 6 Wave 4 — connector-activity aggregate |
+| `a3d484c` | #106 | Section 6 Wave 5 — hive-participation aggregate |
+| (this commit) | TBD | Section 6 final closeout docs |
 
-1. **Wave 2 — first concrete v1 aggregate.** Strongest
-   substrate-derivable candidate per Phase 0 analysis:
-   **org-wide CORRECTION activity over 7d** (consumes
-   existing CORRECTION capsules + EntityMembership; mirrors
-   Section 1 drift-signal pattern at org tier). Other
-   Wave-2-eligible candidates: action-runtime success rate
-   per org over 7d; connector-binding activity per org;
-   hive participation rate per org.
-2. **Wave 3+** — additional aggregates as operator demand
-   surfaces.
-3. **Wave N** — operator-tunable population threshold per
-   org (OrgSettings field; only relevant if k=5 default is
-   too restrictive or too permissive for a specific
-   customer; would land via separate ADR amendment to
-   ADR-0061 §1.c).
-4. **Wave M** — cross-org analytics per CAR Sub-box 8 +
-   separate Founder product decision.
-5. **Wave N+M** — differential-privacy guarantees if a
-   specific compliance framework requires it.
+## Foundation-context coherence (per Founder strategic guardrails)
+
+Section 6 design preserved Foundation strategic context:
+
+- **Generic Entity model preserved**: all 4 aggregates
+  consume `EntityMembership` / `Action.org_entity_id` /
+  `Hive.org_entity_id` / `ConnectorBinding.org_entity_id` /
+  `Wallet.entity_id` — none assume PERSON-only entity
+  semantics; AI_AGENT / DEVICE / APPLICATION / COMPANY
+  entities aggregate identically.
+- **No blockchain / payment / GATS surface**: no payment
+  rail dependency; no settlement; no chain anchor; no
+  spending capability.
+- **Same-org sovereignty preserved**: cross-org reads
+  forbidden by construction at every aggregate.
+- **No surveillance framing**: honest-note copy at every
+  aggregate explicitly disclaims employee scoring / manager
+  dashboard / performance index / worker performance index.
+- **k=5 floor**: aligned with future privacy-stronger
+  guarantees (differential privacy forward-substrate)
+  without blocking them.
+
+## Next slices (forward-substrate)
+
+Each forward-substrate slice requires separate Founder
+authorization at its slice prompt:
+
+1. **Additional aggregates** — each new aggregate is its own
+   Wave + 5-checkpoint Founder authorization per ADR-0061 §8.
+2. **Persistent analytics projections** — cached aggregate
+   rows for dashboards (measure-first per ADR-0016).
+3. **Operator-tunable per-org population threshold** —
+   requires ADR-0061 §1.c amendment.
+4. **Cross-org analytics** — requires CAR Sub-box 8
+   substrate + Founder product decision per ADR-0052.
+5. **Differential-privacy guarantees** — beyond k-anonymity.
+6. **AI-generated executive summary projections** — Founder
+   product decision per ADR-0052 doctrine.
+7. **Analytics Control Tower UX** — frontend; lives in
+   `otzar-control-tower` repo.
 
 ## Risks / forward-substrate
 
-- Aggregates from too-small populations can re-identify
-  individuals — analytics MUST enforce minimum-population
-  thresholds.
-- Cross-org analytics (NIOV-tier benchmarking) is forward-
-  substrate and requires explicit cross-tenant compliance
-  controls per CAR Sub-box 8.
+- The 4 live aggregates assume k=5 default is the right
+  floor for the v1 customer surface. Per-org override
+  requires ADR-0061 §1.c amendment + Founder authorization.
+- Real-time / streaming analytics is forward-substrate per
+  ADR-0061 §2. Live-query only at v1 is fine for current
+  call volumes; "measure first" caching per ADR-0016.
+- Foundation strategic guardrails preserved at v1; future
+  aggregates that touch payment / GATS / chain-anchored
+  signals require explicit Foundation-strategic-context
+  review at the slice prompt.
 
 ---
 
