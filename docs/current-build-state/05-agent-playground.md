@@ -47,7 +47,7 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2+3+4+5+6+7+8+9 LIVE; candidate-generation + outcome-comparison + best-path-recommendation + governed-transition + multi-agent-simulation surfaces all landed; Wave 10 consumer-experience contract ADR-0077 design-only LANDED)
+## Current status (LIVE end-to-end for the v1 enterprise cockpit scope — Waves 1+2+3+4+5+6+7+8+9 LIVE in Foundation; Wave 10 consumer-experience contract ADR-0077 design-only LANDED + Wave 10 implementation LIVE in otzar-control-tower at /agent-playground)
 
 **Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
 scope locked: read-only sandbox-only self-scoped operator
@@ -719,6 +719,55 @@ authorization)**:
    consumer-experience contract ADR-0077 LANDED 2026-05-31
    (design-only; closes ADR-0065 §7 Wave 10 forward-queue
    line at the consumer-experience contract register).
+   **Wave 10 implementation slice LANDED 2026-05-31 in
+   `otzar-control-tower` (PR #6; commit `cf3483f`)** —
+   enterprise decision cockpit at NEW route
+   `/agent-playground` (existing `/playground` Placeholder
+   preserved unchanged per ADR-0077 §11 Option A per Founder
+   UX decision 2026-05-31). 6 primary panels (Scenario
+   Context + Candidate Paths + Outcome Comparison + Best-Path
+   Recommendation + Multi-Agent Simulation + Enterprise
+   Decision Posture + Governed Transition) consuming the 6
+   Foundation Agent Playground routes verbatim via NEW
+   `api.playground.*` namespace (10 methods: listScenarios +
+   createScenario + getScenario + updateScenario +
+   archiveScenario + generateCandidates + compareOutcomes +
+   recommendBestPath + proposeGovernedTransition +
+   runSimulation). Wave 4-9 Foundation type mirrors landed at
+   `src/lib/types/foundation.ts`. ZERO new Foundation
+   backend code / new Foundation routes / new schema / new
+   audit literal / LLM / Python / BEAM / connector
+   invocation / Action execution / personal-life automation
+   / trust delegation / organizational graph (v1 forward-
+   substrate) / raw memory / transcript / prompt /
+   chain-of-thought / Execute button / Wave 8 bypass at this
+   slice. 4 honesty postures enforced (hierarchy /
+   conversation-context — Foundation does NOT yet expose
+   `conversation_context_signals[]`; UI surfaces "not
+   available in this version" / evidence-posture / execution-
+   boundary 3-state lifecycle simulation/proposed/executed
+   with "Action proposed (not executed)" framing when Wave 8
+   returns PROPOSED). Wave 8 governed transition requires
+   explicit acknowledgement checkbox + confirmation modal +
+   `caller_confirmation: true` + fresh `crypto.randomUUID`
+   `idempotency_key` per submit attempt (NEVER reused).
+   Forbidden-UI-copy guard test enforces 20+ forbidden
+   strings ("AI agents decided" / "Final decision" /
+   "Guaranteed compliant" / "Winner" / "Score" / "Ranked #1"
+   / "Chain-of-thought" / "Auto-approved" / etc.); no-leak
+   guard enforces FORBIDDEN_RAW_TOKENS against rendered page
+   tree; no-Execute-button guard walks every stage and
+   asserts no `<button>` has "Execute" as its label. 22 NEW
+   Wave 10 unit tests passing; 110/110 total tests across 22
+   test files (88 prior tests preserved; zero regression);
+   `npm run typecheck` + `npm run lint` + `npm run build`
+   all green. React + Vite + TypeScript + Tailwind +
+   TanStack Query + Vitest + Playwright stack preserved.
+   `otzar-control-tower` main HEAD at this slice landing:
+   `cf3483f` (PR #6 merged 2026-05-31). **Section 5 Agent
+   Playground end-to-end enterprise cockpit is now LIVE for
+   the completed scope across Foundation Waves 4-9 + Control
+   Tower Wave 10.**
    Locks 6 primary panels (Scenario Context + Candidate
    Paths + Outcome Comparison + Best-Path Recommendation +
    Governed Transition + Multi-Agent Simulation / Enterprise
