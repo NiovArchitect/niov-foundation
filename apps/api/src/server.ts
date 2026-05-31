@@ -34,6 +34,7 @@ import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
 import { PlaygroundService } from "./services/playground/playground.service.js";
 import { PlaygroundScenarioService } from "./services/playground/playground-scenario.service.js";
+import { PlaygroundCandidateService } from "./services/playground/playground-candidate.service.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { AnalyticsService } from "./services/analytics/analytics.service.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
@@ -359,6 +360,20 @@ export async function buildApp(
   // recommender, governed transition) will compose against.
   const playgroundScenarioService = new PlaygroundScenarioService(authService);
 
+  // Section 5 Wave 5 Option A ADR-0072 — Agent Playground
+  // deterministic / template-first candidate generation. Computed-
+  // on-read; no persistence; no LLM; no Python; no BEAM; no
+  // connector invocation; no Action creation; no external provider
+  // call. Owner-first + same-org SCENARIO_NOT_FOUND gate is
+  // delegated to PlaygroundScenarioService.getScenario via the
+  // constructor below so the canonical Wave 4 enumeration-safe 404
+  // path is reused verbatim. ADMIN_ACTION + details.action=
+  // "PLAYGROUND_CANDIDATES_GENERATED" audit with safe metadata
+  // only (no candidate text, no raw scenario JSON).
+  const playgroundCandidateService = new PlaygroundCandidateService(
+    playgroundScenarioService,
+  );
+
   // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE
   // projection service. No constructor dependencies at v1
   // (the service reads existing Prisma tables directly and
@@ -513,6 +528,7 @@ export async function buildApp(
     app,
     playgroundService,
     playgroundScenarioService,
+    playgroundCandidateService,
   );
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);
