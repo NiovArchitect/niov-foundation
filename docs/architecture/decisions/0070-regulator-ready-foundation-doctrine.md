@@ -908,6 +908,17 @@ authorization slices have a canonical reference point.
   Package / Legal Hold ADRs may compose against, but is
   not itself the examination room, evidence package, or
   legal-hold surface.
+- Cited from ADR-0072 §10 (Section 5 Wave 5 Candidate-
+  Generation Contract; design-only ADR landed 2026-05-31).
+  ADR-0072 §10 inherits this ADR's §9 legal-advice boundary
+  verbatim — allowed copy ("compliance review recommended",
+  "policy review required", "not a legal determination") /
+  forbidden copy ("legally sufficient", "guaranteed
+  compliant", "regulator approved") apply to every Wave 5
+  candidate field. ADR-0072 §9 + §14 + §16 inherit this
+  ADR's §8 security/privilege boundaries verbatim. ADR-0072
+  does NOT authorize Wave 5 implementation; that remains a
+  separate Founder slice.
 
 ## Founder authorization
 

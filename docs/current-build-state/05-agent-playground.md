@@ -350,9 +350,21 @@ authorization)**:
    routes + `PlaygroundScenarioService` + 38 integration
    tests; ADMIN_ACTION + details.action discriminator
    audit; no new audit literal; soft-archive per RULE 10.
-4. **Wave 5 — scenario candidate generation contract**.
-   Likely fixture / deterministic first; NO LLM autonomy
-   unless separately Founder-authorized.
+4. **Wave 5 — scenario candidate generation contract** —
+   design-only ADR LANDED 2026-05-31 at ADR-0072. Locks
+   the candidate shape + 4 closed vocabularies
+   (`candidate_type` 9 values + `governance_findings` 11
+   values + `action_runtime_transition_hint` 7 values +
+   `confidence_label` 4 values) + 12-input canonical
+   allowed source set + forbidden inputs + safety / no-
+   leak rails + three implementation-method comparison
+   (Option A deterministic TypeScript = v1; Option B
+   Python requires ADR-0069 §2.4 boundary ADR; Option C
+   BEAM folds into Wave 9). NO code / NO schema / NO new
+   audit literal at ADR-0072. Wave 5 implementation slice
+   (Option A deterministic / template-first TypeScript)
+   is forward-substrate behind separate Founder
+   authorization.
 5. **Wave 6 — outcome comparison + scoring rubric**.
    Closed-vocabulary; NO employee scoring.
 6. **Wave 7 — best-path recommender** with evidence and
