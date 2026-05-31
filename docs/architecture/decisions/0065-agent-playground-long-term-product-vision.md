@@ -564,6 +564,14 @@ The §1 long-term purpose statement + §5 safety doctrine
   Wave 4 schema-migration slice).
 - Cites ADR-0028 (BEAM coordination layer; future Wave 9
   multi-agent orchestration substrate).
+- Cited from ADR-0069 §3 domain 6 + §Forward queue
+  (Elixir/BEAM Substrate-Coherence Law for Living
+  Coordination; doctrine ADR landed 2026-05-31). ADR-0069
+  canonicalizes Wave 9 multi-agent simulation orchestration
+  as a BEAM strong-fit domain and requires the §6
+  8-question architecture check before any Wave 9
+  authorization slice. ADR-0069 does NOT authorize Wave 9
+  implementation; that remains a separate Founder slice.
 - Cites ADR-0036 (LawfulBasis; regulator-tier scenarios
   if ever in scope).
 - Cites ADR-0037 (jurisdiction tagging; cross-jurisdiction

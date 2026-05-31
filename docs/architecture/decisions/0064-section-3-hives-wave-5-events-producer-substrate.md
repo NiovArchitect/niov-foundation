@@ -555,6 +555,17 @@ authorization required at its slice):
 
 - Cited from ADR-0059 §Forward queue Wave 5 — this ADR
   closes the producer half of that reservation.
+- Cited from ADR-0069 §3 domain 3 + §Forward queue
+  (Elixir/BEAM Substrate-Coherence Law for Living
+  Coordination; doctrine ADR landed 2026-05-31). ADR-0069
+  canonicalizes the four-language division of labor + the
+  required §6 8-question architecture check. The
+  Phoenix.PubSub consumer half + Broadway reliable delivery
+  forward-substrate items enumerated at §Forward queue
+  inherit ADR-0069 §3 + §5 + §6 as their substrate-placement
+  defense. ADR-0069 does NOT authorize the consumer-half
+  implementation; that authorization lives at its own
+  future slice + RULE 21 research arc per §Sub-decision 13.
 - Cited from ADR-0039 §Forward queue entry #28 — this
   ADR closes the producer half (Phoenix.PubSub at
   BEAM-side stays present in dbgi_supervisor; the

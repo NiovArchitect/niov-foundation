@@ -352,3 +352,17 @@ Bidirectional citations (cited from):
   ADR-0039 per Horde plus cosmp_router pure-module refactor plus
   DMWWorker COSMP handlers plus ETS read-cache substrate at canonical-
   knowledge register substantively).
+- ADR-0069 (Elixir/BEAM Substrate-Coherence Law for Living
+  Coordination; landed 2026-05-31 as doctrine-ADR-only) —
+  load-bearing: ADR-0069 is the canonical four-language division
+  of labor + 7 BEAM strong-fit domains + BEAM non-goals + the
+  required §6 future architecture check that governs every item
+  in this ADR's Forward Queue. Items enumerated here (per-capsule
+  supervised Elixir process at hive scale, OtzarComm cross-region
+  message routing, audit/event ingestion at scale, Python service-
+  boundary, future regulator-ready BEAM consumers) inherit
+  ADR-0069 §3 + §5 + §6 as their substrate-placement defense.
+  ADR-0069 does NOT modify or supersede this ADR's commitment-to-
+  ship — ADR-0028 remains the BEAM coordination layer's
+  ship-commitment; ADR-0069 is the doctrine lens governing how
+  future BEAM placement decisions are reasoned.
