@@ -1097,4 +1097,60 @@ export class OtzarProposedPatternService {
         ] ?? "Accepted by you as alignment guidance for your Twin.",
     }));
   }
+
+  // WHAT: Pure reader for the OLDEST non-archived PROPOSED row
+  //        for one owner; returns null when none exist.
+  // INPUT: ownerEntityId.
+  // OUTPUT: A SAFE projection (pattern_id + closed-vocab
+  //         source_signal_type + closed-vocab pattern_label +
+  //         closed-vocab confidence_label + proposed_at ISO) OR
+  //         null. NEVER raw correction text; NEVER occurrence
+  //         counts / signal timestamps / owner_entity_id /
+  //         reviewed_at / archived_at / created_at / updated_at /
+  //         conversation IDs / embeddings / vectors / storage
+  //         locations / content hashes / bridge IDs / cross-owner
+  //         data.
+  // WHY: Section 1 Wave 3 ADR-0068 proactive-card derivation
+  //      consumes this reader for the
+  //      PROACTIVE_PROPOSED_PATTERN_REVIEW_AVAILABLE card +
+  //      ALIGNMENT_CHECK_IN suppression. Mirrors the Wave 6A
+  //      listAcceptedPatternsForOwner no-audit no-validate
+  //      pure-reader posture verbatim. Owner-scope by
+  //      construction; the caller passes a verified
+  //      session.entity_id from inside getMyTwin.
+  async findOldestPendingProposedForOwner(
+    ownerEntityId: string,
+  ): Promise<{
+    pattern_id: string;
+    source_signal_type: OtzarProposedPatternSourceSignalType;
+    pattern_label: OtzarProposedPatternLabel;
+    confidence_label: OtzarProposedPatternConfidence;
+    proposed_at: string;
+  } | null> {
+    const row = await prisma.otzarProposedPattern.findFirst({
+      where: {
+        owner_entity_id: ownerEntityId,
+        status: "PROPOSED",
+        archived_at: null,
+      },
+      orderBy: { proposed_at: "asc" },
+      select: {
+        pattern_id: true,
+        source_signal_type: true,
+        pattern_label: true,
+        confidence_label: true,
+        proposed_at: true,
+      },
+    });
+    if (row === null) return null;
+    return {
+      pattern_id: row.pattern_id,
+      source_signal_type:
+        row.source_signal_type as OtzarProposedPatternSourceSignalType,
+      pattern_label: row.pattern_label as OtzarProposedPatternLabel,
+      confidence_label:
+        row.confidence_label as OtzarProposedPatternConfidence,
+      proposed_at: row.proposed_at.toISOString(),
+    };
+  }
 }

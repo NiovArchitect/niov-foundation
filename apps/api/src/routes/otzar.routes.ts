@@ -193,7 +193,15 @@ export async function registerOtzarRoutes(
   // never the role-template body, capability flags, permission bridge
   // IDs, or any memory/capsule/vector data (the service enforces the
   // projection).
-  app.get("/api/v1/otzar/my-twin", async (request, reply) => {
+  //
+  // Wave 3 (ADR-0068) — optional ?include_proactive_cards=true|false
+  // query param maps to the GetMyTwinInput.include_proactive_cards
+  // option. Default true (the symbiotic default). Strings other than
+  // "true" or "false" are silently treated as the default (no 400 — a
+  // query-param typo MUST NOT break the read).
+  app.get<{
+    Querystring: { include_proactive_cards?: string };
+  }>("/api/v1/otzar/my-twin", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
     if (token === null) {
       return reply.code(401).send({
@@ -202,7 +210,15 @@ export async function registerOtzarRoutes(
         message: "Missing bearer token",
       });
     }
-    const result = await otzarService.getMyTwin({ token });
+    const raw = request.query.include_proactive_cards;
+    const include_proactive_cards =
+      raw === "false" ? false : raw === "true" ? true : undefined;
+    const result = await otzarService.getMyTwin({
+      token,
+      ...(include_proactive_cards !== undefined
+        ? { include_proactive_cards }
+        : {}),
+    });
     if (!result.ok) {
       return reply.code(statusForCode(result.code)).send(result);
     }
