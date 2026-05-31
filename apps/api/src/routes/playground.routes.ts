@@ -45,6 +45,10 @@ import type {
   PlaygroundBestPathRecommendationService,
   RecommendBestPathInput,
 } from "../services/playground/playground-best-path-recommendation.service.js";
+import type {
+  PlaygroundGovernedTransitionService,
+  ProposeGovernedTransitionInput,
+} from "../services/playground/playground-governed-transition.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // INPUT: The raw header value.
@@ -107,6 +111,19 @@ function scenarioStatusFor(code: PlaygroundScenarioFailureCode): number {
   }
 }
 
+// WHAT: Map a PlaygroundGovernedTransitionFailureCode to an
+//        HTTP status. Wave 8 adds IDEMPOTENCY_KEY_COLLISION
+//        which Section 2 surfaces as 409 per ADR-0075 §17.
+// INPUT: The failure code (Wave 8's union over scenario
+//        failure codes + IDEMPOTENCY_KEY_COLLISION).
+// OUTPUT: number (HTTP status).
+// WHY: Centralizes the route-tier status mapping for the
+//      Wave 8 governed-transition route per ADR-0075 §17.
+function governedTransitionStatusFor(code: string): number {
+  if (code === "IDEMPOTENCY_KEY_COLLISION") return 409;
+  return scenarioStatusFor(code as PlaygroundScenarioFailureCode);
+}
+
 // WHAT: Register the three Agent Playground v1 routes per ADR-0060
 //        §Forward queue (`POST /api/v1/playground/policy-evaluator` +
 //        `POST /api/v1/playground/connector-dry-run` + `POST
@@ -129,6 +146,7 @@ export async function registerPlaygroundRoutes(
   candidates: PlaygroundCandidateService,
   comparisons: PlaygroundOutcomeComparisonService,
   recommendations: PlaygroundBestPathRecommendationService,
+  transitions: PlaygroundGovernedTransitionService,
 ): Promise<void> {
   app.post<{ Body: PolicyEvaluatorInput }>(
     "/api/v1/playground/policy-evaluator",
@@ -391,6 +409,56 @@ export async function registerPlaygroundRoutes(
         ok: false,
         code: result.code,
         message: result.message,
+      });
+    },
+  );
+
+  // POST /api/v1/playground/scenarios/:id/governed-transitions —
+  // Section 5 Wave 8 Option A deterministic / template-first
+  // governed transition per ADR-0075. Computed-on-read at
+  // the Wave 5/6/7 tier; CREATES a Section 2 Action row via
+  // existing createActionForCaller in PROPOSED status per
+  // ADR-0057 (Section 2 retains all execution authority);
+  // Wave 8 NEVER executes; NEVER bypasses policy evaluator;
+  // NEVER bypasses dual-control. Owner-first + same-org
+  // SCENARIO_NOT_FOUND gate inherited via Wave 7 → Wave 6 →
+  // Wave 5 → Wave 4 delegation. Dual audit emission: ADMIN_ACTION
+  // Playground handoff + Section 2's existing ACTION_PROPOSED/
+  // APPROVED/REJECTED row. Mandatory caller_confirmation:
+  // true + idempotency_key per ADR-0075 §12 + §13. CONSERVATIVE
+  // v1 mapping: ONLY SEND_INTERNAL_NOTIFICATION ActionType
+  // allowed; STATUS_QUO + DO_NOT_PROCEED non-transitionable.
+  app.post<{
+    Params: { id: string };
+    Body: ProposeGovernedTransitionInput;
+  }>(
+    "/api/v1/playground/scenarios/:id/governed-transitions",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const body = (request.body ?? {}) as ProposeGovernedTransitionInput;
+      const result = await transitions.proposeTransition(
+        sessionToken,
+        request.params.id,
+        body,
+        { ip_address: request.ip ?? null },
+      );
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(governedTransitionStatusFor(result.code)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
       });
     },
   );

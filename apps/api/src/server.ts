@@ -37,6 +37,7 @@ import { PlaygroundScenarioService } from "./services/playground/playground-scen
 import { PlaygroundCandidateService } from "./services/playground/playground-candidate.service.js";
 import { PlaygroundOutcomeComparisonService } from "./services/playground/playground-outcome-comparison.service.js";
 import { PlaygroundBestPathRecommendationService } from "./services/playground/playground-best-path-recommendation.service.js";
+import { PlaygroundGovernedTransitionService } from "./services/playground/playground-governed-transition.service.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { AnalyticsService } from "./services/analytics/analytics.service.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
@@ -419,6 +420,29 @@ export async function buildApp(
       playgroundScenarioService,
     );
 
+  // Section 5 Wave 8 Option A ADR-0075 — Agent Playground
+  // deterministic / template-first governed transition.
+  // Wave 8 is the FIRST Section 5 wave that creates Section
+  // 2 Action rows — via existing createActionForCaller in
+  // PROPOSED status per ADR-0057. Wave 8 NEVER executes;
+  // Section 2 retains all execution authority via the
+  // policy evaluator + dual-control machinery. NO new
+  // Prisma model; NO schema migration; NO new audit literal
+  // (Wave 8 emits ADMIN_ACTION Playground handoff +
+  // Section 2 emits its own ACTION_PROPOSED/APPROVED/
+  // REJECTED row). Mandatory caller_confirmation: true +
+  // idempotency_key per ADR-0075 §12 + §13. CONSERVATIVE v1
+  // mapping: ONLY SEND_INTERNAL_NOTIFICATION ActionType;
+  // STATUS_QUO + DO_NOT_PROCEED non-transitionable. NO LLM
+  // / Python / BEAM / connector invocation / external
+  // provider call / multi-agent runtime / personal-life
+  // automation / trust-level delegation at this slice.
+  const playgroundGovernedTransitionService =
+    new PlaygroundGovernedTransitionService(
+      playgroundBestPathRecommendationService,
+      playgroundScenarioService,
+    );
+
   // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE
   // projection service. No constructor dependencies at v1
   // (the service reads existing Prisma tables directly and
@@ -576,6 +600,7 @@ export async function buildApp(
     playgroundCandidateService,
     playgroundOutcomeComparisonService,
     playgroundBestPathRecommendationService,
+    playgroundGovernedTransitionService,
   );
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);
