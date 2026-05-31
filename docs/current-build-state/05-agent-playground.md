@@ -47,7 +47,7 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2+3+4 LIVE; persistence substrate landed)
+## Current status (PARTIAL — Waves 1+2+3+4+5 LIVE; first scenario-tier candidate-generation surface landed)
 
 **Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
 scope locked: read-only sandbox-only self-scoped operator
@@ -78,6 +78,51 @@ side effects. ADMIN_ACTION + details.action discriminator
 audit on persistence boundaries (CREATED / UPDATED /
 ARCHIVED); ZERO new audit literal. Schema migration via
 `npm run db:push:test` per ADR-0025.
+
+**Wave 5 contract ADR-0072 LANDED 2026-05-31 (PR #134;
+commit `11b80cb`)** — design-only contract closing
+ADR-0065 §7 Wave 5 forward-queue line at the contract
+register; 20 sub-decisions locking candidate shape + 4
+closed vocabularies + 12-input allowed source set +
+forbidden inputs + bounded counts + universal safety /
+no-leak doctrine + legal-advice posture inherited verbatim
+from ADR-0070 §9 + human-in-the-loop doctrine + three-
+method comparison (Option A deterministic / template-first
+TypeScript = v1; Option B Python requires ADR-0069 §2.4
+boundary ADR first; Option C BEAM folds into Wave 9).
+
+**Wave 5 Option A implementation LANDED 2026-05-31
+(PR #136; commit `e708fa7`)** — deterministic / template-
+first TypeScript candidate-generation surface. NEW
+`PlaygroundCandidateService` at
+`apps/api/src/services/playground/playground-candidate.service.ts`
++ NEW route `POST /api/v1/playground/scenarios/:id/candidates`
++ 33 integration tests. Computed-on-read; NO persistence;
+NO new Prisma model; NO schema migration; NO new audit
+literal; NO LLM / model calls; NO Python; NO BEAM; NO
+Action creation; NO connector invocation; NO external
+provider call; NO Control Tower frontend; NO outcome
+comparison / scoring / best-path recommendation /
+governed transition / multi-agent runtime at this slice.
+Owner-first + same-org SCENARIO_NOT_FOUND gate delegated
+verbatim to `PlaygroundScenarioService.getScenario` so
+the canonical Wave 4 enumeration-safe 404 path is reused.
+`ADMIN_ACTION + details.action = "PLAYGROUND_CANDIDATES_GENERATED"`
+audit with safe metadata only (NEVER raw candidate text;
+NEVER raw scenario JSON). Closed-vocab template library
+covers all 9 ADR-0072 §2 candidate types. Default set
+emits 5 types (STATUS_QUO + LOW_RISK_INCREMENTAL +
+COMPLIANCE_FIRST + OPERATIONAL_RESILIENCE +
+HUMAN_REVIEW_REQUIRED) + DO_NOT_PROCEED when scenario is
+ARCHIVED. The 3 framing-loaded types (SPEED_OPTIMIZED /
+COST_OPTIMIZED / CUSTOMER_IMPACT_FIRST) are opt-in via
+explicit `candidate_types` filter only. Every candidate
+carries the mandatory ADR-0072 §11 `honest_note`.
+Deterministic SHA-256 16-char `candidate_key` per
+ADR-0068 precedent. Bounded count per ADR-0072 §18
+(`CANDIDATES_PER_CALL_MAX = 8`). Python (Option B) and
+BEAM (Option C) remain forward-substrate per ADR-0072
+§Forward queue + ADR-0069.
 
 **RULE 13 substrate-honest disclosure**: Waves 2+4 together
 constitute the **first backend substrate / inspector
@@ -350,21 +395,20 @@ authorization)**:
    routes + `PlaygroundScenarioService` + 38 integration
    tests; ADMIN_ACTION + details.action discriminator
    audit; no new audit literal; soft-archive per RULE 10.
-4. **Wave 5 — scenario candidate generation contract** —
-   design-only ADR LANDED 2026-05-31 at ADR-0072. Locks
-   the candidate shape + 4 closed vocabularies
-   (`candidate_type` 9 values + `governance_findings` 11
-   values + `action_runtime_transition_hint` 7 values +
-   `confidence_label` 4 values) + 12-input canonical
-   allowed source set + forbidden inputs + safety / no-
-   leak rails + three implementation-method comparison
-   (Option A deterministic TypeScript = v1; Option B
-   Python requires ADR-0069 §2.4 boundary ADR; Option C
-   BEAM folds into Wave 9). NO code / NO schema / NO new
-   audit literal at ADR-0072. Wave 5 implementation slice
-   (Option A deterministic / template-first TypeScript)
-   is forward-substrate behind separate Founder
-   authorization.
+4. ~~**Wave 5 — scenario candidate generation contract**~~ —
+   design-only ADR LANDED 2026-05-31 at ADR-0072; Option A
+   deterministic / template-first TypeScript implementation
+   LANDED 2026-05-31 (PR #136; `e708fa7`). NEW
+   `PlaygroundCandidateService` + NEW route
+   `POST /api/v1/playground/scenarios/:id/candidates` +
+   33 integration tests. Computed-on-read; NO persistence;
+   NO schema migration; NO new audit literal; NO LLM /
+   Python / BEAM / Action creation / connector invocation;
+   ADMIN_ACTION + details.action="PLAYGROUND_CANDIDATES_GENERATED"
+   audit with safe metadata only. Option B (Python) and
+   Option C (BEAM) remain forward-substrate behind
+   separate Founder authorization per ADR-0072 §Forward
+   queue.
 5. **Wave 6 — outcome comparison + scoring rubric**.
    Closed-vocabulary; NO employee scoring.
 6. **Wave 7 — best-path recommender** with evidence and
