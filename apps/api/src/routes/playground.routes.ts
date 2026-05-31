@@ -33,6 +33,10 @@ import type {
   PlaygroundScenarioStatus,
 } from "../services/playground/playground-scenario.service.js";
 import { PLAYGROUND_SCENARIO_STATUS_VALUES } from "../services/playground/playground-scenario.service.js";
+import type {
+  PlaygroundCandidateService,
+  GenerateCandidatesInput,
+} from "../services/playground/playground-candidate.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // INPUT: The raw header value.
@@ -114,6 +118,7 @@ export async function registerPlaygroundRoutes(
   app: FastifyInstance,
   playground: PlaygroundService,
   scenarios: PlaygroundScenarioService,
+  candidates: PlaygroundCandidateService,
 ): Promise<void> {
   app.post<{ Body: PolicyEvaluatorInput }>(
     "/api/v1/playground/policy-evaluator",
@@ -376,6 +381,53 @@ export async function registerPlaygroundRoutes(
         ok: false,
         code: result.code,
         message: result.message,
+      });
+    },
+  );
+
+  // POST /api/v1/playground/scenarios/:id/candidates — Section 5
+  // Wave 5 Option A deterministic / template-first candidate
+  // generation per ADR-0072. Computed-on-read; no persistence; no
+  // LLM; no Python; no BEAM; no connector invocation; no Action
+  // creation; no external provider call. Owner-first + same-org
+  // SCENARIO_NOT_FOUND gate is delegated verbatim to
+  // PlaygroundScenarioService.getScenario (inside the candidate
+  // service) so cross-owner / cross-org / unknown id all fold to
+  // enumeration-safe 404. ADMIN_ACTION + details.action=
+  // "PLAYGROUND_CANDIDATES_GENERATED" audit with safe metadata
+  // only (no candidate text, no scenario fields beyond safe IDs +
+  // closed-vocab counters).
+  app.post<{
+    Params: { id: string };
+    Body: GenerateCandidatesInput;
+  }>(
+    "/api/v1/playground/scenarios/:id/candidates",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const body = (request.body ?? {}) as GenerateCandidatesInput;
+      const result = await candidates.generateCandidates(
+        sessionToken,
+        request.params.id,
+        body,
+        { ip_address: request.ip ?? null },
+      );
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(scenarioStatusFor(result.code)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
       });
     },
   );
