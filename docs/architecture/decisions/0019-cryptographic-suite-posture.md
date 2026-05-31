@@ -870,3 +870,15 @@ Bidirectional citations (cited from):
   access territory; post-quantum-ready by primitive
   selection canonical preserved at substantive
   register substantively.
+- ADR-0071 (Section 7 Cross-Scope Audit Verify-Chain
+  Design; design-only ADR landed 2026-05-31) —
+  load-bearing: ADR-0071 §3 SAFE projection canonicalizes
+  `chain_algorithm = "SHA-256/14-field-canonical-record"`
+  as the public chain-algorithm identifier surfaced at the
+  verify-chain response register. The identifier names
+  this ADR's SHA-256 canonical for AuditEvent chain links
+  + ADR-0036's 14-field canonical_record byte-equivalent
+  binding (positions 13+14 = lawful_basis_id +
+  lawful_basis_chain_hash). ADR-0071 does NOT modify or
+  supersede this ADR; the cryptographic-suite posture
+  stays canonical.

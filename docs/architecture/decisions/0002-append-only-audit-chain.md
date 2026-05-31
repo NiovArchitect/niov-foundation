@@ -147,3 +147,12 @@ Bidirectional citations (cited from):
   Surfacing) — the Wave 2B look-back notes the `CONVERSATION_CLOSED`
   event in this chain already records the summary capsule link; the
   read-only detail endpoint adds no new audit literal.
+- ADR-0071 (Section 7 Cross-Scope Audit Verify-Chain Design;
+  design-only ADR landed 2026-05-31) — load-bearing: ADR-0071
+  consumes this ADR's `event_hash` + `previous_event_hash` +
+  14-field canonical_record primitives + BEFORE DELETE trigger as
+  the cryptographic substrate underlying the 4-scope verify-chain
+  expansion (`self` / `org` / `platform` / `regulator`). ADR-0071
+  does NOT modify or supersede this ADR; the append-only audit
+  chain stays the canonical primitive; ADR-0071 extends the
+  verification surface at the scope-matrix register.
