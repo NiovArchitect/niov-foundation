@@ -1,0 +1,630 @@
+# ADR-0076: Agent Playground Multi-Agent Simulation Orchestration Contract — Section 5 Wave 9 (Design-Only)
+
+## Status
+
+Accepted 2026-05-31
+
+Decider: Founder. Authorized at
+`[FOUNDER-SECTION-5-WAVE-9-MULTI-AGENT-SIMULATION-ORCHESTRATION-CONTRACT-ADR-AUTH]`
+2026-05-31 (under the Founder Section 5 autonomy directive
+2026-05-31 + Founder behavioral directive 2026-05-31).
+
+This ADR is **design-only**. NO code, NO schema migration,
+NO new routes, NO new audit literal, NO LLM autonomy, NO
+model calls, NO Python services, NO BEAM orchestration
+implementation, NO Phoenix.PubSub, NO Broadway, NO multi-
+agent runtime, NO Action execution, NO connector invocation,
+NO external provider calls, NO Control Tower frontend, NO
+personal-life automation, NO trust-level delegation logic,
+NO CLAUDE.md bulk catalog edit, NO current active slice
+derailment in this commit.
+
+Sits ABOVE ADR-0075 (Wave 8 governed-transition contract)
+and BELOW ADR-0065 (long-term product vision) at the
+**contract register**. Wave 9 is the simulation-orchestration
+layer above the Wave 5-8 deterministic pipeline; ADR-0076
+locks the contract so a future Wave 9 implementation slice
+(deterministic TypeScript first if substrate allows; BEAM-
+orchestrated later if ADR-0069 §6 8-question check proves
+BEAM is required) can be authorized against a stable
+contract.
+
+## Context
+
+### Why Wave 9 needs its own design ADR
+
+ADR-0065 §7 forward-queues Wave 9 in two sentences:
+*"multi-agent simulation orchestration. Multiple scoped AI
+teammates concurrently exploring candidate-space; requires
+multi-agent coordination substrate (probably consumes ADR-0028
+BEAM coordination layer); NEVER autonomous execution; humans
+approve before any candidate transitions to Wave 8."* That
+framing is correct at the product-vision register but does
+not lock:
+- the simulation request body shape,
+- the simulation_response top-level shape,
+- the closed-vocab orchestration_mode set,
+- the agent_role + branch_definition closed vocabularies,
+- the convergence-summary contract,
+- the no-leak boundary at the multi-agent surface,
+- the relationship to Wave 5/6/7 pipeline (does Wave 9
+  internally invoke Wave 7, or run parallel?),
+- the audit posture,
+- the persistence boundary,
+- the BEAM vs TypeScript implementation register.
+
+ADR-0076 locks the contract. The §15 three-method comparison
++ §19 ADR-0069 §6 8-question architecture check together
+determine whether v1 implementation is deterministic
+TypeScript (Option A; sequential branch enumeration) or
+BEAM-orchestrated (Option C; concurrent supervised agent
+processes).
+
+### Substrate-honest pre-flight (RULE 12 / RULE 13)
+
+Verified on-main state at HEAD `8a69863`:
+
+- **Section 5 Waves 1+2+3+4+5+6+7+8 LIVE**. Wave 8 Option A
+  LIVE (PR #145; `8a69863`): NEW
+  `PlaygroundGovernedTransitionService` + NEW route + 43
+  integration tests. Wave 8 is the FIRST Section 5 wave that
+  creates Section 2 Action rows via `createActionForCaller`
+  in PROPOSED status (Section 2 retains all execution
+  authority).
+- **209 Section 5 integration tests passing** (Wave 8 43 +
+  Wave 7 39 + Wave 6 39 + Wave 5 33 + Wave 4 38 + Wave 2 17).
+- **ADR-0028** (BEAM coordination layer commitment-to-ship)
+  LIVE; ADR-0069 (BEAM substrate-coherence law) LIVE;
+  ADR-0028 §3 Forward queue includes "Agent Playground multi-
+  agent simulation orchestration" as one of the named BEAM-
+  fit candidates per ADR-0065 §7 Wave 9.
+- **ADR-0069 §3 domain 6** explicitly names "Agent Playground
+  multi-agent simulation orchestration" as a BEAM strong-fit
+  domain.
+- **NO Python service substrate yet** — ADR-0069 §2.4
+  requires a dedicated boundary ADR before the first Python
+  service slice.
+
+### Patent + doctrine alignment
+
+- **US 12,517,919 (COSMP)** — multi-agent simulation
+  consumes Wave 7 recommendation output (or re-runs Waves
+  5/6/7 with varied input axes) scope-bounded by caller's
+  COSMP permission.
+- **US 12,164,537 (DMW)** — enterprise-wallet boundaries
+  inherited verbatim.
+- **US 12,399,904 (Foundation primitives)** — simulation
+  outputs are advisory; any transition from simulation
+  candidate to real work MUST route through Wave 8 + Section
+  2. Wave 9 NEVER bypasses Wave 8 or Section 2.
+- **ADR-0069 §3 domain 6** — Agent Playground multi-agent
+  simulation orchestration is a BEAM strong-fit candidate.
+  ADR-0076 §19 §6 8-question check determines v1
+  implementation register.
+
+## Decision
+
+Foundation canonicalizes the **multi-agent simulation
+orchestration contract** for Agent Playground Wave 9. A
+simulation produces structured exploration of multiple
+branches / agent roles / constraint variations over the
+Wave 5-7 pipeline output, surfaces convergence + divergence
+findings, and recommends a NEXT REVIEW item (or a Wave 7
+recommendation rerun with different inputs) — WITHOUT
+executing, creating Actions, invoking connectors,
+exchanging raw chain-of-thought between agents, producing
+hidden scoring, or bypassing Wave 8 governed transition.
+
+### 1. Top-level `SimulationResponse` shape
+
+```text
+SimulationResponse:
+  ok: true
+  scenario_id: string
+  simulated_at: string (ISO 8601)
+  orchestration_mode: OrchestrationMode (closed-vocab; §3)
+  branch_count: number (bounded per §11)
+  branches: SimulationBranch[]
+  convergence_summary: ConvergenceSummary
+  disagreement_summary: DisagreementSummary
+  unresolved_questions: UnresolvedQuestion[] (closed-vocab labels; §6)
+  recommended_next_review: RecommendedNextReview (closed-vocab; §7)
+  human_decision_required: boolean
+  honest_note: string
+  simulation_audit_event_id: string
+```
+
+Each `SimulationBranch` (≤ §11 cap):
+
+```text
+SimulationBranch:
+  branch_id: string (deterministic SHA-256 16-char per §10)
+  branch_definition: BranchDefinition (closed-vocab; §4)
+  agent_role: AgentRole (closed-vocab; §5)
+  assumed_constraints: string[] (closed-vocab labels; §6)
+  expected_outcomes: string[] (closed-vocab labels; §6)
+  governance_conflicts: string[] (closed-vocab labels; §6)
+  branch_summary: string (≤600 chars; closed-style)
+  branch_recommended_candidate_key: string (echoed from Wave 7
+                                               sub-invocation)
+  branch_recommended_candidate_type: PlaygroundCandidateType (echoed)
+  confidence_label: PlaygroundConfidenceLabel (echoed)
+```
+
+`ConvergenceSummary`:
+
+```text
+candidate_keys_agreed_upon: string[]  // closed-vocab sets
+governance_findings_all_branches_share: PlaygroundGovernanceFinding[]
+required_reviews_all_branches_share: PlaygroundRequiredReview[]
+```
+
+`DisagreementSummary`:
+
+```text
+candidate_types_diverged: PlaygroundCandidateType[]
+recommendation_modes_diverged: PlaygroundRecommendationMode[]
+unresolved_branches: string[]  // branch_ids
+```
+
+`RecommendedNextReview` (closed-vocab; §7):
+
+```text
+{
+  next_review_label: NextReviewLabel (closed-vocab from §7)
+  rationale_summary: string (≤300 chars; closed-style)
+  applies_to_branch_ids: string[]
+}
+```
+
+NEVER populated:
+- raw chain-of-thought between agents
+- raw prompts / model outputs / hidden reasoning
+- numeric scores / probabilities / weights
+- raw scenario JSON / capsule content / transcripts
+- agent-internal state beyond closed-vocab labels
+- private memory / unscoped data
+
+### 2. Request body shape (canonical at this ADR)
+
+```text
+POST /api/v1/playground/scenarios/:id/simulations
+
+Body:
+  caller_confirmation: true (REQUIRED; literal boolean true)
+  orchestration_mode?: OrchestrationMode (closed-vocab; §3;
+                                            default DETERMINISTIC_BRANCH_ENUMERATION)
+  branch_definitions?: BranchDefinition[] (closed-vocab; §4;
+                                              if omitted, default
+                                              set per §4)
+  agent_roles?: AgentRole[] (closed-vocab; §5; if omitted,
+                                default set per §5)
+  candidate_types?: PlaygroundCandidateType[] (optional; passes
+                                                 through to Wave 7
+                                                 sub-invocations)
+  max_branches?: number (optional; capped per §11)
+  comparison_mode?: PlaygroundComparisonMode (passes through)
+  recommendation_mode?: PlaygroundRecommendationMode (passes
+                                                       through)
+```
+
+Forbidden body fields (NEVER accepted at v1):
+
+- caller-supplied agent prompts / instructions / chain-of-
+  thought / model outputs.
+- caller-supplied branch payloads.
+- caller-supplied scoring weights.
+- `execute` / `auto_approve` / `bypass_wave_8` / `create_action`
+  flags.
+- `action_id` (Wave 9 NEVER creates Actions; that's Wave 8).
+
+### 3. `orchestration_mode` — closed vocabulary (v1)
+
+Three values. Adding new modes requires future Founder-
+authorized ADR amendment.
+
+- `DETERMINISTIC_BRANCH_ENUMERATION` — DEFAULT at v1. Each
+  branch_definition × agent_role combination produces ONE
+  Wave 7 sub-invocation; the simulation is the parallel
+  union of all sub-invocations. Deterministic; reproducible;
+  no LLM autonomy; no agent-to-agent message-passing; no
+  hidden reasoning.
+- `DETERMINISTIC_CONSTRAINT_VARIATION` — opt-in. Each branch
+  varies the `comparison_mode` / `recommendation_mode` /
+  `candidate_types` inputs across the Wave 7 sub-invocations
+  to surface how the recommendation changes under different
+  modes. Deterministic; reproducible.
+- `DETERMINISTIC_GOVERNANCE_SCOPE_VARIATION` — opt-in. Each
+  branch varies the simulated governance posture (e.g.,
+  branches with vs without explicit `LEGAL_REVIEW_RECOMMENDED`
+  governance findings) to surface how the recommendation
+  changes. Deterministic; reproducible. NO injection of raw
+  scenario data; only closed-vocab signal variations.
+
+### 4. `branch_definition` — closed vocabulary (v1)
+
+Five values. Each branch_definition pairs with an agent_role
+(§5) to produce one Wave 7 sub-invocation. Adding new
+branch_definitions requires future Founder-authorized ADR
+amendment.
+
+- `BASELINE` — runs Wave 7 with default
+  recommendation_mode + comparison_mode + candidate_types.
+- `POLICY_FIRST_BRANCH` — runs Wave 7 with
+  recommendation_mode = `DETERMINISTIC_POLICY_FIRST` (=
+  default; explicit so the branch is reproducible).
+- `GOVERNANCE_FIRST_BRANCH` — runs Wave 7 with
+  recommendation_mode = `DETERMINISTIC_GOVERNANCE_FIRST`.
+- `RESILIENCE_FIRST_BRANCH` — runs Wave 7 with
+  recommendation_mode = `DETERMINISTIC_RESILIENCE_FIRST`.
+- `HUMAN_REVIEW_FIRST_BRANCH` — runs Wave 7 with
+  recommendation_mode = `DETERMINISTIC_HUMAN_REVIEW_FIRST`.
+
+### 5. `agent_role` — closed vocabulary (v1)
+
+Six values per the Founder behavioral directive's
+"governance-bound but still useful" framing. Adding new
+agent_roles requires future Founder-authorized ADR
+amendment.
+
+- `OPERATIONS_AGENT` — surfaces the recommendation through
+  the operational-feasibility lens (execution complexity,
+  resilience).
+- `COMPLIANCE_AGENT` — surfaces the recommendation through
+  the compliance / legal review lens.
+- `RISK_AGENT` — surfaces the recommendation through the
+  operational-risk lens.
+- `CUSTOMER_AGENT` — surfaces the recommendation through
+  the customer-impact lens.
+- `RESILIENCE_AGENT` — surfaces the recommendation through
+  the operational-resilience / reversibility lens.
+- `HUMAN_REVIEW_AGENT` — surfaces the recommendation through
+  the human-review-burden lens.
+
+NEVER use LLM-generated agent personas. Each agent_role is a
+closed-vocab lens that filters / projects the Wave 7 output
+per §1 `SimulationBranch.branch_summary`. The agent_role
+NEVER exchanges raw text or chain-of-thought with another
+agent_role — branches are independent sub-invocations
+projected through closed-vocab post-processing.
+
+### 6. Closed-vocab label sets (v1)
+
+#### 6.1 `assumed_constraints` (closed vocab; 10 values)
+
+- `OWNER_COSMP_SCOPE_ONLY`
+- `SAME_ORG_ONLY`
+- `NO_EXTERNAL_PROVIDERS`
+- `NO_CONNECTOR_INVOCATION`
+- `NO_RAW_MEMORY_ACCESS`
+- `NO_AUTONOMOUS_EXECUTION`
+- `WAVE_8_TRANSITION_REQUIRED_BEFORE_ACTION`
+- `HUMAN_REVIEW_BEFORE_FINAL_DECISION`
+- `LEGAL_COMPLIANCE_REVIEW_WHERE_APPLICABLE`
+- `BLOCKED_CANDIDATES_NEVER_TRANSITIONABLE`
+
+#### 6.2 `expected_outcomes` (closed vocab; 8 values)
+
+- `WAVE_7_RECOMMENDATION_PRODUCED`
+- `WAVE_7_RECOMMENDATION_BLOCKED`
+- `WAVE_7_RECOMMENDATION_REQUIRES_HUMAN_DECISION`
+- `WAVE_8_TRANSITION_POSSIBLE_AFTER_REVIEW`
+- `WAVE_8_TRANSITION_DECLINED_BY_POLICY`
+- `INSUFFICIENT_DATA_REQUIRES_REVIEW`
+- `COMPLIANCE_REVIEW_RECOMMENDED`
+- `OPERATIONAL_RESILIENCE_FAVORABLE`
+
+#### 6.3 `governance_conflicts` (closed vocab; 10 values)
+
+- `BRANCH_RECOMMENDS_DIFFERENT_CANDIDATE_TYPE`
+- `BRANCH_BLOCKED_BY_POLICY`
+- `BRANCH_REQUIRES_DUAL_CONTROL`
+- `BRANCH_REQUIRES_LEGAL_REVIEW`
+- `BRANCH_REQUIRES_COMPLIANCE_REVIEW`
+- `BRANCH_INSUFFICIENT_DATA`
+- `BRANCH_HUMAN_DECISION_REQUIRED`
+- `BRANCH_ACTION_RUNTIME_REQUIRED`
+- `BRANCH_NO_TRANSITION_POSSIBLE`
+- `NO_NOTABLE_CONFLICT`
+
+#### 6.4 `unresolved_questions` (closed vocab; 8 values)
+
+- `WHICH_CANDIDATE_TYPE_TO_RECOMMEND`
+- `WHETHER_TO_PROCEED_GIVEN_INSUFFICIENT_DATA`
+- `WHETHER_GOVERNANCE_REVIEW_IS_SUFFICIENT`
+- `WHETHER_LEGAL_REVIEW_IS_REQUIRED`
+- `WHETHER_DUAL_CONTROL_IS_REQUIRED`
+- `WHETHER_TO_BLOCK_OR_PROCEED`
+- `WHETHER_HUMAN_REVIEWER_IS_AVAILABLE`
+- `NO_UNRESOLVED_QUESTIONS_IDENTIFIED`
+
+### 7. `next_review_label` — closed vocabulary (v1)
+
+Eight values. Adding new values requires future ADR amendment.
+
+- `HUMAN_GOVERNANCE_REVIEW`
+- `POLICY_OWNER_REVIEW`
+- `COMPLIANCE_REVIEW`
+- `LEGAL_REVIEW`
+- `OPERATIONAL_RESILIENCE_REVIEW`
+- `DATA_GOVERNANCE_REVIEW`
+- `RERUN_WITH_DIFFERENT_RECOMMENDATION_MODE`
+- `NO_FURTHER_REVIEW_IDENTIFIED`
+
+### 8. Forbidden inputs / no-leak (universal)
+
+The future Wave 9 implementation MUST NOT consume or expose:
+
+- raw chain-of-thought between agents
+- raw model outputs / prompts / completions
+- raw capsule / memory / transcript content
+- embeddings / vectors / storage locations / content hashes
+- bridge IDs / secret_ref values / connector payloads
+- private employee behavior signals / employee scores /
+  manager surveillance / psychological profiling
+- cross-org data
+- privileged legal material
+- raw audit details beyond Wave 5-7-8 SAFE projections
+- regulator-backdoor data
+- caller-supplied agent prompts or instructions
+- caller-supplied branch payloads
+- numeric `score` / `rank` / `winner` / `probability` /
+  `roi` field names
+
+The future Wave 9 implementation slice MUST include a
+no-leak guard test enforcing every forbidden field substring
+against an adversarial fixture set.
+
+### 9. "Wave 9 calls Wave 7 internally" canonical decision
+
+Wave 9 implementation MUST internally invoke
+`PlaygroundBestPathRecommendationService.recommendBestPath`
+per branch — once per (branch_definition, agent_role)
+combination at v1. It MUST NOT accept caller-supplied agent
+prompts, recommendation payloads, comparison payloads, or
+candidate payloads.
+
+Each Wave 7 sub-invocation receives the appropriate
+`recommendation_mode` derived from the `branch_definition` per
+§4. The sub-invocation results are projected through the
+`agent_role` closed-vocab lens to produce one
+`SimulationBranch`.
+
+### 10. Deterministic `branch_id`
+
+Each `SimulationBranch.branch_id` is a deterministic SHA-256
+16-char hex over `(scenario_id, orchestration_mode,
+branch_definition, agent_role)` — stable across reruns;
+mirrors ADR-0072 §1 `candidate_key` precedent.
+
+### 11. Bounded counts (canonical at this ADR)
+
+- `max_branches` — capped at 24 (4 default branch_definitions
+  × 6 default agent_roles = 24 sub-invocations at v1).
+- `branches_per_response_max` — 24.
+- `assumed_constraints_per_branch_max` — 10.
+- `expected_outcomes_per_branch_max` — 8.
+- `governance_conflicts_per_branch_max` — 10.
+- `unresolved_questions_per_response_max` — 8.
+- `branch_summary_max_chars` — 600.
+- `rationale_summary_max_chars` — 300.
+
+Bounded count discipline is canonical; exact values may
+adjust at the implementation slice.
+
+### 12. ADR-0069 §6 8-question architecture check (Wave 9 v1 register decision)
+
+1. **Concurrency / long-running**: At v1 with 24 deterministic
+   sub-invocations against the in-process Wave 7 service,
+   sequential execution completes in ~24 × Wave-7-latency,
+   which is bounded. **NOT inherently long-running.**
+2. **Supervision / fault isolation**: Each sub-invocation
+   is independent — one Wave 7 failure does NOT prevent
+   other branches from completing. Failure isolation is
+   per-branch, achievable via `Promise.allSettled` in
+   TypeScript. **NOT BEAM-required at v1.**
+3. **Backpressure / streaming**: Wave 9 v1 returns ONE
+   response containing all branches; no streaming surface
+   needed. **NOT BEAM-required.**
+4. **Multi-agent coordination**: Branches are INDEPENDENT;
+   no agent-to-agent message-passing per §5 + §9. **NOT
+   BEAM-required at v1.**
+5. **Event-driven flow**: NO at v1.
+6. **High-throughput**: NO at v1 (bounded to 24 branches per
+   call).
+7. **Cross-system coordination**: NO.
+8. **Intelligence-heavy computation**: NO at v1
+   (deterministic projections through closed-vocab lenses).
+
+**Conclusion**: Wave 9 v1 belongs at the TypeScript §2.1
+register. BEAM (Option C) is forward-substrate per ADR-0069
+§3 domain 6 + ADR-0028 — applicable WHEN multi-agent
+simulation needs LIVE concurrent message-passing agents
+exchanging closed-vocab signals across long-running supervised
+processes, or when the simulation needs to scale beyond 24
+sequential branches per call. Neither condition holds at v1.
+
+### 13. Persistence posture
+
+NO persistence at v1. Wave 9 is computed-on-read (mirrors
+Wave 5/6/7 posture). NO `PlaygroundSimulation` Prisma model.
+NO schema migration. Queryable history via the audit chain
+(`ADMIN_ACTION + details.action =
+"PLAYGROUND_SIMULATION_EXECUTED"`).
+
+A future Founder-authorized ADR amendment MAY introduce a
+persistent simulation surface if Wave 10 (Control Tower)
+needs replayable simulation history.
+
+### 14. Audit posture
+
+Wave 9 emits ONE audit row per invocation:
+`ADMIN_ACTION + details.action = "PLAYGROUND_SIMULATION_EXECUTED"`
+with safe metadata:
+
+- `scenario_id`
+- `orchestration_mode`
+- `branch_count`
+- `branch_definitions_used` (closed-vocab subset of §4)
+- `agent_roles_used` (closed-vocab subset of §5)
+- `convergence_summary_size` (number of agreed candidate_keys)
+- `disagreement_summary_size` (number of diverged candidate_types)
+- `unresolved_questions_count`
+- `caller_confirmation_received` (always true)
+
+NEVER raw branch text / chain-of-thought / scenario JSON /
+agent prompts / model outputs / scores.
+
+ZERO new audit literal. Each Wave 7 sub-invocation also
+emits its own `PLAYGROUND_BEST_PATH_RECOMMENDED` audit row
+per ADR-0074 §14 — Wave 9 does NOT suppress those.
+
+### 15. Implementation-method comparison (canonical at this ADR)
+
+#### 15.1. Option A — Deterministic TypeScript sequential
+
+- **Where**: `apps/api/src/services/playground/playground-simulation.service.ts`.
+- **Mechanism**: sequential `Promise.allSettled` over
+  branch_definitions × agent_roles → `Promise<Wave7Result[]>`
+  → closed-vocab projection.
+- **ADR-0069 register**: TypeScript §2.1.
+- **Recommended posture for v1** per §12 8-question check.
+
+#### 15.2. Option B — Python-backed
+
+- **Where**: NEW Python service per ADR-0069 §2.4.
+- **NOT authorized at this ADR.**
+
+#### 15.3. Option C — BEAM-orchestrated
+
+- **Where**: NEW BEAM service per ADR-0069 §3 domain 6 +
+  ADR-0028 BEAM coordination layer.
+- **Applicable WHEN**: Wave 9 needs LIVE concurrent multi-
+  agent processes with supervised fault isolation,
+  backpressured event flow, or long-running coordination
+  beyond the bounded 24-branch v1 ceiling.
+- **NOT authorized at this ADR.** Future Founder-authorized
+  ADR-0028 amendment + ADR-0069 §6 8-question check
+  re-verification required.
+
+### 16. Wave-map alignment (preserves ADR-0065 §7 + prior ADRs)
+
+Wave 9 contract MUST NOT accidentally implement Wave 10:
+
+- **Wave 10** (Control Tower frontend consumer): lives in
+  the `otzar-control-tower` repo; Foundation owns the
+  contract.
+
+Wave 9 explicitly EXCLUDES:
+
+- Action execution (Section 2 retains all execution authority).
+- new Action creation (Wave 8 owns transition; Wave 9 NEVER
+  bypasses Wave 8).
+- agent-to-agent message-passing with raw text.
+- LLM-generated agent personas or reasoning.
+- caller-supplied agent prompts.
+- numeric scoring / probability claims / winner declaration.
+- multi-agent runtime that survives between requests (Wave
+  9 is per-request; no persistent agent state).
+
+### 17. Future generalization (long-term trust-governed mapping context)
+
+Strategic context only per the Founder behavioral directive.
+NOT authorizing personal-life automation / consumer Otzar
+execution / trust-level delegation logic / autonomous
+execution.
+
+The §1 SimulationResponse architecture preserves the
+multi-perspective exploration pattern that future personal-
+life mapping (Otzar-for-life) may eventually consume — the
+canonical exploration → governance → action transition is
+identical at the architectural register.
+
+### 18. Explicit non-goals at this commit
+
+NO code in this commit. NO schema migration. NO new routes.
+NO new audit literal. NO LLM autonomy. NO Python. NO BEAM
+runtime implementation. NO multi-agent runtime. NO
+Phoenix.PubSub / Broadway / supervised-process orchestration.
+NO Action execution. NO new ActionType. NO Wave 8 bypass.
+NO connector invocation. NO external provider calls. NO
+Control Tower frontend. NO new Prisma model. NO personal-
+life automation. NO trust-level delegation. NO CLAUDE.md
+bulk catalog edit. NO bulk older-ADR rewrite. NO current
+active slice derailment.
+
+## Consequences
+
+### Easier after this ADR
+
+- Future Wave 9 implementation slices have a single
+  canonical contract reference.
+- §12 ADR-0069 §6 check explicitly LOCKS v1 at TypeScript
+  §2.1 (deterministic sequential branch enumeration) —
+  BEAM is forward-substrate, not v1 implementation
+  requirement.
+- §15 three-method comparison forward-queues Python (Option
+  B) and BEAM (Option C) at explicit ADR-0069 §2.4 / §2.3
+  registers with their gating ADRs named.
+- §9 + §5 "no agent-to-agent message-passing" decision
+  prevents Wave 9 from drifting into uncontrolled LLM-
+  agent debate.
+- §11 bounded counts (24-branch ceiling) keep Wave 9 v1
+  within TypeScript synchronous-response latency budget.
+
+### Harder after this ADR
+
+- §11 24-branch ceiling caps simulation scope at v1; future
+  expansion requires either §11 amendment OR Option C BEAM
+  authorization.
+- §4 + §5 closed vocabularies cannot accept caller-supplied
+  branch_definitions or agent_roles. Intentional safety
+  boundary.
+- §9 "Wave 9 calls Wave 7 internally" means callers cannot
+  inject simulation inputs that bypass the Wave 5-7
+  pipeline.
+
+## Forward queue
+
+- Wave 9 implementation slice Option A (deterministic
+  TypeScript sequential branch enumeration) — separate
+  Founder authorization at slice.
+- Wave 9 persistence slice — only if Wave 10 requires
+  replayable simulation history.
+- Wave 9 Option C BEAM-orchestrated — requires ADR-0069 §6
+  re-verification + ADR-0028 amendment + separate Founder
+  authorization at slice.
+- Wave 10 (Control Tower frontend consumer) — separate
+  Founder slice; lives in `otzar-control-tower` repo.
+
+## Bidirectional citations
+
+- Cites RULE 0, RULE 4, RULE 10, RULE 12, RULE 13, RULE 19,
+  RULE 20, RULE 21.
+- Cites ADR-0001 + ADR-0002 + ADR-0020 + ADR-0026 +
+  ADR-0028 (BEAM coordination — Option C target).
+- Cites ADR-0052 + ADR-0057.
+- Cites ADR-0065 (closes §7 Wave 9 forward-queue line at
+  contract register; bidirectional back-citation per RULE
+  14 + RULE 20).
+- Cites ADR-0069 (BEAM substrate-coherence law; §12
+  8-question check applied; bidirectional back-citation
+  per RULE 14 + RULE 20).
+- Cites ADR-0070 (legal-advice boundary).
+- Cites ADR-0072 + ADR-0073 + ADR-0074 (Wave 5/6/7
+  contracts; Wave 9 consumes Wave 7 transitively).
+- Cites ADR-0075 (Wave 8 governed-transition contract;
+  Wave 9 NEVER bypasses Wave 8 for any candidate-to-Action
+  transition).
+
+## Founder authorization
+
+Per RULE 20: this ADR + bidirectional back-citations + the
+architecture/README.md catalog entry + Section 5 build-state
+doc update + NEXT_ACTION.md baton update land under explicit
+Founder authorization at
+`[FOUNDER-SECTION-5-WAVE-9-MULTI-AGENT-SIMULATION-ORCHESTRATION-CONTRACT-ADR-AUTH]`
+2026-05-31 (under Founder Section 5 autonomy directive +
+Founder behavioral directive). ADR-only — Wave 9
+implementation slice (Option A) requires separate Founder
+authorization at slice.

@@ -47,7 +47,7 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2+3+4+5+6+7 LIVE; candidate-generation + outcome-comparison + best-path-recommendation surfaces all landed)
+## Current status (PARTIAL — Waves 1+2+3+4+5+6+7+8 LIVE; candidate-generation + outcome-comparison + best-path-recommendation + governed-transition surfaces all landed; Wave 9 contract ADR-0076 design-only landed)
 
 **Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
 scope locked: read-only sandbox-only self-scoped operator
@@ -588,9 +588,24 @@ authorization)**:
    live + 10-gate priority ladder + 11th deterministic
    tie-breaker. Option B (Python) and Option C (BEAM)
    remain forward-substrate.
-7. **Wave 8 — governed transition** from selected
-   scenario to proposed Action plan — design-only ADR
-   LANDED 2026-05-31 at ADR-0075. Closed-vocabulary
+7. ~~**Wave 8 — governed transition** from selected
+   scenario to proposed Action plan~~ — design-only ADR
+   LANDED 2026-05-31 at ADR-0075; Option A deterministic /
+   template-first TypeScript implementation LANDED
+   2026-05-31 (PR #145; `8a69863`). NEW
+   `PlaygroundGovernedTransitionService` + NEW route
+   `POST /api/v1/playground/scenarios/:id/governed-transitions`
+   + 43 integration tests. Wave 8 is the FIRST Section 5
+   wave that creates Section 2 Action rows via existing
+   `createActionForCaller` in PROPOSED status per
+   ADR-0057; Wave 8 NEVER executes; Section 2 retains all
+   execution authority. CONSERVATIVE v1: ONLY
+   SEND_INTERNAL_NOTIFICATION ActionType allowed. Mandatory
+   `caller_confirmation: true` + `idempotency_key`. NO
+   persistence per Founder QLOCK 1; NO new audit literal;
+   NO LLM / Python / BEAM; NO direct execution; NO
+   connector invocation. ADR-0075 design-only context
+   below was: Closed-vocabulary
    transition contract; Wave 8 creates Section 2 Action
    rows via existing `createActionForCaller` in PROPOSED
    status; Section 2 retains all execution authority per
@@ -613,8 +628,24 @@ authorization)**:
    implementation slice (Option A deterministic
    TypeScript) is forward-substrate behind separate
    Founder authorization.
-8. **Wave 9 — multi-agent simulation orchestration**
-   (consuming ADR-0028 BEAM coordination layer).
+8. **Wave 9 — multi-agent simulation orchestration** —
+   design-only ADR LANDED 2026-05-31 at ADR-0076. Closed-
+   vocabulary simulation contract; 3 orchestration_modes
+   (DETERMINISTIC_BRANCH_ENUMERATION default + 2 opt-in);
+   5 branch_definitions + 6 agent_roles closed-vocab; NO
+   agent-to-agent message-passing; NO LLM-generated agent
+   personas; NO raw chain-of-thought between branches.
+   ADR-0069 §6 8-question architecture check LOCKED v1 at
+   TypeScript §2.1 sequential branch enumeration (bounded
+   24-branch ceiling fits within TS synchronous-response
+   latency budget); Option C BEAM forward-substrate per
+   ADR-0028 (applies WHEN simulation needs LIVE concurrent
+   message-passing agents OR scales beyond 24 sequential
+   branches per call; neither holds at v1). NO code / NO
+   schema / NO new audit literal / NO multi-agent runtime
+   at ADR-0076. Wave 9 implementation slice (Option A
+   deterministic TypeScript) is forward-substrate behind
+   separate Founder authorization.
 9. **Wave 10 — Control Tower frontend consumer**
    (frontend; lives in `otzar-control-tower` repo).
 
