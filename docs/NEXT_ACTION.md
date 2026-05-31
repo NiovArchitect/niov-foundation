@@ -9,11 +9,11 @@
 
 ## Where we are
 
-- **Main HEAD:** `a1b7ca4` (Section 1 Wave 5 closeout docs)
-- **Latest merged PR:** [#115](https://github.com/NiovArchitect/niov-foundation/pull/115) — Section 1 Wave 5 closeout docs.
-- **Active branch / PR:** `section-7-rule13-regulator-expiry-doc-drift-fix` (RULE 13 substrate-honest docs-only correction; Hardening Wave D emitter has been LIVE since 2026-05-29 — Section 7 doc previously listed it as forward-substrate).
+- **Main HEAD:** `2c4336a` (Section 6 Wave 6 per-ActionType action-runtime health; closeout docs PR pending)
+- **Latest merged PR:** [#117](https://github.com/NiovArchitect/niov-foundation/pull/117) — Section 6 Wave 6 (16 tests).
+- **Active branch / PR:** `section-6-wave-6-closeout-docs` (Wave 6 closeout docs; design-only).
 - **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern substrate (2026-05-30)** — Wave 5 LANDED via ADR-0066 (PR #113) + implementation (PR #114; `7661ba9`). NEW `OtzarProposedPattern` Prisma model + 4 self-scoped review routes + `OtzarProposedPatternService` + recurrence-detection function + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit; owner-first; closed-vocab; ADMIN_ACTION + 5-discriminator audit; ZERO new audit literal; existing org-scoped `IntelligencePattern` untouched per RULE 1.
-- **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) — 4-aggregate arc closure.
+- **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 extension LIVE — 5 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health per ADR-0061 §8 forward queue; PR #117 `2c4336a`); ZERO new audit literal across any Section 6 wave.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope**.
 - **Live `ACTION_*` emitters:** 10 of 10. **Real per-`ActionType` handlers:** 3 of 3 LIVE.
@@ -26,23 +26,32 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
+## Section 6 Wave 6 LANDED — per-ActionType action-runtime health (PR #117)
+
+NEW `POST /api/v1/analytics/action-runtime-by-action-type` + `getActionRuntimeByActionTypeForOrg` service method + 16 integration tests per ADR-0061 §8 forward queue ("Wave 3+ additional aggregates as operator demand surfaces"). Extends Wave 3 org-wide action-runtime-success-rate with per-ActionType breakdown. Envelope-tier `OK_BY_ROW | INSUFFICIENT_POPULATION` + per-row `HEALTHY | DEGRADED | UNHEALTHY | INSUFFICIENT_VOLUME` labels. Same `can_admin_org` + same-org + k=5 envelope gate + `ACTION_RUNTIME_MIN_VOLUME=10` per-row gate + ADMIN_ACTION:ANALYTICS_READ audit contract as Wave 3. **ZERO new audit literal.**
+
+**This is aggregate runtime health by ActionType — NOT employee scoring, NOT manager surveillance, NOT individual actor performance, NOT a worker dashboard.** Per-row signal labels are operational only.
+
+Section file: [`current-build-state/06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md).
+
 ## Section 1 Wave 5 LANDED — Otzar proposed-pattern from recurring drift (PR #114)
 
-NEW `OtzarProposedPattern` Prisma model (14 cols + 2 indexes; deliberately separate from existing org-scoped `IntelligencePattern` which stays unchanged per RULE 1 + verified untouched). NEW `OtzarProposedPatternService` with 4 owner-first methods. 4 NEW self-scoped routes on `/api/v1/otzar/my-twin/proposed-patterns` (POST sweep + GET list + GET detail + PATCH state-transition). 36 integration tests. Closes ADR-0058 §"Forward queue" item 1 + ADR-0066 §3-§7 at the implementation register.
-
-**Doctrine**: auto-write = **AUTO-PROPOSE, NOT auto-commit**. Owner-first self-scope (RULE 0); cross-owner/unknown id → 404 PROPOSED_PATTERN_NOT_FOUND enumeration-safe; closed-vocab `status` ∈ PROPOSED|ACCEPTED|REJECTED|ARCHIVED with locked transitions (PROPOSED → any; ACCEPTED|REJECTED → ARCHIVED; ARCHIVED terminal); invalid transitions → 422 INVALID_STATE_TRANSITION; forbidden body fields on PATCH (14 fields; only `status` updatable) → 422 INVALID_REQUEST. ADMIN_ACTION + 5-discriminator audit (PROPOSED + READ + ACCEPTED + REJECTED + ARCHIVED); ZERO new audit literal; safe details only (no safe_summary text; no raw correction/transcript/capsule content; no conversation IDs; no numeric scores).
-
-Recurrence-detection function reads ONLY caller's own drift substrate (caller's CORRECTION capsules in last 14 days + caller's wallet stale-capsule freshness via `embedding_generated_at`). 3 closed-vocab `source_signal_type` discriminators paired with 3 `pattern_label` values. Dedup policy: no new PROPOSED for (owner, source, label) while existing PROPOSED|ACCEPTED non-archived row exists. Schema migration via `npm run db:push:test` per ADR-0025. Substrate-honest single-snapshot proxy for "≥ N consecutive days" criterion (true consecutive-day tracking is forward-substrate per ADR-0066 §9).
-
-Section file: [`current-build-state/01-employee-intelligence-core.md`](current-build-state/01-employee-intelligence-core.md). Tier-4 build-log: [`build-log/2026-05-30-pr-114-section-1-wave-5-otzar-proposed-pattern.md`](build-log/2026-05-30-pr-114-section-1-wave-5-otzar-proposed-pattern.md).
+NEW `OtzarProposedPattern` Prisma model + `OtzarProposedPatternService` + 4 self-scoped routes on `/api/v1/otzar/my-twin/proposed-patterns` + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit. Closes ADR-0058 §"Forward queue" item 1 + ADR-0066 §3-§7. ADMIN_ACTION + 5-discriminator audit (no new audit literal). Existing org-scoped `IntelligencePattern` untouched per RULE 1.
 
 ## Recommended next production section
 
-**Open product decision tier 1**: Section 1 Wave 6 — active-pattern-consumption (how an ACCEPTED `OtzarProposedPattern` informs the AI teammate's behavior). Likely paths: (a) priming hook into `assembleContext` per ADR-0048 (would re-weight working-set construction to favor accepted patterns); (b) explicit advisory surface in `getMyTwin` response (would surface accepted patterns as coaching reminders). Founder product decision needed before drafting the Wave 6 ADR.
+**Tier 1 — safe, no Founder product decision required**:
 
-**Open product decision tier 2 (Section 5)**: Wave 5 candidate generation per ADR-0065 §7 — 4 Founder product decisions still outstanding (candidate storage model + generation source — fixture vs LLM autonomy + audit literal vocabulary + closed-vocab labels).
+- **Section 6 compliance-posture aggregate** per ADR-0061 §8 — next aggregate in the Wave 3+ extension family. Same `AnalyticsService` + same SAFE projection + k=5 + ANALYTICS_READ audit precedent (now 5-aggregate strong). Likely fixture-based for v1 (HIPAA/GDPR/SOC2 framework presence + count of compliance-tagged Actions / capsules in window).
 
-**Safe alternatives (no Founder product decision required)**: ~~Section 7 proactive REGULATOR_ACCESS_EXPIRED emitter~~ — **substrate-honest correction (RULE 13): already LIVE at Hardening Wave D (PR #79 / `dcff369`)**; Section 7 doc previously listed it as forward-substrate but the emitter has been on the cron host since 2026-05-29 with 7 passing integration tests. Section 6 additional aggregates per ADR-0061 §8 (per-action-type runtime health + compliance-posture aggregate; SAFE projection precedent established) remain the safe Tier-1 alternative.
+**Tier 2 — needs ONE Founder product decision**:
+
+- **Section 1 Wave 6 active-pattern-consumption** — how an ACCEPTED `OtzarProposedPattern` informs the AI teammate's behavior. Paths: (a) priming hook into `assembleContext`; (b) advisory surface in `getMyTwin`. Founder picks one (or both).
+
+**Tier 3 — needs multiple Founder product decisions**:
+
+- **Section 5 Wave 5 candidate generation** per ADR-0065 §7 — 4 outstanding decisions (storage / generation source / audit / labels).
+- **Section 4 SDK-bound connectors** — each adapter own QLOCK + RULE 21 + OAuth.
 
 ## Founder Sleep Directive preferences — status
 
