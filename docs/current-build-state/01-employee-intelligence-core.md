@@ -50,12 +50,20 @@ rollup Wave 4C).
 
 **Important scope wording**: closes the **Foundation backend
 drift-detection substrate + the Wave 5 review-gated
-proposed-pattern substrate** for v1 self-scoped coaching/alignment
-trust loop. Wave 5 LANDED 2026-05-30 (PR #114 `7661ba9`):
-NEW `OtzarProposedPattern` Prisma model + service + 4
-self-scoped routes + 36 integration tests; closes ADR-0058
-§"Forward queue" item 1 + ADR-0066 §3-§7 at the implementation
-register. Remaining ADR-0058 §Forward queue items still
+proposed-pattern substrate + the Wave 6A symbiotic advisory
+surface** for v1 self-scoped coaching/alignment trust loop.
+Wave 5 LANDED 2026-05-30 (PR #114 `7661ba9`): NEW
+`OtzarProposedPattern` Prisma model + service + 4 self-scoped
+routes + 36 integration tests; closes ADR-0058 §"Forward queue"
+item 1 + ADR-0066 §3-§7 at the implementation register.
+**Wave 6A LANDED 2026-05-30 (PR #121 `6b84a99`)**: NEW
+symbiotic advisory surface on `GET /api/v1/otzar/my-twin`
+exposing the caller's OWN ACCEPTED `OtzarProposedPattern`
+rows as `accepted_patterns[]`. The user teaches the Twin
+through review-and-acceptance; the Twin reflects accepted
+patterns back as visible alignment memory — NOT correction
+logging, NOT employee coaching, NOT compliance reminders,
+NOT surveillance. Remaining ADR-0058 §Forward queue items still
 forward-substrate: operator-tunable thresholds per org; drift
 digest connector fan-out; Control Tower drift UX; role-scope-
 conflict signal pending a POLICY_DRIFT producer. ADR-0066 §9
@@ -107,6 +115,29 @@ true consecutive-day tracking.
   Counts + labels only; no correction-text leakage; no cross-
   conversation aggregation. Service:
   `apps/api/src/services/otzar/conversation-corrections.ts`.
+- **Wave 6A — symbiotic advisory surface on `/api/v1/otzar/my-twin`
+  (PR #121; `6b84a99`)** — extends the existing Wave 2A
+  getMyTwin response with an optional `accepted_patterns[]`
+  field projecting the caller's OWN ACCEPTED
+  `OtzarProposedPattern` rows as visible alignment guidance.
+  Symbiotic framing per Founder Wave 6A clarification: the
+  user teaches the Twin through review-and-acceptance; the
+  Twin reflects accepted patterns back as visible alignment
+  memory. Forbidden language ("score" / "surveillance" /
+  "manager" / "compliance" / "discipline") verified absent
+  from the advisory_note template copy. **NO assembleContext
+  touch** (Wave 6B forward-substrate). **NO new audit
+  literal** (preserves Wave 2A no-audit posture). **NO
+  schema migration.** SAFE projection enforced by
+  `AcceptedPatternAdvisoryView` (7 fields only: pattern_id +
+  closed-vocab source/label/confidence + safe_summary +
+  accepted_at + symbiotic advisory_note); v1 bounded limit
+  default 5 / cap 25; sorted by `reviewed_at DESC`. PROPOSED
+  / REJECTED / ARCHIVED rows excluded. Cross-owner isolation
+  verified (caller A cannot see caller B's accepted patterns).
+  15 integration tests at `tests/integration/
+  my-twin-accepted-patterns.test.ts`.
+
 - **Wave 5 — `/api/v1/otzar/my-twin/proposed-patterns/*` (PR #114;
   ADR-0066)** — 4 self-scoped routes for the review-gated
   proposed-pattern lifecycle:
@@ -257,15 +288,17 @@ contracts).
 7. ~~**`IntelligencePattern` auto-write from recurring correction
    themes**~~ — **IMPLEMENTATION LANDED at PR #114 `7661ba9`
    (2026-05-30)** as Section 1 Wave 5 `OtzarProposedPattern`
-   review-gated proposal lifecycle per ADR-0066 §3-§7. NEW
-   Prisma model (separate from existing org-scoped
-   `IntelligencePattern` which stays unchanged per RULE 1;
-   verified untouched). 4-route self-scoped review surface;
-   ADMIN_ACTION + 5-discriminator audit (no new audit literal);
-   36 integration tests. Wave 6+ active-pattern-consumption
-   (how an ACCEPTED pattern informs the AI teammate's behavior)
-   remains forward-substrate behind separate Founder
-   authorization per ADR-0066 §9.
+   review-gated proposal lifecycle per ADR-0066 §3-§7.
+   ~~**Wave 6 active-pattern-consumption** remains forward-
+   substrate behind separate Founder authorization per
+   ADR-0066 §9.~~ — **Wave 6A LANDED at PR #121 `6b84a99`
+   (2026-05-30)** as the symbiotic advisory surface on
+   `getMyTwin` (accepted_patterns[] projection; no audit; no
+   assembleContext touch; no schema). **Wave 6B (priming hook
+   into assembleContext) remains ADR/design forward-substrate
+   per Founder operating direction** — must not be implemented
+   until ADR/design confirms no-leak / RULE 0 / behavior-scope
+   safety.
 8. **Cross-team aggregation governance** — design substrate for
    safe aggregation of permissioned signals across an org's
    employee twins (likely lands as a future CAR Sub-box; not yet
