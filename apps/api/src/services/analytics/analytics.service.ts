@@ -251,6 +251,56 @@ export interface ActionRuntimeSuccessRateAggregate {
   honest_note: string;
 }
 
+// WHAT: One SAFE row in the per-action-type runtime health
+//        aggregate response. Closed-vocab fields only.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Per ADR-0061 §1.a closed-vocab + per-row redaction:
+//      action_type is the discriminator; when attempts for that
+//      type in the window are below ACTION_RUNTIME_MIN_VOLUME,
+//      the counts + rate are nulled and signal_label =
+//      INSUFFICIENT_VOLUME (mirrors Wave 3 redaction at the row
+//      tier rather than the envelope tier). NEVER includes
+//      action_id / attempt_id / actor_entity_id / source_entity_id /
+//      target_entity_id / payload_summary / payload_redacted /
+//      error_class / error_summary / per-attempt attribution.
+export interface ActionRuntimeByActionTypeRow {
+  action_type: string;
+  attempt_count: number;
+  succeeded_count: number | null;
+  failed_count: number | null;
+  timed_out_count: number | null;
+  cancelled_count: number | null;
+  success_rate: number | null;
+  signal_label: ActionRuntimeSuccessLabel;
+}
+
+// WHAT: SAFE projection envelope for the per-action-type
+//        action-runtime health aggregate.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Closed-vocab per ADR-0061 §1.a. Two-tier signal model:
+//      envelope `signal_label` reflects the org-wide org-tier
+//      population gate (INSUFFICIENT_POPULATION when org member
+//      count < k=5; otherwise OK_BY_ROW indicating per-row
+//      labels are authoritative). `rows[]` is the per-action-type
+//      breakdown — empty array when the envelope-tier gate
+//      redacted. Aggregate name distinguishes this from the
+//      Wave 3 org-wide ACTION_RUNTIME_SUCCESS_RATE aggregate.
+export interface ActionRuntimeByActionTypeAggregate {
+  ok: true;
+  aggregate: "ACTION_RUNTIME_BY_ACTION_TYPE";
+  window_days: number;
+  org_entity_id: string;
+  member_count: number;
+  redacted: boolean;
+  rows: readonly ActionRuntimeByActionTypeRow[];
+  signal_label:
+    | "OK_BY_ROW"
+    | "INSUFFICIENT_POPULATION";
+  honest_note: string;
+}
+
 // WHAT: Failure shape for analytics service tier.
 // INPUT: Used as a return type only.
 // OUTPUT: None.
@@ -616,6 +666,210 @@ export class AnalyticsService {
         "ActionAttempt rows in the window. Signal label is " +
         "operational only — not an employee score, not a worker " +
         "performance index.",
+    };
+  }
+
+  // WHAT: Compute the per-action-type action-runtime health
+  //        aggregate over the requested window.
+  // INPUT: Pre-resolved org_entity_id + window_days +
+  //         actor_entity_id for audit emission.
+  // OUTPUT: ActionRuntimeByActionTypeAggregate | AnalyticsFailure.
+  // WHY: Extends Wave 3 org-wide success-rate aggregate with
+  //      per-ActionType breakdown. Step-by-step:
+  //   1. Validate window_days (clamp 1..30; default 7).
+  //   2. Count active org members (k=5 population gate).
+  //   3. If member_count < k=5 → return SAFE redacted envelope
+  //      (signal_label = INSUFFICIENT_POPULATION; rows = []).
+  //   4. Resolve org Action ids in window.
+  //   5. Pull ActionAttempt rows for those Actions where
+  //      ended_at >= cutoff + outcome non-null; SELECT only
+  //      outcome + action_id (the join key) — never any payload.
+  //   6. Join attempts to actions by action_id; group by
+  //      action_type; tally counts per outcome.
+  //   7. Per-action-type: if attempt_count < ACTION_RUNTIME_MIN_VOLUME
+  //      (10) → row's counts + rate null + label INSUFFICIENT_VOLUME
+  //      (high-variance protection at the per-type tier; mirrors
+  //      Wave 3 protection at the org-tier).
+  //   8. Per-action-type: otherwise compute success_rate + label
+  //      (HEALTHY >= 0.9; DEGRADED >= 0.6 and < 0.9; UNHEALTHY < 0.6).
+  //   9. Order rows by action_type ASC for deterministic
+  //      consumption by Control Tower frontend; only action_types
+  //      with at least one attempt in window are surfaced (zero-
+  //      attempt action_types absent from rows, which is itself
+  //      a SAFE signal — never speculate counts for non-attempted
+  //      types).
+  //   10. Emit ADMIN_ACTION + ANALYTICS_READ audit with aggregate
+  //       discriminator + window_days filter_key + row_count
+  //       (count of action_types surfaced, not per-row counts).
+  //   11. Return SAFE projection envelope.
+  async getActionRuntimeByActionTypeForOrg(args: {
+    org_entity_id: string;
+    actor_entity_id: string;
+    window_days?: number;
+    ip_address?: string | null;
+  }): Promise<ActionRuntimeByActionTypeAggregate | AnalyticsFailure> {
+    const requestedWindow = args.window_days ?? ANALYTICS_WINDOW_DAYS_DEFAULT;
+    if (
+      !Number.isInteger(requestedWindow) ||
+      requestedWindow < ANALYTICS_WINDOW_DAYS_MIN ||
+      requestedWindow > ANALYTICS_WINDOW_DAYS_MAX
+    ) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: `window_days must be an integer in [${ANALYTICS_WINDOW_DAYS_MIN}, ${ANALYTICS_WINDOW_DAYS_MAX}]`,
+        invalid_fields: ["window_days"],
+      };
+    }
+    const windowDays = requestedWindow;
+
+    // Step 2 — k=5 population gate.
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberCount = memberships.length;
+    if (memberCount < ANALYTICS_MIN_POPULATION) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "ACTION_RUNTIME_BY_ACTION_TYPE",
+        redacted: true,
+        result_count: 0,
+        filter_keys: ["window_days"],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "ACTION_RUNTIME_BY_ACTION_TYPE",
+        window_days: windowDays,
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        rows: [],
+        signal_label: "INSUFFICIENT_POPULATION",
+        honest_note: HONEST_NOTE_BELOW_THRESHOLD,
+      };
+    }
+
+    // Step 4 — resolve org Actions; SELECT only the join key +
+    // action_type discriminator (never payload).
+    const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const orgActions = await prisma.action.findMany({
+      where: {
+        org_entity_id: args.org_entity_id,
+        deleted_at: null,
+      },
+      select: { action_id: true, action_type: true },
+    });
+    const actionTypeById = new Map<string, string>();
+    for (const a of orgActions) {
+      actionTypeById.set(a.action_id, a.action_type);
+    }
+    const orgActionIds = orgActions.map((a) => a.action_id);
+
+    // Step 5 — pull attempts in window; SELECT only outcome +
+    // action_id; never any payload.
+    const attempts =
+      orgActionIds.length === 0
+        ? []
+        : await prisma.actionAttempt.findMany({
+            where: {
+              action_id: { in: orgActionIds },
+              ended_at: { gte: cutoff, not: null },
+              outcome: { not: null },
+            },
+            select: { action_id: true, outcome: true },
+          });
+
+    // Step 6 — group by action_type.
+    type PerTypeCounts = {
+      SUCCEEDED: number;
+      FAILED: number;
+      TIMED_OUT: number;
+      CANCELLED: number;
+    };
+    const grouped = new Map<string, PerTypeCounts>();
+    for (const att of attempts) {
+      const at = actionTypeById.get(att.action_id);
+      if (at === undefined) continue;
+      let bucket = grouped.get(at);
+      if (bucket === undefined) {
+        bucket = { SUCCEEDED: 0, FAILED: 0, TIMED_OUT: 0, CANCELLED: 0 };
+        grouped.set(at, bucket);
+      }
+      if (att.outcome === "SUCCEEDED") bucket.SUCCEEDED++;
+      else if (att.outcome === "FAILED") bucket.FAILED++;
+      else if (att.outcome === "TIMED_OUT") bucket.TIMED_OUT++;
+      else if (att.outcome === "CANCELLED") bucket.CANCELLED++;
+    }
+
+    // Step 7–8 — per-type redaction + label; ordered by
+    // action_type ASC for deterministic projection.
+    const sortedActionTypes = [...grouped.keys()].sort();
+    const rows: ActionRuntimeByActionTypeRow[] = sortedActionTypes.map(
+      (action_type) => {
+        const c = grouped.get(action_type)!;
+        const attempt_count =
+          c.SUCCEEDED + c.FAILED + c.TIMED_OUT + c.CANCELLED;
+        if (attempt_count < ACTION_RUNTIME_MIN_VOLUME) {
+          return {
+            action_type,
+            attempt_count,
+            succeeded_count: null,
+            failed_count: null,
+            timed_out_count: null,
+            cancelled_count: null,
+            success_rate: null,
+            signal_label: "INSUFFICIENT_VOLUME" as const,
+          };
+        }
+        const rate = c.SUCCEEDED / attempt_count;
+        let signal_label: ActionRuntimeSuccessLabel;
+        if (rate >= SUCCESS_RATE_HEALTHY_THRESHOLD) signal_label = "HEALTHY";
+        else if (rate >= SUCCESS_RATE_DEGRADED_THRESHOLD)
+          signal_label = "DEGRADED";
+        else signal_label = "UNHEALTHY";
+        return {
+          action_type,
+          attempt_count,
+          succeeded_count: c.SUCCEEDED,
+          failed_count: c.FAILED,
+          timed_out_count: c.TIMED_OUT,
+          cancelled_count: c.CANCELLED,
+          success_rate: Number(rate.toFixed(4)),
+          signal_label,
+        };
+      },
+    );
+
+    // Step 10 — audit. result_count is the count of action_types
+    // surfaced (an aggregate quantity per ADR-0061 §3); per-row
+    // counts NEVER appear in audit details.
+    await this.emitAnalyticsReadAudit({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      aggregate: "ACTION_RUNTIME_BY_ACTION_TYPE",
+      redacted: false,
+      result_count: rows.length,
+      filter_keys: ["window_days"],
+      ip_address: args.ip_address ?? null,
+    });
+
+    return {
+      ok: true,
+      aggregate: "ACTION_RUNTIME_BY_ACTION_TYPE",
+      window_days: windowDays,
+      org_entity_id: args.org_entity_id,
+      member_count: memberCount,
+      redacted: false,
+      rows,
+      signal_label: "OK_BY_ROW",
+      honest_note:
+        "Per-ActionType action-runtime outcome counts derived " +
+        "from same-org ActionAttempt rows in the window. Row " +
+        "labels are operational only — not employee scores, not " +
+        "worker performance indices, not manager dashboards.",
     };
   }
 
