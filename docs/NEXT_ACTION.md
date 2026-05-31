@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `2b83116` (Section 6 Wave 7 compliance-posture; closeout docs PR pending)
-- **Latest merged PR:** [#119](https://github.com/NiovArchitect/niov-foundation/pull/119) — Section 6 Wave 7 (20 tests).
-- **Active branch / PR:** `section-6-wave-7-closeout-docs` (Wave 7 closeout docs; design-only).
-- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern substrate (2026-05-30)** — Wave 5 LANDED via ADR-0066 (PR #113) + implementation (PR #114; `7661ba9`). NEW `OtzarProposedPattern` Prisma model + 4 self-scoped review routes + `OtzarProposedPatternService` + recurrence-detection function + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit; owner-first; closed-vocab; ADMIN_ACTION + 5-discriminator audit; ZERO new audit literal; existing org-scoped `IntelligencePattern` untouched per RULE 1.
+- **Main HEAD:** `6b84a99` (Section 1 Wave 6A symbiotic advisory surface; closeout docs PR pending)
+- **Latest merged PR:** [#121](https://github.com/NiovArchitect/niov-foundation/pull/121) — Section 1 Wave 6A advisory surface (15 tests).
+- **Active branch / PR:** `section-1-wave-6a-closeout-docs` (Wave 6A closeout docs; design-only; Wave 6B ADR/design starts after this merge).
+- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern + Wave 6A symbiotic advisory surface (2026-05-30)** — Wave 5 LANDED via ADR-0066 (PRs #113/#114/#115; `7661ba9` impl). **Wave 6A LANDED PR #121 `6b84a99`** — NEW symbiotic `accepted_patterns[]` projection on `getMyTwin`; user teaches the Twin through review-and-acceptance; Twin reflects accepted patterns back as visible alignment memory; NO assembleContext touch; NO new audit literal; NO schema migration; 15 integration tests. Wave 6B (assembleContext priming) remains ADR/design forward-substrate.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE — 6 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health + Wave 7 org-level compliance-posture per ADR-0061 §8 forward queue; PRs #117 `2c4336a` + #119 `2b83116`); ZERO new audit literal across any Section 6 wave.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope**.
@@ -26,6 +26,10 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
+## Section 1 Wave 6A LANDED — symbiotic accepted-pattern advisory surface (PR #121)
+
+NEW `accepted_patterns[]` field on `GET /api/v1/otzar/my-twin` projecting the caller's OWN ACCEPTED `OtzarProposedPattern` rows as visible alignment guidance. **Symbiotic framing**: the user teaches the Twin through review-and-acceptance; the Twin reflects accepted patterns back as visible alignment memory — NOT correction logging, NOT coaching, NOT compliance, NOT surveillance. SAFE projection enforced by `AcceptedPatternAdvisoryView` (7-field strict subset); v1 limit 5 / cap 25; reviewed_at DESC; PROPOSED/REJECTED/ARCHIVED excluded; cross-owner isolation verified. NO assembleContext touch (Wave 6B forward-substrate); NO new audit literal; NO schema migration; 15 integration tests.
+
 ## Section 6 Wave 7 LANDED — org-level compliance-posture aggregate (PR #119)
 
 NEW `POST /api/v1/analytics/compliance-posture` + `getCompliancePostureForOrg` service method + 20 integration tests per ADR-0061 §8 forward queue. Org-level **metadata-only compliance posture surface** — **NOT legal advice; NOT certification; NOT employee compliance scoring; NOT manager surveillance.** 5-label closed-vocab: HEALTHY (all subscribed frameworks active + no recent failures) / WATCH (inactive or unknown framework subscribed) / DEGRADED (recent COMPLIANCE_CHECK_FAILED in window) / NOT_CONFIGURED (no profile or empty frameworks[]) / INSUFFICIENT_POPULATION (k=5 fail). Same `can_admin_org` + same-org + k=5 + ADMIN_ACTION:ANALYTICS_READ audit contract as Waves 2-6. **ZERO new audit literal.** Substrate-honest deferral of LawfulBasis + REGULATOR_ACCESS_* counts pending safe org-attribution. **6 live aggregates total**.
@@ -34,20 +38,14 @@ NEW `POST /api/v1/analytics/compliance-posture` + `getCompliancePostureForOrg` s
 
 NEW `POST /api/v1/analytics/action-runtime-by-action-type` + 16 integration tests. Extends Wave 3 with per-ActionType breakdown. Envelope `OK_BY_ROW | INSUFFICIENT_POPULATION` + per-row `HEALTHY | DEGRADED | UNHEALTHY | INSUFFICIENT_VOLUME`. **NOT employee scoring; NOT manager surveillance.** Section file: [`current-build-state/06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md).
 
-## Section 1 Wave 5 LANDED — Otzar proposed-pattern from recurring drift (PR #114)
-
-NEW `OtzarProposedPattern` Prisma model + service + 4 self-scoped routes + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit. Closes ADR-0058 §Forward queue item 1 + ADR-0066. Existing org-scoped `IntelligencePattern` untouched per RULE 1.
-
 ## Recommended next production section
 
-**Tier 2 — needs ONE Founder product decision**:
+**Immediate next (authorized)**: **Section 1 Wave 6B ADR/design only — assembleContext priming hook** per Founder Wave 6A operating direction. After Wave 6A docs closeout merges, draft ADR/design for the priming hook into `assembleContext`. Must NOT be implemented until ADR/design confirms no-leak, RULE 0, and behavior-scope safety. STOP after ADR/design report unless explicitly authorized to implement.
 
-- **Section 1 Wave 6 active-pattern-consumption** — how an ACCEPTED `OtzarProposedPattern` informs the AI teammate's behavior. Paths: (a) priming hook into `assembleContext` (re-weights working-set toward accepted patterns); (b) advisory surface in `getMyTwin` (surfaces accepted patterns as coaching reminders). Founder picks one (or both). **This is the lowest-decision Tier-2 candidate** now that Section 6 Wave 7 has consumed the previous Tier-1 slot.
+**Tier 1 cross-section alternatives (no Founder product decision required)**:
 
-**Tier 1 alternatives still available (no Founder product decision)**:
-
-- **Section 6 additional aggregates** beyond Wave 7 — possible candidates: persistent aggregate caching (would require ADR-0061 §8 amendment); operator-tunable k threshold (would require ADR-0061 §1.c amendment). Both are FORWARD-SUBSTRATE per ADR-0061 §Forward queue and would NOT proceed without explicit Founder authorization for the substrate change.
 - **Section 7 cross-chain verify-chain** — extending self-only `verify-chain` to org-admin / platform / regulator scope. Carries perf + leakage review per Section 7 doc; would need a separate slice with its own QLOCK.
+- **Section 6 additional aggregates** beyond Wave 7 — would require ADR-0061 amendment (persistent caching / operator-tunable k threshold). FORWARD-SUBSTRATE without explicit Founder authorization.
 
 **Tier 3 — multi-decision; defer**:
 
