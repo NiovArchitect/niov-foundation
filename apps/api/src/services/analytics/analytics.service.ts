@@ -301,6 +301,63 @@ export interface ActionRuntimeByActionTypeAggregate {
   honest_note: string;
 }
 
+// WHAT: Closed-vocab signal labels for the compliance-posture
+//        aggregate.
+// INPUT: Used as a value array + TS literal-union type.
+// OUTPUT: None.
+// WHY: ADR-0061 §1.a closed-vocab. The label is the operator
+//      signal; raw counts are surfaced alongside but the LABEL
+//      is the policy-relevant projection. NOT a legal advice
+//      surface; NOT a certification; NOT an employee compliance
+//      score. NOT_CONFIGURED is the explicit zero-state when
+//      the org has no EntityComplianceProfile or zero frameworks.
+//      INSUFFICIENT_POPULATION is the k=5 redaction state.
+export const COMPLIANCE_POSTURE_LABELS = [
+  "HEALTHY",
+  "WATCH",
+  "DEGRADED",
+  "NOT_CONFIGURED",
+  "INSUFFICIENT_POPULATION",
+] as const;
+
+export type CompliancePostureLabel =
+  (typeof COMPLIANCE_POSTURE_LABELS)[number];
+
+// WHAT: SAFE projection envelope for the compliance-posture
+//        aggregate.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Org-level metadata-only aggregate per ADR-0061 §1.a.
+//      Counts ONLY at org tier; NEVER per-member compliance
+//      attribution; NEVER per-framework break-out beyond
+//      aggregate counts; NEVER lawful-basis text /
+//      basis_reference / jurisdiction_invoked / regulator notes
+//      / audit IDs / individual employee compliance state.
+//      `frameworks_subscribed_count` is the org's
+//      EntityComplianceProfile.frameworks[] length;
+//      active/inactive/unknown sub-counts derived by joining
+//      against ComplianceFramework. `recent_check_*_count` is
+//      COMPLIANCE_CHECK_PASSED/FAILED audit row counts in the
+//      window, scoped by target_entity_id = orgEntityId
+//      (the audit event chain is the existing safe source per
+//      compliance.service.ts:545+ precedent).
+export interface CompliancePostureAggregate {
+  ok: true;
+  aggregate: "COMPLIANCE_POSTURE";
+  window_days: number;
+  org_entity_id: string;
+  member_count: number;
+  redacted: boolean;
+  frameworks_subscribed_count: number;
+  frameworks_active_count: number;
+  frameworks_inactive_count: number;
+  frameworks_unknown_count: number;
+  recent_check_passed_count: number;
+  recent_check_failed_count: number;
+  signal_label: CompliancePostureLabel;
+  honest_note: string;
+}
+
 // WHAT: Failure shape for analytics service tier.
 // INPUT: Used as a return type only.
 // OUTPUT: None.
@@ -870,6 +927,245 @@ export class AnalyticsService {
         "from same-org ActionAttempt rows in the window. Row " +
         "labels are operational only — not employee scores, not " +
         "worker performance indices, not manager dashboards.",
+    };
+  }
+
+  // WHAT: Compute the org-level compliance-posture aggregate
+  //        over the requested window.
+  // INPUT: Pre-resolved org_entity_id + window_days +
+  //         actor_entity_id for audit emission.
+  // OUTPUT: CompliancePostureAggregate | AnalyticsFailure.
+  // WHY: ADR-0061 §8 forward queue extension (Wave 3+
+  //      additional aggregates). Metadata-only org-level
+  //      compliance posture — NOT legal advice; NOT
+  //      certification; NOT employee compliance scoring; NOT
+  //      manager surveillance. Step-by-step:
+  //   1. Validate window_days (clamp 1..30; default 7).
+  //   2. k=5 population gate via EntityMembership count.
+  //   3. If member_count < 5 → SAFE redacted projection
+  //      (INSUFFICIENT_POPULATION; all counts 0).
+  //   4. Look up org's EntityComplianceProfile (per DRIFT 15
+  //      this is the org-level row keyed by entity_id =
+  //      orgEntityId; not aggregated across per-member
+  //      profiles).
+  //   5. If profile absent or frameworks list empty →
+  //      NOT_CONFIGURED.
+  //   6. Look up active vs inactive ComplianceFramework rows
+  //      for the names in the profile; derive frameworks_active /
+  //      frameworks_inactive / frameworks_unknown counts.
+  //   7. Count COMPLIANCE_CHECK_PASSED + COMPLIANCE_CHECK_FAILED
+  //      AuditEvent rows in the window with target_entity_id =
+  //      orgEntityId (the existing safe org-scoped audit
+  //      surface per compliance.service.ts:545+).
+  //   8. Derive signal_label:
+  //        - DEGRADED if recent_check_failed_count > 0
+  //        - WATCH if any subscribed framework is inactive OR
+  //          unknown (configured but framework row missing)
+  //        - HEALTHY if all subscribed frameworks active AND
+  //          no recent failures AND no unknown frameworks
+  //   9. Emit ADMIN_ACTION + ANALYTICS_READ audit with
+  //      aggregate discriminator + filter_keys.
+  //   10. Return SAFE projection envelope. NEVER includes
+  //       framework_name strings beyond aggregate counts; NEVER
+  //       lawful-basis text; NEVER audit IDs; NEVER per-member
+  //       compliance state.
+  //
+  // SUBSTRATE-HONEST DELIBERATE EXCLUSIONS:
+  //   - LawfulBasis has no org_entity_id column at v1; safe
+  //     org-attribution would require a complex audit join.
+  //     Deferred to a future slice with separate Founder
+  //     authorization.
+  //   - REGULATOR_ACCESS_* counts share the same org-join
+  //     complexity. Deferred.
+  //   - jurisdiction strings + sector strings are stored on
+  //     the profile but NEVER projected into the response
+  //     (avoid singling-out small orgs; the COUNT is the
+  //     operational signal, not the values).
+  async getCompliancePostureForOrg(args: {
+    org_entity_id: string;
+    actor_entity_id: string;
+    window_days?: number;
+    ip_address?: string | null;
+  }): Promise<CompliancePostureAggregate | AnalyticsFailure> {
+    const requestedWindow = args.window_days ?? ANALYTICS_WINDOW_DAYS_DEFAULT;
+    if (
+      !Number.isInteger(requestedWindow) ||
+      requestedWindow < ANALYTICS_WINDOW_DAYS_MIN ||
+      requestedWindow > ANALYTICS_WINDOW_DAYS_MAX
+    ) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: `window_days must be an integer in [${ANALYTICS_WINDOW_DAYS_MIN}, ${ANALYTICS_WINDOW_DAYS_MAX}]`,
+        invalid_fields: ["window_days"],
+      };
+    }
+    const windowDays = requestedWindow;
+
+    // Step 2 — k=5 population gate.
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberCount = memberships.length;
+    if (memberCount < ANALYTICS_MIN_POPULATION) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "COMPLIANCE_POSTURE",
+        redacted: true,
+        result_count: 0,
+        filter_keys: ["window_days"],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "COMPLIANCE_POSTURE",
+        window_days: windowDays,
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        frameworks_subscribed_count: 0,
+        frameworks_active_count: 0,
+        frameworks_inactive_count: 0,
+        frameworks_unknown_count: 0,
+        recent_check_passed_count: 0,
+        recent_check_failed_count: 0,
+        signal_label: "INSUFFICIENT_POPULATION",
+        honest_note: HONEST_NOTE_BELOW_THRESHOLD,
+      };
+    }
+
+    // Step 4 — org-level EntityComplianceProfile lookup.
+    // SELECT only frameworks[] (the column the aggregate
+    // consumes); never sector / jurisdiction strings — those
+    // would singling-out-leak for small-org configs.
+    const profile = await prisma.entityComplianceProfile.findUnique({
+      where: { entity_id: args.org_entity_id },
+      select: { frameworks: true },
+    });
+    const subscribedNames =
+      profile === null ? [] : [...profile.frameworks];
+
+    if (subscribedNames.length === 0) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "COMPLIANCE_POSTURE",
+        redacted: false,
+        result_count: 0,
+        filter_keys: ["window_days"],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "COMPLIANCE_POSTURE",
+        window_days: windowDays,
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: false,
+        frameworks_subscribed_count: 0,
+        frameworks_active_count: 0,
+        frameworks_inactive_count: 0,
+        frameworks_unknown_count: 0,
+        recent_check_passed_count: 0,
+        recent_check_failed_count: 0,
+        signal_label: "NOT_CONFIGURED",
+        honest_note:
+          "No ComplianceFramework subscriptions on the org's " +
+          "EntityComplianceProfile. This is metadata-only " +
+          "posture, not a legal determination.",
+      };
+    }
+
+    // Step 6 — resolve ComplianceFramework activity for each
+    // subscribed name. SELECT only framework_name + is_active;
+    // never rules JSON or required_audit_events arrays (those
+    // are the framework's policy substrate, not the aggregate's).
+    const frameworks = await prisma.complianceFramework.findMany({
+      where: { framework_name: { in: subscribedNames } },
+      select: { framework_name: true, is_active: true },
+    });
+    const frameworksByName = new Map<string, boolean>();
+    for (const f of frameworks) {
+      frameworksByName.set(f.framework_name, f.is_active);
+    }
+    let activeCount = 0;
+    let inactiveCount = 0;
+    let unknownCount = 0;
+    for (const name of subscribedNames) {
+      const isActive = frameworksByName.get(name);
+      if (isActive === undefined) unknownCount++;
+      else if (isActive === true) activeCount++;
+      else inactiveCount++;
+    }
+
+    // Step 7 — count COMPLIANCE_CHECK_PASSED + _FAILED
+    // AuditEvent rows in window, scoped by target_entity_id =
+    // orgEntityId. Mirrors compliance.service.ts:545+ pattern;
+    // these audit literals are already canonical at
+    // packages/database/src/queries/audit.ts.
+    const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const [passedCount, failedCount] = await Promise.all([
+      prisma.auditEvent.count({
+        where: {
+          event_type: "COMPLIANCE_CHECK_PASSED",
+          target_entity_id: args.org_entity_id,
+          timestamp: { gte: cutoff },
+        },
+      }),
+      prisma.auditEvent.count({
+        where: {
+          event_type: "COMPLIANCE_CHECK_FAILED",
+          target_entity_id: args.org_entity_id,
+          timestamp: { gte: cutoff },
+        },
+      }),
+    ]);
+
+    // Step 8 — derive label.
+    let signalLabel: CompliancePostureLabel;
+    if (failedCount > 0) {
+      signalLabel = "DEGRADED";
+    } else if (inactiveCount > 0 || unknownCount > 0) {
+      signalLabel = "WATCH";
+    } else {
+      signalLabel = "HEALTHY";
+    }
+
+    // Step 9 — audit. result_count is the count of subscribed
+    // frameworks; aggregate quantity per ADR-0061 §3.
+    await this.emitAnalyticsReadAudit({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      aggregate: "COMPLIANCE_POSTURE",
+      redacted: false,
+      result_count: subscribedNames.length,
+      filter_keys: ["window_days"],
+      ip_address: args.ip_address ?? null,
+    });
+
+    return {
+      ok: true,
+      aggregate: "COMPLIANCE_POSTURE",
+      window_days: windowDays,
+      org_entity_id: args.org_entity_id,
+      member_count: memberCount,
+      redacted: false,
+      frameworks_subscribed_count: subscribedNames.length,
+      frameworks_active_count: activeCount,
+      frameworks_inactive_count: inactiveCount,
+      frameworks_unknown_count: unknownCount,
+      recent_check_passed_count: passedCount,
+      recent_check_failed_count: failedCount,
+      signal_label: signalLabel,
+      honest_note:
+        "Org-level compliance posture metadata derived from " +
+        "ComplianceFramework subscription state + recent " +
+        "COMPLIANCE_CHECK audit events. Signal label is " +
+        "operational only — not legal advice, not certification " +
+        "of compliance, not employee compliance scoring, not " +
+        "manager surveillance.",
     };
   }
 
