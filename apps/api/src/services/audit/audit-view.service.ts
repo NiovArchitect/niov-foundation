@@ -46,13 +46,29 @@
 
 import {
   MAX_AUDIT_EVENTS_PAGE_SIZE,
+  VERIFY_CHAIN_MAX_EVENTS,
+  canonicalRecord,
   getActiveLawfulBasisForRegulator,
   isKnownAuditEventType,
   prisma,
   verifyAuditChain,
   writeAuditEvent,
 } from "@niov/database";
-import type { AuditEventType } from "@niov/database";
+import { createHash } from "node:crypto";
+
+// WHAT: Hex SHA-256 — local helper mirroring the
+//        packages/database `sha256Hex` used inside the canonical
+//        chain primitive.
+// INPUT: A canonical-record string.
+// OUTPUT: 64-char lowercase hex digest.
+// WHY: ADR-0071 §7.3 regulator continuity verification recomputes
+//      event_hash from the 14-field canonical_record at the
+//      service tier; we need the same digest the primitive
+//      writes at row insert.
+function sha256Hex(input: string): string {
+  return createHash("sha256").update(input).digest("hex");
+}
+import type { AuditEventType, VerifyAuditChainResult } from "@niov/database";
 import type { AuditEvent, AuditOutcome, Prisma } from "@prisma/client";
 import { getOrgEntityId } from "../governance/org.js";
 
@@ -348,21 +364,69 @@ export type GetAuditEventResult =
       message?: string;
     };
 
-export interface VerifyAuditChainView {
-  actor_entity_id: string;
-  valid: boolean;
-  total_events: number;
-  broken_at: string | null;
+// ─────────────────────────────────────────────────────────────
+// ADR-0071 SAFE VerifyChainView — Option A clean break.
+//
+// Replaces the prior VerifyAuditChainView (`valid` / `total_events`
+// / `broken_at` / `actor_entity_id`). Old fields are NOT aliased.
+// Founder QLOCK 2026-05-31: Option A clean break selected after
+// consumer-mapping showed zero external HTTP consumers + only
+// the route's own integration test consumed the old fields.
+// ─────────────────────────────────────────────────────────────
+
+export type VerifyChainScope =
+  | "self"
+  | "org"
+  | "platform"
+  | "regulator";
+
+export type VerifyChainFailureReason =
+  | "HASH_MISMATCH"
+  | "PREVIOUS_LINK_MISMATCH"
+  | "MISSING_PREVIOUS_EVENT"
+  | "CANONICAL_RECORD_DRIFT";
+
+export interface VerifyChainView {
+  ok: true;
+  scope: VerifyChainScope;
+  verified: boolean;
+  checked_event_count: number;
+  chain_algorithm: "SHA-256/14-field-canonical-record";
+  window_start: string | null;
+  window_end: string | null;
+  first_event_id: string | null;
+  last_event_id: string | null;
+  first_event_hash: string | null;
+  last_event_hash: string | null;
+  broken_at_event_id: string | null;
+  failure_reason: VerifyChainFailureReason | null;
+  lawful_basis_id: string | null;
+  evidence_note: string;
+  honest_note: string;
 }
 
-export type VerifyAuditChainCallerResult =
-  | { ok: true; httpStatus: 200; view: VerifyAuditChainView }
+export type VerifyChainResult =
+  | { ok: true; httpStatus: 200; view: VerifyChainView }
   | {
       ok: false;
-      httpStatus: 400 | 401 | 403 | 404;
+      httpStatus: 400 | 401 | 403 | 404 | 500;
       code: string;
       message?: string;
     };
+
+// Inputs accepted by the cross-scope service. lawful_basis_id is
+// REQUIRED when scope === "regulator"; subject_entity_id is
+// FORBIDDEN when scope === "regulator". Validation lives in the
+// route validator + the service entry guard.
+export interface VerifyChainServiceInput {
+  callerEntityId: string;
+  scope: VerifyChainScope;
+  lawful_basis_id?: string;
+  subject_entity_id?: string;
+  from?: Date;
+  to?: Date;
+  max_events?: number;
+}
 
 // WHAT: Internal result of scope resolution. Either a Prisma
 //        where-clause + optional org_entity_id metadata (for
@@ -841,35 +905,557 @@ export async function getAuditEventForCaller(
   };
 }
 
-// WHAT: Verify the caller's own audit chain. Walks every row
-//        in the caller's chain via the LIVE verifyAuditChain
-//        primitive and surfaces the `{ valid, totalEvents,
-//        brokenAt }` result.
-// INPUT: callerEntityId.
-// OUTPUT: A VerifyAuditChainCallerResult.
-// WHY: Section 7 RULE 13 — hash-chain verification is the
-//      single most-load-bearing operator surface for tamper
-//      detection. Exposing the primitive at HTTP tier lets a
-//      reviewer confirm their own chain is intact without
-//      requiring DB access.
-export async function verifyAuditChainForCaller(
-  callerEntityId: string,
-): Promise<VerifyAuditChainCallerResult> {
-  const result = await verifyAuditChain(callerEntityId);
-  await emitAuditViewerRead(callerEntityId, "AUDIT_VIEW_VERIFY_CHAIN", {
-    valid: result.valid,
-    total_events: result.totalEvents,
-  });
+// ─────────────────────────────────────────────────────────────
+// ADR-0071 cross-scope verify-chain service.
+//
+// Option A clean break per Founder QLOCK 2026-05-31: NEW
+// canonical `VerifyChainView` (verified / checked_event_count /
+// broken_at_event_id / chain_algorithm / window_start/end /
+// first_event_id+hash / last_event_id+hash / failure_reason /
+// lawful_basis_id / evidence_note / honest_note). Old fields
+// (`valid` / `total_events` / `broken_at` / `actor_entity_id`)
+// are NOT aliased.
+// ─────────────────────────────────────────────────────────────
+
+const VERIFY_CHAIN_DEFAULT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const VERIFY_CHAIN_CHAIN_ALGORITHM = "SHA-256/14-field-canonical-record" as const;
+const VERIFY_CHAIN_EVIDENCE_NOTE =
+  "Audit-chain integrity verification within the scoped window. Proves cryptographic chain hash integrity; not a compliance certification, regulator approval, or legal determination.";
+const VERIFY_CHAIN_HONEST_NOTE =
+  "verified=true means every checked row's hash recomputes to the stored event_hash and every previous_event_hash links to its predecessor. Empty windows return verified=true with checked_event_count=0 (vacuously). Failure reasons follow a closed vocabulary; broken_at_event_id may be null under regulator scope when the broken row is outside lawful-basis visibility.";
+
+// WHAT: Map a primitive `valid=false` outcome to the closed-vocab
+//        VerifyChainFailureReason. ADR-0071 §3 + §7.4.
+// INPUT: The primitive result.
+// OUTPUT: A closed-vocab failure reason.
+// WHY: The primitive surfaces a single brokenAt id without
+//      explaining whether the link mismatched or the hash
+//      recomputed differently. At v1 we collapse to
+//      HASH_MISMATCH for any chain break; future iterations may
+//      refine to PREVIOUS_LINK_MISMATCH / CANONICAL_RECORD_DRIFT
+//      via the underlying primitive when the additional
+//      diagnostic surfaces are added (forward-substrate).
+function failureReasonFor(_result: VerifyAuditChainResult): VerifyChainFailureReason {
+  return "HASH_MISMATCH";
+}
+
+// WHAT: Merge two primitive verifyAuditChain results in
+//        timeline order (oldest first wins for first_event /
+//        latest wins for last_event). The merge short-circuits
+//        as soon as one chain reports valid=false.
+// INPUT: An accumulator + the next primitive result + the
+//        next entity's identity.
+// OUTPUT: An updated accumulator.
+// WHY: Multi-chain (org / platform) verification iterates the
+//      in-scope entity set and aggregates totals + boundary
+//      hashes without surfacing per-entity chains in the
+//      response per ADR-0071 §5 (per-entity chain results
+//      forbidden at org/platform aggregate).
+interface AggregateChainState {
+  verified: boolean;
+  checked_event_count: number;
+  broken_at_event_id: string | null;
+  failure_reason: VerifyChainFailureReason | null;
+  first_event_id: string | null;
+  first_event_hash: string | null;
+  first_event_ts: Date | null;
+  last_event_id: string | null;
+  last_event_hash: string | null;
+  last_event_ts: Date | null;
+}
+
+function emptyAggregate(): AggregateChainState {
+  return {
+    verified: true,
+    checked_event_count: 0,
+    broken_at_event_id: null,
+    failure_reason: null,
+    first_event_id: null,
+    first_event_hash: null,
+    first_event_ts: null,
+    last_event_id: null,
+    last_event_hash: null,
+    last_event_ts: null,
+  };
+}
+
+function foldChain(
+  acc: AggregateChainState,
+  result: VerifyAuditChainResult,
+): AggregateChainState {
+  const next: AggregateChainState = {
+    verified: acc.verified && result.valid,
+    checked_event_count: acc.checked_event_count + result.totalEvents,
+    broken_at_event_id: acc.broken_at_event_id ?? result.brokenAt,
+    failure_reason:
+      acc.failure_reason ?? (result.valid ? null : failureReasonFor(result)),
+    first_event_id: acc.first_event_id,
+    first_event_hash: acc.first_event_hash,
+    first_event_ts: acc.first_event_ts,
+    last_event_id: acc.last_event_id,
+    last_event_hash: acc.last_event_hash,
+    last_event_ts: acc.last_event_ts,
+  };
+  if (
+    result.firstEventTimestamp !== null &&
+    (next.first_event_ts === null ||
+      result.firstEventTimestamp.getTime() < next.first_event_ts.getTime())
+  ) {
+    next.first_event_id = result.firstEventId;
+    next.first_event_hash = result.firstEventHash;
+    next.first_event_ts = result.firstEventTimestamp;
+  }
+  if (
+    result.lastEventTimestamp !== null &&
+    (next.last_event_ts === null ||
+      result.lastEventTimestamp.getTime() > next.last_event_ts.getTime())
+  ) {
+    next.last_event_id = result.lastEventId;
+    next.last_event_hash = result.lastEventHash;
+    next.last_event_ts = result.lastEventTimestamp;
+  }
+  return next;
+}
+
+// WHAT: Project an aggregate result + scope inputs into the
+//        canonical VerifyChainView shape.
+// INPUT: Scope + lawful_basis_id (regulator only) + window
+//        bounds + aggregate state.
+// OUTPUT: A SAFE VerifyChainView per ADR-0071 §3.
+// WHY: Centralizes the projection so every scope branch produces
+//      the exact same field set. Forbidden fields (per §5) are
+//      forbidden by-construction at this projection seam.
+function projectVerifyChainView(args: {
+  scope: VerifyChainScope;
+  lawful_basis_id: string | null;
+  window_start: Date | null;
+  window_end: Date | null;
+  agg: AggregateChainState;
+}): VerifyChainView {
   return {
     ok: true,
-    httpStatus: 200,
-    view: {
-      actor_entity_id: callerEntityId,
-      valid: result.valid,
-      total_events: result.totalEvents,
-      broken_at: result.brokenAt,
-    },
+    scope: args.scope,
+    verified: args.agg.verified,
+    checked_event_count: args.agg.checked_event_count,
+    chain_algorithm: VERIFY_CHAIN_CHAIN_ALGORITHM,
+    window_start:
+      args.window_start === null ? null : args.window_start.toISOString(),
+    window_end:
+      args.window_end === null ? null : args.window_end.toISOString(),
+    first_event_id: args.agg.first_event_id,
+    last_event_id: args.agg.last_event_id,
+    first_event_hash: args.agg.first_event_hash,
+    last_event_hash: args.agg.last_event_hash,
+    broken_at_event_id: args.agg.broken_at_event_id,
+    failure_reason: args.agg.failure_reason,
+    lawful_basis_id: args.lawful_basis_id,
+    evidence_note: VERIFY_CHAIN_EVIDENCE_NOTE,
+    honest_note: VERIFY_CHAIN_HONEST_NOTE,
   };
+}
+
+// WHAT: ADR-0071 cross-scope verify-chain. Replaces the prior
+//        self-only `verifyAuditChainForCaller`. Routes through
+//        `self` / `org` / `platform` / `regulator` per Founder
+//        QLOCK Option A.
+// INPUT: VerifyChainServiceInput.
+// OUTPUT: VerifyChainResult discriminated union.
+// WHY: Operationalizes ADR-0071 §1-§9 at the service tier.
+//      RULE 0 owner-scope by-construction at `self`; TAR-
+//      authoritative capability checks at `org`/`platform`;
+//      ADR-0036 9-condition LawfulBasis enforcement at
+//      `regulator`. ZERO new audit literal — reuses existing
+//      `AUDIT_VIEW_VERIFY_CHAIN` discriminator with extended
+//      SAFE meta per §8.
+export async function verifyAuditChainForScope(
+  input: VerifyChainServiceInput,
+): Promise<VerifyChainResult> {
+  const { callerEntityId, scope } = input;
+
+  if (scope === "regulator") {
+    if (input.subject_entity_id !== undefined) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        code: "INVALID_FIELD",
+        message:
+          "subject_entity_id is not accepted under scope=regulator; the basis itself selects the events to verify.",
+      };
+    }
+    if (input.lawful_basis_id === undefined) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        code: "LAWFUL_BASIS_REQUIRED",
+      };
+    }
+    const basisCheck = await getActiveLawfulBasisForRegulator(
+      input.lawful_basis_id,
+      callerEntityId,
+    );
+    if (basisCheck.ok === false) {
+      if (basisCheck.code === "LAWFUL_BASIS_NOT_FOUND") {
+        return { ok: false, httpStatus: 404, code: "LAWFUL_BASIS_NOT_FOUND" };
+      }
+      if (
+        basisCheck.code === "INTERNAL_ENFORCEMENT_ERROR" ||
+        basisCheck.code === "LAWFUL_BASIS_NOT_LINKED_TO_AUDIT"
+      ) {
+        return { ok: false, httpStatus: 500, code: basisCheck.code };
+      }
+      return { ok: false, httpStatus: 403, code: basisCheck.code };
+    }
+    const windowStart =
+      input.from !== undefined && input.from.getTime() > basisCheck.basis.valid_from.getTime()
+        ? input.from
+        : basisCheck.basis.valid_from;
+    const windowEnd =
+      input.to !== undefined && input.to.getTime() < basisCheck.basis.valid_until.getTime()
+        ? input.to
+        : basisCheck.basis.valid_until;
+    const maxEvents =
+      input.max_events !== undefined && input.max_events > 0
+        ? Math.min(input.max_events, VERIFY_CHAIN_MAX_EVENTS)
+        : VERIFY_CHAIN_MAX_EVENTS;
+    return runRegulatorScope({
+      callerEntityId,
+      lawful_basis_id: input.lawful_basis_id,
+      windowStart,
+      windowEnd,
+      maxEvents,
+    });
+  }
+
+  // self / org / platform — share the windowed multi-chain
+  // verification path. Validate scope-specific gates first.
+  const { entityIds, gateError } = await resolveScopeEntityIds({
+    callerEntityId,
+    scope,
+    subject_entity_id: input.subject_entity_id,
+  });
+  if (gateError !== null) return gateError;
+
+  // Window defaults: self has no default window (caller's chain
+  // is bounded by their activity volume); org/platform default
+  // to 30 days when both from + to are omitted per ADR-0071 §6.
+  let windowStart: Date | null = input.from ?? null;
+  let windowEnd: Date | null = input.to ?? null;
+  if (
+    (scope === "org" || scope === "platform") &&
+    windowStart === null &&
+    windowEnd === null
+  ) {
+    windowEnd = new Date();
+    windowStart = new Date(windowEnd.getTime() - VERIFY_CHAIN_DEFAULT_WINDOW_MS);
+  }
+
+  const maxEvents =
+    input.max_events !== undefined && input.max_events > 0
+      ? Math.min(input.max_events, VERIFY_CHAIN_MAX_EVENTS)
+      : VERIFY_CHAIN_MAX_EVENTS;
+
+  // Pre-flight perf-cap estimate per ADR-0071 §6. A single Prisma
+  // count over the in-scope predicate; if it exceeds the cap we
+  // fail closed with WINDOW_TOO_LARGE before walking any chain.
+  const where: Prisma.AuditEventWhereInput = {
+    actor_entity_id: { in: entityIds },
+  };
+  if (windowStart !== null || windowEnd !== null) {
+    const ts: { gte?: Date; lte?: Date } = {};
+    if (windowStart !== null) ts.gte = windowStart;
+    if (windowEnd !== null) ts.lte = windowEnd;
+    where.timestamp = ts;
+  }
+  const estimate = await prisma.auditEvent.count({ where });
+  if (estimate > maxEvents) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      code: "WINDOW_TOO_LARGE",
+      message: `Estimated ${estimate} events exceeds the ${maxEvents} cap. Narrow the window via from/to or subject_entity_id.`,
+    };
+  }
+
+  let agg = emptyAggregate();
+  const optsBase: { from?: Date; to?: Date; maxEvents?: number } = {
+    maxEvents,
+  };
+  if (windowStart !== null) optsBase.from = windowStart;
+  if (windowEnd !== null) optsBase.to = windowEnd;
+  // Walk each in-scope entity's chain. Short-circuit on first
+  // break per ADR-0071 §7.2.
+  for (const entityId of entityIds) {
+    const result = await verifyAuditChain(entityId, optsBase);
+    agg = foldChain(agg, result);
+    if (!agg.verified) break;
+  }
+
+  const view = projectVerifyChainView({
+    scope,
+    lawful_basis_id: null,
+    window_start: windowStart,
+    window_end: windowEnd,
+    agg,
+  });
+  await emitVerifyChainAudit(callerEntityId, view);
+  return { ok: true, httpStatus: 200, view };
+}
+
+// WHAT: Resolve the in-scope actor_entity_id set for a non-
+//        regulator scope. Self → caller only. Org →
+//        subject_entity_id if same-org else 404; without
+//        subject → org-scope vector. Platform → subject if
+//        provided else every entity.
+// INPUT: callerEntityId + scope + optional subject_entity_id.
+// OUTPUT: entityIds + a gate error if access denied.
+// WHY: Centralizes capability + scope-fence resolution so the
+//      service body stays linear.
+async function resolveScopeEntityIds(args: {
+  callerEntityId: string;
+  scope: "self" | "org" | "platform";
+  subject_entity_id?: string;
+}): Promise<{
+  entityIds: string[];
+  gateError: VerifyChainResult | null;
+}> {
+  if (args.scope === "self") {
+    // Per ADR-0071 §6, subject_entity_id is ignored under self.
+    return { entityIds: [args.callerEntityId], gateError: null };
+  }
+  if (args.scope === "platform") {
+    const hasNiov = await callerHasNiovAdminCapability(args.callerEntityId);
+    if (!hasNiov) {
+      return {
+        entityIds: [],
+        gateError: {
+          ok: false,
+          httpStatus: 403,
+          code: "SCOPE_NOT_ALLOWED",
+          message: "scope=platform requires can_admin_niov on the caller's TAR.",
+        },
+      };
+    }
+    if (args.subject_entity_id !== undefined) {
+      // Single-subject narrowing. No same-org constraint at
+      // platform scope.
+      const subject = await prisma.entity.findFirst({
+        where: { entity_id: args.subject_entity_id, deleted_at: null },
+        select: { entity_id: true },
+      });
+      if (subject === null) {
+        return {
+          entityIds: [],
+          gateError: {
+            ok: false,
+            httpStatus: 404,
+            code: "SUBJECT_NOT_FOUND",
+          },
+        };
+      }
+      return { entityIds: [subject.entity_id], gateError: null };
+    }
+    // Without a subject the in-scope set is every live entity.
+    // The estimate query later applies the timestamp window
+    // before any chain walk happens.
+    const rows = await prisma.entity.findMany({
+      where: { deleted_at: null },
+      select: { entity_id: true },
+    });
+    return {
+      entityIds: rows.map((r) => r.entity_id),
+      gateError: null,
+    };
+  }
+  // scope === "org"
+  const hasAdmin = await callerHasAdminCapability(args.callerEntityId);
+  if (!hasAdmin) {
+    return {
+      entityIds: [],
+      gateError: {
+        ok: false,
+        httpStatus: 403,
+        code: "SCOPE_NOT_ALLOWED",
+        message: "scope=org requires can_admin_org on the caller's TAR.",
+      },
+    };
+  }
+  let callerOrgId: string;
+  try {
+    callerOrgId = await getOrgEntityId(args.callerEntityId);
+  } catch {
+    return {
+      entityIds: [],
+      gateError: { ok: false, httpStatus: 404, code: "NOT_IN_ANY_ORG" },
+    };
+  }
+  const orgScope = await resolveOrgScopeVector(callerOrgId);
+  if (args.subject_entity_id !== undefined) {
+    if (!orgScope.includes(args.subject_entity_id)) {
+      // Cross-org subject — enumeration-safe 404 mirroring
+      // existing Section 7 patterns.
+      return {
+        entityIds: [],
+        gateError: { ok: false, httpStatus: 404, code: "SUBJECT_NOT_FOUND" },
+      };
+    }
+    return { entityIds: [args.subject_entity_id], gateError: null };
+  }
+  return { entityIds: orgScope, gateError: null };
+}
+
+// WHAT: Regulator-scope verify-chain implementation. Walks the
+//        events visible under `lawful_basis_id` and verifies
+//        chain continuity around each by reading the prior row's
+//        `event_hash` (only that column) without surfacing the
+//        prior row's data fields.
+// INPUT: callerEntityId + lawful_basis_id + window bounds +
+//        maxEvents.
+// OUTPUT: A VerifyChainResult.
+// WHY: ADR-0071 §7.3 — proves chain integrity around events the
+//      regulator is permitted to see without leaking existence
+//      or content of invisible adjacent events beyond what
+//      `previous_event_hash` structurally exposes.
+async function runRegulatorScope(args: {
+  callerEntityId: string;
+  lawful_basis_id: string;
+  windowStart: Date;
+  windowEnd: Date;
+  maxEvents: number;
+}): Promise<VerifyChainResult> {
+  const where: Prisma.AuditEventWhereInput = {
+    lawful_basis_id: args.lawful_basis_id,
+    timestamp: { gte: args.windowStart, lte: args.windowEnd },
+  };
+  const estimate = await prisma.auditEvent.count({ where });
+  if (estimate > args.maxEvents) {
+    return {
+      ok: false,
+      httpStatus: 400,
+      code: "WINDOW_TOO_LARGE",
+      message: `Estimated ${estimate} events exceeds the ${args.maxEvents} cap.`,
+    };
+  }
+  const visible = await prisma.auditEvent.findMany({
+    where,
+    orderBy: { timestamp: "asc" },
+    take: args.maxEvents,
+  });
+  const agg = emptyAggregate();
+  for (const e of visible) {
+    // §7.3 continuity verification — verify the link via the
+    // prior row's stored `event_hash` ONLY (not the data
+    // fields). When the prior row is also visible under the
+    // basis we still only read its hash column for the link
+    // check. The data-field projection at this surface remains
+    // boundary-hashes only.
+    if (e.previous_event_hash !== null) {
+      const prior = await prisma.auditEvent.findFirst({
+        where: {
+          actor_entity_id: e.actor_entity_id,
+          event_hash: e.previous_event_hash,
+        },
+        select: { audit_id: true, event_hash: true, lawful_basis_id: true },
+      });
+      if (prior === null) {
+        // Missing predecessor → chain break. Whether the prior
+        // row is visible under the basis decides whether we
+        // surface the visible-event id or hide it.
+        agg.verified = false;
+        agg.broken_at_event_id = e.audit_id;
+        agg.failure_reason = "MISSING_PREVIOUS_EVENT";
+        agg.checked_event_count += 1;
+        applyRegulatorBoundary(agg, e);
+        break;
+      }
+    }
+    const recomputed = sha256Hex(
+      canonicalRecord({
+        audit_id: e.audit_id,
+        event_type: e.event_type,
+        actor_entity_id: e.actor_entity_id,
+        target_entity_id: e.target_entity_id,
+        target_capsule_id: e.target_capsule_id,
+        session_id: e.session_id,
+        outcome: e.outcome,
+        denial_reason: e.denial_reason,
+        details: e.details,
+        ip_address: e.ip_address,
+        timestamp: e.timestamp,
+        previous_event_hash: e.previous_event_hash,
+        lawful_basis_id: e.lawful_basis_id,
+        lawful_basis_chain_hash: e.lawful_basis_chain_hash,
+      }),
+    );
+    if (recomputed !== e.event_hash) {
+      agg.verified = false;
+      agg.broken_at_event_id = e.audit_id;
+      agg.failure_reason = "HASH_MISMATCH";
+      agg.checked_event_count += 1;
+      applyRegulatorBoundary(agg, e);
+      break;
+    }
+    agg.checked_event_count += 1;
+    applyRegulatorBoundary(agg, e);
+  }
+
+  const view = projectVerifyChainView({
+    scope: "regulator",
+    lawful_basis_id: args.lawful_basis_id,
+    window_start: args.windowStart,
+    window_end: args.windowEnd,
+    agg,
+  });
+  await emitVerifyChainAudit(args.callerEntityId, view);
+  return { ok: true, httpStatus: 200, view };
+}
+
+function applyRegulatorBoundary(
+  agg: AggregateChainState,
+  e: { audit_id: string; event_hash: string; timestamp: Date },
+): void {
+  if (agg.first_event_ts === null) {
+    agg.first_event_id = e.audit_id;
+    agg.first_event_hash = e.event_hash;
+    agg.first_event_ts = e.timestamp;
+  }
+  agg.last_event_id = e.audit_id;
+  agg.last_event_hash = e.event_hash;
+  agg.last_event_ts = e.timestamp;
+}
+
+// WHAT: SAFE read-audit emission for verify-chain. Reuses the
+//        existing AUDIT_VIEW_VERIFY_CHAIN literal with extended
+//        meta per ADR-0071 §8. ZERO new audit literal.
+// INPUT: callerEntityId + the projected view.
+// OUTPUT: void.
+// WHY: §8 forbidden in audit details: any forbidden field per
+//      §5. We surface only the safe scalar facts (scope +
+//      verified + checked_event_count + window + lawful_basis_id
+//      + failure_reason).
+async function emitVerifyChainAudit(
+  callerEntityId: string,
+  view: VerifyChainView,
+): Promise<void> {
+  const details: Record<string, unknown> = {
+    action: "AUDIT_VIEW_VERIFY_CHAIN",
+    scope: view.scope,
+    verified: view.verified,
+    checked_event_count: view.checked_event_count,
+  };
+  if (view.window_start !== null) details.window_start = view.window_start;
+  if (view.window_end !== null) details.window_end = view.window_end;
+  if (view.lawful_basis_id !== null) {
+    details.lawful_basis_id = view.lawful_basis_id;
+  }
+  if (view.failure_reason !== null) {
+    details.failure_reason = view.failure_reason;
+  }
+  await writeAuditEvent({
+    event_type: "ADMIN_ACTION",
+    outcome: "SUCCESS",
+    actor_entity_id: callerEntityId,
+    details,
+  });
 }
 
 // WHAT: The query-string-shaped input the export route accepts.

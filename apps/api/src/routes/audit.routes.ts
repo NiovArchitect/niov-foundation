@@ -18,8 +18,29 @@ import {
   validateExportAuditEventsQuery,
   validateListAuditEventsQuery,
   validateListRegulatorAuditEventsQuery,
-  verifyAuditChainForCaller,
+  verifyAuditChainForScope,
 } from "../services/audit/audit-view.service.js";
+import type {
+  VerifyChainScope,
+  VerifyChainServiceInput,
+} from "../services/audit/audit-view.service.js";
+
+// WHAT: UUID v4 (or relaxed UUID) regex used to validate the
+//        verify-chain route's optional id query params.
+// INPUT: A string to validate.
+// OUTPUT: Boolean.
+// WHY: Matches the existing audit-view.service `UUID_RE`
+//      precedent; rejecting malformed UUIDs early avoids Prisma
+//      throwing on the downstream count/findMany call.
+const VERIFY_CHAIN_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const VERIFY_CHAIN_SCOPES: ReadonlySet<VerifyChainScope> = new Set<VerifyChainScope>([
+  "self",
+  "org",
+  "platform",
+  "regulator",
+]);
 
 // WHAT: Register the 3 Wave 1 audit-viewer routes on the
 //        Fastify app. Mirrors the registration-function pattern
@@ -127,21 +148,116 @@ export async function registerAuditRoutes(
     },
   );
 
-  // GET /api/v1/audit/verify-chain — verify the caller's own
-  // audit chain via the LIVE verifyAuditChain primitive.
-  app.get(
+  // GET /api/v1/audit/verify-chain — ADR-0071 cross-scope
+  // verify-chain. Accepts:
+  //   scope?: self | org | platform | regulator (default self)
+  //   subject_entity_id?: uuid (self/org/platform only)
+  //   lawful_basis_id?:    uuid (REQUIRED for regulator)
+  //   from?:               ISO timestamp
+  //   to?:                 ISO timestamp
+  //   max_events?:         positive integer
+  //
+  // Option A clean break per Founder QLOCK 2026-05-31. Response
+  // shape is the ADR-0071 §3 SAFE VerifyChainView (verified /
+  // checked_event_count / broken_at_event_id + boundary hashes
+  // + closed-vocab failure_reason). Old fields are NOT aliased.
+  app.get<{
+    Querystring: {
+      scope?: string;
+      subject_entity_id?: string;
+      lawful_basis_id?: string;
+      from?: string;
+      to?: string;
+      max_events?: string;
+    };
+  }>(
     "/api/v1/audit/verify-chain",
     {
       preHandler: requireAuth(authService, "read"),
     },
     async (request, reply) => {
       const callerId = request.auth!.entity_id;
-      const result = await verifyAuditChainForCaller(callerId);
+
+      // Parse + validate query string. Closed-vocab failures
+      // surface deterministic codes per ADR-0071 §9.
+      const rawScope = request.query.scope;
+      let scope: VerifyChainScope = "self";
+      if (rawScope !== undefined) {
+        if (
+          typeof rawScope !== "string" ||
+          !VERIFY_CHAIN_SCOPES.has(rawScope as VerifyChainScope)
+        ) {
+          return reply
+            .code(400)
+            .send({ ok: false, code: "INVALID_SCOPE" });
+        }
+        scope = rawScope as VerifyChainScope;
+      }
+
+      const input: VerifyChainServiceInput = {
+        callerEntityId: callerId,
+        scope,
+      };
+
+      if (request.query.lawful_basis_id !== undefined) {
+        if (
+          typeof request.query.lawful_basis_id !== "string" ||
+          !VERIFY_CHAIN_UUID_RE.test(request.query.lawful_basis_id)
+        ) {
+          return reply
+            .code(400)
+            .send({ ok: false, code: "INVALID_FIELD" });
+        }
+        input.lawful_basis_id = request.query.lawful_basis_id;
+      }
+
+      if (request.query.subject_entity_id !== undefined) {
+        if (
+          typeof request.query.subject_entity_id !== "string" ||
+          !VERIFY_CHAIN_UUID_RE.test(request.query.subject_entity_id)
+        ) {
+          return reply
+            .code(400)
+            .send({ ok: false, code: "INVALID_FIELD" });
+        }
+        input.subject_entity_id = request.query.subject_entity_id;
+      }
+
+      if (request.query.from !== undefined) {
+        const t = Date.parse(request.query.from);
+        if (Number.isNaN(t)) {
+          return reply
+            .code(400)
+            .send({ ok: false, code: "INVALID_FIELD" });
+        }
+        input.from = new Date(t);
+      }
+      if (request.query.to !== undefined) {
+        const t = Date.parse(request.query.to);
+        if (Number.isNaN(t)) {
+          return reply
+            .code(400)
+            .send({ ok: false, code: "INVALID_FIELD" });
+        }
+        input.to = new Date(t);
+      }
+      if (request.query.max_events !== undefined) {
+        const n = Number(request.query.max_events);
+        if (
+          !Number.isInteger(n) ||
+          n <= 0 ||
+          !Number.isFinite(n)
+        ) {
+          return reply
+            .code(400)
+            .send({ ok: false, code: "INVALID_FIELD" });
+        }
+        input.max_events = n;
+      }
+
+      const result = await verifyAuditChainForScope(input);
       if (result.ok === true) {
-        return reply.code(result.httpStatus).send({
-          ok: true,
-          ...result.view,
-        });
+        return reply.code(result.httpStatus).send(result.view);
       }
       const responseBody: Record<string, unknown> = {
         ok: false,
