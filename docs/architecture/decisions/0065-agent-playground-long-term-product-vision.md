@@ -591,7 +591,19 @@ authorization at its slice prompt:
   recommendation/comparison/candidate payloads). Wave 8
   implementation slice is separate Founder authorization
   at its slice.
-- Wave 9: multi-agent simulation orchestration.
+- Wave 9: multi-agent simulation orchestration —
+  design-only contract LANDED 2026-05-31 at ADR-0076
+  (Section 5 Wave 9 Multi-Agent Simulation Orchestration
+  Contract; design-only; bidirectional back-citation;
+  ADR-0069 §6 8-question check LOCKED v1 at TypeScript
+  §2.1 sequential branch enumeration; bounded 24-branch
+  ceiling; 3 closed-vocab orchestration_modes + 5
+  branch_definitions + 6 agent_roles; NO agent-to-agent
+  message-passing; NO LLM-generated agent personas; NO
+  raw chain-of-thought between branches; BEAM Option C
+  forward-substrate per ADR-0028 — applies WHEN simulation
+  needs LIVE concurrent message-passing agents OR scales
+  beyond 24 sequential branches per call).
 - Wave 10: Control Tower frontend consumer.
 
 The §1 long-term purpose statement + §5 safety doctrine
@@ -673,6 +685,13 @@ The §1 long-term purpose statement + §5 safety doctrine
   remains canonical at the long-term product-vision
   tier; bidirectional back-citation per RULE 14 + RULE
   20).
+- Cited from ADR-0076 §Bidirectional citations
+  (Section 5 Wave 9 Multi-Agent Simulation Orchestration
+  Contract; design-only; ADR-0076 closes ADR-0065 §7
+  Wave 9 forward-queue line at the contract register;
+  this ADR remains canonical at the long-term product-
+  vision tier; bidirectional back-citation per RULE 14 +
+  RULE 20).
 - Bidirectional back-citation lands in ADR-0060
   §"Forward queue" entry per RULE 14 + ADR-0020 §3 +
   RULE 20.

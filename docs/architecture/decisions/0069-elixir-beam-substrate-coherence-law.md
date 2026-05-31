@@ -623,6 +623,25 @@ authorization slices have a canonical reference point.
   implementation (folds into ADR-0065 §7 Wave 9). ADR-0074
   does NOT authorize Python or BEAM Wave 7 implementation;
   those remain separate Founder slices.
+- Cited from ADR-0076 §12 + §15 (Section 5 Wave 9 Multi-
+  Agent Simulation Orchestration Contract; design-only;
+  landed 2026-05-31). ADR-0076 §12 applies this ADR's §6
+  mandatory 8-question architecture check verbatim and
+  LOCKS Wave 9 v1 at TypeScript §2.1 (sequential branch
+  enumeration; 24-branch ceiling; no agent-to-agent
+  message-passing; failure isolation via
+  `Promise.allSettled`; not inherently long-running per §6
+  Q1-Q8). ADR-0076 §15.3 names §3 domain 6 (Agent
+  Playground multi-agent simulation) + ADR-0028 BEAM
+  coordination layer as Option C forward-substrate
+  applicable WHEN simulation needs LIVE concurrent
+  message-passing agents OR scales beyond 24 sequential
+  branches per call (neither holds at v1; future
+  authorization requires §6 re-verification + ADR-0028
+  amendment + separate Founder slice). ADR-0076 §15.2
+  names this ADR's §2.4 Python boundary requirement. ADR-
+  0076 does NOT authorize Python or BEAM Wave 9
+  implementation; those remain separate Founder slices.
 - Cited from ADR-0075 §15 + §19 (Section 5 Wave 8
   Governed-Transition Contract; design-only; landed
   2026-05-31). ADR-0075 §19 applies this ADR's §6

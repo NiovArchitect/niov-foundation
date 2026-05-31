@@ -941,6 +941,15 @@ authorization slices have a canonical reference point.
   review per ADR-0074 §16; NEVER claims final-decision
   authority). ADR-0074 does NOT authorize Wave 7
   implementation; that remains a separate Founder slice.
+- Cited from ADR-0076 §8 (Section 5 Wave 9 Multi-Agent
+  Simulation Orchestration Contract; design-only ADR
+  landed 2026-05-31). ADR-0076 §8 no-leak doctrine
+  inherits this ADR's §9 legal-advice boundary verbatim.
+  Wave 9 multi-agent simulation surface NEVER produces
+  legal conclusions; NEVER claims legal sufficiency; NEVER
+  exchanges raw chain-of-thought between agents. ADR-0076
+  does NOT authorize Wave 9 implementation; that remains a
+  separate Founder slice.
 - Cited from ADR-0075 §10 + §18 (Section 5 Wave 8
   Governed-Transition Contract; design-only ADR landed
   2026-05-31). ADR-0075 §10 no-leak doctrine + §18
