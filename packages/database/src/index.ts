@@ -80,6 +80,7 @@ export {
   getLatestEventHash,
   applyAuditEventTriggers,
   MAX_AUDIT_EVENTS_PAGE_SIZE,
+  VERIFY_CHAIN_MAX_EVENTS,
   AUDIT_EVENT_TYPE_VALUES,
   isKnownAuditEventType,
   SYSTEM_PRINCIPALS,
@@ -97,6 +98,7 @@ export type {
   QueryAuditEventsFilters,
   QueryAuditEventsResult,
   VerifyAuditChainResult,
+  VerifyAuditChainOptions,
   SystemPrincipal,
 } from "./queries/audit.js";
 

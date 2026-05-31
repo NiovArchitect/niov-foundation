@@ -397,11 +397,36 @@ export interface QueryAuditEventsResult {
 // INPUT: Used as a return type only.
 // OUTPUT: None -- this is a type, not a value.
 // WHY: Lets callers display "chain valid" / "chain broken at row X"
-//      with a single object.
+//      with a single object. ADR-0071 added the optional
+//      `firstEventId`/`firstEventHash`/`lastEventId`/`lastEventHash`
+//      boundary metadata so cross-scope callers can populate
+//      the SAFE VerifyChainView projection without a second query.
 export interface VerifyAuditChainResult {
   valid: boolean;
   totalEvents: number;
   brokenAt: string | null;
+  firstEventId: string | null;
+  firstEventHash: string | null;
+  firstEventTimestamp: Date | null;
+  lastEventId: string | null;
+  lastEventHash: string | null;
+  lastEventTimestamp: Date | null;
+}
+
+// WHAT: Optional window-aware opts for verifyAuditChain. ADR-0071
+//        §11 — additive only; existing call sites pass no opts
+//        and behavior is preserved.
+// INPUT: Used as a parameter type.
+// OUTPUT: None -- this is a type, not a value.
+// WHY: Cross-scope verify-chain (org/platform/regulator) needs
+//      bounded windows + perf caps so chain walks do not become
+//      full-history scans. `from`/`to` clamp the timestamp range;
+//      `maxEvents` is the perf cap mirroring the
+//      VERIFY_CHAIN_MAX_EVENTS = 10_000 hard ceiling.
+export interface VerifyAuditChainOptions {
+  from?: Date;
+  to?: Date;
+  maxEvents?: number;
 }
 
 // WHAT: The maximum number of audit events one queryAuditEvents page
@@ -411,6 +436,18 @@ export interface VerifyAuditChainResult {
 // WHY: Spec says max 100 per page. Naming the constant means we can
 //      change it later without grep.
 export const MAX_AUDIT_EVENTS_PAGE_SIZE = 100;
+
+// WHAT: Hard cap on the number of audit events a single cross-scope
+//        verify-chain call may walk per ADR-0071 §6.
+// INPUT: None.
+// OUTPUT: The number 10_000.
+// WHY: ADR-0071 perf bound mirroring EXPORT_AUDIT_EVENTS_MAX_ROWS
+//      precedent. Cross-scope verification (org / platform /
+//      regulator) MUST never become a full-history walk; the cap
+//      protects route latency + DB load. Requests whose estimated
+//      row count exceeds this cap fail with WINDOW_TOO_LARGE per
+//      ADR-0071 §9.
+export const VERIFY_CHAIN_MAX_EVENTS = 10_000;
 
 // WHAT: Legacy sentinel used as chainKey when neither actor_entity_id
 //        nor system_principal is provided.
@@ -752,19 +789,61 @@ export async function queryAuditEvents(
 //      previous_event_hash does not match the prior row's stored hash.
 export async function verifyAuditChain(
   entityId: string,
+  opts?: VerifyAuditChainOptions,
 ): Promise<VerifyAuditChainResult> {
+  // ADR-0071 §11 — window-aware variant (additive). When opts is
+  // omitted the where filter degenerates to the original
+  // actor_entity_id-only walk; existing call sites are preserved
+  // verbatim.
+  const where: Prisma.AuditEventWhereInput = {
+    actor_entity_id: entityId,
+  };
+  if (opts?.from !== undefined || opts?.to !== undefined) {
+    const ts: { gte?: Date; lte?: Date } = {};
+    if (opts.from !== undefined) ts.gte = opts.from;
+    if (opts.to !== undefined) ts.lte = opts.to;
+    where.timestamp = ts;
+  }
+  const take =
+    opts?.maxEvents !== undefined && opts.maxEvents > 0
+      ? opts.maxEvents
+      : undefined;
   const events = await prisma.auditEvent.findMany({
-    where: { actor_entity_id: entityId },
+    where,
     orderBy: { timestamp: "asc" },
+    ...(take !== undefined ? { take } : {}),
   });
 
+  const totalEvents = events.length;
+  const firstEvent = events[0] ?? null;
+  const lastEvent = events[totalEvents - 1] ?? null;
+  const boundary = {
+    firstEventId: firstEvent?.audit_id ?? null,
+    firstEventHash: firstEvent?.event_hash ?? null,
+    firstEventTimestamp: firstEvent?.timestamp ?? null,
+    lastEventId: lastEvent?.audit_id ?? null,
+    lastEventHash: lastEvent?.event_hash ?? null,
+    lastEventTimestamp: lastEvent?.timestamp ?? null,
+  };
+
+  // When a window is applied we cannot assume the first event in
+  // the window is the start of the entity's chain — its
+  // `previous_event_hash` may legitimately point at an earlier
+  // row outside the window. Anchor the priorHash to that
+  // expected predecessor so the first iteration validates link
+  // integrity (recompute still verifies the hash itself), and
+  // subsequent iterations validate strict link continuity.
   let priorHash: string | null = null;
+  if (opts !== undefined && firstEvent !== null) {
+    priorHash = firstEvent.previous_event_hash ?? null;
+  }
   for (const e of events) {
     if (e.previous_event_hash !== priorHash) {
       return {
         valid: false,
-        totalEvents: events.length,
+        totalEvents,
         brokenAt: e.audit_id,
+        ...boundary,
       };
     }
     const recomputed = sha256Hex(
@@ -788,14 +867,20 @@ export async function verifyAuditChain(
     if (recomputed !== e.event_hash) {
       return {
         valid: false,
-        totalEvents: events.length,
+        totalEvents,
         brokenAt: e.audit_id,
+        ...boundary,
       };
     }
     priorHash = e.event_hash;
   }
 
-  return { valid: true, totalEvents: events.length, brokenAt: null };
+  return {
+    valid: true,
+    totalEvents,
+    brokenAt: null,
+    ...boundary,
+  };
 }
 
 // WHAT: Return the most recent event_hash for an entity's chain.

@@ -100,7 +100,7 @@ export {
   validateExportAuditEventsQuery,
   validateListAuditEventsQuery,
   validateListRegulatorAuditEventsQuery,
-  verifyAuditChainForCaller,
+  verifyAuditChainForScope,
 } from "./services/audit/audit-view.service.js";
 export type {
   AuditEventChainRef,
@@ -120,8 +120,11 @@ export type {
   NormalizedListRegulatorAuditEventsFilters,
   SafeAuditEventDetailView,
   SafeAuditEventView,
-  VerifyAuditChainCallerResult,
-  VerifyAuditChainView,
+  VerifyChainFailureReason,
+  VerifyChainResult,
+  VerifyChainScope,
+  VerifyChainServiceInput,
+  VerifyChainView,
 } from "./services/audit/audit-view.service.js";
 
 // ADR-0057 Wave 12 — internal-only notification inbox read surface.

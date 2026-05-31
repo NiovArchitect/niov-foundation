@@ -471,8 +471,8 @@ describe("GET /api/v1/audit/events/:id — single-event drilldown", () => {
   });
 });
 
-describe("GET /api/v1/audit/verify-chain — hash-chain integrity surface", () => {
-  it("returns valid:true for an entity with a healthy chain", async () => {
+describe("GET /api/v1/audit/verify-chain — hash-chain integrity surface (ADR-0071 Option A clean break)", () => {
+  it("returns verified:true for an entity with a healthy chain", async () => {
     const orgId = await makeTestOrg();
     const caller = await makeOrgMember(orgId);
     // Seed 3 audit rows on the caller's chain.
@@ -483,18 +483,28 @@ describe("GET /api/v1/audit/verify-chain — hash-chain integrity surface", () =
     expect(r.statusCode).toBe(200);
     const b = r.body as {
       ok: true;
-      actor_entity_id: string;
-      valid: boolean;
-      total_events: number;
-      broken_at: string | null;
+      scope: "self";
+      verified: boolean;
+      checked_event_count: number;
+      chain_algorithm: string;
+      broken_at_event_id: string | null;
+      failure_reason: string | null;
+      lawful_basis_id: string | null;
     };
-    expect(b.actor_entity_id).toBe(caller.entityId);
-    expect(b.valid).toBe(true);
-    expect(b.total_events).toBeGreaterThanOrEqual(3);
-    expect(b.broken_at).toBeNull();
+    expect(b.scope).toBe("self");
+    expect(b.verified).toBe(true);
+    expect(b.checked_event_count).toBeGreaterThanOrEqual(3);
+    expect(b.broken_at_event_id).toBeNull();
+    expect(b.failure_reason).toBeNull();
+    expect(b.chain_algorithm).toBe("SHA-256/14-field-canonical-record");
+    // Old field aliases MUST NOT appear (Option A clean break).
+    expect((b as Record<string, unknown>).valid).toBeUndefined();
+    expect((b as Record<string, unknown>).total_events).toBeUndefined();
+    expect((b as Record<string, unknown>).broken_at).toBeUndefined();
+    expect((b as Record<string, unknown>).actor_entity_id).toBeUndefined();
   });
 
-  it("emits ADMIN_ACTION:AUDIT_VIEW_VERIFY_CHAIN on verify call", async () => {
+  it("emits ADMIN_ACTION:AUDIT_VIEW_VERIFY_CHAIN with extended SAFE meta on verify call", async () => {
     const orgId = await makeTestOrg();
     const caller = await makeOrgMember(orgId);
     await verifyChain(caller);
@@ -511,7 +521,11 @@ describe("GET /api/v1/audit/verify-chain — hash-chain integrity surface", () =
     });
     expect(viewVerify).toBeDefined();
     const d = viewVerify!.details as Record<string, unknown>;
-    expect(d.valid).toBe(true);
-    expect(typeof d.total_events).toBe("number");
+    expect(d.verified).toBe(true);
+    expect(typeof d.checked_event_count).toBe("number");
+    expect(d.scope).toBe("self");
+    // Old audit-detail aliases MUST NOT be emitted.
+    expect(d.valid).toBeUndefined();
+    expect(d.total_events).toBeUndefined();
   });
 });
