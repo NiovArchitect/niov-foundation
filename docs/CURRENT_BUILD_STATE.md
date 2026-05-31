@@ -9,7 +9,39 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-05-31
-(**Otzar Wave 3 IMPLEMENTATION LANDED 2026-05-31** — PR #127
+(**ADR-0071 IMPLEMENTATION LANDED 2026-05-31** — PR #132
+`ffc0548` ships Section 7 cross-scope audit `verify-chain`
+per ADR-0071 with **Option A clean break** Founder QLOCK
+(consumer-mapping evidence confirmed zero external HTTP
+consumers + only the route's own integration test consumed
+the prior `valid` / `total_events` / `broken_at` fields +
+aliases would have been semantically misleading). `GET
+/api/v1/audit/verify-chain` extended from self-only to the
+canonical 4-scope matrix (`self` / `org` / `platform` /
+`regulator`). NEW canonical response: `verified` /
+`checked_event_count` / `chain_algorithm` (`"SHA-256/14-field-
+canonical-record"`) / `window_start/end` / `first_event_id`
++ `first_event_hash` / `last_event_id` + `last_event_hash` /
+`broken_at_event_id` / `failure_reason` closed-vocab /
+`lawful_basis_id` / `evidence_note` / `honest_note`. Old
+field aliases NOT emitted. Internal Prisma primitive
+`verifyAuditChain(entity_id)` backward-compat preserved
+(camelCase fields stay; window-aware variant additive only).
+`VERIFY_CHAIN_MAX_EVENTS = 10_000` perf cap mirroring
+`EXPORT_AUDIT_EVENTS_MAX_ROWS` precedent. Default 30-day
+window for org/platform; regulator window bounded by
+LawfulBasis `valid_from`→`valid_until`. ADR-0036 9-condition
+LawfulBasis enforcement reused verbatim via
+`getActiveLawfulBasisForRegulator`. Regulator-scope
+continuity verification reads prior row's `event_hash` only
+(one column) without surfacing data fields per ADR-0071
+§7.3. ZERO new audit literal — extended
+`AUDIT_VIEW_VERIFY_CHAIN` meta. ZERO schema migration.
+20 new integration tests + 77 audit-viewer regression + 40
+audit unit + 32 verify-chain-primitive-consumer regression
+all green. Closes ADR-0070 §Forward queue item 1 at the
+canonical-execution register. Earlier last-updated context:
+**Otzar Wave 3 IMPLEMENTATION LANDED 2026-05-31** — PR #127
 `8474863` ships scoped Twin proactivity per ADR-0068: NEW
 optional `proactive_cards?[]` sidecar on `MyTwinView`
 projected via a NEW pure-function
@@ -162,9 +194,9 @@ backend scope from earlier today.).
 
 ## Current state
 
-- **Latest main HEAD:** `8474863` (Otzar Wave 3 v1 proactive_cards impl; closeout docs PR pending).
-- **Latest merged PR:** [#127](https://github.com/NiovArchitect/niov-foundation/pull/127) — Otzar Wave 3 v1 — scoped Twin proactivity proactive_cards sidecar (18 tests).
-- **Active branch / PR:** `section-1-wave-3-twin-proactivity-closeout-docs` (Wave 3 closeout docs; design-only).
+- **Latest main HEAD:** `ffc0548` (ADR-0071 cross-scope verify-chain implementation; closeout docs PR pending).
+- **Latest merged PR:** [#132](https://github.com/NiovArchitect/niov-foundation/pull/132) — ADR-0071 Section 7 cross-scope audit verify-chain (Option A clean break; 20 new tests).
+- **Active branch / PR:** `adr-0071-cross-scope-verify-chain-closeout-docs` (ADR-0071 implementation closeout docs).
 - **Section 1 status:** PRODUCTION-GRADE COMPLETE for v1 Foundation drift-detection backend scope. Section 6 PRODUCTION-GRADE COMPLETE earlier 2026-05-30. Section 3 PRODUCTION-GRADE COMPLETE earlier 2026-05-30. **Section 5 PARTIAL with Waves 1+2+3+4 LIVE** (Wave 4 LANDED 2026-05-30).
 - **TypeScript baseline:** exactly 4 canonical residual errors per ADR-0015 Decision B Amendment 1.
 - **Live `ACTION_*` audit emitters:** 10 of 10 (canonical ADR-0057 §10 vocabulary fully wired).
@@ -183,7 +215,7 @@ backend scope from earlier today.).
 | 4 | MCP / Connectors | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5+7 LIVE + Hardening Wave B LIVE.** Provider abstraction + `ConnectorBinding` model (secret_ref env-var NAME only) + 5 admin routes + `INVOKE_CONNECTOR` ActionType + `OutboundWebhookProvider` (HTTPS POST + HMAC-SHA-256) + `NotificationService` fan-out bridge (Wave 5 direct-mode default + Wave 7 Action-routed opt-in via `config.fan_out_mode`) + `verifyInboundHmac` reusable receive-side verifier. 5 admin `ADMIN_ACTION` discriminators + 3 fan-out discriminators (DISPATCHED + FAILED + ENQUEUED) — **zero new audit literals**. SDK-bound connectors + encrypted-at-rest secret column = forward-substrate behind their own future QLOCKs. | [`04-mcp-connectors.md`](current-build-state/04-mcp-connectors.md) |
 | 5 | Agent Playground | **PARTIAL with Waves 1+2+3+4 LIVE (inspector foundation + product-vision ADR + persistent named scenarios).** Wave 1 ADR-0060 (#86) locks v1 inspector scope. Wave 2 (PR #100) ships 3 sandbox-only inspector routes (policy-evaluator / connector-dry-run / working-set) + PlaygroundService + 17 integration tests. Wave 3 ADR-0065 LANDED 2026-05-30 as NEW ADR sitting ABOVE ADR-0060 at the product-vision tier — canonicalizes the long-term DGI vision + 13-input set + 10-output set + human-in-the-loop doctrine + universal safety/no-leak doctrine + canonical 10-wave forward map. **Wave 4 LANDED 2026-05-30 (PR #111; `a2988ee`)** — NEW `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes (`POST/GET /api/v1/playground/scenarios` + `GET/PUT/DELETE /api/v1/playground/scenarios/:id`) + `PlaygroundScenarioService` + 38 integration tests. SAFE persistence layer for the future Wave 5+ candidate-generation / outcome-comparison / best-path-recommender / governed-transition substrate. Owner-first self-scope per RULE 0; same-org enforcement when `org_entity_id` non-null; cross-owner/cross-org/unknown id all fold to `SCENARIO_NOT_FOUND` enumeration-safe 404; forbidden-field rejection on PUT; soft-archive per RULE 10 with idempotency. ADMIN_ACTION + details.action discriminator audit (CREATED/UPDATED/ARCHIVED); ZERO new audit literal; safe details only (no title/description text; no raw Json payloads). Schema migration via `npm run db:push:test` per ADR-0025. Wave 4 itself implements ZERO execution / LLM / multi-agent / external provider / Action creation / connector invocation / MemoryCapsule / OtzarConversation / live side effects — all Wave 5+ slices remain forward-substrate per ADR-0065 §7 with separate Founder authorization required at each. | [`05-agent-playground.md`](current-build-state/05-agent-playground.md) |
 | 6 | Enterprise Analytics | **PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE** (final v1 closeout 2026-05-30; Wave 6 LIVE 2026-05-30; Wave 7 LIVE 2026-05-30). 4-aggregate v1 arc + Wave 6 per-ActionType breakdown + Wave 7 compliance-posture on top of ADR-0061 Wave 1 design (#87): Wave 2 CORRECTION velocity 7d (#103); Wave 3 action-runtime success rate org-wide (#104); Wave 4 connector activity (#105); Wave 5 hive participation (#106); Wave 6 per-ActionType action-runtime health (PR #117; `2c4336a`); **Wave 7 org-level compliance-posture (PR #119; `2b83116`)** — metadata-only org-level posture surface (NOT legal advice; NOT certification; NOT employee compliance scoring); 5-label closed-vocab HEALTHY / WATCH / DEGRADED / NOT_CONFIGURED / INSUFFICIENT_POPULATION; reads EntityComplianceProfile + ComplianceFramework + recent COMPLIANCE_CHECK_PASSED/FAILED audit counts; deliberate exclusion of LawfulBasis + REGULATOR_ACCESS_* counts per substrate-honest finding (no org_entity_id column at v1); same auth + same-org + k=5 + ANALYTICS_READ (zero new audit literal); 20 integration tests. 6 live aggregates total (v1 4 + Wave 6 + Wave 7). All 4 aggregates SAFE-projected; same-org sovereignty enforced by construction; k=5 HIPAA Safe Harbor floor universal; `can_admin_org` gate universal; `ADMIN_ACTION + details.action="ANALYTICS_READ"` audit universal; no new audit literal across any wave; zero schema migration; zero new external dependencies; 55 integration tests. **Important scope wording**: closes the Foundation backend analytics substrate for v1 same-org admin reads — NOT all future analytics product work. **Forward-substrate**: additional aggregates + persistent projections + operator-tunable per-org threshold + cross-org analytics + differential privacy + AI-generated executive summaries + Control Tower UX + real-time/streaming + compliance-framework-specific aggregates (each its own slice + separate Founder authorization). Foundation-strategic-context coherent: generic Entity model preserved (AI_AGENT/DEVICE/APPLICATION/COMPANY aggregate identically), no blockchain/payment surface, no surveillance framing. | [`06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md) |
-| 7 | Full Audit Viewer | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 LIVE + Hardening Wave A (CSV export) LIVE.** Canonical 4-scope matrix (self / org-admin / niov-admin / regulator) live across 3 read shapes (list / single-event / export); `verify-chain` self-only. Regulator access via ADR-0036 LawfulBasis 9-condition enforcement (Wave 5 PR #68). Export supports both `format=ndjson` (Wave 4) and `format=csv` (Hardening A PR #76; RFC 4180; CRLF terminators; `x-audit-format` header). All gates TAR-authoritative; filters AND-narrow; cross-basis isolation tested; SAFE projection; ADMIN_ACTION:AUDIT_VIEW_* (no new audit literal across any wave). Control Tower UX + cross-chain verify-chain = forward-substrate. **Proactive `REGULATOR_ACCESS_EXPIRED` emitter LIVE via Hardening Wave D (PR #79 / `dcff369`; 2026-05-29)** — `tickRegulatorAccessExpirySweep` on the Action scheduler cron host every 60s; idempotent + supersession-aware; `REGULATOR_ACCESS_EXPIRED` audit literal reserved at CAR Sub-box 3 sub-phase 5; 7 integration tests. (Substrate-honest doc-drift correction landed 2026-05-30: prior version of this row listed the emitter as forward-substrate.) | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
+| 7 | Full Audit Viewer | **PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 LIVE + Hardening Wave A (CSV export) LIVE + ADR-0071 cross-scope verify-chain LIVE (PR #132 `ffc0548`).** Canonical 4-scope matrix (self / org-admin / niov-admin / regulator) now LIVE across **all 4 read shapes** — list / single-event / export / verify-chain — closing ADR-0070 §Forward queue item 1 at the canonical-execution register. ADR-0071 Option A clean break per Founder QLOCK: NEW `verified` / `checked_event_count` / `chain_algorithm` / `window_start/end` / `first_event_id+hash` / `last_event_id+hash` / `broken_at_event_id` / `failure_reason` / `lawful_basis_id` / `evidence_note` / `honest_note` canonical fields; old `valid` / `total_events` / `broken_at` / `actor_entity_id` aliases NOT emitted. `VERIFY_CHAIN_MAX_EVENTS = 10_000` perf cap; 30-day default window for org/platform; regulator window bounded by LawfulBasis `valid_from`→`valid_until`. ADR-0036 9-condition LawfulBasis enforcement reused verbatim. Regulator-scope continuity verification reads prior row's `event_hash` only (one column) without surfacing data fields per ADR-0071 §7.3. ZERO new audit literal — extended `AUDIT_VIEW_VERIFY_CHAIN` meta. ZERO schema migration. 20 new integration tests + 77 audit-viewer regression preserved. Regulator access via ADR-0036 LawfulBasis 9-condition enforcement (Wave 5 PR #68). Export supports both `format=ndjson` (Wave 4) and `format=csv` (Hardening A PR #76; RFC 4180; CRLF terminators; `x-audit-format` header). All gates TAR-authoritative; filters AND-narrow; cross-basis isolation tested; SAFE projection; ADMIN_ACTION:AUDIT_VIEW_* (no new audit literal across any wave). Control Tower UX + cross-chain verify-chain = forward-substrate. **Proactive `REGULATOR_ACCESS_EXPIRED` emitter LIVE via Hardening Wave D (PR #79 / `dcff369`; 2026-05-29)** — `tickRegulatorAccessExpirySweep` on the Action scheduler cron host every 60s; idempotent + supersession-aware; `REGULATOR_ACCESS_EXPIRED` audit literal reserved at CAR Sub-box 3 sub-phase 5; 7 integration tests. (Substrate-honest doc-drift correction landed 2026-05-30: prior version of this row listed the emitter as forward-substrate.) | [`07-full-audit-viewer.md`](current-build-state/07-full-audit-viewer.md) |
 | 8 | Billing / Entitlements | Monetization substrate partial (`PRICING_TABLE`, 70/30 split). Entitlements layer forward-substrate. | [`08-billing-entitlements.md`](current-build-state/08-billing-entitlements.md) |
 | 9 | Admin / Governance Control Tower | **Backend contracts substantively complete for a Control Tower v1 frontend.** Live surfaces: Otzar Wave 2A/B/C (per Section 1 confirmation) + Action runtime (Section 2) + Audit viewer (Section 7 self/org/platform/regulator + NDJSON + CSV) + Connector admin (Section 4 — 5 routes + INVOKE_CONNECTOR + fan-out + inbound HMAC verifier) + break-glass + regulator window + escalations. AI-generated executive summary projections per ADR-0052 doctrine remain forward-substrate behind a Founder product decision. CT frontend lives in [`otzar-control-tower`](https://github.com/NiovArchitect/otzar-control-tower). | [`09-admin-governance-control-tower.md`](current-build-state/09-admin-governance-control-tower.md) |
 | 10 | Deployment / Security / Go-Live | Track A closed; ADR-0011/0013/0015/0018/0019/0024/0025/0047 substrate LIVE; GOVSEC.5 (ADR-0050) Accepted; GOVSEC.2–4 + GOVSEC.6–10 forward-substrate. | [`10-deployment-security-go-live.md`](current-build-state/10-deployment-security-go-live.md) |
@@ -192,6 +224,11 @@ backend scope from earlier today.).
 
 | PR | Commit | Description |
 |---|---|---|
+| [#132](https://github.com/NiovArchitect/niov-foundation/pull/132) | `ffc0548` | Implement ADR-0071 — Section 7 cross-scope audit verify-chain (Option A clean break; 20 new tests) |
+| [#131](https://github.com/NiovArchitect/niov-foundation/pull/131) | `3512bed` | Add ADR-0071 design-only — Section 7 cross-scope audit verify-chain |
+| [#130](https://github.com/NiovArchitect/niov-foundation/pull/130) | `d1aabe4` | Add ADR-0070 doctrine-only — Regulator-Ready Foundation Doctrine |
+| [#129](https://github.com/NiovArchitect/niov-foundation/pull/129) | `7fc1483` | Add ADR-0069 doctrine-only — Elixir/BEAM Substrate-Coherence Law |
+| [#128](https://github.com/NiovArchitect/niov-foundation/pull/128) | `5f61b5f` | Close out Otzar Wave 3 — scoped Twin proactivity proactive_cards sidecar |
 | [#127](https://github.com/NiovArchitect/niov-foundation/pull/127) | `8474863` | Implement Otzar Wave 3 v1 — scoped Twin proactivity proactive_cards sidecar on getMyTwin (18 tests) |
 | [#126](https://github.com/NiovArchitect/niov-foundation/pull/126) | `4466b93` | Add ADR-0068 design-only — Otzar Wave 3 scoped Twin proactivity (getMyTwin proactive_cards sidecar) |
 | [#125](https://github.com/NiovArchitect/niov-foundation/pull/125) | `6ea2bee` | Close out Section 1 Wave 6B — symbiotic accepted-pattern priming hook into assembleContext |
@@ -250,7 +287,7 @@ backend scope from earlier today.).
 **Section 7 forward-substrate (autonomous-clean if/when prioritized):**
 
 - ~~Proactive `REGULATOR_ACCESS_EXPIRED` emitter via SCHEDULER sweep~~ — **LIVE** via Hardening Wave D (PR #79 / `dcff369`; 2026-05-29). Substrate-honest doc-drift correction landed 2026-05-30.
-- Org-admin / platform / regulator `verify-chain` (cross-chain perf + leakage review; separate QLOCK).
+- ~~Org-admin / platform / regulator `verify-chain` (cross-chain perf + leakage review; separate QLOCK)~~ — **IMPLEMENTATION LANDED PR #132 `ffc0548` 2026-05-31** per ADR-0071 with Option A clean break Founder QLOCK.
 - Control Tower audit-viewer UX (frontend; out of Foundation scope).
 
 **Section 9 forward-substrate (Founder product decision required):**

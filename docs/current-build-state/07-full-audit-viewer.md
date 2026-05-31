@@ -12,24 +12,98 @@ and (in future waves) export. Per ADR-0002 the audit chain is
 sacrosanct; this section adds the read surface, never the write
 surface.
 
-## Current status (PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 LIVE)
+## Current status (PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5 + Hardening Wave A + ADR-0071 cross-scope verify-chain LIVE)
 
 **Read substrate + unified self / org-admin / niov-admin viewer
-+ NDJSON export + regulator-tier access LIVE per PRs #60 + #62 +
-#64 + #66 + #68.** Foundation primitives LIVE. Wave 1 added the
-per-caller unified read surface at `/api/v1/audit/*`; Wave 2
-added the `scope=org` admin path; Wave 3 added the
-`scope=platform` niov-admin path; Wave 4 added the NDJSON export
-at `/api/v1/audit/events/export`; Wave 5 added the regulator-
-tier audit access at `/api/v1/audit/events/regulator-view` via
-the ADR-0036 LawfulBasis attestation pattern. **Section 7
-Foundation backend is production-grade complete for the
-canonical self / org-admin / niov-admin / regulator scope
-matrix.** Control Tower UX + cross-chain verify-chain + CSV
-export remain forward-substrate (out of Foundation scope or
-optional follow-on).
++ NDJSON export + CSV export + regulator-tier access +
+cross-scope verify-chain LIVE per PRs #60 + #62 + #64 + #66 +
+#68 + #76 (CSV) + #79 (REGULATOR_ACCESS_EXPIRED emitter) +
+#132 (ADR-0071 cross-scope verify-chain).** **Section 7
+Foundation backend is production-grade complete across all 4
+read shapes (list / single-event / export / verify-chain) ×
+4 scopes (self / org-admin / niov-admin / regulator).** The
+canonical 4-scope matrix is now uniform — verify-chain joins
+list/single/export at the cross-scope register per ADR-0071
++ Founder Option A clean break QLOCK 2026-05-31. Control
+Tower UX remains forward-substrate (out of Foundation scope;
+lives in `otzar-control-tower`).
 
 ## What is live
+
+### ADR-0071 (PR #132 `ffc0548`; 2026-05-31) — cross-scope verify-chain (Option A clean break)
+
+- `GET /api/v1/audit/verify-chain?scope=self|org|platform|regulator&subject_entity_id=…&lawful_basis_id=…&from=…&to=…&max_events=…`
+  — bearer + `read`. Default `scope=self`. **Option A clean
+  break** per Founder QLOCK 2026-05-31 (consumer-mapping
+  evidence: zero external HTTP consumers + only the route's
+  own integration test consumed prior `valid` / `total_events`
+  / `broken_at` / `actor_entity_id` fields + aliases would
+  have been semantically misleading because
+  `total_events` / `checked_event_count` are not synonyms
+  under windowed multi-chain scope).
+- **NEW canonical response shape** (16 fields; no aliases):
+  `ok` + `scope` + `verified` + `checked_event_count` +
+  `chain_algorithm` (`"SHA-256/14-field-canonical-record"`) +
+  `window_start` + `window_end` + `first_event_id` +
+  `last_event_id` + `first_event_hash` + `last_event_hash` +
+  `broken_at_event_id` + `failure_reason` (closed-vocab:
+  `HASH_MISMATCH` / `PREVIOUS_LINK_MISMATCH` /
+  `MISSING_PREVIOUS_EVENT` / `CANONICAL_RECORD_DRIFT`) +
+  `lawful_basis_id` + `evidence_note` + `honest_note`. Old
+  HTTP fields removed; **NOT aliased**.
+- **Scope gates** (TAR-authoritative): `self` bearer +
+  `read`; `org` requires `can_admin_org`; `platform` requires
+  `can_admin_niov`; `regulator` requires ADR-0036 9-condition
+  LawfulBasis enforcement via
+  `getActiveLawfulBasisForRegulator` + REGULATOR target
+  identity binding.
+- **Window controls**: default 30-day window for `org` /
+  `platform` when both `from`+`to` omitted; `regulator` window
+  bounded by `LawfulBasis.valid_from`→`LawfulBasis.valid_until`;
+  optional `subject_entity_id` narrows org/platform to a
+  single chain (cross-org subject → enumeration-safe 404
+  `SUBJECT_NOT_FOUND`); regulator scope FORBIDS
+  `subject_entity_id` (the basis selects the events).
+- **Perf cap**: `VERIFY_CHAIN_MAX_EVENTS = 10_000` mirroring
+  `EXPORT_AUDIT_EVENTS_MAX_ROWS` precedent. Pre-flight
+  `prisma.auditEvent.count` over scoped predicate enforces
+  the cap before any chain walk; `WINDOW_TOO_LARGE` 400 on
+  oversized window/missing narrowing.
+- **Regulator §7.3 continuity verification**: reads prior
+  row's `event_hash` only (one column projection) without
+  surfacing data fields. `MISSING_PREVIOUS_EVENT` covers the
+  invisible-predecessor case.
+- **Closed-vocab failure codes**: `UNAUTHORIZED` 401 /
+  `FORBIDDEN` 403 / `INVALID_SCOPE` 400 / `INVALID_FIELD` 400
+  / `LAWFUL_BASIS_REQUIRED` 400 / `LAWFUL_BASIS_NOT_FOUND` 404
+  / `LAWFUL_BASIS_EXPIRED` 403 / `LAWFUL_BASIS_NOT_YET_VALID`
+  403 / `LAWFUL_BASIS_REVOKED` 403 /
+  `LAWFUL_BASIS_HASH_MISMATCH` 403 / `REGULATOR_TARGET_MISMATCH`
+  403 / `SCOPE_NOT_ALLOWED` 403 / `SUBJECT_NOT_FOUND` 404
+  enumeration-safe / `WINDOW_TOO_LARGE` 400 /
+  `CHAIN_VERIFICATION_FAILED`-as-200-with-`verified=false` /
+  `INSUFFICIENT_DATA`-as-200-vacuous-success / `INTERNAL_ERROR`
+  500.
+- **Read-audit emission**: reuses existing
+  `AUDIT_VIEW_VERIFY_CHAIN` literal with extended SAFE meta
+  (`scope` + `verified` + `checked_event_count` + `window` +
+  `lawful_basis_id` + `failure_reason`). **ZERO new audit
+  literal.**
+- **Internal Prisma primitive `verifyAuditChain(entity_id)`
+  backward-compat preserved** — camelCase `valid` /
+  `totalEvents` / `brokenAt` fields still present; window-
+  aware variant additive only; the 7 in-tree call sites
+  (session-lifecycle + session-idle + refresh-rotation +
+  evidence-export + gateway + dandelion + audit unit tests)
+  continue to work unchanged.
+- **ZERO schema migration**.
+- **Test counts**: 20 new integration tests
+  (`tests/integration/audit-verify-chain-cross-scope.test.ts`)
+  + 77 audit-viewer integration regression preserved + 40
+  audit unit + 32 verify-chain-primitive-consumer regression
+  all green.
+- Closes **ADR-0070 §Forward queue item 1** at the canonical-
+  execution register.
 
 ### Wave 5 (PR #68) — regulator-tier audit access via ADR-0036
 
@@ -97,9 +171,13 @@ optional follow-on).
   `details.action` ∈ `{ AUDIT_VIEW_PLATFORM_LIST,
   AUDIT_VIEW_PLATFORM_EVENT }`. **No new audit literal**;
   still on the canonical `ADMIN_ACTION`.
-- `GET /api/v1/audit/verify-chain` — **UNCHANGED**. Self-only
-  across all 3 waves (cross-chain verification = leakage / perf
-  risk; forward-substrate).
+- `GET /api/v1/audit/verify-chain` — Wave-3-era stance: self-
+  only; cross-chain verification was forward-substrate.
+  **Superseded by ADR-0071** (PR #132 `ffc0548`; 2026-05-31)
+  which extends verify-chain to the canonical 4-scope matrix
+  (self / org / platform / regulator) at the cross-scope
+  register. See the ADR-0071 section above for the canonical
+  response shape + scope semantics.
 
 ### Wave 2 (PR #62) — org-admin scope on the unified viewer
 
@@ -138,8 +216,13 @@ optional follow-on).
   (audit_id + event_hash + timestamp only; scoped to caller's
   chain). Enumeration-safe 404 collapses cross-actor + unknown id.
 - `GET /api/v1/audit/verify-chain` — bearer + `read`; exposes
-  the LIVE `verifyAuditChain` primitive at HTTP; returns
-  `{ valid, total_events, broken_at }`.
+  the LIVE `verifyAuditChain` primitive at HTTP. Wave-1-era
+  response was `{ valid, total_events, broken_at }`;
+  **superseded by ADR-0071** (PR #132 `ffc0548`; 2026-05-31)
+  which replaces the response shape with the canonical
+  `VerifyChainView` per Option A clean break. See the
+  ADR-0071 section above for the canonical 4-scope matrix +
+  16-field response shape.
 - Read-audit emission: every GET fires `ADMIN_ACTION` audit on
   the caller's chain with `details.action` set to one of
   `AUDIT_VIEW_LIST` / `AUDIT_VIEW_EVENT` / `AUDIT_VIEW_VERIFY_CHAIN`.
