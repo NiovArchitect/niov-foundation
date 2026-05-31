@@ -359,6 +359,25 @@ contracts).
    safe aggregation of permissioned signals across an org's
    employee twins (likely lands as a future CAR Sub-box; not yet
    designed).
+9. **Otzar Wave 3 — Scoped Twin Proactivity** — **DESIGN LANDED
+   at ADR-0068 (2026-05-31)** as a pull-based computed-on-read
+   `proactive_cards?[]` sidecar on `getMyTwin` derived purely
+   from existing self-scoped substrate (Wave 5 PROPOSED/ACCEPTED
+   readers + Wave 4A wallet-stale signal + Wave 4C cross-
+   conversation rollup + `OtzarProposedPattern.reviewed_at`
+   periodic check-in). 5 closed-vocab card_types at v1
+   (`ACCEPTED_PATTERN_REMINDER` + `PROPOSED_PATTERN_REVIEW_AVAILABLE`
+   + `STALE_CONTEXT_REFRESH_SUGGESTED` + `DRIFT_REVIEW_SUGGESTED`
+   + `ALIGNMENT_CHECK_IN`); cap 4 cards per response;
+   `include_proactive_cards: false` opt-out; deterministic
+   `card_key` for client-side dismiss; NO `NotificationService`
+   integration at v1 (Twin-as-source semantic forward-substrate);
+   NO `conductSession` preamble; NO external delivery; NO
+   autonomous execution; NO Action creation; NO Control Tower
+   frontend; NO LLM-generated text; NO manager visibility; NO
+   schema migration; NO new audit literal. Implementation slice
+   forward-substrate behind separate Founder authorization per
+   ADR-0068 §"Founder authorization".
 
 ## Risks / forward-substrate
 
@@ -371,6 +390,14 @@ contracts).
 - The `role_scope_profile` continuity counts currently report
   totals; ADR-0053 reserves the `recent_` prefix for a future
   time-window contract change without breaking the response shape.
+- **Otzar Wave 3 Twin Proactivity (ADR-0068) is design-only**;
+  the implementation slice has not been authorized. Until
+  the implementation slice lands, `MyTwinView` does NOT carry
+  the `proactive_cards?` field; the Twin remains purely
+  reactive. The ADR is the canonical reference for any future
+  proactivity work — proactivity may not bypass the ADR's
+  closed-vocab + pull-only + owner-controlled posture without
+  a separate Founder authorization.
 
 ---
 

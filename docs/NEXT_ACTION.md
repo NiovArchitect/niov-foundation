@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `625ddbf` (Section 1 Wave 6B priming-hook impl; closeout docs PR pending)
-- **Latest merged PR:** [#124](https://github.com/NiovArchitect/niov-foundation/pull/124) — Section 1 Wave 6B priming-hook (14 tests).
-- **Active branch / PR:** `section-1-wave-6b-closeout-docs` (Wave 6B closeout docs; design-only).
+- **Main HEAD:** `6ea2bee` (Section 1 Wave 6B closeout docs merged).
+- **Latest merged PR:** [#125](https://github.com/NiovArchitect/niov-foundation/pull/125) — Section 1 Wave 6B closeout docs.
+- **Active branch / PR:** `section-1-wave-3-twin-proactivity-adr` (Otzar Wave 3 Twin Proactivity ADR-0068; design-only; awaiting PR).
 - **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern + Wave 6A + Wave 6B (active-pattern-consumption FULLY LIVE) 2026-05-31** — Wave 5 LANDED via ADR-0066 (PRs #113/#114/#115; `7661ba9` impl). **Wave 6A LANDED PR #121 `6b84a99`** (visibility half). **Wave 6B LANDED via ADR-0067 (PR #123) + impl PR #124 `625ddbf`** (influence half — sidecar field on AssembleContextSuccess + labeled L_ALIGNMENT prompt section in conductSession; reuses Wave 6A projection; ZERO score-boost; ZERO capsule pipeline mutation; ZERO new audit literal; ZERO schema migration; 14 integration tests). Symbiotic alignment loop closed at both visibility + influence registers.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE — 6 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health + Wave 7 org-level compliance-posture per ADR-0061 §8 forward queue; PRs #117 `2c4336a` + #119 `2b83116`); ZERO new audit literal across any Section 6 wave.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
@@ -25,6 +25,10 @@
 ## Exact next action
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
+
+## Otzar Wave 3 DESIGN LANDED — Scoped Twin Proactivity (ADR-0068)
+
+Design-only — **no code, no schema, no new audit literal, no new route, no service-method signature change in this commit**. Locks v1 as a pull-based computed-on-read `proactive_cards?[]` sidecar on `getMyTwin` derived purely from existing self-scoped substrate (Wave 5 readers + Wave 4A/4C drift signals + `reviewed_at` periodic check-in). 5 closed-vocab card_types at v1 (`ACCEPTED_PATTERN_REMINDER` + `PROPOSED_PATTERN_REVIEW_AVAILABLE` + `STALE_CONTEXT_REFRESH_SUGGESTED` + `DRIFT_REVIEW_SUGGESTED` + `ALIGNMENT_CHECK_IN`); cap 4 cards per response; `include_proactive_cards: false` opt-out (mirrors Wave 6B precedent); deterministic `card_key` for client-side dismiss; ZERO `NotificationService` integration at v1 (Twin-as-source semantic forward-substrate); ZERO `conductSession` preamble; ZERO external delivery; ZERO autonomous execution; ZERO Action creation; ZERO Control Tower frontend; ZERO LLM-generated text; ZERO manager visibility. Closes ADR-0052 §9 proactivity-vs-autonomy + ADR-0053 §5 "proactive suggestions" forward-queue entries at the design register. **Implementation slice forward-substrate behind separate Founder authorization** per ADR-0068 §"Founder authorization".
 
 ## Section 1 Wave 6B LANDED — symbiotic priming hook into assembleContext (PR #124)
 
@@ -133,12 +137,8 @@ External notification delivery (each adapter = own QLOCK + RULE 21 research arc)
 
 ## Discipline reminders
 
-- **Wave-based delivery (per `[FOUNDATION-VELOCITY-CORRECTION]`):** group related slices in the same production section into one wave. Implementation PRs may still be separate for safety; docs refresh happens **once per completed wave**, not after every small PR. A wave shares substrate, requires no schema migration, does not cross into unrelated sections, requires no new product/architecture decisions, and can be verified safely as a sequence.
-- **Pattern lock (PR cycle):** branch → implement narrow slice → targeted tests + no-leak + no-console + typecheck baseline → commit → push → open PR → wait for CI → merge if green + CLEAN → verify local main equals origin/main → next slice in the same wave (no docs refresh between) → at wave close: one concise docs refresh updating **`NEXT_ACTION.md` + relevant section file** + lean master index touchups.
-- **RULE 21 research arc** required for substrate-architectural pastes (external libraries, new substrate patterns, cross-application boundaries, cross-language boundaries, wire-format changes).
-- **No `console.*` in `apps/api/src`** (RULE 16; anchor test enforces).
-- **Soft-delete only** (RULE 10; `deleted_at` timestamps, never DELETE).
-- **Audit chain integrity** (RULE 4; `writeAuditEvent` before response; failure rolls back action).
+- **Wave-based delivery:** group related slices in one wave; docs refresh once per completed wave. **Pattern lock (PR cycle):** branch → narrow slice → tests + no-leak + no-console + typecheck baseline → commit → push → PR → CI green + CLEAN → merge → local main equals origin/main → next slice → at wave close: concise docs refresh.
+- **RULE 21** research arc for substrate-architectural pastes. **RULE 16** no `console.*` in `apps/api/src`. **RULE 10** soft-delete only. **RULE 4** audit chain integrity (`writeAuditEvent` before response).
 
 ## Update rule (mandatory)
 
