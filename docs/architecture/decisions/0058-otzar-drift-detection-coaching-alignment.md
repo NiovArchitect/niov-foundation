@@ -461,3 +461,13 @@ Service-tier constants (locked in this ADR):
 - Cites RULE 13 (substrate-honest disclosures section above).
 - Cites RULE 20 (this ADR's creation explicitly Founder-authorized
   via the Sleep Directive 2026-05-30).
+- Cited from ADR-0068 (Otzar Wave 3 — Scoped Twin Proactivity,
+  design-only) — Wave 3 consumes Wave 4A `WALLET_STALE_CONTEXT`
+  + Wave 4C `CROSS_CONVERSATION_ROLLUP` signal outputs as
+  source signals for two of the five v1 proactive card_types
+  (`STALE_CONTEXT_REFRESH_SUGGESTED` +
+  `DRIFT_REVIEW_SUGGESTED`). The "proactive suggestions" entry
+  from ADR-0053 §5 + this ADR §"Forward queue" closes at the
+  design register at ADR-0068; Wave 3 surfaces drift coaching
+  via the same closed-vocab + no-leak + no-audit posture this
+  ADR canonicalizes. Drift-signal contracts UNTOUCHED.

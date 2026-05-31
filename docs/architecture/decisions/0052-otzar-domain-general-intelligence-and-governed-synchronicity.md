@@ -211,3 +211,14 @@ Bidirectional citations (cited from):
   (watching-is-not-surveillance), §6 (drift prevention is
   first-class but bounded), and §7 (governed best-practice learning
   without overclaiming).
+- ADR-0068 (Otzar Wave 3 — Scoped Twin Proactivity, design-
+  only) — operationalizes §9 (Proactivity vs. autonomy):
+  *"Otzar can proactively prepare, coordinate, and recommend
+  inside scope. It executes sensitive actions only under
+  permission, policy, or approval."* Wave 3 lands the
+  recommend half via a `getMyTwin` `proactive_cards?[]`
+  sidecar; the execute half remains under Section 2 Action
+  runtime. Honors §5 (watching-is-not-surveillance), §6
+  (drift prevention is first-class but bounded), §7
+  (governed best-practice learning), and §11 (hierarchy-
+  routed reports — Wave 3 has NO manager surface).

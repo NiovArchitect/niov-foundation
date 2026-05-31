@@ -251,3 +251,11 @@ Bidirectional citations (cited from):
   Continuity) — the Wave 2C contract is the per-conversation half
   of this ADR's §5 "drift-prevention foundations"; full drift
   detection remains the Wave 3 boundary §5 locked.
+- ADR-0068 (Otzar Wave 3 — Scoped Twin Proactivity, design-
+  only) — Wave 3 extends the Wave 2A `getMyTwin` surface with
+  a NEW additive `proactive_cards?[]` sidecar that inherits
+  this ADR's no-audit + self-scoped + no-surveillance + no
+  raw internals posture by-construction. Closes the §5
+  "proactive suggestions" forward-queue entry at the design
+  register; implementation slice forward-substrate behind
+  separate Founder authorization.

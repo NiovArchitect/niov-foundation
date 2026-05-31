@@ -720,6 +720,22 @@ additional Founder decisions during execution):
 - Bidirectional back-citation lands in ADR-0058 §"Forward
   queue" item 1 in the same commit per RULE 14.
 
+Bidirectional citations (cited from):
+
+- ADR-0068 (Otzar Wave 3 — Scoped Twin Proactivity, design-
+  only) — consumes Wave 5's `OtzarProposedPattern` PROPOSED +
+  ACCEPTED rows as source signals for two of the five v1
+  proactive card_types (`PROPOSED_PATTERN_REVIEW_AVAILABLE` +
+  `ACCEPTED_PATTERN_REMINDER`). Wave 3 reads via the existing
+  Wave 5 `listProposedPatternsForOwner` /
+  `listAcceptedPatternsForOwner` readers; the Wave 5 review
+  lifecycle (PROPOSED → ACCEPTED|REJECTED|ARCHIVED) is
+  UNTOUCHED by Wave 3. Wave 5 proposals are already
+  Twin-initiated (the recurrence sweep proposes without the
+  owner asking); Wave 3 surfaces the *existence* of those
+  proposals as proactive cards on `getMyTwin`, preserving the
+  owner-reviews-and-decides loop verbatim.
+
 ## Founder authorization
 
 Per RULE 20: this ADR + the bidirectional back-citation in

@@ -646,6 +646,18 @@ tests verbatim — Wave 6B is purely additive.
 - Cites RULE 20 (this ADR's creation explicitly Founder-
   authorized).
 
+Bidirectional citations (cited from):
+
+- ADR-0068 (Otzar Wave 3 — Scoped Twin Proactivity, design-
+  only) — cites ADR-0067 to lock the boundary that Wave 3
+  proactivity surfaces via a NEW `MyTwinView.proactive_cards?`
+  sidecar **and explicitly does NOT touch `assembleContext`
+  or the Wave 6B `alignment_patterns?` sidecar**.
+  `conductSession`'s 8-layer prompt builder + the L_ALIGNMENT
+  prompt section land here at Wave 6B unchanged; Wave 3 is
+  the pull-based proactive-card surface, distinct from
+  Wave 6B's in-chat alignment consumption.
+
 ## Founder authorization
 
 Per RULE 20: this ADR + the bidirectional back-citation in
