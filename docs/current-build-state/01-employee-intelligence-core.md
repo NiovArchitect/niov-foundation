@@ -294,11 +294,17 @@ contracts).
    ADR-0066 §9.~~ — **Wave 6A LANDED at PR #121 `6b84a99`
    (2026-05-30)** as the symbiotic advisory surface on
    `getMyTwin` (accepted_patterns[] projection; no audit; no
-   assembleContext touch; no schema). **Wave 6B (priming hook
-   into assembleContext) remains ADR/design forward-substrate
-   per Founder operating direction** — must not be implemented
-   until ADR/design confirms no-leak / RULE 0 / behavior-scope
-   safety.
+   assembleContext touch; no schema). **Wave 6B DESIGN
+   LANDED at ADR-0067 (2026-05-30)** as the sidecar-field
+   priming hook into `COE.assembleContext` (separate from the
+   capsule pipeline; reuses Wave 6A `AcceptedPatternAdvisoryView`
+   verbatim; explicit owner opt-out via
+   `include_alignment_patterns: false`; labeled LLM-tier prompt
+   section; ZERO new audit literal; ZERO schema migration; ZERO
+   combined_score formula amendment per ADR-0022 frozen anchor).
+   Wave 6B **implementation slice** is forward-substrate behind
+   a separate Founder authorization per ADR-0067 §"Founder
+   authorization" + §14 implementation-slice estimate.
 8. **Cross-team aggregation governance** — design substrate for
    safe aggregation of permissioned signals across an org's
    employee twins (likely lands as a future CAR Sub-box; not yet

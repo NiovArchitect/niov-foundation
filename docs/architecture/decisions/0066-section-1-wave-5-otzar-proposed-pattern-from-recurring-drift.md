@@ -520,10 +520,17 @@ create / list / detail / PATCH responses (mirroring the
 Each is forward-substrate behind separate Founder
 authorization at the respective slice:
 
-- **Active pattern consumption** — how an ACCEPTED pattern
-  informs the AI teammate's behavior. Wave 5 ships the
-  proposal + review substrate; behavior-change consumers
-  are Wave 6+.
+- ~~**Active pattern consumption**~~ — how an ACCEPTED
+  pattern informs the AI teammate's behavior. Wave 5
+  shipped the proposal + review substrate; behavior-change
+  consumers were Wave 6+. **Visibility half (Wave 6A)
+  LANDED 2026-05-30 (PR #121 `6b84a99`)** as the symbiotic
+  `accepted_patterns[]` projection on `getMyTwin`.
+  **Influence half (Wave 6B) DESIGN LANDED 2026-05-30 at
+  ADR-0067** as the sidecar-field priming hook into
+  `COE.assembleContext`. Wave 6B implementation slice is
+  forward-substrate behind separate Founder authorization
+  per ADR-0067 §14 + §"Founder authorization" register.
 - **Manager / org-admin review surface** — explicitly
   forbidden at v1 per RULE 0 + Founder direction. Any
   cross-employee surfacing is a separate slice with
