@@ -47,7 +47,7 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2+3+4+5 LIVE; first scenario-tier candidate-generation surface landed)
+## Current status (PARTIAL — Waves 1+2+3+4+5+6 LIVE; first scenario-tier candidate-generation + outcome-comparison surfaces landed)
 
 **Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
 scope locked: read-only sandbox-only self-scoped operator
@@ -122,6 +122,64 @@ Deterministic SHA-256 16-char `candidate_key` per
 ADR-0068 precedent. Bounded count per ADR-0072 §18
 (`CANDIDATES_PER_CALL_MAX = 8`). Python (Option B) and
 BEAM (Option C) remain forward-substrate per ADR-0072
+§Forward queue + ADR-0069.
+
+**Wave 6 contract ADR-0073 LANDED 2026-05-31 (PR #138;
+commit `1c85985`)** — design-only contract closing
+ADR-0065 §7 Wave 6 forward-queue line at the contract
+register; sits ABOVE ADR-0072 and BELOW ADR-0065 at the
+contract tier; 22 sub-decisions locking
+`ComparisonResponse` shape + `ComparisonMatrixItem` 13
+fields + 5 closed vocabularies (outcome_dimensions 12 +
+dimension_rating 5 + risk_findings 10 +
+dependency_findings 10 + required_reviews 9) +
+comparison_mode 2 + comparison_notes 12 + canonical "Wave
+6 calls Wave 5 internally" decision + bounded counts +
+ADR-0070 §9 legal-advice posture inherited verbatim +
+human-in-the-loop doctrine + three-method comparison
+(Option A deterministic TypeScript = v1; Option B Python
+requires ADR-0069 §2.4 boundary ADR; Option C BEAM folds
+into Wave 9).
+
+**Wave 6 Option A implementation LANDED 2026-05-31
+(PR #139; commit `02410ee`)** — deterministic / template-
+first TypeScript outcome-comparison surface. NEW
+`PlaygroundOutcomeComparisonService` at
+`apps/api/src/services/playground/playground-outcome-comparison.service.ts`
++ NEW route
+`POST /api/v1/playground/scenarios/:id/outcome-comparisons`
++ 39 integration tests. Computed-on-read; internally
+invokes `PlaygroundCandidateService.generateCandidates`
+per ADR-0073 §10 (NEVER accepts caller-supplied candidate
+payloads); v1 body accepts `candidate_types?[]` +
+`max_candidates?` + `comparison_mode?` only — NO
+`candidate_keys[]` per Founder QLOCK 2. NO persistence;
+NO new Prisma model; NO schema migration; NO new audit
+literal; NO LLM / model calls; NO Python; NO BEAM; NO
+Action creation; NO connector invocation; NO external
+provider call; NO Control Tower frontend; NO numeric
+scoring; NO winner selection; NO best-path recommendation;
+NO governed transition; NO multi-agent runtime; NO
+outcome-comparison persistence at this slice. Owner-first
++ same-org SCENARIO_NOT_FOUND gate inherits via Wave 5 →
+Wave 4 delegation. `ADMIN_ACTION + details.action =
+"PLAYGROUND_OUTCOMES_COMPARED"` audit with safe metadata
+only (scenario_id + candidate_count + comparison_mode +
+blocked_candidates_count + review_required_count +
+generated_from_candidate_keys_hash SHA-256 16-char;
+NEVER raw comparison text; NEVER raw candidate text;
+NEVER raw scenario JSON). DETERMINISTIC_RUBRIC mode maps
+Wave 5 candidate fields → outcome dimension ratings +
+risk_findings + dependency_findings + required_reviews
+via closed-vocab rubric library. CANDIDATE_FIELD_PROJECTION
+mode echoes Wave 5 closed-vocab fields verbatim with all
+dimensions rated INSUFFICIENT_DATA (no inference). Every
+matrix item + top-level response carries mandatory
+ADR-0073 §16 `honest_note` ("does not select a winner").
+TradeoffSummary is 4 closed-vocab `candidate_key` sets —
+NEVER a ranking. Bounded counts per ADR-0073 §11
+(`candidates_per_comparison_max = 8`). Python (Option B)
+and BEAM (Option C) remain forward-substrate per ADR-0073
 §Forward queue + ADR-0069.
 
 **RULE 13 substrate-honest disclosure**: Waves 2+4 together
@@ -426,10 +484,23 @@ authorization)**:
    the-loop doctrine + three-method comparison (Option A
    deterministic TypeScript = v1; Option B Python requires
    ADR-0069 §2.4 boundary ADR; Option C BEAM folds into
-   Wave 9). NO code / NO schema / NO new audit literal at
-   ADR-0073. Wave 6 implementation slice (Option A
-   deterministic / template-first TypeScript) is forward-
-   substrate behind separate Founder authorization.
+   Wave 9). Wave 6 Option A deterministic / template-first
+   TypeScript implementation LANDED 2026-05-31 (PR #139;
+   `02410ee`): NEW `PlaygroundOutcomeComparisonService` +
+   NEW route
+   `POST /api/v1/playground/scenarios/:id/outcome-comparisons`
+   + 39 integration tests. Computed-on-read; internally
+   invokes Wave 5 candidate service; NO caller-supplied
+   candidate payloads; NO candidate_keys[] in v1 per
+   Founder QLOCK 2; NO persistence; NO schema migration;
+   NO new audit literal; NO LLM / Python / BEAM / numeric
+   scoring / winner selection / best-path recommendation /
+   Action creation / connector invocation;
+   `ADMIN_ACTION + details.action="PLAYGROUND_OUTCOMES_COMPARED"`
+   audit with safe metadata only. Option B (Python) and
+   Option C (BEAM) remain forward-substrate behind
+   separate Founder authorization per ADR-0073 §Forward
+   queue.
 6. **Wave 7 — best-path recommender** with evidence and
    governance findings.
 7. **Wave 8 — governed transition** from selected
