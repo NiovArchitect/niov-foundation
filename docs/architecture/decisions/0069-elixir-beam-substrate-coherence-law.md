@@ -580,6 +580,20 @@ authorization slices have a canonical reference point.
   (long-form companion) +
   `project_regulator_ready_foundation_substrate.md`
   (regulator-ready directive cross-referenced at §10).
+- Cited from ADR-0070 §7 (Regulator-Ready Foundation
+  Doctrine — Examination-Ready Evidence Flows; doctrine-
+  ADR landed 2026-05-31). ADR-0070 cites this ADR's §6
+  mandatory 8-question architecture check as the gate
+  every future regulator-ready slice touching long-running
+  workflows (evidence-room sessions, disclosure workflows,
+  supervisory queues, regulator access monitoring, legal-
+  hold processing, audit/event ingestion, background
+  retention jobs, high-throughput communication capture)
+  MUST apply. ADR-0070 §7 reinforces this ADR's §3 domains
+  4 + 5 + 7 as the BEAM strong-fit anchors most relevant
+  to regulator-ready substrate. ADR-0070 does NOT modify
+  or supersede ADR-0069; the two doctrine ADRs are
+  complementary architectural-lens registers.
 
 ## Founder authorization
 
