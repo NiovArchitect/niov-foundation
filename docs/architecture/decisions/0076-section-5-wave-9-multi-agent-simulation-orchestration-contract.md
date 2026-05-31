@@ -616,6 +616,16 @@ active slice derailment.
 - Cites ADR-0075 (Wave 8 governed-transition contract;
   Wave 9 NEVER bypasses Wave 8 for any candidate-to-Action
   transition).
+- Cited by ADR-0077 (Wave 10 Control Tower Consumer
+  Contract; Wave 10 panel 6.6 consumes the §1
+  `SimulationResponse` shape verbatim; Wave 10 §13 no-leak
+  doctrine inherits ADR-0076 §8 verbatim; Wave 10 §8.3
+  evidence-posture honesty posture preserves the §6
+  closed-vocab discipline). Bidirectional back-citation
+  per RULE 14 + RULE 20 (Founder authorization for this
+  back-citation amendment landed at
+  `[FOUNDER-SECTION-5-WAVE-10-AGENT-PLAYGROUND-CONTROL-TOWER-CONSUMER-CONTRACT-ADR-AUTH]`
+  2026-05-31).
 
 ## Founder authorization
 
