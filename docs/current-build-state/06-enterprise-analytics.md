@@ -14,15 +14,17 @@ labels + integer counts + derived rates) with k=5
 HIPAA-Safe-Harbor minimum-population floor enforced at every
 aggregate.
 
-## Current status — PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 extension LIVE
+## Current status — PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE
 
-**Final closeout 2026-05-30 (v1) + Wave 6 LIVE 2026-05-30.**
-Section 6 Enterprise Analytics backend substrate is
-production-grade complete after the 4-aggregate v1 arc closure
-(Waves 2+3+4+5) PLUS a 5th aggregate landed in the same
-session under ADR-0061 §8 forward queue ("Wave 3+ additional
-aggregates as operator demand surfaces"): **Wave 6 per-
-ActionType action-runtime health** (PR #117 / `2c4336a`).
+**Final v1 closeout 2026-05-30 + Wave 6 LIVE 2026-05-30 +
+Wave 7 LIVE 2026-05-30.** Section 6 Enterprise Analytics
+backend substrate is production-grade complete after the
+4-aggregate v1 arc closure (Waves 2+3+4+5) PLUS two extensions
+landed in the same session under ADR-0061 §8 forward queue
+("Wave 3+ additional aggregates as operator demand surfaces"):
+**Wave 6 per-ActionType action-runtime health** (PR #117 /
+`2c4336a`) AND **Wave 7 org-level compliance-posture** (PR
+#119 / `2b83116`).
 
 **Important scope wording**: this closes the **Foundation
 backend analytics substrate** for v1 same-org admin reads. It
@@ -35,9 +37,9 @@ summaries) continue as forward-substrate per ADR-0061 §2 +
 
 ### Closeout summary
 
-- **5 live aggregates** (v1 4 + Wave 6 extension) + **5 admin
-  routes** + **1 `AnalyticsService`** + **71 integration tests**
-  across 5 test files (v1 55 + Wave 6 16).
+- **6 live aggregates** (v1 4 + Wave 6 + Wave 7) + **6 admin
+  routes** + **1 `AnalyticsService`** + **91 integration tests**
+  across 6 test files (v1 55 + Wave 6 16 + Wave 7 20).
 - **Universal invariants**: bearer + `can_admin_org` via
   `requireAdminCapability`; same-org via `getOrgEntityId` +
   local `resolveOrgOrFail` (404 `NO_ORG_FOR_CALLER`); k=5
@@ -52,7 +54,7 @@ summaries) continue as forward-substrate per ADR-0061 §2 +
 
 ## What is live
 
-### 5 live aggregates (v1 4 + Wave 6 extension)
+### 6 live aggregates (v1 4 + Wave 6 + Wave 7 extensions)
 
 | # | Aggregate | Route | Signal labels |
 |---|---|---|---|
@@ -61,6 +63,7 @@ summaries) continue as forward-substrate per ADR-0061 §2 +
 | 3 | `CONNECTOR_ACTIVITY` | `POST /api/v1/analytics/connector-activity` | `ACTIVE` / `CONFIGURED_INACTIVE` / `NOT_CONFIGURED` / `INSUFFICIENT_POPULATION` |
 | 4 | `HIVE_PARTICIPATION` | `POST /api/v1/analytics/hive-participation` | `BROAD_PARTICIPATION` / `MODERATE_PARTICIPATION` / `NARROW_PARTICIPATION` / `NO_HIVES` / `INSUFFICIENT_POPULATION` |
 | 5 | `ACTION_RUNTIME_BY_ACTION_TYPE` (Wave 6; per-ActionType breakdown) | `POST /api/v1/analytics/action-runtime-by-action-type` | envelope: `OK_BY_ROW` / `INSUFFICIENT_POPULATION`; per-row: `HEALTHY` / `DEGRADED` / `UNHEALTHY` / `INSUFFICIENT_VOLUME` |
+| 6 | `COMPLIANCE_POSTURE` (Wave 7; org-level metadata) | `POST /api/v1/analytics/compliance-posture` | `HEALTHY` / `WATCH` / `DEGRADED` / `NOT_CONFIGURED` / `INSUFFICIENT_POPULATION` |
 
 Each route accepts optional `{ window_days?: number = 7 }`
 body clamped to `[1, 30]` (except hive-participation which is
@@ -148,6 +151,68 @@ employee scoring, NOT manager surveillance, NOT individual
 actor performance, NOT a worker dashboard.** Per-row signal
 labels are operational only (per `honest_note` copy).
 
+### Wave 7 — org-level compliance-posture (PR #119; `2b83116`)
+
+Org-level **metadata-only compliance posture surface** —
+**NOT legal advice**, **NOT certification**, **NOT employee
+compliance scoring**, **NOT manager surveillance**. Same auth
+(`can_admin_org`) + same-org (`resolveOrgOrFail`) + k=5
+envelope-tier gate + ADMIN_ACTION:ANALYTICS_READ audit (no
+new literal) contract as the other 5 aggregates.
+
+- Route: `POST /api/v1/analytics/compliance-posture` with body
+  `{ window_days?: number }` (clamped 1..30; default 7).
+- Service: `getCompliancePostureForOrg` reads:
+  - `EntityComplianceProfile` for `entity_id = orgEntityId`
+    (org-level row per DRIFT 15; SELECT only `frameworks[]`;
+    never `sector` / `jurisdiction` strings — singling-out
+    protection for small-org configs).
+  - `ComplianceFramework` join for each subscribed name →
+    `frameworks_active_count` / `frameworks_inactive_count` /
+    `frameworks_unknown_count` (subscribed name with no
+    matching ComplianceFramework row).
+  - `AuditEvent.count` with `event_type IN {COMPLIANCE_CHECK_PASSED,
+    COMPLIANCE_CHECK_FAILED}` + `target_entity_id =
+    orgEntityId` + `timestamp >= cutoff` → recent check counts
+    in window (reuses canonical compliance-event substrate per
+    compliance.service.ts:545+; existing audit literals).
+- Label resolution: `DEGRADED` if any recent FAILED; `WATCH` if
+  any subscribed framework is inactive OR unknown; `HEALTHY`
+  if all subscribed frameworks active + no recent failures;
+  `NOT_CONFIGURED` if no profile / empty frameworks[];
+  `INSUFFICIENT_POPULATION` if member_count < 5.
+- Response envelope: `frameworks_subscribed_count` +
+  `frameworks_active_count` + `frameworks_inactive_count` +
+  `frameworks_unknown_count` + `recent_check_passed_count` +
+  `recent_check_failed_count` + `signal_label` + `honest_note`.
+- 20 integration tests at
+  `tests/integration/analytics-wave-7-compliance-posture.test.ts`:
+  auth (2); k=5 (1); NOT_CONFIGURED zero-state (2); HEALTHY (1);
+  WATCH inactive + WATCH unknown (2); DEGRADED on FAILED (1);
+  cross-org isolation × 2 (subscriptions + audits); window_days
+  validation × 3 (incl. backdated FAILED excluded via direct
+  prisma.auditEvent.create with backdated timestamp — append-only
+  INSERT permitted; UPDATE/DELETE blocked per ADR-0002); no-leak
+  × 3 (HEALTHY + DEGRADED responses + explicit non-leakage of
+  framework names / sector / jurisdiction strings); audit
+  emission × 3 (ANALYTICS_READ + aggregate discriminator + safe
+  details only + redacted audit on k=5 + no new audit literal).
+
+**Substrate-honest deliberate exclusions**: `LawfulBasis`
+posture and `REGULATOR_ACCESS_*` counts both deferred at v1 —
+`LawfulBasis` has no `org_entity_id` column; safe
+org-attribution would require complex audit join. Future slice
+with separate Founder authorization. The `frameworks_unknown`
+bucket protects against silent drift when a subscribed
+framework name has no matching `ComplianceFramework` row.
+
+**Honest note** in the response: "Org-level compliance
+posture metadata derived from ComplianceFramework subscription
+state + recent COMPLIANCE_CHECK audit events. Signal label is
+operational only — not legal advice, not certification of
+compliance, not employee compliance scoring, not manager
+surveillance."
+
 ## What is NOT live (forward-substrate per ADR-0061 §2 + §Forward queue)
 
 Each forward-substrate behind separate Founder authorization:
@@ -205,7 +270,9 @@ Each forward-substrate behind separate Founder authorization:
 | `a3d484c` | #106 | Section 6 Wave 5 — hive-participation aggregate |
 | `2aa203a` | #107 | Section 6 final v1 closeout docs |
 | `2c4336a` | #117 | Section 6 Wave 6 — per-ActionType action-runtime health aggregate (16 tests) |
-| (this commit) | TBD | Section 6 Wave 6 closeout docs |
+| `81eabd4` | #118 | Section 6 Wave 6 closeout docs |
+| `2b83116` | #119 | Section 6 Wave 7 — org-level compliance-posture aggregate (20 tests) |
+| (this commit) | TBD | Section 6 Wave 7 closeout docs |
 
 ## Foundation-context coherence (per Founder strategic guardrails)
 
