@@ -35,6 +35,7 @@ import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
 import { PlaygroundService } from "./services/playground/playground.service.js";
 import { PlaygroundScenarioService } from "./services/playground/playground-scenario.service.js";
 import { PlaygroundCandidateService } from "./services/playground/playground-candidate.service.js";
+import { PlaygroundOutcomeComparisonService } from "./services/playground/playground-outcome-comparison.service.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { AnalyticsService } from "./services/analytics/analytics.service.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
@@ -374,6 +375,28 @@ export async function buildApp(
     playgroundScenarioService,
   );
 
+  // Section 5 Wave 6 Option A ADR-0073 — Agent Playground
+  // deterministic / template-first outcome-comparison.
+  // Computed-on-read; internally invokes
+  // PlaygroundCandidateService.generateCandidates per
+  // ADR-0073 §10 (NEVER accepts caller-supplied candidate
+  // payloads). NO persistence; NO LLM; NO Python; NO BEAM;
+  // NO numeric scoring; NO winner selection; NO best-path
+  // recommendation; NO Action creation; NO connector
+  // invocation; NO external provider call. Owner-first +
+  // same-org SCENARIO_NOT_FOUND gate inherited via the Wave
+  // 5 candidate-service delegation; the scenario service is
+  // also passed so the Wave 6 audit row can carry canonical
+  // owner attribution. ADMIN_ACTION + details.action =
+  // "PLAYGROUND_OUTCOMES_COMPARED" audit with safe metadata
+  // only (no comparison text, no candidate text, no
+  // scenario JSON, no scores).
+  const playgroundOutcomeComparisonService =
+    new PlaygroundOutcomeComparisonService(
+      playgroundCandidateService,
+      playgroundScenarioService,
+    );
+
   // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE
   // projection service. No constructor dependencies at v1
   // (the service reads existing Prisma tables directly and
@@ -529,6 +552,7 @@ export async function buildApp(
     playgroundService,
     playgroundScenarioService,
     playgroundCandidateService,
+    playgroundOutcomeComparisonService,
   );
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);

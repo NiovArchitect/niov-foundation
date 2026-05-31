@@ -37,6 +37,10 @@ import type {
   PlaygroundCandidateService,
   GenerateCandidatesInput,
 } from "../services/playground/playground-candidate.service.js";
+import type {
+  PlaygroundOutcomeComparisonService,
+  CompareOutcomesInput,
+} from "../services/playground/playground-outcome-comparison.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // INPUT: The raw header value.
@@ -119,6 +123,7 @@ export async function registerPlaygroundRoutes(
   playground: PlaygroundService,
   scenarios: PlaygroundScenarioService,
   candidates: PlaygroundCandidateService,
+  comparisons: PlaygroundOutcomeComparisonService,
 ): Promise<void> {
   app.post<{ Body: PolicyEvaluatorInput }>(
     "/api/v1/playground/policy-evaluator",
@@ -381,6 +386,54 @@ export async function registerPlaygroundRoutes(
         ok: false,
         code: result.code,
         message: result.message,
+      });
+    },
+  );
+
+  // POST /api/v1/playground/scenarios/:id/outcome-comparisons —
+  // Section 5 Wave 6 Option A deterministic / template-first
+  // outcome-comparison per ADR-0073. Computed-on-read;
+  // internally invokes PlaygroundCandidateService.generateCandidates
+  // (NEVER accepts caller-supplied candidate payloads per
+  // ADR-0073 §10); NO persistence; NO LLM; NO Python; NO BEAM;
+  // NO numeric scoring; NO winner selection; NO best-path
+  // recommendation; NO Action creation. Owner-first +
+  // same-org SCENARIO_NOT_FOUND gate inherited via Wave 5
+  // delegation. `ADMIN_ACTION + details.action =
+  // "PLAYGROUND_OUTCOMES_COMPARED"` audit with safe metadata
+  // only (no comparison text, no candidate text, no scenario
+  // JSON, no scores).
+  app.post<{
+    Params: { id: string };
+    Body: CompareOutcomesInput;
+  }>(
+    "/api/v1/playground/scenarios/:id/outcome-comparisons",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const body = (request.body ?? {}) as CompareOutcomesInput;
+      const result = await comparisons.compareOutcomes(
+        sessionToken,
+        request.params.id,
+        body,
+        { ip_address: request.ip ?? null },
+      );
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(scenarioStatusFor(result.code)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
       });
     },
   );
