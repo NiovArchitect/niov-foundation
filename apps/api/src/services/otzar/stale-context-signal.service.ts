@@ -334,3 +334,79 @@ async function emitStaleContextAudit(args: {
     },
   });
 }
+
+// WHAT: Pure derivation helper — computes the closed-vocab
+//        stale-context label for one entity_id WITHOUT validating
+//        a session and WITHOUT emitting an audit row.
+// INPUT: { entity_id }.
+// OUTPUT: { label, capsules_evaluated, stale_capsule_count }.
+// WHY: Section 1 Wave 3 ADR-0068 proactive-card derivation needs
+//      to read the stale-context label from inside a no-audit
+//      caller-scoped surface (getMyTwin). Reusing
+//      analyzeStaleContextForCaller would double-audit on every
+//      getMyTwin read (violates ADR-0068 §11 "ZERO new audit
+//      row"). This helper extracts the pure derivation logic so
+//      both surfaces can share the algorithm verbatim.
+//      analyzeStaleContextForCaller continues to call its own
+//      audit emit; ADR-0068 callers do not.
+//      Owner-scope is the caller's responsibility — this helper
+//      reads ONLY for the given entity_id and never crosses
+//      that boundary.
+export async function computeStaleContextLabelForEntity(args: {
+  entity_id: string;
+}): Promise<{
+  label: StaleContextLabel;
+  capsules_evaluated: number;
+  stale_capsule_count: number;
+}> {
+  const wallet = await prisma.wallet.findUnique({
+    where: { entity_id: args.entity_id },
+    select: { wallet_id: true },
+  });
+  if (wallet === null) {
+    return {
+      label: "INSUFFICIENT_DATA",
+      capsules_evaluated: 0,
+      stale_capsule_count: 0,
+    };
+  }
+  const capsulesEvaluated = await prisma.memoryCapsule.count({
+    where: {
+      wallet_id: wallet.wallet_id,
+      deleted_at: null,
+      embedding_content_hash: { not: null },
+    },
+  });
+  let staleCount = 0;
+  if (capsulesEvaluated > 0) {
+    const rows = await prisma.memoryCapsule.findMany({
+      where: {
+        wallet_id: wallet.wallet_id,
+        deleted_at: null,
+        embedding_content_hash: { not: null },
+      },
+      select: { content_hash: true, embedding_content_hash: true },
+    });
+    for (const r of rows) {
+      if (
+        r.embedding_content_hash !== null &&
+        r.embedding_content_hash !== r.content_hash
+      ) {
+        staleCount++;
+      }
+    }
+  }
+  let label: StaleContextLabel;
+  if (capsulesEvaluated === 0) {
+    label = "INSUFFICIENT_DATA";
+  } else if (staleCount > 0) {
+    label = "STALE_CONTEXT_RISK";
+  } else {
+    label = "FRESH_CONTEXT";
+  }
+  return {
+    label,
+    capsules_evaluated: capsulesEvaluated,
+    stale_capsule_count: staleCount,
+  };
+}

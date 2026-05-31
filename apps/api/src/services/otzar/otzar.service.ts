@@ -53,16 +53,22 @@ import {
 } from "./drift-signal.service.js";
 import {
   analyzeStaleContextForCaller,
+  computeStaleContextLabelForEntity,
   type GetStaleContextSignalInput,
   type StaleContextSignalSuccess,
   type StaleContextSignalFailure,
 } from "./stale-context-signal.service.js";
 import {
   analyzeDriftRollupForCaller,
+  computeDriftRollupLabelForEntity,
   type GetDriftRollupInput,
   type DriftRollupSuccess,
   type DriftRollupFailure,
 } from "./drift-rollup.service.js";
+import {
+  assembleProactiveCards,
+  type ProactiveCardView,
+} from "./proactivity.service.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -160,6 +166,12 @@ export interface CloseConversationSuccess {
 // WHAT: Inputs for getMyTwin.
 export interface GetMyTwinInput {
   token: string;
+  // Section 1 Wave 3 (ADR-0068) — explicit owner control. When
+  // false, the proactive_cards sidecar is omitted from the
+  // response. Default true (the symbiotic default; owners who
+  // are working with their Twin probably want gentle proactive
+  // signals).
+  include_proactive_cards?: boolean;
 }
 
 // WHAT: One safe skill-package view for the My Twin contract.
@@ -304,6 +316,19 @@ export interface MyTwinView {
   // row is the SAFE advisory subset enforced by
   // `AcceptedPatternAdvisoryView` at the proposed-pattern service.
   accepted_patterns?: readonly AcceptedPatternAdvisoryView[];
+  // Section 1 Wave 3 (ADR-0068) — sidecar SAFE projection of
+  // bounded closed-vocab proactive cards derived from the
+  // caller's OWN existing self-scoped substrate (Wave 5 PROPOSED
+  // / ACCEPTED readers + Wave 4A wallet-stale signal + Wave 4C
+  // cross-conversation rollup + ACCEPTED reviewed_at periodic
+  // check-in). Absent when no cards apply OR when the caller
+  // explicitly disables via include_proactive_cards=false.
+  // NO new schema; NO persistence; NO Action creation; NO
+  // connector invocation; NO external delivery; NO manager
+  // visibility; NO LLM-generated text. Owner-scope enforced
+  // by-construction via session.entity_id; per-source read
+  // failures swallowed silently per ADR-0068 §6.
+  proactive_cards?: readonly ProactiveCardView[];
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1206,6 +1231,44 @@ export class OtzarService {
         );
     }
 
+    // Section 1 Wave 3 — symbiotic proactive cards sidecar per
+    // ADR-0068. Pull-based, computed-on-read; derived purely
+    // from existing self-scoped substrate; never persisted;
+    // never emits a new audit row (inherits Wave 2A no-audit
+    // posture). Owner-scope is by-construction: the same
+    // ownerEntityId used for the Wave 6A accepted_patterns
+    // read is reused here, so there is no cross-owner path.
+    // Per-source read failures are swallowed inside
+    // assembleProactiveCards per ADR-0068 §6.
+    //
+    // Sidecar is omitted (a) when the caller explicitly opts
+    // out via include_proactive_cards=false, or (b) when the
+    // optional proposedPatternService dependency is not wired
+    // (mirrors the Wave 6A backward-compat posture for older
+    // test fixtures constructed without the 5th arg), or
+    // (c) when zero cards apply.
+    let proactiveCards: readonly ProactiveCardView[] | undefined = undefined;
+    if (
+      input.include_proactive_cards !== false &&
+      this.proposedPatternService !== undefined
+    ) {
+      try {
+        const cards = await assembleProactiveCards({
+          ownerEntityId,
+          proposedPatternService: this.proposedPatternService,
+          computeStaleContext: computeStaleContextLabelForEntity,
+          computeDriftRollup: computeDriftRollupLabelForEntity,
+        });
+        if (cards.length > 0) {
+          proactiveCards = cards;
+        }
+      } catch {
+        // ADR-0068 §6 swallow pattern: a transient read miss on
+        // the proactive sidecar must never break getMyTwin.
+        proactiveCards = undefined;
+      }
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -1222,6 +1285,9 @@ export class OtzarService {
       role_scope_profile: roleScopeProfile,
       ...(acceptedPatterns !== undefined
         ? { accepted_patterns: acceptedPatterns }
+        : {}),
+      ...(proactiveCards !== undefined
+        ? { proactive_cards: proactiveCards }
         : {}),
     };
 

@@ -298,3 +298,112 @@ export async function analyzeDriftRollupForCaller(args: {
     boundary_note: DRIFT_ROLLUP_BOUNDARY_NOTE,
   };
 }
+
+// WHAT: Pure derivation helper — computes the closed-vocab
+//        cross-conversation drift-rollup label for one entity_id
+//        WITHOUT validating a session and WITHOUT emitting an
+//        audit row.
+// INPUT: { entity_id }.
+// OUTPUT: { label, conversations_evaluated,
+//           conversations_with_elevated_velocity,
+//           capsules_evaluated, stale_capsule_count }.
+// WHY: Section 1 Wave 3 ADR-0068 proactive-card derivation needs
+//      to read the rollup label from inside a no-audit caller-
+//      scoped surface (getMyTwin). Reusing
+//      analyzeDriftRollupForCaller would double-audit on every
+//      getMyTwin read (violates ADR-0068 §11 "ZERO new audit
+//      row"). This helper extracts the pure derivation logic so
+//      both surfaces share the algorithm verbatim.
+//      analyzeDriftRollupForCaller continues to call its own
+//      audit emit; ADR-0068 callers do not.
+//      Owner-scope is the caller's responsibility — this helper
+//      reads ONLY for the given entity_id and never crosses
+//      that boundary.
+export async function computeDriftRollupLabelForEntity(args: {
+  entity_id: string;
+}): Promise<{
+  label: DriftRollupLabel;
+  conversations_evaluated: number;
+  conversations_with_elevated_velocity: number;
+  capsules_evaluated: number;
+  stale_capsule_count: number;
+}> {
+  const conversations = await prisma.otzarConversation.findMany({
+    where: { entity_id: args.entity_id },
+    select: { conversation_id: true },
+  });
+  const conversationsEvaluated = conversations.length;
+  const wallet = await prisma.wallet.findUnique({
+    where: { entity_id: args.entity_id },
+    select: { wallet_id: true },
+  });
+  let conversationsWithElevatedVelocity = 0;
+  if (conversationsEvaluated > 0 && wallet !== null) {
+    const conversationIds = conversations.map((c) => c.conversation_id);
+    const grouped = await prisma.memoryCapsule.groupBy({
+      by: ["conversation_id"],
+      where: {
+        wallet_id: wallet.wallet_id,
+        capsule_type: "CORRECTION",
+        conversation_id: { in: conversationIds },
+        deleted_at: null,
+      },
+      _count: { _all: true },
+    });
+    for (const row of grouped) {
+      if (
+        row._count._all > CORRECTION_VELOCITY_THRESHOLD_DEFAULT &&
+        row.conversation_id !== null
+      ) {
+        conversationsWithElevatedVelocity++;
+      }
+    }
+  }
+  let capsulesEvaluated = 0;
+  let staleCapsuleCount = 0;
+  if (wallet !== null) {
+    capsulesEvaluated = await prisma.memoryCapsule.count({
+      where: {
+        wallet_id: wallet.wallet_id,
+        deleted_at: null,
+        embedding_content_hash: { not: null },
+      },
+    });
+    if (capsulesEvaluated > 0) {
+      const rows = await prisma.memoryCapsule.findMany({
+        where: {
+          wallet_id: wallet.wallet_id,
+          deleted_at: null,
+          embedding_content_hash: { not: null },
+        },
+        select: { content_hash: true, embedding_content_hash: true },
+      });
+      for (const r of rows) {
+        if (
+          r.embedding_content_hash !== null &&
+          r.embedding_content_hash !== r.content_hash
+        ) {
+          staleCapsuleCount++;
+        }
+      }
+    }
+  }
+  let label: DriftRollupLabel;
+  if (conversationsEvaluated === 0 && capsulesEvaluated === 0) {
+    label = "INSUFFICIENT_DATA";
+  } else if (
+    conversationsWithElevatedVelocity > 0 ||
+    staleCapsuleCount > 0
+  ) {
+    label = "AT_RISK";
+  } else {
+    label = "NORMAL";
+  }
+  return {
+    label,
+    conversations_evaluated: conversationsEvaluated,
+    conversations_with_elevated_velocity: conversationsWithElevatedVelocity,
+    capsules_evaluated: capsulesEvaluated,
+    stale_capsule_count: staleCapsuleCount,
+  };
+}
