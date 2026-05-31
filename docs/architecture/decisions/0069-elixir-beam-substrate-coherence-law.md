@@ -623,6 +623,22 @@ authorization slices have a canonical reference point.
   implementation (folds into ADR-0065 §7 Wave 9). ADR-0074
   does NOT authorize Python or BEAM Wave 7 implementation;
   those remain separate Founder slices.
+- Cited from ADR-0075 §15 + §19 (Section 5 Wave 8
+  Governed-Transition Contract; design-only; landed
+  2026-05-31). ADR-0075 §19 applies this ADR's §6
+  mandatory 8-question architecture check to the Wave 8 v1
+  register and locks v1 at TypeScript §2.1 (synchronous
+  request/response; deterministic mapping). Wave 8 is the
+  first Section 5 wave that creates Section 2 Action rows
+  via `createActionForCaller` per ADR-0057 — but Section 2
+  retains all execution authority and Wave 8 NEVER bypasses
+  the existing policy evaluator or dual-control gate.
+  ADR-0075 §15.2 names this ADR's §2.4 Python boundary
+  requirement; §15.3 names §3 domain 6 + ADR-0028 BEAM as
+  the prerequisite for any future BEAM-orchestrated Wave 8
+  implementation (folds into Wave 9). ADR-0075 does NOT
+  authorize Python or BEAM Wave 8 implementation; those
+  remain separate Founder slices.
 - Cited from ADR-0070 §7 (Regulator-Ready Foundation
   Doctrine — Examination-Ready Evidence Flows; doctrine-
   ADR landed 2026-05-31). ADR-0070 cites this ADR's §6

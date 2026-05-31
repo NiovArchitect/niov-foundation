@@ -1134,6 +1134,18 @@ authorization at its slice prompt:
   scenario-tier projection above Wave 6 comparison; ADR-0074
   closes ADR-0073's "best-path recommendation is Wave 7"
   deferral at the contract register).
+- Cited from ADR-0075 §Bidirectional citations (Section 5
+  Wave 8 Governed-Transition Contract; design-only ADR
+  landed 2026-05-31; ADR-0075 sits ABOVE ADR-0074 at the
+  contract register and consumes the Wave 7
+  `RecommendBestPathSuccess` verbatim per ADR-0075 §7 +
+  §8 — "Wave 8 calls Wave 7 internally" canonical decision;
+  Wave 8 is the first Section 5 wave that creates Section
+  2 Action rows via `createActionForCaller` per ADR-0057;
+  Section 2 retains all execution authority; ADR-0075
+  does NOT modify ADR-0074 — Wave 7 stays canonical at
+  the best-path recommendation contract tier;
+  bidirectional back-citation per RULE 14 + RULE 20).
 
 ## Founder authorization
 

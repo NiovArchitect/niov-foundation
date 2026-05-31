@@ -589,8 +589,30 @@ authorization)**:
    tie-breaker. Option B (Python) and Option C (BEAM)
    remain forward-substrate.
 7. **Wave 8 — governed transition** from selected
-   scenario to proposed Action plan (through Section 2
-   Action runtime per §4 human-in-the-loop doctrine).
+   scenario to proposed Action plan — design-only ADR
+   LANDED 2026-05-31 at ADR-0075. Closed-vocabulary
+   transition contract; Wave 8 creates Section 2 Action
+   rows via existing `createActionForCaller` in PROPOSED
+   status; Section 2 retains all execution authority per
+   ADR-0057. 23 sub-decisions locking
+   `GovernedTransitionResponse` shape + 2-value
+   `transition_outcome` (ACTION_PROPOSED + NO_ACTION_PROPOSED)
+   + canonical `recommended_candidate_type` → `ActionType`
+   mapping (CONSERVATIVE v1: ONLY SEND_INTERNAL_NOTIFICATION
+   allowed; STATUS_QUO + DO_NOT_PROCEED non-transitionable)
+   + 4-value `reason_not_proposed` closed vocabulary +
+   mandatory `caller_confirmation: true` body field +
+   mandatory `idempotency_key` + canonical "Wave 8 calls
+   Wave 7 internally" decision + Section 2 delegation
+   pattern + dual audit emission (ADMIN_ACTION Playground
+   handoff + Section 2's existing ACTION_PROPOSED/APPROVED/
+   REJECTED row) + ADR-0070 §9 legal-advice posture
+   inherited verbatim + three-method comparison + §22
+   future-generalization strategic context. NO code / NO
+   schema / NO new audit literal at ADR-0075. Wave 8
+   implementation slice (Option A deterministic
+   TypeScript) is forward-substrate behind separate
+   Founder authorization.
 8. **Wave 9 — multi-agent simulation orchestration**
    (consuming ADR-0028 BEAM coordination layer).
 9. **Wave 10 — Control Tower frontend consumer**
