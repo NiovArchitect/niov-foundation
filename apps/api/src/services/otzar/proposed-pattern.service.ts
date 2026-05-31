@@ -137,6 +137,33 @@ const SAFE_SUMMARY_TEMPLATES: Readonly<
     "Multiple recent conversations show overlapping drift signals. Accepting this proposed pattern marks it as a candidate for alignment work in your own coaching review — it does not change how your teammate behaves yet, and it is never shared with managers or other employees.",
 };
 
+// WHAT: Symbiotic advisory_note templates keyed on pattern_label.
+//        Surfaced via the Wave 6A My Twin advisory surface so the
+//        owner sees the same alignment context their Twin would.
+// INPUT: Used as a lookup.
+// OUTPUT: Const record.
+// WHY: Founder Wave 6A symbiotic clarification — accepted patterns
+//      are alignment guidance the OWNER taught the Twin through
+//      review-and-acceptance. The Twin reflects them back as a
+//      visible alignment memory, not as a hidden behavior mutation
+//      and not as a coaching score. Copy is locked closed-vocab
+//      template only; never LLM-generated; never raw correction
+//      text; never references managers / scoring / surveillance /
+//      compliance / discipline / risk-profile / employee-weakness
+//      language. All 3 v1 pattern_labels covered exhaustively;
+//      future labels must extend this map at the same time as the
+//      label set itself.
+const SYMBIOTIC_ADVISORY_NOTES: Readonly<
+  Record<OtzarProposedPatternLabel, string>
+> = {
+  RECURRING_CORRECTION_RECOMMENDATION_REVIEW:
+    "Accepted by you as alignment guidance for your Twin. Your Twin can use this as a visible reminder of how you prefer to work — it does not change permissions, execution, or memory behind your back.",
+  STALE_CONTEXT_REFRESH_RECOMMENDED:
+    "Accepted by you so your Twin can stay aligned with how your saved memory has evolved. This is advisory alignment context, not an automatic memory rewrite. You remain in control of which patterns are accepted, archived, or ignored.",
+  CROSS_CONVERSATION_ALIGNMENT_RECOMMENDED:
+    "Accepted by you to help your Twin stay aligned with you across conversations. This is visible alignment context, not a behavior change or a permission change. You can archive this pattern at any time.",
+};
+
 // ----------------------------------------------------------------
 // Recurrence-detection thresholds (ADR-0066 §5)
 // ----------------------------------------------------------------
@@ -222,6 +249,48 @@ export interface TransitionSuccess {
   pattern: OtzarProposedPatternView;
   audit_event_id: string;
 }
+
+// WHAT: SAFE Wave 6A advisory projection of one ACCEPTED proposed
+//        pattern, surfaced by the My Twin advisory surface.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Symbiotic alignment-context projection per Founder Wave 6A
+//      clarification — the owner sees the same alignment context
+//      their Twin sees. Deliberately a STRICT SUBSET of
+//      OtzarProposedPatternView: pattern_id + closed-vocab
+//      source/label/confidence + safe_summary (closed-vocab
+//      template per ADR-0066 §3; not raw correction text) +
+//      accepted_at + advisory_note (symbiotic template). NEVER
+//      includes owner_entity_id / occurrence_count /
+//      first_signal_at / last_signal_at / proposed_at / status /
+//      archived_at / created_at / updated_at — those are pattern-
+//      lifecycle internals that are not part of the advisory
+//      surface. Surfacing them would expand the Wave 6A surface
+//      into territory that requires a separate Founder slice.
+export interface AcceptedPatternAdvisoryView {
+  pattern_id: string;
+  source_signal_type: OtzarProposedPatternSourceSignalType;
+  pattern_label: OtzarProposedPatternLabel;
+  safe_summary: string;
+  confidence_label: OtzarProposedPatternConfidence;
+  accepted_at: string;
+  advisory_note: string;
+}
+
+// WHAT: Default + cap on the number of accepted patterns surfaced
+//        on the My Twin advisory surface.
+// INPUT: Used as constants.
+// OUTPUT: Numbers.
+// WHY: Wave 6A is an advisory surface, not a list view. A bounded
+//      number is enough for the symbiotic reminder loop; the
+//      authoritative list lives at the existing
+//      GET /api/v1/otzar/my-twin/proposed-patterns route per
+//      ADR-0066 §6 (where pagination + filtering already exist).
+//      v1 default = 5; cap = 25 (low enough to keep the My Twin
+//      response cheap; high enough that owners with many alignment
+//      patterns still see the most-recent batch).
+export const ACCEPTED_PATTERNS_MY_TWIN_DEFAULT = 5;
+export const ACCEPTED_PATTERNS_MY_TWIN_MAX = 25;
 
 // ----------------------------------------------------------------
 // PATCH body shape (only `status` updatable per ADR-0066 §6)
@@ -946,5 +1015,86 @@ export class OtzarProposedPatternService {
     }
 
     return candidates;
+  }
+
+  // WHAT: Wave 6A — list the owner's ACCEPTED proposed patterns as
+  //        a SAFE advisory projection for the My Twin surface.
+  // INPUT: ownerEntityId + optional { limit }.
+  // OUTPUT: Array of AcceptedPatternAdvisoryView (empty when caller
+  //         has none).
+  // WHY: Symbiotic alignment-context loop per Founder Wave 6A
+  //      clarification. Filters to status=ACCEPTED + archived_at
+  //      IS NULL (no ARCHIVED, no PROPOSED, no REJECTED). Sorted
+  //      by reviewed_at DESC (most-recently-accepted first; the
+  //      owner sees their latest alignment guidance up top). Limit
+  //      bounded at v1 default 5 / cap 25. Projects ONLY the SAFE
+  //      advisory subset of OtzarProposedPattern fields per
+  //      AcceptedPatternAdvisoryView; advisory_note is a closed-
+  //      vocab symbiotic template keyed on pattern_label, never
+  //      LLM-generated, never raw correction text.
+  //
+  //      DELIBERATELY does NOT emit an audit row. The My Twin
+  //      surface is a no-audit self-read by design (Wave 2A
+  //      precedent at ADR-0053; otzar.service.ts:909 getMyTwin
+  //      emits zero writeAuditEvent calls). Wave 6A inherits this
+  //      no-audit posture per Founder Wave 6A spec ("If getMyTwin
+  //      does not emit audit, do not add a new audit literal").
+  //
+  //      DELIBERATELY does NOT touch assembleContext (ADR-0048).
+  //      Wave 6A is an advisory surface; assembleContext priming
+  //      is forward-substrate per Founder Wave 6B ADR/design
+  //      slice.
+  async listAcceptedPatternsForOwner(
+    ownerEntityId: string,
+    options: { limit?: number } = {},
+  ): Promise<readonly AcceptedPatternAdvisoryView[]> {
+    const limit = Math.min(
+      Math.max(
+        1,
+        Math.floor(options.limit ?? ACCEPTED_PATTERNS_MY_TWIN_DEFAULT),
+      ),
+      ACCEPTED_PATTERNS_MY_TWIN_MAX,
+    );
+
+    const rows = await prisma.otzarProposedPattern.findMany({
+      where: {
+        owner_entity_id: ownerEntityId,
+        status: "ACCEPTED",
+        archived_at: null,
+      },
+      // Reviewed timestamp drives the symbiotic ordering — the most
+      // recently accepted pattern is freshest in the owner's
+      // alignment memory. reviewed_at is set by transition() on
+      // ACCEPTED|REJECTED; ACCEPTED rows always carry a non-null
+      // reviewed_at (otherwise the row would still be PROPOSED).
+      orderBy: { reviewed_at: "desc" },
+      take: limit,
+      select: {
+        pattern_id: true,
+        source_signal_type: true,
+        pattern_label: true,
+        safe_summary: true,
+        confidence_label: true,
+        reviewed_at: true,
+      },
+    });
+
+    return rows.map((r) => ({
+      pattern_id: r.pattern_id,
+      source_signal_type:
+        r.source_signal_type as OtzarProposedPatternSourceSignalType,
+      pattern_label: r.pattern_label as OtzarProposedPatternLabel,
+      safe_summary: r.safe_summary,
+      confidence_label:
+        r.confidence_label as OtzarProposedPatternConfidence,
+      // reviewed_at non-null invariant per ACCEPTED filter above;
+      // the `?? new Date(0)` is a defensive fallback that should
+      // never fire at runtime.
+      accepted_at: (r.reviewed_at ?? new Date(0)).toISOString(),
+      advisory_note:
+        SYMBIOTIC_ADVISORY_NOTES[
+          r.pattern_label as OtzarProposedPatternLabel
+        ] ?? "Accepted by you as alignment guidance for your Twin.",
+    }));
   }
 }
