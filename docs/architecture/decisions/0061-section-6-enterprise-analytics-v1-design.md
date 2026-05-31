@@ -452,6 +452,17 @@ relevance:
   45 CFR §164.514(b)(1) (k≥5 de-identification standard).
 - External literature citation: Samarati & Sweeney 1998
   k-anonymity foundational paper.
+- Cited from ADR-0070 §6.6 (Regulator-Ready Foundation
+  Doctrine — Examination-Ready Evidence Flows; doctrine-
+  ADR landed 2026-05-31). ADR-0070 cites this ADR's SAFE
+  projection pattern + k≥5 HIPAA Safe Harbor floor + no-
+  legal-advice posture as the canonical compliance-
+  analytics lens. Future regulator-ready analytics
+  extensions (examination-readiness indicators, evidence
+  completeness, stale disclosures, unresolved exceptions)
+  MUST land as Wave 2+ slices under ADR-0061's 5 Founder
+  authorization checkpoints + ADR-0070's regulator-ready
+  doctrine. ADR-0070 does NOT modify or supersede ADR-0061.
 - Founder authorization explicit at
   `[FOUNDER-SLEEP-DIRECTIVE-SECTION-6-ANALYTICS-V1-ADR-AUTH]`
   per Founder Sleep Directive 2026-05-30.

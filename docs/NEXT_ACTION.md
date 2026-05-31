@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `5f61b5f` (Otzar Wave 3 closeout docs merged).
-- **Latest merged PR:** [#128](https://github.com/NiovArchitect/niov-foundation/pull/128) — Otzar Wave 3 closeout docs.
-- **Active branch / PR:** `adr-0069-elixir-beam-substrate-coherence-law` (ADR-0069 doctrine-ADR; design-only; awaiting PR).
+- **Main HEAD:** `7fc1483` (ADR-0069 BEAM substrate-coherence law merged).
+- **Latest merged PR:** [#129](https://github.com/NiovArchitect/niov-foundation/pull/129) — ADR-0069 Elixir/BEAM Substrate-Coherence Law for Living Coordination (doctrine-only).
+- **Active branch / PR:** `adr-0070-regulator-ready-foundation-doctrine` (ADR-0070 doctrine-ADR; design-only; awaiting PR).
 - **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern + Wave 6A + Wave 6B (active-pattern-consumption FULLY LIVE) 2026-05-31** — Wave 5 LANDED via ADR-0066 (PRs #113/#114/#115; `7661ba9` impl). **Wave 6A LANDED PR #121 `6b84a99`** (visibility half). **Wave 6B LANDED via ADR-0067 (PR #123) + impl PR #124 `625ddbf`** (influence half — sidecar field on AssembleContextSuccess + labeled L_ALIGNMENT prompt section in conductSession; reuses Wave 6A projection; ZERO score-boost; ZERO capsule pipeline mutation; ZERO new audit literal; ZERO schema migration; 14 integration tests). Symbiotic alignment loop closed at both visibility + influence registers.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE — 6 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health + Wave 7 org-level compliance-posture per ADR-0061 §8 forward queue; PRs #117 `2c4336a` + #119 `2b83116`); ZERO new audit literal across any Section 6 wave.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
@@ -25,6 +25,10 @@
 ## Exact next action
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
+
+## ADR-0070 IN FLIGHT — Regulator-Ready Foundation Doctrine (doctrine-only)
+
+Active branch `adr-0070-regulator-ready-foundation-doctrine`. Doctrine-only — no code, no schema, no new routes, no new audit literal, no CI change. Sits alongside ADR-0027 governance / ADR-0048 personalization doctrine / ADR-0052 Otzar DGI / ADR-0069 BEAM substrate-coherence law as the 4th doctrine ADR. Canonicalizes Foundation's regulator-readiness lens: examination-ready-by-default canonical sentence + mandatory neutral compliance vocabulary + 12 core principles + 20 less-obvious blind spots + 10 proposed future substrate sections (Regulated Communications Layer / Project Provenance Ledger / Disclosure Trigger Engine / Regulator Update Workflow / Examination Room / Legal Hold / Supervisory Review / Regulator Access Governance / Obligation Mapping / Compliance Evidence Vault) + section-by-section interactions + ADR-0069 BEAM interaction + security/privilege boundaries + legal-advice boundary. ADR-0036 LawfulBasis + ADR-0049 GOVSEC + ADR-0050 break-glass + Section 7 Wave 5 regulator-view + Section 6 Wave 7 compliance-posture all stay LIVE and ADR-0070 names them as the existing canonical primitives the broader regulator-ready product surface composes against.
 
 ## Otzar Wave 3 IMPLEMENTATION LANDED — Scoped Twin Proactivity (PR #127)
 
@@ -118,13 +122,7 @@ NEW `POST /api/v1/analytics/action-runtime-by-action-type` + 16 integration test
 - `GET /api/v1/audit/verify-chain` — caller's OWN audit chain. **Self-only across all 5 waves** per Founder direction.
 - Read-audit emission: `ADMIN_ACTION` + `details.action` ∈ all 9 `AUDIT_VIEW_*` labels (no new audit literal across any wave).
 
-**LIVE (Section 2 — full surface; see [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md) for detail):**
-- 9 HTTP routes: `POST /api/v1/actions` + cancel (non-RUNNING + RUNNING-via-break-glass) + GET viewer + GET list + GET attempt-detail + GET attempt-list + GET/PUT `/api/v1/org/action-policies` (dual-control gated; PR #49 accepts the override fields).
-- 3 notification inbox routes (Wave 12 / PR #58): `GET /api/v1/notifications` + `PUT /:id/read` + `PUT /:id/dismiss` — self-scope only; SAFE projection (no `body_redacted`); enumeration-safe 404.
-- 3 of 3 real per-`ActionType` handlers LIVE: RECORD_CAPSULE (PR #35) + PROPOSE_PERMISSION_GRANT (PR #41) + SEND_INTERNAL_NOTIFICATION-internal-only (PR #56 — `Notification` model + `NotificationService` + RULE 0 cross-org DENY).
-- 10 of 10 `ACTION_*` audit emitters LIVE.
-- Executor + scheduler + expiry sweep runtime + per-attempt AbortController plumbing.
-- Operator-tunable `ActionPolicy.retry_budget` + `attempt_timeout_ms_override` (Wave 6/7 PR #47/49); resolved `timeout_ms` persists onto `ActionAttempt` + projects onto attempt-detail (Wave 8 PR #51); forensic-visibility loop CLOSED end-to-end.
+**LIVE (Section 2 — see [`current-build-state/02-autonomous-execution-core.md`](current-build-state/02-autonomous-execution-core.md)):** 9 Action HTTP routes (POST + cancel + GET viewer/list/attempt-detail/attempt-list + GET/PUT `/api/v1/org/action-policies` dual-control gated) + 3 notification inbox routes (Wave 12 / PR #58); 3/3 real handlers LIVE (RECORD_CAPSULE + PROPOSE_PERMISSION_GRANT + SEND_INTERNAL_NOTIFICATION-internal-only); 10/10 `ACTION_*` audit emitters LIVE; executor + scheduler + expiry sweep + per-attempt AbortController; operator-tunable `ActionPolicy.retry_budget` + `attempt_timeout_ms_override` (Wave 6/7); forensic-visibility loop CLOSED end-to-end (Wave 8 PR #51).
 
 **NOT LIVE (intentional future-substrate; do NOT auto-implement):**
 External notification delivery (each adapter = own QLOCK + RULE 21 research arc) + `NotificationPreference` opt-out model + per-Notification audit literals + admin cross-recipient list + Notification detail-view + explicit `GET /api/v1/org/actions` + active AbortSignal consumption + per-action ActionPolicy cache + Control Tower UX / voice / ambient / lens UX. All RULE 20 / Founder-direction gated.

@@ -1467,3 +1467,18 @@ ADR-0047 (production-readiness hardening), ADR-0048 (personalization
 orchestration). Companion canonical document: `docs/reference/govsec-control-
 matrix.md`. Governing rules: RULE 0, RULE 4, RULE 10, RULE 11, RULE 12, RULE 13,
 RULE 18, RULE 20, RULE 21.
+
+**Bidirectional citations (cited from):**
+
+- ADR-0070 (Regulator-Ready Foundation Doctrine — Examination-Ready Evidence
+  Flows; doctrine-ADR landed 2026-05-31). ADR-0070 cites the GOVSEC umbrella as
+  the government-grade-hardening program that already operationalizes several
+  regulator-ready doctrine principles (audit-chain integrity per GOVSEC.2;
+  auth/session per GOVSEC.3; gateway/bot-swarm/adversarial-load per GOVSEC.4;
+  admin/break-glass/dual-control per GOVSEC.5; AI/agent abuse + confused-deputy
+  per GOVSEC.6; tenant isolation per GOVSEC.7; supply-chain per GOVSEC.8;
+  crypto agility per GOVSEC.9; incident response per GOVSEC.10). ADR-0070 does
+  NOT modify or supersede ADR-0049; ADR-0049 remains the canonical GOVSEC
+  control-matrix + gap-closure register. Future regulator-ready slices in
+  ADR-0070's §Forward queue MAY consume GOVSEC controls + cite the relevant
+  ADR-0049 phase as their security/auth substrate baseline.
