@@ -38,6 +38,7 @@ import { PlaygroundCandidateService } from "./services/playground/playground-can
 import { PlaygroundOutcomeComparisonService } from "./services/playground/playground-outcome-comparison.service.js";
 import { PlaygroundBestPathRecommendationService } from "./services/playground/playground-best-path-recommendation.service.js";
 import { PlaygroundGovernedTransitionService } from "./services/playground/playground-governed-transition.service.js";
+import { PlaygroundSimulationService } from "./services/playground/playground-simulation.service.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { AnalyticsService } from "./services/analytics/analytics.service.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
@@ -443,6 +444,29 @@ export async function buildApp(
       playgroundScenarioService,
     );
 
+  // Section 5 Wave 9 Option A ADR-0076 — Agent Playground
+  // deterministic multi-agent simulation orchestration.
+  // Enumerates (branch_definition × agent_role) combinations
+  // (capped at 24 per ADR-0076 §11) and invokes Wave 7
+  // recommendBestPath via Promise.allSettled, then projects
+  // each Wave 7 result through a closed-vocab agent_role
+  // lens. NO Action creation (Wave 8 owns transitions; Wave 9
+  // NEVER bypasses Wave 8); NO connector invocation; NO
+  // external provider call; NO LLM; NO Python; NO BEAM
+  // (ADR-0076 §12 8-question check locks v1 at TypeScript
+  // §2.1; Option C BEAM is forward-substrate); NO new Prisma
+  // model; NO schema migration; NO new audit literal (Wave 9
+  // emits ADMIN_ACTION + details.action =
+  // "PLAYGROUND_SIMULATION_EXECUTED" with safe metadata only).
+  // Mandatory caller_confirmation: true per ADR-0076 §2.
+  // Founder behavioral clarification 2026-05-31 confirmed
+  // Wave 9 semantics as deterministic role-perspective
+  // simulation before action — NEVER autonomous agent debate.
+  const playgroundSimulationService = new PlaygroundSimulationService(
+    playgroundBestPathRecommendationService,
+    playgroundScenarioService,
+  );
+
   // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE
   // projection service. No constructor dependencies at v1
   // (the service reads existing Prisma tables directly and
@@ -601,6 +625,7 @@ export async function buildApp(
     playgroundOutcomeComparisonService,
     playgroundBestPathRecommendationService,
     playgroundGovernedTransitionService,
+    playgroundSimulationService,
   );
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);

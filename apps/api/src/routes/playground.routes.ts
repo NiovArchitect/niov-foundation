@@ -49,6 +49,10 @@ import type {
   PlaygroundGovernedTransitionService,
   ProposeGovernedTransitionInput,
 } from "../services/playground/playground-governed-transition.service.js";
+import type {
+  PlaygroundSimulationService,
+  SimulateInput,
+} from "../services/playground/playground-simulation.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // INPUT: The raw header value.
@@ -147,6 +151,7 @@ export async function registerPlaygroundRoutes(
   comparisons: PlaygroundOutcomeComparisonService,
   recommendations: PlaygroundBestPathRecommendationService,
   transitions: PlaygroundGovernedTransitionService,
+  simulations: PlaygroundSimulationService,
 ): Promise<void> {
   app.post<{ Body: PolicyEvaluatorInput }>(
     "/api/v1/playground/policy-evaluator",
@@ -588,6 +593,65 @@ export async function registerPlaygroundRoutes(
       }
       const body = (request.body ?? {}) as GenerateCandidatesInput;
       const result = await candidates.generateCandidates(
+        sessionToken,
+        request.params.id,
+        body,
+        { ip_address: request.ip ?? null },
+      );
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(scenarioStatusFor(result.code)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
+      });
+    },
+  );
+
+  // POST /api/v1/playground/scenarios/:id/simulations —
+  // Section 5 Wave 9 Option A deterministic multi-agent
+  // simulation orchestration per ADR-0076. Computed-on-read;
+  // enumerates (branch_definition × agent_role) combinations
+  // capped at 24 (ADR-0076 §11) and invokes Wave 7
+  // recommendBestPath via Promise.allSettled, then projects
+  // each Wave 7 result through a closed-vocab agent_role
+  // lens. NO Action creation (Wave 8 owns transitions; Wave 9
+  // NEVER bypasses Wave 8). NO LLM / Python / BEAM /
+  // connector invocation / external provider call / agent-
+  // to-agent message-passing / chain-of-thought exposure /
+  // raw memory or scenario JSON exposure / numeric scoring at
+  // this slice. Owner-first + same-org SCENARIO_NOT_FOUND
+  // gate inherited via Wave 7 → Wave 6 → Wave 5 → Wave 4
+  // delegation. Mandatory caller_confirmation: true per
+  // ADR-0076 §2. Single ADMIN_ACTION + details.action =
+  // "PLAYGROUND_SIMULATION_EXECUTED" audit row with safe
+  // metadata only per ADR-0076 §14; each Wave 7 sub-
+  // invocation also emits its own
+  // PLAYGROUND_BEST_PATH_RECOMMENDED audit per ADR-0074 §14
+  // (Wave 9 does NOT suppress those). Founder behavioral
+  // clarification 2026-05-31 confirmed Wave 9 semantics as
+  // governed role-perspective simulation before action, not
+  // autonomous agent debate.
+  app.post<{
+    Params: { id: string };
+    Body: SimulateInput;
+  }>(
+    "/api/v1/playground/scenarios/:id/simulations",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const body = (request.body ?? {}) as SimulateInput;
+      const result = await simulations.simulate(
         sessionToken,
         request.params.id,
         body,
