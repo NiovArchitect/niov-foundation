@@ -381,6 +381,32 @@ verbatim:
 - **Wave 10**: Control Tower frontend consumer. Lives in
   `otzar-control-tower` repo; Foundation owns the safe
   backend contracts (Waves 4-9); frontend consumes them.
+  **Wave 10 consumer-experience contract LANDED at ADR-0077
+  2026-05-31** (design-only; closes this Wave 10 forward-
+  queue line at the consumer-experience contract register;
+  Wave 10 implementation slice — frontend code in
+  `otzar-control-tower` — requires separate Founder
+  authorization at slice). Wave 9 multi-agent simulation
+  contract LANDED at ADR-0076 2026-05-31; Wave 9 Option A
+  implementation LIVE at PR #147 `340d37f` 2026-05-31
+  (NEW `PlaygroundSimulationService` + NEW route
+  `POST /api/v1/playground/scenarios/:id/simulations` +
+  47 integration tests). Wave 8 governed-transition contract
+  LANDED at ADR-0075 2026-05-31; Wave 8 Option A
+  implementation LIVE at PR #145 `8a69863` 2026-05-31
+  (43 tests; first Section 5 wave that creates Section 2
+  Action rows via `createActionForCaller` per ADR-0057 in
+  PROPOSED status; Section 2 retains all execution
+  authority). Wave 7 best-path-recommendation contract
+  LANDED at ADR-0074 2026-05-31; Wave 7 Option A
+  implementation LIVE at PR #142 `80a60f1` 2026-05-31
+  (39 tests). Wave 6 outcome-comparison contract LANDED at
+  ADR-0073 2026-05-31; Wave 6 Option A implementation LIVE
+  at PR #139 `02410ee` 2026-05-31 (39 tests). Wave 5
+  candidate-generation contract LANDED at ADR-0072
+  2026-05-31; Wave 5 Option A implementation LIVE at PR #136
+  `e708fa7` 2026-05-31 (33 tests). 256 Section 5 integration
+  tests passing at HEAD `f02296c`.
 
 The wave order is recommended but not strictly serial —
 Waves 4 + 5 may interleave; Waves 6 + 7 may consolidate;
@@ -691,6 +717,14 @@ The §1 long-term purpose statement + §5 safety doctrine
   Wave 9 forward-queue line at the contract register;
   this ADR remains canonical at the long-term product-
   vision tier; bidirectional back-citation per RULE 14 +
+  RULE 20).
+- Cited from ADR-0077 §Bidirectional citations
+  (Section 5 Wave 10 Agent Playground Control Tower
+  Consumer Contract; design-only; ADR-0077 closes
+  ADR-0065 §7 Wave 10 forward-queue line at the
+  consumer-experience contract register; this ADR
+  remains canonical at the long-term product-vision
+  tier; bidirectional back-citation per RULE 14 +
   RULE 20).
 - Bidirectional back-citation lands in ADR-0060
   §"Forward queue" entry per RULE 14 + ADR-0020 §3 +

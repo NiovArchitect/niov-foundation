@@ -47,7 +47,7 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2+3+4+5+6+7+8+9 LIVE; candidate-generation + outcome-comparison + best-path-recommendation + governed-transition + multi-agent-simulation surfaces all landed)
+## Current status (PARTIAL — Waves 1+2+3+4+5+6+7+8+9 LIVE; candidate-generation + outcome-comparison + best-path-recommendation + governed-transition + multi-agent-simulation surfaces all landed; Wave 10 consumer-experience contract ADR-0077 design-only LANDED)
 
 **Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
 scope locked: read-only sandbox-only self-scoped operator
@@ -715,8 +715,65 @@ authorization)**:
    simulation needs LIVE concurrent message-passing agents
    OR scales beyond 24 sequential branches per call;
    neither holds at v1).
-9. **Wave 10 — Control Tower frontend consumer**
-   (frontend; lives in `otzar-control-tower` repo).
+9. **Wave 10 — Control Tower frontend consumer** —
+   consumer-experience contract ADR-0077 LANDED 2026-05-31
+   (design-only; closes ADR-0065 §7 Wave 10 forward-queue
+   line at the consumer-experience contract register).
+   Locks 6 primary panels (Scenario Context + Candidate
+   Paths + Outcome Comparison + Best-Path Recommendation +
+   Governed Transition + Multi-Agent Simulation / Enterprise
+   Decision Posture) + route-neutral route intent (existing
+   `/playground` Placeholder framed for "Section 12C"
+   NEGOTIATE demo preserved unless explicit Founder UX scope
+   decision authorizes retirement; implementation slice
+   picks Option A new `/agent-playground` route OR Option B
+   replace OR Option C nest) + closed-vocab canonical UI
+   copy + 20+ forbidden UI strings ("AI agents decided" /
+   "Final decision" / "Guaranteed compliant" / "Winner" /
+   "Score" / "Chain-of-thought" / "Auto-approved" / etc.) +
+   13 closed-vocab state chips + per-panel display contract
+   (canonical Foundation fields each panel MUST show via the
+   6 exported success interfaces verbatim + MUST NOT show)
+   + enterprise success test (16 questions the operator
+   must answer from the UI without dev tools) + 4 honesty
+   postures (hierarchy honesty — NEVER fabricate named
+   approvers; conversation-context honesty — Foundation
+   does NOT yet expose `conversation_context_signals[]`; UI
+   MAY reserve space but MUST state "not available in this
+   version" or omit; evidence-posture honesty — render
+   closed-vocab labels verbatim, NEVER extrapolate;
+   execution-boundary honesty — 3-state lifecycle
+   simulation/proposed/executed; NEVER show "Action
+   executed" framing on PROPOSED status alone) + API client
+   contract intent (extend existing `src/lib/api.ts`
+   `ApiResult<T>` discriminated-union pattern; add
+   `api.playground.*` namespace; bearer auto-attach; 401 →
+   existing `onUnauthorized` callback; POST MUST NOT
+   auto-retry; mirror Foundation success interfaces
+   verbatim) + primary CTA rules (NO "Execute" button in
+   Wave 10 — execution is Section 2's responsibility per
+   ADR-0057; "Propose governed action" requires explicit
+   confirmation gesture + fresh `idempotency_key`) +
+   pre-existing `/playground` Placeholder route handling
+   (3 explicit Option choices the implementation slice MUST
+   cite in PR) + 10-step implementation sequencing +
+   universal forbidden-inputs / no-leak doctrine + audit
+   posture (Wave 10 emits NO new audit events; surfaces
+   existing `audit_event_id` / `playground_audit_event_id`
+   / `simulation_audit_event_id` as short reference badges;
+   ZERO new audit literal) + persistence posture (NO Wave
+   10 Foundation persistence; client-side TanStack Query
+   caching only). Wave 10 implementation slice (frontend
+   code in `otzar-control-tower`) requires separate Founder
+   authorization at slice (`[FOUNDER-SECTION-5-WAVE-10-CONTROL-TOWER-IMPLEMENTATION-AUTH]`
+   tag). `otzar-control-tower` read-only inspected at HEAD
+   `d0c9bcb` "Add correction signals UI" during ADR-0077
+   Phase 0 — main branch clean except `AGENTS.md` /
+   `CONTEXT.md` untracked; existing `/playground` route is
+   a 20-line `<Placeholder>`. CT frontend patterns canonical
+   (React + Vite + TS + Tailwind + TanStack Query + single
+   HTTP client at `src/lib/api.ts` with `ApiResult<T>`
+   discriminated union + Vitest + Playwright).
 
 ## Long-term product vision (canonical at ADR-0065)
 
