@@ -578,6 +578,17 @@ export class OtzarService {
     );
     let L4 = "";
     let L5_items: { content: string; relevance_score: number }[] = [];
+    // Section 1 Wave 6B (ADR-0067) — symbiotic alignment-pattern
+    // priming section. Captured from the optional Wave 6B sidecar
+    // on AssembleContextSuccess. When the caller has at least one
+    // ACCEPTED non-archived OtzarProposedPattern, render a clearly
+    // labeled prompt section so the Twin sees the SAME alignment
+    // guidance the owner already accepted on the Wave 6A getMyTwin
+    // surface. Closed-vocab label per ADR-0067 §6; never silent
+    // injection; never raw correction text; never pattern_id
+    // (debug-only metadata excluded from the LLM prompt per
+    // ADR-0067 §6 + Founder preference).
+    let L_ALIGNMENT = "";
     if (coe.ok) {
       const foundational = coe.context.filter(
         (c) => c.capsule_type === "FOUNDATIONAL",
@@ -597,6 +608,40 @@ export class OtzarService {
         content: c.content,
         relevance_score: 1 - idx * 0.01,
       }));
+      // Wave 6B alignment section assembly — visible labeled
+      // header + bulleted SAFE rows. Bounded by Wave 6A limits
+      // (default 5 / cap 25) on the sidecar reader; size impact
+      // is small (~4-5 KB max). Not run through the truncation
+      // budget because it is owner-controlled alignment context,
+      // not capsule content; truncating it would silently degrade
+      // alignment fidelity. The owner can disable it explicitly
+      // via include_alignment_patterns=false on a future
+      // conductSession surface (route-tier opt-out hook is
+      // forward-substrate; default-true symbiotic posture
+      // preserved at v1).
+      const alignmentPatterns = coe.alignment_patterns;
+      if (alignmentPatterns !== undefined && alignmentPatterns.length > 0) {
+        const lines: string[] = [
+          "[OWNER'S ACCEPTED ALIGNMENT PATTERNS — visible advisory",
+          "context the owner has reviewed and accepted as alignment",
+          "guidance. These are owner-controlled hints, not memory",
+          "rewrites; the owner remains sovereign over which patterns",
+          "are accepted, archived, or ignored.]",
+          "",
+        ];
+        for (const p of alignmentPatterns) {
+          lines.push(
+            `- pattern_label: ${p.pattern_label}`,
+            `  source_signal_type: ${p.source_signal_type}`,
+            `  confidence_label: ${p.confidence_label}`,
+            `  accepted_at: ${p.accepted_at}`,
+            `  safe_summary: ${p.safe_summary}`,
+            `  advisory_note: ${p.advisory_note}`,
+            "",
+          );
+        }
+        L_ALIGNMENT = lines.join("\n").trimEnd();
+      }
     }
 
     // LAYER 6 -- TaskQueue (stub: no table yet, returns []).
@@ -663,8 +708,14 @@ export class OtzarService {
     }
 
     // Build the final system prompt + user message.
+    // Wave 6B alignment section is injected immediately after the
+    // priming layer (so the symbiotic alignment context frames
+    // every layer that follows) and outside the truncation budget
+    // (bounded by the Wave 6A sidecar reader's limit of 5 patterns;
+    // small enough to not require truncation participation).
     const systemPrompt = [
       truncated.final.priming,
+      L_ALIGNMENT,
       truncated.final.L1,
       truncated.final.L2,
       truncated.final.L3,

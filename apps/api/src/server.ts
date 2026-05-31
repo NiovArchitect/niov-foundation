@@ -295,6 +295,17 @@ export async function buildApp(
       },
     },
   );
+  // Section 1 Wave 5 ADR-0066 + Wave 6A + Wave 6B — Otzar
+  // proposed-pattern from recurring drift. Owner-first self-scoped
+  // CRUD over the OtzarProposedPattern model. Constructed BEFORE
+  // COEService so it can be passed as the optional 6th arg per
+  // Wave 6B priming-hook sidecar (ADR-0067 §4 + §5). Also passed
+  // as the optional 5th arg to OtzarService per Wave 6A symbiotic
+  // advisory surface (ADR-0066 §3 consumer).
+  const otzarProposedPatternService = new OtzarProposedPatternService(
+    authService,
+  );
+
   const coeService = new COEService(
     authService,
     negotiateService,
@@ -313,6 +324,13 @@ export async function buildApp(
         });
       },
     },
+    // Section 1 Wave 6B (ADR-0067) — accepted-pattern priming hook
+    // dependency. When wired, assembleContext returns
+    // alignment_patterns sidecar (Wave 6A AcceptedPatternAdvisoryView
+    // projection). NO capsule pipeline mutation. NO score-boost
+    // (ADR-0022 frozen anchor). NO new audit literal. Owner-scope
+    // enforced by-construction via session.entity_id.
+    otzarProposedPatternService,
   );
   // arc 2 WSAPI: the Foundation-owned working-set orchestrator, wired with
   // the production SessionContextResolver (authoritative session→wallet
@@ -368,24 +386,11 @@ export async function buildApp(
           },
         ])
       : getLLMProvider());
-  // Section 1 Wave 5 ADR-0066 — Otzar proposed-pattern from
-  // recurring drift. Owner-first self-scoped CRUD over the NEW
-  // OtzarProposedPattern model; on-demand recurrence sweep reads
-  // only the caller's own drift substrate; auto-write = auto-
-  // propose, NOT auto-commit. No dependencies beyond AuthService
-  // (mirrors Wave 4 PlaygroundScenarioService precedent).
-  // Constructed BEFORE OtzarService so it can be wired as the
-  // optional 5th arg per Wave 6A symbiotic advisory surface.
-  const otzarProposedPatternService = new OtzarProposedPatternService(
-    authService,
-  );
-
   // Section 1 Wave 6A — getMyTwin surfaces the caller's OWN
-  // ACCEPTED proposed patterns as symbiotic alignment guidance.
-  // The 5th constructor arg is the proposed-pattern service; when
-  // present, getMyTwin includes `accepted_patterns[]` in the
-  // response. NO audit emission (Wave 2A precedent preserved). NO
-  // assembleContext touch (Wave 6B ADR/design forward-substrate).
+  // ACCEPTED proposed patterns as symbiotic alignment guidance via
+  // the 5th OtzarService constructor arg. Wave 6B also wires the
+  // same service into COEService above (6th arg) for the
+  // assembleContext sidecar.
   const otzarService = new OtzarService(
     authService,
     coeService,

@@ -441,6 +441,12 @@ export type { ReadFeedbackHook } from "./services/cosmp/read.service.js";
 export {
   OtzarService,
 } from "./services/otzar/otzar.service.js";
+export {
+  OtzarProposedPatternService,
+} from "./services/otzar/proposed-pattern.service.js";
+export type {
+  AcceptedPatternAdvisoryView,
+} from "./services/otzar/proposed-pattern.service.js";
 export type {
   ConductSessionInput,
   ConductSessionSuccess,
