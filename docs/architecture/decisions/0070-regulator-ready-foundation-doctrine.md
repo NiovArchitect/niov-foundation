@@ -930,6 +930,17 @@ authorization slices have a canonical reference point.
   probabilistic claims at this Wave. ADR-0073 does NOT
   authorize Wave 6 implementation; that remains a
   separate Founder slice.
+- Cited from ADR-0074 §7 + §17 (Section 5 Wave 7 Best-Path
+  Recommendation Contract; design-only ADR landed
+  2026-05-31). ADR-0074 §7 scoring posture + §17 no-leak
+  doctrine inherit this ADR's §9 legal-advice boundary
+  verbatim + extend ADR-0073 §7 for Wave 7 to forbid
+  "final decision", "the system decided", "ranked #1",
+  and "AI approved" as winner-declaration framing
+  (recommendation is explicitly advisory + requires human
+  review per ADR-0074 §16; NEVER claims final-decision
+  authority). ADR-0074 does NOT authorize Wave 7
+  implementation; that remains a separate Founder slice.
 
 ## Founder authorization
 

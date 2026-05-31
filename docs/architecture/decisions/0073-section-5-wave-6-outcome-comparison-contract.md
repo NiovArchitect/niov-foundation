@@ -1004,6 +1004,20 @@ authorization at its slice prompt:
 - Cited from ADR-0072 §Forward queue (Wave 6 as the next
   scenario-tier projection above Wave 5 candidate
   generation).
+- Cited from ADR-0074 §Bidirectional citations (Section 5
+  Wave 7 Best-Path Recommendation Contract; design-only
+  ADR landed 2026-05-31; ADR-0074 sits ABOVE ADR-0073 at
+  the contract register and consumes ALL Wave 6
+  `ComparisonResponse` fields verbatim as the
+  recommendation input set; ADR-0074 §10 canonicalizes the
+  "Wave 7 calls Wave 6 internally" decision so the
+  recommendation pipeline never accepts caller-supplied
+  raw comparison or candidate text; ADR-0074 §20 mirrors
+  ADR-0073 §20 wave-map discipline in reverse — Wave 7
+  MUST NOT accidentally implement Wave 8 / 9 / 10;
+  ADR-0074 does NOT modify ADR-0073 — Wave 6 stays
+  canonical at the outcome-comparison contract tier;
+  bidirectional back-citation per RULE 14 + RULE 20).
 
 ## Founder authorization
 

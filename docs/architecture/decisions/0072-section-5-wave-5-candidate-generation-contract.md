@@ -922,6 +922,14 @@ authorization at its slice prompt:
   Wave 5 stays canonical at the candidate-generation
   contract tier; bidirectional back-citation per RULE 14
   + RULE 20).
+- Cited from ADR-0074 §Bidirectional citations (Section 5
+  Wave 7 Best-Path Recommendation Contract; design-only
+  ADR landed 2026-05-31; ADR-0074 consumes Wave 5
+  candidate output transitively via Wave 6 per ADR-0074
+  §10 "Wave 7 calls Wave 6 internally" decision; ADR-0074
+  does NOT modify ADR-0072 — Wave 5 stays canonical at
+  the candidate-generation contract tier; bidirectional
+  back-citation per RULE 14 + RULE 20).
 
 ## Founder authorization
 
