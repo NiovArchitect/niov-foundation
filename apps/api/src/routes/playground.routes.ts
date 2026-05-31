@@ -41,6 +41,10 @@ import type {
   PlaygroundOutcomeComparisonService,
   CompareOutcomesInput,
 } from "../services/playground/playground-outcome-comparison.service.js";
+import type {
+  PlaygroundBestPathRecommendationService,
+  RecommendBestPathInput,
+} from "../services/playground/playground-best-path-recommendation.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // INPUT: The raw header value.
@@ -124,6 +128,7 @@ export async function registerPlaygroundRoutes(
   scenarios: PlaygroundScenarioService,
   candidates: PlaygroundCandidateService,
   comparisons: PlaygroundOutcomeComparisonService,
+  recommendations: PlaygroundBestPathRecommendationService,
 ): Promise<void> {
   app.post<{ Body: PolicyEvaluatorInput }>(
     "/api/v1/playground/policy-evaluator",
@@ -386,6 +391,55 @@ export async function registerPlaygroundRoutes(
         ok: false,
         code: result.code,
         message: result.message,
+      });
+    },
+  );
+
+  // POST /api/v1/playground/scenarios/:id/best-path-recommendations —
+  // Section 5 Wave 7 Option A deterministic / template-first
+  // best-path recommendation per ADR-0074. Computed-on-read;
+  // internally invokes PlaygroundOutcomeComparisonService.compareOutcomes
+  // (NEVER accepts caller-supplied comparison or candidate
+  // payloads per ADR-0074 §10); NO persistence; NO LLM; NO
+  // Python; NO BEAM; NO numeric scoring; NO winner declaration
+  // framing; NO best-path recommendation execution; NO Action
+  // creation (Wave 8 forward-substrate). Owner-first + same-
+  // org SCENARIO_NOT_FOUND gate inherited via Wave 6 → Wave 5
+  // → Wave 4 delegation. `ADMIN_ACTION + details.action =
+  // "PLAYGROUND_BEST_PATH_RECOMMENDED"` audit with safe
+  // metadata only (no recommendation text, no comparison
+  // text, no candidate text, no scenario JSON, no scores).
+  app.post<{
+    Params: { id: string };
+    Body: RecommendBestPathInput;
+  }>(
+    "/api/v1/playground/scenarios/:id/best-path-recommendations",
+    async (request, reply) => {
+      const sessionToken = bearerFrom(request.headers.authorization);
+      if (sessionToken === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const body = (request.body ?? {}) as RecommendBestPathInput;
+      const result = await recommendations.recommendBestPath(
+        sessionToken,
+        request.params.id,
+        body,
+        { ip_address: request.ip ?? null },
+      );
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(scenarioStatusFor(result.code)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
       });
     },
   );

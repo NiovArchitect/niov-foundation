@@ -36,6 +36,7 @@ import { PlaygroundService } from "./services/playground/playground.service.js";
 import { PlaygroundScenarioService } from "./services/playground/playground-scenario.service.js";
 import { PlaygroundCandidateService } from "./services/playground/playground-candidate.service.js";
 import { PlaygroundOutcomeComparisonService } from "./services/playground/playground-outcome-comparison.service.js";
+import { PlaygroundBestPathRecommendationService } from "./services/playground/playground-best-path-recommendation.service.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { AnalyticsService } from "./services/analytics/analytics.service.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
@@ -397,6 +398,27 @@ export async function buildApp(
       playgroundScenarioService,
     );
 
+  // Section 5 Wave 7 Option A ADR-0074 — Agent Playground
+  // deterministic / template-first best-path recommendation.
+  // Computed-on-read; internally invokes
+  // PlaygroundOutcomeComparisonService.compareOutcomes per
+  // ADR-0074 §10 (NEVER accepts caller-supplied comparison
+  // or candidate payloads). NO persistence; NO LLM; NO
+  // Python; NO BEAM; NO numeric scoring; NO winner-
+  // declaration framing; NO Action creation (Wave 8
+  // forward-substrate); NO connector invocation. Owner-
+  // first + same-org SCENARIO_NOT_FOUND gate inherited via
+  // Wave 6 → Wave 5 → Wave 4 delegation; the scenario
+  // service is also passed so the Wave 7 audit row carries
+  // canonical owner attribution. ADMIN_ACTION +
+  // details.action = "PLAYGROUND_BEST_PATH_RECOMMENDED"
+  // audit with safe metadata only.
+  const playgroundBestPathRecommendationService =
+    new PlaygroundBestPathRecommendationService(
+      playgroundOutcomeComparisonService,
+      playgroundScenarioService,
+    );
+
   // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE
   // projection service. No constructor dependencies at v1
   // (the service reads existing Prisma tables directly and
@@ -553,6 +575,7 @@ export async function buildApp(
     playgroundScenarioService,
     playgroundCandidateService,
     playgroundOutcomeComparisonService,
+    playgroundBestPathRecommendationService,
   );
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);
