@@ -22,6 +22,10 @@ import { logger } from "../../logger.js";
 import type { AuthService } from "../auth.service.js";
 import type { NegotiateService } from "../cosmp/negotiate.service.js";
 import type { ReadService } from "../cosmp/read.service.js";
+import type {
+  AcceptedPatternAdvisoryView,
+  OtzarProposedPatternService,
+} from "../otzar/proposed-pattern.service.js";
 import {
   combinedScore,
   extractKeywords,
@@ -69,6 +73,20 @@ export interface AssembleContextSuccess {
   capsules_skipped_budget: number;
   capsules_denied_permission: number;
   context: ContextItem[];
+  // Section 1 Wave 6B (ADR-0067) — symbiotic alignment sidecar.
+  // SAFE projection of the caller's OWN ACCEPTED
+  // OtzarProposedPattern rows (Wave 6A reader; same projection
+  // shape). Absent when:
+  //   - the optional proposedPatternService dependency is not
+  //     wired (backward-compat for existing test fixtures);
+  //   - the caller passes include_alignment_patterns=false (explicit
+  //     opt-out); OR
+  //   - the caller has zero ACCEPTED non-archived patterns.
+  // Never includes pattern-lifecycle internals, raw correction text,
+  // owner_entity_id, conversation IDs, occurrence counts, signal
+  // timestamps, embeddings, vectors, capsule content, or cross-owner
+  // data — every row's shape is enforced by AcceptedPatternAdvisoryView.
+  alignment_patterns?: readonly AcceptedPatternAdvisoryView[];
 }
 
 // WHAT: The shape returned from assembleContext on failure.
@@ -160,6 +178,16 @@ export class COEService {
     private readonly readService: ReadService,
     private readonly encryption: ContentEncryption,
     private readonly feedbackHook?: COEFeedbackHook,
+    // Section 1 Wave 6B (ADR-0067) — optional advisory reader. When
+    // wired in production at server.ts, assembleContext surfaces the
+    // caller's OWN ACCEPTED OtzarProposedPattern rows as the
+    // alignment_patterns sidecar; when absent (existing 5-arg test
+    // fixtures), assembleContext behaves identically to its
+    // pre-Wave-6B form and alignment_patterns is omitted from the
+    // response. Reuses Wave 6A `listAcceptedPatternsForOwner` reader
+    // verbatim; never modifies the capsule pipeline; never amends
+    // combined_score (ADR-0022 frozen anchor).
+    private readonly proposedPatternService?: OtzarProposedPatternService,
   ) {}
 
   // WHAT: Run the seven-step assembleContext flow.
@@ -173,7 +201,18 @@ export class COEService {
     sessionToken: string,
     requestText: string,
     tokenBudget: number,
-    context: { ip_address?: string | null } = {},
+    context: {
+      ip_address?: string | null;
+      // Section 1 Wave 6B (ADR-0067) — explicit owner control over
+      // the alignment-pattern sidecar. Default true (the symbiotic
+      // default: an owner who took the time to accept patterns
+      // probably wants their Twin to see them). Setting false
+      // suppresses the sidecar read entirely; the response shape
+      // is identical to the pre-Wave-6B form (alignment_patterns
+      // field absent). When the optional proposedPatternService
+      // dependency is not wired, this flag is a no-op.
+      include_alignment_patterns?: boolean;
+    } = {},
   ): Promise<AssembleContextSuccess | AssembleContextFailure> {
     if (typeof requestText !== "string" || tokenBudget <= 0) {
       return {
@@ -366,6 +405,37 @@ export class COEService {
       },
     });
 
+    // STEP 6.5 (Wave 6B; ADR-0067) — sidecar alignment patterns.
+    // Reads the caller's OWN ACCEPTED OtzarProposedPattern rows via
+    // the Wave 6A listAcceptedPatternsForOwner reader. RULE 0
+    // owner-scope enforced by-construction (same session.entity_id
+    // already validated at STEP 0). Bounded by Wave 6A v1 default
+    // (5 patterns; cap 25). NEVER mutates context[] or any pipeline
+    // counter. Read failures swallowed silently — context assembly
+    // is load-bearing; alignment patterns are enrichment.
+    let alignmentPatterns:
+      | readonly AcceptedPatternAdvisoryView[]
+      | undefined = undefined;
+    if (
+      this.proposedPatternService !== undefined &&
+      context.include_alignment_patterns !== false
+    ) {
+      try {
+        const accepted =
+          await this.proposedPatternService.listAcceptedPatternsForOwner(
+            session.entity_id,
+          );
+        // Empty array → omit the field for cleaner backward-compat
+        // response shape (mirrors Wave 6A getMyTwin pattern).
+        if (accepted.length > 0) {
+          alignmentPatterns = accepted;
+        }
+      } catch {
+        // Read miss must never break assembleContext.
+        alignmentPatterns = undefined;
+      }
+    }
+
     return {
       ok: true,
       capsules_loaded: items.length,
@@ -374,6 +444,9 @@ export class COEService {
       capsules_skipped_budget: skippedBudget,
       capsules_denied_permission: deniedPermission,
       context: items,
+      ...(alignmentPatterns !== undefined
+        ? { alignment_patterns: alignmentPatterns }
+        : {}),
     };
   }
 

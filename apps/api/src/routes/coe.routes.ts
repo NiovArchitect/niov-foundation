@@ -44,7 +44,18 @@ export async function registerCoeRoutes(
   coeService: COEService,
 ): Promise<void> {
   app.post<{
-    Body: { request_text: string; token_budget: number };
+    Body: {
+      request_text: string;
+      token_budget: number;
+      // Section 1 Wave 6B (ADR-0067) — explicit owner-control
+      // opt-out for the symbiotic alignment-pattern sidecar. When
+      // `false`, assembleContext suppresses the sidecar read +
+      // omits `alignment_patterns` from the response (default
+      // true symbiotic posture). When the optional
+      // proposedPatternService dependency is not wired, this
+      // flag is a no-op.
+      include_alignment_patterns?: boolean;
+    };
   }>("/api/v1/coe/context", async (request, reply) => {
     const sessionToken = bearerFrom(request.headers.authorization);
     if (sessionToken === null) {
@@ -54,12 +65,23 @@ export async function registerCoeRoutes(
         message: "Missing bearer token",
       });
     }
-    const body = request.body ?? ({} as { request_text: string; token_budget: number });
+    const body =
+      request.body ??
+      ({} as {
+        request_text: string;
+        token_budget: number;
+        include_alignment_patterns?: boolean;
+      });
     const result = await coeService.assembleContext(
       sessionToken,
       body.request_text,
       body.token_budget,
-      { ip_address: request.ip ?? null },
+      {
+        ip_address: request.ip ?? null,
+        ...(body.include_alignment_patterns === false
+          ? { include_alignment_patterns: false }
+          : {}),
+      },
     );
     if (!result.ok) {
       return reply.code(statusForCode(result.code)).send(result);
