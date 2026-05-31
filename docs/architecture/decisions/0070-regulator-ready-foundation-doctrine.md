@@ -941,6 +941,19 @@ authorization slices have a canonical reference point.
   review per ADR-0074 §16; NEVER claims final-decision
   authority). ADR-0074 does NOT authorize Wave 7
   implementation; that remains a separate Founder slice.
+- Cited from ADR-0075 §10 + §18 (Section 5 Wave 8
+  Governed-Transition Contract; design-only ADR landed
+  2026-05-31). ADR-0075 §10 no-leak doctrine + §18
+  honest_note inherit this ADR's §9 legal-advice boundary
+  verbatim. Wave 8 transitions a Wave 7 recommendation
+  into a Section 2 Action row via existing
+  `createActionForCaller`; the resulting Action is in
+  PROPOSED / APPROVED / REJECTED status only at the
+  Wave 8 response moment (NEVER RUNNING / SUCCEEDED /
+  FAILED); Section 2 retains all execution authority per
+  ADR-0057. Wave 8 NEVER claims legal sufficiency. ADR-0075
+  does NOT authorize Wave 8 implementation; that remains a
+  separate Founder slice.
 
 ## Founder authorization
 

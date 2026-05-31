@@ -577,7 +577,20 @@ authorization at its slice prompt:
   human/governance review before any real-world action).
   Wave 7 implementation slice is separate Founder
   authorization at its slice.
-- Wave 8: governed transition to Action runtime.
+- Wave 8: governed transition to Action runtime —
+  design-only contract LANDED 2026-05-31 at ADR-0075
+  (Section 5 Wave 8 Governed-Transition Contract;
+  design-only; bidirectional back-citation; deterministic
+  TypeScript v1; Wave 8 creates Section 2 Action rows via
+  existing `createActionForCaller` in PROPOSED status;
+  Section 2 retains all execution authority per ADR-0057;
+  v1 ActionType mapping conservative — ONLY
+  SEND_INTERNAL_NOTIFICATION; mandatory
+  `caller_confirmation: true` request body; mandatory
+  `idempotency_key`; NEVER caller-supplied
+  recommendation/comparison/candidate payloads). Wave 8
+  implementation slice is separate Founder authorization
+  at its slice.
 - Wave 9: multi-agent simulation orchestration.
 - Wave 10: Control Tower frontend consumer.
 
@@ -649,6 +662,13 @@ The §1 long-term purpose statement + §5 safety doctrine
 - Cited from ADR-0074 §Bidirectional citations
   (Section 5 Wave 7 Best-Path Recommendation Contract;
   design-only; ADR-0074 closes ADR-0065 §7 Wave 7
+  forward-queue line at the contract register; this ADR
+  remains canonical at the long-term product-vision
+  tier; bidirectional back-citation per RULE 14 + RULE
+  20).
+- Cited from ADR-0075 §Bidirectional citations
+  (Section 5 Wave 8 Governed-Transition Contract;
+  design-only; ADR-0075 closes ADR-0065 §7 Wave 8
   forward-queue line at the contract register; this ADR
   remains canonical at the long-term product-vision
   tier; bidirectional back-citation per RULE 14 + RULE
