@@ -47,7 +47,7 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2+3+4+5+6+7+8 LIVE; candidate-generation + outcome-comparison + best-path-recommendation + governed-transition surfaces all landed; Wave 9 contract ADR-0076 design-only landed)
+## Current status (PARTIAL — Waves 1+2+3+4+5+6+7+8+9 LIVE; candidate-generation + outcome-comparison + best-path-recommendation + governed-transition + multi-agent-simulation surfaces all landed)
 
 **Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
 scope locked: read-only sandbox-only self-scoped operator
@@ -628,24 +628,93 @@ authorization)**:
    implementation slice (Option A deterministic
    TypeScript) is forward-substrate behind separate
    Founder authorization.
-8. **Wave 9 — multi-agent simulation orchestration** —
-   design-only ADR LANDED 2026-05-31 at ADR-0076. Closed-
-   vocabulary simulation contract; 3 orchestration_modes
-   (DETERMINISTIC_BRANCH_ENUMERATION default + 2 opt-in);
-   5 branch_definitions + 6 agent_roles closed-vocab; NO
-   agent-to-agent message-passing; NO LLM-generated agent
-   personas; NO raw chain-of-thought between branches.
-   ADR-0069 §6 8-question architecture check LOCKED v1 at
-   TypeScript §2.1 sequential branch enumeration (bounded
-   24-branch ceiling fits within TS synchronous-response
-   latency budget); Option C BEAM forward-substrate per
-   ADR-0028 (applies WHEN simulation needs LIVE concurrent
-   message-passing agents OR scales beyond 24 sequential
-   branches per call; neither holds at v1). NO code / NO
-   schema / NO new audit literal / NO multi-agent runtime
-   at ADR-0076. Wave 9 implementation slice (Option A
-   deterministic TypeScript) is forward-substrate behind
-   separate Founder authorization.
+8. **Wave 9 — multi-agent simulation orchestration**
+   design-only ADR LANDED 2026-05-31 at ADR-0076 (PR #146;
+   commit `b077a0e`). Wave 9 Option A implementation
+   LANDED 2026-05-31 at PR #147 (commit `340d37f`) —
+   deterministic TypeScript multi-agent simulation
+   orchestration. NEW `PlaygroundSimulationService` at
+   `apps/api/src/services/playground/playground-simulation.service.ts`
+   + NEW route `POST /api/v1/playground/scenarios/:id/simulations`
+   + 47 integration tests. Sequential `Promise.allSettled`
+   fan-out over (branch_definition × agent_role)
+   combinations capped at 24 per ADR-0076 §11 (4 default
+   branch_definitions × 6 default agent_roles = 24); each
+   combination invokes Wave 7 `recommendBestPath` once;
+   each Wave 7 result projected through a closed-vocab
+   agent_role lens per ADR-0076 §5 + §6 (assumed_constraints
+   10 + expected_outcomes 8 + governance_conflicts 10 +
+   unresolved_questions 8). NO agent-to-agent message-
+   passing; NO LLM-generated agent personas; NO raw
+   chain-of-thought between branches; NO numeric scoring /
+   ranking / probability / winner field names; agent roles
+   = simulation lenses, NOT independent authorities.
+   Convergence (intersection of recommended candidate_keys
+   + governance_findings + required_reviews) + disagreement
+   (distinct candidate_types + distinct recommendation_modes
+   + unresolved_branches) + recommended_next_review
+   (closed-vocab priority ladder; 8 next_review_label
+   values) computed deterministically. Founder enterprise-
+   decision-output clarification 2026-05-31 applied as
+   additive `enterprise_decision_posture` extension:
+   `primary_recommended_branch_id` +
+   `primary_recommendation_reasons[]` (inherits Wave 7 vocab)
+   + `viable_alternative_branch_ids[]` (capped at 3) +
+   `evidence_posture[]` (closed vocab 12 values incl.
+   POLICY_SUPPORTS_PATH / COMPLIANCE_REVIEW_REQUIRED /
+   LEGAL_REVIEW_REQUIRED / INSUFFICIENT_CONTEXT /
+   CONFLICTING_SIGNALS / AUTHORITY_CHAIN_UNCLEAR /
+   AUDIT_HISTORY_SUPPORTS_PATH) +
+   `blockers_before_action[]` (closed vocab 10 values
+   incl. POLICY_BLOCKS_ACTION / MISSING_COMPLIANCE_REVIEW /
+   MISSING_LEGAL_REVIEW / MISSING_DUAL_CONTROL_APPROVAL /
+   MISSING_HUMAN_DECISION / INSUFFICIENT_DATA /
+   CONNECTOR_UNAVAILABLE / AUTHORITY_CHAIN_UNCLEAR /
+   NO_TRANSITION_POSSIBLE / NO_KNOWN_BLOCKER) +
+   `safe_next_step` (closed vocab 7 values: LEGAL >
+   COMPLIANCE > APPROVAL_CHAIN > MISSING_CONTEXT >
+   DO_NOT_PROCEED > HUMAN_REVIEW > PROPOSE_GOVERNED_ACTION
+   priority ladder). Computed-on-read; NO persistence;
+   NO new Prisma model; NO schema migration; NO new audit
+   literal — `ADMIN_ACTION + details.action =
+   "PLAYGROUND_SIMULATION_EXECUTED"` audit with safe
+   metadata only per ADR-0076 §14 (scenario_id +
+   orchestration_mode + branch_count +
+   branch_definitions_used + agent_roles_used +
+   convergence_summary_size + disagreement_summary_size +
+   unresolved_questions_count + caller_confirmation_received;
+   NEVER raw branch text / chain-of-thought / scenario
+   JSON / agent prompts / model outputs / scores). Each
+   Wave 7 sub-invocation also emits its own
+   PLAYGROUND_BEST_PATH_RECOMMENDED audit row per ADR-0074
+   §14 — Wave 9 does NOT suppress those. Mandatory
+   `caller_confirmation: true` per ADR-0076 §2; NO
+   `idempotency_key` (Wave 9 creates no Action rows).
+   Wave 9 NEVER creates Actions / executes / bypasses
+   Wave 8 / invokes connectors / calls external providers
+   / runs LLM / runs Python / runs BEAM. Owner-first +
+   same-org SCENARIO_NOT_FOUND gate inherited via Wave 7
+   → Wave 6 → Wave 5 → Wave 4 delegation. Partial Wave 7
+   sub-invocation failures projected as INSUFFICIENT_DATA
+   closed-vocab branches (NEVER raw error messages) per
+   ADR-0076 §12 fault-isolation guarantee. Founder
+   behavioral clarification 2026-05-31 confirmed Wave 9
+   semantics as governed role-perspective simulation
+   before action — *canonical sentence: "Wave 9 is not
+   autonomous agent debate. Wave 9 is governed role-
+   perspective simulation before action."* Founder's
+   recommended expanded vocab (10 agent_roles + 6
+   branch_types incl. OWNER_OPERATOR, POLICY_REVIEWER,
+   ACTION_APPROVER, RECOMMENDED_PATH, DO_NOT_PROCEED_PATH)
+   is forward-substrate for a future ADR-0076 §4 + §5
+   amendment per RULE 20; v1 keeps the canonical
+   contract-register vocab verbatim. `conversation_context_signals[]`
+   reserved for the governed listener substrate slice.
+   Option C BEAM-orchestrated forward-substrate per
+   ADR-0028 + ADR-0069 §6 re-verification (applies WHEN
+   simulation needs LIVE concurrent message-passing agents
+   OR scales beyond 24 sequential branches per call;
+   neither holds at v1).
 9. **Wave 10 — Control Tower frontend consumer**
    (frontend; lives in `otzar-control-tower` repo).
 
