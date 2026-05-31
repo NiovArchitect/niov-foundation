@@ -409,8 +409,27 @@ authorization)**:
    Option C (BEAM) remain forward-substrate behind
    separate Founder authorization per ADR-0072 §Forward
    queue.
-5. **Wave 6 — outcome comparison + scoring rubric**.
-   Closed-vocabulary; NO employee scoring.
+5. **Wave 6 — outcome comparison + scoring rubric** —
+   design-only ADR LANDED 2026-05-31 at ADR-0073. Closed-
+   vocabulary comparison-matrix contract; computed-on-read;
+   NO employee scoring; NO numeric ranking; NO winner
+   selection (winner selection is Wave 7). 22 sub-decisions
+   locking `ComparisonResponse` shape + `ComparisonMatrixItem`
+   13 fields + 5 closed vocabularies (outcome_dimensions 12
+   values + dimension_rating 5 values + risk_findings 10
+   values + dependency_findings 10 values + required_reviews
+   9 values) + comparison_mode (DETERMINISTIC_RUBRIC default
+   at v1 + CANDIDATE_FIELD_PROJECTION opt-in) +
+   comparison_notes 12 values + canonical "Wave 6 calls
+   Wave 5 internally" decision + bounded counts + ADR-0070
+   §9 legal-advice posture inherited verbatim + human-in-
+   the-loop doctrine + three-method comparison (Option A
+   deterministic TypeScript = v1; Option B Python requires
+   ADR-0069 §2.4 boundary ADR; Option C BEAM folds into
+   Wave 9). NO code / NO schema / NO new audit literal at
+   ADR-0073. Wave 6 implementation slice (Option A
+   deterministic / template-first TypeScript) is forward-
+   substrate behind separate Founder authorization.
 6. **Wave 7 — best-path recommender** with evidence and
    governance findings.
 7. **Wave 8 — governed transition** from selected
