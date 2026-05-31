@@ -9,10 +9,10 @@
 
 ## Where we are
 
-- **Main HEAD:** `6b84a99` (Section 1 Wave 6A symbiotic advisory surface; closeout docs PR pending)
-- **Latest merged PR:** [#121](https://github.com/NiovArchitect/niov-foundation/pull/121) — Section 1 Wave 6A advisory surface (15 tests).
-- **Active branch / PR:** `section-1-wave-6a-closeout-docs` (Wave 6A closeout docs; design-only; Wave 6B ADR/design starts after this merge).
-- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern + Wave 6A symbiotic advisory surface (2026-05-30)** — Wave 5 LANDED via ADR-0066 (PRs #113/#114/#115; `7661ba9` impl). **Wave 6A LANDED PR #121 `6b84a99`** — NEW symbiotic `accepted_patterns[]` projection on `getMyTwin`; user teaches the Twin through review-and-acceptance; Twin reflects accepted patterns back as visible alignment memory; NO assembleContext touch; NO new audit literal; NO schema migration; 15 integration tests. Wave 6B (assembleContext priming) remains ADR/design forward-substrate.
+- **Main HEAD:** `625ddbf` (Section 1 Wave 6B priming-hook impl; closeout docs PR pending)
+- **Latest merged PR:** [#124](https://github.com/NiovArchitect/niov-foundation/pull/124) — Section 1 Wave 6B priming-hook (14 tests).
+- **Active branch / PR:** `section-1-wave-6b-closeout-docs` (Wave 6B closeout docs; design-only).
+- **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern + Wave 6A + Wave 6B (active-pattern-consumption FULLY LIVE) 2026-05-31** — Wave 5 LANDED via ADR-0066 (PRs #113/#114/#115; `7661ba9` impl). **Wave 6A LANDED PR #121 `6b84a99`** (visibility half). **Wave 6B LANDED via ADR-0067 (PR #123) + impl PR #124 `625ddbf`** (influence half — sidecar field on AssembleContextSuccess + labeled L_ALIGNMENT prompt section in conductSession; reuses Wave 6A projection; ZERO score-boost; ZERO capsule pipeline mutation; ZERO new audit literal; ZERO schema migration; 14 integration tests). Symbiotic alignment loop closed at both visibility + influence registers.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE — 6 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health + Wave 7 org-level compliance-posture per ADR-0061 §8 forward queue; PRs #117 `2c4336a` + #119 `2b83116`); ZERO new audit literal across any Section 6 wave.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope**.
@@ -25,6 +25,10 @@
 ## Exact next action
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
+
+## Section 1 Wave 6B LANDED — symbiotic priming hook into assembleContext (PR #124)
+
+ADR-0067 (PR #123) + impl PR #124 `625ddbf`. Sidecar-field design lock (Option d). NEW `alignment_patterns?` on `AssembleContextSuccess` (reuses Wave 6A `AcceptedPatternAdvisoryView` verbatim). NEW `include_alignment_patterns?: boolean` body field on `POST /api/v1/coe/context` (default true; explicit owner opt-out). NEW labeled `L_ALIGNMENT` prompt section in `conductSession` 8-layer assembly between priming and L1 — `[OWNER'S ACCEPTED ALIGNMENT PATTERNS — visible advisory context the owner has reviewed and accepted as alignment guidance. These are owner-controlled hints, not memory rewrites; the owner remains sovereign...]` followed by bulleted SAFE rows. ZERO score-boost (ADR-0022 frozen anchor). ZERO capsule pipeline mutation (counters identical with/without sidecar). ZERO new audit literal. ZERO schema migration. 14 integration tests. **Active-pattern-consumption is now FULLY LIVE** at both visibility (Wave 6A) and influence (Wave 6B) registers.
 
 ## Section 1 Wave 6A LANDED — symbiotic accepted-pattern advisory surface (PR #121)
 
@@ -39,8 +43,6 @@ NEW `POST /api/v1/analytics/compliance-posture` + `getCompliancePostureForOrg` s
 NEW `POST /api/v1/analytics/action-runtime-by-action-type` + 16 integration tests. Extends Wave 3 with per-ActionType breakdown. Envelope `OK_BY_ROW | INSUFFICIENT_POPULATION` + per-row `HEALTHY | DEGRADED | UNHEALTHY | INSUFFICIENT_VOLUME`. **NOT employee scoring; NOT manager surveillance.** Section file: [`current-build-state/06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md).
 
 ## Recommended next production section
-
-**Immediate next (authorized)**: **Section 1 Wave 6B ADR/design only — assembleContext priming hook** per Founder Wave 6A operating direction. After Wave 6A docs closeout merges, draft ADR/design for the priming hook into `assembleContext`. Must NOT be implemented until ADR/design confirms no-leak, RULE 0, and behavior-scope safety. STOP after ADR/design report unless explicitly authorized to implement.
 
 **Tier 1 cross-section alternatives (no Founder product decision required)**:
 
