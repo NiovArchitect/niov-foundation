@@ -47,7 +47,7 @@ evaluator + connector dry-run + working-set assembly — are
 exactly the building blocks future scenario-simulation
 substrate will compose), NOT a replacement for it.
 
-## Current status (PARTIAL — Waves 1+2+3+4+5+6 LIVE; first scenario-tier candidate-generation + outcome-comparison surfaces landed)
+## Current status (PARTIAL — Waves 1+2+3+4+5+6+7 LIVE; candidate-generation + outcome-comparison + best-path-recommendation surfaces all landed)
 
 **Wave 1 ADR LANDED at ADR-0060** (2026-05-30). v1 inspector
 scope locked: read-only sandbox-only self-scoped operator
@@ -181,6 +181,74 @@ NEVER a ranking. Bounded counts per ADR-0073 §11
 (`candidates_per_comparison_max = 8`). Python (Option B)
 and BEAM (Option C) remain forward-substrate per ADR-0073
 §Forward queue + ADR-0069.
+
+**Wave 7 contract ADR-0074 LANDED 2026-05-31 (PR #141;
+commit `8922f66`)** — design-only contract closing ADR-0065
+§7 Wave 7 forward-queue line at the contract register;
+sits ABOVE ADR-0073 (Wave 6 outcome-comparison contract)
+and BELOW ADR-0065 (long-term product vision) at the
+contract tier; 23 sub-decisions locking
+`BestPathRecommendationResponse` shape (19 top-level
+fields) + per-`AlternativeConsidered` 6-field shape +
+deterministic 10-gate priority ladder + 11th deterministic
+tie-breaker + 4 closed vocabularies (recommendation_reasons
+11 + action_transition_readiness 8 + reason_not_recommended
+10 + recommendation_mode 4) + canonical "Wave 7 calls Wave
+6 internally" decision + bounded counts + ADR-0070 §9
+legal-advice posture inherited verbatim + extended for
+Wave 7 + mandatory `human_decision_required` boolean per
+§16 + three-method comparison (Option A deterministic
+TypeScript = v1; Option B Python requires ADR-0069 §2.4
+boundary ADR; Option C BEAM folds into Wave 9) + §22
+future-generalization strategic context (preserves
+architecture for future trust-governed life decision
+support WITHOUT authorizing personal-life automation).
+
+**Wave 7 Option A implementation LANDED 2026-05-31 (PR
+#142; commit `80a60f1`)** — deterministic / template-first
+TypeScript best-path recommendation surface. NEW
+`PlaygroundBestPathRecommendationService` at
+`apps/api/src/services/playground/playground-best-path-recommendation.service.ts`
++ NEW route
+`POST /api/v1/playground/scenarios/:id/best-path-recommendations`
++ 39 integration tests. Computed-on-read; internally
+invokes `PlaygroundOutcomeComparisonService.compareOutcomes`
+per ADR-0074 §10 (NEVER accepts caller-supplied comparison
+or candidate payloads); v1 body accepts `candidate_types?[]`
++ `max_candidates?` + `comparison_mode?` +
+`recommendation_mode?` only — NO `candidate_keys[]` per
+Founder QLOCK 2 (inherits Wave 6 deferral). NO persistence
+per Founder QLOCK 1; NO new Prisma model; NO schema
+migration; NO new audit literal; NO LLM / model calls; NO
+Python; NO BEAM; NO Action creation (Wave 8 forward-
+substrate); NO connector invocation; NO external provider
+call; NO Control Tower frontend; NO numeric scoring; NO
+winner-declaration framing; NO best-path recommender
+execution; NO governed transition; NO multi-agent runtime;
+NO recommendation persistence at this slice. Owner-first +
+same-org SCENARIO_NOT_FOUND gate inherits via Wave 6 → Wave
+5 → Wave 4 delegation. `ADMIN_ACTION + details.action =
+"PLAYGROUND_BEST_PATH_RECOMMENDED"` audit with safe
+metadata only (scenario_id + recommendation_mode +
+candidate_count + recommended_candidate_key +
+recommended_candidate_type + blocked_by_policy +
+human_decision_required + action_transition_readiness;
+NEVER raw recommendation text; NEVER raw comparison text;
+NEVER raw candidate text; NEVER raw scenario JSON). 4
+recommendation modes LIVE: DETERMINISTIC_POLICY_FIRST
+(default), DETERMINISTIC_GOVERNANCE_FIRST,
+DETERMINISTIC_RESILIENCE_FIRST,
+DETERMINISTIC_HUMAN_REVIEW_FIRST (short-circuits to
+HUMAN_REVIEW_REQUIRED if present). Priority ladder is 10
+closed-vocab gates + 11th deterministic tie-breaker by
+candidate_key lexical ASC. Top-level response + each
+matrix item carry mandatory ADR-0074 §16 `honest_note` +
+`human_decision_required` boolean. `alternatives_considered`
+surfaces N-1 non-recommended candidates with closed-vocab
+`reason_not_recommended` per pair. Bounded counts per
+ADR-0074 §11 (`candidates_considered_max = 8`). Python
+(Option B) and BEAM (Option C) remain forward-substrate
+per ADR-0074 §Forward queue + ADR-0069.
 
 **RULE 13 substrate-honest disclosure**: Waves 2+4 together
 constitute the **first backend substrate / inspector
@@ -501,33 +569,25 @@ authorization)**:
    Option C (BEAM) remain forward-substrate behind
    separate Founder authorization per ADR-0073 §Forward
    queue.
-6. **Wave 7 — best-path recommender with evidence and
-   governance findings** — design-only ADR LANDED
-   2026-05-31 at ADR-0074. Closed-vocabulary
-   recommendation contract consuming Wave 6
-   ComparisonResponse; computed-on-read; deterministic
-   priority-ladder selection rule with 10 gates + 11th
-   deterministic tie-breaker (NEVER a numeric score; NEVER
-   a winner declaration; recommendation is ADVISORY ONLY).
-   23 sub-decisions locking `BestPathRecommendationResponse`
-   shape + `AlternativeConsidered` 6-field shape + 4 closed
-   vocabularies (recommendation_reasons 11 + action_transition_readiness
-   8 + reason_not_recommended 10 + recommendation_mode 4) +
-   canonical "Wave 7 calls Wave 6 internally" decision +
-   bounded counts + ADR-0070 §9 legal-advice posture
-   inherited verbatim + extended (forbidden: "final
-   decision" / "the system decided" / "ranked #1" / "AI
-   approved") + mandatory `human_decision_required`
-   boolean per §16 + three-method comparison (Option A
-   deterministic TypeScript = v1; Option B Python requires
-   ADR-0069 §2.4 boundary ADR; Option C BEAM folds into
-   Wave 9) + future-generalization strategic context per
-   §22 (NOT authorizing personal-life automation /
-   consumer Otzar execution / trust-level delegation).
-   NO code / NO schema / NO new audit literal at ADR-0074.
-   Wave 7 implementation slice (Option A deterministic /
-   template-first TypeScript) is forward-substrate behind
-   separate Founder authorization.
+6. ~~**Wave 7 — best-path recommender with evidence and
+   governance findings**~~ — design-only ADR LANDED
+   2026-05-31 at ADR-0074; Option A deterministic /
+   template-first TypeScript implementation LANDED
+   2026-05-31 (PR #142; `80a60f1`). NEW
+   `PlaygroundBestPathRecommendationService` + NEW route
+   `POST /api/v1/playground/scenarios/:id/best-path-recommendations`
+   + 39 integration tests. Computed-on-read; internally
+   invokes Wave 6 outcome-comparison service; NO
+   caller-supplied payloads; NO candidate_keys[] in v1 per
+   Founder QLOCK 2; NO persistence per Founder QLOCK 1;
+   NO schema migration; NO new audit literal; NO LLM /
+   Python / BEAM / numeric scoring / winner-declaration /
+   Action creation / connector invocation;
+   `ADMIN_ACTION + details.action="PLAYGROUND_BEST_PATH_RECOMMENDED"`
+   audit with safe metadata only. 4 recommendation modes
+   live + 10-gate priority ladder + 11th deterministic
+   tie-breaker. Option B (Python) and Option C (BEAM)
+   remain forward-substrate.
 7. **Wave 8 — governed transition** from selected
    scenario to proposed Action plan (through Section 2
    Action runtime per §4 human-in-the-loop doctrine).
