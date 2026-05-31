@@ -9,11 +9,11 @@
 
 ## Where we are
 
-- **Main HEAD:** `2c4336a` (Section 6 Wave 6 per-ActionType action-runtime health; closeout docs PR pending)
-- **Latest merged PR:** [#117](https://github.com/NiovArchitect/niov-foundation/pull/117) — Section 6 Wave 6 (16 tests).
-- **Active branch / PR:** `section-6-wave-6-closeout-docs` (Wave 6 closeout docs; design-only).
+- **Main HEAD:** `2b83116` (Section 6 Wave 7 compliance-posture; closeout docs PR pending)
+- **Latest merged PR:** [#119](https://github.com/NiovArchitect/niov-foundation/pull/119) — Section 6 Wave 7 (20 tests).
+- **Active branch / PR:** `section-6-wave-7-closeout-docs` (Wave 7 closeout docs; design-only).
 - **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern substrate (2026-05-30)** — Wave 5 LANDED via ADR-0066 (PR #113) + implementation (PR #114; `7661ba9`). NEW `OtzarProposedPattern` Prisma model + 4 self-scoped review routes + `OtzarProposedPatternService` + recurrence-detection function + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit; owner-first; closed-vocab; ADMIN_ACTION + 5-discriminator audit; ZERO new audit literal; existing org-scoped `IntelligencePattern` untouched per RULE 1.
-- **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 extension LIVE — 5 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health per ADR-0061 §8 forward queue; PR #117 `2c4336a`); ZERO new audit literal across any Section 6 wave.
+- **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE — 6 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health + Wave 7 org-level compliance-posture per ADR-0061 §8 forward queue; PRs #117 `2c4336a` + #119 `2b83116`); ZERO new audit literal across any Section 6 wave.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.
 - **Section 3 status: PRODUCTION-GRADE COMPLETE for v1 same-org Foundation backend scope**.
 - **Live `ACTION_*` emitters:** 10 of 10. **Real per-`ActionType` handlers:** 3 of 3 LIVE.
@@ -26,32 +26,33 @@
 
 **Founder-clarified framing (re-asserted across all docs):** "Section 2 production-grade complete for internal Foundation autonomous-execution-substrate scope" means the **internal autonomous execution substrate** is complete, **not** that Otzar is an internal-only product. External tool integrations (Slack / email / SMS / push / Google Workspace / Microsoft / Linear / Jira / Salesforce / etc.) remain **required future production capabilities** and are tracked under **Section 4 — MCP / Connectors** as governed adapters. Section 2's internal-only scope is the safe foundation that those future external adapters must consume; it is not a substitute for them.
 
+## Section 6 Wave 7 LANDED — org-level compliance-posture aggregate (PR #119)
+
+NEW `POST /api/v1/analytics/compliance-posture` + `getCompliancePostureForOrg` service method + 20 integration tests per ADR-0061 §8 forward queue. Org-level **metadata-only compliance posture surface** — **NOT legal advice; NOT certification; NOT employee compliance scoring; NOT manager surveillance.** 5-label closed-vocab: HEALTHY (all subscribed frameworks active + no recent failures) / WATCH (inactive or unknown framework subscribed) / DEGRADED (recent COMPLIANCE_CHECK_FAILED in window) / NOT_CONFIGURED (no profile or empty frameworks[]) / INSUFFICIENT_POPULATION (k=5 fail). Same `can_admin_org` + same-org + k=5 + ADMIN_ACTION:ANALYTICS_READ audit contract as Waves 2-6. **ZERO new audit literal.** Substrate-honest deferral of LawfulBasis + REGULATOR_ACCESS_* counts pending safe org-attribution. **6 live aggregates total**.
+
 ## Section 6 Wave 6 LANDED — per-ActionType action-runtime health (PR #117)
 
-NEW `POST /api/v1/analytics/action-runtime-by-action-type` + `getActionRuntimeByActionTypeForOrg` service method + 16 integration tests per ADR-0061 §8 forward queue ("Wave 3+ additional aggregates as operator demand surfaces"). Extends Wave 3 org-wide action-runtime-success-rate with per-ActionType breakdown. Envelope-tier `OK_BY_ROW | INSUFFICIENT_POPULATION` + per-row `HEALTHY | DEGRADED | UNHEALTHY | INSUFFICIENT_VOLUME` labels. Same `can_admin_org` + same-org + k=5 envelope gate + `ACTION_RUNTIME_MIN_VOLUME=10` per-row gate + ADMIN_ACTION:ANALYTICS_READ audit contract as Wave 3. **ZERO new audit literal.**
-
-**This is aggregate runtime health by ActionType — NOT employee scoring, NOT manager surveillance, NOT individual actor performance, NOT a worker dashboard.** Per-row signal labels are operational only.
-
-Section file: [`current-build-state/06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md).
+NEW `POST /api/v1/analytics/action-runtime-by-action-type` + 16 integration tests. Extends Wave 3 with per-ActionType breakdown. Envelope `OK_BY_ROW | INSUFFICIENT_POPULATION` + per-row `HEALTHY | DEGRADED | UNHEALTHY | INSUFFICIENT_VOLUME`. **NOT employee scoring; NOT manager surveillance.** Section file: [`current-build-state/06-enterprise-analytics.md`](current-build-state/06-enterprise-analytics.md).
 
 ## Section 1 Wave 5 LANDED — Otzar proposed-pattern from recurring drift (PR #114)
 
-NEW `OtzarProposedPattern` Prisma model + `OtzarProposedPatternService` + 4 self-scoped routes on `/api/v1/otzar/my-twin/proposed-patterns` + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit. Closes ADR-0058 §"Forward queue" item 1 + ADR-0066 §3-§7. ADMIN_ACTION + 5-discriminator audit (no new audit literal). Existing org-scoped `IntelligencePattern` untouched per RULE 1.
+NEW `OtzarProposedPattern` Prisma model + service + 4 self-scoped routes + 36 integration tests. Auto-write = AUTO-PROPOSE NOT auto-commit. Closes ADR-0058 §Forward queue item 1 + ADR-0066. Existing org-scoped `IntelligencePattern` untouched per RULE 1.
 
 ## Recommended next production section
 
-**Tier 1 — safe, no Founder product decision required**:
-
-- **Section 6 compliance-posture aggregate** per ADR-0061 §8 — next aggregate in the Wave 3+ extension family. Same `AnalyticsService` + same SAFE projection + k=5 + ANALYTICS_READ audit precedent (now 5-aggregate strong). Likely fixture-based for v1 (HIPAA/GDPR/SOC2 framework presence + count of compliance-tagged Actions / capsules in window).
-
 **Tier 2 — needs ONE Founder product decision**:
 
-- **Section 1 Wave 6 active-pattern-consumption** — how an ACCEPTED `OtzarProposedPattern` informs the AI teammate's behavior. Paths: (a) priming hook into `assembleContext`; (b) advisory surface in `getMyTwin`. Founder picks one (or both).
+- **Section 1 Wave 6 active-pattern-consumption** — how an ACCEPTED `OtzarProposedPattern` informs the AI teammate's behavior. Paths: (a) priming hook into `assembleContext` (re-weights working-set toward accepted patterns); (b) advisory surface in `getMyTwin` (surfaces accepted patterns as coaching reminders). Founder picks one (or both). **This is the lowest-decision Tier-2 candidate** now that Section 6 Wave 7 has consumed the previous Tier-1 slot.
 
-**Tier 3 — needs multiple Founder product decisions**:
+**Tier 1 alternatives still available (no Founder product decision)**:
 
-- **Section 5 Wave 5 candidate generation** per ADR-0065 §7 — 4 outstanding decisions (storage / generation source / audit / labels).
-- **Section 4 SDK-bound connectors** — each adapter own QLOCK + RULE 21 + OAuth.
+- **Section 6 additional aggregates** beyond Wave 7 — possible candidates: persistent aggregate caching (would require ADR-0061 §8 amendment); operator-tunable k threshold (would require ADR-0061 §1.c amendment). Both are FORWARD-SUBSTRATE per ADR-0061 §Forward queue and would NOT proceed without explicit Founder authorization for the substrate change.
+- **Section 7 cross-chain verify-chain** — extending self-only `verify-chain` to org-admin / platform / regulator scope. Carries perf + leakage review per Section 7 doc; would need a separate slice with its own QLOCK.
+
+**Tier 3 — multi-decision; defer**:
+
+- **Section 5 Wave 5 candidate generation** per ADR-0065 §7 — 4 outstanding Founder decisions.
+- **Section 4 SDK-bound connectors** — each adapter own QLOCK + RULE 21 + OAuth credential decision.
 
 ## Founder Sleep Directive preferences — status
 
