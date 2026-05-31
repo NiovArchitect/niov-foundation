@@ -368,21 +368,30 @@ export async function buildApp(
           },
         ])
       : getLLMProvider());
-  const otzarService = new OtzarService(
-    authService,
-    coeService,
-    otzarLLM,
-    otzarCache,
-  );
-
   // Section 1 Wave 5 ADR-0066 — Otzar proposed-pattern from
   // recurring drift. Owner-first self-scoped CRUD over the NEW
   // OtzarProposedPattern model; on-demand recurrence sweep reads
   // only the caller's own drift substrate; auto-write = auto-
   // propose, NOT auto-commit. No dependencies beyond AuthService
   // (mirrors Wave 4 PlaygroundScenarioService precedent).
+  // Constructed BEFORE OtzarService so it can be wired as the
+  // optional 5th arg per Wave 6A symbiotic advisory surface.
   const otzarProposedPatternService = new OtzarProposedPatternService(
     authService,
+  );
+
+  // Section 1 Wave 6A — getMyTwin surfaces the caller's OWN
+  // ACCEPTED proposed patterns as symbiotic alignment guidance.
+  // The 5th constructor arg is the proposed-pattern service; when
+  // present, getMyTwin includes `accepted_patterns[]` in the
+  // response. NO audit emission (Wave 2A precedent preserved). NO
+  // assembleContext touch (Wave 6B ADR/design forward-substrate).
+  const otzarService = new OtzarService(
+    authService,
+    coeService,
+    otzarLLM,
+    otzarCache,
+    otzarProposedPatternService,
   );
 
   // Section 11C observation pipeline. Reuses the same LLM provider

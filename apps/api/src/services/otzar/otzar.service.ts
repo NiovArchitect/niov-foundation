@@ -23,6 +23,10 @@ import type { AuthService } from "../auth.service.js";
 import type { COEService } from "../coe/coe.service.js";
 import type { LLMProvider, LLMResult } from "../llm/llm.service.js";
 import type { KVCache } from "./cache.js";
+import type {
+  AcceptedPatternAdvisoryView,
+  OtzarProposedPatternService,
+} from "./proposed-pattern.service.js";
 import { getPriming } from "./priming.js";
 import {
   truncateToTokenBudget,
@@ -288,6 +292,18 @@ export interface MyTwinView {
   // ADR-0053 Wave 2A: additive, optional, self-scoped role-scope profile.
   // Existing fields above are unchanged (backward-compatible).
   role_scope_profile?: MyTwinRoleScopeProfile;
+  // Section 1 Wave 6A: additive, optional, self-scoped symbiotic
+  // advisory surface — the caller's OWN ACCEPTED OtzarProposedPattern
+  // rows projected as alignment guidance per ADR-0066 + Founder
+  // Wave 6A clarification. Absent when there are no accepted
+  // patterns (preserves Wave 2A backward-compat for clients that
+  // don't yet consume this field). NEVER includes pattern lifecycle
+  // internals, raw correction text, occurrence counts, signal
+  // timestamps, owner_entity_id, conversation IDs, embeddings,
+  // capsule content, or cross-owner data — every field on each
+  // row is the SAFE advisory subset enforced by
+  // `AcceptedPatternAdvisoryView` at the proposed-pattern service.
+  accepted_patterns?: readonly AcceptedPatternAdvisoryView[];
 }
 
 // WHAT: Successful getMyTwin return.
@@ -384,6 +400,13 @@ export class OtzarService {
     private readonly coeService: COEService,
     private readonly llmProvider: LLMProvider,
     private readonly cache: KVCache,
+    // Section 1 Wave 6A — symbiotic advisory surface. Optional 5th
+    // arg so existing test fixtures (unit + integration) constructed
+    // with the 4-arg form continue to work; when absent, getMyTwin
+    // simply does not surface accepted_patterns. Wired in production
+    // at apps/api/src/server.ts adjacent to the existing
+    // OtzarProposedPatternService instantiation.
+    private readonly proposedPatternService?: OtzarProposedPatternService,
   ) {}
 
   // ──────────────────────────────────────────────────────────────
@@ -1113,6 +1136,25 @@ export class OtzarService {
       },
     };
 
+    // Section 1 Wave 6A — symbiotic advisory surface. When the
+    // optional proposedPatternService dependency is wired (production
+    // at server.ts), surface the caller's OWN ACCEPTED patterns as
+    // alignment guidance. The owner sees the same alignment context
+    // their Twin sees — review-and-acceptance is how the owner
+    // teaches the Twin per Founder Wave 6A clarification.
+    //
+    // Deliberately NO assembleContext touch — that's forward-substrate
+    // per Wave 6B ADR/design. Deliberately NO audit emission —
+    // getMyTwin is a no-audit self-read by ADR-0053 Wave 2A design.
+    let acceptedPatterns: readonly AcceptedPatternAdvisoryView[] | undefined =
+      undefined;
+    if (this.proposedPatternService !== undefined) {
+      acceptedPatterns =
+        await this.proposedPatternService.listAcceptedPatternsForOwner(
+          ownerEntityId,
+        );
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -1127,6 +1169,9 @@ export class OtzarService {
       created_at: primary.created_at,
       updated_at: config?.updated_at ?? primary.updated_at,
       role_scope_profile: roleScopeProfile,
+      ...(acceptedPatterns !== undefined
+        ? { accepted_patterns: acceptedPatterns }
+        : {}),
     };
 
     return {
