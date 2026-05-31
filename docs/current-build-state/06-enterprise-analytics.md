@@ -14,12 +14,15 @@ labels + integer counts + derived rates) with k=5
 HIPAA-Safe-Harbor minimum-population floor enforced at every
 aggregate.
 
-## Current status — PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1)
+## Current status — PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 extension LIVE
 
-**Final closeout 2026-05-30.** Section 6 Enterprise Analytics
-backend substrate is production-grade complete after the
-4-aggregate arc closure (Waves 2+3+4+5 LIVE on top of Wave 1
-ADR-0061).
+**Final closeout 2026-05-30 (v1) + Wave 6 LIVE 2026-05-30.**
+Section 6 Enterprise Analytics backend substrate is
+production-grade complete after the 4-aggregate v1 arc closure
+(Waves 2+3+4+5) PLUS a 5th aggregate landed in the same
+session under ADR-0061 §8 forward queue ("Wave 3+ additional
+aggregates as operator demand surfaces"): **Wave 6 per-
+ActionType action-runtime health** (PR #117 / `2c4336a`).
 
 **Important scope wording**: this closes the **Foundation
 backend analytics substrate** for v1 same-org admin reads. It
@@ -32,9 +35,9 @@ summaries) continue as forward-substrate per ADR-0061 §2 +
 
 ### Closeout summary
 
-- **4 live aggregates** + **4 admin routes** + **1
-  `AnalyticsService`** + **55 integration tests** across 4
-  test files.
+- **5 live aggregates** (v1 4 + Wave 6 extension) + **5 admin
+  routes** + **1 `AnalyticsService`** + **71 integration tests**
+  across 5 test files (v1 55 + Wave 6 16).
 - **Universal invariants**: bearer + `can_admin_org` via
   `requireAdminCapability`; same-org via `getOrgEntityId` +
   local `resolveOrgOrFail` (404 `NO_ORG_FOR_CALLER`); k=5
@@ -49,14 +52,15 @@ summaries) continue as forward-substrate per ADR-0061 §2 +
 
 ## What is live
 
-### 4 v1 aggregates
+### 5 live aggregates (v1 4 + Wave 6 extension)
 
 | # | Aggregate | Route | Signal labels |
 |---|---|---|---|
 | 1 | `CORRECTION_VELOCITY_7D` | `POST /api/v1/analytics/correction-velocity` | `ELEVATED` / `TYPICAL` / `QUIET` / `INSUFFICIENT_POPULATION` |
-| 2 | `ACTION_RUNTIME_SUCCESS_RATE` | `POST /api/v1/analytics/action-runtime-success-rate` | `HEALTHY` / `DEGRADED` / `UNHEALTHY` / `INSUFFICIENT_VOLUME` / `INSUFFICIENT_POPULATION` |
+| 2 | `ACTION_RUNTIME_SUCCESS_RATE` (org-wide) | `POST /api/v1/analytics/action-runtime-success-rate` | `HEALTHY` / `DEGRADED` / `UNHEALTHY` / `INSUFFICIENT_VOLUME` / `INSUFFICIENT_POPULATION` |
 | 3 | `CONNECTOR_ACTIVITY` | `POST /api/v1/analytics/connector-activity` | `ACTIVE` / `CONFIGURED_INACTIVE` / `NOT_CONFIGURED` / `INSUFFICIENT_POPULATION` |
 | 4 | `HIVE_PARTICIPATION` | `POST /api/v1/analytics/hive-participation` | `BROAD_PARTICIPATION` / `MODERATE_PARTICIPATION` / `NARROW_PARTICIPATION` / `NO_HIVES` / `INSUFFICIENT_POPULATION` |
+| 5 | `ACTION_RUNTIME_BY_ACTION_TYPE` (Wave 6; per-ActionType breakdown) | `POST /api/v1/analytics/action-runtime-by-action-type` | envelope: `OK_BY_ROW` / `INSUFFICIENT_POPULATION`; per-row: `HEALTHY` / `DEGRADED` / `UNHEALTHY` / `INSUFFICIENT_VOLUME` |
 
 Each route accepts optional `{ window_days?: number = 7 }`
 body clamped to `[1, 30]` (except hive-participation which is
@@ -107,6 +111,42 @@ a current-state snapshot with no window).
 adjacent to existing admin route registrations.
 `apps/api/src/index.ts` exports `AnalyticsService` + 5
 constants + 4 closed-vocab label arrays + 9 type re-exports.
+
+### Wave 6 — per-ActionType action-runtime health (PR #117; `2c4336a`)
+
+Extends the Wave 3 org-wide success-rate aggregate with a
+per-ActionType breakdown. Same auth (`can_admin_org`) + same-org
+(`resolveOrgOrFail`) + k=5 envelope-tier gate +
+`ACTION_RUNTIME_MIN_VOLUME=10` per-row gate + ADMIN_ACTION:
+ANALYTICS_READ audit (no new literal) contract as Wave 3.
+
+- Route: `POST /api/v1/analytics/action-runtime-by-action-type`
+  with body `{ window_days?: number }` (clamped 1..30; default 7).
+- Service: `getActionRuntimeByActionTypeForOrg` reads org Actions
+  (SELECT only `action_id` + `action_type` — never payload) +
+  attempts in window (SELECT only `outcome` + `action_id`) +
+  groups by ActionType in-process + per-row redaction at
+  `attempt_count < 10` (INSUFFICIENT_VOLUME label + nulled
+  counts + rate) + per-row label by Wave 3 thresholds + rows
+  ordered by action_type ASC for deterministic projection.
+- Response envelope: `signal_label` = `OK_BY_ROW` |
+  `INSUFFICIENT_POPULATION`; `rows[]` per-ActionType breakdown
+  (empty array when envelope-tier gate redacts).
+- 16 integration tests at
+  `tests/integration/analytics-wave-6-action-runtime-by-action-type.test.ts`:
+  auth (2); k=5 envelope gate (1); per-row aggregation incl.
+  HEALTHY / DEGRADED / UNHEALTHY / per-row INSUFFICIENT_VOLUME
+  / zero-state / deterministic ordering (5); same-org isolation
+  (1); window_days validation (3); 15-marker no-leak scan (1);
+  audit emission (3) verifying ANALYTICS_READ + aggregate
+  discriminator + safe details only (no per-row counts in
+  audit) + redacted audit on k=5 failure + no new audit
+  literal.
+
+**This is aggregate runtime health by ActionType — NOT
+employee scoring, NOT manager surveillance, NOT individual
+actor performance, NOT a worker dashboard.** Per-row signal
+labels are operational only (per `honest_note` copy).
 
 ## What is NOT live (forward-substrate per ADR-0061 §2 + §Forward queue)
 
@@ -163,7 +203,9 @@ Each forward-substrate behind separate Founder authorization:
 | `c8362cd` | #104 | Section 6 Wave 3 — action-runtime success rate aggregate |
 | `f629e23` | #105 | Section 6 Wave 4 — connector-activity aggregate |
 | `a3d484c` | #106 | Section 6 Wave 5 — hive-participation aggregate |
-| (this commit) | TBD | Section 6 final closeout docs |
+| `2aa203a` | #107 | Section 6 final v1 closeout docs |
+| `2c4336a` | #117 | Section 6 Wave 6 — per-ActionType action-runtime health aggregate (16 tests) |
+| (this commit) | TBD | Section 6 Wave 6 closeout docs |
 
 ## Foundation-context coherence (per Founder strategic guardrails)
 
