@@ -51,7 +51,15 @@ rollup Wave 4C).
 **Important scope wording**: closes the **Foundation backend
 drift-detection substrate + the Wave 5 review-gated
 proposed-pattern substrate + the Wave 6A symbiotic advisory
-surface** for v1 self-scoped coaching/alignment trust loop.
+surface + the Wave 6B priming hook into assembleContext**
+for v1 self-scoped coaching/alignment trust loop. **Wave 6B
+LANDED 2026-05-31 (PR #124 `625ddbf`)** implements the
+influence half of active-pattern-consumption per ADR-0067:
+accepted patterns become bounded, owner-controlled alignment
+context for the Twin via a sidecar field on
+`assembleContext` + a labeled prompt section in
+`conductSession`. Visible alignment priming, not hidden
+memory mutation.
 Wave 5 LANDED 2026-05-30 (PR #114 `7661ba9`): NEW
 `OtzarProposedPattern` Prisma model + service + 4 self-scoped
 routes + 36 integration tests; closes ADR-0058 §"Forward queue"
@@ -115,6 +123,45 @@ true consecutive-day tracking.
   Counts + labels only; no correction-text leakage; no cross-
   conversation aggregation. Service:
   `apps/api/src/services/otzar/conversation-corrections.ts`.
+- **Wave 6B — symbiotic priming hook into `COE.assembleContext`
+  (PR #124; `625ddbf`)** — extends Wave 6A visibility half
+  with the **influence half** of active-pattern-consumption
+  per ADR-0067. Implements Option (d) **sidecar-field design
+  lock** (NOT score-boost; NOT capsule pipeline mutation; NOT
+  pre-filter keyword injection). Two consumer surfaces:
+  - **`POST /api/v1/coe/context`** body extended with optional
+    `include_alignment_patterns?: boolean` (default true;
+    explicit owner opt-out). Response extended with optional
+    `alignment_patterns?: readonly AcceptedPatternAdvisoryView[]`
+    (reuses Wave 6A projection verbatim).
+  - **`conductSession` 8-layer prompt builder** renders a
+    NEW labeled `L_ALIGNMENT` section between
+    `truncated.final.priming` and `truncated.final.L1`:
+    `[OWNER'S ACCEPTED ALIGNMENT PATTERNS — visible advisory
+    context the owner has reviewed and accepted as alignment
+    guidance. These are owner-controlled hints, not memory
+    rewrites; the owner remains sovereign over which
+    patterns are accepted, archived, or ignored.]` followed
+    by bulleted SAFE rows showing `pattern_label` +
+    `source_signal_type` + `confidence_label` + `accepted_at`
+    + `safe_summary` + `advisory_note`. `pattern_id` is
+    deliberately excluded from the LLM prompt (debug-only).
+  Service: `apps/api/src/services/coe/coe.service.ts` (NEW
+  STEP 6.5 sidecar read with owner-scope enforced by-construction
+  via `session.entity_id`; read failures swallowed silently);
+  `apps/api/src/services/otzar/otzar.service.ts` (NEW
+  `L_ALIGNMENT` capture + injection; outside truncation
+  budget to preserve alignment fidelity). Server wiring:
+  `OtzarProposedPatternService` constructor reordered BEFORE
+  `COEService` to enable the 6th-arg dependency injection.
+  **NO score-boost** (ADR-0022 `combined_score` frozen
+  anchor preserved). **NO new audit literal** (inherits
+  existing `ADMIN_ACTION+COE_ASSEMBLE_CONTEXT` audit posture).
+  **NO schema migration.** **NO capsule pipeline mutation**
+  (counters verified identical with/without sidecar). 14
+  integration tests at
+  `tests/integration/coe-alignment-patterns-sidecar.test.ts`.
+
 - **Wave 6A — symbiotic advisory surface on `/api/v1/otzar/my-twin`
   (PR #121; `6b84a99`)** — extends the existing Wave 2A
   getMyTwin response with an optional `accepted_patterns[]`
@@ -295,16 +342,19 @@ contracts).
    (2026-05-30)** as the symbiotic advisory surface on
    `getMyTwin` (accepted_patterns[] projection; no audit; no
    assembleContext touch; no schema). **Wave 6B DESIGN
-   LANDED at ADR-0067 (2026-05-30)** as the sidecar-field
-   priming hook into `COE.assembleContext` (separate from the
-   capsule pipeline; reuses Wave 6A `AcceptedPatternAdvisoryView`
-   verbatim; explicit owner opt-out via
-   `include_alignment_patterns: false`; labeled LLM-tier prompt
-   section; ZERO new audit literal; ZERO schema migration; ZERO
-   combined_score formula amendment per ADR-0022 frozen anchor).
-   Wave 6B **implementation slice** is forward-substrate behind
-   a separate Founder authorization per ADR-0067 §"Founder
-   authorization" + §14 implementation-slice estimate.
+   LANDED at ADR-0067 (2026-05-30) + IMPLEMENTATION LANDED
+   at PR #124 `625ddbf` (2026-05-31)** as the sidecar-field
+   priming hook into `COE.assembleContext` (separate from
+   the capsule pipeline; reuses Wave 6A
+   `AcceptedPatternAdvisoryView` verbatim; explicit owner
+   opt-out via `include_alignment_patterns: false`;
+   labeled LLM-tier `L_ALIGNMENT` prompt section; ZERO new
+   audit literal; ZERO schema migration; ZERO
+   combined_score amendment per ADR-0022 frozen anchor;
+   ZERO capsule pipeline mutation; 14 integration tests).
+   **Active-pattern-consumption is now FULLY LIVE** (Wave
+   6A visibility + Wave 6B influence; symbiotic alignment
+   loop closed at both registers).
 8. **Cross-team aggregation governance** — design substrate for
    safe aggregation of permissioned signals across an org's
    employee twins (likely lands as a future CAR Sub-box; not yet
