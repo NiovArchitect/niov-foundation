@@ -546,7 +546,14 @@ Each forward-substrate slice requires separate Founder
 authorization at its slice prompt:
 
 - Wave 4: persistent named scenarios model + CRUD.
-- Wave 5: scenario candidate generation contract.
+- Wave 5: scenario candidate generation contract — design-
+  only contract LANDED 2026-05-31 at ADR-0072 (Section 5
+  Wave 5 Candidate-Generation Contract; design-only;
+  bidirectional back-citation; deterministic / template-
+  first TypeScript v1; Python (ADR-0069 §2.4 boundary ADR
+  required) and BEAM (Wave 9 / ADR-0069 §3 domain 6)
+  forward-substrate). Wave 5 implementation slice is
+  separate Founder authorization at its slice.
 - Wave 6: outcome comparison + scoring rubric.
 - Wave 7: best-path recommender with evidence + findings.
 - Wave 8: governed transition to Action runtime.
@@ -604,6 +611,13 @@ The §1 long-term purpose statement + §5 safety doctrine
   scenario inputs consume governance_terms findings).
 - Cites RULE 0, RULE 4, RULE 13, RULE 14, RULE 19,
   RULE 20.
+- Cited from ADR-0072 §Bidirectional citations
+  (Section 5 Wave 5 Candidate-Generation Contract;
+  design-only; ADR-0072 closes ADR-0065 §7 Wave 5
+  forward-queue line at the contract register; this ADR
+  remains canonical at the long-term product-vision
+  tier; bidirectional back-citation per RULE 14 + RULE
+  20).
 - Bidirectional back-citation lands in ADR-0060
   §"Forward queue" entry per RULE 14 + ADR-0020 §3 +
   RULE 20.

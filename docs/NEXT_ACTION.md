@@ -9,7 +9,7 @@
 
 ## Where we are
 
-- **Main HEAD:** `ffc0548` (ADR-0071 cross-scope verify-chain implementation merged).
+- **Main HEAD:** `6ab71e9` (ADR-0071 cross-scope verify-chain closeout docs merged; ADR-0072 Section 5 Wave 5 candidate-generation contract ADR forward-queued).
 - **Latest merged PR:** [#132](https://github.com/NiovArchitect/niov-foundation/pull/132) — Implement ADR-0071 — Section 7 cross-scope audit verify-chain (Option A clean break; 20 new tests).
 - **Active branch / PR:** `adr-0071-cross-scope-verify-chain-closeout-docs` (closeout docs).
 - **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern + Wave 6A + Wave 6B (active-pattern-consumption FULLY LIVE) 2026-05-31** — Wave 5 LANDED via ADR-0066 (PRs #113/#114/#115; `7661ba9` impl). **Wave 6A LANDED PR #121 `6b84a99`** (visibility half). **Wave 6B LANDED via ADR-0067 (PR #123) + impl PR #124 `625ddbf`** (influence half — sidecar field on AssembleContextSuccess + labeled L_ALIGNMENT prompt section in conductSession; reuses Wave 6A projection; ZERO score-boost; ZERO capsule pipeline mutation; ZERO new audit literal; ZERO schema migration; 14 integration tests). Symbiotic alignment loop closed at both visibility + influence registers.
@@ -60,7 +60,7 @@ PR #127 `8474863` ships ADR-0068 v1 — pull-based, computed-on-read `proactive_
 
 **Tier 3 — multi-decision; defer**:
 
-- **Section 5 Wave 5 candidate generation** per ADR-0065 §7 — 4 outstanding Founder decisions.
+- **Section 5 Wave 5 implementation slice (Option A deterministic TypeScript)** — ADR-0072 contract LANDED 2026-05-31 (design-only). Implementation = `PlaygroundCandidateService` + `POST /api/v1/playground/scenarios/:id/candidates` computed-on-read + read-audit `ADMIN_ACTION + details.action = "PLAYGROUND_CANDIDATES_GENERATED"` + closed-vocab template library + deterministic `candidate_key` + ≥25 integration tests + no-leak guard. Separate Founder authorization required at the slice. Option B (Python) requires ADR-0069 §2.4 boundary ADR first; Option C (BEAM) folds into Wave 9.
 - **Section 4 SDK-bound connectors** — each adapter own QLOCK + RULE 21 + OAuth credential decision.
 
 ## Founder Sleep Directive preferences — status

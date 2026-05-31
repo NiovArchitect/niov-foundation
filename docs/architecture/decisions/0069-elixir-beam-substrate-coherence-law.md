@@ -580,6 +580,20 @@ authorization slices have a canonical reference point.
   (long-form companion) +
   `project_regulator_ready_foundation_substrate.md`
   (regulator-ready directive cross-referenced at §10).
+- Cited from ADR-0072 §8 + §17 (Section 5 Wave 5 Candidate-
+  Generation Contract; design-only; landed 2026-05-31).
+  ADR-0072 §17 applies this ADR's §6 mandatory 8-question
+  architecture check to the Wave 5 v1 register and locks
+  v1 at TypeScript §2.1 (synchronous request/response;
+  deterministic / template-first). ADR-0072 §8.2 names this
+  ADR's §2.4 Python service-boundary requirement as the
+  prerequisite for any future Python-backed Wave 5
+  implementation; §8.3 names §3 domain 6 (multi-agent
+  simulation orchestration) + ADR-0028 BEAM coordination
+  layer as the prerequisite for any future BEAM-orchestrated
+  Wave 5 implementation (folds into ADR-0065 §7 Wave 9).
+  ADR-0072 does NOT authorize Python or BEAM Wave 5
+  implementation; those remain separate Founder slices.
 - Cited from ADR-0070 §7 (Regulator-Ready Foundation
   Doctrine — Examination-Ready Evidence Flows; doctrine-
   ADR landed 2026-05-31). ADR-0070 cites this ADR's §6
