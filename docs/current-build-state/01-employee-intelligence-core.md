@@ -359,25 +359,53 @@ contracts).
    safe aggregation of permissioned signals across an org's
    employee twins (likely lands as a future CAR Sub-box; not yet
    designed).
-9. **Otzar Wave 3 — Scoped Twin Proactivity** — **DESIGN LANDED
-   at ADR-0068 (2026-05-31)** as a pull-based computed-on-read
-   `proactive_cards?[]` sidecar on `getMyTwin` derived purely
-   from existing self-scoped substrate (Wave 5 PROPOSED/ACCEPTED
-   readers + Wave 4A wallet-stale signal + Wave 4C cross-
-   conversation rollup + `OtzarProposedPattern.reviewed_at`
-   periodic check-in). 5 closed-vocab card_types at v1
-   (`ACCEPTED_PATTERN_REMINDER` + `PROPOSED_PATTERN_REVIEW_AVAILABLE`
+9. ~~**Otzar Wave 3 — Scoped Twin Proactivity**~~ —
+   **IMPLEMENTATION LANDED at PR #127 `8474863` (2026-05-31)**
+   per ADR-0068. NEW `apps/api/src/services/otzar/proactivity.service.ts`
+   ships the `assembleProactiveCards` pure-function helper +
+   closed-vocab type set + `PROACTIVE_CARD_TEMPLATES` (locked
+   copy verbatim per ADR-0068 §5) + `PROACTIVE_CARDS_MY_TWIN_MAX
+   = 4` + `ALIGNMENT_CHECK_IN_DAYS = 14`. `MyTwinView` extended
+   with optional `proactive_cards?` sidecar; `GetMyTwinInput`
+   extended with optional `include_proactive_cards?` opt-out;
+   `GET /api/v1/otzar/my-twin` accepts
+   `?include_proactive_cards=true|false` querystring (typos →
+   default; never 400). 5 closed-vocab card_types live:
+   `ACCEPTED_PATTERN_REMINDER` + `PROPOSED_PATTERN_REVIEW_AVAILABLE`
    + `STALE_CONTEXT_REFRESH_SUGGESTED` + `DRIFT_REVIEW_SUGGESTED`
-   + `ALIGNMENT_CHECK_IN`); cap 4 cards per response;
-   `include_proactive_cards: false` opt-out; deterministic
-   `card_key` for client-side dismiss; NO `NotificationService`
-   integration at v1 (Twin-as-source semantic forward-substrate);
-   NO `conductSession` preamble; NO external delivery; NO
-   autonomous execution; NO Action creation; NO Control Tower
-   frontend; NO LLM-generated text; NO manager visibility; NO
-   schema migration; NO new audit literal. Implementation slice
-   forward-substrate behind separate Founder authorization per
-   ADR-0068 §"Founder authorization".
+   + `ALIGNMENT_CHECK_IN`. Deterministic SHA-256 16-char
+   `card_key` (hashes only SAFE components: card_type +
+   source_signal_type + closed-vocab discriminator + ISO day) so
+   the client can persist a local dismiss across same-day reads.
+   RULE 13 + RULE 18 substrate-honest correction surfaced
+   inline: Wave 4A `analyzeStaleContextForCaller` + Wave 4C
+   `analyzeDriftRollupForCaller` + Wave 5
+   `OtzarProposedPatternService.list()` all emit audit +
+   re-validate session, so Wave 3 cannot consume them from
+   inside `getMyTwin` without violating ADR-0068 §11 "ZERO new
+   audit row". Resolved via 3 NEW additive pure helpers
+   (`computeStaleContextLabelForEntity`,
+   `computeDriftRollupLabelForEntity`,
+   `findOldestPendingProposedForOwner`) that share the
+   derivation logic verbatim without audit emission. Existing
+   Wave 4A/4C/5 routes preserved unchanged (RULE 1 additive
+   only). ZERO `NotificationService` integration. ZERO
+   `conductSession` / `assembleContext` touch. ZERO Action /
+   `OtzarProposedPattern` / `MemoryCapsule` /
+   `OtzarConversation` / `IntelligencePattern` mutation. ZERO
+   external delivery. ZERO LLM-generated text. ZERO manager
+   visibility. ZERO schema migration. ZERO new audit literal. 18
+   integration tests + 90/90 Wave 5/6A/6B/4A/4C regression
+   preserved. Forward-substrate after closure: persistent
+   `ProactiveCardDismissal` model; Twin-as-source
+   `NotificationService` extension; `conductSession`
+   proactivity preamble; NEW `/proactive-cards` route; external
+   delivery via Section 4 connectors; LLM-generated proactive
+   text; background scheduler / cadence persistence; Control
+   Tower proactivity UX (out-of-Foundation-scope). Closes
+   ADR-0052 §9 proactivity-vs-autonomy + ADR-0053 §5
+   "proactive suggestions" forward-queue entries at the
+   implementation register.
 
 ## Risks / forward-substrate
 
@@ -390,14 +418,14 @@ contracts).
 - The `role_scope_profile` continuity counts currently report
   totals; ADR-0053 reserves the `recent_` prefix for a future
   time-window contract change without breaking the response shape.
-- **Otzar Wave 3 Twin Proactivity (ADR-0068) is design-only**;
-  the implementation slice has not been authorized. Until
-  the implementation slice lands, `MyTwinView` does NOT carry
-  the `proactive_cards?` field; the Twin remains purely
-  reactive. The ADR is the canonical reference for any future
-  proactivity work — proactivity may not bypass the ADR's
-  closed-vocab + pull-only + owner-controlled posture without
-  a separate Founder authorization.
+- ~~Otzar Wave 3 Twin Proactivity (ADR-0068) is design-only~~
+  — **IMPLEMENTATION LANDED at PR #127 `8474863` (2026-05-31)**.
+  `MyTwinView.proactive_cards?` is LIVE. Future proactivity
+  extensions (persistent dismissal, Twin-as-source notification,
+  `conductSession` preamble, LLM-generated text, external
+  delivery, background scheduler, Control Tower UX) remain
+  forward-substrate behind separate Founder authorization per
+  ADR-0068 §"Forward queue".
 
 ---
 
