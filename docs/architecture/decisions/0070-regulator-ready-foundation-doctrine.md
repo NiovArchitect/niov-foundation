@@ -919,6 +919,17 @@ authorization slices have a canonical reference point.
   ADR's §8 security/privilege boundaries verbatim. ADR-0072
   does NOT authorize Wave 5 implementation; that remains a
   separate Founder slice.
+- Cited from ADR-0073 §7 + §17 (Section 5 Wave 6 Outcome-
+  Comparison Contract; design-only ADR landed 2026-05-31).
+  ADR-0073 §7 scoring posture + §17 no-leak doctrine
+  inherit this ADR's §9 legal-advice boundary verbatim;
+  forbidden copy extended for Wave 6 to include "best",
+  "best path", "winner", "score", "probability of
+  success", "ROI" so the comparison-matrix surface NEVER
+  produces winner selection / numeric scoring / fabricated
+  probabilistic claims at this Wave. ADR-0073 does NOT
+  authorize Wave 6 implementation; that remains a
+  separate Founder slice.
 
 ## Founder authorization
 

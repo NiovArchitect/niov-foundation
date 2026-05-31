@@ -552,9 +552,18 @@ authorization at its slice prompt:
   bidirectional back-citation; deterministic / template-
   first TypeScript v1; Python (ADR-0069 §2.4 boundary ADR
   required) and BEAM (Wave 9 / ADR-0069 §3 domain 6)
-  forward-substrate). Wave 5 implementation slice is
-  separate Founder authorization at its slice.
-- Wave 6: outcome comparison + scoring rubric.
+  forward-substrate). Wave 5 Option A deterministic /
+  template-first TypeScript implementation LANDED
+  2026-05-31 (PR #136; `e708fa7`).
+- Wave 6: outcome comparison + scoring rubric — design-only
+  contract LANDED 2026-05-31 at ADR-0073 (Section 5 Wave 6
+  Outcome-Comparison Contract; design-only; bidirectional
+  back-citation; deterministic TypeScript v1 rubric-first;
+  Python (ADR-0069 §2.4 boundary ADR required) and BEAM
+  (Wave 9 / ADR-0069 §3 domain 6) forward-substrate; NO
+  numeric scoring, NO winner selection at this Wave). Wave
+  6 implementation slice is separate Founder authorization
+  at its slice.
 - Wave 7: best-path recommender with evidence + findings.
 - Wave 8: governed transition to Action runtime.
 - Wave 9: multi-agent simulation orchestration.
@@ -614,6 +623,13 @@ The §1 long-term purpose statement + §5 safety doctrine
 - Cited from ADR-0072 §Bidirectional citations
   (Section 5 Wave 5 Candidate-Generation Contract;
   design-only; ADR-0072 closes ADR-0065 §7 Wave 5
+  forward-queue line at the contract register; this ADR
+  remains canonical at the long-term product-vision
+  tier; bidirectional back-citation per RULE 14 + RULE
+  20).
+- Cited from ADR-0073 §Bidirectional citations
+  (Section 5 Wave 6 Outcome-Comparison Contract;
+  design-only; ADR-0073 closes ADR-0065 §7 Wave 6
   forward-queue line at the contract register; this ADR
   remains canonical at the long-term product-vision
   tier; bidirectional back-citation per RULE 14 + RULE

@@ -910,6 +910,18 @@ authorization at its slice prompt:
 - Cited from ADR-0070 §Forward queue (Wave 5 legal-advice
   boundary inheritance; §9 vocabulary preserved verbatim
   at ADR-0072 §10).
+- Cited from ADR-0073 §Bidirectional citations (Section 5
+  Wave 6 Outcome-Comparison Contract; design-only ADR
+  landed 2026-05-31; ADR-0073 sits ABOVE ADR-0072 at the
+  contract register and consumes ALL 17 SAFE Wave 5
+  `PlaygroundCandidateView` fields verbatim as the
+  comparison-matrix input set; ADR-0073 §10 canonicalizes
+  the "Wave 6 calls Wave 5 internally" decision so the
+  comparison pipeline never accepts caller-supplied raw
+  candidate text; ADR-0073 does NOT modify ADR-0072 —
+  Wave 5 stays canonical at the candidate-generation
+  contract tier; bidirectional back-citation per RULE 14
+  + RULE 20).
 
 ## Founder authorization
 
