@@ -9,9 +9,9 @@
 
 ## Where we are
 
-- **Main HEAD:** `8474863` (Otzar Wave 3 v1 proactive_cards impl).
-- **Latest merged PR:** [#127](https://github.com/NiovArchitect/niov-foundation/pull/127) — Otzar Wave 3 v1 — scoped Twin proactivity proactive_cards sidecar (18 tests).
-- **Active branch / PR:** `section-1-wave-3-twin-proactivity-closeout-docs` (Wave 3 closeout docs).
+- **Main HEAD:** `5f61b5f` (Otzar Wave 3 closeout docs merged).
+- **Latest merged PR:** [#128](https://github.com/NiovArchitect/niov-foundation/pull/128) — Otzar Wave 3 closeout docs.
+- **Active branch / PR:** `adr-0069-elixir-beam-substrate-coherence-law` (ADR-0069 doctrine-ADR; design-only; awaiting PR).
 - **Section 1 status: PRODUCTION-GRADE COMPLETE for v1 drift-detection + Wave 5 review-gated proposed-pattern + Wave 6A + Wave 6B (active-pattern-consumption FULLY LIVE) 2026-05-31** — Wave 5 LANDED via ADR-0066 (PRs #113/#114/#115; `7661ba9` impl). **Wave 6A LANDED PR #121 `6b84a99`** (visibility half). **Wave 6B LANDED via ADR-0067 (PR #123) + impl PR #124 `625ddbf`** (influence half — sidecar field on AssembleContextSuccess + labeled L_ALIGNMENT prompt section in conductSession; reuses Wave 6A projection; ZERO score-boost; ZERO capsule pipeline mutation; ZERO new audit literal; ZERO schema migration; 14 integration tests). Symbiotic alignment loop closed at both visibility + influence registers.
 - **Section 6 status:** PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE — 6 live aggregates total (v1 4 + Wave 6 per-ActionType action-runtime health + Wave 7 org-level compliance-posture per ADR-0061 §8 forward queue; PRs #117 `2c4336a` + #119 `2b83116`); ZERO new audit literal across any Section 6 wave.
 - **Section 5 status: PARTIAL with Waves 1+2+3+4 LIVE** — Wave 1 ADR-0060 + Wave 2 inspector (3 routes) + Wave 3 ADR-0065 product-vision + **Wave 4 LANDED 2026-05-30 (PR #111)** — `PlaygroundScenario` Prisma model + 5 owner-first CRUD routes + 38 integration tests; ADMIN_ACTION audit; zero new audit literal; SAFE persistence layer for future Wave 5+ scenario engine.

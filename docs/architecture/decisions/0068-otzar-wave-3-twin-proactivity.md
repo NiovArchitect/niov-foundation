@@ -760,6 +760,16 @@ The implementation slice MUST preserve the existing Wave 5 /
   in the same commit).
 - Cites RULE 20 (this ADR's creation explicitly Founder-
   authorized).
+- Cited from ADR-0069 §3 domain 5 + §Forward queue
+  (Elixir/BEAM Substrate-Coherence Law for Living
+  Coordination; doctrine ADR landed 2026-05-31). ADR-0069
+  canonicalizes the future BEAM-backed proactive signal
+  pipeline (push-capable mode + background scheduler +
+  cadence persistence) as a BEAM strong-fit domain and
+  requires the §6 8-question architecture check before any
+  push-capable authorization slice. The Wave 3 v1 pull-only
+  surface stays TypeScript-owned per ADR-0069 §7
+  (TypeScript remains the product contract layer).
 
 ## Founder authorization
 
