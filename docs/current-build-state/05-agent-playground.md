@@ -501,8 +501,33 @@ authorization)**:
    Option C (BEAM) remain forward-substrate behind
    separate Founder authorization per ADR-0073 §Forward
    queue.
-6. **Wave 7 — best-path recommender** with evidence and
-   governance findings.
+6. **Wave 7 — best-path recommender with evidence and
+   governance findings** — design-only ADR LANDED
+   2026-05-31 at ADR-0074. Closed-vocabulary
+   recommendation contract consuming Wave 6
+   ComparisonResponse; computed-on-read; deterministic
+   priority-ladder selection rule with 10 gates + 11th
+   deterministic tie-breaker (NEVER a numeric score; NEVER
+   a winner declaration; recommendation is ADVISORY ONLY).
+   23 sub-decisions locking `BestPathRecommendationResponse`
+   shape + `AlternativeConsidered` 6-field shape + 4 closed
+   vocabularies (recommendation_reasons 11 + action_transition_readiness
+   8 + reason_not_recommended 10 + recommendation_mode 4) +
+   canonical "Wave 7 calls Wave 6 internally" decision +
+   bounded counts + ADR-0070 §9 legal-advice posture
+   inherited verbatim + extended (forbidden: "final
+   decision" / "the system decided" / "ranked #1" / "AI
+   approved") + mandatory `human_decision_required`
+   boolean per §16 + three-method comparison (Option A
+   deterministic TypeScript = v1; Option B Python requires
+   ADR-0069 §2.4 boundary ADR; Option C BEAM folds into
+   Wave 9) + future-generalization strategic context per
+   §22 (NOT authorizing personal-life automation /
+   consumer Otzar execution / trust-level delegation).
+   NO code / NO schema / NO new audit literal at ADR-0074.
+   Wave 7 implementation slice (Option A deterministic /
+   template-first TypeScript) is forward-substrate behind
+   separate Founder authorization.
 7. **Wave 8 — governed transition** from selected
    scenario to proposed Action plan (through Section 2
    Action runtime per §4 human-in-the-loop doctrine).

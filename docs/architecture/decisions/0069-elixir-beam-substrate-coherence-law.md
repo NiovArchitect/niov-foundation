@@ -608,6 +608,21 @@ authorization slices have a canonical reference point.
   Wave 6 implementation (folds into ADR-0065 §7 Wave 9).
   ADR-0073 does NOT authorize Python or BEAM Wave 6
   implementation; those remain separate Founder slices.
+- Cited from ADR-0074 §12 + §19 (Section 5 Wave 7 Best-Path
+  Recommendation Contract; design-only; landed 2026-05-31).
+  ADR-0074 §19 applies this ADR's §6 mandatory 8-question
+  architecture check to the Wave 7 v1 register and locks
+  v1 at TypeScript §2.1 (synchronous request/response;
+  deterministic priority-ladder; no LLM autonomy; no
+  numeric scoring). ADR-0074 §12.2 names this ADR's §2.4
+  Python service-boundary requirement as the prerequisite
+  for any future Python-backed Wave 7 implementation;
+  §12.3 names §3 domain 6 (multi-agent simulation
+  orchestration) + ADR-0028 BEAM coordination layer as the
+  prerequisite for any future BEAM-orchestrated Wave 7
+  implementation (folds into ADR-0065 §7 Wave 9). ADR-0074
+  does NOT authorize Python or BEAM Wave 7 implementation;
+  those remain separate Founder slices.
 - Cited from ADR-0070 §7 (Regulator-Ready Foundation
   Doctrine — Examination-Ready Evidence Flows; doctrine-
   ADR landed 2026-05-31). ADR-0070 cites this ADR's §6
