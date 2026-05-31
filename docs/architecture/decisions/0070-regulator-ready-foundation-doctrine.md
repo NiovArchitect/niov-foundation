@@ -894,6 +894,20 @@ authorization slices have a canonical reference point.
   (long-form companion) +
   `project_elixir_beam_canonical_division_of_labor.md`
   (ADR-0069 long-form companion; cross-referenced at §7).
+- Cited from ADR-0071 (Section 7 Cross-Scope Audit
+  Verify-Chain Design; design-only ADR landed 2026-05-31).
+  ADR-0071 operationalizes this ADR's §Forward queue item
+  1 ("Section 7 cross-chain `verify-chain` scope
+  expansion") at the design contract register; closes that
+  forward-queue reservation at the design tier. ADR-0071
+  §10 explicitly preserves ADR-0070's §3.7 examination-
+  room boundary + §3.10 scoped regulator access never
+  raw + §8 security/privilege boundaries + §9 legal-
+  advice boundary; verify-chain is a chain-integrity
+  primitive that future Examination Room / Evidence
+  Package / Legal Hold ADRs may compose against, but is
+  not itself the examination room, evidence package, or
+  legal-hold surface.
 
 ## Founder authorization
 
