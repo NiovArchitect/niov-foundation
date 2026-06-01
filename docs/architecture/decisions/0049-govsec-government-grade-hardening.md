@@ -1456,6 +1456,30 @@ it). D2-C / ip_whitelist / `getOrgSettingsOrDefaults` deferred to **GOVSEC.7**;
 GOVSEC.7 untouched. CONSOLE.1 not started; no new arc. Founder authorization explicit
 at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-CLOSURE-EXECUTE-VERIFY-AUTH]`.
 
+## GOVSEC.6 AI/Agent Abuse + Confused-Deputy Hardening Implementation Note — GAP-D1 + GAP-D2 (2026-06-01)
+
+Per `[FOUNDER-RUNTIME-ACTIVATION-CLARIFICATION-NO-MORE-PERMANENT-STATIC-ONLY-DEFAULT]` + `[FOUNDER-PREVIEW-TO-OPERATING-STATE-GRADUATION-AUTH]`. GOVSEC.6 closure criteria (per §Closure Criteria above) cite three substrate requirements: AI-grantor rejection + SESSION_ONLY-for-AI-grants enforced in code; confused-deputy chains blocked; output-handling / prompt-leak controls exist.
+
+**Substrate state at this Note** (pre-flight grep verification per RULE 12):
+
+- AI-grantor rejection (RULE 0 — AI cannot grant to AI): ENFORCED at `packages/database/src/queries/permission.ts:106-111` via `assertSovereigntyRules`. Tests at `tests/unit/permission.test.ts:205` (AI_AGENT → AI_AGENT rejected) + `:228` (AI_AGENT → PERSON allowed) + `tests/integration/action-propose-permission-grant-handler.test.ts:514` (sovereignty violation surfaces at Action runtime tier).
+- SESSION_ONLY default for AI grantor: ENFORCED at `packages/database/src/queries/permission.ts:121-123` (`defaultDurationFor`). Test at `tests/unit/permission.test.ts:277`.
+- LONG_TERM / PERMANENT PERSON-only: ENFORCED at `permission.ts:97-104`. Tests at `tests/unit/permission.test.ts:138` + `:160`.
+- AI restricted-class sovereignty (Step 3 NEGOTIATE cap at FULL → SHORT_TERM): ENFORCED at `apps/api/src/services/cosmp/negotiate.service.ts:142` (`isRestrictedAiClass`) + `:231` (cap applied during NEGOTIATE Step 3).
+- Confused-deputy at Action create-time: ENFORCED structurally at `apps/api/src/services/action/action.service.ts:553` + `:593` + `:644` + `:695` + `:737` (every Action create path sets `source_entity_id: callerEntityId` from the validated session); idempotency-key mismatch denied at `:491`.
+- Output-handling / prompt-leak: ENFORCED at `tests/unit/no-leak-guard.test.ts` (2 anchor tests) + RULE 16 no-console anchor at `tests/unit/no-console-in-api-src.test.ts`.
+
+**This Note's substrate addition** — composable defense-in-depth helper module for future C2+ connector adapters + future Twin/LLM runtime call-sites that propose grants outside the canonical DB path:
+
+- NEW `apps/api/src/services/govsec/agent-abuse-guard.ts` — pure-function guards: `assertNotConfusedDeputy` (Action ownership) + `assertAiGrantConstraints` (RULE 0 re-asserted at higher layers) + `assertSameOrgConnectorTarget` (cross-tenant connector pre-flight) + `assertAiAgentMayInvokeConnector` (AI_AGENT cannot directly drive write-intent connector calls; routes through Action runtime under human approval per ADR-0084 + ADR-0046). Closed-vocab failure-code enum (6 codes). No DB I/O. No audit emission. Forward-substrate for C2+ connector code + future LLM runtime + future Twin-initiated grant proposals.
+- NEW `tests/unit/govsec-6-agent-abuse-guard.test.ts` — 18 tests across confused-deputy, AI-grantor invariants (AI→AI / AI grantor LONG_TERM / AI grantor PERMANENT / multiple-violation precedence), cross-tenant denial (same-org + cross-tenant + orphan-org-id), AI_AGENT connector pre-flight (PERSON allowed read+write / AI_AGENT allowed read only / AI_AGENT denied write), and closed-vocab failure-code coverage assertion.
+
+**Bounded scope of this Note** — defense-in-depth helper + unit tests only. The substrate enforcement at DB + Action create-time tiers is already LIVE; integration coverage at Action runtime tier already exists at `tests/integration/action-propose-permission-grant-handler.test.ts:514`. Connector-tier integration coverage will land naturally with C2 Slack read-first runtime (where the new helpers compose into the real adapter pre-flight). No new audit literal. No schema migration. No new route. No mutation to existing services.
+
+**GOVSEC.6 graduation:** Section 10 GOVSEC.6 row moves from `IN_FLIGHT` → **`SUBSTRATE_READY`** (helpers + tests landed). Final `CLOSED` status will land when (a) the helpers compose into a live connector adapter (C2+) and (b) an adversarial connector-tier integration test proves cross-tenant denial under attack against a real adapter.
+
+**Recommended next slice:** C2 Slack read-first connector runtime (Classification E) — first real consumer of these helpers. Then GOVSEC.6 graduates to `CLOSED`.
+
 ## References / Source Notes (retrieved 2026-05-20)
 
 Standards sources are listed in §Standards Basis with URLs. Internal references:
