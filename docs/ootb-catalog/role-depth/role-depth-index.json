@@ -1,0 +1,206 @@
+{
+  "$comment": "Machine-readable index of the Wave 2.1 role-depth Markdown files. Per [FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION-AUTH] + [FOUNDER-ADDENDUM-OTZAR-ADMINISTRATOR-AS-FIRST-CLASS-ROLE] + [FOUNDER-ADDENDUM-OTZAR-ADMIN-TWIN-AS-FIRST-CHAMPION-DGI-EXPERIENCE]. Static catalog only — no permissions, no runtime activation.",
+  "index_version": "wave-2-1-v1.0.0",
+  "generated_at": "2026-06-01T00:00:00.000Z",
+  "doctrine_lines": [
+    "Otzar is Domain General Intelligence inside governed enterprise boundaries.",
+    "Admins govern the setup. Dandelion guides and accelerates the setup. Foundation authorizes activation. DMWs scope memory.",
+    "Dandelion is not just onboarding; Dandelion is organizational seeding intelligence.",
+    "Dandelion produces proposed maps. Foundation turns approved maps into governed capability.",
+    "The Otzar Admin is the first champion of the company's governed intelligence layer.",
+    "The Admin Twin should make governance feel intelligent, not administrative.",
+    "Admins govern how memory is scoped; they do not get blanket access to private memory.",
+    "Each company's intelligence remains inside its own governed silo."
+  ],
+  "files": [
+    {
+      "slug": "otzar-administrator",
+      "depth": "DEEP",
+      "role_family": "Otzar Admin / Governance Steward",
+      "wave_2_role_ids": [],
+      "note": "First-class role per Founder addendum. Admin Twin = first DGI experience. NEW in Wave 2.1; no Wave 2 role.json entry.",
+      "admin_twin_aha_count": 12
+    },
+    {
+      "slug": "executive-assistant",
+      "depth": "DEEP",
+      "role_family": "Executive Support",
+      "wave_2_role_ids": ["role.executive-assistant.v1"],
+      "note": "Wave 2's deepest example, ported into role-depth Markdown format."
+    },
+    {
+      "slug": "ceo-founder",
+      "depth": "DEEP",
+      "role_family": "Executive",
+      "wave_2_role_ids": ["role.ceo.v1"],
+      "note": "Founder + CEO combined per Wave 2 SUBSUMED status."
+    },
+    {
+      "slug": "cto",
+      "depth": "DEEP",
+      "role_family": "Executive",
+      "wave_2_role_ids": [],
+      "note": "NEW in Wave 2.1 (Wave 2 NOT_YET_MODELED; addresses Founder addendum priority)."
+    },
+    {
+      "slug": "product-owner-product-manager",
+      "depth": "DEEP",
+      "role_family": "Product",
+      "wave_2_role_ids": ["role.product-manager.v1"]
+    },
+    {
+      "slug": "software-engineer",
+      "depth": "DEEP",
+      "role_family": "Engineering",
+      "wave_2_role_ids": ["role.software-engineer.v1"]
+    },
+    {
+      "slug": "board-member",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Board / Governance",
+      "wave_2_role_ids": ["role.board-member.v1"],
+      "subsumed_roles": ["Board Chair", "Investor Observer"]
+    },
+    {
+      "slug": "cmo",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Executive",
+      "wave_2_role_ids": [],
+      "note": "NEW in Wave 2.1 (Wave 2 NOT_YET_MODELED)."
+    },
+    {
+      "slug": "coo",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Executive",
+      "wave_2_role_ids": ["role.coo.v1"]
+    },
+    {
+      "slug": "cfo",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Executive",
+      "wave_2_role_ids": ["role.cfo.v1"]
+    },
+    {
+      "slug": "chro",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Executive",
+      "wave_2_role_ids": ["role.chro.v1"]
+    },
+    {
+      "slug": "general-counsel",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Legal / Compliance",
+      "wave_2_role_ids": ["role.general-counsel.v1"]
+    },
+    {
+      "slug": "project-program-manager",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Product / Program",
+      "wave_2_role_ids": ["role.project-manager.v1"]
+    },
+    {
+      "slug": "ai-engineer-ml-engineer",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Engineering / AI",
+      "wave_2_role_ids": [],
+      "note": "NEW in Wave 2.1 (Wave 2 NOT_YET_MODELED). Covers AI Engineer + ML Engineer."
+    },
+    {
+      "slug": "researcher-data-scientist-ux-researcher",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Research / Data",
+      "wave_2_role_ids": [],
+      "note": "NEW in Wave 2.1 (Wave 2 NOT_YET_MODELED). Covers Researcher + Data Scientist + UX Researcher."
+    },
+    {
+      "slug": "public-relations-communications",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Marketing / Communications",
+      "wave_2_role_ids": [],
+      "note": "NEW in Wave 2.1 (Wave 2 NOT_YET_MODELED)."
+    },
+    {
+      "slug": "sales-manager-account-executive",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Sales / Revenue",
+      "wave_2_role_ids": ["role.account-executive.v1"],
+      "note": "Sales Manager NEW in Wave 2.1 + Account Executive ported from Wave 2."
+    },
+    {
+      "slug": "customer-success-support-lead",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Customer",
+      "wave_2_role_ids": ["role.customer-success-manager.v1"],
+      "note": "Support Lead NEW in Wave 2.1 + CSM ported from Wave 2."
+    },
+    {
+      "slug": "it-security-grc",
+      "depth": "SUBSTANTIVE",
+      "role_family": "IT / Security / Compliance",
+      "wave_2_role_ids": ["role.it-admin.v1", "role.compliance-officer.v1"],
+      "note": "Consolidates IT Admin + Security + GRC + Compliance Officer per Founder direction."
+    },
+    {
+      "slug": "operations-manager",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Operations",
+      "wave_2_role_ids": [],
+      "note": "NEW in Wave 2.1 (Wave 2 NOT_YET_MODELED)."
+    },
+    {
+      "slug": "general-employee-individual-contributor",
+      "depth": "SUBSTANTIVE",
+      "role_family": "Individual Contributor",
+      "wave_2_role_ids": [],
+      "note": "NEW in Wave 2.1 (Wave 2 NOT_YET_MODELED). Self-scoped; surveillance is the central failure mode."
+    }
+  ],
+  "wave_2_role_ids_now_covered": [
+    "role.executive-assistant.v1",
+    "role.ceo.v1",
+    "role.coo.v1",
+    "role.cfo.v1",
+    "role.chro.v1",
+    "role.general-counsel.v1",
+    "role.product-manager.v1",
+    "role.project-manager.v1",
+    "role.account-executive.v1",
+    "role.customer-success-manager.v1",
+    "role.software-engineer.v1",
+    "role.it-admin.v1",
+    "role.compliance-officer.v1",
+    "role.board-member.v1"
+  ],
+  "wave_2_role_ids_still_starter_depth_in_role_json": [
+    "role.engineering-manager.v1"
+  ],
+  "depth_status_summary": {
+    "DEEP": 6,
+    "SUBSTANTIVE": 15,
+    "TOTAL_FILES": 21,
+    "WAVE_2_NOT_YET_MODELED_ROLES_NOW_COVERED": [
+      "CTO", "CMO", "Sales Manager", "Public Relations", "AI Engineer", "ML Engineer",
+      "Researcher / Research Scientist", "Data Scientist", "UX Researcher",
+      "Support Lead", "Operations Manager", "General Employee / Individual Contributor",
+      "Otzar Administrator"
+    ]
+  },
+  "subsequent_adr_queue": [
+    "Section 9 Workflows ADR (workflow doctrine + 5 maturity stages)",
+    "Dandelion Activation ADR (Stage A preview LIVE; Stage B-F forward-substrate)",
+    "Section 8 Billing / Entitlements ADR ($250 base + add-ons per Founder)",
+    "Section 4 MCP / Connector Strategy ADR (Slack first per Wave 6; broader plan)"
+  ],
+  "source_adr_refs": [
+    "ADR-0080",
+    "ADR-0058",
+    "ADR-0070",
+    "ADR-0026",
+    "ADR-0036",
+    "ADR-0048",
+    "ADR-0050",
+    "ADR-0057",
+    "ADR-0078",
+    "ADR-0079"
+  ]
+}

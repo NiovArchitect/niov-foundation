@@ -1,6 +1,6 @@
 # ADR-0080 — Out-of-the-Box Role, Tool, Workflow, Connector, and Dandelion Onboarding Ontology for Digital Twins
 
-**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (governed context envelope addendum — Wave 2 lands the catalog with envelope metadata; see §17) · **Amendment 2** Accepted 2026-06-01 (Wave 3 CT/Dandelion read-only preview LIVE + deep-role-examples addendum — see §18) · **Amendment 3** Accepted 2026-06-01 (Wave 6 connector-priority matrix output LIVE; suggest-only — see §19) · **Amendment 4** Accepted 2026-06-01 (CT Wave 6 surface LIVE — see §20)
+**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (governed context envelope addendum — Wave 2 lands the catalog with envelope metadata; see §17) · **Amendment 2** Accepted 2026-06-01 (Wave 3 CT/Dandelion read-only preview LIVE + deep-role-examples addendum — see §18) · **Amendment 3** Accepted 2026-06-01 (Wave 6 connector-priority matrix output LIVE; suggest-only — see §19) · **Amendment 4** Accepted 2026-06-01 (CT Wave 6 surface LIVE — see §20) · **Amendment 5** Accepted 2026-06-01 (Wave 2.1 role-depth Markdown layer LIVE + Domain General Otzar expansion + Otzar Administrator as first-class role + Admin Twin as first DGI champion + Dandelion-as-org-seeding-intelligence framing — see §21)
 **Nature:** Design-only at Wave 1; Wave 2 static seed catalog accompanies (no code, no schema, no routes, no runtime behavior). No Control Tower UI. No connector implementation. No LLM/Python/BEAM. No new audit literal. No mutation of existing `dandelion.service.ts`.
 **Founder authorization:** `[FOUNDER-ADR-0080-OOTB-DANDELION-ONTOLOGY-DESIGN-ONLY-AUTH]` (Wave 1) · `[FOUNDER-ADR-0080-WAVE-2-STATIC-SEED-CATALOG-AUTH]` (Wave 2) · `[FOUNDER-ADR-0080-WAVE-2-ADDENDUM-GOVERNED-CONTEXT-TRANSACTION-ENVELOPE]` (Wave 2 envelope amendment) · `[FOUNDER-ADR-0080-WAVE-3-CT-DANDELION-READ-ONLY-PREVIEW-AUTH]` (Wave 3) · `[FOUNDER-ADR-0080-WAVE-3-ADDENDUM-DEEP-ROLE-EXAMPLES-AND-COLLABORATION-MAPS]` (Wave 3 depth/collaboration addendum) · `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]` (autonomous continuation)
 **Parent doctrine:** ADR-0048 (governed personalization-orchestration), ADR-0052 (Otzar DGI), ADR-0027 (governance), ADR-0070 (regulator-ready Foundation), ADR-0069 (BEAM substrate-coherence law).
@@ -1351,3 +1351,123 @@ CT-side mirror is a verbatim copy of Foundation `connector-priority-matrix.json`
 Wave 6 closes end-to-end: matrix derivation (Foundation PR #169 `d2f9c44`) + matrix consumer surface (CT PR #19 `bf7f826`). The Section 4 first-real-connector decision now has the substrate input it needs; the matrix is one input, Dandelion-collected demand + customer launch profile + demo impact are the other forward inputs and are gated.
 
 Next autonomous slice: build-log entry capturing the Wave 3 + Section 10 ops + Wave 6 arc as a single archival record, OR begin the bounded subset of Wave 2.1 role-depth expansion (one or two roles at a time per PR).
+
+---
+
+## 21. Amendment 5 — Wave 2.1 role-depth Markdown layer + Domain General Otzar expansion (2026-06-01)
+
+**Authority:** `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION-AUTH]` + `[FOUNDER-ADDENDUM-OTZAR-ADMINISTRATOR-AS-FIRST-CLASS-ROLE]` + `[FOUNDER-ADDENDUM-OTZAR-ADMIN-TWIN-AS-FIRST-CHAMPION-DGI-EXPERIENCE]` + `[FOUNDER-DANDELION-AS-ORG-SEEDING-ACTIVATION-INTELLIGENCE-ADDENDUM]`.
+
+### 21.1 Wave 2.1 closeout — role-depth Markdown layer LANDED
+
+NEW: `docs/ootb-catalog/role-depth/` with:
+- `README.md` (canonical 29-section role-depth structure + Markdown-for-cognition rationale + governance posture)
+- 21 role-depth Markdown files (6 DEEP + 15 SUBSTANTIVE)
+- `role-depth-index.json` (machine-readable cross-reference; cites Wave 2 `role.*.v1` IDs the file maps to + NEW NOT_YET_MODELED roles now covered)
+
+**DEEP files (6)** — full canonical depth per Founder direction:
+
+1. `otzar-administrator.md` — first-class role per Founder addendum 2; Admin Twin = first DGI champion per addendum 3. 12 Admin Twin first-week aha moments + Admin + Dandelion co-seeding model + Admin Twin synthesis workflows (Company Intelligence Readiness Brief / Rollout Risk Map / Dandelion Completion Brief / Role Fit Review / Connector Value-Risk Brief / Approval Chain Gap Finder / Memory Scope Safety Brief / Policy Gap Finder / Audit Health Brief / First 7-Day Launch Plan / Department Readiness Ranking / Champion Enablement Pack).
+2. `executive-assistant.md` — Wave 2's deepest example, ported into role-depth Markdown format.
+3. `ceo-founder.md`
+4. `cto.md`
+5. `product-owner-product-manager.md`
+6. `software-engineer.md`
+
+**SUBSTANTIVE files (15)** — canonical depth, bounded:
+
+`board-member.md` · `cmo.md` · `coo.md` · `cfo.md` · `chro.md` · `general-counsel.md` · `project-program-manager.md` · `ai-engineer-ml-engineer.md` · `researcher-data-scientist-ux-researcher.md` · `public-relations-communications.md` · `sales-manager-account-executive.md` · `customer-success-support-lead.md` · `it-security-grc.md` · `operations-manager.md` · `general-employee-individual-contributor.md`
+
+**Substrate-honest depth status delta (Wave 3 → Wave 2.1):**
+- Wave 3 status: 1 DEEP + 14 STARTER + 13 NOT_YET_MODELED + 2 SUBSUMED.
+- After Wave 2.1: 6 DEEP role-depth Markdown files + 15 SUBSTANTIVE role-depth Markdown files. 13 NOT_YET_MODELED roles from Wave 3 are now covered: CTO + CMO + Sales Manager + Public Relations + AI Engineer + ML Engineer + Researcher / Research Scientist + Data Scientist + UX Researcher + Support Lead + Operations Manager + General Employee / IC + Otzar Administrator (NEW).
+- `roles.json` itself is NOT modified by Wave 2.1 — the Markdown layer extends the role substrate without mutating the JSON catalog or its envelope metadata. Wave 4+ Dandelion engine will compose against both layers.
+
+### 21.2 Domain General Otzar product framing
+
+Canonical product framing locked at this Amendment:
+
+- **"Otzar is Domain General Intelligence inside governed enterprise boundaries."**
+- **"Each company's intelligence remains inside its own governed silo."**
+- **"Otzar gives each enterprise a governed intelligence layer that understands its domain, tools, roles, workflows, memory, approvals, and policies — while keeping humans and governance in control."**
+
+**Vocabulary discipline** (per Founder direction):
+
+INTERNAL acceptable:
+- Domain General Intelligence
+- domain-contained intelligence
+- governed enterprise intelligence
+- company-contained intelligence
+- silo-contained intelligence
+- enterprise-specific intelligence layer
+
+PUBLIC FORBIDDEN:
+- universal AGI
+- autonomous AGI
+- "replaces employees" / "no human needed" / "fully self-governing company" / "AI runs the company"
+- "guaranteed compliant" / "regulator approved" / "no fine risk" (already forbidden per ADR-0070 neutral compliance vocabulary)
+
+### 21.3 Otzar Administrator as first-class role (addendum 2)
+
+Per `[FOUNDER-ADDENDUM-OTZAR-ADMINISTRATOR-AS-FIRST-CLASS-ROLE]`:
+
+- The Otzar Administrator is the **first internal champion** and the **first Domain General Intelligence experience**.
+- The Admin Twin is a **governance co-pilot** — never a settings helper, checklist bot, generic admin assistant, or SaaS configuration wizard.
+- New roles canonical: Otzar Administrator / Governance Admin / AI Operations Admin / Enterprise AI Admin / Automation Admin / Business Systems Admin (+ IT Admin / Security Admin / Compliance Admin / RevOps / BizOps Admin / Chief of Staff / Operations lead when acting in this capacity).
+- Admin Twin first-week aha moments locked at §22 of `otzar-administrator.md` (12 aha moments).
+- Admin Twin governance boundaries absolute: never browses private user memory raw; never bypasses approval chains; never suppresses audit; never produces employee scoring / surveillance / psychological profiling / cross-tenant access; never makes compliance certainty claims.
+- DMW education line canonical: *"Admins govern how memory is scoped; they do not get blanket access to private memory."*
+- Admin Dandelion path is first-class: *"Dandelion should onboard the Otzar Admin before it onboards the company."*
+
+### 21.4 Admin Twin as first DGI champion (addendum 3)
+
+Per `[FOUNDER-ADDENDUM-OTZAR-ADMIN-TWIN-AS-FIRST-CHAMPION-DGI-EXPERIENCE]`:
+
+- The Admin Twin is the **first proof that Otzar understands the company as a domain**.
+- It synthesizes across company / departments / roles / org chart / Dandelion progress / role-template fit / workflow readiness / connector readiness + risk / approval chains / delegated authority / policies / audit posture / memory scopes / DMW posture / compliance posture / deployment readiness / billing / first-week rollout plan / trust + adoption risks.
+- Admin Twin output is **scoped + auditable + explainable + non-surveillance + non-scoring + governance-focused + action-oriented**.
+- 16 Admin Twin synthesis workflows canonical at §16 of `otzar-administrator.md`.
+- "The Admin Twin should make governance feel intelligent, not administrative." — preserved verbatim.
+
+### 21.5 Dandelion-as-org-seeding-intelligence framing (addendum 4)
+
+Per `[FOUNDER-DANDELION-AS-ORG-SEEDING-ACTIVATION-INTELLIGENCE-ADDENDUM]`:
+
+Canonical framing updated:
+
+- **"Dandelion is not just onboarding; Dandelion is organizational seeding intelligence."**
+- **"Admins govern the setup. Dandelion guides and accelerates the setup. Foundation authorizes activation. DMWs scope memory."**
+- **"Dandelion maps the enterprise so Otzar can become useful without forcing the customer to hand-configure everything from zero."**
+- **"Dandelion produces proposed maps. Foundation turns approved maps into governed capability."**
+
+Dandelion 6-layer org seeding model:
+1. **Company seed** — CompanyDomainModel draft (industry / size / compliance / departments / governance).
+2. **Department seed** — DepartmentTemplate recommendations + workflows + tools + readiness ranking.
+3. **Role seed** — RoleTemplate / PermissionBundle / WorkflowTemplate / AhaMomentPack / SafeFallbackMode / DigitalTwinStarterProfile draft.
+4. **Tool / connector seed** — ConnectorPreset recommendations + read-first plan + write-risk list.
+5. **Workflow seed** — WorkflowTemplate recommendations + readiness map + approval-chain gaps.
+6. **Memory / DMW seed** — DMW scope recommendations + memory policy gaps + starter memory envelope.
+
+Dandelion outputs are **proposed maps**, never live authority. Foundation governance authorizes activation. Confidence labels: HIGH_CONFIDENCE / MEDIUM_CONFIDENCE / LOW_CONFIDENCE / REQUIRES_ADMIN_REVIEW / REQUIRES_USER_CONFIRMATION / BLOCKED_BY_POLICY.
+
+### 21.6 Forward substrate (queued)
+
+Per Founder implementation order:
+
+1. **Section 9 Workflows ADR** — workflow doctrine (governed business process, 5 maturity stages: Template-only → Recommendation-only → Proposed Action → Governed Execution → Continuous Optimization).
+2. **Dandelion Activation ADR** — Stage A preview LIVE; Stage B Assessment → Stage C Recommendation → Stage D Governance Review → Stage E Starter Envelope Assembly → Stage F Activation. Each stage Founder-authorization-gated.
+3. **Section 8 Billing / Entitlements ADR** — $250 base + seat add-ons + capability packs + usage add-ons + enterprise tier (per Founder Domain General activation expansion).
+4. **Section 4 MCP / Connector Strategy ADR** — broader plan covering Slack + Google Workspace + Project Tracker (Wave 6 matrix top 3) + Gmail / Outlook + GitHub + Salesforce / HubSpot + Travel / Expense (Concur / Ramp / Brex / Expensify). First connector candidate arc: Slack read-first → Google Workspace read-first → Project Tracker read-first.
+5. **CompanyDomainModel concept** — eventually formalized as a runtime model after Dandelion Activation lands.
+
+### 21.7 Wave 2.1 does NOT do
+
+- Modify `roles.json` (the Markdown layer extends, does not mutate).
+- Add Prisma schema, route, service, runtime activation.
+- Grant permissions from templates.
+- Create DigitalTwinStarterProfiles at runtime.
+- Activate Dandelion runtime.
+- Add billing / Workflows runtime.
+- Add LLM / Python / BEAM.
+- Add new audit literal.
+- Mutate `dandelion.service.ts`.
