@@ -1,0 +1,166 @@
+{
+  "$schema": "./readiness.schema.json",
+  "kind": "ConnectorReadiness",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "ConnectorReadiness",
+    "human_readable_summary": "Microsoft 365 connector readiness substrate per ADR-0084. Spans Teams / Outlook / SharePoint / OneDrive via Microsoft Graph API.",
+    "model_usage_notes": "Suggest-only. Activation requires Foundation governance + map-region approval + per-connector RULE 21 research arc completion.",
+    "scope_defaults": ["TENANT_SCOPED", "CONNECTOR_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_APPROVED", "GOVERNANCE_GATED_ACTIVATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/connector-readiness/microsoft-365.json",
+      "version_tag": "connector-readiness-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED when consumed"],
+    "policy_purpose": "READINESS_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "readiness.microsoft-365.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ConnectorReadiness",
+      "connector_name": "Microsoft 365",
+      "connector_family": "Workspace / Knowledge + Collaboration",
+      "source_adr_refs": ["ADR-0084", "ADR-0083", "ADR-0082", "ADR-0080", "ADR-0026", "ADR-0019", "ADR-0024", "RULE 0", "RULE 21"],
+      "official_docs_refs": [
+        "https://learn.microsoft.com/en-us/graph/auth/auth-concepts",
+        "https://learn.microsoft.com/en-us/graph/permissions-overview",
+        "https://learn.microsoft.com/en-us/graph/permissions-reference",
+        "https://learn.microsoft.com/en-us/entra/identity-platform/scopes-oidc"
+      ],
+      "MCP_posture": "Microsoft MCP servers emerging (community + Microsoft-affiliated). Substrate-honest evaluation deferred to a later C-slice pre-flight. Initial path is direct Microsoft Graph API via OAuth 2.0 + Entra ID app registration.",
+      "OAuth_model": "Microsoft Graph supports two permission models: delegated permissions (scopes acting on behalf of signed-in user) and application permissions (app roles for daemon scenarios without a user). OAuth 2.0 authorization code flow for delegated; client credentials flow for application permissions.",
+      "app_installation_model": "Entra ID (Azure AD) app registration per environment. App can be single-tenant or multi-tenant. Marketplace listing (AppSource) optional for distribution.",
+      "admin_consent_model": "Tenant administrator pre-approval required for application permissions and for higher-privilege delegated scopes. Admin consent must be granted in the App Registration BEFORE users can be prompted for these scopes — dynamic-scope requests not pre-approved will fail.",
+      "read_capabilities": [
+        "Mail.Read (delegated; read user mail)",
+        "Calendars.Read (delegated; read user calendars)",
+        "Files.Read / Files.Read.All (OneDrive / SharePoint file reads)",
+        "Sites.Read.All (SharePoint site reads)",
+        "Team.ReadBasic.All / Channel.ReadBasic.All / ChannelMessage.Read.All (Teams reads — admin consent required)",
+        "User.Read / User.Read.All (directory reads — admin consent required for .All variants)"
+      ],
+      "write_capabilities": [
+        "Mail.Send (send mail as signed-in user — disabled by default)",
+        "Calendars.ReadWrite (calendar create / update — disabled by default)",
+        "Files.ReadWrite / Files.ReadWrite.All (OneDrive / SharePoint writes — disabled by default)",
+        "Sites.ReadWrite.All (SharePoint writes — disabled by default; admin consent)",
+        "Chat.ReadWrite / Channel.SendMessage (Teams write — disabled by default)"
+      ],
+      "webhook_or_event_capabilities": [
+        "Microsoft Graph change notifications (webhooks) via subscriptions API",
+        "Subscriptions for mail / calendar / Drive / Teams resources",
+        "Webhook validation handshake (client must respond to validation token at subscription create)",
+        "Renewal required (max subscription lifetime varies by resource)"
+      ],
+      "risky_write_actions": [
+        "Mail.Send to external recipients",
+        "SharePoint / OneDrive external sharing (data egress)",
+        "Teams Channel.SendMessage to broad audiences",
+        "User.ReadWrite.All / Directory writes (admin scope — irreversible identity ops)"
+      ],
+      "default_mode": "READ_FIRST",
+      "required_approval_gates": [
+        "Map-region approval per ADR-0082 Amendment 1",
+        "Admin policy approval at activation per ADR-0084",
+        "Per-call governance approval for any write action",
+        "Workflow purpose binding per ADR-0081",
+        "Entra ID admin consent for app permissions + .All-suffixed delegated scopes"
+      ],
+      "dual_control_recommendations": [
+        "External-recipient mail sends — dual-control recommended",
+        "SharePoint / OneDrive external sharing — dual-control recommended",
+        "Directory writes — dual-control mandatory",
+        "Teams Channel.SendMessage to org-wide channels — dual-control"
+      ],
+      "DMW_scope_implications": [
+        "Per-user delegated reads scope to PERSONAL DMW per ADR-0046 (Personal AI Agent context)",
+        "Application-permission reads scope to ENTERPRISE DMW (Enterprise AI Agent context)",
+        "SharePoint sites scoped per-site (team-scoped DMW)",
+        "Teams channels scoped per-channel (team-scoped DMW)",
+        "Sensitive sites / channels (HR / Legal / Compliance) excluded by Risk Map"
+      ],
+      "workflow_purpose_bindings": [
+        "ADR-0081 Stage 2: Outlook triage + summary recommendations",
+        "ADR-0081 Stage 2: Calendar conflict + preparation recommendations",
+        "ADR-0081 Stage 2: SharePoint document discovery",
+        "ADR-0081 Stage 3: Drafted Outlook replies awaiting user approval",
+        "ADR-0081 Stage 3: Drafted Teams messages awaiting user approval"
+      ],
+      "billing_pack_mapping": "Workspace / Knowledge Pack + Collaboration Pack families per ADR-0083 Amendment 1 §9.4 (mapped to both connector-pack.workspace-knowledge.v1 + connector-pack.collaboration.v1 depending on sub-tool).",
+      "Dandelion_map_dependencies": [
+        "Tool Map must approve Microsoft 365 (sub-tool list: Outlook / Teams / SharePoint / OneDrive)",
+        "Workflow Map must approve M365-bound workflows by purpose",
+        "Authority Map must approve send / share / write authority",
+        "Memory / DMW Map must approve M365 memory scope per surface",
+        "Risk Map must clear M365 (compliance-sensitive surfaces flagged)"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED at consume time",
+        "INVOKE_CONNECTOR + ACTION_* at C5+ runtime",
+        "Webhook subscription lifecycle audited (create / renew / expire)",
+        "Application-permission impersonation (which user acted-on) surfaced in audit"
+      ],
+      "secret_handling_requirements": [
+        "Entra ID client_id / client_secret per tenant via secret_ref env-var-NAMEs per ADR-0024 + ADR-0019",
+        "Certificate-based auth preferred for application permissions (vs client_secret)",
+        "Per-user OAuth tokens encrypted at ConnectorBinding row",
+        "Webhook clientState secret per subscription"
+      ],
+      "no_leak_rules": [
+        "Mail body / Teams message content / SharePoint file content never traverses responses outside the wallet's scope",
+        "User principal names / object IDs never exposed cross-tenant",
+        "Site / drive / channel IDs never exposed cross-tenant",
+        "client_secret / certificate private key never logged",
+        "Subscription clientState never logged"
+      ],
+      "tenant_isolation_requirements": [
+        "Per-tenant Entra ID tenant (Microsoft 365 is tenant-isolated)",
+        "Multi-tenant app pattern requires explicit per-customer admin consent flow",
+        "ConnectorBinding enforces wallet_id + entity scope on every API call",
+        "Same-org boundary absolute per ADR-0049"
+      ],
+      "rate_limit_notes": "Microsoft Graph applies per-app + per-tenant throttling (varies by service: Outlook ~10,000 req/10min per mailbox; SharePoint ~600 req/min per app; Teams varies). Exponential backoff + Retry-After header per Microsoft guidance.",
+      "testing_strategy": [
+        "Fixture-based per-service read tests (Mail / Calendar / Files / SharePoint / Teams)",
+        "Replay-mode integration tests",
+        "Webhook subscription validation + renewal tests",
+        "Multi-tenant isolation assertion tests",
+        "No-leak guard tests",
+        "Throttling 429 + Retry-After backoff tests"
+      ],
+      "implementation_risks": [
+        "Admin consent surface is the main onboarding friction — Founder pricing decision may want this pre-approved at install",
+        "Confused-deputy via application permissions: app acting without a user requires explicit per-call attribution",
+        "Dynamic scope requests not pre-approved in App Registration will fail silently — implementation must list scopes upfront",
+        "Teams compliance recording surface is sensitive — keep excluded until explicit governance review",
+        "SharePoint external sharing is a major data-egress risk — keep disabled until C-write slice"
+      ],
+      "first_slice_recommendation": "C5 Microsoft 365 read-first connector runtime — Outlook + Calendar + OneDrive metadata + SharePoint site reads via Microsoft Graph delegated OAuth. Teams reads deferred to C5.5 (admin-consent-heavy). NO writes at C5. After C2 / C3 / C4 + GOVSEC.6.",
+      "readiness_scoring": {
+        "first_week_aha_value": 8.0,
+        "API_maturity": 9.0,
+        "OAuth_complexity": 8.0,
+        "read_value": 8.5,
+        "write_risk": 8.0,
+        "event_webhook_value": 7.5,
+        "enterprise_admin_complexity": 9.0,
+        "data_sensitivity": 9.0,
+        "MCP_fit": 6.5,
+        "implementation_complexity": 8.0,
+        "auditability": 8.0,
+        "DMW_scope_complexity": 8.0,
+        "workflow_binding_value": 8.5
+      },
+      "not_implemented_yet": true
+    }
+  ]
+}

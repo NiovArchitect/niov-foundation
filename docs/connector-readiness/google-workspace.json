@@ -1,0 +1,172 @@
+{
+  "$schema": "./readiness.schema.json",
+  "kind": "ConnectorReadiness",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "ConnectorReadiness",
+    "human_readable_summary": "Google Workspace connector readiness substrate per ADR-0084. Wave 6 matrix score 13.33 (Workspace TIER_1). Spans Gmail / Calendar / Drive / Docs / Sheets / Slides.",
+    "model_usage_notes": "Suggest-only. Activation requires Foundation governance + map-region approval + per-connector RULE 21 research arc completion.",
+    "scope_defaults": ["TENANT_SCOPED", "CONNECTOR_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_APPROVED", "GOVERNANCE_GATED_ACTIVATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/connector-readiness/google-workspace.json",
+      "version_tag": "connector-readiness-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED when consumed"],
+    "policy_purpose": "READINESS_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "readiness.google-workspace.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ConnectorReadiness",
+      "connector_name": "Google Workspace",
+      "connector_family": "Workspace / Knowledge",
+      "source_adr_refs": ["ADR-0084", "ADR-0083", "ADR-0082", "ADR-0080", "ADR-0026", "ADR-0019", "ADR-0024", "RULE 0", "RULE 21"],
+      "official_docs_refs": [
+        "https://developers.google.com/identity/protocols/oauth2",
+        "https://developers.google.com/identity/protocols/oauth2/service-account",
+        "https://knowledge.workspace.google.com/admin/apps/control-api-access-with-domain-wide-delegation",
+        "https://developers.google.com/gmail/api",
+        "https://developers.google.com/calendar",
+        "https://developers.google.com/drive",
+        "https://developers.google.com/workspace/admin/directory/v1/guides"
+      ],
+      "MCP_posture": "Google Workspace MCP servers exist in the broader MCP ecosystem (community + Google-affiliated). Substrate-honest evaluation deferred to C3 pre-flight. Initial path is direct REST API + read-first scopes via OAuth 2.0 user consent OR domain-wide delegation via service account.",
+      "OAuth_model": "OAuth 2.0 authorization code flow for per-user delegated access. Service account + JWT for server-to-server with domain-wide delegation (super admin grants the service account permission to act on behalf of users in the domain). Per-API scopes are NOT additive — each scope must be explicitly listed and periodically reviewed per Google best practice.",
+      "app_installation_model": "Google Cloud project + OAuth client + (optionally) Marketplace app listing for org-wide install. Domain-wide delegation registered at Admin Console > Security > Access and data control > API controls > Manage Domain Wide Delegation by super admin.",
+      "admin_consent_model": "Super admin consents at Admin Console for domain-wide delegation scopes. Per-user OAuth flow requires individual user consent unless app is internal + DWD-configured. Marketplace install requires admin approval.",
+      "read_capabilities": [
+        "gmail.readonly (read user mail metadata + content)",
+        "gmail.metadata (headers + labels only, no message body — lower-sensitivity alternative)",
+        "calendar.readonly (read user calendars)",
+        "calendar.events.readonly (read calendar events)",
+        "drive.readonly (read user Drive files)",
+        "drive.metadata.readonly (Drive file metadata without content — lower-sensitivity alternative)",
+        "documents.readonly (Google Docs read)",
+        "spreadsheets.readonly (Google Sheets read)",
+        "presentations.readonly (Google Slides read)",
+        "admin.directory.user.readonly (user directory read — admin scope)"
+      ],
+      "write_capabilities": [
+        "gmail.send / gmail.compose (send mail — disabled by default; high-trust write)",
+        "calendar.events (create / update events — disabled by default; coordination write)",
+        "drive (create / update / share files — disabled by default; data-egress risk)",
+        "documents / spreadsheets / presentations write — disabled by default"
+      ],
+      "webhook_or_event_capabilities": [
+        "Gmail push notifications via Cloud Pub/Sub watch on user mailbox",
+        "Calendar push notifications via watch / channels API",
+        "Drive changes feed + push notifications via watch / channels API",
+        "Webhook endpoints require HTTPS + verification token; integrate with verifyInboundHmac substrate"
+      ],
+      "risky_write_actions": [
+        "gmail.send to external recipients (legal-effect / external-commit risk)",
+        "Drive file sharing externally (data-egress risk)",
+        "Calendar event invitations to external attendees",
+        "Drive file deletion / permission revocation",
+        "Group / org-unit changes via Admin Directory (admin-scope writes)"
+      ],
+      "default_mode": "READ_FIRST",
+      "required_approval_gates": [
+        "Map-region approval per ADR-0082 Amendment 1 (Tool Map must approve Google Workspace)",
+        "Admin policy approval at activation per ADR-0084",
+        "Per-call governance approval for any write action",
+        "Workflow purpose binding per ADR-0081"
+      ],
+      "dual_control_recommendations": [
+        "External-recipient email sends — dual-control recommended",
+        "External Drive file sharing — dual-control recommended",
+        "Admin Directory writes (group / org-unit changes) — dual-control mandatory",
+        "Bulk operations (>20 items / window) — second-actor approval"
+      ],
+      "DMW_scope_implications": [
+        "Per-user Gmail / Calendar / Drive reads scope to user's PERSONAL DMW per ADR-0046 (Personal AI Agent twin context)",
+        "Domain-wide delegation reads scope to ENTERPRISE DMW (Enterprise AI Agent context)",
+        "Shared Drive content treated as team-scoped DMW",
+        "Forbidden categories from Memory / DMW Map (personal / executive / legal / HR) excluded by construction",
+        "Gmail metadata-only scope preferred when full body not required (data-minimization)"
+      ],
+      "workflow_purpose_bindings": [
+        "ADR-0081 Stage 2: Email triage summary recommendations (read-first)",
+        "ADR-0081 Stage 2: Calendar conflict / preparation recommendations",
+        "ADR-0081 Stage 2: Drive document discovery recommendations",
+        "ADR-0081 Stage 3: Drafted email replies awaiting user approval",
+        "ADR-0081 Stage 3: Drafted calendar invites awaiting user approval"
+      ],
+      "billing_pack_mapping": "Workspace / Knowledge Pack family per ADR-0083 Amendment 1 §9.4 (connector-pack.workspace-knowledge.v1).",
+      "Dandelion_map_dependencies": [
+        "Tool Map must approve Google Workspace (sub-tool list: Gmail / Calendar / Drive / Docs)",
+        "Workflow Map must approve email / calendar / Drive workflows by purpose",
+        "Authority Map must approve send / share / write authority",
+        "Memory / DMW Map must approve mail / calendar / Drive memory scope",
+        "Risk Map must clear Google Workspace (compliance-sensitive surfaces e.g., HIPAA / FERPA / SOX flagged)"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED at consume time",
+        "INVOKE_CONNECTOR + ACTION_* lifecycle at C3+ runtime (existing literals)",
+        "Webhook ingestion audited via verifyInboundHmac path",
+        "Domain-wide delegation impersonation events surfaced in audit chain (which user was impersonated for which API call)"
+      ],
+      "secret_handling_requirements": [
+        "OAuth client_secret + service account JSON key via per-tenant secret_ref env-var-NAME pattern per ADR-0024 + ADR-0019",
+        "User refresh tokens stored encrypted at ConnectorBinding row; never in logs",
+        "Service account private key rotation handled via deployment-target KMS",
+        "Token revocation on user offboarding propagated to ConnectorBinding"
+      ],
+      "no_leak_rules": [
+        "Email body / Drive file content never traverses responses outside the wallet's scope",
+        "User email addresses + Drive file IDs never exposed cross-tenant",
+        "OAuth client_secret + service account key never logged",
+        "Gmail message-IDs scope-checked before any external surface reference",
+        "Domain-wide-delegated impersonated-user identity never leaked between Twins"
+      ],
+      "tenant_isolation_requirements": [
+        "Per-tenant Google Cloud project recommended (or per-tenant OAuth client at minimum)",
+        "Domain-wide delegation per customer domain — never shared across customers",
+        "ConnectorBinding enforces wallet_id + entity scope on every API call",
+        "Same-org boundary absolute per ADR-0049"
+      ],
+      "rate_limit_notes": "Per-API quotas (Gmail: 1 billion quota units/day, ~250 units/sec/user; Drive: 1,000 req/100sec/user; Calendar: 1,000,000 req/day default). Exponential backoff + jitter required per Google best practice.",
+      "testing_strategy": [
+        "Fixture-based read tests per Google API",
+        "Replay-mode integration tests using recorded API responses",
+        "Webhook push-notification signature verification tests",
+        "Domain-wide delegation impersonation audit assertion tests",
+        "Tenant-isolation assertion tests",
+        "No-leak guard tests (no email body / Drive content / tokens in responses)"
+      ],
+      "implementation_risks": [
+        "Domain-wide delegation is a sensitive primitive — Google admin can grant a service account broad domain-wide access; admin review + audit trail mandatory",
+        "Confused-deputy via DWD: service account acting on behalf of users requires per-call user-attribution in audit",
+        "OAuth scope sprawl: implementation must keep scopes minimal + periodically reviewed per Google best practice",
+        "Gmail vs Gmail metadata scope tradeoff: prefer metadata when business case allows",
+        "External Drive sharing surface is a major data-egress risk — keep disabled until C5+"
+      ],
+      "first_slice_recommendation": "C3 Google Workspace read-first connector runtime — Gmail metadata + Calendar readonly + Drive metadata readonly via OAuth 2.0 per-user delegated tokens. NO writes at C3. Domain-wide delegation deferred to C3.5 (separate Founder authorization). Recommend after C2 Slack + GOVSEC.6 land.",
+      "readiness_scoring": {
+        "first_week_aha_value": 8.5,
+        "API_maturity": 9.5,
+        "OAuth_complexity": 7.5,
+        "read_value": 9.5,
+        "write_risk": 8.0,
+        "event_webhook_value": 7.5,
+        "enterprise_admin_complexity": 8.0,
+        "data_sensitivity": 9.0,
+        "MCP_fit": 7.0,
+        "implementation_complexity": 7.5,
+        "auditability": 8.5,
+        "DMW_scope_complexity": 8.0,
+        "workflow_binding_value": 9.0
+      },
+      "not_implemented_yet": true
+    }
+  ]
+}

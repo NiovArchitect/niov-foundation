@@ -1,0 +1,169 @@
+{
+  "$schema": "./readiness.schema.json",
+  "kind": "ConnectorReadiness",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "ConnectorReadiness",
+    "human_readable_summary": "GitHub connector readiness substrate per ADR-0084. Project / Engineering pack family. Prefer GitHub App over OAuth App pattern for installation-level auth + finer permissions + higher rate limits.",
+    "model_usage_notes": "Suggest-only. Activation requires Foundation governance + map-region approval + per-connector RULE 21 research arc completion.",
+    "scope_defaults": ["TENANT_SCOPED", "CONNECTOR_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_APPROVED", "GOVERNANCE_GATED_ACTIVATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/connector-readiness/github.json",
+      "version_tag": "connector-readiness-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED when consumed"],
+    "policy_purpose": "READINESS_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "readiness.github.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ConnectorReadiness",
+      "connector_name": "GitHub",
+      "connector_family": "Project / Engineering",
+      "source_adr_refs": ["ADR-0084", "ADR-0083", "ADR-0082", "ADR-0080", "ADR-0026", "ADR-0019", "ADR-0024", "RULE 0", "RULE 21"],
+      "official_docs_refs": [
+        "https://docs.github.com/en/apps/creating-github-apps",
+        "https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api",
+        "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/rate-limits-for-oauth-apps",
+        "https://docs.github.com/en/webhooks"
+      ],
+      "MCP_posture": "Official GitHub MCP server exists (github/github-mcp-server). Substrate-honest evaluation deferred to a later C-slice pre-flight. Initial path may be MCP server OR direct GitHub App with fine-grained installation tokens.",
+      "OAuth_model": "Two patterns: (1) GitHub App (preferred) — authenticates at the installation level, supports fine-grained permissions, 15,000 API requests/hour per installation; (2) OAuth App — authenticates as a user, less granular, 5,000 requests/hour. NIOV-preferred: GitHub App.",
+      "app_installation_model": "GitHub App created at github.com/settings/apps. Installed per organization / per user with explicit repository selection. Installation token retrieved via JWT-signed app credential exchange.",
+      "admin_consent_model": "Organization owner installs GitHub App + selects repositories. Per-repository permission grant captured at install. Enterprise organizations can require app review at the enterprise level.",
+      "read_capabilities": [
+        "contents:read (repository file reads)",
+        "metadata:read (repository metadata)",
+        "issues:read (issue + PR reads)",
+        "pull_requests:read (PR reads)",
+        "actions:read (workflow run reads)",
+        "checks:read (status check reads)",
+        "members:read (organization member reads — admin scope)"
+      ],
+      "write_capabilities": [
+        "issues:write (issue create / update / comment — disabled by default)",
+        "pull_requests:write (PR create / review / comment — disabled by default)",
+        "contents:write (file commits — disabled by default; code-modification risk)",
+        "actions:write (workflow run triggers — disabled by default)",
+        "administration:write (repo settings — disabled by default; admin scope)"
+      ],
+      "webhook_or_event_capabilities": [
+        "GitHub webhooks for issue / PR / push / workflow_run / installation events",
+        "Webhook signature verification via x-hub-signature-256 header (HMAC SHA-256 with shared secret) — direct fit for verifyInboundHmac substrate",
+        "Per-installation webhook delivery + replay via GitHub admin UI for missed events"
+      ],
+      "risky_write_actions": [
+        "contents:write (code commits — production-effect)",
+        "PR merge / close (production-effect)",
+        "Repository settings / branch protection changes (admin-effect)",
+        "Workflow run triggers (CI/CD effect)",
+        "Bulk operations across repositories"
+      ],
+      "default_mode": "READ_FIRST",
+      "required_approval_gates": [
+        "Map-region approval per ADR-0082 Amendment 1",
+        "Admin policy approval at activation per ADR-0084",
+        "Per-call governance approval for any write action",
+        "Workflow purpose binding per ADR-0081",
+        "Per-repository scope enforcement at install"
+      ],
+      "dual_control_recommendations": [
+        "contents:write to default branch — dual-control mandatory",
+        "PR merge — dual-control recommended for sensitive repos",
+        "Repository administration writes — dual-control mandatory",
+        "Workflow run triggers on production-deploy workflows — dual-control"
+      ],
+      "DMW_scope_implications": [
+        "Repository code / issues / PRs scoped to ENTERPRISE DMW (engineering domain knowledge)",
+        "Per-repository scope: sensitive repos (security / infra / customer-data) excluded by Risk Map",
+        "Public-repo content treated as public-source; private-repo content treated as same-org-only",
+        "PR review state + check state treated as workflow-coordination DMW",
+        "Author identity scoped to engineering team boundary"
+      ],
+      "workflow_purpose_bindings": [
+        "ADR-0081 Stage 2: PR review summary recommendations",
+        "ADR-0081 Stage 2: Issue triage recommendations",
+        "ADR-0081 Stage 2: CI failure analysis recommendations",
+        "ADR-0081 Stage 3: Drafted PR review comments awaiting human approval",
+        "ADR-0081 Stage 3: Drafted issue triage updates awaiting human approval",
+        "GitHub as workflow trigger: incoming webhook events → recommendation pipeline"
+      ],
+      "billing_pack_mapping": "Project / Engineering Pack family per ADR-0083 Amendment 1 §9.4 (connector-pack.project-engineering.v1).",
+      "Dandelion_map_dependencies": [
+        "Tool Map must approve GitHub",
+        "Workflow Map must approve GitHub-bound workflows (PR review / triage / release)",
+        "Authority Map must approve write authority per repository tier",
+        "Memory / DMW Map must approve repository-level memory scope",
+        "Risk Map must clear sensitive repositories (security / infra / customer-data excluded by default)"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED at consume time",
+        "INVOKE_CONNECTOR + ACTION_* at C-runtime",
+        "Webhook ingestion audited via verifyInboundHmac (x-hub-signature-256)",
+        "Per-installation + per-repository scope captured in audit metadata"
+      ],
+      "secret_handling_requirements": [
+        "GitHub App private key (PEM) per environment via secret_ref env-var-NAME per ADR-0019 + ADR-0024",
+        "Webhook shared secret per installation via secret_ref",
+        "OAuth App client_secret (if OAuth path chosen) via secret_ref",
+        "Installation token cached per-installation with short TTL; auto-refresh via app-JWT exchange"
+      ],
+      "no_leak_rules": [
+        "Repository file content / issue body / PR description never traverses responses outside the wallet's scope",
+        "GitHub user identity (login + email) never exposed cross-tenant",
+        "Repository names / owner names never exposed cross-tenant",
+        "GitHub App private key never logged",
+        "Webhook shared secret never logged",
+        "Installation tokens never logged"
+      ],
+      "tenant_isolation_requirements": [
+        "Per-tenant GitHub installation (GitHub App installed per organization)",
+        "Multi-tenant GitHub App pattern requires per-installation token scoping",
+        "ConnectorBinding enforces wallet_id + entity scope on every API call",
+        "Same-org boundary absolute per ADR-0049"
+      ],
+      "rate_limit_notes": "GitHub Apps: 15,000 req/hr per installation (REST); GraphQL has separate 5,000-point/hr quota + repository bonus. Secondary rate limits: 900 points/min REST + 2,000 points/min GraphQL. OAuth Apps: 5,000 req/hr (lower; reason GitHub App is preferred).",
+      "testing_strategy": [
+        "Fixture-based REST + GraphQL read tests",
+        "Replay-mode integration tests using recorded GitHub responses",
+        "Webhook x-hub-signature-256 verification tests against verifyInboundHmac",
+        "Per-installation tenant-isolation assertion tests",
+        "No-leak guard tests (no source code / tokens / secrets in responses)",
+        "Rate-limit retry tests"
+      ],
+      "implementation_risks": [
+        "Confused-deputy via installation-level auth: GitHub App acting across repositories needs per-call repository attribution in audit",
+        "Secondary rate limits hit harder than primary — implementation must surface secondary backoff",
+        "Repository-content writes are production-effect — keep disabled until late C-slice + dual-control",
+        "Default-branch protection-bypass scenarios — must respect branch protection rules",
+        "Public-vs-private repository scope confusion — explicit scope classification required"
+      ],
+      "first_slice_recommendation": "C-GitHub read-first connector runtime — GitHub App installation with metadata + contents + issues + pull_requests + checks read scopes. Webhook ingestion via x-hub-signature-256 + verifyInboundHmac. NO writes. Evaluate official github-mcp-server before direct API integration. After C2 Slack + GOVSEC.6.",
+      "readiness_scoring": {
+        "first_week_aha_value": 7.0,
+        "API_maturity": 9.5,
+        "OAuth_complexity": 7.0,
+        "read_value": 8.0,
+        "write_risk": 8.5,
+        "event_webhook_value": 9.0,
+        "enterprise_admin_complexity": 6.5,
+        "data_sensitivity": 8.0,
+        "MCP_fit": 9.0,
+        "implementation_complexity": 6.5,
+        "auditability": 9.0,
+        "DMW_scope_complexity": 7.0,
+        "workflow_binding_value": 8.0
+      },
+      "not_implemented_yet": true
+    }
+  ]
+}

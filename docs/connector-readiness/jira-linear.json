@@ -1,0 +1,276 @@
+{
+  "$schema": "./readiness.schema.json",
+  "kind": "ConnectorReadiness",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "ConnectorReadiness",
+    "human_readable_summary": "Jira / Linear project tracker readiness substrate per ADR-0084. Wave 6 matrix score 12.75 (Project / Engineering TIER_1). Two-vendor catalog item: Jira Cloud + Linear.",
+    "model_usage_notes": "Suggest-only. Activation requires Foundation governance + map-region approval + per-connector RULE 21 research arc completion. Jira and Linear treated as a coordinated pair given common downstream workflow purpose bindings.",
+    "scope_defaults": ["TENANT_SCOPED", "CONNECTOR_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_APPROVED", "GOVERNANCE_GATED_ACTIVATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/connector-readiness/jira-linear.json",
+      "version_tag": "connector-readiness-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED when consumed"],
+    "policy_purpose": "READINESS_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "readiness.jira-cloud.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ConnectorReadiness",
+      "connector_name": "Jira Cloud",
+      "connector_family": "Project / Engineering",
+      "source_adr_refs": ["ADR-0084", "ADR-0083", "ADR-0082", "ADR-0080", "ADR-0026", "ADR-0019", "ADR-0024", "RULE 0", "RULE 21"],
+      "official_docs_refs": [
+        "https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/",
+        "https://developer.atlassian.com/cloud/jira/platform/scopes-for-oauth-2-3LO-and-forge-apps/",
+        "https://developer.atlassian.com/cloud/jira/platform/rate-limiting/",
+        "https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/"
+      ],
+      "MCP_posture": "Atlassian official MCP server emerging; substrate-honest evaluation deferred to C4 pre-flight. Initial path is direct REST API via OAuth 2.0 3LO classic scopes.",
+      "OAuth_model": "OAuth 2.0 3LO (3-legged OAuth) for Cloud apps. Classic scopes recommended over granular scopes; keep total under 50 per Atlassian best practice. Forge apps for marketplace distribution; direct OAuth 2.0 3LO for direct integration.",
+      "app_installation_model": "Atlassian Developer Console app + OAuth 2.0 3LO client. Marketplace listing for org-wide install. Cloud app installed per-site (Jira Cloud instance).",
+      "admin_consent_model": "Site admin consents to app at OAuth flow / Marketplace install. Per-user grants captured at OAuth; site admin can revoke app site-wide.",
+      "read_capabilities": [
+        "read:jira-work (read issues / projects / boards — classic scope)",
+        "read:jira-user (read user directory)",
+        "read:issue:jira (read issue details)",
+        "read:project:jira (read project details)",
+        "read:board:jira-software (read agile board state)",
+        "JQL search via /rest/api/3/search (issue search)"
+      ],
+      "write_capabilities": [
+        "write:jira-work (create / update issues — disabled by default)",
+        "manage:jira-project (project management — disabled by default; admin-tier)",
+        "manage:jira-configuration (workflow / scheme changes — disabled by default)"
+      ],
+      "webhook_or_event_capabilities": [
+        "Jira webhooks for issue / sprint / version / worklog events",
+        "Webhook signature verification via Atlassian-provided HMAC secret + verifyInboundHmac substrate",
+        "Webhooks subscribed by app or by user with manage:jira-configuration"
+      ],
+      "risky_write_actions": [
+        "Issue status transitions (workflow effect)",
+        "Project / scheme modifications (irreversible operational risk)",
+        "User / group assignment changes",
+        "Bulk issue create / update"
+      ],
+      "default_mode": "READ_FIRST",
+      "required_approval_gates": [
+        "Map-region approval per ADR-0082 Amendment 1 (Tool Map + Workflow Map must approve Jira)",
+        "Admin policy approval at activation per ADR-0084",
+        "Per-call governance approval for any write action",
+        "Workflow purpose binding per ADR-0081"
+      ],
+      "dual_control_recommendations": [
+        "Project / scheme modifications — dual-control mandatory",
+        "Bulk issue writes (>20 issues / window) — second-actor approval",
+        "User-impact writes (assignee / reporter changes on >10 issues) — admin notification"
+      ],
+      "DMW_scope_implications": [
+        "Issue / project metadata scoped to ENTERPRISE DMW per Wave 2.1 §25 (engineering / project domain knowledge)",
+        "Sprint / board state scoped to team-scoped DMW",
+        "User-PII (assignee identity, reporter identity) treated as same-org-only — never cross-tenant",
+        "Comments / descriptions treated as project-scoped DMW; sensitive projects excluded by Risk Map"
+      ],
+      "workflow_purpose_bindings": [
+        "ADR-0081 Stage 2: Sprint risk summary recommendations",
+        "ADR-0081 Stage 2: Issue triage recommendations",
+        "ADR-0081 Stage 3: Drafted issue updates / comments awaiting human approval",
+        "ADR-0081 Stage 3: Cross-tool linkage proposals (Jira ↔ GitHub PRs / Slack threads)"
+      ],
+      "billing_pack_mapping": "Project / Engineering Pack family per ADR-0083 Amendment 1 §9.4 (connector-pack.project-engineering.v1).",
+      "Dandelion_map_dependencies": [
+        "Tool Map must approve Jira",
+        "Workflow Map must approve Jira-bound workflows (sprint / triage / release-readiness)",
+        "Authority Map must approve issue-write authority + project-admin authority",
+        "Memory / DMW Map must approve project / sprint memory scope",
+        "Risk Map must clear sensitive projects excluded (M&A / security / legal projects)"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED at consume time",
+        "INVOKE_CONNECTOR + ACTION_* at C4+ runtime",
+        "Webhook ingestion audited via verifyInboundHmac",
+        "Per-action point-cost surfaced in audit metadata (Jira points-based rate limit per March 2026 enforcement)"
+      ],
+      "secret_handling_requirements": [
+        "OAuth client_id / client_secret per tenant via secret_ref env-var-NAMEs per ADR-0024 + ADR-0019",
+        "Per-user refresh tokens stored encrypted at ConnectorBinding row; never in logs",
+        "Webhook HMAC secret per tenant via secret_ref"
+      ],
+      "no_leak_rules": [
+        "Issue content / description / comments never traverse responses outside the wallet's scope",
+        "Reporter / assignee user identity never exposed cross-tenant",
+        "Project keys / issue keys never exposed cross-tenant",
+        "Webhook HMAC secret never logged"
+      ],
+      "tenant_isolation_requirements": [
+        "Per-tenant Atlassian Cloud site (Jira Cloud is site-isolated by construction)",
+        "ConnectorBinding enforces wallet_id + entity scope on every API call",
+        "Same-org boundary absolute per ADR-0049"
+      ],
+      "rate_limit_notes": "Points-based + tiered quota rate limits enforced from March 2, 2026 (per Atlassian Developer docs). Each API call consumes points based on operation cost. Implementation must surface point-cost in audit metadata + back off on 429.",
+      "testing_strategy": [
+        "Fixture-based read tests against FixtureBasedConnectorAdapter pattern",
+        "Replay-mode integration tests using recorded Jira responses",
+        "Webhook signature verification tests",
+        "Points-based rate-limit backoff tests (fixture-mode 429 + Retry-After)",
+        "Tenant-isolation assertion tests",
+        "No-leak guard tests"
+      ],
+      "implementation_risks": [
+        "March 2026 rate-limit enforcement — must be points-aware from day one",
+        "Confused-deputy via 3LO: per-user token impersonation scope must be enforced in audit",
+        "Scope sprawl: keep <50 scopes per Atlassian best practice",
+        "Webhook delivery best-effort — replay strategy required"
+      ],
+      "first_slice_recommendation": "C4-A Jira Cloud read-first connector runtime — issue / project / board read via OAuth 2.0 3LO classic scopes. NO writes at C4-A. Webhook ingestion via verifyInboundHmac. After C2 Slack + C3 Google Workspace + GOVSEC.6.",
+      "readiness_scoring": {
+        "first_week_aha_value": 8.0,
+        "API_maturity": 8.5,
+        "OAuth_complexity": 6.5,
+        "read_value": 8.5,
+        "write_risk": 6.5,
+        "event_webhook_value": 8.0,
+        "enterprise_admin_complexity": 6.5,
+        "data_sensitivity": 7.0,
+        "MCP_fit": 7.0,
+        "implementation_complexity": 6.5,
+        "auditability": 7.5,
+        "DMW_scope_complexity": 6.5,
+        "workflow_binding_value": 9.0
+      },
+      "not_implemented_yet": true
+    },
+    {
+      "id": "readiness.linear.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ConnectorReadiness",
+      "connector_name": "Linear",
+      "connector_family": "Project / Engineering",
+      "source_adr_refs": ["ADR-0084", "ADR-0083", "ADR-0082", "ADR-0080", "ADR-0026", "ADR-0019", "ADR-0024", "RULE 0", "RULE 21"],
+      "official_docs_refs": [
+        "https://developers.linear.app/docs/oauth/authentication",
+        "https://developers.linear.app/docs/graphql/working-with-the-graphql-api",
+        "https://developers.linear.app/docs/graphql/webhooks"
+      ],
+      "MCP_posture": "Linear has official MCP server. Substrate-honest evaluation deferred to C4-B pre-flight; MCP layer likely reduces governance surface vs. direct GraphQL integration.",
+      "OAuth_model": "OAuth 2.0 authorization code flow. Scopes: read / write / admin / issues:create / comments:create. Personal API keys also available for individual-user automations (lower-trust path).",
+      "app_installation_model": "Linear OAuth app at developer settings + workspace-level install. Linear is single-workspace per Linear org; per-tenant install pattern.",
+      "admin_consent_model": "Workspace admin consents at OAuth install. Per-user token grants captured at install.",
+      "read_capabilities": [
+        "read scope: issues / projects / cycles / teams / users / labels",
+        "GraphQL queries via /graphql endpoint",
+        "Issue search + filter by team / cycle / state / assignee",
+        "Project read + roadmap state"
+      ],
+      "write_capabilities": [
+        "write scope: issue create / update / comment (disabled by default)",
+        "issues:create (narrower create-only scope)",
+        "comments:create (narrower comment-only scope)",
+        "admin scope (project / team management — disabled by default)"
+      ],
+      "webhook_or_event_capabilities": [
+        "Linear webhooks for issue / comment / project / cycle events",
+        "Webhook signature header verification per Linear docs",
+        "Subscribe via developer settings or programmatically per-team"
+      ],
+      "risky_write_actions": [
+        "Issue state transitions (workflow effect)",
+        "Project / cycle management writes",
+        "Bulk issue create / update"
+      ],
+      "default_mode": "READ_FIRST",
+      "required_approval_gates": [
+        "Map-region approval per ADR-0082 Amendment 1",
+        "Admin policy approval at activation per ADR-0084",
+        "Per-call governance approval for any write action",
+        "Workflow purpose binding per ADR-0081"
+      ],
+      "dual_control_recommendations": [
+        "Bulk issue writes — second-actor approval",
+        "Project / cycle structural changes — dual-control mandatory"
+      ],
+      "DMW_scope_implications": [
+        "Issue / project metadata scoped to ENTERPRISE DMW",
+        "Team / cycle state scoped to team-scoped DMW",
+        "Comments treated as project-scoped DMW; sensitive projects excluded by Risk Map",
+        "Linear is single-workspace per org so cross-org leakage risk is structurally lower than multi-tenant tools"
+      ],
+      "workflow_purpose_bindings": [
+        "ADR-0081 Stage 2: Sprint / cycle risk summary",
+        "ADR-0081 Stage 2: Issue triage recommendations",
+        "ADR-0081 Stage 3: Drafted issue / comment updates awaiting approval"
+      ],
+      "billing_pack_mapping": "Project / Engineering Pack family per ADR-0083 Amendment 1 §9.4 (connector-pack.project-engineering.v1).",
+      "Dandelion_map_dependencies": [
+        "Tool Map must approve Linear",
+        "Workflow Map must approve Linear-bound workflows",
+        "Authority Map must approve issue-write authority",
+        "Memory / DMW Map must approve Linear memory scope",
+        "Risk Map must clear sensitive projects"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED at consume time",
+        "INVOKE_CONNECTOR + ACTION_* at C4-B+ runtime",
+        "Webhook ingestion audited via verifyInboundHmac"
+      ],
+      "secret_handling_requirements": [
+        "OAuth client_id / client_secret per tenant via secret_ref env-var-NAMEs per ADR-0024 + ADR-0019",
+        "Per-user OAuth tokens encrypted at ConnectorBinding row",
+        "Webhook signing secret per tenant via secret_ref"
+      ],
+      "no_leak_rules": [
+        "Issue content / comments never traverse responses outside the wallet's scope",
+        "Linear user identity never exposed cross-tenant",
+        "Issue identifiers (TEAM-NNN format) never exposed cross-tenant",
+        "Webhook signing secret never logged"
+      ],
+      "tenant_isolation_requirements": [
+        "Per-tenant Linear workspace (Linear is workspace-isolated)",
+        "ConnectorBinding enforces wallet_id + entity scope on every API call",
+        "Same-org boundary absolute per ADR-0049"
+      ],
+      "rate_limit_notes": "Linear uses GraphQL query complexity limits. Standard limit ~1500 complexity points per minute per OAuth client. Implementation should query selectively and use webhooks for delta.",
+      "testing_strategy": [
+        "Fixture-based GraphQL read tests",
+        "Replay-mode integration tests using recorded Linear responses",
+        "Webhook signature verification tests",
+        "Tenant-isolation assertion tests",
+        "No-leak guard tests"
+      ],
+      "implementation_risks": [
+        "GraphQL query complexity — must be measured + bounded",
+        "Linear MCP server option — evaluate before direct GraphQL to reduce surface",
+        "Personal API keys vs OAuth — prefer OAuth for governance + audit trail"
+      ],
+      "first_slice_recommendation": "C4-B Linear read-first connector runtime — issue / project / cycle GraphQL queries via OAuth 2.0. NO writes at C4-B. Evaluate Linear MCP server before adopting direct GraphQL. After Jira C4-A or in parallel.",
+      "readiness_scoring": {
+        "first_week_aha_value": 7.5,
+        "API_maturity": 8.0,
+        "OAuth_complexity": 5.5,
+        "read_value": 8.0,
+        "write_risk": 6.0,
+        "event_webhook_value": 7.5,
+        "enterprise_admin_complexity": 5.0,
+        "data_sensitivity": 6.5,
+        "MCP_fit": 8.5,
+        "implementation_complexity": 5.5,
+        "auditability": 7.5,
+        "DMW_scope_complexity": 6.0,
+        "workflow_binding_value": 8.5
+      },
+      "not_implemented_yet": true
+    }
+  ]
+}

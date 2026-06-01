@@ -1,0 +1,167 @@
+{
+  "$schema": "./readiness.schema.json",
+  "kind": "ConnectorReadiness",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "ConnectorReadiness",
+    "human_readable_summary": "Slack connector readiness substrate per ADR-0084. RULE 21 research arc input for C2 first-real-connector decision. Wave 6 matrix score 16.00 (top of Collaboration TIER_1). Read-first by default; write actions disabled by default; risky writes approval-gated; map-region approval required.",
+    "model_usage_notes": "Readiness catalog informs implementation. Activation still requires Foundation governance authorization + map-region approval + per-connector RULE 21 research arc completion. Suggest-only — first real connector decision remains Founder-gated at C2.",
+    "scope_defaults": ["TENANT_SCOPED", "CONNECTOR_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_APPROVED", "GOVERNANCE_GATED_ACTIVATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/connector-readiness/slack.json",
+      "version_tag": "connector-readiness-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED when consumed", "INVOKE_CONNECTOR + ACTION_* at future C2+ runtime per ADR-0084"],
+    "policy_purpose": "READINESS_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "readiness.slack.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ConnectorReadiness",
+      "connector_name": "Slack",
+      "connector_family": "Collaboration",
+      "source_adr_refs": ["ADR-0084", "ADR-0083", "ADR-0082", "ADR-0080", "ADR-0026", "ADR-0019", "ADR-0024", "RULE 0", "RULE 21"],
+      "official_docs_refs": [
+        "https://docs.slack.dev/authentication/installing-with-oauth/",
+        "https://docs.slack.dev/reference/scopes/",
+        "https://docs.slack.dev/authentication/tokens/",
+        "https://api.slack.com/authentication/quickstart"
+      ],
+      "MCP_posture": "Slack official MCP server exists in the broader MCP ecosystem; substrate-honest evaluation deferred to C2 pre-flight to compare maintenance posture against direct API integration. Default initial path is direct API + read-first scopes; MCP layer can be added if it reduces governance / auth surface complexity.",
+      "OAuth_model": "OAuth 2.0 v2 flow via oauth.v2.access. Bot tokens (xoxb-*) tied to app installation per workspace, not to individual user identity — preferred for read-first operation per Slack docs because the app remains installed even when the installing user is deactivated. User tokens (xoxp-*) only for user-context operations.",
+      "app_installation_model": "Modern Slack apps (NOT classic apps — classic apps deprecated November 2026 per Slack docs). Per-workspace installation; Enterprise Grid installations support org-wide scopes for admin operations.",
+      "admin_consent_model": "Workspace owners or admins consent at OAuth install time. admin.* scopes require Workspace Owner or higher. Enterprise Grid admin scopes (e.g., admin.legalHolds.*) granted at the enterprise level and tied to Org Owner; revoked if the installer's role drops below Org Owner.",
+      "read_capabilities": [
+        "channels.list (public channels metadata)",
+        "channels.history (public channel messages — explicit per-channel scope)",
+        "conversations.list (public + private channels the bot is a member of)",
+        "conversations.history (messages from channels the bot is a member of)",
+        "search.messages (workspace-wide search — user-token scope)",
+        "users.list (workspace member directory)",
+        "team.info (workspace metadata)",
+        "files.list (file metadata in accessible channels)"
+      ],
+      "write_capabilities": [
+        "chat.postMessage (send messages — disabled by default; only after admin approval + governance review)",
+        "chat.scheduleMessage (schedule sends — disabled by default)",
+        "files.upload (file upload — disabled by default; PII / payload-leak risk)",
+        "conversations.invite / conversations.create (channel management — disabled by default)",
+        "reactions.add (emoji reactions — lower risk; still approval-gated)"
+      ],
+      "webhook_or_event_capabilities": [
+        "Slack Events API (subscribe to message.channels, app_mention, channel_created, etc.) — preferred over polling",
+        "Webhook URL with HMAC signing-secret verification (compose against existing verifyInboundHmac Hardening Wave B substrate)",
+        "Socket Mode alternative for development; HTTP Events API for production",
+        "Event subscriptions require Bot Token Scopes + Event Subscriptions enabled in app manifest"
+      ],
+      "risky_write_actions": [
+        "chat.postMessage to broad audience (e.g., #general or all-org channels)",
+        "DM sends to high-trust recipients (executives, board, legal)",
+        "files.upload of sensitive content",
+        "External-facing channel sends (shared channels)",
+        "Channel creation in regulated workspaces"
+      ],
+      "default_mode": "READ_FIRST",
+      "required_approval_gates": [
+        "Map-region approval per ADR-0082 Amendment 1 cartographer doctrine (Tool Map + Workflow Map regions must include Slack)",
+        "Admin policy approval at activation per ADR-0084",
+        "Per-call governance approval for any write action",
+        "Workflow purpose binding per ADR-0081 (Stage 3+ proposed-Action invocations only)"
+      ],
+      "dual_control_recommendations": [
+        "Bulk write operations (>10 messages in a window) — second-actor approval recommended",
+        "External-facing channel posts — dual-control recommended for shared channels",
+        "App reinstall / scope expansion — admin dual-control recommended"
+      ],
+      "DMW_scope_implications": [
+        "Slack messages read-first: provenance tagged channel-scoped + sender-role-scoped per Wave 2.1 §25 DMW scope notes",
+        "DMs treated as user-self-scoped DMW only; never visible to other Twins / Admin Twin",
+        "Per ADR-0046 dual-context: Personal AI Agent twin Slack reads → PERSONAL wallet; Enterprise AI Agent Slack reads → ENTERPRISE wallet",
+        "Shared / external channels treated as cross-org DMW boundary — additional governance review required",
+        "Sensitive channels (legal / HR / M&A) excluded by default until Risk Map explicit approval"
+      ],
+      "workflow_purpose_bindings": [
+        "ADR-0081 Stage 2 recommendation: Slack catch-up summaries (per-role first-week aha)",
+        "ADR-0081 Stage 3 proposed-Action: Drafted Slack replies / reactions awaiting human approval",
+        "ADR-0081 Stage 4 governed execution: Auto-replies under explicit delegated authority + audit",
+        "Slack as workflow trigger: incoming messages → workflow recommendations (read-only inbound)"
+      ],
+      "billing_pack_mapping": "Collaboration Pack family per ADR-0083 Amendment 1 §9.4 (connector-pack.collaboration.v1).",
+      "Dandelion_map_dependencies": [
+        "Tool Map must approve Slack",
+        "Workflow Map must approve Slack-bound workflows by purpose",
+        "Authority Map must approve write-action authority (per-role / dual-control)",
+        "Memory / DMW Map must approve Slack-derived memory categories + scope",
+        "Risk Map must clear Slack (no map-blocking risk)"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED at consume time",
+        "INVOKE_CONNECTOR + ACTION_* lifecycle at C2+ runtime (existing literals; no new audit literal required per ADR-0084)",
+        "Webhook ingestion audited via existing verifyInboundHmac path (existing literals preserved)",
+        "Admin kill-switch toggles audited via existing ADMIN_ACTION discriminators"
+      ],
+      "secret_handling_requirements": [
+        "Slack signing secret stored via per-tenant secret_ref env-var-NAME pattern per ADR-0024 + ADR-0019 — never raw secret at rest in repo or logs",
+        "Bot token (xoxb-*) per workspace stored via ConnectorBinding.secret_ref (existing substrate at apps/api/src/services/connector/ConnectorBinding model)",
+        "OAuth client ID / client secret per environment via env-var-NAMEs only; deployment-target secret manager resolves payload",
+        "Token rotation discipline: when Slack rotates / reissues a bot token, ConnectorBinding rotation flow must invalidate cached payload + emit ADMIN_ACTION:SECRET_ROTATED"
+      ],
+      "no_leak_rules": [
+        "Connector payloads (full message content, file content, attachment metadata) never traverse responses outside the wallet's scope",
+        "Bot token / signing secret never appears in logs / error messages / no-leak guard surfaces",
+        "User Slack IDs (Uxxx) never exposed cross-tenant",
+        "Channel IDs and names never exposed cross-tenant",
+        "Webhook signing-secret never logged",
+        "Search query text never reflected in error envelopes per no-leak guard precedent"
+      ],
+      "tenant_isolation_requirements": [
+        "Slack workspace per tenant — never shared OAuth app across tenants without explicit Founder authorization",
+        "Per-tenant ConnectorBinding rows enforce wallet_id + entity scope",
+        "Same-org boundary absolute per ADR-0049 + ADR-0027",
+        "Enterprise Grid installations require tenant-to-Grid-workspace mapping recorded at activation"
+      ],
+      "rate_limit_notes": "Slack uses Web API tier-based rate limits (Tier 1 = 1 req/min, Tier 4 = 100+ req/min); chat.postMessage = Tier 4 (~1 req/sec per channel). Events API has separate workspace-level event delivery throughput. Defensive: implement exponential backoff + jitter + tier-aware queueing per workspace.",
+      "testing_strategy": [
+        "Fixture-based read tests against FixtureBasedConnectorAdapter pattern (mirrors FixtureBasedLLMProvider per ADR-0014)",
+        "Replay-mode integration tests using recorded Slack API responses (no live workspace required in CI)",
+        "Webhook signature verification tests against verifyInboundHmac existing substrate (Hardening Wave B)",
+        "Tenant-isolation assertion tests: cross-tenant ConnectorBinding access must 403",
+        "No-leak guard tests: payloads + tokens + signing secret never surface in response / audit",
+        "Rate-limit retry tests using fixture provider returning 429 + Retry-After"
+      ],
+      "implementation_risks": [
+        "Classic-apps deprecation Nov 2026: implementation must target modern Slack apps from day one",
+        "Confused-deputy: bot acting in shared channels could leak between Slack workspaces — GOVSEC.6 hardening recommended before C2",
+        "Bot reinstall flow on installer-role demotion (Enterprise Grid): token revocation cascade must be handled gracefully",
+        "Search scopes vs message scopes: search.messages requires user-token (xoxp-) which raises sovereignty / scope tradeoffs",
+        "Events API delivery is best-effort; outage recovery requires replay strategy"
+      ],
+      "first_slice_recommendation": "C2 Slack read-first connector runtime — bot-token-based reads of public channels + bot-member private channels + events ingestion via verifyInboundHmac. NO writes at C2. NO DM reads at C2 (forward-substrate). NO user-token (xoxp-) search at C2. Write actions deferred to C6 per ADR-0084 9-slice ladder. Recommend GOVSEC.6 (agent abuse / confused-deputy hardening) before or alongside C2.",
+      "readiness_scoring": {
+        "first_week_aha_value": 9.5,
+        "API_maturity": 9.0,
+        "OAuth_complexity": 6.0,
+        "read_value": 9.0,
+        "write_risk": 7.0,
+        "event_webhook_value": 9.0,
+        "enterprise_admin_complexity": 6.5,
+        "data_sensitivity": 7.5,
+        "MCP_fit": 7.5,
+        "implementation_complexity": 5.5,
+        "auditability": 8.0,
+        "DMW_scope_complexity": 6.5,
+        "workflow_binding_value": 9.0
+      },
+      "not_implemented_yet": true
+    }
+  ]
+}
