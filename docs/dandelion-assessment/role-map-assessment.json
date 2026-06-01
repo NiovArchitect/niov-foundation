@@ -1,0 +1,117 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Role assessment composes against existing Wave 2.1 role-depth files; the Twin proposes a role match; the user confirms; the admin approves. Never workforce scoring.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED", "ROLE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "USER_CONFIRMATION_REQUIRED", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/role-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "assessment.role-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "RoleMap",
+      "name": "Role Map Assessment",
+      "description": "Stage B intake substrate for the Role Map. Confirms the user's actual role (vs title), maps against Wave 2.1 role-depth catalog, and proposes the Twin's day-one capabilities + first-week aha moments under admin governance.",
+      "human_readable_summary": "Asks the user what they actually do; matches against the OOTB role-depth catalog; proposes Twin capabilities + first-week aha moments. Admin approves; Foundation governance authorizes any subsequent activation.",
+      "model_usage_notes": "Title and actual role often diverge. Use both. Role-template match confidence must be reported transparently. Never workforce scoring.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0027", "RULE 0"],
+      "required_questions": [
+        "What is your title?",
+        "What is your actual role (what you do day to day)?",
+        "What role family describes the work (operational / executive / specialist / management)?",
+        "What seniority level (IC / senior IC / lead / manager / director / VP / C-level)?",
+        "What department do you operate inside?",
+        "Who is your manager (role-shaped)?",
+        "Do you have direct reports? If so, how many and what kind?",
+        "What are your daily responsibilities?",
+        "What common decisions do you make?"
+      ],
+      "optional_questions": [
+        "What are your common meetings?",
+        "What documents / artifacts do you produce?",
+        "What KPIs / metrics are you measured against (team-shaped, not employee-scoring)?",
+        "Who are your most frequent collaborators (role-shaped)?",
+        "Which first-week aha moments would be most valuable for you?",
+        "How well does the OOTB role template at docs/ootb-catalog/role-depth/ match your actual role?"
+      ],
+      "admin_questions": [
+        "Which roles activate first?",
+        "Which roles require additional governance review (executive / regulated / legal / HR / finance)?",
+        "Which OOTB role templates apply verbatim and which require company-specific overrides?"
+      ],
+      "user_questions": [
+        "Does the proposed Role Map match what you actually do?",
+        "What's missing or wrong in the proposed role map?",
+        "What sensitive scopes (personal / confidential / executive) must NOT be in the initial Map?"
+      ],
+      "evidence_sources": [
+        "User-supplied intake answers",
+        "Wave 2.1 role-depth files at docs/ootb-catalog/role-depth/",
+        "OOTB roles.json at docs/ootb-catalog/roles.json",
+        "Admin-supplied org-chart facts (Org / Relationship Map)"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Role Map proposal (title + actual role + role family + seniority + department + manager + direct reports + responsibilities + decisions + collaborators)",
+        "Role-template match confidence label",
+        "First-week aha moments candidates",
+        "Twin day-one capability candidates (admin approval required)"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Role Map activation",
+        "User must confirm their own role before activation",
+        "Sensitive scopes (personal / confidential / executive) excluded at intake remain absolute downstream",
+        "Role-template overrides logged with provenance",
+        "No workforce-scoring inferences from KPI questions"
+      ],
+      "safe_defaults": [
+        "Role-shaped questions only",
+        "User-confirmed role before activation",
+        "Admin-approved Map region before any Twin capability lights up",
+        "OOTB role-depth defaults as starter priors"
+      ],
+      "forbidden_defaults": [
+        "Workforce-scoring inferences",
+        "Managerial-oversight monitoring",
+        "Sensitive-attribute inference from role / responsibility data",
+        "Autonomous Twin capability activation",
+        "Cross-tenant role fusion"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Role Map bounds Role-scoped DMW memory per Wave 2.1 §25 per-role DMW scope notes",
+        "Sensitive scopes excluded at user-intake remain excluded at DMW activation",
+        "Role-template overrides constrain DMW memory categories",
+        "Twin day-one capabilities map to allowed DMW categories per OOTB role-depth files"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}

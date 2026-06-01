@@ -1,0 +1,118 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Risk Map intake identifies missing policies, missing approvals, overbroad memory scopes, high-risk tools, high-risk workflows, sensitive systems, blocked areas, unknown areas, and compliance-sensitive surfaces. Neutral compliance vocabulary per ADR-0070.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED", "RISK_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/risk-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "assessment.risk-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "RiskMap",
+      "name": "Risk Map Assessment",
+      "description": "Stage B intake substrate for the Risk Map. Identifies governance + memory + tool + workflow + connector + surveillance + compliance risks the rest of the Map system must respect. Neutral compliance vocabulary per ADR-0070 — never claims regulator approval or guaranteed compliance.",
+      "human_readable_summary": "Asks what's risky, what's missing, what's unknown. Outputs Risk Map candidates pending admin approval. Risks gate downstream activation; they never enable autonomous response.",
+      "model_usage_notes": "Risk surfaces inform admin governance — never autonomous Twin response. Per ADR-0070: neutral compliance vocabulary mandatory. Per RULE-20: forbidden surveillance language absolute.",
+      "source_adr_refs": ["ADR-0082", "ADR-0070", "ADR-0049", "ADR-0050", "ADR-0027", "RULE 0"],
+      "required_questions": [
+        "What policies are missing or incomplete (acceptable use / data handling / vendor approval / connector use)?",
+        "What approvals are missing or undefined (spend / external commit / write actions)?",
+        "What memory scopes are currently overbroad (everyone-sees-everything risk)?",
+        "What tools carry high risk (legal-effect / money-moving / customer-PII)?",
+        "What workflows carry high risk (irreversible / external-effect / regulated)?"
+      ],
+      "optional_questions": [
+        "Which sensitive systems exist (HR / Legal / Finance / IT / M&A / R&D)?",
+        "Which areas are explicitly blocked by policy (no AI today)?",
+        "Which areas are unknown (no clear policy, no admin owner)?",
+        "What workforce-monitoring risk concerns exist? (Documented to be excluded by construction)",
+        "Which surfaces are compliance-sensitive (GDPR / HIPAA / FERPA / SOX / regional law)?",
+        "What connector risks apply (OAuth scope creep / token theft / overbroad scope)?"
+      ],
+      "admin_questions": [
+        "Which risks must the Map encode at first activation?",
+        "Which risks must block downstream Map activation entirely?",
+        "Which risks require ADR-0050 break-glass governance?",
+        "Which risks require ADR-0036 LawfulBasis at regulator-view tier?",
+        "What RULE-20-protected forbidden inferences must be encoded at the Map level?"
+      ],
+      "user_questions": [
+        "Does the Risk Map reflect risks you've already considered?",
+        "What risks would you want the system to surface to you on a recurring basis?"
+      ],
+      "evidence_sources": [
+        "Admin-supplied policy inventory",
+        "ADR-0070 Regulator-Ready Foundation Doctrine",
+        "ADR-0049 GOVSEC umbrella + ADR-0050 break-glass",
+        "Wave 2.1 role-depth files §28 (per-role risks and guardrails)"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Risk Map proposal (missing policies / missing approvals / overbroad scope / high-risk tools+workflows / blocked areas / unknown areas / compliance surfaces)",
+        "Map-blocking risk list (absolute downstream)",
+        "Break-glass-governed risk list per ADR-0050",
+        "LawfulBasis-required surfaces per ADR-0036",
+        "RULE-20-protected forbidden inferences list"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Risk Map region before downstream maps activate",
+        "Map-blocking risks gate Tool / Workflow / Connector / Memory Map activation",
+        "Neutral compliance vocabulary mandatory per ADR-0070",
+        "No claims of regulator approval, no claims of guaranteed compliance, no claims of absence of fine risk",
+        "RULE-20-protected forbidden inferences absolute regardless of plan tier"
+      ],
+      "safe_defaults": [
+        "Read-only risk intake",
+        "Admin-approved risk gating",
+        "Neutral compliance vocabulary",
+        "Workforce-monitoring framing excluded by construction",
+        "Conservative default for unknown areas (treat as blocked until reviewed)"
+      ],
+      "forbidden_defaults": [
+        "Autonomous risk response",
+        "Workforce-scoring inferences from risk data",
+        "Managerial-oversight monitoring of individual workers",
+        "Guaranteed-compliance claims",
+        "Regulator-approval claims",
+        "Sensitive-attribute inference",
+        "Personality-trait inference"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Risk Map gates which DMW scopes may activate downstream",
+        "Map-blocking risks exclude their domains from any DMW scope",
+        "Compliance-sensitive surfaces require LawfulBasis per ADR-0036 at regulator-view DMW scope",
+        "Unknown areas default to forbidden-DMW until reviewed"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed", "future BREAK_GLASS_* + LawfulBasis emissions preserved per ADR-0050 + ADR-0036"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}

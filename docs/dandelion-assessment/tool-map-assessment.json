@@ -1,0 +1,117 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Tool Map intake feeds connector readiness + activation gating. Entitlement makes a tool available; admin approval + per-region Map approval + per-connector RULE 21 research arc authorize activation per ADR-0084.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED", "DEPARTMENT_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL", "NO_CONNECTOR_ACTIVATION_FROM_ASSESSMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/tool-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "assessment.tool-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "ToolMap",
+      "name": "Tool Map Assessment",
+      "description": "Stage B intake substrate for the Tool Map. Maps which tools the company / department / user actually uses, which contain sensitive data, which surfaces are read-first-safe, and which connector activations the admin approves. Composes against Wave 6 connector-priority matrix.",
+      "human_readable_summary": "Asks what tools you use, who admins them, what they contain. Outputs Tool Map candidates pending admin approval. Entitlement makes a connector available; governance authorizes activation.",
+      "model_usage_notes": "Use connector-priority matrix (docs/ootb-catalog/connector-priority-matrix.json) as a starter prior. Always read-first by default. Write actions disabled until explicitly delegated. Risky writes require dual-control per ADR-0026.",
+      "source_adr_refs": ["ADR-0082", "ADR-0084", "ADR-0080", "ADR-0026", "RULE 0"],
+      "required_questions": [
+        "What tools does the company use (company-wide stack)?",
+        "What tools does the department use (department-specific)?",
+        "What tools do you (the user) use personally for work?",
+        "Who admins each tool (admin / billing owner / IT)?",
+        "What data does each tool contain (operational / customer-PII / financial / legal / health / etc.)?"
+      ],
+      "optional_questions": [
+        "What are the read surfaces (search / list / view)?",
+        "What are the write surfaces (create / update / delete / send)?",
+        "What are the risky actions (legal-effect / money-moving / external-facing)?",
+        "Which tools have OAuth / enterprise-admin / SCIM support?",
+        "Who owns OAuth / security for each tool?",
+        "Which tools are forbidden for initial rollout (legal / sensitive / regulated)?"
+      ],
+      "admin_questions": [
+        "Which connector packs should the Map propose at initial activation?",
+        "Which tools must NOT be in any connector pack proposal (sensitive / regulated / pre-approval-only)?",
+        "Which tools require dual-control writes by policy?",
+        "Which tools have an existing data-handling policy that connector activation must respect?"
+      ],
+      "user_questions": [
+        "Does the Map represent your tool usage accurately?",
+        "Are there tools you use that should NOT be in scope?"
+      ],
+      "evidence_sources": [
+        "Admin-supplied tool stack",
+        "OOTB tools.json at docs/ootb-catalog/tools.json",
+        "OOTB connector presets at docs/ootb-catalog/connector-presets.json",
+        "Wave 6 connector-priority matrix at docs/ootb-catalog/connector-priority-matrix.json",
+        "Wave 2.1 role-depth files (per-role tool usage) at docs/ootb-catalog/role-depth/"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Tool Map proposal (company / department / user-tool inventory)",
+        "Connector-pack candidate list (admin approval required)",
+        "Read-first-suitable tool list",
+        "Risky-write tools list",
+        "Forbidden-tool exclusion list"
+      ],
+      "governance_review_points": [
+        "Admin must approve every connector activation per ADR-0084",
+        "Per-region Map approval per ADR-0082 Amendment 1 remains stronger than entitlement",
+        "Per-connector RULE 21 research arc required before real adapter implementation",
+        "Forbidden-tool exclusions absolute downstream",
+        "Risky writes mandatory dual-control per ADR-0026"
+      ],
+      "safe_defaults": [
+        "Read-first defaults",
+        "Write actions disabled by default",
+        "Admin-approved connector activation only",
+        "OOTB connector presets as starter priors",
+        "Wave 6 priority matrix as suggest-only"
+      ],
+      "forbidden_defaults": [
+        "Autonomous connector activation",
+        "Connector activation from billing entitlement alone",
+        "Cross-tenant tool fusion",
+        "Workforce-scoring inferences from tool-usage data",
+        "Managerial-oversight monitoring of tool activity",
+        "Auto-approval of writes"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Tool Map bounds which connector data can flow into DMW memory",
+        "Forbidden tools cannot scope any DMW without explicit later admin authorization",
+        "Risky-write tools require Authority Map approval before any write-side DMW provenance",
+        "Per-role tool-usage from Wave 2.1 §24 constrains per-role DMW scope"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed", "future INVOKE_CONNECTOR + ACTION_* at runtime per ADR-0084"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}

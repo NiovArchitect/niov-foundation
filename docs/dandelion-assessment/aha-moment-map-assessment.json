@@ -1,0 +1,113 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Aha Moment Map intake identifies first-week value per role / department / connector / workflow. Composes against Wave 2.1 §22 first-week aha moments + Wave 6 connector-priority matrix. Suggest-only; first real activation Founder-gated.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/aha-moment-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "MEDIUM"
+  },
+  "items": [
+    {
+      "id": "assessment.aha-moment-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "AhaMomentMap",
+      "name": "Aha Moment Map Assessment",
+      "description": "Stage B intake substrate for the Aha Moment Map. Surfaces first-week value per role / department / connector / workflow. Composes against Wave 2.1 §22 per-role first-week aha moments + Wave 6 connector-priority matrix top 3 (Slack 16.00 + Google Workspace 13.33 + Project Tracker 12.75).",
+      "human_readable_summary": "Asks which aha moments would create first-week value. Outputs Aha Moment Map candidates pending admin approval. Suggest-only; first real connector activation Founder-gated.",
+      "model_usage_notes": "Use Wave 2.1 §22 + Wave 6 matrix as starter priors. Slack first per ADR-0084 substrate-grounded recommendation, but C2 first-connector decision remains Founder-gated.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0084", "ADR-0081", "RULE 0"],
+      "required_questions": [
+        "Which first-week aha moments would create most value per role (admin / executive / IC)?",
+        "Which department should activate first (highest aha density)?",
+        "Which first admin wins would build trust fastest (governance visibility / safe surfacing / Map review)?",
+        "Which first executive wins would create leadership confidence (executive brief / governed transparency / decision-cockpit)?",
+        "Which first IC / general employee wins would build day-one adoption (corrections / safe drafts / first-week aha)?"
+      ],
+      "optional_questions": [
+        "Which first connector read-first value would unlock most aha (Slack catch-up / Google Workspace search / Project Tracker risk surface)?",
+        "Which first workflow recommendation would create most value (Stage 2 recommendation-only) per ADR-0081?",
+        "Which safe fallback value exists without connectors (template-based aha moments)?",
+        "Which Wave 6 connector top-tier candidate aligns with the company's first-week priority?"
+      ],
+      "admin_questions": [
+        "Which aha moments should the Map propose at first activation?",
+        "Which aha moments require Founder-gated decisions (e.g., first real connector activation)?",
+        "Which aha moments must NOT be in scope for the initial rollout?",
+        "What success criteria define 'aha worked'?"
+      ],
+      "user_questions": [
+        "Which aha moments would feel most valuable to you in week one?",
+        "Which aha moments would feel intrusive or unsafe?"
+      ],
+      "evidence_sources": [
+        "Wave 2.1 §22 per-role first-week aha moments at docs/ootb-catalog/role-depth/",
+        "Wave 6 connector-priority matrix at docs/ootb-catalog/connector-priority-matrix.json",
+        "ADR-0084 first-connector candidate arc",
+        "ADR-0081 5-stage workflow maturity"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Aha Moment Map proposal (per-role + per-department + per-connector + per-workflow first-week wins)",
+        "First-department activation candidate (admin approval required)",
+        "First-connector read-first candidate (Founder approval required per ADR-0084)",
+        "First-workflow Stage 2 recommendation candidate per ADR-0081",
+        "Safe-fallback aha moments (no connector required)"
+      ],
+      "governance_review_points": [
+        "Admin must approve every aha-moment activation",
+        "First-connector activation Founder-gated per ADR-0084",
+        "Workflow Stage 2+ progression governance-bound per ADR-0081",
+        "User must confirm aha-moment proposals feel safe",
+        "Safe-fallback aha moments available even when no connectors activate"
+      ],
+      "safe_defaults": [
+        "Suggest-only aha moments",
+        "Admin-approved aha activation",
+        "Safe-fallback path always available",
+        "Wave 6 matrix as starter prior, not autonomous activation",
+        "User-confirmed aha-moment proposals"
+      ],
+      "forbidden_defaults": [
+        "Autonomous aha-moment activation",
+        "Workforce-scoring inferences from aha-moment uptake",
+        "Managerial-oversight monitoring of aha-moment engagement",
+        "Cross-tenant aha-moment fusion",
+        "Aha moments that violate Risk Map exclusions"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Aha Moment Map proposes per-role DMW scope priorities (which categories deliver fastest aha)",
+        "Safe-fallback aha moments operate inside baseline DMW scope only",
+        "First-connector aha proposals require per-connector RULE 21 research arc before DMW provenance lights up",
+        "User confirmation required before DMW scope reflects an aha-moment proposal"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}
