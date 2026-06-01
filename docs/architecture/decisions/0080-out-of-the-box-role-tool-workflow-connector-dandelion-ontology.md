@@ -1471,3 +1471,30 @@ Per Founder implementation order:
 - Add LLM / Python / BEAM.
 - Add new audit literal.
 - Mutate `dandelion.service.ts`.
+
+## 22. Amendment 6 — D6 Dandelion Activation substrate LANDED 2026-06-01
+
+Per `[FOUNDATION-D6-DANDELION-ACTIVATION]` autonomous continuation. Classification A (Static / Catalog / Docs). Stage F design substrate LANDED — the final stage of the Dandelion 6-stage maturity model per §21.6 forward substrate item #2.
+
+NEW `docs/dandelion-activation/` (6 files):
+
+- `README.md` — doctrine + activation step ordering doctrine + per-archetype step counts + audit literal forward-queue + validator usage
+- `activation.schema.json` — JSON Schema with `kind: ActivationPlan`, required fields including `consumes_starter_envelope_id` (cross-ref to D5), `activation_state: DESIGN_NOT_EXECUTED` const, activation_steps with `step_order` + `audit_literal` + `preconditions` + `postconditions` + `failure_mode` + `rollback_path`, human_authorization_points enum, rollback_strategy.soft_delete_only const true
+- `starter-pilot-activation.json` — 6 steps (precheck + baseline DMW + template roles + Stage 1 templates + safe-fallback aha + state-flip; no connectors)
+- `team-activation.json` — 8 steps (+ team DMW scope + Slack connector + Stage 2 templates)
+- `business-activation.json` — 11 steps (+ project/customer DMW + delegated authority + Google connector + advanced audit)
+- `enterprise-activation.json` — 14 steps (+ break-glass registry + LawfulBasis attestation + DUAL-CONTROL templates + DUAL-CONTROL regulator-grade audit + board observer)
+
+NEW `scripts/validate-dandelion-activation.mjs` — pure Node ESM validator (mirrors `validate-dandelion-starter-envelope.mjs` sentence-level negation + subtree skip; adds D5 cross-reference check + step ordering integrity check + last-step STARTER_ENVELOPE_ACTIVATED check). Validator green: 6/6 files, 4 activation plans, 39 activation steps (6+8+11+14), 4/4 plan archetypes, 4 D5 envelope IDs cross-referenced.
+
+**Activation step doctrine**: every plan starts with read-only precheck and ends with `step.envelope.mark-activated` state-flip; in between, steps progress in dependency order (DMW grants → role assignments → authority profiles → governance surfaces → connector bindings → workflow templates → advanced audit → board observer → aha moments → state-flip). Every step emits exactly one audit literal BEFORE the underlying mutation per RULE 4; every step's rollback_path is reversible via soft-delete per RULE 10.
+
+**Audit literal forward-queue**: 20+ ADMIN_ACTION:* literals proposed at the design tier (per ADR-0042 §Q-γ.1 clean-transition discipline). Their substantive landing in the audit literals enum is forward-substrate at the implementation slice; the D6 design substrate does NOT add any new audit literal yet.
+
+**Dual-control enforcement**: enterprise activation steps 10 (Stage 2 enterprise templates including financial-effect templates) + 11 (regulator-grade audit with custom retention) require TWO_ORG_ADMINS_DUAL_CONTROL authorization per ADR-0026. Audit details record both approver audit_event_id references; GAP-C1 self-approval guard preserved.
+
+**Reversibility-by-construction**: every step's rollback_path is canonicalized; activation_lineage row preserves forward + backward history; partial activation state is impossible to leave behind; a re-attempt is a fresh plan instance per RULE 10 + ADR-0002.
+
+**NO runtime activation**, NO actual binding registration, NO permission grant, NO DMW scope open, NO workflow template registration, NO new audit literal at the D6 design tier, NO mutation to Foundation services, NO connector authorization beyond C2 (Slack OPERATING) + C3 (Google Workspace RUNTIME_READY).
+
+**Dandelion graduation:** Stage A (Preview LIVE) + Stage B (ASSESSMENT_READY) + Stage C (RECOMMENDATION_READY) + Stage D (GOVERNANCE_REVIEW_READY) + Stage E (ENVELOPE_READY) + **Stage F ACTIVATION_DESIGN_READY**. Stage F runtime execution forward-substrate at the implementation slice.

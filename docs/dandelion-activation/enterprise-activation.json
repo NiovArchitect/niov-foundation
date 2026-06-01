@@ -1,0 +1,361 @@
+{
+  "$schema": "./activation.schema.json",
+  "kind": "ActivationPlan",
+  "catalog_version": "1.0.0",
+  "activation_defaults": {
+    "object_type": "ActivationPlan",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Stage F Activation walks an approved envelope into the live operating state — every step is human-authorized, audit-emitted, and reversible by construction.",
+    "model_usage_notes": "Activation plans are DESIGN_NOT_EXECUTED. Real activation requires a future implementation slice that consumes this catalog. Enterprise-tier dual-control + break-glass + regulator-grade audit composes against existing GOVSEC.5 + ADR-0050 + ADR-0026 substrate.",
+    "scope_defaults": ["TENANT_SCOPED", "ENVELOPE_SCOPED", "STEP_SCOPED", "PROJECT_SCOPED", "CUSTOMER_SCOPED", "REGULATOR_OBSERVABLE_SCOPED"],
+    "permission_defaults": ["HUMAN_AUTHORIZED_AT_EVERY_GATE", "AUDIT_EMITTED_BEFORE_AND_AFTER", "REVERSIBLE_BY_CONSTRUCTION", "NO_AUTONOMOUS_ACTIVATION", "READ_FIRST_CONNECTOR_ONLY", "DELEGATED_AUTHORITY_NEVER_EXCEEDS_HUMAN_CEILING", "DUAL_CONTROL_ON_FINANCIAL_EFFECT", "BREAK_GLASS_TIME_BOXED"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-activation/enterprise-activation.json",
+      "version_tag": "d6-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D6-DANDELION-ACTIVATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:ACTIVATION_PLAN_REFERENCED when consumed", "future ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED + per-step audit literals + dual-control audit lineage at the implementation slice"],
+    "policy_purpose": "ACTIVATION_DESIGN_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ACTIVATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "activation_plan": {
+    "id": "activation.enterprise.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "ActivationPlan",
+    "plan_archetype_id": "enterprise",
+    "name": "Enterprise Activation Plan",
+    "description": "Canonical ordered sequence to activate the Enterprise Starter Envelope (envelope.enterprise.v1). Walks the fullest envelope at the Foundation runtime tier — multi-connector + multi-scope DMW + delegated authority profiles + dual-control on financial-effect ops + break-glass grant registry + LawfulBasis attestation surface + regulator-observable audit projection + custom retention + board observer scope. Dual-control invariants enforce two-admin authorization on financial-effect activation steps per ADR-0026.",
+    "human_readable_summary": "Fullest activation: baseline + team + project + customer + regulator-observable DMW; Slack + Google connectors; delegated authority with dual-control; break-glass time-boxed grants per GOVSEC.5; LawfulBasis attestation surface; regulator-grade audit; custom retention; board observer scope.",
+    "model_usage_notes": "Use this plan for the Enterprise plan tier. Dual-control activates on financial-effect steps (spend approval workflow template registration, advanced audit tier enablement at regulator-observable level). Break-glass grant registry is a designed surface — per GOVSEC.5 / ADR-0050 — that enables time-boxed emergency admin grants with mandatory valid_until and post-hoc two-person review.",
+    "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0083", "ADR-0084", "ADR-0001", "ADR-0019", "ADR-0024", "ADR-0026", "ADR-0027", "ADR-0036", "ADR-0050", "ADR-0049", "ADR-0002", "RULE 0", "RULE 4", "RULE 10", "RULE 20"],
+    "consumes_starter_envelope_id": "envelope.enterprise.v1",
+    "activation_steps": [
+      {
+        "step_order": 1,
+        "step_id": "step.precheck.envelope-state",
+        "step_name": "Precondition check",
+        "step_purpose": "Verify envelope DRAFT_NOT_ACTIVATED + caller admin capabilities + org match + dual-control coverage available.",
+        "consumes_map_type": "CompanyMap",
+        "produces_runtime_object": "PrecheckResult (in-memory)",
+        "human_authorization_required": false,
+        "audit_literal": "ADMIN_ACTION:ENVELOPE_ACTIVATION_PRECHECK",
+        "preconditions": ["envelope.envelope_state == 'DRAFT_NOT_ACTIVATED'", "caller.capabilities.can_admin_org == true", "at least 2 ORG_ADMIN seats available for dual-control on financial-effect steps"],
+        "postconditions": ["precheck_passed == true OR aborted"],
+        "failure_mode": "ABORT_BEFORE_ANY_MUTATION",
+        "rollback_path": "No-op (read-only)"
+      },
+      {
+        "step_order": 2,
+        "step_id": "step.dmw.baseline-grant",
+        "step_name": "Open baseline DMW",
+        "step_purpose": "Activate baseline DMW per ADR-0001.",
+        "consumes_map_type": "MemoryDmwMap",
+        "produces_runtime_object": "DMW baseline grant",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DMW_BASELINE_GRANTED",
+        "preconditions": ["step 1 passed"],
+        "postconditions": ["baseline LIVE"],
+        "failure_mode": "ROLLBACK_TO_PRE_GRANT",
+        "rollback_path": "Soft-delete baseline grant; emit DMW_BASELINE_REVOKED"
+      },
+      {
+        "step_order": 3,
+        "step_id": "step.dmw.full-scope-extension",
+        "step_name": "Extend DMW to full enterprise scope set",
+        "step_purpose": "Add team + project + customer + regulator-observable DMW scope extensions per the Enterprise envelope DMW_scope_ceiling.",
+        "consumes_map_type": "MemoryDmwMap",
+        "produces_runtime_object": "DMW scope extensions (team + project + customer + regulator-observable)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DMW_ENTERPRISE_SCOPE_GRANTED",
+        "preconditions": ["step 2 baseline LIVE"],
+        "postconditions": ["all 4 scope extensions LIVE"],
+        "failure_mode": "ROLLBACK_TO_BASELINE_ONLY",
+        "rollback_path": "Soft-delete extension rows; emit DMW_ENTERPRISE_SCOPE_REVOKED per extension"
+      },
+      {
+        "step_order": 4,
+        "step_id": "step.role.enterprise-template-assignment",
+        "step_name": "Assign enterprise-tier roles (board + GC + GRC + CFO + cross-functional)",
+        "step_purpose": "Register enterprise-tier role templates per W3 catalog Enterprise plan archetype.",
+        "consumes_map_type": "RoleMap",
+        "produces_runtime_object": "Role assignments (enterprise-tier)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:ROLE_TEMPLATE_ASSIGNED",
+        "preconditions": ["step 3 DMW scope LIVE"],
+        "postconditions": ["role assignments LIVE"],
+        "failure_mode": "ROLLBACK_TO_PRE_ASSIGNMENT",
+        "rollback_path": "Soft-delete assignment rows; emit ROLE_TEMPLATE_UNASSIGNED per row"
+      },
+      {
+        "step_order": 5,
+        "step_id": "step.authority.delegated-profile-register",
+        "step_name": "Register delegated authority profiles",
+        "step_purpose": "Register delegated authority profiles per ADR-0080 Authority Map; enforce ceiling-never-exceeds-human per RULE 0.",
+        "consumes_map_type": "AuthorityMap",
+        "produces_runtime_object": "Delegated authority profiles",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DELEGATED_AUTHORITY_REGISTERED",
+        "preconditions": ["step 4 role assignments LIVE"],
+        "postconditions": ["delegated authority profiles LIVE; ceiling-enforcement check audited per profile"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete authority profile rows; emit DELEGATED_AUTHORITY_REVOKED per row"
+      },
+      {
+        "step_order": 6,
+        "step_id": "step.break-glass.grant-registry-enable",
+        "step_name": "Enable break-glass grant registry per GOVSEC.5",
+        "step_purpose": "Enable the break-glass grant registry surface per ADR-0050 + GOVSEC.5. Mandatory valid_until per grant; mandatory post-hoc two-person review; no self-approval (GAP-C1 guard preserved).",
+        "consumes_map_type": "AuthorityMap",
+        "produces_runtime_object": "Break-glass grant registry flag on org_settings (no grants pre-registered)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:BREAK_GLASS_REGISTRY_ENABLED",
+        "preconditions": ["step 5 authority profiles LIVE", "envelope.approved_regions_bundle includes authority.break-glass-grant-registry"],
+        "postconditions": ["break-glass registry LIVE on org_settings; no pre-registered grants"],
+        "failure_mode": "ROLLBACK_TO_PRE_ENABLE",
+        "rollback_path": "Unset break-glass registry flag; emit BREAK_GLASS_REGISTRY_DISABLED"
+      },
+      {
+        "step_order": 7,
+        "step_id": "step.lawful-basis.attestation-surface-enable",
+        "step_name": "Enable LawfulBasis attestation surface per ADR-0036",
+        "step_purpose": "Enable the LawfulBasis attestation surface per ADR-0036. Regulator-grade attestation chain available; ya29.*-or-equivalent regulator credentials NEVER stored in attestation records (env-var-NAME pattern).",
+        "consumes_map_type": "RiskMap",
+        "produces_runtime_object": "LawfulBasis attestation surface flag on org_settings",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:LAWFUL_BASIS_ATTESTATION_ENABLED",
+        "preconditions": ["step 6 break-glass registry LIVE"],
+        "postconditions": ["LawfulBasis attestation surface LIVE"],
+        "failure_mode": "ROLLBACK_TO_PRE_ENABLE",
+        "rollback_path": "Unset attestation surface flag; emit LAWFUL_BASIS_ATTESTATION_DISABLED"
+      },
+      {
+        "step_order": 8,
+        "step_id": "step.connector.slack-binding-register",
+        "step_name": "Register Slack read-first connector binding",
+        "step_purpose": "Register SLACK_READ binding per C2 OPERATING. secret_ref env-var-NAME only.",
+        "consumes_map_type": "ToolMap",
+        "produces_runtime_object": "ConnectorBinding row (type: SLACK_READ)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_REGISTERED",
+        "preconditions": ["step 7 attestation surface LIVE"],
+        "postconditions": ["SLACK_READ binding LIVE"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete binding row; emit CONNECTOR_BINDING_REVOKED"
+      },
+      {
+        "step_order": 9,
+        "step_id": "step.connector.google-workspace-binding-register",
+        "step_name": "Register Google Workspace read-first connector binding",
+        "step_purpose": "Register GOOGLE_WORKSPACE_READ binding per C3 RUNTIME_READY. secret_ref env-var-NAME only.",
+        "consumes_map_type": "ToolMap",
+        "produces_runtime_object": "ConnectorBinding row (type: GOOGLE_WORKSPACE_READ)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_REGISTERED",
+        "preconditions": ["step 8 Slack binding LIVE"],
+        "postconditions": ["GOOGLE_WORKSPACE_READ binding LIVE"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete binding row; emit CONNECTOR_BINDING_REVOKED"
+      },
+      {
+        "step_order": 10,
+        "step_id": "step.workflow.stage-2-enterprise-templates-register",
+        "step_name": "Register Stage 2 enterprise-tier workflow templates (DUAL-CONTROL)",
+        "step_purpose": "Register 16 Stage 2 enterprise templates per W3 catalog (board prep, board finance packet, audit evidence gap, policy exception, security exception, contract review, incident followup, cross-functional blocker, exec commitment followup, vendor renewal, spend approval, expense exception, hiring pipeline risk, PR issue status, focus time protection, exec brief). Financial-effect templates carry dual_control_required_at_stage_3: true. This step requires DUAL-CONTROL authorization.",
+        "consumes_map_type": "WorkflowMap",
+        "produces_runtime_object": "Workflow template registrations (16 Stage 2 templates; all TEMPLATE_ONLY)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:WORKFLOW_TEMPLATE_REGISTERED_DUAL_CONTROL",
+        "preconditions": ["step 9 Google binding LIVE", "dual-control approval recorded per ADR-0026"],
+        "postconditions": ["16 Stage 2 templates LIVE; workflow_state TEMPLATE_ONLY for every template"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete template rows; emit WORKFLOW_TEMPLATE_UNREGISTERED per row"
+      },
+      {
+        "step_order": 11,
+        "step_id": "step.audit.regulator-grade-enable",
+        "step_name": "Enable regulator-grade audit tier (DUAL-CONTROL)",
+        "step_purpose": "Enable regulator-grade audit features — regulator-observable projection surfaces + extended retention + custom retention policy + per-permission audit emission + cross-scope verify-chain visibility. Composes against existing ADR-0002 baseline + ADR-0036 LawfulBasis. This step requires DUAL-CONTROL authorization (financial-effect on retention + storage costs).",
+        "consumes_map_type": "RiskMap",
+        "produces_runtime_object": "Regulator-grade audit tier flag + custom retention policy on org_settings",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:REGULATOR_GRADE_AUDIT_ENABLED_DUAL_CONTROL",
+        "preconditions": ["step 10 templates LIVE", "dual-control approval recorded per ADR-0026"],
+        "postconditions": ["regulator-grade audit tier LIVE; custom retention policy applied"],
+        "failure_mode": "ROLLBACK_TO_ADVANCED_AUDIT",
+        "rollback_path": "Unset regulator-grade tier flag; emit REGULATOR_GRADE_AUDIT_DISABLED"
+      },
+      {
+        "step_order": 12,
+        "step_id": "step.board.observer-scope-register",
+        "step_name": "Register board observer scope",
+        "step_purpose": "Register board observer scope — read-only audit projection for designated board observers. Aggregate-only; no per-employee detail; no surveillance framing.",
+        "consumes_map_type": "OrgRelationshipMap",
+        "produces_runtime_object": "Board observer scope row on org_settings",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:BOARD_OBSERVER_SCOPE_REGISTERED",
+        "preconditions": ["step 11 regulator-grade audit LIVE"],
+        "postconditions": ["board observer scope LIVE; aggregate-only projection enforced"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete board observer scope row; emit BOARD_OBSERVER_SCOPE_REVOKED"
+      },
+      {
+        "step_order": 13,
+        "step_id": "step.aha.enterprise-multi-connector-register",
+        "step_name": "Register enterprise multi-connector aha moments",
+        "step_purpose": "Register enterprise-tier aha-moment surface — first-week activation hints across Slack + Google + dual-control workflows + break-glass + LawfulBasis.",
+        "consumes_map_type": "AhaMomentMap",
+        "produces_runtime_object": "Aha-moment registrations",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:AHA_MOMENT_REGISTERED",
+        "preconditions": ["step 12 board observer scope LIVE"],
+        "postconditions": ["enterprise aha moments visible"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete aha-moment rows; emit AHA_MOMENT_UNREGISTERED"
+      },
+      {
+        "step_order": 14,
+        "step_id": "step.envelope.mark-activated",
+        "step_name": "Mark Starter Envelope as ACTIVATED",
+        "step_purpose": "Final state-flip; emit STARTER_ENVELOPE_ACTIVATED with full lineage including dual-control audit references.",
+        "consumes_map_type": "CompanyMap",
+        "produces_runtime_object": "Envelope state row (ACTIVATED)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED",
+        "preconditions": ["all preceding steps postconditions met"],
+        "postconditions": ["envelope.envelope_state == 'ACTIVATED'; activation_lineage persisted"],
+        "failure_mode": "ROLLBACK_ALL_PRIOR_STEPS",
+        "rollback_path": "Walk steps 13 → 1 in reverse; emit STARTER_ENVELOPE_ACTIVATION_ROLLED_BACK at completion"
+      }
+    ],
+    "audit_expectations": [
+      "Every step emits exactly one audit literal BEFORE the underlying mutation per RULE 4",
+      "Every rollback emits an inverse audit literal AFTER the soft-delete row update",
+      "STARTER_ENVELOPE_ACTIVATED audit details include the ordered audit_event_id list from steps 1-13",
+      "Dual-control steps (10 + 11) emit *_DUAL_CONTROL audit literal; audit details include both approver audit_event_id references per ADR-0026",
+      "Connector binding registration audit details NEVER include the resolved env-var VALUE",
+      "Break-glass registry enablement does NOT pre-register any grants; only the registry surface itself",
+      "LawfulBasis attestation surface enablement does NOT pre-register any attestations; only the surface itself",
+      "Board observer scope enforces aggregate-only projection; per-employee detail in audit is absolutely forbidden",
+      "Regulator-grade audit tier composes against baseline; never replaces or weakens baseline"
+    ],
+    "rollback_strategy": {
+      "soft_delete_only": true,
+      "rollback_steps": [
+        "On any step failure, walk preceding steps in reverse order",
+        "Each step's rollback_path is called; each emits the per-step inverse audit literal",
+        "Final rollback emits STARTER_ENVELOPE_ACTIVATION_ROLLED_BACK with failed step_id + partial lineage",
+        "No row is hard-deleted (RULE 10)",
+        "Connector binding rollback NEVER attempts to revoke third-party tokens",
+        "Dual-control steps rollback emits the inverse *_DUAL_CONTROL audit literal with both approver references",
+        "Break-glass registry rollback NEVER auto-revokes any in-flight emergency grants; those follow their own valid_until lifecycle per ADR-0050"
+      ],
+      "reversibility_guarantee": "Activation is fully reversible by construction. Multi-connector + multi-scope + dual-control + break-glass + LawfulBasis rollback walks every step's rollback_path in reverse order; a partial activation state is impossible to leave behind. In-flight emergency break-glass grants (if any pre-exist) follow their own valid_until expiry path."
+    },
+    "human_authorization_points": [
+      {
+        "point_id": "auth.pre-activation",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm envelope ready to activate + dual-control admin seats available.",
+        "audit_literal": "ADMIN_ACTION:PRE_ACTIVATION_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.delegated-authority-register",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm delegated authority profile registration.",
+        "audit_literal": "ADMIN_ACTION:DELEGATED_AUTHORITY_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.break-glass-registry-enable",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm break-glass grant registry enablement per GOVSEC.5.",
+        "audit_literal": "ADMIN_ACTION:BREAK_GLASS_REGISTRY_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.lawful-basis-attestation-enable",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm LawfulBasis attestation surface enablement per ADR-0036.",
+        "audit_literal": "ADMIN_ACTION:LAWFUL_BASIS_ATTESTATION_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.workflow-template-register-dual-control",
+        "authorizer_role": "TWO_ORG_ADMINS_DUAL_CONTROL",
+        "authorization_purpose": "DUAL-CONTROL: Confirm Stage 2 enterprise template registration including financial-effect templates. Required before step 10 fires.",
+        "audit_literal": "ADMIN_ACTION:WORKFLOW_TEMPLATE_DUAL_CONTROL_AUTHORIZED",
+        "dual_control_required": true
+      },
+      {
+        "point_id": "auth.regulator-grade-audit-enable-dual-control",
+        "authorizer_role": "TWO_ORG_ADMINS_DUAL_CONTROL",
+        "authorization_purpose": "DUAL-CONTROL: Confirm regulator-grade audit tier enablement (financial-effect on retention + storage). Required before step 11 fires.",
+        "audit_literal": "ADMIN_ACTION:REGULATOR_GRADE_AUDIT_DUAL_CONTROL_AUTHORIZED",
+        "dual_control_required": true
+      },
+      {
+        "point_id": "auth.board-observer-register",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm board observer scope registration.",
+        "audit_literal": "ADMIN_ACTION:BOARD_OBSERVER_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.final-state-flip",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm final state-flip.",
+        "audit_literal": "ADMIN_ACTION:STATE_FLIP_AUTHORIZED",
+        "dual_control_required": false
+      }
+    ],
+    "safe_defaults": [
+      "Every step emits audit BEFORE the underlying mutation (RULE 4)",
+      "Every step's rollback_path is reversible via soft-delete (RULE 10)",
+      "No autonomous activation",
+      "Connector bindings registered with use_real: false at activation tier",
+      "Stage 2 templates remain TEMPLATE_ONLY at activation tier",
+      "Delegated authority ceiling-never-exceeds-human per RULE 0",
+      "Dual-control on financial-effect steps per ADR-0026",
+      "Break-glass registry enabled with no pre-registered grants",
+      "LawfulBasis attestation surface enabled with no pre-registered attestations",
+      "Board observer scope aggregate-only projection",
+      "Regulator-grade audit composes against baseline; never weakens",
+      "Activation is single-cycle"
+    ],
+    "forbidden_defaults": [
+      "Auto-activation without ORG_ADMIN authorization is forbidden",
+      "Self-approval on dual-control steps is absolutely forbidden (GAP-C1 guard preserved)",
+      "Cross-tenant activation is forbidden",
+      "Hard-delete of any activation row is forbidden (RULE 10)",
+      "Skipping any step is forbidden",
+      "Re-attempting a failed activation in-place is forbidden",
+      "Audit emission AFTER mutation is forbidden (RULE 4)",
+      "Resolved env-var VALUE in any audit detail / response / log / row is absolutely forbidden",
+      "Auto-flip to use_real: true is forbidden",
+      "Delegated authority profile exceeding the human ceiling is absolutely forbidden",
+      "Break-glass grant without mandatory valid_until is forbidden",
+      "Board observer scope per-employee detail is absolutely forbidden",
+      "Regulator-grade audit with weaker retention than baseline is forbidden",
+      "RULE 20 RULE/ADR modifications during activation are forbidden"
+    ],
+    "allowed_consumers": [
+      "DANDELION_ACTIVATION_ENGINE",
+      "ADMIN_TWIN_SCOPED_TO_ORG",
+      "CONTROL_TOWER_ADMIN_REVIEW",
+      "FOUNDATION_GOVERNANCE_TIER"
+    ],
+    "forbidden_consumers": [
+      "AGENT_TWIN_AUTONOMOUS_ACTIVATION",
+      "AGENT_TWIN_CROSS_TENANT",
+      "MANAGER_SURVEILLANCE_TOOL",
+      "EMPLOYEE_SCORING_TOOL",
+      "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"
+    ],
+    "activation_state": "DESIGN_NOT_EXECUTED"
+  }
+}
