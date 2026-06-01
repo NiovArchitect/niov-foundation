@@ -24,6 +24,7 @@ import {
   executePhase0,
   executeStarterPilotActivationForCaller,
   executeTeamActivationForCaller,
+  executeBusinessActivationForCaller,
   MemoryContentStore,
   MemoryNonceStore,
   MemoryRateLimitStore,
@@ -569,5 +570,293 @@ describe("D6 POST /org/dandelion/activate/team — HTTP surface", () => {
       payload: { slack_display_name: "x", slack_secret_ref: "y" },
     });
     expect(response.statusCode).toBe(403);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// D6 BUSINESS ARCHETYPE TESTS — service tier + HTTP tier
+// ════════════════════════════════════════════════════════════════
+
+function makeSlackAndGoogleInput(suffix: string): {
+  slack_display_name: string;
+  slack_secret_ref: string;
+  google_display_name: string;
+  google_secret_ref: string;
+} {
+  const id = randomUUID().slice(0, 8).toUpperCase().replace(/-/g, "_");
+  return {
+    slack_display_name: `${TEST_PREFIX}biz_slack_${suffix}_${id}`,
+    slack_secret_ref: `D6_TEST_SLACK_TOKEN_${suffix.toUpperCase()}_${id}`,
+    google_display_name: `${TEST_PREFIX}biz_google_${suffix}_${id}`,
+    google_secret_ref: `D6_TEST_GOOGLE_TOKEN_${suffix.toUpperCase()}_${id}`,
+  };
+}
+
+describe("D6 business activation — success path", () => {
+  it("walks all 11 business catalog steps and emits one ADMIN_ACTION audit per step", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      makeSlackAndGoogleInput("svc1"),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.archetype).toBe("business");
+    expect(result.plan_id).toBe("activation.business.v1");
+    expect(result.steps.length).toBe(11);
+    for (let i = 0; i < result.steps.length; i++) {
+      const step = result.steps[i];
+      expect(step).toBeDefined();
+      if (!step) continue;
+      expect(step.step_order).toBe(i + 1);
+    }
+    const finalStep = result.steps[result.steps.length - 1];
+    expect(finalStep).toBeDefined();
+    if (!finalStep) return;
+    expect(finalStep.audit_literal).toBe(
+      "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED",
+    );
+  });
+
+  it("matches the canonical business-archetype catalog step_id sequence", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      makeSlackAndGoogleInput("svc2"),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const expectedStepIds = [
+      "step.precheck.envelope-state",
+      "step.dmw.baseline-grant",
+      "step.dmw.project-customer-scope-extension",
+      "step.role.business-template-assignment",
+      "step.authority.delegated-profile-register",
+      "step.connector.slack-binding-register",
+      "step.connector.google-workspace-binding-register",
+      "step.workflow.stage-2-business-templates-register",
+      "step.audit.advanced-tier-enable",
+      "step.aha.multi-connector-register",
+      "step.envelope.mark-activated",
+    ];
+    expect(result.steps.map((s) => s.step_id)).toEqual(expectedStepIds);
+  });
+
+  it("creates BOTH a real SLACK_READ + a real GOOGLE_WORKSPACE_READ ConnectorBinding row", async () => {
+    const input = makeSlackAndGoogleInput("svc3");
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      input,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const slackBinding = await prisma.connectorBinding.findFirst({
+      where: {
+        display_name: input.slack_display_name,
+        deleted_at: null,
+      },
+    });
+    expect(slackBinding).not.toBeNull();
+    expect(slackBinding?.type).toBe("SLACK_READ");
+    expect(slackBinding?.secret_ref).toBe(input.slack_secret_ref);
+    const slackConfig = (slackBinding?.config ?? {}) as Record<string, unknown>;
+    expect(slackConfig["use_real"]).toBe(false);
+
+    const googleBinding = await prisma.connectorBinding.findFirst({
+      where: {
+        display_name: input.google_display_name,
+        deleted_at: null,
+      },
+    });
+    expect(googleBinding).not.toBeNull();
+    expect(googleBinding?.type).toBe("GOOGLE_WORKSPACE_READ");
+    expect(googleBinding?.secret_ref).toBe(input.google_secret_ref);
+    const googleConfig = (googleBinding?.config ?? {}) as Record<string, unknown>;
+    expect(googleConfig["use_real"]).toBe(false);
+  });
+
+  it("preserves audit chain integrity across all 11 business steps", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      makeSlackAndGoogleInput("svc4"),
+    );
+    expect(result.ok).toBe(true);
+    const chainResult = await verifyAuditChain(phase0.admin_entity_id);
+    expect(chainResult.valid).toBe(true);
+    expect(chainResult.brokenAt).toBeNull();
+  });
+
+  it("step 5 (delegated-authority) + step 9 (advanced-audit-tier) emit audit-only at this slice (no underlying mutation)", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      makeSlackAndGoogleInput("svc5"),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const step5 = result.steps[4];
+    expect(step5?.audit_literal).toBe("ADMIN_ACTION:DELEGATED_AUTHORITY_REGISTERED");
+    const step9 = result.steps[8];
+    expect(step9?.audit_literal).toBe("ADMIN_ACTION:ADVANCED_AUDIT_TIER_ENABLED");
+    // Verify audit rows exist for both
+    if (step5) {
+      const row = await prisma.auditEvent.findUnique({
+        where: { audit_id: step5.audit_event_id },
+        select: { event_type: true, details: true },
+      });
+      expect(row?.event_type).toBe("ADMIN_ACTION");
+      const details = (row?.details ?? {}) as Record<string, unknown>;
+      expect(details["action"]).toBe("DELEGATED_AUTHORITY_REGISTERED");
+    }
+  });
+
+  it("step 7 Google binding audit row carries connector_type GOOGLE_WORKSPACE_READ + env-var NAME (NEVER ya29.* token)", async () => {
+    const input = makeSlackAndGoogleInput("svc6");
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      input,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const step7 = result.steps[6];
+    expect(step7?.step_id).toBe("step.connector.google-workspace-binding-register");
+    if (!step7) return;
+    const row = await prisma.auditEvent.findUnique({
+      where: { audit_id: step7.audit_event_id },
+      select: { event_type: true, details: true },
+    });
+    expect(row?.event_type).toBe("ADMIN_ACTION");
+    const details = (row?.details ?? {}) as Record<string, unknown>;
+    expect(details["action"]).toBe("CONNECTOR_BINDING_REGISTERED");
+    expect(details["connector_type"]).toBe("GOOGLE_WORKSPACE_READ");
+    expect(details["binding_display_name"]).toBe(input.google_display_name);
+    expect(details["binding_secret_ref_name"]).toBe(input.google_secret_ref);
+    const serialized = JSON.stringify(row);
+    expect(serialized).not.toMatch(/ya29\.[A-Za-z0-9_-]{8,}/);
+    expect(serialized).not.toMatch(/-----BEGIN PRIVATE KEY-----/);
+    expect(serialized.toLowerCase()).not.toContain("bearer ");
+  });
+});
+
+describe("D6 business activation — input + auth failures", () => {
+  it("rejects empty slack_display_name as INVALID_SLACK_BINDING_INPUT", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      {
+        slack_display_name: "",
+        slack_secret_ref: "SLACK_X",
+        google_display_name: "google-x",
+        google_secret_ref: "GOOGLE_X",
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("INVALID_SLACK_BINDING_INPUT");
+  });
+
+  it("rejects empty google_display_name as INVALID_GOOGLE_BINDING_INPUT", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      {
+        slack_display_name: "slack-x",
+        slack_secret_ref: "SLACK_X",
+        google_display_name: "",
+        google_secret_ref: "GOOGLE_X",
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("INVALID_GOOGLE_BINDING_INPUT");
+  });
+
+  it("rejects empty google_secret_ref as INVALID_GOOGLE_BINDING_INPUT", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeBusinessActivationForCaller(
+      phase0.admin_entity_id,
+      {
+        slack_display_name: "slack-x",
+        slack_secret_ref: "SLACK_X",
+        google_display_name: "google-x",
+        google_secret_ref: "",
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("INVALID_GOOGLE_BINDING_INPUT");
+  });
+});
+
+describe("D6 POST /org/dandelion/activate/business — HTTP surface", () => {
+  async function loginAdmin(
+    email: string,
+    password: string,
+  ): Promise<{ token: string; ip: string }> {
+    const ip = `10.55.${Math.floor(Math.random() * 200) + 1}.${Math.floor(Math.random() * 254) + 1}`;
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email,
+        password,
+        requested_operations: ["read", "write", "share"],
+      },
+      remoteAddress: ip,
+    });
+    if (login.statusCode !== 200) {
+      throw new Error(`login failed: ${login.statusCode} ${login.body}`);
+    }
+    return { token: (login.json() as { token: string }).token, ip };
+  }
+
+  it("returns 200 + ok:true with 11 step results when the admin caller activates the business envelope", async () => {
+    const input = makePhase0Input();
+    await executePhase0(input);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+    const bindings = makeSlackAndGoogleInput("http1");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate/business",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: bindings,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body["ok"]).toBe(true);
+    expect(body["archetype"]).toBe("business");
+    expect(body["plan_id"]).toBe("activation.business.v1");
+    const steps = body["steps"];
+    expect(Array.isArray(steps)).toBe(true);
+    if (Array.isArray(steps)) {
+      expect(steps.length).toBe(11);
+    }
+  });
+
+  it("returns 422 with INVALID_GOOGLE_BINDING_INPUT when google_display_name is missing", async () => {
+    const input = makePhase0Input();
+    await executePhase0(input);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate/business",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: {
+        slack_display_name: "x",
+        slack_secret_ref: "SLACK_X",
+        google_secret_ref: "GOOGLE_X",
+      },
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as Record<string, unknown>;
+    expect(body["ok"]).toBe(false);
+    expect(body["code"]).toBe("INVALID_GOOGLE_BINDING_INPUT");
   });
 });

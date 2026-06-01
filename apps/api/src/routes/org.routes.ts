@@ -37,6 +37,7 @@ import {
 import {
   executeStarterPilotActivationForCaller,
   executeTeamActivationForCaller,
+  executeBusinessActivationForCaller,
 } from "../services/governance/dandelion-activation.service.js";
 import { createTwin } from "../services/governance/twin.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
@@ -2540,6 +2541,85 @@ export async function registerOrgRoutes(
       const status =
         result.code === "ARCHETYPE_UNKNOWN" ||
         result.code === "INVALID_SLACK_BINDING_INPUT" ||
+        result.code === "CONNECTOR_BINDING_FAILED"
+          ? 422
+          : result.code === "NOT_ADMIN" ||
+              result.code === "CALLER_ENTITY_NOT_FOUND" ||
+              result.code === "CALLER_NOT_IN_ORG"
+            ? 403
+            : 500;
+      return reply.code(status).send(result);
+    },
+  );
+
+  // POST /org/dandelion/activate/business — runs the business-
+  // archetype ActivationPlan catalog (11 steps; business-activation.
+  // json). Steps 6 + 7 register real SLACK_READ + GOOGLE_WORKSPACE_
+  // READ ConnectorBindings via the existing C2 + C3 substrates; both
+  // bindings persist with secret_ref env-var-NAME ONLY. Step 5
+  // (delegated-profile-register) + step 9 (advanced-audit-tier-
+  // enable) emit audit-only at this slice (underlying tables are
+  // forward-substrate).
+  //
+  // Partial-failure semantics: if step 6 (Slack) succeeds but step 7
+  // (Google) fails, the Slack binding row remains LIVE; the failure
+  // message names which connector failed. Operator can soft-delete
+  // the orphaned binding via the existing /api/v1/org/connectors/:id
+  // admin route. A future slice may add automatic rollback.
+  app.post<{
+    Body: {
+      slack_display_name?: unknown;
+      slack_secret_ref?: unknown;
+      slack_workspace_id?: unknown;
+      google_display_name?: unknown;
+      google_secret_ref?: unknown;
+      google_workspace_domain?: unknown;
+    };
+  }>(
+    "/api/v1/org/dandelion/activate/business",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const body = request.body ?? {};
+      const slackDisplayName =
+        typeof body.slack_display_name === "string"
+          ? body.slack_display_name
+          : "";
+      const slackSecretRef =
+        typeof body.slack_secret_ref === "string" ? body.slack_secret_ref : "";
+      const slackWorkspaceId =
+        typeof body.slack_workspace_id === "string"
+          ? body.slack_workspace_id
+          : undefined;
+      const googleDisplayName =
+        typeof body.google_display_name === "string"
+          ? body.google_display_name
+          : "";
+      const googleSecretRef =
+        typeof body.google_secret_ref === "string"
+          ? body.google_secret_ref
+          : "";
+      const googleWorkspaceDomain =
+        typeof body.google_workspace_domain === "string"
+          ? body.google_workspace_domain
+          : undefined;
+      const result = await executeBusinessActivationForCaller(callerId, {
+        slack_display_name: slackDisplayName,
+        slack_secret_ref: slackSecretRef,
+        slack_workspace_id: slackWorkspaceId,
+        google_display_name: googleDisplayName,
+        google_secret_ref: googleSecretRef,
+        google_workspace_domain: googleWorkspaceDomain,
+      });
+      if (result.ok) {
+        return reply.code(200).send(result);
+      }
+      const status =
+        result.code === "ARCHETYPE_UNKNOWN" ||
+        result.code === "INVALID_SLACK_BINDING_INPUT" ||
+        result.code === "INVALID_GOOGLE_BINDING_INPUT" ||
         result.code === "CONNECTOR_BINDING_FAILED"
           ? 422
           : result.code === "NOT_ADMIN" ||
