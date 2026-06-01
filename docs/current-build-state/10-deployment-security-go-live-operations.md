@@ -6,7 +6,9 @@
 
 **READ-ONLY production-readiness audit landed 2026-06-01** per `[FOUNDER-SECTION-10-PRODUCTION-READINESS-AUDIT-AUTH]`. No code changes; no schema; no new routes; no runtime behavior. Audit identifies what is production-grade today, what is launch-critical and missing, what is forward-substrate, and what requires Founder product decision.
 
-**Foundation main HEAD:** `fc54839` · **CT main HEAD:** `f4c24dd`
+**ADR-0080 LANDED design-only 2026-06-01** per `[FOUNDER-ADR-0080-OOTB-DANDELION-ONTOLOGY-DESIGN-ONLY-AUTH]` (PR #TBD). Architecture + product-ontology ADR closes one of the three hard launch blockers at the architecture register — `docs/architecture/decisions/0080-out-of-the-box-role-tool-workflow-connector-dandelion-ontology.md`. 16 design objects defined (RoleTemplate / DepartmentTemplate / CompanyTemplate / ToolProfile / WorkflowTemplate / ConnectorPreset / DelegatedAuthorityProfile / PermissionBundle / OnboardingQuestionSet / AhaMomentPack / SafeFallbackMode / OrgChartRelationshipTemplate / IndustryVariant / CompanySizeVariant / DandelionFlowTemplate / DigitalTwinStarterProfile). NO schema, NO code, NO seed data, NO runtime behavior, NO mutation to existing `dandelion.service.ts`. Recommended next slice = Wave 2 static seed catalog with Executive Assistant deepest worked example — **do NOT implement Wave 2 without separate Founder authorization**.
+
+**Foundation main HEAD:** `5b0b607` (post PR #164; ADR-0080 in flight) · **CT main HEAD:** `f4c24dd`
 
 ## Repository heads audited
 
