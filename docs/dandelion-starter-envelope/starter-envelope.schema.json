@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://niovlabs.com/foundation/dandelion-starter-envelope/starter-envelope.schema.json",
+  "title": "NIOV Foundation Dandelion Stage E Starter Envelope Assembly Substrate Schema",
+  "description": "Validation schema for D5 Dandelion Starter Envelope Assembly Substrate at docs/dandelion-starter-envelope/. Each file is a wrapper containing kind + catalog_version + envelope_defaults + starter_envelope. Each starter envelope bundles D4-approved Map regions across the 9 Map types into a single governed-context-envelope per ADR-0080 Amendment 1, tuned per ADR-0083 plan archetype (starter-pilot / team / business / enterprise). STATIC ASSEMBLY SUBSTRATE ONLY — every envelope_state is DRAFT_NOT_ACTIVATED. Per ADR-0082 + Amendment 1: Dandelion maps the territory; admins approve the map; Foundation governs what can happen inside the map.",
+  "type": "object",
+  "required": ["kind", "catalog_version", "envelope_defaults", "starter_envelope"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "envelope_defaults": { "$ref": "#/definitions/EnvelopeDefaults" },
+    "kind": { "type": "string", "enum": ["StarterEnvelope"] },
+    "catalog_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "starter_envelope": { "$ref": "#/definitions/StarterEnvelope" }
+  },
+  "definitions": {
+    "StarterEnvelope": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "status",
+        "object_type",
+        "plan_archetype_id",
+        "name",
+        "description",
+        "human_readable_summary",
+        "model_usage_notes",
+        "source_adr_refs",
+        "consumes_governance_review_ids",
+        "scope_summary_by_map_type",
+        "approved_regions_bundle",
+        "permission_defaults",
+        "scope_defaults",
+        "cross_map_dependency_resolution",
+        "DMW_scope_ceiling",
+        "audit_expectations",
+        "governance_review_points",
+        "safe_defaults",
+        "forbidden_defaults",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "envelope_state"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)+\\.v[0-9]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "type": "string", "enum": ["ACCEPTED", "PROPOSED", "DEPRECATED"] },
+        "object_type": { "type": "string", "const": "StarterEnvelope" },
+        "plan_archetype_id": { "type": "string", "enum": ["starter-pilot", "team", "business", "enterprise"] },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "source_adr_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(ADR-[0-9]{4}|RULE [0-9]+|US [0-9,]+)$" }
+        },
+        "consumes_governance_review_ids": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": { "type": "string", "pattern": "^review\\.[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)*\\.v[0-9]+$" }
+        },
+        "scope_summary_by_map_type": {
+          "type": "object",
+          "required": ["CompanyMap", "OrgRelationshipMap", "RoleMap", "ToolMap", "WorkflowMap", "AuthorityMap", "MemoryDmwMap", "RiskMap", "AhaMomentMap"],
+          "additionalProperties": false,
+          "properties": {
+            "CompanyMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "OrgRelationshipMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "RoleMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "ToolMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "WorkflowMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "AuthorityMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "MemoryDmwMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "RiskMap": { "$ref": "#/definitions/MapScopeSummary" },
+            "AhaMomentMap": { "$ref": "#/definitions/MapScopeSummary" }
+          }
+        },
+        "approved_regions_bundle": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/ApprovedRegion" }
+        },
+        "permission_defaults": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "scope_defaults": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "cross_map_dependency_resolution": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "DMW_scope_ceiling": {
+          "type": "object",
+          "required": ["baseline_categories", "approved_extension_categories", "forbidden_categories", "derivation_note"],
+          "additionalProperties": false,
+          "properties": {
+            "baseline_categories": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+            "approved_extension_categories": { "type": "array", "items": { "type": "string" } },
+            "forbidden_categories": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+            "derivation_note": { "type": "string", "minLength": 1 }
+          }
+        },
+        "audit_expectations": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "governance_review_points": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "safe_defaults": { "type": "array", "items": { "type": "string" } },
+        "forbidden_defaults": { "type": "array", "items": { "type": "string" } },
+        "allowed_consumers": { "type": "array", "items": { "type": "string" } },
+        "forbidden_consumers": { "type": "array", "items": { "type": "string" } },
+        "envelope_state": { "type": "string", "const": "DRAFT_NOT_ACTIVATED" }
+      },
+      "additionalProperties": true
+    },
+    "MapScopeSummary": {
+      "type": "object",
+      "required": ["approved_region_count", "human_summary", "highest_sensitivity_level"],
+      "properties": {
+        "approved_region_count": { "type": "integer", "minimum": 0 },
+        "human_summary": { "type": "string", "minLength": 1 },
+        "highest_sensitivity_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }
+      },
+      "additionalProperties": true
+    },
+    "ApprovedRegion": {
+      "type": "object",
+      "required": ["region_id", "map_type", "expected_review_outcome", "rationale_summary"],
+      "properties": {
+        "region_id": { "type": "string", "minLength": 1 },
+        "map_type": {
+          "type": "string",
+          "enum": ["CompanyMap", "OrgRelationshipMap", "RoleMap", "ToolMap", "WorkflowMap", "AuthorityMap", "MemoryDmwMap", "RiskMap", "AhaMomentMap"]
+        },
+        "expected_review_outcome": {
+          "type": "string",
+          "enum": ["APPROVE", "APPROVE_WITH_CONDITIONS"]
+        },
+        "rationale_summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "EnvelopeDefaults": {
+      "type": "object",
+      "required": ["object_type", "human_readable_summary", "model_usage_notes", "scope_defaults", "permission_defaults", "provenance", "audit_expectations", "policy_purpose", "allowed_consumers", "forbidden_consumers", "sensitivity_level"],
+      "additionalProperties": true,
+      "properties": {
+        "object_type": { "type": "string" },
+        "human_readable_summary": { "type": "string" },
+        "model_usage_notes": { "type": "string" },
+        "scope_defaults": { "type": "array", "items": { "type": "string" } },
+        "permission_defaults": { "type": "array", "items": { "type": "string" } },
+        "provenance": {
+          "type": "object",
+          "required": ["authored_by", "source", "version_tag", "captured_at", "authority"]
+        },
+        "audit_expectations": { "type": "array", "items": { "type": "string" } },
+        "policy_purpose": { "type": "string" },
+        "allowed_consumers": { "type": "array", "items": { "type": "string" } },
+        "forbidden_consumers": { "type": "array", "items": { "type": "string" } },
+        "sensitivity_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }
+      }
+    }
+  }
+}

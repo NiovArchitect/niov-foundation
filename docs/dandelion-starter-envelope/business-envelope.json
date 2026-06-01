@@ -1,0 +1,142 @@
+{
+  "$schema": "./starter-envelope.schema.json",
+  "kind": "StarterEnvelope",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "StarterEnvelope",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Envelopes are DRAFT_NOT_ACTIVATED. Real activation at D6.",
+    "scope_defaults": ["TENANT_SCOPED", "ENVELOPE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_DELEGATED", "NO_ACTIVATION_FROM_ENVELOPE_DRAFT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-starter-envelope/business-envelope.json",
+      "version_tag": "d5-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D5-DANDELION-STARTER-ENVELOPE]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:STARTER_ENVELOPE_REFERENCED when consumed"],
+    "policy_purpose": "ASSEMBLY_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSEMBLY_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "starter_envelope": {
+    "id": "envelope.business.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "StarterEnvelope",
+    "plan_archetype_id": "business",
+    "name": "Business Starter Envelope",
+    "description": "Bundles D4-approved Map regions appropriate for a Business plan tier. Adds Stage 3 proposed-Action workflows + multi-connector activation candidates + customer-scoped memory + Agent Playground access + advanced audit. Connector activation per ADR-0084 + dual-control for risky writes per ADR-0026.",
+    "human_readable_summary": "Business envelope: full Company + Org + Role + multi-connector (Slack LANDABLE + Google Workspace + Project Tracker queued) + Stages 1-3 workflows + advanced authority + customer-scoped memory + all aha moments.",
+    "model_usage_notes": "Business plan unlocks 5 capability packs. Workflow Stage 3 proposed-Action requires Workflow Owner + Policy Approver. Google Workspace + Project Tracker connectors require their respective C-slice runtimes; Slack runs on existing C2.",
+    "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0083", "ADR-0084", "ADR-0081", "ADR-0061", "ADR-0026", "ADR-0001", "ADR-0027", "RULE 0"],
+    "consumes_governance_review_ids": [
+      "review.company-map.v1",
+      "review.org-relationship-map.v1",
+      "review.role-map.v1",
+      "review.tool-map.v1",
+      "review.workflow-map.v1",
+      "review.authority-map.v1",
+      "review.memory-dmw-map.v1",
+      "review.risk-map.v1",
+      "review.aha-moment-map.v1"
+    ],
+    "scope_summary_by_map_type": {
+      "CompanyMap": { "approved_region_count": 3, "human_summary": "Full company + sensitive exclusion + compliance posture", "highest_sensitivity_level": "HIGH" },
+      "OrgRelationshipMap": { "approved_region_count": 3, "human_summary": "Approval + escalation + executive-support", "highest_sensitivity_level": "HIGH" },
+      "RoleMap": { "approved_region_count": 4, "human_summary": "Template + day-one capabilities + first-week aha + sensitive-scope exclusion for all 6 seat tiers", "highest_sensitivity_level": "HIGH" },
+      "ToolMap": { "approved_region_count": 4, "human_summary": "Slack-read-first + Google Workspace + Project Tracker queued + forbidden-tool exclusion", "highest_sensitivity_level": "HIGH" },
+      "WorkflowMap": { "approved_region_count": 4, "human_summary": "Stages 1-3 + safe-fallback + dual-control workflows", "highest_sensitivity_level": "HIGH" },
+      "AuthorityMap": { "approved_region_count": 4, "human_summary": "Must-never-assume + dual-control + approval chains + delegated profiles", "highest_sensitivity_level": "CRITICAL" },
+      "MemoryDmwMap": { "approved_region_count": 4, "human_summary": "Baseline + self + team + project-customer scoped (forbidden absolute)", "highest_sensitivity_level": "CRITICAL" },
+      "RiskMap": { "approved_region_count": 5, "human_summary": "All 5 risk regions including high-risk tools-workflows + compliance-sensitive", "highest_sensitivity_level": "CRITICAL" },
+      "AhaMomentMap": { "approved_region_count": 5, "human_summary": "All 5 aha regions: Slack LIVE + safe-fallback + Google Workspace queued + Project Tracker queued + workflow recommendations", "highest_sensitivity_level": "MEDIUM" }
+    },
+    "approved_regions_bundle": [
+      { "region_id": "company.initial-departments", "map_type": "CompanyMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Org-wide rollout possible." },
+      { "region_id": "company.sensitive-systems-exclusion", "map_type": "CompanyMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Absolute exclusion." },
+      { "region_id": "company.compliance-posture-summary", "map_type": "CompanyMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Neutral compliance vocabulary." },
+      { "region_id": "org.approval-chains", "map_type": "OrgRelationshipMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Approval chains for Stage 3+ workflows." },
+      { "region_id": "org.escalation-paths", "map_type": "OrgRelationshipMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Escalation paths for incident + customer + compliance." },
+      { "region_id": "org.executive-support", "map_type": "OrgRelationshipMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Executive support requires dual-control." },
+      { "region_id": "role.template-match", "map_type": "RoleMap", "expected_review_outcome": "APPROVE", "rationale_summary": "All 6 seat tiers eligible." },
+      { "region_id": "role.day-one-capabilities", "map_type": "RoleMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Per-role admin policy approval." },
+      { "region_id": "role.first-week-aha", "map_type": "RoleMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "First-week aha per Wave 2.1 §22." },
+      { "region_id": "role.sensitive-scope-exclusion", "map_type": "RoleMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Sensitive scopes absolute." },
+      { "region_id": "tool.slack-read-first", "map_type": "ToolMap", "expected_review_outcome": "APPROVE", "rationale_summary": "C2 OPERATING — full Slack read approval." },
+      { "region_id": "tool.google-workspace-read-first", "map_type": "ToolMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Awaiting C3 runtime; admin approval queued." },
+      { "region_id": "tool.project-tracker-read-first", "map_type": "ToolMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Awaiting C4 runtime; admin approval queued." },
+      { "region_id": "tool.forbidden-exclusion", "map_type": "ToolMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Forbidden tools excluded." },
+      { "region_id": "workflow.stage-1-templates", "map_type": "WorkflowMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Templates baseline." },
+      { "region_id": "workflow.stage-2-recommendations", "map_type": "WorkflowMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Stage 2 recommendations available." },
+      { "region_id": "workflow.stage-3-proposed-action", "map_type": "WorkflowMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Stage 3 proposed-Action requires Policy Approver." },
+      { "region_id": "workflow.safe-fallback", "map_type": "WorkflowMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Safe-fallback always available." },
+      { "region_id": "workflow.dual-control-required", "map_type": "WorkflowMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Dual-control workflows enforced." },
+      { "region_id": "authority.must-never-assume", "map_type": "AuthorityMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Absolute regardless of tier." },
+      { "region_id": "authority.dual-control-required", "map_type": "AuthorityMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Dual-control for risky writes." },
+      { "region_id": "authority.approval-chains", "map_type": "AuthorityMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Spend / hiring / external commit approval chains." },
+      { "region_id": "authority.delegated-profiles", "map_type": "AuthorityMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Per-role delegation profiles." },
+      { "region_id": "memory.baseline-safety", "map_type": "MemoryDmwMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Baseline always-on." },
+      { "region_id": "memory.self-scoped", "map_type": "MemoryDmwMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Self-scoped after user confirmation." },
+      { "region_id": "memory.team-scoped", "map_type": "MemoryDmwMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Team-scope after admin approval." },
+      { "region_id": "memory.project-customer-scoped", "map_type": "MemoryDmwMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Customer-by-customer scope binding." },
+      { "region_id": "risk.map-blocking", "map_type": "RiskMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Absolute downstream." },
+      { "region_id": "risk.rule-20-forbidden", "map_type": "RiskMap", "expected_review_outcome": "APPROVE", "rationale_summary": "RULE-20 absolute." },
+      { "region_id": "risk.unknown-areas", "map_type": "RiskMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Default-forbid until reviewed." },
+      { "region_id": "risk.compliance-sensitive", "map_type": "RiskMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "LawfulBasis-gated where applicable." },
+      { "region_id": "risk.high-risk-tools-workflows", "map_type": "RiskMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Dual-control per ADR-0026." },
+      { "region_id": "aha.slack-catchup", "map_type": "AhaMomentMap", "expected_review_outcome": "APPROVE", "rationale_summary": "C2 LIVE." },
+      { "region_id": "aha.safe-fallback", "map_type": "AhaMomentMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Always available." },
+      { "region_id": "aha.google-workspace", "map_type": "AhaMomentMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Awaits C3." },
+      { "region_id": "aha.project-tracker", "map_type": "AhaMomentMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Awaits C4." },
+      { "region_id": "aha.workflow-recommendations", "map_type": "AhaMomentMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Stage 2 recommendation-only." }
+    ],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_DELEGATED", "STAGES_1_TO_3_WORKFLOWS", "BASELINE_TEAM_CUSTOMER_DMW"],
+    "scope_defaults": ["TENANT_SCOPED", "DEPARTMENT_SCOPED", "ROLE_SCOPED", "TEAM_SCOPED", "PROJECT_SCOPED", "CUSTOMER_SCOPED"],
+    "cross_map_dependency_resolution": [
+      "Company Map gates every downstream Map activation",
+      "Org Map approval + escalation + executive-support gate Authority + Workflow",
+      "Authority Map approval chains + delegated profiles gate Workflow Stage 3",
+      "Risk Map all 5 regions gate Tool / Workflow / Memory / Aha activation",
+      "Tool Map Slack on C2 OPERATING; Google Workspace + Project Tracker queued until C3 / C4",
+      "Memory Map team + project-customer scopes inherit Authority Map dual-control"
+    ],
+    "DMW_scope_ceiling": {
+      "baseline_categories": ["DMW_baseline_safety", "self_scoped_memory", "user_corrections", "session_continuity"],
+      "approved_extension_categories": ["team_scoped_memory", "project_scoped_memory", "customer_scoped_memory", "Slack_connector_provenance_metadata", "playground_simulation_metadata", "advanced_audit_metadata"],
+      "forbidden_categories": ["raw_employee_inspection", "managerial_oversight_monitoring", "workforce_scoring_signals", "psychological_trait_inference", "cross_tenant_memory_fusion", "raw_customer_PII_without_scope_binding", "slack_message_payload_full_capture_at_business_tier"],
+      "derivation_note": "Business envelope extends DMW scope ceiling to include team / project / customer scopes + connector provenance metadata + advanced audit. Forbidden categories absolute including raw customer PII without scope binding."
+    },
+    "audit_expectations": [
+      "ADMIN_ACTION:STARTER_ENVELOPE_REFERENCED when consumed",
+      "INVOKE_CONNECTOR + ACTION_* for Slack-read-first activation",
+      "future ACTION_* at Stage 3+ workflow runtime per ADR-0081",
+      "no new audit literal at D5"
+    ],
+    "governance_review_points": [
+      "Envelope is DRAFT_NOT_ACTIVATED — real activation at D6",
+      "Business envelope unlocks Stage 3 proposed-Action + multi-connector activation",
+      "Connector activation per ADR-0084 + dual-control for risky writes per ADR-0026",
+      "DMW baseline always-on regardless of envelope tier"
+    ],
+    "safe_defaults": [
+      "Read-only envelope assembly",
+      "Stages 1-3 workflows",
+      "Slack on C2 OPERATING; other connectors await C-slice",
+      "Customer-by-customer scope binding",
+      "Baseline DMW safety always included"
+    ],
+    "forbidden_defaults": [
+      "Autonomous envelope activation",
+      "Stage 4-5 workflow inclusion at Business tier",
+      "Connector write activation (write disabled until ≥C6)",
+      "Cross-tenant memory fusion",
+      "Workforce-scoring inferences"
+    ],
+    "allowed_consumers": ["DANDELION_ASSEMBLY_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "envelope_state": "DRAFT_NOT_ACTIVATED"
+  }
+}

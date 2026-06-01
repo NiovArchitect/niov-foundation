@@ -13,8 +13,8 @@
 | A — Preview | ✓ LIVE (ADR-0082 base; CT `/onboarding`; OOTB catalog PR #166 + Wave 6 matrix PR #169) |
 | B — Assessment substrate | ✓ LIVE (D2 PR #181 — `docs/dandelion-assessment/` 11 files, 9 map assessments + schema + README + validator) |
 | C — Recommendation substrate | ✓ LIVE (D3 PR #186 — `docs/dandelion-recommendation/` 11 files, 9 map recommendations + schema + README + validator; 9 D2 IDs cross-referenced) |
-| D — Governance Review substrate | ✓ LIVE (D4 this PR — `docs/dandelion-governance-review/` 11 files, 9 map governance reviews + schema + README + validator; 9 D3 IDs cross-referenced) |
-| E — Starter Envelope Assembly | queued (D5 — Founder-gated) |
+| D — Governance Review substrate | ✓ LIVE (D4 PR #189 — `docs/dandelion-governance-review/` 11 files, 9 map governance reviews + schema + README + validator; 9 D3 IDs cross-referenced) |
+| E — Starter Envelope Assembly substrate | ✓ LIVE (D5 this PR — `docs/dandelion-starter-envelope/` 6 files, 4 plan-archetype envelopes + schema + README + validator; 9 D4 IDs cross-referenced per envelope) |
 | F — Activation | queued (D6 — Founder-gated; per ADR-0082 Amendment 1 §9.7 map-region-gated) |
 
 ## D2 — what landed

@@ -1,0 +1,118 @@
+{
+  "$schema": "./starter-envelope.schema.json",
+  "kind": "StarterEnvelope",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "StarterEnvelope",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Envelopes are DRAFT_NOT_ACTIVATED. Real activation requires admin to walk D4 reviews + the future D6 Activation slice. This substrate is the canonical projection a future D6 will consume.",
+    "scope_defaults": ["TENANT_SCOPED", "ENVELOPE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_DELEGATED", "NO_ACTIVATION_FROM_ENVELOPE_DRAFT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-starter-envelope/starter-pilot-envelope.json",
+      "version_tag": "d5-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D5-DANDELION-STARTER-ENVELOPE]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:STARTER_ENVELOPE_REFERENCED when consumed", "future ADMIN_ACTION:MAP_REGION_APPROVED + STARTER_ENVELOPE_ACTIVATED at D6"],
+    "policy_purpose": "ASSEMBLY_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSEMBLY_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "starter_envelope": {
+    "id": "envelope.starter-pilot.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "StarterEnvelope",
+    "plan_archetype_id": "starter-pilot",
+    "name": "Starter / Pilot Starter Envelope",
+    "description": "Bundles the conservatively-scoped subset of D4-approved Map regions appropriate for a Starter / Pilot plan tier. Designed for pilot teams + evaluation deployments with $250 base + 1 admin + 2 standard twin seats per the B2 catalog. Baseline DMW + safety + audit included; no connector pack entitlement at this tier so connector-bound regions are deliberately excluded from this envelope.",
+    "human_readable_summary": "Smallest viable Starter / Pilot envelope: Company + Org + Role + Memory baselines + safe-fallback aha moments. No connector activation. No workflow runtime. Conservative defaults at every region.",
+    "model_usage_notes": "Use this envelope for the cheapest plan tier. The bundle deliberately excludes connector + workflow-runtime regions because the Starter / Pilot ledger (B4) does not include those capability pack entitlements. The envelope encodes 'safe by minimum scope' rather than 'safe by extensive guards'.",
+    "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0083", "ADR-0001", "ADR-0027", "RULE 0"],
+    "consumes_governance_review_ids": [
+      "review.company-map.v1",
+      "review.org-relationship-map.v1",
+      "review.role-map.v1",
+      "review.tool-map.v1",
+      "review.workflow-map.v1",
+      "review.authority-map.v1",
+      "review.memory-dmw-map.v1",
+      "review.risk-map.v1",
+      "review.aha-moment-map.v1"
+    ],
+    "scope_summary_by_map_type": {
+      "CompanyMap": { "approved_region_count": 2, "human_summary": "Initial-rollout departments + sensitive-systems exclusion", "highest_sensitivity_level": "HIGH" },
+      "OrgRelationshipMap": { "approved_region_count": 1, "human_summary": "Approval chains only; escalation paths deferred", "highest_sensitivity_level": "HIGH" },
+      "RoleMap": { "approved_region_count": 2, "human_summary": "Template match + safe day-one capabilities for admin + standard twin roles only", "highest_sensitivity_level": "HIGH" },
+      "ToolMap": { "approved_region_count": 1, "human_summary": "Forbidden-tool exclusion only; no connector activation at this tier", "highest_sensitivity_level": "HIGH" },
+      "WorkflowMap": { "approved_region_count": 2, "human_summary": "Stage 1 templates + safe-fallback paths; no Stage 2+ at this tier", "highest_sensitivity_level": "HIGH" },
+      "AuthorityMap": { "approved_region_count": 1, "human_summary": "'Must never be assumed' surfaces only; no delegated authority profiles at this tier", "highest_sensitivity_level": "CRITICAL" },
+      "MemoryDmwMap": { "approved_region_count": 2, "human_summary": "Baseline DMW safety + self-scoped memory; team/customer scopes deferred", "highest_sensitivity_level": "CRITICAL" },
+      "RiskMap": { "approved_region_count": 3, "human_summary": "Map-blocking risks + RULE-20 forbidden inferences + unknown-area conservatism", "highest_sensitivity_level": "CRITICAL" },
+      "AhaMomentMap": { "approved_region_count": 1, "human_summary": "Safe-fallback aha moments only (no connector required)", "highest_sensitivity_level": "MEDIUM" }
+    },
+    "approved_regions_bundle": [
+      { "region_id": "company.initial-departments", "map_type": "CompanyMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Limit to one pilot department." },
+      { "region_id": "company.sensitive-systems-exclusion", "map_type": "CompanyMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Always-on exclusion." },
+      { "region_id": "org.approval-chains", "map_type": "OrgRelationshipMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Approve only the pilot-department approval chain." },
+      { "region_id": "role.template-match", "map_type": "RoleMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Wave 2.1 DEEP roles only (e.g. EA + Admin)." },
+      { "region_id": "role.sensitive-scope-exclusion", "map_type": "RoleMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Sensitive-scope exclusions always-on." },
+      { "region_id": "tool.forbidden-exclusion", "map_type": "ToolMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Forbidden tools excluded." },
+      { "region_id": "workflow.stage-1-templates", "map_type": "WorkflowMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Template-only workflows." },
+      { "region_id": "workflow.safe-fallback", "map_type": "WorkflowMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Safe-fallback paths available." },
+      { "region_id": "authority.must-never-assume", "map_type": "AuthorityMap", "expected_review_outcome": "APPROVE", "rationale_summary": "'Must never be assumed' always-on." },
+      { "region_id": "memory.baseline-safety", "map_type": "MemoryDmwMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Baseline DMW safety; never paywalled." },
+      { "region_id": "memory.self-scoped", "map_type": "MemoryDmwMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Self-scoped memory after user confirmation." },
+      { "region_id": "risk.map-blocking", "map_type": "RiskMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Map-blocking risks gate everything downstream." },
+      { "region_id": "risk.rule-20-forbidden", "map_type": "RiskMap", "expected_review_outcome": "APPROVE", "rationale_summary": "RULE-20 forbidden inferences absolute." },
+      { "region_id": "risk.unknown-areas", "map_type": "RiskMap", "expected_review_outcome": "APPROVE_WITH_CONDITIONS", "rationale_summary": "Unknown areas default-forbid." },
+      { "region_id": "aha.safe-fallback", "map_type": "AhaMomentMap", "expected_review_outcome": "APPROVE", "rationale_summary": "Safe-fallback aha moments only." }
+    ],
+    "permission_defaults": ["READ_FIRST", "WRITE_DISABLED_UNTIL_DELEGATED", "TEMPLATE_ONLY_WORKFLOWS", "BASELINE_DMW_ONLY"],
+    "scope_defaults": ["TENANT_SCOPED", "PILOT_DEPARTMENT_SCOPED", "ROLE_SCOPED"],
+    "cross_map_dependency_resolution": [
+      "Company Map approval (region: initial-departments + sensitive-systems-exclusion) gates every downstream Map activation",
+      "Org Map approval-chains gate Authority Map approval downstream",
+      "Risk Map map-blocking + RULE-20-forbidden gate Tool / Workflow / Memory Map activation",
+      "Authority Map 'must never be assumed' inherited by every downstream Twin scope",
+      "Memory / DMW Map baseline + self-scope inherited regardless of plan tier"
+    ],
+    "DMW_scope_ceiling": {
+      "baseline_categories": ["DMW_baseline_safety", "self_scoped_memory", "user_corrections", "session_continuity"],
+      "approved_extension_categories": [],
+      "forbidden_categories": ["raw_employee_inspection", "managerial_oversight_monitoring", "workforce_scoring_signals", "psychological_trait_inference", "cross_tenant_memory_fusion", "connector_payload_capture_at_starter_pilot"],
+      "derivation_note": "Starter / Pilot envelope derives DMW scope ceiling from Memory Map baseline + self-scoped approvals only. No team / project / customer scope at this tier. Forbidden categories absolute regardless of admin choice (RULE-20 protected)."
+    },
+    "audit_expectations": [
+      "ADMIN_ACTION:STARTER_ENVELOPE_REFERENCED when consumed by a future D6 activation",
+      "future ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED at D6 with envelope_id + plan_archetype_id",
+      "no new audit literal at D5"
+    ],
+    "governance_review_points": [
+      "Envelope is DRAFT_NOT_ACTIVATED — real activation at D6 requires admin to walk D4 reviews + admin policy approval",
+      "Starter / Pilot envelope deliberately excludes connector + Stage 2+ workflow regions",
+      "DMW baseline always-on regardless of envelope tier per ADR-0083",
+      "Customers should not pay extra just to have memory be safe"
+    ],
+    "safe_defaults": [
+      "Read-only envelope assembly",
+      "Conservative region inclusion",
+      "Safe-fallback paths preferred",
+      "No connector activation at this tier",
+      "Baseline DMW safety always included"
+    ],
+    "forbidden_defaults": [
+      "Autonomous envelope activation",
+      "Stage 2+ workflow inclusion at Starter / Pilot",
+      "Connector pack activation at this tier",
+      "Cross-tenant memory fusion",
+      "Workforce-scoring inferences from envelope assembly"
+    ],
+    "allowed_consumers": ["DANDELION_ASSEMBLY_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "envelope_state": "DRAFT_NOT_ACTIVATED"
+  }
+}
