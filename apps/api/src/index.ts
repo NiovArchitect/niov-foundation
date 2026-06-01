@@ -625,6 +625,19 @@ export type {
   PropagationEntry,
 } from "./services/governance/dandelion.service.js";
 
+// D6 Dandelion Stage F activation runtime (starter-pilot slice).
+// See apps/api/src/services/governance/dandelion-activation.service.ts
+// + docs/dandelion-activation/starter-pilot-activation.json for the
+// catalog this service consumes.
+export { executeStarterPilotActivationForCaller } from "./services/governance/dandelion-activation.service.js";
+export type {
+  ActivationFailureCode,
+  ActivationFailure,
+  ActivationResult,
+  ActivationStepResult,
+  ActivationSuccess,
+} from "./services/governance/dandelion-activation.service.js";
+
 // escalation.service.ts re-exports -- D-2D-D10-2 substrate (CRUD +
 // PENDING -> APPROVED/REJECTED/EXPIRED state machine over the
 // EscalationRequest model). External consumers (tests, sibling

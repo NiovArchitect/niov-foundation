@@ -34,6 +34,7 @@ import {
   reorderPhase4,
   type PropagationEntry,
 } from "../services/governance/dandelion.service.js";
+import { executeStarterPilotActivationForCaller } from "../services/governance/dandelion-activation.service.js";
 import { createTwin } from "../services/governance/twin.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 import { countEscalationsPending } from "../services/governance/escalation.service.js";
@@ -2451,6 +2452,49 @@ export async function registerOrgRoutes(
         ok: true,
         ...paginatedResponse(items, total, skip, take),
       });
+    },
+  );
+
+  // ════════════════════════════════════════════════════════════════
+  // D6 DANDELION ACTIVATION (Stage F implementation — starter-pilot)
+  // ════════════════════════════════════════════════════════════════
+  // POST /org/dandelion/activate — runs the starter-pilot
+  // ActivationPlan catalog (docs/dandelion-activation/
+  // starter-pilot-activation.json) for the caller's org. Emits one
+  // ADMIN_ACTION audit event per catalog step (6 steps total).
+  // Returns the discriminated ActivationResult shape with the audit
+  // chain lineage. The route is the smallest blast radius slice; it
+  // does not yet support other archetypes (team / business /
+  // enterprise carry connector binding + delegated authority +
+  // dual-control which require additional implementation slices).
+  app.post(
+    "/api/v1/org/dandelion/activate",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const result = await executeStarterPilotActivationForCaller(callerId);
+      if (result.ok) {
+        return reply.code(200).send(result);
+      }
+      // Closed-vocab failure codes → HTTP status mapping. NOT_ADMIN
+      // is the gate's own response (route gate already returns 403
+      // upstream), so a NOT_ADMIN reaching here means TAR rotated
+      // mid-request → 403. CALLER_ENTITY_NOT_FOUND / CALLER_NOT_IN_ORG
+      // are 403 too — caller has a session but lost org membership.
+      // ARCHETYPE_UNKNOWN is 422 (client requested an unsupported
+      // archetype). CATALOG_NOT_FOUND / CATALOG_MALFORMED /
+      // AUDIT_WRITE_FAILED are 500 — server-side substrate errors.
+      const status =
+        result.code === "ARCHETYPE_UNKNOWN"
+          ? 422
+          : result.code === "NOT_ADMIN" ||
+              result.code === "CALLER_ENTITY_NOT_FOUND" ||
+              result.code === "CALLER_NOT_IN_ORG"
+            ? 403
+            : 500;
+      return reply.code(status).send(result);
     },
   );
 }

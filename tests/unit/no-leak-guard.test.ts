@@ -137,10 +137,10 @@ type LegitimateHit = { line: number; token: string; reason: string };
 const KNOWN_LEGITIMATE_HITS: Readonly<Record<string, readonly LegitimateHit[]>> = {
   "apps/api/src/routes/org.routes.ts": [
     {
-      line: 1176,
+      line: 1177,
       token: "payload_summary",
       reason:
-        "Prisma select inside admin route — column read, not response shape; mapper-tier projection strips it before response. Line shifted 898 → 1089 by the ADR-0057 §7 Operation E PUT /api/v1/org/action-policies insertion (+191 lines), then 1089 → 1175 by the ADR-0057 Wave 7 PR #49 retry_budget + attempt_timeout_ms_override admin write-path extension (+86 lines), then 1175 → 1176 by the Section 4 Wave 3 INVOKE_CONNECTOR ActionType allowlist insertion in the same file (+1 line); same canonical code, same substrate justification.",
+        "Prisma select inside admin route — column read, not response shape; mapper-tier projection strips it before response. Line shifted 898 → 1089 by the ADR-0057 §7 Operation E PUT /api/v1/org/action-policies insertion (+191 lines), then 1089 → 1175 by the ADR-0057 Wave 7 PR #49 retry_budget + attempt_timeout_ms_override admin write-path extension (+86 lines), then 1175 → 1176 by the Section 4 Wave 3 INVOKE_CONNECTOR ActionType allowlist insertion in the same file (+1 line), then 1176 → 1177 by the D6 Dandelion Stage F starter-pilot activation runtime import addition (+1 line) — same canonical code, same substrate justification.",
     },
   ],
   "apps/api/src/routes/cosmp.routes.ts": [

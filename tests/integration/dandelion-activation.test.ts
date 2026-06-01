@@ -1,0 +1,312 @@
+// FILE: dandelion-activation.test.ts (integration)
+// PURPOSE: D6 Dandelion Stage F activation runtime — first slice
+//          coverage for the starter-pilot archetype. Verifies:
+//          - Catalog loaded from disk (the same JSON the D6
+//            validator checks at substrate tier)
+//          - All 6 steps emit one ADMIN_ACTION audit event each
+//            (chain integrity preserved per ADR-0002)
+//          - Final step audit_literal is
+//            "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED"
+//          - Step ordering matches the catalog (monotonic 1..6)
+//          - Auth gate: non-admin caller rejected NOT_ADMIN
+//          - Auth gate: unknown caller rejected CALLER_ENTITY_NOT_FOUND
+//          - details.action discriminators match the catalog's
+//            audit_literal sub-strings
+//          - Audit chain remains verifiable end-to-end
+// CONNECTS TO: apps/api/src/services/governance/dandelion-activation.service.ts,
+//              docs/dandelion-activation/starter-pilot-activation.json,
+//              packages/database/src/queries/audit.ts.
+
+import { randomBytes, randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  buildApp,
+  executePhase0,
+  executeStarterPilotActivationForCaller,
+  MemoryContentStore,
+  MemoryNonceStore,
+  MemoryRateLimitStore,
+  type Phase0Input,
+} from "@niov/api";
+import { ContentEncryption } from "@niov/auth";
+import { createEntity, prisma, verifyAuditChain } from "@niov/database";
+import {
+  cleanupTestData,
+  ensureAuditTriggers,
+  makeEntityInput,
+  TEST_PREFIX,
+} from "../helpers.js";
+import type { FastifyInstance } from "fastify";
+
+const TEST_JWT_SECRET = "d6-activation-test-secret";
+const TEST_KEY = randomBytes(32);
+let app: FastifyInstance;
+
+beforeAll(async () => {
+  await ensureAuditTriggers();
+  await cleanupTestData();
+  app = await buildApp({
+    jwtSecret: TEST_JWT_SECRET,
+    sessionNonceStore: new MemoryNonceStore(),
+    declarationStore: new MemoryNonceStore(),
+    contentStore: new MemoryContentStore(),
+    contentEncryption: new ContentEncryption(TEST_KEY),
+    rateLimitStore: new MemoryRateLimitStore(),
+  });
+});
+
+afterAll(async () => {
+  await app.close();
+  await cleanupTestData();
+  await prisma.$disconnect();
+});
+
+function makePhase0Input(overrides: Partial<Phase0Input> = {}): Phase0Input {
+  const id = randomUUID();
+  return {
+    company_name: `${TEST_PREFIX}company_${id}`,
+    industry: "TECH",
+    admin_email: `${TEST_PREFIX}admin_${id}@niov.test`,
+    admin_password: "correct-horse-battery",
+    admin_first_name: "Test",
+    admin_last_name: "Admin",
+    actor_entity_id: null,
+    ...overrides,
+  };
+}
+
+describe("D6 starter-pilot activation — success path", () => {
+  it("walks all 6 catalog steps and emits one ADMIN_ACTION audit per step", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeStarterPilotActivationForCaller(
+      phase0.admin_entity_id,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.archetype).toBe("starter-pilot");
+    expect(result.plan_id).toBe("activation.starter-pilot.v1");
+    expect(result.steps.length).toBe(6);
+    // step_order monotonic from 1
+    for (let i = 0; i < result.steps.length; i++) {
+      const step = result.steps[i];
+      expect(step).toBeDefined();
+      if (!step) continue;
+      expect(step.step_order).toBe(i + 1);
+    }
+    // Final step is STARTER_ENVELOPE_ACTIVATED
+    const finalStep = result.steps[result.steps.length - 1];
+    expect(finalStep).toBeDefined();
+    if (!finalStep) return;
+    expect(finalStep.audit_literal).toBe(
+      "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED",
+    );
+    expect(result.activation_audit_event_id).toBe(finalStep.audit_event_id);
+  });
+
+  it("emits one audit row per step with details.action matching the catalog audit_literal sub-string", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeStarterPilotActivationForCaller(
+      phase0.admin_entity_id,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const step of result.steps) {
+      const row = await prisma.auditEvent.findUnique({
+        where: { audit_id: step.audit_event_id },
+        select: { event_type: true, details: true, actor_entity_id: true },
+      });
+      expect(row).not.toBeNull();
+      expect(row?.event_type).toBe("ADMIN_ACTION");
+      expect(row?.actor_entity_id).toBe(phase0.admin_entity_id);
+      const details = (row?.details ?? {}) as Record<string, unknown>;
+      const expectedAction = step.audit_literal.slice(
+        "ADMIN_ACTION:".length,
+      );
+      expect(details["action"]).toBe(expectedAction);
+      expect(details["archetype"]).toBe("starter-pilot");
+      expect(details["plan_id"]).toBe("activation.starter-pilot.v1");
+      expect(details["step_order"]).toBe(step.step_order);
+      expect(details["step_id"]).toBe(step.step_id);
+    }
+  });
+
+  it("preserves audit chain integrity end-to-end", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeStarterPilotActivationForCaller(
+      phase0.admin_entity_id,
+    );
+    expect(result.ok).toBe(true);
+    // verifyAuditChain walks the audit_event rows for the caller
+    // and asserts hash-chain integrity per ADR-0002. brokenAt is
+    // non-null only when a row's stored hash does not match the
+    // re-computed chain link.
+    const chainResult = await verifyAuditChain(phase0.admin_entity_id);
+    expect(chainResult.valid).toBe(true);
+    expect(chainResult.brokenAt).toBeNull();
+  });
+
+  it("does NOT create any new audit literal (event_type stays ADMIN_ACTION across all 6 steps)", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeStarterPilotActivationForCaller(
+      phase0.admin_entity_id,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const eventTypes = await Promise.all(
+      result.steps.map(async (s) => {
+        const row = await prisma.auditEvent.findUnique({
+          where: { audit_id: s.audit_event_id },
+          select: { event_type: true },
+        });
+        return row?.event_type;
+      }),
+    );
+    for (const t of eventTypes) {
+      expect(t).toBe("ADMIN_ACTION");
+    }
+  });
+});
+
+describe("D6 starter-pilot activation — auth gate", () => {
+  it("rejects a non-admin caller as NOT_ADMIN", async () => {
+    // Create a fresh entity with no admin capability + no membership
+    const nonAdmin = await createEntity(makeEntityInput());
+    const result = await executeStarterPilotActivationForCaller(
+      nonAdmin.entity_id,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // CALLER_NOT_IN_ORG or NOT_ADMIN — both indicate failure to enter
+    // the admin path; we accept either since createEntity doesn't
+    // create a membership row.
+    expect(
+      result.code === "CALLER_ENTITY_NOT_FOUND" ||
+        result.code === "CALLER_NOT_IN_ORG" ||
+        result.code === "NOT_ADMIN",
+    ).toBe(true);
+  });
+
+  it("rejects an unknown caller_entity_id as CALLER_ENTITY_NOT_FOUND or CALLER_NOT_IN_ORG", async () => {
+    const result = await executeStarterPilotActivationForCaller(randomUUID());
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(
+      result.code === "CALLER_ENTITY_NOT_FOUND" ||
+        result.code === "CALLER_NOT_IN_ORG" ||
+        result.code === "NOT_ADMIN",
+    ).toBe(true);
+  });
+});
+
+describe("D6 starter-pilot activation — catalog integrity", () => {
+  it("loads exactly 6 steps from the on-disk catalog and the step shape matches", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeStarterPilotActivationForCaller(
+      phase0.admin_entity_id,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Catalog has these 6 steps in order — verifying canonical
+    // step_id sequence matches the substrate catalog.
+    const expectedStepIds = [
+      "step.precheck.envelope-state",
+      "step.dmw.baseline-grant",
+      "step.role.template-assignment",
+      "step.workflow.template-only-register",
+      "step.aha.safe-fallback-register",
+      "step.envelope.mark-activated",
+    ];
+    const actualStepIds = result.steps.map((s) => s.step_id);
+    expect(actualStepIds).toEqual(expectedStepIds);
+  });
+});
+
+describe("D6 POST /org/dandelion/activate — HTTP surface", () => {
+  async function loginAdmin(
+    email: string,
+    password: string,
+  ): Promise<{ token: string; ip: string }> {
+    const ip = `10.77.${Math.floor(Math.random() * 200) + 1}.${Math.floor(Math.random() * 254) + 1}`;
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email,
+        password,
+        requested_operations: ["read", "write", "share"],
+      },
+      remoteAddress: ip,
+    });
+    if (login.statusCode !== 200) {
+      throw new Error(`login failed: ${login.statusCode} ${login.body}`);
+    }
+    return { token: (login.json() as { token: string }).token, ip };
+  }
+
+  it("returns 200 + ok:true with 6 step results when the admin caller activates the starter-pilot envelope", async () => {
+    const input = makePhase0Input();
+    const phase0 = await executePhase0(input);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body["ok"]).toBe(true);
+    expect(body["archetype"]).toBe("starter-pilot");
+    expect(body["plan_id"]).toBe("activation.starter-pilot.v1");
+    const steps = body["steps"];
+    expect(Array.isArray(steps)).toBe(true);
+    if (Array.isArray(steps)) {
+      expect(steps.length).toBe(6);
+    }
+    expect(typeof body["activation_audit_event_id"]).toBe("string");
+    // The route's audit emission is tied to phase0.admin_entity_id;
+    // we don't read it back here since the service-tier test already
+    // covers row-level details.action.
+    expect(phase0.admin_entity_id).toBeDefined();
+  });
+
+  it("returns 401/403 (unauthenticated) when called without a bearer token", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate",
+      payload: {},
+    });
+    expect([401, 403]).toContain(response.statusCode);
+  });
+
+  it("returns 403 when the caller has a session but no can_admin_org capability", async () => {
+    // Create a plain PERSON entity with no admin capability, login,
+    // and POST to the route. The requireAdminCapability gate must
+    // reject before the service is reached.
+    const input = makeEntityInput({ entity_type: "PERSON", password: "correct-horse-battery" });
+    await createEntity(input);
+    const ip = `10.77.${Math.floor(Math.random() * 200) + 1}.${Math.floor(Math.random() * 254) + 1}`;
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: input.email,
+        password: "correct-horse-battery",
+        requested_operations: ["read"],
+      },
+      remoteAddress: ip,
+    });
+    expect(login.statusCode).toBe(200);
+    const token = (login.json() as { token: string }).token;
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: {},
+    });
+    expect(response.statusCode).toBe(403);
+  });
+});

@@ -1498,3 +1498,47 @@ NEW `scripts/validate-dandelion-activation.mjs` — pure Node ESM validator (mir
 **NO runtime activation**, NO actual binding registration, NO permission grant, NO DMW scope open, NO workflow template registration, NO new audit literal at the D6 design tier, NO mutation to Foundation services, NO connector authorization beyond C2 (Slack OPERATING) + C3 (Google Workspace RUNTIME_READY).
 
 **Dandelion graduation:** Stage A (Preview LIVE) + Stage B (ASSESSMENT_READY) + Stage C (RECOMMENDATION_READY) + Stage D (GOVERNANCE_REVIEW_READY) + Stage E (ENVELOPE_READY) + **Stage F ACTIVATION_DESIGN_READY**. Stage F runtime execution forward-substrate at the implementation slice.
+
+## 23. Amendment 7 — D6 implementation slice (starter-pilot activation runtime) LANDED 2026-06-01
+
+Per `[FOUNDATION-D6-IMPL-STARTER-PILOT-ACTIVATION-RUNTIME]` autonomous continuation. Classification E (Runtime; smallest blast radius — no connector binding, no per-tenant secret_ref handling). Stage F runtime execution LIVE for the starter-pilot archetype only.
+
+NEW `apps/api/src/services/governance/dandelion-activation.service.ts`:
+
+- `executeStarterPilotActivationForCaller(callerEntityId)` — service-owned auth gate per ADR-0004
+- Loads the catalog from disk (`docs/dandelion-activation/starter-pilot-activation.json`) at runtime
+- Walks the 6 catalog steps in order; emits one ADMIN_ACTION audit event per step
+- Each audit row carries `details.action` set to the catalog's audit_literal sub-string (e.g. `ENVELOPE_ACTIVATION_PRECHECK`, `DMW_BASELINE_GRANTED`, `ROLE_TEMPLATE_ASSIGNED`, `WORKFLOW_TEMPLATE_REGISTERED`, `AHA_MOMENT_REGISTERED`, `STARTER_ENVELOPE_ACTIVATED`) — plus `archetype` + `plan_id` + `step_order` + `step_id` + `consumes_map_type` + `human_authorization_required`
+- Returns the discriminated `ActivationResult` shape (`ok: true` with the per-step audit_event_id list + the final `activation_audit_event_id`, or `ok: false` with a closed-vocab `ActivationFailureCode`)
+- Closed-vocab failure codes: `NOT_ADMIN` / `CALLER_ENTITY_NOT_FOUND` / `CALLER_NOT_IN_ORG` / `ARCHETYPE_UNKNOWN` / `CATALOG_NOT_FOUND` / `CATALOG_MALFORMED` / `AUDIT_WRITE_FAILED`
+
+NEW route `POST /api/v1/org/dandelion/activate` (org.routes.ts):
+
+- `requireAdminCapability(authService, "can_admin_org")` preHandler
+- Maps closed-vocab failure codes → HTTP status: `ARCHETYPE_UNKNOWN` → 422 · `NOT_ADMIN` / `CALLER_ENTITY_NOT_FOUND` / `CALLER_NOT_IN_ORG` → 403 · everything else → 500
+- 200 on success with the full `ActivationResult` body
+
+NEW `tests/integration/dandelion-activation.test.ts` (10 tests):
+
+- Service-tier (7 tests): walks all 6 steps · audit row details.action matches catalog audit_literal sub-string · audit chain integrity preserved (`verifyAuditChain.brokenAt === null`) · event_type stays ADMIN_ACTION across all 6 steps · NOT_ADMIN / CALLER_NOT_IN_ORG rejection · catalog step_id sequence matches
+- HTTP-tier (3 tests): 200 + ok:true + 6 step results for admin caller · 401/403 unauthenticated · 403 for non-admin caller
+
+MOD `tests/unit/no-leak-guard.test.ts`:
+
+- `KNOWN_LEGITIMATE_HITS[apps/api/src/routes/org.routes.ts]` line number bumped 1176 → 1177 (the D6 import addition shifted the canonical `payload_summary` Prisma-select line by 1; reason field extended with the canonical lineage)
+
+MOD `apps/api/src/index.ts`:
+
+- NEW barrel exports for `executeStarterPilotActivationForCaller` + `ActivationResult` / `ActivationFailureCode` / `ActivationSuccess` / `ActivationFailure` / `ActivationStepResult` types
+
+**Honest scope** — what this slice DOES NOT do (forward-substrate per the Founder bias toward operating state + smallest-blast-radius discipline):
+
+- NO real DMW grants / role assignments / workflow template registrations / aha moment registrations (those underlying tables are forward-substrate at later slices)
+- NO persistent "envelope state" row (no new Prisma table at this slice; "ACTIVATED" is provable by walking the audit chain)
+- NO new audit literal in `AUDIT_EVENT_TYPE_VALUES` (RULE 4 is satisfied by the existing `event_type: "ADMIN_ACTION"` + `details.action` discriminator pattern per the audit-view.service.ts precedent at lines 561 + 1454)
+- NO team / business / enterprise archetypes (those carry connector binding + delegated authority + dual-control which require additional implementation slices)
+- NO rollback execution path (the catalog's rollback_path strings remain forward-substrate guidance; the audit chain is naturally append-only so the activation row itself is reversible only by issuing inverse audit events — a future slice)
+
+**Test/build state:** unit suite 1225/1225 preserved (no-leak guard line-number rebased to 1177) · integration suite 211 → 221 (+10 NEW D6 tests) · typecheck baseline preserved at 4 canonical errors.
+
+**Stage F graduation:** `ACTIVATION_DESIGN_READY` → **`OPERATING (starter-pilot)`**. Stage F for team / business / enterprise archetypes remains forward-substrate.
