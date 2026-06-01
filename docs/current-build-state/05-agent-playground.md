@@ -1275,6 +1275,81 @@ back-citation. Stage 1 (Layer 1 schema + Layer 3 helper +
 Layer 4 read service) and Stage 3 (governed listener) remain
 forward-substrate.
 
+### ADR-0078 Stage 2 HIVE_CONTEXT projection LIVE 2026-06-01 (Hive C1)
+
+**HIVE_CONTEXT source LIVE** at
+`[HIVE-C1-HIVE-CONTEXT-PROJECTION]` 2026-06-01. Closes the
+explicit zero-output gap the Stage 2 ADR left at
+`projectHiveContextSignalForScenario`. The
+`ConversationContextSignalProjectionService` now reads
+caller-scoped same-org hive memberships via direct Prisma
+(`prisma.hive.findMany({ where: { org_entity_id, status:
+"ACTIVE", members: { some: { entity_id: caller, status:
+"ACTIVE" } } } })`) and emits a single safe
+`MISSING_STAKEHOLDER_INPUT` signal when the caller has ≥ 1
+ACTIVE membership in an ACTIVE hive whose `org_entity_id`
+matches `scenario.org_entity_id`.
+
+Signal shape (closed-vocab + bounded): `signal_type =
+MISSING_STAKEHOLDER_INPUT`, `signal_source_type =
+HIVE_CONTEXT`, `signal_scope = SAME_ORG`, `evidence_label
+= MISSING_CONTEXT`, `business_purpose_label =
+HIVE_OR_TEAM_COORDINATION`, `scope_binding_type =
+ORG_SCOPED`, `retention_class = AUDIT_SAFE_METADATA_ONLY`,
+`conversation_relevance_class = WORK_RELEVANT`,
+`capture_eligibility = CAPTURE_ALLOWED`,
+`agent_playground_use = ALLOWED_FOR_SIGNALS`,
+`requires_human_review = false`, `review_required = false`,
+`redaction_applied = false`, `personal_content_suppressed
+= false`. `signal_confidence_label` widens from `LOW`
+(single membership) to `MEDIUM` (≥ 2 memberships).
+
+Safety invariants enforced by construction at the
+projection register: NEVER hive names, NEVER hive IDs,
+NEVER member entity_ids, NEVER `governance_terms` text,
+NEVER `aggregate_capsule_id`, NEVER raw hive aggregate
+payload (those remain behind the existing
+`getHiveIntelligence` membership gate at
+`hive.service.ts:862-873`). Same-org boundary enforced via
+`Hive.org_entity_id == scenario.org_entity_id` per
+ADR-0059 §1 same-org mandate + RULE 0. Orgless scenarios
+(`scenario.org_entity_id === null`) and callers with no
+in-org memberships return zero `HIVE_CONTEXT` signals.
+REMOVED memberships + DISSOLVED hives are filtered out at
+the query register, mirroring the
+`getHiveIntelligence` ACTIVE-only gate.
+
+7 NEW Wave 7 integration tests cover: signal-presence with
+active membership / safe-field-only assertion / orgless
+scenario → zero signal / in-org caller without membership →
+zero signal / REMOVED membership → zero signal / DISSOLVED
+hive → zero signal / confidence widening to MEDIUM with
+≥ 2 memberships. Wave 7 baseline 46 → 53. Wave 8 + Wave 9
+regression preserved at 43/43 + 58/58 respectively. Typecheck
+baseline preserved at exactly 4 canonical residuals.
+
+NO Foundation route change. NO Foundation schema change. NO
+new audit literal (existing `ADMIN_ACTION + details.action =
+"PLAYGROUND_BEST_PATH_RECOMMENDED"` /
+`"PLAYGROUND_SIMULATION_EXECUTED"` discriminator extended
+with `HIVE_CONTEXT` in the
+`conversation_context_signal_sources` set). NO `HiveService`
+mutation (caller-scoped membership read is direct Prisma
+mirror of the `ACTION_HISTORY` pattern; no new public
+service method introduced). NO Control Tower change (CT
+panel already renders the `signal_source_type` badge
+verbatim — picks up `HIVE_CONTEXT` for free). NO Layer 4
+drilldown surface (Stage 1 / Stage 3 forward-substrate).
+
+Stage 2 source-completion status after this slice:
+`CORRECTION_SIGNAL` LIVE / `ACTION_HISTORY` LIVE /
+`HIVE_CONTEXT` LIVE / `MANUAL_USER_INPUT` LIVE. All 4 ADR-0078
+§3.3 Stage 2 LIVE sources are now wired. The other 4 enum
+values (`MEETING_SUMMARY` / `APPROVED_NOTE` /
+`GOVERNED_LISTENER_OUTPUT` / `IMPORTED_APPROVED_RECORD`)
+remain forward-substrate behind ADR-0078 Stage 1 + Stage 3
+authorization at separate slices.
+
 ---
 
 Back to master: [`../CURRENT_BUILD_STATE.md`](../CURRENT_BUILD_STATE.md)

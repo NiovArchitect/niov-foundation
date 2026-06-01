@@ -1115,3 +1115,265 @@ describe("Section 5 Wave 7 Option A — Wave 6/5 regression preserved", () => {
     expect(Array.isArray(r.body.candidates)).toBe(true);
   });
 });
+
+// ADR-0078 Stage 2 — HIVE_CONTEXT projection (Hive C1 LIVE
+// 2026-06-01). Closes the explicit zero-output gap left at
+// Stage 2: caller-scoped same-org membership read emits a
+// MISSING_STAKEHOLDER_INPUT signal when the caller has at
+// least one ACTIVE membership in an ACTIVE Hive whose
+// org_entity_id matches the scenario's org_entity_id. Cross-
+// org callers + orgless scenarios + callers with no in-org
+// memberships emit zero HIVE_CONTEXT signals.
+describe("Section 5 Wave 7 + ADR-0078 Stage 2 — HIVE_CONTEXT projection (Hive C1)", () => {
+  async function loginPersonInOrg(): Promise<{
+    entityId: string;
+    token: string;
+    ip: string;
+    orgId: string;
+  }> {
+    // Create an org-type entity to act as the parent org.
+    const orgInput = makeEntityInput({
+      entity_type: "COMPANY",
+      password: "irrelevant-org-password",
+    });
+    const org = await createEntity(orgInput);
+    // Create the caller PERSON.
+    const password = "correct-horse-battery";
+    const personInput = makeEntityInput({
+      entity_type: "PERSON",
+      password,
+    });
+    const person = await createEntity(personInput);
+    // Join the PERSON as ACTIVE child of the org.
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: org.entity_id,
+        child_id: person.entity_id,
+        role_title: "MEMBER",
+        is_active: true,
+      },
+    });
+    // Log in.
+    const ip = `10.97.${Math.floor(Math.random() * 200) + 1}.${
+      Math.floor(Math.random() * 254) + 1
+    }`;
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: personInput.email,
+        password,
+        requested_operations: ["read", "write"],
+      },
+      remoteAddress: ip,
+    });
+    if (login.statusCode !== 200) {
+      throw new Error(`login failed: ${login.statusCode} ${login.body}`);
+    }
+    const body = login.json() as { token: string };
+    return {
+      entityId: person.entity_id,
+      token: body.token,
+      ip,
+      orgId: org.entity_id,
+    };
+  }
+
+  async function seedActiveHiveWithMember(opts: {
+    orgId: string;
+    memberEntityId: string;
+  }): Promise<{ hiveId: string }> {
+    const hive = await prisma.hive.create({
+      data: {
+        hive_id: randomUUID(),
+        hive_name: `hive-c1-test-${randomUUID()}`,
+        created_by: opts.memberEntityId,
+        hive_type: "ENTERPRISE",
+        governance_terms: {},
+        member_count: 1,
+        status: "ACTIVE",
+        org_entity_id: opts.orgId,
+        is_default_enterprise: false,
+      },
+    });
+    await prisma.hiveMembership.create({
+      data: {
+        membership_id: randomUUID(),
+        hive_id: hive.hive_id,
+        entity_id: opts.memberEntityId,
+        capsule_types_contributed: ["PREFERENCE"],
+        contribution_scope: "SUMMARY",
+        capsule_types_accessible: ["PREFERENCE"],
+        access_scope: "SUMMARY",
+        status: "ACTIVE",
+      },
+    });
+    return { hiveId: hive.hive_id };
+  }
+
+  it("emits HIVE_CONTEXT signal on Wave 7 when caller has an active same-org hive membership", async () => {
+    const caller = await loginPersonInOrg();
+    await seedActiveHiveWithMember({
+      orgId: caller.orgId,
+      memberEntityId: caller.entityId,
+    });
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    const signals: { signal_source_type: string }[] =
+      r.body.conversation_context_signals;
+    const hiveSignals = signals.filter(
+      (s) => s.signal_source_type === "HIVE_CONTEXT",
+    );
+    expect(hiveSignals.length).toBe(1);
+  });
+
+  it("HIVE_CONTEXT signal carries safe closed-vocab fields only", async () => {
+    const caller = await loginPersonInOrg();
+    await seedActiveHiveWithMember({
+      orgId: caller.orgId,
+      memberEntityId: caller.entityId,
+    });
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    const signals: Record<string, unknown>[] =
+      r.body.conversation_context_signals;
+    const hive = signals.find(
+      (s) => s.signal_source_type === "HIVE_CONTEXT",
+    )!;
+    expect(hive).toBeDefined();
+    expect(hive.signal_type).toBe("MISSING_STAKEHOLDER_INPUT");
+    expect(hive.signal_scope).toBe("SAME_ORG");
+    expect(hive.business_purpose_label).toBe("HIVE_OR_TEAM_COORDINATION");
+    expect(hive.scope_binding_type).toBe("ORG_SCOPED");
+    expect(hive.evidence_label).toBe("MISSING_CONTEXT");
+    expect(hive.conversation_relevance_class).toBe("WORK_RELEVANT");
+    expect(hive.agent_playground_use).toBe("ALLOWED_FOR_SIGNALS");
+    // SAFE METADATA ONLY — must NEVER carry hive name / hive
+    // id / member id / governance_terms text / aggregate
+    // capsule id / raw aggregate payload.
+    const raw = JSON.stringify(hive);
+    expect(raw).not.toContain("hive_name");
+    expect(raw).not.toContain("hive_id");
+    expect(raw).not.toContain("governance_terms");
+    expect(raw).not.toContain("aggregate_capsule_id");
+    expect(raw).not.toContain("member_count");
+  });
+
+  it("orgless scenario emits NO HIVE_CONTEXT signal even when caller has hive memberships elsewhere", async () => {
+    const caller = await loginPerson(); // No org membership.
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    const signals: { signal_source_type: string }[] =
+      r.body.conversation_context_signals;
+    const hiveSignals = signals.filter(
+      (s) => s.signal_source_type === "HIVE_CONTEXT",
+    );
+    expect(hiveSignals.length).toBe(0);
+  });
+
+  it("caller in an org but with NO hive memberships emits NO HIVE_CONTEXT signal", async () => {
+    const caller = await loginPersonInOrg();
+    // Skip seedActiveHiveWithMember — caller has org but no
+    // hive membership.
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    const signals: { signal_source_type: string }[] =
+      r.body.conversation_context_signals;
+    const hiveSignals = signals.filter(
+      (s) => s.signal_source_type === "HIVE_CONTEXT",
+    );
+    expect(hiveSignals.length).toBe(0);
+  });
+
+  it("REMOVED membership does NOT emit HIVE_CONTEXT signal (mirrors getHiveIntelligence gate)", async () => {
+    const caller = await loginPersonInOrg();
+    const { hiveId } = await seedActiveHiveWithMember({
+      orgId: caller.orgId,
+      memberEntityId: caller.entityId,
+    });
+    // Flip membership to REMOVED.
+    await prisma.hiveMembership.updateMany({
+      where: { hive_id: hiveId, entity_id: caller.entityId },
+      data: { status: "REMOVED" },
+    });
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    const signals: { signal_source_type: string }[] =
+      r.body.conversation_context_signals;
+    const hiveSignals = signals.filter(
+      (s) => s.signal_source_type === "HIVE_CONTEXT",
+    );
+    expect(hiveSignals.length).toBe(0);
+  });
+
+  it("DISSOLVED hive does NOT emit HIVE_CONTEXT signal even with active membership", async () => {
+    const caller = await loginPersonInOrg();
+    const { hiveId } = await seedActiveHiveWithMember({
+      orgId: caller.orgId,
+      memberEntityId: caller.entityId,
+    });
+    await prisma.hive.update({
+      where: { hive_id: hiveId },
+      data: { status: "DISSOLVED" },
+    });
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    const signals: { signal_source_type: string }[] =
+      r.body.conversation_context_signals;
+    const hiveSignals = signals.filter(
+      (s) => s.signal_source_type === "HIVE_CONTEXT",
+    );
+    expect(hiveSignals.length).toBe(0);
+  });
+
+  it("HIVE_CONTEXT confidence label widens to MEDIUM with 2+ active memberships in same org", async () => {
+    const caller = await loginPersonInOrg();
+    await seedActiveHiveWithMember({
+      orgId: caller.orgId,
+      memberEntityId: caller.entityId,
+    });
+    await seedActiveHiveWithMember({
+      orgId: caller.orgId,
+      memberEntityId: caller.entityId,
+    });
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    const signals: { signal_source_type: string; signal_confidence_label: string }[] =
+      r.body.conversation_context_signals;
+    const hive = signals.find((s) => s.signal_source_type === "HIVE_CONTEXT");
+    expect(hive?.signal_confidence_label).toBe("MEDIUM");
+  });
+});

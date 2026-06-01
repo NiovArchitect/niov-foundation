@@ -719,18 +719,94 @@ function projectManualUserInputSignalForScenario(args: {
 }
 
 // --------------------------------------------------------------
-// HIVE_CONTEXT projection — preserved at the enum register but
-// intentionally zero-output at this slice. ADR-0059 + ADR-0063
-// have safe substrate but no scenario-tied projection method
-// ready for Stage 2 consumption; a future Founder-authorized
-// amendment can wire it in without changing the response
-// contract.
+// HIVE_CONTEXT projection (Hive C1 — LIVE 2026-06-01). Caller-
+// scoped + same-org membership enumeration via direct Prisma
+// read (mirrors the ACTION_HISTORY pattern; no public
+// HiveService method exposes caller-scoped membership lists).
+// Emits at most one MISSING_STAKEHOLDER_INPUT signal when the
+// caller has at least one ACTIVE membership in an ACTIVE Hive
+// whose `org_entity_id` matches the scenario's
+// `org_entity_id`. Orgless scenarios (org_entity_id === null)
+// and scenarios where the caller has no in-org hive
+// memberships return zero signals.
+//
+// Safety invariants enforced HERE by construction:
+//  - same-org boundary enforced via Hive.org_entity_id ==
+//    scenario.org_entity_id (RULE 0 + ADR-0059 §1 same-org
+//    mandate)
+//  - status: "ACTIVE" both at Hive + HiveMembership tier
+//    (mirrors the getHiveIntelligence membership gate at
+//    hive.service.ts:862-873 — REMOVED + DISSOLVED rows lose
+//    access by construction)
+//  - SAFE METADATA ONLY: emits a count posture, NEVER hive
+//    names, NEVER member entity_ids, NEVER governance_terms
+//    text, NEVER aggregate_capsule_id, NEVER raw aggregate
+//    payload (those remain behind the existing
+//    getHiveIntelligence gate)
+//  - SCOPE = SAME_ORG: signal_scope tagged so downstream
+//    consumers know the binding is broader than self
+//  - business_purpose = HIVE_OR_TEAM_COORDINATION per
+//    ADR-0078 §6C.6
+//  - safe degradation: any Prisma read failure → zero
+//    signals (caller MUST never see the parent route fail
+//    due to the optional Hive read)
 // --------------------------------------------------------------
-function projectHiveContextSignalForScenario(_args: {
+async function projectHiveContextSignalForCaller(args: {
+  callerEntityId: string;
   scenario: PlaygroundScenarioView;
   detected_at: string;
-}): readonly ConversationContextSignal[] {
-  return [];
+}): Promise<readonly ConversationContextSignal[]> {
+  // Orgless scenario — no same-org hive scope to project. The
+  // caller may still be in personal hives, but Stage 2 binds
+  // hive context to the scenario's org for the same-org
+  // privacy boundary; cross-org projection is forward-
+  // substrate.
+  if (args.scenario.org_entity_id === null) {
+    return [];
+  }
+  const hives = await prisma.hive.findMany({
+    where: {
+      org_entity_id: args.scenario.org_entity_id,
+      status: "ACTIVE",
+      members: {
+        some: {
+          entity_id: args.callerEntityId,
+          status: "ACTIVE",
+        },
+      },
+    },
+    select: { hive_id: true },
+  });
+  if (hives.length === 0) {
+    return [];
+  }
+  const safeSummary =
+    "Caller participates in active hives within the same " +
+    "organization as this scenario. Consider hive coordination " +
+    "posture and any collective context before proceeding with " +
+    "the recommendation.";
+  return [
+    makeSignal({
+      signal_type: "MISSING_STAKEHOLDER_INPUT",
+      signal_confidence_label: hives.length >= 2 ? "MEDIUM" : "LOW",
+      signal_source_type: "HIVE_CONTEXT",
+      signal_scope: "SAME_ORG",
+      related_scenario_id: args.scenario.scenario_id,
+      detected_at: args.detected_at,
+      evidence_label: "MISSING_CONTEXT",
+      safe_summary: safeSummary,
+      requires_human_review: false,
+      retention_class: "AUDIT_SAFE_METADATA_ONLY",
+      conversation_relevance_class: "WORK_RELEVANT",
+      capture_eligibility: "CAPTURE_ALLOWED",
+      agent_playground_use: "ALLOWED_FOR_SIGNALS",
+      redaction_applied: false,
+      business_purpose_label: "HIVE_OR_TEAM_COORDINATION",
+      scope_binding_type: "ORG_SCOPED",
+      review_required: false,
+      personal_content_suppressed: false,
+    }),
+  ];
 }
 
 // --------------------------------------------------------------
@@ -789,12 +865,19 @@ export class ConversationContextSignalProjectionService
       // Same safe-degradation discipline.
     }
 
-    // Approved source 3 — HIVE_CONTEXT (zero-output at Stage 2).
-    const hive = projectHiveContextSignalForScenario({
-      scenario: input.scenario,
-      detected_at,
-    });
-    collected.push(...hive);
+    // Approved source 3 — HIVE_CONTEXT (Hive C1 LIVE
+    // 2026-06-01). Caller-scoped same-org membership read.
+    try {
+      const hive = await projectHiveContextSignalForCaller({
+        callerEntityId: input.callerEntityId,
+        scenario: input.scenario,
+        detected_at,
+      });
+      collected.push(...hive);
+    } catch {
+      // RULE 0 / safe degradation: optional source NEVER
+      // fails the parent route. Zero signals on read failure.
+    }
 
     // Approved source 4 — MANUAL_USER_INPUT.
     const manual = projectManualUserInputSignalForScenario({
