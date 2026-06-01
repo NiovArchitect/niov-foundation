@@ -1466,6 +1466,57 @@ ADR-0078 explicitly EXCLUDES at every stage:
   replaced; bidirectional back-citation per RULE 14 +
   RULE 20).
 
+## Forward-substrate closeout
+
+**ADR-0079 LANDED 2026-05-31** at
+`[FOUNDER-ADR-0079-TRANSCRIPT-SUBSTRATE-POLICY-ADR-AUTH]`
+as the Transcript Substrate Policy ADR this ADR's §6 +
+§6A + §6B + §6C anticipated. ADR-0079 converts ADR-0078's
+four-layer conversation architecture into enforceable
+policy + service-tier contracts via 33 canonical sections
+covering capture eligibility, work-relevance
+classification, personal/non-work exclusion, mixed
+conversation handling, sensitive-personal handling,
+business-purpose binding, scope binding, four canonical
+access tiers (Internal Enterprise / Compliance-Legal /
+Regulator Evidence Package / External Third-Party —
+NEVER collapsed), notice/consent, retention, legal hold,
+redaction, privileged conversation handling,
+client-confidential handling, transcript access audit,
+quote/excerpt permission, export/eDiscovery, regulator
+disclosure (ADR-0036 LawfulBasis-gated + ADR-0070
+neutral-vocabulary), correction/amendment trail, linkage
+policy, 9 service-tier gates (`canCaptureTranscript` /
+`classifyConversationRelevance` / `canRetainTranscript` /
+`canUseForAgentPlayground` / `canDrillDownTranscript` /
+`canQuoteTranscript` / `canExportTranscript` /
+`canDiscloseToRegulator` /
+`canDeleteOrPseudonymizeTranscript`), default no-leak
+doctrine (ADR-0078 §11 + §5.2 + §6C forbidden-fields
+catalog inherited verbatim), Agent Playground use policy,
+Control Tower cockpit policy, implementation ladder
+mapping, stop conditions for future implementation. With
+ADR-0079 LANDED, **§7 Stage 1+ implementation is
+policy-unblocked** but remains implementation-gated by
+separate Founder authorization at slice. **Bidirectional
+back-citation per RULE 14 + RULE 20.**
+
+## Bidirectional citations (continued)
+
+- **Cited by ADR-0079** (Transcript Substrate Policy for
+  Conversation Context Signals; design-only Policy ADR;
+  Accepted 2026-05-31) — ADR-0079 is the load-bearing
+  policy prerequisite for this ADR's §7 Stage 1+
+  implementation per §6C.13. ADR-0079 turns this ADR's
+  §6 / §6A / §6B / §6C into enforceable policy gates +
+  service-tier contracts. The 12-vocabulary closed-vocab
+  catalog (§3 + §6C) is inherited verbatim. Bidirectional
+  back-citation per RULE 14 + RULE 20 (Founder
+  authorization for this back-citation amendment landed
+  at
+  `[FOUNDER-ADR-0079-TRANSCRIPT-SUBSTRATE-POLICY-ADR-AUTH]`
+  2026-05-31).
+
 ## Founder authorization
 
 Per RULE 20: this ADR + bidirectional back-citations + the
