@@ -12,6 +12,41 @@ INVOKE_CONNECTOR Actions against per-org-registered external
 adapters, every call audited + every secret kept as an env-var
 reference (never raw-at-rest).
 
+## C2 Slack Read-First Connector Runtime LANDED 2026-06-01
+
+Section 4 graduates **Slack: `RECOMMENDATION_READY` → `RUNTIME_READY`** (Foundation backend register). First real vendor connector now LIVE.
+
+NEW `apps/api/src/services/connector/slack-read.provider.ts` — `SlackReadProvider` implementing `ConnectorProvider`. Three read operations: `channels.list` (via Slack `conversations.list` API) + `users.list` + `conversations.history`. Bot-token (xoxb-*) via `binding.secret_ref` env-var-NAME per ADR-0019 + ADR-0024. Fixture-first: real Slack API only when `SLACK_USE_REAL=1` + `config.use_real=true` + `secret_ref` resolves; triple defensive gate.
+
+MOD `connector.service.ts` — `ConnectorType` extended (`OUTBOUND_WEBHOOK | FIXTURE_ECHO | SLACK_READ`); `CONNECTOR_REGISTRY.SLACK_READ` frozen entry; dispatch wired via `getConnectorProviderAsync`. NO new audit literal. NO schema migration (column is plain `String`).
+
+The existing `INVOKE_CONNECTOR` ActionType handler dispatches SLACK_READ through the same governance pipeline (org-scoped `ConnectorBinding` lookup → cross-tenant denial structural → registry check → provider invoke → ACTION_* audit chain). GOVSEC.6 helpers from `agent-abuse-guard.ts` (PR #183) are now structurally exercised: cross-tenant denial enforced via `getConnectorBindingForOrg(binding_id, org_entity_id)`.
+
+NEW `tests/unit/c2-slack-read-provider.test.ts` — 22 tests across registry extension + factory + fixture-mode success per operation + payload validation + 8 forced-failure fixture keys + environment gate + privacy invariant (no xoxb- / no Bearer / no message content / no user PII in delivery_metadata).
+
+MOD `tests/unit/connector-provider.test.ts` — frozen-anchor contract test updated for 3-type registry.
+
+Unit suite **1183 tests pass** (was 1161; +22). Typecheck baseline preserved at 4. Privacy invariant + no-leak guard preserved.
+
+**Out of scope at C2** (forward-substrate): writes (≥C6), OAuth flow (≥C5), Events API webhook (≥C7), private-message + search.messages (later C-slice), Control Tower binding-creation UI (separate CT slice — Section 4 Wave 2 admin routes already accept `type: "SLACK_READ"` without modification).
+
+**Section 4 graduation across all 6 ranked connectors:**
+
+| Connector | Status |
+|---|---|
+| Slack | **RUNTIME_READY** (this PR) |
+| Linear | RECOMMENDATION_READY |
+| Jira Cloud | RECOMMENDATION_READY |
+| Google Workspace | RECOMMENDATION_READY |
+| GitHub | RECOMMENDATION_READY |
+| Microsoft 365 | RECOMMENDATION_READY |
+
+**Next slice candidates:**
+
+1. **C2 Operating** — first real customer-bound Slack workspace activation; flips Slack `RUNTIME_READY` → `OPERATING`. Requires admin to create a `ConnectorBinding` with `type: "SLACK_READ"` + `secret_ref` pointing to a real xoxb- token + `config.use_real: true` + setting `SLACK_USE_REAL=1` in the deployment env.
+2. **D3 Dandelion Recommendation substrate** — natural next step after D2 Assessment substrate (LIVE PR #181).
+3. **B4 Internal entitlement / seat ledger** — dependency for connector pack entitlement gating at runtime.
+
 ## Connector Implementation-Readiness Catalog LANDED 2026-06-01
 
 Per `[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]`. NEW `docs/connector-readiness/` (9 files, 7 catalog items) + NEW `scripts/validate-connector-readiness.mjs` validator (pure Node ESM; mirrors `validate-entitlement-catalog.mjs` sentence-level negation + subtree skip). Validator green: 9/9 files, 7 items, 7/7 required IDs, 0 errors.
