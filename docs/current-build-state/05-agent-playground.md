@@ -1203,6 +1203,78 @@ posture at `enterprise_decision_posture` attachment point).
 Wave 7 baseline 40 → 46. Wave 9 baseline 51 → 58. Wave 8
 governed-transition regression preserved at 43/43.
 
+### ADR-0078 Stage 2 CT consumer LIVE 2026-06-01
+
+**Control Tower consumer LANDED 2026-06-01** at
+`[CT-ADR-0078-STAGE-2-CONVERSATION-CONTEXT-SIGNALS]`
+(otzar-control-tower PR
+[#9](https://github.com/NiovArchitect/otzar-control-tower/pull/9)
+`ad344a2`). The Wave 10 cockpit at `/agent-playground` now
+consumes the `conversation_context_signals[]` sidecars
+Foundation Stage 2 emits and retires the ADR-0077 §8.2
+"Conversation context signals not available in this version"
+placeholder. NEW `ConversationContextSignalsPanel` renders
+safe Layer 3 signals as closed-vocab badges (source / signal
+type / confidence / scope / binding / purpose / evidence /
+retention / relevance / use / capture + optional
+redaction-applied / personal-content-suppressed chips) +
+safe_summary paragraph + honest_note footer. Wired into Wave 7
+RecommendationPanel (top-level sidecar after
+`alternatives_considered`, before HonestNote) AND Wave 9
+SimulationContent (in place of the retired §8.2 placeholder
+Card). Empty-state copy is honest about the Stage 1 / Layer 4
+boundary not yet shipped (no permissioned evidence drilldown
+in this version).
+
+CT type-mirror surface: NEW `ConversationContextSignal` +
+11 closed-vocab union types at
+`otzar-control-tower:src/lib/types/foundation.ts`. Additive
+`conversation_context_signals` on `RecommendBestPathSuccess`
+(Wave 7) + `PlaygroundEnterpriseDecisionPosture` (Wave 9
+scenario-wide; NOT per-branch — preserves ADR-0076 §11
+budgets).
+
+CT test surface: 4 NEW Wave 10 tests + 1 UPDATED §8.2
+placeholder test (129/129 total; was 126 → +3 net):
+Wave 9 signals panel replaces placeholder + signal count +
+§6C.12 additive fields surfaced; Wave 7 signals panel renders
+on recommendation surface; honest empty-state copy when no
+signals exist; no-leak guard locks 19 Stage-2-specific
+forbidden tokens (raw_text / message_body / speaker_quote /
+private_note / raw_audio / raw_video / raw_screen_capture /
+emotion_score / sentiment_score / employee_score /
+manager_score / psychological_profile /
+compliance_certification / legal_conclusion /
+regulator_approval / related_transcript_ref / transcript_id /
+transcript_hash / transcript_text_encrypted) + 5 ADR-0079 §27
+blocked enum values (NON_WORK_PERSONAL / SENSITIVE_PERSONAL /
+UNKNOWN_REQUIRES_REVIEW / UNKNOWN_BUSINESS_PURPOSE /
+BLOCKED_FROM_AGENT_PLAYGROUND) asserted absent.
+
+CT substrate-honest correction at this slice per RULE 13:
+CT's `FORBIDDEN_UI_COPY` guard previously used a bare
+`"final decision"` substring; replaced with positive-claim
+form (`"is a final decision"` / `"this final decision"` /
+`"the final decision is"`) to avoid false-positives against
+the canonical Foundation disclaimer "Not a final decision"
+that ADR-0074 §16 + ADR-0078 §11 + ADR-0070 §9 authorize
+verbatim — mirrors Foundation Wave 7's
+`FORBIDDEN_RECOMMENDATION_LANGUAGE` discipline.
+
+NO Foundation backend change at this CT slice. NO new
+Foundation route. NO new schema. NO new audit literal. NO
+transcript drilldown UI. NO Layer 4 affordance. NO raw
+transcript. NO quote / excerpt. NO Execute / Approve /
+Cancel / Retry button on the signals surface. NO connector
+invocation. NO LLM in CT. NO Action mutation from CT.
+
+ADR-0077 §8.2 amended in lockstep (Amendment 1) to mark the
+placeholder retired at the CT register. ADR-0078
+forward-substrate closeout extended with a CT-consumer
+back-citation. Stage 1 (Layer 1 schema + Layer 3 helper +
+Layer 4 read service) and Stage 3 (governed listener) remain
+forward-substrate.
+
 ---
 
 Back to master: [`../CURRENT_BUILD_STATE.md`](../CURRENT_BUILD_STATE.md)

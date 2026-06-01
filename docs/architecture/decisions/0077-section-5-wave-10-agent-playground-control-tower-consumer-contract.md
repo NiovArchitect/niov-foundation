@@ -519,20 +519,50 @@ review + policy owner review), Wave 10 MUST:
 
 #### 8.2 Conversation-context honesty
 
-Foundation does not yet expose `conversation_context_signals[]`
-(reserved at the Wave 9 ADR-0076 + ADR-0048 register for a
-future governed listener slice). Wave 10 MAY reserve UI space
-for the section but MUST surface "Conversation context
-signals not available in this version" (or omit the section
-entirely). Wave 10 MUST NOT:
+**Amendment 1 (2026-06-01) — Stage 2 LIVE in lockstep:**
+Foundation now exposes `conversation_context_signals[]` on
+Wave 7 `RecommendBestPathSuccess` top-level + Wave 9
+`EnterpriseDecisionPosture` per ADR-0078 §8 / §9 (Foundation PR
+[#157](https://github.com/NiovArchitect/niov-foundation/pull/157)
+`45c0de6` 2026-06-01) under
+`[ADR-0078-STAGE-2-APPROVED-SOURCE-PROJECTION]`. CT consumes
+both surfaces verbatim in
+[otzar-control-tower PR #9](https://github.com/NiovArchitect/otzar-control-tower/pull/9)
+`ad344a2` 2026-06-01 under
+`[CT-ADR-0078-STAGE-2-CONVERSATION-CONTEXT-SIGNALS]`. The §8.2
+"not available in this version" placeholder is RETIRED at the
+CT register; CT renders the safe Layer 3 signal panel
+(closed-vocab badges + safe_summary + honest_note) when
+Foundation emits signals, with honest empty-state copy when the
+sidecar is `[]`. Stage 1 (Layer 1 schema + Layer 3 helper +
+Layer 4 read service) and Stage 3 (governed listener) remain
+forward-substrate per ADR-0078 §17 — each requires separate
+Founder authorization at slice. Layer 4 permissioned evidence
+drilldown is NOT exposed at CT yet (no `related_transcript_ref`
+emitted at Stage 2 per ADR-0078 §7 line 1088 + no Layer 1
+ingest).
+
+Pre-amendment text (preserved for chronology): Foundation did
+not yet expose `conversation_context_signals[]` (reserved at
+the Wave 9 ADR-0076 + ADR-0048 register for a future governed
+listener slice); Wave 10 surfaced "Conversation context signals
+not available in this version" or reserved UI space.
+
+Wave 10 MUST NOT (preserved across the amendment):
 
 - expose raw messages / raw transcripts / private notes /
   unscoped conversation content
 - fabricate `PRIOR_COMMITMENT_IDENTIFIED` /
   `STAKEHOLDER_CONCERN_IDENTIFIED` etc. labels from inferred
-  context
+  context (Stage 2 signals are PROJECTED from already-LIVE
+  approved Foundation sources; CT MUST render them verbatim,
+  never synthesize new ones)
 - imply the Foundation has access to conversation history it
   does not actually have
+- expose Layer 4 permissioned drilldown surfaces (transcript
+  excerpts / speaker attribution / raw quotes) — those remain
+  forward-substrate behind ADR-0078 Stage 1 + Stage 3
+  authorization
 
 #### 8.3 Evidence-posture honesty
 
