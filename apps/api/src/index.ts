@@ -629,13 +629,17 @@ export type {
 // See apps/api/src/services/governance/dandelion-activation.service.ts
 // + docs/dandelion-activation/starter-pilot-activation.json for the
 // catalog this service consumes.
-export { executeStarterPilotActivationForCaller } from "./services/governance/dandelion-activation.service.js";
+export {
+  executeStarterPilotActivationForCaller,
+  executeTeamActivationForCaller,
+} from "./services/governance/dandelion-activation.service.js";
 export type {
   ActivationFailureCode,
   ActivationFailure,
   ActivationResult,
   ActivationStepResult,
   ActivationSuccess,
+  TeamActivationInput,
 } from "./services/governance/dandelion-activation.service.js";
 
 // escalation.service.ts re-exports -- D-2D-D10-2 substrate (CRUD +

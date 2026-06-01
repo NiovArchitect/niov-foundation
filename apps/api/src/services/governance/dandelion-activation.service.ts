@@ -43,6 +43,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeAuditEvent, prisma } from "@niov/database";
+import { registerConnectorBindingForOrg } from "../connector/connector-binding.service.js";
 
 // ESM-safe equivalent of CJS __dirname (target ES2022 + moduleResolution
 // Bundler per tsconfig.base.json).
@@ -93,7 +94,11 @@ export type ActivationFailureCode =
   | "ARCHETYPE_UNKNOWN"
   | "CATALOG_NOT_FOUND"
   | "CATALOG_MALFORMED"
-  | "AUDIT_WRITE_FAILED";
+  | "AUDIT_WRITE_FAILED"
+  // D6 team archetype additions — only fire from the team activation
+  // path. The starter-pilot path never emits these.
+  | "INVALID_SLACK_BINDING_INPUT"
+  | "CONNECTOR_BINDING_FAILED";
 
 export interface ActivationStepResult {
   step_order: number;
@@ -126,7 +131,7 @@ export type ActivationResult = ActivationSuccess | ActivationFailure;
 // return ARCHETYPE_UNKNOWN until their respective implementation
 // slices land.
 // ────────────────────────────────────────────────────────────────
-const SUPPORTED_ARCHETYPES = new Set(["starter-pilot"]);
+const SUPPORTED_ARCHETYPES = new Set(["starter-pilot", "team"]);
 const KNOWN_ARCHETYPES = new Set([
   "starter-pilot",
   "team",
@@ -136,6 +141,7 @@ const KNOWN_ARCHETYPES = new Set([
 
 const CATALOG_FILENAMES: Readonly<Record<string, string>> = Object.freeze({
   "starter-pilot": "starter-pilot-activation.json",
+  team: "team-activation.json",
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -353,6 +359,209 @@ export async function executeStarterPilotActivationForCaller(
   //    validator's final-step invariant). The catalog's last
   //    audit_literal is asserted at validation time; we re-check at
   //    runtime as defense-in-depth.
+  const finalStep = stepResults[stepResults.length - 1];
+  if (
+    finalStep === undefined ||
+    finalStep.audit_literal !== "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED"
+  ) {
+    return {
+      ok: false,
+      code: "CATALOG_MALFORMED",
+      message: "final step audit_literal is not STARTER_ENVELOPE_ACTIVATED",
+    };
+  }
+
+  return {
+    ok: true,
+    archetype,
+    plan_id: plan.id,
+    steps: stepResults,
+    activation_audit_event_id: finalStep.audit_event_id,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────
+// Team-archetype activation input shape.
+//
+// The team archetype's catalog step 5 is
+// step.connector.slack-binding-register — it requires the admin to
+// supply a SLACK_READ binding display_name + secret_ref env-var-NAME
+// so the activation engine can register the binding via the existing
+// connector-binding.service.ts (C2 OPERATING substrate). Per the
+// Foundation privacy invariant:
+// - The admin paste-in field is the env-var NAME on the deployment
+//   host (e.g. "SLACK_BOT_TOKEN_PROD"); the resolved env-var VALUE
+//   never crosses the API boundary (admin must NEVER paste a raw
+//   token here).
+// - The connector binding is registered with use_real: false at
+//   activation tier. Founder authorization is required separately
+//   at the deployment register for the GOOGLE_USE_REAL=1 /
+//   SLACK_USE_REAL=1 real-mode flip.
+// ────────────────────────────────────────────────────────────────
+export interface TeamActivationInput {
+  /** display_name for the SLACK_READ binding (e.g. "niov-prod-slack"). */
+  slack_display_name: string;
+  /** Env-var NAME for the SLACK_READ binding secret_ref. */
+  slack_secret_ref: string;
+  /** Optional workspace_id config; defaults to slack_display_name. */
+  slack_workspace_id?: string;
+}
+
+// ────────────────────────────────────────────────────────────────
+// executeTeamActivationForCaller — second archetype entry point.
+// Walks the 8 team-archetype catalog steps; step 5 is the only one
+// that performs a real downstream side effect (SLACK_READ binding
+// registration via connector-binding.service.ts). All other steps
+// emit audit only — matching the starter-pilot doctrine of
+// reversibility-by-construction at the audit-chain register.
+//
+// AUDIT INVARIANT (RULE 4): every step's audit is written BEFORE
+// the underlying side effect. The slack-binding step's downstream
+// registerConnectorBindingForOrg call writes its own ADMIN_ACTION
+// audit row (CONNECTOR_REGISTERED) on success; the activation
+// step's CONNECTOR_BINDING_REGISTERED audit fires BEFORE that
+// downstream call. The connector-binding service is the single
+// source of truth for the binding row + its CONNECTOR_REGISTERED
+// audit; this service's CONNECTOR_BINDING_REGISTERED is the
+// activation-plan-tier provenance entry (links the audit chain
+// back to the activation lineage).
+// ────────────────────────────────────────────────────────────────
+export async function executeTeamActivationForCaller(
+  callerEntityId: string,
+  input: TeamActivationInput,
+): Promise<ActivationResult> {
+  const archetype = "team";
+
+  // 0. Validate team-specific input BEFORE the auth gate — closed-
+  //    vocab failure code is more informative than a generic 422.
+  const displayName = input.slack_display_name?.trim?.() ?? "";
+  const secretRef = input.slack_secret_ref?.trim?.() ?? "";
+  if (displayName.length === 0 || secretRef.length === 0) {
+    return {
+      ok: false,
+      code: "INVALID_SLACK_BINDING_INPUT",
+      message:
+        "team archetype requires slack_display_name + slack_secret_ref",
+    };
+  }
+
+  // 1. Auth gate per ADR-0004
+  const callerOrgId = await getCallerOrgId(callerEntityId);
+  if (callerOrgId === null) {
+    return {
+      ok: false,
+      code: "CALLER_ENTITY_NOT_FOUND",
+      message: "caller entity not found",
+    };
+  }
+  const isAdmin = await callerHasAdminCapability(callerEntityId);
+  if (!isAdmin) {
+    return {
+      ok: false,
+      code: "NOT_ADMIN",
+      message: "caller lacks can_admin_org capability",
+    };
+  }
+
+  // 2. Catalog load
+  if (!SUPPORTED_ARCHETYPES.has(archetype) || !KNOWN_ARCHETYPES.has(archetype)) {
+    return {
+      ok: false,
+      code: "ARCHETYPE_UNKNOWN",
+      message: `archetype "${archetype}" is not supported at this slice`,
+    };
+  }
+  const planOrErr = loadActivationPlanFromDisk(archetype);
+  if ("error" in planOrErr) {
+    return { ok: false, code: planOrErr.error, message: planOrErr.message };
+  }
+  const plan = planOrErr;
+
+  // 3. Walk steps in order. Step 5 (step.connector.slack-binding-
+  //    register) is the only side-effecting step at this slice; all
+  //    others emit audit only.
+  const stepResults: ActivationStepResult[] = [];
+  for (const step of plan.activation_steps) {
+    const detailsAction = extractDetailsAction(step.audit_literal);
+    let auditDetails: Record<string, unknown> = {
+      action: detailsAction,
+      archetype,
+      plan_id: plan.id,
+      step_order: step.step_order,
+      step_id: step.step_id,
+      consumes_map_type: step.consumes_map_type,
+      human_authorization_required: step.human_authorization_required,
+    };
+    // For the slack binding step, augment the audit details with the
+    // binding shape we're about to register (env-var NAME ONLY; the
+    // resolved VALUE never crosses this boundary).
+    if (step.step_id === "step.connector.slack-binding-register") {
+      auditDetails = {
+        ...auditDetails,
+        connector_type: "SLACK_READ",
+        binding_display_name: displayName,
+        // We deliberately do NOT include secret_ref VALUE; only the
+        // NAME (which is acceptable per the existing audit-view
+        // service's CONNECTOR_REGISTERED emission pattern). The
+        // downstream registerConnectorBindingForOrg also persists
+        // env-var NAME only.
+        binding_secret_ref_name: secretRef,
+      };
+    }
+    let auditRowId: string;
+    try {
+      const auditRow = await writeAuditEvent({
+        event_type: "ADMIN_ACTION",
+        outcome: "SUCCESS",
+        actor_entity_id: callerEntityId,
+        target_entity_id: callerOrgId,
+        details: auditDetails,
+      });
+      auditRowId = auditRow.audit_id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.slice(0, 120) : "unknown";
+      return {
+        ok: false,
+        code: "AUDIT_WRITE_FAILED",
+        message: `audit emission failed at step ${step.step_order} (${step.step_id}): ${msg}`,
+      };
+    }
+    // After the audit row is written (RULE 4 audit-before-mutation
+    // satisfied), perform the side effect for the slack-binding
+    // step. Any other step is audit-only.
+    if (step.step_id === "step.connector.slack-binding-register") {
+      const workspaceId =
+        input.slack_workspace_id !== undefined &&
+        input.slack_workspace_id.trim().length > 0
+          ? input.slack_workspace_id.trim()
+          : displayName;
+      const registration = await registerConnectorBindingForOrg({
+        org_entity_id: callerOrgId,
+        actor_entity_id: callerEntityId,
+        body: {
+          type: "SLACK_READ",
+          display_name: displayName,
+          config: { use_real: false, workspace_id: workspaceId },
+          secret_ref: secretRef,
+        },
+      });
+      if (!registration.ok) {
+        return {
+          ok: false,
+          code: "CONNECTOR_BINDING_FAILED",
+          message: `slack binding registration failed: ${registration.code}${registration.message ? " — " + registration.message : ""}`,
+        };
+      }
+    }
+    stepResults.push({
+      step_order: step.step_order,
+      step_id: step.step_id,
+      audit_literal: step.audit_literal,
+      audit_event_id: auditRowId,
+    });
+  }
+
+  // 4. Final step invariant (defense-in-depth against catalog drift)
   const finalStep = stepResults[stepResults.length - 1];
   if (
     finalStep === undefined ||

@@ -23,6 +23,7 @@ import {
   buildApp,
   executePhase0,
   executeStarterPilotActivationForCaller,
+  executeTeamActivationForCaller,
   MemoryContentStore,
   MemoryNonceStore,
   MemoryRateLimitStore,
@@ -306,6 +307,266 @@ describe("D6 POST /org/dandelion/activate — HTTP surface", () => {
       headers: { authorization: `Bearer ${token}` },
       remoteAddress: ip,
       payload: {},
+    });
+    expect(response.statusCode).toBe(403);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// D6 TEAM ARCHETYPE TESTS — service tier + HTTP tier
+// ════════════════════════════════════════════════════════════════
+
+function makeSlackInput(suffix: string): {
+  slack_display_name: string;
+  slack_secret_ref: string;
+} {
+  const id = randomUUID().slice(0, 8);
+  // secret_ref must satisfy connector-binding.service.ts SECRET_REF_RE
+  // (UPPER_SNAKE_CASE: starts with letter, ends with letter/digit;
+  // 3-120 chars). TEST_PREFIX is lowercase, so omit it from the
+  // secret_ref; cleanupTestData targets entity rows by TEST_PREFIX
+  // display_name, not connector binding rows.
+  return {
+    slack_display_name: `${TEST_PREFIX}slack_${suffix}_${id}`,
+    slack_secret_ref: `D6_TEST_SLACK_TOKEN_${suffix.toUpperCase()}_${id.toUpperCase().replace(/-/g, "_")}`,
+  };
+}
+
+describe("D6 team activation — success path", () => {
+  it("walks all 8 team catalog steps and emits one ADMIN_ACTION audit per step", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeTeamActivationForCaller(
+      phase0.admin_entity_id,
+      makeSlackInput("svc1"),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.archetype).toBe("team");
+    expect(result.plan_id).toBe("activation.team.v1");
+    expect(result.steps.length).toBe(8);
+    for (let i = 0; i < result.steps.length; i++) {
+      const step = result.steps[i];
+      expect(step).toBeDefined();
+      if (!step) continue;
+      expect(step.step_order).toBe(i + 1);
+    }
+    const finalStep = result.steps[result.steps.length - 1];
+    expect(finalStep).toBeDefined();
+    if (!finalStep) return;
+    expect(finalStep.audit_literal).toBe(
+      "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED",
+    );
+  });
+
+  it("matches the canonical team-archetype catalog step_id sequence", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeTeamActivationForCaller(
+      phase0.admin_entity_id,
+      makeSlackInput("svc2"),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const expectedStepIds = [
+      "step.precheck.envelope-state",
+      "step.dmw.baseline-grant",
+      "step.dmw.team-scope-extension",
+      "step.role.template-and-team-assignment",
+      "step.connector.slack-binding-register",
+      "step.workflow.stage-2-template-register",
+      "step.aha.slack-bound-and-fallback-register",
+      "step.envelope.mark-activated",
+    ];
+    expect(result.steps.map((s) => s.step_id)).toEqual(expectedStepIds);
+  });
+
+  it("creates a real SLACK_READ ConnectorBinding row with use_real:false at step 5", async () => {
+    const slackInput = makeSlackInput("svc3");
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeTeamActivationForCaller(
+      phase0.admin_entity_id,
+      slackInput,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The connector-binding service stores the binding scoped to
+    // the caller's org. Find it by display_name (TEST_PREFIX-uniquely
+    // named per test).
+    const binding = await prisma.connectorBinding.findFirst({
+      where: {
+        display_name: slackInput.slack_display_name,
+        deleted_at: null,
+      },
+    });
+    expect(binding).not.toBeNull();
+    expect(binding?.type).toBe("SLACK_READ");
+    expect(binding?.secret_ref).toBe(slackInput.slack_secret_ref);
+    // config.use_real: false at activation tier (no real-mode flip
+    // at this slice; Founder authorizes that separately at
+    // deployment register).
+    const config = (binding?.config ?? {}) as Record<string, unknown>;
+    expect(config["use_real"]).toBe(false);
+  });
+
+  it("preserves audit chain integrity across all 8 team steps", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeTeamActivationForCaller(
+      phase0.admin_entity_id,
+      makeSlackInput("svc4"),
+    );
+    expect(result.ok).toBe(true);
+    const chainResult = await verifyAuditChain(phase0.admin_entity_id);
+    expect(chainResult.valid).toBe(true);
+    expect(chainResult.brokenAt).toBeNull();
+  });
+
+  it("step 5 audit row carries binding_display_name + binding_secret_ref_name but NEVER a resolved value", async () => {
+    const slackInput = makeSlackInput("svc5");
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeTeamActivationForCaller(
+      phase0.admin_entity_id,
+      slackInput,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const step5 = result.steps[4];
+    expect(step5).toBeDefined();
+    if (!step5) return;
+    expect(step5.step_id).toBe("step.connector.slack-binding-register");
+    const row = await prisma.auditEvent.findUnique({
+      where: { audit_id: step5.audit_event_id },
+      select: { event_type: true, details: true },
+    });
+    expect(row?.event_type).toBe("ADMIN_ACTION");
+    const details = (row?.details ?? {}) as Record<string, unknown>;
+    expect(details["action"]).toBe("CONNECTOR_BINDING_REGISTERED");
+    expect(details["connector_type"]).toBe("SLACK_READ");
+    expect(details["binding_display_name"]).toBe(slackInput.slack_display_name);
+    expect(details["binding_secret_ref_name"]).toBe(
+      slackInput.slack_secret_ref,
+    );
+    // The resolved env-var VALUE never crosses the boundary; the
+    // env-var NAME is documented; we assert the serialized row
+    // contains no token-shaped value (xoxb- pattern + Bearer).
+    const serialized = JSON.stringify(row);
+    expect(serialized).not.toMatch(/xoxb-[A-Za-z0-9]{4,}-[A-Za-z0-9]{4,}/);
+    expect(serialized.toLowerCase()).not.toContain("bearer ");
+  });
+});
+
+describe("D6 team activation — input + auth failures", () => {
+  it("rejects empty slack_display_name as INVALID_SLACK_BINDING_INPUT", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeTeamActivationForCaller(phase0.admin_entity_id, {
+      slack_display_name: "",
+      slack_secret_ref: "SLACK_BOT_TOKEN_X",
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("INVALID_SLACK_BINDING_INPUT");
+  });
+
+  it("rejects empty slack_secret_ref as INVALID_SLACK_BINDING_INPUT", async () => {
+    const phase0 = await executePhase0(makePhase0Input());
+    const result = await executeTeamActivationForCaller(phase0.admin_entity_id, {
+      slack_display_name: "x",
+      slack_secret_ref: "",
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("INVALID_SLACK_BINDING_INPUT");
+  });
+});
+
+describe("D6 POST /org/dandelion/activate/team — HTTP surface", () => {
+  async function loginAdmin(
+    email: string,
+    password: string,
+  ): Promise<{ token: string; ip: string }> {
+    const ip = `10.66.${Math.floor(Math.random() * 200) + 1}.${Math.floor(Math.random() * 254) + 1}`;
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email,
+        password,
+        requested_operations: ["read", "write", "share"],
+      },
+      remoteAddress: ip,
+    });
+    if (login.statusCode !== 200) {
+      throw new Error(`login failed: ${login.statusCode} ${login.body}`);
+    }
+    return { token: (login.json() as { token: string }).token, ip };
+  }
+
+  it("returns 200 + ok:true with 8 step results when the admin caller activates the team envelope", async () => {
+    const input = makePhase0Input();
+    await executePhase0(input);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+    const slack = makeSlackInput("http1");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate/team",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: slack,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body["ok"]).toBe(true);
+    expect(body["archetype"]).toBe("team");
+    expect(body["plan_id"]).toBe("activation.team.v1");
+    const steps = body["steps"];
+    expect(Array.isArray(steps)).toBe(true);
+    if (Array.isArray(steps)) {
+      expect(steps.length).toBe(8);
+    }
+  });
+
+  it("returns 422 with INVALID_SLACK_BINDING_INPUT when slack_display_name is missing", async () => {
+    const input = makePhase0Input();
+    await executePhase0(input);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate/team",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: { slack_secret_ref: "SLACK_BOT_TOKEN_X" },
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as Record<string, unknown>;
+    expect(body["ok"]).toBe(false);
+    expect(body["code"]).toBe("INVALID_SLACK_BINDING_INPUT");
+  });
+
+  it("returns 403 when caller has session but no can_admin_org", async () => {
+    const input = makeEntityInput({
+      entity_type: "PERSON",
+      password: "correct-horse-battery",
+    });
+    await createEntity(input);
+    const ip = `10.66.99.${Math.floor(Math.random() * 254) + 1}`;
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: {
+        email: input.email,
+        password: "correct-horse-battery",
+        requested_operations: ["read"],
+      },
+      remoteAddress: ip,
+    });
+    expect(login.statusCode).toBe(200);
+    const token = (login.json() as { token: string }).token;
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate/team",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: { slack_display_name: "x", slack_secret_ref: "y" },
     });
     expect(response.statusCode).toBe(403);
   });
