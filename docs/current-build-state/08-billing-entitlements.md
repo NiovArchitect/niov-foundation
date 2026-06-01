@@ -10,15 +10,17 @@
 - `[FOUNDER-SECTION-8-BILLING-ENTITLEMENTS-ADR-AUTH]` (Amendment 1 expansion)
 - `[FOUNDER-RESUME-AUTONOMOUS-BUILD-FROM-SAFE-HOLD-AUTH]` (resume + reconfirm)
 
-Section 8 is **architecture-defined; runtime not started**.
+Section 8 is **architecture-defined + static catalog LIVE; runtime not started**.
+
+**B2 Static Entitlement Catalog LANDED 2026-06-01** per `[FOUNDER-SECTION-8-B2-STATIC-ENTITLEMENT-CATALOG-AUTH]`. NEW `docs/entitlement-catalog/` directory contains 9 catalog files (README + schema + plans + seats + capability-packs + connector-pack-families + usage-meters + governance-rules + downgrade-policies + enterprise-add-ons) totaling 93 catalog items: 4 plan templates (Starter/Pilot + Team + Business + Enterprise; every plan DMW_baseline_included=true; $250 base anchored in Starter/Pilot + Team), 6 seat tiers (Standard $25-$49 + Professional $75-$125 + Executive $150-$300 + Admin $99-$199 + Board/Observer $49-$149 + External custom), 9 capability packs (Dandelion Activation + Workflow Automation + Advanced Audit/Compliance + DMW/Memory Governance + Agent Playground/Simulation + Enterprise Analytics + Regulator/Evidence + Premium Support/Onboarding + Collaboration Pack candidate), 8 connector pack families per ADR-0084 + ADR-0083 Amendment 1 §9.4 (Collaboration + Workspace/Knowledge + Project/Engineering + Revenue + Customer + People + Finance/Expense/Travel + Legal/Compliance), 16 usage meter templates (deferred runtime to B3+), 18 governance rules + 13 non-paywallable safety rules + 1 Billing Admin permission profile, 5 downgrade policy templates (upgrade + downgrade + non-payment-grace + cancellation + enterprise-contract-end), 13 enterprise add-ons (SSO/SAML/SCIM + custom retention + custom connector + advanced DMW policy + private cloud/VPC + regulated deployment + dedicated support + SLA + DPA/MSA + premium onboarding + custom evidence workflows + audit export expansion + security review package). NEW `scripts/validate-entitlement-catalog.mjs` validator (pure Node ESM): JSON parse + 10 required files + required wrappers + universal field presence + ID uniqueness + ADR-0083 source ref + DMW_baseline_included on every plan + every seat + $250 base in plans + all required seat/pack/family/meter/non-paywallable IDs + forbidden-phrase scan (11 forbidden phrases with sentence-level negation detection + negation-item subtree skip) + canonical phrase presence in README ("Customers should not pay extra just to have memory be safe."). Validator green: 10/10 files, 93 items, 0 errors. NO Prisma schema, NO migration, NO runtime billing, NO payment provider, NO entitlement enforcement, NO feature gating, NO Control Tower UI, NO connector code, NO Dandelion runtime, NO workflow runtime, NO DMW runtime, NO BEAM/Python/Elixir, NO audit literal, NO existing service mutated.
 
 The pre-existing `apps/api/src/services/monetization/monetization.service.ts` substrate (per ADR-0021 Capsule Type Extension Protocol — `PRICING_TABLE` + 70/30 revenue split math + per-monetization-role attribution) is preserved and continues to live alongside the future Section 8 entitlement substrate. The Section 8 Billing / Entitlements substrate is **additive** forward-substrate (per RULE 9 / RULE 13).
 
 | Slice | Status |
 |-------|--------|
 | ADR-0083 base | ✓ Accepted 2026-06-01 (PR #175 `4b3265d`) |
-| ADR-0083 Amendment 1 | ✓ Accepted 2026-06-01 (this PR) |
-| B2 — Static entitlement catalog | queued (Founder-gated) |
+| ADR-0083 Amendment 1 | ✓ Accepted 2026-06-01 (PR #176) |
+| B2 — Static entitlement catalog | ✓ LANDED 2026-06-01 (this PR) |
 | B3 — CT billing preview | queued (Founder-gated) |
 | B4 — Internal entitlement model + Founder pricing decision | queued (Founder-gated) |
 | B5 — Billing Admin surface | queued (Founder-gated) |

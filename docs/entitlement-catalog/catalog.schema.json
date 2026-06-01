@@ -1,0 +1,148 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://niovlabs.com/foundation/entitlement-catalog/catalog.schema.json",
+  "title": "NIOV Foundation Section 8 B2 Static Entitlement Catalog Schema",
+  "description": "Validation schema for ADR-0083 + Amendment 1 Section 8 B2 static entitlement catalog files at docs/entitlement-catalog/. Each catalog file is a wrapper object containing kind + catalog_version + envelope_defaults + items[]. Each item carries the universal envelope (id / version / status / object_type / name / description / human_readable_summary / model_usage_notes / source_adr_refs / governance_notes / billing_notes / safe_defaults / forbidden_defaults / allowed_consumers / forbidden_consumers / audit_expectations) plus kind-specific fields. Closed-vocab enums are strict; per-item kind-specific extra fields are permitted (additive future-friendly). STATIC CATALOG ONLY — never runtime entitlement enforcement; never a price quote; never a payment provider integration. Per ADR-0083 Amendment 1 §9.13 'cannot be unsafely paywalled' and the DMW-included-at-base doctrine.",
+  "type": "object",
+  "required": ["kind", "catalog_version", "envelope_defaults", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "envelope_defaults": { "$ref": "#/definitions/EnvelopeDefaults" },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "PlanTemplate",
+        "SeatTier",
+        "CapabilityPack",
+        "ConnectorPackFamily",
+        "UsageMeterTemplate",
+        "GovernanceRule",
+        "NonPaywallableSafetyRule",
+        "DowngradePolicyTemplate",
+        "EnterpriseAddOn",
+        "BillingAdminPermissionProfile"
+      ]
+    },
+    "catalog_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/CatalogItem" }
+    },
+    "non_paywallable_safety_rules": {
+      "description": "Optional embedded section for files that carry non-paywallable safety rules alongside primary items (per Founder direction allowing 'section or file' for non_paywallable_safety_rules).",
+      "type": "array",
+      "items": { "$ref": "#/definitions/CatalogItem" }
+    },
+    "billing_admin_permission_profile": {
+      "description": "Optional embedded section for the single BillingAdminPermissionProfile object (per Founder direction allowing embedding adjacent to governance rules).",
+      "$ref": "#/definitions/CatalogItem"
+    }
+  },
+  "definitions": {
+    "CatalogItem": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "status",
+        "object_type",
+        "name",
+        "description",
+        "human_readable_summary",
+        "model_usage_notes",
+        "source_adr_refs",
+        "governance_notes",
+        "billing_notes",
+        "safe_defaults",
+        "forbidden_defaults",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "audit_expectations"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)+\\.v[0-9]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "$ref": "#/definitions/StatusEnum" },
+        "object_type": {
+          "type": "string",
+          "enum": [
+            "PlanTemplate",
+            "SeatTier",
+            "CapabilityPack",
+            "ConnectorPackFamily",
+            "UsageMeterTemplate",
+            "GovernanceRule",
+            "NonPaywallableSafetyRule",
+            "DowngradePolicyTemplate",
+            "EnterpriseAddOn",
+            "BillingAdminPermissionProfile"
+          ]
+        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "minLength": 1 },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "source_adr_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(ADR-[0-9]{4}|RULE [0-9]+|US [0-9,]+)$" }
+        },
+        "governance_notes": { "type": "string", "minLength": 1 },
+        "billing_notes": { "type": "string", "minLength": 1 },
+        "safe_defaults": { "type": "array", "items": { "type": "string" } },
+        "forbidden_defaults": { "type": "array", "items": { "type": "string" } },
+        "allowed_consumers": { "type": "array", "items": { "type": "string" } },
+        "forbidden_consumers": { "type": "array", "items": { "type": "string" } },
+        "audit_expectations": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "StatusEnum": {
+      "type": "string",
+      "enum": ["ACCEPTED", "PROPOSED", "DEPRECATED"]
+    },
+    "EnvelopeDefaults": {
+      "description": "File-level governed context envelope metadata. Template metadata only — NEVER runtime permissions. Per-item overrides take precedence when present.",
+      "type": "object",
+      "required": [
+        "object_type",
+        "human_readable_summary",
+        "model_usage_notes",
+        "scope_defaults",
+        "permission_defaults",
+        "provenance",
+        "audit_expectations",
+        "policy_purpose",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "sensitivity_level"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "object_type": { "type": "string" },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "scope_defaults": { "type": "array", "items": { "type": "string" } },
+        "permission_defaults": { "type": "array", "items": { "type": "string" } },
+        "provenance": {
+          "type": "object",
+          "required": ["authored_by", "source", "version_tag", "captured_at", "authority"],
+          "properties": {
+            "authored_by": { "type": "string" },
+            "source": { "type": "string" },
+            "version_tag": { "type": "string" },
+            "captured_at": { "type": "string" },
+            "authority": { "type": "string" }
+          }
+        },
+        "audit_expectations": { "type": "array", "items": { "type": "string" } },
+        "policy_purpose": { "type": "string" },
+        "allowed_consumers": { "type": "array", "items": { "type": "string" } },
+        "forbidden_consumers": { "type": "array", "items": { "type": "string" } },
+        "sensitivity_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }
+      }
+    }
+  }
+}
