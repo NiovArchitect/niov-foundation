@@ -1,0 +1,73 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. RULE 0 sovereignty over memory is absolute. Baseline DMW safety is never paywalled.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED", "MEMORY_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "USER_CONFIRMATION_REQUIRED", "ADMIN_APPROVAL_REQUIRED"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/memory-dmw-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_MEMORY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "recommendation.memory-dmw-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "MemoryDmwMap",
+      "name": "Memory / DMW Map Recommendation",
+      "description": "Ranks proposed DMW scope regions (baseline DMW safety / self-scoped memory / team-scoped memory / project-scoped / customer-scoped / forbidden categories).",
+      "human_readable_summary": "Proposes which memory categories admins should approve. Baseline DMW safety is always included. Customers should not pay extra just to have memory be safe.",
+      "model_usage_notes": "Baseline DMW safety + self-scoped memory rank HIGH_CONFIDENCE because they ship in every plan. Team / project / customer scopes require admin approval. Forbidden categories absolute.",
+      "source_adr_refs": ["ADR-0082", "ADR-0001", "ADR-0080", "ADR-0083", "ADR-0044", "ADR-0045", "ADR-0046", "RULE 0"],
+      "consumes_assessment_id": "assessment.memory-dmw-map.v1",
+      "ranked_regions": [
+        { "region_id": "memory.baseline-safety", "region_label": "Baseline DMW memory safety", "rank": 1, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Baseline safety ships in every plan per ADR-0083; never paywalled." },
+        { "region_id": "memory.self-scoped", "region_label": "Self-scoped memory", "rank": 2, "confidence_label": "REQUIRES_USER_CONFIRMATION", "rationale_summary": "User confirms own self-scope boundaries." },
+        { "region_id": "memory.team-scoped", "region_label": "Team / hive-scoped memory", "rank": 3, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Team scope requires admin approval of Hive membership + Org Map relationships." },
+        { "region_id": "memory.project-customer-scoped", "region_label": "Project / customer-scoped memory", "rank": 4, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Customer-by-customer scope binding required; sensitive projects excluded." },
+        { "region_id": "memory.forbidden-categories", "region_label": "Forbidden memory categories", "rank": 5, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Forbidden categories from assessment intake remain absolute downstream." }
+      ],
+      "rationale": "Baseline DMW safety + self-scoped memory ship always. Team / project / customer scopes require admin approval. Forbidden categories are absolute. Per ADR-0046 dual-context: Personal AI Agent → PERSONAL wallet; Enterprise AI Agent → ENTERPRISE wallet.",
+      "cross_map_dependencies": [
+        "Memory / DMW Map depends on Role Map (per-role DMW scope per Wave 2.1 §25)",
+        "Memory / DMW Map depends on Risk Map (forbidden categories inherit from Risk Map exclusions)",
+        "Memory / DMW Map depends on Authority Map ('must never be assumed' surfaces exclude DMW scope)"
+      ],
+      "approval_gate_required": "Admin approval + user confirmation of self-scope boundaries.",
+      "confidence_label": "REQUIRES_USER_CONFIRMATION",
+      "DMW_scope_implications": [
+        "Memory / DMW Map directly establishes DMW scope for activation",
+        "Forbidden categories cannot scope any DMW without explicit later authorization",
+        "Per ADR-0046: AI_AGENT EntityType maps to PERSONAL or ENTERPRISE wallet by deployment context",
+        "Advanced DMW governance pack required for custom retention per ADR-0083"
+      ],
+      "governance_review_points": [
+        "RULE 0 sovereignty over entity memory absolute",
+        "Baseline DMW safety never paywalled per ADR-0083",
+        "Customers should not pay extra just to have memory be safe",
+        "User must confirm self-scoped memory boundaries",
+        "Admin must approve team / org / project / customer regions"
+      ],
+      "safe_defaults": ["Baseline DMW safety always included", "Self-scoped memory absolute", "Per-customer / per-project scope binding", "Soft-delete only per RULE 10", "Revocability per RULE 0"],
+      "forbidden_defaults": ["Baseline DMW safety paywalled", "RULE 0 sovereignty relaxation", "Cross-tenant memory fusion", "Workforce-scoring inferences from memory categories", "Managerial-oversight monitoring of personal memory"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_MEMORY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}

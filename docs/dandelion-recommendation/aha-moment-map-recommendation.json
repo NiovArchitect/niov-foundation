@@ -1,0 +1,73 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. C2 Slack read-first runtime LIVE; Slack-based aha moments now RUNTIME_READY substrate.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_APPROVAL_REQUIRED"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/aha-moment-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "MEDIUM"
+  },
+  "items": [
+    {
+      "id": "recommendation.aha-moment-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "AhaMomentMap",
+      "name": "Aha Moment Map Recommendation",
+      "description": "Ranks proposed first-week aha moments per role / department / connector / workflow. C2 Slack RUNTIME_READY substrate informs Slack-based aha ranking.",
+      "human_readable_summary": "Proposes first-week aha moments per role. Slack catch-up summaries rank first because C2 Slack runtime is LIVE. Safe-fallback aha moments always available.",
+      "model_usage_notes": "Slack-based aha moments now have RUNTIME_READY substrate (PR #185). Other connector aha moments remain RECOMMENDATION_READY until per-connector runtime lands.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0084", "ADR-0081", "RULE 0"],
+      "consumes_assessment_id": "assessment.aha-moment-map.v1",
+      "ranked_regions": [
+        { "region_id": "aha.slack-catchup", "region_label": "Slack channel catch-up summary (C2 LIVE)", "rank": 1, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "C2 Slack read-first runtime LIVE. Channels.list + conversations.history substrate ready." },
+        { "region_id": "aha.safe-fallback", "region_label": "Safe-fallback aha moments (no connector required)", "rank": 2, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Safe-fallback paths work without connector activation; HIGH confidence." },
+        { "region_id": "aha.google-workspace", "region_label": "Google Workspace email triage + calendar summary", "rank": 3, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "C3 forward-substrate; requires connector runtime + DWD review." },
+        { "region_id": "aha.project-tracker", "region_label": "Project Tracker (Jira / Linear) sprint risk summary", "rank": 4, "confidence_label": "MEDIUM_CONFIDENCE", "rationale_summary": "C4 forward-substrate; requires per-vendor runtime." },
+        { "region_id": "aha.workflow-recommendations", "region_label": "Workflow recommendations (ADR-0081 Stage 2)", "rank": 5, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Stage 2 recommendation-only workflows; admin approval required." }
+      ],
+      "rationale": "Slack catch-up ranks first because the C2 Slack read-first runtime is LIVE — the aha moment can land today. Safe-fallback paths rank next because they require no connector activation. Other connector aha moments wait on their respective C-slice runtimes.",
+      "cross_map_dependencies": [
+        "Aha Moment Map depends on Role Map (first-week wins per role)",
+        "Aha Moment Map depends on Tool Map (connector activation drives aha potential)",
+        "Aha Moment Map depends on Workflow Map (recommendation aha depends on ADR-0081 Stage 2)",
+        "Aha Moment Map depends on Risk Map (aha moments cannot violate Risk Map exclusions)"
+      ],
+      "approval_gate_required": "Admin approval at D4 + per-connector RULE 21 research arc for new connector aha moments.",
+      "confidence_label": "REQUIRES_ADMIN_REVIEW",
+      "DMW_scope_implications": [
+        "Aha Moment Map proposes per-role DMW scope priorities (which categories deliver fastest aha)",
+        "Safe-fallback aha moments operate inside baseline DMW scope only",
+        "Slack-based aha moments scope to PERSONAL or ENTERPRISE wallet per ADR-0046 dual-context routing",
+        "User confirmation required before DMW scope reflects an aha-moment proposal"
+      ],
+      "governance_review_points": [
+        "Admin must approve every aha-moment activation",
+        "First-connector activations per ADR-0084 (Slack now C2 RUNTIME_READY)",
+        "Workflow Stage 2+ progression governance-bound per ADR-0081",
+        "Safe-fallback always available even when no connectors activate"
+      ],
+      "safe_defaults": ["Suggest-only aha moments", "Admin-approved aha activation", "Safe-fallback always available", "User-confirmed aha-moment proposals"],
+      "forbidden_defaults": ["Autonomous aha-moment activation", "Workforce-scoring inferences from aha-moment uptake", "Managerial-oversight monitoring of aha-moment engagement", "Cross-tenant aha-moment fusion"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}

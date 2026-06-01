@@ -1,0 +1,75 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. Neutral compliance vocabulary per ADR-0070. Risk Map regions block downstream activation.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED", "RISK_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_APPROVAL_REQUIRED"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/risk-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "recommendation.risk-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "RiskMap",
+      "name": "Risk Map Recommendation",
+      "description": "Ranks proposed Risk Map regions (Map-blocking risks / unknown areas / compliance-sensitive surfaces / high-risk tools+workflows / RULE-20-protected forbidden inferences).",
+      "human_readable_summary": "Proposes which risks admins should encode. Map-blocking risks gate downstream activation. Unknown areas default to BLOCKED_BY_POLICY.",
+      "model_usage_notes": "Map-blocking risks rank highest because they prevent downstream activation. Unknown areas default to BLOCKED_BY_POLICY until reviewed. RULE-20-protected forbidden inferences are absolute regardless of plan tier.",
+      "source_adr_refs": ["ADR-0082", "ADR-0070", "ADR-0049", "ADR-0050", "ADR-0027", "RULE 0"],
+      "consumes_assessment_id": "assessment.risk-map.v1",
+      "ranked_regions": [
+        { "region_id": "risk.map-blocking", "region_label": "Map-blocking risks (gate downstream activation)", "rank": 1, "confidence_label": "BLOCKED_BY_POLICY", "rationale_summary": "Map-blocking risks must be encoded before any downstream Map region activates." },
+        { "region_id": "risk.rule-20-forbidden", "region_label": "RULE-20-protected forbidden inferences", "rank": 2, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Forbidden inferences (workforce scoring / managerial-oversight monitoring / sensitive-attribute / personality-trait) absolute regardless of plan tier." },
+        { "region_id": "risk.unknown-areas", "region_label": "Unknown areas (default-forbid)", "rank": 3, "confidence_label": "BLOCKED_BY_POLICY", "rationale_summary": "Conservative default: treat unknown areas as forbidden until reviewed." },
+        { "region_id": "risk.compliance-sensitive", "region_label": "Compliance-sensitive surfaces", "rank": 4, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "GDPR / HIPAA / FERPA / SOX / regional law surfaces require LawfulBasis per ADR-0036 at regulator-view tier." },
+        { "region_id": "risk.high-risk-tools-workflows", "region_label": "High-risk tools + workflows", "rank": 5, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Legal-effect / money-moving / customer-PII risks require dual-control per ADR-0026." }
+      ],
+      "rationale": "Risk Map ranks first across the system because its regions block downstream Map activation. Unknown areas default to BLOCKED_BY_POLICY. RULE-20-protected forbidden inferences absolute.",
+      "cross_map_dependencies": [
+        "Risk Map gates Company Map activation (compliance surfaces)",
+        "Risk Map gates Tool Map activation (high-risk tools excluded)",
+        "Risk Map gates Workflow Map activation (high-risk workflows blocked)",
+        "Risk Map gates Memory / DMW Map activation (forbidden categories)",
+        "Risk Map gates Authority Map activation (excluded relationships)"
+      ],
+      "approval_gate_required": "Admin policy approval at D4 + neutral compliance vocabulary per ADR-0070.",
+      "confidence_label": "REQUIRES_ADMIN_REVIEW",
+      "DMW_scope_implications": [
+        "Risk Map gates which DMW scopes may activate downstream",
+        "Map-blocking risks exclude their domains from any DMW scope",
+        "Compliance-sensitive surfaces require LawfulBasis per ADR-0036 at regulator-view DMW scope",
+        "Unknown areas default to forbidden-DMW until reviewed"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Risk Map region before downstream maps activate",
+        "Map-blocking risks gate Tool / Workflow / Connector / Memory Map activation",
+        "Neutral compliance vocabulary mandatory per ADR-0070",
+        "No claims of regulator approval, no claims of guaranteed compliance",
+        "RULE-20-protected forbidden inferences absolute regardless of plan tier"
+      ],
+      "safe_defaults": ["Admin-approved risk gating", "Neutral compliance vocabulary", "Conservative default for unknown areas (treat as forbidden until reviewed)"],
+      "forbidden_defaults": ["Autonomous risk response", "Workforce-scoring inferences from risk data", "Managerial-oversight monitoring of individual workers", "Guaranteed-compliance claims", "Regulator-approval claims", "Sensitive-attribute inference"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed", "future BREAK_GLASS_* + LawfulBasis per ADR-0050 + ADR-0036"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}
