@@ -1,8 +1,8 @@
 # ADR-0080 — Out-of-the-Box Role, Tool, Workflow, Connector, and Dandelion Onboarding Ontology for Digital Twins
 
-**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (governed context envelope addendum — Wave 2 lands the catalog with envelope metadata; see §17)
+**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (governed context envelope addendum — Wave 2 lands the catalog with envelope metadata; see §17) · **Amendment 2** Accepted 2026-06-01 (Wave 3 CT/Dandelion read-only preview LIVE + deep-role-examples addendum — see §18)
 **Nature:** Design-only at Wave 1; Wave 2 static seed catalog accompanies (no code, no schema, no routes, no runtime behavior). No Control Tower UI. No connector implementation. No LLM/Python/BEAM. No new audit literal. No mutation of existing `dandelion.service.ts`.
-**Founder authorization:** `[FOUNDER-ADR-0080-OOTB-DANDELION-ONTOLOGY-DESIGN-ONLY-AUTH]` (Wave 1) · `[FOUNDER-ADR-0080-WAVE-2-STATIC-SEED-CATALOG-AUTH]` (Wave 2) · `[FOUNDER-ADR-0080-WAVE-2-ADDENDUM-GOVERNED-CONTEXT-TRANSACTION-ENVELOPE]` (Wave 2 envelope amendment)
+**Founder authorization:** `[FOUNDER-ADR-0080-OOTB-DANDELION-ONTOLOGY-DESIGN-ONLY-AUTH]` (Wave 1) · `[FOUNDER-ADR-0080-WAVE-2-STATIC-SEED-CATALOG-AUTH]` (Wave 2) · `[FOUNDER-ADR-0080-WAVE-2-ADDENDUM-GOVERNED-CONTEXT-TRANSACTION-ENVELOPE]` (Wave 2 envelope amendment) · `[FOUNDER-ADR-0080-WAVE-3-CT-DANDELION-READ-ONLY-PREVIEW-AUTH]` (Wave 3) · `[FOUNDER-ADR-0080-WAVE-3-ADDENDUM-DEEP-ROLE-EXAMPLES-AND-COLLABORATION-MAPS]` (Wave 3 depth/collaboration addendum) · `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]` (autonomous continuation)
 **Parent doctrine:** ADR-0048 (governed personalization-orchestration), ADR-0052 (Otzar DGI), ADR-0027 (governance), ADR-0070 (regulator-ready Foundation), ADR-0069 (BEAM substrate-coherence law).
 
 ---
@@ -1188,3 +1188,62 @@ Alternatives Founder may authorize instead:
 - **Section 8 Billing ADR draft** (Founder pricing/billing-provider decision required first).
 
 **Do not implement Wave 3 automatically.** Stop and report.
+
+---
+
+## 18. Amendment 2 — Wave 3 CT/Dandelion read-only preview LIVE + depth/collaboration addendum (2026-06-01)
+
+**Authority:** `[FOUNDER-ADR-0080-WAVE-3-CT-DANDELION-READ-ONLY-PREVIEW-AUTH]` + `[FOUNDER-ADR-0080-WAVE-3-ADDENDUM-DEEP-ROLE-EXAMPLES-AND-COLLABORATION-MAPS]` + `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]`.
+
+### 18.1 Wave 3 closeout
+
+Wave 3 (Control Tower `/onboarding` read-only Dandelion Preview) landed in `otzar-control-tower` via PR #18. Option A — CT-side static catalog mirror — chosen per Wave 3 Phase 0. No Foundation route, no schema migration, no runtime activation.
+
+CT surfaces now live at `/onboarding`:
+- Founder doctrine card (4 canonical lines preserved verbatim).
+- Catalog summary counts (15/10/15/95/30/14/1 = 187 items).
+- 15-row role browser (Executive Assistant flagged as deepest worked example).
+- **Role Depth Roadmap** (per Founder addendum): 1 DEEP + 14 STARTER + 13 NOT_YET_MODELED + 2 SUBSUMED — substrate-honest depth status.
+- Executive Assistant spotlight: 9 likely_reports_to + 15 workflows + 18 tools (SAP Concur family) + 7 permission bundles + 5 aha moments (incl. Travel Booking + Expense Shell) + 3 safe-fallback tiers + forbidden inferences.
+- **EA Collaboration Map** (per Founder addendum): 7 directions (upward / peer / cross-functional / downward / external / approval-path / escalation-path).
+- Tool / workflow / connector preset / Dandelion three-tier flow browsers.
+- **DMW Education panel** (per Founder addendum): canonical user-facing line *"Your Memory Wallet is how Otzar remembers safely."* + canonical architecture line *"Dandelion shapes the starter profile; the DMW scopes memory; Foundation governance authorizes use."* + 10 DMW education bullets.
+- Governed envelope panel (13 envelope metadata fields).
+
+29 NEW CT tests covering all panels + 15-phrase forbidden-UI-copy guard. 218 / 218 total CT tests pass. Typecheck + lint + build clean.
+
+### 18.2 Substrate-honest depth assessment
+
+Per Founder addendum decision rule, current Wave 2 catalog has enough depth for an *honest* Wave 3 preview (the preview transparently names depth gaps rather than pretending depth that does not exist), but Wave 2.1 role-depth expansion is the recommended next slice before Wave 4.
+
+| Status | Count | Roles |
+|--------|-------|-------|
+| DEEP | 1 | Executive Assistant |
+| STARTER | 14 | CEO, COO, CFO, CHRO, General Counsel, Product Manager, Project Manager, Account Executive, Customer Success Manager, Software Engineer, Engineering Manager, IT Admin, Compliance Officer, Board Member |
+| NOT_YET_MODELED | 13 | CTO, CMO, Sales Manager, Public Relations / Communications, AI Engineer, ML Engineer, Researcher / Research Scientist, Data Scientist, UX Researcher, Support Lead, Operations Manager, General Employee / IC, Investor / Observer |
+| SUBSUMED | 2 | Board Chair → Board Member; Founder → CEO |
+
+### 18.3 Wave 2.1 forward path (autonomous continuation)
+
+Wave 2.1 role-depth expansion is queued per Founder autonomous-build authority. Bounded static-catalog work; no schema, no runtime. Priority roles to deepen (subset per Founder addendum):
+- CTO (architecture authority + AI/ML oversight + security/infrastructure risk surface);
+- CMO (campaign + launch comms + brand risk + pipeline influence);
+- AI Engineer + ML Engineer (model risk + dataset lineage + safety/privacy review prep; no deployment without approval);
+- Public Relations / Communications (press brief + crisis response + media triage; legal-gated);
+- General Employee / IC (self-scoped; my-workday brief + commitments + meeting follow-up draft; no manager-monitoring framing);
+- Sales Manager (distinct from AE; pipeline coaching + forecast + discount approval gating);
+- Support Lead (distinct from CSM);
+- Operations Manager;
+- Researcher / Research Scientist;
+- Data Scientist;
+- UX Researcher.
+
+### 18.4 Wave 3 next-slice recommendations (autonomous selection)
+
+Under `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]`, the autonomous build continues:
+
+1. **Wave 2.1** static role-depth expansion (Foundation catalog) — bounded; no schema; no runtime.
+2. **Wave 6** Dandelion-driven connector-priority matrix output (Foundation static + CT surface) — suggest-only; no connector code.
+3. **Section 10 operational hardening** (Foundation docs) — rollback runbook + admin bootstrap runbook + smoke-test checklist.
+
+Section 4 first-real-connector + Section 8 Billing + Section 9 Workflows remain Founder-decision-gated (TRUE STOP CONDITIONS per autonomous-build directive).
