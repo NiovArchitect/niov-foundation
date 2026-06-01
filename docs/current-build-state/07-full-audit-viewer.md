@@ -490,6 +490,105 @@ LawfulBasis flow). Each requires its own Founder
 authorization at slice per RULE 21 production-grade
 discipline.
 
+## CT consumer LIVE 2026-06-01 (Section 7 D2.1 filter UI)
+
+**Control Tower filter UI LANDED 2026-06-01** at
+`[CT-SECTION-7-AUDIT-VIEWER-D2.1-FILTERS]`
+(otzar-control-tower PR
+[#11](https://github.com/NiovArchitect/otzar-control-tower/pull/11)
+`66e9d41`). Adds the two highest-value filters to the Audit
+events list: `event_type` Select dropdown populated from
+`AUDIT_EVENT_TYPE_LABELS` (30 closed-vocab labels) +
+`outcome` Select dropdown (SUCCESS / DENIED / FAILURE) +
+Reset filters button. Foundation route already accepts these
+query params; CT D2 already wired `api.audit.list` to
+`ListAuditEventsInput`; this slice is UI only.
+
+Filter coherence: changing a filter resets page to 1 + clears
+the detail panel selection. Reset is disabled at the default
+state. Filters thread through the TanStack Query key so
+refetch fires on change.
+
+MSW handler extended to honor `event_type` + `outcome` query
+params by filtering the in-memory 3-event fixture chain;
+existing D2 list tests preserved.
+
+4 NEW Wave 7-D2.1 tests: controls + reset render / reset
+disabled at default / event_type filter narrows list +
+serializes via URL / reset restores defaults. CT total:
+144 → 148 (Wave 10 Agent Playground 129/129 + Wave 7-D2
+list/detail 15/15 regression preserved).
+
+NO Foundation backend change. NO new audit literal. NO
+schema. NO new route. NO new type mirror (filter state maps
+into existing `ListAuditEventsInput` fields). NO
+target_entity_id / target_capsule_id text inputs. NO
+start_time / end_time date pickers (both forward-substrate).
+NO Layer 4 drilldown / export / verify-chain panel / org+
+platform+regulator scope at this slice.
+
+## CT consumer LIVE 2026-06-01 (Section 7 D2.2 verify-chain panel)
+
+**Control Tower chain-integrity verification panel LANDED
+2026-06-01** at `[CT-SECTION-7-AUDIT-VIEWER-D2.2-VERIFY-CHAIN]`
+(otzar-control-tower PR
+[#12](https://github.com/NiovArchitect/otzar-control-tower/pull/12)
+`2b79754`). Adds a self-scope chain-integrity verification
+surface above the existing events list+detail grid on
+`/security-audit`. Foundation route
+`GET /api/v1/audit/verify-chain` has been LIVE since ADR-0071
+(PR #133); this slice wires the CT type mirror + API client
+method + panel + tests. ZERO Foundation change.
+
+Type mirror: NEW `VerifyChainView` (14-field SAFE projection
+per ADR-0071 §3 — ok / scope / verified / checked_event_count
+/ chain_algorithm / window_start+end / first+last event id +
+hash / broken_at_event_id / failure_reason / lawful_basis_id
+/ evidence_note / honest_note) + `VerifyChainFailureReason`
+(4 closed-vocab failure reasons: CHAIN_HASH_MISMATCH /
+PREVIOUS_LINK_MISMATCH / MISSING_PREVIOUS_EVENT /
+CANONICAL_RECORD_DRIFT) + `VerifyChainInput`.
+
+API method: NEW `api.audit.verifyChain(input)` →
+`VerifyChainView`.
+
+UI: NEW `VerifyChainPanel` component, manual click-to-run
+only (never auto-runs). Idle / loading / safe-error /
+verified / verification-failed branches all present. Verified
+state surfaces boundary detail rows + algorithm badge +
+Foundation evidence_note + honest_note. Failed state surfaces
+destructive-styled "Chain break" section with
+`broken_at_event_id` + closed-vocab `failure_reason`. ZERO
+raw event bodies, ZERO raw chain data, ZERO PII, ZERO secret
+refs.
+
+MSW handler `auditVerifyChainHandler` returns verified=true
+with chain bounds derived from the existing 3-event fixture
+chain; honors scope query param (rejects values outside
+self|org|platform|regulator with 400 INVALID_SCOPE).
+
+4 NEW Wave 7-D2.2 tests: card + idle Run button render /
+Run → verified state + boundary hashes + algorithm label /
+verified=false → broken_at + failure_reason in destructive
+section / 500 error → safe error block with code. CT total:
+148 → 152 (Wave 10 Agent Playground 129/129 + Wave 7-D2 +
+D2.1 regression preserved).
+
+NO Foundation backend change. NO new audit literal. NO
+schema. NO new route. NO org / platform / regulator scope
+toggle UI (Foundation routes already accept the scope param).
+NO `lawful_basis_id` flow at UI tier. NO Layer 4 drilldown.
+NO NDJSON / CSV export. NO LLM. NO BEAM.
+
+Section 7 forward-substrate remaining at the CT register
+after D2.1 + D2.2 (each a bounded follow-on slice consuming
+already-LIVE Foundation routes): target_entity_id +
+target_capsule_id text-input filters + start_time / end_time
+date-range pickers + NDJSON / CSV export action + org /
+platform / regulator scope toggle (gated on TAR.can_admin_org
++ TAR.can_admin_niov + LawfulBasis flow). Each requires its
+own Founder authorization at slice per RULE 21.
+
 ## Risks / forward-substrate
 
 - The audit chain contains sensitive routing identifiers
