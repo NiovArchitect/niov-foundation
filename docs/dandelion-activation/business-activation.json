@@ -1,0 +1,294 @@
+{
+  "$schema": "./activation.schema.json",
+  "kind": "ActivationPlan",
+  "catalog_version": "1.0.0",
+  "activation_defaults": {
+    "object_type": "ActivationPlan",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Stage F Activation walks an approved envelope into the live operating state — every step is human-authorized, audit-emitted, and reversible by construction.",
+    "model_usage_notes": "Activation plans are DESIGN_NOT_EXECUTED. Real activation requires a future implementation slice that consumes this catalog.",
+    "scope_defaults": ["TENANT_SCOPED", "ENVELOPE_SCOPED", "STEP_SCOPED", "PROJECT_SCOPED", "CUSTOMER_SCOPED"],
+    "permission_defaults": ["HUMAN_AUTHORIZED_AT_EVERY_GATE", "AUDIT_EMITTED_BEFORE_AND_AFTER", "REVERSIBLE_BY_CONSTRUCTION", "NO_AUTONOMOUS_ACTIVATION", "READ_FIRST_CONNECTOR_ONLY", "DELEGATED_AUTHORITY_NEVER_EXCEEDS_HUMAN_CEILING"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-activation/business-activation.json",
+      "version_tag": "d6-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D6-DANDELION-ACTIVATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:ACTIVATION_PLAN_REFERENCED when consumed", "future ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED + per-step audit literals at the implementation slice"],
+    "policy_purpose": "ACTIVATION_DESIGN_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ACTIVATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "activation_plan": {
+    "id": "activation.business.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "ActivationPlan",
+    "plan_archetype_id": "business",
+    "name": "Business Activation Plan",
+    "description": "Canonical ordered sequence to activate the Business Starter Envelope (envelope.business.v1). Walks a project-and-customer-scoped envelope at the Foundation runtime tier — multi-connector binding (Slack C2 + Google Workspace C3) + project/customer DMW + delegated authority profiles + Stage 2 workflow templates + advanced audit + dual-control on financial-effect operations. Every step is human-authorized and audit-emitted.",
+    "human_readable_summary": "Business-scope activation: baseline + team + project + customer DMW; Slack + Google connectors; delegated authority profiles; advanced audit; dual-control on financial-effect operations.",
+    "model_usage_notes": "Use this plan for the Business plan tier. Two connector bindings register in sequence (Slack first per Wave 6 priority + Google Workspace second per C3 RUNTIME_READY). Delegated authority profiles are registered with explicit ceiling-never-exceeds-human enforcement per RULE 0.",
+    "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0083", "ADR-0084", "ADR-0001", "ADR-0019", "ADR-0024", "ADR-0026", "ADR-0027", "ADR-0050", "ADR-0002", "RULE 0", "RULE 4", "RULE 10"],
+    "consumes_starter_envelope_id": "envelope.business.v1",
+    "activation_steps": [
+      {
+        "step_order": 1,
+        "step_id": "step.precheck.envelope-state",
+        "step_name": "Precondition check",
+        "step_purpose": "Verify envelope DRAFT_NOT_ACTIVATED + caller admin capabilities + org match.",
+        "consumes_map_type": "CompanyMap",
+        "produces_runtime_object": "PrecheckResult (in-memory)",
+        "human_authorization_required": false,
+        "audit_literal": "ADMIN_ACTION:ENVELOPE_ACTIVATION_PRECHECK",
+        "preconditions": ["envelope.envelope_state == 'DRAFT_NOT_ACTIVATED'", "caller.capabilities.can_admin_org == true"],
+        "postconditions": ["precheck_passed == true OR aborted"],
+        "failure_mode": "ABORT_BEFORE_ANY_MUTATION",
+        "rollback_path": "No-op (read-only)"
+      },
+      {
+        "step_order": 2,
+        "step_id": "step.dmw.baseline-grant",
+        "step_name": "Open baseline DMW",
+        "step_purpose": "Activate baseline DMW per ADR-0001.",
+        "consumes_map_type": "MemoryDmwMap",
+        "produces_runtime_object": "DMW baseline grant",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DMW_BASELINE_GRANTED",
+        "preconditions": ["step 1 passed"],
+        "postconditions": ["baseline LIVE"],
+        "failure_mode": "ROLLBACK_TO_PRE_GRANT",
+        "rollback_path": "Soft-delete baseline grant; emit DMW_BASELINE_REVOKED"
+      },
+      {
+        "step_order": 3,
+        "step_id": "step.dmw.project-customer-scope-extension",
+        "step_name": "Extend DMW to project + customer scopes",
+        "step_purpose": "Add project-scoped + customer-scoped DMW extensions. Maps to the Business envelope DMW_scope_ceiling.",
+        "consumes_map_type": "MemoryDmwMap",
+        "produces_runtime_object": "DMW project + customer scope extensions",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DMW_PROJECT_CUSTOMER_SCOPE_GRANTED",
+        "preconditions": ["step 2 baseline LIVE", "envelope.DMW_scope_ceiling includes 'project-scope' + 'customer-scope'"],
+        "postconditions": ["project + customer scope extensions LIVE"],
+        "failure_mode": "ROLLBACK_TO_BASELINE_ONLY",
+        "rollback_path": "Soft-delete extension rows; emit DMW_PROJECT_CUSTOMER_SCOPE_REVOKED"
+      },
+      {
+        "step_order": 4,
+        "step_id": "step.role.business-template-assignment",
+        "step_name": "Assign business-tier roles (sales/CS/PM/GC)",
+        "step_purpose": "Register business-tier role templates per W3 catalog (Sales / Customer Success / Project Management / General Counsel).",
+        "consumes_map_type": "RoleMap",
+        "produces_runtime_object": "Role assignments (business-tier)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:ROLE_TEMPLATE_ASSIGNED",
+        "preconditions": ["step 3 DMW scope LIVE"],
+        "postconditions": ["role assignments LIVE"],
+        "failure_mode": "ROLLBACK_TO_PRE_ASSIGNMENT",
+        "rollback_path": "Soft-delete assignment rows; emit ROLE_TEMPLATE_UNASSIGNED per row"
+      },
+      {
+        "step_order": 5,
+        "step_id": "step.authority.delegated-profile-register",
+        "step_name": "Register delegated authority profiles",
+        "step_purpose": "Register delegated authority profiles per ADR-0080 Authority Map. Every profile enforces 'delegated authority ceiling never exceeds human ceiling' per RULE 0.",
+        "consumes_map_type": "AuthorityMap",
+        "produces_runtime_object": "Delegated authority profiles (with ceiling enforcement)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DELEGATED_AUTHORITY_REGISTERED",
+        "preconditions": ["step 4 role assignments LIVE", "envelope.approved_regions_bundle includes authority.delegated-profiles"],
+        "postconditions": ["delegated authority profiles LIVE; ceiling-never-exceeds-human enforced at every profile"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete authority profile rows; emit DELEGATED_AUTHORITY_REVOKED per row"
+      },
+      {
+        "step_order": 6,
+        "step_id": "step.connector.slack-binding-register",
+        "step_name": "Register Slack read-first connector binding",
+        "step_purpose": "Register SLACK_READ binding per C2 OPERATING. secret_ref env-var-NAME only.",
+        "consumes_map_type": "ToolMap",
+        "produces_runtime_object": "ConnectorBinding row (type: SLACK_READ; use_real: false at activation tier)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_REGISTERED",
+        "preconditions": ["step 5 authority profiles LIVE"],
+        "postconditions": ["SLACK_READ binding LIVE; secret_ref env-var-NAME stored"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete binding row; emit CONNECTOR_BINDING_REVOKED"
+      },
+      {
+        "step_order": 7,
+        "step_id": "step.connector.google-workspace-binding-register",
+        "step_name": "Register Google Workspace read-first connector binding",
+        "step_purpose": "Register GOOGLE_WORKSPACE_READ binding per C3 RUNTIME_READY (Foundation PR #193). secret_ref env-var-NAME only; ya29.* tokens NEVER persisted.",
+        "consumes_map_type": "ToolMap",
+        "produces_runtime_object": "ConnectorBinding row (type: GOOGLE_WORKSPACE_READ; use_real: false at activation tier)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_REGISTERED",
+        "preconditions": ["step 6 Slack binding LIVE"],
+        "postconditions": ["GOOGLE_WORKSPACE_READ binding LIVE; secret_ref env-var-NAME stored"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete binding row; emit CONNECTOR_BINDING_REVOKED"
+      },
+      {
+        "step_order": 8,
+        "step_id": "step.workflow.stage-2-business-templates-register",
+        "step_name": "Register Stage 2 business-tier workflow templates",
+        "step_purpose": "Register Business plan Stage 2 templates per W3 catalog (executive brief, commitment followup, sprint risk, roadmap, account brief, pipeline risk, customer health, support escalation, spend approval, contract review queue, weekly execution review, onboarding). All TEMPLATE_ONLY. Spend approval + contract review carry dual_control_required_at_stage_3.",
+        "consumes_map_type": "WorkflowMap",
+        "produces_runtime_object": "Workflow template registrations (12 Stage 2 templates)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:WORKFLOW_TEMPLATE_REGISTERED",
+        "preconditions": ["step 7 Google binding LIVE"],
+        "postconditions": ["12 Stage 2 templates LIVE; workflow_state TEMPLATE_ONLY for every template"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete template rows; emit WORKFLOW_TEMPLATE_UNREGISTERED per row"
+      },
+      {
+        "step_order": 9,
+        "step_id": "step.audit.advanced-tier-enable",
+        "step_name": "Enable advanced audit tier",
+        "step_purpose": "Enable advanced audit features for the Business plan tier — additional audit projection surfaces + extended retention + per-permission audit emission. Builds on the always-on baseline audit per ADR-0002.",
+        "consumes_map_type": "RiskMap",
+        "produces_runtime_object": "Advanced audit tier flag on org_settings",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:ADVANCED_AUDIT_TIER_ENABLED",
+        "preconditions": ["step 8 templates LIVE"],
+        "postconditions": ["advanced audit tier LIVE on org_settings"],
+        "failure_mode": "ROLLBACK_TO_BASELINE_AUDIT",
+        "rollback_path": "Unset advanced audit tier flag; emit ADVANCED_AUDIT_TIER_DISABLED"
+      },
+      {
+        "step_order": 10,
+        "step_id": "step.aha.multi-connector-register",
+        "step_name": "Register multi-connector aha moments",
+        "step_purpose": "Register Business-tier aha-moment surface — first-week activation hints that consume both Slack + Google bindings + Stage 2 templates.",
+        "consumes_map_type": "AhaMomentMap",
+        "produces_runtime_object": "Aha-moment registrations",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:AHA_MOMENT_REGISTERED",
+        "preconditions": ["step 9 audit tier LIVE"],
+        "postconditions": ["multi-connector aha moments visible"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION",
+        "rollback_path": "Soft-delete aha-moment rows; emit AHA_MOMENT_UNREGISTERED"
+      },
+      {
+        "step_order": 11,
+        "step_id": "step.envelope.mark-activated",
+        "step_name": "Mark Starter Envelope as ACTIVATED",
+        "step_purpose": "Final state-flip; emit STARTER_ENVELOPE_ACTIVATED with full lineage.",
+        "consumes_map_type": "CompanyMap",
+        "produces_runtime_object": "Envelope state row (ACTIVATED)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED",
+        "preconditions": ["all preceding steps postconditions met"],
+        "postconditions": ["envelope.envelope_state == 'ACTIVATED'; activation_lineage persisted"],
+        "failure_mode": "ROLLBACK_ALL_PRIOR_STEPS",
+        "rollback_path": "Walk steps 10 → 1 in reverse; emit STARTER_ENVELOPE_ACTIVATION_ROLLED_BACK at completion"
+      }
+    ],
+    "audit_expectations": [
+      "Every step emits exactly one audit literal BEFORE the underlying mutation per RULE 4",
+      "Every rollback emits an inverse audit literal AFTER the soft-delete row update",
+      "STARTER_ENVELOPE_ACTIVATED audit details include the ordered audit_event_id list from steps 1-10",
+      "Connector binding registration audit details NEVER include the resolved env-var VALUE — only the env-var NAME (true for both Slack + Google)",
+      "Delegated authority profile registration audit details record the ceiling-never-exceeds-human enforcement check result",
+      "Advanced audit tier enablement emits its own audit literal independently of the per-step audit"
+    ],
+    "rollback_strategy": {
+      "soft_delete_only": true,
+      "rollback_steps": [
+        "On any step failure, walk preceding steps in reverse order",
+        "Each step's rollback_path is called; each emits the per-step inverse audit literal",
+        "Final rollback emits STARTER_ENVELOPE_ACTIVATION_ROLLED_BACK with failed step_id + partial lineage",
+        "No row is hard-deleted (RULE 10)",
+        "Connector binding rollback NEVER attempts to revoke the underlying bot token / OAuth access token at the third-party tier — that is the operator's responsibility",
+        "Delegated authority profile rollback re-enforces the ceiling-never-exceeds-human invariant before soft-delete"
+      ],
+      "reversibility_guarantee": "Activation is fully reversible by construction. Multi-connector + multi-scope rollback walks every step's rollback_path in reverse order; a partial activation state is impossible to leave behind."
+    },
+    "human_authorization_points": [
+      {
+        "point_id": "auth.pre-activation",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm envelope ready to activate.",
+        "audit_literal": "ADMIN_ACTION:PRE_ACTIVATION_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.delegated-authority-register",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm delegated authority profile registration. Required before step 5 fires.",
+        "audit_literal": "ADMIN_ACTION:DELEGATED_AUTHORITY_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.slack-binding-register",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm Slack binding registration.",
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.google-binding-register",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm Google Workspace binding registration.",
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.advanced-audit-enable",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm advanced audit tier enablement.",
+        "audit_literal": "ADMIN_ACTION:ADVANCED_AUDIT_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.final-state-flip",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm the final state-flip.",
+        "audit_literal": "ADMIN_ACTION:STATE_FLIP_AUTHORIZED",
+        "dual_control_required": false
+      }
+    ],
+    "safe_defaults": [
+      "Every step emits audit BEFORE the underlying mutation (RULE 4)",
+      "Every step's rollback_path is reversible via soft-delete (RULE 10)",
+      "No autonomous activation",
+      "Connector bindings registered with use_real: false at activation tier; Founder authorizes real-mode flip separately",
+      "Stage 2 templates remain TEMPLATE_ONLY at activation tier",
+      "Delegated authority ceiling-never-exceeds-human enforced at every profile registration per RULE 0",
+      "Advanced audit tier extends baseline audit; never replaces or weakens it",
+      "Activation is single-cycle; concurrent attempts rejected at step 1",
+      "Connector binding secret_ref env-var-NAME only; resolved VALUE never persisted, echoed, or audited"
+    ],
+    "forbidden_defaults": [
+      "Auto-activation without ORG_ADMIN authorization is forbidden",
+      "Cross-tenant activation is forbidden",
+      "Hard-delete of any activation row is forbidden (RULE 10)",
+      "Skipping any step is forbidden",
+      "Re-attempting a failed activation in-place is forbidden",
+      "Audit emission AFTER mutation is forbidden (RULE 4)",
+      "Resolved env-var VALUE in any audit detail / response / log / row is absolutely forbidden",
+      "Auto-flip to use_real: true at activation tier is forbidden",
+      "Delegated authority profile registration that exceeds the human ceiling is absolutely forbidden",
+      "Advanced audit tier with weaker retention than baseline is forbidden"
+    ],
+    "allowed_consumers": [
+      "DANDELION_ACTIVATION_ENGINE",
+      "ADMIN_TWIN_SCOPED_TO_ORG",
+      "CONTROL_TOWER_ADMIN_REVIEW",
+      "FOUNDATION_GOVERNANCE_TIER"
+    ],
+    "forbidden_consumers": [
+      "AGENT_TWIN_AUTONOMOUS_ACTIVATION",
+      "AGENT_TWIN_CROSS_TENANT",
+      "MANAGER_SURVEILLANCE_TOOL",
+      "EMPLOYEE_SCORING_TOOL",
+      "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"
+    ],
+    "activation_state": "DESIGN_NOT_EXECUTED"
+  }
+}

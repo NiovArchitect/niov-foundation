@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://niovlabs.com/foundation/dandelion-activation/activation.schema.json",
+  "title": "NIOV Foundation Dandelion Stage F Activation Substrate Schema",
+  "description": "Validation schema for D6 Dandelion Activation Substrate at docs/dandelion-activation/. Each file is a wrapper containing kind + catalog_version + activation_defaults + activation_plan. Each activation plan canonicalizes the ordered, governed sequence of steps that take a D5 Starter Envelope (DRAFT_NOT_ACTIVATED) and walk it into a real activated state at the Foundation runtime tier — binding registrations + permission grants + DMW scope opens + workflow template registrations. STATIC DESIGN SUBSTRATE ONLY — every activation_state is DESIGN_NOT_EXECUTED. No code, no runtime mutation, no actual Twin activation. The future implementation slice consumes this catalog. Per ADR-0080 Amendment 1 Dandelion 6-stage maturity model: Stage F is the final stage where the approved map becomes a live operating envelope, but every step is human-authorized + audit-emitted + reversible.",
+  "type": "object",
+  "required": ["kind", "catalog_version", "activation_defaults", "activation_plan"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "activation_defaults": { "$ref": "#/definitions/ActivationDefaults" },
+    "kind": { "type": "string", "enum": ["ActivationPlan"] },
+    "catalog_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "activation_plan": { "$ref": "#/definitions/ActivationPlan" }
+  },
+  "definitions": {
+    "ActivationPlan": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "status",
+        "object_type",
+        "plan_archetype_id",
+        "name",
+        "description",
+        "human_readable_summary",
+        "model_usage_notes",
+        "source_adr_refs",
+        "consumes_starter_envelope_id",
+        "activation_steps",
+        "audit_expectations",
+        "rollback_strategy",
+        "human_authorization_points",
+        "safe_defaults",
+        "forbidden_defaults",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "activation_state"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)+\\.v[0-9]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "type": "string", "enum": ["ACCEPTED", "PROPOSED", "DEPRECATED"] },
+        "object_type": { "type": "string", "const": "ActivationPlan" },
+        "plan_archetype_id": { "type": "string", "enum": ["starter-pilot", "team", "business", "enterprise"] },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "source_adr_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(ADR-[0-9]{4}|RULE [0-9]+|US [0-9,]+)$" }
+        },
+        "consumes_starter_envelope_id": { "type": "string", "pattern": "^envelope\\.[a-z][a-zA-Z0-9_-]*\\.v[0-9]+$" },
+        "activation_steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/ActivationStep" }
+        },
+        "audit_expectations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "rollback_strategy": {
+          "type": "object",
+          "required": ["soft_delete_only", "rollback_steps", "reversibility_guarantee"],
+          "properties": {
+            "soft_delete_only": { "type": "boolean", "const": true },
+            "rollback_steps": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "reversibility_guarantee": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "human_authorization_points": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/HumanAuthorizationPoint" }
+        },
+        "safe_defaults": { "type": "array", "items": { "type": "string" } },
+        "forbidden_defaults": { "type": "array", "items": { "type": "string" } },
+        "allowed_consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "forbidden_consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "activation_state": {
+          "type": "string",
+          "const": "DESIGN_NOT_EXECUTED"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActivationStep": {
+      "type": "object",
+      "required": [
+        "step_order",
+        "step_id",
+        "step_name",
+        "step_purpose",
+        "consumes_map_type",
+        "produces_runtime_object",
+        "human_authorization_required",
+        "audit_literal",
+        "preconditions",
+        "postconditions",
+        "failure_mode",
+        "rollback_path"
+      ],
+      "properties": {
+        "step_order": { "type": "integer", "minimum": 1 },
+        "step_id": { "type": "string", "minLength": 1 },
+        "step_name": { "type": "string", "minLength": 1 },
+        "step_purpose": { "type": "string", "minLength": 1 },
+        "consumes_map_type": {
+          "type": "string",
+          "enum": [
+            "CompanyMap",
+            "OrgRelationshipMap",
+            "RoleMap",
+            "ToolMap",
+            "WorkflowMap",
+            "AuthorityMap",
+            "MemoryDmwMap",
+            "RiskMap",
+            "AhaMomentMap"
+          ]
+        },
+        "produces_runtime_object": { "type": "string", "minLength": 1 },
+        "human_authorization_required": { "type": "boolean" },
+        "audit_literal": { "type": "string", "minLength": 1 },
+        "preconditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "postconditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "failure_mode": { "type": "string", "minLength": 1 },
+        "rollback_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "HumanAuthorizationPoint": {
+      "type": "object",
+      "required": ["point_id", "authorizer_role", "authorization_purpose", "audit_literal", "dual_control_required"],
+      "properties": {
+        "point_id": { "type": "string", "minLength": 1 },
+        "authorizer_role": {
+          "type": "string",
+          "enum": ["ORG_ADMIN", "FOUNDER", "TWO_ORG_ADMINS_DUAL_CONTROL"]
+        },
+        "authorization_purpose": { "type": "string", "minLength": 1 },
+        "audit_literal": { "type": "string", "minLength": 1 },
+        "dual_control_required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "ActivationDefaults": {
+      "type": "object",
+      "required": [
+        "object_type",
+        "human_readable_summary",
+        "model_usage_notes",
+        "scope_defaults",
+        "permission_defaults",
+        "provenance",
+        "audit_expectations",
+        "policy_purpose",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "sensitivity_level"
+      ],
+      "properties": {
+        "object_type": { "type": "string", "const": "ActivationPlan" },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "scope_defaults": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "permission_defaults": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "provenance": {
+          "type": "object",
+          "required": ["authored_by", "source", "version_tag", "captured_at", "authority"],
+          "properties": {
+            "authored_by": { "type": "string" },
+            "source": { "type": "string" },
+            "version_tag": { "type": "string" },
+            "captured_at": { "type": "string" },
+            "authority": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "audit_expectations": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "policy_purpose": { "type": "string", "minLength": 1 },
+        "allowed_consumers": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "forbidden_consumers": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "sensitivity_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

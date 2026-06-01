@@ -1,0 +1,233 @@
+{
+  "$schema": "./activation.schema.json",
+  "kind": "ActivationPlan",
+  "catalog_version": "1.0.0",
+  "activation_defaults": {
+    "object_type": "ActivationPlan",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Stage F Activation walks an approved envelope into the live operating state — every step is human-authorized, audit-emitted, and reversible by construction.",
+    "model_usage_notes": "Activation plans are DESIGN_NOT_EXECUTED. Real activation requires a future implementation slice that consumes this catalog. Every step in the catalog is the canonical projection a future runtime activation engine will follow.",
+    "scope_defaults": ["TENANT_SCOPED", "ENVELOPE_SCOPED", "STEP_SCOPED", "TEAM_SCOPED"],
+    "permission_defaults": ["HUMAN_AUTHORIZED_AT_EVERY_GATE", "AUDIT_EMITTED_BEFORE_AND_AFTER", "REVERSIBLE_BY_CONSTRUCTION", "NO_AUTONOMOUS_ACTIVATION", "READ_FIRST_CONNECTOR_ONLY"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-activation/team-activation.json",
+      "version_tag": "d6-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D6-DANDELION-ACTIVATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:ACTIVATION_PLAN_REFERENCED when consumed", "future ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED + per-step audit literals at the implementation slice"],
+    "policy_purpose": "ACTIVATION_DESIGN_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ACTIVATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "activation_plan": {
+    "id": "activation.team.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "ActivationPlan",
+    "plan_archetype_id": "team",
+    "name": "Team Activation Plan",
+    "description": "Canonical ordered sequence to activate the Team Starter Envelope (envelope.team.v1). Walks a team-scoped envelope at the Foundation runtime tier — baseline DMW + team-scoped DMW grants + Slack read-first connector binding (per C2 OPERATING per Foundation PR #185) + Stage 2 workflow templates (template-only at this design tier; runtime promotion at W4 forward-substrate) + team-scoped role assignments. Every step is human-authorized and audit-emitted. Slack connector binding registration is structurally enabled but requires Founder authorization of the env-var-resolved bot token at the deployment register.",
+    "human_readable_summary": "Team-scope activation: baseline + team DMW, register Slack read-first binding, assign template + team roles, register Stage 2 templates. Slack binding LANDABLE today per C2. Every step reversible via soft-delete.",
+    "model_usage_notes": "Use this plan for the Team plan tier. Slack binding registration is the canonical extension over Starter / Pilot — the binding row is persisted with secret_ref env-var-NAME only (never the resolved token). Stage 2 workflow templates remain in TEMPLATE_ONLY register at activation tier; Stage 3 runtime promotion requires a separate W4 slice.",
+    "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0083", "ADR-0084", "ADR-0001", "ADR-0019", "ADR-0024", "ADR-0026", "ADR-0027", "ADR-0002", "RULE 0", "RULE 4", "RULE 10"],
+    "consumes_starter_envelope_id": "envelope.team.v1",
+    "activation_steps": [
+      {
+        "step_order": 1,
+        "step_id": "step.precheck.envelope-state",
+        "step_name": "Precondition check: envelope in DRAFT_NOT_ACTIVATED state",
+        "step_purpose": "Verify the consumed Starter Envelope has not been previously activated and that the org_entity_id has admin capabilities (can_admin_org) at the caller tier.",
+        "consumes_map_type": "CompanyMap",
+        "produces_runtime_object": "PrecheckResult (in-memory; no persistence)",
+        "human_authorization_required": false,
+        "audit_literal": "ADMIN_ACTION:ENVELOPE_ACTIVATION_PRECHECK",
+        "preconditions": ["envelope.envelope_state == 'DRAFT_NOT_ACTIVATED'", "caller.capabilities.can_admin_org == true", "envelope.org_entity_id == caller.org_entity_id"],
+        "postconditions": ["precheck_passed == true OR activation aborted with PRECHECK_FAILED"],
+        "failure_mode": "ABORT_BEFORE_ANY_MUTATION",
+        "rollback_path": "No-op (precheck is read-only; no mutation occurred)"
+      },
+      {
+        "step_order": 2,
+        "step_id": "step.dmw.baseline-grant",
+        "step_name": "Open baseline DMW scope for org_entity_id",
+        "step_purpose": "Activate the baseline DMW per ADR-0001 + the canonical 'DMW baseline always included at base' doctrine.",
+        "consumes_map_type": "MemoryDmwMap",
+        "produces_runtime_object": "DMW baseline grant (persists in capsule.wallet_id binding for org)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DMW_BASELINE_GRANTED",
+        "preconditions": ["step 1 precheck_passed == true", "no existing DMW baseline grant for org_entity_id"],
+        "postconditions": ["DMW baseline LIVE for org_entity_id"],
+        "failure_mode": "ROLLBACK_TO_PRE_GRANT_STATE",
+        "rollback_path": "Soft-delete the DMW baseline grant row (RULE 10); emit ADMIN_ACTION:DMW_BASELINE_REVOKED"
+      },
+      {
+        "step_order": 3,
+        "step_id": "step.dmw.team-scope-extension",
+        "step_name": "Extend DMW scope to team-scoped memory",
+        "step_purpose": "Add team-scoped DMW extension on top of the baseline. Self-scoped memory + team-scoped memory; customer/project scopes remain forbidden at this tier per envelope DMW_scope_ceiling.",
+        "consumes_map_type": "MemoryDmwMap",
+        "produces_runtime_object": "DMW team-scope extension grant",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:DMW_TEAM_SCOPE_GRANTED",
+        "preconditions": ["step 2 DMW baseline LIVE", "envelope.DMW_scope_ceiling includes 'team-scope'"],
+        "postconditions": ["DMW team-scope extension LIVE"],
+        "failure_mode": "ROLLBACK_TO_BASELINE_ONLY",
+        "rollback_path": "Soft-delete the team-scope extension row (RULE 10); emit ADMIN_ACTION:DMW_TEAM_SCOPE_REVOKED"
+      },
+      {
+        "step_order": 4,
+        "step_id": "step.role.template-and-team-assignment",
+        "step_name": "Assign template + team-scoped roles",
+        "step_purpose": "Register Wave 2.1 DEEP role templates scoped to the team. Maps to the team plan's seat count from the B2 ledger.",
+        "consumes_map_type": "RoleMap",
+        "produces_runtime_object": "Role assignments (team-scoped)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:ROLE_TEMPLATE_ASSIGNED",
+        "preconditions": ["step 3 DMW team-scope LIVE", "envelope.approved_regions_bundle includes role.template-match + role.team-scope"],
+        "postconditions": ["role assignments LIVE; team-scope enforced at every assignment"],
+        "failure_mode": "ROLLBACK_TO_PRE_ASSIGNMENT_STATE",
+        "rollback_path": "Soft-delete each role assignment row (RULE 10); emit ADMIN_ACTION:ROLE_TEMPLATE_UNASSIGNED per row"
+      },
+      {
+        "step_order": 5,
+        "step_id": "step.connector.slack-binding-register",
+        "step_name": "Register Slack read-first connector binding",
+        "step_purpose": "Register a SLACK_READ ConnectorBinding (per Foundation PR #185 C2 OPERATING). The binding persists with secret_ref env-var-NAME only; the resolved bot token is never persisted or echoed. Fixture-first defensive triple gate preserved at the runtime tier.",
+        "consumes_map_type": "ToolMap",
+        "produces_runtime_object": "ConnectorBinding row (type: SLACK_READ; enabled: true; use_real: false at activation tier — Founder authorizes real-mode flip at deployment register)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_REGISTERED",
+        "preconditions": ["step 4 role assignments LIVE", "envelope.approved_regions_bundle includes tool.slack-read-first", "Team plan's B4 capability pack entitlement includes slack-read"],
+        "postconditions": ["SLACK_READ binding LIVE in org_connectors; secret_ref env-var-NAME stored; resolved value NEVER persisted"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION_STATE",
+        "rollback_path": "Soft-delete the connector binding row (RULE 10); emit ADMIN_ACTION:CONNECTOR_BINDING_REVOKED"
+      },
+      {
+        "step_order": 6,
+        "step_id": "step.workflow.stage-2-template-register",
+        "step_name": "Register Stage 2 workflow templates (template-only)",
+        "step_purpose": "Register Stage 2 workflow templates from the W3 catalog. Per ADR-0081 §2.2: Stage 2 cannot execute; templates are visible for the runtime promotion gate at W4. Stage 1 templates remain available.",
+        "consumes_map_type": "WorkflowMap",
+        "produces_runtime_object": "Workflow template registrations (Stage 1 + Stage 2; all TEMPLATE_ONLY)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:WORKFLOW_TEMPLATE_REGISTERED",
+        "preconditions": ["step 5 Slack binding LIVE", "envelope.approved_regions_bundle includes workflow.stage-2-templates"],
+        "postconditions": ["Stage 1 + Stage 2 templates LIVE; workflow_state remains TEMPLATE_ONLY for every template"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION_STATE",
+        "rollback_path": "Soft-delete each workflow template row (RULE 10); emit ADMIN_ACTION:WORKFLOW_TEMPLATE_UNREGISTERED per row"
+      },
+      {
+        "step_order": 7,
+        "step_id": "step.aha.slack-bound-and-fallback-register",
+        "step_name": "Register Slack-bound + safe-fallback aha moments",
+        "step_purpose": "Register the team-tier aha-moment surface — first-week activation hints that consume the Slack read-first binding + safe-fallback paths.",
+        "consumes_map_type": "AhaMomentMap",
+        "produces_runtime_object": "Aha-moment registrations (Slack-bound + safe-fallback)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:AHA_MOMENT_REGISTERED",
+        "preconditions": ["step 6 workflow templates LIVE", "envelope.approved_regions_bundle includes aha.slack-bound + aha.safe-fallback"],
+        "postconditions": ["Slack-bound + safe-fallback aha moments visible to assigned team roles"],
+        "failure_mode": "ROLLBACK_TO_PRE_REGISTRATION_STATE",
+        "rollback_path": "Soft-delete each aha-moment registration row (RULE 10); emit ADMIN_ACTION:AHA_MOMENT_UNREGISTERED per row"
+      },
+      {
+        "step_order": 8,
+        "step_id": "step.envelope.mark-activated",
+        "step_name": "Mark Starter Envelope as ACTIVATED",
+        "step_purpose": "Transition envelope_state from DRAFT_NOT_ACTIVATED to ACTIVATED. Final state-flip step; emit STARTER_ENVELOPE_ACTIVATED with full step-by-step lineage in audit details.",
+        "consumes_map_type": "CompanyMap",
+        "produces_runtime_object": "Envelope state row (envelope_state: ACTIVATED)",
+        "human_authorization_required": true,
+        "audit_literal": "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED",
+        "preconditions": ["all preceding steps postconditions met", "no rollback in flight"],
+        "postconditions": ["envelope.envelope_state == 'ACTIVATED'; activation_lineage row persisted with step-by-step audit_event_id references"],
+        "failure_mode": "ROLLBACK_ALL_PRIOR_STEPS",
+        "rollback_path": "If state-flip fails, walk steps 7 → 1 in reverse order calling each step's rollback_path; emit ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATION_ROLLED_BACK at completion"
+      }
+    ],
+    "audit_expectations": [
+      "Every step emits exactly one audit literal BEFORE the underlying mutation per RULE 4",
+      "Every rollback emits an inverse audit literal AFTER the soft-delete row update",
+      "STARTER_ENVELOPE_ACTIVATED audit details include the ordered audit_event_id list from steps 1-7",
+      "Failed activation emits STARTER_ENVELOPE_ACTIVATION_ROLLED_BACK + the failed step_id + the partial step lineage",
+      "Connector binding registration audit details NEVER include the resolved env-var VALUE — only the env-var NAME"
+    ],
+    "rollback_strategy": {
+      "soft_delete_only": true,
+      "rollback_steps": [
+        "On any step failure, walk preceding steps in reverse order",
+        "Each step's rollback_path is called; each emits the per-step inverse audit literal",
+        "Final rollback emits STARTER_ENVELOPE_ACTIVATION_ROLLED_BACK with the failed step_id and partial lineage",
+        "No row is hard-deleted (RULE 10); every rollback sets deleted_at timestamps",
+        "Connector binding rollback NEVER attempts to revoke the underlying Slack bot token at the third-party tier — that is the operator's responsibility outside the activation plan"
+      ],
+      "reversibility_guarantee": "Activation is fully reversible by construction. The activation_lineage row + per-step audit chain preserves the full forward history; rollback preserves the full backward history. A re-activation attempt is a fresh activation plan, not a re-attempt of a previously-failed plan."
+    },
+    "human_authorization_points": [
+      {
+        "point_id": "auth.pre-activation",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm the envelope is ready to activate (D5 envelope_state DRAFT_NOT_ACTIVATED + D4 governance reviews complete). Required before step 1 precheck fires.",
+        "audit_literal": "ADMIN_ACTION:PRE_ACTIVATION_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.dmw-baseline-grant",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm opening the baseline DMW scope for the org. Required before step 2 fires.",
+        "audit_literal": "ADMIN_ACTION:DMW_BASELINE_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.connector-binding-register",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm registering the Slack read-first binding (env-var-NAME secret_ref; never resolved value). Required before step 5 fires.",
+        "audit_literal": "ADMIN_ACTION:CONNECTOR_BINDING_AUTHORIZED",
+        "dual_control_required": false
+      },
+      {
+        "point_id": "auth.final-state-flip",
+        "authorizer_role": "ORG_ADMIN",
+        "authorization_purpose": "Confirm the state-flip from DRAFT_NOT_ACTIVATED to ACTIVATED. Required before step 8 fires.",
+        "audit_literal": "ADMIN_ACTION:STATE_FLIP_AUTHORIZED",
+        "dual_control_required": false
+      }
+    ],
+    "safe_defaults": [
+      "Every step emits audit BEFORE the underlying mutation (RULE 4)",
+      "Every step's rollback_path is reversible via soft-delete (RULE 10)",
+      "No autonomous activation; every gate requires explicit human authorization",
+      "Slack binding registered with use_real: false at activation tier; Founder authorizes real-mode flip separately at deployment register",
+      "Stage 2 templates remain TEMPLATE_ONLY at activation tier; runtime promotion requires W4 slice",
+      "Envelope ownership boundary preserved (caller org == envelope org)",
+      "Activation is single-cycle; concurrent activation attempts rejected at step 1 precheck",
+      "Connector binding secret_ref env-var-NAME only; resolved env-var VALUE never persisted, echoed, or audited"
+    ],
+    "forbidden_defaults": [
+      "Auto-activation without ORG_ADMIN authorization is forbidden",
+      "Cross-tenant activation (caller activates another org's envelope) is forbidden",
+      "Hard-delete of any activation row is forbidden (RULE 10)",
+      "Skipping any step is forbidden — activation is all-or-nothing per plan",
+      "Re-attempting a failed activation in-place is forbidden — a fresh plan instance is required",
+      "Audit emission AFTER mutation is forbidden — audit fires BEFORE per RULE 4",
+      "Resolved env-var VALUE in any audit detail, response body, log line, or persisted row is absolutely forbidden",
+      "Auto-flip to use_real: true at activation tier is forbidden — Founder authorizes real-mode separately"
+    ],
+    "allowed_consumers": [
+      "DANDELION_ACTIVATION_ENGINE (future implementation slice)",
+      "ADMIN_TWIN_SCOPED_TO_ORG (read-only consumption for UI preview)",
+      "CONTROL_TOWER_ADMIN_REVIEW (read-only consumption for admin review)",
+      "FOUNDATION_GOVERNANCE_TIER (read-only consumption for governance audit)"
+    ],
+    "forbidden_consumers": [
+      "AGENT_TWIN_AUTONOMOUS_ACTIVATION — autonomous activation is absolutely forbidden",
+      "AGENT_TWIN_CROSS_TENANT — cross-tenant activation is absolutely forbidden",
+      "MANAGER_SURVEILLANCE_TOOL — this plan must never be used to enable employee monitoring",
+      "EMPLOYEE_SCORING_TOOL — this plan must never be used to produce employee score",
+      "EXTERNAL_THIRD_PARTY_UNAUTHORIZED — third parties must not consume activation plans"
+    ],
+    "activation_state": "DESIGN_NOT_EXECUTED"
+  }
+}
