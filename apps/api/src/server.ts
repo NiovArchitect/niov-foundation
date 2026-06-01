@@ -39,6 +39,7 @@ import { PlaygroundOutcomeComparisonService } from "./services/playground/playgr
 import { PlaygroundBestPathRecommendationService } from "./services/playground/playground-best-path-recommendation.service.js";
 import { PlaygroundGovernedTransitionService } from "./services/playground/playground-governed-transition.service.js";
 import { PlaygroundSimulationService } from "./services/playground/playground-simulation.service.js";
+import { ConversationContextSignalProjectionService } from "./services/playground/conversation-context-signals.js";
 import { registerPlaygroundRoutes } from "./routes/playground.routes.js";
 import { AnalyticsService } from "./services/analytics/analytics.service.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
@@ -415,10 +416,24 @@ export async function buildApp(
   // canonical owner attribution. ADMIN_ACTION +
   // details.action = "PLAYGROUND_BEST_PATH_RECOMMENDED"
   // audit with safe metadata only.
+  // ADR-0078 Stage 2 — approved-source projection service for
+  // safe `conversation_context_signals[]` sidecars on Wave 7 +
+  // Wave 9 responses. Pure projection over already-LIVE safe
+  // sources (CORRECTION_SIGNAL per ADR-0055/0058; ACTION_HISTORY
+  // per ADR-0057; MANUAL_USER_INPUT per ADR-0065; HIVE_CONTEXT
+  // preserved at enum register, zero-output at Stage 2). NO raw
+  // transcript ingest; NO Layer 1; NO Layer 4 drilldown; NO new
+  // audit literal; NO schema migration; NO Action creation /
+  // mutation; NO connector invocation. ADR-0079 §27 Agent
+  // Playground use policy enforced by construction.
+  const conversationContextSignalProjectionService =
+    new ConversationContextSignalProjectionService();
+
   const playgroundBestPathRecommendationService =
     new PlaygroundBestPathRecommendationService(
       playgroundOutcomeComparisonService,
       playgroundScenarioService,
+      conversationContextSignalProjectionService,
     );
 
   // Section 5 Wave 8 Option A ADR-0075 — Agent Playground
@@ -465,6 +480,7 @@ export async function buildApp(
   const playgroundSimulationService = new PlaygroundSimulationService(
     playgroundBestPathRecommendationService,
     playgroundScenarioService,
+    conversationContextSignalProjectionService,
   );
 
   // Section 6 Wave 2 ADR-0061 — Enterprise Analytics SAFE

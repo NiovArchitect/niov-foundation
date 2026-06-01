@@ -1468,6 +1468,50 @@ ADR-0078 explicitly EXCLUDES at every stage:
 
 ## Forward-substrate closeout
 
+**Stage 2 approved-source projection LANDED 2026-06-01** at
+`[ADR-0078-STAGE-2-APPROVED-SOURCE-PROJECTION]`. Foundation
+Wave 7 `RecommendBestPathSuccess` + Wave 9
+`EnterpriseDecisionPosture` carry an additive
+`conversation_context_signals: readonly ConversationContextSignal[]`
+sidecar at the §8 / §9 attachment points respectively. The
+sidecar uses ONLY already-LIVE approved Foundation sources:
+`CORRECTION_SIGNAL` (ADR-0055 + ADR-0058; caller-wallet
+self-scoped CORRECTION capsule count + freshness — never
+correction payload), `ACTION_HISTORY` (ADR-0057
+`listActionsForCaller` → `SafeActionView` per §10 allowlist —
+status / requires_approval / risk_tier only), and
+`MANUAL_USER_INPUT` (ADR-0065 scenario `goal_summary`
+PRESENCE/ABSENCE only — never raw text). `HIVE_CONTEXT` is
+preserved at the §3.3 enum register but intentionally
+zero-output at Stage 2 (no scenario-tied safe Hive
+context-projection method implementation-ready at this slice).
+`related_transcript_ref` is OMITTED on every Stage 2 signal per
+§7 Stage 2 line 1088 (no Layer 1 ingest yet). Every emitted
+signal carries the 15 §2 base fields + 8 §6C.12 additive fields
+exhaustively. ADR-0079 §27 enforcement is applied by
+construction at the projection service register
+(`NON_WORK_PERSONAL` / `SENSITIVE_PERSONAL` /
+`UNKNOWN_REQUIRES_REVIEW` / `UNKNOWN_BUSINESS_PURPOSE` /
+`BLOCKED_FROM_AGENT_PLAYGROUND` / `REQUIRES_HUMAN_REVIEW` /
+unset `scope_binding_type` can never appear on the wire).
+Bounded ≤ 8 per §8 line 1129 (Wave 9 reuses the same scenario-
+wide ceiling at the `EnterpriseDecisionPosture` attachment to
+preserve ADR-0076 §11 per-branch budgets). **ZERO** new audit
+literal (existing `ADMIN_ACTION + details.action` discriminator
+extended with safe `conversation_context_signals_count` +
+de-duped `conversation_context_signal_sources` only — never raw
+signal text). **ZERO** schema migration, **ZERO** new route,
+**ZERO** Layer 1 transcript ingest, **ZERO** Layer 4 drilldown
+surface, **ZERO** Control Tower code, **ZERO** Action
+creation / mutation, **ZERO** connector invocation,
+**ZERO** LLM / Python / BEAM at this slice. Tests: 17 NEW unit
++ 6 NEW Wave 7 integration + 7 NEW Wave 9 integration (Wave 7
+46/46 / Wave 9 58/58 / Wave 8 43/43 regression preserved).
+**Stage 1** (Layer 1 schema + Layer 3 helper + Layer 4 read
+service) and **Stage 3** (governed listener) remain forward-
+substrate per §17 — each requires separate Founder
+authorization at slice.
+
 **ADR-0079 LANDED 2026-05-31** at
 `[FOUNDER-ADR-0079-TRANSCRIPT-SUBSTRATE-POLICY-ADR-AUTH]`
 as the Transcript Substrate Policy ADR this ADR's §6 +

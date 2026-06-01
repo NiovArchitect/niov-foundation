@@ -1271,3 +1271,56 @@ is the load-bearing policy prerequisite for Stage 1+ that
 ADR-0078 §6C.13 anticipated; with ADR-0079 LANDED, Stage 1+
 is policy-unblocked but remains implementation-gated by
 separate Founder authorization.
+
+## 34. Forward-substrate closeout — Stage 2 conformance
+
+**ADR-0078 Stage 2 approved-source projection LANDED
+2026-06-01** at `[ADR-0078-STAGE-2-APPROVED-SOURCE-PROJECTION]`
+conforms to this ADR's policy register as follows.
+
+§19 audit posture conformed verbatim: ZERO new audit literal;
+existing `ADMIN_ACTION + details.action =
+"PLAYGROUND_BEST_PATH_RECOMMENDED"` (Wave 7) +
+`"PLAYGROUND_SIMULATION_EXECUTED"` (Wave 9) extended with
+safe metadata only (`conversation_context_signals_count` +
+de-duped `conversation_context_signal_sources` list); NEVER
+raw `safe_summary` text, NEVER raw transcript text, NEVER
+unredacted speaker quotes.
+
+§26 forbidden default-surface fields conformed verbatim: no
+raw_text / message_body / speaker_quote / private_note /
+raw_audio / raw_video / raw_screen_capture / emotion_score /
+sentiment_score / employee_score / manager_score /
+psychological_profile / compliance_certification /
+legal_conclusion / regulator_approval / related_transcript_ref
+/ transcript_id / transcript_hash / transcript_text_encrypted
+surface on Wave 7 or Wave 9 response bodies — enforced by
+the no-leak guard tests added at Stage 2.
+
+§27 Agent Playground use policy conformed verbatim: the
+projection service register enforces every blocking rule by
+construction. `NON_WORK_PERSONAL` / `SENSITIVE_PERSONAL` /
+`UNKNOWN_REQUIRES_REVIEW` (without explicit review) /
+`UNKNOWN_BUSINESS_PURPOSE` / `BLOCKED_FROM_AGENT_PLAYGROUND`
+/ `REQUIRES_HUMAN_REVIEW` / unset `scope_binding_type` can
+never reach the response surface. Tested per-discriminator
+on the Wave 7 + Wave 9 sidecar fields.
+
+§29.2 Stage 2 ladder conformed verbatim: Stage 2 uses ONLY
+LIVE Foundation sources (CORRECTION_SIGNAL per ADR-0055 +
+ADR-0058; ACTION_HISTORY per ADR-0057; HIVE_CONTEXT per
+ADR-0059 + ADR-0063 — enum-preserved zero-output; MANUAL_USER_INPUT
+per ADR-0065). NO raw transcript ingestion was added.
+Signal-shape carries ADR-0078 §6C.12 8 additive fields
+verbatim on every emitted signal. Stage 2 landed BEFORE
+Stage 1 per §29.2 line 1132.
+
+§28 Control Tower cockpit policy preserved verbatim:
+Foundation Stage 2 added NO Control Tower code. The CT
+cockpit at `/agent-playground` continues to render the
+ADR-0077 §8.2 "Conversation context signals not available
+in this version" placeholder until a separate Founder-
+authorized CT consumption slice replaces it with safe Layer
+3 signals.
+
+Bidirectional back-citation per RULE 14 + RULE 20.

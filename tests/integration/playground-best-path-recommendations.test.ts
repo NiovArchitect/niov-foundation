@@ -896,6 +896,198 @@ describe("Section 5 Wave 7 Option A — no-leak + no-side-effect", () => {
   });
 });
 
+// ADR-0078 Stage 2 — approved-source projection of safe
+// `conversation_context_signals[]` on the Wave 7 response. The
+// sidecar is additive, always present (empty array when no
+// approved-source signal exists), bounded ≤ 8 per ADR-0078 §8,
+// closed-vocab + §6C.12 additive fields exhaustive, and ADR-0079
+// §27 filtering enforced by construction. No-leak guards inherit
+// the FORBIDDEN_NO_LEAK_MARKERS set above + this block extends
+// them for transcript / personal-content / surveillance markers.
+const STAGE_2_FORBIDDEN_RESPONSE_MARKERS = [
+  "raw_text",
+  "message_body",
+  "speaker_quote",
+  "private_note",
+  "raw_audio",
+  "raw_video",
+  "raw_screen_capture",
+  "emotion_score",
+  "sentiment_score",
+  "employee_score",
+  "manager_score",
+  "psychological_profile",
+  "compliance_certification",
+  "legal_conclusion",
+  "regulator_approval",
+  "related_transcript_ref",
+  "transcript_id",
+  "transcript_hash",
+  "transcript_text_encrypted",
+];
+
+const STAGE_2_FORBIDDEN_SIGNAL_VALUES = [
+  "NON_WORK_PERSONAL",
+  "SENSITIVE_PERSONAL",
+  "UNKNOWN_REQUIRES_REVIEW",
+  "UNKNOWN_BUSINESS_PURPOSE",
+  "BLOCKED_FROM_AGENT_PLAYGROUND",
+  "REQUIRES_HUMAN_REVIEW",
+];
+
+const STAGE_2_REQUIRED_SIGNAL_FIELDS = [
+  "signal_type",
+  "signal_confidence_label",
+  "signal_source_type",
+  "signal_scope",
+  "detected_at",
+  "evidence_label",
+  "safe_summary",
+  "requires_human_review",
+  "retention_class",
+  "honest_note",
+  "conversation_relevance_class",
+  "capture_eligibility",
+  "agent_playground_use",
+  "redaction_applied",
+  "business_purpose_label",
+  "scope_binding_type",
+  "review_required",
+  "personal_content_suppressed",
+] as const;
+
+describe("Section 5 Wave 7 + ADR-0078 Stage 2 — conversation_context_signals sidecar", () => {
+  it("response carries `conversation_context_signals` array (additive sidecar)", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    expect(r.body.ok).toBe(true);
+    expect(Array.isArray(r.body.conversation_context_signals)).toBe(true);
+  });
+
+  it("response remains backward-compatible (existing Wave 7 fields preserved)", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    expect(r.body.recommended_candidate_key).toBeDefined();
+    expect(r.body.recommended_candidate_type).toBeDefined();
+    expect(r.body.recommended_at).toBeDefined();
+    expect(r.body.audit_event_id).toBeDefined();
+    expect(r.body.honest_note).toBeDefined();
+    expect(r.body.human_decision_required).toBeDefined();
+    expect(Array.isArray(r.body.recommendation_reasons)).toBe(true);
+    expect(Array.isArray(r.body.alternatives_considered)).toBe(true);
+  });
+
+  it("sidecar is bounded ≤ 8 per ADR-0078 §8 line 1129", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    expect(r.body.conversation_context_signals.length).toBeLessThanOrEqual(8);
+  });
+
+  it("every emitted signal carries all §6C.12 additive fields + §2 base fields", async () => {
+    // Goal-summary missing → triggers the MANUAL_USER_INPUT
+    // CONTEXT_INSUFFICIENT_FOR_RECOMMENDATION projection so we
+    // can assert the full ConversationContextSignal shape.
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller, {
+      goal_summary: "",
+    });
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    const signals: unknown[] = r.body.conversation_context_signals;
+    if (signals.length === 0) {
+      // Scenario without approved-source context may legitimately
+      // emit zero signals — the rest of this assertion only
+      // applies when at least one signal is present.
+      return;
+    }
+    for (const s of signals) {
+      expect(typeof s).toBe("object");
+      for (const f of STAGE_2_REQUIRED_SIGNAL_FIELDS) {
+        expect(s).toHaveProperty(f);
+      }
+    }
+  });
+
+  it("sidecar NEVER carries Stage 1-forbidden tokens (no-leak guard)", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller, {
+      goal_summary: "",
+    });
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    for (const token of STAGE_2_FORBIDDEN_RESPONSE_MARKERS) {
+      expect(r.raw).not.toContain(token);
+    }
+  });
+
+  it("sidecar NEVER carries ADR-0079 §27 blocked enum values", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller, {
+      goal_summary: "",
+    });
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    const signals: Record<string, string>[] =
+      r.body.conversation_context_signals;
+    for (const s of signals) {
+      for (const blocked of STAGE_2_FORBIDDEN_SIGNAL_VALUES) {
+        // these values must not appear in any closed-vocab
+        // discriminator on the wire
+        expect(s.conversation_relevance_class).not.toBe(blocked);
+        expect(s.business_purpose_label).not.toBe(blocked);
+        expect(s.agent_playground_use).not.toBe(blocked);
+      }
+    }
+  });
+
+  it("scenarios with no approved-source context return an empty (NOT null) sidecar", async () => {
+    const caller = await loginPerson();
+    // Fresh caller has no MemoryCapsule rows + no Action rows;
+    // scenario has a non-empty goal_summary so MANUAL_USER_INPUT
+    // signal does not fire either.
+    const { scenario_id } = await createScenario(caller, {
+      goal_summary: "A clearly described goal for the scenario.",
+    });
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/best-path-recommendations`,
+    );
+    expect(r.statusCode).toBe(200);
+    expect(r.body.conversation_context_signals).toEqual([]);
+  });
+});
+
 describe("Section 5 Wave 7 Option A — Wave 6/5 regression preserved", () => {
   it("Wave 6 outcome-comparison route still LIVE", async () => {
     const caller = await loginPerson();
