@@ -151,6 +151,79 @@ substrate-honesty per RULE 13 + adds the Section 4 + Section 7
 backend contracts that Control Tower will consume in
 subsequent frontend slices.
 
+## CT consumer LIVE 2026-06-01 (Section 9 Approvals + Policies)
+
+**Two Control Tower consumer slices LANDED 2026-06-01**
+retiring 2 of 3 Section 9 CT Placeholders by wiring the
+Foundation governance substrate that has been LIVE since
+ADR-0026 dual-control + ADR-0050 break-glass + ADR-0061
+ComplianceService.
+
+CT Approvals page (PR
+[#16](https://github.com/NiovArchitect/otzar-control-tower/pull/16)
+`e3d2621`): retires the long-standing `/approvals` (org-admin
+Control Tower) Placeholder. Consumes the existing
+`/api/v1/escalations/*` substrate verbatim:
+- `GET /api/v1/escalations/pending` — caller's own pending
+  dual-control queue
+- `GET /api/v1/escalations/:id` — single-detail with safe
+  metadata
+- `POST /api/v1/escalations/:id/approve` — two-step confirm
+  + Foundation enforces two-person rule (403
+  ESCALATION_FORBIDDEN when caller === source)
+- `POST /api/v1/escalations/:id/reject` — same gate
+
+UI surface: two-column layout (list card + detail panel);
+closed-vocab escalation_type + severity + status badges;
+two-step confirm dialog (Cancel never dispatches; Confirm
+fires via useMutation + invalidates pending list); two-person
+rule UI mirror — when caller_entity_id === source_entity_id,
+"You sourced this request" block renders + Approve/Deny
+buttons disabled. Foundation's two-person rule is the
+security boundary; CT mirror is UX only. `resolution_metadata`
+opaque Json field NEVER rendered raw (no-leak guard asserts).
+
+CT Policies page (PR
+[#17](https://github.com/NiovArchitect/otzar-control-tower/pull/17)
+`f4c24dd`): retires the long-standing `/policies` Placeholder.
+Read-only at this slice; consumes ComplianceService:
+- `GET /api/v1/compliance/frameworks` — canonical catalog
+  (HIPAA / FERPA / FedRAMP / etc.)
+- `GET /api/v1/compliance/state` — caller-org live 24h
+  posture per framework (org-level per DRIFT 15; NOT
+  aggregated per member)
+
+UI surface: single Compliance Frameworks card with per-row
+name + status badges (Inactive flag if applicable + Compliant
+24h-window verdict / Failures in 24h window verdict) +
+jurisdiction + sector badges + live posture detail (last
+passed / last check / 24h failure count) + evaluated-at
+timestamp footer; honest empty + safe error + Retry; amber
+notice when only posture fails (frameworks catalog remains
+visible). `rules` JSON blob NEVER mirrored at the type
+register — by construction cannot be destructured or
+rendered. ComplianceService.check() mutation surface is NOT
+exposed at CT (read-only at this slice; mutation requires
+separate Founder authorization).
+
+Test surface: 14 NEW Approvals tests + 10 NEW Policies
+tests at otzar-control-tower (CT total 165 → 189; all prior
+Section 5 + Section 7 + Wave 10 regression preserved).
+
+Section 9 status after this bundled closeout: 2 of 3 CT
+consumer Placeholders retired (Approvals ✓ + Policies ✓).
+CT Workflows page remains Placeholder pending Founder
+decision on Workflows ADR (no Foundation workflow-substrate
+exists yet; this is a product-decision boundary, not a
+substrate gap).
+
+NO Foundation backend change across either CT slice. NO new
+audit literal. NO schema. NO new route. NO regulator scope.
+NO Layer 4 drilldown. NO LLM. NO BEAM. NO bulk approve/deny.
+NO org-wide approval list (no Foundation route). NO
+compliance.check() mutation. NO full-report download. NO
+policy editing UI.
+
 ## Risks / forward-substrate
 
 - CT UX surfaces must land sequentially, not in a big-bang —
