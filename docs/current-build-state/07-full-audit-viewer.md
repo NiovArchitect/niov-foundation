@@ -422,6 +422,74 @@ execution — each is RULE 20-gated):
    REGULATOR_ACCESS_EXPIRED emitter** via SCHEDULER sweep at
    `valid_until` crossing per ADR-0036 Sub-decision 4.
 
+## CT consumer LIVE 2026-06-01 (Section 7 D2)
+
+**Control Tower consumer LANDED 2026-06-01** at
+`[CT-SECTION-7-AUDIT-VIEWER-D2]` (otzar-control-tower PR
+[#10](https://github.com/NiovArchitect/otzar-control-tower/pull/10)
+`ad7cb38`). Replaces the long-standing `/security-audit`
+Placeholder with a real customer-facing Security & Audit screen
+consuming Foundation Section 7 Wave 1 self-scope reads:
+
+- `GET /api/v1/audit/events` — paginated `SafeAuditEventView[]`
+- `GET /api/v1/audit/events/:id` — `SafeAuditEventDetailView`
+  with `previous_event` + `next_event` chain refs
+
+CT type-mirror surface: NEW `SafeAuditEventView` (legacy
+`AuditEvent` + 5 Section 7 chain / provenance fields:
+`previous_event_hash`, `event_hash`, `lawful_basis_id`,
+`lawful_basis_chain_hash`, `jurisdiction`) +
+`AuditEventChainRef` (compact `audit_id` + `event_hash` +
+`timestamp` only — NEVER the full neighbour body) +
+`SafeAuditEventDetailView` (extends `SafeAuditEventView` with
+chain refs) + `AuditViewScope` + 4 response envelopes.
+
+CT page surface: paginated list card (skeleton loading /
+honest empty-state / safe-error block + Retry / `PAGE_SIZE
+= 25` / pager with total event count) + side panel that
+shows event detail on row click (full safe-metadata surface
++ chain integrity section surfacing `event_hash` +
+`previous_event_hash` + prev/next chain refs + conditional
+lawful basis section when basis fields present).
+
+NEW `api.audit.*` namespace (list + detail) distinct from
+legacy `api.org.audit.list` (kept verbatim for Home Recent
+Activity / 12B.2 consumers).
+
+CT test surface: 15 NEW Wave 7-D2 tests (was 129 → 144 CT
+total; Wave 10 Agent Playground 129/129 regression
+preserved) covering nav + page shell + list view (5) +
+detail panel (4) + forbidden-copy + no-leak guards (2).
+17 forbidden ADR-0077-family UI copy substrings + 11
+raw-payload / secret / chain-of-thought tokens asserted
+absent across the full rendered surface.
+
+CT substrate-honest catch at this slice per RULE 13: the
+`ChainRefRow` component initially named its prop `ref`,
+conflicting with React's reserved ref-forwarding prop —
+chain ref data arrived as `undefined` inside the component
+despite the API response carrying it correctly. Renamed to
+`chainRef` and documented inline before merge. Caught by
+the chain-integrity test.
+
+NO Foundation backend change at this CT slice. NO new
+Foundation route. NO new schema. NO new audit literal. NO
+Layer 4 transcript drilldown UI. NO export (NDJSON / CSV).
+NO verify-chain panel. NO org / platform / regulator scope.
+NO Action mutation. NO connector invocation. NO LLM. NO
+BEAM.
+
+Section 7 forward-substrate remaining at the CT register
+(each a bounded follow-on slice consuming already-LIVE
+Foundation routes): event-list filtering UI (event_type +
+outcome + target_entity_id + target_capsule_id +
+start_time + end_time) + NDJSON / CSV export action +
+verify-chain panel + org / platform / regulator scope
+toggle (gated on TAR.can_admin_org + TAR.can_admin_niov +
+LawfulBasis flow). Each requires its own Founder
+authorization at slice per RULE 21 production-grade
+discipline.
+
 ## Risks / forward-substrate
 
 - The audit chain contains sensitive routing identifiers
