@@ -1,0 +1,65 @@
+{
+  "$schema": "./governance-review.schema.json",
+  "kind": "MapGovernanceReview",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapGovernanceReview",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Reviews are PROPOSED_NOT_REVIEWED. Admin decisions land at D5 Starter Envelope Assembly + D6 Activation. No runtime activation at D4.",
+    "scope_defaults": ["TENANT_SCOPED", "GOVERNANCE_REVIEW_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED", "NO_ACTIVATION_FROM_REVIEW"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-governance-review/company-map-governance-review.json",
+      "version_tag": "d4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed", "future ADMIN_ACTION:MAP_REGION_APPROVED at D6 activation"],
+    "policy_purpose": "GOVERNANCE_REVIEW_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "review.company-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapGovernanceReview",
+      "map_type": "CompanyMap",
+      "name": "Company Map Governance Review",
+      "description": "Surfaces D3 Company Map recommendation regions for admin governance review with explicit approval_chain + dual_control + escalation_path per region. Initial-rollout departments + sensitive-systems exclusion + compliance posture summary each carry distinct admin_approval_required flags.",
+      "human_readable_summary": "Admin walks each Company Map region and decides APPROVE / APPROVE_WITH_CONDITIONS / DEFER_FOR_MORE_INFO / REJECT / ESCALATE_TO_FOUNDER. Sensitive-systems exclusion is absolute regardless of admin choice.",
+      "model_usage_notes": "Initial-rollout departments require Otzar Administrator approval. Sensitive-systems exclusion is always-on (REJECT-or-stronger); admin can only restrict further, never expand. Compliance posture summary requires neutral vocabulary per ADR-0070.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0070", "ADR-0027", "ADR-0026", "RULE 0"],
+      "consumes_recommendation_id": "recommendation.company-map.v1",
+      "region_reviews": [
+        { "region_id": "company.initial-departments", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "company.sensitive-systems-exclusion", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "ESCALATE_TO_FOUNDER"] },
+        { "region_id": "company.compliance-posture-summary", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + General Counsel", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] }
+      ],
+      "approval_chain": ["Otzar Administrator", "Security Lead (for sensitive-systems)", "General Counsel (for compliance posture)"],
+      "dual_control_required": true,
+      "escalation_path": ["Otzar Administrator → Security Lead", "Security Lead → General Counsel", "General Counsel → Founder (ESCALATE_TO_FOUNDER for sensitive-systems modifications)"],
+      "DMW_scope_implications": [
+        "Approved Company Map establishes the tenant-scope ceiling for every downstream DMW scope",
+        "Sensitive-systems exclusion REJECT outcome remains absolute downstream",
+        "Initial-rollout departments approval bounds Department-scoped DMW activation",
+        "Per ADR-0037: jurisdiction approval bounds jurisdiction-aware DMW scope"
+      ],
+      "governance_review_points": [
+        "Admin must approve every CompanyMap region before any downstream Map activates",
+        "Sensitive-systems exclusion is REJECT-or-stronger; admin can only narrow, never expand",
+        "Compliance vocabulary must stay neutral per ADR-0070 — no claim of regulator approval or guaranteed compliance",
+        "Dual-control mandatory for sensitive-systems modifications per ADR-0026"
+      ],
+      "safe_defaults": ["Admin policy approval at every region", "Dual-control for sensitive-systems", "Neutral compliance vocabulary", "Conservative deferrals over premature approvals"],
+      "forbidden_defaults": ["Autonomous CompanyMap activation", "Sensitive-attribute inference during review", "Workforce-scoring inferences from company facts", "Guaranteed-compliance claims", "Regulator-approval claims"],
+      "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed", "future ADMIN_ACTION:MAP_REGION_APPROVED at D6"],
+      "review_state": "PROPOSED_NOT_REVIEWED"
+    }
+  ]
+}

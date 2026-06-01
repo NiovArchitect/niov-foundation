@@ -487,6 +487,20 @@ After Amendment 1 lands, the cartography doctrine is canonical across:
 
 Per the Founder resume directive, the recommended **next autonomous slice** after Amendment 1 lands is **ADR-0084 Section 4 MCP / Connector Strategy** (design-only; broader plan covering Slack + Google Workspace + Project Tracker + Gmail / Outlook + GitHub + Salesforce / HubSpot + Travel / Expense per Wave 6 matrix; per-connector RULE 21 research arc gating).
 
+### D4 — Stage D Governance Review Substrate LANDED 2026-06-01
+
+Per `[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]`. NEW `docs/dandelion-governance-review/` directory (11 files): README + JSON Schema + 9 MapGovernanceReview files (one per map type). NEW `scripts/validate-dandelion-governance-review.mjs` validator (pure Node ESM; mirrors `validate-dandelion-recommendation.mjs` sentence-level negation + subtree skip; adds D3 cross-reference check). Validator green: 11/11 files, 9 items, 9/9 map types, **9 D3 recommendation IDs cross-referenced** (every governance review's `consumes_recommendation_id` resolves to a real D3 recommendation at `docs/dandelion-recommendation/`).
+
+Every MapGovernanceReview carries: `consumes_recommendation_id` (cross-ref to D3) + `region_reviews` (per-region admin_approval_required boolean + dual_control_required boolean + approval_chain_role + review_outcome_options closed-vocab 5-enum) + map-level `approval_chain` + `dual_control_required` + `escalation_path` + `DMW_scope_implications` + `governance_review_points` + `review_state: PROPOSED_NOT_REVIEWED` (enforced by validator).
+
+**Review outcome options** (5-enum closed-vocab): `APPROVE` · `APPROVE_WITH_CONDITIONS` · `DEFER_FOR_MORE_INFO` · `REJECT` · `ESCALATE_TO_FOUNDER`. The 5th outcome (`ESCALATE_TO_FOUNDER`) is reserved for sensitive-system modifications + RULE-20 forbidden inference modifications + break-glass authority changes per ADR-0050.
+
+**Notable cross-D4-to-runtime composition:** Tool Map Governance Review elevates `tool.slack-read-first` to a fully landable region because the C2 Slack read-first runtime is LIVE at Foundation (PR #185) + the Connectors admin UI is LIVE in Control Tower (PR #21). Admin approval of this region now maps directly to a real binding creation today. Aha Moment Map Governance Review ranks Slack catch-up summary as the first OPERATING-substrate aha moment. Authority Map + Risk Map require dual-control for `must-never-assume` + `map-blocking` regions; modifications escalate to Founder.
+
+NO runtime activation, NO actual admin review, NO Twin activation, NO permission grants, NO connector authorizations, NO mutation to `apps/api/src/services/governance/dandelion.service.ts`, NO runtime DMW behavior, NO new audit literal.
+
+**Dandelion graduation:** Stage A Preview LIVE + Stage B Assessment `ASSESSMENT_READY` + Stage C Recommendation `RECOMMENDATION_READY` → **Stage D Governance Review `GOVERNANCE_REVIEW_READY`** (this D4 PR). Stage E Starter Envelope Assembly + Stage F Activation forward-substrate.
+
 ### D3 — Stage C Recommendation Substrate LANDED 2026-06-01
 
 Per `[FOUNDATION-D3-DANDELION-RECOMMENDATION]`. NEW `docs/dandelion-recommendation/` directory (11 files): README + JSON Schema + 9 MapRecommendation files (Company / Org-Relationship / Role / Tool / Workflow / Authority / Memory-DMW / Risk / Aha Moment). NEW `scripts/validate-dandelion-recommendation.mjs` validator (pure Node ESM; mirrors `validate-dandelion-assessment.mjs` sentence-level negation + subtree skip; adds D2 cross-reference check). Validator green: 11/11 files, 9 items, 9/9 map types, **9 D2 assessment IDs cross-referenced** (every recommendation's `consumes_assessment_id` resolves to a real assessment at `docs/dandelion-assessment/`).

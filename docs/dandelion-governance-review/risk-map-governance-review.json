@@ -1,0 +1,68 @@
+{
+  "$schema": "./governance-review.schema.json",
+  "kind": "MapGovernanceReview",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapGovernanceReview",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Reviews are PROPOSED_NOT_REVIEWED. Map-blocking risks gate downstream activation. Neutral compliance vocabulary per ADR-0070. RULE-20-protected forbidden inferences absolute.",
+    "scope_defaults": ["TENANT_SCOPED", "GOVERNANCE_REVIEW_SCOPED", "RISK_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED", "DUAL_CONTROL_FOR_CRITICAL"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-governance-review/risk-map-governance-review.json",
+      "version_tag": "d4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+    "policy_purpose": "GOVERNANCE_REVIEW_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "review.risk-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapGovernanceReview",
+      "map_type": "RiskMap",
+      "name": "Risk Map Governance Review",
+      "description": "Surfaces D3 Risk Map recommendation regions for admin review. Map-blocking risks gate downstream activation; unknown areas default to BLOCKED_BY_POLICY; RULE-20-protected forbidden inferences absolute.",
+      "human_readable_summary": "Admin walks risk regions. Map-blocking risks require dual-control approval. Unknown areas default-forbid until reviewed.",
+      "model_usage_notes": "Map-blocking risks + RULE-20 inferences require Security Lead + dual-control. Unknown areas surface for explicit review; cannot be silently approved.",
+      "source_adr_refs": ["ADR-0082", "ADR-0070", "ADR-0049", "ADR-0050", "ADR-0027", "ADR-0026", "RULE 0"],
+      "consumes_recommendation_id": "recommendation.risk-map.v1",
+      "region_reviews": [
+        { "region_id": "risk.map-blocking", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "ESCALATE_TO_FOUNDER"] },
+        { "region_id": "risk.rule-20-forbidden", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "ESCALATE_TO_FOUNDER"] },
+        { "region_id": "risk.unknown-areas", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "risk.compliance-sensitive", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + General Counsel", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "risk.high-risk-tools-workflows", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "REJECT"] }
+      ],
+      "approval_chain": ["Otzar Administrator", "Security Lead", "General Counsel (compliance-sensitive)"],
+      "dual_control_required": true,
+      "escalation_path": ["Otzar Administrator → Security Lead", "Security Lead → Founder (ESCALATE_TO_FOUNDER for Map-blocking + RULE-20 modifications)"],
+      "DMW_scope_implications": [
+        "Approved Risk Map gates which DMW scopes may activate downstream",
+        "Map-blocking risks exclude their domains from any DMW scope",
+        "Compliance-sensitive surfaces require LawfulBasis per ADR-0036 at regulator-view DMW scope",
+        "Unknown areas default to forbidden-DMW until reviewed"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Risk Map region before downstream maps activate",
+        "Map-blocking risks gate Tool / Workflow / Connector / Memory Map activation",
+        "Neutral compliance vocabulary mandatory per ADR-0070",
+        "No claims of regulator approval, no claims of guaranteed compliance",
+        "RULE-20-protected forbidden inferences absolute regardless of plan tier"
+      ],
+      "safe_defaults": ["Admin + dual-control for critical regions", "Neutral compliance vocabulary", "Conservative default for unknown areas"],
+      "forbidden_defaults": ["Autonomous risk response", "Workforce-scoring inferences from risk data", "Managerial-oversight monitoring", "Guaranteed-compliance claims", "Regulator-approval claims", "Sensitive-attribute inference"],
+      "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed", "future BREAK_GLASS_* + LawfulBasis per ADR-0050 + ADR-0036"],
+      "review_state": "PROPOSED_NOT_REVIEWED"
+    }
+  ]
+}

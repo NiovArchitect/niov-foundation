@@ -1,0 +1,67 @@
+{
+  "$schema": "./governance-review.schema.json",
+  "kind": "MapGovernanceReview",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapGovernanceReview",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Reviews are PROPOSED_NOT_REVIEWED. RULE 0 sovereignty absolute: AI never grants authority to other AI.",
+    "scope_defaults": ["TENANT_SCOPED", "GOVERNANCE_REVIEW_SCOPED", "AUTHORITY_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED", "DUAL_CONTROL_FOR_CRITICAL"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-governance-review/authority-map-governance-review.json",
+      "version_tag": "d4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+    "policy_purpose": "GOVERNANCE_REVIEW_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_AUTHORITY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "review.authority-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapGovernanceReview",
+      "map_type": "AuthorityMap",
+      "name": "Authority Map Governance Review",
+      "description": "Surfaces D3 Authority Map recommendation regions for admin review. 'Must never be assumed' surfaces + dual-control + break-glass require Security Lead approval. Approval chains + delegated authority profiles require Otzar Administrator + Executive Sponsor.",
+      "human_readable_summary": "Admin walks authority regions. 'Must never be assumed' surfaces require dual-control approval. RULE 0 sovereignty absolute throughout.",
+      "model_usage_notes": "'Must never be assumed' surfaces are append-only; admin can never remove them from review without dual-control + Founder escalation. Break-glass paths require ADR-0050 governance.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0026", "ADR-0050", "ADR-0027", "RULE 0"],
+      "consumes_recommendation_id": "recommendation.authority-map.v1",
+      "region_reviews": [
+        { "region_id": "authority.must-never-assume", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "ESCALATE_TO_FOUNDER"] },
+        { "region_id": "authority.dual-control-required", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS"] },
+        { "region_id": "authority.approval-chains", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + Executive Sponsor", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "authority.delegated-profiles", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + Executive Sponsor", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "authority.break-glass", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "REJECT", "ESCALATE_TO_FOUNDER"] }
+      ],
+      "approval_chain": ["Otzar Administrator", "Security Lead", "Executive Sponsor (for delegated authority)"],
+      "dual_control_required": true,
+      "escalation_path": ["Otzar Administrator → Security Lead", "Security Lead → Founder (ESCALATE_TO_FOUNDER for 'must never be assumed' modifications + break-glass)"],
+      "DMW_scope_implications": [
+        "Approved Authority Map bounds Twin write-side DMW provenance",
+        "'Must never be assumed' REJECT-or-ESCALATE outcomes excluded from any Twin DMW",
+        "Break-glass per ADR-0050 emits to bounded audit-only DMW scope"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Authority Map region with dual-control for critical regions",
+        "RULE 0 sovereignty absolute: AI never grants authority to AI",
+        "Dual-control mandatory for risky writes per ADR-0026",
+        "ADR-0050 break-glass for emergency authority only",
+        "Per-call governance approval required for any authority-bound execution"
+      ],
+      "safe_defaults": ["Explicit + revocable delegated authority only", "Dual-control for critical regions", "'Must never be assumed' rules absolute", "Conservative deferrals over premature approvals"],
+      "forbidden_defaults": ["Autonomous authority grant", "AI-to-AI authority grant", "Dual-control bypass for commercial reason", "Cross-tenant authority fusion", "Workforce-scoring inferences from authority structure"],
+      "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_AUTHORITY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed", "future BREAK_GLASS_* per ADR-0050"],
+      "review_state": "PROPOSED_NOT_REVIEWED"
+    }
+  ]
+}
