@@ -179,3 +179,17 @@ Tier 1 by Wave 6 matrix: Slack / Google Workspace / Microsoft 365 / CRM / financ
 - **Enterprise (1501-10000)**: Multi-layer reporting; Board + committee structure mature.
 - **Large enterprise (10000+)**: Highly mature governance; multi-board / multi-jurisdiction.
 - **Regulated**: Board fiduciary + audit committee oversight maximized; regulator-facing disclosure tightly governed per ADR-0070.
+
+## 30. Dandelion Map Implications
+
+Per ADR-0082 Amendment 1 (Dandelion-as-organizational-cartographer doctrine), the CEO / Founder is **both a mapped subject and a strategic map consumer**:
+
+- **Mapped subject** — The Company Map's executive-team region + the Org / Relationship Map's CEO-Board-Investor relationships + the Role Map's CEO/Founder template + the Authority Map's strategic decision authority all chart around the CEO.
+- **Strategic consumer** — The CEO Twin consumes synthesized cross-map signals (Company Map progress + Risk Map executive-level risks + Aha Moment Map company-wide wins) to produce strategic briefs.
+
+The CEO does **not** validate maps directly — that is the Otzar Administrator's responsibility per §9.3 (Admin Twin cartographer-aware synthesis). The CEO **approves company strategy + delegates Otzar governance** to the Otzar Administrator; the Admin then validates the maps inside the strategic framing the CEO sets.
+
+Canonical:
+> *"Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain."*
+
+For the CEO, the Strategic Day Brief and Board Update Brief (§22 aha moments) consume Dandelion map outputs at the **company-level + board-level synthesis tier** — never at the individual-employee surveillance tier.

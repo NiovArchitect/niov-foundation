@@ -130,3 +130,14 @@ Surveillance creep · scoring · protected-class inference · HIPAA / GDPR HR-da
 - **SMB / Mid-market**: dedicated HR Lead.
 - **Enterprise**: full org with regional HR.
 - **Regulated**: stricter compliance + retention.
+
+## 30. Dandelion Map Implications
+
+Per ADR-0082 Amendment 1 (Dandelion-as-organizational-cartographer doctrine), the CHRO is **an Org / Relationship Map co-owner + a Memory / DMW Map regulator**:
+
+- **Org / Relationship Map co-owner** — CHRO + HR own the canonical org chart (managers / direct reports / dotted-line / employment status). Dandelion's Layer 2 Department seed + Layer 3 Role seed consume HRIS signals where authorized; CHRO validates the resulting Org / Relationship Map.
+- **Memory / DMW Map regulator** — CHRO **ensures** the Memory / DMW Map's "must never become enterprise intelligence" region is properly bounded: protected-attribute data, compensation outside scope, employee relations cases, sensitive medical / family / disability / union-activity data. ADR-0058 absolute forbidden inferences are enforced at the CHRO's map-region approval.
+- **Risk Map participant** — Hiring pipeline risk + employee-relations risk regions of the Risk Map are CHRO domain (aggregate signals only; never individual employee scoring).
+- **Authority Map participant** — Onboarding / offboarding approval chains route through CHRO + IT + Security (dual-control per ADR-0026).
+
+The CHRO Twin produces aggregate hiring / cycle / engagement briefs — **never** individual employee scoring; **never** manager surveillance; **never** protected-attribute inference. The forbidden surveillance language list (per ADR-0082 Amendment 1 §9.5) is enforced absolute at the CHRO surface.

@@ -1,8 +1,8 @@
 # ADR-0082 — Dandelion Activation Architecture (Design-Only)
 
-**Status:** Accepted 2026-06-01
+**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (Dandelion-as-organizational-cartographer doctrine + 9 Map Types + allowed/forbidden UI language + Admin Twin cartographer-aware synthesis — see §9)
 **Nature:** Design-only. No code. No schema. No migration. No routes. No services. No runtime activation. No Control Tower Dandelion engine. No connector activation. No permission grants from Dandelion outputs. No LLM / Python / BEAM. No new audit literal. **No mutation to existing `apps/api/src/services/governance/dandelion.service.ts`** — that service continues to own org-admin Phase 0/2/3/4 invite/seating substrate exactly as today.
-**Founder authorization:** `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION-AUTH]` step 3 (Dandelion activation architecture) + `[FOUNDER-DANDELION-AS-ORG-SEEDING-ACTIVATION-INTELLIGENCE-ADDENDUM]` (the canonical Dandelion-as-org-seeding-intelligence framing).
+**Founder authorization:** `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION-AUTH]` step 3 (Dandelion activation architecture) + `[FOUNDER-DANDELION-AS-ORG-SEEDING-ACTIVATION-INTELLIGENCE-ADDENDUM]` (the canonical Dandelion-as-org-seeding-intelligence framing) + `[FOUNDER-DANDELION-AS-ORGANIZATIONAL-CARTOGRAPHER-DOCTRINE]` (Amendment 1 cartographer doctrine).
 **Parent doctrine:** ADR-0080 (OOTB ontology + Amendment 5 Dandelion-as-org-seeding-intelligence framing) · ADR-0081 (Section 9 Workflows Doctrine — Stage 2 Recommendation-only fires from Dandelion) · ADR-0048 (governed personalization-orchestration) · ADR-0027 (governance + RULE 20) · ADR-0026 (dual-control) · ADR-0070 (regulator-ready Foundation).
 
 ---
@@ -300,3 +300,189 @@ This ADR is authorized under `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION
 Subsequent slices (D2-D8) require their own Founder authorization at slice. **Do not implement D2+ automatically.**
 
 After this ADR lands, the recommended next autonomous slice is **ADR-0083 Section 8 Billing / Entitlements ADR** (design-only; $250 base + seat add-ons + capability packs + usage add-ons + enterprise tier per Founder Domain General activation expansion).
+
+---
+
+## 9. Amendment 1 — Dandelion-as-Organizational-Cartographer Doctrine (2026-06-01)
+
+**Authority:** `[FOUNDER-DANDELION-AS-ORGANIZATIONAL-CARTOGRAPHER-DOCTRINE]`.
+
+### 9.1 Canonical doctrine (8 lines preserved verbatim)
+
+The Founder loves the framing of Dandelion as a cartographer. The following 8 lines are canonical product doctrine and must be preserved verbatim across this ADR, future Control Tower copy, role-depth Markdown files, future Dandelion runtime documentation, and any external product description that references Dandelion:
+
+1. *"Dandelion is the organizational cartographer for the company's governed intelligence layer."*
+2. *"Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain."*
+3. *"Dandelion does not merely onboard users; Dandelion charts the company's roles, tools, workflows, permissions, memory scopes, and activation paths."*
+4. *"Before Otzar can become useful, it needs a map. Dandelion creates the proposed map. Admins validate it. Foundation turns approved map regions into governed capability."*
+5. *"The Admin is not manually drawing everything from zero. Dandelion drafts the map. The Admin validates, corrects, approves, or blocks the map."*
+6. *"Foundation authorizes capability only inside approved map boundaries."*
+7. *"The DMW scopes memory inside the map."*
+8. *"Digital Twins operate inside approved terrain."*
+
+The cartographer doctrine is **additive** to and **compatible with** the prior Dandelion framings from §1 + §2 (organizational seeding intelligence + 6-layer org seeding model + 6-stage maturity). Cartography = the unifying metaphor; seeding-and-layers + stages-A-F = the structural mechanics. All prior content remains canonical.
+
+### 9.2 Nine Map Types (canonical)
+
+Dandelion produces proposed maps across **9 canonical map types**. Each map type composes against the 6-layer org-seeding model + the 6-stage maturity model.
+
+| # | Map | Substance |
+|---|-----|-----------|
+| 1 | **Company Map** | Company profile · business model · industry · company size · regions · compliance posture · operating cadence · executive team · board / governance structure · departments · customer type · rollout constraints |
+| 2 | **Org / Relationship Map** | Managers · direct reports · dotted-line relationships · executive support relationships · board / investor relationships · department peers · cross-functional partners · temporary delegates · external collaborators |
+| 3 | **Role Map** | Role templates (per ADR-0080 + Wave 2 + Wave 2.1) · role depth · seniority · responsibilities · decisions · meetings · documents · KPIs · common collaborators · first-week aha moments |
+| 4 | **Tool Map** | Tools used · teams using each tool · tool owners / admins · data contained · read / write risks · OAuth / security needs · connector priority (per Wave 6 matrix) · safe default mode |
+| 5 | **Workflow Map** | Recurring processes (per ADR-0081 Stages 1-5) · triggers · owners · participants · tools · approvals · inputs / outputs · escalation paths · audit requirements · automation maturity |
+| 6 | **Authority Map** | Approval chains · delegated authority · proxy actions · dual-control requirements (per ADR-0026) · spend thresholds · connector write gates · workflow approval gates · never-default permissions |
+| 7 | **Memory / DMW Map** | Self-scoped memory · team / hive-scoped memory · project-scoped memory · client / customer-scoped memory · legal / compliance-scoped memory · board-scoped memory · temporary / delegated memory · memory that must never become enterprise intelligence · safe metadata retention |
+| 8 | **Risk Map** | Blocked areas · uncertain areas · high-risk tools · high-risk workflows · missing approvals · missing policies · overbroad memory scopes · connector risks · compliance-sensitive areas |
+| 9 | **Aha Moment Map** | First-week value by role · first department to activate · first workflows to recommend · first connectors to enable read-first (per Wave 6 matrix top 3) · first Admin Twin wins · first executive wins · first IC / general employee wins |
+
+**Map-to-layer correspondence**:
+
+| Map | Primary org-seeding layer (per §2.2) |
+|-----|--------------------------------------|
+| Company Map | L1 Company seed |
+| Org / Relationship Map | L1 Company seed + L2 Department seed + L3 Role seed |
+| Role Map | L3 Role seed |
+| Tool Map | L4 Tool / connector seed |
+| Workflow Map | L5 Workflow seed |
+| Authority Map | L3 Role seed + L5 Workflow seed (compose across both) |
+| Memory / DMW Map | L6 Memory / DMW seed |
+| Risk Map | cross-cuts all 6 layers |
+| Aha Moment Map | derived from L3 + L4 + L5 outputs against L1 + L2 context |
+
+### 9.3 Admin Twin cartographer-aware synthesis
+
+The Admin Twin (per ADR-0080 Amendment 5 — first Domain General Intelligence champion) operates as the **cartography reviewer + activation strategist** for the proposed maps. The Admin Twin's 12 first-week aha moments (catalogued in `docs/ootb-catalog/role-depth/otzar-administrator.md` §22) are restated here as cartography-aware capabilities:
+
+The Admin Twin helps the Otzar Administrator answer:
+
+- **What parts of the map are complete?**
+- **What parts are missing?** (unmapped areas needing more Dandelion question coverage or admin input)
+- **What parts are risky?** (Risk Map regions; high-risk tools / workflows / memory scopes)
+- **What requires admin review?** (REQUIRES_ADMIN_REVIEW confidence label per §2.3)
+- **What should be activated first?** (Aha Moment Map's first-week value routes)
+- **What should stay blocked?** (BLOCKED_BY_POLICY confidence label per §2.3 + Risk Map blocked areas)
+- **What memory scopes are too broad?** (Memory / DMW Map overbroad-scope review)
+- **What connector regions are safe read-first?** (Tool Map read-first regions × Wave 6 matrix priority)
+- **What workflow regions are ready for recommendation-only?** (Workflow Map × ADR-0081 Stage 2 readiness)
+- **What capabilities are not ready for activation?** (uncertain regions; missing approvals; missing policies)
+
+These map questions extend the §2.5 Admin Dandelion path (A → F): the Admin acts as the **map validator** + **activation route selector** for the proposed cartography Dandelion delivers.
+
+### 9.4 Allowed UI / product language (cartography vocabulary)
+
+Cartography vocabulary may be used safely and powerfully across Control Tower copy, Dandelion preview surfaces, role-depth documentation, future Dandelion runtime UI, and external product descriptions:
+
+- organizational map · company map
+- role map · tool map · workflow map · authority map · memory map · risk map · aha moment map
+- activation path · activation route · approved terrain · unmapped area
+- needs review · blocked region · safe route · first-value route · rollout route · governed path
+
+### 9.5 Forbidden UI / product language (surveillance framing absolute)
+
+Cartography vocabulary must **never** drift into surveillance framing. The following language is absolute forbidden across every Otzar surface (UI copy, role-depth documentation, internal docs, external product descriptions):
+
+- "monitoring map"
+- "employee map" (when used in a surveillance sense)
+- "performance map"
+- "behavior map"
+- "psychological map"
+- "manager visibility map"
+
+This forbidden list is enforced at the same tier as ADR-0058 no-manager-surveillance posture + ADR-0079 forbidden personal-categories list. Any future ADR proposing to weaken this list requires Founder authorization per RULE 20.
+
+### 9.6 Maps are proposals, not authority
+
+The cartographer framing reinforces the §2.7 canonical never-actions:
+
+- Maps are **proposed**. Foundation governance authorizes activation per stage.
+- Maps are **revisable**. Admins may correct / reject / amend any proposed map region.
+- Maps are **bounded**. Dandelion cannot infer outside the 6-layer org seeding model's question scope.
+- Maps are **scoped**. Same-org boundary absolute; no cross-tenant cartography.
+- Maps are **temporal**. Maps decay over time as company state evolves; periodic re-seeding refreshes the cartography.
+
+Canonical re-statement:
+> *"Dandelion produces proposed maps. Foundation turns approved maps into governed capability."*
+
+### 9.7 Workflows + connectors activate only inside approved map regions
+
+Per Founder direction, the cartography doctrine binds workflow + connector activation to map-region approval:
+
+- **Workflows** (per ADR-0081) activate only inside **approved Workflow Map regions** + **approved Authority Map regions** (approval chain present + approved). Uncertain regions require admin review; blocked regions cannot activate.
+- **Connectors** (per Section 4 forward-substrate + Wave 6 priority matrix) activate only inside **approved Tool Map regions** + **approved Authority Map regions** (admin policy approval present). Uncertain tools require admin review; blocked tools cannot activate.
+- **Memory** (per ADR-0079 + Wave 2.1 DMW notes) operates only inside **approved Memory / DMW Map regions**. Forbidden categories (private personal / family / protected attributes / union / labor organizing where applicable) are absolute outside the map.
+
+This map-region-gated activation discipline is **stronger** than entitlement (per ADR-0083) and **stronger** than billing (per ADR-0083 Amendment 1) — a customer may be entitled to a Connector Pack (billing ✓), the connector preset may exist in the catalog (entitlement ✓), but if the Tool Map's region for that connector is unmapped / uncertain / blocked, **Foundation governance does not authorize activation**.
+
+### 9.8 Future Control Tower cartography surface
+
+Per Founder direction:
+
+- The `/onboarding` route currently hosts the Stage A Dandelion Preview (LIVE per Wave 3 + Wave 6). The route name remains backward-compatible.
+- The product surface should mature toward a **Dandelion / Company Map / Activation Map experience** as Stages B–F substrate lands.
+- The **Admin Launch Center / Governance Launch Center** (forward-substrate; appears in `docs/ootb-catalog/role-depth/otzar-administrator.md` §16) should show:
+  - **Map completeness** (per map type × layer × stage).
+  - **Risk regions** (Risk Map highlighting).
+  - **Missing policies** (Authority Map gaps).
+  - **Missing approvals** (Authority Map approval chain gaps).
+  - **Activation routes** (Aha Moment Map ranked safe-first-value paths).
+- The CT Dandelion / Cartography surface is **never** an autonomous activation console — it is the admin's governance + visibility console (per §6 disposition).
+
+### 9.9 Cartographer doctrine + 6-stage maturity correspondence
+
+The cartography doctrine maps cleanly onto the §2.1 6-stage maturity model:
+
+| Stage | Cartographic action |
+|-------|---------------------|
+| A Preview | Browse the canonical 9 Map Types as catalog reference |
+| B Assessment | Dandelion **draws proposed maps** from company / department / user answers |
+| C Recommendation | Proposed maps include confidence labels per region |
+| D Governance Review | Admin **validates / corrects / rejects / amends** each proposed map region |
+| E Starter Envelope Assembly | Approved map regions assemble into the `GovernedStarterEnvelope` |
+| F Activation | Foundation authorizes capability **only inside approved map boundaries** |
+
+### 9.10 Amendment 1 does NOT change
+
+The following remain locked from base ADR-0082:
+
+- §2.1 the 6 maturity stages (cartography doctrine maps onto stages per §9.9; stages themselves preserved).
+- §2.2 the 6-layer org seeding model (maps consume layers per §9.2 correspondence).
+- §2.3 confidence labels (closed-vocab preserved; applied per map region).
+- §2.4 governed envelope output discipline.
+- §2.6 distinction from existing `dandelion.service.ts`.
+- §2.7 canonical never-actions (reinforced by §9.6).
+- §2.8 – §2.10 Workflows / DMW / Section 4 connector couplings (reinforced by §9.7).
+- §3 non-goals (cartography doctrine adds no runtime / schema / route / service).
+- §4 8-slice implementation ladder D1–D8.
+- §5 governance posture.
+- §6 CT `/onboarding` page disposition (extended in §9.8).
+- §7 citations.
+- §8 Founder authorization (extended; not replaced).
+
+### 9.11 Wave 2.1 role-depth touch-ups (companion edits)
+
+Companion edits in this PR add a "Dandelion Map Implications" subsection to 7 key Wave 2.1 role-depth Markdown files where the cartography doctrine is most operationally load-bearing:
+
+- `docs/ootb-catalog/role-depth/otzar-administrator.md`
+- `docs/ootb-catalog/role-depth/ceo-founder.md`
+- `docs/ootb-catalog/role-depth/cto.md`
+- `docs/ootb-catalog/role-depth/product-owner-product-manager.md`
+- `docs/ootb-catalog/role-depth/chro.md`
+- `docs/ootb-catalog/role-depth/general-counsel.md`
+- `docs/ootb-catalog/role-depth/general-employee-individual-contributor.md`
+
+Each touch-up names the role's specific cartography responsibilities (validator / consumer / mapped subject / authority approver / risk reviewer / map-region owner / etc.) as appropriate. Other Wave 2.1 role-depth files remain unchanged at this PR; future PRs may extend the touch-ups across additional roles if the doctrine surfaces specific implications.
+
+### 9.12 Forward substrate (queued)
+
+After Amendment 1 lands, the cartography doctrine is canonical across:
+
+- Future Dandelion Activation slices D2–D8 (per §4).
+- Future Control Tower Dandelion / Cartography surface evolution (per §9.8).
+- Future Workflows runtime (per §9.7 + ADR-0081).
+- Future Section 4 connector implementation (per §9.7 + Wave 6 matrix).
+- Future DMW runtime (per §9.7 + ADR-0079).
+
+Per the Founder resume directive, the recommended **next autonomous slice** after Amendment 1 lands is **ADR-0084 Section 4 MCP / Connector Strategy** (design-only; broader plan covering Slack + Google Workspace + Project Tracker + Gmail / Outlook + GitHub + Salesforce / HubSpot + Travel / Expense per Wave 6 matrix; per-connector RULE 21 research arc gating).
