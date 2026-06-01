@@ -458,3 +458,5 @@ Bidirectional citations (cited from):
   Synchronicity) — Wave 2C honors §5 (watching-is-not-surveillance),
   §6 (drift prevention is first-class but bounded), and §7 (governed
   best-practice learning without overclaiming).
+
+- **Cited by ADR-0078** (Conversation Substrate — Source-of-Truth Transcripts + `conversation_context_signals[]` Safe-Projection Layer for Agent Playground; design-only; Accepted 2026-05-31) — ADR-0078 inherits this ADR's safe-projection / closed-vocab / no-surveillance / self-scoped substrate discipline verbatim; ADR-0078 §3.3 `signal_source_type` includes a value reflecting this ADR's source role. Implementation gated on future ADR-0079 Transcript Substrate Policy. Bidirectional back-citation per RULE 14 + RULE 20.

@@ -222,3 +222,27 @@ Bidirectional citations (cited from):
   (drift prevention is first-class but bounded), §7
   (governed best-practice learning), and §11 (hierarchy-
   routed reports — Wave 3 has NO manager surface).
+- **Cited by ADR-0078** (Conversation Substrate — Source-of-
+  Truth Transcripts + `conversation_context_signals[]`
+  Safe-Projection Layer for Agent Playground; design-only;
+  Accepted 2026-05-31) — ADR-0078 operationalizes this
+  doctrine's build-order step 4 (*"transcript ownership /
+  retention / scope policy before raw transcripts"*) by
+  defining the four-layer conversation substrate (Layer 1
+  Raw Transcript Source-of-Truth + Layer 2 Scoped Reasoning
+  + Layer 3 `conversation_context_signals[]` Safe Projection
+  + Layer 4 Permissioned Evidence Drilldown) under explicit
+  doctrine inheritance. ADR-0078 carries the canonical
+  doctrine sentences *"Otzar Enterprise should remember
+  work, not surveil life"* + *"The transcript layer
+  preserves authorized business evidence; the relevance
+  layer prevents personal life from becoming enterprise
+  intelligence"* — operational expressions of §5
+  (watching-is-not-surveillance) + §11 (hierarchy-routed
+  reports, NOT manager surveillance) at the conversation-
+  substrate register. ADR-0078 §6C capture-eligibility +
+  work-relevance filtering layer is the load-bearing gate
+  that enforces this doctrine before any transcript ingest
+  fires. Implementation gated on future ADR-0079 Transcript
+  Substrate Policy covering ADR-0078 §6 + §6A + §6B + §6C.
+  Bidirectional back-citation per RULE 14 + RULE 20.

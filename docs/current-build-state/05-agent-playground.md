@@ -995,6 +995,60 @@ authorization at its slice.
 - Avoid building the playground UI on the Foundation surface;
   it belongs in the Control Tower frontend (Section 9).
 
+### ADR-0078 conversation substrate (design-only LANDED 2026-05-31)
+
+**ADR-0078 LANDED 2026-05-31** at
+`[FOUNDER-CONVERSATION-CONTEXT-SIGNALS-SUBSTRATE-ADR-AUTH]`
+— design-only four-layer conversation substrate canonical:
+**Layer 1** Raw Transcript Source-of-Truth (governed exact
+transcripts when authorized) + **Layer 2** Scoped Reasoning
+(Agent Playground may consult exact transcripts internally
+for accuracy under scope) + **Layer 3**
+`conversation_context_signals[]` Safe Projection (closed-
+vocab UI / reasoning-output substrate) + **Layer 4**
+Permissioned Evidence Drilldown (authorized users may
+traverse signal → transcript excerpt under policy).
+Canonical doctrines: *"Exact transcripts are the
+evidentiary source of truth;
+`conversation_context_signals[]` are the governed
+intelligence interface."* + *"Otzar Enterprise should
+remember work, not surveil life."* + *"The transcript
+layer preserves authorized business evidence; the
+relevance layer prevents personal life from becoming
+enterprise intelligence."* §3 closed-vocab catalogs (9
+unions: signal_type 17 / confidence 4 / source 8 / scope 6
+/ evidence_label 13 / retention_class 5 / redaction_status
+4 / policy_purpose 7 + TranscriptRef Layer-4 attachment
+shape). §4 Layer 1 allowed transcript-source-record
+fields. §5 Wave 10 cockpit attachment (replaces ADR-0077
+§8.2 placeholder when Stage 4 lands). §6 12 implementation
+prerequisites + §6A 19 transcript-governance capabilities
++ §6B four canonical access tiers (internal enterprise /
+compliance-legal review / regulator-facing evidence
+package / external third-party) + §6C capture-eligibility
++ work-relevance filtering layer (5-class relevance
+classifier biased toward privacy; 7-value capture-
+eligibility vocab; 5-value agent-playground-use vocab;
+11-value business-purpose-label vocab; 9-value scope-
+binding-type vocab; personal/protected-category exclusion;
+mixed-conversation handling; sensitive-personal blocked
+from Agent Playground entirely). §7 five-stage
+implementation ladder (Stage 0 this ADR LANDED; Stages
+1-5 each require separate Founder authorization). §8/§9
+future Wave 7 + Wave 9 additive-sidecar attachment points.
+§11 safe_summary discipline (closed-style at default
+surface; exact quotes ONLY via Layer 4 permissioned
+drilldown). §12 ZERO new audit literal. §13 ADR-0070
+regulator-ready posture inherited. **Load-bearing
+prerequisite**: future ADR-0079 Transcript Substrate
+Policy ADR MUST cover ADR-0078 §6 + §6A + §6B + §6C
+before any implementation stage can fire (separate Founder
+authorization at slice). The four-layer substrate
+preserves both the patent-implementation evidence trail
+(exact transcripts under governance) AND the no-
+surveillance discipline (work-relevance filtering blocks
+personal life from becoming enterprise intelligence).
+
 ---
 
 Back to master: [`../CURRENT_BUILD_STATE.md`](../CURRENT_BUILD_STATE.md)

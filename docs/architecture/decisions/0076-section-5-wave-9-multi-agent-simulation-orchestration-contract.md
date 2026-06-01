@@ -952,6 +952,21 @@ cockpit scope.
   back-citation amendment landed at
   `[FOUNDER-SECTION-5-WAVE-10-AGENT-PLAYGROUND-CONTROL-TOWER-CONSUMER-CONTRACT-ADR-AUTH]`
   2026-05-31).
+- **Cited by ADR-0078** (Conversation Substrate — Source-of-
+  Truth Transcripts + `conversation_context_signals[]`
+  Safe-Projection Layer for Agent Playground; design-only;
+  Accepted 2026-05-31) — ADR-0078 §9 defines the future
+  Wave 9 additive-sidecar attachment point: future Wave 9
+  implementation amendment MAY extend `SimulationBranch` OR
+  `EnterpriseDecisionPosture` with
+  `conversation_context_signals?: readonly ConversationContextSignal[]`.
+  ADR-0076 §1 response shape + §6 closed-vocab label sets +
+  §8 universal no-leak doctrine + §11 24-branch ceiling
+  preserved across any future amendment. Bidirectional
+  back-citation per RULE 14 + RULE 20 (Founder
+  authorization for this back-citation amendment landed at
+  `[FOUNDER-CONVERSATION-CONTEXT-SIGNALS-SUBSTRATE-ADR-AUTH]`
+  2026-05-31).
 
 ## Founder authorization
 

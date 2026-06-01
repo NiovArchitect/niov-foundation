@@ -879,6 +879,26 @@ Phase 0.
 - Cites ADR-0076 (Wave 9 multi-agent simulation
   orchestration contract; Wave 10 panel 6.6 consumes;
   bidirectional back-citation per RULE 14 + RULE 20).
+- **Cited by ADR-0078** (Conversation Substrate — Source-
+  of-Truth Transcripts + `conversation_context_signals[]`
+  Safe-Projection Layer for Agent Playground; design-only;
+  Accepted 2026-05-31) — ADR-0078 §5 defines the future
+  Wave 10 cockpit attachment point: when ADR-0078 Stage 4
+  implementation lands, the cockpit replaces this ADR's
+  §8.2 *"Conversation context signals not available in
+  this version"* placeholder with real Layer 3 signals +
+  ADR-0078 §5.1 permissioned evidence-drilldown
+  affordance. ADR-0077 §8 four honesty postures (hierarchy
+  / conversation-context / evidence-posture / execution-
+  boundary) preserved verbatim. ADR-0077 §4 forbidden-UI
+  + §13 no-leak + §10 no-Execute-button guards preserved.
+  ADR-0078 §5.2 forbidden default-projection field catalog
+  extends ADR-0077 §13 no-leak doctrine at the
+  conversation-substrate register. Bidirectional back-
+  citation per RULE 14 + RULE 20 (Founder authorization
+  for this back-citation amendment landed at
+  `[FOUNDER-CONVERSATION-CONTEXT-SIGNALS-SUBSTRATE-ADR-AUTH]`
+  2026-05-31).
 
 ## Founder authorization
 
