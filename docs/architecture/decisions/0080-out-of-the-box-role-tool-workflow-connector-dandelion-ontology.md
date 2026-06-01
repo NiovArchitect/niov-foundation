@@ -1,6 +1,6 @@
 # ADR-0080 — Out-of-the-Box Role, Tool, Workflow, Connector, and Dandelion Onboarding Ontology for Digital Twins
 
-**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (governed context envelope addendum — Wave 2 lands the catalog with envelope metadata; see §17) · **Amendment 2** Accepted 2026-06-01 (Wave 3 CT/Dandelion read-only preview LIVE + deep-role-examples addendum — see §18) · **Amendment 3** Accepted 2026-06-01 (Wave 6 connector-priority matrix output LIVE; suggest-only — see §19)
+**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (governed context envelope addendum — Wave 2 lands the catalog with envelope metadata; see §17) · **Amendment 2** Accepted 2026-06-01 (Wave 3 CT/Dandelion read-only preview LIVE + deep-role-examples addendum — see §18) · **Amendment 3** Accepted 2026-06-01 (Wave 6 connector-priority matrix output LIVE; suggest-only — see §19) · **Amendment 4** Accepted 2026-06-01 (CT Wave 6 surface LIVE — see §20)
 **Nature:** Design-only at Wave 1; Wave 2 static seed catalog accompanies (no code, no schema, no routes, no runtime behavior). No Control Tower UI. No connector implementation. No LLM/Python/BEAM. No new audit literal. No mutation of existing `dandelion.service.ts`.
 **Founder authorization:** `[FOUNDER-ADR-0080-OOTB-DANDELION-ONTOLOGY-DESIGN-ONLY-AUTH]` (Wave 1) · `[FOUNDER-ADR-0080-WAVE-2-STATIC-SEED-CATALOG-AUTH]` (Wave 2) · `[FOUNDER-ADR-0080-WAVE-2-ADDENDUM-GOVERNED-CONTEXT-TRANSACTION-ENVELOPE]` (Wave 2 envelope amendment) · `[FOUNDER-ADR-0080-WAVE-3-CT-DANDELION-READ-ONLY-PREVIEW-AUTH]` (Wave 3) · `[FOUNDER-ADR-0080-WAVE-3-ADDENDUM-DEEP-ROLE-EXAMPLES-AND-COLLABORATION-MAPS]` (Wave 3 depth/collaboration addendum) · `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]` (autonomous continuation)
 **Parent doctrine:** ADR-0048 (governed personalization-orchestration), ADR-0052 (Otzar DGI), ADR-0027 (governance), ADR-0070 (regulator-ready Foundation), ADR-0069 (BEAM substrate-coherence law).
@@ -1319,3 +1319,35 @@ When these become available (Wave 4 runtime + first customer signals + Founder l
 1. **CT Wave 6 surface** — render the matrix in the Dandelion Preview's connector preset section as a "Suggested first-connector ranking" panel; transparently show the score formula and forward-substrate inputs.
 2. **Wave 2.1 role-depth expansion** — re-run the matrix after deeper role catalog lands; the ranking will likely shift as more roles claim more tools.
 3. **Section 4 first-connector implementation arc** — Founder-gated; matrix is the primary substrate input.
+
+---
+
+## 20. Amendment 4 — CT Wave 6 surface LIVE (2026-06-01)
+
+**Authority:** `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]`.
+
+### 20.1 CT Wave 6 closeout
+
+CT PR #19 (merged at CT `bf7f826`) extends `/onboarding` Dandelion Preview with a **Suggested first-connector ranking** panel that consumes the Wave 6 matrix landed in Foundation PR #169.
+
+CT surfaces:
+- 14 ConnectorPreset rows ranked by `total_score` (Slack 16 first, ATS 5.75 last).
+- Per-row score breakdown: rank badge + preset name + underlying tools count + most-roles-using + per-component scores (tier / api / adoption / auth / sensitivity-penalty / complexity-penalty) + total score badge (TIER 1–3 highlighted via secondary badge variant).
+- 4 forward-substrate inputs declared transparently (Dandelion_collected_demand / customer_demand / launch_necessity / demo_impact).
+- Matrix version + generated-at metadata.
+- Suggest-only notice + reading guidance footer.
+
+CT-side mirror is a verbatim copy of Foundation `connector-priority-matrix.json` at `src/lib/ootb-catalog/data.ts` — no derivation logic on the CT side, no invented content. 5 NEW CT tests (panel rendering + 14-row presence + Slack #1 ranking + forward-substrate inputs surfaced + matrix version displayed). 223 / 223 total CT tests pass. Typecheck + lint + build green.
+
+### 20.2 Substrate-honest framing preserved
+
+- "Suggest-only." 
+- "The first real connector requires Founder authorization plus a research arc."
+- "Nothing is connected from this page."
+- "A high score does not mean a connector should be activated."
+
+### 20.3 Forward substrate
+
+Wave 6 closes end-to-end: matrix derivation (Foundation PR #169 `d2f9c44`) + matrix consumer surface (CT PR #19 `bf7f826`). The Section 4 first-real-connector decision now has the substrate input it needs; the matrix is one input, Dandelion-collected demand + customer launch profile + demo impact are the other forward inputs and are gated.
+
+Next autonomous slice: build-log entry capturing the Wave 3 + Section 10 ops + Wave 6 arc as a single archival record, OR begin the bounded subset of Wave 2.1 role-depth expansion (one or two roles at a time per PR).
