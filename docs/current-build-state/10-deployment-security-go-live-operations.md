@@ -41,7 +41,7 @@ Both repos `git pull --rebase origin main` clean. No dirty state.
 | **Section 8 Billing** | **✗ NOT STARTED** | No Subscription/Plan/Seat/Stripe substrate; LAUNCH BLOCKER if commercial launch |
 | **Section 4 first real connector** | **⚠ DECISION-BLOCKED** | OutboundWebhook is the only LIVE adapter; needs Founder decision on Slack vs Gmail vs Salesforce etc. |
 | **Section 9 Workflows page** | **⚠ DECISION-BLOCKED** | Foundation has `Workflow` model stub; no service/routes/ADR yet; CT page still Placeholder |
-| **Section 10 operational substrate** | **⚠ FOUNDATIONS LAID** | Deployment runbook + GOVSEC.5 break-glass LIVE; metrics/observability/rollback runbook deferred |
+| **Section 10 operational substrate** | **✓ READY (docs tier)** | Deployment runbook + GOVSEC.5 break-glass LIVE + 4 NEW operational runbooks LIVE (`admin-bootstrap-runbook.md`, `rollback-runbook.md`, `smoke-test-checklist.md`, `monitoring-and-healthcheck.md`). Prometheus/OTel implementation deferred to GOVSEC.2. |
 | **OOTB role/tool/workflow templates** | **✗ MISSING** | New launch-readiness gap surfaced by Founder; see §OOTB section below |
 
 ## Section-by-section product dashboard
@@ -99,9 +99,10 @@ Both repos `git pull --rebase origin main` clean. No dirty state.
 | Build commands | ✓ | `package.json` scripts standard |
 | CI workflow | ✓ | `.github/workflows/ci.yml` 4 required checks: typecheck / unit / integration / Elixir (Foundation); verify (CT) |
 | Deployment runbook | ✓ partial | `docs/operations/deployment-runbook.md` exists (created at ADR-0047 PR.4); not exercised against a real deploy yet |
-| Rollback runbook | ✗ MISSING | db:push has no rollback; assumes Supabase PITR + manual restore |
-| Admin bootstrap runbook | ✗ MISSING | First `can_admin_niov` grant is direct DB edit; not documented |
-| Smoke test suite | ✗ MISSING | No formal smoke tests; CI relies on unit + integration |
+| Rollback runbook | ✓ READY | `docs/operations/rollback-runbook.md` — decision tree + 6 rollback procedures + post-rollback verification |
+| Admin bootstrap runbook | ✓ READY | `docs/operations/admin-bootstrap-runbook.md` — first `can_admin_niov` SQL bootstrap + recovery + audit posture |
+| Smoke test checklist | ✓ READY | `docs/operations/smoke-test-checklist.md` — 15-section manual smoke covering health/auth/audit/COSMP/Otzar/Action/dual-control/break-glass/connector/playground/CT/no-leak/no-console/CORS/rate-limit |
+| Monitoring + healthcheck guidance | ✓ READY | `docs/operations/monitoring-and-healthcheck.md` — `/health` contract + audit-chain as observability primitive + 11-row alerting policy + first-24/48/168h post-deploy guide |
 
 ### Env vars (REQUIRED vs OPTIONAL)
 
