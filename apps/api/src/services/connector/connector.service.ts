@@ -42,7 +42,11 @@
 // OUTPUT: None — type only.
 // WHY: Branded string union over connector kinds. Mirrors the
 //      embedding model/dimensions string-literal pattern.
-export type ConnectorType = "OUTBOUND_WEBHOOK" | "FIXTURE_ECHO" | "SLACK_READ";
+export type ConnectorType =
+  | "OUTBOUND_WEBHOOK"
+  | "FIXTURE_ECHO"
+  | "SLACK_READ"
+  | "GOOGLE_WORKSPACE_READ";
 
 // WHAT: The shape of one connector-type definition in the registry.
 // INPUT: Used as a record type.
@@ -102,6 +106,15 @@ export const CONNECTOR_REGISTRY: Readonly<
     description:
       "Section 4 C2 first real vendor connector. Bot-token (xoxb-*) read-only access to Slack via conversations.list + users.list + conversations.history. Fixture-first: real Slack Web API reached only when SLACK_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C2 (chat.postMessage / files.upload forward-substrate to ≥C6). No OAuth flow at C2 (static admin-supplied bot-token via secret_ref). No Events API webhook at C2 (forward-substrate to ≥C7).",
   }),
+  GOOGLE_WORKSPACE_READ: Object.freeze({
+    type: "GOOGLE_WORKSPACE_READ" as const,
+    display_name: "Google Workspace (read-first)",
+    transport: "https-get-bearer-token",
+    default_config_keys: Object.freeze(["use_real", "workspace_domain"]),
+    secret_ref_required: true,
+    description:
+      "Section 4 C3 second real vendor connector. OAuth-2.0 access-token read-only access to Google Workspace via calendar.events.list + drive.files.list + gmail.messages.list. Fixture-first: real Google API reached only when GOOGLE_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C3 (calendar/drive/gmail mutations forward-substrate to ≥C6). No OAuth refresh-token flow at C3 (static admin-supplied access-token via secret_ref; refresh-token rotation forward-substrate to a later C-slice). No Drive content download / Gmail body read at C3 (metadata + IDs only; raw content forward-substrate to ≥C5).",
+  }),
 });
 
 // WHAT: Lookup helper — returns the catalog entry for a connector
@@ -118,7 +131,8 @@ export function getConnectorTypeDefinition(
   if (
     candidate === "OUTBOUND_WEBHOOK" ||
     candidate === "FIXTURE_ECHO" ||
-    candidate === "SLACK_READ"
+    candidate === "SLACK_READ" ||
+    candidate === "GOOGLE_WORKSPACE_READ"
   ) {
     return CONNECTOR_REGISTRY[candidate];
   }
@@ -328,6 +342,12 @@ export async function getConnectorProviderAsync(
     // import cycle (the provider imports types from this module).
     const mod = await import("./slack-read.provider.js");
     return new mod.SlackReadProvider();
+  }
+  if (type === "GOOGLE_WORKSPACE_READ") {
+    // Section 4 C3 — second real vendor connector. Same dynamic-
+    // import pattern as SLACK_READ and OUTBOUND_WEBHOOK.
+    const mod = await import("./google-workspace-read.provider.js");
+    return new mod.GoogleWorkspaceReadProvider();
   }
   return new FixtureBasedConnectorProvider();
 }
