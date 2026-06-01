@@ -1,0 +1,64 @@
+{
+  "$schema": "./governance-review.schema.json",
+  "kind": "MapGovernanceReview",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapGovernanceReview",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Reviews are PROPOSED_NOT_REVIEWED. Approval chains gate downstream write authority. No managerial-oversight monitoring inferences during review.",
+    "scope_defaults": ["TENANT_SCOPED", "GOVERNANCE_REVIEW_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED", "NO_ACTIVATION_FROM_REVIEW"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-governance-review/org-relationship-map-governance-review.json",
+      "version_tag": "d4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+    "policy_purpose": "GOVERNANCE_REVIEW_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "review.org-relationship-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapGovernanceReview",
+      "map_type": "OrgRelationshipMap",
+      "name": "Org / Relationship Map Governance Review",
+      "description": "Surfaces D3 Org / Relationship Map recommendation regions for admin review. Approval chains + escalation paths require Otzar Administrator approval. Confidential relationships excluded at assessment remain absolute through review.",
+      "human_readable_summary": "Admin walks role-shaped relationship regions and decides per-region outcome. Approval chains gate downstream write authority. Confidential relationships excluded at intake remain absolute.",
+      "model_usage_notes": "Approval chains rank first because they gate write authority. Escalation paths rank second. Dotted-line relationships can be deferred per company maturity.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0070", "ADR-0026", "RULE 0"],
+      "consumes_recommendation_id": "recommendation.org-relationship-map.v1",
+      "region_reviews": [
+        { "region_id": "org.approval-chains", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "org.escalation-paths", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO"] },
+        { "region_id": "org.executive-support", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Executive Sponsor", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "org.dotted-line", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "DEFER_FOR_MORE_INFO", "REJECT"] }
+      ],
+      "approval_chain": ["Otzar Administrator", "Executive Sponsor (for executive-support regions)"],
+      "dual_control_required": true,
+      "escalation_path": ["Otzar Administrator → Executive Sponsor", "Executive Sponsor → Founder (for cross-org executive-support cases)"],
+      "DMW_scope_implications": [
+        "Approved Org Map bounds Team / Hive-scoped DMW memory",
+        "Confidential relationships REJECT outcome excluded from any downstream DMW",
+        "Approval-path relationships inform Authority Map DMW scope at D5"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Org Map region before downstream Authority Map approval can land",
+        "No workforce-scoring inferences from reporting structure during review",
+        "Executive-support regions require dual-control to prevent confused-deputy escalation"
+      ],
+      "safe_defaults": ["Role-shaped relationships only", "Admin-approved scope", "Confidential relationships excluded by construction"],
+      "forbidden_defaults": ["Autonomous activation", "Workforce-scoring inferences during review", "Managerial-oversight monitoring of named individuals", "Cross-tenant relationship fusion"],
+      "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+      "review_state": "PROPOSED_NOT_REVIEWED"
+    }
+  ]
+}

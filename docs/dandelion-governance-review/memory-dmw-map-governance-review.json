@@ -1,0 +1,68 @@
+{
+  "$schema": "./governance-review.schema.json",
+  "kind": "MapGovernanceReview",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapGovernanceReview",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Reviews are PROPOSED_NOT_REVIEWED. RULE 0 sovereignty over memory is absolute. Baseline DMW safety is never paywalled.",
+    "scope_defaults": ["TENANT_SCOPED", "GOVERNANCE_REVIEW_SCOPED", "MEMORY_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "USER_CONFIRMATION_REQUIRED", "ADMIN_REVIEW_REQUIRED"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-governance-review/memory-dmw-map-governance-review.json",
+      "version_tag": "d4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+    "policy_purpose": "GOVERNANCE_REVIEW_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_MEMORY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "review.memory-dmw-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapGovernanceReview",
+      "map_type": "MemoryDmwMap",
+      "name": "Memory / DMW Map Governance Review",
+      "description": "Surfaces D3 Memory / DMW Map recommendation regions for user confirmation + admin governance review. Baseline DMW safety ships always; self-scoped memory requires user confirmation; team/project/customer scopes require admin approval; forbidden categories absolute.",
+      "human_readable_summary": "User confirms self-scoped memory; admin approves team/project/customer scopes. Baseline DMW safety always-on; forbidden categories absolute.",
+      "model_usage_notes": "Baseline DMW + self-scoped require minimal review. Team / project / customer scopes require admin policy review. Forbidden categories cannot be expanded by review.",
+      "source_adr_refs": ["ADR-0082", "ADR-0001", "ADR-0080", "ADR-0083", "ADR-0044", "ADR-0045", "ADR-0046", "RULE 0"],
+      "consumes_recommendation_id": "recommendation.memory-dmw-map.v1",
+      "region_reviews": [
+        { "region_id": "memory.baseline-safety", "admin_approval_required": false, "dual_control_required": false, "approval_chain_role": "Automatic (baseline; never paywalled)", "review_outcome_options": ["APPROVE"] },
+        { "region_id": "memory.self-scoped", "admin_approval_required": false, "dual_control_required": false, "approval_chain_role": "User Self-Confirmation", "review_outcome_options": ["APPROVE", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "memory.team-scoped", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "memory.project-customer-scoped", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Customer Owner", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "memory.forbidden-categories", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "ESCALATE_TO_FOUNDER"] }
+      ],
+      "approval_chain": ["User Self-Confirmation (self-scope)", "Otzar Administrator (team / project / customer)", "Customer Owner (customer-scoped)", "Security Lead (forbidden categories)"],
+      "dual_control_required": true,
+      "escalation_path": ["User → Otzar Administrator", "Otzar Administrator → Security Lead", "Security Lead → Founder (forbidden-category expansion)"],
+      "DMW_scope_implications": [
+        "Approved Memory Map directly establishes DMW scope for activation",
+        "Forbidden categories REJECT-or-ESCALATE excluded from any DMW",
+        "Per ADR-0046: AI_AGENT EntityType maps to PERSONAL or ENTERPRISE wallet by deployment context",
+        "Advanced DMW governance pack required for custom retention per ADR-0083"
+      ],
+      "governance_review_points": [
+        "RULE 0 sovereignty over entity memory absolute",
+        "Baseline DMW safety never paywalled per ADR-0083",
+        "Customers should not pay extra just to have memory be safe",
+        "User must confirm self-scoped memory boundaries",
+        "Admin must approve team / org / project / customer regions"
+      ],
+      "safe_defaults": ["Baseline DMW safety always-on", "Self-scoped memory absolute", "Per-customer / per-project scope binding", "Soft-delete only per RULE 10"],
+      "forbidden_defaults": ["Baseline DMW safety paywalled", "RULE 0 sovereignty relaxation", "Cross-tenant memory fusion", "Workforce-scoring inferences from memory categories", "Managerial-oversight monitoring of personal memory"],
+      "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_MEMORY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+      "review_state": "PROPOSED_NOT_REVIEWED"
+    }
+  ]
+}

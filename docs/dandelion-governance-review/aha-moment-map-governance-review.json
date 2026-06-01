@@ -1,0 +1,66 @@
+{
+  "$schema": "./governance-review.schema.json",
+  "kind": "MapGovernanceReview",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapGovernanceReview",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Reviews are PROPOSED_NOT_REVIEWED. Slack catch-up summary now ranks as the first OPERATING-substrate aha moment since C2 Slack runtime is LIVE (Section 4 PR #185 + CT PR #21).",
+    "scope_defaults": ["TENANT_SCOPED", "GOVERNANCE_REVIEW_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-governance-review/aha-moment-map-governance-review.json",
+      "version_tag": "d4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+    "policy_purpose": "GOVERNANCE_REVIEW_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "MEDIUM"
+  },
+  "items": [
+    {
+      "id": "review.aha-moment-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapGovernanceReview",
+      "map_type": "AhaMomentMap",
+      "name": "Aha Moment Map Governance Review",
+      "description": "Surfaces D3 Aha Moment Map recommendation regions for admin governance review. Slack catch-up summary now LANDABLE since Slack OPERATING. Safe-fallback aha moments require minimal review. Other connector aha moments wait on respective C-slice runtimes.",
+      "human_readable_summary": "Admin approves first-week aha moments per role. Slack catch-up substrate LIVE per C2; admin can approve today. Safe-fallback aha moments require no connector.",
+      "model_usage_notes": "Slack catch-up summary aha moment has runtime substrate (PR #185); admin approval lands a working surface today. Other connector aha moments stay in DEFER until their C-slice runtime lands.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0084", "ADR-0081", "RULE 0"],
+      "consumes_recommendation_id": "recommendation.aha-moment-map.v1",
+      "region_reviews": [
+        { "region_id": "aha.slack-catchup", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "aha.safe-fallback", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "DEFER_FOR_MORE_INFO"] },
+        { "region_id": "aha.google-workspace", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + Workspace Super Admin", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO"] },
+        { "region_id": "aha.project-tracker", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + Engineering Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO"] },
+        { "region_id": "aha.workflow-recommendations", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + Workflow Owner", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO"] }
+      ],
+      "approval_chain": ["Otzar Administrator", "Workspace Super Admin (Google Workspace)", "Engineering Lead (Project Tracker)", "Workflow Owner (Stage 2 recommendations)"],
+      "dual_control_required": false,
+      "escalation_path": ["Otzar Administrator → Workflow Owner / Vendor Admin", "Workflow Owner → Founder (for cross-org aha-moment expansions)"],
+      "DMW_scope_implications": [
+        "Approved aha moments propose per-role DMW scope priorities",
+        "Safe-fallback aha moments operate inside baseline DMW scope only",
+        "Slack-based aha moments scope to PERSONAL or ENTERPRISE wallet per ADR-0046 dual-context"
+      ],
+      "governance_review_points": [
+        "Admin must approve every aha-moment activation",
+        "Workflow Stage 2+ progression governance-bound per ADR-0081",
+        "Safe-fallback always available even when no connectors activate",
+        "C2 Slack OPERATING substrate enables immediate Slack catch-up approval"
+      ],
+      "safe_defaults": ["Suggest-only aha moments at review", "Admin-approved aha activation", "Safe-fallback always available", "Wave 6 matrix as ranking input only"],
+      "forbidden_defaults": ["Autonomous aha-moment activation", "Workforce-scoring inferences from aha-moment uptake", "Managerial-oversight monitoring of engagement", "Cross-tenant aha-moment fusion"],
+      "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+      "review_state": "PROPOSED_NOT_REVIEWED"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "./governance-review.schema.json",
+  "kind": "MapGovernanceReview",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapGovernanceReview",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Reviews are PROPOSED_NOT_REVIEWED. Slack already OPERATING at Foundation; admin can self-serve binding creation today. Other connectors require per-connector RULE 21 research arc + admin policy approval.",
+    "scope_defaults": ["TENANT_SCOPED", "GOVERNANCE_REVIEW_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED", "NO_CONNECTOR_ACTIVATION_FROM_REVIEW"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-governance-review/tool-map-governance-review.json",
+      "version_tag": "d4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed"],
+    "policy_purpose": "GOVERNANCE_REVIEW_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "review.tool-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapGovernanceReview",
+      "map_type": "ToolMap",
+      "name": "Tool Map Governance Review",
+      "description": "Surfaces D3 Tool Map recommendation regions for admin governance review. Slack-read-first ranks first because C2 runtime is LIVE (Slack OPERATING per Section 4 closeout). Other connectors require per-connector RULE 21 research arc.",
+      "human_readable_summary": "Admin reviews Slack + Google Workspace + Project Tracker activation candidates. Slack admin can self-serve today via /connectors page. Forbidden tools remain absolute.",
+      "model_usage_notes": "Slack admin approval can land immediately given C2 OPERATING substrate (Foundation PR #185 + CT PR #21). Other connectors land at their respective C-slice runtimes.",
+      "source_adr_refs": ["ADR-0082", "ADR-0084", "ADR-0080", "ADR-0026", "RULE 0"],
+      "consumes_recommendation_id": "recommendation.tool-map.v1",
+      "region_reviews": [
+        { "region_id": "tool.slack-read-first", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO", "REJECT"] },
+        { "region_id": "tool.google-workspace-read-first", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Workspace Super Admin", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO"] },
+        { "region_id": "tool.project-tracker-read-first", "admin_approval_required": true, "dual_control_required": false, "approval_chain_role": "Otzar Administrator + Engineering Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "DEFER_FOR_MORE_INFO"] },
+        { "region_id": "tool.forbidden-exclusion", "admin_approval_required": true, "dual_control_required": true, "approval_chain_role": "Otzar Administrator + Security Lead", "review_outcome_options": ["APPROVE", "APPROVE_WITH_CONDITIONS", "ESCALATE_TO_FOUNDER"] }
+      ],
+      "approval_chain": ["Otzar Administrator", "Workspace Super Admin (Google Workspace)", "Engineering Lead (Project Tracker)", "Security Lead (forbidden exclusions)"],
+      "dual_control_required": true,
+      "escalation_path": ["Otzar Administrator → Tool Vendor Admin", "Security Lead → Founder (for forbidden exclusion modifications)"],
+      "DMW_scope_implications": [
+        "Approved tools bound connector-DMW provenance per Wave 2.1 §24",
+        "Forbidden tools REJECT outcome cannot scope any DMW",
+        "Per-role tool usage constrains per-role DMW scope downstream"
+      ],
+      "governance_review_points": [
+        "Admin must approve every connector activation per ADR-0084",
+        "Per-region Map approval per ADR-0082 Amendment 1",
+        "Per-connector RULE 21 research arc completed before adapter approval",
+        "Risky writes (≥C6) mandatory dual-control per ADR-0026"
+      ],
+      "safe_defaults": ["Read-first defaults", "Write actions disabled by default", "Admin-approved connector activation only", "Wave 6 priority matrix as ranking input only"],
+      "forbidden_defaults": ["Autonomous connector activation", "Connector activation from billing entitlement alone", "Cross-tenant tool fusion", "Workforce-scoring inferences from tool-usage data"],
+      "allowed_consumers": ["DANDELION_GOVERNANCE_REVIEW_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_GOVERNANCE_REVIEW_REFERENCED when consumed", "future INVOKE_CONNECTOR + ACTION_* at C-runtime"],
+      "review_state": "PROPOSED_NOT_REVIEWED"
+    }
+  ]
+}
