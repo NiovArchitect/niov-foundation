@@ -750,8 +750,61 @@ authorization)**:
    NEVER invokes Wave 8). v1 vocabulary fully retired by
    clean replacement per ADR-0076 §17A; Foundation Wave 9
    API responses now emit vNext closed-vocab labels only.
-   `conversation_context_signals[]` reserved for the
-   governed listener substrate slice.
+   **Wave 10 Section 2 Action read-surface integration LIVE
+   2026-05-31** per ADR-0077 §8.4 three-state-lifecycle
+   honesty (simulation / proposed / executed) at
+   `[FOUNDER-SECTION-2-ACTION-READ-SURFACE-FOR-WAVE-10-CT-AUTH]`
+   2026-05-31. CT cockpit at `otzar-control-tower` PR #8
+   `ade4981` consumes Foundation's existing
+   `GET /api/v1/actions/:id` endpoint (LIVE per ADR-0057
+   §9 + §10 + `getActionForCaller`; SafeActionDetailView
+   per §10 forbidden-fields allowlist) verbatim with ZERO
+   Foundation backend changes. NEW `ActionLifecyclePanel`
+   embedded inside the Governed Transition panel after
+   Wave 8 returns an `action_id`; lazy TanStack Query
+   (`enabled: false`) triggered exclusively by user clicks
+   on the "Refresh action status" button (NO aggressive
+   polling); closed-vocab `actionLifecycleSummary()` maps
+   each Section 2 status → honest lifecycle copy
+   (PROPOSED → "Action proposed (not executed)"; APPROVED
+   → "Action approved by Section 2; scheduled for
+   execution by the Section 2 Action Runtime"; SCHEDULED
+   / RUNNING → current lifecycle; SUCCEEDED → "Action
+   completed by Section 2"; FAILED → "Action failed in
+   Section 2"; CANCELLED → "Action cancelled in Section
+   2"; REJECTED → "Action rejected by Section 2
+   (governance review denied)"; TIMED_OUT → "Action
+   timed out in Section 2"; EXPIRED → "Action expired in
+   Section 2 (approval window elapsed)"). NEW
+   `api.actions.getAction(actionId)` namespace extends
+   existing `src/lib/api.ts` `ApiResult<T>` pattern. NEW
+   type mirrors at `src/lib/types/foundation.ts`:
+   `ActionStatus` 10-value closed-vocab union mirroring
+   Foundation Prisma `ActionStatus` + `SafeActionView` +
+   `SafeActionDetailView` extending with `attempt_count`
+   + `last_result_summary` per ADR-0057 §9. Lifecycle
+   panel footer states: *"This Action detail is a
+   read-only lifecycle view. It does not approve, execute,
+   retry, or cancel the Action. Execution authority
+   remains with the Section 2 Action Runtime per ADR-
+   0057."* 16 NEW Section 2 lifecycle integration unit
+   tests passing (110 prior CT tests preserved verbatim;
+   126/126 total across 22 test files; zero regression);
+   typecheck + lint + build green. Wave 10 cockpit now
+   distinguishes all three lifecycle states honestly:
+   (1) simulation only — no Action proposed; (2) action
+   proposed (Wave 8 PROPOSED unverified) — UI surfaces
+   "Action proposed (not executed). Click 'Refresh action
+   status' to read Section 2's current view."; (3)
+   action lifecycle verified — UI surfaces the closed-
+   vocab Section 2 status copy. NO Execute button. NO
+   Approve button. NO Cancel button. NO Retry button. NO
+   Section 2 mutation surface in Wave 10. NO Section 2
+   bypass. NO new Foundation API. NO schema. NO new
+   audit literal. NO raw payload / secrets / policy
+   internals / raw audit / memory / transcript / prompt /
+   chain-of-thought exposure. `conversation_context_signals[]`
+   reserved for the governed listener substrate slice.
    Option C BEAM-orchestrated forward-substrate per
    ADR-0028 + ADR-0069 §6 re-verification (applies WHEN
    simulation needs LIVE concurrent message-passing agents
