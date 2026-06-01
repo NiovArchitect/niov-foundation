@@ -633,6 +633,7 @@ export {
   executeStarterPilotActivationForCaller,
   executeTeamActivationForCaller,
   executeBusinessActivationForCaller,
+  executeEnterpriseActivationForCaller,
 } from "./services/governance/dandelion-activation.service.js";
 export type {
   ActivationFailureCode,
@@ -642,6 +643,7 @@ export type {
   ActivationSuccess,
   TeamActivationInput,
   BusinessActivationInput,
+  EnterpriseActivationInput,
 } from "./services/governance/dandelion-activation.service.js";
 
 // escalation.service.ts re-exports -- D-2D-D10-2 substrate (CRUD +

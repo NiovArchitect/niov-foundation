@@ -137,7 +137,12 @@ export type ActivationResult = ActivationSuccess | ActivationFailure;
 // return ARCHETYPE_UNKNOWN until their respective implementation
 // slices land.
 // ────────────────────────────────────────────────────────────────
-const SUPPORTED_ARCHETYPES = new Set(["starter-pilot", "team", "business"]);
+const SUPPORTED_ARCHETYPES = new Set([
+  "starter-pilot",
+  "team",
+  "business",
+  "enterprise",
+]);
 const KNOWN_ARCHETYPES = new Set([
   "starter-pilot",
   "team",
@@ -149,6 +154,7 @@ const CATALOG_FILENAMES: Readonly<Record<string, string>> = Object.freeze({
   "starter-pilot": "starter-pilot-activation.json",
   team: "team-activation.json",
   business: "business-activation.json",
+  enterprise: "enterprise-activation.json",
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -665,6 +671,225 @@ export async function executeBusinessActivationForCaller(
       ok: false,
       code: "INVALID_GOOGLE_BINDING_INPUT",
       message: "business archetype requires google_display_name + google_secret_ref",
+    };
+  }
+
+  const callerOrgId = await getCallerOrgId(callerEntityId);
+  if (callerOrgId === null) {
+    return { ok: false, code: "CALLER_ENTITY_NOT_FOUND", message: "caller entity not found" };
+  }
+  const isAdmin = await callerHasAdminCapability(callerEntityId);
+  if (!isAdmin) {
+    return { ok: false, code: "NOT_ADMIN", message: "caller lacks can_admin_org capability" };
+  }
+
+  if (!SUPPORTED_ARCHETYPES.has(archetype) || !KNOWN_ARCHETYPES.has(archetype)) {
+    return {
+      ok: false,
+      code: "ARCHETYPE_UNKNOWN",
+      message: `archetype "${archetype}" is not supported at this slice`,
+    };
+  }
+  const planOrErr = loadActivationPlanFromDisk(archetype);
+  if ("error" in planOrErr) {
+    return { ok: false, code: planOrErr.error, message: planOrErr.message };
+  }
+  const plan = planOrErr;
+
+  const stepResults: ActivationStepResult[] = [];
+  for (const step of plan.activation_steps) {
+    const detailsAction = extractDetailsAction(step.audit_literal);
+    let auditDetails: Record<string, unknown> = {
+      action: detailsAction,
+      archetype,
+      plan_id: plan.id,
+      step_order: step.step_order,
+      step_id: step.step_id,
+      consumes_map_type: step.consumes_map_type,
+      human_authorization_required: step.human_authorization_required,
+    };
+    if (step.step_id === "step.connector.slack-binding-register") {
+      auditDetails = {
+        ...auditDetails,
+        connector_type: "SLACK_READ",
+        binding_display_name: slackDisplayName,
+        binding_secret_ref_name: slackSecretRef,
+      };
+    }
+    if (step.step_id === "step.connector.google-workspace-binding-register") {
+      auditDetails = {
+        ...auditDetails,
+        connector_type: "GOOGLE_WORKSPACE_READ",
+        binding_display_name: googleDisplayName,
+        binding_secret_ref_name: googleSecretRef,
+      };
+    }
+    let auditRowId: string;
+    try {
+      const auditRow = await writeAuditEvent({
+        event_type: "ADMIN_ACTION",
+        outcome: "SUCCESS",
+        actor_entity_id: callerEntityId,
+        target_entity_id: callerOrgId,
+        details: auditDetails,
+      });
+      auditRowId = auditRow.audit_id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.slice(0, 120) : "unknown";
+      return {
+        ok: false,
+        code: "AUDIT_WRITE_FAILED",
+        message: `audit emission failed at step ${step.step_order} (${step.step_id}): ${msg}`,
+      };
+    }
+    if (step.step_id === "step.connector.slack-binding-register") {
+      const workspaceId =
+        input.slack_workspace_id !== undefined &&
+        input.slack_workspace_id.trim().length > 0
+          ? input.slack_workspace_id.trim()
+          : slackDisplayName;
+      const registration = await registerConnectorBindingForOrg({
+        org_entity_id: callerOrgId,
+        actor_entity_id: callerEntityId,
+        body: {
+          type: "SLACK_READ",
+          display_name: slackDisplayName,
+          config: { use_real: false, workspace_id: workspaceId },
+          secret_ref: slackSecretRef,
+        },
+      });
+      if (!registration.ok) {
+        return {
+          ok: false,
+          code: "CONNECTOR_BINDING_FAILED",
+          message: `slack binding registration failed: ${registration.code}${registration.message ? " — " + registration.message : ""}`,
+        };
+      }
+    }
+    if (step.step_id === "step.connector.google-workspace-binding-register") {
+      const workspaceDomain =
+        input.google_workspace_domain !== undefined &&
+        input.google_workspace_domain.trim().length > 0
+          ? input.google_workspace_domain.trim()
+          : googleDisplayName;
+      const registration = await registerConnectorBindingForOrg({
+        org_entity_id: callerOrgId,
+        actor_entity_id: callerEntityId,
+        body: {
+          type: "GOOGLE_WORKSPACE_READ",
+          display_name: googleDisplayName,
+          config: { use_real: false, workspace_domain: workspaceDomain },
+          secret_ref: googleSecretRef,
+        },
+      });
+      if (!registration.ok) {
+        return {
+          ok: false,
+          code: "CONNECTOR_BINDING_FAILED",
+          message: `google workspace binding registration failed: ${registration.code}${registration.message ? " — " + registration.message : ""}`,
+        };
+      }
+    }
+    stepResults.push({
+      step_order: step.step_order,
+      step_id: step.step_id,
+      audit_literal: step.audit_literal,
+      audit_event_id: auditRowId,
+    });
+  }
+
+  const finalStep = stepResults[stepResults.length - 1];
+  if (
+    finalStep === undefined ||
+    finalStep.audit_literal !== "ADMIN_ACTION:STARTER_ENVELOPE_ACTIVATED"
+  ) {
+    return {
+      ok: false,
+      code: "CATALOG_MALFORMED",
+      message: "final step audit_literal is not STARTER_ENVELOPE_ACTIVATED",
+    };
+  }
+
+  return {
+    ok: true,
+    archetype,
+    plan_id: plan.id,
+    steps: stepResults,
+    activation_audit_event_id: finalStep.audit_event_id,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────
+// Enterprise-archetype activation input shape.
+//
+// The enterprise archetype's 14-step catalog requires the same two
+// real ConnectorBinding registrations as business (steps 8 + 9):
+// SLACK_READ + GOOGLE_WORKSPACE_READ via the existing C2 + C3
+// substrates. Steps 5 (delegated authority), 6 (break-glass
+// registry enable), 7 (LawfulBasis attestation surface enable),
+// 10 (DUAL-CONTROL Stage-2 enterprise templates), 11 (DUAL-CONTROL
+// regulator-grade audit tier), and 12 (board observer scope) all
+// emit audit-only at this slice — the underlying tables
+// (BreakGlassGrant registry / LawfulBasisAttestation / regulator
+// grade audit tier / BoardObserverScope) are forward-substrate.
+//
+// The DUAL-CONTROL audit literals at steps 10 + 11 are emitted as-
+// is at this slice; the actual DUAL-CONTROL approval flow per
+// ADR-0026 is forward-substrate (a future slice will wire the
+// dual-control middleware preHandler in front of the route). Until
+// that slice lands, the literals truthfully record the catalog's
+// design-intent that these steps are dual-control-bound; the audit
+// chain remains hash-verifiable.
+//
+// Partial-failure semantics: identical to business (Slack binding
+// stays LIVE if Google fails; failure message names which
+// connector failed; operator soft-deletes orphaned binding via the
+// existing /api/v1/org/connectors/:id admin route).
+// ────────────────────────────────────────────────────────────────
+export interface EnterpriseActivationInput {
+  /** display_name for the SLACK_READ binding (step 8). */
+  slack_display_name: string;
+  /** Env-var NAME for the SLACK_READ binding secret_ref (step 8). */
+  slack_secret_ref: string;
+  /** Optional Slack workspace_id config; defaults to slack_display_name. */
+  slack_workspace_id?: string;
+  /** display_name for the GOOGLE_WORKSPACE_READ binding (step 9). */
+  google_display_name: string;
+  /** Env-var NAME for the GOOGLE_WORKSPACE_READ binding secret_ref (step 9). */
+  google_secret_ref: string;
+  /** Optional Google workspace_domain config; defaults to google_display_name. */
+  google_workspace_domain?: string;
+}
+
+// ────────────────────────────────────────────────────────────────
+// executeEnterpriseActivationForCaller — fourth archetype entry
+// point. Completes the D6 4-archetype series at runtime. Walks the
+// 14 enterprise-archetype catalog steps. Steps 8 + 9 perform real
+// downstream side effects (Slack + Google connector binding
+// registrations); all other steps emit audit only.
+// ────────────────────────────────────────────────────────────────
+export async function executeEnterpriseActivationForCaller(
+  callerEntityId: string,
+  input: EnterpriseActivationInput,
+): Promise<ActivationResult> {
+  const archetype = "enterprise";
+
+  const slackDisplayName = input.slack_display_name?.trim?.() ?? "";
+  const slackSecretRef = input.slack_secret_ref?.trim?.() ?? "";
+  if (slackDisplayName.length === 0 || slackSecretRef.length === 0) {
+    return {
+      ok: false,
+      code: "INVALID_SLACK_BINDING_INPUT",
+      message: "enterprise archetype requires slack_display_name + slack_secret_ref",
+    };
+  }
+  const googleDisplayName = input.google_display_name?.trim?.() ?? "";
+  const googleSecretRef = input.google_secret_ref?.trim?.() ?? "";
+  if (googleDisplayName.length === 0 || googleSecretRef.length === 0) {
+    return {
+      ok: false,
+      code: "INVALID_GOOGLE_BINDING_INPUT",
+      message: "enterprise archetype requires google_display_name + google_secret_ref",
     };
   }
 
