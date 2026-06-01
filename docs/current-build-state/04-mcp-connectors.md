@@ -12,6 +12,29 @@ INVOKE_CONNECTOR Actions against per-org-registered external
 adapters, every call audited + every secret kept as an env-var
 reference (never raw-at-rest).
 
+## Connector Implementation-Readiness Catalog LANDED 2026-06-01
+
+Per `[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]`. NEW `docs/connector-readiness/` (9 files, 7 catalog items) + NEW `scripts/validate-connector-readiness.mjs` validator (pure Node ESM; mirrors `validate-entitlement-catalog.mjs` sentence-level negation + subtree skip). Validator green: 9/9 files, 7 items, 7/7 required IDs, 0 errors.
+
+Five connector readiness items + matrix:
+
+| Rank | Connector | Composite | First slice | Family |
+|---|---|---|---|---|
+| 1 | **Slack** | **8.65** | **C2** | Collaboration |
+| 2 | Linear | 7.65 | C4-B | Project / Engineering |
+| 3 | Jira Cloud | 7.55 | C4-A | Project / Engineering |
+| 4 | Google Workspace | 7.50 | C3 | Workspace / Knowledge |
+| 5 | GitHub | 7.40 | C-GitHub | Project / Engineering |
+| 6 | Microsoft 365 | 7.10 | C5 | Workspace / Knowledge + Collaboration |
+
+Composite formula: `first_week_aha_value*0.18 + API_maturity*0.14 + read_value*0.14 + workflow_binding_value*0.13 + event_webhook_value*0.09 + auditability*0.09 + MCP_fit*0.06 + (10-OAuth_complexity)*0.05 + (10-write_risk)*0.04 + (10-enterprise_admin_complexity)*0.03 + (10-data_sensitivity)*0.02 + (10-implementation_complexity)*0.02 + (10-DMW_scope_complexity)*0.01`. 13-dimension scoring per connector.
+
+Every connector readiness item carries: official vendor docs cited verbatim (Slack docs.slack.dev / Google developers.google.com / Atlassian developer.atlassian.com / Linear developers.linear.app / Microsoft Graph learn.microsoft.com / GitHub docs.github.com) · MCP posture · OAuth model · admin consent model · read capabilities · write capabilities (disabled by default) · webhook / event capabilities · risky write actions · `default_mode: READ_FIRST` · required approval gates · dual-control recommendations · DMW scope implications per ADR-0046 dual-context · workflow purpose bindings per ADR-0081 5-stage maturity · billing pack mapping per ADR-0083 Amendment 1 §9.4 · Dandelion map dependencies (Tool / Workflow / Authority / Memory / Risk) per ADR-0082 Amendment 1 · audit expectations (existing literals; no new audit literal) · secret handling per ADR-0024 + ADR-0019 · no-leak rules · tenant isolation · rate limit notes · testing strategy · implementation risks · first slice recommendation · `not_implemented_yet: true`.
+
+**Graduation:** Connectors `PREVIEW_ONLY` → **`RECOMMENDATION_READY`**. Per-connector next step: `RUNTIME_READY` at C-slice PR landing; `OPERATING` after first real customer-bound activation.
+
+**Recommended next slices:** GOVSEC.6 (agent abuse / confused-deputy hardening) before/alongside C2 → C2 Slack read-first runtime → D3 Dandelion Recommendation substrate.
+
 ## Current status (PRODUCTION-GRADE COMPLETE for Foundation backend scope — Waves 1+2+3+4+5+7 LIVE + Hardening B LIVE)
 
 **Provider abstraction + ConnectorBinding model + admin routes +

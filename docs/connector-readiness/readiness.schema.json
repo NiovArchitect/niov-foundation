@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://niovlabs.com/foundation/connector-readiness/readiness.schema.json",
+  "title": "NIOV Foundation Connector Implementation-Readiness Schema",
+  "description": "Validation schema for the connector implementation-readiness catalog at docs/connector-readiness/. Each file is a wrapper object containing kind + catalog_version + envelope_defaults + items[]. Each item captures the RULE 21 research arc inputs for one connector or connector family (OAuth model + app installation model + admin consent model + scopes + read/write capabilities + webhooks + rate limits + MCP posture + governance + DMW scope + audit + secret handling + readiness scoring) and is preparation substrate for C2+ runtime decisions. Per ADR-0084: per-connector RULE 21 research arc gates real adapter implementation; this catalog is the substrate for that gate.",
+  "type": "object",
+  "required": ["kind", "catalog_version", "envelope_defaults", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "envelope_defaults": { "$ref": "#/definitions/EnvelopeDefaults" },
+    "kind": {
+      "type": "string",
+      "enum": ["ConnectorReadiness", "ConnectorReadinessMatrix"]
+    },
+    "catalog_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/ReadinessItem" }
+    }
+  },
+  "definitions": {
+    "ReadinessItem": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "status",
+        "object_type",
+        "connector_name",
+        "connector_family",
+        "source_adr_refs",
+        "official_docs_refs",
+        "MCP_posture",
+        "OAuth_model",
+        "app_installation_model",
+        "admin_consent_model",
+        "read_capabilities",
+        "write_capabilities",
+        "webhook_or_event_capabilities",
+        "risky_write_actions",
+        "default_mode",
+        "required_approval_gates",
+        "dual_control_recommendations",
+        "DMW_scope_implications",
+        "workflow_purpose_bindings",
+        "billing_pack_mapping",
+        "Dandelion_map_dependencies",
+        "audit_expectations",
+        "secret_handling_requirements",
+        "no_leak_rules",
+        "tenant_isolation_requirements",
+        "rate_limit_notes",
+        "testing_strategy",
+        "implementation_risks",
+        "first_slice_recommendation",
+        "readiness_scoring",
+        "not_implemented_yet"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)+\\.v[0-9]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "$ref": "#/definitions/StatusEnum" },
+        "object_type": { "type": "string", "enum": ["ConnectorReadiness", "ConnectorReadinessMatrix"] },
+        "connector_name": { "type": "string", "minLength": 1 },
+        "connector_family": { "type": "string", "minLength": 1 },
+        "source_adr_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(ADR-[0-9]{4}|RULE [0-9]+|US [0-9,]+)$" }
+        },
+        "official_docs_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "MCP_posture": { "type": "string", "minLength": 1 },
+        "OAuth_model": { "type": "string", "minLength": 1 },
+        "app_installation_model": { "type": "string", "minLength": 1 },
+        "admin_consent_model": { "type": "string", "minLength": 1 },
+        "read_capabilities": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "write_capabilities": { "type": "array", "items": { "type": "string" } },
+        "webhook_or_event_capabilities": { "type": "array", "items": { "type": "string" } },
+        "risky_write_actions": { "type": "array", "items": { "type": "string" } },
+        "default_mode": { "type": "string", "const": "READ_FIRST" },
+        "required_approval_gates": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "dual_control_recommendations": { "type": "array", "items": { "type": "string" } },
+        "DMW_scope_implications": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "workflow_purpose_bindings": { "type": "array", "items": { "type": "string" } },
+        "billing_pack_mapping": { "type": "string", "minLength": 1 },
+        "Dandelion_map_dependencies": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "audit_expectations": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "secret_handling_requirements": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "no_leak_rules": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "tenant_isolation_requirements": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "rate_limit_notes": { "type": "string" },
+        "testing_strategy": { "type": "array", "items": { "type": "string" } },
+        "implementation_risks": { "type": "array", "items": { "type": "string" } },
+        "first_slice_recommendation": { "type": "string" },
+        "readiness_scoring": { "$ref": "#/definitions/ReadinessScoring" },
+        "not_implemented_yet": { "type": "boolean", "const": true }
+      },
+      "additionalProperties": true
+    },
+    "ReadinessScoring": {
+      "type": "object",
+      "required": [
+        "first_week_aha_value",
+        "API_maturity",
+        "OAuth_complexity",
+        "read_value",
+        "write_risk",
+        "event_webhook_value",
+        "enterprise_admin_complexity",
+        "data_sensitivity",
+        "MCP_fit",
+        "implementation_complexity",
+        "auditability",
+        "DMW_scope_complexity",
+        "workflow_binding_value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "first_week_aha_value": { "type": "number", "minimum": 0, "maximum": 10 },
+        "API_maturity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "OAuth_complexity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "read_value": { "type": "number", "minimum": 0, "maximum": 10 },
+        "write_risk": { "type": "number", "minimum": 0, "maximum": 10 },
+        "event_webhook_value": { "type": "number", "minimum": 0, "maximum": 10 },
+        "enterprise_admin_complexity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "data_sensitivity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "MCP_fit": { "type": "number", "minimum": 0, "maximum": 10 },
+        "implementation_complexity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "auditability": { "type": "number", "minimum": 0, "maximum": 10 },
+        "DMW_scope_complexity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "workflow_binding_value": { "type": "number", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "StatusEnum": { "type": "string", "enum": ["ACCEPTED", "PROPOSED", "DEPRECATED"] },
+    "EnvelopeDefaults": {
+      "type": "object",
+      "required": [
+        "object_type",
+        "human_readable_summary",
+        "model_usage_notes",
+        "scope_defaults",
+        "permission_defaults",
+        "provenance",
+        "audit_expectations",
+        "policy_purpose",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "sensitivity_level"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "object_type": { "type": "string" },
+        "human_readable_summary": { "type": "string" },
+        "model_usage_notes": { "type": "string" },
+        "scope_defaults": { "type": "array", "items": { "type": "string" } },
+        "permission_defaults": { "type": "array", "items": { "type": "string" } },
+        "provenance": {
+          "type": "object",
+          "required": ["authored_by", "source", "version_tag", "captured_at", "authority"],
+          "properties": {
+            "authored_by": { "type": "string" },
+            "source": { "type": "string" },
+            "version_tag": { "type": "string" },
+            "captured_at": { "type": "string" },
+            "authority": { "type": "string" }
+          }
+        },
+        "audit_expectations": { "type": "array", "items": { "type": "string" } },
+        "policy_purpose": { "type": "string" },
+        "allowed_consumers": { "type": "array", "items": { "type": "string" } },
+        "forbidden_consumers": { "type": "array", "items": { "type": "string" } },
+        "sensitivity_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }
+      }
+    }
+  }
+}

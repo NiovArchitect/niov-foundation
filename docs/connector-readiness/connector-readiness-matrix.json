@@ -1,0 +1,137 @@
+{
+  "$schema": "./readiness.schema.json",
+  "kind": "ConnectorReadinessMatrix",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "ConnectorReadinessMatrix",
+    "human_readable_summary": "Connector implementation-readiness matrix per ADR-0084. Deterministic weighted ranking across 13 scoring dimensions. Suggest-only — first real connector decision (C2) remains Founder-gated.",
+    "model_usage_notes": "Higher composite score = more ready for first-slice implementation. Composite weighting prioritizes first-week aha value + API maturity + read value + workflow binding while penalizing write risk + implementation complexity + DMW scope complexity. Treat ranking as a recommendation surface, never as authority.",
+    "scope_defaults": ["TENANT_SCOPED"],
+    "permission_defaults": ["READ_FIRST"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/connector-readiness/connector-readiness-matrix.json",
+      "version_tag": "connector-readiness-matrix-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "matrix.connector-readiness.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ConnectorReadinessMatrix",
+      "connector_name": "Connector Readiness Matrix",
+      "connector_family": "ALL",
+      "source_adr_refs": ["ADR-0084", "ADR-0083", "ADR-0082", "ADR-0080", "RULE 21"],
+      "official_docs_refs": [
+        "see per-connector readiness files in docs/connector-readiness/"
+      ],
+      "MCP_posture": "Matrix-level: per-connector MCP availability captured in individual readiness files; matrix does not score MCP availability separately.",
+      "OAuth_model": "Matrix-level: per-connector OAuth model captured in individual readiness files.",
+      "app_installation_model": "Matrix-level: per-connector installation model captured in individual readiness files.",
+      "admin_consent_model": "Matrix-level: per-connector admin consent model captured in individual readiness files.",
+      "read_capabilities": ["Matrix-level: see per-connector readiness files"],
+      "write_capabilities": [],
+      "webhook_or_event_capabilities": [],
+      "risky_write_actions": [],
+      "default_mode": "READ_FIRST",
+      "required_approval_gates": [
+        "Founder authorization for any C2+ runtime activation",
+        "Map-region approval per ADR-0082 Amendment 1",
+        "Per-connector RULE 21 research arc completion (this catalog is the substrate; runtime authorization remains separate)"
+      ],
+      "dual_control_recommendations": [],
+      "DMW_scope_implications": ["Matrix is recommendation substrate; per-connector DMW implications captured in individual readiness files."],
+      "workflow_purpose_bindings": [],
+      "billing_pack_mapping": "Cross-family: see per-connector files.",
+      "Dandelion_map_dependencies": [
+        "Tool Map must approve each ranked connector individually",
+        "Workflow Map must approve workflows by purpose for each ranked connector",
+        "Authority Map must approve write authority for each ranked connector",
+        "Memory / DMW Map must approve memory scope for each ranked connector",
+        "Risk Map must clear each ranked connector"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:CONNECTOR_READINESS_REFERENCED at consume time"],
+      "secret_handling_requirements": ["Matrix is metadata-only; secrets are per-connector"],
+      "no_leak_rules": ["Matrix is metadata-only; no payload data"],
+      "tenant_isolation_requirements": ["Matrix is reference data; per-connector tenant isolation per individual files"],
+      "rate_limit_notes": "Matrix is reference data; rate limits per individual connector files.",
+      "testing_strategy": ["Validator + matrix-structure tests"],
+      "implementation_risks": [
+        "Matrix ranking is a recommendation surface, not authority",
+        "C2 first real connector decision remains Founder-gated",
+        "Substrate-honest disclaimer: ranking reflects 2026-06-01 research arc captured at this commit; vendor APIs evolve"
+      ],
+      "first_slice_recommendation": "By matrix composite: Slack (top) → Linear → Jira → Google Workspace → GitHub → Microsoft 365. Recommend C2 = Slack read-first runtime per ADR-0084 first-connector candidate arc + Wave 6 matrix alignment. Recommend GOVSEC.6 before or alongside C2 to harden against agent-abuse / confused-deputy.",
+      "readiness_scoring": {
+        "first_week_aha_value": 0,
+        "API_maturity": 0,
+        "OAuth_complexity": 0,
+        "read_value": 0,
+        "write_risk": 0,
+        "event_webhook_value": 0,
+        "enterprise_admin_complexity": 0,
+        "data_sensitivity": 0,
+        "MCP_fit": 0,
+        "implementation_complexity": 0,
+        "auditability": 0,
+        "DMW_scope_complexity": 0,
+        "workflow_binding_value": 0
+      },
+      "not_implemented_yet": true,
+      "matrix_rankings": [
+        {
+          "rank": 1,
+          "connector_name": "Slack",
+          "composite_score": 8.65,
+          "first_slice_label": "C2",
+          "recommendation": "First real connector candidate per ADR-0084 + Wave 6 matrix"
+        },
+        {
+          "rank": 2,
+          "connector_name": "Linear",
+          "composite_score": 7.65,
+          "first_slice_label": "C4-B",
+          "recommendation": "Strong second-tier read-first candidate; MCP fit + lower OAuth complexity"
+        },
+        {
+          "rank": 3,
+          "connector_name": "Jira Cloud",
+          "composite_score": 7.55,
+          "first_slice_label": "C4-A",
+          "recommendation": "Project / Engineering pack anchor; coordinate with Linear under Project Tracker family"
+        },
+        {
+          "rank": 4,
+          "connector_name": "Google Workspace",
+          "composite_score": 7.50,
+          "first_slice_label": "C3",
+          "recommendation": "High read value but high admin complexity; pair domain-wide-delegation review with C3 activation"
+        },
+        {
+          "rank": 5,
+          "connector_name": "GitHub",
+          "composite_score": 7.40,
+          "first_slice_label": "C-GitHub",
+          "recommendation": "Strong auditability + MCP fit; production-effect write risk requires late-C-slice + dual-control"
+        },
+        {
+          "rank": 6,
+          "connector_name": "Microsoft 365",
+          "composite_score": 7.10,
+          "first_slice_label": "C5",
+          "recommendation": "Highest enterprise admin complexity + write risk; defer until after Google Workspace + Slack established"
+        }
+      ],
+      "composite_formula": "Composite = (first_week_aha_value*0.18 + API_maturity*0.14 + read_value*0.14 + workflow_binding_value*0.13 + event_webhook_value*0.09 + auditability*0.09 + MCP_fit*0.06 + (10-OAuth_complexity)*0.05 + (10-write_risk)*0.04 + (10-enterprise_admin_complexity)*0.03 + (10-data_sensitivity)*0.02 + (10-implementation_complexity)*0.02 + (10-DMW_scope_complexity)*0.01). Weights bias toward read-first first-week-value + auditability while penalizing implementation friction.",
+      "suggest_only_disclaimer": "This matrix is suggest-only. No runtime connector is implemented. C2 real connector remains Founder-gated. Final selection should consider customer demand signals + Dandelion map outputs + GOVSEC.6 readiness in addition to this matrix."
+    }
+  ]
+}

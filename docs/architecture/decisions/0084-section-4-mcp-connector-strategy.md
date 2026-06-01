@@ -350,3 +350,15 @@ The implementation roadmap (D2-D8 Dandelion · B2-B8 Billing · C2-C9+ Connector
 2. **B2 — Static entitlement catalog** (bounded; eligible for autonomous build if Founder confirms).
 3. **D2 — Dandelion Assessment substrate** (`DandelionAssessment` Prisma model + admin-only routes; Founder authorization at slice).
 4. **Wave 2.1 expansion to additional roles** (substrate-deepening; lower priority per autonomous-build directive).
+
+### Connector Implementation-Readiness Catalog LANDED 2026-06-01
+
+Per `[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]`. NEW `docs/connector-readiness/` directory (9 files: README + JSON Schema + 5 connector files for Slack / Google Workspace / Jira+Linear / Microsoft 365 / GitHub + matrix JSON + matrix Markdown) + NEW `scripts/validate-connector-readiness.mjs` validator. RULE 21 research arc captured at 2026-06-01 against official vendor docs (docs.slack.dev / developers.google.com / developer.atlassian.com / developers.linear.app / learn.microsoft.com / docs.github.com). Validator green: 9/9 files, 7 items (5 connectors + Linear sub-item + matrix), 7/7 required IDs, 0 errors.
+
+Every connector item carries: official docs cited verbatim + MCP posture + OAuth model + app installation model + admin consent model + read capabilities + write capabilities (disabled by default) + webhook / event capabilities + risky write actions + `default_mode: READ_FIRST` (enforced) + required approval gates + dual-control recommendations + DMW scope implications + workflow purpose bindings per ADR-0081 + billing pack mapping per ADR-0083 Amendment 1 §9.4 + Dandelion map dependencies (Tool / Workflow / Authority / Memory / Risk) + audit expectations (existing literals; no new audit literal) + secret handling per ADR-0024 + ADR-0019 + no-leak rules + tenant isolation + rate limit notes + testing strategy + implementation risks + first slice recommendation + 13-dimension `readiness_scoring` + `not_implemented_yet: true` (enforced).
+
+Matrix ranking (composite weighted across 13 dimensions; formula documented at `connector-readiness-matrix.md`): **Slack 8.65 (C2) · Linear 7.65 (C4-B) · Jira Cloud 7.55 (C4-A) · Google Workspace 7.50 (C3) · GitHub 7.40 (C-GitHub) · Microsoft 365 7.10 (C5)**.
+
+Substrate-honest disclaimer canonical: research captured 2026-06-01; vendor APIs evolve (Slack classic-apps deprecation Nov 2026; Atlassian points-based rate limits enforcement March 2026; etc.). Per-connector readiness re-validation required at each C-slice pre-flight. Suggest-only — C2 first real connector activation remains Founder-gated.
+
+The readiness catalog graduates Section 4 from `PREVIEW_ONLY` (strategy ADR + Wave 6 matrix) to **`RECOMMENDATION_READY`**. Per-connector next step: `RUNTIME_READY` at C-slice PR landing; `OPERATING` after first real customer-bound activation. Recommended next slices: GOVSEC.6 (agent abuse / confused-deputy hardening) before/alongside C2 → C2 Slack read-first runtime → D3 Dandelion Recommendation substrate. NEW `docs/current-build-state/04-mcp-connectors.md` extended with the readiness catalog summary at the top.
