@@ -1,8 +1,8 @@
 # ADR-0080 — Out-of-the-Box Role, Tool, Workflow, Connector, and Dandelion Onboarding Ontology for Digital Twins
 
-**Status:** Accepted 2026-06-01
-**Nature:** Design-only. No code. No schema. No routes. No seed data. No runtime behavior. No Control Tower UI. No connector implementation. No LLM/Python/BEAM. No new audit literal. No mutation of existing `dandelion.service.ts`.
-**Founder authorization:** `[FOUNDER-ADR-0080-OOTB-DANDELION-ONTOLOGY-DESIGN-ONLY-AUTH]`
+**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (governed context envelope addendum — Wave 2 lands the catalog with envelope metadata; see §17)
+**Nature:** Design-only at Wave 1; Wave 2 static seed catalog accompanies (no code, no schema, no routes, no runtime behavior). No Control Tower UI. No connector implementation. No LLM/Python/BEAM. No new audit literal. No mutation of existing `dandelion.service.ts`.
+**Founder authorization:** `[FOUNDER-ADR-0080-OOTB-DANDELION-ONTOLOGY-DESIGN-ONLY-AUTH]` (Wave 1) · `[FOUNDER-ADR-0080-WAVE-2-STATIC-SEED-CATALOG-AUTH]` (Wave 2) · `[FOUNDER-ADR-0080-WAVE-2-ADDENDUM-GOVERNED-CONTEXT-TRANSACTION-ENVELOPE]` (Wave 2 envelope amendment)
 **Parent doctrine:** ADR-0048 (governed personalization-orchestration), ADR-0052 (Otzar DGI), ADR-0027 (governance), ADR-0070 (regulator-ready Foundation), ADR-0069 (BEAM substrate-coherence law).
 
 ---
@@ -1109,3 +1109,82 @@ This ADR is authorized at the Founder tier under
 Subsequent waves (§13) require their own Founder authorization.
 
 After this ADR lands, the recommended next slice is **Wave 2 — static seed catalog** with Executive Assistant as the deepest first worked example. **Do not implement Wave 2 automatically.** Stop and report; await Founder authorization.
+
+---
+
+## 17. Amendment 1 — Wave 2 closeout + governed context envelope doctrine (2026-06-01)
+
+**Authority:** `[FOUNDER-ADR-0080-WAVE-2-STATIC-SEED-CATALOG-AUTH]` + `[FOUNDER-ADR-0080-WAVE-2-ADDENDUM-GOVERNED-CONTEXT-TRANSACTION-ENVELOPE]` (Founder authorization per RULE 20).
+
+### 17.1 Wave 2 closeout
+
+Wave 2 (static seed catalog) landed at `docs/ootb-catalog/`:
+
+- `catalog.schema.json` — JSON Schema with universal envelope + closed-vocab enums.
+- `roles.json` — 15 RoleTemplate entries; **Executive Assistant deepest worked example** per §8.
+- `departments.json` — 10 DepartmentTemplate entries.
+- `company-variants.json` — 10 IndustryVariant + 5 CompanySizeVariant entries.
+- `tools.json` — ~95 ToolProfile entries across 14 categories per §7.
+- `workflows.json` — 30 WorkflowTemplate entries per Founder workflow list.
+- `connector-presets.json` — 14 ConnectorPreset entries (all read-first).
+- `dandelion-flow-templates.json` — 1 canonical three-tier `dandelionFlow.company-department-user-activation.v1`.
+- `scripts/validate-ootb-catalog.mjs` — pure Node ESM validator (parse, uniqueness, cross-references, envelope completeness, forbidden-phrase scan, EA SAP Concur + Travel Booking + Expense Shell presence, canonical line).
+- `docs/ootb-catalog/README.md` — usage + envelope doctrine + Wave 3 consumption notes.
+
+**Out-of-scope** (preserved): no Prisma schema, no runtime behavior, no routes, no Control Tower UI, no connector code, no LLM, no Python, no BEAM, no new audit literal, no mutation to existing `apps/api/src/services/governance/dandelion.service.ts`, no `package.json` script entry (validator runs manually per Founder authorization on CI-churn risk).
+
+### 17.2 Governed context envelope doctrine (Founder addendum)
+
+The catalog format (JSON) is **not** the moat. The **governed context envelope** is.
+
+> *Templates describe useful defaults. Governed envelopes define how those defaults may be used.*
+>
+> *File format is an implementation detail. Scoped authorization, provenance, permissions, auditability, and context boundaries are the real substrate.*
+>
+> *For AI agents, the unit of value is not a JSON object. It is a governed context/transaction envelope that carries identity, scope, purpose, permissions, provenance, policy, and audit obligations.*
+>
+> *Dandelion does not activate raw templates. Dandelion assembles governed starter envelopes for Foundation governance to authorize.*
+
+Every Wave 2 catalog file carries an `envelope_defaults` block stamping each item with 13 envelope fields: `object_type`, `human_readable_summary`, `model_usage_notes`, `scope_defaults`, `permission_defaults`, `provenance`, `audit_expectations`, `policy_purpose`, `allowed_consumers`, `forbidden_consumers`, `sensitivity_level`, `adaptation_rules`, `override_rules`. The schema (`catalog.schema.json`) enforces presence; the validator enforces non-empty values. Per-item overrides take precedence when present (per Founder addendum allowance for file-level compactness).
+
+### 17.3 Future GovernedContextEnvelope shape (forward-substrate)
+
+Future Wave 5+ DigitalTwinStarterProfile attachment will materialize a runtime envelope per Twin. The conceptual future shape (NOT implemented in Wave 2; documented for forward-substrate continuity):
+
+```
+GovernedContextEnvelope:
+  envelope_id, envelope_version, object_type, object_id, object_version,
+  tenant_or_org_scope, entity_scope, department_scope, role_scope,
+  purpose, policy_purpose, lawful_basis_required,
+  permission_bundle_refs, delegated_authority_refs, connector_preset_refs,
+  workflow_refs, source_template_refs,
+  provenance, created_by, approved_by, last_reviewed_at,
+  expiration_or_review_window, sensitivity_level, retention_class,
+  audit_requirements, no_leak_rules,
+  allowed_consumers, forbidden_consumers,
+  runtime_activation_state, human_override_state, governance_status,
+  payload_ref
+```
+
+The payload may be JSON, YAML, Markdown, Protobuf, Arrow, a database row, or another representation. The envelope is what governs agent use. A connector preset is never just "the Slack connector" — it is "Slack read-first preset for a scoped role/workflow, under a permission bundle, with safe read surfaces, disabled write actions, audit expectations, and explicit activation requirements."
+
+### 17.4 Connector implication
+
+`ConnectorPreset` entries in Wave 2 already encode envelope-aware metadata. The Wave 7 first-real-connector implementation (separate Founder authorization + RULE 21 research arc) will consume the preset's `envelope_defaults` + per-item `secret_requirements` + `production_enablement_checklist` to materialize the runtime envelope.
+
+### 17.5 Dandelion implication
+
+Wave 4 Dandelion recommendation engine (separate Founder authorization) will produce a `DigitalTwinStarterProfile` whose **assembly** is the governed envelope — not raw template selection. Every governance review point in `dandelionFlow.company-department-user-activation.v1.governance_review_points` is an envelope checkpoint.
+
+### 17.6 Wave 3 recommendation (subject to Founder authorization)
+
+**Recommended next slice:** Wave 3 — Control Tower / Dandelion **read-only preview**.
+
+Wave 3 lands a CT visualization of the Wave 2 catalog (browse roles, departments, tools, workflows, presets; step through the three-tier Dandelion flow). **No permission grants. No connector enablement. Only display.** Wave 3 closes the third Section 10 hard launch blocker at the *visualization* register.
+
+Alternatives Founder may authorize instead:
+- **Wave 6** — Dandelion-driven connector-priority matrix output (still suggest-only).
+- **Section 10 operational hardening pass** (rollback runbook + admin bootstrap runbook + smoke tests; can land in parallel).
+- **Section 8 Billing ADR draft** (Founder pricing/billing-provider decision required first).
+
+**Do not implement Wave 3 automatically.** Stop and report.

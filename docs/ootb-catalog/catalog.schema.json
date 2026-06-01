@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://niovlabs.com/foundation/ootb-catalog/catalog.schema.json",
+  "title": "NIOV Foundation OOTB Static Seed Catalog Schema",
+  "description": "Validation schema for ADR-0080 Wave 2 static seed catalog files at docs/ootb-catalog/. Each catalog file is a wrapper object containing kind + catalog_version + items[]. Each item has a universal envelope (id / version / status / name / description / governance_notes / safe_defaults / forbidden_defaults / source_adr_refs) plus kind-specific fields. Closed-vocab enums are strict; per-item kind-specific extra fields are permitted (additive future-friendly).",
+  "type": "object",
+  "required": ["kind", "catalog_version", "envelope_defaults", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "envelope_defaults": { "$ref": "#/definitions/EnvelopeDefaults" },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "RoleTemplate",
+        "DepartmentTemplate",
+        "CompanyTemplate",
+        "ToolProfile",
+        "WorkflowTemplate",
+        "ConnectorPreset",
+        "DelegatedAuthorityProfile",
+        "PermissionBundle",
+        "OnboardingQuestionSet",
+        "AhaMomentPack",
+        "SafeFallbackMode",
+        "OrgChartRelationshipTemplate",
+        "IndustryVariant",
+        "CompanySizeVariant",
+        "DandelionFlowTemplate",
+        "DigitalTwinStarterProfileTemplate"
+      ]
+    },
+    "catalog_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/CatalogItem" }
+    }
+  },
+  "definitions": {
+    "CatalogItem": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "status",
+        "name",
+        "description",
+        "governance_notes",
+        "safe_defaults",
+        "forbidden_defaults",
+        "source_adr_refs"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-z][a-zA-Z0-9_-]*)+\\.v[0-9]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "$ref": "#/definitions/StatusEnum" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "minLength": 1 },
+        "governance_notes": { "type": "string", "minLength": 1 },
+        "safe_defaults": { "type": "array", "items": { "type": "string" } },
+        "forbidden_defaults": { "type": "array", "items": { "type": "string" } },
+        "source_adr_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(ADR-[0-9]{4}|RULE [0-9]+|US [0-9,]+)$" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "StatusEnum": {
+      "type": "string",
+      "enum": ["ACCEPTED", "PROPOSED", "DEPRECATED"]
+    },
+    "EnvelopeDefaults": {
+      "description": "File-level governed context envelope metadata applied by default to every item in items[]. Per RULE 20 Founder authorization [FOUNDER-ADR-0080-WAVE-2-ADDENDUM-GOVERNED-CONTEXT-TRANSACTION-ENVELOPE]: the catalog format is not the moat — the governed context envelope is. These defaults are template metadata, NEVER runtime permissions. Per-item overrides take precedence when present.",
+      "type": "object",
+      "required": [
+        "object_type",
+        "human_readable_summary",
+        "model_usage_notes",
+        "scope_defaults",
+        "permission_defaults",
+        "provenance",
+        "audit_expectations",
+        "policy_purpose",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "sensitivity_level",
+        "adaptation_rules",
+        "override_rules"
+      ],
+      "properties": {
+        "object_type": { "type": "string" },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "scope_defaults": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "permission_defaults": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "provenance": { "type": "object", "minProperties": 1 },
+        "audit_expectations": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "policy_purpose": { "type": "string", "minLength": 1 },
+        "allowed_consumers": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "forbidden_consumers": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "sensitivity_level": { "$ref": "#/definitions/SensitivityLevelEnum" },
+        "adaptation_rules": { "type": "string", "minLength": 1 },
+        "override_rules": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "RiskLevelEnum": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    },
+    "AutomationLevelEnum": {
+      "type": "string",
+      "enum": ["NONE", "SUGGEST_ONLY", "HUMAN_CONFIRMED", "GOVERNED_AUTO"]
+    },
+    "ApprovalRequirementEnum": {
+      "type": "string",
+      "enum": ["NONE", "POLICY_CHECK", "APPROVAL_REQUIRED", "DUAL_CONTROL"]
+    },
+    "DefaultPermissionStateEnum": {
+      "type": "string",
+      "enum": ["ENABLED", "DISABLED_UNTIL_APPROVED", "DRAFT_ONLY"]
+    },
+    "ConnectorPriorityTierEnum": {
+      "type": "string",
+      "enum": ["TIER_1_CRITICAL", "TIER_2_HIGH", "TIER_3_MEDIUM", "TIER_4_LOWER"]
+    },
+    "SensitivityLevelEnum": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    },
+    "CompanySizeVariantEnum": {
+      "type": "string",
+      "enum": ["STARTUP", "SMB", "MID_MARKET", "ENTERPRISE", "LARGE_ENTERPRISE"]
+    },
+    "IndustryVariantEnum": {
+      "type": "string",
+      "enum": [
+        "TECH",
+        "FINANCIAL_SERVICES",
+        "HEALTHCARE",
+        "LEGAL_SERVICES",
+        "GOVERNMENT",
+        "EDUCATION",
+        "MANUFACTURING",
+        "SAAS",
+        "REGULATED_FINANCE",
+        "REGULATED_HEALTH"
+      ]
+    },
+    "RelationshipTypeEnum": {
+      "type": "string",
+      "enum": [
+        "MANAGER",
+        "DIRECT_REPORT",
+        "DOTTED_LINE",
+        "EXECUTIVE_SUPPORT",
+        "BOARD_MEMBER",
+        "INVESTOR_OBSERVER",
+        "TEMPORARY_DELEGATE",
+        "VACATION_DELEGATE",
+        "DEPARTMENT_PEER",
+        "CROSS_FUNCTIONAL_PARTNER"
+      ]
+    }
+  }
+}
