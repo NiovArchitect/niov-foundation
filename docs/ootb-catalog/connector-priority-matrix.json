@@ -1,0 +1,259 @@
+{
+  "catalog_version": "1.0.0",
+  "matrix_version": "wave-6-v1.0.0",
+  "generated_at": "2026-06-01T09:31:16.269Z",
+  "source_files": [
+    "docs/ootb-catalog/tools.json",
+    "docs/ootb-catalog/connector-presets.json",
+    "docs/ootb-catalog/roles.json"
+  ],
+  "derivation_kind": "PURE_FROM_STATIC_CATALOG",
+  "forward_substrate_inputs_not_yet_available": [
+    "Dandelion_collected_demand (no Dandelion runtime yet)",
+    "customer_demand (no customers yet)",
+    "launch_necessity (Founder decision)",
+    "demo_impact (Founder/sales decision)"
+  ],
+  "weights": {
+    "tier_score": 1.5,
+    "api_maturity_score": 1,
+    "adoption_signal_score": 1,
+    "auth_readiness_score": 1,
+    "role_count_max": 0.5,
+    "sensitivity_penalty": -0.5,
+    "complexity_penalty": -0.5
+  },
+  "notice": "SUGGEST-ONLY. This matrix derives a connector-priority score from the static catalog. It is not an authorization to implement any connector. The first real Section 4 connector requires Founder authorization + a RULE 21 research arc.",
+  "source_adr_refs": [
+    "ADR-0080",
+    "ADR-0024",
+    "ADR-0026",
+    "ADR-0070"
+  ],
+  "rows": [
+    {
+      "preset_id": "preset.slack-read-first.v1",
+      "preset_name": "Slack (Read-First)",
+      "tool_count": 1,
+      "total_score": 16,
+      "components_avg": {
+        "tier_score": 4,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 3,
+        "auth_readiness_score": 2,
+        "sensitivity_penalty": 1.5,
+        "complexity_penalty": 0.5,
+        "role_count_max": 8
+      },
+      "rank": 1
+    },
+    {
+      "preset_id": "preset.google-workspace-read-first.v1",
+      "preset_name": "Google Workspace (Read-First)",
+      "tool_count": 6,
+      "total_score": 13.33,
+      "components_avg": {
+        "tier_score": 3.33,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 2.83,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 1.58,
+        "complexity_penalty": 0.42,
+        "role_count_max": 7
+      },
+      "rank": 2
+    },
+    {
+      "preset_id": "preset.jira-linear-project-read-first.v1",
+      "preset_name": "Project Tracker (Read-First)",
+      "tool_count": 2,
+      "total_score": 12.75,
+      "components_avg": {
+        "tier_score": 3.5,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 2.5,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 0.5,
+        "complexity_penalty": 0.5,
+        "role_count_max": 5
+      },
+      "rank": 3
+    },
+    {
+      "preset_id": "preset.microsoft-365-read-first.v1",
+      "preset_name": "Microsoft 365 (Read-First)",
+      "tool_count": 5,
+      "total_score": 11.05,
+      "components_avg": {
+        "tier_score": 3.4,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 2.6,
+        "auth_readiness_score": 0.6,
+        "sensitivity_penalty": 1.6,
+        "complexity_penalty": 0.9,
+        "role_count_max": 4
+      },
+      "rank": 4
+    },
+    {
+      "preset_id": "preset.microsoft-teams-read-first.v1",
+      "preset_name": "Microsoft Teams (Read-First)",
+      "tool_count": 1,
+      "total_score": 11,
+      "components_avg": {
+        "tier_score": 4,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 3,
+        "auth_readiness_score": 0.5,
+        "sensitivity_penalty": 1.5,
+        "complexity_penalty": 1.5,
+        "role_count_max": 2
+      },
+      "rank": 5
+    },
+    {
+      "preset_id": "preset.github-read-first.v1",
+      "preset_name": "GitHub (Read-First)",
+      "tool_count": 1,
+      "total_score": 10,
+      "components_avg": {
+        "tier_score": 3,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 3,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 2,
+        "complexity_penalty": 1,
+        "role_count_max": 2
+      },
+      "rank": 6
+    },
+    {
+      "preset_id": "preset.salesforce-hubspot-crm-read-first.v1",
+      "preset_name": "CRM (Read-First)",
+      "tool_count": 2,
+      "total_score": 9.75,
+      "components_avg": {
+        "tier_score": 3.5,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 2.5,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 1.75,
+        "complexity_penalty": 2.25,
+        "role_count_max": 2
+      },
+      "rank": 7
+    },
+    {
+      "preset_id": "preset.travel-expense-read-first.v1",
+      "preset_name": "Travel + Expense (Read-First)",
+      "tool_count": 6,
+      "total_score": 8.75,
+      "components_avg": {
+        "tier_score": 2.83,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 2,
+        "auth_readiness_score": 0.75,
+        "sensitivity_penalty": 1.5,
+        "complexity_penalty": 1,
+        "role_count_max": 2
+      },
+      "rank": 8
+    },
+    {
+      "preset_id": "preset.support-platform-read-first.v1",
+      "preset_name": "Support Platform (Read-First)",
+      "tool_count": 4,
+      "total_score": 6.63,
+      "components_avg": {
+        "tier_score": 2,
+        "api_maturity_score": 1.75,
+        "adoption_signal_score": 1.75,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 1.5,
+        "complexity_penalty": 1.25,
+        "role_count_max": 1
+      },
+      "rank": 9
+    },
+    {
+      "preset_id": "preset.legal-contracts-read-first.v1",
+      "preset_name": "Legal / Contracts (Read-First)",
+      "tool_count": 4,
+      "total_score": 6.63,
+      "components_avg": {
+        "tier_score": 1.75,
+        "api_maturity_score": 1.25,
+        "adoption_signal_score": 1.75,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 2,
+        "complexity_penalty": 1,
+        "role_count_max": 3
+      },
+      "rank": 10
+    },
+    {
+      "preset_id": "preset.compliance-platform-read-first.v1",
+      "preset_name": "Compliance Platform (Read-First)",
+      "tool_count": 4,
+      "total_score": 6.31,
+      "components_avg": {
+        "tier_score": 2.5,
+        "api_maturity_score": 1,
+        "adoption_signal_score": 1.5,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 1.63,
+        "complexity_penalty": 1.25,
+        "role_count_max": 1
+      },
+      "rank": 11
+    },
+    {
+      "preset_id": "preset.hris-read-first.v1",
+      "preset_name": "HRIS (Read-First)",
+      "tool_count": 5,
+      "total_score": 6.3,
+      "components_avg": {
+        "tier_score": 1.8,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 2.2,
+        "auth_readiness_score": 0.8,
+        "sensitivity_penalty": 2,
+        "complexity_penalty": 1.8,
+        "role_count_max": 1
+      },
+      "rank": 12
+    },
+    {
+      "preset_id": "preset.finance-erp-read-first.v1",
+      "preset_name": "Finance ERP (Read-First)",
+      "tool_count": 3,
+      "total_score": 6,
+      "components_avg": {
+        "tier_score": 1.67,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 2,
+        "auth_readiness_score": 0.83,
+        "sensitivity_penalty": 2,
+        "complexity_penalty": 1.67,
+        "role_count_max": 1
+      },
+      "rank": 13
+    },
+    {
+      "preset_id": "preset.ats-read-first.v1",
+      "preset_name": "ATS (Read-First)",
+      "tool_count": 2,
+      "total_score": 5.75,
+      "components_avg": {
+        "tier_score": 1.5,
+        "api_maturity_score": 2,
+        "adoption_signal_score": 1.5,
+        "auth_readiness_score": 1,
+        "sensitivity_penalty": 2,
+        "complexity_penalty": 1,
+        "role_count_max": 1
+      },
+      "rank": 14
+    }
+  ]
+}

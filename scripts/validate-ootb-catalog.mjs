@@ -403,6 +403,48 @@ function main() {
   }
   scanForbiddenPhrasesInMarkdown("docs/ootb-catalog/README.md", readmeText);
 
+  // 10) Wave 6 connector-priority matrix (optional file; validate if present)
+  let matrix = null;
+  try {
+    matrix = JSON.parse(
+      readFileSync(join(CATALOG_DIR, "connector-priority-matrix.json"), "utf8"),
+    );
+  } catch {
+    // matrix file is optional at this validator tier
+  }
+  if (matrix) {
+    if (!Array.isArray(matrix.rows) || matrix.rows.length === 0) {
+      err("connector-priority-matrix.json: rows[] must be a non-empty array");
+    }
+    if (matrix.derivation_kind !== "PURE_FROM_STATIC_CATALOG") {
+      err(
+        "connector-priority-matrix.json: derivation_kind must be PURE_FROM_STATIC_CATALOG",
+      );
+    }
+    for (const row of matrix.rows ?? []) {
+      if (!idIndex.has(row.preset_id)) {
+        err(
+          `connector-priority-matrix.json: row preset_id "${row.preset_id}" not present in connector-presets catalog`,
+        );
+      }
+      if (typeof row.total_score !== "number") {
+        err(
+          `connector-priority-matrix.json: row ${row.preset_id} total_score must be a number`,
+        );
+      }
+      if (typeof row.rank !== "number" || row.rank < 1) {
+        err(
+          `connector-priority-matrix.json: row ${row.preset_id} rank must be a positive integer`,
+        );
+      }
+    }
+    if (matrix.notice && !matrix.notice.toLowerCase().includes("suggest")) {
+      err(
+        "connector-priority-matrix.json: notice must declare SUGGEST-ONLY posture",
+      );
+    }
+  }
+
   finish();
 }
 
