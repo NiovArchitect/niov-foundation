@@ -38,6 +38,7 @@ import {
   executeStarterPilotActivationForCaller,
   executeTeamActivationForCaller,
   executeBusinessActivationForCaller,
+  executeEnterpriseActivationForCaller,
 } from "../services/governance/dandelion-activation.service.js";
 import { createTwin } from "../services/governance/twin.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
@@ -2606,6 +2607,86 @@ export async function registerOrgRoutes(
           ? body.google_workspace_domain
           : undefined;
       const result = await executeBusinessActivationForCaller(callerId, {
+        slack_display_name: slackDisplayName,
+        slack_secret_ref: slackSecretRef,
+        slack_workspace_id: slackWorkspaceId,
+        google_display_name: googleDisplayName,
+        google_secret_ref: googleSecretRef,
+        google_workspace_domain: googleWorkspaceDomain,
+      });
+      if (result.ok) {
+        return reply.code(200).send(result);
+      }
+      const status =
+        result.code === "ARCHETYPE_UNKNOWN" ||
+        result.code === "INVALID_SLACK_BINDING_INPUT" ||
+        result.code === "INVALID_GOOGLE_BINDING_INPUT" ||
+        result.code === "CONNECTOR_BINDING_FAILED"
+          ? 422
+          : result.code === "NOT_ADMIN" ||
+              result.code === "CALLER_ENTITY_NOT_FOUND" ||
+              result.code === "CALLER_NOT_IN_ORG"
+            ? 403
+            : 500;
+      return reply.code(status).send(result);
+    },
+  );
+
+  // POST /org/dandelion/activate/enterprise — runs the enterprise-
+  // archetype ActivationPlan catalog (14 steps; enterprise-activation
+  // .json). Steps 8 + 9 register real SLACK_READ +
+  // GOOGLE_WORKSPACE_READ ConnectorBindings via the existing C2 + C3
+  // substrates. Steps 5 (delegated authority), 6 (break-glass
+  // registry enable), 7 (LawfulBasis attestation surface enable),
+  // 10 (DUAL-CONTROL Stage-2 enterprise templates), 11 (DUAL-CONTROL
+  // regulator-grade audit), and 12 (board observer scope) emit
+  // audit-only at this slice (underlying tables forward-substrate).
+  // The DUAL-CONTROL audit literals at steps 10 + 11 truthfully
+  // record the catalog's design-intent; the actual DUAL-CONTROL
+  // approval flow per ADR-0026 is forward-substrate (a future slice
+  // will wire requireDualControl in front of this route).
+  //
+  // Completes the D6 4-archetype series at runtime.
+  app.post<{
+    Body: {
+      slack_display_name?: unknown;
+      slack_secret_ref?: unknown;
+      slack_workspace_id?: unknown;
+      google_display_name?: unknown;
+      google_secret_ref?: unknown;
+      google_workspace_domain?: unknown;
+    };
+  }>(
+    "/api/v1/org/dandelion/activate/enterprise",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const body = request.body ?? {};
+      const slackDisplayName =
+        typeof body.slack_display_name === "string"
+          ? body.slack_display_name
+          : "";
+      const slackSecretRef =
+        typeof body.slack_secret_ref === "string" ? body.slack_secret_ref : "";
+      const slackWorkspaceId =
+        typeof body.slack_workspace_id === "string"
+          ? body.slack_workspace_id
+          : undefined;
+      const googleDisplayName =
+        typeof body.google_display_name === "string"
+          ? body.google_display_name
+          : "";
+      const googleSecretRef =
+        typeof body.google_secret_ref === "string"
+          ? body.google_secret_ref
+          : "";
+      const googleWorkspaceDomain =
+        typeof body.google_workspace_domain === "string"
+          ? body.google_workspace_domain
+          : undefined;
+      const result = await executeEnterpriseActivationForCaller(callerId, {
         slack_display_name: slackDisplayName,
         slack_secret_ref: slackSecretRef,
         slack_workspace_id: slackWorkspaceId,
