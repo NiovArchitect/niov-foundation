@@ -589,6 +589,81 @@ platform / regulator scope toggle (gated on TAR.can_admin_org
 + TAR.can_admin_niov + LawfulBasis flow). Each requires its
 own Founder authorization at slice per RULE 21.
 
+## CT consumer LIVE 2026-06-01 (Section 7 D3 export, D4 text/date filters, D5 scope toggle)
+
+**Three bundled CT slices LANDED 2026-06-01** completing the
+Section 7 audit viewer at the CT consumer register for
+non-regulator-tier work.
+
+D3 export (CT PR
+[#13](https://github.com/NiovArchitect/otzar-control-tower/pull/13)
+`71fcf48`): NEW `api.audit.export(input)` method bypasses the
+JSON-parsing request helper to handle raw NDJSON / CSV bodies;
+parses the four `x-audit-*` response headers. NEW
+`ExportActionBar` inside the list card — Format Select (NDJSON
+default; CSV alternative) + Download button + summary line
+(row_count + truncation state) + safe error surface. Respects
+active filters. Honest 10 000-row cap copy. 4 NEW tests.
+
+D4 text/date filters (CT PR
+[#14](https://github.com/NiovArchitect/otzar-control-tower/pull/14)
+`e4335c7`): `AuditListFilters` state extended from 2 → 6
+fields with `target_entity_id` + `target_capsule_id` (UUID
+text inputs with inline validation; invalid UUIDs NEVER
+forwarded to the wire) + `start_time` + `end_time` (HTML5
+datetime-local inputs; normalized to ISO-8601 at the
+boundary; unparseable dates NEVER forwarded). Filter changes
+reset page to 1 + clear detail selection (any of the 6
+fields). Reset disabled only when all 6 fields are at
+default. Filters thread through the TanStack Query key + the
+export action. 4 NEW tests. ZERO new type mirror or api
+method (existing surfaces already accept these params).
+
+D5 scope toggle (CT PR
+[#15](https://github.com/NiovArchitect/otzar-control-tower/pull/15)
+`1accb6a`): `AuditListFilters` extended with `scope`
+("self" | "org" | "platform"; defaults to "self"). NEW Scope
+Select inside the filter bar (4-column grid; was 3); only
+renders options the caller can actually exercise per the auth
+store's `capabilities.can_admin_org` + `can_admin_niov` flags.
+**Regulator scope intentionally NOT exposed** — needs the
+ADR-0036 `lawful_basis_id` 9-condition flow which CT does not
+yet surface AND the Foundation export route does not accept
+regulator scope. Scope threaded through list query + export
+action + verify-chain panel. Reset returns scope to `self`.
+`ORG_SCOPE_FORBIDDEN` + `PLATFORM_SCOPE_FORBIDDEN` render as
+safe error blocks (Foundation enforces the real TAR-based
+gates server-side; CT capability gate is a UI nicety, NOT a
+security boundary).
+
+D5 also lands a **RULE 13 substrate-honest correction**: the
+CT `VerifyChainFailureReason` mirror introduced in CT D2.2
+declared `"CHAIN_HASH_MISMATCH"`, but Foundation actually
+emits `"HASH_MISMATCH"` (no `CHAIN_` prefix; verified at
+`apps/api/src/services/audit/audit-view.service.ts:383-387`).
+Drift was type-level only at runtime, but the type contract
+was lying. Fixed inline.
+
+Final CT test surface for Section 7: 36/36 security tests.
+165/165 CT total (was 152 after D2.2 → +5 D3 + +4 D4 + +5 D5
+= +14 NEW Section 7 tests). Wave 10 Agent Playground 129/129
++ all prior Section 7 D2 / D2.1 / D2.2 regression preserved.
+
+**Section 7 audit viewer is now PRODUCTION-GRADE COMPLETE for
+current production scope across Foundation + CT.** Remaining
+work is bounded forward-substrate behind separate Founder-
+authorized slices: (a) regulator scope flow (lawful_basis_id
+selection + ADR-0036 9-condition gating + the Foundation
+regulator-view route at `/api/v1/audit/events/regulator-view`
+which is already LIVE); (b) Layer 4 transcript drilldown
+(gated on ADR-0078 Stage 1 schema landing); (c) proactive
+`REGULATOR_ACCESS_EXPIRED` emitter via SCHEDULER (already
+documented at the Risks section below).
+
+NO Foundation backend change across D3 / D4 / D5. NO new
+audit literal. NO schema. NO new route. NO Layer 4 drilldown.
+NO LLM. NO BEAM.
+
 ## Risks / forward-substrate
 
 - The audit chain contains sensitive routing identifiers
