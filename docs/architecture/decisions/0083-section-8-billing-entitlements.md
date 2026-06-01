@@ -1,8 +1,8 @@
 # ADR-0083 — Section 8 Billing / Entitlements (Design-Only)
 
-**Status:** Accepted 2026-06-01
+**Status:** Accepted 2026-06-01 · **Amendment 1** Accepted 2026-06-01 (billing expansion + Professional Twin tier + 8 connector pack families + 4 plan archetypes + Billing Admin role + 8 conceptual entitlement objects + DMW-included reinforcement + revised B1-B8 ladder; see §9)
 **Nature:** Design-only. No code. No schema. No migration. No routes. No services. No runtime activation. No Control Tower billing UI. No payment provider integration. No payment data persistence. No LLM / Python / BEAM. No new audit literal. **No financial integration assumptions beyond what this ADR explicitly locks**; provider selection (Stripe / Chargebee / Paddle / etc.) is deferred to its own bounded slice under separate Founder authorization.
-**Founder authorization:** `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION-AUTH]` step 4 ("Section 8 Billing / Entitlements ADR using $250 base + add-ons") + companion direction from the Founder's billing-governance language in the same authorization ("entitlements gate features; billing should not destroy audit/evidence; non-payment should disable new premium actions, not delete retained records; compliance retention must remain intact; downgrades must preserve historical audit; security/governance features should not be unsafe paywalled").
+**Founder authorization:** `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION-AUTH]` step 4 ("Section 8 Billing / Entitlements ADR using $250 base + add-ons") + `[FOUNDER-SECTION-8-BILLING-ENTITLEMENTS-ADR-AUTH]` (Amendment 1 substantive expansion) + `[FOUNDER-RESUME-AUTONOMOUS-BUILD-FROM-SAFE-HOLD-AUTH]` (resume + reconfirm).
 **Parent doctrine:** ADR-0080 (OOTB ontology + Amendment 5 Domain General Otzar product framing) · ADR-0081 (Workflows Doctrine) · ADR-0082 (Dandelion Activation Architecture) · ADR-0027 (governance + RULE 20) · ADR-0026 (dual-control) · ADR-0070 (regulator-ready Foundation).
 
 ---
@@ -350,3 +350,434 @@ This ADR is authorized under `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION
 Subsequent slices (B2-B8) require their own Founder authorization at slice. **Do not implement B2+ automatically.** Per-seat / per-pack USD pricing requires explicit Founder pricing decision.
 
 After this ADR lands, the recommended next autonomous slice is **ADR-0084 Section 4 MCP / Connector Strategy ADR** (design-only; broader plan covering Slack + Google Workspace + Project Tracker + Gmail / Outlook + GitHub + Salesforce / HubSpot + Travel / Expense per Wave 6 matrix; first connector candidate arc; per-connector RULE 21 research arc gating).
+
+---
+
+## 9. Amendment 1 — Billing Expansion + Professional Twin Tier + Connector Pack Families + Plan Archetypes + Billing Admin Role + Conceptual Entitlement Objects + DMW-Included Reinforcement (2026-06-01)
+
+**Authority:** `[FOUNDER-SECTION-8-BILLING-ENTITLEMENTS-ADR-AUTH]` + `[FOUNDER-RESUME-AUTONOMOUS-BUILD-FROM-SAFE-HOLD-AUTH]`.
+
+### 9.0 Substrate-state drift acknowledgment (RULE 13)
+
+The Founder authorization for this amendment references HEAD `f5902fa` (Wave 2.1 closeout) and asks for an ADR-0081 number. Between that drafting moment and this amendment landing, ADR-0081 (Workflows Doctrine), ADR-0082 (Dandelion Activation Architecture), and ADR-0083 (Section 8 Billing/Entitlements base) all merged on `main`. ADR-0081 / ADR-0082 numbers are taken; ADR-0083 is the Section 8 Billing ADR. The new content lands here as **Amendment 1 to ADR-0083** (RULE 13 surface drifts inline + ADR numbering stability discipline preserved). All new Founder substance is absorbed verbatim below.
+
+### 9.1 DMW pricing doctrine reinforcement (canonical lines preserved verbatim)
+
+Per `[FOUNDER-SECTION-8-BILLING-ENTITLEMENTS-ADR-AUTH]`:
+
+- *"Billing is not just payment. Billing is the entitlement layer that controls how Otzar's governed intelligence capabilities scale across an enterprise."*
+- *"The DMW is not a luxury add-on. The Memory Wallet is foundational trust infrastructure."*
+- *"Customers should not pay extra just to have memory be safe."*
+- *"Base Otzar must include enough DMW capability for every Digital Twin to remember safely."*
+- *"Advanced memory governance can be premium; basic memory safety cannot."*
+- *"Billing says what the organization has purchased. Governance says what the system may safely do."*
+- *"Billing may entitle a connector pack; governance still authorizes connector activation."*
+- *"Downgrades may disable new premium actions, but they must never delete audit history, violate retention, or break evidence integrity."*
+
+These 8 canonical lines are preserved verbatim across §9 of this ADR and the new `docs/current-build-state/08-billing-entitlements.md` build-state document.
+
+### 9.2 Baseline DMW capability locked at base tier
+
+The $250/month base tier **includes** the following DMW capabilities (no separate fee; no crypto setup burden):
+
+- Automatic DMW / Memory Wallet auto-provisioned per user / entity (when DMW runtime lands).
+- Basic self-scoped memory.
+- Basic team / project / action-scoped memory support where authorized.
+- Basic forgetting / disconnect posture.
+- Basic audit / provenance metadata.
+- Basic safe memory education.
+- Basic DMW governance metadata visibility for admins (NOT private user memory content).
+- No separate "wallet fee" that blocks adoption.
+
+**Premium DMW** (via DMW / Memory Governance Pack) layers on:
+
+- Advanced retention policies.
+- Legal / compliance memory scopes.
+- Regulator / evidence memory controls.
+- High-volume memory capsule storage.
+- Long-term archival memory.
+- Advanced memory analytics.
+- Cross-workflow memory governance.
+- Custom memory retention windows.
+- Dedicated memory governance reports.
+- Advanced selective forgetting workflows.
+- Advanced depersonalized telemetry governance.
+
+The base ADR §2.2 rule "DMW auto-provisioning + base scope discipline" is reinforced here as **non-negotiable**: any future ADR weakening DMW base-tier inclusion requires Founder authorization per RULE 20.
+
+### 9.3 Seat tier expansion — NEW Professional Twin tier (6 tiers total)
+
+The base ADR §2.1 listed 5 seat add-ons. Amendment 1 inserts the **Professional Digital Twin Seat** between Standard and Executive per Founder direction, yielding **6 seat tiers**.
+
+Suggested **internal** USD ranges (architectural recommendations; NOT public pricing; final per-seat USD requires Founder pricing decision at B2):
+
+| Tier | Internal range | Intended for | Includes (selected) |
+|------|---------------|--------------|---------------------|
+| **Standard Digital Twin** | `$25 – $49 / user / month` | General employees · ICs · basic team members | Role-aware Twin starter profile (when runtime lands) · self-scoped memory · basic workflows · basic Dandelion role mapping · read-only context where authorized · meeting/work summary assistance · personal workday brief · open commitments · basic project blocker support |
+| **Professional Digital Twin** (NEW) | `$75 – $125 / user / month` | Managers · PMs · Sales/CS/HR/Finance/Ops roles · role owners with cross-functional workflows | Team / project context · advanced role templates · workflow recommendations · approval-aware actions · cross-functional coordination · richer DMW scopes · more connector read surfaces · proposed action support where authorized |
+| **Executive / High-Authority Twin** | `$150 – $300 / user / month` | CEO · Founder · COO · CFO · CTO · CMO · CHRO · GC · senior executives | Executive briefs · board / investor packet support · high-sensitivity governance · delegated authority controls · cross-company insight · stronger DMW memory boundaries · executive commitment tracking · risk / decision brief support · stronger audit requirements |
+| **Otzar Administrator** | `$99 – $199 / admin / month` | Otzar Admin · Governance Admin · AI Operations Admin · Enterprise AI Admin | Admin Twin · Dandelion rollout planning · Company Intelligence Readiness Brief · connector risk review · role / template review queue · policy gap finder · approval-chain builder · memory-scope safety brief · audit health brief · onboarding progress · first 7-day launch plan · governance launch guidance |
+| **Board / Observer** | `$49 – $149 / user / month` | Board members · investor observers · committee members · external governance observers | Read-only board packet summaries · KPI / risk briefs · committee evidence packs · NO operational write access · purpose-bound DMW / audit scopes · strict access controls |
+| **External Collaborator / Limited** | (custom per engagement) | Auditor · vendor · counterparty under NDA + scope envelope | Read-only by default · per-collaborator audit · scoped envelope per engagement contract |
+
+Canonical line preserved per Founder direction:
+> *"The Otzar Admin seat is not a settings seat. It is the first Domain General Intelligence champion seat."*
+
+### 9.4 Connector packs subdivided by tool family (8 packs replace single Connector Pack)
+
+The base ADR §2.1 listed a single "Connector Pack." Amendment 1 subdivides it into **8 tool-family packs** per Founder direction. Customers can adopt packs as value becomes visible — no forced bundle.
+
+| Pack | Tools included | Notes |
+|------|---------------|-------|
+| **Collaboration Pack** | Slack · Microsoft Teams · Gmail · Outlook · Google Calendar · Outlook Calendar · basic Drive / Docs / M365 read surfaces | Highest adoption value per Wave 6 matrix (Slack 16.00; Google Workspace 13.33). |
+| **Workspace / Knowledge Pack** | Google Drive · Google Docs / Sheets / Slides · Microsoft 365 · SharePoint · OneDrive · Notion · Confluence | Document substrate for EA + executive workflows. |
+| **Project / Engineering Pack** | Jira · Linear · Asana · Monday · GitHub · GitLab | Engineering + PM core (Wave 6 matrix Project Tracker 12.75; GitHub 10.00). |
+| **Revenue Pack** | Salesforce · HubSpot · Gong · Outreach · Salesloft | Sales + CRM (Wave 6 CRM 9.75). |
+| **Customer Pack** | Zendesk · Intercom · Gainsight · ChurnZero · Freshdesk | Customer success + support (Wave 6 Support 6.63). |
+| **People Pack** | Workday · BambooHR · Rippling · Greenhouse · Lever · Lattice · Culture Amp · ADP · Gusto | HRIS + ATS (Wave 6 HRIS 6.30, ATS 5.75). |
+| **Finance / Expense / Travel Pack** | SAP Concur · Ramp · Brex · Expensify · Navan / TripActions · TravelPerk · NetSuite · QuickBooks · Bill.com · Coupa · Airbase | EA + Finance canonical (Wave 6 Travel+Expense 8.75; Finance ERP 6.00). |
+| **Legal / Compliance Pack** | DocuSign · Ironclad · LinkSquares · Evisort · Vanta · Drata · OneTrust · Secureframe | Legal contracts + compliance evidence (Wave 6 Legal 6.63; Compliance 6.31). |
+
+Universal connector pack principles (preserved + reinforced):
+
+- Read-first by default.
+- Write actions disabled by default.
+- Write actions require approval (per ADR-0026 / per ADR-0081 Stage 3).
+- Risky writes may require dual-control.
+- All connector activity audited (existing `ADMIN_ACTION` + `INVOKE_CONNECTOR` lineage; no new audit literal).
+- No connector payload leaks.
+- No secrets exposed (`secret_ref` env-var-NAME pattern per ADR-0024).
+- **Billing entitlement ≠ connector activation.** Entitlement allows availability; governance authorizes actual use.
+
+Canonical line preserved verbatim:
+> *"Billing may entitle a connector pack; governance still authorizes connector activation."*
+
+### 9.5 Plan archetypes (4 archetypes; NEW)
+
+Internal plan archetypes for sales / packaging discussion. **NOT public final pricing**:
+
+| Archetype | Base | Includes | Purpose |
+|-----------|------|----------|---------|
+| **Starter / Pilot** | $250 base | Limited seats · Dandelion preview / basic activation · limited audit · NO advanced connector writes · limited workflow recommendations · baseline DMW included | Low-friction adoption + champion creation. |
+| **Team** | $250 base + seats | Standard / Professional Twin seats · Collaboration Connector Pack · basic workflow recommendations · basic DMW · basic audit | Small department deployment. |
+| **Business** | (negotiated) | More seats · Admin Twin · Dandelion Activation Pack · multiple Connector Packs · Agent Playground · advanced audit · workflow recommendations + proposed actions · DMW governance baseline + some premium controls | Mid-sized enterprise. |
+| **Enterprise** | Custom annual | Executive seats · Board seats · advanced DMW governance · Regulator / Evidence Pack · custom connectors · SSO / SAML / SCIM · custom retention · premium support · SLA | Large enterprise + regulated. |
+
+These archetypes compose against the seat tiers (§9.3) + capability packs (§9.4 + base ADR §2.1) + usage add-ons (base ADR §2.1) — they are not new SKUs, they are pre-bundled compositions.
+
+### 9.6 Billing Admin role (NEW)
+
+The Billing Admin is a distinct Otzar Admin role with bounded permissions. Per Founder direction:
+
+**Billing Admin CAN**:
+
+- View plan + subscription state.
+- View invoices + payment history.
+- Manage seats (assign / revoke within seat entitlement).
+- Manage capability pack add-ons (request / cancel).
+- See usage meter state.
+- Manage billing + invoice contacts.
+- Request upgrades / downgrades (subject to dual-control for high-risk downgrades).
+- Review entitlement warnings + grace-period alerts.
+
+**Billing Admin CANNOT (by default)**:
+
+- Read private user memory.
+- See sensitive workflow payloads.
+- Access connector secrets (`secret_ref` env-var-NAME visible; payload absolute forbidden).
+- Bypass policies (per ADR-0008 / Section 9 Policies).
+- Approve high-risk workflows (per ADR-0081 Stage 3+ approval chains).
+- Export audit logs unless separately authorized via Advanced Audit / Compliance Pack + dual-control.
+
+The Billing Admin maps to an Otzar Administrator seat (per §9.3) with a Billing-scoped PermissionBundle (per ADR-0080). The Admin Twin (per ADR-0080 Amendment 5 §21.3) does **not** automatically gain Billing Admin authority — Billing Admin is a distinct sub-role assigned per company policy.
+
+### 9.7 Conceptual entitlement objects (8 NEW objects)
+
+The base ADR §2.3 listed a single `Entitlement` runtime model shape. Amendment 1 expands this into **8 conceptual entitlement objects** per Founder direction. These are design-only shapes; NOT implemented at this ADR.
+
+#### 9.7.1 `BillingAccount`
+
+| Field | Purpose |
+|-------|---------|
+| `billing_account_id` | Stable identifier |
+| `org_id` | Tenant boundary |
+| `billing_status` | ACTIVE / GRACE / SUSPENDED / CANCELLED |
+| `plan_id` | Reference to Plan |
+| `payment_provider` | Provider identifier (deferred per base ADR §2.5) |
+| `billing_contact` | Per-org contact entity |
+| `invoice_contact` | Per-org invoice entity |
+| `tax_region` | Jurisdiction for tax / VAT |
+| `contract_type` | MONTHLY / ANNUAL / ENTERPRISE_CUSTOM |
+| `renewal_date` | Per contract |
+| `grace_period_status` | NONE / IN_GRACE / GRACE_EXPIRED |
+
+#### 9.7.2 `Plan`
+
+| Field | Purpose |
+|-------|---------|
+| `plan_id` | Stable identifier |
+| `name` | Plan archetype (Starter / Team / Business / Enterprise) per §9.5 |
+| `base_price` | $250 default (or volume-discounted enterprise) |
+| `included_seats` | Per archetype |
+| `included_packs` | Per archetype |
+| `included_usage` | Per archetype usage allowances |
+| `support_level` | Standard / Premium / Dedicated |
+| `deployment_model` | Shared / Sovereign / On-premise / Air-gapped per ADR-0018 |
+
+#### 9.7.3 `SeatEntitlement`
+
+| Field | Purpose |
+|-------|---------|
+| `seat_entitlement_id` | Stable identifier |
+| `org_id` | Tenant boundary |
+| `entity_id` | The entity holding the seat |
+| `seat_type` | One of the 6 tiers per §9.3 |
+| `status` | ACTIVE / SUSPENDED / GRACE / REVOKED |
+| `starts_at` | Seat start timestamp |
+| `ends_at` | Seat end (per contract) |
+| `assigned_by` | Billing Admin or Otzar Admin entity_id |
+| `billing_state` | PAID / GRACE / UNPAID |
+| `governance_state` | Governance-eligibility independent of billing |
+
+#### 9.7.4 `CapabilityPackEntitlement`
+
+| Field | Purpose |
+|-------|---------|
+| `pack_entitlement_id` | Stable identifier |
+| `org_id` | Tenant boundary |
+| `pack_type` | One of the 9 packs (Dandelion Activation / Workflow Automation / etc.) or one of the 8 connector pack families per §9.4 |
+| `status` | ACTIVE / SUSPENDED / GRACE / CANCELLED |
+| `included_features` | Feature key set unlocked |
+| `usage_limits` | Per pack usage allowance |
+| `activation_requirements` | Governance gates required before pack features become usable |
+| `governance_requirements` | Foundation governance compose gates |
+
+#### 9.7.5 `FeatureEntitlement`
+
+| Field | Purpose |
+|-------|---------|
+| `feature_key` | Closed-vocab feature identifier (e.g., `DANDELION_STAGE_B`, `CONNECTOR_SLACK`, `WORKFLOW_STAGE_3`) |
+| `org_id` | Tenant boundary |
+| `enabled` | Billing tier currently permits |
+| `source_plan` | Plan / Pack that enables this feature |
+| `required_governance_state` | Foundation governance state required (admin approval / dual-control / lawful basis) |
+| `required_policy_state` | Per ADR-0008 policy state required |
+| `required_admin_capability` | Specific admin capability gate |
+
+#### 9.7.6 `UsageMeter`
+
+| Field | Purpose |
+|-------|---------|
+| `meter_id` | Stable identifier |
+| `org_id` | Tenant boundary |
+| `meter_type` | Closed-vocab meter (per §9.8) |
+| `period_start` | Billing period start |
+| `period_end` | Billing period end |
+| `included_quantity` | Plan-included allowance |
+| `consumed_quantity` | Actual usage in period |
+| `overage_quantity` | Above-allowance usage |
+| `enforcement_mode` | SOFT_WARN / HARD_BLOCK / OVERAGE_BILLED |
+
+#### 9.7.7 `EntitlementCheck`
+
+| Field | Purpose |
+|-------|---------|
+| `org_id` | Tenant boundary |
+| `entity_id` | Subject of the check |
+| `feature_key` | What's being checked |
+| `requested_action` | Action triggering the check |
+| `billing_allowed` | Billing tier permits |
+| `governance_allowed` | Foundation governance permits |
+| `policy_allowed` | Policy state permits |
+| `final_decision` | ALLOWED / DENIED_BILLING / DENIED_GOVERNANCE / DENIED_POLICY |
+| `reason` | Closed-vocab denial reason for audit lineage |
+
+The `EntitlementCheck` is the canonical fan-in object where Billing × Governance × Policy intersect. The base ADR §2.4 enforcement points all consume this shape.
+
+#### 9.7.8 `DowngradePolicy`
+
+| Field | Purpose |
+|-------|---------|
+| `plan_from` | Current plan |
+| `plan_to` | Target plan |
+| `disabled_new_capabilities` | Capability set that becomes unavailable for NEW actions |
+| `preserved_records` | Record types preserved (audit / evidence / capsules) |
+| `retained_audit` | Audit chain retention (always intact per base ADR §2.2) |
+| `retained_memory_policy` | DMW retention preserved per existing scope |
+| `export_window` | Grace window for the customer to export retained data |
+| `grace_period` | Per company policy |
+
+The `DowngradePolicy` enforces the canonical "downgrades never destroy" posture from base ADR §2.2.4.
+
+### 9.8 Usage meter expansion (12 meters)
+
+Expanding base ADR §2.1's 6 usage add-ons to **12 canonical meters** per Founder direction:
+
+1. Active Digital Twin seats (counter).
+2. Active Admin seats (counter).
+3. Active Board / Observer seats (counter).
+4. Dandelion activation runs (per ADR-0082 Stage B–F invocation).
+5. Workflow recommendations (per ADR-0081 Stage 2).
+6. Workflow runs (per ADR-0081 Stage 3+).
+7. Proposed Actions (per ADR-0057).
+8. Approved connector actions (per `INVOKE_CONNECTOR`).
+9. Connector read events (per pack-level read activity).
+10. Connector write events (per approval-gated write).
+11. Simulation runs (per ADR-0076 Wave 9).
+12. Audit exports + evidence package generation + memory capsule volume + advanced DMW governance events (composite meter group; period-bounded; overage billed).
+
+Pricing principle preserved: predictable base + included allowances + transparent overages + enterprise caps where needed.
+
+### 9.9 Connector entitlement stages (1–7)
+
+Per Founder direction. Connector adoption flows through 7 stages; billing entitles availability at Stage 2; governance composes through Stages 3–7.
+
+1. **Discover / recommend connector** (Dandelion L4 + Wave 6 priority matrix; no billing required).
+2. **Entitlement check** (Connector Pack must be entitled per `CapabilityPackEntitlement`).
+3. **Admin policy approval** (Otzar Admin reviews per Section 9 Policies).
+4. **OAuth / security setup** (per ADR-0024 `secret_ref` env-var-NAME pattern; per-tenant secret rotation).
+5. **Read-first activation** (connector preset's `read_capabilities` enabled; writes still disabled).
+6. **Workflow-specific use** (per ADR-0081 Stage 2+ workflows compose against the connector).
+7. **Write actions only with approval gates** (per ADR-0081 Stage 3+; dual-control per ADR-0026 where required).
+
+### 9.10 Workflow billing maturity mapping
+
+Per ADR-0081's 5 workflow maturity stages. Amendment 1 maps each stage to billing posture:
+
+| Workflow stage | Billing posture | Notes |
+|----------------|-----------------|-------|
+| Stage 1 Template-only | Base tier; no add-on | Wave 2 + Wave 2.1 LIVE; catalog browse only |
+| Stage 2 Recommendation-only | Base tier OR Dandelion Activation Pack | Suggest-only; no automation |
+| Stage 3 Proposed Action | Workflow Automation Pack required | ADR-0057 Action runtime composition |
+| Stage 4 Governed Execution | Workflow Automation Pack + connector pack(s) + per-connector RULE 21 research arc | Connector writes gated per §9.9 stages 6-7 |
+| Stage 5 Continuous Optimization | Workflow Automation Pack + advanced governance | ADR-0048 personalization substrate |
+
+Canonical line preserved verbatim:
+> *"Do not make full automation default."*
+
+Workflow Automation Pack unlocks **higher workflow run volume + advanced governed action orchestration** — never unapproved autonomy.
+
+### 9.11 Revised B1-B8 implementation ladder (per Founder direction)
+
+The base ADR §4 implementation ladder is **superseded** by this revised ladder per Founder direction, which front-loads static catalogs + CT read-only preview before runtime + payment provider:
+
+| Slice | Scope | Gating |
+|-------|-------|--------|
+| **B1 — this ADR + Amendment 1** | Doctrine + 6 seat tiers + 9 capability packs (8 connector pack families) + 4 plan archetypes + Billing Admin role + 8 conceptual entitlement objects + 12 usage meters + 10 non-negotiable billing governance posture rules | This Founder authorization |
+| **B2 — Static entitlement catalog** | JSON / Markdown plan + pack + seat-tier catalog at `docs/billing/catalog/` mirroring the OOTB catalog structure; no runtime enforcement | Separate Founder authorization at slice |
+| **B3 — CT billing preview** | Read-only `/billing` (or `/onboarding` extension) showing plan + pack + seat-tier catalog; no payment provider; no live mutation | Separate Founder authorization at slice |
+| **B4 — Internal entitlement model** | `Entitlement` Prisma model per §9.7 + migration per ADR-0025; feature gates in read-only safe mode | Separate Founder authorization at slice + Founder pricing decision |
+| **B5 — Billing admin surface** | Billing Admin role + permissions per §9.6; CT subscription dashboard with seat / pack management; manual billing status | Separate Founder authorization at slice |
+| **B6 — Usage meter foundation** | Usage counters per §9.8; no external overage billing yet | Separate Founder authorization at slice |
+| **B7 — Payment provider integration** | Stripe / Chargebee / Paddle / manual invoice decision + integration | Separate Founder authorization at slice + RULE 21 research arc on provider |
+| **B8 — Enterprise billing operations** | Annual contracts · custom retention overrides · SLAs · audit / export guarantees · regulated deployment per ADR-0018 | Separate Founder authorization at slice |
+
+Each slice is bounded + separately authorized. **Do not implement B2+ automatically.**
+
+### 9.12 Strengthened "what cannot be unsafely paywalled" (13 items; expands base ADR §2.2)
+
+Base ADR §2.2 listed 10 non-negotiable rules. Amendment 1 expands the list of features that **must remain available regardless of plan / payment state** per Founder direction (13 items):
+
+1. Access to historical audit records required for compliance.
+2. Retention of legally required records.
+3. Audit chain integrity verification (`verify-chain`).
+4. Basic DMW memory-safety behavior (per §9.2).
+5. Basic security controls (dual-control / break-glass / rate-limit / no-leak / no-console / boot validation).
+6. User offboarding safety.
+7. Ability to disconnect / revoke connectors (admin can disable risky automation regardless of billing state).
+8. Ability to export required compliance / audit data during grace / legal window.
+9. Ability to disable risky automations / connectors.
+10. Ability to preserve data boundaries (same-org / cross-tenant absolute).
+11. Regulator-ready posture (per ADR-0070 neutral compliance vocabulary).
+12. DMW auto-provisioning + base scope discipline.
+13. Foundation governance posture (Approvals + Policies + Security Audit Viewer at read tier).
+
+The base ADR §2.2 10-rule list is preserved; this 13-item list is the customer-facing operationalization.
+
+### 9.13 Upgrade / downgrade / cancellation safety (canonical behaviors)
+
+Per Founder direction.
+
+**Upgrade**:
+- Unlocks availability.
+- Still requires governance.
+- May increase usage allowances.
+- May allow more connector packs.
+- May enable additional workflow stages.
+- Existing scopes preserved.
+
+**Downgrade**:
+- Preserve audit (RULE 4 + ADR-0002 absolute).
+- Preserve required retention (per company policy + regulated industry baseline).
+- Preserve DMW safety (memory scopes preserved per existing envelope).
+- Preserve historical evidence (per ADR-0036 retained packages).
+- Disable new premium actions (new ADR-0081 Stage 3+ workflow runs / new connector writes / new high-volume simulations).
+- Disable future high-volume activity (overage prospective only).
+- Keep admin able to export / resolve obligations (export window per `DowngradePolicy`).
+- Do not orphan active governance records.
+- Do not delete memory capsules unexpectedly (RULE 10 absolute).
+
+**Cancellation**:
+- Retain records per policy / legal obligations.
+- Allow export window.
+- Disable new actions.
+- Disconnect connectors safely (existing approved actions in flight complete; new write actions disabled).
+- Preserve audit chain where required.
+- Apply deletion / retention policy after lawful window per `DowngradePolicy` + ADR-0002 + ADR-0079 §14.
+
+### 9.14 Section mapping (Billing × 10 sections)
+
+Per Founder direction. Maps Billing to all 10 Otzar sections:
+
+| § | Section | Billing interaction |
+|---|---------|---------------------|
+| 1 | Employee Intelligence Core | Seat tier controls Twin availability + memory scope level |
+| 2 | Autonomous Execution Core | Entitlements gate ADR-0081 Stage 3+ proposed / governed execution volume |
+| 3 | Hives / Team Intelligence | Department / team scale may map to packs |
+| 4 | MCP / Connectors | Connector packs entitle availability; governance authorizes activation (per §9.4 + §9.9) |
+| 5 | Agent Playground | Simulation pack + usage allowance |
+| 6 | Enterprise Analytics | Analytics pack + aggregate insight tier |
+| 7 | Full Audit Viewer | Baseline audit included; advanced compliance / evidence premium |
+| 8 | **Billing / Entitlements** | **This ADR (base + Amendment 1) defines** |
+| 9 | Admin / Governance Control Tower | Billing Admin role per §9.6; entitlement views; plan / usage / add-on management |
+| 10 | Deployment / Security / Go-Live | Enterprise contracts · SSO · support · retention · deployment model per ADR-0018 |
+
+### 9.15 Adoption + monetization principles
+
+Per Founder direction:
+
+- Free / included DMW drives trust + usage.
+- Advanced DMW creates enterprise monetization.
+- DMW is priced into platform / seats / packs — **never** sold as confusing wallet fee.
+- Dandelion should help customer see value map; billing unlocks deeper activation, not blocks understanding.
+- Billing should help adoption, not create fear that safe governance costs extra.
+- Dandelion drives activation; billing helps companies expand activation as value becomes visible.
+
+Canonical:
+> *"Entitlements should gate premium capability, not destroy trust."*
+
+> *"Customers should not pay extra just to have memory be safe."*
+
+> *"Billing should help adoption, not create fear that safe governance costs extra."*
+
+### 9.16 Amendment 1 does NOT change
+
+The following remain locked from base ADR-0083:
+
+- §2.2 the 10 non-negotiable billing governance posture rules (Amendment 1 §9.12 expands to 13 customer-facing operationalizations; the 10 rules are preserved verbatim).
+- §3 non-goals (NO code / NO schema / NO payment provider integration / etc.).
+- §5 universal governance posture across all billing states.
+- §6 CT `/billing` page disposition (Placeholder until B5 entitlement substrate LIVE).
+- §7 citations.
+- §8 Founder authorization (extended; not replaced).
+
+### 9.17 Forward substrate (queued)
+
+After Amendment 1 lands:
+
+1. **B2 — Static entitlement catalog** (queued; bounded; eligible for autonomous build if Founder confirms).
+2. **B3 — CT billing preview** (queued; bounded; eligible for autonomous build after B2).
+3. **B4 — Internal entitlement model** (Founder pricing decision required — per-seat / per-pack USD).
+4. **B7 — Payment provider integration** (RULE 21 research arc + Founder provider decision).
+
+Per the Founder resume directive, the recommended **next autonomous slice** after Amendment 1 lands is **ADR-0084 Section 4 MCP / Connector Strategy** (design-only; covers Slack + Google Workspace + Project Tracker + Gmail / Outlook + GitHub + Salesforce / HubSpot + Travel / Expense per Wave 6 matrix; first-connector candidate arc; per-connector RULE 21 research arc gating).
