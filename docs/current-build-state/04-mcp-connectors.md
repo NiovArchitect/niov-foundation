@@ -12,6 +12,29 @@ INVOKE_CONNECTOR Actions against per-org-registered external
 adapters, every call audited + every secret kept as an env-var
 reference (never raw-at-rest).
 
+## CT Connectors Admin Surface LANDED 2026-06-01 — Slack RUNTIME_READY → OPERATING
+
+CT PR #21 `714879b` (Foundation closeout this PR). Operator-visible Control Tower `/connectors` page consuming the 5 LIVE Foundation admin routes at `/api/v1/org/connectors[/:id]`. Admin self-serve binding creation + listing + enable/disable + soft-delete (RULE 10) is now operational.
+
+CT artifacts: `src/lib/connectors/{types,data}.ts` (mirror of Foundation ConnectorBindingView + CONNECTOR_REGISTRY) · `src/pages/ConnectorsAdmin.tsx` (4-section operator page) · `src/lib/api.ts` `api.connectors` namespace · `src/lib/nav.ts` Connectors entry · `src/App.tsx` `/connectors` route · 29 NEW CT unit tests (250 → 279).
+
+Privacy invariant preserved: `secret_ref` is the env-var NAME only; resolved env-var VALUE never crosses the API boundary; page renders explicit disclaimer + tests assert no concrete bot-token pattern leaks.
+
+**Section 4 connector graduation:**
+
+| Connector | Status |
+|---|---|
+| Slack | **OPERATING (admin self-serve)** ← graduated this PR |
+| Linear | RECOMMENDATION_READY |
+| Jira Cloud | RECOMMENDATION_READY |
+| Google Workspace | RECOMMENDATION_READY |
+| GitHub | RECOMMENDATION_READY |
+| Microsoft 365 | RECOMMENDATION_READY |
+
+First real customer-bound Slack activation is now unblocked at the admin tier — registration form takes a connector type + display_name + secret_ref env-var NAME; binding flows through the same governance pipeline (org-scoped ConnectorBinding + INVOKE_CONNECTOR ActionType + ACTION_* audit chain + GOVSEC.6 structural cross-tenant denial) as every other connector.
+
+NO new Foundation route. NO new audit literal. NO schema migration. NO mutation to existing Foundation services. NO connector invocation surface in CT (INVOKE_CONNECTOR still routes through Section 2 Action runtime). NO write-capability toggle (deferred to ≥C6).
+
 ## C2 Slack Read-First Connector Runtime LANDED 2026-06-01
 
 Section 4 graduates **Slack: `RECOMMENDATION_READY` → `RUNTIME_READY`** (Foundation backend register). First real vendor connector now LIVE.

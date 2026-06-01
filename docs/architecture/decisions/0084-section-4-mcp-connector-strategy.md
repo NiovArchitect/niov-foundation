@@ -351,6 +351,25 @@ The implementation roadmap (D2-D8 Dandelion · B2-B8 Billing · C2-C9+ Connector
 3. **D2 — Dandelion Assessment substrate** (`DandelionAssessment` Prisma model + admin-only routes; Founder authorization at slice).
 4. **Wave 2.1 expansion to additional roles** (substrate-deepening; lower priority per autonomous-build directive).
 
+### CT Section 4 Connectors Admin Surface LANDED 2026-06-01
+
+Per `[CT-SECTION-4-CONNECTORS-ADMIN-SURFACE]` (CT PR #21 `714879b`; Foundation closeout this PR). Operator-visible Control Tower `/connectors` page consumes the 5 LIVE Foundation admin routes at `/api/v1/org/connectors[/:id]` (POST register + GET list + GET single + PATCH update/enable-disable + DELETE soft-delete; all `can_admin_org`-gated via `requireAdminCapability` preHandler).
+
+NEW Control Tower artifacts:
+- `src/lib/connectors/types.ts` — CT-side mirror of Foundation's `ConnectorBindingView` + `RegisterConnectorBindingInput` + `ConnectorBindingFailure` shapes
+- `src/lib/connectors/data.ts` — CT-side mirror of Foundation's `CONNECTOR_REGISTRY` (SLACK_READ + OUTBOUND_WEBHOOK + FIXTURE_ECHO; FIXTURE_ECHO hidden from selection UI)
+- `src/pages/ConnectorsAdmin.tsx` — operator page (Posture/doctrine + Available types + Register form + Existing bindings list with per-card Enable/Disable + Soft-delete)
+- `src/lib/api.ts` `api.connectors` namespace (list/get/register/update/delete)
+- `src/lib/nav.ts` Connectors NAV entry
+- `src/App.tsx` `/connectors` route
+- 29 NEW CT unit tests (250 → 279 total)
+
+**Privacy invariant preserved at the CT register:** `secret_ref` displayed as env-var NAME only (e.g. `SLACK_BOT_TOKEN_PROD`); resolved env-var VALUE never crosses the API boundary (structurally impossible per Foundation's `ConnectorBindingView` allowlist projection); page renders explicit "resolved value never displayed" disclaimer; tests assert no concrete bot-token pattern `/xoxb-[A-Za-z0-9]{4,}-[A-Za-z0-9]{4,}/` ever appears.
+
+**Section 4 graduation:** Slack `RUNTIME_READY` (backend) → **`OPERATING`** (admin self-serve). Admins can now register a Slack workspace binding from the Control Tower; the binding flows through the same governance pipeline (org-scoped ConnectorBinding + INVOKE_CONNECTOR ActionType + ACTION_* audit chain + GOVSEC.6 structural cross-tenant denial) as every other connector. First real customer-bound activation is now unblocked.
+
+NO new Foundation route. NO new audit literal. NO schema migration. NO mutation to existing Foundation services. NO connector invocation surface in this slice (the admin page registers bindings; INVOKE_CONNECTOR still routes through Section 2 Action runtime). NO write-capability toggle (writes deferred to ≥C6).
+
 ### C2 — Slack Read-First Connector Runtime LANDED 2026-06-01
 
 Per `[FOUNDER-RUNTIME-ACTIVATION-CLARIFICATION-NO-MORE-PERMANENT-STATIC-ONLY-DEFAULT]` + `[FOUNDER-PREVIEW-TO-OPERATING-STATE-GRADUATION-AUTH]`. First real vendor connector lands at Foundation backend register. Classification E (Connector Runtime).
