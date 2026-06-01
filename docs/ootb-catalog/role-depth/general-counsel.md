@@ -130,3 +130,15 @@ AI legal certainty claims · privilege waiver · regulator-approval claims (forb
 - **SMB / Mid-market**: GC + Compliance.
 - **Enterprise**: full legal org + privacy + regulatory.
 - **Public / Regulated**: maximum SEC / regulatory compliance.
+
+## 30. Dandelion Map Implications
+
+Per ADR-0082 Amendment 1 (Dandelion-as-organizational-cartographer doctrine), the General Counsel is **a Risk Map + Authority Map + Memory / DMW Map regulator across compliance-sensitive regions**:
+
+- **Risk Map regulator** — GC reviews the Risk Map's compliance-sensitive areas (regulator exposure / litigation risk / contract risk / privacy risk / privilege protection). Risk Map regions flagged BLOCKED_BY_POLICY by GC cannot activate.
+- **Authority Map regulator** — Contract signature authority + regulator-facing disclosure authority + privileged communications routing all chart through GC. Authority Map regions requiring lawful basis (per ADR-0036) are gated by GC + Compliance Officer review.
+- **Memory / DMW Map regulator** — Privileged-content memory scopes (attorney-client privilege / work product / executive session / regulator-evidence) are gated by GC. Cross-matter leakage absolute forbidden per Wave 2.1 §25 + ADR-0079.
+- **Workflow Map gatekeeper** — Workflow regions that touch regulator disclosure / contract review / privilege-lift / evidence export require GC participation in the approval chain (per ADR-0036 + Workflow Automation Pack governance per ADR-0083).
+- **Tool Map gatekeeper** — Legal-grade tools (Ironclad / DocuSign / Vanta / OneTrust) require GC scope-approval before write activation.
+
+The GC Twin produces contract / audit-evidence / regulator-prep briefs at the **scope-bounded, never-AI-certainty register**. ADR-0070 neutral compliance vocabulary absolute; never claims "guaranteed compliant" / "regulator approved" / "no fine risk" (per ADR-0082 Amendment 1 §9.5 forbidden surveillance / overclaim language).

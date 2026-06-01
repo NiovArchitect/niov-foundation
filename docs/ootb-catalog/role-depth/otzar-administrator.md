@@ -391,3 +391,34 @@ Canonical admin-facing line: *"Admins govern how memory is scoped; they do not g
 | **Legal Services** | Attorney-client privilege absolute. Matter-scoped memory. Cross-matter leakage forbidden. |
 | **Government** | FedRAMP / FISMA / sovereign jurisdictional boundary. Possibly air-gapped deployment per ADR-0018. |
 | **Education** | FERPA / COPPA where applicable. Student PII protected. |
+
+## 30. Dandelion Map Implications
+
+Per ADR-0082 Amendment 1 (Dandelion-as-organizational-cartographer doctrine) the Otzar Administrator is the **primary map validator + activation route selector** for every map type Dandelion drafts.
+
+| Map | Admin's role |
+|-----|--------------|
+| Company Map | Confirms / corrects company profile; locks the CompanyDomainModel. |
+| Org / Relationship Map | Approves the org-chart mapping (managers / direct reports / dotted-line / executive support / board / external). |
+| Role Map | Reviews + approves RoleTemplate assignments per user; flags role-template mismatches via the "Role Fit Review" first-week aha moment. |
+| Tool Map | Approves which tools enter scope at read-first; gates risky write surfaces; coordinates OAuth / secret setup with IT / Security. |
+| Workflow Map | Reviews proposed workflow recommendations; approves Stage 2 Recommendation-only activations; gates Stage 3+ runs. |
+| Authority Map | **Owns** approval-chain configuration; reviews delegated-authority defaults; enforces dual-control where required. |
+| Memory / DMW Map | Reviews memory-scope safety; flags overbroad scopes; ensures forbidden categories absolute; never browses private memory raw. |
+| Risk Map | Reviews blocked / uncertain regions before any activation; coordinates risk remediation with Security / Compliance / Legal. |
+| Aha Moment Map | Selects first-week wins per department + role + connector; sequences the rollout route. |
+
+Canonical line (verbatim from ADR-0082 Amendment 1):
+> *"The Admin is not manually drawing everything from zero. Dandelion drafts the map. The Admin validates, corrects, approves, or blocks the map."*
+
+The Admin Twin's 12 first-week aha moments (§22) and 16 synthesis workflows (§16) are the operational instruments for this map validation work. Specifically:
+
+- **Company Intelligence Readiness Brief** → reports Company Map + Org / Relationship Map completeness.
+- **Rollout Risk Map (synthesis workflow)** → consumes the Risk Map directly.
+- **Role Fit Review** → consumes the Role Map.
+- **Connector Value/Risk Brief** → consumes the Tool Map × Wave 6 priority matrix.
+- **Approval Chain Gap Finder** → consumes the Authority Map.
+- **Memory Scope Safety Brief** → consumes the Memory / DMW Map.
+- **Policy Gap Finder** → consumes the Authority Map × Risk Map.
+- **First 7-Day Launch Plan** → consumes the Aha Moment Map sequenced against approved regions.
+- **Department Readiness Ranking** → composes Company + Role + Tool + Workflow + Authority Maps per department.

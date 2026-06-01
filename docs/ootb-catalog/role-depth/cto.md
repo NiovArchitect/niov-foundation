@@ -168,3 +168,13 @@ Tier-1 by Wave 6 matrix: Slack, Project Tracker (Jira / Linear), GitHub. Tier-2:
 - **SMB**: VP Eng common; CTO emerging.
 - **Mid-market / Enterprise**: Full eng org under CTO; security may be CISO peer.
 - **Regulated**: heavier compliance + audit gating; AI deployment governance maximized.
+
+## 30. Dandelion Map Implications
+
+Per ADR-0082 Amendment 1 (Dandelion-as-organizational-cartographer doctrine), the CTO is **an authority-region owner for the Tool Map + the Risk Map**:
+
+- **Tool Map authority owner** — The CTO + IT / Security peers gate which tools (cloud / SaaS / repositories / observability) enter the company's connector scope. Wave 6 priority matrix (Slack / Google Workspace / GitHub / etc.) consumed against this Tool-Map authority.
+- **Risk Map domain co-owner** — Security / Infrastructure risk regions of the Risk Map are CTO + CISO domain. The Engineering Risk Brief + Security / Infrastructure Risk Map synthesis workflows (§22 aha moments) consume Risk Map signals directly.
+- **Authority Map participation** — Production deploy / AI deployment / security exception approval chains route through CTO + Security (per §18).
+
+The CTO Twin produces architecture briefs / engineering risk briefs / incident follow-ups composed from Tool Map + Workflow Map + Risk Map signals at the **team-level + system-level synthesis tier** — never at the engineer-level scoring tier (per ADR-0058 + §28 absolute forbidden).

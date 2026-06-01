@@ -162,3 +162,13 @@ Top by Wave 6 matrix: Slack · Project Tracker (Jira / Linear) · Google Workspa
 - **SMB / Mid-market**: Dedicated PM per area.
 - **Enterprise**: PM org with PM Ops + Group PM.
 - **Regulated**: feature launches gated by compliance review (HIPAA / SOX / etc.).
+
+## 30. Dandelion Map Implications
+
+Per ADR-0082 Amendment 1 (Dandelion-as-organizational-cartographer doctrine), the Product Manager is **a Workflow Map + Aha Moment Map co-author**:
+
+- **Workflow Map co-author** — PM signals which recurring product processes (roadmap reviews / sprint risk reviews / launch readiness / customer feedback synthesis) belong on the Workflow Map per team. Workflow Map regions PM owns activate at ADR-0081 Stage 2 Recommendation-only first.
+- **Aha Moment Map participant** — Product-led aha moments (Roadmap Decision Brief / Sprint Risk Summary / Customer Feedback Synthesis / Launch Readiness Checklist) populate the Aha Moment Map for product organizations. PM Twin coordinates with Engineering Manager (Tool Map authority for engineering connectors) + CSM (Customer Map authority for customer feedback regions).
+- **Tool Map informer** — PM contributes signals to the Tool Map about which product tools (Jira / Linear / Figma / analytics) the team uses + which connector packs unlock value first.
+
+The PM Twin operates inside the **PM-scoped map region**: own roadmap + own sprint + own customer interview synthesis. Cross-PM signals belong to the Head of Product (forward-substrate; not yet in Wave 2.1).

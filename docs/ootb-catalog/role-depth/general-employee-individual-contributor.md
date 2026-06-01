@@ -176,3 +176,27 @@ Canonical IC line: *"Your Memory Wallet is how Otzar remembers safely — it rem
 - **Enterprise**: highly specialized roles; Twin operates within department scope.
 - **Regulated**: compliance + privacy constraints layer onto every IC's tool stack (HIPAA / SOX / GDPR / FedRAMP).
 - **Union / Labor-organizing context**: respect for union activity; never surveille union organizing per ADR-0079 forbidden categories.
+
+## 30. Dandelion Map Implications
+
+Per ADR-0082 Amendment 1 (Dandelion-as-organizational-cartographer doctrine), the General Employee / IC is **a mapped subject — never a surveillance target**:
+
+- **Role Map subject** — IC appears in the Role Map per their actual role + manager + dotted-line relationships. The IC validates their own role mapping at Dandelion Stage B Assessment; the Admin approves at Stage D Governance Review.
+- **Self-scoped Memory / DMW Map participant** — The IC's DMW scope is **self-first** + project / team where authorized. The Memory / DMW Map's "must never become enterprise intelligence" region absolutely protects the IC's private / personal / family / health / financial / political / union-organizing content (per ADR-0079 §7 + Wave 2.1 §25 absolute forbidden).
+- **Aha Moment Map first-week recipient** — IC's first-week wins (My Workday Brief / My Open Commitments / Meeting Follow-Up Draft / Project Blocker Request / Tool Access Request Prep) populate the Aha Moment Map's IC route.
+
+**The IC is NEVER mapped at the surveillance tier.** Per ADR-0082 Amendment 1 §9.5 forbidden language list — absolute forbidden across every Otzar surface:
+
+- "monitoring map"
+- "employee map" (when used in a surveillance sense)
+- "performance map"
+- "behavior map"
+- "psychological map"
+- "manager visibility map"
+
+The IC Twin operates from **the IC's own work context**, for **the IC's own benefit**. Manager-side aggregation of IC behavioral signals is forbidden absolute (per §28 risks-and-guardrails + ADR-0058). The Org / Relationship Map's IC region is **structural** (who reports to whom) — never **behavioral**.
+
+Canonical:
+> *"Your Memory Wallet is how Otzar remembers safely — it remembers your work, not your private life."*
+
+> *"Digital Twins operate inside approved terrain."* (ADR-0082 Amendment 1)
