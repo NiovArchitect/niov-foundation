@@ -424,3 +424,38 @@ Matrix ranking (composite weighted across 13 dimensions; formula documented at `
 Substrate-honest disclaimer canonical: research captured 2026-06-01; vendor APIs evolve (Slack classic-apps deprecation Nov 2026; Atlassian points-based rate limits enforcement March 2026; etc.). Per-connector readiness re-validation required at each C-slice pre-flight. Suggest-only — C2 first real connector activation remains Founder-gated.
 
 The readiness catalog graduates Section 4 from `PREVIEW_ONLY` (strategy ADR + Wave 6 matrix) to **`RECOMMENDATION_READY`**. Per-connector next step: `RUNTIME_READY` at C-slice PR landing; `OPERATING` after first real customer-bound activation. Recommended next slices: GOVSEC.6 (agent abuse / confused-deputy hardening) before/alongside C2 → C2 Slack read-first runtime → D3 Dandelion Recommendation substrate. NEW `docs/current-build-state/04-mcp-connectors.md` extended with the readiness catalog summary at the top.
+
+### C3 — Google Workspace Read-First Connector Runtime LANDED 2026-06-01
+
+Per `[FOUNDER-PREVIEW-TO-OPERATING-STATE-GRADUATION-AUTH]` autonomous continuation. Section 4 C3 — **second** real vendor connector. Pattern-mirrors C2 SLACK_READ verbatim (ADR-0014 key-based dispatch + fixture-first defensive triple gate + closed-vocab failure codes + privacy invariant + RULE 21 research arc captured at C3 pre-flight against developers.google.com).
+
+NEW `apps/api/src/services/connector/google-workspace-read.provider.ts` — `GoogleWorkspaceReadProvider implements ConnectorProvider`. Three read operations: `calendar.events.list` (primary calendar metadata; `fields=items(id,status,updated,recurringEventId)` filter excludes attendee email PII + descriptions) · `drive.files.list` (file metadata only; `fields=files(id,mimeType,modifiedTime)` filter excludes file names + content) · `gmail.messages.list` (message IDs + threadIds only; no `format=full` / `format=metadata` body fetch at C3).
+
+MOD `apps/api/src/services/connector/connector.service.ts` — `ConnectorType` union extended to 4 types; `CONNECTOR_REGISTRY.GOOGLE_WORKSPACE_READ` frozen entry added (`transport: "https-get-bearer-token"` + `default_config_keys: ["use_real", "workspace_domain"]` + `secret_ref_required: true`); `getConnectorTypeDefinition("GOOGLE_WORKSPACE_READ")` resolves; `getConnectorProviderAsync("GOOGLE_WORKSPACE_READ")` dynamic-imports the provider (same circular-import-dodge pattern as SLACK_READ + OUTBOUND_WEBHOOK).
+
+**Fixture-first defensive triple gate** (identical pattern to C2): real Google APIs are reached only when **all three** hold: (1) `process.env.GOOGLE_USE_REAL === "1"`, (2) `binding.config.use_real === true`, (3) `binding.secret_ref` resolves to a non-empty env-var VALUE. CI + unit + integration tests leave `GOOGLE_USE_REAL` unset, so every invocation deterministically runs in fixture mode.
+
+**Closed-vocab failure codes** (same 8-code mapping as C2): VALIDATION (unknown operation / write-style op) · AUTH (HTTP 401 / fixture force) · RATE_LIMIT (HTTP 429 / fixture force) · PROVIDER_ERROR (other non-2xx) · NETWORK (Node fetch error; message capped 120 chars) · TIMEOUT (fixture force) · NOT_CONFIGURED (missing secret_ref / unset env var) · DISABLED (fixture force).
+
+**Privacy invariant** (mirrors C2 + OutboundWebhookProvider pattern):
+
+- `delivery_metadata` may carry counts (events_count / recurring_events_count / files_count / folders_count / messages_count / result_size_estimate) + mode label + binding_id; NEVER raw event content, attendee email PII, file names, message bodies, subject lines, or the access token
+- On error, `message` is a short scrubbed summary; never includes the resolved access token, raw response body, or third-party stack traces
+- Network errors collapse to NETWORK; HTTP 401 → AUTH; HTTP 429 → RATE_LIMIT; other non-2xx → PROVIDER_ERROR with status code surfaced (status codes are not secret material)
+- Real-mode `fields` URL parameters filter Google response bodies BEFORE the provider parses them — defense-in-depth so an accidental `JSON.stringify(body)` cannot exfiltrate names/content from Drive or Gmail
+
+**Test/build state:** unit suite 1200 → 1225 (+25 NEW C3 tests) · typecheck baseline preserved at 4 canonical errors · existing connector-provider frozen-anchor contract MOD from 3 types to 4 types (`["FIXTURE_ECHO", "GOOGLE_WORKSPACE_READ", "OUTBOUND_WEBHOOK", "SLACK_READ"]`).
+
+**Out of scope at C3** (forward-substrate per ADR-0084 9-slice ladder):
+
+- Writes (events.insert / files.create / messages.send / etc.) — ≥C6
+- OAuth refresh-token rotation — later C-slice (static admin-supplied access token via secret_ref at C3; composes against ADR-0019 cryptographic posture + GOVSEC.5 break-glass)
+- Drive content download (`files.get?alt=media`) — ≥C5
+- Gmail body read (`messages.get?format=full|metadata`) — ≥C5
+- Pub/Sub push notifications (Gmail watch / Calendar channels / Drive changes feed) — ≥C7 (composes against existing `verifyInboundHmac` substrate)
+- Admin Directory writes / domain-wide-delegation auto-onboarding — separate later C-slice with explicit super-admin gate
+- Control Tower binding-creation UI consumer — separate CT slice; current `/api/v1/org/connectors[/:id]` admin routes (Section 4 Wave 2 LIVE) already accept `type: "GOOGLE_WORKSPACE_READ"` since the column is plain `String` (no schema migration needed)
+
+**Section 4 graduation:** Google Workspace `RECOMMENDATION_READY` → **`RUNTIME_READY`** (backend provider + tests + registry extension landed). Final graduation to `OPERATING` happens when the first real customer-bound activation lands a working binding row + uses the `GOOGLE_USE_REAL=1` production path against a live workspace.
+
+**GOVSEC.6 + GOVSEC.7 graduation:** the `assertSameOrgConnectorTarget` + `assertAiAgentMayInvokeConnector` helpers from `apps/api/src/services/govsec/agent-abuse-guard.ts` (PR #183) + `assertSameTenantConnectorBinding` from `apps/api/src/services/govsec/tenant-isolation-guard.ts` (PR #190) are now structurally exercised by this slice's INVOKE_CONNECTOR path against the GOOGLE_WORKSPACE_READ type as well: cross-tenant denial enforced via `getConnectorBindingForOrg` org-scoped lookup; AI_AGENT write-intent denial forward-substrate to the C6 write slice. GOVSEC.6 + GOVSEC.7 remain **`OPERATING (read-first)`** — the C3 slice does not change the graduation tier, but it doubles the structural coverage of the helpers across vendor adapters (Slack + Google).
