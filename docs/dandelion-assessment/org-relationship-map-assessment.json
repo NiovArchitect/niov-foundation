@@ -1,0 +1,108 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Assessment is read-only intake. Relationship facts are role-shaped (manager / direct report / dotted-line / executive support / external collaborator) — never named-individual surveillance.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL", "NO_ACTIVATION_FROM_ASSESSMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/org-relationship-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "assessment.org-relationship-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "OrgRelationshipMap",
+      "name": "Org / Relationship Map Assessment",
+      "description": "Stage B intake substrate for the Org / Relationship Map. Collects role-shaped relationships (manager / direct report / dotted line / executive support / board / vendor / external collaborator) that anchor approval + escalation paths.",
+      "human_readable_summary": "Asks role-shaped relationship questions. Outputs Org / Relationship Map candidates pending admin approval. Never named-individual surveillance.",
+      "model_usage_notes": "Use role-shaped relationships only. Never infer reporting quality or workforce performance. Approval + escalation paths are governance-bound.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0070", "RULE 0"],
+      "required_questions": [
+        "What are the manager / direct-report relationships at the role level?",
+        "What dotted-line relationships exist (matrixed reporting, project leadership)?",
+        "What executive-support relationships exist (EA / Chief of Staff / Office of the CEO)?",
+        "What approval relationships exist (spend / hiring / external commit / legal)?",
+        "What escalation paths exist (technical / customer / compliance / legal / security)?"
+      ],
+      "optional_questions": [
+        "What temporary delegation patterns exist (acting-manager / PTO coverage / interim role)?",
+        "What board / investor relationships exist that require scoped read-only visibility?",
+        "What vendor / partner / customer-facing relationships need scoped representation?",
+        "What external collaborator relationships exist (advisors / contractors / fractional executives)?"
+      ],
+      "admin_questions": [
+        "Which relationships should be Map-visible at first activation?",
+        "Which relationships are confidential at the org level (legal / HR / M&A) and must NOT be in the initial scope?",
+        "Are there any RULE-20-protected forbidden inferences (e.g., performance assessment from reporting structure) that must be encoded at the Map level?"
+      ],
+      "user_questions": [
+        "Does the Map represent your reporting / collaboration relationships accurately?",
+        "Are any relationships missing or shown incorrectly that you can confirm?"
+      ],
+      "evidence_sources": [
+        "Admin-supplied org chart facts",
+        "Existing OOTB OrgChartRelationshipTemplate at docs/ootb-catalog/",
+        "Existing Wave 2.1 role-depth files at docs/ootb-catalog/role-depth/"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Org / Relationship Map proposal (role-shaped)",
+        "Approval-path candidates (admin approval required)",
+        "Escalation-path candidates (admin approval required)",
+        "Confidential-relationship exclusion list (admin approval required)"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Org Map region before any downstream activation",
+        "Confidential relationships excluded by admin must remain absolute across downstream maps",
+        "Approval + escalation paths are governance-bound; never autonomous",
+        "No performance / workforce-scoring inferences from reporting structure"
+      ],
+      "safe_defaults": [
+        "Role-shaped relationships only",
+        "Read-only intake",
+        "Admin-approved scope at activation",
+        "Confidential relationships excluded by construction"
+      ],
+      "forbidden_defaults": [
+        "Workforce-scoring inferences from reporting structure",
+        "Managerial-oversight monitoring of named individuals",
+        "Autonomous activation of approval / escalation paths",
+        "Cross-tenant relationship fusion",
+        "Sensitive-attribute inference from team composition"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Org Map bounds Team / Hive-scoped DMW memory",
+        "Dotted-line relationships constrain cross-project DMW scope",
+        "Confidential relationships excluded at Org Map cannot scope any DMW without explicit later admin authorization",
+        "Approval paths inform Authority Map DMW scope downstream"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}

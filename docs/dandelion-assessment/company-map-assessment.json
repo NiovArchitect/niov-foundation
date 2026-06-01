@@ -1,0 +1,117 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Assessment is read-only intake. The Twin proposes the company map; the admin approves it; Foundation governance authorizes any subsequent activation. Per RULE 0: no inference of sensitive or protected attributes. Per ADR-0082 Amendment 1: forbidden surveillance language is absolute.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL", "NO_ACTIVATION_FROM_ASSESSMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/company-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed", "future ADMIN_ACTION:MAP_REGION_APPROVED at activation tier"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "assessment.company-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "CompanyMap",
+      "name": "Company Map Assessment",
+      "description": "Stage B intake substrate for the Company Map. Collects the foundational company facts that anchor every downstream map (Org / Role / Tool / Workflow / Authority / Memory / Risk / Aha). Never autonomous; never activates anything; never infers sensitive attributes.",
+      "human_readable_summary": "Asks the founding company questions. Outputs Company Map candidates pending admin approval. Foundation governance authorizes anything that may run.",
+      "model_usage_notes": "Treat output as MAP CANDIDATES only. Never as activated state. Avoid sensitive-attribute inference. Industry-vertical mapping must use neutral compliance vocabulary per ADR-0070.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0070", "ADR-0027", "RULE 0"],
+      "required_questions": [
+        "What is the company's legal name?",
+        "What industry / vertical describes the company?",
+        "What is the approximate company size (employees, revenue tier)?",
+        "What business model does the company operate (SaaS / services / regulated / public / non-profit / hybrid)?",
+        "What regions or jurisdictions does the company operate in?",
+        "What is the executive team composition (roles, not personal identities of named individuals)?",
+        "What is the board / governance structure (board / advisory / regulator-overseen / family-held / etc.)?",
+        "What departments exist (Engineering / Sales / Customer Success / Marketing / People / Finance / Legal / Operations / IT / etc.)?",
+        "What customer type does the company serve (enterprise / mid-market / SMB / government / consumer / regulated)?"
+      ],
+      "optional_questions": [
+        "What is the operating cadence (quarterly OKRs / monthly cycles / sprint cadence)?",
+        "What rollout constraints apply (regulatory / commercial / cultural / legal / unionized workforce / change-management capacity)?",
+        "What is the company's existing AI / governance posture (formal AI policy / draft / none)?",
+        "What is the company's existing audit / compliance posture (regulator interactions / certifications in flight / none)?"
+      ],
+      "admin_questions": [
+        "Which departments should activate first?",
+        "Which systems are considered sensitive and must NOT be in the initial scope?",
+        "What existing org-wide policies (acceptable use / data handling / vendor approval) should the Map respect?",
+        "What trust / adoption concerns should Dandelion know about up front?",
+        "Are there any RULE-20-protected forbidden inferences specific to this company that must be encoded at the Map level?"
+      ],
+      "user_questions": [
+        "Does the company map you see represent your organization accurately at the high-level shape (industry / size / regions / departments)?",
+        "Are there any company-level facts that you (as the user being asked) should NOT be the source of?"
+      ],
+      "evidence_sources": [
+        "Public company facts (website / regulatory filings / public registry)",
+        "Admin-supplied intake answers",
+        "Existing OOTB CompanyTemplate at docs/ootb-catalog/company-variants.json"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "CompanyMap proposal with industry / size / regions / departments / customer type",
+        "Initial-rollout department list (admin approval required)",
+        "Sensitive-systems exclusion list (admin approval required)",
+        "Compliance-posture neutral summary (no guaranteed-compliance claim per ADR-0070)"
+      ],
+      "governance_review_points": [
+        "Admin must approve every CompanyMap candidate before any downstream Map activates a region",
+        "Compliance vocabulary must be neutral per ADR-0070 — no claim of regulator approval, no claim of guaranteed compliance",
+        "Sensitive systems list is absolute; downstream Tool / Workflow / Authority Maps must respect it",
+        "Initial rollout departments restrict downstream Role / Tool / Workflow Map activation scope",
+        "Map-region approval per ADR-0082 Amendment 1 remains stronger than entitlement"
+      ],
+      "safe_defaults": [
+        "Read-only intake",
+        "Admin approval required for every Map region",
+        "Neutral compliance vocabulary",
+        "Initial scope restricted to admin-named departments",
+        "Sensitive systems excluded by construction"
+      ],
+      "forbidden_defaults": [
+        "Autonomous CompanyMap activation",
+        "Workforce-scoring inferences from company facts",
+        "Sensitive-attribute inference",
+        "Cross-tenant data fusion",
+        "Guaranteed-compliance claims",
+        "Regulator-approval claims"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "CompanyMap establishes the tenant-scope ceiling for every downstream DMW scope",
+        "Departments named in initial rollout bound Department-scoped DMW memory",
+        "Regions and jurisdictions bound jurisdiction-aware DMW scope per ADR-0037",
+        "Sensitive systems excluded at CompanyMap level cannot be scoped into any DMW without explicit later admin authorization"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed", "future ADMIN_ACTION:MAP_REGION_APPROVED on admin approval", "no new audit literal at D2"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}

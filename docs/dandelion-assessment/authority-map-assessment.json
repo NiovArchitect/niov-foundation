@@ -1,0 +1,119 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Authority Map intake establishes delegated-authority boundaries. Per ADR-0026 + ADR-0050: dual-control + break-glass. Per RULE 0: humans always sovereign; AI cannot grant access to other AI.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED", "AUTHORITY_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL", "NO_AUTHORITY_GRANT_FROM_ASSESSMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/authority-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_AUTHORITY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "assessment.authority-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "AuthorityMap",
+      "name": "Authority Map Assessment",
+      "description": "Stage B intake substrate for the Authority Map. Maps approval chains, delegated authority profiles, proxy actions, spend thresholds, external-communication authority, connector-write gates, dual-control requirements, and what must never be assumed by any Twin or AI agent.",
+      "human_readable_summary": "Asks who can approve what, who can act for whom, what must never be assumed. Outputs Authority Map candidates pending admin approval. AI never grants authority autonomously.",
+      "model_usage_notes": "Per RULE 0: humans are always sovereign. Per ADR-0080 + Wave 2.1 §19-20: delegated authority profiles are explicit + revocable. AI cannot grant access to other AI (RULE 0).",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0026", "ADR-0050", "ADR-0027", "RULE 0"],
+      "required_questions": [
+        "What approval chains exist (spend / hiring / external commit / legal / customer commitment)?",
+        "What delegated authority does each role hold (per Wave 2.1 §19 delegated-authority profiles)?",
+        "What proxy actions are permitted (EA-as-executive / acting-manager / interim approver)?",
+        "What spend thresholds apply at which approver level?",
+        "What external-communication authority applies (customer / press / regulator / public)?",
+        "What connector-write gates apply per ADR-0084 (risky writes require approval / dual-control)?"
+      ],
+      "optional_questions": [
+        "What dual-control requirements exist per ADR-0026?",
+        "Who owns each policy (acceptable use / data handling / vendor approval)?",
+        "What break-glass / emergency authority exists per ADR-0050?",
+        "What temporary delegations are common (PTO / TDY / interim)?",
+        "Who must never be assumed by any Twin (e.g., founder voice / CEO email / board member)?"
+      ],
+      "admin_questions": [
+        "Which approval chains must the Map represent at first activation?",
+        "Which authority surfaces are RULE-20-protected and must NOT be modifiable from assessment?",
+        "Which dual-control workflows are mandatory regardless of plan tier?",
+        "Which authority paths require ADR-0050 break-glass governance?",
+        "What 'must never be assumed' rules apply org-wide?"
+      ],
+      "user_questions": [
+        "Does the Map represent your approval / delegation context accurately?",
+        "Are there authority surfaces you (the user being asked) should not be the source of (legal / HR / finance)?"
+      ],
+      "evidence_sources": [
+        "Admin-supplied delegated-authority profiles",
+        "Wave 2.1 §17-20 per-role delegated authority + approval dependencies",
+        "OOTB DelegatedAuthorityProfile + PermissionBundle templates at docs/ootb-catalog/",
+        "ADR-0026 dual-control endpoint registry",
+        "ADR-0050 break-glass design"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Authority Map proposal (approval chains / delegated authority / proxy actions / spend thresholds)",
+        "Dual-control requirement list per ADR-0026 (admin approval required)",
+        "External-communication authority list (admin approval required)",
+        "Connector-write gate list per ADR-0084 (admin approval required)",
+        "'Must never be assumed' list"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Authority Map region",
+        "RULE 0 sovereignty is absolute: AI never grants authority to other AI",
+        "Dual-control mandatory for risky writes per ADR-0026",
+        "ADR-0050 break-glass for emergency authority only",
+        "Per-call governance approval required for any authority-bound execution",
+        "Authority Map regions must compose against Foundation governance — never override it"
+      ],
+      "safe_defaults": [
+        "Read-only intake",
+        "Explicit + revocable delegated authority only",
+        "Dual-control for risky writes",
+        "Admin-approved authority regions",
+        "'Must never be assumed' rules absolute"
+      ],
+      "forbidden_defaults": [
+        "Autonomous authority grant",
+        "AI-to-AI authority grant",
+        "Dual-control bypass for commercial reason",
+        "Cross-tenant authority fusion",
+        "Workforce-scoring inferences from authority structure",
+        "Managerial-oversight monitoring from approval chains"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_AUTHORITY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Authority Map bounds Twin write-side DMW provenance",
+        "Dual-control workflows constrain write-side DMW emission tracking",
+        "'Must never be assumed' authority surfaces excluded from any Twin DMW",
+        "Break-glass authority per ADR-0050 emits to bounded audit-only DMW scope"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed", "future BREAK_GLASS_* at runtime per ADR-0050"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Memory / DMW Map intake establishes the memory-scope ceiling per ADR-0001 + ADR-0080 + RULE 0 sovereignty. Customers should not pay extra just to have memory be safe.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED", "MEMORY_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "USER_CONFIRMATION_REQUIRED", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/memory-dmw-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_MEMORY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "assessment.memory-dmw-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "MemoryDmwMap",
+      "name": "Memory / DMW Map Assessment",
+      "description": "Stage B intake substrate for the Memory / DMW Map. Maps memory scope per role / user / project / client / team / board / legal / temporary delegation. Establishes which categories belong to self-scoped vs team-scoped vs forbidden DMW scope. Baseline DMW safety is never paywalled.",
+      "human_readable_summary": "Asks what memory belongs where. Outputs DMW scope candidates pending admin + user approval. Baseline DMW safety is in every plan; advanced governance is premium.",
+      "model_usage_notes": "Per RULE 0: entity sovereignty over memory is absolute. Per Wave 2.1 §25 per-role DMW scope notes. Per ADR-0083: DMW baseline included in every plan; advanced governance is a separate pack.",
+      "source_adr_refs": ["ADR-0082", "ADR-0001", "ADR-0080", "ADR-0083", "ADR-0044", "ADR-0045", "ADR-0046", "RULE 0"],
+      "required_questions": [
+        "What memory is self-scoped (your operating context, never visible to others)?",
+        "What memory is team-scoped / hive-scoped (shared within team boundary)?",
+        "What memory is project-scoped (per-project scope)?",
+        "What memory is client / customer-scoped (customer-by-customer scope binding)?",
+        "What memory is board-scoped (read-only / executive summary)?",
+        "What memory is legal / compliance-scoped (legal hold / retention)?"
+      ],
+      "optional_questions": [
+        "What temporary delegated memory exists (PTO coverage / interim role)?",
+        "What non-work / private content must be suppressed by construction?",
+        "What forgetting / disconnect requirements apply (RULE 0 revocability)?",
+        "What safe metadata retention applies (audit chain integrity per ADR-0002)?",
+        "What memory review points exist (periodic admin review / regulator review per ADR-0036)?"
+      ],
+      "admin_questions": [
+        "Which memory categories must the Map propose at first activation?",
+        "Which memory categories are forbidden for initial rollout (sensitive / regulated / pre-approval-only)?",
+        "Which memory categories require advanced DMW governance pack per ADR-0083?",
+        "Which memory categories require ADR-0036 LawfulBasis at regulator-view tier?",
+        "Are there any RULE-20-protected forbidden memory categories?"
+      ],
+      "user_questions": [
+        "Does the Map represent your memory boundaries accurately?",
+        "What memory must be private to you only (forbidden to team / org / managers)?",
+        "What memory should automatically expire (per-conversation / per-engagement / per-project)?"
+      ],
+      "evidence_sources": [
+        "User-supplied memory scope intent",
+        "Wave 2.1 §25 per-role DMW scope notes at docs/ootb-catalog/role-depth/",
+        "ADR-0001 three-wallet architecture (Personal / Enterprise / Device)",
+        "ADR-0046 dual-context AI_AGENT routing (Personal AI Agent vs Enterprise AI Agent)",
+        "ADR-0083 + Amendment 1 DMW-included doctrine"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Memory / DMW Map proposal (self / team / project / client / board / legal / temporary scope)",
+        "Forbidden memory categories list (absolute downstream)",
+        "Advanced DMW governance pack requirements list (per ADR-0083)",
+        "Periodic memory review schedule (admin / regulator)",
+        "Per-conversation / per-engagement / per-project expiration schedule"
+      ],
+      "governance_review_points": [
+        "RULE 0 sovereignty over entity memory is absolute",
+        "Baseline DMW safety is never paywalled per ADR-0083",
+        "Customers should not pay extra just to have memory be safe",
+        "User must confirm self-scoped memory boundaries",
+        "Admin must approve team / org / project / client memory regions",
+        "Forbidden memory categories absolute downstream",
+        "Per ADR-0046 dual-context: Personal AI Agent maps to PERSONAL wallet; Enterprise AI Agent maps to ENTERPRISE wallet"
+      ],
+      "safe_defaults": [
+        "Baseline DMW safety included regardless of plan",
+        "Self-scoped memory absolute",
+        "Per-customer / per-project scope binding",
+        "Soft-delete only per RULE 10",
+        "Revocability per RULE 0",
+        "Audit chain integrity per ADR-0002"
+      ],
+      "forbidden_defaults": [
+        "Baseline DMW safety paywalled",
+        "RULE 0 sovereignty relaxation",
+        "Cross-tenant memory fusion",
+        "Workforce-scoring inferences from memory categories",
+        "Managerial-oversight monitoring of personal memory",
+        "Sensitive-attribute inference",
+        "Personality-trait inference from memory content"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_MEMORY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Memory / DMW Map directly establishes DMW scope boundaries for activation",
+        "Forbidden memory categories cannot scope any DMW without explicit later admin authorization",
+        "Per-role memory scope from Wave 2.1 §25 constrains per-role DMW activation",
+        "Advanced DMW governance pack required for custom retention / regulated deletion variants per ADR-0083",
+        "Per ADR-0046: AI_AGENT EntityType maps to PERSONAL or ENTERPRISE wallet by deployment context"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed", "existing DMW capsule audit literals preserved", "no new audit literal at D2"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}

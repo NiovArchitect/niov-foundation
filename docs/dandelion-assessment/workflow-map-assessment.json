@@ -1,0 +1,115 @@
+{
+  "$schema": "./assessment.schema.json",
+  "kind": "MapAssessment",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapAssessment",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Workflow Map intake aligns with ADR-0081 5-stage workflow maturity. Stage 1 (template) + Stage 2 (recommendation) are baseline; Stages 3-5 require admin policy approval + Foundation governance authorization + per-call governance for execution.",
+    "scope_defaults": ["TENANT_SCOPED", "ASSESSMENT_SCOPED", "DEPARTMENT_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_REVIEW_REQUIRED_FOR_APPROVAL", "NO_EXECUTION_FROM_ASSESSMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-assessment/workflow-map-assessment.json",
+      "version_tag": "d2-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed"],
+    "policy_purpose": "ASSESSMENT_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_EXECUTION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "assessment.workflow-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapAssessment",
+      "map_type": "WorkflowMap",
+      "name": "Workflow Map Assessment",
+      "description": "Stage B intake substrate for the Workflow Map. Maps recurring workflows (owners / participants / triggers / inputs / outputs / tools / approval gates / escalation paths). Per ADR-0081, workflows progress through 5 maturity stages; Stages 3-5 require admin + governance approval.",
+      "human_readable_summary": "Asks what recurring processes you run. Outputs Workflow Map candidates pending admin approval. Recommendations are baseline; execution is governance-bound.",
+      "model_usage_notes": "Workflow assessment composes against OOTB workflow templates (docs/ootb-catalog/workflows.json). Templates describe useful defaults; governance authorizes anything that may execute.",
+      "source_adr_refs": ["ADR-0082", "ADR-0081", "ADR-0080", "ADR-0026", "RULE 0"],
+      "required_questions": [
+        "What recurring workflows does the role / department / company run?",
+        "Who owns each workflow?",
+        "Who participates in each workflow (role-shaped)?",
+        "What triggers each workflow (calendar / event / manual / external)?",
+        "What inputs and outputs does each workflow consume / produce?",
+        "What tools does each workflow require?"
+      ],
+      "optional_questions": [
+        "What approval gates exist in each workflow?",
+        "What escalation paths apply (technical / customer / compliance / legal)?",
+        "What safe fallback exists if a connector / tool is unavailable?",
+        "What is the workflow's current automation maturity (manual / templated / recommendation / proposed-action / executed)?",
+        "Which workflows are recommendation-ready (Stage 2 viable) vs require deeper substrate?"
+      ],
+      "admin_questions": [
+        "Which workflows should the Map propose at Stage 1 (template-only) first?",
+        "Which workflows are eligible for Stage 2 (recommendation-only)?",
+        "Which workflows must NOT progress to Stages 3-5 (proposed-action / execution / continuous optimization) without explicit policy review?",
+        "Which workflows require dual-control per ADR-0026 regardless of stage?"
+      ],
+      "user_questions": [
+        "Does the Map represent the workflows you actually run?",
+        "Which workflows feel safe to receive recommendations on first?"
+      ],
+      "evidence_sources": [
+        "Admin-supplied recurring workflow inventory",
+        "OOTB workflows.json at docs/ootb-catalog/workflows.json",
+        "Wave 2.1 role-depth files (per-role workflow inventory) at docs/ootb-catalog/role-depth/",
+        "ADR-0081 5-stage maturity model"
+      ],
+      "confidence_labels": [
+        "HIGH_CONFIDENCE",
+        "MEDIUM_CONFIDENCE",
+        "LOW_CONFIDENCE",
+        "REQUIRES_ADMIN_REVIEW",
+        "REQUIRES_USER_CONFIRMATION",
+        "BLOCKED_BY_POLICY"
+      ],
+      "output_candidates": [
+        "Workflow Map proposal (templates / recommendations / proposed-actions / execution candidates)",
+        "ADR-0081 stage labels per workflow (Stage 1-5 maturity)",
+        "Approval-gate candidates (admin approval required)",
+        "Escalation-path candidates (admin approval required)",
+        "Safe-fallback list per workflow"
+      ],
+      "governance_review_points": [
+        "Admin must approve every workflow stage progression",
+        "Workflow Stages 3-5 require Foundation governance authorization + per-call approval per ADR-0081",
+        "Dual-control workflows enforced regardless of stage per ADR-0026",
+        "Workflow purpose binding required at activation per ADR-0084 §6-layer governance compose stack",
+        "Map-region approval per ADR-0082 Amendment 1 remains stronger than entitlement"
+      ],
+      "safe_defaults": [
+        "Stage 1 (template-only) + Stage 2 (recommendation-only) baseline",
+        "Admin-approved stage progression",
+        "Per-call governance for any execution",
+        "Dual-control for risky writes regardless of stage",
+        "Safe-fallback documented for every workflow"
+      ],
+      "forbidden_defaults": [
+        "Autonomous execution from assessment",
+        "Stage 3+ progression without admin approval",
+        "Cross-tenant workflow fusion",
+        "Workforce-scoring inferences from workflow throughput",
+        "Managerial-oversight monitoring from workflow participation"
+      ],
+      "allowed_consumers": ["DANDELION_ASSESSMENT_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_EXECUTION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "DMW_scope_implications": [
+        "Workflow Map bounds workflow-scoped DMW provenance per ADR-0081",
+        "Approval-gate workflows constrain Authority Map DMW scope downstream",
+        "Escalation paths constrain cross-role DMW visibility",
+        "Safe-fallback workflows operate without connector DMW provenance"
+      ],
+      "audit_expectations": ["ADMIN_ACTION:MAP_ASSESSMENT_REFERENCED when consumed", "future ACTION_* at workflow execution runtime per ADR-0081 Stage 3+"],
+      "activation_state": "NOT_ACTIVATED"
+    }
+  ]
+}
