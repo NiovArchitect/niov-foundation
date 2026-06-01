@@ -14,7 +14,9 @@
 
 **ADR-0080 Wave 6 connector-priority matrix LIVE 2026-06-01** per `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]`. NEW `scripts/compute-connector-priority.mjs` (pure Node ESM; deterministic) + NEW `docs/ootb-catalog/connector-priority-matrix.{json,md}` (14 presets ranked; matrix-version `wave-6-v1.0.0`). Top 3: Slack (16.00) → Google Workspace (13.33) → Project Tracker (12.75). Matrix-derived ranking aligns with Section 10 audit's substrate-honest "Slack first" recommendation. **Suggest-only — Section 4 first-real-connector decision remains Founder-gated.** Forward-substrate inputs (Dandelion demand / customer demand / launch necessity / demo impact) transparently declared as not-yet-derivable. ADR-0080 Amendment 3 records the closeout. Validator extended to verify matrix structure.
 
-**Foundation main HEAD:** `c2b3803` (post PR #168 ops hardening; Wave 6 in flight) · **CT main HEAD:** `dfb3b84` (Wave 3 CT preview LIVE)
+**ADR-0080 Wave 6 CT surface LIVE 2026-06-01** per `[FOUNDER-AUTONOMOUS-OTZAR-COMPLETE-BUILD-WHILE-FOUNDER-RESTS-AUTH]` (CT PR #19 `bf7f826`). `/onboarding` Dandelion Preview now renders the 14-row connector-priority ranking with per-row score breakdown + 4 forward-substrate inputs declared transparently + suggest-only notice. 223/223 CT tests pass. ADR-0080 Amendment 4 records the closeout. Wave 6 end-to-end CLOSED (Foundation matrix derivation + CT consumer surface both LIVE).
+
+**Foundation main HEAD:** `d2f9c44` (Wave 6 matrix PR #169 LIVE; CT closeout in flight) · **CT main HEAD:** `bf7f826` (Wave 6 CT surface LIVE)
 
 ## Repository heads audited
 
