@@ -103,6 +103,10 @@ import type {
   PlaygroundScenarioFailureCode,
   PlaygroundScenarioService,
 } from "./playground-scenario.service.js";
+import type {
+  ConversationContextSignal,
+  ConversationContextSignalProjectionServiceLike,
+} from "./conversation-context-signals.js";
 
 // WHAT: Closed-vocabulary recommendation_mode set per
 //        ADR-0074 §6.
@@ -247,6 +251,14 @@ export interface RecommendBestPathSuccess {
   human_decision_required: boolean;
   honest_note: string;
   audit_event_id: string;
+  // ADR-0078 Stage 2 — approved-source projection of safe
+  // `conversation_context_signals[]`. Additive sidecar per
+  // ADR-0078 §8 (line 1115-1129). Always present; empty array
+  // when no approved-source signals exist. Bounded ≤ 8 per
+  // ADR-0078 §8 line 1129. NEVER carries raw transcript
+  // content / chain-of-thought / raw correction payload / raw
+  // Action payload / connector payload / secret refs.
+  conversation_context_signals: readonly ConversationContextSignal[];
 }
 
 // WHAT: ADR-0074 §11 bounded counts canonical at the
@@ -877,6 +889,7 @@ export class PlaygroundBestPathRecommendationService {
   constructor(
     private readonly comparisons: PlaygroundOutcomeComparisonService,
     private readonly scenarios: PlaygroundScenarioService,
+    private readonly conversationContextSignals: ConversationContextSignalProjectionServiceLike,
   ) {}
 
   // WHAT: Recommend the best path for a stored scenario per
@@ -1125,10 +1138,31 @@ export class PlaygroundBestPathRecommendationService {
     }
     const ownerEntityId = scenarioLookup.scenario.owner_entity_id;
 
+    // 8b. Project Stage 2 approved-source
+    //     conversation_context_signals[] (ADR-0078 §7 Stage 2 +
+    //     §8 + §6C.12 + ADR-0079 §27). Pure projection — no
+    //     mutation, no LLM, no connector invocation, no Action
+    //     creation/mutation, no transcript ingest. Filtered by
+    //     construction per ADR-0079 §27 (NON_WORK_PERSONAL /
+    //     SENSITIVE_PERSONAL / UNKNOWN_BUSINESS_PURPOSE /
+    //     UNKNOWN_REQUIRES_REVIEW / BLOCKED_FROM_AGENT_PLAYGROUND
+    //     never flow). Empty array when no approved-source
+    //     signals exist.
+    const conversationContextSignals =
+      await this.conversationContextSignals.projectApprovedSourceSignals({
+        callerEntityId: ownerEntityId,
+        scenario: scenarioLookup.scenario,
+        policyPurpose: "RECOMMENDATION_REVIEW",
+      });
+
     // 9. Emit audit. Safe metadata only — NEVER raw
     //    recommendation / comparison / candidate text;
     //    NEVER raw scenario JSON; NEVER scores; NEVER legal-
-    //    compliance conclusions.
+    //    compliance conclusions. ADR-0078 §12 + ADR-0079 §19:
+    //    ZERO new audit literal; reuse existing
+    //    ADMIN_ACTION + details.action discriminator and
+    //    extend details with safe counts only (NEVER raw
+    //    signal text / safe_summary / honest_note).
     const audit = await writeAuditEvent({
       event_type: "ADMIN_ACTION",
       outcome: "SUCCESS",
@@ -1145,6 +1179,13 @@ export class PlaygroundBestPathRecommendationService {
         blocked_by_policy: winner.blocked_by_policy,
         human_decision_required: humanDecisionRequired,
         action_transition_readiness: readiness,
+        conversation_context_signals_count:
+          conversationContextSignals.length,
+        conversation_context_signal_sources: [
+          ...new Set(
+            conversationContextSignals.map((s) => s.signal_source_type),
+          ),
+        ],
       },
     });
 
@@ -1183,6 +1224,7 @@ export class PlaygroundBestPathRecommendationService {
       human_decision_required: humanDecisionRequired,
       honest_note: HONEST_NOTE,
       audit_event_id: audit.audit_id,
+      conversation_context_signals: conversationContextSignals,
     };
   }
 }

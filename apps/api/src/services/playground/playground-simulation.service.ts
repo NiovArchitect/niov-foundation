@@ -100,6 +100,10 @@ import type {
   PlaygroundScenarioFailureCode,
   PlaygroundScenarioService,
 } from "./playground-scenario.service.js";
+import type {
+  ConversationContextSignal,
+  ConversationContextSignalProjectionServiceLike,
+} from "./conversation-context-signals.js";
 
 // WHAT: Closed-vocabulary orchestration_mode set per ADR-0076
 //        §3.
@@ -532,6 +536,17 @@ export interface EnterpriseDecisionPosture {
   blockers_before_action: readonly PlaygroundBlockerBeforeAction[];
   // ONE closed-vocab safe next step.
   safe_next_step: PlaygroundSafeNextStep;
+  // ADR-0078 Stage 2 — approved-source projection of safe
+  // `conversation_context_signals[]`. Attached at the
+  // EnterpriseDecisionPosture per ADR-0078 §9 (line 1144-1148)
+  // so the scenario-wide sidecar lives in ONE place rather
+  // than per-branch — preserves ADR-0076 §11 bounded counts
+  // for SimulationBranch and stays inside the §8 ≤ 8 ceiling.
+  // Always present; empty array when no approved-source
+  // signals exist. NEVER carries raw transcript content /
+  // chain-of-thought / raw correction payload / raw Action
+  // payload / connector payload / secret refs.
+  conversation_context_signals: readonly ConversationContextSignal[];
 }
 
 // WHAT: Body shape for POST
@@ -1097,6 +1112,7 @@ function computeEnterpriseDecisionPosture(args: {
   wave7Results: RecommendBestPathSuccess[];
   nextReview: RecommendedNextReview;
   anyFailure: boolean;
+  conversation_context_signals: readonly ConversationContextSignal[];
 }): EnterpriseDecisionPosture {
   // 1. Primary branch — prefer:
   //    (a) a non-failure branch whose Wave 7 result is the
@@ -1185,6 +1201,7 @@ function computeEnterpriseDecisionPosture(args: {
       evidence_posture: ["INSUFFICIENT_CONTEXT"],
       blockers_before_action: ["INSUFFICIENT_DATA"],
       safe_next_step: "DO_NOT_PROCEED",
+      conversation_context_signals: args.conversation_context_signals,
     };
   }
 
@@ -1365,6 +1382,7 @@ function computeEnterpriseDecisionPosture(args: {
     evidence_posture: [...evidence].sort() as PlaygroundEvidencePosture[],
     blockers_before_action: [...blockers].sort() as PlaygroundBlockerBeforeAction[],
     safe_next_step: nextStep,
+    conversation_context_signals: args.conversation_context_signals,
   };
 }
 
@@ -1408,6 +1426,7 @@ export class PlaygroundSimulationService {
   constructor(
     private readonly recommendations: PlaygroundBestPathRecommendationService,
     private readonly scenarios: PlaygroundScenarioService,
+    private readonly conversationContextSignals: ConversationContextSignalProjectionServiceLike,
   ) {}
 
   // WHAT: Simulate a multi-agent exploration for a stored
@@ -1727,11 +1746,28 @@ export class PlaygroundSimulationService {
     //     clarification 2026-05-31). Closed-vocab labels
     //     derived from the same Wave 7 outputs already
     //     consumed above.
+    //
+    //     ADR-0078 Stage 2 — also project safe approved-source
+    //     `conversation_context_signals[]` and attach to the
+    //     enterprise_decision_posture per ADR-0078 §9 (scenario-
+    //     wide single sidecar; NOT per-branch — preserves
+    //     ADR-0076 §11 bounded counts). Pure projection — no
+    //     mutation, no LLM, no connector invocation, no Action
+    //     creation/mutation, no transcript ingest. Filtered by
+    //     construction per ADR-0079 §27.
+    const conversationContextSignals =
+      await this.conversationContextSignals.projectApprovedSourceSignals({
+        callerEntityId: ownerEntityId,
+        scenario: scenarioLookup.scenario,
+        policyPurpose: "SIMULATION_REVIEW",
+      });
+
     const enterprisePosture = computeEnterpriseDecisionPosture({
       branches,
       wave7Results: wave7Successes,
       nextReview,
       anyFailure,
+      conversation_context_signals: conversationContextSignals,
     });
 
     // 8. Emit the single ADR-0076 §14 audit row. Safe
@@ -1756,6 +1792,16 @@ export class PlaygroundSimulationService {
           disagreement.candidate_types_diverged.length,
         unresolved_questions_count: unresolvedQuestions.length,
         caller_confirmation_received: true,
+        // ADR-0078 §12 + ADR-0079 §19 — ZERO new audit literal.
+        // Safe metadata counts only; NEVER raw signal text /
+        // safe_summary / honest_note / signal content.
+        conversation_context_signals_count:
+          conversationContextSignals.length,
+        conversation_context_signal_sources: [
+          ...new Set(
+            conversationContextSignals.map((s) => s.signal_source_type),
+          ),
+        ],
       },
     });
 

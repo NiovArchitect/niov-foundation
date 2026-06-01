@@ -1108,6 +1108,101 @@ delivers Wave 7 / Wave 9 / Wave 10 conversation-signal
 value using already-LIVE Foundation substrate without
 introducing Layer 1 ingest.
 
+### ADR-0078 Stage 2 approved-source projection LIVE 2026-06-01
+
+**ADR-0078 Stage 2 LIVE** at
+`[ADR-0078-STAGE-2-APPROVED-SOURCE-PROJECTION]` 2026-06-01.
+Foundation Wave 7 + Wave 9 responses now carry an additive,
+backward-compatible
+`conversation_context_signals: readonly ConversationContextSignal[]`
+sidecar built from already-LIVE approved sources only.
+**ZERO** raw transcript schema, **ZERO** transcript capture,
+**ZERO** listener, **ZERO** Layer 1 ingest, **ZERO** Layer 4
+drilldown surface, **ZERO** Control Tower code, **ZERO** new
+audit literal, **ZERO** schema migration, **ZERO** new route,
+**ZERO** Action creation / mutation, **ZERO** connector
+invocation, **ZERO** LLM / Python / BEAM at this slice.
+
+LIVE Stage 2 sources at this slice:
+- `CORRECTION_SIGNAL` — caller-wallet self-scoped CORRECTION
+  capsule count + last-seen freshness via Prisma (mirrors
+  `projectConversationCorrections` discipline; ADR-0055 +
+  ADR-0058 LIVE).
+- `ACTION_HISTORY` — `listActionsForCaller` → `SafeActionView`
+  per ADR-0057 §10 allowlist (status / requires_approval /
+  risk_tier / action_type only; NEVER payload_summary /
+  payload_redacted / policy_envelope / secret_ref / source-org-
+  target entity_ids).
+- `MANUAL_USER_INPUT` — structural PRESENCE/ABSENCE of
+  scenario.goal_summary only (NEVER quotes text); empty
+  goal_summary triggers a
+  CONTEXT_INSUFFICIENT_FOR_RECOMMENDATION signal so the human
+  is nudged to fill in scenario context before action.
+
+Deferred / zero-output at Stage 2 (enum preserved):
+- `HIVE_CONTEXT` — no scenario-tied safe Hive context-projection
+  method ready for Stage 2 consumption; future Founder-authorized
+  amendment may wire it in without breaking the response
+  contract.
+
+Signal shape: every emitted `ConversationContextSignal` carries
+all §2 base fields (minus `related_transcript_ref` which is
+OMITTED at Stage 2 per ADR-0078 §7 line 1088 — no Layer 1 yet)
+PLUS the 8 §6C.12 additive fields (`conversation_relevance_class`
++ `capture_eligibility` + `agent_playground_use` +
+`redaction_applied` + `business_purpose_label` +
+`scope_binding_type` + `review_required` +
+`personal_content_suppressed`). Bounded ≤ 8 per ADR-0078 §8
+line 1129. Stable ordering by (source_type, signal_type). Dedupe
+on (signal_type, signal_source_type, signal_scope).
+
+Wave 9 attachment lives on `EnterpriseDecisionPosture` per
+ADR-0078 §9 (scenario-wide single sidecar; NOT per-branch —
+preserves ADR-0076 §11 bounded branch budgets). Wave 7
+attachment lives at the top-level `RecommendBestPathSuccess`
+per ADR-0078 §8.
+
+ADR-0079 §27 Agent Playground use policy enforced **by
+construction** at the projection service register:
+`NON_WORK_PERSONAL` / `SENSITIVE_PERSONAL` /
+`UNKNOWN_REQUIRES_REVIEW` / `UNKNOWN_BUSINESS_PURPOSE` /
+`BLOCKED_FROM_AGENT_PLAYGROUND` / `REQUIRES_HUMAN_REVIEW` /
+unset `scope_binding_type` can never appear in the sidecar.
+Wire-level no-leak guard tests assert raw_text / message_body /
+speaker_quote / private_note / raw_audio / raw_video /
+raw_screen_capture / emotion_score / sentiment_score /
+employee_score / manager_score / psychological_profile /
+compliance_certification / legal_conclusion / regulator_approval
+/ related_transcript_ref / transcript_id / transcript_hash /
+transcript_text_encrypted never surface in Wave 7 or Wave 9
+response bodies.
+
+Audit posture: existing `ADMIN_ACTION + details.action =
+"PLAYGROUND_BEST_PATH_RECOMMENDED"` (Wave 7) +
+`"PLAYGROUND_SIMULATION_EXECUTED"` (Wave 9) extended with safe
+metadata only — `conversation_context_signals_count` + de-duped
+`conversation_context_signal_sources` list. NEVER raw signal
+text / safe_summary / honest_note / safe_summary content / raw
+correction payload / raw Action payload.
+
+Stage 1 (Layer 1 schema + Layer 3 helper + Layer 4 read
+service) remains forward-substrate (separate Founder
+authorization at slice). Control Tower can continue to render
+ADR-0077 §8.2 "Conversation context signals not available in
+this version" placeholder; the next recommended slice is the CT
+consumption slice that replaces that placeholder with safe
+Layer 3 signals from this Stage 2 Foundation surface.
+
+Test surface: 17 NEW unit tests (closed-vocab tuple stability +
+§6C.12 additive field exhaustion + bounded-count discipline) +
+6 NEW Wave 7 integration tests (sidecar presence + backward
+compatibility + bounded ≤ 8 + signal shape + no-leak + ADR-0079
+§27 blocked enum values absent + empty array for caller without
+approved-source context) + 7 NEW Wave 9 integration tests (same
+posture at `enterprise_decision_posture` attachment point).
+Wave 7 baseline 40 → 46. Wave 9 baseline 51 → 58. Wave 8
+governed-transition regression preserved at 43/43.
+
 ---
 
 Back to master: [`../CURRENT_BUILD_STATE.md`](../CURRENT_BUILD_STATE.md)

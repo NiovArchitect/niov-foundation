@@ -514,6 +514,43 @@ export type {
   ConversationCorrectionsInput,
 } from "./services/otzar/conversation-corrections.js";
 
+// ADR-0078 Stage 2 — approved-source projection of safe
+// `conversation_context_signals[]` for Agent Playground Wave 7
+// + Wave 9 response surfaces.
+export {
+  ConversationContextSignalProjectionService,
+  CONVERSATION_CONTEXT_SIGNAL_TYPE_VALUES,
+  SIGNAL_CONFIDENCE_LABEL_VALUES,
+  SIGNAL_SOURCE_TYPE_VALUES,
+  SIGNAL_SCOPE_VALUES,
+  EVIDENCE_LABEL_VALUES,
+  RETENTION_CLASS_VALUES,
+  POLICY_PURPOSE_VALUES,
+  BUSINESS_PURPOSE_LABEL_VALUES,
+  CONVERSATION_RELEVANCE_CLASS_VALUES,
+  CAPTURE_ELIGIBILITY_VALUES,
+  AGENT_PLAYGROUND_USE_VALUES,
+  SCOPE_BINDING_TYPE_VALUES,
+  CONVERSATION_CONTEXT_SIGNALS_MAX,
+} from "./services/playground/conversation-context-signals.js";
+export type {
+  ConversationContextSignal,
+  ConversationContextSignalType,
+  SignalConfidenceLabel,
+  SignalSourceType,
+  SignalScope,
+  EvidenceLabel,
+  RetentionClass,
+  PolicyPurpose,
+  BusinessPurposeLabel,
+  ConversationRelevanceClass,
+  CaptureEligibility,
+  AgentPlaygroundUse,
+  ScopeBindingType,
+  ConversationContextSignalProjectionServiceLike,
+  ProjectApprovedSourceSignalsInput,
+} from "./services/playground/conversation-context-signals.js";
+
 export {
   truncateToTokenBudget,
   TokenBudgetExceededError,
