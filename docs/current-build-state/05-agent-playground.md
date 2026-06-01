@@ -702,14 +702,31 @@ authorization)**:
    semantics as governed role-perspective simulation
    before action — *canonical sentence: "Wave 9 is not
    autonomous agent debate. Wave 9 is governed role-
-   perspective simulation before action."* Founder's
-   recommended expanded vocab (10 agent_roles + 6
-   branch_types incl. OWNER_OPERATOR, POLICY_REVIEWER,
-   ACTION_APPROVER, RECOMMENDED_PATH, DO_NOT_PROCEED_PATH)
-   is forward-substrate for a future ADR-0076 §4 + §5
-   amendment per RULE 20; v1 keeps the canonical
-   contract-register vocab verbatim. `conversation_context_signals[]`
-   reserved for the governed listener substrate slice.
+   perspective simulation before action."* **ADR-0076
+   Amendment 1 LANDED 2026-05-31** at
+   `[FOUNDER-SECTION-5-WAVE-9-VOCABULARY-AMENDMENT-AUTH]` —
+   docs-only canonicalization of the richer vNext branch +
+   role vocabulary alongside the LIVE v1 runtime vocabulary
+   (§4 amended to §4.1 v1 + §4.2 vNext 6 branch postures
+   incl. RECOMMENDED_PATH / LOW_RISK_PATH /
+   COMPLIANCE_FIRST_PATH / RESILIENCE_FIRST_PATH /
+   HUMAN_REVIEW_PATH / DO_NOT_PROCEED_PATH; §5 amended to
+   §5.1 v1 + §5.2 vNext 10 enterprise-recognizable roles
+   incl. OWNER_OPERATOR / POLICY_REVIEWER /
+   COMPLIANCE_REVIEWER / SECURITY_REVIEWER /
+   DATA_GOVERNANCE_REVIEWER / CONNECTOR_ADMIN /
+   ACTION_APPROVER / CUSTOMER_OR_STAKEHOLDER_ADVOCATE /
+   OPERATIONS_LEAD / RESILIENCE_REVIEWER; NEW §17A
+   migration posture; NEW §17B Control Tower relation; NEW
+   §17C DGI/product rationale). v1 runtime + Wave 10 CT
+   cockpit at `otzar-control-tower` PR #6 `cf3483f` remain
+   canonical and LIVE for the v1 enterprise cockpit scope
+   verbatim. The vNext implementation slice (v1 → vNext
+   service constants + Wave 10 CT label migration) requires
+   separate Founder authorization at
+   `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`.
+   `conversation_context_signals[]` reserved for the
+   governed listener substrate slice.
    Option C BEAM-orchestrated forward-substrate per
    ADR-0028 + ADR-0069 §6 re-verification (applies WHEN
    simulation needs LIVE concurrent message-passing agents
