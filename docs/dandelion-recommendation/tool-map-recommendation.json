@@ -1,0 +1,71 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. Tool activation also requires per-connector RULE 21 research arc per ADR-0084.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_APPROVAL_REQUIRED", "NO_CONNECTOR_ACTIVATION_FROM_RECOMMENDATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/tool-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "recommendation.tool-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "ToolMap",
+      "name": "Tool Map Recommendation",
+      "description": "Ranks proposed Tool Map regions consuming Tool Map Assessment + composing Wave 6 connector-priority matrix + connector implementation-readiness catalog. Slack ranks first per Wave 6 + C2 RUNTIME_READY substrate.",
+      "human_readable_summary": "Proposes which connectors admins should approve first. Slack first per Wave 6 + C2 substrate. Google Workspace + Project Tracker rank next.",
+      "model_usage_notes": "Tool Map references both the Wave 6 priority matrix (docs/ootb-catalog/connector-priority-matrix.json) + connector readiness catalog (docs/connector-readiness/connector-readiness-matrix.json). C2 LIVE substrate at apps/api/src/services/connector/slack-read.provider.ts is RUNTIME_READY for Slack.",
+      "source_adr_refs": ["ADR-0082", "ADR-0084", "ADR-0080", "ADR-0026", "RULE 0"],
+      "consumes_assessment_id": "assessment.tool-map.v1",
+      "ranked_regions": [
+        { "region_id": "tool.slack-read-first", "region_label": "Slack read-first connector", "rank": 1, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Wave 6 score 16.00 + readiness composite 8.65 + C2 RUNTIME_READY substrate LIVE." },
+        { "region_id": "tool.google-workspace-read-first", "region_label": "Google Workspace read-first connector", "rank": 2, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Wave 6 score 13.33 + readiness 7.50; domain-wide delegation requires super-admin review." },
+        { "region_id": "tool.project-tracker-read-first", "region_label": "Project Tracker (Jira / Linear) read-first connector", "rank": 3, "confidence_label": "MEDIUM_CONFIDENCE", "rationale_summary": "Wave 6 score 12.75; choose Jira or Linear based on existing tool stack." },
+        { "region_id": "tool.forbidden-exclusion", "region_label": "Forbidden-tool exclusion list", "rank": 4, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Forbidden tools from assessment intake remain absolute downstream." }
+      ],
+      "rationale": "Slack first because the runtime substrate is already LIVE (C2 PR #185). Google Workspace + Project Tracker rank next per Wave 6 + readiness catalog. Forbidden tools absolute.",
+      "cross_map_dependencies": [
+        "Tool Map depends on Company Map (forbidden tools draw from sensitive-systems exclusion)",
+        "Workflow Map depends on Tool Map (workflows compose against approved tools)",
+        "Authority Map gates Tool Map write activation",
+        "Risk Map gates Tool Map (high-risk tools flagged)"
+      ],
+      "approval_gate_required": "Admin policy approval + map-region approval + per-connector RULE 21 research arc per ADR-0084.",
+      "confidence_label": "REQUIRES_ADMIN_REVIEW",
+      "DMW_scope_implications": [
+        "Tool Map bounds which connector data flows into DMW memory",
+        "Forbidden tools cannot scope any DMW without explicit later admin authorization",
+        "Per-role tool-usage from Wave 2.1 §24 constrains per-role DMW scope"
+      ],
+      "governance_review_points": [
+        "Admin must approve every connector activation per ADR-0084",
+        "Per-region Map approval per ADR-0082 Amendment 1",
+        "Per-connector RULE 21 research arc required before adapter implementation",
+        "Risky writes mandatory dual-control per ADR-0026"
+      ],
+      "safe_defaults": ["Read-first defaults", "Write actions disabled by default", "Admin-approved activation only", "Wave 6 priority matrix as suggest-only"],
+      "forbidden_defaults": ["Autonomous connector activation", "Connector activation from billing entitlement alone", "Cross-tenant tool fusion", "Workforce-scoring inferences from tool-usage data"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_CONNECTOR_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed", "future INVOKE_CONNECTOR + ACTION_* per ADR-0084"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}

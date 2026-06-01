@@ -1,0 +1,72 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. ADR-0081 5-stage maturity governs workflow activation.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_APPROVAL_REQUIRED", "NO_EXECUTION_FROM_RECOMMENDATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/workflow-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_EXECUTION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "recommendation.workflow-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "WorkflowMap",
+      "name": "Workflow Map Recommendation",
+      "description": "Ranks proposed Workflow Map regions per ADR-0081 5-stage maturity. Stage 1 (template) + Stage 2 (recommendation) regions rank first; Stages 3-5 require explicit policy review.",
+      "human_readable_summary": "Proposes Stage 1 + Stage 2 workflows first. Stage 3-5 progression requires explicit admin policy review + per-call governance.",
+      "model_usage_notes": "Use ADR-0081 stage labels. Template-only + recommendation-only workflows are safe defaults. Proposed-Action + governed execution + continuous-optimization stages must surface as REQUIRES_ADMIN_REVIEW at minimum.",
+      "source_adr_refs": ["ADR-0082", "ADR-0081", "ADR-0080", "ADR-0026", "RULE 0"],
+      "consumes_assessment_id": "assessment.workflow-map.v1",
+      "ranked_regions": [
+        { "region_id": "workflow.stage-1-templates", "region_label": "Stage 1 template-only workflows", "rank": 1, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Templates are non-executing; safe baseline." },
+        { "region_id": "workflow.stage-2-recommendations", "region_label": "Stage 2 recommendation-only workflows", "rank": 2, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Recommendations surface to humans; admin approval defines surface scope." },
+        { "region_id": "workflow.stage-3-proposed-action", "region_label": "Stage 3 proposed-Action workflows", "rank": 3, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Proposed-Action requires admin policy approval per ADR-0081." },
+        { "region_id": "workflow.safe-fallback", "region_label": "Safe-fallback paths per workflow", "rank": 4, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Safe-fallback documented per workflow; HIGH confidence because they require no connector activation." },
+        { "region_id": "workflow.dual-control-required", "region_label": "Dual-control-required workflows", "rank": 5, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Risky writes mandatory dual-control per ADR-0026 regardless of stage." }
+      ],
+      "rationale": "Stages 1-2 are safe; Stages 3-5 require explicit admin review. Safe-fallback paths always available even without connectors. Dual-control workflows enforced regardless of stage.",
+      "cross_map_dependencies": [
+        "Workflow Map depends on Role Map (workflow participants are role-shaped)",
+        "Workflow Map depends on Tool Map (workflows compose against approved tools)",
+        "Workflow Map depends on Authority Map (approval gates draw from authority chains)",
+        "Workflow Map depends on Risk Map (high-risk workflows blocked)"
+      ],
+      "approval_gate_required": "Admin policy approval at D4 + per-call governance for Stage 3+ per ADR-0081.",
+      "confidence_label": "REQUIRES_ADMIN_REVIEW",
+      "DMW_scope_implications": [
+        "Workflow Map bounds workflow-scoped DMW provenance per ADR-0081",
+        "Approval-gate workflows constrain Authority Map DMW scope downstream",
+        "Safe-fallback workflows operate without connector DMW provenance"
+      ],
+      "governance_review_points": [
+        "Admin must approve every workflow stage progression",
+        "Workflow Stages 3-5 require Foundation governance authorization + per-call approval",
+        "Dual-control mandatory for risky writes regardless of stage",
+        "Workflow purpose binding required at activation"
+      ],
+      "safe_defaults": ["Stage 1 + Stage 2 baseline", "Admin-approved stage progression", "Per-call governance for any execution", "Safe-fallback always available"],
+      "forbidden_defaults": ["Autonomous execution from recommendation", "Stage 3+ progression without admin approval", "Cross-tenant workflow fusion", "Workforce-scoring inferences from workflow throughput"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_EXECUTION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed", "future ACTION_* at Stage 3+ runtime"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}

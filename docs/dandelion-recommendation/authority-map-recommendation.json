@@ -1,0 +1,74 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. RULE 0 sovereignty absolute: AI never grants authority to other AI.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED", "AUTHORITY_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_APPROVAL_REQUIRED", "NO_AUTHORITY_GRANT_FROM_RECOMMENDATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/authority-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_AUTHORITY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "CRITICAL"
+  },
+  "items": [
+    {
+      "id": "recommendation.authority-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "AuthorityMap",
+      "name": "Authority Map Recommendation",
+      "description": "Ranks proposed Authority Map regions (approval chains / delegated authority / dual-control requirements / break-glass paths / 'must never be assumed' surfaces).",
+      "human_readable_summary": "Proposes which authority surfaces admins should approve. AI never grants authority autonomously. Dual-control mandatory for risky writes.",
+      "model_usage_notes": "'Must never be assumed' regions rank HIGH_CONFIDENCE because they are absolute exclusions. Dual-control requirements rank next because they gate risky writes. Break-glass paths require ADR-0050 governance.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0026", "ADR-0050", "ADR-0027", "RULE 0"],
+      "consumes_assessment_id": "assessment.authority-map.v1",
+      "ranked_regions": [
+        { "region_id": "authority.must-never-assume", "region_label": "'Must never be assumed' surfaces", "rank": 1, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Absolute exclusions from intake remain absolute downstream." },
+        { "region_id": "authority.dual-control-required", "region_label": "Dual-control-required surfaces per ADR-0026", "rank": 2, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Risky writes mandatory dual-control regardless of plan tier." },
+        { "region_id": "authority.approval-chains", "region_label": "Approval chains", "rank": 3, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Spend / hiring / external-commit / legal approval chains gate write authority." },
+        { "region_id": "authority.delegated-profiles", "region_label": "Delegated authority profiles", "rank": 4, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Per Wave 2.1 §19; per-role delegation profiles require admin policy approval." },
+        { "region_id": "authority.break-glass", "region_label": "Break-glass / emergency authority per ADR-0050", "rank": 5, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Break-glass paths require ADR-0050 governance + time-boxed audit." }
+      ],
+      "rationale": "'Must never be assumed' regions + dual-control requirements rank first because they are absolute boundaries. Approval chains + delegation profiles follow. Break-glass paths require explicit ADR-0050 governance discipline.",
+      "cross_map_dependencies": [
+        "Authority Map depends on Org Map (approval chains inherit reporting structure)",
+        "Workflow Map depends on Authority Map (workflow approval gates draw from authority chains)",
+        "Tool Map depends on Authority Map (connector-write gates require authority approval)",
+        "Memory / DMW Map depends on Authority Map ('must never be assumed' regions exclude DMW scope)"
+      ],
+      "approval_gate_required": "Admin policy approval at D4 + RULE 0 sovereignty absolute (AI never grants authority).",
+      "confidence_label": "REQUIRES_ADMIN_REVIEW",
+      "DMW_scope_implications": [
+        "Authority Map bounds Twin write-side DMW provenance",
+        "Dual-control workflows constrain write-side DMW emission tracking",
+        "'Must never be assumed' surfaces excluded from any Twin DMW",
+        "Break-glass per ADR-0050 emits to bounded audit-only DMW scope"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Authority Map region",
+        "RULE 0 sovereignty absolute: AI never grants authority to AI",
+        "Dual-control mandatory for risky writes per ADR-0026",
+        "ADR-0050 break-glass for emergency authority only",
+        "Per-call governance approval required for any authority-bound execution"
+      ],
+      "safe_defaults": ["Explicit + revocable delegated authority only", "Dual-control for risky writes", "Admin-approved authority regions", "'Must never be assumed' rules absolute"],
+      "forbidden_defaults": ["Autonomous authority grant", "AI-to-AI authority grant", "Dual-control bypass for commercial reason", "Cross-tenant authority fusion", "Workforce-scoring inferences from authority structure"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_AUTHORITY_GRANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed", "future BREAK_GLASS_* per ADR-0050"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}

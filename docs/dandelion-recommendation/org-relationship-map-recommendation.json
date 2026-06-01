@@ -1,0 +1,69 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. Admin approval at D4 mandatory.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_APPROVAL_REQUIRED", "NO_ACTIVATION_FROM_RECOMMENDATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/org-relationship-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "recommendation.org-relationship-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "OrgRelationshipMap",
+      "name": "Org / Relationship Map Recommendation",
+      "description": "Ranks proposed role-shaped relationship regions (approval chains / escalation paths / executive-support relationships / dotted-line relationships) consumed from the Org / Relationship Map Assessment.",
+      "human_readable_summary": "Proposes which approval + escalation + reporting relationships admins should approve. Role-shaped only — never named-individual surveillance.",
+      "model_usage_notes": "Approval chains rank first because they gate every downstream write authority. Escalation paths rank second. Dotted-line relationships rank lower because they vary more across orgs.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0070", "RULE 0"],
+      "consumes_assessment_id": "assessment.org-relationship-map.v1",
+      "ranked_regions": [
+        { "region_id": "org.approval-chains", "region_label": "Approval chains", "rank": 1, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Approval chains gate every downstream write authority. Admin approval required." },
+        { "region_id": "org.escalation-paths", "region_label": "Escalation paths", "rank": 2, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Escalation paths govern incident + customer + compliance + legal flow." },
+        { "region_id": "org.executive-support", "region_label": "Executive-support relationships", "rank": 3, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "EA / Chief of Staff / Office of CEO relationships govern delegated executive authority." },
+        { "region_id": "org.dotted-line", "region_label": "Dotted-line relationships", "rank": 4, "confidence_label": "MEDIUM_CONFIDENCE", "rationale_summary": "Matrixed reporting varies across orgs; rank lower until admin confirms." }
+      ],
+      "rationale": "Approval + escalation gate write authority + incident flow. They must land before any tool-write or workflow-execution region activates downstream. Confidential relationships excluded at assessment intake remain absolute.",
+      "cross_map_dependencies": [
+        "Authority Map depends on Org Map approval chains",
+        "Workflow Map depends on Org Map escalation paths",
+        "Role Map depends on Org Map for reporting-structure context"
+      ],
+      "approval_gate_required": "Admin policy approval at D4 per ADR-0082 Amendment 1.",
+      "confidence_label": "REQUIRES_ADMIN_REVIEW",
+      "DMW_scope_implications": [
+        "Org Map bounds Team / Hive-scoped DMW memory",
+        "Confidential relationships excluded at assessment remain excluded at DMW activation",
+        "Approval-path relationships inform Authority Map DMW scope downstream"
+      ],
+      "governance_review_points": [
+        "Admin must approve every Org Map region before any downstream activation",
+        "No workforce-scoring inferences from reporting structure",
+        "No managerial-oversight monitoring from approval chains"
+      ],
+      "safe_defaults": ["Role-shaped relationships only", "Admin-approved scope", "Confidential relationships excluded by construction"],
+      "forbidden_defaults": ["Autonomous activation", "Workforce-scoring inferences from reporting structure", "Managerial-oversight monitoring of named individuals", "Cross-tenant relationship fusion"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}

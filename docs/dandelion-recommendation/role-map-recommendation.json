@@ -1,0 +1,70 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. User must confirm own role; admin approval at D4 mandatory before Twin capability activation.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED", "ROLE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "USER_CONFIRMATION_REQUIRED", "ADMIN_APPROVAL_REQUIRED"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/role-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "recommendation.role-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "RoleMap",
+      "name": "Role Map Recommendation",
+      "description": "Ranks proposed Role Map regions consuming Role Map Assessment output candidates. Includes role-template match confidence + day-one Twin capability candidates + first-week aha moments + sensitive-scope exclusions.",
+      "human_readable_summary": "Proposes role-template match + day-one Twin capabilities + first-week aha moments per user. Sensitive scopes excluded at assessment remain absolute.",
+      "model_usage_notes": "Role-template match confidence depends on Wave 2.1 role-depth file coverage. DEEP roles (6 of 21) get HIGH_CONFIDENCE template matches; SUBSTANTIVE roles (15 of 21) get MEDIUM. Out-of-catalog roles get LOW + REQUIRES_USER_CONFIRMATION.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0027", "RULE 0"],
+      "consumes_assessment_id": "assessment.role-map.v1",
+      "ranked_regions": [
+        { "region_id": "role.template-match", "region_label": "OOTB role-template match", "rank": 1, "confidence_label": "REQUIRES_USER_CONFIRMATION", "rationale_summary": "User confirms role match before Twin capability activation." },
+        { "region_id": "role.day-one-capabilities", "region_label": "Twin day-one capabilities", "rank": 2, "confidence_label": "REQUIRES_ADMIN_REVIEW", "rationale_summary": "Day-one capabilities require admin policy approval before activation." },
+        { "region_id": "role.first-week-aha", "region_label": "First-week aha moments", "rank": 3, "confidence_label": "REQUIRES_USER_CONFIRMATION", "rationale_summary": "Aha moments per Wave 2.1 §22; user confirms before surfacing." },
+        { "region_id": "role.sensitive-scope-exclusion", "region_label": "Sensitive-scope exclusions", "rank": 4, "confidence_label": "HIGH_CONFIDENCE", "rationale_summary": "Sensitive scopes excluded at intake remain absolute downstream." }
+      ],
+      "rationale": "Role-template match confirmation must precede capability activation. First-week aha moments depend on confirmed role + admin-approved capabilities. Sensitive-scope exclusions inherit from Risk Map.",
+      "cross_map_dependencies": [
+        "Role Map depends on Company Map (initial-rollout departments bound role scope)",
+        "Role Map depends on Org Map (manager + direct-reports relationships)",
+        "Tool Map references Role Map (per-role tool usage per Wave 2.1 §24)",
+        "Memory / DMW Map references Role Map (per-role DMW scope per Wave 2.1 §25)"
+      ],
+      "approval_gate_required": "User confirmation + admin policy approval at D4 per ADR-0082 Amendment 1.",
+      "confidence_label": "REQUIRES_USER_CONFIRMATION",
+      "DMW_scope_implications": [
+        "Role Map bounds Role-scoped DMW memory per Wave 2.1 §25",
+        "Sensitive scopes excluded at assessment remain excluded at DMW activation",
+        "Twin day-one capabilities map to allowed DMW categories per OOTB role-depth"
+      ],
+      "governance_review_points": [
+        "User must confirm own role before Twin activation",
+        "Admin must approve every Role Map region before capability lights up",
+        "No workforce-scoring inferences from role + responsibility data"
+      ],
+      "safe_defaults": ["User-confirmed role match", "Admin-approved Map region", "OOTB role-depth defaults as starter priors"],
+      "forbidden_defaults": ["Autonomous Twin capability activation", "Workforce-scoring inferences", "Managerial-oversight monitoring", "Cross-tenant role fusion"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AGENT_TWIN_SCOPED_TO_USER", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}

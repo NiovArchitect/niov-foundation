@@ -1,0 +1,100 @@
+{
+  "$schema": "./recommendation.schema.json",
+  "kind": "MapRecommendation",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "MapRecommendation",
+    "human_readable_summary": "Dandelion maps the territory. Admins approve the map. Foundation governs what can happen inside the map. DMWs scope what can be remembered. Digital Twins operate within the approved terrain.",
+    "model_usage_notes": "Recommendations are PROPOSED_NOT_APPROVED. Admin approval at D4 Governance Review is mandatory before any region may activate downstream.",
+    "scope_defaults": ["TENANT_SCOPED", "RECOMMENDATION_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "ADMIN_APPROVAL_REQUIRED", "NO_ACTIVATION_FROM_RECOMMENDATION"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/dandelion-recommendation/company-map-recommendation.json",
+      "version_tag": "d3-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-D3-DANDELION-RECOMMENDATION]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed", "future ADMIN_ACTION:MAP_REGION_APPROVED at D4 governance review"],
+    "policy_purpose": "RECOMMENDATION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "recommendation.company-map.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "MapRecommendation",
+      "map_type": "CompanyMap",
+      "name": "Company Map Recommendation",
+      "description": "Ranks proposed Company Map regions (initial department rollout / sensitive-systems exclusion list / compliance posture summary) consumed from the Company Map Assessment output candidates. Every region is PROPOSED_NOT_APPROVED; admin review at D4 is mandatory.",
+      "human_readable_summary": "Proposes which Company Map regions admins should approve first. Includes initial-department rollout candidates, sensitive-system exclusions, and a neutral compliance posture summary per ADR-0070.",
+      "model_usage_notes": "Use ranked_regions[].rank for surfacing order. Treat HIGH_CONFIDENCE as 'safe to propose'; REQUIRES_ADMIN_REVIEW as 'must surface but never auto-activate'; BLOCKED_BY_POLICY as 'excluded from proposal'.",
+      "source_adr_refs": ["ADR-0082", "ADR-0080", "ADR-0070", "ADR-0027", "RULE 0"],
+      "consumes_assessment_id": "assessment.company-map.v1",
+      "ranked_regions": [
+        {
+          "region_id": "company.initial-departments",
+          "region_label": "Initial-rollout department list",
+          "rank": 1,
+          "confidence_label": "REQUIRES_ADMIN_REVIEW",
+          "rationale_summary": "Admin-supplied list from assessment intake; admin must explicitly approve before any downstream Role / Tool / Workflow Map region activates within these departments."
+        },
+        {
+          "region_id": "company.sensitive-systems-exclusion",
+          "region_label": "Sensitive-systems exclusion list",
+          "rank": 2,
+          "confidence_label": "HIGH_CONFIDENCE",
+          "rationale_summary": "Sensitive systems named by admin are absolute exclusions downstream; high confidence because the user explicitly named them and Risk Map intake reinforces them."
+        },
+        {
+          "region_id": "company.compliance-posture-summary",
+          "region_label": "Neutral compliance posture summary",
+          "rank": 3,
+          "confidence_label": "REQUIRES_ADMIN_REVIEW",
+          "rationale_summary": "Compliance vocabulary must be neutral per ADR-0070 — never claim regulator approval or guaranteed compliance. Admin approval required."
+        }
+      ],
+      "rationale": "Company Map anchors every downstream Map. Approving the initial-rollout departments + sensitive-systems exclusion + compliance posture summary in that order minimizes blast radius and preserves the Risk Map's hard exclusions before any role-level activity begins. The recommendation never claims to know the company beyond what admin + user intake provided.",
+      "cross_map_dependencies": [
+        "Org / Relationship Map depends on Company Map (departments anchor reporting structure)",
+        "Role Map depends on Company Map (departments + customer type bound role activation)",
+        "Tool Map depends on Company Map (forbidden tools for initial rollout draw from sensitive-systems exclusion)",
+        "Risk Map cross-references Company Map (compliance-sensitive surfaces inherit company regions/jurisdictions)"
+      ],
+      "approval_gate_required": "Admin policy approval at D4 Governance Review per ADR-0082 Amendment 1 cartographer doctrine. Without admin approval no Company Map region may activate downstream.",
+      "confidence_label": "REQUIRES_ADMIN_REVIEW",
+      "DMW_scope_implications": [
+        "Company Map establishes the tenant-scope ceiling that every downstream DMW scope inherits",
+        "Initial-rollout departments bound Department-scoped DMW memory",
+        "Sensitive-systems exclusion remains absolute downstream — no DMW scope may include them without explicit later admin authorization",
+        "Per ADR-0037: regions/jurisdictions bound jurisdiction-aware DMW scope"
+      ],
+      "governance_review_points": [
+        "Admin must approve initial-rollout departments before any downstream Map region activates",
+        "Sensitive-systems exclusion is absolute downstream",
+        "Compliance vocabulary must stay neutral per ADR-0070",
+        "No workforce-scoring inferences from company facts (RULE 0 + RULE 20)"
+      ],
+      "safe_defaults": [
+        "Read-only recommendation surface",
+        "Admin approval at D4 mandatory",
+        "Conservative ranking for unknown / ambiguous regions",
+        "BLOCKED_BY_POLICY confidence reserved for regions that fail Risk Map exclusions"
+      ],
+      "forbidden_defaults": [
+        "Autonomous activation from recommendation",
+        "Cross-tenant data fusion",
+        "Workforce-scoring inferences from company facts",
+        "Guaranteed-compliance claims",
+        "Regulator-approval claims"
+      ],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_CROSS_TENANT", "AGENT_TWIN_AUTONOMOUS_ACTIVATION", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "audit_expectations": ["ADMIN_ACTION:MAP_RECOMMENDATION_REFERENCED when consumed", "no new audit literal at D3"],
+      "recommendation_state": "PROPOSED_NOT_APPROVED"
+    }
+  ]
+}
