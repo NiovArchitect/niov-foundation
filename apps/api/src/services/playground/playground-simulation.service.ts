@@ -116,47 +116,87 @@ export type PlaygroundOrchestrationMode =
   (typeof PLAYGROUND_ORCHESTRATION_MODE_VALUES)[number];
 
 // WHAT: Closed-vocabulary branch_definition set per ADR-0076
-//        §4. Five values; v1 default set excludes BASELINE so
-//        the 4 × 6 = 24 sub-invocation ceiling per ADR-0076
-//        §11 holds.
+//        §4 Amendment 1 (vNext runtime LIVE since
+//        `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`
+//        2026-05-31). Six values total — the 4 default values
+//        plus 2 opt-in values; default 4 × default 6 roles =
+//        24 sub-invocations preserves the ADR-0076 §11
+//        24-branch ceiling.
+//
+//        v1 vocabulary (BASELINE / POLICY_FIRST_BRANCH /
+//        GOVERNANCE_FIRST_BRANCH / RESILIENCE_FIRST_BRANCH /
+//        HUMAN_REVIEW_FIRST_BRANCH) was the LIVE runtime
+//        from Wave 9 Option A PR #147 `340d37f` 2026-05-31
+//        through ADR-0076 Amendment 1 docs landing at PR
+//        #151 `401fdee` 2026-05-31. This commit performs
+//        the clean v1 → vNext replacement per ADR-0076
+//        §17A migration posture.
 export const PLAYGROUND_BRANCH_DEFINITION_VALUES = [
-  "BASELINE",
-  "POLICY_FIRST_BRANCH",
-  "GOVERNANCE_FIRST_BRANCH",
-  "RESILIENCE_FIRST_BRANCH",
-  "HUMAN_REVIEW_FIRST_BRANCH",
+  "RECOMMENDED_PATH",
+  "LOW_RISK_PATH",
+  "COMPLIANCE_FIRST_PATH",
+  "RESILIENCE_FIRST_PATH",
+  "HUMAN_REVIEW_PATH",
+  "DO_NOT_PROCEED_PATH",
 ] as const;
 export type PlaygroundBranchDefinition =
   (typeof PLAYGROUND_BRANCH_DEFINITION_VALUES)[number];
 
+// WHAT: Default branch_definition set per Founder paste at
+//        `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`
+//        2026-05-31. Four values × six default roles =
+//        24-branch ceiling. RESILIENCE_FIRST_PATH +
+//        DO_NOT_PROCEED_PATH are opt-in via explicit
+//        `branch_definitions[]` body param.
 const DEFAULT_BRANCH_DEFINITIONS: readonly PlaygroundBranchDefinition[] = [
-  "POLICY_FIRST_BRANCH",
-  "GOVERNANCE_FIRST_BRANCH",
-  "RESILIENCE_FIRST_BRANCH",
-  "HUMAN_REVIEW_FIRST_BRANCH",
+  "RECOMMENDED_PATH",
+  "LOW_RISK_PATH",
+  "COMPLIANCE_FIRST_PATH",
+  "HUMAN_REVIEW_PATH",
 ];
 
-// WHAT: Closed-vocabulary agent_role set per ADR-0076 §5. Six
-//        values. Each agent_role is a closed-vocab lens
-//        projecting Wave 7 output; NEVER an LLM persona.
+// WHAT: Closed-vocabulary agent_role set per ADR-0076 §5
+//        Amendment 1 vNext (LIVE since
+//        `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`
+//        2026-05-31). Ten values total — 6 default plus 4
+//        opt-in. Each agent_role is a closed-vocab lens
+//        projecting Wave 7 output; NEVER an LLM persona;
+//        NEVER exchanges raw text or chain-of-thought with
+//        another agent_role.
+//
+//        v1 vocabulary (OPERATIONS_AGENT / COMPLIANCE_AGENT /
+//        RISK_AGENT / CUSTOMER_AGENT / RESILIENCE_AGENT /
+//        HUMAN_REVIEW_AGENT) replaced cleanly per ADR-0076
+//        §17A migration posture.
 export const PLAYGROUND_AGENT_ROLE_VALUES = [
-  "OPERATIONS_AGENT",
-  "COMPLIANCE_AGENT",
-  "RISK_AGENT",
-  "CUSTOMER_AGENT",
-  "RESILIENCE_AGENT",
-  "HUMAN_REVIEW_AGENT",
+  "OWNER_OPERATOR",
+  "POLICY_REVIEWER",
+  "COMPLIANCE_REVIEWER",
+  "SECURITY_REVIEWER",
+  "DATA_GOVERNANCE_REVIEWER",
+  "CONNECTOR_ADMIN",
+  "ACTION_APPROVER",
+  "CUSTOMER_OR_STAKEHOLDER_ADVOCATE",
+  "OPERATIONS_LEAD",
+  "RESILIENCE_REVIEWER",
 ] as const;
 export type PlaygroundAgentRole =
   (typeof PLAYGROUND_AGENT_ROLE_VALUES)[number];
 
+// WHAT: Default agent_role set per Founder paste at
+//        `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`
+//        2026-05-31. Six values × four default branches =
+//        24-branch ceiling. SECURITY_REVIEWER +
+//        DATA_GOVERNANCE_REVIEWER + CONNECTOR_ADMIN +
+//        CUSTOMER_OR_STAKEHOLDER_ADVOCATE are opt-in via
+//        explicit `agent_roles[]` body param.
 const DEFAULT_AGENT_ROLES: readonly PlaygroundAgentRole[] = [
-  "OPERATIONS_AGENT",
-  "COMPLIANCE_AGENT",
-  "RISK_AGENT",
-  "CUSTOMER_AGENT",
-  "RESILIENCE_AGENT",
-  "HUMAN_REVIEW_AGENT",
+  "OWNER_OPERATOR",
+  "POLICY_REVIEWER",
+  "COMPLIANCE_REVIEWER",
+  "ACTION_APPROVER",
+  "OPERATIONS_LEAD",
+  "RESILIENCE_REVIEWER",
 ];
 
 // WHAT: Closed-vocab assumed_constraints set per ADR-0076 §6.1.
@@ -372,19 +412,35 @@ function isRecommendationMode(value: unknown): value is PlaygroundRecommendation
 }
 
 // WHAT: Map a branch_definition → Wave 7 recommendation_mode
-//        per ADR-0076 §4.
+//        per ADR-0076 §4 Amendment 1 + Founder vNext
+//        implementation paste 2026-05-31. RECOMMENDED_PATH +
+//        LOW_RISK_PATH map to POLICY_FIRST (Wave 7 default
+//        priority ladder). COMPLIANCE_FIRST_PATH maps to
+//        GOVERNANCE_FIRST. RESILIENCE_FIRST_PATH maps to
+//        RESILIENCE_FIRST. HUMAN_REVIEW_PATH and
+//        DO_NOT_PROCEED_PATH both map to HUMAN_REVIEW_FIRST
+//        (Wave 7's HUMAN_REVIEW_FIRST mode short-circuits to
+//        HUMAN_REVIEW_REQUIRED + safety-blocking gates so
+//        DO_NOT_PROCEED_PATH safely surfaces a non-action
+//        posture per §4.2 + Founder paste branch-mapping
+//        guidance). DO_NOT_PROCEED_PATH NEVER creates an
+//        Action and NEVER invokes Wave 8; the safety-first
+//        posture is communicated through the closed-vocab
+//        projection labels (governance_conflicts /
+//        expected_outcomes / blockers_before_action).
 function recommendationModeForBranch(
   branch: PlaygroundBranchDefinition,
 ): PlaygroundRecommendationMode {
   switch (branch) {
-    case "BASELINE":
-    case "POLICY_FIRST_BRANCH":
+    case "RECOMMENDED_PATH":
+    case "LOW_RISK_PATH":
       return "DETERMINISTIC_POLICY_FIRST";
-    case "GOVERNANCE_FIRST_BRANCH":
+    case "COMPLIANCE_FIRST_PATH":
       return "DETERMINISTIC_GOVERNANCE_FIRST";
-    case "RESILIENCE_FIRST_BRANCH":
+    case "RESILIENCE_FIRST_PATH":
       return "DETERMINISTIC_RESILIENCE_FIRST";
-    case "HUMAN_REVIEW_FIRST_BRANCH":
+    case "HUMAN_REVIEW_PATH":
+    case "DO_NOT_PROCEED_PATH":
       return "DETERMINISTIC_HUMAN_REVIEW_FIRST";
   }
 }
@@ -538,9 +594,42 @@ export interface SimulationSuccess {
   simulation_audit_event_id: string;
 }
 
+// WHAT: Map a vNext agent_role → closed-style lens phrase
+//        per ADR-0076 §5.2 + Founder paste role-behavior
+//        guidance 2026-05-31.
+// INPUT: A PlaygroundAgentRole.
+// OUTPUT: A short noun phrase describing the role lens.
+// WHY: The branch_summary uses this phrase to make the role
+//      perspective legible without exposing chain-of-thought.
+//      Each phrase is closed-style; NEVER raw reasoning.
+function lensClauseForRole(role: PlaygroundAgentRole): string {
+  switch (role) {
+    case "OWNER_OPERATOR":
+      return "decision-owner / accountable-party lens";
+    case "POLICY_REVIEWER":
+      return "policy-review lens";
+    case "COMPLIANCE_REVIEWER":
+      return "compliance-review lens";
+    case "SECURITY_REVIEWER":
+      return "security-review lens";
+    case "DATA_GOVERNANCE_REVIEWER":
+      return "data-governance lens";
+    case "CONNECTOR_ADMIN":
+      return "connector-readiness lens";
+    case "ACTION_APPROVER":
+      return "approval-chain lens";
+    case "CUSTOMER_OR_STAKEHOLDER_ADVOCATE":
+      return "customer / stakeholder-impact lens";
+    case "OPERATIONS_LEAD":
+      return "operational-feasibility lens";
+    case "RESILIENCE_REVIEWER":
+      return "operational-resilience / reversibility lens";
+  }
+}
+
 // WHAT: Helper — project a Wave 7 success result + agent_role
 //        lens into a single SimulationBranch's closed-vocab
-//        labels per ADR-0076 §6 + §5.
+//        labels per ADR-0076 §6 + §5.2 vNext.
 // INPUT: Wave 7 success result + branch_definition + agent_role
 //        + scenario_id + orchestration_mode.
 // OUTPUT: A SimulationBranch with closed-vocab labels only.
@@ -576,13 +665,17 @@ function projectBranchFromWave7Success(args: {
     "HUMAN_REVIEW_BEFORE_FINAL_DECISION",
   ]);
   if (
-    args.agent_role === "COMPLIANCE_AGENT" ||
+    args.agent_role === "COMPLIANCE_REVIEWER" ||
+    args.agent_role === "POLICY_REVIEWER" ||
     args.wave7.required_reviews.includes("LEGAL_REVIEW") ||
     args.wave7.required_reviews.includes("COMPLIANCE_REVIEW")
   ) {
     assumed.add("LEGAL_COMPLIANCE_REVIEW_WHERE_APPLICABLE");
   }
-  if (args.wave7.blocked_by_policy === true) {
+  if (
+    args.wave7.blocked_by_policy === true ||
+    args.branch_definition === "DO_NOT_PROCEED_PATH"
+  ) {
     assumed.add("BLOCKED_CANDIDATES_NEVER_TRANSITIONABLE");
   }
 
@@ -608,19 +701,28 @@ function projectBranchFromWave7Success(args: {
     expected.add("INSUFFICIENT_DATA_REQUIRES_REVIEW");
   }
   if (
-    args.agent_role === "COMPLIANCE_AGENT" ||
+    args.agent_role === "COMPLIANCE_REVIEWER" ||
     args.wave7.required_reviews.includes("LEGAL_REVIEW") ||
     args.wave7.required_reviews.includes("COMPLIANCE_REVIEW")
   ) {
     expected.add("COMPLIANCE_REVIEW_RECOMMENDED");
   }
   if (
-    args.agent_role === "RESILIENCE_AGENT" &&
+    args.agent_role === "RESILIENCE_REVIEWER" &&
     args.wave7.recommendation_reasons.includes(
       "STRONGEST_RESILIENCE_POSTURE",
     )
   ) {
     expected.add("OPERATIONAL_RESILIENCE_FAVORABLE");
+  }
+  if (args.branch_definition === "DO_NOT_PROCEED_PATH") {
+    // DO_NOT_PROCEED_PATH surfaces a safe non-action posture
+    // per ADR-0076 §4.2 + Founder paste branch-mapping
+    // guidance. It MUST NOT create an Action and MUST NOT
+    // invoke Wave 8 — the closed-vocab projection
+    // communicates "do not proceed" as a review posture.
+    expected.add("WAVE_7_RECOMMENDATION_REQUIRES_HUMAN_DECISION");
+    expected.add("WAVE_8_TRANSITION_DECLINED_BY_POLICY");
   }
 
   // governance_conflicts — derived from Wave 7 closed-vocab
@@ -659,7 +761,8 @@ function projectBranchFromWave7Success(args: {
     args.wave7.action_transition_readiness === "NOT_READY" ||
     args.wave7.action_transition_readiness === "BLOCKED" ||
     args.wave7.recommended_candidate_type === "STATUS_QUO" ||
-    args.wave7.recommended_candidate_type === "DO_NOT_PROCEED"
+    args.wave7.recommended_candidate_type === "DO_NOT_PROCEED" ||
+    args.branch_definition === "DO_NOT_PROCEED_PATH"
   ) {
     conflicts.add("BRANCH_NO_TRANSITION_POSSIBLE");
   }
@@ -668,19 +771,11 @@ function projectBranchFromWave7Success(args: {
   }
 
   // branch_summary — closed-style ≤600 chars. NEVER raw
-  // reasoning; closed-vocab labels only.
-  const lensClause =
-    args.agent_role === "OPERATIONS_AGENT"
-      ? "operational-feasibility lens"
-      : args.agent_role === "COMPLIANCE_AGENT"
-        ? "compliance / legal review lens"
-        : args.agent_role === "RISK_AGENT"
-          ? "operational-risk lens"
-          : args.agent_role === "CUSTOMER_AGENT"
-            ? "customer-impact lens"
-            : args.agent_role === "RESILIENCE_AGENT"
-              ? "operational-resilience / reversibility lens"
-              : "human-review-burden lens";
+  // reasoning; closed-vocab labels only. Lens phrasing per
+  // ADR-0076 §5.2 vNext role discipline + Founder paste
+  // role-behavior guidance. Roles are simulation LENSES,
+  // NEVER independent authorities.
+  const lensClause = lensClauseForRole(args.agent_role);
   const summary =
     `Branch ${args.branch_definition} viewed through the ${lensClause} ` +
     `surfaced ${args.wave7.recommended_candidate_type} as the recommended ` +

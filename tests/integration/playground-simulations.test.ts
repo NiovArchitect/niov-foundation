@@ -184,21 +184,57 @@ const ORCHESTRATION_MODES = [
   "DETERMINISTIC_GOVERNANCE_SCOPE_VARIATION",
 ] as const;
 
+// vNext closed vocab per ADR-0076 §4.2 / §5.2 — LIVE since
+// `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`
+// 2026-05-31. Full-vocab cross-product 6 × 10 = 60 exceeds
+// the §11 24-branch ceiling and is rejected by the service.
 const BRANCH_DEFINITIONS = [
-  "BASELINE",
-  "POLICY_FIRST_BRANCH",
-  "GOVERNANCE_FIRST_BRANCH",
-  "RESILIENCE_FIRST_BRANCH",
-  "HUMAN_REVIEW_FIRST_BRANCH",
+  "RECOMMENDED_PATH",
+  "LOW_RISK_PATH",
+  "COMPLIANCE_FIRST_PATH",
+  "RESILIENCE_FIRST_PATH",
+  "HUMAN_REVIEW_PATH",
+  "DO_NOT_PROCEED_PATH",
 ] as const;
 
 const AGENT_ROLES = [
-  "OPERATIONS_AGENT",
-  "COMPLIANCE_AGENT",
-  "RISK_AGENT",
-  "CUSTOMER_AGENT",
-  "RESILIENCE_AGENT",
-  "HUMAN_REVIEW_AGENT",
+  "OWNER_OPERATOR",
+  "POLICY_REVIEWER",
+  "COMPLIANCE_REVIEWER",
+  "SECURITY_REVIEWER",
+  "DATA_GOVERNANCE_REVIEWER",
+  "CONNECTOR_ADMIN",
+  "ACTION_APPROVER",
+  "CUSTOMER_OR_STAKEHOLDER_ADVOCATE",
+  "OPERATIONS_LEAD",
+  "RESILIENCE_REVIEWER",
+] as const;
+
+// Default branch + role sets per Founder vNext implementation
+// paste 2026-05-31. 4 × 6 = 24 (§11 ceiling preserved).
+const DEFAULT_BRANCHES = [
+  "RECOMMENDED_PATH",
+  "LOW_RISK_PATH",
+  "COMPLIANCE_FIRST_PATH",
+  "HUMAN_REVIEW_PATH",
+] as const;
+
+const DEFAULT_ROLES = [
+  "OWNER_OPERATOR",
+  "POLICY_REVIEWER",
+  "COMPLIANCE_REVIEWER",
+  "ACTION_APPROVER",
+  "OPERATIONS_LEAD",
+  "RESILIENCE_REVIEWER",
+] as const;
+
+// Opt-in (not in default set).
+const OPT_IN_BRANCHES = ["RESILIENCE_FIRST_PATH", "DO_NOT_PROCEED_PATH"] as const;
+const OPT_IN_ROLES = [
+  "SECURITY_REVIEWER",
+  "DATA_GOVERNANCE_REVIEWER",
+  "CONNECTOR_ADMIN",
+  "CUSTOMER_OR_STAKEHOLDER_ADVOCATE",
 ] as const;
 
 const NEXT_REVIEW_LABELS = [
@@ -379,7 +415,7 @@ describe("Section 5 Wave 9 Option A — mandatory body fields", () => {
       `/api/v1/playground/scenarios/${scenario_id}/simulations`,
       {
         caller_confirmation: true,
-        branch_definitions: ["BASELINE", "NOT_A_REAL_BRANCH"],
+        branch_definitions: ["RECOMMENDED_PATH", "NOT_A_REAL_BRANCH"],
       },
     );
     expect(r.statusCode).toBe(422);
@@ -395,7 +431,7 @@ describe("Section 5 Wave 9 Option A — mandatory body fields", () => {
       `/api/v1/playground/scenarios/${scenario_id}/simulations`,
       {
         caller_confirmation: true,
-        agent_roles: ["OPERATIONS_AGENT", "FREEFORM_AGENT_DEBATER"],
+        agent_roles: ["OWNER_OPERATOR", "FREEFORM_AGENT_DEBATER"],
       },
     );
     expect(r.statusCode).toBe(422);
@@ -431,7 +467,8 @@ describe("Section 5 Wave 9 Option A — mandatory body fields", () => {
   it("(branch × role) exceeds max_branches → 422", async () => {
     const caller = await loginPerson();
     const { scenario_id } = await createScenario(caller);
-    // 5 branches × 6 roles = 30 > 24 → reject.
+    // Full vNext cross-product: 6 branches × 10 roles = 60
+    // > 24 → reject per ADR-0076 §11 ceiling.
     const r = await inject(
       "POST",
       caller,
@@ -448,7 +485,7 @@ describe("Section 5 Wave 9 Option A — mandatory body fields", () => {
 });
 
 describe("Section 5 Wave 9 Option A — response shape", () => {
-  it("default flow produces 24 branches (4 default branch_definitions × 6 default agent_roles)", async () => {
+  it("default flow produces 24 branches (4 default vNext branch_definitions × 6 default vNext agent_roles)", async () => {
     const caller = await loginPerson();
     const { scenario_id } = await createScenario(caller);
     const r = await inject(
@@ -460,6 +497,107 @@ describe("Section 5 Wave 9 Option A — response shape", () => {
     expect(r.statusCode).toBe(200);
     expect(r.body.branch_count).toBe(24);
     expect(r.body.branches.length).toBe(24);
+    // Default set assertions — every default branch + every
+    // default role appears at least once in the response.
+    const seenBranches = new Set<string>(
+      r.body.branches.map((b: any) => b.branch_definition),
+    );
+    const seenRoles = new Set<string>(
+      r.body.branches.map((b: any) => b.agent_role),
+    );
+    for (const expected of DEFAULT_BRANCHES) {
+      expect(seenBranches.has(expected)).toBe(true);
+    }
+    for (const expected of DEFAULT_ROLES) {
+      expect(seenRoles.has(expected)).toBe(true);
+    }
+    // Opt-in vNext values are NOT in the default set.
+    for (const optIn of OPT_IN_BRANCHES) {
+      expect(seenBranches.has(optIn)).toBe(false);
+    }
+    for (const optIn of OPT_IN_ROLES) {
+      expect(seenRoles.has(optIn)).toBe(false);
+    }
+  });
+
+  it("opt-in vNext branch_definitions accepted (RESILIENCE_FIRST_PATH + DO_NOT_PROCEED_PATH)", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/simulations`,
+      {
+        caller_confirmation: true,
+        branch_definitions: [
+          "RESILIENCE_FIRST_PATH",
+          "DO_NOT_PROCEED_PATH",
+        ],
+        agent_roles: ["OWNER_OPERATOR", "RESILIENCE_REVIEWER"],
+      },
+    );
+    expect(r.statusCode).toBe(200);
+    expect(r.body.branch_count).toBe(4);
+    const seenBranches = new Set<string>(
+      r.body.branches.map((b: any) => b.branch_definition),
+    );
+    expect(seenBranches.has("RESILIENCE_FIRST_PATH")).toBe(true);
+    expect(seenBranches.has("DO_NOT_PROCEED_PATH")).toBe(true);
+  });
+
+  it("opt-in vNext agent_roles accepted (SECURITY_REVIEWER + DATA_GOVERNANCE_REVIEWER + CONNECTOR_ADMIN + CUSTOMER_OR_STAKEHOLDER_ADVOCATE)", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/simulations`,
+      {
+        caller_confirmation: true,
+        branch_definitions: ["RECOMMENDED_PATH"],
+        agent_roles: [...OPT_IN_ROLES],
+      },
+    );
+    expect(r.statusCode).toBe(200);
+    expect(r.body.branch_count).toBe(4);
+    const seenRoles = new Set<string>(
+      r.body.branches.map((b: any) => b.agent_role),
+    );
+    for (const role of OPT_IN_ROLES) {
+      expect(seenRoles.has(role)).toBe(true);
+    }
+  });
+
+  it("v1 branch_definition values rejected as INVALID_REQUEST after vNext clean replacement", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/simulations`,
+      {
+        caller_confirmation: true,
+        branch_definitions: ["POLICY_FIRST_BRANCH"],
+      },
+    );
+    expect(r.statusCode).toBe(422);
+    expect(r.body.invalid_fields).toContain("branch_definitions");
+  });
+
+  it("v1 agent_role values rejected as INVALID_REQUEST after vNext clean replacement", async () => {
+    const caller = await loginPerson();
+    const { scenario_id } = await createScenario(caller);
+    const r = await inject(
+      "POST",
+      caller,
+      `/api/v1/playground/scenarios/${scenario_id}/simulations`,
+      {
+        caller_confirmation: true,
+        agent_roles: ["OPERATIONS_AGENT"],
+      },
+    );
+    expect(r.statusCode).toBe(422);
+    expect(r.body.invalid_fields).toContain("agent_roles");
   });
 
   it("orchestration_mode is closed-vocab string", async () => {
@@ -907,11 +1045,11 @@ describe("Section 5 Wave 9 Option A — bounded counts + custom subsets", () => 
       {
         caller_confirmation: true,
         branch_definitions: [
-          "POLICY_FIRST_BRANCH",
-          "GOVERNANCE_FIRST_BRANCH",
-          "RESILIENCE_FIRST_BRANCH",
+          "RECOMMENDED_PATH",
+          "COMPLIANCE_FIRST_PATH",
+          "RESILIENCE_FIRST_PATH",
         ],
-        agent_roles: ["OPERATIONS_AGENT", "COMPLIANCE_AGENT"],
+        agent_roles: ["OWNER_OPERATOR", "COMPLIANCE_REVIEWER"],
       },
     );
     expect(r.statusCode).toBe(200);
