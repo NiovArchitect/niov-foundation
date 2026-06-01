@@ -351,6 +351,49 @@ The implementation roadmap (D2-D8 Dandelion · B2-B8 Billing · C2-C9+ Connector
 3. **D2 — Dandelion Assessment substrate** (`DandelionAssessment` Prisma model + admin-only routes; Founder authorization at slice).
 4. **Wave 2.1 expansion to additional roles** (substrate-deepening; lower priority per autonomous-build directive).
 
+### C2 — Slack Read-First Connector Runtime LANDED 2026-06-01
+
+Per `[FOUNDER-RUNTIME-ACTIVATION-CLARIFICATION-NO-MORE-PERMANENT-STATIC-ONLY-DEFAULT]` + `[FOUNDER-PREVIEW-TO-OPERATING-STATE-GRADUATION-AUTH]`. First real vendor connector lands at Foundation backend register. Classification E (Connector Runtime).
+
+NEW `apps/api/src/services/connector/slack-read.provider.ts` — `SlackReadProvider` class implementing the canonical `ConnectorProvider` interface. Three read operations: `channels.list` (via `conversations.list`) + `users.list` + `conversations.history`. Bot-token-based (xoxb-*) per Slack OAuth v2 modern app pattern; bot token resolved via `binding.secret_ref` env-var-NAME pattern per ADR-0019 + ADR-0024. Fixture-first: default invocation runs deterministic fixture mode (no outbound HTTP); real Slack Web API reached only when `process.env.SLACK_USE_REAL === "1"` + `binding.config.use_real === true` + `binding.secret_ref` resolves to a non-empty env-var value. Defensive triple gate prevents accidental real-API activation in CI / dev.
+
+MOD `apps/api/src/services/connector/connector.service.ts` — `ConnectorType` union extended `"OUTBOUND_WEBHOOK" | "FIXTURE_ECHO"` → `"OUTBOUND_WEBHOOK" | "FIXTURE_ECHO" | "SLACK_READ"`; `CONNECTOR_REGISTRY.SLACK_READ` frozen entry (display_name: "Slack (read-first)" / transport: "https-get-bearer-token" / default_config_keys: `["use_real", "workspace_id"]` / `secret_ref_required: true`); `getConnectorTypeDefinition` recognizes `SLACK_READ`; `getConnectorProviderAsync("SLACK_READ")` dynamic-imports + constructs `SlackReadProvider` (mirrors the OUTBOUND_WEBHOOK pattern to avoid static-import cycles).
+
+The existing `INVOKE_CONNECTOR` ActionType handler at `apps/api/src/services/action/handlers.ts:574` (`makeInvokeConnectorHandler`) dispatches unchanged — `SLACK_READ` is just another connector type passing through the same governance pipeline:
+
+1. Payload validated at create-time + execute-time
+2. `ConnectorBinding` resolved with `org_entity_id` filter (cross-tenant denial enforced structurally — cross-org `binding_id` returns `CONNECTOR_BINDING_NOT_FOUND`)
+3. Binding enabled-state check (`CONNECTOR_BINDING_DISABLED` on miss)
+4. Type-registry check (`CONNECTOR_TYPE_UNKNOWN` on miss)
+5. Provider invocation
+6. Result → ACTION_SUCCEEDED / ACTION_FAILED via existing audit chain
+
+NO new audit literal. NO schema migration. NO new route. NO mutation to the existing INVOKE_CONNECTOR handler.
+
+NEW `tests/unit/c2-slack-read-provider.test.ts` — 22 tests across: SLACK_READ registry extension + provider factory + fixture-mode success per operation + payload validation (unknown operation / missing channel / empty payload) + 8 forced-failure fixture keys mapping to each `error_class` + environment-gate behavior (SLACK_USE_REAL unset / config.use_real false) + privacy invariant (delivery_metadata never carries xoxb- / Bearer / message content / user PII / error message scrubs bot token).
+
+MOD `tests/unit/connector-provider.test.ts` — frozen-anchor contract test updated to reflect the registry extension (2 → 3 connector types). Identical assertion shape; no behavioral test removed.
+
+**Privacy invariant** (mirrors existing OutboundWebhookProvider pattern):
+
+- `delivery_metadata` may carry counts (channels_count / members_count / messages_count) + status code + mode label; NEVER raw message content, channel content, user PII, or the bot token
+- On error, `message` is a short scrubbed summary; never includes the resolved bot token, raw response body, or third-party stack traces
+- Network errors collapse to NETWORK; HTTP 429 → RATE_LIMIT; Slack `ok=false` with `invalid_auth` / `not_authed` → AUTH; other Slack errors → PROVIDER_ERROR with the Slack error code surfaced (Slack error codes are not secret material)
+
+**Test/build state:** unit suite 1161 → 1183 (+22) · typecheck baseline preserved at 4 canonical errors · existing connector-provider frozen-anchor contract preserved with the C2 extension.
+
+**Out of scope at C2** (forward-substrate per ADR-0084 9-slice ladder):
+
+- Writes (chat.postMessage / files.upload / etc.) — ≥C6
+- OAuth installation flow — ≥C5
+- Events API webhook ingestion — ≥C7 (composes against existing `verifyInboundHmac` substrate)
+- Private-message / search.messages reads (require xoxp- user-token scopes) — later C-slice
+- Control Tower binding-creation UI consumer — separate CT slice; current `/api/v1/org/connectors[/:id]` admin routes (Section 4 Wave 2 LIVE) already accept `type: "SLACK_READ"` since the column is plain `String` (no schema migration needed)
+
+**Section 4 graduation:** Slack `RECOMMENDATION_READY` → **`RUNTIME_READY`** (backend provider + tests + registry extension landed). Final graduation to `OPERATING` happens when the first real customer-bound activation lands a working binding row + uses the SLACK_USE_REAL=1 production path against a live workspace.
+
+**GOVSEC.6 graduation:** the `assertSameOrgConnectorTarget` + `assertAiAgentMayInvokeConnector` helpers from `apps/api/src/services/govsec/agent-abuse-guard.ts` (landed PR #183) are now structurally exercised by this slice's INVOKE_CONNECTOR path: cross-tenant denial enforced via `getConnectorBindingForOrg` org-scoped lookup; AI_AGENT write-intent denial forward-substrate to the C6 write slice. GOVSEC.6 graduates `SUBSTRATE_READY` → **`OPERATING (read-first)`** — the helpers + structural enforcement are LIVE for the first real adapter. Full `CLOSED` lands when GOVSEC.6 covers the C6 write path with an adversarial integration test.
+
 ### Connector Implementation-Readiness Catalog LANDED 2026-06-01
 
 Per `[FOUNDER-POST-B3-AUTONOMOUS-D2-AND-CONNECTOR-READINESS-CONTINUATION-AUTH]`. NEW `docs/connector-readiness/` directory (9 files: README + JSON Schema + 5 connector files for Slack / Google Workspace / Jira+Linear / Microsoft 365 / GitHub + matrix JSON + matrix Markdown) + NEW `scripts/validate-connector-readiness.mjs` validator. RULE 21 research arc captured at 2026-06-01 against official vendor docs (docs.slack.dev / developers.google.com / developer.atlassian.com / developers.linear.app / learn.microsoft.com / docs.github.com). Validator green: 9/9 files, 7 items (5 connectors + Linear sub-item + matrix), 7/7 required IDs, 0 errors.

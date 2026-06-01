@@ -42,7 +42,7 @@
 // OUTPUT: None — type only.
 // WHY: Branded string union over connector kinds. Mirrors the
 //      embedding model/dimensions string-literal pattern.
-export type ConnectorType = "OUTBOUND_WEBHOOK" | "FIXTURE_ECHO";
+export type ConnectorType = "OUTBOUND_WEBHOOK" | "FIXTURE_ECHO" | "SLACK_READ";
 
 // WHAT: The shape of one connector-type definition in the registry.
 // INPUT: Used as a record type.
@@ -93,6 +93,15 @@ export const CONNECTOR_REGISTRY: Readonly<
     description:
       "Test-only connector that returns the invocation payload back to the caller deterministically. Never enabled in production bindings; used by FixtureBasedConnectorProvider for unit + integration tests.",
   }),
+  SLACK_READ: Object.freeze({
+    type: "SLACK_READ" as const,
+    display_name: "Slack (read-first)",
+    transport: "https-get-bearer-token",
+    default_config_keys: Object.freeze(["use_real", "workspace_id"]),
+    secret_ref_required: true,
+    description:
+      "Section 4 C2 first real vendor connector. Bot-token (xoxb-*) read-only access to Slack via conversations.list + users.list + conversations.history. Fixture-first: real Slack Web API reached only when SLACK_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C2 (chat.postMessage / files.upload forward-substrate to ≥C6). No OAuth flow at C2 (static admin-supplied bot-token via secret_ref). No Events API webhook at C2 (forward-substrate to ≥C7).",
+  }),
 });
 
 // WHAT: Lookup helper — returns the catalog entry for a connector
@@ -106,7 +115,11 @@ export const CONNECTOR_REGISTRY: Readonly<
 export function getConnectorTypeDefinition(
   candidate: string,
 ): ConnectorTypeDefinition | null {
-  if (candidate === "OUTBOUND_WEBHOOK" || candidate === "FIXTURE_ECHO") {
+  if (
+    candidate === "OUTBOUND_WEBHOOK" ||
+    candidate === "FIXTURE_ECHO" ||
+    candidate === "SLACK_READ"
+  ) {
     return CONNECTOR_REGISTRY[candidate];
   }
   return null;
@@ -308,6 +321,13 @@ export async function getConnectorProviderAsync(
   if (type === "OUTBOUND_WEBHOOK") {
     const mod = await import("./outbound-webhook.provider.js");
     return new mod.OutboundWebhookProvider();
+  }
+  if (type === "SLACK_READ") {
+    // Section 4 C2 — first real vendor connector. Dynamic import
+    // mirrors the OUTBOUND_WEBHOOK pattern above to avoid a static
+    // import cycle (the provider imports types from this module).
+    const mod = await import("./slack-read.provider.js");
+    return new mod.SlackReadProvider();
   }
   return new FixtureBasedConnectorProvider();
 }

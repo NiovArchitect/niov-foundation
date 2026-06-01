@@ -37,9 +37,9 @@ function makeInvocation(
 }
 
 describe("CONNECTOR_REGISTRY — frozen-anchor contract", () => {
-  it("contains exactly the two Wave 1 connector types", () => {
+  it("contains the Wave 1 connector types plus the C2 SLACK_READ extension", () => {
     const keys = Object.keys(CONNECTOR_REGISTRY);
-    expect(keys.sort()).toEqual(["FIXTURE_ECHO", "OUTBOUND_WEBHOOK"]);
+    expect(keys.sort()).toEqual(["FIXTURE_ECHO", "OUTBOUND_WEBHOOK", "SLACK_READ"]);
   });
 
   it("is frozen and individual entries are frozen", () => {
