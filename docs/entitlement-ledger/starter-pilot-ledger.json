@@ -1,0 +1,102 @@
+{
+  "$schema": "./ledger.schema.json",
+  "kind": "EntitlementLedgerSeed",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "EntitlementLedgerSeed",
+    "human_readable_summary": "Static design substrate. Billing entitles availability; Foundation governance authorizes activation. Baseline DMW + safety + audit included in every plan including Starter / Pilot — never paywalled.",
+    "model_usage_notes": "These seed ledgers are NOT runtime billing state. They are worked examples of the 8 ADR-0083 Amendment 1 §9.7 entitlement objects per plan archetype. A future Founder-authorized B5 slice instantiates the Prisma Entitlement runtime model from these shapes.",
+    "scope_defaults": ["TENANT_SCOPED", "DESIGN_SUBSTRATE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "DESIGN_REFERENCE_ONLY", "NO_RUNTIME_ENFORCEMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/entitlement-ledger/starter-pilot-ledger.json",
+      "version_tag": "b4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-B4-ENTITLEMENT-LEDGER-DESIGN-SUBSTRATE]"
+    },
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED at B5+ runtime; no new audit literal at B4"],
+    "policy_purpose": "DESIGN_SUBSTRATE_REFERENCE_ONLY",
+    "allowed_consumers": ["BILLING_ADMIN_REVIEW", "CONTROL_TOWER_BILLING_PREVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_BILLING_CHANGE", "AGENT_TWIN_CROSS_TENANT", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "ledger": {
+    "id": "ledger.starter-pilot.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "EntitlementLedgerSeed",
+    "plan_archetype_id": "starter-pilot",
+    "name": "Starter / Pilot Entitlement Ledger Seed",
+    "human_readable_summary": "$250 base + 1 admin seat + 2 standard seats baseline. Foundation safety + audit + DMW baseline included. No connector pack entitlement. No advanced governance pack entitlement.",
+    "model_usage_notes": "Starter / Pilot is the cheapest plan and still ships the full DMW + safety + audit baseline. This seed proves the canonical 'Customers should not pay extra just to have memory be safe.' invariant at the cheapest plan tier.",
+    "source_adr_refs": ["ADR-0083", "ADR-0080", "ADR-0070", "RULE 0", "RULE 4", "RULE 10"],
+    "consumes_plan_id": "plan.starter-pilot.v1",
+    "billing_account": {
+      "billing_status": "ACTIVE",
+      "contract_type": "MONTHLY",
+      "grace_period_status": "NONE"
+    },
+    "plan": {
+      "plan_id": "starter-pilot",
+      "plan_name": "Starter / Pilot",
+      "base_price_anchor": "$250/month"
+    },
+    "seat_entitlements": [
+      { "seat_tier_id": "seat.otzar-administrator.v1", "included_count": 1, "overage_strategy": "ADD_ON_PER_SEAT" },
+      { "seat_tier_id": "seat.standard-twin.v1", "included_count": 2, "overage_strategy": "ADD_ON_PER_SEAT" }
+    ],
+    "capability_pack_entitlements": [],
+    "feature_entitlements": [
+      { "feature_id": "DMW_baseline_safety", "entitled": true },
+      { "feature_id": "audit_baseline", "entitled": true },
+      { "feature_id": "Foundation_safety_baseline", "entitled": true },
+      { "feature_id": "Dandelion_preview_read_only", "entitled": true },
+      { "feature_id": "Section_7_audit_viewer", "entitled": true },
+      { "feature_id": "Section_9_approvals_policies", "entitled": true }
+    ],
+    "usage_meters": [
+      { "meter_id": "meter.active-twin-seats.v1", "included_allowance": "2 active standard twin seats", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.active-admin-seats.v1", "included_allowance": "1 active admin seat", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.audit-exports.v1", "included_allowance": "5 baseline exports / month (legal-window exports unrestricted)", "enforcement_mode": "DEFERRED_TO_RUNTIME" }
+    ],
+    "entitlement_check_examples": [
+      {
+        "scenario": "Admin reads the audit viewer at Starter / Pilot",
+        "input": { "feature_id": "Section_7_audit_viewer", "actor": "admin" },
+        "expected_outcome": "ENTITLED_AND_GOVERNANCE_AUTHORIZED",
+        "governance_note": "Audit viewer is baseline; entitled and governance-authorized at every plan tier."
+      },
+      {
+        "scenario": "Admin tries to activate Slack connector at Starter / Pilot (no Collaboration pack entitlement)",
+        "input": { "feature_id": "connector_activation:SLACK_READ", "actor": "admin" },
+        "expected_outcome": "NOT_ENTITLED",
+        "governance_note": "Starter / Pilot does not include the Collaboration pack entitlement; admin would need to upgrade to Team or add the pack."
+      },
+      {
+        "scenario": "Anyone tries to access DMW baseline safety regardless of plan",
+        "input": { "feature_id": "DMW_baseline_safety", "actor": "any" },
+        "expected_outcome": "ENTITLED_AND_GOVERNANCE_AUTHORIZED",
+        "governance_note": "Baseline DMW safety is never paywalled per ADR-0083 + RULE 0. Customers should not pay extra just to have memory be safe."
+      }
+    ],
+    "downgrade_policy": {
+      "policy_id": "policy.downgrade.v1",
+      "preserves_audit": true,
+      "preserves_dmw_baseline": true,
+      "preserves_lawful_retention": true
+    },
+    "governance_review_points": [
+      "Billing entitles availability; Foundation governance authorizes activation",
+      "Baseline DMW safety is never paywalled — included even at Starter / Pilot",
+      "Audit chain integrity preserved through every downgrade per RULE 10 + ADR-0002",
+      "No employee scoring, no managerial-oversight monitoring, no sensitive-attribute inference regardless of plan tier",
+      "Customers should not pay extra just to have memory be safe"
+    ],
+    "DMW_baseline_included": true,
+    "safety_baseline_included": true,
+    "audit_baseline_included": true,
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED when consumed at B5+ runtime", "no new audit literal at B4"],
+    "runtime_state": "DESIGN_SUBSTRATE_ONLY"
+  }
+}

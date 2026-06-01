@@ -23,7 +23,8 @@ The pre-existing `apps/api/src/services/monetization/monetization.service.ts` su
 | ADR-0083 base | ✓ Accepted 2026-06-01 (PR #175 `4b3265d`) |
 | ADR-0083 Amendment 1 | ✓ Accepted 2026-06-01 (PR #176) |
 | B2 — Static entitlement catalog | ✓ LANDED 2026-06-01 (PR #179) |
-| B3 — CT billing preview | ✓ LANDED 2026-06-01 (CT PR #20 `db2c079`; Foundation closeout this PR) |
+| B3 — CT billing preview | ✓ LANDED 2026-06-01 (CT PR #20 `db2c079`; Foundation closeout PR #180) |
+| B4 — Internal entitlement / seat ledger design substrate | ✓ LANDED 2026-06-01 (this PR — `docs/entitlement-ledger/` 6 files + validator green; 4/4 ledgers + 4 plans + 6 seats + 9 packs + 16 meters cross-referenced) |
 | B4 — Internal entitlement model + Founder pricing decision | queued (Founder-gated) |
 | B5 — Billing Admin surface | queued (Founder-gated) |
 | B6 — Usage meter foundation | queued (Founder-gated) |

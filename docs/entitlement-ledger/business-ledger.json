@@ -1,0 +1,123 @@
+{
+  "$schema": "./ledger.schema.json",
+  "kind": "EntitlementLedgerSeed",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "EntitlementLedgerSeed",
+    "human_readable_summary": "Static design substrate. Business plan: 6 seat tiers + 5 capability packs (Dandelion / Workflow / Audit / DMW / Playground) + workflow recommendations and proposed actions + advanced audit. Baseline DMW + safety + audit included.",
+    "model_usage_notes": "Business plan is the mid-tier inflection point: connector packs become broadly entitled; workflow Stages 3-5 entitlement opens; advanced audit pack unlocks cross-scope verify-chain.",
+    "scope_defaults": ["TENANT_SCOPED", "DESIGN_SUBSTRATE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "DESIGN_REFERENCE_ONLY", "NO_RUNTIME_ENFORCEMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/entitlement-ledger/business-ledger.json",
+      "version_tag": "b4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-B4-ENTITLEMENT-LEDGER-DESIGN-SUBSTRATE]"
+    },
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED at B5+ runtime"],
+    "policy_purpose": "DESIGN_SUBSTRATE_REFERENCE_ONLY",
+    "allowed_consumers": ["BILLING_ADMIN_REVIEW", "CONTROL_TOWER_BILLING_PREVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_BILLING_CHANGE", "AGENT_TWIN_CROSS_TENANT", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "ledger": {
+    "id": "ledger.business.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "EntitlementLedgerSeed",
+    "plan_archetype_id": "business",
+    "name": "Business Entitlement Ledger Seed",
+    "human_readable_summary": "Business plan: 6 seat tiers + 5 capability packs + Agent Playground + advanced audit + workflow recommendations and proposed actions + DMW governance baseline + selected premium controls.",
+    "model_usage_notes": "Business plan unlocks Stages 3-5 workflow entitlement availability; activation per-call still gated by Foundation governance + dual-control for risky writes per ADR-0026.",
+    "source_adr_refs": ["ADR-0083", "ADR-0084", "ADR-0082", "ADR-0081", "ADR-0080", "ADR-0061", "ADR-0026", "RULE 0"],
+    "consumes_plan_id": "plan.business.v1",
+    "billing_account": {
+      "billing_status": "ACTIVE",
+      "contract_type": "MONTHLY",
+      "grace_period_status": "NONE"
+    },
+    "plan": {
+      "plan_id": "business",
+      "plan_name": "Business",
+      "base_price_anchor": "Custom monthly or annual (mid-market anchor)"
+    },
+    "seat_entitlements": [
+      { "seat_tier_id": "seat.otzar-administrator.v1", "included_count": 5, "overage_strategy": "ADD_ON_PER_SEAT" },
+      { "seat_tier_id": "seat.standard-twin.v1", "included_count": 25, "overage_strategy": "ADD_ON_PER_SEAT" },
+      { "seat_tier_id": "seat.professional-twin.v1", "included_count": 25, "overage_strategy": "ADD_ON_PER_SEAT" },
+      { "seat_tier_id": "seat.executive-twin.v1", "included_count": 5, "overage_strategy": "ADD_ON_PER_SEAT" },
+      { "seat_tier_id": "seat.board-observer.v1", "included_count": 3, "overage_strategy": "ADD_ON_PER_SEAT" }
+    ],
+    "capability_pack_entitlements": [
+      { "pack_id": "pack.dandelion-activation.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.workflow-automation.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.advanced-audit-compliance.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.dmw-memory-governance.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.agent-playground-simulation.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.collaboration-pack-candidate.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" }
+    ],
+    "feature_entitlements": [
+      { "feature_id": "DMW_baseline_safety", "entitled": true },
+      { "feature_id": "audit_baseline", "entitled": true },
+      { "feature_id": "Foundation_safety_baseline", "entitled": true },
+      { "feature_id": "Section_7_audit_viewer", "entitled": true },
+      { "feature_id": "Section_7_cross_scope_verify_chain", "entitled": true },
+      { "feature_id": "Section_9_approvals_policies", "entitled": true },
+      { "feature_id": "Section_4_connector_admin_surface", "entitled": true },
+      { "feature_id": "Section_5_agent_playground", "entitled": true },
+      { "feature_id": "Section_6_enterprise_analytics_aggregate", "entitled": true },
+      { "feature_id": "workflow_recommendations_advanced", "entitled": true },
+      { "feature_id": "workflow_stage_3_proposed_action", "entitled": true },
+      { "feature_id": "advanced_DMW_governance", "entitled": true }
+    ],
+    "usage_meters": [
+      { "meter_id": "meter.active-twin-seats.v1", "included_allowance": "50 active standard + professional seats combined", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.active-admin-seats.v1", "included_allowance": "5 active admin seats", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.workflow-recommendations.v1", "included_allowance": "10000 recommendations / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.workflow-runs.v1", "included_allowance": "1000 governed workflow runs / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.proposed-actions.v1", "included_allowance": "5000 proposed actions / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.connector-read-events.v1", "included_allowance": "1000000 read events / month per activated connector", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.simulation-runs.v1", "included_allowance": "500 Agent Playground simulation runs / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.audit-exports.v1", "included_allowance": "100 baseline exports / month (legal-window exports unrestricted)", "enforcement_mode": "DEFERRED_TO_RUNTIME" }
+    ],
+    "entitlement_check_examples": [
+      {
+        "scenario": "Admin promotes a workflow from Stage 2 to Stage 3 proposed action at Business plan",
+        "input": { "feature_id": "workflow_stage_3_proposed_action", "actor": "admin" },
+        "expected_outcome": "ENTITLED_BUT_GOVERNANCE_GATED",
+        "governance_note": "Workflow Automation pack entitles Stage 3 availability; admin policy approval + per-call governance + dual-control for risky writes still required per ADR-0081 + ADR-0026."
+      },
+      {
+        "scenario": "Auditor invokes cross-scope verify-chain at Business plan",
+        "input": { "feature_id": "Section_7_cross_scope_verify_chain", "actor": "auditor" },
+        "expected_outcome": "ENTITLED_BUT_GOVERNANCE_GATED",
+        "governance_note": "Advanced Audit / Compliance pack entitles cross-scope verify-chain; LawfulBasis required for regulator-tier scope per ADR-0036 + ADR-0071."
+      },
+      {
+        "scenario": "Admin attempts to claim guaranteed compliance",
+        "input": { "feature_id": "guaranteed_compliance_claim", "actor": "admin" },
+        "expected_outcome": "FORBIDDEN_BY_GOVERNANCE",
+        "governance_note": "Per ADR-0070: never claim guaranteed compliance regardless of plan tier. Examination-ready substrate is delivered; certification is the regulator's call."
+      }
+    ],
+    "downgrade_policy": {
+      "policy_id": "policy.downgrade.v1",
+      "preserves_audit": true,
+      "preserves_dmw_baseline": true,
+      "preserves_lawful_retention": true
+    },
+    "governance_review_points": [
+      "Capability pack entitlement makes availability; Foundation governance authorizes activation per call",
+      "Workflow Stages 3-5 require Foundation governance authorization + per-call approval per ADR-0081",
+      "Cross-scope verify-chain requires LawfulBasis per ADR-0036 + ADR-0071 at regulator tier",
+      "Baseline DMW safety is never paywalled even at Business",
+      "No claim of guaranteed compliance per ADR-0070"
+    ],
+    "DMW_baseline_included": true,
+    "safety_baseline_included": true,
+    "audit_baseline_included": true,
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED when consumed at B5+ runtime"],
+    "runtime_state": "DESIGN_SUBSTRATE_ONLY"
+  }
+}
