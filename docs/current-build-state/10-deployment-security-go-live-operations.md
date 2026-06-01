@@ -290,9 +290,45 @@ An EA Twin should know out of the box that EAs typically:
 
 **Current Otzar substrate to support this:** None. The EA Twin's role_template field could be set to "Executive Assistant" but `seedAgentTemplates` is a stub — no AgentTemplate row exists with EA defaults, no tool profile catalog, no permission bundle, no onboarding question set ("Which executive(s) do you support?", "Which travel/expense system do you use?", "What spend threshold requires approval?"), no aha moment pack, no safe fallback ("Even without Concur connected, EA can draft itinerary checklist, identify needed booking details, prepare expense shell").
 
+### Dandelion onboarding readiness (per Founder addendum)
+
+> **Dandelion** is named as the activation layer that turns the OOTB ontology into a customer-facing onboarding + discovery + Twin-starter-profile experience. Section 10 must answer whether Dandelion exists today and what's missing.
+
+**Substrate-honest grep findings:**
+- `apps/api/src/services/governance/dandelion.service.ts` — EXISTS. Foundation backend service for org-admin Phase 0 (org creation atomic transaction) + Phase 2 (analyze invites) + Phase 3 (propagate) + Phase 4 (status). Consumed by `apps/api/src/routes/org.routes.ts`.
+- `packages/database/prisma/schema.prisma:605` + `:798` + `:845` — Dandelion-aware seed substrate (frameworks, industry hints, gateway).
+- CT consumer: `/onboarding` is Placeholder; `src/lib/api.ts api.org.onboarding.{start, invite, reorder, status}` consumes the existing org-admin onboarding flow.
+
+**Critical distinction (substrate-honest):**
+- Today's "Dandelion" = **org-admin Phase 2/3/4 invite/propagate substrate** (bulk invite wizard for an org admin to seat employees).
+- Founder's Dandelion = **employee + company + department + user onboarding / role discovery / tool discovery / workflow discovery / Twin starter-profile generation / connector-priority calculation** — a fundamentally broader activation layer that does NOT exist today.
+
+**Answers to the required Dandelion audit questions:**
+
+1. **Does Dandelion exist in the repo today?** ✓ PARTIAL — Foundation `dandelion.service.ts` handles org-admin invite Phase 2/3/4, NOT the role/tool/workflow/Twin activation flow.
+2. **Is there a Dandelion route/page/service today?** ✓ partial — Foundation routes `api.org.onboarding.*`; CT `/onboarding` Placeholder.
+3. **Does onboarding currently assign RoleTemplates?** ✗ NO. Invite wizard captures `role_title` as free text; no RoleTemplate substrate (see OOTB section above).
+4. **Does onboarding currently ask tool/workflow questions?** ✗ NO. Org-admin flow is "who do you want to invite + what's their email + what role-title string"; no tool / workflow / preference discovery.
+5. **Does onboarding currently ask delegated-authority questions?** ✗ NO. TAR capabilities default at signup; no per-role authority-bundle discovery.
+6. **Does onboarding currently ask reporting-line questions?** ✗ NO (EntityMembership has parent/child but invite wizard doesn't capture this).
+7. **Does onboarding currently generate DigitalTwinStarterProfiles?** ✗ NO. TwinConfig.role_template is a free-text hint; no profile-generation pipeline.
+8. **Does onboarding currently recommend connector presets?** ✗ NO (and ConnectorPreset substrate doesn't exist).
+9. **Does onboarding currently produce safe fallback modes?** ✗ NO.
+10. **Does onboarding currently produce aha moment packs?** ✗ NO.
+11. **What would Dandelion need to be launch-ready?** Three-tier flow (company-level → department-level → user-level onboarding question sets), DigitalTwinStarterProfile generation pipeline, connector-priority calculation engine, safe-fallback-mode resolver, aha-moment-pack assignment, governance-aware delegated-authority recommendation — all ADR-0080-dependent.
+12. **Should Dandelion be required before Section 4 connector prioritization?** **YES per Founder doctrine.** Dandelion's company + department + user onboarding collects the role/tool demand data that feeds the connector-priority matrix. Founder addendum is explicit: "Instead of asking the Founder to guess whether Slack, Gmail, Google Workspace, Salesforce, Jira, or Concur should ship first, Dandelion can collect role/tool demand and produce connector priority."
+
+**Critical governance note (per Founder addendum):** Dandelion **suggests**; Foundation governance **authorizes**. "Dandelion recommends the starter shape of the Digital Twin; Foundation governance authorizes what the Twin may actually do." Dandelion must never become an unsafe permission wizard — it must preserve read-only-first, write-disabled-by-default for risky systems, dual-control where needed, auditability, same-org scope, no sensitive/protected-attribute inference, no employee scoring, no manager surveillance, user correction/override, admin review, policy-driven activation.
+
+**Dandelion + ADR-0080 fold-in:** The recommended ADR-0080 must define not only the template types listed in the prior addendum but ALSO:
+- `DepartmentTemplate` (Dandelion department-level onboarding output)
+- `CompanyTemplate` (Dandelion company-level onboarding output)
+- `DandelionFlowTemplate` (the three-tier flow specification: company-level + department-level + user-level question sets, decision tree, output mapping)
+- `DigitalTwinStarterProfile` (the activation output that bundles selected RoleTemplate + PermissionBundle + ToolProfiles + WorkflowTemplates + AhaMomentPack + SafeFallbackMode + delegated-authority defaults)
+
 ### Connector-selection implication for Section 4
 
-Per the Founder addendum: **Before picking the first real Section 4 connector, Otzar should derive connector priority from the role/tool/workflow ontology, not from founder intuition.** Connector priority should be ranked by:
+Per the Founder addendum: **Before picking the first real Section 4 connector, Otzar should derive connector priority from the role/tool/workflow ontology AND Dandelion-collected company/department/user demand, not from founder intuition.** Connector priority should be ranked by:
 - how many common roles use the tool
 - centrality to daily work
 - whether it enables an immediate aha moment
@@ -308,7 +344,7 @@ This means **Section 4 first-adapter decision should follow ADR-0080 (the OOTB o
 
 ### Recommended follow-up — ADR-0080
 
-**ADR-0080 — Out-of-the-Box Role / Tool / Workflow / Connector Template Ontology for Digital Twins** (design-only ADR; no schema; no code).
+**ADR-0080 — Out-of-the-Box Role / Tool / Workflow / Connector + Dandelion Onboarding Ontology for Digital Twins** (design-only ADR; no schema; no code; renamed per Dandelion addendum).
 
 ADR-0080 must define:
 - `RoleTemplate` (role_name, department, seniority, common reporting relationships)
@@ -324,15 +360,15 @@ ADR-0080 must define:
 - `IndustryVariant` (startup / SMB / mid-market / enterprise / regulated enterprise / healthcare / finance / education / government / legal / SaaS / manufacturing — variants modify defaults; an EA in a 20-person startup ≠ an EA in a regulated public company)
 - `CompanySizeVariant` (analogous to IndustryVariant by headcount)
 
-After ADR-0080 lands design-only: **static seed catalog** (RoleTemplate + ToolProfile + WorkflowTemplate + ConnectorPreset + DelegatedAuthorityProfile + PermissionBundle + OnboardingQuestionSet + AhaMomentPack for the top 10-15 roles); then **Control Tower template catalog preview**; then **derive Section 4 first-connector priority from the resulting connector-priority matrix**.
+After ADR-0080 lands design-only: **static seed catalog** (RoleTemplate + DepartmentTemplate + CompanyTemplate + ToolProfile + WorkflowTemplate + ConnectorPreset + DelegatedAuthorityProfile + PermissionBundle + OnboardingQuestionSet + AhaMomentPack + SafeFallbackMode + DandelionFlowTemplate for the top 10-15 roles); then **Control Tower / Dandelion preview** (company setup + department setup + user role setup + connector recommendation + aha moment activation); then **derive Section 4 first-connector priority from the resulting connector-priority matrix calculated by Dandelion against role/tool demand**.
 
-**Founder's preferred sequence:** ADR-0080 design-only → static seed catalog → connector priority matrix → first real Section 4 connector.
+**Founder's preferred sequence:** ADR-0080 design-only → static seed catalog → CT/Dandelion preview → Dandelion-driven connector priority matrix → first real Section 4 connector.
 
 ## Launch blockers (hard)
 
 1. **Section 8 Billing/Entitlements — STUB-ONLY** if Otzar ships as commercial SaaS. Needs Founder product decision on pricing model + billing provider before any ADR can be drafted.
-2. **Section 4 first real external adapter** — OutboundWebhook is the only LIVE adapter. Per the OOTB addendum: should be selected via ADR-0080 ontology, not founder intuition.
-3. **OOTB role/tool/workflow templates missing** — Otzar today is substrate-complete but role-naive. ADR-0080 + seed catalog needed for day-one customer value.
+2. **Section 4 first real external adapter** — OutboundWebhook is the only LIVE adapter. Per the OOTB + Dandelion addendums: should be selected via ADR-0080 ontology + Dandelion-collected role/tool demand, NOT founder intuition.
+3. **OOTB role/tool/workflow templates + Dandelion activation layer missing** — Otzar today is substrate-complete but role-naive AND has no role-discovery / Twin-starter-profile / connector-priority-calculation onboarding. Foundation's existing `dandelion.service.ts` handles only org-admin Phase 2/3/4 invites, NOT the company/department/user activation flow the Founder describes. ADR-0080 + seed catalog + CT Dandelion preview needed for day-one customer value.
 
 ## Launch blockers (soft / launch-target-dependent)
 
@@ -361,11 +397,12 @@ After ADR-0080 lands design-only: **static seed catalog** (RoleTemplate + ToolPr
 
 Ranked by launch-leverage:
 
-1. **ADR-0080 design-only — OOTB Role/Tool/Workflow/Connector + DelegatedAuthority/PermissionBundle/OnboardingQuestionSet/AhaMomentPack/SafeFallbackMode/OrgChartRelationshipTemplate/IndustryVariant/CompanySizeVariant ontology** (per Founder addendums; no schema; no code; ADR draft only). Unlocks the Section 4 connector priority matrix + day-one customer value.
-2. **Static seed catalog for top 10-15 RoleTemplate + ToolProfile + WorkflowTemplate + ConnectorPreset + DelegatedAuthorityProfile + PermissionBundle + OnboardingQuestionSet + AhaMomentPack** (substrate work; bounded once ADR-0080 lands). Includes worked examples: Executive Assistant, CEO/Founder, COO, CFO, CHRO/People, Product Manager, Project Manager, Sales Rep, Customer Success, Engineer, Legal/Compliance, Board Member.
-3. **Use the ontology + connector-priority matrix to pick the first real Section 4 connector** (likely Slack for token-auth + cross-role ubiquity; or SAP Concur if EA/finance roles drive first launch). Bounded once connector selected.
-4. **Section 10 operational hardening pass** — rollback runbook + admin bootstrap runbook + formal smoke-test suite + metrics endpoint stub. Bounded; ~1 PR per artifact.
-5. **Section 8 Billing/Entitlements ADR draft** — only after Founder confirms pricing model + billing provider + seat vs usage model. Blocked until Founder input.
+1. **ADR-0080 design-only — OOTB Role/Tool/Workflow/Connector + DelegatedAuthority/PermissionBundle/OnboardingQuestionSet/AhaMomentPack/SafeFallbackMode/OrgChartRelationshipTemplate/IndustryVariant/CompanySizeVariant + Dandelion Onboarding ontology** (per all 3 Founder addendums; no schema; no code; ADR draft only). Unlocks Dandelion activation layer + Section 4 connector priority matrix + day-one customer value.
+2. **Static seed catalog** — top 10-15 RoleTemplate + DepartmentTemplate + CompanyTemplate + ToolProfile + WorkflowTemplate + ConnectorPreset + DelegatedAuthorityProfile + PermissionBundle + OnboardingQuestionSet + AhaMomentPack + SafeFallbackMode + DandelionFlowTemplate (substrate work; bounded once ADR-0080 lands). Worked examples: Executive Assistant (with SAP Concur + travel/expense + delegated authority), CEO/Founder, COO, CFO, CHRO/People, Product Manager, Project Manager, Sales Rep, Customer Success, Engineer, Legal/Compliance, Board Member.
+3. **CT Dandelion preview** — company setup + department setup + user role setup + connector recommendation + aha moment activation surfaces. Bounded after seed catalog.
+4. **Use Dandelion-driven connector-priority matrix to pick first real Section 4 connector** (matrix = role/tool demand × API maturity × write-risk × cross-department reach; likely candidates after analysis: Slack for token-auth ubiquity OR SAP Concur if EA/finance roles drive first launch). Bounded once Dandelion runs.
+5. **Section 10 operational hardening pass** — rollback runbook + admin bootstrap runbook + formal smoke-test suite + metrics endpoint stub. Bounded; ~1 PR per artifact. Can land in parallel with ADR-0080 work.
+6. **Section 8 Billing/Entitlements ADR draft** — only after Founder confirms pricing model + billing provider + seat vs usage model. Blocked until Founder input.
 
 ## Founder decisions required
 
