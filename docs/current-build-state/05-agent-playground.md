@@ -718,13 +718,38 @@ authorization)**:
    ACTION_APPROVER / CUSTOMER_OR_STAKEHOLDER_ADVOCATE /
    OPERATIONS_LEAD / RESILIENCE_REVIEWER; NEW §17A
    migration posture; NEW §17B Control Tower relation; NEW
-   §17C DGI/product rationale). v1 runtime + Wave 10 CT
-   cockpit at `otzar-control-tower` PR #6 `cf3483f` remain
-   canonical and LIVE for the v1 enterprise cockpit scope
-   verbatim. The vNext implementation slice (v1 → vNext
-   service constants + Wave 10 CT label migration) requires
-   separate Founder authorization at
-   `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`.
+   §17C DGI/product rationale). **vNext runtime LIVE
+   2026-05-31** — clean v1 → vNext replacement landed in
+   lockstep across Foundation + Control Tower per
+   `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`
+   2026-05-31. Foundation Wave 9 service migration LIVE at
+   PR #152 `7593e6f` (51 Wave 9 integration tests
+   passing — 47 existing migrated + 4 NEW vNext-specific:
+   default-set membership / opt-in branch + role acceptance
+   / v1 rejection / full 6×10=60 cross-product rejected per
+   §11 cap). Wave 10 CT lockstep migration LIVE at
+   `otzar-control-tower` PR #7 `ff6e54b` (110/110 CT tests
+   passing across 22 test files — Wave 10 type mirror + MSW
+   simulation fixture + 4 NEW vNext-vocab assertions; the
+   `/agent-playground` cockpit page requires NO code
+   changes because it renders Foundation closed-vocab labels
+   verbatim as `<Badge>` children). Default set 4 vNext
+   branches (RECOMMENDED_PATH / LOW_RISK_PATH /
+   COMPLIANCE_FIRST_PATH / HUMAN_REVIEW_PATH) × 6 vNext
+   roles (OWNER_OPERATOR / POLICY_REVIEWER /
+   COMPLIANCE_REVIEWER / ACTION_APPROVER / OPERATIONS_LEAD
+   / RESILIENCE_REVIEWER) = 24 (§11 ceiling preserved).
+   Opt-in via explicit body param: 2 branches
+   (RESILIENCE_FIRST_PATH / DO_NOT_PROCEED_PATH) + 4 roles
+   (SECURITY_REVIEWER / DATA_GOVERNANCE_REVIEWER /
+   CONNECTOR_ADMIN / CUSTOMER_OR_STAKEHOLDER_ADVOCATE).
+   DO_NOT_PROCEED_PATH maps to DETERMINISTIC_HUMAN_REVIEW_FIRST
+   with closed-vocab projection surfacing
+   BRANCH_NO_TRANSITION_POSSIBLE + WAVE_8_TRANSITION_DECLINED_BY_POLICY
+   (safety-first review posture; NEVER creates an Action,
+   NEVER invokes Wave 8). v1 vocabulary fully retired by
+   clean replacement per ADR-0076 §17A; Foundation Wave 9
+   API responses now emit vNext closed-vocab labels only.
    `conversation_context_signals[]` reserved for the
    governed listener substrate slice.
    Option C BEAM-orchestrated forward-substrate per
