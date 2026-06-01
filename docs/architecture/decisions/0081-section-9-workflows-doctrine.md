@@ -238,3 +238,13 @@ This ADR is authorized under `[FOUNDER-DOMAIN-GENERAL-OTZAR-ACTIVATION-EXPANSION
 Subsequent waves (W3 onward) require their own Founder authorization at slice.
 
 After this ADR lands, the recommended next autonomous slice is **ADR-0082 Dandelion Activation Architecture** (Stages B–F design-only; canonical 6-layer org seeding model formalized; no runtime activation).
+
+### W3 — Workflow Recommendation Substrate LANDED 2026-06-01
+
+Per `[FOUNDATION-W3-WORKFLOW-RECOMMENDATION]`. NEW `docs/workflow-recommendation/` directory (6 files): README + JSON Schema + 4 plan-archetype WorkflowRecommendation catalogs (starter-pilot / team / business / enterprise). NEW `scripts/validate-workflow-recommendation.mjs` validator (pure Node ESM; mirrors `validate-dandelion-starter-envelope.mjs`; adds cross-reference check into Wave 2 OOTB workflows catalog at `docs/ootb-catalog/workflows.json`). Validator green: 6/6 files, 37 items, 4/4 plan archetypes, 30 OOTB workflow template IDs cross-referenced.
+
+Per-archetype counts: Starter / Pilot 3 items (Stage 1 only) · Team 6 items (Stage 2 mix; Slack-bound LANDABLE per C2) · Business 12 items · Enterprise 16 items. Universal item shape: `consumes_workflow_template_id` (cross-ref to OOTB Wave 2 catalog) + `adr_0081_stage` (1 or 2; validator-enforced) + `recommendation_purpose` + `role_audience` + `tool_dependencies` + `safe_fallback` + `dual_control_required_at_stage_3` (advisory metadata for future Stage 3 slice) + `DMW_scope_implications` + `governance_review_points` + `audit_expectations` + `workflow_state: RECOMMENDATION_ONLY` (enforced).
+
+The canonical §2.1 phrase is machine-checked present in the W3 README.
+
+NO runtime activation, NO actual workflow execution, NO Twin activation, NO connector authorizations, NO mutation to existing Foundation services, NO new audit literal. Per ADR-0081 §2.2: Stage 1 + Stage 2 cannot execute. Stage 3 promotion requires separate Founder authorization per slice + ADR-0057 + ADR-0026 dual-control where required.
