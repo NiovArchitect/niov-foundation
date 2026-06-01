@@ -92,7 +92,7 @@ any in-flight attempt short-circuits.
 |---|---|---|---|
 | `POST` | `/api/v1/actions` | bearer + `write` | `apps/api/src/services/action/action.service.ts` (`createActionForCaller`) |
 | `POST` | `/api/v1/actions/:id/cancel` | bearer + `write` | `apps/api/src/services/action/cancel.service.ts` (`cancelActionForCaller` — non-RUNNING unconditional; RUNNING via GOVSEC.5 break-glass grant) |
-| `GET` | `/api/v1/actions/:id` | bearer + `read` | `apps/api/src/services/action/get.service.ts` (`getActionForCaller`) |
+| `GET` | `/api/v1/actions/:id` | bearer + `read` | `apps/api/src/services/action/get.service.ts` (`getActionForCaller`) — **also consumed by Wave 10 Agent Playground cockpit at `otzar-control-tower` PR #8 `ade4981` 2026-05-31 as the canonical Section 2 lifecycle read-surface per ADR-0077 §8.4 three-state-lifecycle honesty (simulation / proposed / executed); CT cockpit consumes the existing endpoint verbatim with NO Foundation backend changes; lifecycle read is explicit user-initiated `Refresh action status` click only — no aggressive polling; NO mutation surface in CT (no Execute / Approve / Cancel / Retry buttons)** |
 | `GET` | `/api/v1/actions` | bearer + `read` | `apps/api/src/services/action/list.service.ts` (`listActionsForCaller`) |
 | `GET` | `/api/v1/actions/:id/attempts/:attempt_id` | bearer + `read` | `apps/api/src/services/action/attempt.service.ts` (`getActionAttemptForCaller`) |
 | `GET` | `/api/v1/actions/:id/attempts` | bearer + `read` | `apps/api/src/services/action/attempt-list.service.ts` (`listActionAttemptsForCaller`) — paginated SafeActionAttemptView list for one parent Action; `attempt_number` ASC; outcome filter; soft-delete invisibility |
