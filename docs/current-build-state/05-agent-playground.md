@@ -1049,6 +1049,65 @@ preserves both the patent-implementation evidence trail
 surveillance discipline (work-relevance filtering blocks
 personal life from becoming enterprise intelligence).
 
+### ADR-0079 transcript substrate policy (design-only LANDED 2026-05-31)
+
+**ADR-0079 LANDED 2026-05-31** at
+`[FOUNDER-ADR-0079-TRANSCRIPT-SUBSTRATE-POLICY-ADR-AUTH]`
+— design-only Policy ADR that turns ADR-0078 §6 + §6A +
+§6B + §6C into enforceable policy gates + service-tier
+contracts. 33 sections covering capture eligibility (8
+pre-Layer-1 gates) + work-relevance classification
+(biased toward privacy; UNKNOWN_REQUIRES_REVIEW default)
++ personal/non-work exclusion (13 categories incl.
+protected-class) + mixed conversation handling +
+sensitive personal BLOCKED-from-Agent-Playground +
+business-purpose binding + scope binding + 4 canonical
+access tiers (Internal Enterprise / Compliance-Legal /
+Regulator Evidence Package / External Third-Party —
+NEVER collapsed) + notice/consent + retention (5-class
+vocab; legal hold overrides deletion) + legal hold
+(dual-control RECOMMENDED) + redaction + privileged
+conversation handling + client/customer confidential
+handling + transcript access audit (9 categories; ZERO
+new audit literal — existing ADMIN_ACTION + details.action
+discriminator pattern reused; raw transcript NEVER in
+audit details) + quote/excerpt permission + export/
+eDiscovery + regulator disclosure (ADR-0036 LawfulBasis
+9-condition gate + ADR-0070 neutral-vocabulary) +
+correction/amendment trail + linkage policy + **9
+service-tier gates** (`canCaptureTranscript` /
+`classifyConversationRelevance` / `canRetainTranscript` /
+`canUseForAgentPlayground` / `canDrillDownTranscript` /
+`canQuoteTranscript` / `canExportTranscript` /
+`canDiscloseToRegulator` /
+`canDeleteOrPseudonymizeTranscript`) + default no-leak
+doctrine (ADR-0078 §11 + §5.2 + §6C catalog inherited
+verbatim) + Agent Playground use policy + Control Tower
+cockpit policy (ADR-0077 §8 four honesty postures + §4 /
+§13 / §10 guards preserved verbatim) + implementation
+ladder mapping + 18-item stop-conditions list. ADR-0079
+itself is **docs-only — NO code / schema / new routes /
+listeners / transcript capture / Control Tower
+implementation / LLM / Python / BEAM / connector
+invocation / Action mutation / new audit literal / raw
+transcript exposure by default at this commit**. **With
+ADR-0079 LANDED, ADR-0078 §7 Stage 1+ implementation is
+policy-unblocked** but remains implementation-gated by
+separate Founder authorization at slice. **Recommended
+next slice: ADR-0078 Stage 2 approved-source projection**
+(uses already-LIVE safe sources `CORRECTION_SIGNAL` per
+ADR-0055 + ADR-0058 / `ACTION_HISTORY` per ADR-0057 /
+`HIVE_CONTEXT` per ADR-0059 + ADR-0063 /
+`MANUAL_USER_INPUT` per ADR-0065; brings
+`conversation_context_signals[]` to Agent Playground
+without raw transcript ingestion; signal shape carries
+ADR-0078 §6C.12 additive fields verbatim). Stage 1 layer
+1 schema + helper + read service MAY land before OR after
+Stage 2 — Stage 2 is recommended first because it
+delivers Wave 7 / Wave 9 / Wave 10 conversation-signal
+value using already-LIVE Foundation substrate without
+introducing Layer 1 ingest.
+
 ---
 
 Back to master: [`../CURRENT_BUILD_STATE.md`](../CURRENT_BUILD_STATE.md)
