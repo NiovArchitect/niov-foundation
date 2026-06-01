@@ -9,6 +9,20 @@ Decider: Founder. Authorized at
 2026-05-31 (under the Founder Section 5 autonomy directive
 2026-05-31 + Founder behavioral directive 2026-05-31).
 
+**Amendment 1** landed 2026-05-31 at
+`[FOUNDER-SECTION-5-WAVE-9-VOCABULARY-AMENDMENT-AUTH]`:
+§4 + §5 amended in-place to canonicalize a richer vNext
+branch + agent-role vocabulary while preserving the LIVE
+v1 runtime vocabulary verbatim. Amendment 1 is **docs-only**
+— NO runtime code change, NO conflict with Wave 9 Option A
+implementation at PR #147 `340d37f`, NO conflict with Wave 10
+Control Tower implementation at `otzar-control-tower` PR #6
+`cf3483f`. Both v1 runtime + Wave 10 CT cockpit remain LIVE
+and valid on the v1 vocabulary. The vNext vocabulary becomes
+forward-substrate; a future Founder-authorized implementation
+amendment migrates service constants, tests, and Control
+Tower labels.
+
 This ADR is **design-only**. NO code, NO schema migration,
 NO new routes, NO new audit literal, NO LLM autonomy, NO
 model calls, NO Python services, NO BEAM orchestration
@@ -241,12 +255,25 @@ authorized ADR amendment.
   changes. Deterministic; reproducible. NO injection of raw
   scenario data; only closed-vocab signal variations.
 
-### 4. `branch_definition` — closed vocabulary (v1)
+### 4. `branch_definition` — closed vocabulary
 
-Five values. Each branch_definition pairs with an agent_role
-(§5) to produce one Wave 7 sub-invocation. Adding new
-branch_definitions requires future Founder-authorized ADR
-amendment.
+§4 was amended in-place 2026-05-31 (Amendment 1) to
+canonicalize a richer vNext vocabulary alongside the LIVE v1
+runtime vocabulary. Both sets are closed-vocab and additive
+within §4; future implementation amendment may migrate the
+runtime constants from v1 → vNext under a separate
+Founder-authorized slice.
+
+#### 4.1 v1 runtime vocabulary (LIVE)
+
+Five values. LIVE at
+`apps/api/src/services/playground/playground-simulation.service.ts`
+`PLAYGROUND_BRANCH_DEFINITION_VALUES` per Wave 9 Option A
+implementation PR #147 `340d37f`. Wave 10 Control Tower
+cockpit at `otzar-control-tower` PR #6 `cf3483f` consumes
+this set verbatim. v1 default = 4 (excludes `BASELINE` so the
+§11 24-branch ceiling holds when paired with the v1 §5
+6-role default).
 
 - `BASELINE` — runs Wave 7 with default
   recommendation_mode + comparison_mode + candidate_types.
@@ -260,12 +287,77 @@ amendment.
 - `HUMAN_REVIEW_FIRST_BRANCH` — runs Wave 7 with
   recommendation_mode = `DETERMINISTIC_HUMAN_REVIEW_FIRST`.
 
-### 5. `agent_role` — closed vocabulary (v1)
+#### 4.2 canonical vNext vocabulary (forward-substrate)
+
+Six values. **Not yet LIVE in any code surface.** Becomes
+canonical at the future Founder-authorized implementation
+amendment that migrates the v1 runtime constants. vNext
+branches map to deterministic Wave 7 sub-invocations using
+the same `recommendation_mode` + `comparison_mode` +
+`candidate_types` axes as v1; the migration ADR specifies the
+exact mapping. vNext default = 4 of 6 (chosen at the
+implementation slice to preserve the §11 24-branch ceiling
+when paired with the vNext §5.2 10-role set; the
+implementation slice picks the 4-of-6 + 6-of-10 = 24
+default).
+
+- `RECOMMENDED_PATH` — the primary recommended branch posture
+  (analogous to v1 `BASELINE` + `POLICY_FIRST_BRANCH`
+  collapsed; the future migration ADR specifies the precise
+  Wave 7 input mapping).
+- `LOW_RISK_PATH` — the low-risk incremental posture; favors
+  reversibility + smallest blast radius.
+- `COMPLIANCE_FIRST_PATH` — the compliance + governance
+  posture; surfaces compliance / legal review needs first.
+- `RESILIENCE_FIRST_PATH` — the operational-resilience +
+  reversibility posture.
+- `HUMAN_REVIEW_PATH` — the human-decision-first posture;
+  surfaces what a human reviewer needs to decide.
+- `DO_NOT_PROCEED_PATH` — the safety-first posture; surfaces
+  the case for not proceeding at all.
+
+#### 4.3 branch behavior clarification (universal across v1 + vNext)
+
+Branches are **bounded scenario postures**, NOT autonomous
+plans. Every branch in either vocabulary set obeys these
+canonical boundaries by construction:
+
+- Branches are bounded scenario postures (closed-vocab
+  filter + projection over Wave 7 output; nothing else).
+- Branches are NOT autonomous plans.
+- Branches are NOT execution paths.
+- Branches do NOT create Actions (Wave 8 owns transitions;
+  Wave 9 NEVER bypasses Wave 8).
+- Branches do NOT invoke connectors.
+- Branches do NOT bypass Wave 8.
+- Branches do NOT bypass Section 2 Action runtime
+  per ADR-0057.
+- Branches exist to compare governed possibilities before
+  action.
+
+These boundaries are preserved verbatim across §4.1 (v1) and
+§4.2 (vNext); the vocabulary names change but the substrate
+constraints do NOT.
+
+### 5. `agent_role` — closed vocabulary
+
+§5 was amended in-place 2026-05-31 (Amendment 1) to
+canonicalize a richer vNext vocabulary alongside the LIVE v1
+runtime vocabulary. Both sets are closed-vocab; future
+implementation amendment may migrate the runtime constants
+from v1 → vNext under a separate Founder-authorized slice.
+Both sets honor §5.3 role behavior clarification verbatim.
+
+#### 5.1 v1 runtime vocabulary (LIVE)
 
 Six values per the Founder behavioral directive's
-"governance-bound but still useful" framing. Adding new
-agent_roles requires future Founder-authorized ADR
-amendment.
+"governance-bound but still useful" framing. LIVE at
+`apps/api/src/services/playground/playground-simulation.service.ts`
+`PLAYGROUND_AGENT_ROLE_VALUES` per Wave 9 Option A
+implementation PR #147 `340d37f`. Wave 10 Control Tower
+cockpit at `otzar-control-tower` PR #6 `cf3483f` consumes
+this set verbatim. v1 default = all 6 (4 v1 branches × 6 v1
+roles = §11 24-branch ceiling).
 
 - `OPERATIONS_AGENT` — surfaces the recommendation through
   the operational-feasibility lens (execution complexity,
@@ -281,12 +373,98 @@ amendment.
 - `HUMAN_REVIEW_AGENT` — surfaces the recommendation through
   the human-review-burden lens.
 
-NEVER use LLM-generated agent personas. Each agent_role is a
-closed-vocab lens that filters / projects the Wave 7 output
-per §1 `SimulationBranch.branch_summary`. The agent_role
-NEVER exchanges raw text or chain-of-thought with another
-agent_role — branches are independent sub-invocations
-projected through closed-vocab post-processing.
+#### 5.2 canonical vNext vocabulary (forward-substrate)
+
+Ten values. **Not yet LIVE in any code surface.** Becomes
+canonical at the future Founder-authorized implementation
+amendment that migrates the v1 runtime constants. vNext
+roles each map to a closed-vocab projection lens over Wave 7
+output; the migration ADR specifies the exact closed-vocab
+label set each role surfaces. vNext default at the
+implementation slice is **6 of 10** (paired with 4-of-6 §4.2
+branches → §11 24-branch ceiling preserved). The 10 vNext
+roles better mirror how organizations actually reason through
+decisions — ownership / policy / compliance / security / data
+governance / connector readiness / approval authority /
+stakeholder impact / operations / resilience.
+
+- `OWNER_OPERATOR` — surfaces the recommendation through the
+  decision-owner / accountable-party lens.
+- `POLICY_REVIEWER` — surfaces the policy-review lens
+  (ActionPolicy + governance_terms posture per ADR-0063).
+- `COMPLIANCE_REVIEWER` — surfaces the compliance-review
+  lens (HIPAA / FERPA / SOC 2 / FedRAMP frameworks per
+  ADR-0061 + ADR-0070).
+- `SECURITY_REVIEWER` — surfaces the security-review lens
+  (operational risk + threat model posture).
+- `DATA_GOVERNANCE_REVIEWER` — surfaces the data-governance
+  lens (data scope readiness + jurisdiction + retention per
+  ADR-0037).
+- `CONNECTOR_ADMIN` — surfaces the connector-readiness lens
+  (required connector capabilities per ADR-0064).
+- `ACTION_APPROVER` — surfaces the approval-chain lens
+  (dual-control + escalation per ADR-0026 + ADR-0057).
+- `CUSTOMER_OR_STAKEHOLDER_ADVOCATE` — surfaces the
+  customer-impact / external-stakeholder lens.
+- `OPERATIONS_LEAD` — surfaces the operational-feasibility +
+  execution-complexity lens (analogous to v1
+  `OPERATIONS_AGENT` but framed as a governed role).
+- `RESILIENCE_REVIEWER` — surfaces the resilience +
+  reversibility lens (analogous to v1 `RESILIENCE_AGENT`).
+
+#### 5.3 role behavior clarification (universal across v1 + vNext)
+
+NEVER use LLM-generated agent personas. Each agent_role in
+either vocabulary set is a closed-vocab lens that filters /
+projects the Wave 7 output per §1 `SimulationBranch.branch_summary`.
+The agent_role NEVER exchanges raw text or chain-of-thought
+with another agent_role — branches are independent
+sub-invocations projected through closed-vocab post-processing.
+
+Each simulated role must answer these 8 questions safely
+through closed-vocab projection (NEVER through free-text or
+LLM reasoning):
+
+1. **What does this role care about?** (surfaced via the
+   role's closed-vocab `assumed_constraints[]` subset)
+2. **What risk does this role see?** (surfaced via the
+   role's `governance_conflicts[]` projection)
+3. **What constraint does this role introduce?** (surfaced
+   via the role's `assumed_constraints[]` additions over
+   the universal RULE 0 / ADR-0026 / ADR-0046 baseline)
+4. **What approval or review would this role require?**
+   (surfaced via `required_reviews[]` echoed from Wave 7)
+5. **What would this role block?** (surfaced via
+   `governance_conflicts[]` non-`NO_NOTABLE_CONFLICT`
+   labels + `blocked_by_policy`)
+6. **What would this role support?** (surfaced via
+   `expected_outcomes[]` non-blocked subset)
+7. **What context is missing?** (surfaced via `confidence_label
+   === INSUFFICIENT_DATA` + `unresolved_questions[]`)
+8. **What safe next step does this role recommend?**
+   (surfaced via the simulation-wide `recommended_next_review`
+   + `enterprise_decision_posture.safe_next_step`)
+
+NO simulated role in either vocabulary set may:
+
+- approve an action
+- execute an action
+- invoke a connector
+- change data
+- create memory capsules
+- create Action rows
+- override policy
+- speak on behalf of a real human
+- claim legal or compliance certainty
+- expose private reasoning
+- reveal chain-of-thought
+- act as a manager surveillance surface
+- produce employee risk scoring
+- produce psychological or personality scoring
+
+These constraints are preserved verbatim across §5.1 (v1)
+and §5.2 (vNext); the vocabulary names change but the
+substrate boundaries do NOT.
 
 ### 6. Closed-vocab label sets (v1)
 
@@ -540,6 +718,139 @@ life mapping (Otzar-for-life) may eventually consume — the
 canonical exploration → governance → action transition is
 identical at the architectural register.
 
+### 17A. Amendment 1 migration posture (added 2026-05-31)
+
+Amendment 1 introduced §4.2 + §5.2 vNext vocabularies
+alongside the LIVE §4.1 + §5.1 v1 vocabularies. The
+migration posture is **explicit and forward-only** — runtime
+behavior does NOT change at this amendment.
+
+Canonical disposition at Amendment 1:
+
+- **Wave 9 Option A runtime (PR #147 `340d37f`) stays on the
+  v1 vocabulary.** `PLAYGROUND_BRANCH_DEFINITION_VALUES` +
+  `PLAYGROUND_AGENT_ROLE_VALUES` + the v1 defaults
+  (4 branches × 6 roles = 24) at
+  `apps/api/src/services/playground/playground-simulation.service.ts`
+  are NOT modified by Amendment 1.
+- **Wave 10 Control Tower implementation (PR #6 `cf3483f`)
+  stays on the v1 vocabulary.** The `api.playground.*`
+  namespace at `otzar-control-tower/src/lib/api.ts` + the
+  Wave 4-9 Foundation type mirrors at
+  `src/lib/types/foundation.ts` + the cockpit page at
+  `src/pages/AgentPlayground.tsx` all consume the v1
+  closed-vocab labels verbatim. Amendment 1 does NOT change
+  any CT surface.
+- **The vNext vocabulary is canonical at the contract
+  register but NOT at the execution register.** Foundation
+  Wave 9 API responses continue to emit v1 closed-vocab
+  labels (`POLICY_FIRST_BRANCH` / `OPERATIONS_AGENT` etc.)
+  until a future Founder-authorized implementation amendment
+  migrates the service constants.
+- **The 24-branch §11 ceiling is preserved across both
+  vocabularies.** v1 default = 4 × 6 = 24. vNext default at
+  the future implementation slice = 4-of-6 branches × 6-of-10
+  roles = 24. The exact 4-of-6 + 6-of-10 default selections
+  are picked at the implementation slice.
+- **NO existing implementation is marked stale or broken.**
+  v1 runtime + Wave 10 CT cockpit remain canonical and LIVE
+  for the v1 enterprise cockpit scope. Amendment 1 is a
+  forward-substrate canonicalization — it makes the richer
+  vocabulary available to future slices without invalidating
+  current shipped substrate.
+
+The future implementation amendment that migrates v1 → vNext
+MUST:
+
+1. Land under a separate Founder authorization tag like
+   `[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`.
+2. Either replace the v1 constants in-place (clean break) OR
+   support both vocabularies simultaneously during a
+   transition window — the implementation slice picks.
+3. Migrate the Wave 10 CT type mirror + cockpit panel labels
+   + MSW handlers + unit tests in lockstep with the
+   Foundation service migration.
+4. Preserve the §11 24-branch ceiling.
+5. Preserve §1 + §6 + §8 + §16 (response shape + closed-vocab
+   label sets + no-leak boundary + wave-map alignment)
+   verbatim.
+6. Preserve §4.3 + §5.3 universal behavior clarifications
+   verbatim (branches are bounded scenario postures; roles
+   are simulation lenses; never autonomous; never bypass
+   Wave 8).
+7. Pass the existing Foundation Wave 9 integration test
+   surface + Wave 10 CT forbidden-UI-copy / no-leak /
+   no-Execute-button guards.
+
+### 17B. Control Tower relation at Amendment 1
+
+The Wave 10 Control Tower cockpit at `/agent-playground`
+(LIVE per ADR-0077 §11 Option A + `otzar-control-tower` PR
+#6 `cf3483f`) is the canonical consumer surface for Wave 9
+simulation output. At Amendment 1:
+
+- The CT cockpit continues to render v1 closed-vocab labels
+  (`POLICY_FIRST_BRANCH` / `OPERATIONS_AGENT` etc.) as
+  badges in the Simulation panel (6.6) per ADR-0077 §6.6.
+- No CT code change is authorized by Amendment 1.
+- A future CT implementation amendment will surface the
+  richer vNext labels when the Foundation service migrates;
+  that amendment lands under its own Founder authorization
+  in the `otzar-control-tower` repo.
+- The CT cockpit's 4 honesty postures per ADR-0077 §8
+  (hierarchy / conversation-context / evidence-posture /
+  execution-boundary) are preserved across both vocabularies
+  unchanged.
+
+### 17C. DGI / product rationale for vNext vocabulary
+
+The richer §4.2 + §5.2 vocabulary mirrors how enterprises
+actually reason through governed decisions. Where v1 uses
+abstract-sounding roles (`OPERATIONS_AGENT` /
+`COMPLIANCE_AGENT` / `RISK_AGENT` / `CUSTOMER_AGENT` /
+`RESILIENCE_AGENT` / `HUMAN_REVIEW_AGENT`), vNext maps to
+recognizable governed enterprise roles:
+
+- ownership (`OWNER_OPERATOR`)
+- policy (`POLICY_REVIEWER`)
+- compliance (`COMPLIANCE_REVIEWER`)
+- security (`SECURITY_REVIEWER`)
+- data governance (`DATA_GOVERNANCE_REVIEWER`)
+- connector readiness (`CONNECTOR_ADMIN`)
+- approval authority (`ACTION_APPROVER`)
+- stakeholder impact (`CUSTOMER_OR_STAKEHOLDER_ADVOCATE`)
+- operations (`OPERATIONS_LEAD`)
+- resilience (`RESILIENCE_REVIEWER`)
+
+Where v1 branch definitions mirror Wave 7 recommendation
+modes verbatim (`POLICY_FIRST_BRANCH` /
+`GOVERNANCE_FIRST_BRANCH` etc.), vNext branch definitions
+read as enterprise-recognizable decision postures
+(`RECOMMENDED_PATH` / `LOW_RISK_PATH` / `COMPLIANCE_FIRST_PATH`
+/ `RESILIENCE_FIRST_PATH` / `HUMAN_REVIEW_PATH` /
+`DO_NOT_PROCEED_PATH`).
+
+The best simulation output posture remains canonical across
+both vocabularies per ADR-0077 §6.6 + §8 + §10:
+
+- ONE primary recommended path for review (per
+  `enterprise_decision_posture.primary_recommended_branch_id`)
+- viable alternatives where useful (per
+  `viable_alternative_branch_ids[]`; capped at 3)
+- evidence posture (per `evidence_posture[]` closed-vocab)
+- blockers before action (per `blockers_before_action[]`
+  closed-vocab)
+- safe next step (per `safe_next_step` closed-vocab; 7
+  values)
+- explicit "not executed" boundary (per ADR-0077 §8.4
+  execution-boundary honesty + three-state lifecycle)
+
+vNext NEVER introduces numeric scoring, ranking, "AI
+decided," or final-decision language — those framings are
+permanently forbidden across both vocabularies per ADR-0077
+§4 forbidden UI copy + this ADR §8 universal no-leak + the
+§4.3 + §5.3 universal behavior clarifications.
+
 ### 18. Explicit non-goals at this commit
 
 NO code in this commit. NO schema migration. NO new routes.
@@ -552,6 +863,21 @@ Control Tower frontend. NO new Prisma model. NO personal-
 life automation. NO trust-level delegation. NO CLAUDE.md
 bulk catalog edit. NO bulk older-ADR rewrite. NO current
 active slice derailment.
+
+**Amendment 1 explicit non-goals (added 2026-05-31):** NO
+runtime code change. NO modification of Wave 9 service
+constants. NO modification of Wave 9 integration tests. NO
+modification of Wave 10 Control Tower implementation. NO
+new Foundation routes. NO new schema. NO new audit literal.
+NO LLM / Python / BEAM authorization. NO conversation
+listener authorization. NO hierarchy substrate
+authorization. NO organizational graph authorization. NO
+new Foundation API authorization. NO change to current Wave
+9 runtime behavior. NO marking of v1 vocabulary as stale or
+broken. Amendment 1 is docs-only canonicalization of vNext
+vocabulary as forward-substrate; v1 runtime + Wave 10 CT
+cockpit remain canonical and LIVE for the v1 enterprise
+cockpit scope.
 
 ## Consequences
 
@@ -638,3 +964,19 @@ Founder authorization at
 Founder behavioral directive). ADR-only — Wave 9
 implementation slice (Option A) requires separate Founder
 authorization at slice.
+
+**Amendment 1 authorization** (added 2026-05-31): §4 + §5 +
+§17A + §17B + §17C + §18 amendment + the corresponding
+architecture/README.md catalog refresh +
+docs/current-build-state/05-agent-playground.md forward-
+substrate row refresh + docs/NEXT_ACTION.md Tier 1 refresh
+all land under explicit Founder authorization at
+`[FOUNDER-SECTION-5-WAVE-9-VOCABULARY-AMENDMENT-AUTH]`
+2026-05-31. Amendment 1 is docs-only — Wave 9 vNext
+implementation slice (migration of v1 → vNext runtime
+constants + Wave 10 CT label migration) requires separate
+Founder authorization at slice
+(`[FOUNDER-SECTION-5-WAVE-9-VNEXT-IMPLEMENTATION-AUTH]`).
+v1 runtime + Wave 10 CT cockpit remain canonical and LIVE
+for the v1 enterprise cockpit scope at Amendment 1 landing
+register.
