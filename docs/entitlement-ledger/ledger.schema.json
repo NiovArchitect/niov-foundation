@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://niovlabs.com/foundation/entitlement-ledger/ledger.schema.json",
+  "title": "NIOV Foundation Section 8 B4 Entitlement Ledger Design Substrate Schema",
+  "description": "Validation schema for Section 8 B4 entitlement ledger design substrate at docs/entitlement-ledger/. Each ledger file is a per-plan-archetype seed instance of the 8 conceptual entitlement objects per ADR-0083 Amendment 1 §9.7. STATIC DESIGN SUBSTRATE ONLY — these seed ledgers prepare the canonical shape for a future Prisma Entitlement runtime model. No code, no schema migration, no runtime billing enforcement at this slice. Per ADR-0083 B4 row: 'Separate Founder authorization at slice + Founder pricing decision' required before the runtime Prisma model lands. This design substrate consumes the B2 static entitlement catalog at docs/entitlement-catalog/ and projects each catalog item into an instantiated seed ledger for each of the 4 plan archetypes (starter-pilot / team / business / enterprise) so the future runtime model has worked examples to consume.",
+  "type": "object",
+  "required": ["kind", "catalog_version", "envelope_defaults", "ledger"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "envelope_defaults": { "$ref": "#/definitions/EnvelopeDefaults" },
+    "kind": { "type": "string", "enum": ["EntitlementLedgerSeed"] },
+    "catalog_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "ledger": { "$ref": "#/definitions/Ledger" }
+  },
+  "definitions": {
+    "Ledger": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "status",
+        "object_type",
+        "plan_archetype_id",
+        "name",
+        "human_readable_summary",
+        "model_usage_notes",
+        "source_adr_refs",
+        "consumes_plan_id",
+        "billing_account",
+        "plan",
+        "seat_entitlements",
+        "capability_pack_entitlements",
+        "feature_entitlements",
+        "usage_meters",
+        "entitlement_check_examples",
+        "downgrade_policy",
+        "governance_review_points",
+        "DMW_baseline_included",
+        "safety_baseline_included",
+        "audit_baseline_included",
+        "audit_expectations",
+        "runtime_state"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)+\\.v[0-9]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "type": "string", "enum": ["ACCEPTED", "PROPOSED", "DEPRECATED"] },
+        "object_type": { "type": "string", "const": "EntitlementLedgerSeed" },
+        "plan_archetype_id": { "type": "string", "enum": ["starter-pilot", "team", "business", "enterprise"] },
+        "name": { "type": "string", "minLength": 1 },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "source_adr_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(ADR-[0-9]{4}|RULE [0-9]+|US [0-9,]+)$" }
+        },
+        "consumes_plan_id": { "type": "string", "pattern": "^plan\\.[a-z][a-zA-Z0-9_-]*\\.v[0-9]+$" },
+        "billing_account": { "$ref": "#/definitions/BillingAccountSeed" },
+        "plan": { "$ref": "#/definitions/PlanSeed" },
+        "seat_entitlements": { "type": "array", "items": { "$ref": "#/definitions/SeatEntitlementSeed" } },
+        "capability_pack_entitlements": { "type": "array", "items": { "$ref": "#/definitions/CapabilityPackEntitlementSeed" } },
+        "feature_entitlements": { "type": "array", "items": { "$ref": "#/definitions/FeatureEntitlementSeed" } },
+        "usage_meters": { "type": "array", "items": { "$ref": "#/definitions/UsageMeterSeed" } },
+        "entitlement_check_examples": { "type": "array", "items": { "$ref": "#/definitions/EntitlementCheckExample" }, "minItems": 1 },
+        "downgrade_policy": { "$ref": "#/definitions/DowngradePolicySeed" },
+        "governance_review_points": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "DMW_baseline_included": { "type": "boolean", "const": true },
+        "safety_baseline_included": { "type": "boolean", "const": true },
+        "audit_baseline_included": { "type": "boolean", "const": true },
+        "audit_expectations": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "runtime_state": { "type": "string", "const": "DESIGN_SUBSTRATE_ONLY" }
+      },
+      "additionalProperties": true
+    },
+    "BillingAccountSeed": {
+      "type": "object",
+      "required": ["billing_status", "contract_type", "grace_period_status"],
+      "properties": {
+        "billing_status": { "type": "string", "enum": ["ACTIVE", "GRACE", "SUSPENDED", "CANCELLED"] },
+        "contract_type": { "type": "string", "enum": ["MONTHLY", "ANNUAL", "ENTERPRISE_CUSTOM"] },
+        "grace_period_status": { "type": "string", "enum": ["NONE", "IN_GRACE", "GRACE_EXPIRED"] }
+      },
+      "additionalProperties": true
+    },
+    "PlanSeed": {
+      "type": "object",
+      "required": ["plan_id", "plan_name", "base_price_anchor"],
+      "properties": {
+        "plan_id": { "type": "string", "minLength": 1 },
+        "plan_name": { "type": "string", "minLength": 1 },
+        "base_price_anchor": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "SeatEntitlementSeed": {
+      "type": "object",
+      "required": ["seat_tier_id", "included_count", "overage_strategy"],
+      "properties": {
+        "seat_tier_id": { "type": "string", "pattern": "^seat\\.[a-z][a-zA-Z0-9_-]*\\.v[0-9]+$" },
+        "included_count": { "type": "integer", "minimum": 0 },
+        "overage_strategy": { "type": "string", "enum": ["NONE", "WARN", "ADD_ON_PER_SEAT", "CUSTOM_ENTERPRISE"] }
+      },
+      "additionalProperties": true
+    },
+    "CapabilityPackEntitlementSeed": {
+      "type": "object",
+      "required": ["pack_id", "entitled", "activation_state"],
+      "properties": {
+        "pack_id": { "type": "string", "pattern": "^pack\\.[a-z][a-zA-Z0-9_-]*\\.v[0-9]+$" },
+        "entitled": { "type": "boolean" },
+        "activation_state": { "type": "string", "const": "ENTITLED_NOT_ACTIVATED" }
+      },
+      "additionalProperties": true
+    },
+    "FeatureEntitlementSeed": {
+      "type": "object",
+      "required": ["feature_id", "entitled"],
+      "properties": {
+        "feature_id": { "type": "string", "minLength": 1 },
+        "entitled": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "UsageMeterSeed": {
+      "type": "object",
+      "required": ["meter_id", "included_allowance", "enforcement_mode"],
+      "properties": {
+        "meter_id": { "type": "string", "pattern": "^meter\\.[a-z][a-zA-Z0-9_-]*\\.v[0-9]+$" },
+        "included_allowance": { "type": "string", "minLength": 1 },
+        "enforcement_mode": { "type": "string", "const": "DEFERRED_TO_RUNTIME" }
+      },
+      "additionalProperties": true
+    },
+    "EntitlementCheckExample": {
+      "type": "object",
+      "required": ["scenario", "input", "expected_outcome", "governance_note"],
+      "properties": {
+        "scenario": { "type": "string", "minLength": 1 },
+        "input": { "type": "object" },
+        "expected_outcome": { "type": "string", "enum": ["ENTITLED_AND_GOVERNANCE_AUTHORIZED", "ENTITLED_BUT_GOVERNANCE_GATED", "NOT_ENTITLED", "FORBIDDEN_BY_GOVERNANCE"] },
+        "governance_note": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "DowngradePolicySeed": {
+      "type": "object",
+      "required": ["policy_id", "preserves_audit", "preserves_dmw_baseline", "preserves_lawful_retention"],
+      "properties": {
+        "policy_id": { "type": "string", "pattern": "^policy\\.[a-z][a-zA-Z0-9_-]*\\.v[0-9]+$" },
+        "preserves_audit": { "type": "boolean", "const": true },
+        "preserves_dmw_baseline": { "type": "boolean", "const": true },
+        "preserves_lawful_retention": { "type": "boolean", "const": true }
+      },
+      "additionalProperties": true
+    },
+    "EnvelopeDefaults": {
+      "type": "object",
+      "required": ["object_type", "human_readable_summary", "model_usage_notes", "scope_defaults", "permission_defaults", "provenance", "audit_expectations", "policy_purpose", "allowed_consumers", "forbidden_consumers", "sensitivity_level"],
+      "additionalProperties": true,
+      "properties": {
+        "object_type": { "type": "string" },
+        "human_readable_summary": { "type": "string" },
+        "model_usage_notes": { "type": "string" },
+        "scope_defaults": { "type": "array", "items": { "type": "string" } },
+        "permission_defaults": { "type": "array", "items": { "type": "string" } },
+        "provenance": {
+          "type": "object",
+          "required": ["authored_by", "source", "version_tag", "captured_at", "authority"]
+        },
+        "audit_expectations": { "type": "array", "items": { "type": "string" } },
+        "policy_purpose": { "type": "string" },
+        "allowed_consumers": { "type": "array", "items": { "type": "string" } },
+        "forbidden_consumers": { "type": "array", "items": { "type": "string" } },
+        "sensitivity_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] }
+      }
+    }
+  }
+}

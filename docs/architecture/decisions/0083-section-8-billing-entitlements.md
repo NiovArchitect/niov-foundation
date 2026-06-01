@@ -782,6 +782,31 @@ After Amendment 1 lands:
 
 Per the Founder resume directive, the recommended **next autonomous slice** after Amendment 1 lands is **ADR-0084 Section 4 MCP / Connector Strategy** (design-only; covers Slack + Google Workspace + Project Tracker + Gmail / Outlook + GitHub + Salesforce / HubSpot + Travel / Expense per Wave 6 matrix; first-connector candidate arc; per-connector RULE 21 research arc gating).
 
+### 9.20 B4 Internal Entitlement / Seat Ledger Design Substrate LANDED 2026-06-01
+
+Per `[FOUNDATION-B4-ENTITLEMENT-LEDGER-DESIGN-SUBSTRATE]`. **Classification A (Static / Catalog / Docs).** NEW `docs/entitlement-ledger/` directory (6 files: README + JSON Schema + 4 plan-archetype seed ledgers — Starter/Pilot + Team + Business + Enterprise) + NEW `scripts/validate-entitlement-ledger.mjs` validator (pure Node ESM; mirrors `validate-entitlement-catalog.mjs` sentence-level negation + subtree skip; adds cross-reference checks into B2 catalog at `docs/entitlement-catalog/`).
+
+Each seed ledger instantiates all **8 conceptual entitlement objects** per §9.7 (`BillingAccount` + `Plan` + `SeatEntitlement[]` + `CapabilityPackEntitlement[]` + `FeatureEntitlement[]` + `UsageMeter[]` + `EntitlementCheck` worked examples + `DowngradePolicy`) with explicit cross-references into B2:
+
+- `consumes_plan_id` → resolves to a real plan at `docs/entitlement-catalog/plans.json` (4 of 4)
+- `seat_entitlements[].seat_tier_id` → resolves to real seat tiers (cross-reference enforced)
+- `capability_pack_entitlements[].pack_id` → resolves to real capability packs (cross-reference enforced)
+- `usage_meters[].meter_id` → resolves to real usage meters (cross-reference enforced)
+
+Validator green: 6/6 files · 4/4 ledgers · 4/4 plan archetypes · cross-references resolve to **4 plans, 6 seats, 9 packs, 16 meters** at the B2 catalog.
+
+Machine-enforced invariants:
+
+- Every ledger has `DMW_baseline_included` + `safety_baseline_included` + `audit_baseline_included` all `true` (DMW-included-at-base doctrine machine-checked at every plan tier, including Starter / Pilot)
+- Every `capability_pack_entitlements[].activation_state` equals `ENTITLED_NOT_ACTIVATED` (separation of entitlement from activation enforced — billing entitles availability, governance authorizes activation)
+- Every `usage_meters[].enforcement_mode` equals `DEFERRED_TO_RUNTIME` (no runtime metering at B4)
+- Every ledger has `runtime_state: DESIGN_SUBSTRATE_ONLY` (separates B4 from B5+ runtime substrate)
+- Canonical phrase *"Customers should not pay extra just to have memory be safe."* present in README
+
+`EntitlementCheck` worked examples surface the four expected outcomes per ledger: `ENTITLED_AND_GOVERNANCE_AUTHORIZED` (baseline features that ship + are immediately usable) · `ENTITLED_BUT_GOVERNANCE_GATED` (pack availability that still requires Foundation governance + per-call approval) · `NOT_ENTITLED` (cross-tier upgrade scenarios) · `FORBIDDEN_BY_GOVERNANCE` (RULE-20-protected inferences + AI-grantor sovereignty + audit-history-deletion).
+
+NO code, NO Prisma schema, NO migration, NO runtime billing enforcement, NO payment provider integration, NO Control Tower UI, NO connector activation, NO Dandelion runtime, NO workflow runtime, NO BEAM / Python / Elixir, NO new audit literal, NO mutation to existing `apps/api/src/services/monetization/monetization.service.ts` (preserved per ADR-0021 additive discipline). B4 closes the entitlement-ledger design-substrate stage at the **canonical-knowledge register**; runtime substrate B5-B8 remains Founder-decision-gated per §B4 ladder row ("Separate Founder authorization at slice + Founder pricing decision").
+
 ### 9.19 B3 CT Billing Preview LANDED 2026-06-01
 
 Per `[FOUNDER-SECTION-8-B3-CT-BILLING-PREVIEW-AUTH]` (CT PR #20 `db2c079`; Foundation closeout PR sibling). Read-only Control Tower route `/billing` (BillingPreviewPage at `otzar-control-tower:src/pages/BillingPreview.tsx`) composes against the CT-side compact derived mirror at `otzar-control-tower:src/lib/entitlement-catalog/{types,data}.ts` of Foundation `docs/entitlement-catalog/*` (B2 PR #179 HEAD `308486c`). 12 panels: Doctrine + Counts + Base Platform + 4 Plans + 6 Seats + 9 Capability Packs + 8 Connector Pack Families + 16 Usage Meter Templates + 18 Governance Rules + 13 Non-paywallable Safety Rules + 5 Downgrade Policies + 13 Enterprise Add-ons + 1 Billing Admin Permission Profile. Canonical Founder doctrine preserved verbatim across UI ("Customers should not pay extra just to have memory be safe." + "Billing says what the organization has purchased. Governance says what the system may safely do." + "Capability packs entitle availability; they do not authorize activation." + "Connector packs are not live connectors." + "This preview does not charge customers, activate billing, gate features, or connect payment providers."). 27 NEW CT unit tests (250/250 CT total, was 223; +27); typecheck + lint + vite build all green. NO runtime billing, NO payment provider, NO entitlement enforcement, NO feature gating, NO customer subscription mutation, NO checkout, NO invoices, NO payment methods, NO usage metering runtime, NO connector activation, NO Foundation backend route added, NO Foundation API call from this page, NO new audit literal, NO MSW handler added, NO mutation to existing Foundation services. CT mirror substitutes neutral wording for 3 governance rule names whose literal prohibition prose would otherwise trip CT's forbidden-UI-copy guard (rule.no-employee-scoring → "No workforce-scoring inferences"; rule.no-manager-surveillance → "No managerial-oversight monitoring"; rule.no-regulator-approval-claims → "No regulatory-approval claims") — Foundation canonical catalog at `docs/entitlement-catalog/governance-rules.json` preserves original phrasing; substitution applies only to the visible UI surface, mirroring the established Onboarding page convention. B3 closes ADR-0083 + Amendment 1 + B2 catalog-to-visible-product-surface stage at the **product-surface register**; runtime substrate B4-B8 remains Founder-decision-gated.

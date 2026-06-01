@@ -1,0 +1,137 @@
+{
+  "$schema": "./ledger.schema.json",
+  "kind": "EntitlementLedgerSeed",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "EntitlementLedgerSeed",
+    "human_readable_summary": "Static design substrate. Enterprise plan: 6 seat tiers + all 9 capability packs + advanced DMW governance + regulator/evidence pack + SSO/SAML/SCIM + custom retention + premium support + SLA. Custom annual contract.",
+    "model_usage_notes": "Enterprise plan unlocks all capability packs at the entitlement layer. Governance, audit, DMW safety, and the same-org boundary remain absolute regardless of contract.",
+    "scope_defaults": ["TENANT_SCOPED", "DESIGN_SUBSTRATE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "DESIGN_REFERENCE_ONLY", "NO_RUNTIME_ENFORCEMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/entitlement-ledger/enterprise-ledger.json",
+      "version_tag": "b4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-B4-ENTITLEMENT-LEDGER-DESIGN-SUBSTRATE]"
+    },
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED at B5+ runtime"],
+    "policy_purpose": "DESIGN_SUBSTRATE_REFERENCE_ONLY",
+    "allowed_consumers": ["BILLING_ADMIN_REVIEW", "CONTROL_TOWER_BILLING_PREVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_BILLING_CHANGE", "AGENT_TWIN_CROSS_TENANT", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "ledger": {
+    "id": "ledger.enterprise.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "EntitlementLedgerSeed",
+    "plan_archetype_id": "enterprise",
+    "name": "Enterprise Entitlement Ledger Seed",
+    "human_readable_summary": "Enterprise: custom annual + executive + board seats + advanced DMW governance + regulated evidence pack + SSO/SAML/SCIM + custom retention + premium support + SLA.",
+    "model_usage_notes": "Enterprise entitles all 9 capability packs. Customers cannot opt out of Foundation governance, audit chain integrity, same-org boundary, or DMW baseline safety. Custom retention extends — never reduces — required retention.",
+    "source_adr_refs": ["ADR-0083", "ADR-0084", "ADR-0082", "ADR-0081", "ADR-0080", "ADR-0070", "ADR-0036", "ADR-0049", "ADR-0026", "RULE 0"],
+    "consumes_plan_id": "plan.enterprise.v1",
+    "billing_account": {
+      "billing_status": "ACTIVE",
+      "contract_type": "ENTERPRISE_CUSTOM",
+      "grace_period_status": "NONE"
+    },
+    "plan": {
+      "plan_id": "enterprise",
+      "plan_name": "Enterprise",
+      "base_price_anchor": "Custom annual (negotiated per opportunity)"
+    },
+    "seat_entitlements": [
+      { "seat_tier_id": "seat.otzar-administrator.v1", "included_count": 20, "overage_strategy": "CUSTOM_ENTERPRISE" },
+      { "seat_tier_id": "seat.standard-twin.v1", "included_count": 100, "overage_strategy": "CUSTOM_ENTERPRISE" },
+      { "seat_tier_id": "seat.professional-twin.v1", "included_count": 100, "overage_strategy": "CUSTOM_ENTERPRISE" },
+      { "seat_tier_id": "seat.executive-twin.v1", "included_count": 20, "overage_strategy": "CUSTOM_ENTERPRISE" },
+      { "seat_tier_id": "seat.board-observer.v1", "included_count": 10, "overage_strategy": "CUSTOM_ENTERPRISE" },
+      { "seat_tier_id": "seat.external-collaborator.v1", "included_count": 25, "overage_strategy": "CUSTOM_ENTERPRISE" }
+    ],
+    "capability_pack_entitlements": [
+      { "pack_id": "pack.dandelion-activation.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.workflow-automation.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.advanced-audit-compliance.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.dmw-memory-governance.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.agent-playground-simulation.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.enterprise-analytics.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.regulator-evidence.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.premium-support-onboarding.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" },
+      { "pack_id": "pack.collaboration-pack-candidate.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" }
+    ],
+    "feature_entitlements": [
+      { "feature_id": "DMW_baseline_safety", "entitled": true },
+      { "feature_id": "audit_baseline", "entitled": true },
+      { "feature_id": "Foundation_safety_baseline", "entitled": true },
+      { "feature_id": "Section_7_audit_viewer", "entitled": true },
+      { "feature_id": "Section_7_cross_scope_verify_chain", "entitled": true },
+      { "feature_id": "Section_7_regulator_view_lawful_basis", "entitled": true },
+      { "feature_id": "Section_9_approvals_policies", "entitled": true },
+      { "feature_id": "Section_4_connector_admin_surface", "entitled": true },
+      { "feature_id": "Section_5_agent_playground", "entitled": true },
+      { "feature_id": "Section_6_enterprise_analytics_aggregate", "entitled": true },
+      { "feature_id": "workflow_recommendations_advanced", "entitled": true },
+      { "feature_id": "workflow_stage_3_proposed_action", "entitled": true },
+      { "feature_id": "workflow_stage_4_governed_execution", "entitled": true },
+      { "feature_id": "workflow_stage_5_continuous_optimization", "entitled": true },
+      { "feature_id": "advanced_DMW_governance", "entitled": true },
+      { "feature_id": "custom_retention_extension", "entitled": true },
+      { "feature_id": "regulator_evidence_packaging", "entitled": true },
+      { "feature_id": "SSO_SAML_SCIM", "entitled": true },
+      { "feature_id": "SLA_premium_support", "entitled": true }
+    ],
+    "usage_meters": [
+      { "meter_id": "meter.active-twin-seats.v1", "included_allowance": "200 active standard + professional seats combined (custom-negotiated overage)", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.active-admin-seats.v1", "included_allowance": "20 active admin seats", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.active-board-observer-seats.v1", "included_allowance": "10 active board / observer seats", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.workflow-recommendations.v1", "included_allowance": "100000 recommendations / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.workflow-runs.v1", "included_allowance": "10000 governed workflow runs / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.proposed-actions.v1", "included_allowance": "50000 proposed actions / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.connector-read-events.v1", "included_allowance": "Custom-negotiated read volume per activated connector", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.connector-write-events.v1", "included_allowance": "Custom-negotiated write volume per activated connector at >=C6", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.simulation-runs.v1", "included_allowance": "5000 Agent Playground simulation runs / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.evidence-package-generation.v1", "included_allowance": "Custom-negotiated regulator evidence packages / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.audit-exports.v1", "included_allowance": "1000 baseline exports / month (legal-window exports unrestricted)", "enforcement_mode": "DEFERRED_TO_RUNTIME" }
+    ],
+    "entitlement_check_examples": [
+      {
+        "scenario": "Regulator invokes regulator-view via LawfulBasis at Enterprise plan",
+        "input": { "feature_id": "Section_7_regulator_view_lawful_basis", "actor": "regulator" },
+        "expected_outcome": "ENTITLED_BUT_GOVERNANCE_GATED",
+        "governance_note": "Regulator/Evidence pack entitles availability; ADR-0036 LawfulBasis 9-condition enforcement still required at runtime."
+      },
+      {
+        "scenario": "Enterprise admin promotes workflow to Stage 5 continuous optimization",
+        "input": { "feature_id": "workflow_stage_5_continuous_optimization", "actor": "admin" },
+        "expected_outcome": "ENTITLED_BUT_GOVERNANCE_GATED",
+        "governance_note": "Enterprise entitles Stage 5; per-call governance + dual-control for risky writes still required per ADR-0081 + ADR-0026."
+      },
+      {
+        "scenario": "Enterprise downgrade attempts to delete audit history",
+        "input": { "feature_id": "audit_history_deletion_via_downgrade", "actor": "billing_admin" },
+        "expected_outcome": "FORBIDDEN_BY_GOVERNANCE",
+        "governance_note": "Per ADR-0083 + ADR-0002 + RULE 10: downgrades may disable new premium actions but never delete audit history or violate retention regardless of contract."
+      }
+    ],
+    "downgrade_policy": {
+      "policy_id": "policy.enterprise-contract-end.v1",
+      "preserves_audit": true,
+      "preserves_dmw_baseline": true,
+      "preserves_lawful_retention": true
+    },
+    "governance_review_points": [
+      "All 9 capability packs entitled; activation per call still governance-gated",
+      "Regulator-view requires LawfulBasis 9-condition enforcement per ADR-0036",
+      "Enterprise contract end preserves audit + DMW + lawful retention absolutely",
+      "Customers cannot opt out of Foundation governance + audit chain integrity + same-org boundary regardless of contract",
+      "Custom retention extends — never reduces — required retention"
+    ],
+    "DMW_baseline_included": true,
+    "safety_baseline_included": true,
+    "audit_baseline_included": true,
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED when consumed at B5+ runtime"],
+    "runtime_state": "DESIGN_SUBSTRATE_ONLY"
+  }
+}

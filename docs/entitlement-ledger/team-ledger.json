@@ -1,0 +1,108 @@
+{
+  "$schema": "./ledger.schema.json",
+  "kind": "EntitlementLedgerSeed",
+  "catalog_version": "1.0.0",
+  "envelope_defaults": {
+    "object_type": "EntitlementLedgerSeed",
+    "human_readable_summary": "Static design substrate. Team plan: Standard + Professional Twin seats + Collaboration Pack candidate + basic workflow recommendations. Baseline DMW + safety + audit included.",
+    "model_usage_notes": "Team plan unlocks Collaboration pack entitlement availability. Connector activation still requires Foundation governance + map-region approval + per-connector RULE 21 research arc per ADR-0084.",
+    "scope_defaults": ["TENANT_SCOPED", "DESIGN_SUBSTRATE_SCOPED"],
+    "permission_defaults": ["READ_FIRST", "DESIGN_REFERENCE_ONLY", "NO_RUNTIME_ENFORCEMENT"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/entitlement-ledger/team-ledger.json",
+      "version_tag": "b4-v1.0.0",
+      "captured_at": "2026-06-01",
+      "authority": "[FOUNDATION-B4-ENTITLEMENT-LEDGER-DESIGN-SUBSTRATE]"
+    },
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED at B5+ runtime"],
+    "policy_purpose": "DESIGN_SUBSTRATE_REFERENCE_ONLY",
+    "allowed_consumers": ["BILLING_ADMIN_REVIEW", "CONTROL_TOWER_BILLING_PREVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_BILLING_CHANGE", "AGENT_TWIN_CROSS_TENANT", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "ledger": {
+    "id": "ledger.team.v1",
+    "version": "1",
+    "status": "ACCEPTED",
+    "object_type": "EntitlementLedgerSeed",
+    "plan_archetype_id": "team",
+    "name": "Team Entitlement Ledger Seed",
+    "human_readable_summary": "$250 base + 2 admin + 5 standard + 5 professional twin seats baseline. Collaboration Pack candidate entitlement. Basic workflow recommendations. Baseline DMW + safety + audit included.",
+    "model_usage_notes": "Team plan is the first tier where connector pack candidacy + workflow recommendations land at the entitlement layer.",
+    "source_adr_refs": ["ADR-0083", "ADR-0084", "ADR-0080", "ADR-0081", "ADR-0082", "RULE 0"],
+    "consumes_plan_id": "plan.team.v1",
+    "billing_account": {
+      "billing_status": "ACTIVE",
+      "contract_type": "MONTHLY",
+      "grace_period_status": "NONE"
+    },
+    "plan": {
+      "plan_id": "team",
+      "plan_name": "Team",
+      "base_price_anchor": "$250 base + per-seat"
+    },
+    "seat_entitlements": [
+      { "seat_tier_id": "seat.otzar-administrator.v1", "included_count": 2, "overage_strategy": "ADD_ON_PER_SEAT" },
+      { "seat_tier_id": "seat.standard-twin.v1", "included_count": 5, "overage_strategy": "ADD_ON_PER_SEAT" },
+      { "seat_tier_id": "seat.professional-twin.v1", "included_count": 5, "overage_strategy": "ADD_ON_PER_SEAT" }
+    ],
+    "capability_pack_entitlements": [
+      { "pack_id": "pack.collaboration-pack-candidate.v1", "entitled": true, "activation_state": "ENTITLED_NOT_ACTIVATED" }
+    ],
+    "feature_entitlements": [
+      { "feature_id": "DMW_baseline_safety", "entitled": true },
+      { "feature_id": "audit_baseline", "entitled": true },
+      { "feature_id": "Foundation_safety_baseline", "entitled": true },
+      { "feature_id": "Dandelion_preview_read_only", "entitled": true },
+      { "feature_id": "Section_7_audit_viewer", "entitled": true },
+      { "feature_id": "Section_9_approvals_policies", "entitled": true },
+      { "feature_id": "Section_4_connector_admin_surface", "entitled": true },
+      { "feature_id": "workflow_recommendations_basic", "entitled": true }
+    ],
+    "usage_meters": [
+      { "meter_id": "meter.active-twin-seats.v1", "included_allowance": "10 active standard + professional twin seats combined", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.active-admin-seats.v1", "included_allowance": "2 active admin seats", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.workflow-recommendations.v1", "included_allowance": "1000 recommendations / month", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.connector-read-events.v1", "included_allowance": "100000 read events / month per activated connector", "enforcement_mode": "DEFERRED_TO_RUNTIME" },
+      { "meter_id": "meter.audit-exports.v1", "included_allowance": "20 baseline exports / month (legal-window exports unrestricted)", "enforcement_mode": "DEFERRED_TO_RUNTIME" }
+    ],
+    "entitlement_check_examples": [
+      {
+        "scenario": "Admin activates a Slack ConnectorBinding at Team plan",
+        "input": { "feature_id": "connector_activation:SLACK_READ", "actor": "admin" },
+        "expected_outcome": "ENTITLED_BUT_GOVERNANCE_GATED",
+        "governance_note": "Collaboration Pack candidate entitlement at Team makes Slack available; Foundation governance + map-region approval per ADR-0082 Amendment 1 + per-connector RULE 21 research arc still required to authorize activation."
+      },
+      {
+        "scenario": "Admin tries to activate workflow Stage 4 governed execution at Team plan",
+        "input": { "feature_id": "workflow_stage_4_execution", "actor": "admin" },
+        "expected_outcome": "NOT_ENTITLED",
+        "governance_note": "Team plan covers Stages 1-2 (template + recommendation) per ADR-0081. Stage 3+ requires Workflow Automation Pack entitlement at Business plan."
+      },
+      {
+        "scenario": "Connector pack entitlement at Team plan is interpreted as authorization",
+        "input": { "feature_id": "connector_activation:SLACK_READ", "actor": "ai_agent_autonomous" },
+        "expected_outcome": "FORBIDDEN_BY_GOVERNANCE",
+        "governance_note": "AI_AGENT cannot autonomously activate connectors per GOVSEC.6 + ADR-0084. Entitlement makes availability; governance authorizes activation."
+      }
+    ],
+    "downgrade_policy": {
+      "policy_id": "policy.downgrade.v1",
+      "preserves_audit": true,
+      "preserves_dmw_baseline": true,
+      "preserves_lawful_retention": true
+    },
+    "governance_review_points": [
+      "Collaboration Pack entitlement makes Slack available; governance authorizes activation",
+      "Workflow recommendations are advisory; Stage 3+ execution requires Business plan entitlement + Foundation governance approval",
+      "Baseline DMW safety is never paywalled — included even at Team",
+      "Customers should not pay extra just to have memory be safe"
+    ],
+    "DMW_baseline_included": true,
+    "safety_baseline_included": true,
+    "audit_baseline_included": true,
+    "audit_expectations": ["future ADMIN_ACTION:ENTITLEMENT_LEDGER_REFERENCED when consumed at B5+ runtime"],
+    "runtime_state": "DESIGN_SUBSTRATE_ONLY"
+  }
+}
