@@ -1456,6 +1456,29 @@ it). D2-C / ip_whitelist / `getOrgSettingsOrDefaults` deferred to **GOVSEC.7**;
 GOVSEC.7 untouched. CONSOLE.1 not started; no new arc. Founder authorization explicit
 at `[GOVSEC-GOVERNMENT-GRADE-HARDENING-GOVSEC5-CLOSURE-EXECUTE-VERIFY-AUTH]`.
 
+## GOVSEC.7 Tenant Isolation Hardening Implementation Note — GAP-F1 + GAP-F3 (2026-06-01)
+
+Per `[FOUNDATION-GOVSEC-7-TENANT-ISOLATION-HARDENING]`. GOVSEC.7 closure criteria (per §Closure Criteria above): department/hive filtering confirmed or added; cross-org escalation isolation enforced; failed cross-wallet NEGOTIATE denial regression exists.
+
+**Substrate state at this Note** (pre-flight grep verification per RULE 12):
+
+- Cross-org escalation denial: ENFORCED structurally at `apps/api/src/services/governance/escalation.service.ts:342-355` (cross-org-leak structural defence — same pattern as the DRIFT 9 anchor). Service tier filters Class B escalations by org-scope at L355 + `:544` enforces resolved orgEntityId at runtime.
+- Capsule org-scope: ENFORCED at `packages/database/src/queries/capsule.ts` via wallet_id + org-scoped predicates (DRIFT 9 anchor pattern — filters compose AS-AND with the existing org-scope predicate, never replace).
+- Org resolution: canonical at `apps/api/src/services/governance/org.ts` `getOrgEntityId(entityId)` consumed by `otzar.service.ts:496+944` + `playground-scenario.service.ts:46+286` + `compliance.service.ts:588`.
+- Hive substrate: tenant-scoped at `apps/api/src/services/hive/hive.service.ts` + `hive-events.ts` + `governance-terms-evaluator.ts`.
+- DRIFT 9 anchor test at `tests/integration/admin-routes.test.ts` (filter narrowing + cross-org-leak prevention).
+
+**This Note's substrate addition** — composable defense-in-depth helper module for any future hive-extension + escalation + department-filter + future-connector code that proposes a row outside the canonical org-scoped query path:
+
+- NEW `apps/api/src/services/govsec/tenant-isolation-guard.ts` — pure-function guards: `assertSameOrgForCapsule` (capsule wallet org match) + `assertSameOrgForHive` (hive org match) + `assertNoCrossOrgEscalation` (escalation source vs target) + `assertDepartmentFilterAndOrgScope` (filter AND-narrowing + deny-by-default on unresolved department). Closed-vocab failure-code enum (6 codes: CALLER_ORG_MISMATCH_CAPSULE / CALLER_ORG_MISMATCH_HIVE / CROSS_ORG_ESCALATION_FORBIDDEN / DEPARTMENT_FILTER_OUT_OF_ORG_SCOPE / ORPHAN_CALLER_NO_ORG / ORPHAN_RESOURCE_NO_ORG). No DB I/O. No audit emission. Forward-substrate for future hive-extension code + future workflow-escalation handler + future department-filtered list endpoints.
+- NEW `tests/unit/govsec-7-tenant-isolation-guard.test.ts` — 17 tests across same-org allowed / cross-org denied / orphan caller / orphan resource per helper + closed-vocab failure-code coverage assertion exercising all 6 codes.
+
+**Bounded scope of this Note** — defense-in-depth helper + unit tests only. The structural enforcement at DB + service tier is already LIVE; the existing DRIFT 9 anchor integration test at `tests/integration/admin-routes.test.ts` covers cross-org-leak prevention via filter narrowing. The failed cross-wallet NEGOTIATE denial regression that ADR-0049 §GOVSEC.7 cites lives at the existing NEGOTIATE integration tests in `tests/integration/share-revoke.test.ts` + `tests/integration/negotiate.test.ts` which already exercise wallet-boundary denial paths. This slice adds the composable helper module forward-substrate consumed when new boundaries (hive extension, workflow escalation, department-filtered lists, future connector cross-tenant pre-flight) need to compose against the same invariant without round-tripping through the DB. No new audit literal. No schema migration. No new route. No mutation to existing services.
+
+**GOVSEC.7 graduation:** Section 10 GOVSEC.7 row moves from `IN_FLIGHT` → **`SUBSTRATE_READY`** (helpers + unit tests landed; structural enforcement at the existing DB + service tier remains authoritative). Final `CLOSED` status will land when (a) a future hive-extension or department-filtered list endpoint consumes these helpers in production and (b) an adversarial integration test proves cross-tenant denial under attack against the new endpoint.
+
+**Recommended next slice:** W3 workflow recommendation substrate (Classification A) or D5 Starter Envelope Assembly substrate (Classification A) — both natural progressions under the operating-state graduation directive.
+
 ## GOVSEC.6 AI/Agent Abuse + Confused-Deputy Hardening Implementation Note — GAP-D1 + GAP-D2 (2026-06-01)
 
 Per `[FOUNDER-RUNTIME-ACTIVATION-CLARIFICATION-NO-MORE-PERMANENT-STATIC-ONLY-DEFAULT]` + `[FOUNDER-PREVIEW-TO-OPERATING-STATE-GRADUATION-AUTH]`. GOVSEC.6 closure criteria (per §Closure Criteria above) cite three substrate requirements: AI-grantor rejection + SESSION_ONLY-for-AI-grants enforced in code; confused-deputy chains blocked; output-handling / prompt-leak controls exist.
