@@ -1468,6 +1468,42 @@ ADR-0078 explicitly EXCLUDES at every stage:
 
 ## Forward-substrate closeout
 
+**HIVE_CONTEXT projection LANDED 2026-06-01 (Hive C1)** at
+`[HIVE-C1-HIVE-CONTEXT-PROJECTION]`. Closes the zero-output gap
+this ADR's Stage 2 implementation left at the
+`projectHiveContextSignalForScenario` stub. The
+`ConversationContextSignalProjectionService` now reads
+caller-scoped same-org hive memberships via direct Prisma and
+emits a single safe `MISSING_STAKEHOLDER_INPUT` signal
+(`signal_source_type = HIVE_CONTEXT` /
+`signal_scope = SAME_ORG` /
+`business_purpose_label = HIVE_OR_TEAM_COORDINATION` /
+`scope_binding_type = ORG_SCOPED`) when the caller has ≥ 1
+ACTIVE membership in an ACTIVE hive whose `org_entity_id`
+matches the scenario's `org_entity_id`. Mirrors the
+ACTION_HISTORY pattern (direct Prisma read; no public
+HiveService method introduced). All 4 §3.3 Stage 2 LIVE
+sources (`CORRECTION_SIGNAL` / `ACTION_HISTORY` /
+`HIVE_CONTEXT` / `MANUAL_USER_INPUT`) are now wired; the
+remaining 4 enum values (`MEETING_SUMMARY` / `APPROVED_NOTE`
+/ `GOVERNED_LISTENER_OUTPUT` / `IMPORTED_APPROVED_RECORD`)
+remain forward-substrate behind Stage 1 + Stage 3
+authorization. Safety: NEVER hive names / hive IDs / member
+identities / `governance_terms` text / `aggregate_capsule_id`
+/ raw aggregate payload (those remain behind the existing
+`getHiveIntelligence` membership gate); REMOVED memberships +
+DISSOLVED hives filtered out at the query register; orgless
+scenarios + cross-org callers + in-org-but-no-membership
+callers emit zero `HIVE_CONTEXT` signals. 7 NEW Wave 7
+integration tests (signal presence + safe-fields-only + 5
+boundary cases). Wave 7 baseline 46 → 53. ZERO new audit
+literal (existing `details.action` discriminator extended
+with `HIVE_CONTEXT` in
+`conversation_context_signal_sources`). ZERO schema
+migration. ZERO new route. ZERO HiveService mutation. ZERO
+Control Tower change (CT panel renders `signal_source_type`
+verbatim — picks up `HIVE_CONTEXT` for free).
+
 **CT Stage 2 consumer LANDED 2026-06-01** at
 `[CT-ADR-0078-STAGE-2-CONVERSATION-CONTEXT-SIGNALS]`
 (otzar-control-tower PR
