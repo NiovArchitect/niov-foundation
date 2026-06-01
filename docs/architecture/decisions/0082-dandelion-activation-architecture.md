@@ -487,6 +487,25 @@ After Amendment 1 lands, the cartography doctrine is canonical across:
 
 Per the Founder resume directive, the recommended **next autonomous slice** after Amendment 1 lands is **ADR-0084 Section 4 MCP / Connector Strategy** (design-only; broader plan covering Slack + Google Workspace + Project Tracker + Gmail / Outlook + GitHub + Salesforce / HubSpot + Travel / Expense per Wave 6 matrix; per-connector RULE 21 research arc gating).
 
+### D5 — Stage E Starter Envelope Assembly Substrate LANDED 2026-06-01
+
+Per `[FOUNDATION-D5-DANDELION-STARTER-ENVELOPE]`. NEW `docs/dandelion-starter-envelope/` directory (6 files: README + JSON Schema + 4 plan-archetype starter envelopes for Starter/Pilot + Team + Business + Enterprise) + NEW `scripts/validate-dandelion-starter-envelope.mjs` validator (pure Node ESM; mirrors `validate-dandelion-governance-review.mjs` sentence-level negation + subtree skip; adds D4 cross-reference check). Validator green: 6/6 files, 4 envelopes, 4/4 plan archetypes, **9 D4 governance review IDs cross-referenced** (every envelope's `consumes_governance_review_ids` array has exactly 9 entries — one per Map type — and each resolves to a real D4 review at `docs/dandelion-governance-review/`).
+
+Each starter envelope bundles approved Map regions across all 9 Map types into a single governed-context-envelope per ADR-0080 Amendment 1, tuned per ADR-0083 plan archetype. Universal envelope shape: `consumes_governance_review_ids` (exactly 9 D4 refs) + `scope_summary_by_map_type` (per-Map region count + summary + sensitivity) + `approved_regions_bundle` (per-region `expected_review_outcome`: `APPROVE` or `APPROVE_WITH_CONDITIONS`) + `cross_map_dependency_resolution` + `DMW_scope_ceiling` (baseline + approved extensions + forbidden categories + derivation note) + `permission_defaults` + `scope_defaults` + `audit_expectations` + `governance_review_points` + `envelope_state: DRAFT_NOT_ACTIVATED` (enforced by validator).
+
+**Per-archetype scope summary:**
+
+- Starter / Pilot: 15 approved regions, no connector activation, baseline + self-scoped DMW
+- Team: 24 approved regions, **Slack-read-first LANDABLE per C2 OPERATING substrate**, Stage 2 workflows, team-scoped DMW
+- Business: 35 approved regions, Stages 1-3 workflows, multi-connector queued (Slack LIVE / Google Workspace + Project Tracker queued), customer-scoped DMW
+- Enterprise: 38 approved regions, Stages 1-5 workflows queued, all connector packs queued, regulator-evidence pack, SSO/SAML/SCIM, LawfulBasis-gated regulator-view per ADR-0036, break-glass per ADR-0050
+
+**Notable cross-D5-to-runtime composition:** Team envelope ranks `tool.slack-read-first` + `aha.slack-catchup` as APPROVE_WITH_CONDITIONS because the C2 Slack read-first runtime is LIVE at Foundation (PR #185) + the Connectors admin UI is LIVE in Control Tower (PR #21) — admin walk at D6 maps directly to a real ConnectorBinding creation today. Enterprise envelope explicitly composes against ADR-0050 break-glass + ADR-0036 LawfulBasis + ADR-0071 cross-scope verify-chain + ADR-0061 enterprise analytics aggregate. The DMW_scope_ceiling derivation is per-archetype: Starter / Pilot has zero approved extensions; Team adds team-scope + Slack provenance metadata; Business adds project / customer / advanced audit; Enterprise adds regulator-evidence + custom retention + board observer (forbidden categories absolute across all tiers — `raw_employee_inspection` + `managerial_oversight_monitoring` + `workforce_scoring_signals` + `psychological_trait_inference` + `cross_tenant_memory_fusion` + plan-specific carve-outs).
+
+NO runtime activation, NO actual D6 admin walk, NO Twin activation, NO permission grants, NO connector authorizations, NO mutation to `apps/api/src/services/governance/dandelion.service.ts`, NO new audit literal.
+
+**Dandelion graduation:** Stage A Preview LIVE + Stage B Assessment `ASSESSMENT_READY` + Stage C Recommendation `RECOMMENDATION_READY` + Stage D Governance Review `GOVERNANCE_REVIEW_READY` → **Stage E Starter Envelope Assembly `ENVELOPE_READY`** (this D5 PR). Stage F Activation forward-substrate.
+
 ### D4 — Stage D Governance Review Substrate LANDED 2026-06-01
 
 Per `[FOUNDATION-D4-DANDELION-GOVERNANCE-REVIEW]`. NEW `docs/dandelion-governance-review/` directory (11 files): README + JSON Schema + 9 MapGovernanceReview files (one per map type). NEW `scripts/validate-dandelion-governance-review.mjs` validator (pure Node ESM; mirrors `validate-dandelion-recommendation.mjs` sentence-level negation + subtree skip; adds D3 cross-reference check). Validator green: 11/11 files, 9 items, 9/9 map types, **9 D3 recommendation IDs cross-referenced** (every governance review's `consumes_recommendation_id` resolves to a real D3 recommendation at `docs/dandelion-recommendation/`).
