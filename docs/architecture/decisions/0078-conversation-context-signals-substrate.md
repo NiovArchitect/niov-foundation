@@ -1468,6 +1468,28 @@ ADR-0078 explicitly EXCLUDES at every stage:
 
 ## Forward-substrate closeout
 
+**CT Stage 2 consumer LANDED 2026-06-01** at
+`[CT-ADR-0078-STAGE-2-CONVERSATION-CONTEXT-SIGNALS]`
+(otzar-control-tower PR
+[#9](https://github.com/NiovArchitect/otzar-control-tower/pull/9)
+`ad344a2`). The Wave 10 cockpit at `/agent-playground` now
+renders the safe Layer 3 signal panel built from this ADR's
+Stage 2 Foundation sidecars (closed-vocab badges + safe_summary
++ honest_note). The ADR-0077 §8.2 "Conversation context signals
+not available in this version" placeholder is RETIRED at the CT
+register (ADR-0077 §8.2 Amendment 1 in lockstep). CT renders 2
+signals from the MSW fixture parity surface (ACTION_HISTORY +
+CORRECTION_SIGNAL on Wave 7; ACTION_HISTORY + MANUAL_USER_INPUT
+on Wave 9), honest empty-state copy when the sidecar is `[]`,
+and the §6C.12 8 additive fields exhaustively. ZERO transcript
+drilldown UI, ZERO quote/excerpt rendering, ZERO Layer 4
+affordance — those remain forward-substrate behind Stage 1
++ Stage 3. 4 NEW CT tests + 1 UPDATED placeholder test
+(129/129 CT total; was 126 → +3). CT no-leak guard locks
+19 Stage-2-specific forbidden tokens + 5 ADR-0079 §27 blocked
+enum values absent from the rendered surface. RULE 14
+bidirectional citation to ADR-0077 §8.2 Amendment 1.
+
 **Stage 2 approved-source projection LANDED 2026-06-01** at
 `[ADR-0078-STAGE-2-APPROVED-SOURCE-PROJECTION]`. Foundation
 Wave 7 `RecommendBestPathSuccess` + Wave 9
