@@ -101,6 +101,7 @@ import { registerOtzarProposedPatternRoutes } from "./routes/otzar-proposed-patt
 import { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
+import { registerVoiceRoutes } from "./routes/voice.routes.js";
 import { registerPlatformRoutes } from "./routes/platform.routes.js";
 import { registerOrgRoutes } from "./routes/org.routes.js";
 import { registerEscalationRoutes } from "./routes/escalation.routes.js";
@@ -620,6 +621,7 @@ export async function buildApp(
 
   await registerHealthRoutes(app);
   await registerAuthRoutes(app, authService);
+  await registerVoiceRoutes(app, authService);
   await registerCosmpRoutes(
     app,
     negotiateService,

@@ -759,6 +759,9 @@ export {
   LOCAL_MOCK_FIXTURE_TRANSCRIPTS,
   LocalMockVoiceProvider,
 } from "./services/voice/local-mock-voice.provider.js";
+// VF.4a Foundation voice intent route per ADR-0085 §8.
+export { registerVoiceRoutes } from "./routes/voice.routes.js";
+export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";
 export {
   VOICE_SOURCE_SURFACES,
   constructEnvelope,
