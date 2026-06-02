@@ -738,6 +738,41 @@ export type {
   EmbeddingResult,
 } from "./services/embedding/embedding.service.js";
 
+// ADR-0085 VF.2: voice-first runtime substrate exports.
+// VoiceProviderAdapter interface + TextOnlyVoiceProvider +
+// VoiceIntentEnvelope substrate object + envelope-construction
+// service. Mirrors embedding provider re-export pattern.
+export {
+  getVoiceProviderAsync,
+  VOICE_PROVIDER_TYPES,
+} from "./services/voice/voice-provider.service.js";
+export type {
+  AudioRef,
+  SynthesizeResult,
+  TranscribeResult,
+  VoiceErrorClass,
+  VoiceProviderAdapter,
+  VoiceProviderType,
+} from "./services/voice/voice-provider.service.js";
+export { TextOnlyVoiceProvider } from "./services/voice/text-only-voice.provider.js";
+export {
+  VOICE_SOURCE_SURFACES,
+  constructEnvelope,
+  emitVoiceLifecycleAudit,
+  isVoiceSourceSurface,
+} from "./services/voice/voice-intent-envelope.js";
+export type {
+  ConstructEnvelopeInput,
+  VoiceApprovalChainState,
+  VoiceConfirmationState,
+  VoiceIntentClass,
+  VoiceIntentEnvelope,
+  VoiceLifecycleAuditLiteral,
+  VoiceRedactionReason,
+  VoiceRetentionClass,
+  VoiceSourceSurface,
+} from "./services/voice/voice-intent-envelope.js";
+
 // ADR-0043 G3.6 (Q-G3.6-α α-1): standalone similarity retrieval
 // service. RULE 0 SQL-tier filters + HNSW iterative scan posture.
 // Companion route POST /api/v1/cosmp/search registered in
