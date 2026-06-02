@@ -35,6 +35,47 @@ First real customer-bound Slack activation is now unblocked at the admin tier �
 
 NO new Foundation route. NO new audit literal. NO schema migration. NO mutation to existing Foundation services. NO connector invocation surface in CT (INVOKE_CONNECTOR still routes through Section 2 Action runtime). NO write-capability toggle (deferred to ≥C6).
 
+## C4-B Linear Read-First Connector Runtime LANDED 2026-06-01 — Project/Engineering Family 2/2
+
+Section 4 graduates **Linear: `RECOMMENDATION_READY` → `RUNTIME_READY`** (Foundation backend register). Fourth real vendor connector now LIVE. Closes the Project / Engineering family at 2/2 alongside C4-A Jira Cloud.
+
+Pattern mirrors C2/C3/C4-A verbatim with one architectural difference: Linear uses GraphQL (single `POST /graphql` endpoint with pinned query strings) rather than per-operation REST URLs. The ConnectorProvider abstraction is identical.
+
+NEW `apps/api/src/services/connector/linear-read.provider.ts` — `LinearReadProvider` implementing `ConnectorProvider`. Three read operations: `viewer` (current authenticated Linear user; boolean `authenticated` + `active` only — never user id / name / email) + `teams.list` (workspace teams metadata; `teams_count` + `has_next_page` only — never team keys / names) + `issues.list` (issue state-type aggregates grouped from `WorkflowState.type` enum into 4 buckets: `to_do_count` = triage+backlog+unstarted; `in_progress_count` = started; `done_count` = completed; **`canceled_count`** = canceled — Linear surfaces canceled distinctly from completed unlike Jira's status-category split). OAuth 2.0 access token via `binding.secret_ref` env-var-NAME per ADR-0019 + ADR-0024. Fixture-first: real Linear API only when `LINEAR_USE_REAL=1` + `config.use_real=true` + `secret_ref` resolves; triple defensive gate.
+
+GraphQL-specific handling: HTTP 200 with non-empty `errors[]` in the response body collapses to `PROVIDER_ERROR` (per GraphQL convention — a 200 with errors is still a failure). GraphQL complexity-based rate-limit aware (Linear ~1500 complexity / minute per OAuth client; 429 collapses to `RATE_LIMIT`).
+
+MOD `connector.service.ts` — `ConnectorType` extended (5-type → 6-type registry); `CONNECTOR_REGISTRY.LINEAR_READ` frozen entry; `getConnectorTypeDefinition` + `getConnectorProviderAsync` dispatch wired.
+
+NEW `tests/unit/c4-b-linear-read-provider.test.ts` — 28 tests across registry extension + factory + fixture-mode success per operation + payload validation (rejects `issueCreate` / `commentCreate` / `issueUpdate` / `cycleUpdate` as VALIDATION) + 8 forced-failure fixture keys + environment gate + privacy invariant (no `Bearer` / no `lin_oauth_` / no `lin_api_` / no `title` / no `description` / no `assignee` / no `reporter` / no `comment` / no `@` in delivery_metadata; whitelist-asserts the exact metadata keys per operation including the new `canceled_count` for issues.list).
+
+MOD `tests/unit/connector-provider.test.ts` — frozen-anchor contract test updated for 6-type registry.
+
+Unit suite **1282 tests pass** (was 1254; +28). Typecheck 4-error baseline preserved. Privacy invariant + no-leak guard preserved.
+
+RULE 21 research arc embedded in provider doc comment + test header lineage: Linear GraphQL API stable endpoint `https://api.linear.app/graphql`; OAuth 2.0 authorization code flow with `read` scope; `Authorization: Bearer <access_token>` header for OAuth tokens (personal API keys use a different header shape and are intentionally NOT supported at C4-B for workspace-tier auditability); `WorkflowState.type` enum (triage / backlog / unstarted / started / completed / canceled); GraphQL complexity-based rate limit; HTTP 200 with `errors[]` non-empty → PROVIDER_ERROR.
+
+**Out of scope at C4-B** (forward-substrate): writes (≥C6; per dual-control + workflow-binding constraints — `issueCreate` / `commentCreate` / state transitions / project-cycle management), OAuth refresh-token rotation (≥C5), webhook ingestion via `verifyInboundHmac` (≥C7), cycle / roadmap / label / project reads (later C-slice), personal-API-key fallback path (intentionally excluded for workspace-tier auditability), Linear MCP server adoption (substrate-honest evaluation deferred — direct GraphQL keeps the same fixture-first triple-gate pattern), Control Tower binding-creation UI for LINEAR_READ (separate CT slice; Section 4 Wave 2 admin routes already accept `type: "LINEAR_READ"` without modification).
+
+**Section 4 graduation across all 6 ranked connectors:**
+
+| Connector | Status |
+|---|---|
+| Slack | OPERATING (admin self-serve via CT PR #21) |
+| Linear | **RUNTIME_READY** (this PR) |
+| Jira Cloud | OPERATING (admin self-serve via CT PR #27) |
+| Google Workspace | OPERATING (admin self-serve via CT PR #22) |
+| GitHub | RECOMMENDATION_READY |
+| Microsoft 365 | RECOMMENDATION_READY |
+
+**Project / Engineering family: 2/2 connectors at RUNTIME_READY or higher.**
+
+**Next slice candidates:**
+
+1. **CT C4-B Linear admin path** — operator-visible `/connectors` registration for `LINEAR_READ` mirroring CT PR #27 Jira Cloud shape; graduates Linear `RUNTIME_READY` → `OPERATING (admin self-serve)`.
+2. **C-GitHub read-first connector runtime** — mirrors C4-A REST pattern against GitHub REST API.
+3. **C5 Microsoft 365 read-first connector runtime** — broader Microsoft Graph surface.
+
 ## CT C4-A Jira Cloud Admin Path LANDED 2026-06-01 — Jira Cloud RUNTIME_READY → OPERATING
 
 CT PR #27 `4e19e07` (Foundation closeout this PR). Operator-visible `/connectors` page now supports `JIRA_CLOUD_READ` binding registration end-to-end. Admin self-serve graduates Section 4 Jira Cloud from `RUNTIME_READY` (Foundation backend PR #207) to **`OPERATING (admin self-serve)`** at parity with C2 Slack (CT PR #21) + C3 Google Workspace (CT PR #22).
