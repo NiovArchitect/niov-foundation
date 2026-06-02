@@ -46,7 +46,8 @@ export type ConnectorType =
   | "OUTBOUND_WEBHOOK"
   | "FIXTURE_ECHO"
   | "SLACK_READ"
-  | "GOOGLE_WORKSPACE_READ";
+  | "GOOGLE_WORKSPACE_READ"
+  | "JIRA_CLOUD_READ";
 
 // WHAT: The shape of one connector-type definition in the registry.
 // INPUT: Used as a record type.
@@ -115,6 +116,15 @@ export const CONNECTOR_REGISTRY: Readonly<
     description:
       "Section 4 C3 second real vendor connector. OAuth-2.0 access-token read-only access to Google Workspace via calendar.events.list + drive.files.list + gmail.messages.list. Fixture-first: real Google API reached only when GOOGLE_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C3 (calendar/drive/gmail mutations forward-substrate to ≥C6). No OAuth refresh-token flow at C3 (static admin-supplied access-token via secret_ref; refresh-token rotation forward-substrate to a later C-slice). No Drive content download / Gmail body read at C3 (metadata + IDs only; raw content forward-substrate to ≥C5).",
   }),
+  JIRA_CLOUD_READ: Object.freeze({
+    type: "JIRA_CLOUD_READ" as const,
+    display_name: "Jira Cloud (read-first)",
+    transport: "https-bearer-token",
+    default_config_keys: Object.freeze(["use_real", "cloud_id"]),
+    secret_ref_required: true,
+    description:
+      "Section 4 C4-A third real vendor connector. OAuth-2.0 3LO access-token read-only access to Jira Cloud via myself + project.search + issue.search (POST /rest/api/3/search/jql cursor-based JQL search). Fixture-first: real Jira Cloud API reached only when JIRA_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C4-A (issue create / update / transition / bulk forward-substrate to ≥C6 per dual-control + workflow-binding constraints). No OAuth refresh-token rotation. No agile-board / sprint / worklog / changelog / webhook ingestion at C4-A. Status-category aggregates only — never issue keys / summaries / descriptions / assignee identity. Points-based rate-limit enforcement aware (Atlassian active 2026-03-02).",
+  }),
 });
 
 // WHAT: Lookup helper — returns the catalog entry for a connector
@@ -132,7 +142,8 @@ export function getConnectorTypeDefinition(
     candidate === "OUTBOUND_WEBHOOK" ||
     candidate === "FIXTURE_ECHO" ||
     candidate === "SLACK_READ" ||
-    candidate === "GOOGLE_WORKSPACE_READ"
+    candidate === "GOOGLE_WORKSPACE_READ" ||
+    candidate === "JIRA_CLOUD_READ"
   ) {
     return CONNECTOR_REGISTRY[candidate];
   }
@@ -348,6 +359,13 @@ export async function getConnectorProviderAsync(
     // import pattern as SLACK_READ and OUTBOUND_WEBHOOK.
     const mod = await import("./google-workspace-read.provider.js");
     return new mod.GoogleWorkspaceReadProvider();
+  }
+  if (type === "JIRA_CLOUD_READ") {
+    // Section 4 C4-A — third real vendor connector. Same dynamic-
+    // import pattern as SLACK_READ + GOOGLE_WORKSPACE_READ +
+    // OUTBOUND_WEBHOOK.
+    const mod = await import("./jira-cloud-read.provider.js");
+    return new mod.JiraCloudReadProvider();
   }
   return new FixtureBasedConnectorProvider();
 }
