@@ -35,6 +35,37 @@ First real customer-bound Slack activation is now unblocked at the admin tier �
 
 NO new Foundation route. NO new audit literal. NO schema migration. NO mutation to existing Foundation services. NO connector invocation surface in CT (INVOKE_CONNECTOR still routes through Section 2 Action runtime). NO write-capability toggle (deferred to ≥C6).
 
+## CT C5 Microsoft 365 Admin Path LANDED 2026-06-02 — Microsoft 365 RUNTIME_READY → OPERATING; **6 of 6 Connector Matrix CLOSED at OPERATING Parity**
+
+CT PR #31 `beed085` (Foundation closeout this PR). Operator-visible `/connectors` page now supports `MICROSOFT_365_READ` binding registration end-to-end. Admin self-serve graduates Section 4 Microsoft 365 from `RUNTIME_READY` (Foundation backend PR #218) to **`OPERATING (admin self-serve)`** at parity with C2 Slack + C3 Google Workspace + C4-A Jira Cloud + C4-B Linear + C-GitHub.
+
+🎯 **6 of 6 ranked connectors at OPERATING parity. Section 4 connector substrate matrix complete at OPERATING tier.** Every ranked connector is admin-visible at CT tier; every binding flows through the same governance pipeline (org-scoped ConnectorBinding + INVOKE_CONNECTOR ActionType + ACTION_* audit chain + GOVSEC.6 structural cross-tenant denial).
+
+CT changes: `CtConnectorType` union 7 → 8; `CT_CONNECTOR_REGISTRY.MICROSOFT_365_READ` entry with `{use_real, tenant_id}` config shape (tenant_id carries Azure AD tenant identifier; analogous role to C3 workspace_domain or C4-A cloud_id) + governance note explicitly listing what the connector NEVER traverses (event subjects / attendee email PII / body content / file names / folder paths / mail subject lines / sender + recipient email addresses / attachment names); type-aware placeholders; nested-ternary read-first badge now selects "C5"; page header + TypeRegistryCard descriptions extended with "6/6 connector matrix at RUNTIME_READY" stamp; 5 NEW CT tests (CT suite 452 → 457).
+
+Privacy invariant exercised across 4 layers: env-var NAME-only secret_ref placeholder; no Azure AD JWT prefix (`eyJ` followed by ≥20 base64url chars) in rendered output; no `@outlook.com` / `@onmicrosoft.com` PII; no service-account private-key JSON snippet; no `Bearer ` prefix; 15-phrase forbidden UI copy guard preserved.
+
+**Section 4 connector substrate posture across all 6 ranked connectors — 6 of 6 at OPERATING parity:**
+
+| Connector | Status |
+|---|---|
+| Slack | OPERATING (admin self-serve via CT PR #21) |
+| Google Workspace | OPERATING (admin self-serve via CT PR #22) |
+| Jira Cloud | OPERATING (admin self-serve via CT PR #27) |
+| Linear | OPERATING (admin self-serve via CT PR #29) |
+| GitHub | OPERATING (admin self-serve via CT PR #30) |
+| Microsoft 365 | **OPERATING (admin self-serve)** ← this PR |
+
+**Family-level completion: 6 of 6 OPERATING (Section 4 connector substrate matrix COMPLETE):**
+- Project / Engineering: 2/2 OPERATING (Jira + Linear)
+- **Workspace / Knowledge: 2/2 OPERATING** ← this PR closes (Google + Microsoft 365)
+- Collaboration: 1/1 OPERATING (Slack)
+- Code / SCM: 1/1 OPERATING (GitHub)
+
+**Next slice candidates:** D6-ENTERPRISE-AUDIT-ONLY-TABLES (Section 10 hardening item 2; BreakGlassGrant + LawfulBasisAttestation + BoardObserverScope tables); W4 Proposed Action substrate; INVOKE_CONNECTOR CT surface (operator-visible per-binding invocation UI; consumes existing Section 2 Action runtime); per-connector write-capability slices (≥C6 per connector).
+
+NO new CT route. NO new audit literal. NO Foundation backend change. NO schema migration. NO new dependency.
+
 ## C5 Microsoft 365 Read-First Connector Runtime LANDED 2026-06-02 — 6 of 6 Connector Matrix at RUNTIME_READY
 
 Section 4 graduates **Microsoft 365: `RECOMMENDATION_READY` → `RUNTIME_READY`** (Foundation backend register). Sixth real vendor connector now LIVE — **6 of 6 ranked connectors at RUNTIME_READY or higher**. Closes the Workspace / Knowledge family at 2/2 RUNTIME_READY (Google Workspace OPERATING via CT PR #22 + Microsoft 365 RUNTIME_READY this PR).
