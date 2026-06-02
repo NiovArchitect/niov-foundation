@@ -1,0 +1,304 @@
+{
+  "$schema": "./proposed-action.schema.json",
+  "kind": "ProposedActionCatalog",
+  "catalog_version": "1.0.0",
+  "plan_archetype_id": "team",
+  "envelope_defaults": {
+    "object_type": "ProposedAction",
+    "human_readable_summary": "Team-tier proposed actions materialize from W3 Stage 2 workflow recommendations per ADR-0081 §2.2. Every proposed action stays at proposed_action_state: PROPOSED_NOT_AUTHORIZED. Runtime promotion to Section 2 Action requires separate Founder authorization per slice + ADR-0026 dual-control where required.",
+    "model_usage_notes": "Team envelope materializes 4 Stage 3 proposed actions from the 6 Team W3 recommendations. Sprint risk + travel expense + onboarding + offboarding surface here; the daily-brief + weekly-execution Stage 2 recommendations stay at Stage 2 at this tier (no per-action surface needed at Team — the recommendation itself is the unit of value at this tier).",
+    "scope_defaults": ["TENANT_SCOPED", "PROPOSED_ACTION_SCOPED", "ADMIN_AND_TWIN_VISIBLE"],
+    "permission_defaults": ["READ_FIRST", "NO_AUTONOMOUS_EXECUTION", "NO_CONNECTOR_WRITE_AT_THIS_TIER"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/proposed-action/team-proposed-actions.json",
+      "version_tag": "w4-v1.0.0",
+      "captured_at": "2026-06-02",
+      "authority": "[FOUNDATION-W4-PROPOSED-ACTION-SUBSTRATE]"
+    },
+    "audit_expectations": [
+      "ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED when W3 recommendation is read",
+      "ADMIN_ACTION:PROPOSED_ACTION_REFERENCED (forward-substrate audit literal at runtime promotion per ADR-0042 §Q-γ.1 clean-transition) when proposed action substrate is consumed by a Twin"
+    ],
+    "policy_purpose": "PROPOSED_ACTION_REFERENCE_ONLY",
+    "allowed_consumers": [
+      "DANDELION_RECOMMENDATION_ENGINE",
+      "ADMIN_TWIN_SCOPED_TO_ORG",
+      "DIGITAL_TWIN_PERSONAL_SCOPE",
+      "AI_TEAMMATE_ROLE_SCOPE",
+      "CONTROL_TOWER_ADMIN_REVIEW",
+      "FOUNDATION_GOVERNANCE_TIER"
+    ],
+    "forbidden_consumers": [
+      "AGENT_TWIN_AUTONOMOUS_EXECUTION",
+      "AGENT_TWIN_CROSS_TENANT",
+      "MANAGER_SURVEILLANCE_TOOL",
+      "EMPLOYEE_SCORING_TOOL",
+      "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"
+    ],
+    "sensitivity_level": "MEDIUM"
+  },
+  "items": [
+    {
+      "id": "proposed-action.sprint-risk-summary.team.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Sprint Risk Summary — Proposed Action (Stage 3)",
+      "human_readable_summary": "PM Twin proposes posting a sprint risk summary to the team's Slack channel. Operator confirms before promotion; promotion to Section 2 Action requires separate Founder authorization per slice.",
+      "model_usage_notes": "Materializes from W3 sprint-risk-summary.team.v1 recommendation. PM Twin drafts a team-scoped sprint risk summary using Jira metadata (state aggregates only per C4-A privacy) + Linear metadata (state-type aggregates per C4-B). Proposes Slack POST via the canonical SLACK_READ binding's write-capability extension at ≥C6 (forward-substrate); at Stage 3 the proposed_payload_shape is fully described but the connector write is gated.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "ADR-0085", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.sprint-risk-summary.team.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "SLACK",
+      "proposed_payload_shape": {
+        "operation": "chat.postMessage",
+        "safe_field_set": [
+          "channel_name",
+          "summary_text",
+          "open_issue_count",
+          "in_progress_issue_count",
+          "blocked_issue_count",
+          "risk_label_aggregate"
+        ],
+        "forbidden_field_set": [
+          "raw_jira_issue_titles",
+          "raw_linear_issue_titles",
+          "assignee_emails",
+          "reporter_emails",
+          "engineer_performance_score",
+          "engineer_ranking",
+          "individual_velocity_metric",
+          "raw_pr_links",
+          "raw_commit_messages"
+        ]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": false,
+        "dual_control_required": false,
+        "audit_required": true
+      },
+      "safe_fallback": "PM reviews the sprint risk summary independently without Twin-mediated Slack post; W3 Stage 2 recommendation surface remains available.",
+      "DMW_scope_implications": [
+        "Reads aggregate Jira + Linear metadata scoped to the team DMW",
+        "Never reads per-engineer commit history, PR review timings, or individual performance data",
+        "Never surfaces raw issue titles or engineer identifiers outside the team DMW scope"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read",
+        "PROPOSED_ACTION_REFERENCED (forward-substrate) at this proposed action's read",
+        "ACTION_PROPOSED + ACTION_APPROVED + ACTION_SUCCEEDED at promotion to Section 2 Action runtime (forward-substrate; gated)"
+      ],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "operator_reviews_proposed_action" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "operator_confirms_proposal" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "operator_rejects_proposal" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["Proposal stays at PROPOSED_NOT_AUTHORIZED until operator review", "Audit emits before delivery (RULE 4)", "DMW scope absolute (RULE 0)"],
+      "forbidden_defaults": ["Auto-execution without operator confirmation", "Cross-tenant data fusion", "Individual engineer scoring or ranking"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "DIGITAL_TWIN_PERSONAL_SCOPE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.travel-booking-expense-shell.team.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Travel Booking + Expense Shell — Proposed Action (Stage 3)",
+      "human_readable_summary": "EA Twin proposes a draft travel itinerary + expense shell for an executive trip. Operator confirms before any external booking system is touched.",
+      "model_usage_notes": "Materializes from W3 travel-booking-expense-shell.team.v1 recommendation per Wave 2.1 §22 EA aha moment. At Stage 3 the EA Twin produces a draft itinerary + expense shell as an internal-only proposed action; the actual external booking system invocation (TravelEdge / Concur / Navan / etc.) is forward-substrate at a later C-slice that requires its own Founder authorization. This proposed action stays INTERNAL_ONLY at Team tier.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.travel-booking-expense-shell.team.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_travel_itinerary_internal_only",
+        "safe_field_set": [
+          "trip_purpose_summary",
+          "city_count",
+          "approximate_total_cost_band",
+          "expense_shell_template_id"
+        ],
+        "forbidden_field_set": [
+          "raw_flight_numbers",
+          "raw_hotel_confirmations",
+          "raw_payment_card_data",
+          "executive_personal_calendar_details",
+          "passport_data",
+          "frequent_flyer_numbers"
+        ]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": true,
+        "dual_control_required": true,
+        "audit_required": true,
+        "approval_role_requirements": ["EXECUTIVE_ASSISTANT_PRIMARY", "DELEGATED_AUTHORITY_HOLDER"]
+      },
+      "safe_fallback": "EA composes travel + expense draft independently; the W3 Stage 2 recommendation remains available as a structural template.",
+      "DMW_scope_implications": [
+        "Reads executive's calendar metadata only (no per-attendee email PII)",
+        "Reads executive's stated travel preferences from the executive DMW scope",
+        "Never reads personal financial data; expense shell is a template, not a financial transaction"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read",
+        "PROPOSED_ACTION_REFERENCED (forward-substrate) at this proposed action's read",
+        "ACTION_PROPOSED + ACTION_APPROVED at promotion (forward-substrate; gated)"
+      ],
+      "retention_class": "AGGREGATE_ONLY",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "ea_reviews_proposed_itinerary" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "delegated_authority_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "executive_rejects_itinerary_shape" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["Internal-only at Team tier (no external booking system call)", "Dual-control mandatory per ADR-0026 (EA + delegated authority holder)", "Aggregate-only retention class (no per-trip details retained at substrate tier)"],
+      "forbidden_defaults": ["External booking system invocation at Team tier", "Personal-financial-data read", "Cross-executive itinerary fusion"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.onboarding-checklist.team.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Onboarding Checklist — Proposed Action (Stage 3)",
+      "human_readable_summary": "Admin Twin proposes a specific onboarding checklist instance for a new team member. Operator confirms before any internal-record mutation.",
+      "model_usage_notes": "Materializes from W3 onboarding-checklist.team.v1 recommendation. Admin Twin proposes a per-team-member onboarding checklist instance. INTERNAL_ONLY at Team tier — actual provisioning into external systems (Slack workspace invite / Linear seat / GitHub repo access / Google Workspace seat / Microsoft 365 seat / etc.) is forward-substrate per ADR-0084 ≥C6.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.onboarding-checklist.team.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "ADMIN_TWIN",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_onboarding_checklist_instance",
+        "safe_field_set": [
+          "team_member_role_template_id",
+          "checklist_template_id",
+          "required_step_count",
+          "approver_role"
+        ],
+        "forbidden_field_set": [
+          "raw_personal_email_address",
+          "raw_phone_number",
+          "raw_government_id",
+          "raw_bank_account_data",
+          "psychological_profile_inference"
+        ]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": false,
+        "dual_control_required": false,
+        "audit_required": true
+      },
+      "safe_fallback": "Admin walks the OOTB onboarding template manually; W3 Stage 2 recommendation surface remains available.",
+      "DMW_scope_implications": [
+        "Reads team membership metadata only (no per-employee performance data)",
+        "Operates within the admin scope; never expands to manager-surveillance scope",
+        "Onboarded user's personal-tier DMW is not provisioned by this proposed action; provisioning is forward-substrate at runtime promotion"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read",
+        "PROPOSED_ACTION_REFERENCED (forward-substrate) at this proposed action's read",
+        "ACTION_PROPOSED + ACTION_APPROVED at promotion (forward-substrate)"
+      ],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "admin_reviews_proposed_checklist" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "admin_confirms_proposal" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "admin_rejects_proposal" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["Internal-only at Team tier", "Admin-only consumer", "No raw PII"],
+      "forbidden_defaults": ["External-system provisioning at Team tier", "Manager surveillance posture", "Employee scoring"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.offboarding-checklist.team.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Offboarding Checklist — Proposed Action (Stage 3)",
+      "human_readable_summary": "Admin Twin proposes an offboarding checklist instance for a departing team member. Audit chain integrity per RULE 10 + ADR-0002 preserved.",
+      "model_usage_notes": "Materializes from W3 offboarding-checklist.team.v1 recommendation. Admin Twin proposes the per-departing-team-member offboarding checklist. INTERNAL_ONLY at Team tier — actual deprovisioning from external systems is forward-substrate. Per RULE 10 the departing user's audit history is never deleted; deleted_at timestamps are set per ADR-0002 BEFORE DELETE trigger.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "ADR-0002", "RULE 0", "RULE 4", "RULE 10"],
+      "consumes_workflow_recommendation_id": "recommendation.offboarding-checklist.team.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "ADMIN_TWIN",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_offboarding_checklist_instance",
+        "safe_field_set": [
+          "departing_member_role_template_id",
+          "checklist_template_id",
+          "required_step_count",
+          "audit_retention_class",
+          "approver_role"
+        ],
+        "forbidden_field_set": [
+          "raw_termination_reason",
+          "raw_performance_history",
+          "raw_compensation_data",
+          "psychological_profile_inference",
+          "exit_interview_raw_transcript"
+        ]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": false,
+        "dual_control_required": false,
+        "audit_required": true
+      },
+      "safe_fallback": "Admin walks the OOTB offboarding template manually; audit chain integrity preserved per ADR-0002.",
+      "DMW_scope_implications": [
+        "Reads team membership metadata only (no per-employee performance / compensation / termination-reason data)",
+        "Departing user's personal-tier DMW is preserved per RULE 10 (deleted_at set; rows preserved)",
+        "Cross-team audit history preservation per ADR-0002 BEFORE DELETE trigger"
+      ],
+      "audit_expectations": [
+        "ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read",
+        "PROPOSED_ACTION_REFERENCED (forward-substrate) at this proposed action's read",
+        "ACTION_PROPOSED + ACTION_APPROVED at promotion (forward-substrate)"
+      ],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "admin_reviews_proposed_offboarding" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "admin_confirms_proposal" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "admin_rejects_proposal" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["Internal-only at Team tier", "Admin-only consumer", "No raw PII", "Audit retention preserved per RULE 10"],
+      "forbidden_defaults": ["External-system deprovisioning at Team tier", "Termination-reason exposure", "Performance-history exposure"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    }
+  ]
+}

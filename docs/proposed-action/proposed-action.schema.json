@@ -1,0 +1,288 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://niovlabs.com/foundation/proposed-action/proposed-action.schema.json",
+  "title": "NIOV Foundation Section 9 W4 Proposed Action Substrate Schema",
+  "description": "Validation schema for W4 Proposed Action Substrate at docs/proposed-action/. Each file is a wrapper containing kind + catalog_version + envelope_defaults + plan_archetype_id + items[] of ProposedAction entries. Each item composes against an existing W3 workflow recommendation (docs/workflow-recommendation/) + advances the ADR-0081 Stage 3 (Proposed Action) maturity surface. STATIC PROPOSED-ACTION SUBSTRATE ONLY — every proposed_action_state is PROPOSED_NOT_AUTHORIZED. Per ADR-0081 §2.2: Stage 3 (Proposed Action) materializes the human-in-the-loop decision; runtime promotion to Section 2 Action requires separate Founder authorization per slice + ADR-0057 + ADR-0026 dual-control where required.",
+  "type": "object",
+  "required": ["kind", "catalog_version", "envelope_defaults", "plan_archetype_id", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "envelope_defaults": { "$ref": "#/definitions/EnvelopeDefaults" },
+    "kind": { "type": "string", "enum": ["ProposedActionCatalog"] },
+    "catalog_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "plan_archetype_id": { "type": "string", "enum": ["starter-pilot", "team", "business", "enterprise"] },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/ProposedAction" }
+    }
+  },
+  "definitions": {
+    "ProposedAction": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "status",
+        "object_type",
+        "name",
+        "human_readable_summary",
+        "model_usage_notes",
+        "source_adr_refs",
+        "consumes_workflow_recommendation_id",
+        "adr_0081_stage",
+        "actor_role",
+        "intended_external_system",
+        "proposed_payload_shape",
+        "governance_gates",
+        "safe_fallback",
+        "DMW_scope_implications",
+        "audit_expectations",
+        "retention_class",
+        "state_machine",
+        "safe_defaults",
+        "forbidden_defaults",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "proposed_action_state"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)+\\.v[0-9]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "type": "string", "enum": ["ACCEPTED", "PROPOSED", "DEPRECATED"] },
+        "object_type": { "type": "string", "const": "ProposedAction" },
+        "name": { "type": "string", "minLength": 1 },
+        "human_readable_summary": { "type": "string", "minLength": 1 },
+        "model_usage_notes": { "type": "string", "minLength": 1 },
+        "source_adr_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^(ADR-[0-9]{4}|RULE [0-9]+)$" }
+        },
+        "consumes_workflow_recommendation_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9_-]*(\\.[a-zA-Z0-9][a-zA-Z0-9_-]*)+\\.v[0-9]+$",
+          "description": "Cross-reference into W3 workflow-recommendation/. The proposed action materializes from this workflow recommendation."
+        },
+        "adr_0081_stage": {
+          "type": "integer",
+          "enum": [3],
+          "description": "Per ADR-0081 §2.2: ProposedAction is Stage 3. Stage 1 = Template-only; Stage 2 = Recommendation-only; Stage 3 = Proposed Action; Stage 4+ = Action runtime + execution."
+        },
+        "actor_role": {
+          "type": "string",
+          "enum": [
+            "DIGITAL_TWIN",
+            "AI_TEAMMATE",
+            "ADMIN_TWIN",
+            "OPERATOR",
+            "HIVE_COORDINATOR"
+          ],
+          "description": "Which canonical actor proposes the action. Voice intents per ADR-0085 §5 surface here as DIGITAL_TWIN or AI_TEAMMATE."
+        },
+        "intended_external_system": {
+          "type": "string",
+          "enum": [
+            "SLACK",
+            "GOOGLE_WORKSPACE",
+            "JIRA_CLOUD",
+            "LINEAR",
+            "GITHUB",
+            "MICROSOFT_365",
+            "INTERNAL_ONLY",
+            "OUTBOUND_WEBHOOK"
+          ],
+          "description": "Which target system the proposed action would touch. INTERNAL_ONLY for proposed actions that stay inside Foundation governance (e.g., proposed permission grant)."
+        },
+        "proposed_payload_shape": {
+          "type": "object",
+          "required": ["operation", "safe_field_set"],
+          "properties": {
+            "operation": {
+              "type": "string",
+              "description": "Closed-vocab operation name. Mirrors the connector ConnectorProvider operation enum for external-system actions; or the Section 2 ActionType enum for INTERNAL_ONLY."
+            },
+            "safe_field_set": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Closed-vocab list of fields the proposed action may carry. Anything not on the safe_field_set is forbidden at proposal-construction tier."
+            },
+            "forbidden_field_set": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Closed-vocab list of fields the proposed action must NEVER carry (raw tokens / chain-of-thought / employee scoring / etc.)."
+            }
+          }
+        },
+        "governance_gates": {
+          "type": "object",
+          "required": [
+            "policy_decision_required",
+            "approval_chain_required",
+            "dual_control_required",
+            "audit_required"
+          ],
+          "properties": {
+            "policy_decision_required": {
+              "type": "boolean",
+              "description": "Whether the proposed action must pass a Section 2 + ADR-0057 policy decision before promotion to Section 2 Action."
+            },
+            "approval_chain_required": {
+              "type": "boolean",
+              "description": "Whether the proposed action must walk a Section 9 approval chain before promotion."
+            },
+            "dual_control_required": {
+              "type": "boolean",
+              "description": "Whether the proposed action requires ADR-0026 dual-control (two distinct admin actors) before promotion."
+            },
+            "audit_required": {
+              "type": "boolean",
+              "const": true,
+              "description": "Per RULE 4 every proposed action emits an audit event before promotion. Always true; encoded explicitly so the validator catches drift."
+            },
+            "approval_role_requirements": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Optional: closed-vocab roles required at approval (e.g., MANAGER + COMPLIANCE_OFFICER + CFO)."
+            }
+          }
+        },
+        "safe_fallback": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What happens if proposal is rejected or the governance gate fails. Plain language."
+        },
+        "DMW_scope_implications": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Per ADR-0001 + RULE 0: which DMW scopes the proposed action's promotion would touch."
+        },
+        "audit_expectations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Per RULE 4: closed-vocab audit literals the proposed action emits at construction + at promotion."
+        },
+        "retention_class": {
+          "type": "string",
+          "enum": ["STANDARD", "AGGREGATE_ONLY", "EPHEMERAL"],
+          "description": "Per ADR-0079: how long the proposed-action substrate is retained. Mirrors voice-intent retention discipline."
+        },
+        "state_machine": {
+          "type": "object",
+          "required": ["initial_state", "transitions"],
+          "properties": {
+            "initial_state": {
+              "type": "string",
+              "const": "PROPOSED_NOT_AUTHORIZED"
+            },
+            "transitions": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["from", "to", "trigger"],
+                "properties": {
+                  "from": { "type": "string" },
+                  "to": { "type": "string" },
+                  "trigger": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "safe_defaults": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "forbidden_defaults": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "allowed_consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "forbidden_consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "proposed_action_state": {
+          "type": "string",
+          "const": "PROPOSED_NOT_AUTHORIZED",
+          "description": "Closed-vocab. Per ADR-0081 §2.2: Stage 3 proposed actions never run autonomously. Runtime promotion to Section 2 Action requires separate Founder authorization per slice."
+        },
+        "envelope_defaults_inherited": { "type": "object" }
+      }
+    },
+    "EnvelopeDefaults": {
+      "type": "object",
+      "required": [
+        "object_type",
+        "human_readable_summary",
+        "model_usage_notes",
+        "scope_defaults",
+        "permission_defaults",
+        "provenance",
+        "audit_expectations",
+        "policy_purpose",
+        "allowed_consumers",
+        "forbidden_consumers",
+        "sensitivity_level"
+      ],
+      "properties": {
+        "object_type": { "type": "string", "const": "ProposedAction" },
+        "human_readable_summary": { "type": "string" },
+        "model_usage_notes": { "type": "string" },
+        "scope_defaults": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "permission_defaults": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "provenance": {
+          "type": "object",
+          "required": [
+            "authored_by",
+            "source",
+            "version_tag",
+            "captured_at",
+            "authority"
+          ],
+          "properties": {
+            "authored_by": { "type": "string" },
+            "source": { "type": "string" },
+            "version_tag": { "type": "string" },
+            "captured_at": { "type": "string" },
+            "authority": { "type": "string" }
+          }
+        },
+        "audit_expectations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "policy_purpose": { "type": "string" },
+        "allowed_consumers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "forbidden_consumers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sensitivity_level": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH"]
+        }
+      }
+    }
+  }
+}
