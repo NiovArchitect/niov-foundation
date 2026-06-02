@@ -307,6 +307,25 @@ export async function registerOrgRoutes(
     );
   }
 
+  // [FOUNDATION-CLOSE-DC-WIRING-DRIFT-ACTION-POLICIES] per Section 10
+  // hardening pass PR #205 — close the substrate-honesty drift:
+  // PRIVILEGED_ENDPOINTS registry entry + route comment + integration
+  // tests at tests/integration/org-action-policies.test.ts pre-grant
+  // approval via grantPolicyUpdateApproval — all claimed
+  // dual-control enforcement, but the actual route preHandler at the
+  // PUT /api/v1/org/action-policies binding below lacked
+  // requireDualControl. This lookup + the route's preHandler array
+  // update close the drift: same canonical 3-touchpoint pattern as
+  // ORG_DANDELION_ENTERPRISE_ACTIVATION at PR #204.
+  const actionPolicyEndpoint = PRIVILEGED_ENDPOINTS.find(
+    (e) => e.actionDescriptor.type === "ORG_ACTION_POLICY_UPDATE",
+  );
+  if (!actionPolicyEndpoint) {
+    throw new Error(
+      "PRIVILEGED_ENDPOINTS registry missing required entry for ORG_ACTION_POLICY_UPDATE",
+    );
+  }
+
   // POST /org/members -- single-member add.
   app.post<{ Body: MemberInput }>(
     "/api/v1/org/members",
@@ -913,7 +932,18 @@ export async function registerOrgRoutes(
   app.put<{ Body: Record<string, unknown> }>(
     "/api/v1/org/action-policies",
     {
-      preHandler: requireAdminCapability(authService, "can_admin_org"),
+      // [FOUNDATION-CLOSE-DC-WIRING-DRIFT-ACTION-POLICIES]
+      // per Section 10 hardening pass PR #205. PreHandler order
+      // matters — requireAdminCapability MUST run first (it
+      // populates request.auth.entity_id, which requireDualControl
+      // reads per the BINDING CONTRACT in dual-control.middleware.ts).
+      // Tests at tests/integration/org-action-policies.test.ts
+      // already pre-grant approval via grantPolicyUpdateApproval —
+      // this wiring activates the dormant integration coverage.
+      preHandler: [
+        requireAdminCapability(authService, "can_admin_org"),
+        requireDualControl(actionPolicyEndpoint),
+      ],
     },
     async (request, reply) => {
       const callerId = request.auth!.entity_id;
