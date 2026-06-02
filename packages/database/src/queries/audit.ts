@@ -213,7 +213,27 @@ export type AuditEventType =
   | "ACTION_FAILED"
   | "ACTION_CANCELLED"
   | "ACTION_EXPIRED"
-  | "ACTION_POLICY_UPDATE";
+  | "ACTION_POLICY_UPDATE"
+  // VF.2 voice-first runtime per ADR-0085 §5 (VoiceIntentEnvelope)
+  // + §8 (implementation sequence). 6 NEW append-only literals
+  // (40 + previous extensions → 6 voice literals appended). Each
+  // is emitted by the voice-intent envelope construction service
+  // before delivery per RULE 4. Audit details schema (SAFE):
+  // intent_id (UUID) + source_surface (1 of 13 enum values from
+  // ADR-0085 §7) + intent_class (LOW / MEDIUM / HIGH) +
+  // confirmation_state (enum) + approval_chain_state (enum) +
+  // transcript_redacted (boolean) + transcript_redaction_reason
+  // (closed-vocab) + retention_class. FORBIDDEN: transcript_text
+  // (lives in the envelope row, not the audit details); raw
+  // audio_ref; OAuth/API key; Bearer header; cross-tenant
+  // identifiers; proposed_action body. Append-only per ADR-0042
+  // §Q-γ.1 clean-transition discipline.
+  | "VOICE_INTENT_RECEIVED"
+  | "VOICE_INTENT_CONFIRMED"
+  | "VOICE_INTENT_REJECTED"
+  | "VOICE_INTENT_EXPIRED"
+  | "VOICE_INTENT_REDACTED"
+  | "VOICE_INTENT_DELIVERED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -309,6 +329,14 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "ACTION_CANCELLED",
   "ACTION_EXPIRED",
   "ACTION_POLICY_UPDATE",
+  // VF.2 voice-first runtime per ADR-0085 §5 + §8. 6 NEW append-
+  // only literals. Append-only per ADR-0042 §Q-γ.1.
+  "VOICE_INTENT_RECEIVED",
+  "VOICE_INTENT_CONFIRMED",
+  "VOICE_INTENT_REJECTED",
+  "VOICE_INTENT_EXPIRED",
+  "VOICE_INTENT_REDACTED",
+  "VOICE_INTENT_DELIVERED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
