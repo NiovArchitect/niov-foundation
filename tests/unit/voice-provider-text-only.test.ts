@@ -96,9 +96,14 @@ describe("VF.2 — getVoiceProviderAsync dispatch", () => {
     expect(provider).toBeInstanceOf(TextOnlyVoiceProvider);
   });
 
-  it("LOCAL_MOCK falls back to TextOnlyVoiceProvider (forward-substrate at VF.3)", async () => {
+  it("LOCAL_MOCK dispatches to LocalMockVoiceProvider (VF.3 LANDED)", async () => {
+    // VF.3 LANDED: LOCAL_MOCK is now a real concrete adapter, no
+    // longer a TextOnlyVoiceProvider fallback. Imported here at
+    // call-time so this assertion does not require touching the
+    // module-level imports.
+    const { LocalMockVoiceProvider } = await import("@niov/api");
     const provider = await getVoiceProviderAsync("LOCAL_MOCK");
-    expect(provider).toBeInstanceOf(TextOnlyVoiceProvider);
+    expect(provider).toBeInstanceOf(LocalMockVoiceProvider);
   });
 
   it("SESAME falls back to TextOnlyVoiceProvider (forward-substrate at VF.6; Founder-gated)", async () => {

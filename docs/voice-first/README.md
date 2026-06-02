@@ -39,8 +39,8 @@ This directory holds the canonical voice-first product doctrine substrate. The a
 | Gate | Description | Status |
 |---|---|---|
 | VF.1 | Voice-first product doctrine + ADR-0085 + interaction map + adapter architecture + governance + risk model + sequence | **LANDED 2026-06-02 (PR #210 `dcffc3c`)** |
-| VF.2 | `VoiceProviderAdapter` interface + `VoiceIntentEnvelope` type + `TextOnlyVoiceProvider` + 6 NEW closed-vocab audit literals + 44 unit tests | **LANDED 2026-06-02 (this PR)** |
-| VF.3 | `LocalMockVoiceProvider` + fixture catalog | Forward-substrate |
+| VF.2 | `VoiceProviderAdapter` interface + `VoiceIntentEnvelope` type + `TextOnlyVoiceProvider` + 6 NEW closed-vocab audit literals + 44 unit tests | **LANDED 2026-06-02 (PR #211 `35d7e84`)** |
+| VF.3 | `LocalMockVoiceProvider` + fixture catalog + 27 unit tests + 9 integration tests asserting envelope-to-audit-chain end-to-end | **LANDED 2026-06-02 (this PR)** |
 | VF.4 | CT voice surface scaffolding (text-only talk button on AI Twin page) | Forward-substrate |
 | VF.5 | Sesame readiness assessment completion across 10 gates | Forward-substrate (Founder-gated) |
 | VF.6 | `SesameVoiceProvider` adapter implementation | Forward-substrate (explicit Founder authorization) |
