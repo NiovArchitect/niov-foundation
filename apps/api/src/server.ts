@@ -108,6 +108,9 @@ import { registerEscalationRoutes } from "./routes/escalation.routes.js";
 // ADR-0057 §9 Option E — POST /api/v1/actions create-time substrate.
 // Bearer + "write"-gated; NO dual-control preHandler (evaluator decides).
 import { registerActionsRoutes } from "./routes/actions.routes.js";
+// W5 Action Promotion Runtime per ADR-0086 — the governed bridge from
+// W4 Proposed Action substrate to Section 2 Action runtime.
+import { registerProposedActionRoutes } from "./routes/proposed-action.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 // Section 4 Wave 2 — admin connector binding routes (can_admin_org).
@@ -653,6 +656,7 @@ export async function buildApp(
   await registerOrgRoutes(app, authService);
   await registerEscalationRoutes(app, authService);
   await registerActionsRoutes(app, authService);
+  await registerProposedActionRoutes(app, authService);
   await registerNotificationRoutes(app, authService);
   await registerAuditRoutes(app, authService);
   await registerConnectorRoutes(app, authService);

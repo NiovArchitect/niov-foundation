@@ -22,7 +22,7 @@ import {
 } from "@niov/api";
 
 describe("PRIVILEGED_ENDPOINTS registry", () => {
-  it("contains exactly 5 LIVE entries (Operations A + B + C + D + E)", () => {
+  it("contains exactly 7 LIVE entries (Operations A + B + C + D + E + F + G)", () => {
     // Substrate-state verification: the runtime registry consumes ONLY
     // the LIVE entries per the three-artifact substrate split. Future
     // LIVE entries land here when their target sub-phase ships.
@@ -44,7 +44,17 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     //     DUAL-CONTROL design-intent from D6 enterprise (steps 10 + 11
     //     emit *_DUAL_CONTROL audit literals) into actual approval-
     //     flow enforcement at runtime.
-    expect(PRIVILEGED_ENDPOINTS).toHaveLength(6);
+    //   6 -> 7 at [W5-ACTION-PROMOTION-RUNTIME] per ADR-0086 §4 —
+    //     Operation G PROPOSED_ACTION_DUAL_CONTROL_PROMOTION (POST
+    //     /api/v1/proposed-actions/:catalog_id/promote-dual-control);
+    //     can_admin_org-tier; the THIRD LIVE Class B entry. The
+    //     dual-control-wrapped W5 promotion route through which a W4
+    //     proposed action whose `governance_gates.dual_control_required`
+    //     flag is true is promoted into a Section 2 Action. The plain
+    //     POST /api/v1/proposed-actions/:catalog_id/promote route is
+    //     NOT in the registry — its service path returns
+    //     409 DUAL_CONTROL_REQUIRED when the catalog flags it.
+    expect(PRIVILEGED_ENDPOINTS).toHaveLength(7);
   });
 
   it("has no duplicate (method, route) entries", () => {
@@ -72,15 +82,16 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     expect(allCanonical).toBe(true);
   });
 
-  it("Class B (can_admin_org) entries are the org-admin-tier surfaces (currently exactly 2: ORG_ACTION_POLICY_UPDATE + ORG_DANDELION_ENTERPRISE_ACTIVATION)", () => {
+  it("Class B (can_admin_org) entries are the org-admin-tier surfaces (currently exactly 3: ORG_ACTION_POLICY_UPDATE + ORG_DANDELION_ENTERPRISE_ACTIVATION + PROPOSED_ACTION_DUAL_CONTROL_PROMOTION)", () => {
     const classB = PRIVILEGED_ENDPOINTS.filter(
       (e: PrivilegedEndpoint) => e.authTier === "can_admin_org",
     );
-    expect(classB).toHaveLength(2);
+    expect(classB).toHaveLength(3);
     const classBTypes = classB.map((e) => e.actionDescriptor.type).sort();
     expect(classBTypes).toEqual([
       "ORG_ACTION_POLICY_UPDATE",
       "ORG_DANDELION_ENTERPRISE_ACTIVATION",
+      "PROPOSED_ACTION_DUAL_CONTROL_PROMOTION",
     ]);
     // Verify each entry's (method, route) tuple
     const policyEntry = classB.find(
@@ -95,6 +106,14 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     expect(enterpriseEntry?.method).toBe("POST");
     expect(enterpriseEntry?.route).toBe(
       "/api/v1/org/dandelion/activate/enterprise",
+    );
+    const promoteEntry = classB.find(
+      (e) =>
+        e.actionDescriptor.type === "PROPOSED_ACTION_DUAL_CONTROL_PROMOTION",
+    );
+    expect(promoteEntry?.method).toBe("POST");
+    expect(promoteEntry?.route).toBe(
+      "/api/v1/proposed-actions/:catalog_id/promote-dual-control",
     );
   });
 

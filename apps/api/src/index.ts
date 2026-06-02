@@ -946,6 +946,38 @@ export type {
 export { projectActionView } from "./services/action/views.js";
 export type { SafeActionView } from "./services/action/views.js";
 
+// W5 Action Promotion Runtime per ADR-0086 — governed bridge from W4
+// Proposed Action substrate to Section 2 Action runtime.
+export {
+  getProposedActionById,
+  getProposedActionRegistry,
+  listProposedActions,
+  setProposedActionRegistryForTests,
+  PLAN_ARCHETYPE_VALUES,
+  ACTOR_ROLE_VALUES,
+  INTENDED_EXTERNAL_SYSTEM_VALUES,
+  RETENTION_CLASS_VALUES as PROPOSED_ACTION_RETENTION_CLASS_VALUES,
+} from "./services/proposed-action/proposed-action-catalog.js";
+export type {
+  ProposedActionEntry,
+  ProposedActionGovernanceGates,
+  PlanArchetype,
+  ActorRole,
+  IntendedExternalSystem,
+  RetentionClass as ProposedActionRetentionClass,
+} from "./services/proposed-action/proposed-action-catalog.js";
+export {
+  buildCreateActionInput,
+  mapIntendedExternalSystemToActionType,
+  promoteProposedActionForCaller,
+  validatePromoteBody,
+} from "./services/proposed-action/proposed-action-promotion.service.js";
+export type {
+  PromoteProposedActionInput,
+  PromoteProposedActionOptions,
+  PromoteProposedActionResult,
+} from "./services/proposed-action/proposed-action-promotion.service.js";
+
 // ADR-0057 §6 cancel service — non-RUNNING caller-initiated
 // cancellation (PROPOSED / APPROVED / SCHEDULED -> CANCELLED) with
 // ACTION_CANCELLED emission, plus RUNNING -> CANCELLED via GOVSEC.5

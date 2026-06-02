@@ -85,7 +85,17 @@ export type EscalationActionDescriptor = {
     // per ADR-0026 §6. Binds POST /api/v1/org/dandelion/activate/
     // enterprise; Class B (can_admin_org tier) — second admin in
     // the same org must approve before the route handler runs.
-    | "ORG_DANDELION_ENTERPRISE_ACTIVATION";
+    | "ORG_DANDELION_ENTERPRISE_ACTIVATION"
+    // W5 Action Promotion Runtime per ADR-0086 §4. Binds POST
+    // /api/v1/proposed-actions/:catalog_id/promote-dual-control.
+    // Class B (can_admin_org tier) — second admin in the same org
+    // must approve before the promotion service translates the W4
+    // catalog entry into a Section 2 Action via createActionForCaller.
+    // The plain POST /api/v1/proposed-actions/:catalog_id/promote
+    // route is NOT in this registry; the service decides per the
+    // catalog's `governance_gates.dual_control_required` flag and
+    // 409s when the wrapped route is required.
+    | "PROPOSED_ACTION_DUAL_CONTROL_PROMOTION";
   metadata?: Record<string, unknown>;
 };
 
@@ -228,6 +238,32 @@ export const PRIVILEGED_ENDPOINTS: readonly PrivilegedEndpoint[] = [
     route: "/api/v1/org/dandelion/activate/enterprise",
     authTier: "can_admin_org",
     actionDescriptor: { type: "ORG_DANDELION_ENTERPRISE_ACTIVATION" },
+  },
+  {
+    // W5 Action Promotion Runtime per ADR-0086 §4. Binds the
+    // dual-control-wrapped promotion route. The plain
+    // /promote route is intentionally NOT in this registry — its
+    // service path 409s with DUAL_CONTROL_REQUIRED when the catalog
+    // entry requires dual-control, prompting the caller to use the
+    // wrapped route below. Class B (can_admin_org tier): second
+    // admin in the same org must approve before the promotion
+    // service maps the catalog entry to a Section 2 Action via
+    // createActionForCaller. Cross-org candidates excluded
+    // structurally per ADR-0026 Amendment 1 §6. Fail-closed:
+    // single-admin org → 503 ESCALATION_TARGET_NOT_FOUND +
+    // DUAL_CONTROL_NO_APPROVER_AVAILABLE marker.
+    //
+    // Privacy invariant: the catalog_id route parameter is the W4
+    // catalog string id; it carries no secret material. The
+    // EscalationRequest description carries
+    // DUAL_CONTROL:PROPOSED_ACTION_DUAL_CONTROL_PROMOTION plus the
+    // catalog_id — sufficient to identify the operation to the
+    // second approver without exposing runtime_data or
+    // payload_redacted to the EscalationRequest substrate.
+    method: "POST",
+    route: "/api/v1/proposed-actions/:catalog_id/promote-dual-control",
+    authTier: "can_admin_org",
+    actionDescriptor: { type: "PROPOSED_ACTION_DUAL_CONTROL_PROMOTION" },
   },
 ] as const;
 
