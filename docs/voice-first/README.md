@@ -40,8 +40,9 @@ This directory holds the canonical voice-first product doctrine substrate. The a
 |---|---|---|
 | VF.1 | Voice-first product doctrine + ADR-0085 + interaction map + adapter architecture + governance + risk model + sequence | **LANDED 2026-06-02 (PR #210 `dcffc3c`)** |
 | VF.2 | `VoiceProviderAdapter` interface + `VoiceIntentEnvelope` type + `TextOnlyVoiceProvider` + 6 NEW closed-vocab audit literals + 44 unit tests | **LANDED 2026-06-02 (PR #211 `35d7e84`)** |
-| VF.3 | `LocalMockVoiceProvider` + fixture catalog + 27 unit tests + 9 integration tests asserting envelope-to-audit-chain end-to-end | **LANDED 2026-06-02 (this PR)** |
-| VF.4 | CT voice surface scaffolding (text-only talk button on AI Twin page) | Forward-substrate |
+| VF.3 | `LocalMockVoiceProvider` + fixture catalog + 27 unit tests + 9 integration tests asserting envelope-to-audit-chain end-to-end | **LANDED 2026-06-02 (PR #212 `e1ac631`)** |
+| VF.4a | Foundation route `POST /api/v1/voice/intents` + 11 integration tests asserting HTTP-tier auth + validation + SAFE response + audit row written | **LANDED 2026-06-02 (this PR)** |
+| VF.4b | CT voice surface scaffolding (text-only talk button on AI Twin page; consumes VF.4a) | Forward-substrate |
 | VF.5 | Sesame readiness assessment completion across 10 gates | Forward-substrate (Founder-gated) |
 | VF.6 | `SesameVoiceProvider` adapter implementation | Forward-substrate (explicit Founder authorization) |
 | VF.7 | Production voice runtime activation per-tenant flip | Forward-substrate (per-tenant Founder authorization) |
