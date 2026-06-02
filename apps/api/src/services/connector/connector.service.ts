@@ -47,7 +47,8 @@ export type ConnectorType =
   | "FIXTURE_ECHO"
   | "SLACK_READ"
   | "GOOGLE_WORKSPACE_READ"
-  | "JIRA_CLOUD_READ";
+  | "JIRA_CLOUD_READ"
+  | "LINEAR_READ";
 
 // WHAT: The shape of one connector-type definition in the registry.
 // INPUT: Used as a record type.
@@ -125,6 +126,15 @@ export const CONNECTOR_REGISTRY: Readonly<
     description:
       "Section 4 C4-A third real vendor connector. OAuth-2.0 3LO access-token read-only access to Jira Cloud via myself + project.search + issue.search (POST /rest/api/3/search/jql cursor-based JQL search). Fixture-first: real Jira Cloud API reached only when JIRA_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C4-A (issue create / update / transition / bulk forward-substrate to ≥C6 per dual-control + workflow-binding constraints). No OAuth refresh-token rotation. No agile-board / sprint / worklog / changelog / webhook ingestion at C4-A. Status-category aggregates only — never issue keys / summaries / descriptions / assignee identity. Points-based rate-limit enforcement aware (Atlassian active 2026-03-02).",
   }),
+  LINEAR_READ: Object.freeze({
+    type: "LINEAR_READ" as const,
+    display_name: "Linear (read-first)",
+    transport: "https-post-graphql-bearer-token",
+    default_config_keys: Object.freeze(["use_real"]),
+    secret_ref_required: true,
+    description:
+      "Section 4 C4-B fourth real vendor connector. Closes Project/Engineering family at 2/2 alongside Jira Cloud. OAuth-2.0 access-token read-only access to Linear via viewer + teams.list + issues.list (single POST /graphql endpoint with pinned GraphQL query strings). Fixture-first: real Linear API reached only when LINEAR_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C4-B (issueCreate / commentCreate / state transitions / project-cycle management forward-substrate to ≥C6 per dual-control + workflow-binding constraints). No OAuth refresh-token rotation. No personal-API-key fallback (OAuth only at C4-B for workspace-tier auditability). No cycle / roadmap / label / project reads. No webhook ingestion. State-type aggregates only (to_do / in_progress / done / canceled grouped from WorkflowState.type enum) — never team keys / team names / issue identifiers (TEAM-NNN) / titles / descriptions / assignee identity / reporter identity / comments. GraphQL complexity-based rate limit (~1500 complexity / minute per OAuth client) aware; HTTP 200 with errors[] non-empty collapses to PROVIDER_ERROR per GraphQL convention.",
+  }),
 });
 
 // WHAT: Lookup helper — returns the catalog entry for a connector
@@ -143,7 +153,8 @@ export function getConnectorTypeDefinition(
     candidate === "FIXTURE_ECHO" ||
     candidate === "SLACK_READ" ||
     candidate === "GOOGLE_WORKSPACE_READ" ||
-    candidate === "JIRA_CLOUD_READ"
+    candidate === "JIRA_CLOUD_READ" ||
+    candidate === "LINEAR_READ"
   ) {
     return CONNECTOR_REGISTRY[candidate];
   }
@@ -366,6 +377,15 @@ export async function getConnectorProviderAsync(
     // OUTBOUND_WEBHOOK.
     const mod = await import("./jira-cloud-read.provider.js");
     return new mod.JiraCloudReadProvider();
+  }
+  if (type === "LINEAR_READ") {
+    // Section 4 C4-B — fourth real vendor connector. Closes the
+    // Project/Engineering family at 2/2 alongside Jira Cloud.
+    // Same dynamic-import pattern; Linear uses a single
+    // POST /graphql endpoint rather than per-operation REST URLs
+    // but the ConnectorProvider abstraction is identical.
+    const mod = await import("./linear-read.provider.js");
+    return new mod.LinearReadProvider();
   }
   return new FixtureBasedConnectorProvider();
 }
