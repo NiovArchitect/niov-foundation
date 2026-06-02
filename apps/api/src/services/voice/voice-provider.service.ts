@@ -135,11 +135,14 @@ export async function getVoiceProviderAsync(
     return new mod.TextOnlyVoiceProvider();
   }
   if (type === "LOCAL_MOCK") {
-    // Forward-substrate to VF.3 per ADR-0085 §8.
-    // Until the LOCAL_MOCK provider lands, dispatch falls back to
-    // TEXT_ONLY (safest fallback).
-    const mod = await import("./text-only-voice.provider.js");
-    return new mod.TextOnlyVoiceProvider();
+    // VF.3 LANDED per ADR-0085 §8: LocalMockVoiceProvider is now
+    // a real concrete adapter (apps/api/src/services/voice/
+    // local-mock-voice.provider.ts). Tests + dev environments can
+    // dispatch through this slot for richer fixture transcripts +
+    // 8-code forced-failure fixture-key dispatch than
+    // TextOnlyVoiceProvider provides.
+    const mod = await import("./local-mock-voice.provider.js");
+    return new mod.LocalMockVoiceProvider();
   }
   if (type === "SESAME") {
     // Forward-substrate to VF.6 per ADR-0085 §8.

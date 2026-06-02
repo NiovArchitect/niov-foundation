@@ -756,6 +756,10 @@ export type {
 } from "./services/voice/voice-provider.service.js";
 export { TextOnlyVoiceProvider } from "./services/voice/text-only-voice.provider.js";
 export {
+  LOCAL_MOCK_FIXTURE_TRANSCRIPTS,
+  LocalMockVoiceProvider,
+} from "./services/voice/local-mock-voice.provider.js";
+export {
   VOICE_SOURCE_SURFACES,
   constructEnvelope,
   emitVoiceLifecycleAudit,
