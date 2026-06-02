@@ -20,7 +20,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  approveEscalationForCaller,
   buildApp,
+  createEscalationForCaller,
+  dualControlDescription,
   executePhase0,
   executeStarterPilotActivationForCaller,
   executeTeamActivationForCaller,
@@ -32,7 +35,7 @@ import {
   type Phase0Input,
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
-import { createEntity, prisma, verifyAuditChain } from "@niov/database";
+import { computeTARHash, createEntity, prisma, verifyAuditChain } from "@niov/database";
 import {
   cleanupTestData,
   ensureAuditTriggers,
@@ -45,8 +48,31 @@ const TEST_JWT_SECRET = "d6-activation-test-secret";
 const TEST_KEY = randomBytes(32);
 let app: FastifyInstance;
 
+// D6 enterprise dual-control wiring: EscalationRequest rows have no
+// onDelete: Cascade on entity relations, so we own the cleanup. Runs
+// BEFORE cleanupTestData() which hard-deletes the TEST_PREFIX-tagged
+// entities.
+async function cleanupTestEscalations(): Promise<void> {
+  const testEntities = await prisma.entity.findMany({
+    where: { display_name: { startsWith: TEST_PREFIX } },
+    select: { entity_id: true },
+  });
+  const ids = testEntities.map((e) => e.entity_id);
+  if (ids.length === 0) return;
+  await prisma.escalationRequest.deleteMany({
+    where: {
+      OR: [
+        { source_entity_id: { in: ids } },
+        { target_entity_id: { in: ids } },
+        { resolved_by_entity_id: { in: ids } },
+      ],
+    },
+  });
+}
+
 beforeAll(async () => {
   await ensureAuditTriggers();
+  await cleanupTestEscalations();
   await cleanupTestData();
   app = await buildApp({
     jwtSecret: TEST_JWT_SECRET,
@@ -60,6 +86,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
+  await cleanupTestEscalations();
   await cleanupTestData();
   await prisma.$disconnect();
 });
@@ -1042,7 +1069,7 @@ describe("D6 enterprise activation — input + auth failures", () => {
   });
 });
 
-describe("D6 POST /org/dandelion/activate/enterprise — HTTP surface", () => {
+describe("D6 POST /org/dandelion/activate/enterprise — HTTP surface (dual-control)", () => {
   async function loginAdmin(
     email: string,
     password: string,
@@ -1064,9 +1091,150 @@ describe("D6 POST /org/dandelion/activate/enterprise — HTTP surface", () => {
     return { token: (login.json() as { token: string }).token, ip };
   }
 
-  it("returns 200 + ok:true with 14 step results when the admin caller activates the enterprise envelope", async () => {
+  // D6 DUAL-CONTROL middleware wiring: grant a dual-control APPROVAL
+  // for the caller against the ORG_DANDELION_ENTERPRISE_ACTIVATION
+  // action. Mirrors the org-action-policies.test.ts
+  // grantPolicyUpdateApproval helper (Class B same-org pattern): the
+  // distinct approver must be linked to the same org via
+  // EntityMembership so the Class B target resolver can find them
+  // structurally. Without the membership, the org has only 1 admin
+  // and the middleware fails closed with 503 +
+  // DUAL_CONTROL_NO_APPROVER_AVAILABLE per ADR-0026 Amendment 1 §6.
+  async function grantEnterpriseActivationApproval(
+    callerEntityId: string,
+    orgId: string,
+  ): Promise<string> {
+    const distinctApprover = await createEntity(
+      makeEntityInput({ entity_type: "PERSON" }),
+    );
+    // Link the approver to the same org so Class B candidate
+    // resolution can discover them.
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: orgId,
+        child_id: distinctApprover.entity_id,
+        role_title: "MEMBER",
+        is_active: true,
+      },
+    });
+    const created = await createEscalationForCaller(callerEntityId, {
+      target_entity_id: distinctApprover.entity_id,
+      escalation_type: "DUAL_CONTROL_REQUIRED",
+      severity: "HIGH",
+      description: dualControlDescription(
+        "ORG_DANDELION_ENTERPRISE_ACTIVATION",
+      ),
+      expires_at: null,
+    });
+    await approveEscalationForCaller(
+      distinctApprover.entity_id,
+      created.escalation_id,
+    );
+    return created.escalation_id;
+  }
+
+  // Helper to seed a second can_admin_org entity in the same org so
+  // that Class B target resolution can discover an approver. Without
+  // can_admin_org on the second entity, the Class B candidate pool is
+  // empty and the middleware fails closed with 503 +
+  // DUAL_CONTROL_NO_APPROVER_AVAILABLE (intentional per GAP-C1).
+  async function seedSecondOrgAdmin(orgId: string): Promise<string> {
+    const second = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: orgId,
+        child_id: second.entity_id,
+        role_title: "MEMBER",
+        is_active: true,
+      },
+    });
+    // Flip can_admin_org + recompute TAR hash so Class B candidate
+    // pool sees them as a structurally-valid approver.
+    await prisma.tokenAttributeRepository.update({
+      where: { entity_id: second.entity_id },
+      data: { can_admin_org: true },
+    });
+    const fresh = await prisma.tokenAttributeRepository.findUnique({
+      where: { entity_id: second.entity_id },
+    });
+    if (fresh === null) throw new Error("TAR vanished mid-test");
+    const newHash = computeTARHash({
+      can_login: fresh.can_login,
+      can_read_capsules: fresh.can_read_capsules,
+      can_write_capsules: fresh.can_write_capsules,
+      can_share_capsules: fresh.can_share_capsules,
+      can_create_hives: fresh.can_create_hives,
+      can_access_external_api: fresh.can_access_external_api,
+      can_admin_niov: fresh.can_admin_niov,
+      can_admin_org: fresh.can_admin_org,
+      clearance_ceiling: fresh.clearance_ceiling,
+      monetization_role: fresh.monetization_role,
+      compliance_frameworks: fresh.compliance_frameworks,
+      status: fresh.status,
+    });
+    await prisma.tokenAttributeRepository.update({
+      where: { entity_id: second.entity_id },
+      data: { tar_hash: newHash },
+    });
+    return second.entity_id;
+  }
+
+  it("returns 503 DUAL_CONTROL_NO_APPROVER_AVAILABLE for a single-admin org (Class B fail-closed)", async () => {
+    // Single-admin org: only the Dandelion-created admin exists.
+    // Class B target resolver cannot find a structurally-distinct
+    // same-org approver → 503 fail-closed per ADR-0026 Amendment 1
+    // §6 (GAP-C1 self-approval guard).
     const input = makePhase0Input();
     await executePhase0(input);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate/enterprise",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: makeEnterpriseInput("dc-503"),
+    });
+    expect(response.statusCode).toBe(503);
+  });
+
+  it("returns 403 when caller has no APPROVED dual-control EscalationRequest but a second admin exists (creates PENDING)", async () => {
+    const input = makePhase0Input();
+    const phase0 = await executePhase0(input);
+    // Seed a second org admin so Class B resolution succeeds and the
+    // middleware can create a PENDING escalation row.
+    await seedSecondOrgAdmin(phase0.org_entity_id);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate/enterprise",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: makeEnterpriseInput("dc-403"),
+    });
+    expect(response.statusCode).toBe(403);
+    // A PENDING EscalationRequest should now exist for this caller
+    const pending = await prisma.escalationRequest.findFirst({
+      where: {
+        source_entity_id: phase0.admin_entity_id,
+        escalation_type: "DUAL_CONTROL_REQUIRED",
+        status: "PENDING",
+        description: dualControlDescription(
+          "ORG_DANDELION_ENTERPRISE_ACTIVATION",
+        ),
+      },
+    });
+    expect(pending).not.toBeNull();
+  });
+
+  it("returns 200 + ok:true with 14 step results when the admin caller has an APPROVED dual-control grant", async () => {
+    const input = makePhase0Input();
+    const phase0 = await executePhase0(input);
+    await grantEnterpriseActivationApproval(
+      phase0.admin_entity_id,
+      phase0.org_entity_id,
+    );
     const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
     const bindings = makeEnterpriseInput("http1");
 
@@ -1089,9 +1257,13 @@ describe("D6 POST /org/dandelion/activate/enterprise — HTTP surface", () => {
     }
   });
 
-  it("returns 422 with INVALID_GOOGLE_BINDING_INPUT when google_display_name is missing", async () => {
+  it("returns 422 with INVALID_GOOGLE_BINDING_INPUT when google_display_name is missing (after dual-control passes)", async () => {
     const input = makePhase0Input();
-    await executePhase0(input);
+    const phase0 = await executePhase0(input);
+    await grantEnterpriseActivationApproval(
+      phase0.admin_entity_id,
+      phase0.org_entity_id,
+    );
     const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
 
     const response = await app.inject({
@@ -1109,5 +1281,25 @@ describe("D6 POST /org/dandelion/activate/enterprise — HTTP surface", () => {
     const body = response.json() as Record<string, unknown>;
     expect(body["ok"]).toBe(false);
     expect(body["code"]).toBe("INVALID_GOOGLE_BINDING_INPUT");
+  });
+
+  it("non-enterprise routes (starter-pilot / team / business) remain single-actor (no dual-control)", async () => {
+    // The starter-pilot route is not in PRIVILEGED_ENDPOINTS and must
+    // continue to operate without a dual-control approval.
+    const input = makePhase0Input();
+    await executePhase0(input);
+    const { token, ip } = await loginAdmin(input.admin_email, input.admin_password);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/dandelion/activate",
+      headers: { authorization: `Bearer ${token}` },
+      remoteAddress: ip,
+      payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    expect(body["ok"]).toBe(true);
+    expect(body["archetype"]).toBe("starter-pilot");
   });
 });

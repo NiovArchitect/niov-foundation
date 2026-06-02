@@ -36,7 +36,15 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     //     ORG_ACTION_POLICY_UPDATE (PUT /api/v1/org/action-policies);
     //     can_admin_org-tier; the FIRST LIVE entry to exercise
     //     Class B at the integration tier.
-    expect(PRIVILEGED_ENDPOINTS).toHaveLength(5);
+    //   5 -> 6 at [FOUNDATION-D6-IMPL-DUAL-CONTROL-WIRING] per
+    //     ADR-0080 §23 Amendment 7 + ADR-0026 — Operation F
+    //     ORG_DANDELION_ENTERPRISE_ACTIVATION (POST /api/v1/org/
+    //     dandelion/activate/enterprise); can_admin_org-tier; the
+    //     SECOND LIVE Class B entry. Converts the truthfully-recorded
+    //     DUAL-CONTROL design-intent from D6 enterprise (steps 10 + 11
+    //     emit *_DUAL_CONTROL audit literals) into actual approval-
+    //     flow enforcement at runtime.
+    expect(PRIVILEGED_ENDPOINTS).toHaveLength(6);
   });
 
   it("has no duplicate (method, route) entries", () => {
@@ -64,14 +72,30 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     expect(allCanonical).toBe(true);
   });
 
-  it("Class B (can_admin_org) entries are the org-admin-tier surfaces (currently exactly 1: ORG_ACTION_POLICY_UPDATE)", () => {
+  it("Class B (can_admin_org) entries are the org-admin-tier surfaces (currently exactly 2: ORG_ACTION_POLICY_UPDATE + ORG_DANDELION_ENTERPRISE_ACTIVATION)", () => {
     const classB = PRIVILEGED_ENDPOINTS.filter(
       (e: PrivilegedEndpoint) => e.authTier === "can_admin_org",
     );
-    expect(classB).toHaveLength(1);
-    expect(classB[0]?.actionDescriptor.type).toBe("ORG_ACTION_POLICY_UPDATE");
-    expect(classB[0]?.method).toBe("PUT");
-    expect(classB[0]?.route).toBe("/api/v1/org/action-policies");
+    expect(classB).toHaveLength(2);
+    const classBTypes = classB.map((e) => e.actionDescriptor.type).sort();
+    expect(classBTypes).toEqual([
+      "ORG_ACTION_POLICY_UPDATE",
+      "ORG_DANDELION_ENTERPRISE_ACTIVATION",
+    ]);
+    // Verify each entry's (method, route) tuple
+    const policyEntry = classB.find(
+      (e) => e.actionDescriptor.type === "ORG_ACTION_POLICY_UPDATE",
+    );
+    expect(policyEntry?.method).toBe("PUT");
+    expect(policyEntry?.route).toBe("/api/v1/org/action-policies");
+    const enterpriseEntry = classB.find(
+      (e) =>
+        e.actionDescriptor.type === "ORG_DANDELION_ENTERPRISE_ACTIVATION",
+    );
+    expect(enterpriseEntry?.method).toBe("POST");
+    expect(enterpriseEntry?.route).toBe(
+      "/api/v1/org/dandelion/activate/enterprise",
+    );
   });
 
   it("Class C (can_admin_niov) entries remain the platform-admin-tier surfaces (currently exactly 4)", () => {
@@ -137,6 +161,43 @@ describe("isPrivilegedEndpoint type guard", () => {
     expect(entry).toBeDefined();
     expect(entry?.actionDescriptor.type).toBe("ORG_ACTION_POLICY_UPDATE");
     expect(entry?.authTier).toBe("can_admin_org");
+  });
+
+  it("returns the matching entry for POST /api/v1/org/dandelion/activate/enterprise (Operation F)", () => {
+    // [FOUNDATION-D6-IMPL-DUAL-CONTROL-WIRING] per ADR-0080 §23
+    // Amendment 7 + ADR-0026. The SECOND LIVE Class B entry.
+    // Converts the truthfully-recorded DUAL-CONTROL design-intent
+    // from D6 enterprise (steps 10 + 11 emit *_DUAL_CONTROL audit
+    // literals) into actual approval-flow enforcement at runtime.
+    const entry = isPrivilegedEndpoint(
+      "POST",
+      "/api/v1/org/dandelion/activate/enterprise",
+    );
+    expect(entry).toBeDefined();
+    expect(entry?.actionDescriptor.type).toBe(
+      "ORG_DANDELION_ENTERPRISE_ACTIVATION",
+    );
+    expect(entry?.authTier).toBe("can_admin_org");
+  });
+
+  it("non-enterprise activation routes are NOT privileged endpoints (starter-pilot / team / business stay single-actor)", () => {
+    // The starter-pilot / team / business archetype catalogs do not
+    // carry *_DUAL_CONTROL audit literals; their routes intentionally
+    // remain single-actor. Only the enterprise archetype carries the
+    // dual-control design-intent at the catalog tier per ADR-0080
+    // §23 Amendment 7.
+    expect(
+      isPrivilegedEndpoint("POST", "/api/v1/org/dandelion/activate"),
+    ).toBeUndefined();
+    expect(
+      isPrivilegedEndpoint("POST", "/api/v1/org/dandelion/activate/team"),
+    ).toBeUndefined();
+    expect(
+      isPrivilegedEndpoint(
+        "POST",
+        "/api/v1/org/dandelion/activate/business",
+      ),
+    ).toBeUndefined();
   });
 
   it("GET /api/v1/org/action-policies is NOT a privileged endpoint (only PUT is)", () => {
