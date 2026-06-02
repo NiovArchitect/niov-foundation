@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "voice-first.schema.json",
+  "title": "Voice-First Substrate Schema",
+  "description": "JSON Schema for the voice-first substrate per ADR-0085. Verified by scripts/validate-voice-first.mjs.",
+  "type": "object",
+  "properties": {
+    "kind": { "type": "string", "const": "VoiceFirstSubstrate" },
+    "version": { "type": "string" },
+    "doctrine_lines_canonical": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "interaction_map_surfaces": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "items": {
+        "type": "object",
+        "properties": {
+          "ordinal": { "type": "integer", "minimum": 1, "maximum": 13 },
+          "surface_id": {
+            "type": "string",
+            "enum": [
+              "ONBOARDING",
+              "ADMIN_TWIN",
+              "AI_TWIN",
+              "AI_TEAMMATE",
+              "WORKFLOW_RECOMMENDATION",
+              "PROPOSED_ACTION",
+              "APPROVAL_REQUEST",
+              "CONNECTOR_QUESTION",
+              "MEETING_FOLLOWUP",
+              "HIVE",
+              "AGENT_PLAYGROUND",
+              "AUDIT_EXPLANATION",
+              "EXECUTIVE_BRIEFING"
+            ]
+          },
+          "display_name": { "type": "string" },
+          "default_risk_tiers": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+            "minItems": 1
+          }
+        },
+        "required": ["ordinal", "surface_id", "display_name", "default_risk_tiers"]
+      }
+    },
+    "risk_tiers": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "sesame_readiness_gates": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "properties": {
+          "gate_number": { "type": "integer", "minimum": 1, "maximum": 10 },
+          "description": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "VERIFIED", "BLOCKED"]
+          }
+        },
+        "required": ["gate_number", "description", "status"]
+      }
+    },
+    "voice_provider_adapter_slots": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "string",
+        "enum": ["TEXT_ONLY", "LOCAL_MOCK", "SESAME", "FUTURE"]
+      },
+      "uniqueItems": true
+    },
+    "implementation_sequence_gates": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "type": "string",
+            "pattern": "^VF\\.[1-7]$"
+          },
+          "description": { "type": "string" },
+          "classification": {
+            "type": "string",
+            "enum": ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+          },
+          "authorization": {
+            "type": "string",
+            "enum": [
+              "autonomous-continuation",
+              "explicit-founder-authorization"
+            ]
+          }
+        },
+        "required": ["gate_id", "description", "classification", "authorization"]
+      }
+    }
+  },
+  "required": [
+    "kind",
+    "version",
+    "doctrine_lines_canonical",
+    "interaction_map_surfaces",
+    "risk_tiers",
+    "sesame_readiness_gates",
+    "voice_provider_adapter_slots",
+    "implementation_sequence_gates"
+  ]
+}
