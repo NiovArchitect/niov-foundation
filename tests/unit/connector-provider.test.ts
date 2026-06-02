@@ -37,10 +37,11 @@ function makeInvocation(
 }
 
 describe("CONNECTOR_REGISTRY — frozen-anchor contract", () => {
-  it("contains the Wave 1 connector types plus C2 SLACK_READ + C3 GOOGLE_WORKSPACE_READ + C4-A JIRA_CLOUD_READ + C4-B LINEAR_READ extensions", () => {
+  it("contains the Wave 1 connector types plus C2 SLACK_READ + C3 GOOGLE_WORKSPACE_READ + C4-A JIRA_CLOUD_READ + C4-B LINEAR_READ + C-GitHub GITHUB_READ extensions", () => {
     const keys = Object.keys(CONNECTOR_REGISTRY);
     expect(keys.sort()).toEqual([
       "FIXTURE_ECHO",
+      "GITHUB_READ",
       "GOOGLE_WORKSPACE_READ",
       "JIRA_CLOUD_READ",
       "LINEAR_READ",
