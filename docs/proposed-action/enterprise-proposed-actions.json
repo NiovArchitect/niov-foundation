@@ -1,0 +1,369 @@
+{
+  "$schema": "./proposed-action.schema.json",
+  "kind": "ProposedActionCatalog",
+  "catalog_version": "1.0.0",
+  "plan_archetype_id": "enterprise",
+  "envelope_defaults": {
+    "object_type": "ProposedAction",
+    "human_readable_summary": "Enterprise-tier proposed actions materialize from W3 Stage 2 workflow recommendations per ADR-0081 §2.2. Every proposed action stays at proposed_action_state: PROPOSED_NOT_AUTHORIZED. Runtime promotion to Section 2 Action requires separate Founder authorization per slice + ADR-0026 dual-control where required.",
+    "model_usage_notes": "Enterprise envelope materializes 8 Stage 3 proposed actions from the 16 Enterprise W3 recommendations. Board / GC / GRC / CFO / cross-functional surfaces with strict dual-control posture on money-moving + legal + governance-affecting proposals.",
+    "scope_defaults": ["TENANT_SCOPED", "PROPOSED_ACTION_SCOPED", "ADMIN_AND_TWIN_VISIBLE"],
+    "permission_defaults": ["READ_FIRST", "NO_AUTONOMOUS_EXECUTION", "NO_CONNECTOR_WRITE_AT_THIS_TIER", "DUAL_CONTROL_DEFAULT_ON_FOR_GOVERNANCE_AFFECTING"],
+    "provenance": {
+      "authored_by": "NIOV Labs / niov-foundation",
+      "source": "docs/proposed-action/enterprise-proposed-actions.json",
+      "version_tag": "w4-v1.0.0",
+      "captured_at": "2026-06-02",
+      "authority": "[FOUNDATION-W4-PROPOSED-ACTION-SUBSTRATE]"
+    },
+    "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED when W3 recommendation is read", "PROPOSED_ACTION_REFERENCED (forward-substrate clean-transition) when consumed"],
+    "policy_purpose": "PROPOSED_ACTION_REFERENCE_ONLY",
+    "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "DIGITAL_TWIN_PERSONAL_SCOPE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+    "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+    "sensitivity_level": "HIGH"
+  },
+  "items": [
+    {
+      "id": "proposed-action.board-meeting-prep-packet.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Board Meeting Prep Packet — Proposed Action (Stage 3)",
+      "human_readable_summary": "Board Twin proposes a board meeting prep packet shape. Dual-control mandatory before any board-observer-visible promotion per ADR-0026.",
+      "model_usage_notes": "Materializes from W3 board-meeting-prep-packet.enterprise.v1. INTERNAL_ONLY at Enterprise tier — actual packet distribution remains manual until ≥C-board-distribution slice.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.board-meeting-prep-packet.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_board_prep_packet_internal_only",
+        "safe_field_set": ["meeting_date_iso", "agenda_section_count", "approval_chain_summary", "board_observer_scope_label"],
+        "forbidden_field_set": ["raw_board_member_pii", "raw_compensation_data", "individual_director_voting_history", "competitor_intelligence_inference", "psychological_profile_inference"]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": true,
+        "dual_control_required": true,
+        "audit_required": true,
+        "approval_role_requirements": ["BOARD_SECRETARY", "CEO_OR_DELEGATE"]
+      },
+      "safe_fallback": "Board Secretary assembles packet manually using existing board portal tools.",
+      "DMW_scope_implications": ["Board scope; never raw director PII", "Aggregate-only retention class per ADR-0079"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)", "ACTION_PROPOSED + DUAL_CONTROL_REQUEST_CREATED at promotion (forward-substrate)"],
+      "retention_class": "AGGREGATE_ONLY",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "board_secretary_reviews" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "ceo_or_delegate_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "board_secretary_rejects" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["INTERNAL_ONLY at Enterprise tier", "Dual-control mandatory", "Aggregate-only retention"],
+      "forbidden_defaults": ["External board-portal write at Enterprise tier", "Raw director PII exposure", "Individual voting history disclosure"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.audit-evidence-gap-review.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Audit Evidence Gap Review — Proposed Action (Stage 3)",
+      "human_readable_summary": "GRC Twin proposes an audit evidence gap review queue. Neutral compliance vocabulary per ADR-0070; never compliance-certainty claim.",
+      "model_usage_notes": "Materializes from W3 audit-evidence-gap-review.enterprise.v1. INTERNAL_ONLY; supports GRC team's evidence collection without claiming compliance.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0070", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.audit-evidence-gap-review.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_audit_evidence_gap_review_internal_only",
+        "safe_field_set": ["control_family_label", "open_gap_count", "evidence_type_summary", "review_due_window_days"],
+        "forbidden_field_set": ["guaranteed_compliant_claim", "regulator_approved_claim", "no_fine_risk_claim", "raw_examiner_correspondence"]
+      },
+      "governance_gates": { "policy_decision_required": true, "approval_chain_required": false, "dual_control_required": false, "audit_required": true },
+      "safe_fallback": "GRC team reviews evidence gaps manually using existing GRC tooling.",
+      "DMW_scope_implications": ["GRC scope only", "Neutral compliance vocabulary per ADR-0070", "Examination-ready-by-default per ADR-0070"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)"],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "grc_reviews_gap_summary" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "grc_confirms_gap_summary" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "grc_rejects_gap_summary" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["INTERNAL_ONLY", "Neutral compliance vocabulary", "Examination-ready-by-default"],
+      "forbidden_defaults": ["Compliance-certainty claim", "Regulator-approved claim", "No-fine-risk claim"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.contract-review-queue.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Contract Review Queue — Proposed Action (Stage 3) — Enterprise Tier",
+      "human_readable_summary": "GC Twin proposes a contract triage queue at Enterprise tier. Same neutral-compliance-vocabulary discipline as Business tier; broader counterparty surface.",
+      "model_usage_notes": "Materializes from W3 contract-review-queue.enterprise.v1. Mirrors Business tier; broader counterparty surface at Enterprise tier.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "ADR-0070", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.contract-review-queue.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_contract_triage_queue_internal_only",
+        "safe_field_set": ["contract_id_internal", "queue_position", "risk_tier_label", "counterparty_category_label", "review_due_window_days"],
+        "forbidden_field_set": ["legal_advice_claim", "guaranteed_compliance_claim", "raw_counterparty_negotiation_data", "auto_sign_default"]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": true,
+        "dual_control_required": true,
+        "audit_required": true,
+        "approval_role_requirements": ["GENERAL_COUNSEL", "DEPUTY_GENERAL_COUNSEL_OR_DELEGATE"]
+      },
+      "safe_fallback": "GC reviews contracts via existing legal tooling.",
+      "DMW_scope_implications": ["Legal scope only", "Neutral compliance vocabulary per ADR-0070"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)", "ACTION_PROPOSED + DUAL_CONTROL_REQUEST_CREATED at promotion (forward-substrate)"],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "gc_reviews_queue_shape" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "deputy_gc_or_delegate_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "gc_rejects_queue_shape" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["Review-queue surfacing only", "Neutral compliance vocabulary"],
+      "forbidden_defaults": ["Legal advice claim", "Auto-signing", "Guaranteed compliance claim"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.incident-followup-brief.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Incident Follow-Up Brief — Proposed Action (Stage 3)",
+      "human_readable_summary": "Security Twin proposes a post-incident follow-up brief. Aggregate-only retention; never raw incident-investigation data.",
+      "model_usage_notes": "Materializes from W3 incident-followup-brief.enterprise.v1. INTERNAL_ONLY; supports post-incident review without exposing raw investigation data.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0070", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.incident-followup-brief.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_incident_followup_brief_internal_only",
+        "safe_field_set": ["incident_class_label", "containment_state_label", "remediation_step_count", "review_due_window_days"],
+        "forbidden_field_set": ["raw_investigation_data", "individual_employee_blame_inference", "exploit_chain_disclosure", "guaranteed_security_claim"]
+      },
+      "governance_gates": { "policy_decision_required": true, "approval_chain_required": false, "dual_control_required": false, "audit_required": true },
+      "safe_fallback": "Security team reviews incident via existing SIEM / IR tooling.",
+      "DMW_scope_implications": ["Security team scope only", "Aggregate-only retention per ADR-0079", "Never individual-employee blame inference"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)"],
+      "retention_class": "AGGREGATE_ONLY",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "security_lead_reviews" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "security_lead_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "security_lead_rejects" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["INTERNAL_ONLY", "Aggregate-only retention"],
+      "forbidden_defaults": ["Individual-employee blame inference", "Exploit chain disclosure", "Guaranteed security claim"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.executive-commitment-followup-draft.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Executive Commitment Follow-Up Draft — Proposed Action (Stage 3) — Enterprise Tier",
+      "human_readable_summary": "EA Twin proposes a draft follow-up message at Enterprise tier. Mirrors Business tier; broader executive coverage + stricter retention.",
+      "model_usage_notes": "Materializes from W3 executive-commitment-followup-draft.enterprise.v1. INTERNAL_ONLY at Enterprise tier; external delivery forward-substrate with strict dual-control.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.executive-commitment-followup-draft.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_followup_internal_only",
+        "safe_field_set": ["commitment_topic_summary", "due_date_iso", "internal_recipient_role", "drafted_message_text_internal_only"],
+        "forbidden_field_set": ["external_recipient_email_address", "raw_executive_calendar_details", "raw_counterparty_negotiation_data"]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": true,
+        "dual_control_required": true,
+        "audit_required": true,
+        "approval_role_requirements": ["EXECUTIVE_ASSISTANT_PRIMARY", "EXECUTIVE_HOLDER_OR_DELEGATE"]
+      },
+      "safe_fallback": "EA tracks follow-ups manually using the W3 recommendation template.",
+      "DMW_scope_implications": ["Executive scope read; never raw counterparty data exposure"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)"],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "ea_reviews_draft_followup" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "executive_or_delegate_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "executive_rejects_draft" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["INTERNAL_ONLY at Enterprise tier"],
+      "forbidden_defaults": ["External delivery without dual-control"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.vendor-renewal-review.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Vendor Renewal Review — Proposed Action (Stage 3)",
+      "human_readable_summary": "Procurement Twin proposes a vendor renewal review queue. Dual-control mandatory for any money-moving promotion per ADR-0026.",
+      "model_usage_notes": "Materializes from W3 vendor-renewal-review.enterprise.v1. INTERNAL_ONLY at Enterprise tier; no contract-management-system write at this stage.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.vendor-renewal-review.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_vendor_renewal_review_internal_only",
+        "safe_field_set": ["vendor_category_label", "renewal_window_days", "spend_band_label", "risk_tier_label"],
+        "forbidden_field_set": ["raw_contract_negotiation_data", "vendor_employee_pii", "auto_renewal_default", "guaranteed_compliance_claim"]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": true,
+        "dual_control_required": true,
+        "audit_required": true,
+        "approval_role_requirements": ["PROCUREMENT_LEAD", "CFO_OR_DELEGATE"]
+      },
+      "safe_fallback": "Procurement team reviews vendor renewals via existing tooling.",
+      "DMW_scope_implications": ["Procurement scope only", "Aggregate spend bands only; never individual vendor invoice data"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)"],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "procurement_reviews" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "cfo_or_delegate_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "procurement_rejects" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["INTERNAL_ONLY", "Dual-control mandatory"],
+      "forbidden_defaults": ["Auto-renewal", "Single-actor money-moving promotion"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.spend-approval-review.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Spend Approval Review — Proposed Action (Stage 3) — Enterprise Tier",
+      "human_readable_summary": "Finance Twin proposes a spend approval review at Enterprise tier. Mirrors Business tier; broader spend surface + stricter dual-control roles.",
+      "model_usage_notes": "Materializes from W3 spend-approval-review.enterprise.v1. INTERNAL_ONLY at Enterprise tier — no external accounting-system write at this stage.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0026", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.spend-approval-review.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "AI_TEAMMATE",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_spend_approval_review_internal_only",
+        "safe_field_set": ["spend_request_id_internal", "approval_chain_summary", "fiscal_period_label", "risk_tier_label", "spend_band_label"],
+        "forbidden_field_set": ["raw_compensation_data", "individual_employee_salary", "personal_financial_data", "auto_approval_default"]
+      },
+      "governance_gates": {
+        "policy_decision_required": true,
+        "approval_chain_required": true,
+        "dual_control_required": true,
+        "audit_required": true,
+        "approval_role_requirements": ["FINANCE_LEAD", "CONTROLLER_OR_DELEGATE", "CFO_OR_DELEGATE"]
+      },
+      "safe_fallback": "Finance reviews approvals manually via existing finance tooling.",
+      "DMW_scope_implications": ["Finance scope only", "No individual employee compensation visibility"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)", "ACTION_PROPOSED + ACTION_APPROVED + DUAL_CONTROL_REQUEST_CREATED at promotion (forward-substrate)"],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "finance_lead_reviews" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "controller_or_cfo_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "finance_rejects" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["Review-only at Enterprise tier", "Dual-control mandatory"],
+      "forbidden_defaults": ["Auto-approval at any stage", "Compensation disclosure", "Single-actor money-moving promotion"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    },
+    {
+      "id": "proposed-action.cross-functional-blocker-escalation.enterprise.v1",
+      "version": "1",
+      "status": "ACCEPTED",
+      "object_type": "ProposedAction",
+      "name": "Cross-Functional Blocker Escalation — Proposed Action (Stage 3)",
+      "human_readable_summary": "Hive Coordinator proposes a cross-functional blocker escalation. Hive-coordinator role per ADR-0046 dual-context routing.",
+      "model_usage_notes": "Materializes from W3 cross-functional-blocker-escalation.enterprise.v1. HIVE_COORDINATOR actor role per ADR-0046 — coordinates blocker resolution across teams without manager surveillance.",
+      "source_adr_refs": ["ADR-0081", "ADR-0057", "ADR-0046", "RULE 0", "RULE 4"],
+      "consumes_workflow_recommendation_id": "recommendation.cross-functional-blocker-escalation.enterprise.v1",
+      "adr_0081_stage": 3,
+      "actor_role": "HIVE_COORDINATOR",
+      "intended_external_system": "INTERNAL_ONLY",
+      "proposed_payload_shape": {
+        "operation": "draft_cross_functional_blocker_escalation_internal_only",
+        "safe_field_set": ["blocker_category_label", "affected_team_count", "escalation_path_summary", "due_window_days"],
+        "forbidden_field_set": ["individual_employee_blame_inference", "manager_surveillance_data", "team_member_scoring", "raw_slack_messages"]
+      },
+      "governance_gates": { "policy_decision_required": true, "approval_chain_required": false, "dual_control_required": false, "audit_required": true },
+      "safe_fallback": "Hive coordinator escalates blocker via existing team communication channels.",
+      "DMW_scope_implications": ["Hive scope per ADR-0046 dual-context routing", "Team-aggregate only; never individual team-member surveillance"],
+      "audit_expectations": ["ADMIN_ACTION:WORKFLOW_RECOMMENDATION_REFERENCED at W3 read", "PROPOSED_ACTION_REFERENCED (forward-substrate)"],
+      "retention_class": "STANDARD",
+      "state_machine": {
+        "initial_state": "PROPOSED_NOT_AUTHORIZED",
+        "transitions": [
+          { "from": "PROPOSED_NOT_AUTHORIZED", "to": "REVIEWED", "trigger": "hive_coordinator_reviews" },
+          { "from": "REVIEWED", "to": "APPROVED", "trigger": "hive_coordinator_confirms" },
+          { "from": "REVIEWED", "to": "REJECTED", "trigger": "hive_coordinator_rejects" },
+          { "from": "APPROVED", "to": "PROMOTED_TO_ACTION", "trigger": "founder_authorized_per_slice_promotion" },
+          { "from": "APPROVED", "to": "CANCELED", "trigger": "operator_cancels_after_approval" }
+        ]
+      },
+      "safe_defaults": ["INTERNAL_ONLY", "Team-aggregate only"],
+      "forbidden_defaults": ["Individual blame inference", "Manager surveillance posture", "Team-member scoring"],
+      "allowed_consumers": ["DANDELION_RECOMMENDATION_ENGINE", "ADMIN_TWIN_SCOPED_TO_ORG", "AI_TEAMMATE_ROLE_SCOPE", "CONTROL_TOWER_ADMIN_REVIEW", "FOUNDATION_GOVERNANCE_TIER"],
+      "forbidden_consumers": ["AGENT_TWIN_AUTONOMOUS_EXECUTION", "AGENT_TWIN_CROSS_TENANT", "MANAGER_SURVEILLANCE_TOOL", "EMPLOYEE_SCORING_TOOL", "EXTERNAL_THIRD_PARTY_UNAUTHORIZED"],
+      "proposed_action_state": "PROPOSED_NOT_AUTHORIZED"
+    }
+  ]
+}
