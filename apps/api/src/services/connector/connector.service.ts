@@ -48,7 +48,8 @@ export type ConnectorType =
   | "SLACK_READ"
   | "GOOGLE_WORKSPACE_READ"
   | "JIRA_CLOUD_READ"
-  | "LINEAR_READ";
+  | "LINEAR_READ"
+  | "GITHUB_READ";
 
 // WHAT: The shape of one connector-type definition in the registry.
 // INPUT: Used as a record type.
@@ -135,6 +136,15 @@ export const CONNECTOR_REGISTRY: Readonly<
     description:
       "Section 4 C4-B fourth real vendor connector. Closes Project/Engineering family at 2/2 alongside Jira Cloud. OAuth-2.0 access-token read-only access to Linear via viewer + teams.list + issues.list (single POST /graphql endpoint with pinned GraphQL query strings). Fixture-first: real Linear API reached only when LINEAR_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C4-B (issueCreate / commentCreate / state transitions / project-cycle management forward-substrate to ≥C6 per dual-control + workflow-binding constraints). No OAuth refresh-token rotation. No personal-API-key fallback (OAuth only at C4-B for workspace-tier auditability). No cycle / roadmap / label / project reads. No webhook ingestion. State-type aggregates only (to_do / in_progress / done / canceled grouped from WorkflowState.type enum) — never team keys / team names / issue identifiers (TEAM-NNN) / titles / descriptions / assignee identity / reporter identity / comments. GraphQL complexity-based rate limit (~1500 complexity / minute per OAuth client) aware; HTTP 200 with errors[] non-empty collapses to PROVIDER_ERROR per GraphQL convention.",
   }),
+  GITHUB_READ: Object.freeze({
+    type: "GITHUB_READ" as const,
+    display_name: "GitHub (read-first)",
+    transport: "https-get-bearer-token",
+    default_config_keys: Object.freeze(["use_real"]),
+    secret_ref_required: true,
+    description:
+      "Section 4 C-GitHub fifth real vendor connector. OAuth-2.0 access-token OR Personal Access Token (PAT) read-only access to GitHub REST v3 via user + repos.list + issues.search (REST API v3; X-GitHub-Api-Version 2022-11-28 pinned). Fixture-first: real GitHub API reached only when GITHUB_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C-GitHub (issues.create / repos.create / pulls.create / etc. forward-substrate to ≥C6 per dual-control + workflow-binding constraints). No GitHub App JWT exchange flow at C-GitHub (static admin-supplied access token only; installation-token rotation forward-substrate). No PR / commit / branch / file-content reads. No webhook ingestion. No GraphQL surface (REST v3 only at C-GitHub; GraphQL v4 forward-substrate). State aggregates only grouped from GitHub issue state + state_reason fields (open / closed_completed / closed_not_planned) — never repo names / owner logins / branch names / issue identifiers / titles / bodies / assignee email / reporter login / comments. 401 + 403 both collapse to AUTH (token invalid OR token-missing-scope). Rate limit aware (5000 req/hr OAuth User; 15000 req/hr GitHub App).",
+  }),
 });
 
 // WHAT: Lookup helper — returns the catalog entry for a connector
@@ -154,7 +164,8 @@ export function getConnectorTypeDefinition(
     candidate === "SLACK_READ" ||
     candidate === "GOOGLE_WORKSPACE_READ" ||
     candidate === "JIRA_CLOUD_READ" ||
-    candidate === "LINEAR_READ"
+    candidate === "LINEAR_READ" ||
+    candidate === "GITHUB_READ"
   ) {
     return CONNECTOR_REGISTRY[candidate];
   }
@@ -386,6 +397,14 @@ export async function getConnectorProviderAsync(
     // but the ConnectorProvider abstraction is identical.
     const mod = await import("./linear-read.provider.js");
     return new mod.LinearReadProvider();
+  }
+  if (type === "GITHUB_READ") {
+    // Section 4 C-GitHub — fifth real vendor connector. Same
+    // dynamic-import pattern as the other read-first providers.
+    // GitHub REST v3 with Bearer auth (OAuth 2.0 OR Personal
+    // Access Token).
+    const mod = await import("./github-read.provider.js");
+    return new mod.GitHubReadProvider();
   }
   return new FixtureBasedConnectorProvider();
 }
