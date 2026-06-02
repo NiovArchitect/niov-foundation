@@ -12,6 +12,34 @@ INVOKE_CONNECTOR Actions against per-org-registered external
 adapters, every call audited + every secret kept as an env-var
 reference (never raw-at-rest).
 
+## CT INVOKE_CONNECTOR Surface LANDED 2026-06-02 — 6/6 OPERATING matrix operator-usable
+
+CT PR #32 `de77cdf` (this Foundation closeout records the graduation). Operator-visible per-binding test-invoke UI shipped at Control Tower. Admins/operators can now select a binding + a read-first operation from a closed-vocab catalog mirroring Foundation providers verbatim (6 vendors × 3 ops each: Slack `channels.list` / `users.list` / `conversations.history`; Google Workspace `calendar.events.list` / `drive.files.list` / `gmail.messages.list`; Jira Cloud `myself` / `project.search` / `issue.search`; Linear `viewer` / `teams.list` / `issues.list`; GitHub `user` / `repos.list` / `issues.search`; Microsoft 365 `calendar.events.list` / `drive.items.list` / `mail.messages.list`) + an optional forced-failure fixture key (8 force-* values: AUTH / NETWORK / TIMEOUT / RATE_LIMIT / PROVIDER_ERROR / VALIDATION / NOT_CONFIGURED / DISABLED), submit, and watch the Section 2 Action lifecycle reach a terminal status with a SAFE metadata projection rendered back.
+
+CT artifacts: `src/lib/connectors/invoke-operations.ts` (NEW closed-vocab catalog + 9 fixture keys + `supportsInvokeOperations` helper) · `src/components/ConnectorInvokeDialog.tsx` (NEW modal; 2 s × 15-attempt poll ~30 s; renders SafeActionDetailView projection only) · `src/lib/api.ts` `api.actions.createInvokeConnector` (MOD; bounded to `action_type=INVOKE_CONNECTOR`) · `src/pages/ConnectorsAdmin.tsx` (MOD; per-binding "Test invoke" button) · 16 NEW unit tests (457 → 473) covering catalog enforcement + button visibility + dialog mount + POST shape + happy/failure render + privacy invariant + secret_ref-never-echoed.
+
+ZERO Foundation backend changes — the surface consumes the existing Section 2 Action runtime (`POST /api/v1/actions` per ADR-0057 + `GET /api/v1/actions/:id` per ADR-0057 §9 + §10) verbatim. Read-first only at this surface; writes (Slack `chat.postMessage`, M365 `mail.messages.send`, Jira `issue.create`, Linear `issueCreate`, GitHub `issues.create`, Google Workspace `gmail.messages.send`) are forward-substrate to ≥C6 per ADR-0084 + require separate Founder authorization per slice.
+
+Privacy invariants enforced structurally + assertion-locked:
+
+- Dialog renders only `SafeActionDetailView` (`status` + `attempt_count` + `last_result_summary`) — never raw operation result body, vendor token, attendee email, file name, mail subject, issue title, repo name, branch name, or PII.
+- Request boundary structurally cannot carry vendor secret material — the operator never types secrets at this surface.
+- Dialog body does not echo the binding's `secret_ref` env-var NAME (the binding card may, per ADR-0086, but the dialog discusses the call lifecycle, not the credential).
+- Unit-test assertions: `xoxb-*` / `ya29.*` / `Bearer *` / `eyJ*` (JWT) / `ATATT3xFfGF0*` (Atlassian PAT) / `lin_(oauth|api)_*` (Linear OAuth) / `(ghp|gho|ghs|github_pat)_*` (GitHub token) / `@outlook.com` / `@onmicrosoft.com` / `private_key` substrings absent from rendered DOM even if upstream regressed.
+
+**Section 4 connector matrix graduation — 6/6 OPERATING with operator-usable invocation UI:**
+
+| Connector | Admin self-serve | Operator-invokable from CT |
+|---|---|---|
+| Slack | OPERATING | **YES (CT PR #32)** |
+| Linear | OPERATING | **YES (CT PR #32)** |
+| Jira Cloud | OPERATING | **YES (CT PR #32)** |
+| Google Workspace | OPERATING | **YES (CT PR #32)** |
+| GitHub | OPERATING | **YES (CT PR #32)** |
+| Microsoft 365 | OPERATING | **YES (CT PR #32)** |
+
+🎯 **Section 4 connector substrate matrix CLOSED at OPERATING parity AND admin-/operator-usability parity.** Forward-substrate: ≥C6 per-connector write-capability slices (each Founder-gated per ADR-0084); Section 2 W5 Action Promotion Runtime (proposed-action → Action runtime promotion path); per-provider real-vendor flip (`*_USE_REAL` env-flag) per-org per Founder authorization.
+
 ## CT Connectors Admin Surface LANDED 2026-06-01 — Slack RUNTIME_READY → OPERATING
 
 CT PR #21 `714879b` (Foundation closeout this PR). Operator-visible Control Tower `/connectors` page consuming the 5 LIVE Foundation admin routes at `/api/v1/org/connectors[/:id]`. Admin self-serve binding creation + listing + enable/disable + soft-delete (RULE 10) is now operational.
