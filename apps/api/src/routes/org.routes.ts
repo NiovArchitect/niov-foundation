@@ -27,6 +27,8 @@ import {
   type Prisma,
 } from "@niov/database";
 import { requireAdminCapability } from "../middleware/admin.middleware.js";
+import { requireDualControl } from "../middleware/dual-control.middleware.js";
+import { PRIVILEGED_ENDPOINTS } from "../security/privileged-endpoints.js";
 import {
   analyzePhase2,
   executePhase3Invite,
@@ -289,6 +291,22 @@ export async function registerOrgRoutes(
   app: FastifyInstance,
   authService: AuthService,
 ): Promise<void> {
+  // D6 enterprise activation per ADR-0080 §23 Amendment 7 + ADR-0026
+  // dual-control middleware pattern. Resolve the
+  // ORG_DANDELION_ENTERPRISE_ACTIVATION descriptor from the runtime
+  // PRIVILEGED_ENDPOINTS registry at route-registration time so the
+  // requireDualControl preHandler bound below has a stable reference.
+  // The throw-guard fails fast at server boot if the registry drifts.
+  const enterpriseActivationEndpoint = PRIVILEGED_ENDPOINTS.find(
+    (e) =>
+      e.actionDescriptor.type === "ORG_DANDELION_ENTERPRISE_ACTIVATION",
+  );
+  if (!enterpriseActivationEndpoint) {
+    throw new Error(
+      "PRIVILEGED_ENDPOINTS registry missing required entry for ORG_DANDELION_ENTERPRISE_ACTIVATION",
+    );
+  }
+
   // POST /org/members -- single-member add.
   app.post<{ Body: MemberInput }>(
     "/api/v1/org/members",
@@ -2638,15 +2656,29 @@ export async function registerOrgRoutes(
   // GOOGLE_WORKSPACE_READ ConnectorBindings via the existing C2 + C3
   // substrates. Steps 5 (delegated authority), 6 (break-glass
   // registry enable), 7 (LawfulBasis attestation surface enable),
-  // 10 (DUAL-CONTROL Stage-2 enterprise templates), 11 (DUAL-CONTROL
-  // regulator-grade audit), and 12 (board observer scope) emit
-  // audit-only at this slice (underlying tables forward-substrate).
-  // The DUAL-CONTROL audit literals at steps 10 + 11 truthfully
-  // record the catalog's design-intent; the actual DUAL-CONTROL
-  // approval flow per ADR-0026 is forward-substrate (a future slice
-  // will wire requireDualControl in front of this route).
+  // and 12 (board observer scope) emit audit-only at this slice
+  // (underlying tables forward-substrate).
   //
-  // Completes the D6 4-archetype series at runtime.
+  // DUAL-CONTROL enforcement (this slice): the route is now LIVE in
+  // PRIVILEGED_ENDPOINTS as ORG_DANDELION_ENTERPRISE_ACTIVATION per
+  // ADR-0026 dual-control middleware pattern. requireDualControl
+  // intercepts requests lacking an APPROVED EscalationRequest
+  // (escalation_type DUAL_CONTROL_REQUIRED; target_action
+  // ORG_DANDELION_ENTERPRISE_ACTIVATION) and returns 403 + creates a
+  // PENDING one. The DUAL-CONTROL audit literals at steps 10 + 11
+  // continue to truthfully record the catalog's design-intent; the
+  // route-tier approval-flow enforcement is now LIVE.
+  //
+  // preHandler ORDER MATTERS — requireAdminCapability MUST run first
+  // (it populates request.auth.entity_id, which requireDualControl
+  // reads per the BINDING CONTRACT in dual-control.middleware.ts).
+  //
+  // The starter-pilot / team / business archetypes intentionally
+  // remain single-actor (their catalogs do not carry *_DUAL_CONTROL
+  // audit literals; their routes are NOT in PRIVILEGED_ENDPOINTS).
+  //
+  // Completes the D6 4-archetype series at runtime + closes the
+  // truthfully-recorded design-intent into actual enforcement.
   app.post<{
     Body: {
       slack_display_name?: unknown;
@@ -2659,7 +2691,10 @@ export async function registerOrgRoutes(
   }>(
     "/api/v1/org/dandelion/activate/enterprise",
     {
-      preHandler: requireAdminCapability(authService, "can_admin_org"),
+      preHandler: [
+        requireAdminCapability(authService, "can_admin_org"),
+        requireDualControl(enterpriseActivationEndpoint),
+      ],
     },
     async (request, reply) => {
       const callerId = request.auth!.entity_id;

@@ -71,7 +71,21 @@ export type EscalationActionDescriptor = {
     // evaluateActionPolicy consumer at action.service.ts (forward-
     // substrate per ADR-0057 §16 step 4-7) reads from. Privileged
     // because it changes the autonomy contract.
-    | "ORG_ACTION_POLICY_UPDATE";
+    | "ORG_ACTION_POLICY_UPDATE"
+    // D6 enterprise activation per ADR-0080 §23 Amendment 7 +
+    // ADR-0026 dual-control middleware pattern. Converts the
+    // truthfully-recorded DUAL-CONTROL design-intent from the
+    // enterprise-activation.json catalog (steps 10 + 11 emit
+    // WORKFLOW_TEMPLATE_REGISTERED_DUAL_CONTROL +
+    // REGULATOR_GRADE_AUDIT_ENABLED_DUAL_CONTROL audit literals)
+    // into actual approval-flow enforcement at runtime. The
+    // enterprise activation walks 14 catalog steps including
+    // financial-effect templates (step 10) + regulator-grade audit
+    // tier (step 11); both are categorically dual-control-bound
+    // per ADR-0026 §6. Binds POST /api/v1/org/dandelion/activate/
+    // enterprise; Class B (can_admin_org tier) — second admin in
+    // the same org must approve before the route handler runs.
+    | "ORG_DANDELION_ENTERPRISE_ACTIVATION";
   metadata?: Record<string, unknown>;
 };
 
@@ -184,6 +198,36 @@ export const PRIVILEGED_ENDPOINTS: readonly PrivilegedEndpoint[] = [
     route: "/api/v1/org/action-policies",
     authTier: "can_admin_org",
     actionDescriptor: { type: "ORG_ACTION_POLICY_UPDATE" },
+  },
+  {
+    // D6 enterprise activation per ADR-0080 §23 Amendment 7 +
+    // ADR-0026 dual-control middleware pattern. Binds
+    // POST /api/v1/org/dandelion/activate/enterprise — converts
+    // the truthfully-recorded DUAL-CONTROL design-intent from the
+    // enterprise-activation.json catalog (steps 10 + 11) into
+    // actual approval-flow enforcement at runtime. The starter-
+    // pilot / team / business archetypes intentionally remain
+    // single-actor (their catalogs do not carry *_DUAL_CONTROL
+    // audit literals; their corresponding routes
+    // /activate{,/team,/business} are NOT in this registry).
+    //
+    // Class B (can_admin_org tier) — second admin in the same org
+    // must approve before the route handler runs; cross-org
+    // candidates excluded structurally per ADR-0026 Amendment 1 §6.
+    // Fail-closed: single-admin org → 503
+    // ESCALATION_TARGET_NOT_FOUND + DUAL_CONTROL_NO_APPROVER_
+    // AVAILABLE marker.
+    //
+    // Privacy invariant inherited from D6 enterprise runtime:
+    // env-var NAMEs only in request body (slack_secret_ref +
+    // google_secret_ref). The dual-control approval flow does NOT
+    // need to surface the request body in the EscalationRequest;
+    // standard EscalationRequest metadata + the route descriptor
+    // alone identify the operation to the second approver.
+    method: "POST",
+    route: "/api/v1/org/dandelion/activate/enterprise",
+    authTier: "can_admin_org",
+    actionDescriptor: { type: "ORG_DANDELION_ENTERPRISE_ACTIVATION" },
   },
 ] as const;
 
