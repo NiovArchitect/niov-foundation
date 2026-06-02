@@ -200,6 +200,58 @@ export interface HiveParticipationAggregate {
   honest_note: string;
 }
 
+// WHAT: Closed-vocab labels for the APPROVAL_BACKLOG aggregate
+//        per ADR-0087 §3. First canonical Hive Intelligence
+//        Runtime signal.
+// INPUT: Used as a value array + TS literal-union type.
+// OUTPUT: None.
+// WHY: ADR-0087 §3 + ADR-0061 §1.a closed-vocab. Operators
+//      get the operational signal ("is the org's
+//      approval-flow backlog elevated?") without per-actor
+//      attribution and without surfacing individual
+//      escalation contents. The label is policy-relevant;
+//      the raw pending/total counts + derived ratio are
+//      surfaced as aggregate quantities per ADR-0061 §1.a
+//      allowance for "integer counts" extended to rates
+//      derived from those counts.
+export const APPROVAL_BACKLOG_LABELS = [
+  "HIGH_BACKLOG",
+  "MODERATE_BACKLOG",
+  "LIGHT_BACKLOG",
+  "NO_BACKLOG",
+  "NO_ESCALATIONS",
+  "INSUFFICIENT_POPULATION",
+] as const;
+
+export type ApprovalBacklogLabel = (typeof APPROVAL_BACKLOG_LABELS)[number];
+
+const APPROVAL_BACKLOG_HIGH_THRESHOLD = 0.5;
+const APPROVAL_BACKLOG_MODERATE_THRESHOLD = 0.2;
+
+// WHAT: SAFE projection envelope for the approval-backlog
+//        aggregate per ADR-0087 §3.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Closed-vocab fields only per ADR-0087 §3 + ADR-0061
+//      §1.a. NEVER includes escalation_id, source_entity_id,
+//      target_entity_id, resolved_by_entity_id, description,
+//      severity, escalation_type, resolution_metadata, or any
+//      per-actor attribution. Only org-level aggregate counts
+//      and a derived rate surface.
+export interface ApprovalBacklogAggregate {
+  ok: true;
+  aggregate: "APPROVAL_BACKLOG";
+  window_days: number;
+  org_entity_id: string;
+  member_count: number;
+  redacted: boolean;
+  pending_count: number | null;
+  total_count: number | null;
+  pending_rate: number | null;
+  signal_label: ApprovalBacklogLabel;
+  honest_note: string;
+}
+
 // WHAT: SAFE projection envelope for the connector-activity
 //        aggregate.
 // INPUT: Used as a return type only.
@@ -1442,6 +1494,149 @@ export class AnalyticsService {
         "HiveMembership in a same-org ACTIVE Hive. Signal " +
         "label is operational only — not an employee score, " +
         "not a manager dashboard.",
+    };
+  }
+
+  // WHAT: Compute the org-wide approval-backlog aggregate per
+  //        ADR-0087 §3. First canonical Hive Intelligence
+  //        Runtime signal.
+  // INPUT: Pre-resolved org_entity_id + actor_entity_id +
+  //         window_days (default 7; clamped 1..30).
+  // OUTPUT: ApprovalBacklogAggregate | AnalyticsFailure.
+  // WHY: Step-by-step:
+  //   1. Validate window_days (clamp 1..30; default 7).
+  //   2. Resolve same-org member entity_ids via
+  //      EntityMembership (parent_id = orgId + is_active).
+  //   3. k=5 gate (member_count < 5 → SAFE redacted).
+  //   4. Count EscalationRequest rows in window whose
+  //      source_entity_id is in the org member set
+  //      (same-org boundary enforced at the query tier).
+  //   5. Count the subset with status = PENDING.
+  //   6. Compute pending_rate = pending / total.
+  //   7. Map rate / counts to closed-vocab label per ADR-0087 §3.
+  //   8. Audit emit (ADMIN_ACTION + details.action =
+  //      "ANALYTICS_READ" — no new audit literal per ADR-0087 §5).
+  //   9. SAFE return.
+  async getApprovalBacklogForOrg(args: {
+    org_entity_id: string;
+    actor_entity_id: string;
+    window_days?: number;
+    ip_address?: string | null;
+  }): Promise<ApprovalBacklogAggregate | AnalyticsFailure> {
+    const requestedWindow = args.window_days ?? ANALYTICS_WINDOW_DAYS_DEFAULT;
+    if (
+      !Number.isInteger(requestedWindow) ||
+      requestedWindow < ANALYTICS_WINDOW_DAYS_MIN ||
+      requestedWindow > ANALYTICS_WINDOW_DAYS_MAX
+    ) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: `window_days must be an integer in [${ANALYTICS_WINDOW_DAYS_MIN}, ${ANALYTICS_WINDOW_DAYS_MAX}]`,
+        invalid_fields: ["window_days"],
+      };
+    }
+    const windowDays = requestedWindow;
+
+    // Step 2 — resolve active org membership.
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberEntityIds = memberships.map((m) => m.child_id);
+    const memberCount = memberEntityIds.length;
+
+    // Step 3 — k=5 gate.
+    if (memberCount < ANALYTICS_MIN_POPULATION) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "APPROVAL_BACKLOG",
+        redacted: true,
+        result_count: 0,
+        filter_keys: ["window_days"],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "APPROVAL_BACKLOG",
+        window_days: windowDays,
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        pending_count: null,
+        total_count: null,
+        pending_rate: null,
+        signal_label: "INSUFFICIENT_POPULATION",
+        honest_note: HONEST_NOTE_BELOW_THRESHOLD,
+      };
+    }
+
+    // Step 4 + 5 — total + pending counts of same-org
+    // EscalationRequest rows in window. Same-org boundary at
+    // the query tier via source_entity_id ∈ memberEntityIds.
+    const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const totalCount = await prisma.escalationRequest.count({
+      where: {
+        source_entity_id: { in: memberEntityIds },
+        created_at: { gte: cutoff },
+      },
+    });
+    const pendingCount = await prisma.escalationRequest.count({
+      where: {
+        source_entity_id: { in: memberEntityIds },
+        created_at: { gte: cutoff },
+        status: "PENDING",
+      },
+    });
+
+    // Step 6 + 7 — rate + label per ADR-0087 §3.
+    let signalLabel: ApprovalBacklogLabel;
+    let pendingRate: number | null;
+    if (totalCount === 0) {
+      signalLabel = "NO_ESCALATIONS";
+      pendingRate = null;
+    } else {
+      const ratio = pendingCount / totalCount;
+      pendingRate = Number(ratio.toFixed(4));
+      if (pendingCount === 0) {
+        signalLabel = "NO_BACKLOG";
+      } else if (ratio >= APPROVAL_BACKLOG_HIGH_THRESHOLD) {
+        signalLabel = "HIGH_BACKLOG";
+      } else if (ratio >= APPROVAL_BACKLOG_MODERATE_THRESHOLD) {
+        signalLabel = "MODERATE_BACKLOG";
+      } else {
+        signalLabel = "LIGHT_BACKLOG";
+      }
+    }
+
+    // Step 8 — audit emission.
+    await this.emitAnalyticsReadAudit({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      aggregate: "APPROVAL_BACKLOG",
+      redacted: false,
+      result_count: pendingCount,
+      filter_keys: ["window_days"],
+      ip_address: args.ip_address ?? null,
+    });
+
+    // Step 9 — SAFE return.
+    return {
+      ok: true,
+      aggregate: "APPROVAL_BACKLOG",
+      window_days: windowDays,
+      org_entity_id: args.org_entity_id,
+      member_count: memberCount,
+      redacted: false,
+      pending_count: pendingCount,
+      total_count: totalCount,
+      pending_rate: pendingRate,
+      signal_label: signalLabel,
+      honest_note:
+        "Same-org EscalationRequest pending-rate over the window. " +
+        "Signal label is operational only — not an employee score, " +
+        "not a manager dashboard, not a productivity index.",
     };
   }
 
