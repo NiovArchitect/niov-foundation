@@ -8,7 +8,62 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-05-31
+**Last updated:** 2026-06-02
+
+🎯 **2026-06-02 milestone block** — three substrate landings in one
+autonomous-continuation session per `[FOUNDER-AUTONOMOUS-PRODUCTION-
+GO-LIVE-AUTH]` + `[FOUNDER-CORRECTION — OTZAR IS VOICE-FIRST / SESAME
+IS CORE PRODUCT REQUIREMENT]`:
+
+1. **Section 4 connector substrate matrix CLOSED at OPERATING parity
+   — 6 of 6 ranked connectors OPERATING (admin self-serve).** Slack
+   (CT PR #21) + Google Workspace (CT PR #22) + Jira Cloud (CT PR
+   #27) + Linear (CT PR #29) + GitHub (CT PR #30) + Microsoft 365
+   (CT PR #31). Family-level completion: Project/Engineering 2/2 +
+   Workspace/Knowledge 2/2 + Collaboration 1/1 + Code/SCM 1/1.
+   Foundation backend per Foundation PRs #185/#193/#207/#209/#216/
+   #218; CT admin self-serve per the 6 CT PRs above. Foundation
+   closeouts at #208/#214/#215/#217/#219 record the per-graduation
+   substrate-state milestones; PR #219 records the canonical 6/6
+   OPERATING parity milestone.
+
+2. **Voice-first product arc OPERATOR-VISIBLE per ADR-0085 §8.**
+   VF.1 doctrine + 9-file `docs/voice-first/` substrate + validator
+   LIVE (PR #210). VF.2 `VoiceProviderAdapter` + `TextOnlyVoice
+   Provider` + `VoiceIntentEnvelope` substrate + 6 NEW closed-vocab
+   audit literals LIVE (PR #211). VF.3 `LocalMockVoiceProvider` +
+   integration tests asserting envelope-to-audit-chain end-to-end
+   LIVE (PR #212). VF.4a Foundation route `POST /api/v1/voice/
+   intents` LIVE (PR #213). VF.4b CT `/voice` talk surface +
+   `api.voice.*` namespace + confirmation modal for MEDIUM/HIGH +
+   privacy invariant proven across 4 layers LIVE (CT PR #28).
+   Sesame readiness PENDING across all 10 gates; VF.5+ Founder-
+   gated per ADR-0085 §8 authorization boundary. Voice is text-
+   only by design until Sesame readiness assessment closes.
+
+3. **Workflow → Action substrate ladder Stage 3 SUBSTRATE LIVE per
+   ADR-0081 §2.2.** W4 Proposed Action substrate (`docs/proposed-
+   action/` 5 files + 18 proposed actions across Team/Business/
+   Enterprise + validator with 31 checks green) LIVE (PR #220). Every
+   `proposed_action_state` is `PROPOSED_NOT_AUTHORIZED`; runtime
+   promotion to Section 2 Action requires separate Founder
+   authorization per slice + ADR-0026 dual-control where required.
+   Voice-first composition (ADR-0085 §5 envelope `proposed_action`
+   field) bound at the `actor_role` enum.
+
+Operationally-meaningful remaining surfaces (require Founder
+direction): INVOKE_CONNECTOR CT surface (operator-visible per-
+binding invocation UI consuming Section 2 Action runtime; high ROI
+on the 6/6 OPERATING matrix); W5 Action Promotion Runtime substrate
+(promotes W4 proposed actions into Section 2 Actions; per-slice
+Founder authorization); D6 enterprise audit-only tables (Section 10
+hardening item 2; needs ADR-RULE-20 authorization first to
+disambiguate table-vs-flag scope); VF.5 Sesame readiness assessment
+(Founder-gated per ADR-0085 §8); per-connector write-capability
+slices (≥C6; per-slice Founder authorization per ADR-0084).
+
+**Earlier last-updated context preserved below.** Prior canonical
+last-updated context:
 (**ADR-0071 IMPLEMENTATION LANDED 2026-05-31** — PR #132
 `ffc0548` ships Section 7 cross-scope audit `verify-chain`
 per ADR-0071 with **Option A clean break** Founder QLOCK
