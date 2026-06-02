@@ -49,7 +49,8 @@ export type ConnectorType =
   | "GOOGLE_WORKSPACE_READ"
   | "JIRA_CLOUD_READ"
   | "LINEAR_READ"
-  | "GITHUB_READ";
+  | "GITHUB_READ"
+  | "MICROSOFT_365_READ";
 
 // WHAT: The shape of one connector-type definition in the registry.
 // INPUT: Used as a record type.
@@ -145,6 +146,15 @@ export const CONNECTOR_REGISTRY: Readonly<
     description:
       "Section 4 C-GitHub fifth real vendor connector. OAuth-2.0 access-token OR Personal Access Token (PAT) read-only access to GitHub REST v3 via user + repos.list + issues.search (REST API v3; X-GitHub-Api-Version 2022-11-28 pinned). Fixture-first: real GitHub API reached only when GITHUB_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C-GitHub (issues.create / repos.create / pulls.create / etc. forward-substrate to ≥C6 per dual-control + workflow-binding constraints). No GitHub App JWT exchange flow at C-GitHub (static admin-supplied access token only; installation-token rotation forward-substrate). No PR / commit / branch / file-content reads. No webhook ingestion. No GraphQL surface (REST v3 only at C-GitHub; GraphQL v4 forward-substrate). State aggregates only grouped from GitHub issue state + state_reason fields (open / closed_completed / closed_not_planned) — never repo names / owner logins / branch names / issue identifiers / titles / bodies / assignee email / reporter login / comments. 401 + 403 both collapse to AUTH (token invalid OR token-missing-scope). Rate limit aware (5000 req/hr OAuth User; 15000 req/hr GitHub App).",
   }),
+  MICROSOFT_365_READ: Object.freeze({
+    type: "MICROSOFT_365_READ" as const,
+    display_name: "Microsoft 365 (read-first)",
+    transport: "https-get-bearer-token",
+    default_config_keys: Object.freeze(["use_real", "tenant_id"]),
+    secret_ref_required: true,
+    description:
+      "Section 4 C5 sixth real vendor connector — closes the 6/6 connector matrix at RUNTIME_READY. OAuth-2.0 access-token (Azure Active Directory) read-only access to Microsoft 365 via calendar.events.list + drive.items.list + mail.messages.list (Microsoft Graph v1.0; $select query parameter restricts response field set so subject lines / body content / file names / attendee email PII cannot accidentally surface). Fixture-first: real Microsoft Graph API reached only when MS365_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C5 (events.create / files.upload / messages.send / etc. forward-substrate to ≥C6). No OAuth refresh-token rotation. No OneDrive content download. No Outlook mail body read. No Teams read at C5 (forward-substrate). No webhook / change-notification subscriptions. No SharePoint / OneNote / Planner / Bookings reads. tenant_id config field carries the Azure AD tenant identifier (analogous role to C3 workspace_domain or C4-A cloud_id). 401 + 403 both collapse to AUTH (token invalid OR token-missing-scope). Microsoft Graph throttling aware; 429 surfaces RATE_LIMIT.",
+  }),
 });
 
 // WHAT: Lookup helper — returns the catalog entry for a connector
@@ -165,7 +175,8 @@ export function getConnectorTypeDefinition(
     candidate === "GOOGLE_WORKSPACE_READ" ||
     candidate === "JIRA_CLOUD_READ" ||
     candidate === "LINEAR_READ" ||
-    candidate === "GITHUB_READ"
+    candidate === "GITHUB_READ" ||
+    candidate === "MICROSOFT_365_READ"
   ) {
     return CONNECTOR_REGISTRY[candidate];
   }
@@ -405,6 +416,15 @@ export async function getConnectorProviderAsync(
     // Access Token).
     const mod = await import("./github-read.provider.js");
     return new mod.GitHubReadProvider();
+  }
+  if (type === "MICROSOFT_365_READ") {
+    // Section 4 C5 — sixth real vendor connector. Closes the
+    // 6/6 connector matrix at RUNTIME_READY. Microsoft Graph
+    // v1.0 with Bearer auth (OAuth 2.0 access token issued by
+    // Azure Active Directory). Same dynamic-import pattern as
+    // the other read-first providers.
+    const mod = await import("./microsoft-365-read.provider.js");
+    return new mod.Microsoft365ReadProvider();
   }
   return new FixtureBasedConnectorProvider();
 }
