@@ -14,7 +14,25 @@ labels + integer counts + derived rates) with k=5
 HIPAA-Safe-Harbor minimum-population floor enforced at every
 aggregate.
 
-## Current status — PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE
+## Hive Intelligence Runtime V1 LANDED 2026-06-02 — APPROVAL_BACKLOG signal LIVE per ADR-0087
+
+PR #223 `26ec1dc` per `[FOUNDER-AUTH — W5 + LIVING ENTERPRISE INTELLIGENCE AUTONOMOUS BUILD]`. ADR-0087 canonicalizes **Hive Intelligence Runtime** as a substrate layer composing the Section 6 SAFE projection technique (ADR-0061) + Section 3 Hive substrate (ADR-0059) + W5 promotion path (ADR-0086). V1 implementation lands as additional methods on `AnalyticsService` rather than a new service class (extraction is forward-substrate per ADR-0017 when warranted by aggregate count).
+
+**First canonical Hive Intelligence Runtime signal:** APPROVAL_BACKLOG.
+
+- `POST /api/v1/analytics/approval-backlog` — bearer + `can_admin_org`; body `{ window_days?: number = 7 }` (clamped 1..30 at service tier)
+- Aggregates same-org `EscalationRequest` pending-rate over window with k=5 minimum-population gate
+- 6 closed-vocab labels: `HIGH_BACKLOG` (≥0.5) / `MODERATE_BACKLOG` (≥0.2) / `LIGHT_BACKLOG` (<0.2 nonzero) / `NO_BACKLOG` (total>0 pending=0) / `NO_ESCALATIONS` (total=0) / `INSUFFICIENT_POPULATION` (member_count<5)
+- Same-org boundary enforced at query tier: `EscalationRequest.source_entity_id ∈ EntityMembership.child_id` for the caller's org
+- No new audit literal — rides existing `ADMIN_ACTION + details.action="ANALYTICS_READ"` discriminator
+- No schema migration — `EscalationRequest` + `EntityMembership` already exist
+- Bans inherited from ADR-0058/0059/0061: no employee scoring, no manager surveillance, no psychological profiling, no protected-attribute inference
+
+**5-signal forward queue per ADR-0087 §9** (each Founder-gated): `STALLED_PROPOSALS_7D`, `RECURRING_BLOCKER_TOPICS_30D`, `CROSS_TEAM_DEPENDENCY_HIVE_RATIO`, `CONNECTOR_FRICTION_BY_VENDOR_7D`, `PROPOSAL_PROMOTION_CONVERSION_RATE_7D`.
+
+**Aggregate count:** **7 live** (CORRECTION_VELOCITY_7D + ACTION_RUNTIME_SUCCESS_RATE + ACTION_RUNTIME_BY_ACTION_TYPE + COMPLIANCE_POSTURE + CONNECTOR_ACTIVITY + HIVE_PARTICIPATION + APPROVAL_BACKLOG). Zero new audit literals across all waves.
+
+## Current status — PRODUCTION-GRADE COMPLETE for Foundation backend scope (v1) + Wave 6 + Wave 7 extensions LIVE + Hive Intelligence Runtime V1 LIVE
 
 **Final v1 closeout 2026-05-30 + Wave 6 LIVE 2026-05-30 +
 Wave 7 LIVE 2026-05-30.** Section 6 Enterprise Analytics
