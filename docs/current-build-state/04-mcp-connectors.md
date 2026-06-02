@@ -35,6 +35,37 @@ First real customer-bound Slack activation is now unblocked at the admin tier �
 
 NO new Foundation route. NO new audit literal. NO schema migration. NO mutation to existing Foundation services. NO connector invocation surface in CT (INVOKE_CONNECTOR still routes through Section 2 Action runtime). NO write-capability toggle (deferred to ≥C6).
 
+## CT C4-B Linear Admin Path LANDED 2026-06-02 — Linear RUNTIME_READY → OPERATING; Project/Engineering Family 2/2 OPERATING Parity
+
+CT PR #29 `caad758` (Foundation closeout this PR). Operator-visible `/connectors` page now supports `LINEAR_READ` binding registration end-to-end. Admin self-serve graduates Section 4 Linear from `RUNTIME_READY` (Foundation backend PR #209) to **`OPERATING (admin self-serve)`** at parity with C2 Slack (CT PR #21) + C3 Google Workspace (CT PR #22) + C4-A Jira Cloud (CT PR #27).
+
+**Project / Engineering family closes at 2/2 OPERATING parity** — Jira Cloud OPERATING via CT PR #27; Linear OPERATING via this PR.
+
+CT changes: `CtConnectorType` union 5 → 6; `CT_CONNECTOR_REGISTRY.LINEAR_READ` entry with minimal `{use_real}` config shape (Linear OAuth tokens are workspace-bound by construction — no per-tenant `cloud_id` / `workspace_domain` required) + governance note explicitly listing what the connector NEVER traverses (team keys TEAM-NNN / issue identifiers / titles / descriptions / assignee / reporter / comments); type-aware placeholders for displayName + secret_ref; nested-ternary read-first badge now selects C4-B; page header + TypeRegistryCard descriptions extended; 5 NEW CT tests (CT suite 442 → 447).
+
+Privacy invariant exercised across 4 layers: env-var NAME-only secret_ref placeholder; no `lin_oauth_*` / `lin_api_*` pattern in rendered output; no service-account private-key JSON snippet; no `Bearer ` prefix; 15-phrase forbidden UI copy guard preserved.
+
+**Section 4 connector substrate posture across all 6 ranked connectors:**
+
+| Connector | Status |
+|---|---|
+| Slack | OPERATING (admin self-serve via CT PR #21) |
+| Google Workspace | OPERATING (admin self-serve via CT PR #22) |
+| Jira Cloud | OPERATING (admin self-serve via CT PR #27) |
+| Linear | **OPERATING (admin self-serve)** ← this PR |
+| GitHub | RECOMMENDATION_READY |
+| Microsoft 365 | RECOMMENDATION_READY |
+
+**Project / Engineering family: 2/2 connectors at OPERATING parity.**
+
+**Workspace / Knowledge family: 1/2 connectors at OPERATING** (Google Workspace OPERATING; Microsoft 365 RECOMMENDATION_READY).
+
+**Collaboration family: 1/1 connectors at OPERATING** (Slack OPERATING).
+
+**Next slice candidates:** C-GitHub read-first connector runtime (Foundation; mirrors C4-A REST pattern against GitHub REST API); C5 Microsoft 365 read-first runtime via Microsoft Graph; D6-ENTERPRISE-AUDIT-ONLY-TABLES (Section 10 hardening item 2); W4 Proposed Action substrate.
+
+NO new CT route. NO new audit literal. NO Foundation backend change. NO schema migration. NO new dependency. The existing `INVOKE_CONNECTOR` ActionType handler dispatches `LINEAR_READ` through the same governance pipeline as Slack + Google Workspace + Jira Cloud.
+
 ## C4-B Linear Read-First Connector Runtime LANDED 2026-06-01 — Project/Engineering Family 2/2
 
 Section 4 graduates **Linear: `RECOMMENDATION_READY` → `RUNTIME_READY`** (Foundation backend register). Fourth real vendor connector now LIVE. Closes the Project / Engineering family at 2/2 alongside C4-A Jira Cloud.
