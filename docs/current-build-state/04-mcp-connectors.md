@@ -35,6 +35,37 @@ First real customer-bound Slack activation is now unblocked at the admin tier �
 
 NO new Foundation route. NO new audit literal. NO schema migration. NO mutation to existing Foundation services. NO connector invocation surface in CT (INVOKE_CONNECTOR still routes through Section 2 Action runtime). NO write-capability toggle (deferred to ≥C6).
 
+## CT C-GitHub Admin Path LANDED 2026-06-02 — GitHub RUNTIME_READY → OPERATING; 5 of 6 OPERATING Parity
+
+CT PR #30 `c5e6a14` (Foundation closeout this PR). Operator-visible `/connectors` page now supports `GITHUB_READ` binding registration end-to-end. Admin self-serve graduates Section 4 GitHub from `RUNTIME_READY` (Foundation backend PR #216) to **`OPERATING (admin self-serve)`** at parity with C2 Slack + C3 Google Workspace + C4-A Jira Cloud + C4-B Linear.
+
+**5 of 6 ranked connectors now at OPERATING parity** — only Microsoft 365 remains RECOMMENDATION_READY.
+
+CT changes: `CtConnectorType` union 6 → 7; `CT_CONNECTOR_REGISTRY.GITHUB_READ` entry with minimal `{use_real}` config shape (GitHub access tokens are global to the authenticated caller or GitHub App installation — no per-tenant `cloud_id` / `workspace_id` required) + governance note explicitly listing what the connector NEVER traverses (repo names / owner logins / branch names / issue identifiers / titles / bodies / assignee email / reporter login / comments); type-aware placeholders; nested-ternary read-first badge now selects "C-GitHub"; page header + TypeRegistryCard descriptions extended; 5 NEW CT tests (CT suite 447 → 452).
+
+Privacy invariant exercised across 4 layers: env-var NAME-only secret_ref placeholder; no `ghp_*` / `github_pat_*` / `gho_*` / `ghs_*` token markers in rendered output; no service-account private-key JSON snippet; no `Bearer ` prefix; 15-phrase forbidden UI copy guard preserved.
+
+**Section 4 connector substrate posture across all 6 ranked connectors:**
+
+| Connector | Status |
+|---|---|
+| Slack | OPERATING (admin self-serve via CT PR #21) |
+| Google Workspace | OPERATING (admin self-serve via CT PR #22) |
+| Jira Cloud | OPERATING (admin self-serve via CT PR #27) |
+| Linear | OPERATING (admin self-serve via CT PR #29) |
+| GitHub | **OPERATING (admin self-serve)** ← this PR |
+| Microsoft 365 | RECOMMENDATION_READY |
+
+**Family-level completion: 5 of 6 connectors OPERATING:**
+- Project / Engineering: 2/2 OPERATING (Jira + Linear)
+- Workspace / Knowledge: 1/2 OPERATING (Google; Microsoft 365 RECOMMENDATION_READY)
+- Collaboration: 1/1 OPERATING (Slack)
+- Code / SCM: **1/1 OPERATING** ← this PR closes (GitHub)
+
+**Next slice candidates:** C5 Microsoft 365 read-first connector runtime via Microsoft Graph (closes 6/6 matrix at RUNTIME_READY); D6-ENTERPRISE-AUDIT-ONLY-TABLES (Section 10 hardening item 2); W4 Proposed Action substrate.
+
+NO new CT route. NO new audit literal. NO Foundation backend change. NO schema migration. NO new dependency.
+
 ## C-GitHub Read-First Connector Runtime LANDED 2026-06-02 — Fifth Real Vendor Connector
 
 Section 4 graduates **GitHub: `RECOMMENDATION_READY` → `RUNTIME_READY`** (Foundation backend register). Fifth real vendor connector now LIVE. Mirrors C4-A Jira Cloud REST pattern verbatim.
