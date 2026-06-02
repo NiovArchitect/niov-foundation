@@ -233,7 +233,25 @@ export type AuditEventType =
   | "VOICE_INTENT_REJECTED"
   | "VOICE_INTENT_EXPIRED"
   | "VOICE_INTENT_REDACTED"
-  | "VOICE_INTENT_DELIVERED";
+  | "VOICE_INTENT_DELIVERED"
+  // W5 Action Promotion Runtime per ADR-0086 + ADR-0042 §Q-γ.1
+  // clean-transition discipline. 1 NEW append-only literal. Emitted
+  // by proposed-action-promotion.service.ts after the Section 2
+  // Action runtime returns from createActionForCaller — links the
+  // resulting action_id back to the W4 catalog `id`. Audit details
+  // schema (SAFE): catalog_id (catalog string) + action_id (UUID) +
+  // plan_archetype_id (team/business/enterprise) + actor_role
+  // (closed-vocab) + intended_external_system (closed-vocab) +
+  // dual_control_required + dual_control_satisfied +
+  // approval_chain_required + policy_decision_required +
+  // retention_class + section2_outcome (PROPOSED / APPROVED / REJECTED
+  // / NO_ELIGIBLE_TARGET; mirrors the Section 2 return shape). FORBIDDEN:
+  // raw payload content, values of safe_field_set, values of
+  // forbidden_field_set, raw secret material, vendor token, raw
+  // transcript, raw prompt, chain-of-thought, OAuth header,
+  // recipient PII, capsule content. The audit envelope carries
+  // metadata only. Append-only per ADR-0042 §Q-γ.1.
+  | "PROPOSED_ACTION_REFERENCED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -337,6 +355,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "VOICE_INTENT_EXPIRED",
   "VOICE_INTENT_REDACTED",
   "VOICE_INTENT_DELIVERED",
+  // W5 Action Promotion Runtime per ADR-0086 + ADR-0042 §Q-γ.1.
+  "PROPOSED_ACTION_REFERENCED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
