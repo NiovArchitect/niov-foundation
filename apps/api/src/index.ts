@@ -279,6 +279,8 @@ export {
   ACTION_RUNTIME_MIN_VOLUME,
   CONNECTOR_ACTIVITY_LABELS,
   HIVE_PARTICIPATION_LABELS,
+  // ADR-0087 Hive Intelligence Runtime — V1 APPROVAL_BACKLOG signal.
+  APPROVAL_BACKLOG_LABELS,
 } from "./services/analytics/analytics.service.js";
 export type {
   AnalyticsFailureCode,
@@ -291,6 +293,9 @@ export type {
   ConnectorActivityLabel,
   HiveParticipationAggregate,
   HiveParticipationLabel,
+  // ADR-0087 Hive Intelligence Runtime — V1 APPROVAL_BACKLOG signal.
+  ApprovalBacklogAggregate,
+  ApprovalBacklogLabel,
 } from "./services/analytics/analytics.service.js";
 
 // Section 5 Wave 2 ADR-0060 — Agent Playground v1 barrel exports.

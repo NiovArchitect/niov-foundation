@@ -432,4 +432,65 @@ export async function registerAnalyticsRoutes(
       });
     },
   );
+
+  // POST /api/v1/analytics/approval-backlog per ADR-0087 §4.
+  // The FIRST Hive Intelligence Runtime signal: same-org
+  // EscalationRequest pending-rate over the window. Bearer +
+  // can_admin_org-gated. Body: { window_days?: number = 7 }
+  // (clamped 1..30 at the service tier).
+  app.post<{ Body: { window_days?: unknown } }>(
+    "/api/v1/analytics/approval-backlog",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+
+      const rawWindow = request.body?.window_days;
+      let windowDays: number | undefined;
+      if (rawWindow === undefined) {
+        windowDays = undefined;
+      } else if (typeof rawWindow === "number") {
+        windowDays = rawWindow;
+      } else if (typeof rawWindow === "string") {
+        const parsed = parseOptionalIntQuery(rawWindow);
+        if (parsed === "INVALID") {
+          return reply.code(422).send({
+            ok: false,
+            code: "INVALID_REQUEST",
+            message: "window_days must be an integer",
+            invalid_fields: ["window_days"],
+          });
+        }
+        windowDays = parsed;
+      } else {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "window_days must be a number",
+          invalid_fields: ["window_days"],
+        });
+      }
+
+      const result = await analytics.getApprovalBacklogForOrg({
+        org_entity_id: orgEntityId,
+        actor_entity_id: callerId,
+        ...(windowDays !== undefined ? { window_days: windowDays } : {}),
+        ip_address: request.ip ?? null,
+      });
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(statusFor(result)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
+      });
+    },
+  );
 }
