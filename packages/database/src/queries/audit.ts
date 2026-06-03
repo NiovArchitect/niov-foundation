@@ -321,7 +321,23 @@ export type AuditEventType =
   // free-text reason for delegation beyond closed-vocab
   // capability codes, PII beyond entity_id, swarm member
   // identities. The audit envelope carries metadata only.
-  | "TEAM_DELEGATION_CREATED";
+  | "TEAM_DELEGATION_CREATED"
+  // DMW Runtime DM3-B per ADR-0092 §4 Candidate C (AI
+  // Teammate Delegation Frame) — closes the TeamDelegation
+  // + SwarmBoundary pair. 1 NEW append-only literal per
+  // ADR-0042 §Q-γ.1 clean-transition discipline. Emitted
+  // by DMWSwarmBoundaryService on every SwarmBoundary
+  // declaration (initial declaration + subsequent
+  // tightening upserts). Audit details schema (SAFE):
+  // team_entity_id + capsule_access_mode (closed-vocab
+  // METADATA_ONLY|SCOPED_SUMMARY|FULL_SCOPED) +
+  // cross_team_reach + escalation_on_exceed (closed-vocab
+  // DENY|ESCALATE_TO_W5|AUDIT_ONLY) + declared_by.
+  // FORBIDDEN: raw capsule content, raw secret material,
+  // free-text reasons, PII beyond entity_id, swarm member
+  // identities (only the team_entity_id surfaces; the
+  // membership graph is queried elsewhere).
+  | "SWARM_BOUNDARY_DECLARED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -437,6 +453,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONVERSATION_MEMORY_SCOPE_DECLARED",
   // DMW Runtime DM3-A per ADR-0092 §4 Candidate C.
   "TEAM_DELEGATION_CREATED",
+  // DMW Runtime DM3-B per ADR-0092 §4 Candidate C.
+  "SWARM_BOUNDARY_DECLARED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

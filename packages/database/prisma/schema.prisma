@@ -1181,6 +1181,52 @@ enum TeamDelegationStatus {
   EXPIRED
 }
 
+// DMW Runtime DM3-B per ADR-0092 §4 Candidate C (AI Teammate
+// Delegation Frame) — closes the TeamDelegation + SwarmBoundary
+// pair. One SwarmBoundary per team_entity_id; the team_entity_id
+// is both the FK link to the team's identity row and the PK
+// (one boundary per team).
+//
+// capsule_access_mode caps the maximum surface the team's
+// members may ever observe regardless of any per-member
+// ConsentGrant. escalation_on_exceed names what Foundation
+// does when a team member attempts to exceed the bound:
+//   DENY — reject the operation outright (default; safest)
+//   ESCALATE_TO_W5 — route through W5 promotion as a proposed
+//     action requiring human-in-the-loop confirmation
+//   AUDIT_ONLY — allow but emit an additional audit event
+//     (forward-substrate consumer; not implemented at DM3-B)
+//
+// cross_team_reach=false (default) blocks any team member from
+// referencing capsules attached to ANOTHER team's
+// delegator_entity_id; cross_team_reach=true (forward-substrate
+// at this slice; encoded but no consumer enforces yet) names
+// the relaxation.
+model SwarmBoundary {
+  team_entity_id        String              @id @db.Uuid
+  capsule_access_mode   CapsuleAccessMode   @default(METADATA_ONLY)
+  cross_team_reach      Boolean             @default(false)
+  escalation_on_exceed  EscalationOnExceed  @default(DENY)
+  declared_by           String              @db.Uuid
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+
+  @@index([declared_by])
+  @@map("swarm_boundaries")
+}
+
+enum CapsuleAccessMode {
+  METADATA_ONLY
+  SCOPED_SUMMARY
+  FULL_SCOPED
+}
+
+enum EscalationOnExceed {
+  DENY
+  ESCALATE_TO_W5
+  AUDIT_ONLY
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {

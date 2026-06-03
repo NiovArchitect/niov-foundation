@@ -857,7 +857,7 @@ export type {
 } from "./services/dmw/voice-access-log.service.js";
 
 // ADR-0092 §4 Candidate C DM3-A TeamDelegation — AI Teammate
-// Delegation Frame; SwarmBoundary forward-substrate.
+// Delegation Frame.
 export {
   TEAM_DELEGATION_ALLOWED_CAPABILITIES,
   TEAM_DELEGATION_FORBIDDEN_CAPABILITIES,
@@ -873,6 +873,18 @@ export type {
   TeamDelegationCapability,
   TeamDelegationSummary,
 } from "./services/dmw/team-delegation.service.js";
+
+// ADR-0092 §4 Candidate C DM3-B SwarmBoundary — closes the
+// TeamDelegation + SwarmBoundary pair.
+export {
+  declareSwarmBoundaryForCaller,
+  getSwarmBoundaryByTeamId,
+} from "./services/dmw/swarm-boundary.service.js";
+export type {
+  DeclareSwarmBoundaryInput,
+  DeclareSwarmBoundaryResult,
+  SwarmBoundarySummary,
+} from "./services/dmw/swarm-boundary.service.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";
