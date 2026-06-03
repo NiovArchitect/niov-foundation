@@ -277,7 +277,20 @@ export type AuditEventType =
   // FORBIDDEN: raw payload content driving the increment, caller
   // PII beyond entity_id, plan pricing data, per-actor
   // attribution. The audit envelope carries metadata only.
-  | "USAGE_METER_RECORDED";
+  | "USAGE_METER_RECORDED"
+  // DMW Runtime DM1-A per ADR-0092 §4 Candidate A + ADR-0042
+  // §Q-γ.1 clean-transition discipline. 1 NEW append-only
+  // literal. Emitted by DMWConsentService on every ConsentGrant
+  // state transition (recorded + revoked + approved + denied +
+  // expired). Audit details schema (SAFE): consent_id +
+  // grantor_entity_id + grantee_entity_id + purpose (closed-
+  // vocab) + consent_state (closed-vocab enum value) +
+  // valid_from + valid_until (ISO timestamps). FORBIDDEN: raw
+  // payload content driving the consent, free-text reason for
+  // revocation beyond closed-vocab codes, PII beyond entity_id,
+  // capsule content, secret material. The audit envelope
+  // carries metadata only.
+  | "CONSENT_GRANT_RECORDED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -387,6 +400,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "ENTITLEMENT_CHECK_DENIED",
   // Section 8 Billing Completion B6-α per ADR-0093 §5 Candidate C.
   "USAGE_METER_RECORDED",
+  // DMW Runtime DM1-A per ADR-0092 §4 Candidate A.
+  "CONSENT_GRANT_RECORDED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
