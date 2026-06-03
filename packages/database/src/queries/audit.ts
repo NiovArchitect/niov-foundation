@@ -264,7 +264,20 @@ export type AuditEventType =
   // raw feature payload, caller PII beyond entity_id, capability
   // pack contents, plan pricing data. Append-only per ADR-0042
   // §Q-γ.1.
-  | "ENTITLEMENT_CHECK_DENIED";
+  | "ENTITLEMENT_CHECK_DENIED"
+  // Section 8 Billing Completion B6-α per ADR-0093 §5 Candidate C
+  // + ADR-0042 §Q-γ.1 clean-transition discipline. 1 NEW
+  // append-only literal. Emitted by
+  // UsageMeterService.recordUsageForOrg on every counter
+  // increment (tracking-only at V1; enforcement deferred to B6-β
+  // per ADR-0093 §7). Audit details schema (SAFE): org_entity_id
+  // + meter_id (closed-vocab catalog id matching
+  // docs/entitlement-catalog/usage-meters.json vocabulary) +
+  // delta + post_value (the counter value after the increment).
+  // FORBIDDEN: raw payload content driving the increment, caller
+  // PII beyond entity_id, plan pricing data, per-actor
+  // attribution. The audit envelope carries metadata only.
+  | "USAGE_METER_RECORDED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -372,6 +385,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "PROPOSED_ACTION_REFERENCED",
   // Section 8 Billing Completion B5-α per ADR-0093 §5 Candidate A.
   "ENTITLEMENT_CHECK_DENIED",
+  // Section 8 Billing Completion B6-α per ADR-0093 §5 Candidate C.
+  "USAGE_METER_RECORDED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

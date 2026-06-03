@@ -962,6 +962,36 @@ model Entitlement {
   @@map("entitlements")
 }
 
+// Section 8 Billing Completion B6-α per ADR-0093 §5 Candidate C.
+// Per-org per-meter usage counter (tracking-only at this slice;
+// enforcement deferred to B6-β + Founder pricing decision per
+// ADR-0093 §7). The composite (org_entity_id, meter_id) PK
+// ensures at-most-one row per meter per org; recordUsageForOrg
+// upserts + increments `current_value`. Snapshots (per-window
+// rolled-up records) are forward-substrate; V1 carries only the
+// current running total + last_recorded_at timestamp.
+//
+// meter_id vocabulary mirrors the B2 catalog at
+// docs/entitlement-catalog/usage-meters.json + B4 ledger seed
+// rows (e.g. `meter.active-twin-seats.v1`,
+// `meter.connector-read-events.v1`).
+//
+// USAGE_METER_RECORDED audit event fires on every record
+// per ADR-0042 §Q-γ.1 clean-transition discipline; the
+// pre-emission audit invariant per RULE 4 is preserved.
+model UsageMeter {
+  org_entity_id     String   @db.Uuid
+  meter_id          String
+  current_value     BigInt   @default(0)
+  last_recorded_at  DateTime @default(now())
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@id([org_entity_id, meter_id])
+  @@index([org_entity_id])
+  @@map("usage_meters")
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {
