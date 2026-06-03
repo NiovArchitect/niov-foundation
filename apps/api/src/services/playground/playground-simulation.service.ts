@@ -104,6 +104,9 @@ import type {
   ConversationContextSignal,
   ConversationContextSignalProjectionServiceLike,
 } from "./conversation-context-signals.js";
+import { assertEntitledForOrgSoftGate } from "../billing/entitlement-check.service.js";
+import { recordUsageForOrg } from "../billing/usage-meter.service.js";
+import { getOrgEntityId } from "../governance/org.js";
 
 // WHAT: Closed-vocabulary orchestration_mode set per ADR-0076
 //        §3.
@@ -581,13 +584,20 @@ export interface SimulateInput {
 //        OPERATION_NOT_PERMITTED / SCENARIO_NOT_FOUND /
 //        INTERNAL_ERROR). INVALID_REQUEST flows through for
 //        body-shape violations.
-export type PlaygroundSimulationFailureCode = PlaygroundScenarioFailureCode;
+export type PlaygroundSimulationFailureCode =
+  | PlaygroundScenarioFailureCode
+  | "ENTITLEMENT_INSUFFICIENT";
 
 export interface PlaygroundSimulationFailure {
   ok: false;
   code: PlaygroundSimulationFailureCode;
   message: string;
   invalid_fields?: readonly string[];
+  reason_code?:
+    | "NO_ENTITLEMENT_ROW"
+    | "FEATURE_NOT_ENTITLED"
+    | "CAPABILITY_PACK_NOT_OWNED";
+  feature_id?: string;
 }
 
 export interface SimulationSuccess {
@@ -1609,6 +1619,42 @@ export class PlaygroundSimulationService {
     const ownerEntityId = scenarioLookup.scenario.owner_entity_id;
     const resolvedScenarioId = scenarioLookup.scenario.scenario_id;
 
+    // 3.5. Section 8 B5-α Entitlement gate per ADR-0093 §5
+    //      Candidate A. Closes the Founder-named "Agent Playground
+    //      simulation runs" billing-tier target. Multi-agent
+    //      simulation is the premium orchestration tier per the
+    //      Section 5 Wave 9 contract; computed-on-read but
+    //      compute-heavy (Wave 7 sub-invocations × 24 combinations
+    //      max per ADR-0076 §11). Soft-gate posture matches the
+    //      billing-wiring round — orgs without an Entitlement row
+    //      continue to run simulations; orgs WITH a row need
+    //      `agent_playground_simulation_runs` entitled.
+    //      Skipped (treated as backward-compat) when org cannot be
+    //      resolved (the scenario lookup above already enforced
+    //      owner-first scope).
+    try {
+      const orgEntityIdForGate = await getOrgEntityId(ownerEntityId);
+      const entitlement = await assertEntitledForOrgSoftGate({
+        org_entity_id: orgEntityIdForGate,
+        actor_entity_id: ownerEntityId,
+        feature_id: "agent_playground_simulation_runs",
+      });
+      if (entitlement.ok === false) {
+        return {
+          ok: false,
+          code: "ENTITLEMENT_INSUFFICIENT",
+          message:
+            "org is not entitled to run Playground multi-agent simulations",
+          reason_code: entitlement.reason_code,
+          feature_id: entitlement.feature_id,
+        };
+      }
+    } catch {
+      // org resolution failed — fall through; the scenario lookup
+      // already enforced owner-first scope so this path is safe to
+      // continue without gating.
+    }
+
     // 4. Sequential Promise.allSettled over Wave 7
     //    sub-invocations per ADR-0076 §12 + §15.1.
     const subInvocations = combinations.map((combo, index) => {
@@ -1804,6 +1850,27 @@ export class PlaygroundSimulationService {
         ],
       },
     });
+
+    // B6-α telemetry counter — record one Playground multi-agent
+    // simulation run against the org meter. Delta is the branch
+    // count so capacity-planning surfaces observe simulation
+    // breadth, not just call count. Telemetry isolation try/catch
+    // swallows all failures so the simulation response is never
+    // blocked by meter issues.
+    try {
+      const orgEntityIdForMeter = await getOrgEntityId(ownerEntityId);
+      const branchDelta = Math.max(1, branches.length);
+      if (Number.isInteger(branchDelta) && branchDelta > 0) {
+        await recordUsageForOrg(
+          orgEntityIdForMeter,
+          "meter.playground-simulations.v1",
+          branchDelta,
+        );
+      }
+    } catch {
+      // intentionally swallowed; telemetry must not affect the
+      // simulation response.
+    }
 
     return {
       ok: true,

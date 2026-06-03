@@ -660,12 +660,25 @@ export async function registerPlaygroundRoutes(
       if (result.ok === true) {
         return reply.code(200).send(result);
       }
-      return reply.code(scenarioStatusFor(result.code)).send({
+      // Section 8 B5-α gate uses the simulation-specific
+      // ENTITLEMENT_INSUFFICIENT failure code → 403. All other
+      // codes share the scenario failure code → status mapping.
+      const status =
+        result.code === "ENTITLEMENT_INSUFFICIENT"
+          ? 403
+          : scenarioStatusFor(result.code as PlaygroundScenarioFailureCode);
+      return reply.code(status).send({
         ok: false,
         code: result.code,
         message: result.message,
         ...(result.invalid_fields !== undefined
           ? { invalid_fields: result.invalid_fields }
+          : {}),
+        ...(result.reason_code !== undefined
+          ? { reason_code: result.reason_code }
+          : {}),
+        ...(result.feature_id !== undefined
+          ? { feature_id: result.feature_id }
           : {}),
       });
     },
