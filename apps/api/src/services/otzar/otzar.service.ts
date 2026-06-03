@@ -193,6 +193,33 @@ export type ConductNextStep =
 // while still letting downstream consumers (e.g. a future client-side
 // device TTS) reuse the speech-ready projection of the response.
 //
+// Phase EDX-3 slice 5: safe layer-breakdown projection of how memory
+// was used to produce this response. Pure summary of the 8-layer COE
+// assembly counts conductSession ALREADY computes internally for the
+// `context_used` scalar — no new DB reads, no content surfaced, no
+// per-item scores, no capsule IDs (those live on the existing
+// ADR-0051 `context_provenance` array, not here). Lets the UI render
+// a calm "what your Twin considered" panel without consumers having
+// to invert the COE truncation result themselves.
+export interface MemoryUsedSummary {
+  // L1 -- never-trim CORRECTION capsules read from the caller's wallet.
+  layer_1_corrections: number;
+  // L3 -- WORK_PATTERN / COMMUNICATION_PREF / DECISION_STYLE capsules.
+  layer_3_work_profile: number;
+  // L4 -- FOUNDATIONAL items returned by COE.assembleContext.
+  layer_4_foundational: number;
+  // L5 -- non-FOUNDATIONAL items returned by COE.assembleContext that
+  //       survived truncation.
+  layer_5_relevant_context: number;
+  // L8 -- conversation_history messages supplied by the client that
+  //       survived truncation.
+  layer_8_history_messages: number;
+  // Sum across the layers that participate in the response — matches
+  // the existing top-level `context_used` scalar by construction so
+  // the UI can use either value interchangeably.
+  total_capsules: number;
+}
+
 // Phase EDX-3 slice 4: deterministic-false "denial of preconditions"
 // envelope. Six required booleans naming the conditions that
 // conductSession at this slice does NOT detect:
@@ -244,6 +271,11 @@ export interface ConductSessionSuccess {
   policy_blocked: boolean;
   dmw_scope_blocked: boolean;
   collaboration_suggested: boolean;
+  // Phase EDX-3 slice 5: safe layer-breakdown projection of memory
+  // usage. Pure summary of counts conductSession already computes
+  // internally for the existing `context_used` scalar — see the
+  // MemoryUsedSummary doc-comment above.
+  memory_used_summary: MemoryUsedSummary;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -1045,6 +1077,27 @@ export class OtzarService {
     const dmwScopeBlocked = false;
     const collaborationSuggested = false;
 
+    // Phase EDX-3 slice 5: safe layer-breakdown projection. Pure
+    // summary of the per-layer counts conductSession already used to
+    // compute the existing `context_used` scalar — no new DB reads,
+    // no content surfaced. layer_1 / layer_3 reflect the L1
+    // (CORRECTION) + L3 (WORK_PATTERN / COMMUNICATION_PREF /
+    // DECISION_STYLE) capsule reads above. layer_4 is 0 or 1 (the
+    // FOUNDATIONAL bundle is collapsed into a single context slot
+    // by `contextUsed`'s `L4.length > 0 ? 1 : 0` form). layer_5
+    // reflects the COE-returned non-FOUNDATIONAL items that survived
+    // truncation. layer_8 reflects the conversation_history messages
+    // that survived truncation. total_capsules equals contextUsed by
+    // construction so a UI consumer can use either value.
+    const memoryUsedSummary: MemoryUsedSummary = {
+      layer_1_corrections: l1Caps.length,
+      layer_3_work_profile: l3Caps.length,
+      layer_4_foundational: L4.length > 0 ? 1 : 0,
+      layer_5_relevant_context: truncated.final.L5_items.length,
+      layer_8_history_messages: truncated.final.L8_items.length,
+      total_capsules: contextUsed,
+    };
+
     return {
       ok: true,
       response: llmResult.text,
@@ -1063,6 +1116,7 @@ export class OtzarService {
       policy_blocked: policyBlocked,
       dmw_scope_blocked: dmwScopeBlocked,
       collaboration_suggested: collaborationSuggested,
+      memory_used_summary: memoryUsedSummary,
     };
   }
 

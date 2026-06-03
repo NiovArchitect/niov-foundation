@@ -464,6 +464,7 @@ export type {
   ConductSessionInput,
   ConductSessionSuccess,
   ConductNextStep,
+  MemoryUsedSummary,
   CloseConversationInput,
   CloseConversationSuccess,
   OtzarFailure,
