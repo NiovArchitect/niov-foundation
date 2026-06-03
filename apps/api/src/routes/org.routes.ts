@@ -1684,6 +1684,31 @@ export async function registerOrgRoutes(
       if (body.actions !== undefined)
         data.actions = body.actions as Prisma.InputJsonValue;
       if (typeof body.enabled === "boolean") data.enabled = body.enabled;
+      // Section 8 B5-α Entitlement gate at PATCH per ADR-0093 §5
+      // Candidate A — same `workflow_complex_creation` feature that
+      // gates POST per PR #251. Closes the forward-substrate item
+      // from PR #251 (a patch that grows an existing workflow into
+      // 3+ action stages was previously ungated).
+      // Gate only fires when the PATCH actually modifies `actions`
+      // AND the NEW length is 3 or more — patches that leave the
+      // actions array untouched skip the check entirely.
+      if (Array.isArray(body.actions) && body.actions.length >= 3) {
+        const entitlement = await assertEntitledForOrgSoftGate({
+          org_entity_id: orgEntityId,
+          actor_entity_id: callerId,
+          feature_id: "workflow_complex_creation",
+        });
+        if (entitlement.ok === false) {
+          return reply.code(403).send({
+            ok: false,
+            code: "ENTITLEMENT_INSUFFICIENT",
+            reason_code: entitlement.reason_code,
+            feature_id: entitlement.feature_id,
+            message:
+              "org is not entitled to grow workflows to 3 or more action stages",
+          });
+        }
+      }
       const updated = await prisma.workflow.update({
         where: { workflow_id: request.params.id },
         data,
