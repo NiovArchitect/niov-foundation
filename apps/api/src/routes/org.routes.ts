@@ -1590,6 +1590,34 @@ export async function registerOrgRoutes(
           message: "name + trigger_type are required",
         });
       }
+      // Section 8 B5-α Entitlement gate per ADR-0093 §5 Candidate A.
+      // Closes the Founder-named "Workflow stage 3+" billing-tier
+      // target. A "stage 3+" workflow is one whose `actions` array
+      // has 3 or more entries (the multi-stage automation tier).
+      // 0-2-action workflows remain base-tier (single-action /
+      // two-action automations are basic governance). Soft-gate
+      // posture matches PR #244 — orgs without an Entitlement row
+      // still create complex workflows; orgs WITH a row need
+      // `workflow_complex_creation` entitled.
+      const actionsArray = Array.isArray(body.actions) ? body.actions : [];
+      const isComplexWorkflow = actionsArray.length >= 3;
+      if (isComplexWorkflow) {
+        const entitlement = await assertEntitledForOrgSoftGate({
+          org_entity_id: orgEntityId,
+          actor_entity_id: callerId,
+          feature_id: "workflow_complex_creation",
+        });
+        if (entitlement.ok === false) {
+          return reply.code(403).send({
+            ok: false,
+            code: "ENTITLEMENT_INSUFFICIENT",
+            reason_code: entitlement.reason_code,
+            feature_id: entitlement.feature_id,
+            message:
+              "org is not entitled to create workflows with 3 or more action stages",
+          });
+        }
+      }
       const wf = await prisma.workflow.create({
         data: {
           org_entity_id: orgEntityId,
@@ -1600,6 +1628,23 @@ export async function registerOrgRoutes(
           created_by: callerId,
         },
       });
+      // B6-α telemetry counter — delta = max(1, actions.length) so
+      // capacity-planning surfaces observe stage volume, not just
+      // call count. Telemetry isolation try/catch swallows all
+      // failures.
+      try {
+        const stageDelta = Math.max(1, actionsArray.length);
+        if (Number.isInteger(stageDelta) && stageDelta > 0) {
+          await recordUsageForOrg(
+            orgEntityId,
+            "meter.workflow-creations.v1",
+            stageDelta,
+          );
+        }
+      } catch {
+        // intentionally swallowed; telemetry must not affect the
+        // workflow response.
+      }
       return reply.code(201).send({ ok: true, workflow: wf });
     },
   );
