@@ -2084,3 +2084,117 @@ model OtzarProposedPattern {
   @@index([owner_entity_id, archived_at])
   @@map("otzar_proposed_patterns")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase EDX-4 — Twin Authority Grant substrate per the
+// [FOUNDER-AUTH — EVERYDAY EMPLOYEE DOMAIN GENERAL INTELLIGENCE
+// EXPERIENCE] + [FOUNDER-AUTH — AUTONOMOUS EMPLOYEE DGI STRUCTURAL
+// RUNTIME COMPLETION / NO MORE SIDECAR-ONLY DRIFT] directives.
+//
+// Establishes the first-class employee→Twin authority-to-act
+// substrate. Structurally distinct from DM1-A ConsentGrant
+// (grantor→grantee permission grant) and DM3-A TeamDelegation
+// (delegator→team capability scope) — adds duration-class
+// semantics, sensitivity classification, one-time consumption,
+// and action/connector/workflow/conversation scoping so the
+// employee can express "my Twin may do X for Y duration with Z
+// sensitivity" and have the system enforce it before any
+// material AI action.
+//
+// Foundational rules (enforced by service tier):
+//   - Indefinite / UNTIL_REVOKED never means "unlimited" — every
+//     grant remains scoped by purpose / action_type / connector /
+//     project / sensitivity.
+//   - Sensitive actions default to SENSITIVE_CASE_BY_CASE unless
+//     explicitly granted and policy allows it.
+//   - Authority grants cannot bypass policy, DMW scope, dual-
+//     control, or audit emission.
+//   - Connector writes remain Founder-gated per ADR-0084 even
+//     when an authority grant nominally permits them.
+//   - Revocation stops future use but preserves evidence (RULE 10).
+//   - One-time grants are consumed after use (consumed_at set).
+//   - NEVER hard-deleted — soft-delete only via state machine.
+//   - Audit emission uses ADMIN_ACTION + details.action discriminator
+//     pattern (TWIN_AUTHORITY_GRANTED / _REVOKED / _CONSUMED /
+//     _CHECK_DENIED / _EXPIRED) — no new top-level audit literal
+//     in this slice.
+// ─────────────────────────────────────────────────────────────────
+
+enum TwinAuthorityDurationClass {
+  ONE_TIME
+  SESSION
+  SHORT_TERM
+  PROJECT_SCOPED
+  LONG_TERM
+  INDEFINITE
+  UNTIL_REVOKED
+  SENSITIVE_CASE_BY_CASE
+}
+
+enum TwinAuthorityGrantState {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  SUPERSEDED
+  CONSUMED
+  BLOCKED
+}
+
+enum TwinAuthoritySensitivityClass {
+  LOW
+  MODERATE
+  HIGH
+  REGULATED
+  CUSTOMER_SENSITIVE
+  FINANCIAL
+  LEGAL
+  SECURITY
+  PERSONAL_MEMORY
+  CONNECTOR_WRITE
+}
+
+enum TwinAuthorityScopeType {
+  PERSONAL
+  SESSION
+  PROJECT
+  TEAM
+  ORG
+  CONNECTOR
+  ACTION_TYPE
+  WORKFLOW
+  CONVERSATION
+}
+
+model TwinAuthorityGrant {
+  grant_id              String                        @id @default(uuid()) @db.Uuid
+  org_entity_id         String                        @db.Uuid
+  grantor_entity_id     String                        @db.Uuid
+  grantee_entity_id     String                        @db.Uuid
+  scope_type            TwinAuthorityScopeType
+  scope_id              String?                       @db.Uuid
+  action_type           String?
+  connector_type        String?
+  connector_binding_id  String?                       @db.Uuid
+  duration_class        TwinAuthorityDurationClass
+  sensitivity_class     TwinAuthoritySensitivityClass @default(MODERATE)
+  state                 TwinAuthorityGrantState       @default(ACTIVE)
+  effective_from        DateTime                      @default(now())
+  expires_at            DateTime?
+  revoked_at            DateTime?
+  revoked_by_entity_id  String?                       @db.Uuid
+  consumed_at           DateTime?
+  purpose_summary       String
+  constraints_json      Json                          @default("{}")
+  consent_grant_id      String?                       @db.Uuid
+  receipt_id            String?                       @db.Uuid
+  created_at            DateTime                      @default(now())
+  updated_at            DateTime                      @updatedAt
+
+  @@index([org_entity_id])
+  @@index([grantor_entity_id])
+  @@index([grantee_entity_id])
+  @@index([state])
+  @@index([expires_at])
+  @@index([grantor_entity_id, state, expires_at])
+  @@map("twin_authority_grants")
+}
