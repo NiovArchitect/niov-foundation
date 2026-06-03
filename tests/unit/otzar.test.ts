@@ -545,6 +545,75 @@ describe("conductSession", () => {
     },
   );
 
+  // Phase EDX-3 slice 5: `memory_used_summary` is a safe layer-
+  // breakdown projection of the counts conductSession already used
+  // to compute the existing `context_used` scalar. Pure projection,
+  // no new DB reads, no content.
+  it(
+    "[EDX-3] memory_used_summary layer counts are non-negative and sum to context_used",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "what should I do today?",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const m = result.memory_used_summary;
+      expect(typeof m).toBe("object");
+      expect(m.layer_1_corrections).toBeGreaterThanOrEqual(0);
+      expect(m.layer_3_work_profile).toBeGreaterThanOrEqual(0);
+      expect(m.layer_4_foundational).toBeGreaterThanOrEqual(0);
+      expect(m.layer_5_relevant_context).toBeGreaterThanOrEqual(0);
+      expect(m.layer_8_history_messages).toBeGreaterThanOrEqual(0);
+      // L4 is always 0 or 1 in the current contextUsed formula.
+      expect([0, 1]).toContain(m.layer_4_foundational);
+      // The layers that participate in `context_used` (L1 + L3 + L4
+      // + L5) must sum to total_capsules by construction. L8 history
+      // messages are tracked separately and excluded from the sum.
+      expect(
+        m.layer_1_corrections +
+          m.layer_3_work_profile +
+          m.layer_4_foundational +
+          m.layer_5_relevant_context,
+      ).toBe(m.total_capsules);
+      expect(m.total_capsules).toBe(result.context_used);
+    },
+  );
+
+  it(
+    "[EDX-3] memory_used_summary surfaces no raw content / capsule IDs",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "what should I do today?",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // Shape is counts-only — no string fields, no arrays.
+      const m = result.memory_used_summary;
+      expect(Object.keys(m).every((k) => k.startsWith("layer_") || k === "total_capsules")).toBe(
+        true,
+      );
+      for (const v of Object.values(m)) {
+        expect(typeof v).toBe("number");
+      }
+    },
+  );
+
   // ADR-0051 Wave 1: conductSession surfaces the additive transparency
   // contract built from the governed COE metadata. Backward-compatible
   // fields stay intact; transparency is a read-only projection.
