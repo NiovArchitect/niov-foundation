@@ -2784,6 +2784,34 @@ export async function registerOrgRoutes(
         typeof body.google_workspace_domain === "string"
           ? body.google_workspace_domain
           : undefined;
+      // Section 8 B5-α Entitlement gate per ADR-0093 §5 Candidate A.
+      // Soft-gate so orgs that pre-date the Entitlement system
+      // continue to run the D6 enterprise archetype; orgs WITH an
+      // Entitlement row need the
+      // `dandelion_activation:enterprise_archetype` feature.
+      // Skipped when org cannot be resolved (the service handles
+      // CALLER_NOT_IN_ORG / CALLER_ENTITY_NOT_FOUND below).
+      try {
+        const orgEntityId = await getOrgEntityId(callerId);
+        const entitlement = await assertEntitledForOrgSoftGate({
+          org_entity_id: orgEntityId,
+          actor_entity_id: callerId,
+          feature_id: "dandelion_activation:enterprise_archetype",
+        });
+        if (entitlement.ok === false) {
+          return reply.code(403).send({
+            ok: false,
+            code: "ENTITLEMENT_INSUFFICIENT",
+            reason_code: entitlement.reason_code,
+            feature_id: entitlement.feature_id,
+            message:
+              "org is not entitled to run the D6 enterprise activation archetype",
+          });
+        }
+      } catch {
+        // org resolution failed — let the service-tier error path
+        // surface the canonical CALLER_NOT_IN_ORG / 403 below.
+      }
       const result = await executeEnterpriseActivationForCaller(callerId, {
         slack_display_name: slackDisplayName,
         slack_secret_ref: slackSecretRef,
@@ -2793,6 +2821,22 @@ export async function registerOrgRoutes(
         google_workspace_domain: googleWorkspaceDomain,
       });
       if (result.ok) {
+        // B6-α telemetry counter — one D6 enterprise activation
+        // per org per success against
+        // `meter.dandelion-enterprise-activations.v1`. Telemetry
+        // isolation try/catch swallows all failures so the
+        // activation response is never blocked by meter issues.
+        try {
+          const orgEntityId = await getOrgEntityId(callerId);
+          await recordUsageForOrg(
+            orgEntityId,
+            "meter.dandelion-enterprise-activations.v1",
+            1,
+          );
+        } catch {
+          // intentionally swallowed; telemetry must not affect
+          // the activation response.
+        }
         return reply.code(200).send(result);
       }
       const status =
