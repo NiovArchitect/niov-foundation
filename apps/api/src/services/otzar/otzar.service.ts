@@ -85,6 +85,10 @@ import {
   computeActiveGrantsSummaryForCaller,
   type TwinActiveGrantsSummary,
 } from "./twin-active-grants.js";
+import {
+  computeVoiceReadinessState,
+  type TwinVoiceReadinessState,
+} from "./twin-voice-readiness.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -386,6 +390,14 @@ export interface MyTwinView {
   // per-grant substance. Per-source read failures swallowed
   // silently per ADR-0068 §6.
   active_grants_summary?: TwinActiveGrantsSummary;
+  // Phase EDX-1 employee Twin self-state extension —
+  // voice_readiness_state sidecar. Constant projection
+  // exposing which voice surfaces are LIVE today (envelope
+  // construction at VF.4) vs forward-substrate Founder-gated
+  // (live mic capture + live audio synthesis per ADR-0085 +
+  // ADR-0089). Lets the Control Tower UI render the right
+  // voice panel affordances without false promises.
+  voice_readiness_state?: TwinVoiceReadinessState;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1382,6 +1394,12 @@ export class OtzarService {
       activeGrantsSummary = undefined;
     }
 
+    // Phase EDX-1 employee Twin self-state extension —
+    // voice_readiness_state sidecar. Constant projection (no
+    // DB hit, no caller-specific gating at the Foundation tier).
+    const voiceReadinessState: TwinVoiceReadinessState =
+      computeVoiceReadinessState();
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -1414,6 +1432,7 @@ export class OtzarService {
       ...(activeGrantsSummary !== undefined
         ? { active_grants_summary: activeGrantsSummary }
         : {}),
+      voice_readiness_state: voiceReadinessState,
     };
 
     return {
