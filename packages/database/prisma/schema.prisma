@@ -1037,6 +1037,35 @@ enum ConsentState {
   REVOKED
 }
 
+// DMW Runtime DM1-B per ADR-0092 §4 Candidate A — closes the
+// Consent + Receipt pair. The Receipt is the cryptographic
+// proof-of-grant artifact a caller can present later. Each
+// Receipt chains into the existing append-only audit substrate
+// per ADR-0002 by referencing the AuditEvent that the
+// CONSENT_GRANT_RECORDED emission produced; the receipt_hash
+// is a SHA-256 fingerprint of the canonical record so a
+// regulator/auditor/counterparty can verify the receipt against
+// the audit chain without trusting the receipt source.
+//
+// One ConsentGrant MAY have multiple Receipts over its
+// lifecycle (one per state-transition snapshot). The PK is
+// receipt_id; the FK constraint to ConsentGrant is enforced at
+// the service tier (per Section 9 §13 — Prisma FKs would
+// complicate cross-tenant reads; service-tier enforces).
+model Receipt {
+  receipt_id        String   @id @default(uuid()) @db.Uuid
+  consent_id        String   @db.Uuid
+  permission_id     String?  @db.Uuid
+  audit_event_id    String?  @db.Uuid
+  timestamp_sealed  DateTime @default(now())
+  receipt_hash      String
+  created_at        DateTime @default(now())
+
+  @@index([consent_id])
+  @@index([audit_event_id])
+  @@map("receipts")
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {
