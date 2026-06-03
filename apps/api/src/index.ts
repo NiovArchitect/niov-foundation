@@ -792,6 +792,23 @@ export type {
   PythonScopeEnvelope,
   PythonTransport,
 } from "./services/python/python-client.js";
+
+// ADR-0092 §4 Candidate A DM1-A ConsentGrant substrate. The
+// first DMW Runtime control-plane primitive.
+export {
+  CONSENT_PURPOSE_VALUES,
+  getConsentGrantById,
+  recordConsentGrantForCaller,
+  revokeConsentGrantForCaller,
+} from "./services/dmw/consent-grant.service.js";
+export type {
+  ConsentGrantSummary,
+  ConsentPurpose,
+  RecordConsentGrantInput,
+  RecordConsentGrantResult,
+  RevokeConsentGrantInput,
+  RevokeConsentGrantResult,
+} from "./services/dmw/consent-grant.service.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";

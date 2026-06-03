@@ -992,6 +992,51 @@ model UsageMeter {
   @@map("usage_meters")
 }
 
+// DMW Runtime DM1-A per ADR-0092 §4 Candidate A. Per-entity
+// consent grant — the explicit consent record that complements
+// the existing Permission model. Permission encodes WHAT is
+// allowed; ConsentGrant records that the grantor explicitly
+// agreed to the grant for a specific purpose.
+//
+// A grantor (PERSON / COMPANY / DEVICE / AI_AGENT EntityType)
+// grants a grantee (PERSON / COMPANY / AI_AGENT) consent to
+// operate against a specific purpose for a bounded validity
+// window. Revocation is recorded in-place by setting
+// `consent_state` to REVOKED + `revoked_at` + `revoked_by`;
+// the row is NEVER deleted (RULE 10).
+//
+// Receipt model is forward-substrate to a follow-up DMW slice;
+// V1 emits CONSENT_GRANT_RECORDED audit on every state
+// transition so the audit chain itself is the receipt at this
+// slice per ADR-0002.
+model ConsentGrant {
+  consent_id          String              @id @default(uuid()) @db.Uuid
+  grantor_entity_id   String              @db.Uuid
+  grantee_entity_id   String              @db.Uuid
+  purpose             String
+  permission_id       String?             @db.Uuid
+  consent_state       ConsentState        @default(REQUESTED)
+  valid_from          DateTime            @default(now())
+  valid_until         DateTime?
+  revoked_at          DateTime?
+  revoked_by          String?             @db.Uuid
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+
+  @@index([grantor_entity_id])
+  @@index([grantee_entity_id])
+  @@index([consent_state])
+  @@map("consent_grants")
+}
+
+enum ConsentState {
+  REQUESTED
+  APPROVED
+  DENIED
+  EXPIRED
+  REVOKED
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {
