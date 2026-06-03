@@ -45,6 +45,8 @@ import {
 import { createTwin } from "../services/governance/twin.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 import { countEscalationsPending } from "../services/governance/escalation.service.js";
+import { assertEntitledForOrgSoftGate } from "../services/billing/entitlement-check.service.js";
+import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
 import type { AuthService } from "../services/auth.service.js";
 
 // WHAT: Default + max page size for list endpoints. Audit-table reads
@@ -1684,6 +1686,24 @@ export async function registerOrgRoutes(
           message: "Twin owner must be in your org",
         });
       }
+      // Section 8 B5-α Entitlement gate per ADR-0093 §5 Candidate A.
+      // Soft-gate so orgs that pre-date the Entitlement system
+      // continue to create twins; orgs WITH an Entitlement row need
+      // the `twin_creation` feature.
+      const entitlement = await assertEntitledForOrgSoftGate({
+        org_entity_id: orgEntityId,
+        actor_entity_id: callerId,
+        feature_id: "twin_creation",
+      });
+      if (entitlement.ok === false) {
+        return reply.code(403).send({
+          ok: false,
+          code: "ENTITLEMENT_INSUFFICIENT",
+          reason_code: entitlement.reason_code,
+          feature_id: entitlement.feature_id,
+          message: "org is not entitled to create AI twins",
+        });
+      }
       try {
         const result = await createTwin({
           owner_entity_id: owner,
@@ -1692,6 +1712,19 @@ export async function registerOrgRoutes(
           is_admin_invite: isAdminInvite,
           actor_entity_id: callerId,
         });
+        // B6-α telemetry counter — record one twin creation against
+        // the org's running meter. Failure here MUST NOT fail the
+        // twin response (telemetry tier, not gate tier).
+        try {
+          await recordUsageForOrg(
+            orgEntityId,
+            "meter.twin-creations.v1",
+            1,
+          );
+        } catch {
+          // intentionally swallowed; telemetry must not affect the
+          // twin response.
+        }
         return reply.code(201).send({ ok: true, ...result });
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown";
