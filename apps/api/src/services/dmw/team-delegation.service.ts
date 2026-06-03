@@ -35,6 +35,9 @@
 
 import { prisma, writeAuditEvent } from "@niov/database";
 import type { TeamDelegationStatus } from "@prisma/client";
+import { assertEntitledForOrgSoftGate } from "../billing/entitlement-check.service.js";
+import { recordUsageForOrg } from "../billing/usage-meter.service.js";
+import { getOrgEntityId } from "../governance/org.js";
 
 // WHAT: The closed-vocab capability_scope enum for
 //        TeamDelegation. V1 covers 4 ALLOWED capabilities;
@@ -95,6 +98,17 @@ export type CreateTeamDelegationResult =
       code: "FORBIDDEN_CAPABILITY";
       httpStatus: 403;
       forbidden: ReadonlyArray<string>;
+    }
+  | {
+      ok: false;
+      code: "ENTITLEMENT_INSUFFICIENT";
+      httpStatus: 403;
+      reason_code?:
+        | "NO_ENTITLEMENT_ROW"
+        | "FEATURE_NOT_ENTITLED"
+        | "CAPABILITY_PACK_NOT_OWNED";
+      feature_id?: string;
+      message?: string;
     };
 
 export type RevokeTeamDelegationInput = {
@@ -210,6 +224,42 @@ export async function createTeamDelegationForCaller(
       invalid_fields: ["capability_scope"],
     };
   }
+  // Section 8 B5-α Entitlement gate per ADR-0093 §5 Candidate A.
+  // Closes the Founder-named "DMW advanced memory governance"
+  // billing-tier target (advanced delegation configuration slot).
+  // TeamDelegation is the premium tier of DMW governance — it
+  // configures supervised AI teammate delegations with bounded
+  // capability scopes. Baseline DMW safety (consent + receipt +
+  // scope + audit + revocation) is NOT gated per ADR-0093 §10
+  // doctrine "customers should not pay extra just to have memory
+  // be safe." Soft-gate posture — orgs without an Entitlement row
+  // continue to create delegations; orgs WITH a row need
+  // `dmw_advanced_delegation_configuration` entitled. Skipped
+  // when org cannot be resolved.
+  try {
+    const orgEntityIdForGate = await getOrgEntityId(
+      input.delegator_entity_id,
+    );
+    const entitlement = await assertEntitledForOrgSoftGate({
+      org_entity_id: orgEntityIdForGate,
+      actor_entity_id: input.delegator_entity_id,
+      feature_id: "dmw_advanced_delegation_configuration",
+    });
+    if (entitlement.ok === false) {
+      return {
+        ok: false,
+        code: "ENTITLEMENT_INSUFFICIENT",
+        httpStatus: 403,
+        reason_code: entitlement.reason_code,
+        feature_id: entitlement.feature_id,
+        message:
+          "org is not entitled to configure advanced TeamDelegation supervision",
+      };
+    }
+  } catch {
+    // org resolution failed — fall through; the delegator UUID
+    // validation above already guarded against malformed input.
+  }
   const supervision_required =
     input.supervision_required === undefined
       ? true
@@ -240,6 +290,23 @@ export async function createTeamDelegationForCaller(
       status: row.status,
     },
   });
+  // B6-α telemetry counter — record one TeamDelegation creation
+  // against the org meter `meter.dmw-delegations-created.v1`.
+  // Telemetry isolation try/catch swallows all failures so the
+  // delegation response is never blocked by meter issues.
+  try {
+    const orgEntityIdForMeter = await getOrgEntityId(
+      row.delegator_entity_id,
+    );
+    await recordUsageForOrg(
+      orgEntityIdForMeter,
+      "meter.dmw-delegations-created.v1",
+      1,
+    );
+  } catch {
+    // intentionally swallowed; telemetry must not affect the
+    // delegation response.
+  }
   return { ok: true, delegation: project(row) };
 }
 
