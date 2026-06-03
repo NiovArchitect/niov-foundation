@@ -1108,6 +1108,7 @@ export {
 export {
   ALWAYS_ALLOW_BASE_TIER_FEATURES,
   assertEntitledForCaller,
+  assertEntitledForOrgSoftGate,
   evaluateEntitlement,
   setEntitlementLoaderForTests,
 } from "./services/billing/entitlement-check.service.js";
