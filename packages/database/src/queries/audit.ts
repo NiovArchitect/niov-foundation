@@ -251,7 +251,20 @@ export type AuditEventType =
   // transcript, raw prompt, chain-of-thought, OAuth header,
   // recipient PII, capsule content. The audit envelope carries
   // metadata only. Append-only per ADR-0042 §Q-γ.1.
-  | "PROPOSED_ACTION_REFERENCED";
+  | "PROPOSED_ACTION_REFERENCED"
+  // Section 8 Billing Completion B5-α per ADR-0093 §5 Candidate A
+  // + ADR-0042 §Q-γ.1 clean-transition discipline. 1 NEW append-only
+  // literal. Emitted by EntitlementCheckService.assertEntitledForCaller
+  // when the caller's org Entitlement row does NOT cover the
+  // requested feature_id AND the requested feature is NOT on the
+  // ADR-0093 §10 always-allow base-tier list. Audit details schema
+  // (SAFE): org_entity_id + feature_id (closed-vocab catalog id) +
+  // plan_archetype_id + reason_code (NO_ENTITLEMENT_ROW /
+  // FEATURE_NOT_ENTITLED / CAPABILITY_PACK_NOT_OWNED). FORBIDDEN:
+  // raw feature payload, caller PII beyond entity_id, capability
+  // pack contents, plan pricing data. Append-only per ADR-0042
+  // §Q-γ.1.
+  | "ENTITLEMENT_CHECK_DENIED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -357,6 +370,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "VOICE_INTENT_DELIVERED",
   // W5 Action Promotion Runtime per ADR-0086 + ADR-0042 §Q-γ.1.
   "PROPOSED_ACTION_REFERENCED",
+  // Section 8 Billing Completion B5-α per ADR-0093 §5 Candidate A.
+  "ENTITLEMENT_CHECK_DENIED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

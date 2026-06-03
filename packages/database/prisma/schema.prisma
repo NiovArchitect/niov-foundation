@@ -932,6 +932,36 @@ model MonetizationConfig {
   @@map("monetization_config")
 }
 
+// Section 8 Billing Completion B5-α per ADR-0093 §5 Candidate A.
+// Per-org runtime entitlement record. Seeded from the B4 ledger
+// design substrate at docs/entitlement-ledger/ when an org enters
+// B5-α; one Entitlement row per org_entity_id (PK).
+//
+// feature_entitlements is a JSON map of feature_id -> boolean,
+// mirroring the B4 ledger's feature_entitlements[] shape (e.g.
+// `{"DMW_baseline_safety": true, "workflow_stage_4_execution":
+// false}`). capability_packs[] is the closed-vocab list of pack
+// IDs the org owns (e.g. ["pack.collaboration", "pack.advanced-
+// audit"]).
+//
+// EntitlementCheckService.assertEntitledForCaller resolves the
+// caller's org via getOrgEntityId, loads this row, and decides
+// per ADR-0093 §5 + §10. Memory-safety baseline features per the
+// §10 always-allow list bypass this row entirely. Returns 403
+// ENTITLEMENT_INSUFFICIENT and emits ENTITLEMENT_CHECK_DENIED
+// audit event on denial per ADR-0042 §Q-γ.1 clean-transition.
+model Entitlement {
+  org_entity_id          String   @id @db.Uuid
+  plan_archetype_id      String
+  feature_entitlements   Json     @default("{}")
+  capability_packs       String[] @default([])
+  catalog_version        String   @default("1.0.0")
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  @@map("entitlements")
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {

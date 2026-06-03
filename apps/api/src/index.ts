@@ -977,6 +977,18 @@ export {
   promoteProposedActionForCaller,
   validatePromoteBody,
 } from "./services/proposed-action/proposed-action-promotion.service.js";
+
+// Section 8 Billing Completion B5-α per ADR-0093 §5 Candidate A.
+export {
+  ALWAYS_ALLOW_BASE_TIER_FEATURES,
+  assertEntitledForCaller,
+  evaluateEntitlement,
+  setEntitlementLoaderForTests,
+} from "./services/billing/entitlement-check.service.js";
+export type {
+  EntitlementCheckResult,
+  EntitlementRowShape,
+} from "./services/billing/entitlement-check.service.js";
 export type {
   PromoteProposedActionInput,
   PromoteProposedActionOptions,
