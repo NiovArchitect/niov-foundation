@@ -305,7 +305,23 @@ export type AuditEventType =
   // raw transcript, raw audio_ref, PII beyond entity_id,
   // secret material, vendor token, capsule payload. The audit
   // envelope carries metadata only.
-  | "CONVERSATION_MEMORY_SCOPE_DECLARED";
+  | "CONVERSATION_MEMORY_SCOPE_DECLARED"
+  // DMW Runtime DM3-A per ADR-0092 §4 Candidate C (AI
+  // Teammate Delegation Frame) + ADR-0042 §Q-γ.1 clean-
+  // transition discipline. 1 NEW append-only literal.
+  // Emitted by DMWTeamDelegationService on every
+  // TeamDelegation state transition (create + revoke +
+  // future expire when scheduler lands). Audit details
+  // schema (SAFE): delegation_id + delegator_entity_id +
+  // team_entity_id + capability_scope[] (closed-vocab
+  // VOICE-tier capabilities) + supervision_required +
+  // valid_from + valid_until + status (closed-vocab
+  // TeamDelegationStatus enum) + revoked_at + revoked_by.
+  // FORBIDDEN: raw capsule content, raw secret material,
+  // free-text reason for delegation beyond closed-vocab
+  // capability codes, PII beyond entity_id, swarm member
+  // identities. The audit envelope carries metadata only.
+  | "TEAM_DELEGATION_CREATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -419,6 +435,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONSENT_GRANT_RECORDED",
   // DMW Runtime DM2-A per ADR-0092 §4 Candidate B.
   "CONVERSATION_MEMORY_SCOPE_DECLARED",
+  // DMW Runtime DM3-A per ADR-0092 §4 Candidate C.
+  "TEAM_DELEGATION_CREATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

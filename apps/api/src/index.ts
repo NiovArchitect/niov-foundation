@@ -855,6 +855,24 @@ export type {
   RecordVoiceAccessResult,
   VoiceAccessLogSummary,
 } from "./services/dmw/voice-access-log.service.js";
+
+// ADR-0092 §4 Candidate C DM3-A TeamDelegation — AI Teammate
+// Delegation Frame; SwarmBoundary forward-substrate.
+export {
+  TEAM_DELEGATION_ALLOWED_CAPABILITIES,
+  TEAM_DELEGATION_FORBIDDEN_CAPABILITIES,
+  createTeamDelegationForCaller,
+  getTeamDelegationById,
+  revokeTeamDelegationForCaller,
+} from "./services/dmw/team-delegation.service.js";
+export type {
+  CreateTeamDelegationInput,
+  CreateTeamDelegationResult,
+  RevokeTeamDelegationInput,
+  RevokeTeamDelegationResult,
+  TeamDelegationCapability,
+  TeamDelegationSummary,
+} from "./services/dmw/team-delegation.service.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";

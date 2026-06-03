@@ -1136,6 +1136,51 @@ model VoiceAccessLog {
   @@map("voice_access_logs")
 }
 
+// DMW Runtime DM3-A per ADR-0092 §4 Candidate C (AI Teammate
+// Delegation Frame). Formalizes the multi-AI-agent team
+// delegation contract — distinct from ADR-0046 dual-context
+// AI_AGENT routing. A delegator (PERSON / COMPANY) authorizes a
+// team (an AI_AGENT entity acting as a Hive coordinator) to
+// operate within a closed-vocab capability_scope[] for a bounded
+// validity window.
+//
+// supervision_required (default true) — when true, downstream
+// W5 promotion of any proposed action originating from a team
+// member MUST surface a human-in-the-loop confirmation per
+// ADR-0046 §C confused-deputy guard. supervision_required=false
+// is forward-substrate to a future per-delegation Founder
+// authorization (e.g., low-risk repetitive workflows).
+//
+// SwarmBoundary model is deferred to a follow-up DMW DM3-B
+// slice; V1 covers the delegation-creation register only.
+model TeamDelegation {
+  delegation_id         String                 @id @default(uuid()) @db.Uuid
+  delegator_entity_id   String                 @db.Uuid
+  team_entity_id        String                 @db.Uuid
+  capability_scope      String[]               @default([])
+  supervision_required  Boolean                @default(true)
+  revocation_bridge_id  String?                @db.Uuid
+  valid_from            DateTime               @default(now())
+  valid_until           DateTime?
+  status                TeamDelegationStatus   @default(ACTIVE)
+  revoked_at            DateTime?
+  revoked_by            String?                @db.Uuid
+  created_at            DateTime               @default(now())
+  updated_at            DateTime               @updatedAt
+
+  @@index([delegator_entity_id])
+  @@index([team_entity_id])
+  @@index([status])
+  @@index([valid_until])
+  @@map("team_delegations")
+}
+
+enum TeamDelegationStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {
