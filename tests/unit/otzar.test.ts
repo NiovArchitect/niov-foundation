@@ -512,6 +512,39 @@ describe("conductSession", () => {
     },
   );
 
+  // Phase EDX-3 slice 4: deterministic-false "denial of preconditions"
+  // envelope. ConductSession does not yet detect any of these six
+  // conditions, so the booleans are emitted as false. Future slices
+  // wire detection logic that flips them and introduce the closed-
+  // vocab companion fields.
+  it(
+    "[EDX-3] denial envelope booleans are all false on happy path",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "what should I do today?",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.clarification_needed).toBe(false);
+      expect(result.action_proposed).toBe(false);
+      expect(result.approval_required).toBe(false);
+      expect(result.policy_blocked).toBe(false);
+      expect(result.dmw_scope_blocked).toBe(false);
+      expect(result.collaboration_suggested).toBe(false);
+      // next_step stays "ANSWERED" because none of the denial-envelope
+      // conditions are detected at this slice.
+      expect(result.next_step).toBe("ANSWERED");
+    },
+  );
+
   // ADR-0051 Wave 1: conductSession surfaces the additive transparency
   // contract built from the governed COE metadata. Backward-compatible
   // fields stay intact; transparency is a read-only projection.
