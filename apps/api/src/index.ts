@@ -770,6 +770,28 @@ export {
 // internal delegate with a real CSM-1B HTTP client. mode is
 // downgraded to "fixture" until VS5 lands.
 export { SelfHostedCsm1bVoiceProvider } from "./services/voice/self-hosted-csm-1b.provider.js";
+
+// ADR-0090 §10 PY4 TypeScript client wrapper seat. The
+// PythonIntelligenceClient wraps a PythonTransport; the default
+// transport is FixturePythonTransport (deterministic outputs per
+// purpose). PY3 will replace the default with a real HTTP client
+// over the boundary spec'd at PY2.
+export {
+  FixturePythonTransport,
+  PYTHON_PURPOSE_VALUES,
+  PythonIntelligenceClient,
+  validateEnvelope,
+  validateNoLeakAssertions,
+} from "./services/python/python-client.js";
+export type {
+  NoLeakAssertions,
+  PythonComputationEnvelope,
+  PythonComputationResult,
+  PythonPurpose,
+  PythonRetentionClass,
+  PythonScopeEnvelope,
+  PythonTransport,
+} from "./services/python/python-client.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";
