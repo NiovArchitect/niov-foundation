@@ -54,7 +54,15 @@ export const ALWAYS_ALLOW_BASE_TIER_FEATURES: ReadonlySet<string> = new Set([
 ]);
 
 export type EntitlementCheckResult =
-  | { ok: true; entitled: true; reason: "ALWAYS_ALLOW_BASE_TIER" | "FEATURE_ENTITLED" | "CAPABILITY_PACK_OWNED" }
+  | {
+      ok: true;
+      entitled: true;
+      reason:
+        | "ALWAYS_ALLOW_BASE_TIER"
+        | "FEATURE_ENTITLED"
+        | "CAPABILITY_PACK_OWNED"
+        | "NO_ENTITLEMENT_ROW_BACKWARD_COMPAT";
+    }
   | {
       ok: false;
       code: "ENTITLEMENT_INSUFFICIENT";
@@ -219,6 +227,57 @@ export async function assertEntitledForCaller(
       event_type: "ENTITLEMENT_CHECK_DENIED",
       outcome: "DENIED",
       actor_entity_id: callerEntityId,
+      target_entity_id: org_entity_id,
+      details: {
+        org_entity_id,
+        feature_id: result.feature_id,
+        plan_archetype_id: row?.plan_archetype_id ?? null,
+        reason_code: result.reason_code,
+      },
+    });
+  }
+  return result;
+}
+
+// WHAT: Soft-gate entitlement check for consumer surfaces wiring
+//        the Entitlement system into pre-existing flows where some
+//        orgs may pre-date Entitlement row creation.
+// INPUT: Pre-resolved org_entity_id (caller's route already
+//        resolved it) + actor_entity_id (audit attribution) +
+//        feature_id (B2 catalog vocab).
+// OUTPUT: EntitlementCheckResult — with NEW reason
+//         "NO_ENTITLEMENT_ROW_BACKWARD_COMPAT" for the no-row case
+//         instead of the hard deny.
+// WHY: A hard rollout of EntitlementCheck at every consumer would
+//      deny every pre-billing org. Soft-gate lets the substrate be
+//      wired without breaking existing flows: no row → allow with
+//      explicit backward-compat reason; row exists → normal
+//      evaluation. When a denial occurs, ENTITLEMENT_CHECK_DENIED
+//      audit fires (RULE 4); backward-compat allows do NOT emit
+//      audit because no deny event occurred.
+//      The reason_code on the ok branch is observable downstream
+//      so consumers can record / report backward-compat invocations
+//      separately from genuinely entitled ones.
+export async function assertEntitledForOrgSoftGate(args: {
+  org_entity_id: string;
+  actor_entity_id: string;
+  feature_id: string;
+}): Promise<EntitlementCheckResult> {
+  const { org_entity_id, actor_entity_id, feature_id } = args;
+  const row = await loadEntitlement(org_entity_id);
+  if (row === null && !ALWAYS_ALLOW_BASE_TIER_FEATURES.has(feature_id)) {
+    return {
+      ok: true,
+      entitled: true,
+      reason: "NO_ENTITLEMENT_ROW_BACKWARD_COMPAT",
+    };
+  }
+  const result = evaluateEntitlement(feature_id, row, org_entity_id);
+  if (result.ok === false) {
+    await writeAuditEvent({
+      event_type: "ENTITLEMENT_CHECK_DENIED",
+      outcome: "DENIED",
+      actor_entity_id,
       target_entity_id: org_entity_id,
       details: {
         org_entity_id,

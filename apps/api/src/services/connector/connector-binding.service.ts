@@ -33,6 +33,7 @@ import {
 } from "@niov/database";
 import { getConnectorTypeDefinition } from "./connector.service.js";
 import type { ConnectorType } from "./connector.service.js";
+import { assertEntitledForOrgSoftGate } from "../billing/entitlement-check.service.js";
 
 const DISPLAY_NAME_MAX = 80;
 const SECRET_REF_MAX = 120;
@@ -101,9 +102,15 @@ export type ConnectorBindingFailure = {
     | "SECRET_REF_INVALID"
     | "BINDING_NOT_FOUND"
     | "DUPLICATE_DISPLAY_NAME"
+    | "ENTITLEMENT_INSUFFICIENT"
     | "INTERNAL_ERROR";
   message?: string;
   invalid_fields?: string[];
+  reason_code?:
+    | "NO_ENTITLEMENT_ROW"
+    | "FEATURE_NOT_ENTITLED"
+    | "CAPABILITY_PACK_NOT_OWNED";
+  feature_id?: string;
 };
 
 // WHAT: Input for registering a new ConnectorBinding via the admin
@@ -202,6 +209,26 @@ export async function registerConnectorBindingForOrg(args: {
       ok: false,
       code: "SECRET_REF_INVALID",
       message: "secret_ref exceeds 120 chars",
+    };
+  }
+
+  // Section 8 B5-α Entitlement gate per ADR-0093 §5 Candidate A.
+  // Soft-gate so orgs that pre-date the Entitlement system still
+  // succeed; orgs with an Entitlement row must own the capability
+  // pack `connector_activation:<TYPE>` (or have the feature
+  // entitled as true) to register a binding for that connector type.
+  const entitlement = await assertEntitledForOrgSoftGate({
+    org_entity_id: args.org_entity_id,
+    actor_entity_id: args.actor_entity_id,
+    feature_id: `connector_activation:${def.type}`,
+  });
+  if (entitlement.ok === false) {
+    return {
+      ok: false,
+      code: "ENTITLEMENT_INSUFFICIENT",
+      reason_code: entitlement.reason_code,
+      feature_id: entitlement.feature_id,
+      message: `org is not entitled to activate the ${def.type} connector`,
     };
   }
 

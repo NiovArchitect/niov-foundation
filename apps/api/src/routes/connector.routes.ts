@@ -65,6 +65,8 @@ function statusFor(failure: ConnectorBindingFailure): number {
     case "SECRET_REF_REQUIRED":
     case "SECRET_REF_INVALID":
       return 422;
+    case "ENTITLEMENT_INSUFFICIENT":
+      return 403;
     case "BINDING_NOT_FOUND":
       return 404;
     case "DUPLICATE_DISPLAY_NAME":
@@ -114,6 +116,12 @@ export async function registerConnectorRoutes(
         ...(result.message !== undefined ? { message: result.message } : {}),
         ...(result.invalid_fields !== undefined
           ? { invalid_fields: result.invalid_fields }
+          : {}),
+        ...(result.reason_code !== undefined
+          ? { reason_code: result.reason_code }
+          : {}),
+        ...(result.feature_id !== undefined
+          ? { feature_id: result.feature_id }
           : {}),
       });
     },
