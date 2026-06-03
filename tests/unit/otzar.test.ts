@@ -477,6 +477,41 @@ describe("conductSession", () => {
     },
   );
 
+  // Phase EDX-3 slice 3: `speech_ready_text` is the response sanitized
+  // for TTS / device speech; `voice_output_supported` mirrors the
+  // EDX-1 voice_readiness_state.live_audio_output (false at the
+  // Foundation tier today per ADR-0085 + ADR-0089).
+  it(
+    "[EDX-3] speech_ready_text + voice_output_supported are present " +
+      "on happy path (false at the Foundation tier)",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "what should I do today?",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // Fields are present and shape-correct.
+      expect(typeof result.speech_ready_text).toBe("string");
+      expect(result.voice_output_supported).toBe(false);
+      // Sanitization is non-destructive — at minimum the sanitized
+      // text is non-empty whenever the LLM response is non-empty.
+      if (result.response.length > 0) {
+        expect(result.speech_ready_text.length).toBeGreaterThan(0);
+      }
+      // Backward-compatible fields preserved across all 3 slices.
+      expect(result.next_step).toBe("ANSWERED");
+      expect(result.correction_capture_available).toBe(true);
+    },
+  );
+
   // ADR-0051 Wave 1: conductSession surfaces the additive transparency
   // contract built from the governed COE metadata. Backward-compatible
   // fields stay intact; transparency is a read-only projection.

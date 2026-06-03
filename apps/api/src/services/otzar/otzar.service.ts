@@ -89,6 +89,10 @@ import {
   computeVoiceReadinessState,
   type TwinVoiceReadinessState,
 } from "./twin-voice-readiness.js";
+import {
+  computeVoiceOutputSupported,
+  toSpeechReadyText,
+} from "./speech-ready.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -178,6 +182,16 @@ export type ConductNextStep =
 // a `read`-capable bearer session (the same session that conducted
 // the chat). Lets the UI render the "correct this" affordance without
 // guessing whether the substrate is ready.
+//
+// Phase EDX-3 slice 3: `speech_ready_text` is the response sanitized
+// for TTS / device speech (Markdown / code blocks / links / headers
+// stripped). `voice_output_supported` mirrors the EDX-1
+// voice_readiness_state.live_audio_output — false at the Foundation
+// tier today per ADR-0085 + ADR-0089 (live audio synthesis remains
+// forward-substrate Founder-gated). Lets the UI hide / disable a
+// "speak aloud" affordance that would otherwise produce no audio
+// while still letting downstream consumers (e.g. a future client-side
+// device TTS) reuse the speech-ready projection of the response.
 export interface ConductSessionSuccess {
   ok: true;
   response: string;
@@ -188,6 +202,8 @@ export interface ConductSessionSuccess {
   context_provenance?: ContextProvenanceItem[];
   next_step: ConductNextStep;
   correction_capture_available: boolean;
+  speech_ready_text: string;
+  voice_output_supported: boolean;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -960,6 +976,19 @@ export class OtzarService {
     // without guessing.
     const correctionCaptureAvailable = true;
 
+    // Phase EDX-3 slice 3: speech-ready projection of the response
+    // text + voice-output-supported signal. `toSpeechReadyText` is a
+    // pure markdown / code / link stripper that produces text safe
+    // to hand to a downstream TTS or client-side device speech
+    // engine. `computeVoiceOutputSupported` mirrors the EDX-1
+    // voice_readiness_state.live_audio_output value (false at the
+    // Foundation tier today per ADR-0085 + ADR-0089) so the UI can
+    // hide / disable a "speak aloud" affordance that would produce
+    // no audio while still letting the speech-ready text reach
+    // future audio consumers.
+    const speechReadyText = toSpeechReadyText(llmResult.text);
+    const voiceOutputSupported = computeVoiceOutputSupported();
+
     return {
       ok: true,
       response: llmResult.text,
@@ -970,6 +999,8 @@ export class OtzarService {
       context_provenance,
       next_step: nextStep,
       correction_capture_available: correctionCaptureAvailable,
+      speech_ready_text: speechReadyText,
+      voice_output_supported: voiceOutputSupported,
     };
   }
 
