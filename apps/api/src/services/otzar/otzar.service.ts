@@ -69,6 +69,10 @@ import {
   assembleProactiveCards,
   type ProactiveCardView,
 } from "./proactivity.service.js";
+import {
+  computePendingApprovalsSummaryForCaller,
+  type TwinPendingApprovalsSummary,
+} from "./twin-pending-approvals.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -329,6 +333,18 @@ export interface MyTwinView {
   // by-construction via session.entity_id; per-source read
   // failures swallowed silently per ADR-0068 §6.
   proactive_cards?: readonly ProactiveCardView[];
+  // Phase EDX-1 employee Twin self-state extension per the
+  // [FOUNDER-AUTH — EVERYDAY EMPLOYEE DOMAIN GENERAL
+  // INTELLIGENCE EXPERIENCE] directive. SAFE projection of the
+  // caller's pending approval inbox count + most-recent
+  // timestamp from EscalationRequest substrate where the caller
+  // is the *approver* (target_entity_id). NEVER includes
+  // escalation_id / description / severity / source_entity_id /
+  // capsule_id / resolution_metadata / raw EscalationType values.
+  // Per-source read failures swallowed silently per the same
+  // ADR-0068 §6 pattern the proactive_cards sidecar uses, so a
+  // transient miss never breaks the My Twin read.
+  pending_approvals_summary?: TwinPendingApprovalsSummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1269,6 +1285,21 @@ export class OtzarService {
       }
     }
 
+    // Phase EDX-1 employee Twin self-state extension —
+    // pending_approvals_summary sidecar. Self-scoped via
+    // primary.entity_id as the approver-side target. Per-source
+    // read miss swallowed silently per the same ADR-0068 §6
+    // pattern proactive_cards uses, so a transient DB miss
+    // never breaks the My Twin read.
+    let pendingApprovalsSummary: TwinPendingApprovalsSummary | undefined;
+    try {
+      pendingApprovalsSummary = await computePendingApprovalsSummaryForCaller(
+        primary.entity_id,
+      );
+    } catch {
+      pendingApprovalsSummary = undefined;
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -1288,6 +1319,9 @@ export class OtzarService {
         : {}),
       ...(proactiveCards !== undefined
         ? { proactive_cards: proactiveCards }
+        : {}),
+      ...(pendingApprovalsSummary !== undefined
+        ? { pending_approvals_summary: pendingApprovalsSummary }
         : {}),
     };
 
