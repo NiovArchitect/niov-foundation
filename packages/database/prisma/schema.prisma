@@ -1066,6 +1066,41 @@ model Receipt {
   @@map("receipts")
 }
 
+// DMW Runtime DM2-A per ADR-0092 §4 Candidate B (Scoped Voice
+// Memory Gate). The per-conversation memory scope declaration
+// that binds what capsule classes a voice (or other governed
+// session) flow may read from. Closes the "DMW scope integration"
+// gap from the Founder's voice-runtime authorized list per
+// ADR-0085 §5 + ADR-0089 §5.
+//
+// One ConversationMemoryScope per (conversation_id, entity_id);
+// the composite primary key ensures at-most-one scope per
+// (conversation, entity) tuple. The same conversation may have
+// scopes declared for multiple entities (e.g. multiple twin
+// participants).
+//
+// VoiceAccessLog model (Founder direction "Authorized first
+// runtime path: ... DMW scope integration ...") is deferred to
+// a follow-up DMW DM2-B slice; V1 covers the scope-declaration
+// register only.
+model ConversationMemoryScope {
+  conversation_id      String      @db.Uuid
+  entity_id            String      @db.Uuid
+  access_scope         AccessScope @default(METADATA_ONLY)
+  capsule_types        String[]    @default([])
+  context_signals_only Boolean     @default(true)
+  expires_at           DateTime?
+  declared_by          String      @db.Uuid
+  created_at           DateTime    @default(now())
+  updated_at           DateTime    @updatedAt
+
+  @@id([conversation_id, entity_id])
+  @@index([conversation_id])
+  @@index([entity_id])
+  @@index([expires_at])
+  @@map("conversation_memory_scopes")
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {
