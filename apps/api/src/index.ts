@@ -809,6 +809,22 @@ export type {
   RevokeConsentGrantInput,
   RevokeConsentGrantResult,
 } from "./services/dmw/consent-grant.service.js";
+
+// ADR-0092 §4 Candidate A DM1-B Receipt substrate — closes the
+// Consent + Receipt pair. SHA-256 fingerprint over the canonical
+// record per ADR-0019 + ADR-0033 byte-equivalence pattern.
+export {
+  buildReceiptCanonicalRecord,
+  computeReceiptHash,
+  getReceiptById,
+  issueReceiptForConsent,
+  verifyReceiptHash,
+} from "./services/dmw/receipt.service.js";
+export type {
+  IssueReceiptInput,
+  IssueReceiptResult,
+  ReceiptSummary,
+} from "./services/dmw/receipt.service.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";
