@@ -228,6 +228,64 @@ export type ApprovalBacklogLabel = (typeof APPROVAL_BACKLOG_LABELS)[number];
 const APPROVAL_BACKLOG_HIGH_THRESHOLD = 0.5;
 const APPROVAL_BACKLOG_MODERATE_THRESHOLD = 0.2;
 
+// WHAT: Closed-vocab labels for the ENTERPRISE_TWIN_STATE
+//        aggregate. The first Enterprise Twin Runtime read-only
+//        state projection per Founder direction "Authorized
+//        first step after BEAM/DMW groundwork: read-only
+//        Enterprise Twin state projection."
+// INPUT: Used as a value array + TS literal-union type.
+// OUTPUT: None.
+// WHY: SAFE projection per ADR-0061 §1.a. Surfaces an org's
+//      coordination posture as a single closed-vocab label
+//      derived from the membership scale + active governance
+//      substrate volume (Hives + Entitlement + ConsentGrants +
+//      TeamDelegations + ConnectorBindings + pending
+//      escalations). Never surfaces per-actor attribution.
+export const ENTERPRISE_TWIN_POSTURE_LABELS = [
+  "HEAVY_ACTIVITY",
+  "MODERATE_ACTIVITY",
+  "LIGHT_ACTIVITY",
+  "DORMANT",
+  "INSUFFICIENT_POPULATION",
+] as const;
+
+export type EnterpriseTwinPostureLabel =
+  (typeof ENTERPRISE_TWIN_POSTURE_LABELS)[number];
+
+// Activity-density thresholds — count of "active substrate
+// objects" (hives + entitlements + consents + delegations +
+// connectors + pending escalations) per member.
+const ENTERPRISE_TWIN_HEAVY_THRESHOLD = 1.5;
+const ENTERPRISE_TWIN_MODERATE_THRESHOLD = 0.5;
+const ENTERPRISE_TWIN_LIGHT_THRESHOLD = 0.05;
+
+// WHAT: SAFE projection envelope for the ENTERPRISE_TWIN_STATE
+//        aggregate. Read-only state-at-a-glance projection.
+// INPUT: Used as a return type only.
+// OUTPUT: None.
+// WHY: Closed-vocab fields only per ADR-0061 §1.a. NEVER
+//      includes entity_id lists, raw governance contents,
+//      member names, capsule contents, secret material, or any
+//      per-actor attribution. Only org-level aggregate counts
+//      and a derived posture label surface.
+export interface EnterpriseTwinStateAggregate {
+  ok: true;
+  aggregate: "ENTERPRISE_TWIN_STATE";
+  org_entity_id: string;
+  member_count: number;
+  redacted: boolean;
+  ai_agent_count: number | null;
+  active_hive_count: number | null;
+  has_entitlement: boolean | null;
+  active_consent_grant_count: number | null;
+  active_team_delegation_count: number | null;
+  active_connector_binding_count: number | null;
+  pending_escalation_count: number | null;
+  activity_density: number | null;
+  posture_label: EnterpriseTwinPostureLabel;
+  honest_note: string;
+}
+
 // WHAT: SAFE projection envelope for the approval-backlog
 //        aggregate per ADR-0087 §3.
 // INPUT: Used as a return type only.
@@ -1637,6 +1695,182 @@ export class AnalyticsService {
         "Same-org EscalationRequest pending-rate over the window. " +
         "Signal label is operational only — not an employee score, " +
         "not a manager dashboard, not a productivity index.",
+    };
+  }
+
+  // WHAT: Compute the ENTERPRISE_TWIN_STATE aggregate per the
+  //        first Enterprise Twin Runtime read-only state
+  //        projection (Founder direction "Authorized first step
+  //        after BEAM/DMW groundwork: read-only Enterprise Twin
+  //        state projection").
+  // INPUT: Pre-resolved org_entity_id + actor_entity_id +
+  //         ip_address.
+  // OUTPUT: EnterpriseTwinStateAggregate | AnalyticsFailure.
+  // WHY: Step-by-step:
+  //   1. Resolve same-org member entity_ids via EntityMembership.
+  //   2. k=5 gate (member_count < 5 → SAFE redacted projection
+  //      with posture_label = INSUFFICIENT_POPULATION).
+  //   3. Count AI_AGENT-type children among org members.
+  //   4. Count ACTIVE same-org Hives.
+  //   5. Lookup the Entitlement row (existence boolean only;
+  //      NEVER surfaces plan_archetype_id / feature_entitlements).
+  //   6. Count ACTIVE same-org ConsentGrants (consent_state IN
+  //      [REQUESTED, APPROVED]; grantor in member set).
+  //   7. Count ACTIVE same-org TeamDelegations (status = ACTIVE;
+  //      delegator in member set).
+  //   8. Count ACTIVE same-org ConnectorBindings (enabled = true;
+  //      org_entity_id match).
+  //   9. Count PENDING same-org EscalationRequests (status =
+  //      PENDING; source in member set).
+  //  10. Compute activity_density = sum(counts) / member_count.
+  //  11. Map density to closed-vocab posture_label.
+  //  12. Emit ADMIN_ACTION + details.action="ANALYTICS_READ"
+  //      audit with aggregate=ENTERPRISE_TWIN_STATE.
+  //  13. Return SAFE projection envelope.
+  async getEnterpriseTwinStateForOrg(args: {
+    org_entity_id: string;
+    actor_entity_id: string;
+    ip_address?: string | null;
+  }): Promise<EnterpriseTwinStateAggregate | AnalyticsFailure> {
+    // Step 1 + 2 — resolve membership + k=5 gate.
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberEntityIds = memberships.map((m) => m.child_id);
+    const memberCount = memberEntityIds.length;
+    if (memberCount < ANALYTICS_MIN_POPULATION) {
+      await this.emitAnalyticsReadAudit({
+        actor_entity_id: args.actor_entity_id,
+        org_entity_id: args.org_entity_id,
+        aggregate: "ENTERPRISE_TWIN_STATE",
+        redacted: true,
+        result_count: 0,
+        filter_keys: [],
+        ip_address: args.ip_address ?? null,
+      });
+      return {
+        ok: true,
+        aggregate: "ENTERPRISE_TWIN_STATE",
+        org_entity_id: args.org_entity_id,
+        member_count: memberCount,
+        redacted: true,
+        ai_agent_count: null,
+        active_hive_count: null,
+        has_entitlement: null,
+        active_consent_grant_count: null,
+        active_team_delegation_count: null,
+        active_connector_binding_count: null,
+        pending_escalation_count: null,
+        activity_density: null,
+        posture_label: "INSUFFICIENT_POPULATION",
+        honest_note: HONEST_NOTE_BELOW_THRESHOLD,
+      };
+    }
+
+    // Step 3 — AI_AGENT count among org members.
+    const aiAgentCount = await prisma.entity.count({
+      where: {
+        entity_id: { in: memberEntityIds },
+        entity_type: "AI_AGENT",
+      },
+    });
+
+    // Step 4 — active same-org Hives.
+    const activeHiveCount = await prisma.hive.count({
+      where: { org_entity_id: args.org_entity_id, status: "ACTIVE" },
+    });
+
+    // Step 5 — existence of Entitlement row (boolean only).
+    const entitlement = await prisma.entitlement.findUnique({
+      where: { org_entity_id: args.org_entity_id },
+      select: { org_entity_id: true },
+    });
+    const hasEntitlement = entitlement !== null;
+
+    // Step 6 — active ConsentGrants where grantor is org member.
+    const activeConsentCount = await prisma.consentGrant.count({
+      where: {
+        grantor_entity_id: { in: memberEntityIds },
+        consent_state: { in: ["REQUESTED", "APPROVED"] },
+      },
+    });
+
+    // Step 7 — active TeamDelegations where delegator is org member.
+    const activeDelegationCount = await prisma.teamDelegation.count({
+      where: {
+        delegator_entity_id: { in: memberEntityIds },
+        status: "ACTIVE",
+      },
+    });
+
+    // Step 8 — enabled ConnectorBindings for the org.
+    const activeBindingCount = await prisma.connectorBinding.count({
+      where: { org_entity_id: args.org_entity_id, enabled: true },
+    });
+
+    // Step 9 — pending EscalationRequests where source is org member.
+    const pendingEscalationCount = await prisma.escalationRequest.count({
+      where: {
+        source_entity_id: { in: memberEntityIds },
+        status: "PENDING",
+      },
+    });
+
+    // Step 10 — activity density.
+    const activityTotal =
+      activeHiveCount +
+      activeConsentCount +
+      activeDelegationCount +
+      activeBindingCount +
+      pendingEscalationCount;
+    const activityDensity = activityTotal / memberCount;
+
+    // Step 11 — closed-vocab posture mapping.
+    let postureLabel: EnterpriseTwinPostureLabel;
+    if (activityDensity >= ENTERPRISE_TWIN_HEAVY_THRESHOLD) {
+      postureLabel = "HEAVY_ACTIVITY";
+    } else if (activityDensity >= ENTERPRISE_TWIN_MODERATE_THRESHOLD) {
+      postureLabel = "MODERATE_ACTIVITY";
+    } else if (activityDensity >= ENTERPRISE_TWIN_LIGHT_THRESHOLD) {
+      postureLabel = "LIGHT_ACTIVITY";
+    } else {
+      postureLabel = "DORMANT";
+    }
+
+    // Step 12 — audit emission.
+    await this.emitAnalyticsReadAudit({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      aggregate: "ENTERPRISE_TWIN_STATE",
+      redacted: false,
+      result_count: activityTotal,
+      filter_keys: [],
+      ip_address: args.ip_address ?? null,
+    });
+
+    // Step 13 — SAFE return.
+    return {
+      ok: true,
+      aggregate: "ENTERPRISE_TWIN_STATE",
+      org_entity_id: args.org_entity_id,
+      member_count: memberCount,
+      redacted: false,
+      ai_agent_count: aiAgentCount,
+      active_hive_count: activeHiveCount,
+      has_entitlement: hasEntitlement,
+      active_consent_grant_count: activeConsentCount,
+      active_team_delegation_count: activeDelegationCount,
+      active_connector_binding_count: activeBindingCount,
+      pending_escalation_count: pendingEscalationCount,
+      activity_density: Number(activityDensity.toFixed(4)),
+      posture_label: postureLabel,
+      honest_note:
+        "Org-level coordination posture derived from member + " +
+        "hive + entitlement + consent + delegation + connector + " +
+        "pending-escalation counts. Posture label is operational " +
+        "only — not an employee score, not a manager dashboard, " +
+        "not a productivity index.",
     };
   }
 

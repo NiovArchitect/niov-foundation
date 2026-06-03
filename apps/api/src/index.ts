@@ -281,6 +281,8 @@ export {
   HIVE_PARTICIPATION_LABELS,
   // ADR-0087 Hive Intelligence Runtime — V1 APPROVAL_BACKLOG signal.
   APPROVAL_BACKLOG_LABELS,
+  // Enterprise Twin Runtime — V1 ENTERPRISE_TWIN_STATE projection.
+  ENTERPRISE_TWIN_POSTURE_LABELS,
 } from "./services/analytics/analytics.service.js";
 export type {
   AnalyticsFailureCode,
@@ -296,6 +298,9 @@ export type {
   // ADR-0087 Hive Intelligence Runtime — V1 APPROVAL_BACKLOG signal.
   ApprovalBacklogAggregate,
   ApprovalBacklogLabel,
+  // Enterprise Twin Runtime — V1 ENTERPRISE_TWIN_STATE projection.
+  EnterpriseTwinPostureLabel,
+  EnterpriseTwinStateAggregate,
 } from "./services/analytics/analytics.service.js";
 
 // Section 5 Wave 2 ADR-0060 — Agent Playground v1 barrel exports.
