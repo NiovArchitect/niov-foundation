@@ -378,6 +378,27 @@ export async function registerAuditRoutes(
         validation.normalized,
       );
       if (result.ok === true) {
+        // B6-α telemetry counter — record the regulator audit-view
+        // event volume (per-page event count) against the caller's
+        // org meter. Telemetry isolation per ADR-0093 §5 Candidate C
+        // — failure MUST NOT affect the regulator response.
+        // `meter.regulator-audit-views.v1` matches the B2 catalog
+        // vocabulary `meter.<name>.v<n>`. Closes the Founder-named
+        // "regulator evidence packages" billing-tier target.
+        try {
+          const orgEntityId = await getOrgEntityId(callerId);
+          const eventCount = result.view.events.length;
+          if (Number.isInteger(eventCount) && eventCount > 0) {
+            await recordUsageForOrg(
+              orgEntityId,
+              "meter.regulator-audit-views.v1",
+              eventCount,
+            );
+          }
+        } catch {
+          // intentionally swallowed; telemetry must not affect the
+          // regulator response.
+        }
         return reply.code(result.httpStatus).send({
           ok: true,
           ...result.view,
