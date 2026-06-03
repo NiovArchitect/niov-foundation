@@ -32,6 +32,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { getOrgEntityId } from "../services/governance/org.js";
+import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
 import {
   VOICE_SOURCE_SURFACES,
   constructEnvelope,
@@ -259,6 +260,24 @@ export async function registerVoiceRoutes(
           ...(transcriptRedactionReason !== undefined ? { transcript_redaction_reason: transcriptRedactionReason } : {}),
           ...(retentionClass !== undefined ? { retention_class: retentionClass } : {}),
         });
+
+        // B6-α telemetry counter — record one voice intent
+        // envelope construction against the tenant org meter
+        // `meter.voice-intents-constructed.v1`. No entitlement
+        // gate — voice_intent_envelope_vf4 is in ADR-0093 §10
+        // always-allow base-tier features. Telemetry isolation
+        // try/catch swallows all failures so the intent response
+        // is never blocked by meter issues.
+        try {
+          await recordUsageForOrg(
+            orgEntityId,
+            "meter.voice-intents-constructed.v1",
+            1,
+          );
+        } catch {
+          // intentionally swallowed; telemetry must not affect
+          // the intent response.
+        }
 
         // SAFE response: explicitly DOES NOT carry transcript_text,
         // transcript_redaction_reason details, or any internal
