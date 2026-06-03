@@ -34,6 +34,11 @@ import {
 import { getConnectorTypeDefinition } from "./connector.service.js";
 import type { ConnectorType } from "./connector.service.js";
 import { assertEntitledForOrgSoftGate } from "../billing/entitlement-check.service.js";
+import { recordUsageForOrg } from "../billing/usage-meter.service.js";
+
+// B6-α usage meter id for Section 4 connector activation events.
+// Catalog vocabulary `meter.<name>.v<n>` per ADR-0093 §5 Candidate C.
+const CONNECTOR_ACTIVATION_METER_ID = "meter.connector-activations.v1";
 
 const DISPLAY_NAME_MAX = 80;
 const SECRET_REF_MAX = 120;
@@ -253,6 +258,21 @@ export async function registerConnectorBindingForOrg(args: {
         display_name: row.display_name,
       },
     });
+    // B6-α telemetry counter — record one connector activation
+    // against the org's running meter. Failure here MUST NOT fail
+    // the binding creation (telemetry tier, not gate tier); the
+    // USAGE_METER_RECORDED audit fires inside recordUsageForOrg
+    // on success.
+    try {
+      await recordUsageForOrg(
+        args.org_entity_id,
+        CONNECTOR_ACTIVATION_METER_ID,
+        1,
+      );
+    } catch {
+      // intentionally swallowed; telemetry must not affect the
+      // binding response.
+    }
     return {
       ok: true,
       view: projectConnectorBinding(row),
