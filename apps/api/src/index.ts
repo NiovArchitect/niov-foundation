@@ -841,6 +841,20 @@ export type {
   DeclareConversationMemoryScopeInput,
   DeclareConversationMemoryScopeResult,
 } from "./services/dmw/voice-memory-scope.service.js";
+
+// ADR-0092 §4 Candidate B DM2-B Voice Access Log — closes the
+// ConversationMemoryScope + VoiceAccessLog pair. Tracking-only
+// at V1; no new audit literal (rides existing VF.2 voice
+// literals).
+export {
+  getConversationVoiceAccessHistory,
+  recordVoiceAccessForConversation,
+} from "./services/dmw/voice-access-log.service.js";
+export type {
+  RecordVoiceAccessInput,
+  RecordVoiceAccessResult,
+  VoiceAccessLogSummary,
+} from "./services/dmw/voice-access-log.service.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";
