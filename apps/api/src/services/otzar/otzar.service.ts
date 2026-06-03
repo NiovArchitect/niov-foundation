@@ -192,6 +192,40 @@ export type ConductNextStep =
 // "speak aloud" affordance that would otherwise produce no audio
 // while still letting downstream consumers (e.g. a future client-side
 // device TTS) reuse the speech-ready projection of the response.
+//
+// Phase EDX-3 slice 4: deterministic-false "denial of preconditions"
+// envelope. Six required booleans naming the conditions that
+// conductSession at this slice does NOT detect:
+//   - `clarification_needed`     — no clarification-detection logic
+//                                   yet (always false).
+//   - `action_proposed`          — no action-proposing logic yet.
+//                                   conductSession answers; it does
+//                                   not propose into the Section 2
+//                                   Action runtime from chat (always
+//                                   false).
+//   - `approval_required`        — no approval-detection logic yet.
+//                                   ConductSession does not create
+//                                   approval-blocked actions from
+//                                   chat (always false).
+//   - `policy_blocked`           — happy-path responses are not
+//                                   policy-blocked. ConductSession
+//                                   does not currently detect policy
+//                                   blocking from chat (always false).
+//   - `dmw_scope_blocked`        — COE handles wallet-scope filtering
+//                                   internally; conductSession does
+//                                   not surface a chat-tier DMW-scope-
+//                                   blocked condition (always false).
+//   - `collaboration_suggested`  — no collaboration substrate yet;
+//                                   the collaboration model itself
+//                                   is forward-substrate per Phase
+//                                   EDX-6 (always false).
+// Future EDX-3 slices add the detection substrate that flips
+// individual booleans true and introduces the closed-vocab companion
+// fields (`approval_reason` / `policy_block_reason` /
+// `collaboration_target_type` / etc.) alongside their detection
+// logic. The structural envelope is locked here so consumers can
+// switch on the booleans without crashing when conditions are not
+// detected.
 export interface ConductSessionSuccess {
   ok: true;
   response: string;
@@ -204,6 +238,12 @@ export interface ConductSessionSuccess {
   correction_capture_available: boolean;
   speech_ready_text: string;
   voice_output_supported: boolean;
+  clarification_needed: boolean;
+  action_proposed: boolean;
+  approval_required: boolean;
+  policy_blocked: boolean;
+  dmw_scope_blocked: boolean;
+  collaboration_suggested: boolean;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -989,6 +1029,22 @@ export class OtzarService {
     const speechReadyText = toSpeechReadyText(llmResult.text);
     const voiceOutputSupported = computeVoiceOutputSupported();
 
+    // Phase EDX-3 slice 4: deterministic-false "denial of preconditions"
+    // envelope. ConductSession at this slice does NOT detect any of
+    // these six conditions — the LLM produces a text answer, no
+    // clarification/action/approval/policy/scope/collaboration
+    // detection logic is wired yet. The booleans are emitted as false
+    // so the UI can switch on them without crashing on missing fields.
+    // Future EDX-3 slices flip individual booleans true and introduce
+    // the closed-vocab companion fields alongside their detection
+    // logic.
+    const clarificationNeeded = false;
+    const actionProposed = false;
+    const approvalRequired = false;
+    const policyBlocked = false;
+    const dmwScopeBlocked = false;
+    const collaborationSuggested = false;
+
     return {
       ok: true,
       response: llmResult.text,
@@ -1001,6 +1057,12 @@ export class OtzarService {
       correction_capture_available: correctionCaptureAvailable,
       speech_ready_text: speechReadyText,
       voice_output_supported: voiceOutputSupported,
+      clarification_needed: clarificationNeeded,
+      action_proposed: actionProposed,
+      approval_required: approvalRequired,
+      policy_blocked: policyBlocked,
+      dmw_scope_blocked: dmwScopeBlocked,
+      collaboration_suggested: collaborationSuggested,
     };
   }
 
