@@ -764,6 +764,12 @@ export {
   LOCAL_MOCK_FIXTURE_TRANSCRIPTS,
   LocalMockVoiceProvider,
 } from "./services/voice/local-mock-voice.provider.js";
+// ADR-0089 §5 + §9 VS5 forward-substrate seat. The
+// SelfHostedCsm1bVoiceProvider adapter seam delegates to
+// LocalMockVoiceProvider at this slice; VS5 will replace the
+// internal delegate with a real CSM-1B HTTP client. mode is
+// downgraded to "fixture" until VS5 lands.
+export { SelfHostedCsm1bVoiceProvider } from "./services/voice/self-hosted-csm-1b.provider.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";
