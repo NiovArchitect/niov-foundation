@@ -133,11 +133,42 @@ export interface ConductSessionInput {
   token_budget?: number;
 }
 
+// WHAT: Closed-vocab next-step label per the
+//       [FOUNDER-AUTH — EVERYDAY EMPLOYEE DOMAIN GENERAL INTELLIGENCE
+//       EXPERIENCE] directive Phase EDX-3 (ConductSession output
+//       expansion). Each value names the next thing the employee /
+//       UI should expect after the response is delivered. Closed-vocab
+//       (no free-form strings) so consumers can switch on the value
+//       without parsing prose.
+//
+// At this slice (slice 1 of the EDX-3 output expansion), conductSession
+// always returns "ANSWERED" — there is no detection logic yet for
+// clarification, action proposing, policy/scope blocking, or
+// collaboration suggesting. Future EDX-3 slices add the detection
+// substrate that flips this value to the other states; the closed-
+// vocab is locked here so consumers can rely on it.
+export type ConductNextStep =
+  | "ANSWERED"
+  | "NEEDS_CLARIFICATION"
+  | "NEEDS_APPROVAL"
+  | "ACTION_PROPOSED"
+  | "ACTION_CREATED"
+  | "BLOCKED_BY_POLICY"
+  | "BLOCKED_BY_SCOPE"
+  | "COLLABORATION_REQUEST_SUGGESTED"
+  | "MEMORY_CORRECTION_AVAILABLE";
+
 // WHAT: Successful conductSession return.
 // ADR-0051 (Wave 1): `transparency` and `context_provenance` are ADDITIVE
 // OPTIONAL fields surfacing the governed context metadata COE already
 // produced. `ok`, `response`, `context_used`, `tokens_consumed`, and
 // `conversation_id` are unchanged (backward-compatible).
+//
+// Phase EDX-3 slice 1 (Founder directive): `next_step` is an ADDITIVE
+// closed-vocab field. Always populated when ok=true. At this slice the
+// value is always "ANSWERED" because conductSession in its current form
+// only answers; future slices wire in the detection logic for the other
+// closed-vocab states without changing this contract.
 export interface ConductSessionSuccess {
   ok: true;
   response: string;
@@ -146,6 +177,7 @@ export interface ConductSessionSuccess {
   conversation_id: string;
   transparency?: ChatTransparency;
   context_provenance?: ContextProvenanceItem[];
+  next_step: ConductNextStep;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -900,6 +932,14 @@ export class OtzarService {
       context_items_used: contextUsed,
     });
 
+    // Phase EDX-3 slice 1: `next_step` is "ANSWERED" at this slice —
+    // conductSession in its current form always answers (no detection
+    // logic yet for clarification, action proposing, policy/scope
+    // blocking, or collaboration suggesting). Future EDX-3 slices add
+    // the detection substrate that flips this value; the closed-vocab
+    // contract is locked here.
+    const nextStep: ConductNextStep = "ANSWERED";
+
     return {
       ok: true,
       response: llmResult.text,
@@ -908,6 +948,7 @@ export class OtzarService {
       conversation_id: conversationId,
       transparency,
       context_provenance,
+      next_step: nextStep,
     };
   }
 

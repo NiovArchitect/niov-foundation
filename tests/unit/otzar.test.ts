@@ -387,6 +387,65 @@ describe("conductSession", () => {
     expect(typeof result.context_used).toBe("number");
   });
 
+  // Phase EDX-3 slice 1 (Founder directive): `next_step` is an
+  // additive closed-vocab field on ConductSessionSuccess. At this
+  // slice conductSession always answers, so the deterministic value
+  // is "ANSWERED". Future slices add detection logic that flips this
+  // value to NEEDS_CLARIFICATION / NEEDS_APPROVAL / ACTION_PROPOSED /
+  // ACTION_CREATED / BLOCKED_BY_POLICY / BLOCKED_BY_SCOPE /
+  // COLLABORATION_REQUEST_SUGGESTED / MEMORY_CORRECTION_AVAILABLE.
+  it("[EDX-3] next_step is ANSWERED on happy path (closed-vocab)", async () => {
+    const { auth, otzar } = makeServices({
+      llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+    });
+    const owner = await loginAs(auth);
+    await attachTwin(owner.entity.entity_id);
+    const result = await otzar.conductSession({
+      token: owner.token,
+      message: "what should I do today?",
+      conversation_history: [],
+      token_budget: 8000,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.next_step).toBe("ANSWERED");
+    // Backward-compatible fields still present.
+    expect(typeof result.response).toBe("string");
+    expect(typeof result.tokens_consumed).toBe("number");
+    expect(typeof result.context_used).toBe("number");
+    expect(result.conversation_id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it(
+    "[EDX-3] next_step is one of the closed-vocab values when ok=true",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "what should I do today?",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect([
+        "ANSWERED",
+        "NEEDS_CLARIFICATION",
+        "NEEDS_APPROVAL",
+        "ACTION_PROPOSED",
+        "ACTION_CREATED",
+        "BLOCKED_BY_POLICY",
+        "BLOCKED_BY_SCOPE",
+        "COLLABORATION_REQUEST_SUGGESTED",
+        "MEMORY_CORRECTION_AVAILABLE",
+      ]).toContain(result.next_step);
+    },
+  );
+
   // ADR-0051 Wave 1: conductSession surfaces the additive transparency
   // contract built from the governed COE metadata. Backward-compatible
   // fields stay intact; transparency is a read-only projection.

@@ -463,6 +463,7 @@ export type {
 export type {
   ConductSessionInput,
   ConductSessionSuccess,
+  ConductNextStep,
   CloseConversationInput,
   CloseConversationSuccess,
   OtzarFailure,
