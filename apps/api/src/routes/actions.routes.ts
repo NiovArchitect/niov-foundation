@@ -36,6 +36,8 @@ import {
   listActionAttemptsForCaller,
   validateListAttemptsQuery,
 } from "../services/action/attempt-list.service.js";
+import { getOrgEntityId } from "../services/governance/org.js";
+import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
 
 // WHAT: Register the POST /api/v1/actions route on the Fastify app.
 // INPUT: A Fastify instance + the shared AuthService.
@@ -73,6 +75,23 @@ export async function registerActionsRoutes(
       const result = await createActionForCaller(callerId, validation.normalized);
       // Step 3 — map result to HTTP response.
       if (result.ok === true) {
+        // B6-α telemetry counter — record one action creation
+        // against the caller's org meter
+        // `meter.actions-created.v1`. Closes the Section 2 Action
+        // create-volume billing-tier surface. Telemetry isolation
+        // try/catch swallows all failures so the action response
+        // is never blocked by meter issues.
+        try {
+          const orgEntityId = await getOrgEntityId(callerId);
+          await recordUsageForOrg(
+            orgEntityId,
+            "meter.actions-created.v1",
+            1,
+          );
+        } catch {
+          // intentionally swallowed; telemetry must not affect
+          // the action response.
+        }
         return reply.code(result.httpStatus).send({
           ok: true,
           action: result.view,
