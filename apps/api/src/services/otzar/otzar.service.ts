@@ -77,6 +77,10 @@ import {
   computeRecentActionSummaryForCaller,
   type TwinRecentActionSummary,
 } from "./twin-recent-actions.js";
+import {
+  computeMemoryScopeSummaryForCaller,
+  type TwinMemoryScopeSummary,
+} from "./twin-memory-scope.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -359,6 +363,14 @@ export interface MyTwinView {
   // details / connector substance. Per-source read failures
   // swallowed silently per the same ADR-0068 §6 pattern.
   recent_action_summary?: TwinRecentActionSummary;
+  // Phase EDX-1 employee Twin self-state extension —
+  // memory_scope_summary sidecar. SAFE projection of the
+  // caller's currently-active ConversationMemoryScope inventory
+  // from DM2-A DMW substrate. NEVER includes conversation_id /
+  // access_scope / capsule_types / context_signals_only /
+  // declared_by / any per-scope substance. Per-source read
+  // failures swallowed silently per ADR-0068 §6.
+  memory_scope_summary?: TwinMemoryScopeSummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1328,6 +1340,19 @@ export class OtzarService {
       recentActionSummary = undefined;
     }
 
+    // Phase EDX-1 employee Twin self-state extension —
+    // memory_scope_summary sidecar. Self-scoped via
+    // primary.entity_id as the scoped entity. Per-source read
+    // miss swallowed silently per ADR-0068 §6.
+    let memoryScopeSummary: TwinMemoryScopeSummary | undefined;
+    try {
+      memoryScopeSummary = await computeMemoryScopeSummaryForCaller(
+        primary.entity_id,
+      );
+    } catch {
+      memoryScopeSummary = undefined;
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -1353,6 +1378,9 @@ export class OtzarService {
         : {}),
       ...(recentActionSummary !== undefined
         ? { recent_action_summary: recentActionSummary }
+        : {}),
+      ...(memoryScopeSummary !== undefined
+        ? { memory_scope_summary: memoryScopeSummary }
         : {}),
     };
 
