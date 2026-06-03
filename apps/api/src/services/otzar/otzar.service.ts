@@ -73,6 +73,10 @@ import {
   computePendingApprovalsSummaryForCaller,
   type TwinPendingApprovalsSummary,
 } from "./twin-pending-approvals.js";
+import {
+  computeRecentActionSummaryForCaller,
+  type TwinRecentActionSummary,
+} from "./twin-recent-actions.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -345,6 +349,16 @@ export interface MyTwinView {
   // ADR-0068 §6 pattern the proactive_cards sidecar uses, so a
   // transient miss never breaks the My Twin read.
   pending_approvals_summary?: TwinPendingApprovalsSummary;
+  // Phase EDX-1 employee Twin self-state extension —
+  // recent_action_summary sidecar. SAFE projection of the
+  // caller's recent action substance volume — bounded window +
+  // count + most-recent timestamp — from the Section 2 Action
+  // substrate where the caller is the source_entity_id. NEVER
+  // includes action_id / action_type / status / payload_redacted
+  // / payload_encrypted / target_entity_id / handler error
+  // details / connector substance. Per-source read failures
+  // swallowed silently per the same ADR-0068 §6 pattern.
+  recent_action_summary?: TwinRecentActionSummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1300,6 +1314,20 @@ export class OtzarService {
       pendingApprovalsSummary = undefined;
     }
 
+    // Phase EDX-1 employee Twin self-state extension —
+    // recent_action_summary sidecar. Self-scoped via
+    // primary.entity_id as the action source. Default 7-day
+    // window. Per-source read miss swallowed silently per
+    // ADR-0068 §6.
+    let recentActionSummary: TwinRecentActionSummary | undefined;
+    try {
+      recentActionSummary = await computeRecentActionSummaryForCaller(
+        primary.entity_id,
+      );
+    } catch {
+      recentActionSummary = undefined;
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -1322,6 +1350,9 @@ export class OtzarService {
         : {}),
       ...(pendingApprovalsSummary !== undefined
         ? { pending_approvals_summary: pendingApprovalsSummary }
+        : {}),
+      ...(recentActionSummary !== undefined
+        ? { recent_action_summary: recentActionSummary }
         : {}),
     };
 
