@@ -169,6 +169,15 @@ export type ConductNextStep =
 // value is always "ANSWERED" because conductSession in its current form
 // only answers; future slices wire in the detection logic for the other
 // closed-vocab states without changing this contract.
+//
+// Phase EDX-3 slice 2: `correction_capture_available` is an ADDITIVE
+// boolean signaling that the caller can submit a correction against
+// the conversation via the LIVE `POST /api/v1/otzar/correction`
+// endpoint (ADR-0055 Wave 2C). Always true at the Foundation tier —
+// the substrate is always available for authenticated employees with
+// a `read`-capable bearer session (the same session that conducted
+// the chat). Lets the UI render the "correct this" affordance without
+// guessing whether the substrate is ready.
 export interface ConductSessionSuccess {
   ok: true;
   response: string;
@@ -178,6 +187,7 @@ export interface ConductSessionSuccess {
   transparency?: ChatTransparency;
   context_provenance?: ContextProvenanceItem[];
   next_step: ConductNextStep;
+  correction_capture_available: boolean;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -940,6 +950,16 @@ export class OtzarService {
     // contract is locked here.
     const nextStep: ConductNextStep = "ANSWERED";
 
+    // Phase EDX-3 slice 2: `correction_capture_available` is always
+    // true at the Foundation tier. The LIVE `POST /api/v1/otzar/
+    // correction` endpoint (ADR-0055 Wave 2C) accepts a correction
+    // from any caller with a `read`-capable bearer session — the
+    // same session that just authenticated this conductSession call.
+    // No per-conversation gating exists; the substrate is uniformly
+    // available, so the UI can render the "correct this" affordance
+    // without guessing.
+    const correctionCaptureAvailable = true;
+
     return {
       ok: true,
       response: llmResult.text,
@@ -949,6 +969,7 @@ export class OtzarService {
       transparency,
       context_provenance,
       next_step: nextStep,
+      correction_capture_available: correctionCaptureAvailable,
     };
   }
 

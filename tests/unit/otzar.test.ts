@@ -446,6 +446,37 @@ describe("conductSession", () => {
     },
   );
 
+  // Phase EDX-3 slice 2: `correction_capture_available` is an additive
+  // boolean on ConductSessionSuccess signaling that the caller can
+  // submit a correction via the LIVE POST /api/v1/otzar/correction
+  // endpoint (ADR-0055 Wave 2C). Always true at the Foundation tier
+  // because the correction substrate is uniformly available to any
+  // `read`-capable session.
+  it(
+    "[EDX-3] correction_capture_available is true on happy path " +
+      "(LIVE ADR-0055 Wave 2C correction endpoint)",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "what should I do today?",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.correction_capture_available).toBe(true);
+      // Backward-compatible fields preserved across slices.
+      expect(result.next_step).toBe("ANSWERED");
+      expect(typeof result.response).toBe("string");
+      expect(result.conversation_id).toMatch(/^[0-9a-f-]{36}$/);
+    },
+  );
+
   // ADR-0051 Wave 1: conductSession surfaces the additive transparency
   // contract built from the governed COE metadata. Backward-compatible
   // fields stay intact; transparency is a read-only projection.
