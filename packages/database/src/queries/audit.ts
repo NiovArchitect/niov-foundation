@@ -290,7 +290,22 @@ export type AuditEventType =
   // revocation beyond closed-vocab codes, PII beyond entity_id,
   // capsule content, secret material. The audit envelope
   // carries metadata only.
-  | "CONSENT_GRANT_RECORDED";
+  | "CONSENT_GRANT_RECORDED"
+  // DMW Runtime DM2-A per ADR-0092 §4 Candidate B (Scoped
+  // Voice Memory Gate) + ADR-0042 §Q-γ.1 clean-transition
+  // discipline. 1 NEW append-only literal. Emitted by
+  // DMWVoiceMemoryService.declareConversationMemoryScope on
+  // every scope declaration (initial declaration + later
+  // tightening or expiration push). Audit details schema
+  // (SAFE): conversation_id + entity_id + access_scope
+  // (METADATA_ONLY / SUMMARY / FULL closed-vocab) +
+  // capsule_types[] (closed-vocab CapsuleType names) +
+  // context_signals_only (boolean) + expires_at (ISO timestamp
+  // or null) + declared_by. FORBIDDEN: raw capsule content,
+  // raw transcript, raw audio_ref, PII beyond entity_id,
+  // secret material, vendor token, capsule payload. The audit
+  // envelope carries metadata only.
+  | "CONVERSATION_MEMORY_SCOPE_DECLARED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -402,6 +417,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "USAGE_METER_RECORDED",
   // DMW Runtime DM1-A per ADR-0092 §4 Candidate A.
   "CONSENT_GRANT_RECORDED",
+  // DMW Runtime DM2-A per ADR-0092 §4 Candidate B.
+  "CONVERSATION_MEMORY_SCOPE_DECLARED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

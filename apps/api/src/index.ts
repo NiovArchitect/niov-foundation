@@ -825,6 +825,22 @@ export type {
   IssueReceiptResult,
   ReceiptSummary,
 } from "./services/dmw/receipt.service.js";
+
+// ADR-0092 §4 Candidate B DM2-A Scoped Voice Memory Gate. The
+// per-(conversation_id, entity_id) memory scope declaration
+// that binds what CapsuleType classes a voice or other governed
+// session flow may read from.
+export {
+  VOICE_SCOPE_ALLOWED_CAPSULE_TYPES,
+  declareConversationMemoryScopeForCaller,
+  getConversationMemoryScope,
+  isScopeActive,
+} from "./services/dmw/voice-memory-scope.service.js";
+export type {
+  ConversationMemoryScopeSummary,
+  DeclareConversationMemoryScopeInput,
+  DeclareConversationMemoryScopeResult,
+} from "./services/dmw/voice-memory-scope.service.js";
 // VF.4a Foundation voice intent route per ADR-0085 §8.
 export { registerVoiceRoutes } from "./routes/voice.routes.js";
 export type { VoiceIntentFailureCode } from "./routes/voice.routes.js";
