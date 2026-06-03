@@ -1101,6 +1101,41 @@ model ConversationMemoryScope {
   @@map("conversation_memory_scopes")
 }
 
+// DMW Runtime DM2-B per ADR-0092 §4 Candidate B (Scoped Voice
+// Memory Gate). Per-(conversation_id, entity_id, voice_provider)
+// access counter that tracks voice session metrics for later
+// analytics + entitlement enforcement. Closes the
+// ConversationMemoryScope + VoiceAccessLog pair end-to-end.
+//
+// Tracking-only at V1; enforcement deferred. NO new audit
+// literal — per ADR-0092 §4 Candidate B doctrine "voice-specific
+// access rides existing VF.2 6 voice literals" (VOICE_INTENT_
+// RECEIVED / CONFIRMED / REJECTED / EXPIRED / REDACTED /
+// DELIVERED already capture every voice access event at the
+// audit register). VoiceAccessLog is the metrics aggregator.
+//
+// Composite (conversation_id, entity_id, voice_provider) PK
+// ensures at-most-one row per (conversation, entity, provider)
+// tuple; recordVoiceAccessForConversation upserts + increments
+// atomically via Prisma's increment operator (same pattern as
+// UsageMeter from PR #233).
+model VoiceAccessLog {
+  conversation_id          String   @db.Uuid
+  entity_id                String   @db.Uuid
+  voice_provider           String
+  duration_seconds         BigInt   @default(0)
+  capsule_access_count     BigInt   @default(0)
+  signals_projected_count  BigInt   @default(0)
+  last_recorded_at         DateTime @default(now())
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  @@id([conversation_id, entity_id, voice_provider])
+  @@index([conversation_id])
+  @@index([entity_id])
+  @@map("voice_access_logs")
+}
+
 // Workflow is one named automation rule for an org -- a trigger
 // plus a list of actions encoded as JSON.
 model Workflow {
