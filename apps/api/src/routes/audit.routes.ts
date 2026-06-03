@@ -24,6 +24,8 @@ import type {
   VerifyChainScope,
   VerifyChainServiceInput,
 } from "../services/audit/audit-view.service.js";
+import { getOrgEntityId } from "../services/governance/org.js";
+import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
 
 // WHAT: UUID v4 (or relaxed UUID) regex used to validate the
 //        verify-chain route's optional id query params.
@@ -295,6 +297,27 @@ export async function registerAuditRoutes(
         validation.normalized,
       );
       if (result.ok === true) {
+        // B6-α telemetry counter — record audit-export volume
+        // against the caller's org meter. Failure here MUST NOT
+        // affect the export response (telemetry isolation per
+        // ADR-0093 §5 Candidate C). The delta is the row_count so
+        // capacity-planning surfaces can observe export volume,
+        // not just call count. `meter.audit-exports.v1` matches
+        // the B2 catalog vocabulary `meter.<name>.v<n>`.
+        try {
+          const orgEntityId = await getOrgEntityId(callerId);
+          const rowCount = result.view.row_count;
+          if (Number.isInteger(rowCount) && rowCount > 0) {
+            await recordUsageForOrg(
+              orgEntityId,
+              "meter.audit-exports.v1",
+              rowCount,
+            );
+          }
+        } catch {
+          // intentionally swallowed; telemetry must not affect
+          // the export response.
+        }
         // Content-type per format:
         //   NDJSON → application/x-ndjson per RFC 8259 + the
         //     de-facto media-type convention (formal registration
