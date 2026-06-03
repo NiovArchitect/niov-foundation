@@ -81,6 +81,10 @@ import {
   computeMemoryScopeSummaryForCaller,
   type TwinMemoryScopeSummary,
 } from "./twin-memory-scope.js";
+import {
+  computeActiveGrantsSummaryForCaller,
+  type TwinActiveGrantsSummary,
+} from "./twin-active-grants.js";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -371,6 +375,17 @@ export interface MyTwinView {
   // declared_by / any per-scope substance. Per-source read
   // failures swallowed silently per ADR-0068 §6.
   memory_scope_summary?: TwinMemoryScopeSummary;
+  // Phase EDX-1 employee Twin self-state extension —
+  // active_grants_summary sidecar. SAFE projection of the
+  // caller's currently-active grants across the DM1-A
+  // ConsentGrant substrate and the DM3-A TeamDelegation
+  // substrate. NEVER includes consent_id / delegation_id /
+  // grantee_entity_id / team_entity_id / purpose / permission_id
+  // / capability_scope / supervision_required /
+  // revocation_bridge_id / status / consent_state / any
+  // per-grant substance. Per-source read failures swallowed
+  // silently per ADR-0068 §6.
+  active_grants_summary?: TwinActiveGrantsSummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1353,6 +1368,20 @@ export class OtzarService {
       memoryScopeSummary = undefined;
     }
 
+    // Phase EDX-1 employee Twin self-state extension —
+    // active_grants_summary sidecar. Self-scoped via
+    // primary.entity_id as the grantor/delegator. Composes
+    // DM1-A ConsentGrant + DM3-A TeamDelegation reads. Per-source
+    // read miss swallowed silently per ADR-0068 §6.
+    let activeGrantsSummary: TwinActiveGrantsSummary | undefined;
+    try {
+      activeGrantsSummary = await computeActiveGrantsSummaryForCaller(
+        primary.entity_id,
+      );
+    } catch {
+      activeGrantsSummary = undefined;
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -1381,6 +1410,9 @@ export class OtzarService {
         : {}),
       ...(memoryScopeSummary !== undefined
         ? { memory_scope_summary: memoryScopeSummary }
+        : {}),
+      ...(activeGrantsSummary !== undefined
+        ? { active_grants_summary: activeGrantsSummary }
         : {}),
     };
 
