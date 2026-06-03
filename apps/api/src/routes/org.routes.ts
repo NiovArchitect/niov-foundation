@@ -2612,12 +2612,50 @@ export async function registerOrgRoutes(
         typeof body.slack_workspace_id === "string"
           ? body.slack_workspace_id
           : undefined;
+      // Section 8 B5-α Entitlement gate per ADR-0093 §5 Candidate A.
+      // Soft-gate matching PR #249 (enterprise archetype). Skipped
+      // when org cannot be resolved so the service tier's canonical
+      // CALLER_NOT_IN_ORG path surfaces.
+      try {
+        const orgEntityId = await getOrgEntityId(callerId);
+        const entitlement = await assertEntitledForOrgSoftGate({
+          org_entity_id: orgEntityId,
+          actor_entity_id: callerId,
+          feature_id: "dandelion_activation:team_archetype",
+        });
+        if (entitlement.ok === false) {
+          return reply.code(403).send({
+            ok: false,
+            code: "ENTITLEMENT_INSUFFICIENT",
+            reason_code: entitlement.reason_code,
+            feature_id: entitlement.feature_id,
+            message:
+              "org is not entitled to run the D6 team activation archetype",
+          });
+        }
+      } catch {
+        // org resolution failed — service-tier error path surfaces
+        // canonical CALLER_NOT_IN_ORG / 403 below.
+      }
       const result = await executeTeamActivationForCaller(callerId, {
         slack_display_name: slackDisplayName,
         slack_secret_ref: slackSecretRef,
         slack_workspace_id: slackWorkspaceId,
       });
       if (result.ok) {
+        // B6-α telemetry counter — one D6 team activation per
+        // success against `meter.dandelion-team-activations.v1`.
+        // Telemetry isolation try/catch swallows all failures.
+        try {
+          const orgEntityId = await getOrgEntityId(callerId);
+          await recordUsageForOrg(
+            orgEntityId,
+            "meter.dandelion-team-activations.v1",
+            1,
+          );
+        } catch {
+          // intentionally swallowed.
+        }
         return reply.code(200).send(result);
       }
       const status =
@@ -2687,6 +2725,31 @@ export async function registerOrgRoutes(
         typeof body.google_workspace_domain === "string"
           ? body.google_workspace_domain
           : undefined;
+      // Section 8 B5-α Entitlement gate per ADR-0093 §5 Candidate A.
+      // Soft-gate matching PR #249 (enterprise archetype). Skipped
+      // when org cannot be resolved so the service tier's canonical
+      // CALLER_NOT_IN_ORG path surfaces.
+      try {
+        const orgEntityId = await getOrgEntityId(callerId);
+        const entitlement = await assertEntitledForOrgSoftGate({
+          org_entity_id: orgEntityId,
+          actor_entity_id: callerId,
+          feature_id: "dandelion_activation:business_archetype",
+        });
+        if (entitlement.ok === false) {
+          return reply.code(403).send({
+            ok: false,
+            code: "ENTITLEMENT_INSUFFICIENT",
+            reason_code: entitlement.reason_code,
+            feature_id: entitlement.feature_id,
+            message:
+              "org is not entitled to run the D6 business activation archetype",
+          });
+        }
+      } catch {
+        // org resolution failed — service-tier error path surfaces
+        // canonical CALLER_NOT_IN_ORG / 403 below.
+      }
       const result = await executeBusinessActivationForCaller(callerId, {
         slack_display_name: slackDisplayName,
         slack_secret_ref: slackSecretRef,
@@ -2696,6 +2759,19 @@ export async function registerOrgRoutes(
         google_workspace_domain: googleWorkspaceDomain,
       });
       if (result.ok) {
+        // B6-α telemetry counter — one D6 business activation per
+        // success against `meter.dandelion-business-activations.v1`.
+        // Telemetry isolation try/catch swallows all failures.
+        try {
+          const orgEntityId = await getOrgEntityId(callerId);
+          await recordUsageForOrg(
+            orgEntityId,
+            "meter.dandelion-business-activations.v1",
+            1,
+          );
+        } catch {
+          // intentionally swallowed.
+        }
         return reply.code(200).send(result);
       }
       const status =
