@@ -989,6 +989,17 @@ export type {
   EntitlementCheckResult,
   EntitlementRowShape,
 } from "./services/billing/entitlement-check.service.js";
+
+// Section 8 Billing Completion B6-α per ADR-0093 §5 Candidate C.
+export {
+  isValidMeterId,
+  recordUsageForOrg,
+  getOrgUsage,
+} from "./services/billing/usage-meter.service.js";
+export type {
+  RecordUsageResult,
+  GetOrgUsageResult,
+} from "./services/billing/usage-meter.service.js";
 export type {
   PromoteProposedActionInput,
   PromoteProposedActionOptions,
