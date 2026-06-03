@@ -493,4 +493,36 @@ export async function registerAnalyticsRoutes(
       });
     },
   );
+
+  // POST /api/v1/analytics/enterprise-twin-state — first
+  // Enterprise Twin Runtime read-only state projection per
+  // Founder direction. Bearer + can_admin_org-gated. No body
+  // (current-state snapshot; no window).
+  app.post(
+    "/api/v1/analytics/enterprise-twin-state",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const result = await analytics.getEnterpriseTwinStateForOrg({
+        org_entity_id: orgEntityId,
+        actor_entity_id: callerId,
+        ip_address: request.ip ?? null,
+      });
+      if (result.ok === true) {
+        return reply.code(200).send(result);
+      }
+      return reply.code(statusFor(result)).send({
+        ok: false,
+        code: result.code,
+        message: result.message,
+        ...(result.invalid_fields !== undefined
+          ? { invalid_fields: result.invalid_fields }
+          : {}),
+      });
+    },
+  );
 }
