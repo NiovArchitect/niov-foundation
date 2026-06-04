@@ -2492,3 +2492,72 @@ model WorkProjectMember {
   @@index([org_entity_id])
   @@map("work_project_members")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 2 — OrgCollaborationPolicy substrate per the [FOUNDER-AUTH
+// — CONTINUE AFTER EDX-3/4/5/6 / AUTONOMOUS ENTERPRISE COLLABORATION
+// COMPLETION] directive. Admin/org collaboration permission policy
+// — the layer that prevents employee-granted authority from
+// becoming an unnecessary blocker for safe internal collaboration.
+//
+// Rule precedence (enforced at the service tier):
+//   1. Admin/org policy defines the allowed operating envelope.
+//   2. Employee grants define what the employee's own Twin may do
+//      inside that envelope.
+//   3. DMW scope defines what memory/context may be used.
+//   4. Action runtime/policy defines whether material execution
+//      is allowed.
+//   5. Audit records the lineage.
+// Employee authority can NEVER exceed admin/org policy.
+// Admin/org policy can SAFELY open organizational collaboration
+// without requiring employees to approve every harmless internal
+// handoff.
+//
+// Defaults (baked into the service when no row exists):
+//   - SAME_TEAM / SAME_PROJECT status/review/coordination → ALLOW
+//   - CROSS_TEAM coordination → NEEDS_APPROVAL
+//   - CROSS_PROJECT coordination → NEEDS_APPROVAL
+//   - Connector writes → BLOCK (Founder-gated per ADR-0084 even
+//     when an OrgCollaborationPolicy row would otherwise allow)
+//   - LEGAL / FINANCIAL / SECURITY / CUSTOMER_SENSITIVE →
+//     DUAL_CONTROL_REQUIRED
+//   - PERSONAL_MEMORY → enforced via DMW scope (not this policy)
+// ─────────────────────────────────────────────────────────────────
+
+enum OrgCollaborationScope {
+  SAME_TEAM
+  SAME_PROJECT
+  CROSS_TEAM
+  CROSS_PROJECT
+  ORG_WIDE
+}
+
+enum OrgCollaborationOutcome {
+  ALLOW
+  NEEDS_APPROVAL
+  BLOCK
+  DRAFT_ONLY
+  DUAL_CONTROL_REQUIRED
+}
+
+model OrgCollaborationPolicy {
+  policy_id                  String                          @id @default(uuid()) @db.Uuid
+  org_entity_id              String                          @db.Uuid
+  collaboration_scope        OrgCollaborationScope
+  request_type               TwinCollaborationRequestType?
+  sensitivity_class          TwinAuthoritySensitivityClass?
+  outcome                    OrgCollaborationOutcome         @default(NEEDS_APPROVAL)
+  requires_employee_authority Boolean                        @default(false)
+  requires_admin_approval    Boolean                         @default(false)
+  requires_dual_control      Boolean                         @default(false)
+  connector_write_allowed    Boolean                         @default(false)
+  created_at                 DateTime                        @default(now())
+  updated_at                 DateTime                        @updatedAt
+
+  // One policy row per (org, scope, request_type, sensitivity_class)
+  // tuple — more-specific tuples override the org default.
+  @@unique([org_entity_id, collaboration_scope, request_type, sensitivity_class])
+  @@index([org_entity_id])
+  @@index([org_entity_id, collaboration_scope])
+  @@map("org_collaboration_policies")
+}
