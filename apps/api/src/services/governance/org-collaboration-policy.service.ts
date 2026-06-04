@@ -309,48 +309,50 @@ export function projectOrgCollaborationPolicySafeView(row: {
 
 // WHAT: Upsert a policy row. Admin-tier helper.
 // WHY: Composite unique on (org, scope, request_type, sensitivity)
-//      drives the upsert key. Emits ADMIN_ACTION audit BEFORE
-//      returning (RULE 4).
+//      with nullable request_type + sensitivity_class — Prisma's
+//      upsert-with-compound-unique rejects null values in the where
+//      clause at the type tier, and Postgres unique-on-nullable
+//      treats NULL as "not equal" so a literal upsert would never
+//      match. Workaround: do a manual findFirst + update / create.
+//      Emits ADMIN_ACTION audit BEFORE returning (RULE 4).
 export async function upsertOrgCollaborationPolicyForCaller(
   input: UpsertOrgCollaborationPolicyInput,
 ): Promise<OrgCollaborationPolicySafeView> {
-  const row = await prisma.orgCollaborationPolicy.upsert({
-    // Prisma's composite-unique input typing rejects `null` even
-    // though the column allows it; cast through unknown to express
-    // "null is part of the unique tuple key" without disabling the
-    // surrounding type-check.
+  const existing = await prisma.orgCollaborationPolicy.findFirst({
     where: {
-      org_entity_id_collaboration_scope_request_type_sensitivity_class: {
-        org_entity_id: input.orgEntityId,
-        collaboration_scope: input.scope,
-        request_type: input.requestType ?? null,
-        sensitivity_class: input.sensitivityClass ?? null,
-      } as unknown as {
-        org_entity_id: string;
-        collaboration_scope: OrgCollaborationScope;
-        request_type: TwinCollaborationRequestType;
-        sensitivity_class: TwinAuthoritySensitivityClass;
-      },
-    },
-    update: {
-      outcome: input.outcome,
-      requires_employee_authority: input.requiresEmployeeAuthority ?? false,
-      requires_admin_approval: input.requiresAdminApproval ?? false,
-      requires_dual_control: input.requiresDualControl ?? false,
-      connector_write_allowed: input.connectorWriteAllowed ?? false,
-    },
-    create: {
       org_entity_id: input.orgEntityId,
       collaboration_scope: input.scope,
       request_type: input.requestType ?? null,
       sensitivity_class: input.sensitivityClass ?? null,
-      outcome: input.outcome,
-      requires_employee_authority: input.requiresEmployeeAuthority ?? false,
-      requires_admin_approval: input.requiresAdminApproval ?? false,
-      requires_dual_control: input.requiresDualControl ?? false,
-      connector_write_allowed: input.connectorWriteAllowed ?? false,
     },
   });
+  let row;
+  if (existing !== null) {
+    row = await prisma.orgCollaborationPolicy.update({
+      where: { policy_id: existing.policy_id },
+      data: {
+        outcome: input.outcome,
+        requires_employee_authority: input.requiresEmployeeAuthority ?? false,
+        requires_admin_approval: input.requiresAdminApproval ?? false,
+        requires_dual_control: input.requiresDualControl ?? false,
+        connector_write_allowed: input.connectorWriteAllowed ?? false,
+      },
+    });
+  } else {
+    row = await prisma.orgCollaborationPolicy.create({
+      data: {
+        org_entity_id: input.orgEntityId,
+        collaboration_scope: input.scope,
+        request_type: input.requestType ?? null,
+        sensitivity_class: input.sensitivityClass ?? null,
+        outcome: input.outcome,
+        requires_employee_authority: input.requiresEmployeeAuthority ?? false,
+        requires_admin_approval: input.requiresAdminApproval ?? false,
+        requires_dual_control: input.requiresDualControl ?? false,
+        connector_write_allowed: input.connectorWriteAllowed ?? false,
+      },
+    });
+  }
   await writeAuditEvent({
     event_type: "ADMIN_ACTION",
     outcome: "SUCCESS",
