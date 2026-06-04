@@ -94,6 +94,10 @@ import {
   type TwinPersonalPreferencesSummary,
 } from "./twin-personal-preferences.js";
 import {
+  computeCollaborationInboxSummaryForCaller,
+  type TwinCollaborationInboxSummary,
+} from "./twin-collaboration-inbox.js";
+import {
   computeVoiceReadinessState,
   type TwinVoiceReadinessState,
 } from "./twin-voice-readiness.js";
@@ -570,6 +574,15 @@ export interface MyTwinView {
   // / source_conversation_id / per-row substance. Per-source
   // read failures swallowed silently per ADR-0068 §6.
   personal_preferences_summary?: TwinPersonalPreferencesSummary;
+  // Phase EDX-6 PR 3 employee Twin self-state extension —
+  // collaboration_inbox_summary sidecar. SAFE capacity-only
+  // projection of the caller's collaboration inbox (where the
+  // caller is the target). Closes the EDX-1 forward-substrate
+  // item that was blocked on collaboration substrate (PR #276 +
+  // #277). NEVER includes collaboration_id / safe_summary /
+  // requester identity / per-row substance. Per-source read
+  // failures swallowed silently per ADR-0068 §6.
+  collaboration_inbox_summary?: TwinCollaborationInboxSummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1692,6 +1705,21 @@ export class OtzarService {
       personalPreferencesSummary = undefined;
     }
 
+    // Phase EDX-6 PR 3 employee Twin self-state extension —
+    // collaboration_inbox_summary sidecar. Self-scoped via
+    // primary.entity_id (the human owner; the helper's where
+    // clause checks target_entity_id OR target_twin_entity_id so
+    // requests addressed to either the owner or their primary
+    // Twin are counted). Per-source read miss swallowed silently
+    // per ADR-0068 §6.
+    let collaborationInboxSummary: TwinCollaborationInboxSummary | undefined;
+    try {
+      collaborationInboxSummary =
+        await computeCollaborationInboxSummaryForCaller(primary.entity_id);
+    } catch {
+      collaborationInboxSummary = undefined;
+    }
+
     // Phase EDX-1 employee Twin self-state extension —
     // voice_readiness_state sidecar. Constant projection (no
     // DB hit, no caller-specific gating at the Foundation tier).
@@ -1735,6 +1763,9 @@ export class OtzarService {
         : {}),
       ...(personalPreferencesSummary !== undefined
         ? { personal_preferences_summary: personalPreferencesSummary }
+        : {}),
+      ...(collaborationInboxSummary !== undefined
+        ? { collaboration_inbox_summary: collaborationInboxSummary }
         : {}),
       voice_readiness_state: voiceReadinessState,
     };
