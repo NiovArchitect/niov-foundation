@@ -90,6 +90,10 @@ import {
   type TwinActiveAuthoritySummary,
 } from "./twin-active-authority.js";
 import {
+  computePersonalPreferencesSummaryForCaller,
+  type TwinPersonalPreferencesSummary,
+} from "./twin-personal-preferences.js";
+import {
   computeVoiceReadinessState,
   type TwinVoiceReadinessState,
 } from "./twin-voice-readiness.js";
@@ -558,6 +562,14 @@ export interface MyTwinView {
   // substance. Per-source read failures swallowed silently per
   // ADR-0068 §6.
   active_authority_summary?: TwinActiveAuthoritySummary;
+  // Phase EDX-5 PR 3 employee Twin self-state extension —
+  // personal_preferences_summary sidecar. SAFE capacity-only
+  // projection of the caller's TwinCorrectionMemory inventory
+  // (PR #273 substrate; PR #274 routes). NEVER includes
+  // correction_id / safe_summary / scope_id / source_message_id
+  // / source_conversation_id / per-row substance. Per-source
+  // read failures swallowed silently per ADR-0068 §6.
+  personal_preferences_summary?: TwinPersonalPreferencesSummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1664,6 +1676,22 @@ export class OtzarService {
       activeAuthoritySummary = undefined;
     }
 
+    // Phase EDX-5 PR 3 employee Twin self-state extension —
+    // personal_preferences_summary sidecar. Self-scoped via
+    // primary.entity_id as the owner. Distinct from the existing
+    // ADR-0055 Wave 2C CORRECTION MemoryCapsule (which is read at
+    // L1 of conductSession, not surfaced via this sidecar).
+    // Per-source read miss swallowed silently per ADR-0068 §6.
+    let personalPreferencesSummary:
+      | TwinPersonalPreferencesSummary
+      | undefined;
+    try {
+      personalPreferencesSummary =
+        await computePersonalPreferencesSummaryForCaller(primary.entity_id);
+    } catch {
+      personalPreferencesSummary = undefined;
+    }
+
     // Phase EDX-1 employee Twin self-state extension —
     // voice_readiness_state sidecar. Constant projection (no
     // DB hit, no caller-specific gating at the Foundation tier).
@@ -1704,6 +1732,9 @@ export class OtzarService {
         : {}),
       ...(activeAuthoritySummary !== undefined
         ? { active_authority_summary: activeAuthoritySummary }
+        : {}),
+      ...(personalPreferencesSummary !== undefined
+        ? { personal_preferences_summary: personalPreferencesSummary }
         : {}),
       voice_readiness_state: voiceReadinessState,
     };
