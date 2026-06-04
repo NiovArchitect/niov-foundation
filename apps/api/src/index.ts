@@ -460,6 +460,7 @@ export {
 export type {
   AcceptedPatternAdvisoryView,
 } from "./services/otzar/proposed-pattern.service.js";
+export type { ApprovalReason } from "./services/otzar/approval-detection.js";
 export type {
   ConductSessionInput,
   ConductSessionSuccess,

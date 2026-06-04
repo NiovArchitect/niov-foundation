@@ -97,6 +97,11 @@ import {
   computeVoiceOutputSupported,
   toSpeechReadyText,
 } from "./speech-ready.js";
+import {
+  detectApprovalRequirement,
+  type ApprovalReason,
+} from "./approval-detection.js";
+import type { TwinAuthorityDurationClass } from "@prisma/client";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -280,6 +285,16 @@ export interface ConductSessionSuccess {
   // internally for the existing `context_used` scalar — see the
   // MemoryUsedSummary doc-comment above.
   memory_used_summary: MemoryUsedSummary;
+  // Phase EDX-4 PR 4 — closed-vocab companion fields surfaced only
+  // when approval_required flips true. The conservative detection
+  // helper (`detectApprovalRequirement`) scans the caller's message
+  // for action-like verbs / connector names / cross-team phrases
+  // and supplies the reason + the duration options the UI offers
+  // when the user opts to grant authority. Always omitted when
+  // approval_required is false so consumers can treat their absence
+  // as "no detection".
+  approval_reason?: ApprovalReason;
+  approval_duration_options?: ReadonlyArray<TwinAuthorityDurationClass>;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -1045,14 +1060,6 @@ export class OtzarService {
       context_items_used: contextUsed,
     });
 
-    // Phase EDX-3 slice 1: `next_step` is "ANSWERED" at this slice —
-    // conductSession in its current form always answers (no detection
-    // logic yet for clarification, action proposing, policy/scope
-    // blocking, or collaboration suggesting). Future EDX-3 slices add
-    // the detection substrate that flips this value; the closed-vocab
-    // contract is locked here.
-    const nextStep: ConductNextStep = "ANSWERED";
-
     // Phase EDX-3 slice 2: `correction_capture_available` is always
     // true at the Foundation tier. The LIVE `POST /api/v1/otzar/
     // correction` endpoint (ADR-0055 Wave 2C) accepts a correction
@@ -1076,21 +1083,39 @@ export class OtzarService {
     const speechReadyText = toSpeechReadyText(llmResult.text);
     const voiceOutputSupported = computeVoiceOutputSupported();
 
+    // Phase EDX-4 PR 4 — conservative deterministic verb-scan over
+    // the caller's message. When the user clearly intends a material
+    // action (send / email / post / connector access / cross-team
+    // handoff / destructive verb), flip `approval_required: true`
+    // + supply the closed-vocab `approval_reason` and the
+    // `approval_duration_options` array the UI offers when the user
+    // opts to grant authority. The chat surface NEVER auto-creates
+    // a TwinAuthorityGrant or auto-executes an action; the detection
+    // only updates the envelope so the UI can render the right
+    // approval panel.
+    const approval = detectApprovalRequirement(input.message);
+
     // Phase EDX-3 slice 4: deterministic-false "denial of preconditions"
-    // envelope. ConductSession at this slice does NOT detect any of
-    // these six conditions — the LLM produces a text answer, no
-    // clarification/action/approval/policy/scope/collaboration
-    // detection logic is wired yet. The booleans are emitted as false
-    // so the UI can switch on them without crashing on missing fields.
-    // Future EDX-3 slices flip individual booleans true and introduce
-    // the closed-vocab companion fields alongside their detection
-    // logic.
+    // envelope, refined at EDX-4 PR 4 to flip `approval_required`
+    // when verb-scan detection fires. The other five booleans
+    // (clarification / action_proposed / policy_blocked /
+    // dmw_scope_blocked / collaboration_suggested) remain
+    // deterministic-false until their EDX-5 / EDX-6 / Section 2 +
+    // Section 9 detection substrates wire in.
     const clarificationNeeded = false;
     const actionProposed = false;
-    const approvalRequired = false;
+    const approvalRequired = approval.approval_required;
     const policyBlocked = false;
     const dmwScopeBlocked = false;
     const collaborationSuggested = false;
+
+    // Phase EDX-3 slice 1: `next_step` defaults to "ANSWERED" — the
+    // chat surface answered the user's question. EDX-4 PR 4 flips
+    // to "NEEDS_APPROVAL" when approval detection fires so the UI
+    // can route to the approval panel instead of the answer view.
+    const nextStep: ConductNextStep = approvalRequired
+      ? "NEEDS_APPROVAL"
+      : "ANSWERED";
 
     // Phase EDX-3 slice 5: safe layer-breakdown projection. Pure
     // summary of the per-layer counts conductSession already used to
@@ -1132,6 +1157,12 @@ export class OtzarService {
       dmw_scope_blocked: dmwScopeBlocked,
       collaboration_suggested: collaborationSuggested,
       memory_used_summary: memoryUsedSummary,
+      ...(approval.approval_required
+        ? {
+            approval_reason: approval.approval_reason,
+            approval_duration_options: approval.approval_duration_options,
+          }
+        : {}),
     };
   }
 
