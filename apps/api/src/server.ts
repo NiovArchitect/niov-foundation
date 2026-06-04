@@ -99,6 +99,7 @@ import {
 import { registerOtzarRoutes } from "./routes/otzar.routes.js";
 import { registerOtzarProposedPatternRoutes } from "./routes/otzar-proposed-pattern.routes.js";
 import { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
+import { registerOtzarAuthorityGrantsRoutes } from "./routes/otzar-authority-grants.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerVoiceRoutes } from "./routes/voice.routes.js";
@@ -667,6 +668,7 @@ export async function buildApp(
   await registerOtzarRoutes(app, otzarService);
   await registerOtzarProposedPatternRoutes(app, otzarProposedPatternService);
   await registerOtzarObservationRoutes(app, observationService, authService);
+  await registerOtzarAuthorityGrantsRoutes(app, authService);
 
   // Idempotent seed on every boot so a fresh DB has the seven
   // spec frameworks ready before the first request lands.

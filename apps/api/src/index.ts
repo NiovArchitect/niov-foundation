@@ -611,6 +611,7 @@ export type {
 } from "./services/otzar/observation.service.js";
 
 export { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
+export { registerOtzarAuthorityGrantsRoutes } from "./routes/otzar-authority-grants.routes.js";
 
 export {
   createTwin,
