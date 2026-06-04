@@ -43,6 +43,7 @@ import type {
   TwinCorrectionType,
 } from "@prisma/client";
 import { prisma } from "@niov/database";
+import { isActiveProjectMember } from "./work-project.service.js";
 
 export type {
   TwinCorrectionRetentionClass,
@@ -177,10 +178,32 @@ export function projectTwinCorrectionSafeView(row: {
 // WHY: Always writes + emits an ADMIN_ACTION audit event BEFORE
 //      the service returns (RULE 4). safe_summary bounded to
 //      SAFE_SUMMARY_MAX_LENGTH chars. PERSONAL is the default-safe
-//      scope when no scope_id is provided.
+//      scope when no scope_id is provided. Phase 1 PR 4 — PROJECT-
+//      scope corrections with an explicit scope_id additionally
+//      validate that the caller is an ACTIVE member of the named
+//      project before the write fires.
+export type CreateCorrectionResult =
+  | { ok: true; correction: TwinCorrectionSafeView }
+  | { ok: false; code: "PROJECT_NOT_MEMBER" };
+
 export async function createTwinCorrectionMemoryForCaller(
   input: CreateTwinCorrectionInput,
-): Promise<TwinCorrectionSafeView> {
+): Promise<CreateCorrectionResult> {
+  // Phase 1 PR 4 project-membership guard for PROJECT-scope
+  // corrections. Only fires when scope_type = PROJECT AND
+  // scope_id is supplied (a PROJECT-class but unscoped correction
+  // is treated as forward-substrate).
+  if (
+    input.scopeType === "PROJECT" &&
+    typeof input.scopeId === "string" &&
+    input.scopeId.length > 0
+  ) {
+    const isMember = await isActiveProjectMember({
+      projectId: input.scopeId,
+      entityId: input.callerEntityId,
+    });
+    if (!isMember) return { ok: false, code: "PROJECT_NOT_MEMBER" };
+  }
   const safeSummary = input.safeSummary.slice(0, SAFE_SUMMARY_MAX_LENGTH);
   const sensitivity = input.sensitivityClass ?? "MODERATE";
   const retention = input.retentionClass ?? "STANDARD";
@@ -219,7 +242,7 @@ export async function createTwinCorrectionMemoryForCaller(
     },
   });
 
-  return projectTwinCorrectionSafeView(row);
+  return { ok: true, correction: projectTwinCorrectionSafeView(row) };
 }
 
 // WHAT: List the caller's own corrections (self-scope guard).

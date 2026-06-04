@@ -264,7 +264,7 @@ export async function registerOtzarAuthorityGrantsRoutes(
       granteeEntityId = twin;
     }
 
-    const view = await createTwinAuthorityGrantForCaller({
+    const result = await createTwinAuthorityGrantForCaller({
       callerEntityId,
       orgEntityId,
       granteeEntityId,
@@ -286,7 +286,12 @@ export async function registerOtzarAuthorityGrantsRoutes(
       expiresAt: expiresAt ?? null,
     });
 
-    return reply.code(201).send({ ok: true, grant: view });
+    if (!result.ok) {
+      // Phase 1 PR 4 — PROJECT_SCOPED grant rejected because the
+      // caller is not an ACTIVE member of the named project.
+      return reply.code(403).send(result);
+    }
+    return reply.code(201).send({ ok: true, grant: result.grant });
   });
 
   // GET /api/v1/otzar/my-twin/authority-grants

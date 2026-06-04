@@ -29,6 +29,14 @@ vi.mock("@niov/database", async (importOriginal) => {
   };
 });
 
+// Phase 1 PR 4 — mock the work-project membership helper.
+const { isActiveProjectMemberMock } = vi.hoisted(() => ({
+  isActiveProjectMemberMock: vi.fn(),
+}));
+vi.mock("../../apps/api/src/services/otzar/work-project.service.js", () => ({
+  isActiveProjectMember: isActiveProjectMemberMock,
+}));
+
 import {
   createTwinCorrectionMemoryForCaller,
   listTwinCorrectionsForCaller,
@@ -74,6 +82,7 @@ beforeEach(() => {
   prismaMock.twinCorrectionMemory.findMany.mockReset();
   prismaMock.twinCorrectionMemory.update.mockReset();
   auditMock.mockReset();
+  isActiveProjectMemberMock.mockReset();
 });
 
 describe("projectTwinCorrectionSafeView", () => {
@@ -104,7 +113,7 @@ describe("projectTwinCorrectionSafeView", () => {
 describe("createTwinCorrectionMemoryForCaller", () => {
   it("writes the row + emits ADMIN_ACTION audit before returning", async () => {
     prismaMock.twinCorrectionMemory.create.mockResolvedValue(rowFixture());
-    const view = await createTwinCorrectionMemoryForCaller({
+    const result = await createTwinCorrectionMemoryForCaller({
       callerEntityId: CALLER_ID,
       orgEntityId: ORG_ID,
       scopeType: "PERSONAL",
@@ -116,7 +125,9 @@ describe("createTwinCorrectionMemoryForCaller", () => {
     const auditCall = auditMock.mock.calls[0]?.[0];
     expect(auditCall.event_type).toBe("ADMIN_ACTION");
     expect(auditCall.details.action).toBe("TWIN_CORRECTION_RECORDED");
-    expect(view.correction_id).toBe(CORRECTION_ID);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.correction.correction_id).toBe(CORRECTION_ID);
   });
 
   it("forces caller as owner AND created_by (RULE 0)", async () => {
@@ -168,15 +179,49 @@ describe("createTwinCorrectionMemoryForCaller", () => {
       prismaMock.twinCorrectionMemory.create.mockResolvedValue(
         rowFixture({ correction_type: t }),
       );
-      const v = await createTwinCorrectionMemoryForCaller({
+      const result = await createTwinCorrectionMemoryForCaller({
         callerEntityId: CALLER_ID,
         orgEntityId: ORG_ID,
         scopeType: "PERSONAL",
         correctionType: t,
         safeSummary: "test",
       });
-      expect(v.correction_type).toBe(t);
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.correction.correction_type).toBe(t);
     }
+  });
+
+  // Phase 1 PR 4 — PROJECT-scope correction project-membership guard.
+  it("PROJECT_NOT_MEMBER when scope_type=PROJECT + scope_id given + caller not a member", async () => {
+    isActiveProjectMemberMock.mockResolvedValue(false);
+    const result = await createTwinCorrectionMemoryForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      scopeType: "PROJECT",
+      scopeId: "99999999-9999-9999-9999-999999999999",
+      correctionType: "PROJECT_PREFERENCE",
+      safeSummary: "Project-scoped preference",
+    });
+    expect(result).toEqual({ ok: false, code: "PROJECT_NOT_MEMBER" });
+    expect(prismaMock.twinCorrectionMemory.create).not.toHaveBeenCalled();
+    expect(auditMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path when scope_type=PROJECT + scope_id given + caller IS a member", async () => {
+    isActiveProjectMemberMock.mockResolvedValue(true);
+    prismaMock.twinCorrectionMemory.create.mockResolvedValue(
+      rowFixture({ scope_type: "PROJECT" }),
+    );
+    const result = await createTwinCorrectionMemoryForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      scopeType: "PROJECT",
+      scopeId: "99999999-9999-9999-9999-999999999999",
+      correctionType: "PROJECT_PREFERENCE",
+      safeSummary: "Project-scoped preference",
+    });
+    expect(result.ok).toBe(true);
   });
 });
 

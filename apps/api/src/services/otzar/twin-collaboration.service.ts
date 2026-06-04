@@ -37,6 +37,7 @@ import type {
   TwinCollaborationTargetType,
 } from "@prisma/client";
 import { prisma } from "@niov/database";
+import { isActiveProjectMember } from "./work-project.service.js";
 
 export type {
   TwinCollaborationBlockedReason,
@@ -238,9 +239,36 @@ export async function createTwinCollaborationRequestForCaller(
     return { ok: false, code: "TARGET_NOT_FOUND" };
   }
 
-  const initialState: TwinCollaborationState = requiresApproval
-    ? "NEEDS_APPROVAL"
-    : "REQUESTED";
+  // Phase 1 PR 4 — project membership guard for PROJECT target_type.
+  // When the request explicitly names a target_project_id, the
+  // caller (requester) must be an ACTIVE-project member. Missing
+  // membership creates a BLOCKED row with the closed-vocab
+  // blocked_reason rather than rejecting the create — per the
+  // directive, "if missing membership, return blocked_reason
+  // MISSING_PROJECT_MEMBERSHIP". This lets the UI render the
+  // blocked-row state with the closed-vocab reason instead of a
+  // 4xx silently dropping the user's intent.
+  let projectMembershipBlocked = false;
+  if (
+    input.targetType === "PROJECT" &&
+    typeof input.targetProjectId === "string"
+  ) {
+    const isMember = await isActiveProjectMember({
+      projectId: input.targetProjectId,
+      entityId: input.callerEntityId,
+    });
+    if (!isMember) {
+      projectMembershipBlocked = true;
+    }
+  }
+
+  const initialState: TwinCollaborationState = projectMembershipBlocked
+    ? "BLOCKED"
+    : requiresApproval
+      ? "NEEDS_APPROVAL"
+      : "REQUESTED";
+  const initialBlockedReason: TwinCollaborationBlockedReason | null =
+    projectMembershipBlocked ? "MISSING_PROJECT_MEMBERSHIP" : null;
 
   const row = await prisma.twinCollaborationRequest.create({
     data: {
@@ -261,6 +289,7 @@ export async function createTwinCollaborationRequestForCaller(
       requested_by_ai: requestedByAi,
       requires_approval: requiresApproval,
       approval_grant_id: input.approvalGrantId ?? null,
+      blocked_reason: initialBlockedReason,
       expires_at: input.expiresAt ?? null,
     },
   });

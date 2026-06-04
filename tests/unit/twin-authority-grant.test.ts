@@ -33,6 +33,15 @@ vi.mock("@niov/database", async (importOriginal) => {
   };
 });
 
+// Phase 1 PR 4 — mock the work-project membership helper so the
+// PROJECT_SCOPED branch can be exercised without DB.
+const { isActiveProjectMemberMock } = vi.hoisted(() => ({
+  isActiveProjectMemberMock: vi.fn(),
+}));
+vi.mock("../../apps/api/src/services/otzar/work-project.service.js", () => ({
+  isActiveProjectMember: isActiveProjectMemberMock,
+}));
+
 import {
   checkAuthorityForAction,
   consumeOneTimeTwinAuthorityGrant,
@@ -85,6 +94,7 @@ beforeEach(() => {
   prismaMock.twinAuthorityGrant.findMany.mockReset();
   prismaMock.twinAuthorityGrant.update.mockReset();
   auditMock.mockReset();
+  isActiveProjectMemberMock.mockReset();
 });
 
 describe("projectTwinAuthorityGrantSafeView", () => {
@@ -127,7 +137,7 @@ describe("projectTwinAuthorityGrantSafeView", () => {
 describe("createTwinAuthorityGrantForCaller", () => {
   it("writes the grant + emits ADMIN_ACTION audit before returning", async () => {
     prismaMock.twinAuthorityGrant.create.mockResolvedValue(rowFixture());
-    const view = await createTwinAuthorityGrantForCaller({
+    const result = await createTwinAuthorityGrantForCaller({
       callerEntityId: CALLER_ID,
       orgEntityId: ORG_ID,
       granteeEntityId: GRANTEE_ID,
@@ -140,7 +150,9 @@ describe("createTwinAuthorityGrantForCaller", () => {
     const auditCall = auditMock.mock.calls[0]?.[0];
     expect(auditCall.event_type).toBe("ADMIN_ACTION");
     expect(auditCall.details.action).toBe("TWIN_AUTHORITY_GRANTED");
-    expect(view.grant_id).toBe(GRANT_ID);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.grant.grant_id).toBe(GRANT_ID);
   });
 
   it("forces caller as grantor (RULE 0)", async () => {
@@ -176,7 +188,7 @@ describe("createTwinAuthorityGrantForCaller", () => {
     prismaMock.twinAuthorityGrant.create.mockResolvedValue(
       rowFixture({ duration_class: "ONE_TIME" }),
     );
-    const view = await createTwinAuthorityGrantForCaller({
+    const result = await createTwinAuthorityGrantForCaller({
       callerEntityId: CALLER_ID,
       orgEntityId: ORG_ID,
       granteeEntityId: GRANTEE_ID,
@@ -185,7 +197,62 @@ describe("createTwinAuthorityGrantForCaller", () => {
       durationClass: "ONE_TIME",
       purposeSummary: "Send approval reminder once",
     });
-    expect(view.duration_class).toBe("ONE_TIME");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.grant.duration_class).toBe("ONE_TIME");
+  });
+
+  // Phase 1 PR 4 — PROJECT_SCOPED + scope_id validation.
+  it("PROJECT_NOT_MEMBER when scope_type=PROJECT + scope_id given + caller not a member", async () => {
+    isActiveProjectMemberMock.mockResolvedValue(false);
+    const result = await createTwinAuthorityGrantForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      granteeEntityId: GRANTEE_ID,
+      scopeType: "PROJECT",
+      scopeId: "99999999-9999-9999-9999-999999999999",
+      durationClass: "PROJECT_SCOPED",
+      purposeSummary: "Project-scoped grant",
+    });
+    expect(result).toEqual({ ok: false, code: "PROJECT_NOT_MEMBER" });
+    // No write should fire when the membership guard rejects.
+    expect(prismaMock.twinAuthorityGrant.create).not.toHaveBeenCalled();
+    expect(auditMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path when scope_type=PROJECT + scope_id given + caller IS a member", async () => {
+    isActiveProjectMemberMock.mockResolvedValue(true);
+    prismaMock.twinAuthorityGrant.create.mockResolvedValue(
+      rowFixture({ scope_type: "PROJECT" }),
+    );
+    const result = await createTwinAuthorityGrantForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      granteeEntityId: GRANTEE_ID,
+      scopeType: "PROJECT",
+      scopeId: "99999999-9999-9999-9999-999999999999",
+      durationClass: "PROJECT_SCOPED",
+      purposeSummary: "Project-scoped grant",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.grant.scope_type).toBe("PROJECT");
+  });
+
+  it("PROJECT scope without scope_id skips the membership check (forward-substrate)", async () => {
+    prismaMock.twinAuthorityGrant.create.mockResolvedValue(
+      rowFixture({ scope_type: "PROJECT" }),
+    );
+    const result = await createTwinAuthorityGrantForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      granteeEntityId: GRANTEE_ID,
+      scopeType: "PROJECT",
+      durationClass: "PROJECT_SCOPED",
+      purposeSummary: "Project-class but unscoped",
+    });
+    expect(result.ok).toBe(true);
+    expect(isActiveProjectMemberMock).not.toHaveBeenCalled();
   });
 });
 
