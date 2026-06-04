@@ -613,6 +613,7 @@ export type {
 
 export { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
 export { registerOtzarAuthorityGrantsRoutes } from "./routes/otzar-authority-grants.routes.js";
+export { registerOtzarCorrectionMemoryRoutes } from "./routes/otzar-correction-memory.routes.js";
 
 export {
   createTwin,
