@@ -2561,3 +2561,167 @@ model OrgCollaborationPolicy {
   @@index([org_entity_id, collaboration_scope])
   @@map("org_collaboration_policies")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 5 — Connector + MCP rails per the [FOUNDER-AUTH — FULL
+// DEPLOYED RUNTIMES / CONNECTOR-MCP ONBOARDING] directive.
+//
+// Three-tier credential separation (docs/deployment/cloud-portability.md
+// §2):
+//   1. NIOV PLATFORM secrets — vault path niov/platform/{env}/* —
+//      DATABASE_URL / JWT_SECRET / ENCRYPTION_KEY. Never appear here.
+//   2. CUSTOMER TENANT secrets — vault path
+//      niov/tenants/{org_entity_id}/connectors/{connection_id}/secret —
+//      Slack / Microsoft 365 / Google Workspace / Jira / Linear /
+//      GitHub / customer-supplied LLM keys. ConnectorScopeGrant +
+//      McpToolPolicy gate access. Stored here as `secret_ref` only.
+//   3. EMPLOYEE-SCOPED grants — TwinAuthorityGrant rows. Already
+//      live above.
+//
+// Existing ConnectorBinding (at line ~1983) remains the per-org
+// per-type connector binding. The NEW substrate below adds:
+//   - ConnectorScopeGrant: per-team / per-project / per-role /
+//     per-employee scope on top of a ConnectorBinding.
+//   - McpServerConnection: per-tenant Model Context Protocol
+//     server connection (governed tool rails).
+//   - McpToolPolicy: per-tool policy on top of an
+//     McpServerConnection.
+//
+// Per RULE 0: human/entity sovereignty preserved — no NIOV operator
+// can read a tenant's secret_ref value without explicit time-bounded
+// audited support-access grants (forward-substrate).
+// Per RULE 1: ConnectorBinding stays as-is; this is additive substrate.
+// Per RULE 4: every create/update/revoke emits an ADMIN_ACTION audit
+// event with details.action discriminator (no new audit literals).
+// Per RULE 10: revocation uses revoked_at timestamp (soft-delete);
+// rows stay.
+// ─────────────────────────────────────────────────────────────────
+
+enum ConnectorScopeType {
+  ORG
+  TEAM
+  PROJECT
+  ROLE
+  EMPLOYEE
+  TWIN
+}
+
+enum ConnectorOperationClass {
+  READ
+  DRAFT
+  WRITE_REQUEST
+  WRITE_EXECUTE
+}
+
+model ConnectorScopeGrant {
+  grant_id                  String                    @id @default(uuid()) @db.Uuid
+  org_entity_id             String                    @db.Uuid
+  connection_id             String                    @db.Uuid
+  scope_type                ConnectorScopeType
+  scope_id                  String?                   @db.Uuid
+  allowed_operations        ConnectorOperationClass[]
+  requires_employee_authority Boolean                 @default(true)
+  requires_admin_approval   Boolean                   @default(false)
+  requires_dual_control     Boolean                   @default(false)
+  created_by_entity_id      String                    @db.Uuid
+  created_at                DateTime                  @default(now())
+  updated_at                DateTime                  @updatedAt
+  expires_at                DateTime?
+  revoked_at                DateTime?
+
+  @@index([org_entity_id])
+  @@index([connection_id])
+  @@index([connection_id, scope_type, scope_id])
+  @@index([org_entity_id, revoked_at])
+  @@map("connector_scope_grants")
+}
+
+enum McpAuthMode {
+  OAUTH2
+  API_KEY
+  SERVICE_ACCOUNT
+  MCP_AUTH
+  NONE_FOR_LOCAL_MOCK
+}
+
+enum McpServerStatus {
+  NOT_CONFIGURED
+  CONNECTED
+  DEGRADED
+  REVOKED
+  ERROR
+}
+
+enum McpToolPolicyMode {
+  READ_ONLY
+  APPROVAL_REQUIRED
+  BLOCKED_BY_DEFAULT
+}
+
+enum McpOperationClass {
+  READ
+  WRITE
+  MUTATION
+  EXTERNAL_SEND
+  FINANCIAL
+  LEGAL
+  SECURITY
+  CUSTOMER_SENSITIVE
+}
+
+enum McpPolicyOutcome {
+  ALLOW
+  NEEDS_APPROVAL
+  BLOCK
+  DRAFT_ONLY
+  DUAL_CONTROL_REQUIRED
+}
+
+model McpServerConnection {
+  mcp_connection_id    String           @id @default(uuid()) @db.Uuid
+  org_entity_id        String           @db.Uuid
+  display_name         String
+  server_url           String
+  auth_mode            McpAuthMode      @default(MCP_AUTH)
+  secret_ref           String?
+  status               McpServerStatus  @default(NOT_CONFIGURED)
+  tool_policy_mode     McpToolPolicyMode @default(BLOCKED_BY_DEFAULT)
+  allowed_tool_names   String[]
+  blocked_tool_names   String[]
+  created_by_entity_id String           @db.Uuid
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+  revoked_at           DateTime?
+  last_health_check_at DateTime?
+  policies             McpToolPolicy[]
+
+  @@unique([org_entity_id, display_name])
+  @@index([org_entity_id])
+  @@index([org_entity_id, status])
+  @@map("mcp_server_connections")
+}
+
+model McpToolPolicy {
+  policy_id              String              @id @default(uuid()) @db.Uuid
+  org_entity_id          String              @db.Uuid
+  mcp_connection_id      String              @db.Uuid
+  tool_name              String
+  operation_class        McpOperationClass
+  outcome                McpPolicyOutcome    @default(NEEDS_APPROVAL)
+  requires_employee_authority Boolean        @default(true)
+  requires_dmw_scope     Boolean             @default(true)
+  requires_admin_approval Boolean            @default(false)
+  redaction_policy       String?
+  output_retention_policy String?
+  created_by_entity_id   String              @db.Uuid
+  created_at             DateTime            @default(now())
+  updated_at             DateTime            @updatedAt
+  revoked_at             DateTime?
+  server                 McpServerConnection @relation(fields: [mcp_connection_id], references: [mcp_connection_id])
+
+  @@unique([mcp_connection_id, tool_name, operation_class])
+  @@index([org_entity_id])
+  @@index([mcp_connection_id])
+  @@index([mcp_connection_id, tool_name])
+  @@map("mcp_tool_policies")
+}
