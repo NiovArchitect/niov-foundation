@@ -178,6 +178,16 @@ const LOCAL_DEV_CORS_ORIGINS = [
   "http://127.0.0.1:5173",
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  // Tauri 2.x desktop shell (otzar-control-tower/src-tauri).
+  // macOS uses `tauri://localhost` for the custom protocol;
+  // the asset protocol can present `https://tauri.localhost`.
+  // Adding both keeps the visual-desktop run working without
+  // exposing real Tauri origins in production (production CORS
+  // is driven by CONTROL_TOWER_URL / FOUNDATION_COMMAND_URL env
+  // vars and never auto-includes these).
+  "tauri://localhost",
+  "https://tauri.localhost",
+  "http://tauri.localhost",
 ] as const;
 
 // WHAT: Assemble the exact-origin CORS allowlist from env + local dev defaults.
