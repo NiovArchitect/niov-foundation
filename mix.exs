@@ -38,7 +38,8 @@ defmodule NiovFoundationBeam.MixProject do
   defp apps_paths do
     %{
       cosmp_router: "apps/cosmp_router",
-      dbgi_supervisor: "apps/dbgi_supervisor"
+      dbgi_supervisor: "apps/dbgi_supervisor",
+      collaboration_supervisor: "apps/collaboration_supervisor"
     }
   end
 
