@@ -95,7 +95,7 @@ async function loginInOrg(orgId: string = SHARED_ORG_ID): Promise<{
 }
 
 describe("POST /api/v1/otzar/my-twin/collaboration-requests", () => {
-  it("creates a REQUESTED row with no-leak guard (201)", async () => {
+  it("creates a NEEDS_APPROVAL row (ORG_WIDE default per Phase 2) with no-leak guard (201)", async () => {
     const requester = await loginInOrg();
     const target = await loginInOrg();
     const response = await app.inject({
@@ -122,7 +122,12 @@ describe("POST /api/v1/otzar/my-twin/collaboration-requests", () => {
       };
     };
     expect(body.ok).toBe(true);
-    expect(body.collaboration.state).toBe("REQUESTED");
+    // Phase 2 PR #285 — EMPLOYEE target maps to ORG_WIDE policy
+    // scope which defaults to NEEDS_APPROVAL. The org has no
+    // OrgCollaborationPolicy override row at this point, so the
+    // default fires. A future admin can upsert an ORG_WIDE → ALLOW
+    // policy row to restore the prior auto-REQUESTED behavior.
+    expect(body.collaboration.state).toBe("NEEDS_APPROVAL");
     expect(body.collaboration.has_target_entity).toBe(true);
     // No leakage of internals.
     expect(response.payload).not.toContain("target_entity_id");
