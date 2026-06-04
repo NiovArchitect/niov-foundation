@@ -2421,3 +2421,74 @@ model TwinCollaborationRequest {
   @@index([target_entity_id, state])
   @@map("twin_collaboration_requests")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 1 — WorkProject substrate per the
+// [FOUNDER-AUTH — CONTINUE AFTER EDX-3/4/5/6 / AUTONOMOUS
+// ENTERPRISE COLLABORATION COMPLETION] directive. Establishes
+// the minimal project/workspace context the EDX-1
+// project_context_summary sidecar + EDX-4 PROJECT_SCOPED authority
+// grants + EDX-5 PROJECT-scoped corrections + EDX-6 PROJECT
+// collaboration target_type all need to land safely. Coexists
+// with the existing Workflow / Hive / PlaygroundScenario models —
+// none of them is the enterprise project context this substrate
+// names.
+//
+// Foundational rules (enforced at the service tier):
+//   - Same-org only (validated against org_entity_id).
+//   - Archived projects cannot be collaboration / authority /
+//     correction targets (state-gate enforced).
+//   - No raw project docs / connector payloads on the row —
+//     `name` is bounded and the row carries no free-form
+//     content. Files / docs are forward-substrate.
+//   - Membership required for project-specific collaboration
+//     unless admin/org policy says otherwise (Phase 2 substrate).
+//   - NEVER hard-deleted (RULE 10) — state moves to ARCHIVED.
+//   - Audit emission via ADMIN_ACTION + details.action
+//     discriminator (WORK_PROJECT_CREATED / _MEMBER_ADDED /
+//     _ARCHIVED).
+// ─────────────────────────────────────────────────────────────────
+
+enum WorkProjectState {
+  ACTIVE
+  ARCHIVED
+}
+
+enum WorkProjectMemberRole {
+  OWNER
+  MEMBER
+  REVIEWER
+}
+
+model WorkProject {
+  project_id              String           @id @default(uuid()) @db.Uuid
+  org_entity_id           String           @db.Uuid
+  name                    String
+  state                   WorkProjectState @default(ACTIVE)
+  created_by_entity_id    String           @db.Uuid
+  archived_at             DateTime?
+  created_at              DateTime         @default(now())
+  updated_at              DateTime         @updatedAt
+
+  @@index([org_entity_id])
+  @@index([org_entity_id, state])
+  @@index([created_by_entity_id])
+  @@map("work_projects")
+}
+
+model WorkProjectMember {
+  project_member_id      String                 @id @default(uuid()) @db.Uuid
+  project_id             String                 @db.Uuid
+  org_entity_id          String                 @db.Uuid
+  entity_id              String                 @db.Uuid
+  role                   WorkProjectMemberRole  @default(MEMBER)
+  created_at             DateTime               @default(now())
+  updated_at             DateTime               @updatedAt
+
+  @@unique([project_id, entity_id])
+  @@index([project_id])
+  @@index([entity_id])
+  @@index([entity_id, role])
+  @@index([org_entity_id])
+  @@map("work_project_members")
+}
