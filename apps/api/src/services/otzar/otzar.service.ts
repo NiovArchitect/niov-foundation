@@ -109,7 +109,10 @@ import {
   detectApprovalRequirement,
   type ApprovalReason,
 } from "./approval-detection.js";
-import type { TwinAuthorityDurationClass } from "@prisma/client";
+import type {
+  TwinAuthorityDurationClass,
+  TwinCollaborationTargetType,
+} from "@prisma/client";
 
 // WHAT: Maximum messages allowed in client-supplied L8 history.
 const L8_MAX_MESSAGES = 50;
@@ -303,6 +306,14 @@ export interface ConductSessionSuccess {
   // as "no detection".
   approval_reason?: ApprovalReason;
   approval_duration_options?: ReadonlyArray<TwinAuthorityDurationClass>;
+  // Phase EDX-6 — collaboration_suggested closed-vocab companion.
+  // Surfaced only when collaboration_suggested flips true (the EDX-4
+  // verb-scan detected CROSS_TEAM_REQUEST or CROSS_PROJECT_REQUEST).
+  // Value names the kind of target the UI should suggest opening
+  // a collaboration request against; the actual collaboration row
+  // is NEVER auto-created from chat — the user explicitly opens
+  // the collaboration affordance on the My Twin view.
+  collaboration_target_type?: TwinCollaborationTargetType;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -1132,15 +1143,39 @@ export class OtzarService {
     const approvalRequired = approval.approval_required;
     const policyBlocked = false;
     const dmwScopeBlocked = false;
-    const collaborationSuggested = false;
+
+    // Phase EDX-6 — `collaboration_suggested` flips true when the
+    // EDX-4 verb-scan classified the message as CROSS_TEAM_REQUEST
+    // or CROSS_PROJECT_REQUEST. The companion
+    // collaboration_target_type reflects the directive's vocab
+    // (TEAM for cross-team handoffs; PROJECT for cross-project).
+    // ConductSession NEVER auto-creates the collaboration request
+    // row — the user explicitly opens the collaboration affordance.
+    let collaborationSuggested = false;
+    let collaborationTargetType: TwinCollaborationTargetType | undefined;
+    if (
+      approval.approval_required &&
+      (approval.approval_reason === "CROSS_TEAM_REQUEST" ||
+        approval.approval_reason === "CROSS_PROJECT_REQUEST")
+    ) {
+      collaborationSuggested = true;
+      collaborationTargetType =
+        approval.approval_reason === "CROSS_TEAM_REQUEST" ? "TEAM" : "PROJECT";
+    }
 
     // Phase EDX-3 slice 1: `next_step` defaults to "ANSWERED" — the
     // chat surface answered the user's question. EDX-4 PR 4 flips
-    // to "NEEDS_APPROVAL" when approval detection fires so the UI
-    // can route to the approval panel instead of the answer view.
-    const nextStep: ConductNextStep = approvalRequired
-      ? "NEEDS_APPROVAL"
-      : "ANSWERED";
+    // to "NEEDS_APPROVAL" when approval detection fires (catches
+    // EXTERNAL_WRITE / SENSITIVE_CONTEXT / CONNECTOR_ACCESS) and
+    // EDX-6 surfaces COLLABORATION_REQUEST_SUGGESTED when the
+    // CROSS_TEAM_REQUEST / CROSS_PROJECT_REQUEST classification
+    // wins (the chat path that explicitly maps to the collaboration
+    // substrate).
+    const nextStep: ConductNextStep = collaborationSuggested
+      ? "COLLABORATION_REQUEST_SUGGESTED"
+      : approvalRequired
+        ? "NEEDS_APPROVAL"
+        : "ANSWERED";
 
     // Phase EDX-3 slice 5: safe layer-breakdown projection. Pure
     // summary of the per-layer counts conductSession already used to
@@ -1187,6 +1222,9 @@ export class OtzarService {
             approval_reason: approval.approval_reason,
             approval_duration_options: approval.approval_duration_options,
           }
+        : {}),
+      ...(collaborationTargetType !== undefined
+        ? { collaboration_target_type: collaborationTargetType }
         : {}),
     };
   }

@@ -667,6 +667,87 @@ describe("conductSession", () => {
       // Companions absent when approval_required is false.
       expect(result.approval_reason).toBeUndefined();
       expect(result.approval_duration_options).toBeUndefined();
+      // Phase EDX-6 — collaboration companions absent too.
+      expect(result.collaboration_suggested).toBe(false);
+      expect(result.collaboration_target_type).toBeUndefined();
+    },
+  );
+
+  // Phase EDX-6 — CROSS_TEAM_REQUEST detection flips
+  // collaboration_suggested true + sets collaboration_target_type
+  // = "TEAM" + flips next_step to "COLLABORATION_REQUEST_SUGGESTED".
+  it(
+    "[EDX-6] cross-team message flips collaboration_suggested + target_type=TEAM",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "loop in legal on this contract",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.collaboration_suggested).toBe(true);
+      expect(result.collaboration_target_type).toBe("TEAM");
+      expect(result.next_step).toBe("COLLABORATION_REQUEST_SUGGESTED");
+      // The verb-scan still classified it as CROSS_TEAM_REQUEST so
+      // approval_required is also true.
+      expect(result.approval_required).toBe(true);
+      expect(result.approval_reason).toBe("CROSS_TEAM_REQUEST");
+    },
+  );
+
+  it(
+    "[EDX-6] cross-project message flips collaboration_suggested + target_type=PROJECT",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "pull context from another project for me",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.collaboration_suggested).toBe(true);
+      expect(result.collaboration_target_type).toBe("PROJECT");
+      expect(result.next_step).toBe("COLLABORATION_REQUEST_SUGGESTED");
+      expect(result.approval_reason).toBe("CROSS_PROJECT_REQUEST");
+    },
+  );
+
+  it(
+    "[EDX-6] CONNECTOR_ACCESS does NOT flip collaboration_suggested (priority discipline)",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "send a slack message to ops",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // CONNECTOR_ACCESS won the priority order in the verb-scan;
+      // collaboration_suggested stays false even though approval
+      // fires.
+      expect(result.collaboration_suggested).toBe(false);
+      expect(result.collaboration_target_type).toBeUndefined();
+      expect(result.approval_required).toBe(true);
+      expect(result.next_step).toBe("NEEDS_APPROVAL");
     },
   );
 
