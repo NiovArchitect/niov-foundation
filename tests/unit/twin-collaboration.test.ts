@@ -40,6 +40,17 @@ vi.mock("../../apps/api/src/services/otzar/work-project.service.js", () => ({
   isActiveProjectMember: isActiveProjectMemberMock,
 }));
 
+// Phase 2 PR 2 — mock the org collaboration policy evaluator.
+const { evalPolicyMock } = vi.hoisted(() => ({
+  evalPolicyMock: vi.fn(),
+}));
+vi.mock(
+  "../../apps/api/src/services/governance/org-collaboration-policy.service.js",
+  () => ({
+    evaluateOrgCollaborationPolicy: evalPolicyMock,
+  }),
+);
+
 import {
   acceptTwinCollaborationRequestForCaller,
   cancelTwinCollaborationRequestForCaller,
@@ -95,6 +106,16 @@ beforeEach(() => {
   prismaMock.entityMembership.findFirst.mockReset();
   auditMock.mockReset();
   isActiveProjectMemberMock.mockReset();
+  evalPolicyMock.mockReset();
+  // Default the policy evaluator to ALLOW so the pre-existing tests
+  // (which were written before the policy gate landed) keep passing.
+  evalPolicyMock.mockResolvedValue({
+    outcome: "ALLOW",
+    reason_code: "ORG_DEFAULT_ALLOW",
+    requires_employee_authority: false,
+    requires_admin_approval: false,
+    requires_dual_control: false,
+  });
 });
 
 describe("projectCollaborationRequestSafeView", () => {
@@ -251,6 +272,156 @@ describe("createTwinCollaborationRequestForCaller", () => {
       prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
     expect(createCall.data.state).toBe("REQUESTED");
     expect(createCall.data.blocked_reason).toBeNull();
+  });
+
+  // Phase 2 PR 2 — org collaboration policy integration. The
+  // evaluator is mocked so we can drive the create-time state
+  // machine through each outcome.
+  it("policy ALLOW + no requires_approval → REQUESTED", async () => {
+    evalPolicyMock.mockResolvedValue({
+      outcome: "ALLOW",
+      reason_code: "ORG_DEFAULT_ALLOW",
+      requires_employee_authority: false,
+      requires_admin_approval: false,
+      requires_dual_control: false,
+    });
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      child_id: TARGET_ID,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(rowFixture());
+    await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "STATUS_REQUEST",
+      safeSummary: "ALLOW path",
+    });
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("REQUESTED");
+  });
+
+  it("policy NEEDS_APPROVAL forces NEEDS_APPROVAL state", async () => {
+    evalPolicyMock.mockResolvedValue({
+      outcome: "NEEDS_APPROVAL",
+      reason_code: "ORG_DEFAULT_NEEDS_APPROVAL",
+      requires_employee_authority: false,
+      requires_admin_approval: true,
+      requires_dual_control: false,
+    });
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      child_id: TARGET_ID,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({ state: "NEEDS_APPROVAL" }),
+    );
+    await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "CROSS_TEAM_COORDINATION",
+      safeSummary: "Cross-team",
+    });
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("NEEDS_APPROVAL");
+  });
+
+  it("policy BLOCK creates BLOCKED row + POLICY_REQUIRES_APPROVAL reason", async () => {
+    evalPolicyMock.mockResolvedValue({
+      outcome: "BLOCK",
+      reason_code: "POLICY_ROW_MATCH",
+      requires_employee_authority: false,
+      requires_admin_approval: false,
+      requires_dual_control: false,
+    });
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      child_id: TARGET_ID,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({
+        state: "BLOCKED",
+        blocked_reason: "POLICY_REQUIRES_APPROVAL",
+      }),
+    );
+    await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "STATUS_REQUEST",
+      safeSummary: "Will be blocked",
+    });
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("BLOCKED");
+    expect(createCall.data.blocked_reason).toBe("POLICY_REQUIRES_APPROVAL");
+  });
+
+  it("policy DUAL_CONTROL_REQUIRED → NEEDS_APPROVAL", async () => {
+    evalPolicyMock.mockResolvedValue({
+      outcome: "DUAL_CONTROL_REQUIRED",
+      reason_code: "SENSITIVE_DOMAIN_DUAL_CONTROL",
+      requires_employee_authority: false,
+      requires_admin_approval: true,
+      requires_dual_control: true,
+    });
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      child_id: TARGET_ID,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({ state: "NEEDS_APPROVAL" }),
+    );
+    await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "CONTEXT_REQUEST",
+      sensitivityClass: "LEGAL",
+      safeSummary: "Legal review needed",
+    });
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("NEEDS_APPROVAL");
+  });
+
+  it("project membership block wins over policy (BLOCKED + MISSING_PROJECT_MEMBERSHIP)", async () => {
+    // Even if the policy would allow, the project-membership rule
+    // takes precedence and creates a BLOCKED row with the project-
+    // membership reason.
+    isActiveProjectMemberMock.mockResolvedValue(false);
+    evalPolicyMock.mockResolvedValue({
+      outcome: "ALLOW",
+      reason_code: "ORG_DEFAULT_ALLOW",
+      requires_employee_authority: false,
+      requires_admin_approval: false,
+      requires_dual_control: false,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({
+        state: "BLOCKED",
+        blocked_reason: "MISSING_PROJECT_MEMBERSHIP",
+      }),
+    );
+    await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "PROJECT",
+      targetProjectId: "99999999-9999-9999-9999-999999999999",
+      requestType: "PROJECT_COORDINATION",
+      safeSummary: "Project block",
+    });
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("BLOCKED");
+    expect(createCall.data.blocked_reason).toBe(
+      "MISSING_PROJECT_MEMBERSHIP",
+    );
+    // Policy evaluator is NOT called when project-membership blocks.
+    expect(evalPolicyMock).not.toHaveBeenCalled();
   });
 });
 
