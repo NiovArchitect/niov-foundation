@@ -32,6 +32,14 @@ vi.mock("@niov/database", async (importOriginal) => {
   };
 });
 
+// Phase 1 PR 4 — mock the work-project membership helper.
+const { isActiveProjectMemberMock } = vi.hoisted(() => ({
+  isActiveProjectMemberMock: vi.fn(),
+}));
+vi.mock("../../apps/api/src/services/otzar/work-project.service.js", () => ({
+  isActiveProjectMember: isActiveProjectMemberMock,
+}));
+
 import {
   acceptTwinCollaborationRequestForCaller,
   cancelTwinCollaborationRequestForCaller,
@@ -86,6 +94,7 @@ beforeEach(() => {
   prismaMock.twinCollaborationRequest.update.mockReset();
   prismaMock.entityMembership.findFirst.mockReset();
   auditMock.mockReset();
+  isActiveProjectMemberMock.mockReset();
 });
 
 describe("projectCollaborationRequestSafeView", () => {
@@ -192,6 +201,56 @@ describe("createTwinCollaborationRequestForCaller", () => {
     const createCall =
       prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
     expect(createCall.data.safe_summary.length).toBeLessThanOrEqual(500);
+  });
+
+  // Phase 1 PR 4 — PROJECT target_type project-membership guard.
+  it("PROJECT target with caller-not-a-member creates a BLOCKED row + MISSING_PROJECT_MEMBERSHIP reason", async () => {
+    isActiveProjectMemberMock.mockResolvedValue(false);
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({
+        target_type: "PROJECT",
+        target_project_id: "99999999-9999-9999-9999-999999999999",
+        state: "BLOCKED",
+        blocked_reason: "MISSING_PROJECT_MEMBERSHIP",
+      }),
+    );
+    const r = await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "PROJECT",
+      targetProjectId: "99999999-9999-9999-9999-999999999999",
+      requestType: "PROJECT_COORDINATION",
+      safeSummary: "Project handoff",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // The create call writes the blocked row with the reason.
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("BLOCKED");
+    expect(createCall.data.blocked_reason).toBe("MISSING_PROJECT_MEMBERSHIP");
+  });
+
+  it("PROJECT target with caller IS a member creates a REQUESTED row + no blocked_reason", async () => {
+    isActiveProjectMemberMock.mockResolvedValue(true);
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({
+        target_type: "PROJECT",
+        target_project_id: "99999999-9999-9999-9999-999999999999",
+      }),
+    );
+    await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "PROJECT",
+      targetProjectId: "99999999-9999-9999-9999-999999999999",
+      requestType: "PROJECT_COORDINATION",
+      safeSummary: "Project coordination",
+    });
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("REQUESTED");
+    expect(createCall.data.blocked_reason).toBeNull();
   });
 });
 

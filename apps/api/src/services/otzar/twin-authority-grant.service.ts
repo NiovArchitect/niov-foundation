@@ -42,6 +42,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { prisma } from "@niov/database";
+import { isActiveProjectMember } from "./work-project.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // Closed vocabs — re-export the Prisma-generated literal unions so
@@ -245,18 +246,48 @@ export function projectTwinAuthorityGrantSafeView(row: {
   };
 }
 
+// WHAT: Result discriminated union for create — Phase 1 PR 4 adds
+//        the PROJECT_NOT_MEMBER failure so PROJECT_SCOPED grants can
+//        reject pre-write when the caller is not a member of the
+//        named project. Existing happy-path callers continue to
+//        receive { ok: true, grant: ... }.
+export type CreateGrantResult =
+  | { ok: true; grant: TwinAuthorityGrantSafeView }
+  | { ok: false; code: "PROJECT_NOT_MEMBER" };
+
 // WHAT: Create a TwinAuthorityGrant on behalf of the caller.
 // INPUT: CreateTwinAuthorityGrantInput. callerEntityId becomes
 //        grantor_entity_id (RULE 0 — caller is always the grantor).
-// OUTPUT: Safe view of the persisted grant.
+// OUTPUT: CreateGrantResult discriminated union.
 // WHY: Always writes the row + emits an ADMIN_ACTION audit event
 //      with details.action = "TWIN_AUTHORITY_GRANTED" BEFORE the
 //      service returns (RULE 4). purpose_summary is bounded.
 //      SENSITIVE_CASE_BY_CASE grants are explicitly allowed at
 //      creation — the gate fires at check-time, not create-time.
+//      Phase 1 PR 4 — PROJECT_SCOPED grants with an explicit
+//      scope_id additionally validate that the caller is an
+//      ACTIVE member of the named project before the write fires.
+//      Non-members get PROJECT_NOT_MEMBER without persisting a row.
 export async function createTwinAuthorityGrantForCaller(
   input: CreateTwinAuthorityGrantInput,
-): Promise<TwinAuthorityGrantSafeView> {
+): Promise<CreateGrantResult> {
+  // Phase 1 PR 4 project-membership guard. Only fires when the
+  // scope is PROJECT and an explicit project id is supplied — a
+  // grant whose scope_type is PROJECT but scope_id is null is a
+  // "project-class but unscoped" grant and the gate fires at
+  // check-time, not create-time.
+  if (
+    input.scopeType === "PROJECT" &&
+    typeof input.scopeId === "string" &&
+    input.scopeId.length > 0
+  ) {
+    const isMember = await isActiveProjectMember({
+      projectId: input.scopeId,
+      entityId: input.callerEntityId,
+    });
+    if (!isMember) return { ok: false, code: "PROJECT_NOT_MEMBER" };
+  }
+
   const purpose = input.purposeSummary.slice(0, PURPOSE_SUMMARY_MAX_LENGTH);
   const constraints = input.constraints ?? {};
   const sensitivity = input.sensitivityClass ?? "MODERATE";
@@ -299,7 +330,7 @@ export async function createTwinAuthorityGrantForCaller(
     },
   });
 
-  return projectTwinAuthorityGrantSafeView(row);
+  return { ok: true, grant: projectTwinAuthorityGrantSafeView(row) };
 }
 
 // WHAT: List the caller's grants (grantor-side).

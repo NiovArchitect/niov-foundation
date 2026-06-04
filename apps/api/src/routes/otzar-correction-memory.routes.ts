@@ -228,7 +228,7 @@ export async function registerOtzarCorrectionMemoryRoutes(
       });
     }
 
-    const view = await createTwinCorrectionMemoryForCaller({
+    const result = await createTwinCorrectionMemoryForCaller({
       callerEntityId,
       orgEntityId,
       scopeType: body.scope_type as TwinCorrectionScopeType,
@@ -254,7 +254,12 @@ export async function registerOtzarCorrectionMemoryRoutes(
       expiresAt: expiresAt ?? null,
     });
 
-    return reply.code(201).send({ ok: true, correction: view });
+    if (!result.ok) {
+      // Phase 1 PR 4 — PROJECT-scope correction rejected because
+      // the caller is not an ACTIVE member of the named project.
+      return reply.code(403).send(result);
+    }
+    return reply.code(201).send({ ok: true, correction: result.correction });
   });
 
   // GET /api/v1/otzar/my-twin/corrections
