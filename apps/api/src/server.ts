@@ -498,10 +498,16 @@ export async function buildApp(
   // (the service reads existing Prisma tables directly and
   // emits audit via the shared writeAuditEvent helper).
   const analyticsService = new AnalyticsService();
-  const rateLimits: Record<string, RateLimitPolicy> = {
-    ...DEFAULT_LIMITS,
-    ...(config.rateLimitOverrides ?? {}),
-  };
+  // Spread DEFAULT_LIMITS then layer in any overrides whose value is
+  // actually defined. `config.rateLimitOverrides` is typed as
+  // `Partial<Record<string, RateLimitPolicy>>` so spreading it directly
+  // would let an explicit `undefined` entry sneak through and break
+  // the `Record<string, RateLimitPolicy>` contract — filter those out.
+  const rateLimits: Record<string, RateLimitPolicy> = { ...DEFAULT_LIMITS };
+  const overrides = config.rateLimitOverrides ?? {};
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) rateLimits[key] = value;
+  }
 
   // Section 11B Otzar service. KVCache + LLM provider + COE +
   // Auth dependencies. In test mode (NODE_ENV=test), buildApp uses

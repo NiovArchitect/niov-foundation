@@ -240,43 +240,22 @@ export async function getCapsuleMetadata(
   actorId: string | null = null,
 ): Promise<CapsuleMetadata | null> {
   return prisma.$transaction(async (tx) => {
+    // Use Prisma's `omit` (Prisma 5.16+; we ship 6.19+) so the result
+    // shape automatically includes EVERY MemoryCapsule field except
+    // storage_location — exactly matching the
+    // `Omit<MemoryCapsule, "storage_location">` CapsuleMetadata
+    // contract. This closes the D-COSMP-METADATA-SELECT-CLAUSE-DRIFT
+    // gap surfaced when the explicit select clause fell behind
+    // schema growth (tokens / tokens_tokenizer / commitment_date /
+    // embedding_content_hash / created_by / created_session_id /
+    // write_reason / updated_by / updated_session_id / previous_version
+    // / mutation_type / conversation_id / embedding_generated_at).
+    // The storage_location omission preserves the privacy invariant
+    // documented above the function.
     const capsule = await tx.memoryCapsule.findFirst({
       where: { capsule_id: capsuleId, deleted_at: null },
-      select: {
-        capsule_id: true,
-        wallet_id: true,
-        entity_id: true,
-        version: true,
-        capsule_type: true,
-        topic_tags: true,
-        relevance_score: true,
-        decay_type: true,
-        decay_rate: true,
-        feedback_loop_score: true,
-        payload_summary: true,
-        payload_size_tokens: true,
-        storage_tier: true,
-        clearance_required: true,
-        access_count: true,
-        content_hash: true,
-        ai_access_blocked: true,
-        requires_validation: true,
-        connected_capsule_ids: true,
-        connected_entity_ids: true,
-        monetization_enabled: true,
-        monetization_category: true,
-        created_at: true,
-        last_accessed_at: true,
-        last_updated_at: true,
-        expires_at: true,
-        deleted_at: true,
-        // CAR Sub-box 2 sub-phase 4 [CAR-SUB-BOX-2-COSMP-ENFORCEMENT]
-        // per ADR-0037 Sub-decision 7 + Q4 LOCKED Option α: NEGOTIATE
-        // start-check needs target capsule jurisdiction at runtime.
-        // Minimum-touch select extension; pre-existing missing fields
-        // (tokens, tokens_tokenizer, commitment_date, +6 more) remain
-        // forward-queued per D-COSMP-METADATA-SELECT-CLAUSE-DRIFT.
-        jurisdiction: true,
+      omit: {
+        storage_location: true,
       },
     });
 

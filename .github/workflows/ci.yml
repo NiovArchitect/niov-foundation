@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   typecheck:
-    name: Typecheck (strict 4-error baseline)
+    name: Typecheck (zero-error baseline)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -39,18 +39,18 @@ jobs:
       - run: npm ci
       - name: Generate Prisma client
         run: npm run db:generate
-      - name: Run typecheck (strict baseline)
+      - name: Run typecheck (zero-error baseline)
         run: |
           set +e
           npx tsc --noEmit -p tsconfig.json 2>&1 | tee tsc-output.log
           set -e
           ERROR_COUNT=$(grep -c "error TS" tsc-output.log || echo 0)
-          echo "TS error count: $ERROR_COUNT (baseline: 4)"
-          if [ "$ERROR_COUNT" -gt 4 ]; then
-            echo "::error::TS error count $ERROR_COUNT exceeds baseline 4"
+          echo "TS error count: $ERROR_COUNT (baseline: 0)"
+          if [ "$ERROR_COUNT" -gt 0 ]; then
+            echo "::error::TS error count $ERROR_COUNT exceeds zero-error baseline"
             exit 1
           fi
-          echo "✓ TS baseline preserved at $ERROR_COUNT errors"
+          echo "✓ Zero-error baseline preserved"
       - name: Upload typecheck diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
