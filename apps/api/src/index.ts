@@ -617,6 +617,7 @@ export { registerOtzarCorrectionMemoryRoutes } from "./routes/otzar-correction-m
 export { registerOtzarCollaborationRoutes } from "./routes/otzar-collaboration.routes.js";
 export { registerOtzarWorkProjectRoutes } from "./routes/otzar-work-project.routes.js";
 export { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
+export { registerOtzarVoiceReadyRoutes } from "./routes/otzar-voice-ready.routes.js";
 
 export {
   createTwin,
