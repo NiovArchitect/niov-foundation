@@ -98,6 +98,10 @@ import {
   type TwinCollaborationInboxSummary,
 } from "./twin-collaboration-inbox.js";
 import {
+  computeProjectContextSummaryForCaller,
+  type TwinProjectContextSummary,
+} from "./twin-project-context.js";
+import {
   computeVoiceReadinessState,
   type TwinVoiceReadinessState,
 } from "./twin-voice-readiness.js";
@@ -594,6 +598,15 @@ export interface MyTwinView {
   // requester identity / per-row substance. Per-source read
   // failures swallowed silently per ADR-0068 §6.
   collaboration_inbox_summary?: TwinCollaborationInboxSummary;
+  // Phase 1 PR 3 employee Twin self-state extension —
+  // project_context_summary sidecar. SAFE capacity-only projection
+  // of the caller's WorkProject membership inventory (PR #280
+  // substrate; PR #281 routes). Closes the EDX-1 forward-substrate
+  // item that was blocked on project substrate. NEVER includes
+  // project_id / name / per-row substance / other members'
+  // identities. Per-source read failures swallowed silently per
+  // ADR-0068 §6.
+  project_context_summary?: TwinProjectContextSummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1758,6 +1771,20 @@ export class OtzarService {
       collaborationInboxSummary = undefined;
     }
 
+    // Phase 1 PR 3 employee Twin self-state extension —
+    // project_context_summary sidecar. Self-scoped via
+    // primary.entity_id (the human owner; project membership lives
+    // on the human, not the Twin). Per-source read miss swallowed
+    // silently per ADR-0068 §6.
+    let projectContextSummary: TwinProjectContextSummary | undefined;
+    try {
+      projectContextSummary = await computeProjectContextSummaryForCaller(
+        primary.entity_id,
+      );
+    } catch {
+      projectContextSummary = undefined;
+    }
+
     // Phase EDX-1 employee Twin self-state extension —
     // voice_readiness_state sidecar. Constant projection (no
     // DB hit, no caller-specific gating at the Foundation tier).
@@ -1804,6 +1831,9 @@ export class OtzarService {
         : {}),
       ...(collaborationInboxSummary !== undefined
         ? { collaboration_inbox_summary: collaborationInboxSummary }
+        : {}),
+      ...(projectContextSummary !== undefined
+        ? { project_context_summary: projectContextSummary }
         : {}),
       voice_readiness_state: voiceReadinessState,
     };
