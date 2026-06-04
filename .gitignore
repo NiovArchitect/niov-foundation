@@ -19,6 +19,11 @@ docs/_generated/
 
 # Track A test infrastructure (per ADR-0013)
 .env.test.local
+.env.test.local.bak
+
+# Visual desktop demo (local-dev only; never committed)
+.env.demo.local
+.env.demo.local.bak
 
 # Elixir/BEAM (Block B sub-phase 2 [BEAM-MIX-WORKSPACE] per ADR-0030)
 _build/
