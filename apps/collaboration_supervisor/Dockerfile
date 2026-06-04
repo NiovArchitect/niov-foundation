@@ -12,7 +12,7 @@
 # Point Foundation at it:
 #   BEAM_RUNTIME_ENABLED=true BEAM_RUNTIME_URL=http://localhost:4001 npm run dev
 
-FROM hexpm/elixir:1.19.5-erlang-28.5.0-debian-bookworm-20251229-slim AS build
+FROM hexpm/elixir:1.19.5-erlang-28.5.0.1-debian-bookworm-20260518-slim AS build
 
 ENV MIX_ENV=prod \
     LANG=C.UTF-8 \
@@ -46,7 +46,7 @@ RUN mix local.hex --force && \
 RUN MIX_ENV=prod mix do deps.compile, compile --only collaboration_supervisor
 
 # --- Runtime --------------------------------------------------------------
-FROM hexpm/elixir:1.19.5-erlang-28.5.0-debian-bookworm-20251229-slim AS runtime
+FROM hexpm/elixir:1.19.5-erlang-28.5.0.1-debian-bookworm-20260518-slim AS runtime
 
 ENV MIX_ENV=prod \
     LANG=C.UTF-8

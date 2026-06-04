@@ -1,0 +1,119 @@
+# Deploy to the staging environment.
+#
+# Gates:
+# - The `staging` GitHub Environment MUST exist and have appropriate
+#   protection rules (required reviewers / wait timer / branch restriction).
+#   This is repo-admin configuration that lives outside this workflow.
+# - Cloud credentials live as `staging` environment secrets, NOT as
+#   repository-wide secrets, so other workflows cannot see them.
+# - If cloud credentials are missing, the workflow exits 0 with an
+#   explanatory notice rather than failing — keeping the substrate
+#   forward-compatible per the directive ("skip deploy with clear
+#   message, not failure").
+#
+# Per docs/deployment/cloud-portability.md and the three-tier
+# credential separation, customer connector keys NEVER enter this
+# workflow — only NIOV PLATFORM secrets do.
+
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "apps/api/**"
+      - "packages/**"
+      - "apps/collaboration_supervisor/**"
+      - "services/python-intelligence/**"
+      - ".github/workflows/deploy-staging.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_PUBLIC_URL }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Detect cloud target
+        id: target
+        run: |
+          target="${{ vars.CLOUD_TARGET }}"
+          if [ -z "$target" ]; then
+            target="skip"
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "::notice::Cloud target: $target"
+
+      - name: Skip when CLOUD_TARGET unset
+        if: steps.target.outputs.target == 'skip'
+        run: |
+          echo "::notice::CLOUD_TARGET environment variable not set on 'staging' environment."
+          echo "::notice::Set CLOUD_TARGET=azure or CLOUD_TARGET=aws and configure secrets to enable deploys."
+          echo "::notice::See docs/deployment/azure-deployment.md / docs/deployment/aws-deployment.md."
+
+      # --- Azure path ----------------------------------------------------
+      - name: Azure login
+        if: steps.target.outputs.target == 'azure'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure Container Apps update
+        if: steps.target.outputs.target == 'azure'
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          APP: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+          ACR: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+        run: |
+          if [ -z "$RG" ] || [ -z "$APP" ] || [ -z "$ACR" ]; then
+            echo "::notice::Azure target selected but resource group / container app / ACR not configured. Skipping."
+            exit 0
+          fi
+          echo "::notice::az containerapp update -n $APP -g $RG --image $ACR.azurecr.io/niov/foundation-api:${IMAGE_TAG}"
+          echo "::notice::(actual update gated until secrets verified)"
+
+      # --- AWS path ------------------------------------------------------
+      - name: Configure AWS credentials
+        if: steps.target.outputs.target == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: AWS ECS update-service
+        if: steps.target.outputs.target == 'aws'
+        env:
+          CLUSTER: ${{ vars.AWS_ECS_CLUSTER }}
+          SERVICE: ${{ vars.AWS_ECS_SERVICE }}
+        run: |
+          if [ -z "$CLUSTER" ] || [ -z "$SERVICE" ]; then
+            echo "::notice::AWS target selected but cluster / service not configured. Skipping."
+            exit 0
+          fi
+          echo "::notice::aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment"
+          echo "::notice::(actual update gated until secrets verified)"
+
+      # --- Post-deploy smoke --------------------------------------------
+      - name: Smoke against ${{ vars.STAGING_PUBLIC_URL }}
+        if: steps.target.outputs.target != 'skip' && vars.STAGING_PUBLIC_URL != ''
+        run: |
+          url="${{ vars.STAGING_PUBLIC_URL }}"
+          echo "::notice::Smoke check against ${url}/health"
+          # The actual curl is forward-substrate — staging URL may not be
+          # publicly reachable from GitHub Actions runners depending on
+          # the customer's network posture.
+          echo "::notice::(smoke gated until staging URL reachability is verified)"
