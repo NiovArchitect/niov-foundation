@@ -19,6 +19,12 @@ FROM node:22.11-bookworm-slim AS deps
 ENV NODE_ENV=production
 WORKDIR /repo
 
+# OpenSSL is required by Prisma's binary at install time on slim images.
+# ca-certificates supports HTTPS fetches from any npm scope.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openssl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy lockfile + workspace package.jsons first so npm ci can cache.
 COPY package.json package-lock.json* ./
 COPY apps/api/package.json apps/api/package.json
@@ -39,9 +45,10 @@ RUN npm --workspace @niov/database run db:generate
 # --- Stage 2: runtime --------------------------------------------------------
 FROM node:22.11-bookworm-slim AS runtime
 
-# tini for clean PID 1 signal handling
+# tini for clean PID 1 signal handling. OpenSSL is required by Prisma's
+# generated client at runtime. ca-certificates supports outbound HTTPS.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends tini curl ca-certificates && \
+    apt-get install -y --no-install-recommends tini curl openssl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
@@ -50,10 +57,11 @@ ENV NODE_ENV=production \
 
 WORKDIR /repo
 
-# Bring deps + generated Prisma client over from the deps stage.
+# Bring the hoisted root node_modules over. npm workspaces hoist everything
+# to the repo root by default, so we only need this single COPY. (The
+# per-workspace node_modules dirs only exist when there are conflicting
+# versions; in this repo they don't.)
 COPY --from=deps /repo/node_modules ./node_modules
-COPY --from=deps /repo/packages/database/node_modules ./packages/database/node_modules
-COPY --from=deps /repo/apps/api/node_modules ./apps/api/node_modules
 
 # Copy source. We deliberately don't precompile — apps/api runs via tsx, so
 # TS source IS the deployable.
