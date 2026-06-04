@@ -316,3 +316,31 @@ jobs:
         # DBGI where expensive-test-tier :integration-tagged tests may
         # surface (observability, libcluster multi-region, etc.).
         run: mix test --include integration
+
+  python-intelligence:
+    name: Python intelligence runtime
+    runs-on: ubuntu-latest
+    # Independent of the rest of the matrix — no DB needed, no Node
+    # needed. Runs the deterministic ranker + forecaster tests for the
+    # FastAPI service at services/python-intelligence/. Foundation TS
+    # wrapper at apps/api/src/services/intelligence/python-ranking.service.ts
+    # talks to this service over HTTP when
+    # PYTHON_INTELLIGENCE_RUNTIME_URL is set; the wrapper otherwise
+    # falls back to its in-process fixture ranker (see ADR-0048
+    # personalization-orchestration substrate).
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: services/python-intelligence/requirements-dev.txt
+      - name: Install deps
+        run: |
+          cd services/python-intelligence
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Pytest
+        run: |
+          cd services/python-intelligence
+          pytest -q

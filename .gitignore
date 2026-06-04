@@ -36,3 +36,10 @@ doc/
 # Mix-generated release + repo artifacts
 apps/*/priv/static/
 apps/*/priv/repo/structure.sql
+
+# Python intelligence runtime (services/python-intelligence)
+services/python-intelligence/.venv/
+services/python-intelligence/**/__pycache__/
+services/python-intelligence/.pytest_cache/
+services/python-intelligence/.ruff_cache/
+services/python-intelligence/*.egg-info/
