@@ -197,7 +197,16 @@ export class AnthropicProvider implements LLMProvider {
       );
     }
     this.client = new Anthropic({ apiKey });
-    this.model = args.model ?? "claude-sonnet-4-6";
+    // Model selection precedence (mirrors OpenAIProvider):
+    //   1. explicit args.model
+    //   2. ANTHROPIC_MODEL env var
+    //   3. MODEL_ROUTER_DEFAULT_MODEL env var
+    //   4. "claude-sonnet-4-6" hard-coded default
+    this.model =
+      args.model ??
+      process.env.ANTHROPIC_MODEL ??
+      process.env.MODEL_ROUTER_DEFAULT_MODEL ??
+      "claude-sonnet-4-6";
   }
 
   async generateResponse(
@@ -255,7 +264,17 @@ export class OpenAIProvider implements LLMProvider {
       );
     }
     this.client = new OpenAI({ apiKey });
-    this.model = args.model ?? "gpt-4o";
+    // Model selection precedence:
+    //   1. explicit args.model (used by tests / explicit DI)
+    //   2. OPENAI_MODEL env var (operator override for a specific deploy)
+    //   3. MODEL_ROUTER_DEFAULT_MODEL env var (Founder-facing alias documented
+    //      in .env.example for symmetry with multi-provider env naming)
+    //   4. "gpt-4o" hard-coded default (the production-safe fallback)
+    this.model =
+      args.model ??
+      process.env.OPENAI_MODEL ??
+      process.env.MODEL_ROUTER_DEFAULT_MODEL ??
+      "gpt-4o";
   }
 
   async generateResponse(
@@ -290,12 +309,19 @@ export class OpenAIProvider implements LLMProvider {
 }
 
 // WHAT: Pick the production LLM provider per env config.
-// INPUT: None (reads PREFERRED_LLM env, defaults to "anthropic").
+// INPUT: None (reads LLM_PROVIDER or PREFERRED_LLM env, defaults to "anthropic").
 // OUTPUT: A circuit-breaker-wrapped LLMProvider.
 // WHY: Single factory used by buildApp's production path. Tests
 //      construct providers + breakers directly with injected clocks.
+//
+//      Env precedence:
+//        1. LLM_PROVIDER (Founder-facing canonical name; preferred)
+//        2. PREFERRED_LLM (legacy; preserved for back-compat)
+//        3. "anthropic" hard-coded default
 export function getLLMProvider(): LLMProvider {
-  const preferred = (process.env.PREFERRED_LLM ?? "anthropic").toLowerCase();
+  const preferred = (
+    process.env.LLM_PROVIDER ?? process.env.PREFERRED_LLM ?? "anthropic"
+  ).toLowerCase();
   if (preferred === "openai") {
     return withCircuitBreaker(new OpenAIProvider());
   }
