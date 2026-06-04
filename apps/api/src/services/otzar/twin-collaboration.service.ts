@@ -38,6 +38,10 @@ import type {
 } from "@prisma/client";
 import { prisma } from "@niov/database";
 import { isActiveProjectMember } from "./work-project.service.js";
+import {
+  evaluateOrgCollaborationPolicy,
+  type OrgCollaborationScope,
+} from "../governance/org-collaboration-policy.service.js";
 
 export type {
   TwinCollaborationBlockedReason,
@@ -249,26 +253,85 @@ export async function createTwinCollaborationRequestForCaller(
   // blocked-row state with the closed-vocab reason instead of a
   // 4xx silently dropping the user's intent.
   let projectMembershipBlocked = false;
+  let callerIsProjectMember = false;
   if (
     input.targetType === "PROJECT" &&
     typeof input.targetProjectId === "string"
   ) {
-    const isMember = await isActiveProjectMember({
+    callerIsProjectMember = await isActiveProjectMember({
       projectId: input.targetProjectId,
       entityId: input.callerEntityId,
     });
-    if (!isMember) {
+    if (!callerIsProjectMember) {
       projectMembershipBlocked = true;
     }
   }
 
+  // Phase 2 PR 2 — org collaboration policy evaluation. Mapped from
+  // target_type to an OrgCollaborationScope. PROJECT + project
+  // membership → SAME_PROJECT (the same-project allow path); PROJECT
+  // without membership is already handled by the
+  // MISSING_PROJECT_MEMBERSHIP block above (we skip policy eval in
+  // that case — the block reason wins). TEAM defaults to CROSS_TEAM
+  // conservatively (no Team substrate exists at this slice). EMPLOYEE
+  // / EMPLOYEE_TWIN / HIVE / WORKFLOW default to ORG_WIDE. The
+  // evaluator's defaults take it from there: SAME_PROJECT → ALLOW,
+  // CROSS_TEAM / CROSS_PROJECT / ORG_WIDE → NEEDS_APPROVAL, and any
+  // sensitive sensitivity_class → DUAL_CONTROL_REQUIRED.
+  let policyOutcome:
+    | "ALLOW"
+    | "NEEDS_APPROVAL"
+    | "BLOCK"
+    | "DRAFT_ONLY"
+    | "DUAL_CONTROL_REQUIRED"
+    | null = null;
+  let policyBlocked = false;
+  if (!projectMembershipBlocked) {
+    const scope: OrgCollaborationScope =
+      input.targetType === "PROJECT" && callerIsProjectMember
+        ? "SAME_PROJECT"
+        : input.targetType === "PROJECT"
+          ? "CROSS_PROJECT"
+          : input.targetType === "TEAM"
+            ? "CROSS_TEAM"
+            : "ORG_WIDE";
+    const evaluation = await evaluateOrgCollaborationPolicy({
+      orgEntityId: input.orgEntityId,
+      scope,
+      requestType: input.requestType,
+      sensitivityClass: input.sensitivityClass,
+    });
+    policyOutcome = evaluation.outcome;
+    if (
+      evaluation.outcome === "BLOCK" ||
+      evaluation.outcome === "DRAFT_ONLY"
+    ) {
+      policyBlocked = true;
+    }
+  }
+
+  // Combine the gating decisions in priority order:
+  //   1. project-membership block (already evaluated above)
+  //   2. policy BLOCK / DRAFT_ONLY
+  //   3. policy DUAL_CONTROL_REQUIRED → NEEDS_APPROVAL
+  //   4. policy NEEDS_APPROVAL OR caller-passed requires_approval
+  //   5. policy ALLOW (and not requires_approval) → REQUESTED
+  const policyForcesApproval =
+    policyOutcome === "NEEDS_APPROVAL" ||
+    policyOutcome === "DUAL_CONTROL_REQUIRED";
   const initialState: TwinCollaborationState = projectMembershipBlocked
     ? "BLOCKED"
-    : requiresApproval
-      ? "NEEDS_APPROVAL"
-      : "REQUESTED";
+    : policyBlocked
+      ? "BLOCKED"
+      : policyForcesApproval || requiresApproval
+        ? "NEEDS_APPROVAL"
+        : "REQUESTED";
   const initialBlockedReason: TwinCollaborationBlockedReason | null =
-    projectMembershipBlocked ? "MISSING_PROJECT_MEMBERSHIP" : null;
+    projectMembershipBlocked
+      ? "MISSING_PROJECT_MEMBERSHIP"
+      : policyBlocked
+        ? "POLICY_REQUIRES_APPROVAL"
+        : null;
 
   const row = await prisma.twinCollaborationRequest.create({
     data: {
