@@ -2198,3 +2198,117 @@ model TwinAuthorityGrant {
   @@index([grantor_entity_id, state, expires_at])
   @@map("twin_authority_grants")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase EDX-5 — Twin Correction Memory substrate per the
+// [FOUNDER-AUTH — EVERYDAY EMPLOYEE DOMAIN GENERAL INTELLIGENCE
+// EXPERIENCE] + [FOUNDER-AUTH — AUTONOMOUS EMPLOYEE DGI STRUCTURAL
+// RUNTIME COMPLETION] directives.
+//
+// Establishes the first-class personal work-style memory substrate
+// distinct from the existing ADR-0055 Wave 2C CORRECTION
+// MemoryCapsule (free-form text + topic_tags). Adds 14 closed-vocab
+// correction types, 6 lifecycle states with a candidate-promotion
+// path, 6 scope types (PERSONAL / CONVERSATION / PROJECT / TEAM /
+// ROLE / ORG), and explicit sensitivity / retention classification
+// so the employee can teach their Twin:
+//   - what they meant (MEANING_CLARIFICATION)
+//   - what worked (SUCCESSFUL_PATTERN)
+//   - what did not work (FAILED_PATTERN)
+//   - their tone preferences (TONE_PREFERENCE)
+//   - project-specific preferences (PROJECT_PREFERENCE)
+//   - sensitivity boundaries (SENSITIVITY_BOUNDARY)
+//   - approval preferences (APPROVAL_PREFERENCE)
+//   - terminology definitions (TERMINOLOGY_DEFINITION)
+//   - ask-before-acting preferences (ASK_BEFORE_ACTING)
+//
+// Foundational rules (enforced by service tier):
+//   - Personal corrections remain personal — never automatically
+//     promoted to team/org without explicit owner consent.
+//   - Team / org best-practice candidates are CANDIDATES only —
+//     they require a separate promotion flow (forward-substrate).
+//   - Failed patterns must never become employee scoring.
+//   - safe_summary is bounded (no raw transcripts / prompts /
+//     chain-of-thought).
+//   - NEVER hard-deleted (RULE 10) — soft-state lifecycle.
+//   - Same-org boundary enforced at the service tier.
+//   - Audit emission uses ADMIN_ACTION + details.action
+//     discriminator (TWIN_CORRECTION_RECORDED / _REVOKED).
+//
+// Coexists with the existing CORRECTION MemoryCapsule from ADR-0055
+// Wave 2C (POST /otzar/correction). Both substrates surface
+// independently to ConductSession + MyTwinView; the new substrate
+// is the structurally-richer "personal work-style memory"
+// canonicalization.
+// ─────────────────────────────────────────────────────────────────
+
+enum TwinCorrectionType {
+  MEANING_CLARIFICATION
+  TERMINOLOGY_DEFINITION
+  PREFERENCE
+  TONE_PREFERENCE
+  PROJECT_PREFERENCE
+  CLIENT_CONTEXT
+  TEAM_BEST_PRACTICE_CANDIDATE
+  ORG_BEST_PRACTICE_CANDIDATE
+  FAILED_PATTERN
+  SUCCESSFUL_PATTERN
+  SENSITIVITY_BOUNDARY
+  APPROVAL_PREFERENCE
+  DO_NOT_USE_CONTEXT
+  ASK_BEFORE_ACTING
+}
+
+enum TwinCorrectionState {
+  ACTIVE
+  REVOKED
+  SUPERSEDED
+  EXPIRED
+  PROMOTED_TO_TEAM_PATTERN
+  PROMOTED_TO_ORG_PATTERN
+}
+
+enum TwinCorrectionScopeType {
+  PERSONAL
+  CONVERSATION
+  PROJECT
+  TEAM
+  ROLE
+  ORG
+}
+
+enum TwinCorrectionRetentionClass {
+  EPHEMERAL
+  STANDARD
+  LONG_RETENTION
+  PERMANENT_UNTIL_REVOKED
+}
+
+model TwinCorrectionMemory {
+  correction_id            String                        @id @default(uuid()) @db.Uuid
+  org_entity_id            String                        @db.Uuid
+  owner_entity_id          String                        @db.Uuid
+  created_by_entity_id     String                        @db.Uuid
+  scope_type               TwinCorrectionScopeType
+  scope_id                 String?                       @db.Uuid
+  correction_type          TwinCorrectionType
+  state                    TwinCorrectionState           @default(ACTIVE)
+  sensitivity_class        TwinAuthoritySensitivityClass @default(MODERATE)
+  retention_class          TwinCorrectionRetentionClass  @default(STANDARD)
+  safe_summary             String
+  source_message_id        String?                       @db.Uuid
+  source_conversation_id   String?                       @db.Uuid
+  effective_from           DateTime                      @default(now())
+  expires_at               DateTime?
+  revoked_at               DateTime?
+  superseded_by_id         String?                       @db.Uuid
+  created_at               DateTime                      @default(now())
+  updated_at               DateTime                      @updatedAt
+
+  @@index([org_entity_id])
+  @@index([owner_entity_id])
+  @@index([owner_entity_id, state])
+  @@index([scope_type, scope_id])
+  @@index([owner_entity_id, correction_type, state])
+  @@map("twin_correction_memories")
+}
