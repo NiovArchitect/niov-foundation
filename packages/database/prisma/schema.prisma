@@ -2312,3 +2312,112 @@ model TwinCorrectionMemory {
   @@index([owner_entity_id, correction_type, state])
   @@map("twin_correction_memories")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase EDX-6 — Twin Collaboration Request substrate per the
+// [FOUNDER-AUTH — AUTONOMOUS EMPLOYEE DGI STRUCTURAL RUNTIME
+// COMPLETION] directive.
+//
+// Establishes the first-class employee-↔-employee /
+// employee-Twin-↔-coworker-Twin collaboration substrate so an
+// employee can ask a coworker for status / a review / a handoff,
+// a Twin can request status from another Twin, teams can hand work
+// off across teams or projects — all under DMW scope + policy +
+// audit boundaries.
+//
+// Foundational rules (enforced at the service tier):
+//   - Same-org required at request creation (cross-org explicitly
+//     forward-substrate).
+//   - Caller is always the requester (RULE 0).
+//   - safe_summary bounded (no raw transcripts).
+//   - Status may be visible across requester+target; substance never
+//     is.
+//   - AI Twin can request but cannot force coworker action.
+//   - If approval needed, state → NEEDS_APPROVAL.
+//   - If blocked, blocked_reason carries the closed-vocab reason.
+//   - NEVER hard-deleted (RULE 10) — soft-state lifecycle.
+//   - Audit emission via ADMIN_ACTION + details.action discriminator
+//     (TWIN_COLLABORATION_REQUESTED / _ACCEPTED / _REJECTED /
+//     _CANCELED / _COMPLETED / _BLOCKED).
+// ─────────────────────────────────────────────────────────────────
+
+enum TwinCollaborationTargetType {
+  EMPLOYEE
+  EMPLOYEE_TWIN
+  TEAM
+  PROJECT
+  HIVE
+  WORKFLOW
+}
+
+enum TwinCollaborationState {
+  REQUESTED
+  ACCEPTED
+  NEEDS_APPROVAL
+  BLOCKED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  EXPIRED
+  CANCELED
+}
+
+enum TwinCollaborationRequestType {
+  STATUS_REQUEST
+  REVIEW_REQUEST
+  BLOCKER_RESOLUTION
+  FOLLOW_UP
+  HANDOFF
+  CONTEXT_REQUEST
+  APPROVAL_REQUEST
+  PROJECT_COORDINATION
+  CROSS_TEAM_COORDINATION
+  WORKFLOW_COORDINATION
+}
+
+enum TwinCollaborationBlockedReason {
+  CROSS_ORG_DENIED
+  MISSING_PROJECT_MEMBERSHIP
+  MISSING_TEAM_MEMBERSHIP
+  MISSING_DMW_SCOPE
+  MISSING_AUTHORITY_GRANT
+  POLICY_REQUIRES_APPROVAL
+  CONNECTOR_WRITE_NOT_AUTHORIZED
+  SENSITIVE_CONTEXT_BLOCKED
+  TARGET_NOT_FOUND
+}
+
+model TwinCollaborationRequest {
+  collaboration_id          String                          @id @default(uuid()) @db.Uuid
+  org_entity_id             String                          @db.Uuid
+  requester_entity_id       String                          @db.Uuid
+  requester_twin_entity_id  String?                         @db.Uuid
+  target_entity_id          String?                         @db.Uuid
+  target_twin_entity_id     String?                         @db.Uuid
+  target_team_id            String?                         @db.Uuid
+  target_project_id         String?                         @db.Uuid
+  workflow_id               String?                         @db.Uuid
+  action_id                 String?                         @db.Uuid
+  request_type              TwinCollaborationRequestType
+  target_type               TwinCollaborationTargetType
+  state                     TwinCollaborationState          @default(REQUESTED)
+  sensitivity_class         TwinAuthoritySensitivityClass   @default(MODERATE)
+  safe_summary              String
+  requested_by_ai           Boolean                         @default(false)
+  requires_approval         Boolean                         @default(false)
+  approval_grant_id         String?                         @db.Uuid
+  blocked_reason            TwinCollaborationBlockedReason?
+  expires_at                DateTime?
+  completed_at              DateTime?
+  created_at                DateTime                        @default(now())
+  updated_at                DateTime                        @updatedAt
+
+  @@index([org_entity_id])
+  @@index([requester_entity_id])
+  @@index([target_entity_id])
+  @@index([target_twin_entity_id])
+  @@index([state])
+  @@index([requester_entity_id, state])
+  @@index([target_entity_id, state])
+  @@map("twin_collaboration_requests")
+}

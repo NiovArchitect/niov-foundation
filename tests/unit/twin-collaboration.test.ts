@@ -1,0 +1,361 @@
+// FILE: twin-collaboration.test.ts (unit)
+// PURPOSE: Phase EDX-6 PR 1 — unit coverage for the create / list /
+//          accept / reject / cancel / complete pure-function
+//          helpers on the TwinCollaborationRequest substrate.
+//          Prisma + writeAuditEvent mocked.
+// CONNECTS TO:
+//   - apps/api/src/services/otzar/twin-collaboration.service.ts
+
+import { describe, expect, it, beforeEach, vi } from "vitest";
+
+const { prismaMock, auditMock } = vi.hoisted(() => ({
+  prismaMock: {
+    twinCollaborationRequest: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
+    entityMembership: {
+      findFirst: vi.fn(),
+    },
+  },
+  auditMock: vi.fn(),
+}));
+
+vi.mock("@niov/database", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    prisma: prismaMock,
+    writeAuditEvent: auditMock,
+  };
+});
+
+import {
+  acceptTwinCollaborationRequestForCaller,
+  cancelTwinCollaborationRequestForCaller,
+  completeTwinCollaborationRequestForCaller,
+  createTwinCollaborationRequestForCaller,
+  listInboundCollaborationRequestsForCaller,
+  listOutboundCollaborationRequestsForCaller,
+  projectCollaborationRequestSafeView,
+  rejectTwinCollaborationRequestForCaller,
+} from "../../apps/api/src/services/otzar/twin-collaboration.service.js";
+
+const CALLER_ID = "11111111-1111-1111-1111-111111111111";
+const TARGET_ID = "22222222-2222-2222-2222-222222222222";
+const ORG_ID = "33333333-3333-3333-3333-333333333333";
+const COLLAB_ID = "44444444-4444-4444-4444-444444444444";
+
+function rowFixture(overrides: Record<string, unknown> = {}) {
+  const now = new Date("2026-06-03T12:00:00.000Z");
+  return {
+    collaboration_id: COLLAB_ID,
+    org_entity_id: ORG_ID,
+    requester_entity_id: CALLER_ID,
+    requester_twin_entity_id: null,
+    target_entity_id: TARGET_ID,
+    target_twin_entity_id: null,
+    target_team_id: null,
+    target_project_id: null,
+    workflow_id: null,
+    action_id: null,
+    request_type: "STATUS_REQUEST" as const,
+    target_type: "EMPLOYEE" as const,
+    state: "REQUESTED" as const,
+    sensitivity_class: "MODERATE" as const,
+    safe_summary: "Can you confirm the launch window?",
+    requested_by_ai: false,
+    requires_approval: false,
+    approval_grant_id: null,
+    blocked_reason: null,
+    expires_at: null,
+    completed_at: null,
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.twinCollaborationRequest.create.mockReset();
+  prismaMock.twinCollaborationRequest.findUnique.mockReset();
+  prismaMock.twinCollaborationRequest.findMany.mockReset();
+  prismaMock.twinCollaborationRequest.update.mockReset();
+  prismaMock.entityMembership.findFirst.mockReset();
+  auditMock.mockReset();
+});
+
+describe("projectCollaborationRequestSafeView", () => {
+  it("collapses target FKs to booleans, never the IDs", () => {
+    const row = rowFixture({
+      target_entity_id: TARGET_ID,
+      target_twin_entity_id: "55555555-5555-5555-5555-555555555555",
+      target_team_id: "66666666-6666-6666-6666-666666666666",
+      target_project_id: "77777777-7777-7777-7777-777777777777",
+    });
+    const view = projectCollaborationRequestSafeView(row);
+    expect(view).not.toHaveProperty("target_entity_id");
+    expect(view).not.toHaveProperty("target_twin_entity_id");
+    expect(view.has_target_entity).toBe(true);
+    expect(view.has_target_twin).toBe(true);
+    expect(view.has_target_team).toBe(true);
+    expect(view.has_target_project).toBe(true);
+  });
+});
+
+describe("createTwinCollaborationRequestForCaller", () => {
+  it("creates a REQUESTED row + emits TWIN_COLLABORATION_REQUESTED audit", async () => {
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      child_id: TARGET_ID,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(rowFixture());
+    const r = await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "STATUS_REQUEST",
+      safeSummary: "Can you confirm the launch window?",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.collaboration.state).toBe("REQUESTED");
+    const auditCall = auditMock.mock.calls[0]?.[0];
+    expect(auditCall.details.action).toBe("TWIN_COLLABORATION_REQUESTED");
+  });
+
+  it("requires_approval=true → state NEEDS_APPROVAL", async () => {
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      child_id: TARGET_ID,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({ state: "NEEDS_APPROVAL", requires_approval: true }),
+    );
+    const r = await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "STATUS_REQUEST",
+      safeSummary: "Test",
+      requiresApproval: true,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.collaboration.state).toBe("NEEDS_APPROVAL");
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.state).toBe("NEEDS_APPROVAL");
+  });
+
+  it("returns CROSS_ORG_DENIED when target is not in caller's org", async () => {
+    prismaMock.entityMembership.findFirst.mockResolvedValue(null); // not in org
+    const r = await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "STATUS_REQUEST",
+      safeSummary: "Test",
+    });
+    expect(r).toEqual({ ok: false, code: "CROSS_ORG_DENIED" });
+  });
+
+  it("returns TARGET_NOT_FOUND when target_type=EMPLOYEE but no targetEntityId", async () => {
+    const r = await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      requestType: "STATUS_REQUEST",
+      safeSummary: "Test",
+    });
+    expect(r).toEqual({ ok: false, code: "TARGET_NOT_FOUND" });
+  });
+
+  it("bounds safe_summary to prevent raw-transcript collection", async () => {
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      child_id: TARGET_ID,
+    });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(rowFixture());
+    const oversize = "z".repeat(800);
+    await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE",
+      targetEntityId: TARGET_ID,
+      requestType: "STATUS_REQUEST",
+      safeSummary: oversize,
+    });
+    const createCall =
+      prismaMock.twinCollaborationRequest.create.mock.calls[0]?.[0];
+    expect(createCall.data.safe_summary.length).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("list helpers", () => {
+  it("inbound matches target_entity_id OR target_twin_entity_id", async () => {
+    prismaMock.twinCollaborationRequest.findMany.mockResolvedValue([
+      rowFixture(),
+    ]);
+    await listInboundCollaborationRequestsForCaller({
+      callerEntityId: CALLER_ID,
+    });
+    const call =
+      prismaMock.twinCollaborationRequest.findMany.mock.calls[0]?.[0];
+    expect(call.where.OR).toEqual([
+      { target_entity_id: CALLER_ID },
+      { target_twin_entity_id: CALLER_ID },
+    ]);
+  });
+
+  it("outbound pins requester_entity_id to caller", async () => {
+    prismaMock.twinCollaborationRequest.findMany.mockResolvedValue([
+      rowFixture(),
+    ]);
+    await listOutboundCollaborationRequestsForCaller({
+      callerEntityId: CALLER_ID,
+    });
+    const call =
+      prismaMock.twinCollaborationRequest.findMany.mock.calls[0]?.[0];
+    expect(call.where.requester_entity_id).toBe(CALLER_ID);
+  });
+});
+
+describe("transition helpers — target-applied (accept / reject)", () => {
+  it("accept: COLLABORATION_NOT_FOUND when missing", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(null);
+    const r = await acceptTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r).toEqual({ ok: false, code: "COLLABORATION_NOT_FOUND" });
+  });
+
+  it("accept: NOT_TARGET when caller is not the target", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture({ target_entity_id: "99999999-9999-9999-9999-999999999999" }),
+    );
+    const r = await acceptTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r).toEqual({ ok: false, code: "NOT_TARGET" });
+  });
+
+  it("accept: REQUESTED → ACCEPTED + emits audit", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture({ target_entity_id: CALLER_ID }),
+    );
+    prismaMock.twinCollaborationRequest.update.mockResolvedValue(
+      rowFixture({ state: "ACCEPTED", target_entity_id: CALLER_ID }),
+    );
+    const r = await acceptTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.collaboration.state).toBe("ACCEPTED");
+    expect(auditMock.mock.calls[0]?.[0].details.action).toBe(
+      "TWIN_COLLABORATION_ACCEPTED",
+    );
+  });
+
+  it("reject: REQUESTED → REJECTED + emits audit", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture({ target_entity_id: CALLER_ID }),
+    );
+    prismaMock.twinCollaborationRequest.update.mockResolvedValue(
+      rowFixture({ state: "REJECTED", target_entity_id: CALLER_ID }),
+    );
+    const r = await rejectTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.collaboration.state).toBe("REJECTED");
+    expect(auditMock.mock.calls[0]?.[0].details.action).toBe(
+      "TWIN_COLLABORATION_REJECTED",
+    );
+  });
+
+  it("accept: INVALID_STATE_TRANSITION from terminal state", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture({ state: "COMPLETED", target_entity_id: CALLER_ID }),
+    );
+    const r = await acceptTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r).toEqual({ ok: false, code: "INVALID_STATE_TRANSITION" });
+  });
+});
+
+describe("transition helpers — requester-applied (cancel / complete)", () => {
+  it("cancel: NOT_REQUESTER when caller is not the requester", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture({
+        requester_entity_id: "99999999-9999-9999-9999-999999999999",
+      }),
+    );
+    const r = await cancelTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r).toEqual({ ok: false, code: "NOT_REQUESTER" });
+  });
+
+  it("cancel: REQUESTED → CANCELED + emits audit", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture(),
+    );
+    prismaMock.twinCollaborationRequest.update.mockResolvedValue(
+      rowFixture({ state: "CANCELED" }),
+    );
+    const r = await cancelTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.collaboration.state).toBe("CANCELED");
+    expect(auditMock.mock.calls[0]?.[0].details.action).toBe(
+      "TWIN_COLLABORATION_CANCELED",
+    );
+  });
+
+  it("complete: ACCEPTED → COMPLETED + sets completed_at", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture({ state: "ACCEPTED" }),
+    );
+    prismaMock.twinCollaborationRequest.update.mockResolvedValue(
+      rowFixture({ state: "COMPLETED", completed_at: new Date() }),
+    );
+    const r = await completeTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.collaboration.state).toBe("COMPLETED");
+    expect(r.collaboration.completed_at).not.toBeNull();
+    expect(auditMock.mock.calls[0]?.[0].details.action).toBe(
+      "TWIN_COLLABORATION_COMPLETED",
+    );
+  });
+
+  it("complete: INVALID_STATE_TRANSITION from terminal state", async () => {
+    prismaMock.twinCollaborationRequest.findUnique.mockResolvedValue(
+      rowFixture({ state: "EXPIRED" }),
+    );
+    const r = await completeTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      collaborationId: COLLAB_ID,
+    });
+    expect(r).toEqual({ ok: false, code: "INVALID_STATE_TRANSITION" });
+  });
+});
