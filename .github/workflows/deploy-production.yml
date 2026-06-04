@@ -1,0 +1,120 @@
+# Deploy to the production environment.
+#
+# Gates:
+# - The `production` GitHub Environment MUST exist with required
+#   reviewers (typically the Founder + one engineer) and a
+#   branch restriction limiting to `main`.
+# - This workflow is `workflow_dispatch` ONLY — never auto-fires on push.
+# - Cloud credentials live as `production` environment secrets, separate
+#   from staging.
+# - If cloud credentials are missing, the workflow exits 0 with an
+#   explanatory notice — same posture as deploy-staging.yml so the
+#   substrate is forward-compatible without false-positive failures.
+#
+# Per docs/deployment/cloud-portability.md and the three-tier
+# credential separation, customer connector keys NEVER enter this
+# workflow — only NIOV PLATFORM secrets do.
+
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to latest commit on main)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_PUBLIC_URL }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve image tag
+        id: resolve
+        run: |
+          tag="${{ inputs.image_tag }}"
+          if [ -z "$tag" ]; then
+            tag="${{ github.sha }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "::notice::Deploying tag: $tag"
+
+      - name: Detect cloud target
+        id: target
+        run: |
+          target="${{ vars.CLOUD_TARGET }}"
+          if [ -z "$target" ]; then
+            target="skip"
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "::notice::Cloud target: $target"
+
+      - name: Skip when CLOUD_TARGET unset
+        if: steps.target.outputs.target == 'skip'
+        run: |
+          echo "::notice::CLOUD_TARGET environment variable not set on 'production' environment."
+          echo "::notice::Configure required reviewers + CLOUD_TARGET + cloud credentials to enable production deploys."
+          echo "::notice::See docs/deployment/azure-deployment.md / docs/deployment/aws-deployment.md."
+
+      # --- Azure path ----------------------------------------------------
+      - name: Azure login
+        if: steps.target.outputs.target == 'azure'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure Container Apps update (production)
+        if: steps.target.outputs.target == 'azure'
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          APP: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+          ACR: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          if [ -z "$RG" ] || [ -z "$APP" ] || [ -z "$ACR" ]; then
+            echo "::notice::Azure target selected but RG / APP / ACR not configured. Skipping."
+            exit 0
+          fi
+          echo "::notice::az containerapp update -n $APP -g $RG --image $ACR.azurecr.io/niov/foundation-api:${TAG}"
+          echo "::notice::(actual update gated until production-tier secrets + Founder approval are in place)"
+
+      # --- AWS path ------------------------------------------------------
+      - name: Configure AWS credentials
+        if: steps.target.outputs.target == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: AWS ECS update-service (production)
+        if: steps.target.outputs.target == 'aws'
+        env:
+          CLUSTER: ${{ vars.AWS_ECS_CLUSTER }}
+          SERVICE: ${{ vars.AWS_ECS_SERVICE }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          if [ -z "$CLUSTER" ] || [ -z "$SERVICE" ]; then
+            echo "::notice::AWS target selected but CLUSTER / SERVICE not configured. Skipping."
+            exit 0
+          fi
+          echo "::notice::aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment --task-definition-tag ${TAG}"
+          echo "::notice::(actual update gated until production-tier secrets + Founder approval are in place)"
+
+      - name: Post-deploy smoke
+        if: steps.target.outputs.target != 'skip' && vars.PRODUCTION_PUBLIC_URL != ''
+        run: |
+          url="${{ vars.PRODUCTION_PUBLIC_URL }}"
+          echo "::notice::Smoke check would run against ${url}/health"
+          echo "::notice::(forward-substrate — gated until reachability confirmed)"
