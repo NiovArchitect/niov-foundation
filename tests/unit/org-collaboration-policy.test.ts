@@ -10,7 +10,9 @@ const { prismaMock, auditMock } = vi.hoisted(() => ({
   prismaMock: {
     orgCollaborationPolicy: {
       findMany: vi.fn(),
-      upsert: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
   },
   auditMock: vi.fn(),
@@ -55,7 +57,9 @@ function policyRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.orgCollaborationPolicy.findMany.mockReset();
-  prismaMock.orgCollaborationPolicy.upsert.mockReset();
+  prismaMock.orgCollaborationPolicy.findFirst.mockReset();
+  prismaMock.orgCollaborationPolicy.create.mockReset();
+  prismaMock.orgCollaborationPolicy.update.mockReset();
   auditMock.mockReset();
 });
 
@@ -241,8 +245,9 @@ describe("evaluateOrgCollaborationPolicy — row precedence", () => {
 });
 
 describe("upsertOrgCollaborationPolicyForCaller", () => {
-  it("creates/updates a policy row + emits ORG_COLLABORATION_POLICY_UPSERTED audit", async () => {
-    prismaMock.orgCollaborationPolicy.upsert.mockResolvedValue(policyRow());
+  it("creates a new policy row when none exists + emits audit", async () => {
+    prismaMock.orgCollaborationPolicy.findFirst.mockResolvedValue(null);
+    prismaMock.orgCollaborationPolicy.create.mockResolvedValue(policyRow());
     const view = await upsertOrgCollaborationPolicyForCaller({
       callerEntityId: CALLER_ID,
       orgEntityId: ORG_ID,
@@ -251,9 +256,28 @@ describe("upsertOrgCollaborationPolicyForCaller", () => {
     });
     expect(view.outcome).toBe("ALLOW");
     expect(view.collaboration_scope).toBe("CROSS_TEAM");
+    expect(prismaMock.orgCollaborationPolicy.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.orgCollaborationPolicy.update).not.toHaveBeenCalled();
     expect(auditMock.mock.calls[0]?.[0].details.action).toBe(
       "ORG_COLLABORATION_POLICY_UPSERTED",
     );
+  });
+
+  it("updates the existing row when one already exists", async () => {
+    const existing = policyRow();
+    prismaMock.orgCollaborationPolicy.findFirst.mockResolvedValue(existing);
+    prismaMock.orgCollaborationPolicy.update.mockResolvedValue(
+      policyRow({ outcome: "BLOCK" }),
+    );
+    const view = await upsertOrgCollaborationPolicyForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      scope: "CROSS_TEAM",
+      outcome: "BLOCK",
+    });
+    expect(view.outcome).toBe("BLOCK");
+    expect(prismaMock.orgCollaborationPolicy.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.orgCollaborationPolicy.create).not.toHaveBeenCalled();
   });
 });
 
