@@ -614,6 +614,62 @@ describe("conductSession", () => {
     },
   );
 
+  // Phase EDX-4 PR 4: conservative verb-scan flips approval_required
+  // + supplies the closed-vocab approval_reason +
+  // approval_duration_options + next_step = "NEEDS_APPROVAL" when
+  // the caller's message asks the Twin to perform a material action.
+  it(
+    "[EDX-4] action-like message flips approval_required + populates closed-vocab companions",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "send a follow-up to Sarah on slack",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.approval_required).toBe(true);
+      expect(result.next_step).toBe("NEEDS_APPROVAL");
+      // CONNECTOR_ACCESS wins because the message names Slack.
+      expect(result.approval_reason).toBe("CONNECTOR_ACCESS");
+      expect(Array.isArray(result.approval_duration_options)).toBe(true);
+      expect(result.approval_duration_options).toContain("ONE_TIME");
+      expect(result.approval_duration_options).toContain(
+        "SENSITIVE_CASE_BY_CASE",
+      );
+    },
+  );
+
+  it(
+    "[EDX-4] neutral question keeps approval_required false + omits companions",
+    async () => {
+      const { auth, otzar } = makeServices({
+        llm: makeFixtureProvider("unit-otzar-conduct-session-happy-path"),
+      });
+      const owner = await loginAs(auth);
+      await attachTwin(owner.entity.entity_id);
+      const result = await otzar.conductSession({
+        token: owner.token,
+        message: "what should I do today?",
+        conversation_history: [],
+        token_budget: 8000,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.approval_required).toBe(false);
+      expect(result.next_step).toBe("ANSWERED");
+      // Companions absent when approval_required is false.
+      expect(result.approval_reason).toBeUndefined();
+      expect(result.approval_duration_options).toBeUndefined();
+    },
+  );
+
   // ADR-0051 Wave 1: conductSession surfaces the additive transparency
   // contract built from the governed COE metadata. Backward-compatible
   // fields stay intact; transparency is a read-only projection.
