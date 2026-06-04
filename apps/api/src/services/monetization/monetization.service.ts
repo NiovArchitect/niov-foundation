@@ -27,7 +27,16 @@ import type { AuthService } from "../auth.service.js";
 //      not sell their own identity. Future revisions can move
 //      these into a config table; for MVP a constant map keeps
 //      the logic readable.
-export const PRICING_TABLE: Record<CapsuleType, number> = {
+//
+//      The shape is `Partial<Record<CapsuleType, number>>` because
+//      Foundation has added new CapsuleType enum values (Phase 3
+//      Sub-Arc 2: CONVERSATION_LEARNING, TASK_LEARNING, WORK_PATTERN,
+//      COMMUNICATION_PREF, etc.) that have NOT been priced yet —
+//      pricing decisions are Founder-authorized policy and require
+//      explicit values, not implicit defaults. Consumers MUST use
+//      `PRICING_TABLE[type] ?? 0` so unpriced capsule types collapse
+//      to "no payout" rather than NaN / undefined arithmetic.
+export const PRICING_TABLE: Partial<Record<CapsuleType, number>> = {
   FOUNDATIONAL: 0,
   PREFERENCE: 0.001,
   RELATIONSHIP: 0.0025,
@@ -179,10 +188,13 @@ export class MonetizationService {
       return { ok: false, reason: "MONETIZATION_DISABLED" };
     }
 
-    const gross = PRICING_TABLE[capsule.capsule_type];
+    // PRICING_TABLE is `Partial<Record<CapsuleType, number>>` — unpriced
+    // capsule types collapse to 0 ("no payout") rather than NaN. Same
+    // collapse path as ZERO_VALUE: we do not write an event row.
+    const gross = PRICING_TABLE[capsule.capsule_type] ?? 0;
     if (gross <= 0) {
-      // FOUNDATIONAL or any future zero-priced type. We do not
-      // even write an event row for these.
+      // FOUNDATIONAL, any unpriced new CapsuleType, or any future
+      // zero-priced type. We do not even write an event row for these.
       return { ok: false, reason: "ZERO_VALUE" };
     }
     const niovFee = roundUsd(gross * NIOV_FEE_SHARE);

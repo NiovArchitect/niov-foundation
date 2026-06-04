@@ -113,9 +113,16 @@ export interface ValidateSuccess {
 // INPUT: Used as a return type only.
 // OUTPUT: None.
 // WHY: Codes match the seven failure points in the spec, so middleware
-//      can return precise error responses.
+//      can return precise error responses. `entity_id` is OPTIONAL —
+//      validateSession() doesn't populate it on the failure path today
+//      (the JWT-decode failure path doesn't have an entity_id at all),
+//      but call sites that audit a failed session may legitimately
+//      access it for actor attribution; documenting it as optional
+//      keeps `session.entity_id ?? null` (write.service.ts:548 pattern)
+//      type-safe without weakening the public auth contract.
 export interface ValidateFailure {
   valid: false;
+  entity_id?: string;
   code:
     | "SESSION_INVALID"
     | "SESSION_EXPIRED"
