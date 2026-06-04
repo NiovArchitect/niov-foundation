@@ -86,6 +86,10 @@ import {
   type TwinActiveGrantsSummary,
 } from "./twin-active-grants.js";
 import {
+  computeActiveAuthoritySummaryForCaller,
+  type TwinActiveAuthoritySummary,
+} from "./twin-active-authority.js";
+import {
   computeVoiceReadinessState,
   type TwinVoiceReadinessState,
 } from "./twin-voice-readiness.js";
@@ -528,6 +532,17 @@ export interface MyTwinView {
   // ADR-0089). Lets the Control Tower UI render the right
   // voice panel affordances without false promises.
   voice_readiness_state?: TwinVoiceReadinessState;
+  // Phase EDX-4 PR 3 employee Twin self-state extension —
+  // active_authority_summary sidecar. SAFE capacity-only
+  // projection of the caller's TwinAuthorityGrant inventory
+  // (PR #269 substrate; PR #270 routes). Distinct from
+  // active_grants_summary above (which aggregates DM1-A
+  // ConsentGrant + DM3-A TeamDelegation). NEVER includes
+  // grant_id / grantee_entity_id / scope_id / purpose_summary
+  // / constraints_json / connector_binding_id / per-grant
+  // substance. Per-source read failures swallowed silently per
+  // ADR-0068 §6.
+  active_authority_summary?: TwinActiveAuthoritySummary;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -1603,6 +1618,21 @@ export class OtzarService {
       activeGrantsSummary = undefined;
     }
 
+    // Phase EDX-4 PR 3 employee Twin self-state extension —
+    // active_authority_summary sidecar. Self-scoped via
+    // primary.entity_id as the grantor. Distinct from
+    // active_grants_summary above (which aggregates DM1-A
+    // ConsentGrant + DM3-A TeamDelegation). Per-source read miss
+    // swallowed silently per ADR-0068 §6.
+    let activeAuthoritySummary: TwinActiveAuthoritySummary | undefined;
+    try {
+      activeAuthoritySummary = await computeActiveAuthoritySummaryForCaller(
+        primary.entity_id,
+      );
+    } catch {
+      activeAuthoritySummary = undefined;
+    }
+
     // Phase EDX-1 employee Twin self-state extension —
     // voice_readiness_state sidecar. Constant projection (no
     // DB hit, no caller-specific gating at the Foundation tier).
@@ -1640,6 +1670,9 @@ export class OtzarService {
         : {}),
       ...(activeGrantsSummary !== undefined
         ? { active_grants_summary: activeGrantsSummary }
+        : {}),
+      ...(activeAuthoritySummary !== undefined
+        ? { active_authority_summary: activeAuthoritySummary }
         : {}),
       voice_readiness_state: voiceReadinessState,
     };
