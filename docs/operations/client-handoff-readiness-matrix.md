@@ -1,0 +1,163 @@
+# Otzar — Client Handoff Readiness Matrix
+
+**Last updated:** 2026-06-10
+**Maintained by:** Founder + automated PR updates
+**Purpose:** One-page truth about what is production-ready vs.
+demo-only vs. blocked-on-runtime-configuration for an enterprise
+client handoff. Read this before claiming a feature is
+"production-ready."
+
+---
+
+## Legend
+
+| Marker | Meaning |
+|---|---|
+| **PROD** | Live in production. Real Foundation runtime + real backend + real authorized users. |
+| **PROD-READY** | Substrate is complete + tested + merged. Becomes PROD on the next prod schema push. |
+| **DEMO** | Working at the substrate tier with mock / manual / fixture inputs. Real provider integration requires OAuth keys + connector configuration. |
+| **PARTIAL** | Some flows live, others mock. Specific gaps documented. |
+| **BLOCKED** | Requires Founder-authorized destructive action (prod schema migration, OAuth provisioning, third-party contract) before going live. |
+| **NOT_STARTED** | Bounded queue item not yet built. |
+
+---
+
+## Substrate readiness (Foundation backend)
+
+| Surface | Status | Evidence | Gating to PROD |
+|---|---|---|---|
+| Entity + EntityProfile + EntityMembership | **PROD** | Hundreds of integration tests; substrate predates Phase 1215. | — |
+| Notification + SafeNotificationView + reply mediator | **PROD** | Phase 1215 (PR #313) live; round-trip verified end-to-end. | — |
+| Action runtime + 10-state lifecycle + auto-approve policy | **PROD** | ADR-0057; Phase 1209 / 1215 round-trips. | — |
+| AuditEvent + SHA-256 chain + BEFORE DELETE trigger | **PROD** | ADR-0002 + ADR-0071 verify-chain (4-scope). | — |
+| MemoryCapsule + 30-field schema | **PROD** | ADR-0033 Ecto mirror; pgvector embeddings live. | — |
+| OtzarConversation + message lifecycle | **PROD** | Section 11D; conversation-detail / corrections live. | — |
+| CollaborationWorkspace family (5 tables + 8 enums + 10 audit literals) | **PROD-READY** | Foundation PR #315 (merged); integration test #316 (4/4 green). | Push schema to production Supabase. |
+| ExternalCollaborator family (3 tables + 7 audit literals) | **PROD-READY** | Same Foundation PR #315; service + 7 routes wired. | Push schema to production Supabase. |
+| MeetingCapture family (2 tables + 6 audit literals) | **PROD-READY** | Foundation PR #317; integration test 3/3 green. | Push schema to production Supabase. |
+
+---
+
+## Bounded queue 1215–1232
+
+| Phase | Subject | Status | Notes |
+|---|---|---|---|
+| 1215 | Reply-to-note round-trip mediator | **PROD** | Live; SafeNotificationView privacy preserved. |
+| 1216 | People & Collaboration (Dandelion rename) + PeopleDirectory | **PROD** | Roster-aware UI live. |
+| 1217 | My Organization view | **PROD** | Surveillance-language ban test-locked. |
+| 1218 | 13 role archetypes (Wave 2.1) | **PROD** | Static metadata registry. |
+| 1219 | My Digital Work Wallet (DMW rename for employees) | **PROD** | Internal jargon ban test-locked. |
+| 1220 | Connector Health honest catalogue | **PROD** | 10 categories; admin overlay + 403 fallback. |
+| 1221 | True Collaboration Workspace end-to-end (+ External Collaborator) | **PROD-READY** | Foundation merged; CT merged; integration test 4/4. **Needs prod schema push.** |
+| 1222 | Live meeting capture (Google Meet / Zoom / Teams / manual) | **DEMO** | Manual transcript upload exercises full pipeline. Real Google Meet / Zoom / Teams adapters deferred to 1224 / forward. |
+| 1223 | Voice / STT end-to-end | **NOT_STARTED** | Talk-to-Otzar surface live; real-time STT pipeline + Whisper / Deepgram integration pending. |
+| 1224 | Google Workspace end-to-end | **NOT_STARTED** | OAuth credentials required (Google Cloud project + verified consent screen). |
+| 1225 | Slack end-to-end | **NOT_STARTED** | OAuth app credentials required (Slack workspace install). |
+| 1226 | Email end-to-end | **NOT_STARTED** | Gmail OAuth (reuses 1224) + Microsoft 365 OAuth + SMTP gateway. |
+| 1227 | OCR / Observe end-to-end | **NOT_STARTED** | Provider selection (Tesseract local / AWS Textract / Google Vision). |
+| 1228 | DMW backend substrate | **PARTIAL** | Phase 3 substrate live (DMWWorker + Horde + per-DMW dispatch). Public consent/scope APIs forward-substrate. |
+| 1229 | COSMP backend substrate | **PARTIAL** | 7-op COSMP coordination layer live in Elixir/BEAM (ADR-0030 / 0031). Public namespace surface forward-substrate. |
+| 1230 | Production onboarding / admin readiness | **NOT_STARTED** | First-run org setup wizard + admin invite + ActionPolicy seeding. |
+| 1231 | Client handoff readiness matrix | **PROD** | This document. Auto-updated by future PRs. |
+| 1232 | Circle / Base / USDC settlement | **NOT_STARTED** | Per Founder: LAST. Connector + governed approval required. |
+
+---
+
+## What blocks an enterprise client handoff
+
+These are the items a real enterprise client needs before signing a contract. Without them, the handoff is a demo, not a deployment.
+
+### 1. Production schema migration (Phase 1221 + Phase 1222) — **Founder-authorized destructive action**
+
+The Phase 1221 + 1222 substrates (10 new tables across 4 prefixes — `collaboration_*`, `external_*`, `workspace_external_memberships`, `meeting_captures*`) are PROD-READY in code but not pushed to production Supabase. Founder runs:
+
+```bash
+# Set env to production
+export DATABASE_URL="postgresql://postgres.<prod-host>...?pgbouncer=true"
+export DIRECT_URL="postgresql://postgres.<prod-host>...:5432/postgres"
+
+# Verify schema diff is additive only (no destructive changes)
+cd packages/database
+npx prisma migrate diff \
+  --from-url $DATABASE_URL \
+  --to-schema-datamodel prisma/schema.prisma \
+  --script
+
+# Apply
+npx prisma db push --schema=prisma/schema.prisma --skip-generate
+```
+
+**Verification before push:** the diff MUST be additive only — 10 NEW tables + 17 NEW audit literals (no column drops, no enum value removals, no index changes on existing tables).
+
+### 2. OAuth provisioning (Phases 1224 / 1225 / 1226)
+
+Each external connector needs:
+- An OAuth app registered with the provider (Google Cloud Console, Slack API portal, Zoom Marketplace).
+- A verified consent screen + scope review (Google: app verification takes ~6 weeks for restricted scopes).
+- Per-tenant client_id / client_secret stored in the per-tenant vault path per ADR-0089 (vault path `niov/tenants/{org_entity_id}/connectors/{connection_id}/secret`).
+- Per-employee scoped grants via existing `ConnectorScopeGrant` substrate.
+
+### 3. Real-time transports (Phase 1222 live + Phase 1223)
+
+For live in-meeting capture (vs. post-meeting transcript ingest):
+- Recall.ai bot (third-party SaaS, $40/meeting baseline) — fastest path.
+- OR custom Daily.co + meeting platform SDK + STT provider — 6-8 weeks engineering.
+- Voice / STT: Deepgram (most accurate streaming) or OpenAI Whisper API (cheaper, slightly higher latency).
+
+### 4. Compliance certifications (continuous)
+
+- **SOC 2 Type II** — Otzar's substrate is SOC-2-ready architecturally (audit chain, RBAC, data segregation). Audit firm + ~6 months of evidence collection required for cert.
+- **HIPAA** — substrate-compatible; BAA + DPA required per customer.
+- **GDPR / SCC** — Foundation jurisdiction tagging (ADR-0037) supports per-region data residency.
+- **FedRAMP** — Foundation deployment-target agnostic per ADR-0018. AWS GovCloud RDS for PostgreSQL is the canonical path; ATO process ~12-18 months.
+
+---
+
+## Demo-vs-prod capability matrix (by employee-facing feature)
+
+| Capability | Demo path | Prod path | Gap |
+|---|---|---|---|
+| **Notes between teammates** | Real Foundation Notification + reply round-trip | Live | None |
+| **Action Center lifecycle** | Real Action runtime; auto-approve LOW risk; cron executes | Live | None |
+| **Collaboration workspaces** | Real `CollaborationWorkspace` on local test DB | Push schema to prod | 1 destructive Founder action |
+| **External stakeholders tracking** | Real `ExternalCollaborator` on local test DB | Push schema to prod | 1 destructive Founder action |
+| **Meeting capture (manual transcript)** | Real `MeetingCapture` on local test DB | Push schema to prod | 1 destructive Founder action |
+| **Meeting capture (Google Meet auto-ingest)** | Manual transcript paste | OAuth Google Workspace + Drive API + post-meeting recording webhook | 1224 implementation + Google app verification |
+| **Meeting capture (Zoom auto-ingest)** | Manual transcript paste | OAuth Zoom + Cloud Recording API webhook | Zoom Marketplace app review |
+| **Talk to Otzar (voice in)** | Browser SpeechRecognition (varies by browser) | Deepgram streaming STT + WebRTC client | 1223 implementation |
+| **Otzar talks back (voice out)** | Browser SpeechSynthesis | ElevenLabs / OpenAI TTS | 1223 implementation |
+| **Slack notifications** | "Send to Slack" button creates draft Action only | OAuth Slack + Webhook + per-channel scope grant | 1225 implementation |
+| **Email send** | Draft-only via existing Comms surface | OAuth Gmail (1224) or Microsoft Graph or SMTP gateway | 1226 implementation |
+| **Jira ticket creation** | Draft-only | OAuth Atlassian + REST API | future phase |
+| **OCR / document capture** | Manual upload + plain-text extraction | Tesseract.js (local) or AWS Textract / Google Vision | 1227 implementation |
+| **DMW consent / scope management** | Underlying Foundation substrate live | Public CT consent UI + permission revocation flow | 1228 CT integration |
+| **COSMP 7-op routing** | Live in Elixir/BEAM coordination layer | Public CT layer translating user actions → COSMP ops | 1229 CT integration |
+| **Org onboarding (first-run)** | Manual operator seed | Wizard + admin invite + default ActionPolicy seeding | 1230 implementation |
+| **Settlement (Circle / Base / USDC)** | None | Circle account + Base on-chain settlement + per-action approval gate | 1232 implementation (LAST) |
+
+---
+
+## "Walk me through it" — the canonical demo today
+
+These flows work TODAY against the local test DB or PROD (where marked):
+
+1. **Notes flow (PROD)** — Log in → My Day → write a follow-up to David → David receives Notification → David replies → Sadeil sees reply Action + Notification. Full audit chain.
+
+2. **Workspace flow (PROD-READY local-only)** — Create "Launch Collaboration" workspace → add David / Samiksha / Annie → paste the Launch Follow-Up transcript → resolver assigns owners correctly → confirm each follow-up → 3 SEND_INTERNAL_NOTIFICATION Actions → each owner receives Notification.
+
+3. **External stakeholder flow (PROD-READY local-only)** — Create "MICE Event Expansion" workspace with visibility EXTERNAL_ALLOWED → track Maria / Carlos from MICE Global → record their commitments via ExternalCommitment → no external messages sent → internal-reminder Actions created for the internal owner.
+
+4. **Meeting capture flow (DEMO)** — Pick MANUAL_UPLOAD → paste a transcript → mark participant consent → attach to a workspace → decisions + commitments imported automatically → resolver assigns + confirm flows work.
+
+---
+
+## Maintenance
+
+This document is the source of truth for "what's real." When a phase completes:
+
+1. Update the row in the bounded queue table.
+2. Update the "Demo-vs-prod" matrix where the capability changed.
+3. Update the "Last updated" line.
+4. Add a "Walk me through it" entry if a new canonical demo exists.
+
+When a destructive Founder action ships (e.g., production schema push for Phase 1221 / 1222), update PROD-READY rows to **PROD**.
