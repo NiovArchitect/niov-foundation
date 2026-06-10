@@ -517,6 +517,15 @@ export {
 } from "./services/otzar/identity-context.js";
 export type { IdentityContext } from "./services/otzar/identity-context.js";
 
+// Phase 1208 [OTZAR-CHAT-ACTION-PROPOSE].
+export { extractProposedAction } from "./services/otzar/proposed-action-extractor.js";
+export type {
+  ProposedAction,
+  ProposedActionTargetCandidate,
+  ProposedActionType,
+  OrgRosterPeer,
+} from "./services/otzar/proposed-action-extractor.js";
+
 export { projectConversationDetail } from "./services/otzar/conversation-detail.js";
 export type {
   ConversationDetailView,
