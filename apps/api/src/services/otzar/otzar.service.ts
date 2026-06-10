@@ -38,6 +38,11 @@ import {
   type ProposedAction,
 } from "./proposed-action-extractor.js";
 import {
+  extractFromCapturedText,
+  type CommsExtractionResult,
+  type CommsExtractionMode,
+} from "./comms-extract.service.js";
+import {
   truncateToTokenBudget,
   TokenBudgetExceededError,
   type LayerBundle,
@@ -371,6 +376,26 @@ export interface CloseConversationSuccess {
   capsule_id: string;
   conversation_id: string;
   topics: string[];
+}
+
+// WHAT: Inputs for extractFromComms (Phase 1213).
+// WHY: Token + the assembled captured text. force_mode lets the
+//      operator (or tests) pin DEMO_SCRIPTED / LOCAL_FALLBACK
+//      explicitly without changing the input text.
+export interface ExtractCommsInput {
+  token: string;
+  captured_text: string;
+  force_mode?: CommsExtractionMode;
+}
+
+// WHAT: Successful extractFromComms return.
+// WHY: Closed-vocab; no DB ids leak. The CommsExtractionResult
+//      carries the demo/LLM/local-fallback discriminator so the
+//      CT UI can render an honest "this is demo capture mode"
+//      banner when relevant.
+export interface ExtractCommsSuccess {
+  ok: true;
+  extraction: CommsExtractionResult;
 }
 
 // WHAT: Inputs for getContextHealth.
@@ -1923,6 +1948,57 @@ export class OtzarService {
       twin,
       has_multiple_twins: twins.length > 1,
       twin_count: twins.length,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // extractFromComms -- Phase 1213 [OTZAR-AMBIENT-COMMS] entry
+  // point. Given a "captured" conversation text from the CT Comms
+  // page (demo-capture timer, manual paste, or future live STT),
+  // organize it into summary + decisions + commitments + suggested
+  // governed-Action follow-ups. Suggested actions become real
+  // Action rows ONLY when the operator clicks Send on the CT
+  // approval card -- exactly the existing Phase 1208 path.
+  //
+  // WHAT: Closed-vocab CommsExtractionResult; no DB writes; no
+  //       new mutation surface.
+  // INPUT: ExtractCommsInput { token, captured_text, force_mode? }.
+  // OUTPUT: ExtractCommsSuccess (200) or OtzarFailure (SESSION_*).
+  // WHY: Reuses identity-context (Phase 1205) for roster
+  //      resolution + existing llmProvider for LLM extraction
+  //      mode. Demo-scripted mode honors the Founder-provided
+  //      canonical fixture so the demo proves the loop without
+  //      depending on LLM provisioning. The path is read-only at
+  //      Foundation tier; persistence comes via the existing
+  //      Action pipeline when the operator confirms a follow-up.
+  // ──────────────────────────────────────────────────────────────
+  async extractFromComms(
+    input: ExtractCommsInput,
+  ): Promise<ExtractCommsSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Comms extract denied" };
+    }
+    if (typeof input.captured_text !== "string" || input.captured_text.length === 0) {
+      return {
+        ok: false,
+        code: "INVALID_HISTORY",
+        message: "captured_text is required (non-empty string)",
+      };
+    }
+    const result = await extractFromCapturedText(
+      {
+        viewerEntityId: session.entity_id,
+        captured_text: input.captured_text,
+        ...(input.force_mode !== undefined
+          ? { force_mode: input.force_mode }
+          : {}),
+      },
+      this.llmProvider,
+    );
+    return {
+      ok: true,
+      extraction: result,
     };
   }
 
