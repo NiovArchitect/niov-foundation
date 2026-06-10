@@ -8,8 +8,173 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-05-31
-(**ADR-0071 IMPLEMENTATION LANDED 2026-05-31** — PR #132
+**Last updated:** 2026-06-10
+(**Otzar Phase 1221 PLAN LANDED 2026-06-10** — True Collaboration
+Workspace end-to-end. Founder-issued addendum required a written
+audit + plan in this document BEFORE implementation.
+
+### Existing collaboration substrate (audited 2026-06-10)
+- **`TwinCollaborationRequest`** (`schema.prisma:2390`) — single-shot
+  request between two parties (REQUESTED → APPROVED/REJECTED/etc.).
+  10 closed-vocab `TwinCollaborationRequestType` values. NOT a
+  persistent shared workspace. EDX-6 inbox surfaces it.
+- **`WorkProject`** + **`WorkProjectMember`** (`schema.prisma:2463`/
+  `:2479`) — EDX project substrate. `WorkProjectMemberRole` is a
+  CLOSED enum `OWNER | MEMBER | REVIEWER`. NO free-text role label,
+  NO responsibility summary, NO visibility, NO source_type, NO
+  attached-conversation column.
+- **`OrgCollaborationPolicy`** (`schema.prisma:2543`) — per-org
+  policy gate for cross-org collaboration; useful as the
+  external-collaborator gate.
+- **`OtzarConversation`** (`:1525`) — conversation session model.
+- **`MemoryCapsule.conversation_id`** (`:170`) — nullable linkage
+  precedent per ADR-0055.
+- **`Action`** (`:1768`) — ADR-0057 substrate.
+  `SEND_INTERNAL_NOTIFICATION` proven live (Phases 1209 / 1215).
+- **`Notification`** (`:1311`) + `SafeNotificationView`.
+- **`AuditEvent`** (`:318`) + closed-vocab `AUDIT_EVENT_TYPE_VALUES`.
+  Additive literals allowed without ADR-0002 amendment per ADR-0050
+  precedent.
+
+### Existing APIs (Foundation)
+- `otzar-collaboration.routes.ts` — `TwinCollaborationRequest`
+  routes (create/list/transition).
+- `otzar-work-project.routes.ts` — WorkProject routes
+  (create/list/archive/member-add/list).
+- `org-collaboration-policy.routes.ts` — policy read/upsert.
+- `otzar.routes.ts` — `POST /otzar/comms/extract`,
+  `POST /otzar/conversation/start|message|close`.
+- `notification.routes.ts` — list / mark-read / reply.
+- `actions.routes.ts` — list / create / get.
+
+### Existing UI pages (Otzar Control Tower / employee shell)
+- `src/pages/app/Collaboration.tsx` (Phase 1216) — PeopleDirectory
+  + `TwinCollaborationRequest` inbox.
+- `src/pages/app/ActionCenter.tsx` — Action lifecycle list.
+- `src/components/otzar/NotificationBell.tsx` — Notification
+  dropdown with reply.
+- `src/components/otzar/PeopleDirectory.tsx` (Phase 1216).
+- `src/pages/app/Comms.tsx` — comms-extract demo surface.
+
+### What can be reused (NO new substrate)
+- `AuditEvent` (Founder explicit: "If existing audit_events can
+  cover this, use existing audit_events instead").
+- `Action` + `SEND_INTERNAL_NOTIFICATION` + executor + auto-approve
+  for `confirm commitment → action`.
+- `Notification` + `SafeNotificationView` for owner-side delivery.
+- `OtzarConversation.conversation_id` for `source_conversation_id`.
+- `comms-extract.service.ts` DEMO_SCRIPTED fixture
+  (`buildDemoExtraction`) — matches Founder's Launch Follow-Up
+  Meeting fixture VERBATIM: 2 decisions + 3 commitments + 3
+  suggested `SEND_INTERNAL_NOTIFICATION` actions resolved
+  HIGH/RESOLVED against the roster when David / Samiksha / Annie
+  exist.
+- `OrgCollaborationPolicy` + `OrgSettings` as the
+  external-collaborator policy gate.
+- `IdentityContext.org_roster` for member candidate lookup.
+- Patterns from `twin-collaboration.service.ts` (audit + same-org
+  guard + auth) as the canonical template for the new service.
+
+### What is missing (must be added — additive only)
+- A PERSISTENT shared workspace concept distinct from one-shot
+  `TwinCollaborationRequest` and from fixed-enum-role `WorkProject`.
+- Free-text `role_label` + `responsibility_summary` per member.
+- `member_type INTERNAL | EXTERNAL` + `access_level VIEW | COMMENT |
+  CONTRIBUTE | APPROVE`.
+- `visibility INTERNAL_ONLY | EXTERNAL_ALLOWED`.
+- Persistent `CollaborationDecision` + `CollaborationCommitment`
+  rows attached to a workspace so a workspace shows decisions /
+  commitments without re-running extraction each time.
+- `CollaborationSharedContext` row per share to record what's
+  shared and sensitivity.
+- `CollaborationCommitment.assignment_reason` + `confidence` +
+  `resolution_status` + `related_action_id` + 5-state status
+  `PROPOSED | CONFIRMED | ACTION_CREATED | COMPLETED | BLOCKED`.
+- ~10 additive audit literals (`WORKSPACE_CREATED`,
+  `WORKSPACE_MEMBER_ADDED`, `WORKSPACE_MEMBER_REVOKED`,
+  `WORKSPACE_CONTEXT_SHARED`, `WORKSPACE_DECISION_ADDED`,
+  `WORKSPACE_COMMITMENT_ADDED`, `WORKSPACE_COMMITMENT_CONFIRMED`,
+  `WORKSPACE_ACTION_LINKED`, `WORKSPACE_PERMISSION_BLOCKED`,
+  `WORKSPACE_ARCHIVED`).
+
+### Backend changes required? YES
+CT-only is NOT sufficient. A persistent shared workspace cannot be
+faked client-side without leaking governance to the client. Backend
+substrate is required for durability, audit, permission gates,
+action linkage, and cross-member visibility.
+
+### Phase 1221 implementation plan (exact)
+1. **Schema** — 5 new models (`CollaborationWorkspace`,
+   `CollaborationMembership`, `CollaborationDecision`,
+   `CollaborationCommitment`, `CollaborationSharedContext`).
+   Migrate via `scripts/prisma-db-push-test.sh` per ADR-0025. NO
+   new `CapsuleType`. NO new `ActionType`. NO
+   `CollaborationAuditEvent` table — reuse `AuditEvent`.
+2. **Audit literals** — 10 additive literals to
+   `AUDIT_EVENT_TYPE_VALUES` in
+   `packages/database/src/queries/audit.ts`.
+3. **Assignment resolver** —
+   `apps/api/src/services/otzar/collaboration-assignment-resolver.ts`
+   (pure function) implementing the 8-priority cascade
+   (EXPLICIT_AGREEMENT → EXPLICIT_ASK → ROLE_RESPONSIBILITY →
+   ROLE_ARCHETYPE → PROJECT_MEMBERSHIP → UNKNOWN → AMBIGUOUS →
+   RESTRICTED) with explicit `assignment_reason` prose and
+   confidence + resolution_status fields. NO fuzzy match, NO LLM
+   disambiguation, NO entity-id fabrication.
+4. **Services** — `collaboration-workspace.service.ts` with
+   `*ForCaller` exports per ADR-0004: create / list / detail /
+   addMember / attachConversation / importCommsOutput /
+   confirmCommitment / listActions.
+5. **Routes** — 8 additive routes under
+   `otzar-collaboration-workspace.routes.ts` matching the
+   Founder's spec verbatim.
+6. **Backend tests** — 12 integration tests covering all 12
+   Founder assertions.
+7. **CT types + api client** — `api.collaborationWorkspaces.*`
+   namespace + types in `src/lib/types/foundation.ts`.
+8. **CT UI** — `CollaborationWorkspaces.tsx` (list + create) and
+   `CollaborationWorkspaceDetail.tsx` (Overview / People /
+   Decisions / Commitments / Follow-ups / Shared context /
+   Audit). Plain-language only; no DMW / COSMP / payload /
+   binding / adapter strings.
+9. **CT tests** — 16 vitest tests covering the Founder's list.
+10. **Live probe** — rebuild Otzar.app, log in as Sadeil, walk
+    the full Launch Collaboration scenario, verify all 19
+    acceptance criteria.
+
+### Remains partial after Phase 1221
+- Live meeting capture transport (Google Meet / Zoom hosts; needs
+  connector OAuth) — Phase 1222.
+- Voice / STT real-time pipeline — Phase 1223.
+- External writes (Slack / email / Jira) — Phases 1225 / 1226 /
+  later.
+- AI Twin auto-confirming commitments (Twin in this phase READS
+  workspace context; confirmation remains human-approved).
+- Cross-workspace memory propagation.
+- Workspace-scoped DMW / COSMP substrate amendments — Phases
+  1228 / 1229.
+- Workspace billing / seat metering — Phase 1230 / 1231.
+
+### Invariants preserved
+- RULE 0 — sovereignty preserved; AI Twin reads only within
+  scope; external members default-deny.
+- RULE 1 — additive only; no deletion / restructuring of
+  existing collaboration / project substrates.
+- RULE 4 — audit emit BEFORE service returns success.
+- RULE 9 — service-owned `*ForCaller` gate per ADR-0004.
+- RULE 10 — soft-delete via `deleted_at` on all 5 new tables.
+- RULE 13 — drift surfaced inline (existing substrate enumerated
+  + decision rationale documented above).
+- RULE 16 — no `console.*` in `apps/api/src`.
+- RULE 20 — no CLAUDE.md or ADR modifications; the audit-literal
+  additions follow the ADR-0050 / Sub-box-3 / ADR-0042 §Q-γ.1
+  append-only precedent (additive literal class — no ADR
+  amendment required).
+
+Earlier last-updated context:
+**Otzar Phase 1215–1220 LANDED 2026-06-10** — bounded
+employee-shell readiness slice (snapshot PR #314).
+**ADR-0071 IMPLEMENTATION LANDED 2026-05-31** — PR #132
 `ffc0548` ships Section 7 cross-scope audit `verify-chain`
 per ADR-0071 with **Option A clean break** Founder QLOCK
 (consumer-mapping evidence confirmed zero external HTTP
