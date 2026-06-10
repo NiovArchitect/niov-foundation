@@ -225,6 +225,32 @@ export async function registerOtzarRoutes(
     return reply.code(200).send(result);
   });
 
+  // GET /api/v1/otzar/my-twin/context-health -- closed-vocab projection
+  // of the L0_IDENTITY block conductSession prepends to the LLM system
+  // prompt. Self-read: bearer + "read" capability only. Used by the
+  // Voice page to render an "AI Twin context" badge so the operator
+  // sees at-a-glance whether Otzar will recognize them. Phase 1205
+  // per [FOUNDER-AUTH -- FIX AI TWIN IDENTITY CONTEXT].
+  //
+  // Returns IdentityContext + a discrete READY|PARTIAL|UNCONFIGURED
+  // status. NEVER includes secrets, raw memory text, raw transcripts,
+  // cross-user data, or fields beyond the IdentityContext projection.
+  app.get("/api/v1/otzar/my-twin/context-health", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const result = await otzarService.getContextHealth({ token });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
   // GET /api/v1/otzar/conversations -- metadata-only continuity feed for
   // the caller's OWN conversations. Self-scoped: bearer + "read"
   // capability only (no admin gate). ?skip= & ?take= pagination (take

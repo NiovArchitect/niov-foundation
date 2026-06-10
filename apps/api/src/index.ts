@@ -510,6 +510,13 @@ export type {
   DriftSignalsView,
 } from "./services/otzar/drift-signal.service.js";
 
+// Phase 1205 [FOUNDER-AUTH -- FIX AI TWIN IDENTITY CONTEXT].
+export {
+  buildIdentityContext,
+  renderIdentityPreamble,
+} from "./services/otzar/identity-context.js";
+export type { IdentityContext } from "./services/otzar/identity-context.js";
+
 export { projectConversationDetail } from "./services/otzar/conversation-detail.js";
 export type {
   ConversationDetailView,
