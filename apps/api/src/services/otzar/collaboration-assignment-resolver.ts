@@ -153,9 +153,13 @@ function detectExplicitAgreement(
 ): { member: ResolverMemberSnapshot; matchedName: string } | null {
   const lc = normalize(excerpt);
   // Per-member scan — only consider names actually in the roster
-  // (strict-match-only). For each member, look for "<first> agreed",
-  // "<first> said she", "<first> said he", "<first> said they",
-  // "<first> will", "<first> can", "<first> committed".
+  // (strict-match-only). For each member, look for "<token> agreed",
+  // "<token> said she", "<token> said he", "<token> said they",
+  // "<token> will", "<token> can", "<token> committed" — where
+  // <token> is ANY word from the member's display_name. This lets
+  // "Annie Wells" match "Annie agreed" without requiring "Wells"
+  // to appear in the capture; it also tolerates a leading test
+  // prefix word in display_name that wouldn't appear in a capture.
   const verbs = [
     "agreed",
     "said she",
@@ -167,12 +171,14 @@ function detectExplicitAgreement(
     "committed",
   ];
   for (const member of members) {
-    const first = normalize(member.display_name).split(" ")[0] ?? "";
-    if (first.length === 0) continue;
-    for (const v of verbs) {
-      const idx = lc.indexOf(`${first} ${v}`);
-      if (idx !== -1) {
-        return { member, matchedName: member.display_name };
+    const tokens = normalize(member.display_name).split(" ").filter(
+      (t) => t.length > 0,
+    );
+    for (const token of tokens) {
+      for (const v of verbs) {
+        if (lc.includes(`${token} ${v}`)) {
+          return { member, matchedName: member.display_name };
+        }
       }
     }
   }
@@ -191,15 +197,18 @@ function detectExplicitAsk(
 ): { member: ResolverMemberSnapshot; matchedName: string } | null {
   const lc = normalize(excerpt);
   for (const member of members) {
-    const first = normalize(member.display_name).split(" ")[0] ?? "";
-    if (first.length === 0) continue;
-    if (
-      lc.includes(`asked ${first} `) ||
-      lc.includes(`asked ${first},`) ||
-      lc.includes(`asked ${first}.`) ||
-      lc.endsWith(`asked ${first}`)
-    ) {
-      return { member, matchedName: member.display_name };
+    const tokens = normalize(member.display_name).split(" ").filter(
+      (t) => t.length > 0,
+    );
+    for (const token of tokens) {
+      if (
+        lc.includes(`asked ${token} `) ||
+        lc.includes(`asked ${token},`) ||
+        lc.includes(`asked ${token}.`) ||
+        lc.endsWith(`asked ${token}`)
+      ) {
+        return { member, matchedName: member.display_name };
+      }
     }
   }
   return null;
