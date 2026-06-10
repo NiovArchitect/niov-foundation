@@ -251,6 +251,52 @@ export async function registerOtzarRoutes(
     return reply.code(200).send(result);
   });
 
+  // POST /api/v1/otzar/comms/extract -- Phase 1213
+  // [OTZAR-AMBIENT-COMMS]. Given the assembled captured text of a
+  // conversation (from CT's demo-capture timer, manual paste, or
+  // future live STT), return a structured summary + decisions +
+  // commitments + suggested governed-Action follow-ups. NEVER
+  // creates Action rows -- those land only when the operator
+  // explicitly clicks Send on a CT approval card (Phase 1208 path).
+  app.post<{
+    Body: { captured_text?: unknown; force_mode?: unknown };
+  }>("/api/v1/otzar/comms/extract", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const body = request.body ?? {};
+    if (
+      typeof body.captured_text !== "string" ||
+      body.captured_text.length === 0
+    ) {
+      return reply.code(422).send({
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "captured_text is required (non-empty string)",
+      });
+    }
+    const force_mode =
+      body.force_mode === "DEMO_SCRIPTED" ||
+      body.force_mode === "LLM" ||
+      body.force_mode === "LOCAL_FALLBACK"
+        ? body.force_mode
+        : undefined;
+    const result = await otzarService.extractFromComms({
+      token,
+      captured_text: body.captured_text,
+      ...(force_mode !== undefined ? { force_mode } : {}),
+    });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
   // GET /api/v1/otzar/conversations -- metadata-only continuity feed for
   // the caller's OWN conversations. Self-scoped: bearer + "read"
   // capability only (no admin gate). ?skip= & ?take= pagination (take

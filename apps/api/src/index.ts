@@ -526,6 +526,14 @@ export type {
   OrgRosterPeer,
 } from "./services/otzar/proposed-action-extractor.js";
 
+// Phase 1213 [OTZAR-AMBIENT-COMMS].
+export { extractFromCapturedText } from "./services/otzar/comms-extract.service.js";
+export type {
+  CommsExtractionResult,
+  CommsExtractionMode,
+  CommsSuggestedAction,
+} from "./services/otzar/comms-extract.service.js";
+
 export { projectConversationDetail } from "./services/otzar/conversation-detail.js";
 export type {
   ConversationDetailView,
