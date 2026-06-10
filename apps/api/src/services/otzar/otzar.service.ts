@@ -29,6 +29,11 @@ import type {
 } from "./proposed-pattern.service.js";
 import { getPriming } from "./priming.js";
 import {
+  buildIdentityContext,
+  renderIdentityPreamble,
+  type IdentityContext,
+} from "./identity-context.js";
+import {
   truncateToTokenBudget,
   TokenBudgetExceededError,
   type LayerBundle,
@@ -353,6 +358,22 @@ export interface CloseConversationSuccess {
   capsule_id: string;
   conversation_id: string;
   topics: string[];
+}
+
+// WHAT: Inputs for getContextHealth.
+// WHY: Token only -- caller is self-scoped via session.entity_id.
+export interface GetContextHealthInput {
+  token: string;
+}
+
+// WHAT: Successful getContextHealth return.
+// WHY: Surfaces the same IdentityContext fields the LLM sees as
+//      L0_IDENTITY, plus a discrete READY|PARTIAL|UNCONFIGURED
+//      status for the Voice page badge.
+export interface ContextHealthSuccess {
+  ok: true;
+  status: "READY" | "PARTIAL" | "UNCONFIGURED";
+  identity: IdentityContext;
 }
 
 // WHAT: Inputs for getMyTwin.
@@ -1011,12 +1032,38 @@ export class OtzarService {
     }
 
     // Build the final system prompt + user message.
+    //
+    // L0_IDENTITY (Phase 1205 per [FOUNDER-AUTH -- FIX AI TWIN
+    // IDENTITY CONTEXT]): a SHORT viewer-identity preamble is
+    // prepended outside the truncation budget so Otzar always knows
+    // who it is talking to even when L1-L7 get trimmed. The block is
+    // closed-vocab + size-bounded + privacy-scoped per
+    // identity-context.ts (no secrets, no raw memory, no cross-user
+    // private data; only the viewer's own org/title/twin/projects
+    // and context-signal counts). Failure to build the block is NOT
+    // fatal -- we degrade to the legacy L1-L7-only path so a
+    // partially-seeded org never blocks a conversation.
+    //
     // Wave 6B alignment section is injected immediately after the
     // priming layer (so the symbiotic alignment context frames
     // every layer that follows) and outside the truncation budget
     // (bounded by the Wave 6A sidecar reader's limit of 5 patterns;
     // small enough to not require truncation participation).
+    let identityPreamble = "";
+    try {
+      const identity = await buildIdentityContext(ownerEntityId);
+      identityPreamble = renderIdentityPreamble(identity);
+    } catch (err) {
+      // Degrade gracefully -- log + continue without L0_IDENTITY so
+      // a partially-seeded org never blocks a conversation.
+      logger.warn(
+        { err, ownerEntityId },
+        "otzar.conductSession: identity-context build failed; degrading",
+      );
+    }
+
     const systemPrompt = [
+      identityPreamble,
       truncated.final.priming,
       L_ALIGNMENT,
       truncated.final.L1,
@@ -1843,6 +1890,49 @@ export class OtzarService {
       twin,
       has_multiple_twins: twins.length > 1,
       twin_count: twins.length,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // getContextHealth -- closed-vocab projection of the L0_IDENTITY
+  // block conductSession prepends, served to the Voice UI so the
+  // operator can see at a glance whether Otzar will recognize them.
+  //
+  // WHAT: Surface viewer/org/twin/projects/context-signal/safety
+  //       facts the LLM ALREADY sees, as a small JSON object suitable
+  //       for an "AI Twin context" badge on the Voice page.
+  // INPUT: GetContextHealthInput { token }.
+  // OUTPUT: ContextHealthSuccess (200) or OtzarFailure (SESSION_*).
+  // WHY: Closes the "is Otzar actually loaded with my identity?"
+  //      observability gap surfaced by [FOUNDER-AUTH -- FIX AI TWIN
+  //      IDENTITY CONTEXT]. The response NEVER includes secrets,
+  //      raw memory text, raw transcripts, cross-user data, TAR
+  //      hashes, password fields, grant identifiers, or any field
+  //      not already present in IdentityContext.
+  // ──────────────────────────────────────────────────────────────
+  async getContextHealth(
+    input: GetContextHealthInput,
+  ): Promise<ContextHealthSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return {
+        ok: false,
+        code: session.code,
+        message: "Context health denied",
+      };
+    }
+    const ownerEntityId = session.entity_id;
+    const identity: IdentityContext = await buildIdentityContext(ownerEntityId);
+    const status: "READY" | "PARTIAL" | "UNCONFIGURED" =
+      identity.org.org_id !== null && identity.twin.active
+        ? "READY"
+        : identity.viewer.display_name !== "Unknown viewer"
+          ? "PARTIAL"
+          : "UNCONFIGURED";
+    return {
+      ok: true,
+      status,
+      identity,
     };
   }
 
