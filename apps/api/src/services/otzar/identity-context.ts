@@ -59,6 +59,22 @@ export interface IdentityContext {
     collaboration_inbound_count: number;
     collaboration_outbound_count: number;
   };
+  // Phase 1207 [FOUNDER-AUTH -- REDUCE OTZAR QUESTION FRICTION].
+  // Other PERSON members of the viewer's org with the rough collab
+  // signal the LLM needs to resolve a first-name reference ("send
+  // David a note") without launching a clarification cascade. Closed-
+  // vocab: display_name / email / title / shared_project_count /
+  // recent_collab_count. Sensitive PII (TAR, capsules, vectors) is
+  // never surfaced here -- this is a "who exists in this org" facts
+  // dump for inference only.
+  org_roster: ReadonlyArray<{
+    entity_id: string;
+    display_name: string;
+    email: string | null;
+    title: string;
+    shared_project_count: number;
+    recent_collab_count: number;
+  }>;
   safety: {
     no_external_write_without_approval: true;
     no_private_data_to_unauthorized_users: true;
@@ -198,6 +214,96 @@ export async function buildIdentityContext(
     where: { requester_entity_id: viewerEntityId },
   });
 
+  // Org roster — other PERSON members of the viewer's org. Lets the
+  // LLM resolve a first-name reference ("send David a note") without
+  // launching a clarification cascade. Excludes the viewer; excludes
+  // AI_AGENT / COMPANY entities; bounded to 50 rows by query.
+  let orgRoster: IdentityContext["org_roster"] = [];
+  if (orgId !== null) {
+    const peerMemberships = await prisma.entityMembership.findMany({
+      where: {
+        parent_id: orgId,
+        is_active: true,
+        child_id: { not: viewerEntityId },
+        child: { entity_type: "PERSON", deleted_at: null },
+      },
+      include: { child: true },
+      take: 50,
+    });
+    const peerIds = peerMemberships.map((m) => m.child_id);
+
+    // Recent collaboration counts per peer (inbound + outbound with
+    // the viewer). One grouped query each is enough at this scale.
+    const collabOutPerPeer =
+      peerIds.length === 0
+        ? []
+        : await prisma.twinCollaborationRequest.groupBy({
+            by: ["target_entity_id"],
+            where: {
+              requester_entity_id: viewerEntityId,
+              target_entity_id: { in: peerIds },
+            },
+            _count: { _all: true },
+          });
+    const collabInPerPeer =
+      peerIds.length === 0
+        ? []
+        : await prisma.twinCollaborationRequest.groupBy({
+            by: ["requester_entity_id"],
+            where: {
+              target_entity_id: viewerEntityId,
+              requester_entity_id: { in: peerIds },
+            },
+            _count: { _all: true },
+          });
+    const collabCountByPeer = new Map<string, number>();
+    for (const row of collabOutPerPeer) {
+      if (row.target_entity_id === null) continue;
+      collabCountByPeer.set(
+        row.target_entity_id,
+        (collabCountByPeer.get(row.target_entity_id) ?? 0) + row._count._all,
+      );
+    }
+    for (const row of collabInPerPeer) {
+      if (row.requester_entity_id === null) continue;
+      collabCountByPeer.set(
+        row.requester_entity_id,
+        (collabCountByPeer.get(row.requester_entity_id) ?? 0) +
+          row._count._all,
+      );
+    }
+
+    // Shared-project counts per peer (peers that sit on the same
+    // ACTIVE project as the viewer).
+    const viewerProjectIds = projects.map((p) => p.project_id);
+    const peerProjectMemberships =
+      peerIds.length === 0 || viewerProjectIds.length === 0
+        ? []
+        : await prisma.workProjectMember.findMany({
+            where: {
+              entity_id: { in: peerIds },
+              project_id: { in: viewerProjectIds },
+            },
+            select: { entity_id: true, project_id: true },
+          });
+    const sharedProjectCountByPeer = new Map<string, number>();
+    for (const m of peerProjectMemberships) {
+      sharedProjectCountByPeer.set(
+        m.entity_id,
+        (sharedProjectCountByPeer.get(m.entity_id) ?? 0) + 1,
+      );
+    }
+
+    orgRoster = peerMemberships.map((m) => ({
+      entity_id: m.child_id,
+      display_name: m.child.display_name,
+      email: m.child.email,
+      title: m.role_title ?? "MEMBER",
+      shared_project_count: sharedProjectCountByPeer.get(m.child_id) ?? 0,
+      recent_collab_count: collabCountByPeer.get(m.child_id) ?? 0,
+    }));
+  }
+
   return {
     viewer: {
       user_id: viewerEntityId,
@@ -235,6 +341,7 @@ export async function buildIdentityContext(
       collaboration_inbound_count: collaborationInbound,
       collaboration_outbound_count: collaborationOutbound,
     },
+    org_roster: orgRoster,
     safety: {
       no_external_write_without_approval: true,
       no_private_data_to_unauthorized_users: true,
@@ -310,6 +417,37 @@ export function renderIdentityPreamble(ctx: IdentityContext): string {
       `${ctx.context_signals.collaboration_inbound_count} inbound collaborations, ` +
       `${ctx.context_signals.collaboration_outbound_count} outbound collaborations available.`,
   );
+
+  // Org roster -- give the LLM the facts it needs to resolve a first-
+  // name reference like "send David a note" without launching a
+  // clarification cascade. Sorted by (shared_project_count DESC,
+  // recent_collab_count DESC, display_name ASC) so the most-relevant
+  // peers land at the top.
+  if (ctx.org_roster.length > 0) {
+    const sorted = [...ctx.org_roster].sort((a, b) => {
+      if (b.shared_project_count !== a.shared_project_count) {
+        return b.shared_project_count - a.shared_project_count;
+      }
+      if (b.recent_collab_count !== a.recent_collab_count) {
+        return b.recent_collab_count - a.recent_collab_count;
+      }
+      return a.display_name.localeCompare(b.display_name);
+    });
+    const lines = sorted.map((p) => {
+      const sig: string[] = [];
+      if (p.shared_project_count > 0) {
+        sig.push(`${p.shared_project_count} shared project${p.shared_project_count === 1 ? "" : "s"}`);
+      }
+      if (p.recent_collab_count > 0) {
+        sig.push(`${p.recent_collab_count} recent collaboration${p.recent_collab_count === 1 ? "" : "s"}`);
+      }
+      const sigStr = sig.length > 0 ? ` -- ${sig.join(", ")}` : "";
+      const emailStr = p.email !== null ? ` <${p.email}>` : "";
+      return `  - ${p.display_name}${emailStr}, ${humanizeTitle(p.title)}${sigStr}`;
+    });
+    parts.push("[ORG ROSTER]", lines.join("\n"));
+  }
+
   parts.push(
     "[GOVERNANCE]",
     "You are Otzar, the governed AI Twin interface for the authenticated viewer. " +
@@ -320,6 +458,16 @@ export function renderIdentityPreamble(ctx: IdentityContext): string {
       "External writes (Slack / email / Jira / Linear / etc.) require approval and the operator must explicitly enable connector writes. " +
       "Sensitive memory remains scoped to its wallet and policy; do not expose one viewer's private data to another viewer. " +
       "If the viewer asks who they are, answer using the [VIEWER IDENTITY] block above.",
+    "[ACTION DRAFTING DISCIPLINE]",
+    "When the viewer asks you to send/message/tell/ask/remind/nudge/follow-up-with another person, INFER FIRST, DRAFT FIRST, ASK ONLY ON REAL AMBIGUITY. " +
+      "Step 1 (resolve target): use [ORG ROSTER] above. A first-name reference resolves to the roster entry whose display_name starts with that name; if multiple match, prefer the one with the highest shared_project_count, then highest recent_collab_count. Only ask 'which X?' when two or more candidates have IDENTICAL shared_project_count AND recent_collab_count. " +
+      "Step 2 (resolve channel): default to an internal Otzar proposed-action / internal note. Do not ask which channel first. " +
+      "Step 3 (resolve tone): default to direct but professional. Do not ask which tone first. " +
+      "Step 4 (DRAFT the message immediately) and present it in this exact shape: " +
+      "'I found <Display Name>... I drafted a direct internal note. I will not send it until you approve.\\n\\nDraft:\\n\"<draft text>\"\\n\\nSend this to <Display Name>?' " +
+      "Step 5 (approval): never send / never create an external write without explicit approval. Internal proposed actions can be created immediately. " +
+      "FORBIDDEN: asking multiple clarification questions in one turn (which person / which channel / what tone) for a low-risk internal message when the roster contains a clear top candidate. " +
+      "Even when ambiguity is real, ask ONE focused question only -- never a questionnaire.",
   );
   return parts.join("\n");
 }
