@@ -18,6 +18,7 @@ import {
   markNotificationReadForCaller,
   validateListNotificationsQuery,
 } from "../services/notification/notification-read.service.js";
+import { replyToNotificationForCaller } from "../services/notification/notification-reply.service.js";
 
 // WHAT: Register the 3 inbox routes on the Fastify app. Mirrors
 //        the registration-function pattern used by every other
@@ -54,6 +55,44 @@ export async function registerNotificationRoutes(
         return reply.code(result.httpStatus).send({
           ok: true,
           ...result.view,
+        });
+      }
+      const responseBody: Record<string, unknown> = {
+        ok: false,
+        code: result.code,
+      };
+      if (result.message !== undefined) responseBody.message = result.message;
+      return reply.code(result.httpStatus).send(responseBody);
+    },
+  );
+
+  // Phase 1215 [OTZAR-NOTIFICATION-REPLY] -- recipient-side inline
+  // reply. The caller knows the notification_id; Foundation looks up
+  // the row server-side, resolves the original sender, and creates a
+  // governed SEND_INTERNAL_NOTIFICATION Action back to them via the
+  // existing createActionForCaller path (ADR-0057). Privacy invariant
+  // preserved: the recipient never sees source_entity_id directly.
+  app.post<{
+    Params: { id: string };
+    Body: { body_summary?: unknown; idempotency_key?: unknown };
+  }>(
+    "/api/v1/notifications/:id/reply",
+    { preHandler: requireAuth(authService, "write") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const body = request.body ?? {};
+      const result = await replyToNotificationForCaller(callerId, {
+        notificationId: request.params.id,
+        body_summary:
+          typeof body.body_summary === "string" ? body.body_summary : "",
+        idempotency_key:
+          typeof body.idempotency_key === "string" ? body.idempotency_key : "",
+      });
+      if (result.ok === true) {
+        return reply.code(result.httpStatus).send({
+          ok: true,
+          reply_action_id: result.reply_action_id,
+          reply_action_status: result.reply_action_status,
         });
       }
       const responseBody: Record<string, unknown> = {
