@@ -39,6 +39,24 @@ slices: **Phase 1211 (Action Center page)** in flight, and **Phase
 as task #78. Task #73 is now closed; further work continues in
 those bounded slices rather than as an open umbrella ticket.
 
+## Phase 1213 close-out (2026-06-10) — Ambient Otzar Comms
+
+**Hero flow:** *Start capture → Otzar listens → Otzar organizes →
+follow-ups ready.* Manual paste is fallback-only.
+
+| | |
+| --- | --- |
+| Foundation PR | `niov-foundation#311` merged (`78c5175`) |
+| CT PR | `otzar-control-tower#56` merged (`cec1d14`) |
+| Foundation tests | 2024 unit (`+12`) |
+| CT tests | 627 unit (`+9` + 1 nav update) |
+| Live extraction | DEMO_SCRIPTED auto-detects the canonical Founder fixture |
+| Live actions | 3 RESOLVED follow-ups → 3 `Action(SUCCEEDED)` rows → 3 recipient `Notification` rows |
+| External writes | zero |
+| Audit | `ACTION_PROPOSED` + `_APPROVED` + `_EXECUTED` per action |
+| New Prisma models | **none** (persistence reuses the existing Action + Notification pipeline) |
+| Three modes | `DEMO_SCRIPTED` (canonical fixture), `LLM` (Anthropic), `LOCAL_FALLBACK` (honest empty) |
+
 ## Phase 1209 close-out (2026-06-10)
 
 **Roster-aware internal note completion is live end-to-end.**
