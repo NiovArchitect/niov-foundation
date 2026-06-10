@@ -13,6 +13,32 @@ navigation, and interaction model: AI feels like it can do work
 Foundation governance pipeline. See `OTZAR_EMPLOYEE_EXPERIENCE.md`
 (future, queued) for the full mapping.
 
+## PR-H "ambient employee UX" reconciliation (2026-06-10)
+
+The original PR-H task (`#73`, posted with the
+[FOUNDER-AUTH — REDESIGN EMPLOYEE UX AS AMBIENT OTZAR DESKTOP LAYER]
+directive) is reconciled as **Option B — partially completed**. The
+nine specific items from that directive map to shipped phases as
+follows:
+
+| # | PR-H item | Status | Lineage |
+| --- | --- | --- | --- |
+| 1 | Top notification bell | **DONE** | Phase 1210 (`ct#53`) |
+| 2 | Ambient My Twin bar always-available | **already exists** | `AmbientOtzarBar` (pre-PR-H) |
+| 3 | "My Day" landing page | **deferred → Phase 1212** | task #78 |
+| 4 | Pending confirmations visible immediately | **PARTIAL** | bell surfaces notifications (1210); Action Center pending in 1211 |
+| 5 | Recent internal notes surfaced | **DONE** | Phase 1210 bell |
+| 6 | Clean employee navigation | **deferred → Phase 1212** | task #78 |
+| 7 | Hide unfinished technical pages | **deferred → Phase 1212** | task #78 |
+| 8 | Remove developer-facing labels | **PARTIAL** | friendly error copy on approval card (Phase 1209); full sweep in 1212 |
+| 9 | Keep admin Control Tower separate | **already exists** | EmployeeLayout vs admin Layout (pre-PR-H) |
+
+The remaining PR-H work has been split into two bounded follow-on
+slices: **Phase 1211 (Action Center page)** in flight, and **Phase
+1212 (My Day landing + nav simplification + label sweep)** queued
+as task #78. Task #73 is now closed; further work continues in
+those bounded slices rather than as an open umbrella ticket.
+
 ## Phase 1209 close-out (2026-06-10)
 
 **Roster-aware internal note completion is live end-to-end.**
