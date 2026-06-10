@@ -8,8 +8,43 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-05-31
-(**ADR-0071 IMPLEMENTATION LANDED 2026-05-31** — PR #132
+**Last updated:** 2026-06-10
+(**Otzar Phase 1215–1220 LANDED 2026-06-10** — bounded employee-
+shell readiness slice. **Phase 1215** Foundation `POST
+/api/v1/notifications/:id/reply` mediator + CT inline reply UI
+(PR niov-foundation#313 + otzar-control-tower#58); reply does
+server-side `source_entity_id` lookup, creates a governed
+`SEND_INTERNAL_NOTIFICATION` Action back to the original sender,
+preserves SafeNotificationView privacy invariant. **Phase 1216**
+CT People & Collaboration rename + PeopleDirectory consuming
+`IdentityContext.org_roster` (CT #59). **Phase 1217** CT My
+Organization view, 5 cards, projects-by-role, surveillance-
+language ban test-locked (CT #60). **Phase 1218** 13 role
+archetypes in `src/lib/role-archetypes.ts` (CTO/CMO/SALES_MANAGER/
+PR_LEAD/AI_ENGINEER/ML_ENGINEER/RESEARCHER/DATA_SCIENTIST/
+UX_RESEARCHER/SUPPORT_LEAD/OPERATIONS_MANAGER/GENERAL_EMPLOYEE/
+INVESTOR_OBSERVER) + `resolveRoleArchetype()` fuzzy aliases (CT
+#61). **Phase 1219** My Digital Work Wallet (DMW renamed for
+employees); `outerHTML` test-locked against DMW/COSMP/
+MemoryCapsule/capsule_id/wallet_id/embedding leakage (CT #62).
+**Phase 1220** Connector Health honest catalogue across 10
+provider categories (Productivity/Communications/Engineering/AI/
+Settlement), admin overlay via `listProviders`, 403 fallback,
+reassurance footer, privacy invariants test-locked (CT #63;
+async-wait CI race fix `cb4905c`). Otzar.app rebundled
+2026-06-10 14:50:24 (`Contents/MacOS/otzar-desktop`). All 6
+surfaces verified in shipped JS. **ZERO** external writes,
+**ZERO** Foundation schema migrations 1216–1220, **ZERO**
+weakening of governance/audit boundaries. Foundation TS baseline
+preserved at zero errors. RULE 0/1/4/9/13/16/20 preserved.
+Bounded queue **1221–1232 OPEN**: 1221 Collaboration Workspace
+e2e (Sadeil/David/Samiksha/Annie launch acceptance scenario);
+1222 live meeting capture; 1223 voice/STT; 1224 Google
+Workspace; 1225 Slack; 1226 email; 1227 OCR/Observe; 1228 DMW
+backend substrate; 1229 COSMP backend substrate; 1230
+onboarding; 1231 client handoff readiness matrix; 1232
+Circle/Base/USDC LAST. Earlier last-updated context:
+**ADR-0071 IMPLEMENTATION LANDED 2026-05-31** — PR #132
 `ffc0548` ships Section 7 cross-scope audit `verify-chain`
 per ADR-0071 with **Option A clean break** Founder QLOCK
 (consumer-mapping evidence confirmed zero external HTTP
