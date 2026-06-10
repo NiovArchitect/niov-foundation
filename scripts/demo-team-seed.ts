@@ -378,10 +378,81 @@ async function main() {
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Phase 1209 -- roster-aware internal note auto-approval policy.
+  // Inserts ONE ActionPolicy row for the NIOV demo org:
+  //   (action_type=SEND_INTERNAL_NOTIFICATION, risk_tier=LOW,
+  //    default_decision=AUTO_APPROVE).
+  // This is the smallest governed change that takes the chat-drafted
+  // internal note flow from REJECTED (no eligible approver for
+  // dual-control) to AUTO_APPROVED + executor fires + recipient
+  // Notification row created + David/Annie/Vishesh/Samiksha can
+  // see it in /api/v1/notifications.
+  //
+  // PAIRED CHANGE: OrgSettings.require_human_approval must be FALSE
+  // for the NIOV demo org because policy-evaluator.ts Rung 1 (§4.1)
+  // short-circuits to REQUIRE_DUAL_CONTROL whenever
+  // require_human_approval=true, BEFORE the per-(action_type,risk_tier)
+  // ActionPolicy row is consulted. With require_human_approval=false,
+  // governance is NOT weakened -- every action_type WITHOUT an
+  // explicit ActionPolicy.AUTO_APPROVE row still defaults to
+  // REQUIRE_DUAL_CONTROL via Rung 4 (§4.4)
+  // APPROVAL_REQUIRED_DEFAULT_DUAL_CONTROL. The ActionPolicy table
+  // becomes the explicit safe-list.
+  //
+  // SCOPE:
+  //   - Affects ONLY SEND_INTERNAL_NOTIFICATION + LOW for this org.
+  //   - Other action_types + risk_tiers retain Foundation safe
+  //     defaults (REQUIRE_DUAL_CONTROL).
+  //   - No external connectors enabled; INVOKE_CONNECTOR remains
+  //     gated. PROPOSE_PERMISSION_GRANT remains gated. RECORD_CAPSULE
+  //     remains gated.
+  //   - Idempotent: upsert on the unique
+  //     (org, action_type, risk_tier) key.
+  //   - updated_by = Sadeil (founder identity).
+  await prisma.orgSettings.upsert({
+    where: { org_entity_id: orgId },
+    create: {
+      org_entity_id: orgId,
+      require_human_approval: false,
+      auto_approve_low_risk: true,
+      audit_ai_actions: true,
+    },
+    update: {
+      require_human_approval: false,
+      auto_approve_low_risk: true,
+      // audit_ai_actions left at its prior value -- we never weaken audit.
+    },
+  });
+  await prisma.actionPolicy.upsert({
+    where: {
+      org_entity_id_action_type_risk_tier: {
+        org_entity_id: orgId,
+        action_type: "SEND_INTERNAL_NOTIFICATION",
+        risk_tier: "LOW",
+      },
+    },
+    create: {
+      org_entity_id: orgId,
+      action_type: "SEND_INTERNAL_NOTIFICATION",
+      risk_tier: "LOW",
+      default_decision: "AUTO_APPROVE",
+      require_admin_capability: null,
+      updated_by: founderId,
+    },
+    update: {
+      default_decision: "AUTO_APPROVE",
+      require_admin_capability: null,
+      updated_by: founderId,
+    },
+  });
+
   console.log("\n=== NIOV TEAM DEMO SEED ===");
   console.log(`Org:                ${ORG_NAME}`);
   console.log(`Founder:            sadeil@niovlabs.com (must already exist)`);
   console.log(`Demo password:      ${DEFAULT_PASSWORD}`);
+  console.log(`Action policies seeded:`);
+  console.log(`  - SEND_INTERNAL_NOTIFICATION + LOW → AUTO_APPROVE`);
   console.log(`Projects (${PROJECTS.length}):`);
   for (const name of PROJECTS) {
     console.log(`  - ${name}    ${projectIds[name]}`);

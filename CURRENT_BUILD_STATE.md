@@ -1,5 +1,45 @@
 # CURRENT_BUILD_STATE.md
 
+_Last updated: 2026-06-10 (Phase 1209 close-out)._
+
+## Warmwind OS reference (added 2026-06-10)
+
+**Warmwind OS is now a UX reference point for Otzar's employee AI Work
+OS experience, not a replacement architecture.** Foundation remains
+the identity / DMW / COSMP / policy / GovernedAction / audit /
+settlement substrate. The Warmwind reference influences UI/UX,
+navigation, and interaction model: AI feels like it can do work
+(visual, calm, OS-like) but every action is still routed through the
+Foundation governance pipeline. See `OTZAR_EMPLOYEE_EXPERIENCE.md`
+(future, queued) for the full mapping.
+
+## Phase 1209 close-out (2026-06-10)
+
+**Roster-aware internal note completion is live end-to-end.**
+
+| Sender | Recipient | Action ID | Status | Recipient sees in inbox? |
+| --- | --- | --- | --- | --- |
+| sadeil@niovlabs.com | David Odie | 2d465f7d… | SUCCEEDED | ✅ UNREAD |
+| vishesh@niovlabs.com | Annie | 0e95d0af… | SUCCEEDED | ✅ UNREAD |
+| sadeil@niovlabs.com | Samiksha Sharma | 6a2f83dd… | SUCCEEDED | ✅ UNREAD |
+| david@niovlabs.com | Vishesh Sharma | 5f1dd8f6… | SUCCEEDED | ✅ UNREAD |
+| sadeil@niovlabs.com | "Marcus" (not in roster) | — | — | LLM refused to draft; surfaced full roster instead |
+
+Verified live against merged Foundation main + Phase 1209
+ActionPolicy + OrgSettings seed. Chat → Otzar drafts → operator
+clicks Send → `POST /api/v1/actions` → policy evaluator
+AUTO_APPROVE → executor cron fires → `SendInternalNotification`
+handler creates recipient Notification row → recipient
+`GET /api/v1/notifications` shows the unread note. ACTION_PROPOSED +
+ACTION_APPROVED + ACTION_EXECUTED audit emitted. **Zero external
+writes**. **Zero notifications to non-recipients**.
+
+The feature is **"roster-aware internal note/action completion"** —
+David was the original regression fixture, not a product rule. The
+backend extractor (17 tests across 5 names) and the CT card (16
+tests across 4 recipients + 3 friendly-error-copy cases) prove the
+card / extractor / API client work for any valid roster entry.
+
 _Last updated: 2026-06-10 by Claude during the
 [FOUNDATION/OTZAR end-to-end audit] directive._
 
