@@ -337,7 +337,66 @@ export type AuditEventType =
   // free-text reasons, PII beyond entity_id, swarm member
   // identities (only the team_entity_id surfaces; the
   // membership graph is queried elsewhere).
-  | "SWARM_BOUNDARY_DECLARED";
+  | "SWARM_BOUNDARY_DECLARED"
+  // Phase 1221 — Collaboration Workspace per the [FOUNDER-AUTH —
+  // PHASE 1221 TRUE COLLABORATION WORKSPACE END-TO-END] directive.
+  // 10 NEW append-only literals for the CollaborationWorkspace
+  // lifecycle, emitted by collaboration-workspace.service.ts.
+  // Append-only per ADR-0042 §Q-γ.1 clean-transition discipline;
+  // additive literals require no ADR-0002 amendment (ADR-0002
+  // governs the chain mechanism + BEFORE-DELETE trigger).
+  //
+  // SAFE audit-details allowlist:
+  //   workspace_id / workspace_title (the title is the workspace's
+  //   own short label — no transcript leakage) / member_entity_id
+  //   (where structurally safe) / role_label (free-text member
+  //   responsibility) / member_type (INTERNAL | EXTERNAL) /
+  //   access_level (closed-vocab) / commitment_id / decision_id /
+  //   shared_context_id / action_id / source_conversation_id /
+  //   visibility (closed-vocab) / source_type (closed-vocab) /
+  //   resolution_status (closed-vocab) / confidence (closed-vocab) /
+  //   confirmed_action_id / blocked_reason (closed-vocab).
+  //
+  // FORBIDDEN audit-details (RULE 0 + RULE 4):
+  //   raw transcript text / raw payload_summary text / per-message
+  //   bodies / raw conversation excerpts / embeddings / vectors /
+  //   per-result distance / candidate-name list / external email
+  //   addresses / OAuth tokens / Bearer headers / cross-tenant
+  //   identifiers / capsule payload_content / capsule
+  //   storage_location / SHA-256 of any secret.
+  | "WORKSPACE_CREATED"
+  | "WORKSPACE_MEMBER_ADDED"
+  | "WORKSPACE_MEMBER_REVOKED"
+  | "WORKSPACE_CONTEXT_SHARED"
+  | "WORKSPACE_DECISION_ADDED"
+  | "WORKSPACE_COMMITMENT_ADDED"
+  | "WORKSPACE_COMMITMENT_CONFIRMED"
+  | "WORKSPACE_ACTION_LINKED"
+  | "WORKSPACE_PERMISSION_BLOCKED"
+  | "WORKSPACE_ARCHIVED"
+  // Phase 1221 ADDENDUM — External Collaborator governance per the
+  // [FOUNDER-AUTH — PHASE 1221 ADDENDUM THIRD-PARTY / EXTERNAL
+  // COLLABORATOR GOVERNANCE] directive. 7 NEW append-only literals
+  // for the ExternalCollaborator / WorkspaceExternalMembership /
+  // ExternalCommitment lifecycle. Append-only per ADR-0042 §Q-γ.1.
+  //
+  // SAFE audit-details allowlist: external_collaborator_id /
+  // workspace_id / relationship_type (closed-vocab) / status
+  // (closed-vocab) / access_level (closed-vocab) / direction
+  // (closed-vocab) / internal_owner_entity_id (where structurally
+  // safe) / company_name / risk_level (closed-vocab).
+  //
+  // FORBIDDEN audit-details (RULE 0): external email body /
+  // private contract text / external NDA contents / private internal
+  // notes / cross-tenant identifiers / OAuth tokens / external
+  // person PII beyond display_name + company_name.
+  | "EXTERNAL_COLLABORATOR_TRACKED"
+  | "EXTERNAL_COLLABORATOR_INVITED"
+  | "EXTERNAL_COLLABORATOR_APPROVED"
+  | "EXTERNAL_COLLABORATOR_REVOKED"
+  | "EXTERNAL_COLLABORATOR_CONTEXT_UPDATED"
+  | "EXTERNAL_COMMITMENT_RECORDED"
+  | "EXTERNAL_FOLLOWUP_REMINDED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -455,6 +514,26 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "TEAM_DELEGATION_CREATED",
   // DMW Runtime DM3-B per ADR-0092 §4 Candidate C.
   "SWARM_BOUNDARY_DECLARED",
+  // Phase 1221 Collaboration Workspace lifecycle. Append-only per
+  // ADR-0042 §Q-γ.1; emitted by collaboration-workspace.service.ts.
+  "WORKSPACE_CREATED",
+  "WORKSPACE_MEMBER_ADDED",
+  "WORKSPACE_MEMBER_REVOKED",
+  "WORKSPACE_CONTEXT_SHARED",
+  "WORKSPACE_DECISION_ADDED",
+  "WORKSPACE_COMMITMENT_ADDED",
+  "WORKSPACE_COMMITMENT_CONFIRMED",
+  "WORKSPACE_ACTION_LINKED",
+  "WORKSPACE_PERMISSION_BLOCKED",
+  "WORKSPACE_ARCHIVED",
+  // Phase 1221 ADDENDUM — External Collaborator lifecycle.
+  "EXTERNAL_COLLABORATOR_TRACKED",
+  "EXTERNAL_COLLABORATOR_INVITED",
+  "EXTERNAL_COLLABORATOR_APPROVED",
+  "EXTERNAL_COLLABORATOR_REVOKED",
+  "EXTERNAL_COLLABORATOR_CONTEXT_UPDATED",
+  "EXTERNAL_COMMITMENT_RECORDED",
+  "EXTERNAL_FOLLOWUP_REMINDED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

@@ -2725,3 +2725,366 @@ model McpToolPolicy {
   @@index([mcp_connection_id, tool_name])
   @@map("mcp_tool_policies")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 1221 — CollaborationWorkspace substrate per the
+// [FOUNDER-AUTH — PHASE 1221 TRUE COLLABORATION WORKSPACE
+// END-TO-END] directive. A persistent, shared, governed work
+// area for selected people, distinct from one-shot
+// `TwinCollaborationRequest` and from fixed-enum-role
+// `WorkProject`. Reuses `AuditEvent` for audit and `Action` /
+// `Notification` for governed follow-up delivery.
+// ─────────────────────────────────────────────────────────────────
+
+enum CollaborationWorkspaceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CollaborationWorkspaceVisibility {
+  INTERNAL_ONLY
+  EXTERNAL_ALLOWED
+}
+
+enum CollaborationWorkspaceSourceType {
+  MANUAL
+  COMMS_CAPTURE
+  PROJECT
+  IMPORTED
+}
+
+enum CollaborationMembershipType {
+  INTERNAL
+  EXTERNAL
+}
+
+enum CollaborationMembershipAccessLevel {
+  VIEW
+  COMMENT
+  CONTRIBUTE
+  APPROVE
+}
+
+enum CollaborationMembershipStatus {
+  ACTIVE
+  PENDING
+  REVOKED
+}
+
+enum CollaborationCommitmentResolutionStatus {
+  RESOLVED
+  UNRESOLVED
+  AMBIGUOUS
+  RESTRICTED
+}
+
+enum CollaborationCommitmentConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum CollaborationCommitmentStatus {
+  PROPOSED
+  CONFIRMED
+  ACTION_CREATED
+  COMPLETED
+  BLOCKED
+}
+
+enum CollaborationSharedContextType {
+  COMMS_SUMMARY
+  DECISION
+  COMMITMENT
+  ACTION
+  MEMORY_CANDIDATE
+  PROJECT
+}
+
+enum CollaborationSharedContextSensitivity {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+model CollaborationWorkspace {
+  workspace_id            String                              @id @default(uuid()) @db.Uuid
+  org_entity_id           String                              @db.Uuid
+  title                   String
+  description             String?
+  created_by_entity_id    String                              @db.Uuid
+  status                  CollaborationWorkspaceStatus        @default(ACTIVE)
+  visibility              CollaborationWorkspaceVisibility    @default(INTERNAL_ONLY)
+  source_type             CollaborationWorkspaceSourceType    @default(MANUAL)
+  source_conversation_id  String?                             @db.Uuid
+  archived_at             DateTime?
+  created_at              DateTime                            @default(now())
+  updated_at              DateTime                            @updatedAt
+  deleted_at              DateTime?
+
+  members                 CollaborationMembership[]
+  decisions               CollaborationDecision[]
+  commitments             CollaborationCommitment[]
+  shared_context          CollaborationSharedContext[]
+
+  @@index([org_entity_id])
+  @@index([org_entity_id, status])
+  @@index([created_by_entity_id])
+  @@index([source_conversation_id])
+  @@map("collaboration_workspaces")
+}
+
+model CollaborationMembership {
+  membership_id            String                               @id @default(uuid()) @db.Uuid
+  workspace_id             String                               @db.Uuid
+  org_entity_id            String                               @db.Uuid
+  member_entity_id         String                               @db.Uuid
+  member_display_name      String
+  member_email             String?
+  role_label               String
+  responsibility_summary   String?
+  member_type              CollaborationMembershipType          @default(INTERNAL)
+  access_level             CollaborationMembershipAccessLevel   @default(CONTRIBUTE)
+  status                   CollaborationMembershipStatus        @default(ACTIVE)
+  invited_by_entity_id     String?                              @db.Uuid
+  accepted_at              DateTime?
+  revoked_at               DateTime?
+  created_at               DateTime                             @default(now())
+  updated_at               DateTime                             @updatedAt
+  deleted_at               DateTime?
+
+  workspace                CollaborationWorkspace               @relation(fields: [workspace_id], references: [workspace_id])
+
+  @@unique([workspace_id, member_entity_id])
+  @@index([workspace_id])
+  @@index([member_entity_id])
+  @@index([workspace_id, status])
+  @@index([org_entity_id])
+  @@map("collaboration_memberships")
+}
+
+model CollaborationDecision {
+  decision_id              String                  @id @default(uuid()) @db.Uuid
+  workspace_id             String                  @db.Uuid
+  org_entity_id            String                  @db.Uuid
+  text                     String
+  source_conversation_id   String?                 @db.Uuid
+  source_excerpt           String?
+  added_by_entity_id       String                  @db.Uuid
+  created_at               DateTime                @default(now())
+  deleted_at               DateTime?
+
+  workspace                CollaborationWorkspace  @relation(fields: [workspace_id], references: [workspace_id])
+
+  @@index([workspace_id])
+  @@index([org_entity_id])
+  @@index([source_conversation_id])
+  @@map("collaboration_decisions")
+}
+
+model CollaborationCommitment {
+  commitment_id            String                                   @id @default(uuid()) @db.Uuid
+  workspace_id             String                                   @db.Uuid
+  org_entity_id            String                                   @db.Uuid
+  owner_entity_id          String?                                  @db.Uuid
+  owner_display_name       String
+  text                     String
+  due_date                 DateTime?
+  source_conversation_id   String?                                  @db.Uuid
+  source_excerpt           String?
+  assignment_reason        String
+  confidence               CollaborationCommitmentConfidence        @default(MEDIUM)
+  resolution_status        CollaborationCommitmentResolutionStatus  @default(UNRESOLVED)
+  related_action_id        String?                                  @db.Uuid
+  status                   CollaborationCommitmentStatus            @default(PROPOSED)
+  added_by_entity_id       String                                   @db.Uuid
+  created_at               DateTime                                 @default(now())
+  updated_at               DateTime                                 @updatedAt
+  deleted_at               DateTime?
+
+  workspace                CollaborationWorkspace                   @relation(fields: [workspace_id], references: [workspace_id])
+
+  @@index([workspace_id])
+  @@index([workspace_id, status])
+  @@index([owner_entity_id])
+  @@index([related_action_id])
+  @@index([org_entity_id])
+  @@map("collaboration_commitments")
+}
+
+model CollaborationSharedContext {
+  shared_context_id        String                                  @id @default(uuid()) @db.Uuid
+  workspace_id             String                                  @db.Uuid
+  org_entity_id            String                                  @db.Uuid
+  context_type             CollaborationSharedContextType
+  context_ref_id           String?                                 @db.Uuid
+  title                    String
+  summary                  String
+  sensitivity              CollaborationSharedContextSensitivity   @default(INTERNAL)
+  shared_by_entity_id      String                                  @db.Uuid
+  created_at               DateTime                                @default(now())
+  deleted_at               DateTime?
+
+  workspace                CollaborationWorkspace                  @relation(fields: [workspace_id], references: [workspace_id])
+
+  @@index([workspace_id])
+  @@index([workspace_id, context_type])
+  @@index([org_entity_id])
+  @@map("collaboration_shared_context")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 1221 ADDENDUM — External Collaborator / Third-Party
+// Stakeholder substrate per the [FOUNDER-AUTH — PHASE 1221 ADDENDUM
+// THIRD-PARTY / EXTERNAL COLLABORATOR GOVERNANCE] directive.
+//
+// External people (clients / vendors / contractors / partners /
+// investors / advisors / agencies / regulators / prospects /
+// candidates / other) are tracked WITHOUT auto-granting them
+// access to Otzar. Inviting an external collaborator into a
+// workspace is an explicit, audited, policy-gated step.
+//
+// Two-level model:
+//   1. ExternalCollaborator — the org-wide external person record
+//      (one row per external person; reusable across workspaces).
+//   2. WorkspaceExternalMembership — the per-workspace link with
+//      the scoped access level. Inviting and revoking happen here.
+// ─────────────────────────────────────────────────────────────────
+
+enum ExternalRelationshipType {
+  CLIENT
+  VENDOR
+  CONTRACTOR
+  PARTNER
+  INVESTOR
+  ADVISOR
+  AGENCY
+  REGULATOR
+  PROSPECT
+  CANDIDATE
+  OTHER
+}
+
+enum ExternalCollaboratorStatus {
+  TRACKED_EXTERNAL
+  INVITED_EXTERNAL
+  ACTIVE_EXTERNAL
+  REVOKED_EXTERNAL
+  BLOCKED_EXTERNAL
+}
+
+enum WorkspaceExternalAccessLevel {
+  NONE
+  VIEW_SHARED
+  COMMENT_SHARED
+  CONTRIBUTE_SHARED
+  APPROVE_SHARED
+}
+
+enum ExternalCommitmentDirection {
+  INTERNAL_OWES_EXTERNAL
+  EXTERNAL_OWES_INTERNAL
+}
+
+enum ExternalRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model ExternalCollaborator {
+  external_collaborator_id   String                       @id @default(uuid()) @db.Uuid
+  org_entity_id              String                       @db.Uuid
+  display_name               String
+  email                      String?
+  company_name               String?
+  relationship_type          ExternalRelationshipType     @default(OTHER)
+  status                     ExternalCollaboratorStatus   @default(TRACKED_EXTERNAL)
+  internal_owner_entity_id   String?                      @db.Uuid
+  purpose_summary            String?
+  goals_summary              String?
+  needs_from_us              String?
+  we_need_from_them          String?
+  allowed_context_policy     String?
+  risk_level                 ExternalRiskLevel            @default(LOW)
+  created_by_entity_id       String                       @db.Uuid
+  created_at                 DateTime                     @default(now())
+  updated_at                 DateTime                     @updatedAt
+  deleted_at                 DateTime?
+
+  workspace_memberships      WorkspaceExternalMembership[]
+  external_commitments       ExternalCommitment[]
+
+  @@index([org_entity_id])
+  @@index([org_entity_id, status])
+  @@index([org_entity_id, relationship_type])
+  @@index([internal_owner_entity_id])
+  @@map("external_collaborators")
+}
+
+model WorkspaceExternalMembership {
+  workspace_external_membership_id  String                       @id @default(uuid()) @db.Uuid
+  workspace_id                      String                       @db.Uuid
+  external_collaborator_id          String                       @db.Uuid
+  org_entity_id                     String                       @db.Uuid
+  access_level                      WorkspaceExternalAccessLevel @default(NONE)
+  status                            ExternalCollaboratorStatus   @default(TRACKED_EXTERNAL)
+  project_role                      String?
+  internal_owner_entity_id          String?                      @db.Uuid
+  invited_by_entity_id              String?                      @db.Uuid
+  approved_by_entity_id             String?                      @db.Uuid
+  invited_at                        DateTime?
+  approved_at                       DateTime?
+  revoked_at                        DateTime?
+  created_at                        DateTime                     @default(now())
+  updated_at                        DateTime                     @updatedAt
+  deleted_at                        DateTime?
+
+  external_collaborator             ExternalCollaborator         @relation(fields: [external_collaborator_id], references: [external_collaborator_id])
+
+  @@unique([workspace_id, external_collaborator_id])
+  @@index([workspace_id])
+  @@index([external_collaborator_id])
+  @@index([workspace_id, status])
+  @@index([org_entity_id])
+  @@map("workspace_external_memberships")
+}
+
+// ExternalCommitment carries commitments OWNED BY (the external
+// person owes us) or DIRECTED TO (we owe the external) an external
+// stakeholder. Distinct from CollaborationCommitment so internal
+// owners (entity_id) and external owners (external_collaborator_id)
+// never share a single ambiguous owner column.
+model ExternalCommitment {
+  external_commitment_id    String                       @id @default(uuid()) @db.Uuid
+  workspace_id              String                       @db.Uuid
+  org_entity_id             String                       @db.Uuid
+  external_collaborator_id  String                       @db.Uuid
+  direction                 ExternalCommitmentDirection
+  text                      String
+  due_date                  DateTime?
+  source_conversation_id    String?                      @db.Uuid
+  source_excerpt            String?
+  // For EXTERNAL_OWES_INTERNAL: the internal team member who owns
+  // following up. For INTERNAL_OWES_EXTERNAL: the internal team
+  // member responsible for delivering.
+  internal_owner_entity_id  String?                      @db.Uuid
+  // The internal SEND_INTERNAL_NOTIFICATION action created as a
+  // reminder to the internal owner. NEVER an external send.
+  related_action_id         String?                      @db.Uuid
+  status                    CollaborationCommitmentStatus @default(PROPOSED)
+  confidence                CollaborationCommitmentConfidence @default(MEDIUM)
+  added_by_entity_id        String                       @db.Uuid
+  created_at                DateTime                     @default(now())
+  updated_at                DateTime                     @updatedAt
+  deleted_at                DateTime?
+
+  external_collaborator     ExternalCollaborator         @relation(fields: [external_collaborator_id], references: [external_collaborator_id])
+
+  @@index([workspace_id])
+  @@index([external_collaborator_id])
+  @@index([internal_owner_entity_id])
+  @@index([workspace_id, direction])
+  @@map("external_commitments")
+}
