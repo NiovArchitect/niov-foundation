@@ -396,7 +396,25 @@ export type AuditEventType =
   | "EXTERNAL_COLLABORATOR_REVOKED"
   | "EXTERNAL_COLLABORATOR_CONTEXT_UPDATED"
   | "EXTERNAL_COMMITMENT_RECORDED"
-  | "EXTERNAL_FOLLOWUP_REMINDED";
+  | "EXTERNAL_FOLLOWUP_REMINDED"
+  // Phase 1222 — MeetingCapture lifecycle. 6 NEW append-only
+  // literals emitted by meeting-capture.service.ts. Append-only
+  // per ADR-0042 §Q-γ.1.
+  //
+  // SAFE audit-details allowlist: meeting_capture_id /
+  // workspace_id / provider (closed-vocab) / provider_meeting_id
+  // / participant_count / consent_state (closed-vocab) /
+  // attachment_outcome (closed-vocab).
+  //
+  // FORBIDDEN (RULE 0): raw transcript text / raw meeting body /
+  // participant PII beyond display_name + email / OAuth tokens /
+  // recording URLs / cross-tenant identifiers.
+  | "MEETING_CAPTURE_RECEIVED"
+  | "MEETING_CAPTURE_PROCESSED"
+  | "MEETING_CAPTURE_ATTACHED"
+  | "MEETING_CAPTURE_PARTICIPANT_CONSENT_RECORDED"
+  | "MEETING_CAPTURE_BLOCKED_CONSENT"
+  | "MEETING_CAPTURE_ARCHIVED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -534,6 +552,13 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "EXTERNAL_COLLABORATOR_CONTEXT_UPDATED",
   "EXTERNAL_COMMITMENT_RECORDED",
   "EXTERNAL_FOLLOWUP_REMINDED",
+  // Phase 1222 MeetingCapture lifecycle.
+  "MEETING_CAPTURE_RECEIVED",
+  "MEETING_CAPTURE_PROCESSED",
+  "MEETING_CAPTURE_ATTACHED",
+  "MEETING_CAPTURE_PARTICIPANT_CONSENT_RECORDED",
+  "MEETING_CAPTURE_BLOCKED_CONSENT",
+  "MEETING_CAPTURE_ARCHIVED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

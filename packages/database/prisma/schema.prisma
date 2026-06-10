@@ -2935,6 +2935,103 @@ model CollaborationSharedContext {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Phase 1222 — MeetingCapture substrate per the [FOUNDER-AUTH —
+// PHASE 1222 LIVE MEETING CAPTURE] directive. Provider-agnostic
+// (Google Meet / Zoom / Teams / manual upload / API ingest);
+// downstream connector OAuth lands in Phase 1224 / 1225.
+//
+// PARTICIPANT CONSENT (RULE 0): each captured meeting carries a
+// per-participant consent record. Captures with any participant
+// in NOT_CONSENTED state are flagged BLOCKED_PARTICIPANT_CONSENT
+// at audit time and surface as such in the workspace UI.
+// ─────────────────────────────────────────────────────────────────
+
+enum MeetingCaptureProvider {
+  GOOGLE_MEET
+  ZOOM
+  MICROSOFT_TEAMS
+  MANUAL_UPLOAD
+  API_INGEST
+}
+
+enum MeetingCaptureStatus {
+  PENDING
+  PROCESSED
+  ATTACHED_TO_WORKSPACE
+  BLOCKED_PARTICIPANT_CONSENT
+  FAILED
+  ARCHIVED
+}
+
+enum MeetingParticipantConsentState {
+  CONSENTED
+  NOT_CONSENTED
+  PENDING
+  EXTERNAL_TRACKED
+}
+
+model MeetingCapture {
+  meeting_capture_id        String                       @id @default(uuid()) @db.Uuid
+  org_entity_id             String                       @db.Uuid
+  provider                  MeetingCaptureProvider       @default(MANUAL_UPLOAD)
+  provider_meeting_id       String?
+  title                     String
+  scheduled_start           DateTime?
+  scheduled_end             DateTime?
+  recorded_start            DateTime?
+  recorded_end              DateTime?
+  participant_count         Int                          @default(0)
+  status                    MeetingCaptureStatus         @default(PENDING)
+  workspace_id              String?                      @db.Uuid
+  source_conversation_id    String?                      @db.Uuid
+  // SAFE summary only — never carries raw transcript.
+  summary                   String?
+  // Bounded transcript text. May be null when only metadata is
+  // captured (e.g. a meeting reminder). For real-time integrations
+  // the transcript will be appended in chunks.
+  transcript                String?
+  captured_by_entity_id     String                       @db.Uuid
+  created_at                DateTime                     @default(now())
+  updated_at                DateTime                     @updatedAt
+  deleted_at                DateTime?
+
+  participants              MeetingParticipantConsent[]
+
+  @@index([org_entity_id])
+  @@index([org_entity_id, status])
+  @@index([workspace_id])
+  @@index([captured_by_entity_id])
+  @@index([provider])
+  @@map("meeting_captures")
+}
+
+model MeetingParticipantConsent {
+  meeting_participant_consent_id  String                            @id @default(uuid()) @db.Uuid
+  meeting_capture_id              String                            @db.Uuid
+  org_entity_id                   String                            @db.Uuid
+  // Either entity_id (internal participant) or
+  // external_collaborator_id (external participant) — exactly one.
+  participant_entity_id           String?                           @db.Uuid
+  external_collaborator_id        String?                           @db.Uuid
+  display_name                    String
+  email                           String?
+  consent_state                   MeetingParticipantConsentState    @default(PENDING)
+  consent_source                  String?                           // e.g. "google_meet_invite" / "zoom_meeting_settings" / "manual_check_box"
+  consent_recorded_at             DateTime?
+  created_at                      DateTime                          @default(now())
+  updated_at                      DateTime                          @updatedAt
+  deleted_at                      DateTime?
+
+  meeting_capture                 MeetingCapture                    @relation(fields: [meeting_capture_id], references: [meeting_capture_id])
+
+  @@index([meeting_capture_id])
+  @@index([participant_entity_id])
+  @@index([external_collaborator_id])
+  @@index([org_entity_id])
+  @@map("meeting_participant_consents")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Phase 1221 ADDENDUM — External Collaborator / Third-Party
 // Stakeholder substrate per the [FOUNDER-AUTH — PHASE 1221 ADDENDUM
 // THIRD-PARTY / EXTERNAL COLLABORATOR GOVERNANCE] directive.
