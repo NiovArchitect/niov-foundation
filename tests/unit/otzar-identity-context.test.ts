@@ -50,6 +50,7 @@ function baseCtx(overrides: Partial<IdentityContext> = {}): IdentityContext {
       collaboration_inbound_count: 1,
       collaboration_outbound_count: 2,
     },
+    org_roster: [],
     safety: {
       no_external_write_without_approval: true,
       no_private_data_to_unauthorized_users: true,
@@ -333,6 +334,158 @@ describe("renderIdentityPreamble -- unconfigured viewer (wiring-gap copy)", () =
     expect(UNCONFIGURED_PREAMBLE).not.toContain("David");
     expect(UNCONFIGURED_PREAMBLE).not.toContain("Vishesh");
     expect(UNCONFIGURED_PREAMBLE).not.toContain("Samiksha");
+  });
+});
+
+describe("renderIdentityPreamble -- Phase 1207 [ACTION DRAFTING DISCIPLINE]", () => {
+  // Per [FOUNDER-AUTH -- REDUCE OTZAR QUESTION FRICTION /
+  // CONTEXT-FIRST ACTION DRAFTING]: the LLM was answering
+  // "Send David a note..." with a 4-question clarification cascade.
+  // The preamble must (a) surface the org roster so the LLM has the
+  // facts to resolve "David" -> "David Odie", and (b) include an
+  // explicit infer-first / draft-first / ask-only-on-real-ambiguity
+  // discipline block.
+
+  function rosterPeer(
+    name: string,
+    title: string,
+    shared = 0,
+    collab = 0,
+    email: string | null = null,
+  ): IdentityContext["org_roster"][number] {
+    return {
+      entity_id: `id-${name.toLowerCase().replace(/\s+/g, "-")}`,
+      display_name: name,
+      email: email ?? `${name.split(" ")[0]?.toLowerCase()}@niovlabs.com`,
+      title,
+      shared_project_count: shared,
+      recent_collab_count: collab,
+    };
+  }
+
+  it("emits an [ORG ROSTER] block when peers exist", () => {
+    const out = renderIdentityPreamble(
+      baseCtx({
+        org_roster: [
+          rosterPeer("David Odie", "TECH LEAD", 3, 5),
+          rosterPeer("Vishesh Sharma", "AI UI ENGINEER", 2, 1),
+        ],
+      }),
+    );
+    expect(out).toContain("[ORG ROSTER]");
+    expect(out).toContain("David Odie <david@niovlabs.com>");
+    expect(out).toContain("Tech Lead");
+    expect(out).toContain("Vishesh Sharma");
+    expect(out).toContain("AI UI Engineer");
+  });
+
+  it("omits the rendered roster bullet list when org_roster is empty (governance block may still reference [ORG ROSTER])", () => {
+    const out = renderIdentityPreamble(baseCtx({ org_roster: [] }));
+    // The discipline block legitimately CITES "[ORG ROSTER]" as the
+    // table the LLM should consult. What must NOT appear is the
+    // actual bullet-list output (which starts with "  - ").
+    expect(out).not.toMatch(/\[ORG ROSTER\]\n {2}- /);
+  });
+
+  it("sorts roster by (shared_project_count DESC, recent_collab_count DESC, name ASC)", () => {
+    const out = renderIdentityPreamble(
+      baseCtx({
+        org_roster: [
+          rosterPeer("Annie", "RISK & COMPLIANCE LEAD", 0, 0),
+          rosterPeer("David Odie", "TECH LEAD", 3, 5),
+          rosterPeer("Walter", "MEDIA LEAD", 1, 0),
+          rosterPeer("Vishesh", "AI UI ENGINEER", 2, 1),
+        ],
+      }),
+    );
+    const davidIdx = out.indexOf("David Odie");
+    const visheshIdx = out.indexOf("Vishesh");
+    const walterIdx = out.indexOf("Walter");
+    const annieIdx = out.indexOf("Annie");
+    expect(davidIdx).toBeGreaterThan(-1);
+    expect(davidIdx).toBeLessThan(visheshIdx);
+    expect(visheshIdx).toBeLessThan(walterIdx);
+    expect(walterIdx).toBeLessThan(annieIdx);
+  });
+
+  it("surfaces shared_project + recent_collab signals so the LLM can disambiguate", () => {
+    const out = renderIdentityPreamble(
+      baseCtx({
+        org_roster: [rosterPeer("David Odie", "TECH LEAD", 3, 5)],
+      }),
+    );
+    expect(out).toContain("3 shared projects");
+    expect(out).toContain("5 recent collaborations");
+  });
+
+  it("singularizes the signal labels for count of 1", () => {
+    const out = renderIdentityPreamble(
+      baseCtx({
+        org_roster: [rosterPeer("David Odie", "TECH LEAD", 1, 1)],
+      }),
+    );
+    expect(out).toContain("1 shared project,");
+    expect(out).toContain("1 recent collaboration");
+  });
+
+  it("preamble includes the explicit [ACTION DRAFTING DISCIPLINE] block", () => {
+    const out = renderIdentityPreamble(baseCtx());
+    expect(out).toContain("[ACTION DRAFTING DISCIPLINE]");
+  });
+
+  it("discipline block explicitly bans the multi-question clarification cascade", () => {
+    const out = renderIdentityPreamble(baseCtx());
+    // The exact regression we're closing: "which David / which channel / what tone"
+    // questionnaire in response to a simple "send David a note" intent.
+    expect(out).toContain("INFER FIRST, DRAFT FIRST, ASK ONLY ON REAL AMBIGUITY");
+    expect(out).toMatch(/FORBIDDEN: asking multiple clarification questions/i);
+    expect(out).toMatch(/never a questionnaire/i);
+  });
+
+  it("discipline block instructs the LLM to resolve target via [ORG ROSTER] using shared_project + recent_collab tiebreak", () => {
+    const out = renderIdentityPreamble(baseCtx());
+    expect(out).toMatch(/use \[ORG ROSTER\]/i);
+    expect(out).toContain("shared_project_count");
+    expect(out).toContain("recent_collab_count");
+  });
+
+  it("discipline block instructs the LLM to default channel = internal Otzar proposed-action / internal note (not ask)", () => {
+    const out = renderIdentityPreamble(baseCtx());
+    expect(out).toMatch(/default to an internal Otzar proposed-action/i);
+    expect(out).toMatch(/Do not ask which channel first/i);
+  });
+
+  it("discipline block instructs the LLM to default tone = direct but professional (not ask)", () => {
+    const out = renderIdentityPreamble(baseCtx());
+    expect(out).toMatch(/default to direct but professional/i);
+    expect(out).toMatch(/Do not ask which tone first/i);
+  });
+
+  it("discipline block preserves the approval gate (never send without approval)", () => {
+    const out = renderIdentityPreamble(baseCtx());
+    expect(out).toMatch(/never send/i);
+    expect(out).toMatch(/never create an external write without explicit approval/i);
+  });
+
+  it("discipline block prescribes the EXACT 'I found / I drafted / Send this to' canonical response shape", () => {
+    const out = renderIdentityPreamble(baseCtx());
+    expect(out).toContain("I found");
+    expect(out).toContain("I drafted");
+    expect(out).toContain("I will not send it until you approve");
+    expect(out).toContain("Send this to");
+  });
+
+  it("never leaks raw TAR / wallet / capsule data through the roster (privacy invariant)", () => {
+    const out = renderIdentityPreamble(
+      baseCtx({
+        org_roster: [rosterPeer("David Odie", "TECH LEAD", 3, 5)],
+      }),
+    );
+    expect(out).not.toMatch(/tar[_-]?hash/i);
+    expect(out).not.toMatch(/wallet[_-]?id/i);
+    expect(out).not.toMatch(/capsule[_-]?id/i);
+    expect(out).not.toMatch(/can_admin/i);
+    expect(out).not.toMatch(/clearance_ceiling/i);
   });
 });
 
