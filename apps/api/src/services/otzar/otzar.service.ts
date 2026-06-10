@@ -34,6 +34,10 @@ import {
   type IdentityContext,
 } from "./identity-context.js";
 import {
+  extractProposedAction,
+  type ProposedAction,
+} from "./proposed-action-extractor.js";
+import {
   truncateToTokenBudget,
   TokenBudgetExceededError,
   type LayerBundle,
@@ -323,6 +327,15 @@ export interface ConductSessionSuccess {
   // is NEVER auto-created from chat — the user explicitly opens
   // the collaboration affordance on the My Twin view.
   collaboration_target_type?: TwinCollaborationTargetType;
+  // Phase 1208 [OTZAR-CHAT-ACTION-PROPOSE] -- structured envelope the
+  // UI consumes to render an inline approval card under the chat
+  // response. Surfaced only when the Phase 1207 canonical draft shape
+  // is detected ("I found <Name>... Draft: '<text>'... Send this to
+  // <Name>?"). Recipient is resolved against the IdentityContext
+  // org_roster; falls back to the LLM's quoted name when not in
+  // roster. NEVER auto-executes -- the Action row is created on
+  // explicit operator approve click via POST /api/v1/actions.
+  proposed_action?: ProposedAction;
 }
 
 // WHAT: Failure shape for conductSession + closeConversation.
@@ -1050,9 +1063,11 @@ export class OtzarService {
     // (bounded by the Wave 6A sidecar reader's limit of 5 patterns;
     // small enough to not require truncation participation).
     let identityPreamble = "";
+    let identityForExtractor: IdentityContext | null = null;
     try {
       const identity = await buildIdentityContext(ownerEntityId);
       identityPreamble = renderIdentityPreamble(identity);
+      identityForExtractor = identity;
     } catch (err) {
       // Degrade gracefully -- log + continue without L0_IDENTITY so
       // a partially-seeded org never blocks a conversation.
@@ -1199,7 +1214,24 @@ export class OtzarService {
     // deterministic-false until their EDX-5 / EDX-6 / Section 2 +
     // Section 9 detection substrates wire in.
     const clarificationNeeded = false;
-    const actionProposed = false;
+    // Phase 1208 -- pure extractor parses the LLM's canonical Phase
+    // 1207 draft shape. Returns null when the response is not a
+    // draft (clarification / answer / etc.), so we tolerate every
+    // shape. action_proposed flips to true only when the extractor
+    // succeeds; the structured envelope is surfaced on the response
+    // for the CT inline approval card.
+    const proposedAction: ProposedAction | null =
+      identityForExtractor !== null
+        ? extractProposedAction(
+            llmResult.text,
+            identityForExtractor.org_roster.map((p) => ({
+              entity_id: p.entity_id,
+              display_name: p.display_name,
+              email: p.email,
+            })),
+          )
+        : null;
+    const actionProposed = proposedAction !== null;
     const approvalRequired = approval.approval_required;
     const policyBlocked = false;
     const dmwScopeBlocked = false;
@@ -1277,6 +1309,7 @@ export class OtzarService {
       dmw_scope_blocked: dmwScopeBlocked,
       collaboration_suggested: collaborationSuggested,
       memory_used_summary: memoryUsedSummary,
+      ...(proposedAction !== null ? { proposed_action: proposedAction } : {}),
       ...(approval.approval_required
         ? {
             approval_reason: approval.approval_reason,
