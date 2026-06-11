@@ -118,9 +118,9 @@ the executable demo walk (`enterprise-demo-walk.test.ts`, 1/1 green).
 
 These are the items a real enterprise client needs before signing a contract. Without them, the handoff is a demo, not a deployment.
 
-### 1. Production schema migration (Phase 1221 + Phase 1222 + Phase 1223 + Phase 1230) — **Founder-authorized destructive action**
+### 1. Production schema migration (Phases 1221 / 1222 / 1223 / 1227 / 1230 / 1233) — **Founder-authorized destructive action**
 
-The Phase 1221 / 1222 / 1223 / 1230 substrates add a total of **13 new tables** that are PROD-READY in code but not pushed to production Supabase:
+The Phase 1221 / 1222 / 1223 / 1227 / 1230 / 1233 substrates add a total of **15 new tables** that are PROD-READY in code but not pushed to production Supabase:
 
 | Phase | New tables |
 |---|---|
