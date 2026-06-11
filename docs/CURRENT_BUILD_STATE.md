@@ -64,6 +64,19 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1245** Final enterprise demo path — DONE (docs). The
+  canonical 28-step handoff demo is recorded in
+  enterprise-handoff-runbook.md §18: deterministic, credential-free,
+  each step mapped to its proving substrate and phase; the five
+  schema-pending steps are marked honestly.
+- **Phase 1244** Ambient shell completion (connector guidance) —
+  DONE. otzar-control-tower #74: admin-gated 'How to connect' on
+  Connector Health consuming the Phase 1243 hardened registry —
+  friendly status badges, 'Demo works today' flags, numbered
+  plain-English setup steps, honest missing-env names (admin
+  diagnostics tier). Hidden for non-admins (test-locked);
+  non-blocking on failure. Suite 9 → 11; full CT 771/771;
+  Otzar.app rebuilt 07:43 with surfaces verified.
 - **Phase 1243** Connector setup/status hardening — DONE
   (Foundation). All 11 registry adapters now declare plain-English
   `setup_steps` (guidance only; the no-secrets pattern is
