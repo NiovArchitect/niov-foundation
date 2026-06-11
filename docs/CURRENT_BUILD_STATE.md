@@ -64,6 +64,16 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1248** Mock/dev settlement rail — DONE (the final
+  authorized prep deliverable). settlement-readiness.service.ts
+  implements the ADR-0094 rail-adapter seam: MOCK_RAIL produces
+  clearly-labeled mock receipts (is_mock: true; 'no funds moved')
+  so the governed pipeline can be built and demoed safely; real
+  rails surface honest BLOCKED_BY_CREDENTIALS, and even with
+  credentials present they flip only to NOT_AUTHORIZED — explicit
+  Founder authorization stays required (test-locked). 4 unit tests
+  green; NO schema changes; NO route exposure yet (service-tier
+  seam only; routes land with the authorized implementation phase).
 - **Phase 1247** Circle/Base settlement architecture preparation —
   DONE (prep only). ADR-0094 (Governed Agent Transaction Standard)
   is the canonical architecture: rails reference Foundation's
