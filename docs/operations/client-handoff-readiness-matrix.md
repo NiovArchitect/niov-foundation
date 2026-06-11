@@ -61,7 +61,7 @@ client handoff. Read this before claiming a feature is
 | 1231 | Client handoff readiness matrix | **PROD** | This document. Auto-updated by future PRs. |
 | 1232 | Circle / Base / USDC settlement | **NOT_STARTED** | Per Founder: LAST. Connector + governed approval required. |
 | 1233 | Compliance share packages (regulator evidence sharing) | **PROD-READY** | `ComplianceSharePackage`: company-controlled, purpose-bound, time-boxed, revocable, REDACTED regulator evidence views over existing substrate; 4 routes at /api/v1/compliance/share-packages/*; 4 audit literals; unit 8/8 + integration 7/7 green. **Needs prod schema push** for `compliance_share_packages`. |
-| 1234 | My Day intelligence (Python runtime first product consumer) | **PROD-READY** (fixture path always works; Python path activates when `PYTHON_INTELLIGENCE_RUNTIME_URL` is set + service deployed) | `GET /api/v1/otzar/my-day/intelligence`; SAFE caller-scoped signal pack → `rankEmployeeTwinNextActions`; honest provider_status; unit 6/6 + integration 6/6. **No schema migration needed.** CT consumption follow-on. |
+| 1234 | My Day intelligence (Python runtime first product consumer) | **PROD-READY** (fixture path always works; Python path activates when `PYTHON_INTELLIGENCE_RUNTIME_URL` is set + service deployed) | `GET /api/v1/otzar/my-day/intelligence`; SAFE caller-scoped signal pack → `rankEmployeeTwinNextActions`; honest provider_status; unit 6/6 + integration 6/6. **No schema migration needed.** CT half landed (otzar-control-tower #68 — 'What matters today' card on My Day; my-day suite 15/15; full CT suite 725/725); Otzar.app rebuilt with the new surface. |
 
 ---
 

@@ -80,8 +80,14 @@ bounded Founder queue 1215–1232 substantially complete.
   closed-vocab labels only; no payloads, no audit details, no
   external-collaborator private fields. Unit 6/6 + integration
   6/6 green (org isolation, revoked-grant exclusion, no-leak
-  boundary proven). **No schema changes.** CT My Day
-  consumption is the follow-on CT phase.
+  boundary proven). **No schema changes.** CT half landed:
+  otzar-control-tower #68 adds the 'What matters today' card to
+  My Day (calm headline + top-3 ranked suggestions with friendly
+  closed-vocab reason copy + one-click Open links +
+  waiting-on-external line + honest provider footer; card hides
+  non-blockingly when the call fails). my-day suite 15/15; full
+  CT suite 725/725; Otzar.app rebuilt and shipped JS verified to
+  contain the new surface.
 
 ### Production schema push status
 
