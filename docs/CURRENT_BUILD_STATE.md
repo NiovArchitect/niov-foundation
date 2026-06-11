@@ -9,8 +9,83 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-06-10
-(**Otzar Phases 1221 + 1222 + 1231 LANDED + 1223/1228/1229/1230
-IN FLIGHT 2026-06-10** — bounded Founder queue 1215–1232.
+(**Otzar Phases 1221 + 1222 + 1223 + 1228 + 1229 + 1230 + 1231 +
+1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
+bounded Founder queue 1215–1232 substantially complete.
+
+### Final close-out state (Founder closeout #2)
+
+- **Phase 1221** True Collaboration Workspace + External
+  Collaborator — DONE. PRs niov-foundation #315/#316/#318 +
+  otzar-control-tower #64. Integration test 4/4 green.
+- **Phase 1222** Provider-agnostic Meeting Capture — DONE.
+  PRs niov-foundation #317 + otzar-control-tower #65.
+  Integration test 3/3 green. Real Google Meet / Zoom / Teams
+  auto-ingest BLOCKED_BY_CREDENTIAL.
+- **Phase 1223** Voice/STT pipeline — DONE. PRs
+  niov-foundation #320 + otzar-control-tower #67.
+  Integration test 7/7 green. DEMO_FIXTURE + LOCAL_BROWSER
+  paths always work; WHISPER_API + DEEPGRAM
+  BLOCKED_BY_CREDENTIAL.
+- **Phase 1228** DMW Registry — DONE. PR niov-foundation
+  #321. 10 DMW types as closed-vocab projection over existing
+  EntityType + ExternalRelationshipType + WalletType.
+  Integration test 7/7 green. **No schema migration needed.**
+- **Phase 1229** COSMP Capsule management — DONE. PR
+  niov-foundation #322. List / revoke / audit + DMW revocation
+  gate. Integration test 6/6 green. **No schema migration
+  needed.**
+- **Phase 1230** Production onboarding / admin readiness —
+  DONE. PRs niov-foundation #323 + otzar-control-tower #66.
+  11-step admin checklist + DEMO/PRODUCTION mode toggle.
+  Integration test 4/4 green.
+- **Phase 1231** Client handoff readiness matrix — DONE +
+  updated for all new substrate. PRs niov-foundation #318 +
+  #324.
+- **Phases 1224/1225/1226/1227** connector adapter substrate
+  — DONE. PR niov-foundation #325. Provider-adapter registry
+  declares GOOGLE_WORKSPACE / SLACK / MICROSOFT_365 / ZOOM /
+  JIRA / GITHUB / LINEAR / SMTP_EMAIL / 3 OCR providers with
+  required envs + OAuth scopes + status reporting. Real OAuth
+  + send paths BLOCKED_BY_CREDENTIAL + BLOCKED_BY_APP_REVIEW
+  per provider. Unit test 6/6 green.
+- **Phase 1232** Circle / Base / USDC — per Founder directive,
+  remains LAST. NOT_STARTED.
+
+### Production schema push status
+
+Phases 1221 + 1222 + 1223 + 1230 add **13 new Prisma tables**:
+
+- 1221 (8): `collaboration_workspaces`,
+  `collaboration_memberships`, `collaboration_decisions`,
+  `collaboration_commitments`, `collaboration_shared_context`,
+  `external_collaborators`, `workspace_external_memberships`,
+  `external_commitments`.
+- 1222 (2): `meeting_captures`,
+  `meeting_participant_consents`.
+- 1223 (2): `audio_captures`, `transcript_segments`.
+- 1230 (1): `org_onboarding_states`.
+
+Plus **35 new append-only audit literals** (10 WORKSPACE_* + 7
+EXTERNAL_* + 6 MEETING_CAPTURE_* + 6 AUDIO_CAPTURE_/STT_* + 3
+ONBOARDING_* + 3 from Phase 1221 + Phase 1230). All additive per
+ADR-0042 §Q-γ.1 — no ADR-0002 amendment required.
+
+Local test DB carries the full schema; integration tier proves
+the substrate (32/32 across 6 phases + 6 unit tests for the
+connector adapter registry + 9 unit tests for the resolver +
+720+ CT tests). Production Supabase still on the pre-1221
+schema; **PROD-READY flip requires explicit Founder `APPROVE
+PROD SCHEMA PUSH` authorization**.
+
+Phases 1228 + 1229 use existing substrate — no migration needed.
+
+### Otzar.app build state
+
+Last rebundle 2026-06-10 16:27:36 (Phase 1221 + 1222 surfaces).
+**Final rebuild pending after CT PRs #66 + #67 merge.**
+
+(**Earlier context — Phase 1221 PLAN LANDED 2026-06-10**)
 
 ### Current state truth (per Founder closeout directive)
 
