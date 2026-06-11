@@ -64,11 +64,20 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
-- **Phase 1245** Final enterprise demo path — DONE (docs). The
-  canonical 28-step handoff demo is recorded in
-  enterprise-handoff-runbook.md §18: deterministic, credential-free,
-  each step mapped to its proving substrate and phase; the five
-  schema-pending steps are marked honestly.
+- **Phase 1245** Final enterprise demo path — DONE (docs + code).
+  The canonical 28-step handoff demo is recorded in
+  enterprise-handoff-runbook.md §18 AND executable:
+  tests/integration/enterprise-demo-walk.test.ts walks the
+  credential-free chain end-to-end in ONE deterministic scenario —
+  org/admin/employee setup, the 11-step checklist, the readiness
+  aggregate's honest schema/connector truth, My Day fixture
+  ranking, calendar-driven auto-quiet, Dandelion growth + the
+  consent gate (zero capsules until approval), AI Employee
+  provisioning with boundaries, Observe extraction → workspace
+  ledger import (owners UNRESOLVED until humans confirm),
+  compliance share package → regulator redacted read → revocation
+  cutoff, ZERO external writes across the entire walk, and audit
+  coverage. 1/1 green.
 - **Phase 1244** Ambient shell completion (connector guidance) —
   DONE. otzar-control-tower #74: admin-gated 'How to connect' on
   Connector Health consuming the Phase 1243 hardened registry —
