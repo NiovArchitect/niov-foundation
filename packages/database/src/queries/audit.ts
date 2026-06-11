@@ -459,7 +459,31 @@ export type AuditEventType =
   | "OBSERVE_CAPTURE_RECEIVED"
   | "OBSERVE_CAPTURE_EXTRACTED"
   | "OBSERVE_CAPTURE_FAILED"
-  | "OBSERVE_CAPTURE_ATTACHED";
+  | "OBSERVE_CAPTURE_ATTACHED"
+  // Phase 1250 governed-transaction readiness per ADR-0094 (GATS) +
+  // ADR-0042 §Q-γ.1 clean-transition discipline. 5 NEW append-only
+  // literals. Emitted by governed-transaction.service.ts for the
+  // MOCK-ONLY transaction lifecycle: the append-only audit chain IS
+  // the intent store (event-sourced; immutable per ADR-0002), so the
+  // governance substrate runs on the CURRENT production schema while
+  // the persistent GATS models (GA2-GA5) remain forward-substrate.
+  // Audit details schema (SAFE): intent_id (UUID) + org_entity_id +
+  // amount_usd + asset (USDC_MOCK only) + rail (MOCK_RAIL only) +
+  // purpose (closed-vocab) + schedule (ONE_TIME) + actor_class
+  // (DMW closed-vocab) + policy_decision + reason_code +
+  // required_approvals + approver_entity_id (approve events) +
+  // counterparty_label + expires_at + is_mock (settle events; always
+  // true) + receipt_reference. FORBIDDEN: private keys (Foundation
+  // never holds them), API keys, env values, OAuth material, chain
+  // addresses, real rail responses, counterparty PII beyond the
+  // caller-supplied label. No real rail event exists by construction:
+  // ADR-0094 §2 bans 1-5 stay canonical; only MOCK_RAIL is
+  // executable and credentials alone never authorize settlement.
+  | "TRANSACTION_INTENT_PROPOSED"
+  | "TRANSACTION_INTENT_APPROVED"
+  | "TRANSACTION_INTENT_DENIED"
+  | "TRANSACTION_INTENT_REVOKED"
+  | "TRANSACTION_MOCK_SETTLED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -626,6 +650,12 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "OBSERVE_CAPTURE_EXTRACTED",
   "OBSERVE_CAPTURE_FAILED",
   "OBSERVE_CAPTURE_ATTACHED",
+  // Phase 1250 governed-transaction readiness (mock lifecycle).
+  "TRANSACTION_INTENT_PROPOSED",
+  "TRANSACTION_INTENT_APPROVED",
+  "TRANSACTION_INTENT_DENIED",
+  "TRANSACTION_INTENT_REVOKED",
+  "TRANSACTION_MOCK_SETTLED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

@@ -8,7 +8,8 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-06-11 (Enterprise Reality Hardening Pass)
+**Last updated:** 2026-06-11 (Phase 1250 Governed Transaction
+Readiness + Enterprise Reality Hardening Pass)
 (**Otzar Phases 1221 + 1222 + 1223 + 1228 + 1229 + 1230 + 1231 +
 1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
 bounded Founder queue 1215–1232 substantially complete.
@@ -97,6 +98,30 @@ bounded Founder queue 1215–1232 substantially complete.
   alerts recorded for Founder review in founder-input-needed.md §4
   (external PRs are not merged unattended). Prod schema push remains
   pending invalid credentials per §0 — not retried.
+- **Phase 1250** Governed Transaction Readiness (2026-06-11) — DONE.
+  ZERO schema changes; runs on the CURRENT production schema. NEW
+  governed-transaction.service.ts + otzar-settlement.routes.ts +
+  5 append-only TRANSACTION_* audit literals: DMW actors (humans,
+  AI Twins, AI Employees, devices, agents) propose MOCK transaction
+  intents; the pure policy gate tiers by amount (micro ≤ $1 may
+  auto-approve for humans only when the org opts in; dual control =
+  two distinct human approvers ≥ $1,000) and actor class (AI /
+  device / machine NEVER auto-approve; regulators and external
+  collaborators cannot transact; suspended actors blocked at propose
+  AND settle — the AI-Employee kill switch is exercised end-to-end);
+  the append-only audit chain IS the intent store (event-sourced,
+  immutable per ADR-0002). MOCK_RAIL emits clearly-labeled proofs;
+  CIRCLE_GATEWAY / COINBASE_BASE intents are FORBIDDEN at the policy
+  gate even with credentials present (test-locked, twice). Regulator
+  share packages surface transaction evidence redacted (event types
+  only — no amounts, no counterparties). Capability truth: governance
+  substrate PROD + mock rail DEMO_ONLY + Circle/Base
+  BLOCKED_BY_CREDENTIALS unchanged. Demo walk extended to 29 steps
+  (step 29 = AI Employee proposes → human approves → mock proof →
+  3 audit events). 10 unit + 9 integration tests green. ADR-0094's
+  five bans intact: no real USDC, no CDP, no Circle, no Base, no
+  x402; real funds NOT_AUTHORIZED; private keys NOT_HANDLED.
+- **Phase 1248** Mock/dev settlement rail — DONE (the final
   authorized prep deliverable). settlement-readiness.service.ts
   implements the ADR-0094 rail-adapter seam: MOCK_RAIL produces
   clearly-labeled mock receipts (is_mock: true; 'no funds moved')
@@ -123,13 +148,13 @@ bounded Founder queue 1215–1232 substantially complete.
   or honestly credential/app-review blocked. Truth is
   triple-mirrored: the readiness matrix (human), CAPABILITY_TRUTH in
   handoff-readiness.service.ts (machine, test-locked), and the
-  executable 28-step demo walk (1/1 green). Honest residual
+  executable 29-step demo walk (1/1 green). Honest residual
   improvements recorded (extractor schema validation, ADR-0030 gRPC
   migration, BEAM CT diagnostics, Tesseract dependency arc) — all
   enhancements, none handoff gaps. Circle/Base/USDC remains gated on
   explicit Founder authorization.
 - **Phase 1245** Final enterprise demo path — DONE (docs + code).
-  The canonical 28-step handoff demo is recorded in
+  The canonical 29-step handoff demo is recorded in
   enterprise-handoff-runbook.md §18 AND executable:
   tests/integration/enterprise-demo-walk.test.ts walks the
   credential-free chain end-to-end in ONE deterministic scenario —
