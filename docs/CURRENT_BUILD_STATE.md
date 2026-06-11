@@ -51,6 +51,19 @@ bounded Founder queue 1215–1232 substantially complete.
   per provider. Unit test 6/6 green.
 - **Phase 1232** Circle / Base / USDC — per Founder directive,
   remains LAST. NOT_STARTED.
+- **Phase 1233** Compliance share packages (company-controlled
+  regulator sharing) — DONE. `ComplianceSharePackage` substrate:
+  purpose-bound, time-boxed (max 365 days), revocable grants
+  through which a REGULATOR entity reads REDACTED evidence
+  (audit summary / action compliance / memory lineage /
+  connector access / onboarding readiness — counts + event
+  types + outcomes + timestamps ONLY; never `details` JSON,
+  capsule payloads, or connector config). 4 routes at
+  `/api/v1/compliance/share-packages/*`; 4 new append-only
+  audit literals (COMPLIANCE_SHARE_PACKAGE_CREATED / _ACCESSED
+  / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
+  first touch. Unit test 8/8 + integration test 7/7 green.
+  **Needs prod schema push** for `compliance_share_packages`.
 
 ### Production schema push status
 
@@ -65,6 +78,9 @@ Phases 1221 + 1222 + 1223 + 1230 add **13 new Prisma tables**:
   `meeting_participant_consents`.
 - 1223 (2): `audio_captures`, `transcript_segments`.
 - 1230 (1): `org_onboarding_states`.
+- 1233 (1): `compliance_share_packages` (+ 3 enums:
+  `SharePackageStatus`, `SharePackageScope`,
+  `SharePackageRedactionProfile`).
 
 Plus **35 new append-only audit literals** (10 WORKSPACE_* + 7
 EXTERNAL_* + 6 MEETING_CAPTURE_* + 6 AUDIO_CAPTURE_/STT_* + 3
