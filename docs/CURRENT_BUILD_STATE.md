@@ -64,6 +64,15 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1243** Connector setup/status hardening — DONE
+  (Foundation). All 11 registry adapters now declare plain-English
+  `setup_steps` (guidance only; the no-secrets pattern is
+  test-locked, and every write-capable provider must state the
+  approval gate in its steps — also test-locked) plus a
+  `demo_mode_available` flag. The fields flow through the existing
+  connector-adapter-status route and the Phase 1242 readiness
+  aggregate automatically. Registry suite 6 → 8. NO schema changes.
+  CT setup-guidance surfacing rides the Phase 1244 shell pass.
 - **Phase 1242** Production onboarding / enterprise handoff polish —
   Foundation half DONE. `GET /api/v1/otzar/production-readiness`
   (admin-scoped): the single truthful handoff aggregate — Phase 1230

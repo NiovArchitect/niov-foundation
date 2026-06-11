@@ -78,3 +78,26 @@ describe("connector adapter registry", () => {
     expect(rows.every((r) => r.can_write === false)).toBe(true);
   });
 });
+
+describe("Phase 1243 — setup steps + demo mode hardening", () => {
+  it("every adapter declares plain-English setup steps and a demo-mode flag", () => {
+    for (const row of listConnectorAdapters()) {
+      expect(row.setup_steps.length, row.provider_name).toBeGreaterThan(0);
+      expect(typeof row.demo_mode_available).toBe("boolean");
+      for (const step of row.setup_steps) {
+        expect(step.length).toBeGreaterThan(10);
+        // Guidance only — never secrets or raw values.
+        expect(step).not.toMatch(/sk-|secret=|password=/i);
+      }
+    }
+  });
+
+  it("write-capable adapters always state the approval gate in their steps", () => {
+    for (const row of listConnectorAdapters()) {
+      if (row.can_write) {
+        const joined = row.setup_steps.join(" ").toLowerCase();
+        expect(joined, row.provider_name).toContain("approval");
+      }
+    }
+  });
+});
