@@ -30,7 +30,9 @@ export type ConnectorProviderName =
   | "SMTP_EMAIL"
   | "OCR_TESSERACT"
   | "OCR_AWS_TEXTRACT"
-  | "OCR_GOOGLE_VISION";
+  | "OCR_GOOGLE_VISION"
+  | "CIRCLE_GATEWAY"
+  | "COINBASE_BASE";
 
 export type ConnectorProviderCategory =
   | "PRODUCTIVITY"
@@ -314,6 +316,46 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
     app_review_required: false,
     can_write: false,
     phase: 1227,
+  },
+  {
+    provider_name: "CIRCLE_GATEWAY",
+    category: "SETTLEMENT",
+    display_name: "Circle (USDC settlement rail)",
+    description:
+      "USDC settlement via Circle. Architecture prepared per ADR-0094 (GATS) — Foundation proves the transaction was allowed; the rail moves funds. Implementation is gated on explicit Founder authorization.",
+    required_envs: ["CIRCLE_API_KEY"],
+    oauth_scopes: [],
+    setup_docs_url: "https://developers.circle.com/",
+    app_review_required: false,
+    can_write: false,
+    phase: 1247,
+    setup_steps: [
+      "Settlement remains deliberately last — Foundation's governance substrate is what proves a transaction was allowed.",
+      "Create a Circle developer account and provide the API key to your deployment.",
+      "Every settlement intent will require policy evaluation, dual-control approval, and audit before any rail call fires (per ADR-0094).",
+      "No funds move and no keys are handled until the Founder explicitly authorizes the implementation phase.",
+    ],
+    demo_mode_available: false,
+  },
+  {
+    provider_name: "COINBASE_BASE",
+    category: "SETTLEMENT",
+    display_name: "Coinbase Base (on-chain settlement rail)",
+    description:
+      "On-chain settlement and receipt anchoring via Coinbase CDP / Base. Architecture prepared per ADR-0094 (GATS). Implementation is gated on explicit Founder authorization.",
+    required_envs: ["CDP_API_KEY_ID", "CDP_API_KEY_SECRET"],
+    oauth_scopes: [],
+    setup_docs_url: "https://docs.cdp.coinbase.com/",
+    app_review_required: false,
+    can_write: false,
+    phase: 1247,
+    setup_steps: [
+      "Settlement remains deliberately last — Foundation's governance substrate is what proves a transaction was allowed.",
+      "Create a Coinbase Developer Platform project and provide the API key pair to your deployment.",
+      "Every settlement intent will require policy evaluation, dual-control approval, and audit before any rail call fires (per ADR-0094).",
+      "No funds move, no private keys are handled, and no transactions are submitted until the Founder explicitly authorizes the implementation phase.",
+    ],
+    demo_mode_available: false,
   },
 ];
 

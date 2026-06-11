@@ -68,7 +68,14 @@ describe("connector adapter registry", () => {
     const rows = listConnectorAdapters();
     expect(
       rows
-        .filter((r) => r.required_envs.length > 0 && r.category !== "AI")
+        // AI + SETTLEMENT adapters authenticate by API key, not OAuth
+        // scopes (Phase 1247 — Circle/Base rails per ADR-0094).
+        .filter(
+          (r) =>
+            r.required_envs.length > 0 &&
+            r.category !== "AI" &&
+            r.category !== "SETTLEMENT",
+        )
         .every((r) => r.oauth_scopes.length > 0 || r.provider_name === "SMTP_EMAIL"),
     ).toBe(true);
   });

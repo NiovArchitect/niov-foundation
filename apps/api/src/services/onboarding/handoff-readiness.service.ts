@@ -90,7 +90,7 @@ export const CAPABILITY_TRUTH: readonly CapabilityRow[] = [
   { capability: "Live Google Meet / Zoom / Teams auto-ingest", classification: "BLOCKED_BY_CREDENTIALS", note: "Manual transcript upload exercises the full pipeline today." },
   { capability: "Google Workspace / Gmail / Calendar", classification: "BLOCKED_BY_APP_REVIEW", note: "Needs the organization's Google Cloud setup and Google's app verification." },
   { capability: "Slack / Microsoft 365 / Zoom connectors", classification: "BLOCKED_BY_CREDENTIALS", note: "Setup paths and status are ready; each needs the organization's app credentials." },
-  { capability: "Circle / Base / USDC settlement", classification: "NOT_STARTED", note: "Deliberately last, per direction. The governance rails it will mount on are live." },
+  { capability: "Circle / Base / USDC settlement", classification: "BLOCKED_BY_CREDENTIALS", note: "Architecture prepared (ADR-0094 governed-transaction standard; Circle + Base rail adapters registered with honest blockers). No funds move and nothing is wired until the Founder explicitly authorizes implementation and credentials exist." },
 ] as const;
 
 export interface HandoffReadinessView {

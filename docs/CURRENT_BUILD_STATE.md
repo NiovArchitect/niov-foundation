@@ -64,6 +64,17 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1247** Circle/Base settlement architecture preparation —
+  DONE (prep only). ADR-0094 (Governed Agent Transaction Standard)
+  is the canonical architecture: rails reference Foundation's
+  cryptographically-chained authorization evidence; Foundation never
+  moves funds. Phase 1247 registered the CIRCLE_GATEWAY +
+  COINBASE_BASE adapters (SETTLEMENT category; BLOCKED_BY_CREDENTIAL;
+  can_write false until wiring is explicitly authorized; approval
+  gate stated in every setup step) and aligned CAPABILITY_TRUTH +
+  the readiness matrix. NO funds, NO keys, NO transactions, NO
+  schema changes. Implementation remains gated on explicit Founder
+  authorization.
 - **Phase 1246** Final readiness truth pass — DONE. The Circle/Base
   gate condition is MET: every non-blockchain capability is PROD,
   PROD-READY pending APPROVE PROD SCHEMA PUSH (15 additive tables),
