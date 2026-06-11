@@ -68,11 +68,24 @@ export interface ConnectorAdapterDescriptor {
   /** Phase that introduces this adapter (for the readiness
    *  matrix). */
   phase: number;
+  /** Phase 1243 — plain-English setup steps the admin follows to
+   *  activate this connector. Guidance only; never secrets. */
+  setup_steps: string[];
+  /** Phase 1243 — whether a mock/demo path exercises this
+   *  connector's product flow without credentials. */
+  demo_mode_available: boolean;
 }
 
 const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   {
     provider_name: "GOOGLE_WORKSPACE",
+    setup_steps: [
+      "Create a Google Cloud project for your organization.",
+      "Configure the OAuth consent screen and submit Google's app verification (restricted scopes take ~6 weeks).",
+      "Create OAuth credentials and provide the client ID and secret to your deployment.",
+      "Grant per-employee scopes in Otzar — nothing is read or sent without them.",
+    ],
+    demo_mode_available: true,
     category: "PRODUCTIVITY",
     display_name: "Google Workspace",
     description:
@@ -91,6 +104,13 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "SLACK",
+    setup_steps: [
+      "Create a Slack app in your workspace's API portal.",
+      "Add the client ID, client secret, and signing secret to your deployment.",
+      "Install the app to your workspace and approve the requested scopes.",
+      "Sends remain approval-gated inside Otzar even after connection.",
+    ],
+    demo_mode_available: true,
     category: "COMMUNICATIONS",
     display_name: "Slack",
     description:
@@ -113,6 +133,13 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "MICROSOFT_365",
+    setup_steps: [
+      "Register an application in your Microsoft Entra admin center.",
+      "Provide the Graph client ID, client secret, and tenant ID to your deployment.",
+      "Grant admin consent for the requested Graph scopes.",
+      "Sends remain approval-gated inside Otzar even after connection.",
+    ],
+    demo_mode_available: true,
     category: "PRODUCTIVITY",
     display_name: "Microsoft 365",
     description:
@@ -136,6 +163,13 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "ZOOM",
+    setup_steps: [
+      "Create a Zoom Marketplace app for your account.",
+      "Provide the OAuth client ID and secret to your deployment.",
+      "Complete Zoom's app review if you publish beyond your account.",
+      "Recording ingest activates only with participant consent in Otzar.",
+    ],
+    demo_mode_available: true,
     category: "COMMUNICATIONS",
     display_name: "Zoom",
     description:
@@ -149,6 +183,12 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "JIRA",
+    setup_steps: [
+      "Create an Atlassian OAuth app.",
+      "Provide the client credentials to your deployment.",
+      "Ticket creation stays draft-only until policy approves sends.",
+    ],
+    demo_mode_available: false,
     category: "ENGINEERING",
     display_name: "Jira (Atlassian)",
     description:
@@ -163,6 +203,12 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "GITHUB",
+    setup_steps: [
+      "Create a GitHub App or OAuth app for your organization.",
+      "Provide the client credentials to your deployment.",
+      "Writes stay approval-gated inside Otzar.",
+    ],
+    demo_mode_available: false,
     category: "ENGINEERING",
     display_name: "GitHub",
     description:
@@ -177,6 +223,12 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "LINEAR",
+    setup_steps: [
+      "Create a Linear OAuth app.",
+      "Provide the client credentials to your deployment.",
+      "Writes stay approval-gated inside Otzar.",
+    ],
+    demo_mode_available: false,
     category: "ENGINEERING",
     display_name: "Linear",
     description: "Linear issues + projects context.",
@@ -189,6 +241,12 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "SMTP_EMAIL",
+    setup_steps: [
+      "Provide your SMTP gateway host, port, and credentials to your deployment.",
+      "Send a test message to yourself from the connector check.",
+      "Outbound email remains approval-gated per recipient.",
+    ],
+    demo_mode_available: true,
     category: "COMMUNICATIONS",
     display_name: "SMTP email",
     description:
@@ -208,6 +266,11 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "OCR_TESSERACT",
+    setup_steps: [
+      "No credentials needed — local reading installs with a future build update.",
+      "Until then, pasted text and the built-in sample exercise the same flow.",
+    ],
+    demo_mode_available: true,
     category: "AI",
     display_name: "Tesseract.js (local OCR)",
     description:
@@ -221,6 +284,11 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "OCR_AWS_TEXTRACT",
+    setup_steps: [
+      "Provide AWS access key, secret, and region to your deployment.",
+      "Reading is per-document billed by AWS.",
+    ],
+    demo_mode_available: true,
     category: "AI",
     display_name: "AWS Textract",
     description: "Cloud OCR via AWS Textract. Per-document billing.",
@@ -233,6 +301,10 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
   },
   {
     provider_name: "OCR_GOOGLE_VISION",
+    setup_steps: [
+      "Provide a Google Cloud Vision API key to your deployment.",
+    ],
+    demo_mode_available: true,
     category: "AI",
     display_name: "Google Cloud Vision",
     description: "Cloud OCR via Google Cloud Vision API.",
