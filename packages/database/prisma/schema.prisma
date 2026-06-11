@@ -3185,3 +3185,125 @@ model ExternalCommitment {
   @@index([workspace_id, direction])
   @@map("external_commitments")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Phase 1223 — Voice/STT substrate per the [FOUNDER-AUTH —
+// PHASE 1223 VOICE/STT END-TO-END] directive.
+//
+// Layered design:
+//   1. STTProviderType — closed-vocab provider enum. Real provider
+//      activation is per-org (Deepgram / Whisper / Google Speech)
+//      gated by per-org credentials; DEMO_FIXTURE always available.
+//   2. AudioCapture — one row per audio submission (live mic
+//      stream chunk OR uploaded file OR replayed demo fixture).
+//   3. TranscriptSegment — one row per emitted segment from the
+//      STT provider (live providers stream multiple per capture;
+//      DEMO_FIXTURE emits one).
+//   4. Optional handoff to MeetingCapture (Phase 1222) when the
+//      audio is for a known meeting.
+//
+// PRIVACY (RULE 0):
+//   - Audio payload is NOT stored in the row (kept at the
+//     storage_ref pointer; for DEMO_FIXTURE the ref is a synthetic
+//     local id).
+//   - Transcripts ARE stored (otherwise the user can't see what
+//     was said), bounded + scoped to the capturer's wallet by
+//     default. Sharing into a workspace requires the existing
+//     CollaborationSharedContext flow.
+// ─────────────────────────────────────────────────────────────────
+
+enum STTProviderType {
+  DEMO_FIXTURE
+  LOCAL_BROWSER
+  WHISPER_API
+  DEEPGRAM
+  GOOGLE_SPEECH
+  AZURE_SPEECH
+}
+
+enum STTProviderStatus {
+  CONFIGURED
+  MISSING_CREDENTIAL
+  ERROR
+  DISABLED
+  DEMO_ONLY
+}
+
+enum AudioCaptureMode {
+  LIVE_MIC
+  AUDIO_FILE_UPLOAD
+  DEMO_AUDIO_SAMPLE
+  LOCAL_FALLBACK
+}
+
+enum AudioCaptureStatus {
+  RECEIVED
+  TRANSCRIBING
+  TRANSCRIBED
+  FAILED
+  ATTACHED_TO_MEETING_CAPTURE
+  ARCHIVED
+}
+
+model AudioCapture {
+  audio_capture_id          String                  @id @default(uuid()) @db.Uuid
+  org_entity_id             String                  @db.Uuid
+  captured_by_entity_id     String                  @db.Uuid
+  provider                  STTProviderType         @default(DEMO_FIXTURE)
+  provider_status_at_start  STTProviderStatus       @default(DEMO_ONLY)
+  mode                      AudioCaptureMode        @default(DEMO_AUDIO_SAMPLE)
+  // Synthetic storage pointer; never the raw audio bytes.
+  storage_ref               String?
+  duration_ms               Int?
+  status                    AudioCaptureStatus      @default(RECEIVED)
+  // Optional handoff target — when set, the transcript is fed
+  // into the named MeetingCapture's transcript field on finalize.
+  meeting_capture_id        String?                 @db.Uuid
+  workspace_id              String?                 @db.Uuid
+  title                     String?
+  // Aggregated full transcript (sum of all segments). NULL until
+  // status === TRANSCRIBED.
+  full_transcript           String?
+  summary                   String?
+  failure_class             String?
+  failure_message           String?
+  created_at                DateTime                @default(now())
+  updated_at                DateTime                @updatedAt
+  deleted_at                DateTime?
+
+  segments                  TranscriptSegment[]
+
+  @@index([org_entity_id])
+  @@index([captured_by_entity_id])
+  @@index([meeting_capture_id])
+  @@index([workspace_id])
+  @@index([org_entity_id, status])
+  @@map("audio_captures")
+}
+
+model TranscriptSegment {
+  transcript_segment_id     String                  @id @default(uuid()) @db.Uuid
+  audio_capture_id          String                  @db.Uuid
+  org_entity_id             String                  @db.Uuid
+  // Speaker label as provided by the STT provider; may be
+  // "Speaker 1" / "Sadeil" / "Unknown" depending on diarization
+  // capability. Bounded.
+  speaker_label             String?
+  // Segment timing in milliseconds from capture start.
+  start_ms                  Int
+  end_ms                    Int
+  // Bounded transcript text for this segment.
+  text                      String
+  // Provider's reported confidence (0..1) when available.
+  confidence                Float?
+  is_final                  Boolean                 @default(true)
+  created_at                DateTime                @default(now())
+  deleted_at                DateTime?
+
+  audio_capture             AudioCapture            @relation(fields: [audio_capture_id], references: [audio_capture_id])
+
+  @@index([audio_capture_id])
+  @@index([audio_capture_id, start_ms])
+  @@index([org_entity_id])
+  @@map("transcript_segments")
+}
