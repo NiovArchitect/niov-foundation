@@ -9,9 +9,81 @@ Tier 4 PR-specific build-log:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
 **Last updated:** 2026-06-10
-(**Otzar Phase 1221 PLAN LANDED 2026-06-10** — True Collaboration
-Workspace end-to-end. Founder-issued addendum required a written
-audit + plan in this document BEFORE implementation.
+(**Otzar Phases 1221 + 1222 + 1231 LANDED + 1223/1228/1229/1230
+IN FLIGHT 2026-06-10** — bounded Founder queue 1215–1232.
+
+### Current state truth (per Founder closeout directive)
+
+- **Phase 1221 True Collaboration Workspace** — DONE locally + in
+  the app's UI. Production schema push to Supabase is **PENDING
+  Founder explicit `APPROVE PROD SCHEMA PUSH` authorization**. PRs
+  niov-foundation #315 + #316 + otzar-control-tower #64 all merged.
+  Integration test 4/4 green; resolver unit tests 9/9 green; CT
+  test suite 720/720 green.
+- **Phase 1222 Live Meeting Capture** — Provider-agnostic substrate
+  DONE (Google Meet / Zoom / Microsoft Teams / MANUAL_UPLOAD /
+  API_INGEST). Real live Google Meet + Zoom + Teams auto-ingest
+  remains **BLOCKED by connector credentials + provider app
+  approvals** (Google Cloud Console verification ~6 weeks for
+  restricted scopes; Zoom Marketplace review; Microsoft 365 OAuth
+  app). PRs niov-foundation #317 + otzar-control-tower #65 merged;
+  integration test 3/3 green.
+- **Phase 1231 Client Handoff Readiness Matrix** — DONE
+  (`docs/operations/client-handoff-readiness-matrix.md` is the
+  authoritative source). PR niov-foundation #318 merged.
+- **Phases 1223 / 1228 / 1229 / 1230** — IN FLIGHT per Founder
+  directive (continue autonomously past OAuth blockers). Phase
+  1223 builds a STT provider-adapter interface + demo/sample
+  mode; Phase 1228 builds the full DMW registry backend; Phase
+  1229 builds the full COSMP capsule backend; Phase 1230 builds
+  the production onboarding wizard.
+- **Phases 1224 / 1225 / 1226** — **BLOCKED_BY_CREDENTIAL** —
+  provider-adapter substrate ships with mock/dev paths; real
+  OAuth wiring waits for credential provisioning.
+- **Phase 1227 OCR / Observe** — substrate ships with manual
+  upload path; real OCR provider selection (Tesseract.js / AWS
+  Textract / Google Vision) deferred.
+- **Phase 1232 Circle / Base / USDC** — per Founder directive,
+  remains LAST.
+
+### Otzar.app build state
+
+Last rebundle 2026-06-10 16:27:36 (after Phase 1221 + 1222
+merges). All surfaces verified in shipped JS: "Collaboration
+Workspaces", "External stakeholders", "Commitments by owner",
+"They owe us"/"We owe them", "Meeting captures", "Capture a
+meeting", participant consent UI, `BLOCKED_PARTICIPANT_CONSENT`
+status. 14× `collaboration-workspaces` route refs + 10×
+`meeting-captures` route refs.
+
+### Production schema push status
+
+Phase 1221 + 1222 add 10 NEW Prisma tables to schema.prisma:
+
+- `collaboration_workspaces`
+- `collaboration_memberships`
+- `collaboration_decisions`
+- `collaboration_commitments`
+- `collaboration_shared_context`
+- `external_collaborators`
+- `workspace_external_memberships`
+- `external_commitments`
+- `meeting_captures`
+- `meeting_participant_consents`
+
+Plus 23 NEW append-only `AUDIT_EVENT_TYPE_VALUES` literals (10
+WORKSPACE_* + 7 EXTERNAL_* + 6 MEETING_CAPTURE_*). All additive
+per ADR-0042 §Q-γ.1 (no ADR-0002 amendment required). Local test
+DB at localhost:5433/foundation_test carries the full schema and
+proves the substrate at integration tier (4/4 + 3/3 + 9/9 +
+720/720 green). Production Supabase still on the pre-1221 schema;
+PROD-READY flip requires explicit Founder `APPROVE PROD SCHEMA
+PUSH` authorization.
+
+(**Earlier last-updated context — Phase 1221 PLAN LANDED
+2026-06-10** — True Collaboration Workspace end-to-end. Founder-
+issued addendum required a written audit + plan in this document
+BEFORE implementation.
 
 ### Existing collaboration substrate (audited 2026-06-10)
 - **`TwinCollaborationRequest`** (`schema.prisma:2390`) — single-shot
