@@ -431,7 +431,14 @@ export type AuditEventType =
   | "AUDIO_CAPTURE_FAILED"
   | "AUDIO_CAPTURE_ATTACHED"
   | "AUDIO_CAPTURE_ARCHIVED"
-  | "STT_PROVIDER_STATUS_CHECKED";
+  | "STT_PROVIDER_STATUS_CHECKED"
+  // Phase 1230 — Onboarding admin actions. 3 NEW append-only
+  // literals. SAFE details: org_entity_id / step_name /
+  // step_value (closed-vocab) / mode (DEMO|PRODUCTION).
+  // FORBIDDEN: raw seed data, secret material.
+  | "ONBOARDING_STEP_COMPLETED"
+  | "ONBOARDING_MODE_CHANGED"
+  | "ONBOARDING_READY_FOR_PRODUCTION";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -583,6 +590,10 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "AUDIO_CAPTURE_ATTACHED",
   "AUDIO_CAPTURE_ARCHIVED",
   "STT_PROVIDER_STATUS_CHECKED",
+  // Phase 1230 Onboarding.
+  "ONBOARDING_STEP_COMPLETED",
+  "ONBOARDING_MODE_CHANGED",
+  "ONBOARDING_READY_FOR_PRODUCTION",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
