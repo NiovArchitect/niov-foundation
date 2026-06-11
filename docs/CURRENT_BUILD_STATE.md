@@ -8,7 +8,7 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-11 (Enterprise Reality Hardening Pass)
 (**Otzar Phases 1221 + 1222 + 1223 + 1228 + 1229 + 1230 + 1231 +
 1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
 bounded Founder queue 1215–1232 substantially complete.
@@ -80,7 +80,23 @@ bounded Founder queue 1215–1232 substantially complete.
   credential enumeration — every key the Founder needs now appears
   in the readiness endpoint and Connector Health. NO schema
   changes.
-- **Phase 1248** Mock/dev settlement rail — DONE (the final
+- **Enterprise Reality Hardening Pass (2026-06-11)** — DONE.
+  Three parallel read-only audits (CT UI copy/fragility, Foundation
+  governance/secrets, docs truth-drift) triaged to 3 real findings,
+  all fixed and merged: readiness-matrix table-count drift 13 → 15
+  (foundation #352); protocol name removed from employee-ambient CT
+  copy (footer badge / Login / nav — 'COSMP' now in the employee ban
+  list; buyer-facing Playground patent demo deliberately keeps it) +
+  VoiceCaptures load failures now render truthful "Couldn't load"
+  copy instead of the empty state + CT lint restored to 0/0
+  (otzar-control-tower #75, 775/775 green, Otzar.app rebuilt and
+  shipped-JS verified). Foundation governance audit: 0 real issues
+  (all 51 routes auth-gated via the three canonical patterns; raw SQL
+  parameterized; no response leaks; no secrets in docs). Two stale
+  local branches removed. 6 Dependabot PRs + 9 GitHub vulnerability
+  alerts recorded for Founder review in founder-input-needed.md §4
+  (external PRs are not merged unattended). Prod schema push remains
+  pending invalid credentials per §0 — not retried.
   authorized prep deliverable). settlement-readiness.service.ts
   implements the ADR-0094 rail-adapter seam: MOCK_RAIL produces
   clearly-labeled mock receipts (is_mock: true; 'no funds moved')
