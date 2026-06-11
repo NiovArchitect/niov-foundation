@@ -8,8 +8,8 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-06-11 (Phase 1250 Governed Transaction
-Readiness + Enterprise Reality Hardening Pass)
+**Last updated:** 2026-06-11 (Phase 1251 Ambient Work OS + Phase 1250
+Governed Transaction Readiness + Enterprise Reality Hardening Pass)
 (**Otzar Phases 1221 + 1222 + 1223 + 1228 + 1229 + 1230 + 1231 +
 1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
 bounded Founder queue 1215–1232 substantially complete.
@@ -98,6 +98,21 @@ bounded Founder queue 1215–1232 substantially complete.
   alerts recorded for Founder review in founder-input-needed.md §4
   (external PRs are not merged unattended). Prod schema push remains
   pending invalid credentials per §0 — not retried.
+- **Phase 1251** Otzar Ambient Work OS / Edge Presence (2026-06-11)
+  — DONE (otzar-control-tower #77; CT-only code + this docs pointer).
+  Founder Design Law implemented: presence store with the nine-state
+  edge language (idle/listening/thinking/recommendation/approval/
+  success/blocked/quiet/failure), AmbientEdgeGlow (pointer-safe,
+  reduced-motion-safe state halo), the orb (state-aware collapsed
+  dock), AmbientNotificationStack (≤2 truthful plain-language cards),
+  AdminCommandLayer (⌘K plain-language navigation), Dandelion
+  root-first propagation copy, governed shared-screen story on
+  Observe. Canonical law:
+  otzar-control-tower/docs/product/otzar-ambient-work-os-design-law.md
+  (pointer: docs/otzar/AMBIENT_WORK_OS_DESIGN_LAW_POINTER.md). Native
+  Tauri edge window (transparent / always-on-top / tray / global
+  shortcut) documented as the follow-up slice. 792/792 CT tests;
+  Otzar.app rebuilt + shipped-JS verified.
 - **Phase 1250** Governed Transaction Readiness (2026-06-11) — DONE.
   ZERO schema changes; runs on the CURRENT production schema. NEW
   governed-transaction.service.ts + otzar-settlement.routes.ts +
