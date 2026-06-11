@@ -64,6 +64,20 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1236** Calendar-aware automatic quiet mode — DONE.
+  Foundation #333: `GET /api/v1/otzar/calendar/context` — the meeting
+  signal is REAL substrate (caller's MeetingCapture scheduled
+  windows), credential-free; safe current_event/next_event
+  projections (bounded titles, boolean external flag, consent-derived
+  capture status — never attendee emails or bodies);
+  MOCK_CALENDAR_FIXTURE drives FOCUS_TIME demos; provider_mode is
+  honest readiness (MOCK_CALENDAR today, *_CONFIGURED when OAuth envs
+  exist — real clients are the credential-gated follow-on into the
+  same shape). CT #71: AmbientOtzarBar polls the context and
+  auto-quiets with explainer copy + Resume-voice session override
+  (no re-quiet loop; override clears when the recommendation lifts).
+  7 unit + 5 integration Foundation tests; CT 759/759. NO schema
+  changes. Real Google/Microsoft calendar = BLOCKED_BY_CREDENTIAL.
 - **Phase 1235** Ambient employee shell — DONE (CT-only). Per the
   Founder ambient/border-first/voice-first product-intent addendum:
   EmployeeNav 'More' section collapsed by default (employees see 7
