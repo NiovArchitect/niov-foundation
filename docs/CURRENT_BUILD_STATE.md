@@ -77,7 +77,14 @@ bounded Founder queue 1215–1232 substantially complete.
   Suggested follow-ups are NEVER auto-executed (zero Action rows
   created; Phase 1208 confirm path only). 5 NEW audit literals.
   Unit 9/9 + integration 8/8 green. **Needs prod schema push** for
-  `observe_captures` (+3 enums). CT Observe surface is the follow-on.
+  `observe_captures` (+3 enums). CT half landed: otzar-control-tower
+  #69 restructures the Observe page around 'Let Otzar read this'
+  (provider chips with friendly labels, sample + pasted-text
+  reading, 'Otzar found text' results with approval-gated
+  follow-ups via ProposedActionCard, attach-to-workspace with
+  imported ledger counts; pre-1227 quick-note flow preserved).
+  Observe suites 11/11; full CT suite 731/731; Otzar.app rebuilt
+  and shipped JS verified.
 - **Phase 1234** My Day intelligence (first real Python
   intelligence consumer) — DONE. `GET
   /api/v1/otzar/my-day/intelligence` builds the caller's SAFE
