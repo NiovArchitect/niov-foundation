@@ -112,6 +112,7 @@ import { registerCOSMPCapsuleManagementRoutes } from "./routes/cosmp-capsule-man
 import { registerOnboardingRoutes } from "./routes/onboarding.routes.js";
 import { registerComplianceSharingRoutes } from "./routes/compliance-sharing.routes.js";
 import { registerOtzarMyDayRoutes } from "./routes/otzar-my-day.routes.js";
+import { registerOtzarObserveRoutes } from "./routes/otzar-observe.routes.js";
 import { registerConnectorAdapterStatusRoutes } from "./routes/connector-adapter-status.routes.js";
 import { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
 import { registerOtzarVoiceReadyRoutes } from "./routes/otzar-voice-ready.routes.js";
@@ -714,6 +715,7 @@ export async function buildApp(
   await registerOnboardingRoutes(app, authService);
   await registerComplianceSharingRoutes(app, authService);
   await registerOtzarMyDayRoutes(app, authService);
+  await registerOtzarObserveRoutes(app, authService, otzarLLM);
   await registerConnectorAdapterStatusRoutes(app, authService);
   await registerOrgCollaborationPolicyRoutes(app, authService);
   await registerOtzarVoiceReadyRoutes(app, otzarService);
