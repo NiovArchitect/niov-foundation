@@ -14,6 +14,7 @@ import {
   setOnboardingModeForCaller,
   type OnboardingStepId,
 } from "../services/onboarding/onboarding.service.js";
+import { getHandoffReadinessForCaller } from "../services/onboarding/handoff-readiness.service.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -43,6 +44,22 @@ export async function registerOnboardingRoutes(
   app: FastifyInstance,
   authService: AuthService,
 ): Promise<void> {
+  // Phase 1242 — the enterprise handoff readiness aggregate.
+  app.get("/api/v1/otzar/production-readiness", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null)
+      return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+    const session = await authService.validateSession(token, "read");
+    if (!session.valid)
+      return reply.code(401).send({ ok: false, code: session.code });
+    const result = await getHandoffReadinessForCaller(session.entity_id);
+    if (result.ok === false) {
+      const status = result.code === "ADMIN_REQUIRED" ? 403 : 404;
+      return reply.code(status).send({ ok: false, code: result.code });
+    }
+    return reply.code(200).send({ ok: true, readiness: result.readiness });
+  });
+
   app.get("/api/v1/onboarding/checklist", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
     if (token === null)
