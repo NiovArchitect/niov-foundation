@@ -64,6 +64,24 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1234** My Day intelligence (first real Python
+  intelligence consumer) — DONE. `GET
+  /api/v1/otzar/my-day/intelligence` builds the caller's SAFE
+  scoped signal pack (proposed Actions / unread Notifications /
+  pending+blocked TwinCollaborationRequests / ACTIVE-only
+  TwinAuthorityGrants incl. expiring + sensitive-case-by-case /
+  active WorkProjects / open CollaborationCommitments /
+  waiting-on-external ExternalCommitments by direction) and
+  runs it through `rankEmployeeTwinNextActions` — the Python
+  runtime when `PYTHON_INTELLIGENCE_RUNTIME_URL` is configured,
+  honest deterministic fixture otherwise. Calm user-safe
+  response (headline + ranked suggestions + closed-vocab
+  provider_status: PYTHON_CONFIGURED / FIXTURE_*). Counts +
+  closed-vocab labels only; no payloads, no audit details, no
+  external-collaborator private fields. Unit 6/6 + integration
+  6/6 green (org isolation, revoked-grant exclusion, no-leak
+  boundary proven). **No schema changes.** CT My Day
+  consumption is the follow-on CT phase.
 
 ### Production schema push status
 
