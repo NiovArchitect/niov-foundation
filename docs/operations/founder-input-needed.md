@@ -73,6 +73,22 @@ connect" (admin) and the registry (`connector-adapter-registry.ts`).
 - Tesseract local OCR dependency (RULE 21 research arc before adding).
 - SOC 2 / HIPAA / FedRAMP: certification processes, not code.
 
+### Dependency updates awaiting your merge (Phase 1248 note)
+
+GitHub reports 9 Dependabot vulnerabilities on the foundation default
+branch (2 critical, 2 high, 5 moderate) and 6 open Dependabot PRs.
+Unattended policy: external PRs are not merged by the agent.
+
+- **Low-risk, CI green — merge first:** #350 `@grpc/grpc-js`
+  1.14.3 → 1.14.4 (patch); #42 `brace-expansion` 5.0.5 → 5.0.6 (patch;
+  comment `@dependabot rebase` first — its CI run is stale).
+- **Major bumps — need a deliberate ADR-0016 pin review, do NOT
+  rubber-stamp:** #303 vitest 2 → 3, #293 pytest 8 → 9, #44 vite +
+  vitest, #43 esbuild + vitest (test-runner/build-tool majors can
+  change behavior).
+- Review the alert list at GitHub → Security → Dependabot to confirm
+  which alerts the patch PRs actually close.
+
 ## 5. What needs nothing — live today
 
 Identity, Actions + policy + dual-control, notifications + replies,
