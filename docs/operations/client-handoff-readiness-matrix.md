@@ -1,6 +1,6 @@
 # Otzar — Client Handoff Readiness Matrix
 
-**Last updated:** 2026-06-11 (Phase 1249 — voice-seat registry; credential enumeration complete)
+**Last updated:** 2026-06-11 (unattended run — schema push aborted at preflight on invalid prod credentials; founder-input-needed.md added)
 **Maintained by:** Founder + automated PR updates
 **Purpose:** One-page truth about what is production-ready vs.
 demo-only vs. blocked-on-runtime-configuration for an enterprise
@@ -77,6 +77,16 @@ client handoff. Read this before claiming a feature is
 | 1234 | My Day intelligence (Python runtime first product consumer) | **PROD-READY** (fixture path always works; Python path activates when `PYTHON_INTELLIGENCE_RUNTIME_URL` is set + service deployed) | `GET /api/v1/otzar/my-day/intelligence`; SAFE caller-scoped signal pack → `rankEmployeeTwinNextActions`; honest provider_status; unit 6/6 + integration 6/6. **No schema migration needed.** CT half landed (otzar-control-tower #68 — 'What matters today' card on My Day; my-day suite 15/15; full CT suite 725/725); Otzar.app rebuilt with the new surface. |
 
 ---
+
+## Production schema push attempt (2026-06-11, unattended run)
+
+The Founder-approved push was attempted and **aborted safely at
+preflight**: both production `DATABASE_URL` and `DIRECT_URL`
+authenticate as invalid (Prisma P1000) against the Supabase host —
+the credentials need rotation. No diff ran; nothing was pushed. All
+schema-pending classifications stand. The exact recovery procedure +
+the full consolidated Founder input list:
+`docs/operations/founder-input-needed.md`.
 
 ## Phase 1246 — Final readiness truth pass (2026-06-11)
 

@@ -64,6 +64,13 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Production schema push attempt (unattended run)** — ABORTED
+  SAFELY at preflight. The Founder-approved push could not proceed:
+  both production DATABASE_URL and DIRECT_URL fail authentication
+  (Prisma P1000 — credentials need rotation). No diff ran; nothing
+  was pushed; nothing was harmed. Recovery procedure + the complete
+  consolidated Founder input package:
+  docs/operations/founder-input-needed.md (NEW).
 - **Phase 1249** Voice-seat provider registry — DONE. The three
   recommended voice seats (per the research-verified provider
   recommendation) join the connector registry with honest
