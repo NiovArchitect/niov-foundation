@@ -64,6 +64,21 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1242** Production onboarding / enterprise handoff polish —
+  Foundation half DONE. `GET /api/v1/otzar/production-readiness`
+  (admin-scoped): the single truthful handoff aggregate — Phase 1230
+  checklist progress, 6 honest runtime rows, the full connector
+  registry with credential/app-review blockers (env NAMES only —
+  no-secrets boundary test-proven with a canary), the pending
+  15-table additive schema diff + the explicit APPROVE PROD SCHEMA
+  PUSH phrase, demo/prod separation, audit/compliance status, and
+  the closed-vocab capability truth table (CAPABILITY_TRUTH — the
+  code-maintained mirror of this matrix). NEW
+  docs/operations/enterprise-handoff-runbook.md: the 17-step
+  operator script (demo start, tests, rebuild, seeding, verify
+  flows, credential/schema gates, what NOT to claim). 5 integration
+  tests green; NO schema changes. CT readiness page upgrade is the
+  follow-on.
 - **Phase 1241** BEAM production-path integration — DONE (first
   consumer). The Phase-6 BEAM Collaboration Supervisor wrapper
   (previously zero consumers) joins the live HTTP surface:
