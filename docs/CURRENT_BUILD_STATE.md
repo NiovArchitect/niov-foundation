@@ -64,6 +64,17 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1246** Final readiness truth pass — DONE. The Circle/Base
+  gate condition is MET: every non-blockchain capability is PROD,
+  PROD-READY pending APPROVE PROD SCHEMA PUSH (15 additive tables),
+  or honestly credential/app-review blocked. Truth is
+  triple-mirrored: the readiness matrix (human), CAPABILITY_TRUTH in
+  handoff-readiness.service.ts (machine, test-locked), and the
+  executable 28-step demo walk (1/1 green). Honest residual
+  improvements recorded (extractor schema validation, ADR-0030 gRPC
+  migration, BEAM CT diagnostics, Tesseract dependency arc) — all
+  enhancements, none handoff gaps. Circle/Base/USDC remains gated on
+  explicit Founder authorization.
 - **Phase 1245** Final enterprise demo path — DONE (docs + code).
   The canonical 28-step handoff demo is recorded in
   enterprise-handoff-runbook.md §18 AND executable:
