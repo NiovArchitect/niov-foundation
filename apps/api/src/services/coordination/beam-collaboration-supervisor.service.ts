@@ -267,3 +267,93 @@ function buildFallbackStatus(
     observed_at: new Date().toISOString(),
   };
 }
+
+// ─── Phase 1241 — production-path consumers ──────────────────
+
+// WHAT: Caller-scoped wrapper for getCollaborationSupervisedStatus.
+// INPUT: callerEntityId + collaborationId + optional runtime config.
+// OUTPUT: SupervisedStatusResult, with PARTICIPANT_REQUIRED for
+//         non-participants (same code path as not-found probes —
+//         no existence oracle).
+// WHY: Phase 1241 wires the BEAM supervisor into the live HTTP
+//      surface. The Prisma row is the scoping authority: only the
+//      requester or the target may read supervised status. BEAM
+//      stays observation-only — no policy bypass is possible
+//      through this read.
+export async function getCollaborationSupervisedStatusForCaller(
+  callerEntityId: string,
+  collaborationId: string,
+  runtime: BeamRuntimeConfig = {},
+): Promise<SupervisedStatusResult> {
+  const row = await prisma.twinCollaborationRequest.findUnique({
+    where: { collaboration_id: collaborationId },
+    select: { requester_entity_id: true, target_entity_id: true },
+  });
+  if (
+    row === null ||
+    (row.requester_entity_id !== callerEntityId &&
+      row.target_entity_id !== callerEntityId)
+  ) {
+    return { ok: false, code: "COLLABORATION_NOT_FOUND" };
+  }
+  return getCollaborationSupervisedStatus(collaborationId, runtime);
+}
+
+export interface BeamRuntimeStatusView {
+  collaboration_supervisor: BeamProviderMode;
+  /** Calm, honest one-liner for diagnostics surfaces. */
+  note: string;
+}
+
+// WHAT: Probe the BEAM runtime's health for the diagnostics surface.
+// INPUT: Optional runtime config (tests inject fetch/env).
+// OUTPUT: Closed-vocab status + honest note. Never throws.
+// WHY: Admin/diagnostics readiness needs one truthful answer to
+//      "is BEAM coordination live right now?" — DISABLED (flag off),
+//      READY_NOT_ACTIVE (flag on, no URL), ACTIVE (health 200),
+//      UNREACHABLE (probe failed).
+export async function getBeamRuntimeStatus(
+  runtime: BeamRuntimeConfig = {},
+): Promise<BeamRuntimeStatusView> {
+  const enabled =
+    runtime.enabled ?? process.env.BEAM_RUNTIME_ENABLED === "true";
+  const beamUrl = runtime.beamUrl ?? process.env.BEAM_RUNTIME_URL ?? null;
+  if (!enabled) {
+    return {
+      collaboration_supervisor: "DISABLED",
+      note: "BEAM coordination is turned off. Collaboration status comes from Foundation directly.",
+    };
+  }
+  if (beamUrl === null || beamUrl.length === 0) {
+    return {
+      collaboration_supervisor: "READY_NOT_ACTIVE",
+      note: "BEAM coordination is enabled but no runtime address is configured.",
+    };
+  }
+  const timeoutMs = runtime.timeoutMs ?? DEFAULT_BEAM_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const fetchFn = runtime.fetchImpl ?? fetch;
+  try {
+    const response = await fetchFn(`${beamUrl}/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return {
+        collaboration_supervisor: "UNREACHABLE",
+        note: "The BEAM coordination runtime did not answer its health check. Foundation fallback is serving status.",
+      };
+    }
+    return {
+      collaboration_supervisor: "ACTIVE",
+      note: "BEAM coordination is live and supervising collaborations.",
+    };
+  } catch {
+    return {
+      collaboration_supervisor: "UNREACHABLE",
+      note: "The BEAM coordination runtime could not be reached. Foundation fallback is serving status.",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}

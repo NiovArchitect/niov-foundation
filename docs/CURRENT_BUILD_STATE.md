@@ -64,6 +64,23 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1241** BEAM production-path integration — DONE (first
+  consumer). The Phase-6 BEAM Collaboration Supervisor wrapper
+  (previously zero consumers) joins the live HTTP surface:
+  `GET /api/v1/otzar/beam/status` reports honest closed-vocab
+  runtime status (DISABLED when the flag is off / READY_NOT_ACTIVE
+  when enabled without a URL / ACTIVE on healthy probe /
+  UNREACHABLE on failure — never throws), and
+  `GET /api/v1/otzar/collaboration/:id/supervised-status` serves
+  participant-scoped supervised status — the live BEAM per-
+  collaboration process state when reachable, a deterministic
+  Foundation projection otherwise. Observation-only by design: BEAM
+  is never a policy authority, reads never mutate (test-proven),
+  non-participants get no existence oracle. Activation is deploy
+  config (BEAM_RUNTIME_ENABLED + BEAM_RUNTIME_URL → the
+  collaboration_supervisor OTP app's HTTP listener). 5 integration
+  tests green; NO schema changes. Expansion path: ADR-0030 COSMP
+  gRPC migration remains the next BEAM production step.
 - **Phase 1240** AI Employee boundaries + DMW formalization — DONE.
   AI Employees are the ADR-0046 Enterprise AI Agent context made
   first-class: `POST /api/v1/otzar/ai-employees` (org admin) creates
