@@ -1,6 +1,6 @@
 # Otzar — Client Handoff Readiness Matrix
 
-**Last updated:** 2026-06-11 (Phase 1235 ambient employee shell landed)
+**Last updated:** 2026-06-11 (Phase 1236 calendar-aware automatic quiet mode landed)
 **Maintained by:** Founder + automated PR updates
 **Purpose:** One-page truth about what is production-ready vs.
 demo-only vs. blocked-on-runtime-configuration for an enterprise
@@ -61,6 +61,7 @@ client handoff. Read this before claiming a feature is
 | 1231 | Client handoff readiness matrix | **PROD** | This document. Auto-updated by future PRs. |
 | 1232 | Circle / Base / USDC settlement | **NOT_STARTED** | Per Founder: LAST. Connector + governed approval required. |
 | 1233 | Compliance share packages (regulator evidence sharing) | **PROD-READY** | `ComplianceSharePackage`: company-controlled, purpose-bound, time-boxed, revocable, REDACTED regulator evidence views over existing substrate; 4 routes at /api/v1/compliance/share-packages/*; 4 audit literals; unit 8/8 + integration 7/7 green. **Needs prod schema push** for `compliance_share_packages`. |
+| 1236 | Calendar-aware automatic quiet mode | **PROD** for the substrate-driven path (no schema changes); real Google/Microsoft calendar clients = BLOCKED_BY_CREDENTIAL | Foundation #333: GET /api/v1/otzar/calendar/context — meeting detection from the caller's own MeetingCapture scheduled windows (credential-free) + MOCK_CALENDAR_FIXTURE demo states; provider_mode flips to *_CONFIGURED when OAuth envs exist. CT #71: AmbientOtzarBar auto-quiets (stops listening, cancels speech, suppresses auto-speak) with 'Otzar went quiet for your meeting.' + Resume-voice session override; failing endpoint never breaks the shell. 7+5 Foundation tests; CT suite 759/759. |
 | 1235 | Ambient employee shell (collapsed nav + role-gated admin entries + global copy sweep + quiet mode) | **PROD** (CT-only; no Foundation changes) | otzar-control-tower #70: 'More' nav collapsed by default (7 primary surfaces visible), adminOnly entries hidden from non-admins, global ambient-copy sweep locks raw internals + developer vocabulary out of all 19 employee pages, AmbientOtzarBar quiet mode (manual; auto via calendar lands with the calendar connector). Full CT suite 756/756. |
 | 1234 | My Day intelligence (Python runtime first product consumer) | **PROD-READY** (fixture path always works; Python path activates when `PYTHON_INTELLIGENCE_RUNTIME_URL` is set + service deployed) | `GET /api/v1/otzar/my-day/intelligence`; SAFE caller-scoped signal pack → `rankEmployeeTwinNextActions`; honest provider_status; unit 6/6 + integration 6/6. **No schema migration needed.** CT half landed (otzar-control-tower #68 — 'What matters today' card on My Day; my-day suite 15/15; full CT suite 725/725); Otzar.app rebuilt with the new surface. |
 
