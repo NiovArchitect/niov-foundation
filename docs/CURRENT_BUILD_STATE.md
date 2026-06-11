@@ -86,8 +86,13 @@ bounded Founder queue 1215–1232 substantially complete.
   docs/operations/enterprise-handoff-runbook.md: the 17-step
   operator script (demo start, tests, rebuild, seeding, verify
   flows, credential/schema gates, what NOT to claim). 5 integration
-  tests green; NO schema changes. CT readiness page upgrade is the
-  follow-on.
+  tests green; NO schema changes. CT half landed: otzar-control-tower
+  #73 adds the 'What's ready vs blocked' section to Production
+  Readiness — calm headline, the amber APPROVE PROD SCHEMA PUSH
+  callout, four friendly capability buckets (raw enums never shown),
+  honest runtime notes, non-blocking on failure. handoff suite 3/3;
+  full CT suite 769/769; Otzar.app rebuilt 07:22 and shipped JS
+  verified.
 - **Phase 1241** BEAM production-path integration — DONE (first
   consumer). The Phase-6 BEAM Collaboration Supervisor wrapper
   (previously zero consumers) joins the live HTTP surface:
