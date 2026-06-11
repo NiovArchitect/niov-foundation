@@ -3212,6 +3212,40 @@ model ExternalCommitment {
 //     CollaborationSharedContext flow.
 // ─────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────
+// Phase 1230 — Production onboarding / admin readiness state per
+// the [FOUNDER-AUTH — PHASE 1230 ONBOARDING] directive.
+// One row per org tracks the configurable readiness checklist.
+// ─────────────────────────────────────────────────────────────────
+
+enum OnboardingMode {
+  DEMO
+  PRODUCTION
+}
+
+model OrgOnboardingState {
+  org_entity_id              String          @id @db.Uuid
+  mode                       OnboardingMode  @default(DEMO)
+  // Each step holds an ISO timestamp when marked complete.
+  org_created_at             DateTime?
+  admins_invited_at          DateTime?
+  roles_assigned_at          DateTime?
+  role_archetypes_assigned_at DateTime?
+  action_policy_configured_at DateTime?
+  connector_status_reviewed_at DateTime?
+  dmw_defaults_configured_at DateTime?
+  cosmp_defaults_configured_at DateTime?
+  demo_seed_loaded_at        DateTime?
+  prod_schema_migration_acknowledged_at DateTime?
+  ready_for_production_at    DateTime?
+  notes                      String?
+  updated_by_entity_id       String?         @db.Uuid
+  created_at                 DateTime        @default(now())
+  updated_at                 DateTime        @updatedAt
+
+  @@map("org_onboarding_states")
+}
+
 enum STTProviderType {
   DEMO_FIXTURE
   LOCAL_BROWSER

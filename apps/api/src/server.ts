@@ -109,6 +109,7 @@ import { registerOtzarMeetingCaptureRoutes } from "./routes/otzar-meeting-captur
 import { registerOtzarVoiceCaptureRoutes } from "./routes/otzar-voice-capture.routes.js";
 import { registerDMWRegistryRoutes } from "./routes/dmw-registry.routes.js";
 import { registerCOSMPCapsuleManagementRoutes } from "./routes/cosmp-capsule-management.routes.js";
+import { registerOnboardingRoutes } from "./routes/onboarding.routes.js";
 import { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
 import { registerOtzarVoiceReadyRoutes } from "./routes/otzar-voice-ready.routes.js";
 import { registerConnectorRailsRoutes } from "./routes/connector-rails.routes.js";
@@ -707,6 +708,7 @@ export async function buildApp(
   await registerOtzarVoiceCaptureRoutes(app, authService);
   await registerDMWRegistryRoutes(app, authService);
   await registerCOSMPCapsuleManagementRoutes(app, authService);
+  await registerOnboardingRoutes(app, authService);
   await registerOrgCollaborationPolicyRoutes(app, authService);
   await registerOtzarVoiceReadyRoutes(app, otzarService);
   await registerConnectorRailsRoutes(app, authService);
