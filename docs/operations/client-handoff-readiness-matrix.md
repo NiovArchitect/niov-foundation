@@ -1,6 +1,6 @@
 # Otzar — Client Handoff Readiness Matrix
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-10 (Phase 1223 / 1228 / 1229 / 1230 backend substrates landed)
 **Maintained by:** Founder + automated PR updates
 **Purpose:** One-page truth about what is production-ready vs.
 demo-only vs. blocked-on-runtime-configuration for an enterprise
@@ -48,16 +48,16 @@ client handoff. Read this before claiming a feature is
 | 1218 | 13 role archetypes (Wave 2.1) | **PROD** | Static metadata registry. |
 | 1219 | My Digital Work Wallet (DMW rename for employees) | **PROD** | Internal jargon ban test-locked. |
 | 1220 | Connector Health honest catalogue | **PROD** | 10 categories; admin overlay + 403 fallback. |
-| 1221 | True Collaboration Workspace end-to-end (+ External Collaborator) | **PROD-READY** | Foundation merged; CT merged; integration test 4/4. **Needs prod schema push.** |
+| 1221 | True Collaboration Workspace end-to-end (+ External Collaborator) | **PROD-READY** | Foundation #315/#316 + CT #64 merged; integration test 4/4. **Needs prod schema push.** |
 | 1222 | Live meeting capture (Google Meet / Zoom / Teams / manual) | **DEMO** | Manual transcript upload exercises full pipeline. Real Google Meet / Zoom / Teams adapters deferred to 1224 / forward. |
-| 1223 | Voice / STT end-to-end | **NOT_STARTED** | Talk-to-Otzar surface live; real-time STT pipeline + Whisper / Deepgram integration pending. |
-| 1224 | Google Workspace end-to-end | **NOT_STARTED** | OAuth credentials required (Google Cloud project + verified consent screen). |
-| 1225 | Slack end-to-end | **NOT_STARTED** | OAuth app credentials required (Slack workspace install). |
-| 1226 | Email end-to-end | **NOT_STARTED** | Gmail OAuth (reuses 1224) + Microsoft 365 OAuth + SMTP gateway. |
+| 1223 | Voice / STT end-to-end | **PROD-READY** (DEMO_FIXTURE + LOCAL_BROWSER paths always work; Whisper / Deepgram = BLOCKED_BY_KEY) | Foundation #320 merged; provider-adapter pattern lands 4 providers (DEMO_FIXTURE / LOCAL_BROWSER / WHISPER_API / DEEPGRAM); 2 NEW tables + 6 audit literals + 4 routes; integration test 7/7 green; **needs prod schema push to flip to PROD**. Whisper / Deepgram activate when `OPENAI_API_KEY` / `DEEPGRAM_API_KEY` are set. |
+| 1224 | Google Workspace end-to-end | **BLOCKED_BY_CREDENTIAL** | OAuth credentials required (Google Cloud project + verified consent screen). |
+| 1225 | Slack end-to-end | **BLOCKED_BY_CREDENTIAL** | OAuth app credentials required (Slack workspace install). |
+| 1226 | Email end-to-end | **BLOCKED_BY_CREDENTIAL** | Gmail OAuth (reuses 1224) + Microsoft 365 OAuth + SMTP gateway. |
 | 1227 | OCR / Observe end-to-end | **NOT_STARTED** | Provider selection (Tesseract local / AWS Textract / Google Vision). |
-| 1228 | DMW backend substrate | **PARTIAL** | Phase 3 substrate live (DMWWorker + Horde + per-DMW dispatch). Public consent/scope APIs forward-substrate. |
-| 1229 | COSMP backend substrate | **PARTIAL** | 7-op COSMP coordination layer live in Elixir/BEAM (ADR-0030 / 0031). Public namespace surface forward-substrate. |
-| 1230 | Production onboarding / admin readiness | **NOT_STARTED** | First-run org setup wizard + admin invite + ActionPolicy seeding. |
+| 1228 | DMW backend substrate | **PROD-READY** | Foundation #321 merged; DMW Registry as unified read view over existing substrate (Entity + ConsentGrant + TeamDelegation + SwarmBoundary + ExternalCollaborator); 10 DMW types as closed-vocab projection (HUMAN/ENTERPRISE/AI_TWIN/etc.); 6 routes at /api/v1/dmw/*; integration test 7/7 green. **No prod schema migration needed** — uses existing substrate. |
+| 1229 | COSMP backend substrate | **PROD-READY** | Foundation #322 merged; COSMP capsule list / revoke / audit surface; DMW revocation gate integration (`isCapsuleUsable` refuses revoked DMWs); 3 routes at /api/v1/cosmp/capsules/*; integration test 6/6 green. **No prod schema migration needed** — uses existing MemoryCapsule substrate. |
+| 1230 | Production onboarding / admin readiness | **PROD-READY** | Foundation #323 merged; 11-step admin checklist + DEMO/PRODUCTION mode; auto-computed from existing substrate (ActionPolicy / OrgSettings / ConnectorBinding / STT providers); 3 routes at /api/v1/onboarding/*; integration test 4/4 green. **Needs prod schema push** for `OrgOnboardingState` table. |
 | 1231 | Client handoff readiness matrix | **PROD** | This document. Auto-updated by future PRs. |
 | 1232 | Circle / Base / USDC settlement | **NOT_STARTED** | Per Founder: LAST. Connector + governed approval required. |
 
@@ -67,9 +67,20 @@ client handoff. Read this before claiming a feature is
 
 These are the items a real enterprise client needs before signing a contract. Without them, the handoff is a demo, not a deployment.
 
-### 1. Production schema migration (Phase 1221 + Phase 1222) — **Founder-authorized destructive action**
+### 1. Production schema migration (Phase 1221 + Phase 1222 + Phase 1223 + Phase 1230) — **Founder-authorized destructive action**
 
-The Phase 1221 + 1222 substrates (10 new tables across 4 prefixes — `collaboration_*`, `external_*`, `workspace_external_memberships`, `meeting_captures*`) are PROD-READY in code but not pushed to production Supabase. Founder runs:
+The Phase 1221 / 1222 / 1223 / 1230 substrates add a total of **13 new tables** that are PROD-READY in code but not pushed to production Supabase:
+
+| Phase | New tables |
+|---|---|
+| 1221 | `collaboration_workspaces`, `collaboration_memberships`, `collaboration_decisions`, `collaboration_commitments`, `collaboration_shared_context`, `external_collaborators`, `workspace_external_memberships`, `external_commitments` |
+| 1222 | `meeting_captures`, `meeting_participant_consents` |
+| 1223 | `audio_captures`, `transcript_segments` |
+| 1230 | `org_onboarding_states` |
+
+Plus **32 new audit literals** (10 WORKSPACE_* + 7 EXTERNAL_* + 6 MEETING_CAPTURE_* + 6 AUDIO_CAPTURE_/STT_* + 3 ONBOARDING_*).
+
+Founder runs:
 
 ```bash
 # Set env to production
