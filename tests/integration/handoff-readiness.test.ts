@@ -78,11 +78,13 @@ describe("Phase 1242 — handoff readiness", () => {
     for (const row of v.capabilities) {
       expect(CAPABILITY_CLASSES).toContain(row.classification);
     }
-    // Circle/Base honestly NOT_STARTED.
+    // Circle/Base: architecture prepared (Phase 1247), implementation
+    // honestly credential-gated + Founder-authorization-gated.
     const circle = v.capabilities.find((c) =>
       c.capability.includes("Circle"),
     );
-    expect(circle?.classification).toBe("NOT_STARTED");
+    expect(circle?.classification).toBe("BLOCKED_BY_CREDENTIALS");
+    expect(circle?.note).toContain("ADR-0094");
   });
 
   it("non-admin members are refused", async () => {
