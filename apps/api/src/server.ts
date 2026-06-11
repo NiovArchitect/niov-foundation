@@ -114,6 +114,7 @@ import { registerComplianceSharingRoutes } from "./routes/compliance-sharing.rou
 import { registerOtzarMyDayRoutes } from "./routes/otzar-my-day.routes.js";
 import { registerOtzarObserveRoutes } from "./routes/otzar-observe.routes.js";
 import { registerOtzarCalendarContextRoutes } from "./routes/otzar-calendar-context.routes.js";
+import { registerOtzarDandelionRoutes } from "./routes/otzar-dandelion.routes.js";
 import { registerConnectorAdapterStatusRoutes } from "./routes/connector-adapter-status.routes.js";
 import { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
 import { registerOtzarVoiceReadyRoutes } from "./routes/otzar-voice-ready.routes.js";
@@ -718,6 +719,7 @@ export async function buildApp(
   await registerOtzarMyDayRoutes(app, authService);
   await registerOtzarObserveRoutes(app, authService, otzarLLM);
   await registerOtzarCalendarContextRoutes(app, authService);
+  await registerOtzarDandelionRoutes(app, authService);
   await registerConnectorAdapterStatusRoutes(app, authService);
   await registerOrgCollaborationPolicyRoutes(app, authService);
   await registerOtzarVoiceReadyRoutes(app, otzarService);
