@@ -3,7 +3,7 @@
 //
 //          - GET  /api/v1/otzar/observe/providers
 //          - POST /api/v1/otzar/observe/extract
-//          - GET  /api/v1/otzar/observe
+//          - GET  /api/v1/otzar/observe/captures
 //          - POST /api/v1/otzar/observe/:observe_capture_id/attach-workspace
 //
 //          Suggested follow-ups returned by extract are draft
@@ -127,7 +127,7 @@ export async function registerOtzarObserveRoutes(
     },
   );
 
-  app.get("/api/v1/otzar/observe", async (request, reply) => {
+  app.get("/api/v1/otzar/observe/captures", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
     if (token === null)
       return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
