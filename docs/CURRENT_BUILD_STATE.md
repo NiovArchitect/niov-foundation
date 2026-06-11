@@ -64,6 +64,20 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1235** Ambient employee shell — DONE (CT-only). Per the
+  Founder ambient/border-first/voice-first product-intent addendum:
+  EmployeeNav 'More' section collapsed by default (employees see 7
+  primary surfaces + one quiet disclosure, not 22 links); adminOnly
+  nav entries hidden from non-admins ('Production readiness' first);
+  NEW global ambient-copy sweep test renders all 19 top-level
+  employee pages and bans raw internals everywhere + developer
+  vocabulary on employee-tier pages (all pages passed without copy
+  fixes); AmbientOtzarBar quiet mode (moon toggle; stops listening +
+  cancels speech on entry; auto-speak suppressed; mic paused; muted
+  'Otzar · quiet' collapsed pill; banner is honest that automatic
+  meeting quiet-mode lands with the calendar connector).
+  otzar-control-tower #70; full CT suite 756/756; Otzar.app rebuilt.
+  No Foundation changes; no schema impact.
 - **Phase 1227** OCR / Observe — DONE (backend). Governed Observe
   pipeline: `GET/POST /api/v1/otzar/observe/*` — provider adapter
   (DEMO_FIXTURE + PLAIN_TEXT always work; TESSERACT_LOCAL honestly
