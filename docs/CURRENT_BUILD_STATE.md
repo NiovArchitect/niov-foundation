@@ -64,6 +64,22 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1240** AI Employee boundaries + DMW formalization — DONE.
+  AI Employees are the ADR-0046 Enterprise AI Agent context made
+  first-class: `POST /api/v1/otzar/ai-employees` (org admin) creates
+  AI_AGENT + EXPLICIT ENTERPRISE wallet + org EntityMembership +
+  APPROVAL_REQUIRED autonomy with the provisioning admin as the
+  HUMAN approver. The RULE 0 boundary set holds by construction and
+  is test-proven: TAR clearance_ceiling 2, can_admin_org/niov false,
+  can_access_external_api false — NO broad default access.
+  `GET /api/v1/otzar/ai-employees` lists org-scoped safe views (the
+  Phase 1228 DMW Registry projects them as AI_EMPLOYEE; personal
+  twins are excluded). `POST .../:id/deactivate` is the one-action
+  kill switch: entity SUSPENDED + every ACTIVE TwinAuthorityGrant
+  REVOKED in one transaction, audited (ENTITY_SUSPENDED +
+  AI_EMPLOYEE_DEACTIVATED discriminator). Cross-org probes get 404
+  (no existence oracle). 6 integration tests green; NO schema
+  changes; no new audit literals.
 - **Phase 1239** AI Twin collaboration protocol — VERIFIED, no gaps.
   All 11 Founder requirements hold with existing evidence: routes
   gated; Twins act under PERSONAL DMWs (ADR-0046); the protocol is
