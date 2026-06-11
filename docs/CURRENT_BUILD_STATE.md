@@ -64,6 +64,25 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1237** Dandelion org growth + voice-first onboarding —
+  Foundation half DONE. Per the Founder Dandelion addendum: Dandelion
+  is the organic org-growth/pollination intelligence layer.
+  `GET /api/v1/otzar/dandelion/org-growth` (org admin): "Otzar found
+  N ways to strengthen your organization this week" — governed
+  recommendations computed from REAL substrate (external
+  relationships lacking internal owners / overloaded commitment
+  owners / disconnected teammates + safe introduction pairing /
+  onboarding gaps), display names only, recommendations never
+  execute anything. `GET /api/v1/otzar/dandelion/onboarding`
+  (employee-scoped): warm greeting, teammates to meet, workspaces to
+  join, first steps, and the consent note ("Otzar only remembers
+  what you approve"). `POST .../onboarding/memory-candidates`: the
+  consent gate — preferred name / pronunciation / communication +
+  quiet preferences become Action(PROPOSED, RECORD_CAPSULE) through
+  the dual-control pipeline; NO capsule is written until the user
+  approves in Action Center; retries are idempotent. 5 unit + 6
+  integration green; NO schema changes. CT Dandelion surfaces
+  (admin growth card + voice-first welcome) are the follow-on.
 - **Phase 1236** Calendar-aware automatic quiet mode — DONE.
   Foundation #333: `GET /api/v1/otzar/calendar/context` — the meeting
   signal is REAL substrate (caller's MeetingCapture scheduled
