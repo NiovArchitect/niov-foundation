@@ -106,6 +106,7 @@ import { registerOtzarWorkProjectRoutes } from "./routes/otzar-work-project.rout
 import { registerOtzarCollaborationWorkspaceRoutes } from "./routes/otzar-collaboration-workspace.routes.js";
 import { registerOtzarExternalCollaboratorRoutes } from "./routes/otzar-external-collaborator.routes.js";
 import { registerOtzarMeetingCaptureRoutes } from "./routes/otzar-meeting-capture.routes.js";
+import { registerOtzarVoiceCaptureRoutes } from "./routes/otzar-voice-capture.routes.js";
 import { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
 import { registerOtzarVoiceReadyRoutes } from "./routes/otzar-voice-ready.routes.js";
 import { registerConnectorRailsRoutes } from "./routes/connector-rails.routes.js";
@@ -701,6 +702,7 @@ export async function buildApp(
   await registerOtzarCollaborationWorkspaceRoutes(app, authService);
   await registerOtzarExternalCollaboratorRoutes(app, authService);
   await registerOtzarMeetingCaptureRoutes(app, authService);
+  await registerOtzarVoiceCaptureRoutes(app, authService);
   await registerOrgCollaborationPolicyRoutes(app, authService);
   await registerOtzarVoiceReadyRoutes(app, otzarService);
   await registerConnectorRailsRoutes(app, authService);

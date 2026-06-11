@@ -414,7 +414,24 @@ export type AuditEventType =
   | "MEETING_CAPTURE_ATTACHED"
   | "MEETING_CAPTURE_PARTICIPANT_CONSENT_RECORDED"
   | "MEETING_CAPTURE_BLOCKED_CONSENT"
-  | "MEETING_CAPTURE_ARCHIVED";
+  | "MEETING_CAPTURE_ARCHIVED"
+  // Phase 1223 — Voice/STT lifecycle. 6 NEW append-only literals
+  // emitted by voice-capture.service.ts. Append-only per ADR-0042
+  // §Q-γ.1.
+  //
+  // SAFE audit-details: audio_capture_id / provider / mode /
+  // provider_status_at_start / status / failure_class /
+  // segment_count / meeting_capture_id / workspace_id.
+  //
+  // FORBIDDEN (RULE 0): raw audio bytes / storage_ref values that
+  // would leak file paths / Bearer tokens / OAuth secrets / full
+  // transcripts / cross-tenant identifiers.
+  | "AUDIO_CAPTURE_RECEIVED"
+  | "AUDIO_CAPTURE_TRANSCRIBED"
+  | "AUDIO_CAPTURE_FAILED"
+  | "AUDIO_CAPTURE_ATTACHED"
+  | "AUDIO_CAPTURE_ARCHIVED"
+  | "STT_PROVIDER_STATUS_CHECKED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -559,6 +576,13 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MEETING_CAPTURE_PARTICIPANT_CONSENT_RECORDED",
   "MEETING_CAPTURE_BLOCKED_CONSENT",
   "MEETING_CAPTURE_ARCHIVED",
+  // Phase 1223 Voice/STT lifecycle.
+  "AUDIO_CAPTURE_RECEIVED",
+  "AUDIO_CAPTURE_TRANSCRIBED",
+  "AUDIO_CAPTURE_FAILED",
+  "AUDIO_CAPTURE_ATTACHED",
+  "AUDIO_CAPTURE_ARCHIVED",
+  "STT_PROVIDER_STATUS_CHECKED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
