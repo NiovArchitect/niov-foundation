@@ -103,3 +103,42 @@ verification commands are in the readiness matrix §1.
 - Circle/Base/USDC settlement (deliberately last; rails prepared).
 - SOC 2 / HIPAA / FedRAMP certification (architecturally ready;
   certification processes are separate — matrix §4).
+
+## 18. The canonical 28-step handoff demo (Phase 1245)
+
+Deterministic, credential-free, end-to-end. Every step names its
+proving substrate; fixture mode is honest everywhere.
+
+| # | Demo step | How (no credentials needed) |
+|---|---|---|
+| 1 | Admin sets up org | Demo seed org + Phase 1230 checklist on Production Readiness |
+| 2 | Admin invites users | Seeded `@niovlabs.com` users; checklist ADMINS_INVITED auto-readies |
+| 3 | Roles/archetypes assigned | EntityProfile job titles + the 13-archetype registry (Phase 1218) |
+| 4 | Admin configures policy | ActionPolicy seed (Phase 1209); checklist step |
+| 5 | Admin sees connector readiness | Connector Health + "How to connect" (Phases 1220/1244) |
+| 6 | Employee opens ambient My Day | `/app` — calm shell, collapsed nav (Phase 1235) |
+| 7 | My Day shows ranked intelligence | "What matters today" (Phase 1234; fixture ranker honest) |
+| 8 | Voice-first interaction | Talk-to-Otzar dock; browser STT/TTS (Phase 1223) |
+| 9 | Otzar goes quiet in meetings | Schedule a MeetingCapture window → auto quiet (Phase 1236) |
+| 10 | Capture/ingest context | Meeting capture manual transcript OR Observe sample (Phases 1222/1227) |
+| 11 | Internal + external participants identified | Launch Collaboration + MICE fixtures (Phase 1221) |
+| 12 | Decisions + commitments extracted | DEMO_SCRIPTED extraction (Phase 1213 canonical fixture) |
+| 13 | Owners assigned correctly | Roster-aware resolver; unresolved stays UNRESOLVED for human confirm |
+| 14 | User approves actions | ProposedActionCard → Action Center (Phase 1208) |
+| 15 | DMW authority checked | Authority grants + revocation gate (Phases 1228/1229) |
+| 16 | COSMP memory permissions checked | COE assembleContext is the only memory path (ADR-0048) |
+| 17 | Policy evaluates | ADR-0057 evaluator (AUTO_APPROVE low-risk internal) |
+| 18 | Action executes | Executor cron → SUCCEEDED |
+| 19 | Notification appears | Recipient unread note (Phase 1209 live-verified) |
+| 20 | Reply loop works | Inline reply round-trip (Phase 1215) |
+| 21 | Action Center updates | Status + audit timestamps |
+| 22 | Workspace updates | Commitments by owner; they-owe-us/we-owe-them |
+| 23 | Memory candidate governed | Dandelion welcome → consent → approve in Action Center (Phase 1237) |
+| 24 | Compliance/audit evidence exists | ACTION_* chain per action (ADR-0002 tamper-evident) |
+| 25 | Company creates regulator share package | Phase 1233 create (local/test DB today) |
+| 26 | Regulator sees only scoped/redacted evidence | Phase 1233 evidence read (counts/types/timestamps only) |
+| 27 | External collaborator sees only shared context | EXTERNAL_ALLOWED workspace scoping (Phase 1221) |
+| 28 | No unapproved external write | No connector credentials = no external write path exists; enforcement matrix is the evidence |
+
+Steps 10/22/23/25/26 run on the local/test DB today and flip to
+production with the schema push. Everything else is PROD now.
