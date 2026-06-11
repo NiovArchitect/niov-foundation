@@ -71,5 +71,54 @@ gated; the five files with zero route-level `validateSession` calls
   keys arrive, `INVOKE_CONNECTOR` policy coverage must be re-verified
   per provider before any live send.
 
+## Phase 1239 — AI Twin Collaboration Protocol verification (2026-06-11)
+
+Verified against the 11 Founder requirements; **substrate complete, no
+gaps, no fixes needed.** Evidence:
+
+1. **No Foundation bypass** — `/otzar/collaboration/*` routes gated
+   (pattern A, 7/7); service re-validates at create/accept/reject
+   (`twin-collaboration.service.ts`).
+2. **Each Twin acts under a DMW** — Twin entities resolve to PERSONAL
+   wallets via the ADR-0046 dual-context model
+   (`twin.service.ts:189-191` explicit override); Twin authority is
+   the `TwinAuthorityGrant` substrate (states/expiry/revocation).
+3. **COSMP-permitted memory only** — structurally enforced: the
+   protocol carries ZERO memory. Grep-verified — no
+   MemoryCapsule/COE/capsule access anywhere in
+   `twin-collaboration.service.ts`, `twin-collaboration-inbox.ts`, or
+   the routes. The only cross-Twin content is the caller-authored
+   `safe_summary`, bounded to 500 chars
+   (`SAFE_SUMMARY_MAX_LENGTH`).
+4. **Org/workspace/project scoping** — same-org guard at create
+   (`CROSS_ORG_DENIED`); PROJECT targets require ACTIVE project
+   membership or land BLOCKED with
+   `MISSING_PROJECT_MEMBERSHIP` (closed vocab, UI-renderable).
+5. **Sensitive collaboration requires approval/block** —
+   `evaluateOrgCollaborationPolicy`: SAME_PROJECT → ALLOW;
+   CROSS_TEAM/CROSS_PROJECT/ORG_WIDE → NEEDS_APPROVAL; sensitive
+   `sensitivity_class` → DUAL_CONTROL_REQUIRED → NEEDS_APPROVAL.
+6. **Cross-org denied** — test-locked
+   (`tests/unit/twin-collaboration.test.ts` `CROSS_ORG_DENIED`).
+7. **External collaborator context not leaked** — externals are not
+   org entities, so they cannot be collaboration targets; the
+   protocol carries no external-collaborator fields.
+8. **No restricted memory in another Twin's context pack** — follows
+   from (3): context packs are built only by viewer-scoped COE
+   `assembleContext`; collaboration rows never enter them as memory.
+9. **Proposed actions still governed** — the protocol creates no
+   Actions; `action_id` is an optional FK breadcrumb EXCLUDED from
+   the safe view (test-locked: target FKs collapse to booleans,
+   never IDs).
+10. **Audit** — TWIN_COLLABORATION_REQUESTED/_ACCEPTED/_REJECTED/etc.
+    via the ADMIN_ACTION details-discriminator pattern (test-locked).
+11. **UI honesty** — CT Collaboration surfaces (Phase 1216) +
+    the 20-page ambient-copy sweep; approval/blocked states render
+    the closed-vocab reasons, never implying ungoverned autonomy.
+
+Test census: 24 service unit + 18 org-policy unit + 13 HTTP
+integration tests already lock these behaviors — no new tests were
+required.
+
 Maintenance: update this matrix whenever a new first-party flow lands
 or an auth pattern changes; cite file:line evidence, never phase labels.

@@ -64,6 +64,19 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1239** AI Twin collaboration protocol — VERIFIED, no gaps.
+  All 11 Founder requirements hold with existing evidence: routes
+  gated; Twins act under PERSONAL DMWs (ADR-0046); the protocol is
+  memory-tight by construction (only the caller-authored 500-char
+  safe_summary crosses Twins — grep-verified zero MemoryCapsule/COE
+  access); same-org guard (CROSS_ORG_DENIED) + project-membership
+  blocks (MISSING_PROJECT_MEMBERSHIP) + policy-gated approval
+  (sensitive sensitivity_class → DUAL_CONTROL_REQUIRED →
+  NEEDS_APPROVAL); no Actions created by the protocol; audit via
+  TWIN_COLLABORATION_* discriminators; safe view collapses target
+  FKs to booleans (test-locked). Evidence section added to
+  dmw-cosmp-enforcement-matrix.md. 24 service + 18 policy + 13 route
+  tests already lock the behaviors — no code changes were needed.
 - **Phase 1237** Dandelion org growth + voice-first onboarding —
   Foundation half DONE. Per the Founder Dandelion addendum: Dandelion
   is the organic org-growth/pollination intelligence layer.
