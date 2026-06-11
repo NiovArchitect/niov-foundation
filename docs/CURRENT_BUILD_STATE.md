@@ -81,8 +81,15 @@ bounded Founder queue 1215–1232 substantially complete.
   quiet preferences become Action(PROPOSED, RECORD_CAPSULE) through
   the dual-control pipeline; NO capsule is written until the user
   approves in Action Center; retries are idempotent. 5 unit + 6
-  integration green; NO schema changes. CT Dandelion surfaces
-  (admin growth card + voice-first welcome) are the follow-on.
+  integration green; NO schema changes. CT half landed:
+  otzar-control-tower #72 — admin-gated 'Help your organization
+  grow' card on People & Collaboration (plain-language why + next
+  step, local dismiss, 'Suggestions only — nothing happens without
+  you') + NEW /app/welcome voice-first Dandelion welcome (Hear-it
+  TTS greeting, preferred name + pronunciation + communication/quiet
+  preferences, consent gate pointing to Action Center approval).
+  Dandelion suite 6/6; ambient sweep now 20 pages; full CT suite
+  766/766; Otzar.app rebuilt and shipped JS verified.
 - **Phase 1236** Calendar-aware automatic quiet mode — DONE.
   Foundation #333: `GET /api/v1/otzar/calendar/context` — the meeting
   signal is REAL substrate (caller's MeetingCapture scheduled
