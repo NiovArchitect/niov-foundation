@@ -55,13 +55,31 @@ Onboarding persistence, Regulator Share Packages (15 additive tables).
 Setup steps for every provider are in Connector Health → "How to
 connect" (admin) and the registry (`connector-adapter-registry.ts`).
 
-## 3. Settlement (deliberately last; architecture complete per ADR-0094)
+## 3. Settlement (deliberately last; architecture complete per ADR-0094; governance PROVEN per Phase 1250)
 
-- `CIRCLE_API_KEY` and/or `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET`
-- **Plus your explicit written authorization to wire the settlement
-  implementation.** Test-locked invariant: credentials alone flip
-  rails only to NOT_AUTHORIZED — never live.
-- Mock rail (`MOCK_RAIL`) exists for safe pipeline development.
+What exists today (no input needed):
+
+- **Governed transaction substrate: PROD** on the current schema —
+  DMW actors propose intents, policy gates (AI/devices never
+  auto-approve; dual control ≥ $1,000), humans approve, the mock rail
+  emits clearly-labeled proofs, every step audit-chained. Demo-walk
+  step 29 proves it end-to-end. Admin truth at
+  `GET /api/v1/otzar/settlement/readiness`.
+- Mock rail (`MOCK_RAIL`): DEMO_ONLY, settles nothing.
+
+What real Circle/Base/USDC settlement needs from you (in order):
+
+1. `CIRCLE_API_KEY` and/or `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET`.
+2. **Your explicit written authorization to wire a real rail** (per
+   ADR-0094 the five bans — no real USDC / CDP / Circle / Base / x402
+   live — stay canonical until you lift one explicitly; each rail
+   needs its own RULE 21 research arc per the GA6+ ladder).
+3. Test-locked invariants that survive both inputs: credentials alone
+   flip rails only to NOT_AUTHORIZED — never live; a non-mock rail on
+   an intent is FORBIDDEN at the policy gate.
+
+Private keys: NOT_HANDLED — custody stays with the external provider
+under any future authorization. Real funds: NOT_AUTHORIZED.
 
 ## 4. Honest non-input residuals (no action needed from you)
 
@@ -96,6 +114,6 @@ audit chain, COSMP + DMW (registry, revocation, enforcement), My Day
 intelligence, ambient shell + quiet mode (manual + capture-driven
 auto), Dandelion (growth + welcome + consent-gated memory), AI
 Employees + kill switch, Twin collaboration governance, BEAM status
-surfaces, readiness aggregate + runbook + the executable 28-step demo
+surfaces, readiness aggregate + runbook + the executable 29-step demo
 walk, connector registry with setup guidance (17 providers), mock
 settlement rail. Otzar.app bundles fresh.

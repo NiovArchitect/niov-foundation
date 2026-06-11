@@ -104,7 +104,7 @@ verification commands are in the readiness matrix §1.
 - SOC 2 / HIPAA / FedRAMP certification (architecturally ready;
   certification processes are separate — matrix §4).
 
-## 18. The canonical 28-step handoff demo (Phase 1245)
+## 18. The canonical 29-step handoff demo (Phases 1245 + 1250)
 
 Deterministic, credential-free, end-to-end. Every step names its
 proving substrate; fixture mode is honest everywhere.
@@ -139,6 +139,7 @@ proving substrate; fixture mode is honest everywhere.
 | 26 | Regulator sees only scoped/redacted evidence | Phase 1233 evidence read (counts/types/timestamps only) |
 | 27 | External collaborator sees only shared context | EXTERNAL_ALLOWED workspace scoping (Phase 1221) |
 | 28 | No unapproved external write | No connector credentials = no external write path exists; enforcement matrix is the evidence |
+| 29 | Governed MOCK transaction | Phase 1250: the AI Employee proposes a mock intent → policy requires a human approval (AI never auto-approves) → admin approves → MOCK rail emits a clearly-labeled proof → 3 audit events; no funds exist on this path |
 
 Steps 10/22/23/25/26 run on the local/test DB today and flip to
 production with the schema push. Everything else is PROD now.

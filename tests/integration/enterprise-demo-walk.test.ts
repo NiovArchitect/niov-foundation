@@ -27,6 +27,11 @@ import {
 } from "../../apps/api/src/services/otzar/dandelion-growth.service.js";
 import { provisionAiEmployeeForCaller } from "../../apps/api/src/services/governance/ai-employee.service.js";
 import {
+  approveMockTransactionIntentForCaller,
+  proposeMockTransactionIntentForCaller,
+  settleMockTransactionIntentForCaller,
+} from "../../apps/api/src/services/governance/governed-transaction.service.js";
+import {
   attachObserveCaptureToWorkspaceForCaller,
   extractObserveCaptureForCaller,
 } from "../../apps/api/src/services/otzar/observe-intake.service.js";
@@ -340,6 +345,39 @@ describe("Phase 1245 — the deterministic enterprise demo walk", () => {
       packageId: pkg.package.package_id,
     });
     expect(afterRevoke).toEqual({ ok: false, code: "PACKAGE_REVOKED" });
+
+    // ── Step 29 (Phase 1250): governed MOCK transaction ──
+    // The AI Employee proposes a transaction intent; policy demands a
+    // human approval (AI never auto-approves); the admin approves; the
+    // MOCK rail emits a clearly-labeled proof; every step is audited;
+    // no funds exist anywhere on this path.
+    const txnIntent = await proposeMockTransactionIntentForCaller({
+      callerEntityId: aiEmp.ai_employee.entity_id,
+      amountUsd: 12.5,
+      purpose: "RESOURCE_PURCHASE",
+      counterpartyLabel: `${TEST_PREFIX} research data vendor`,
+    });
+    if (txnIntent.ok === false) throw new Error(`txn: ${txnIntent.code}`);
+    expect(txnIntent.intent.status).toBe("APPROVAL_REQUIRED");
+    expect(txnIntent.intent.actor_class).toBe("AI_EMPLOYEE");
+    const txnApproved = await approveMockTransactionIntentForCaller({
+      callerEntityId: adminId,
+      intentId: txnIntent.intent.intent_id,
+    });
+    if (txnApproved.ok === false) throw new Error(`txna: ${txnApproved.code}`);
+    const txnSettled = await settleMockTransactionIntentForCaller({
+      callerEntityId: adminId,
+      intentId: txnIntent.intent.intent_id,
+    });
+    if (txnSettled.ok === false) throw new Error(`txns: ${txnSettled.code}`);
+    expect(txnSettled.proof.receipt.is_mock).toBe(true);
+    expect(txnSettled.proof.receipt.note).toContain("no funds moved");
+    const txnAudit = await prisma.auditEvent.count({
+      where: {
+        details: { path: ["intent_id"], equals: txnIntent.intent.intent_id },
+      },
+    });
+    expect(txnAudit).toBe(3); // proposed + approved + mock-settled
 
     // ── Step 28: zero external writes in the entire walk ──
     const externalActions = await prisma.action.count({

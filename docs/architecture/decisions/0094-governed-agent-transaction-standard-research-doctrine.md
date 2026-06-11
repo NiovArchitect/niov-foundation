@@ -189,6 +189,43 @@ Per ADR-0020 two-register IP discipline. GATS advances the patent-implementation
 
 The cryptographically-timestamped GATS commit lineage (from this ADR forward) joins the patent-implementation evidence trail for US 12,517,919 (COSMP) + US 12,164,537 + US 12,399,904, with specific emphasis on Foundation's contribution to the agentic-transaction surface that vendor wallets / facilitators / gateways do NOT provide at the protocol layer.
 
+## Amendment 1 — Phase 1250 Governed Transaction Readiness slice (2026-06-11)
+
+**Authorization:** `[FOUNDER — GOVERNED TRANSACTION READINESS PASS /
+USDC + BASE + DMW ENTITY TRANSACTION SUBSTRATE]` per RULE 20. The
+Founder directive explicitly authorized safe, non-destructive
+transaction-readiness substrate ("transaction intent model, mock
+transaction service, mock settlement proof, … tests, docs, ADR
+updates, enterprise demo mock transaction, audit event types, policy
+gates") while explicitly forbidding real funds, live rails, unsafe
+key handling, and settlement authorized by credentials alone.
+
+**What landed (mock/readiness only — NOT GA2-GA5):**
+
+- `apps/api/src/services/governance/governed-transaction.service.ts`
+  + `apps/api/src/routes/otzar-settlement.routes.ts` — the governed
+  MOCK transaction lifecycle: propose (DMW actor) → pure policy gate
+  → human approval (dual control ≥ $1,000; self-approval forbidden)
+  → MOCK settlement proof → append-only audit at every step.
+- 5 append-only audit literals (`TRANSACTION_INTENT_PROPOSED` /
+  `_APPROVED` / `_DENIED` / `_REVOKED` / `TRANSACTION_MOCK_SETTLED`)
+  per ADR-0042 §Q-γ.1 clean-transition discipline.
+- ZERO schema changes: the append-only audit chain (ADR-0002) is the
+  intent store (event-sourced), so the governance substrate is PROD
+  on the current production schema. The persistent GATS objects of
+  §3 remain forward-substrate at the GA ladder — this slice proves
+  the GOVERNANCE half without landing the models.
+- Test locks: only MOCK_RAIL is executable; CIRCLE_GATEWAY /
+  COINBASE_BASE intents are FORBIDDEN at the policy gate even with
+  credentials present; AI / device / machine actors never
+  auto-approve (§8 preserved); suspended actors blocked at propose
+  AND settle; tenant isolation; regulator evidence redacted.
+
+**What did NOT change:** the §2 five inviolable bans (verbatim,
+canonical); the §9 GA1-GA10 per-slice authorization requirement for
+persistent models and any real rail; rail-agnosticism; custody
+posture (Foundation handles no private keys).
+
 ## Consequences
 
 **Positive.**

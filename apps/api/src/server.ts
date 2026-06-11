@@ -116,6 +116,7 @@ import { registerOtzarObserveRoutes } from "./routes/otzar-observe.routes.js";
 import { registerOtzarCalendarContextRoutes } from "./routes/otzar-calendar-context.routes.js";
 import { registerOtzarDandelionRoutes } from "./routes/otzar-dandelion.routes.js";
 import { registerOtzarAiEmployeesRoutes } from "./routes/otzar-ai-employees.routes.js";
+import { registerOtzarSettlementRoutes } from "./routes/otzar-settlement.routes.js";
 import { registerOtzarBeamStatusRoutes } from "./routes/otzar-beam-status.routes.js";
 import { registerConnectorAdapterStatusRoutes } from "./routes/connector-adapter-status.routes.js";
 import { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
@@ -723,6 +724,7 @@ export async function buildApp(
   await registerOtzarCalendarContextRoutes(app, authService);
   await registerOtzarDandelionRoutes(app, authService);
   await registerOtzarAiEmployeesRoutes(app, authService);
+  await registerOtzarSettlementRoutes(app, authService);
   await registerOtzarBeamStatusRoutes(app, authService);
   await registerConnectorAdapterStatusRoutes(app, authService);
   await registerOrgCollaborationPolicyRoutes(app, authService);

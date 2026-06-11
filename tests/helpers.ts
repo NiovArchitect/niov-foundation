@@ -115,6 +115,38 @@ export async function cleanupTestData(): Promise<void> {
   });
   const ids = testEntities.map((e) => e.entity_id);
 
+  // Phase 1250 hardening: long-lived LOCAL test databases accumulate
+  // orphaned test rows in tables that reference entities without a
+  // cascading FK — actions (fixed test idempotency keys then collide
+  // on re-runs) and lawful_bases (the batched regulator-expiry sweep
+  // starves before reaching fresh fixtures). Delete by their
+  // TEST_PREFIX fingerprints so orphans from interrupted runs are
+  // caught too. CI's fresh-per-job DB is unaffected (ADR-0035
+  // D-CI-FRESH); real data never carries TEST_PREFIX.
+  const staleActions = await prisma.action.findMany({
+    where: {
+      OR: [
+        { idempotency_key: { startsWith: TEST_PREFIX } },
+        ...(ids.length > 0
+          ? [{ org_entity_id: { in: ids } }, { source_entity_id: { in: ids } }]
+          : []),
+      ],
+    },
+    select: { action_id: true },
+  });
+  const staleActionIds = staleActions.map((a) => a.action_id);
+  if (staleActionIds.length > 0) {
+    await prisma.actionAttempt.deleteMany({
+      where: { action_id: { in: staleActionIds } },
+    });
+    await prisma.action.deleteMany({
+      where: { action_id: { in: staleActionIds } },
+    });
+  }
+  await prisma.lawfulBasis.deleteMany({
+    where: { basis_reference: { startsWith: TEST_PREFIX } },
+  });
+
   if (ids.length > 0) {
     await prisma.auditLog.deleteMany({
       where: { entity_id: { in: ids } },

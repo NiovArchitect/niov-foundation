@@ -90,6 +90,8 @@ export const CAPABILITY_TRUTH: readonly CapabilityRow[] = [
   { capability: "Live Google Meet / Zoom / Teams auto-ingest", classification: "BLOCKED_BY_CREDENTIALS", note: "Manual transcript upload exercises the full pipeline today." },
   { capability: "Google Workspace / Gmail / Calendar", classification: "BLOCKED_BY_APP_REVIEW", note: "Needs the organization's Google Cloud setup and Google's app verification." },
   { capability: "Slack / Microsoft 365 / Zoom connectors", classification: "BLOCKED_BY_CREDENTIALS", note: "Setup paths and status are ready; each needs the organization's app credentials." },
+  { capability: "Governed transaction substrate (intent → policy → approval → proof)", classification: "PROD", note: "Live on the current schema (Phase 1250): DMW actors propose, policy gates by amount and actor class, humans approve (dual control above $1,000), and every step is audit-chained. AI, device, and machine actors never auto-approve." },
+  { capability: "Mock settlement rail (development/demo)", classification: "DEMO_ONLY", note: "The only executable rail. Produces clearly-labeled mock receipts — settles nothing, moves no funds, handles no keys." },
   { capability: "Circle / Base / USDC settlement", classification: "BLOCKED_BY_CREDENTIALS", note: "Architecture prepared (ADR-0094 governed-transaction standard; Circle + Base rail adapters registered with honest blockers). No funds move and nothing is wired until the Founder explicitly authorizes implementation and credentials exist." },
 ] as const;
 
