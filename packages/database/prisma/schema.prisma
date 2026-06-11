@@ -3341,3 +3341,64 @@ model TranscriptSegment {
   @@index([org_entity_id])
   @@map("transcript_segments")
 }
+
+// =============================================================================
+// Phase 1233 — Compliance share packages (company-controlled regulator sharing)
+// =============================================================================
+// A ComplianceSharePackage is the company-controlled, purpose-bound,
+// time-boxed grant through which a REGULATOR entity may read REDACTED
+// compliance evidence for one org. Mirrors the LawfulBasis /
+// BreakGlassGrant time-box pattern: mandatory valid_until, no perpetual
+// access, explicit revocation. Entity ids are stored as plain UUIDs
+// (governance-record posture, same as LawfulBasis / BreakGlassGrant).
+// Evidence itself is NEVER stored here — it is projected at read time
+// from existing substrate (AuditEvent / Action / MemoryCapsule /
+// ConnectorBinding / OrgOnboardingState) through the redaction layer in
+// apps/api/src/services/compliance/compliance-sharing.service.ts, so a
+// revoked or expired package cuts off access immediately.
+
+enum SharePackageStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum SharePackageScope {
+  AUDIT_SUMMARY
+  ACTION_COMPLIANCE
+  MEMORY_LINEAGE
+  CONNECTOR_ACCESS
+  ONBOARDING_READINESS
+}
+
+enum SharePackageRedactionProfile {
+  METADATA_ONLY
+  REDACTED_SUMMARY
+}
+
+model ComplianceSharePackage {
+  package_id           String                       @id @default(uuid()) @db.Uuid
+  org_entity_id        String                       @db.Uuid
+  regulator_entity_id  String                       @db.Uuid
+  lawful_basis_id      String?                      @db.Uuid
+  purpose              String
+  scopes               SharePackageScope[]
+  redaction_profile    SharePackageRedactionProfile @default(METADATA_ONLY)
+  status               SharePackageStatus           @default(ACTIVE)
+  valid_from           DateTime                     @default(now())
+  valid_until          DateTime
+  created_by_entity_id String                       @db.Uuid
+  revoked_at           DateTime?
+  revoked_by_entity_id String?                      @db.Uuid
+  access_count         Int                          @default(0)
+  last_accessed_at     DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([org_entity_id, status])
+  @@index([regulator_entity_id, status])
+  @@index([valid_until])
+  @@index([created_at])
+  @@map("compliance_share_packages")
+}

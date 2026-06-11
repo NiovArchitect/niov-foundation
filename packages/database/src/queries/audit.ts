@@ -438,7 +438,17 @@ export type AuditEventType =
   // FORBIDDEN: raw seed data, secret material.
   | "ONBOARDING_STEP_COMPLETED"
   | "ONBOARDING_MODE_CHANGED"
-  | "ONBOARDING_READY_FOR_PRODUCTION";
+  | "ONBOARDING_READY_FOR_PRODUCTION"
+  // Phase 1233 — Compliance share-package lifecycle. 4 NEW
+  // append-only literals. SAFE details: package_id /
+  // org_entity_id / regulator_entity_id / purpose / scopes
+  // (closed-vocab) / redaction_profile / valid_until.
+  // FORBIDDEN (RULE 0): evidence contents, capsule payloads,
+  // audit details of the shared events, secret material.
+  | "COMPLIANCE_SHARE_PACKAGE_CREATED"
+  | "COMPLIANCE_SHARE_PACKAGE_ACCESSED"
+  | "COMPLIANCE_SHARE_PACKAGE_REVOKED"
+  | "COMPLIANCE_SHARE_PACKAGE_EXPIRED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -594,6 +604,11 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "ONBOARDING_STEP_COMPLETED",
   "ONBOARDING_MODE_CHANGED",
   "ONBOARDING_READY_FOR_PRODUCTION",
+  // Phase 1233 Compliance share-package lifecycle.
+  "COMPLIANCE_SHARE_PACKAGE_CREATED",
+  "COMPLIANCE_SHARE_PACKAGE_ACCESSED",
+  "COMPLIANCE_SHARE_PACKAGE_REVOKED",
+  "COMPLIANCE_SHARE_PACKAGE_EXPIRED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

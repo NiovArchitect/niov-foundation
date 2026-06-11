@@ -1,6 +1,6 @@
 # Otzar — Client Handoff Readiness Matrix
 
-**Last updated:** 2026-06-10 (Phase 1223 / 1228 / 1229 / 1230 backend substrates landed)
+**Last updated:** 2026-06-10 (Phase 1233 compliance share packages landed)
 **Maintained by:** Founder + automated PR updates
 **Purpose:** One-page truth about what is production-ready vs.
 demo-only vs. blocked-on-runtime-configuration for an enterprise
@@ -60,6 +60,7 @@ client handoff. Read this before claiming a feature is
 | 1230 | Production onboarding / admin readiness | **PROD-READY** | Foundation #323 merged; 11-step admin checklist + DEMO/PRODUCTION mode; auto-computed from existing substrate (ActionPolicy / OrgSettings / ConnectorBinding / STT providers); 3 routes at /api/v1/onboarding/*; integration test 4/4 green. **Needs prod schema push** for `OrgOnboardingState` table. |
 | 1231 | Client handoff readiness matrix | **PROD** | This document. Auto-updated by future PRs. |
 | 1232 | Circle / Base / USDC settlement | **NOT_STARTED** | Per Founder: LAST. Connector + governed approval required. |
+| 1233 | Compliance share packages (regulator evidence sharing) | **PROD-READY** | `ComplianceSharePackage`: company-controlled, purpose-bound, time-boxed, revocable, REDACTED regulator evidence views over existing substrate; 4 routes at /api/v1/compliance/share-packages/*; 4 audit literals; unit 8/8 + integration 7/7 green. **Needs prod schema push** for `compliance_share_packages`. |
 
 ---
 
@@ -77,6 +78,7 @@ The Phase 1221 / 1222 / 1223 / 1230 substrates add a total of **13 new tables** 
 | 1222 | `meeting_captures`, `meeting_participant_consents` |
 | 1223 | `audio_captures`, `transcript_segments` |
 | 1230 | `org_onboarding_states` |
+| 1233 | `compliance_share_packages` |
 
 Plus **32 new audit literals** (10 WORKSPACE_* + 7 EXTERNAL_* + 6 MEETING_CAPTURE_* + 6 AUDIO_CAPTURE_/STT_* + 3 ONBOARDING_*).
 
@@ -144,6 +146,7 @@ For live in-meeting capture (vs. post-meeting transcript ingest):
 | **DMW consent / scope management** | Underlying Foundation substrate live | Public CT consent UI + permission revocation flow | 1228 CT integration |
 | **COSMP 7-op routing** | Live in Elixir/BEAM coordination layer | Public CT layer translating user actions → COSMP ops | 1229 CT integration |
 | **Org onboarding (first-run)** | Manual operator seed | Wizard + admin invite + default ActionPolicy seeding | 1230 implementation |
+| **Regulator evidence sharing** | Real `ComplianceSharePackage` on local test DB (create / list / revoke / scoped redacted evidence read) | Push schema to prod | 1 destructive Founder action |
 | **Settlement (Circle / Base / USDC)** | None | Circle account + Base on-chain settlement + per-action approval gate | 1232 implementation (LAST) |
 
 ---
