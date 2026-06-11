@@ -1,6 +1,6 @@
 # Otzar — Client Handoff Readiness Matrix
 
-**Last updated:** 2026-06-11 (Phases 1244 + 1245 — shell completion + canonical demo path)
+**Last updated:** 2026-06-11 (Phase 1246 — final readiness truth pass; Circle/Base gate condition MET)
 **Maintained by:** Founder + automated PR updates
 **Purpose:** One-page truth about what is production-ready vs.
 demo-only vs. blocked-on-runtime-configuration for an enterprise
@@ -74,6 +74,32 @@ client handoff. Read this before claiming a feature is
 | 1234 | My Day intelligence (Python runtime first product consumer) | **PROD-READY** (fixture path always works; Python path activates when `PYTHON_INTELLIGENCE_RUNTIME_URL` is set + service deployed) | `GET /api/v1/otzar/my-day/intelligence`; SAFE caller-scoped signal pack → `rankEmployeeTwinNextActions`; honest provider_status; unit 6/6 + integration 6/6. **No schema migration needed.** CT half landed (otzar-control-tower #68 — 'What matters today' card on My Day; my-day suite 15/15; full CT suite 725/725); Otzar.app rebuilt with the new surface. |
 
 ---
+
+## Phase 1246 — Final readiness truth pass (2026-06-11)
+
+**The Circle/Base gate condition is MET:** every non-blockchain
+enterprise capability is now exactly one of — PROD, PROD-READY
+pending the schema push, or honestly credential/app-review blocked.
+Nothing implementable without credentials or schema approval remains
+in the bounded queue.
+
+| Bucket | Items |
+|---|---|
+| **PROD** (live now) | Identity/Entity, Actions + policy + executor, Notifications + replies, Audit chain, MemoryCapsule/COSMP, DMW Registry + revocation gate, My Day intelligence (fixture path), Ambient shell + quiet mode, Calendar-aware auto quiet (substrate path), Dandelion growth + welcome + consent gate, AI Employees + kill switch, Twin collaboration governance, BEAM status consumers, Handoff readiness aggregate + runbook, Connector setup guidance, the executable 28-step demo walk |
+| **PROD-READY pending `APPROVE PROD SCHEMA PUSH`** (15 additive tables) | Collaboration Workspaces + external stakeholders, Meeting capture, Voice capture tables, Observe captures, Onboarding persistence, Compliance share packages |
+| **BLOCKED_BY_CREDENTIALS / APP_REVIEW** | Google Workspace/Gmail/Calendar (+ ~6-week Google verification), Slack, Microsoft 365, Zoom, Whisper/Deepgram keys, ElevenLabs/Sesame/Realtime-2 TTS seats, cloud OCR (AWS/Google), live meeting auto-ingest |
+| **NOT_STARTED (deliberately last)** | Circle / Base / USDC settlement — the rails it mounts on (Wallet types, Action governance, audit chain, compliance sharing) are live |
+
+**Honest residual improvements (enhancements, not handoff gaps):**
+chat proposed-action extractor regex → structured-output schema
+validation; ADR-0030 COSMP gRPC migration (BEAM production-path step
+2); CT diagnostics surfacing for BEAM/SupervisedStatus; Tesseract
+local OCR dependency (RULE 21 arc).
+
+**Verification chain:** capability classifications are triple-mirrored
+— this matrix (human), `CAPABILITY_TRUTH` in
+handoff-readiness.service.ts (machine, closed-vocab test-locked), and
+the executable demo walk (`enterprise-demo-walk.test.ts`, 1/1 green).
 
 ## What blocks an enterprise client handoff
 
