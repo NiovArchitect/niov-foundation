@@ -1,6 +1,6 @@
 # Otzar — Client Handoff Readiness Matrix
 
-**Last updated:** 2026-06-11 (Phase 1234 My Day intelligence landed — Python runtime first product consumer)
+**Last updated:** 2026-06-11 (Phase 1227 OCR/Observe landed — governed document observation)
 **Maintained by:** Founder + automated PR updates
 **Purpose:** One-page truth about what is production-ready vs.
 demo-only vs. blocked-on-runtime-configuration for an enterprise
@@ -54,7 +54,7 @@ client handoff. Read this before claiming a feature is
 | 1224 | Google Workspace end-to-end | **BLOCKED_BY_CREDENTIAL** | OAuth credentials required (Google Cloud project + verified consent screen). |
 | 1225 | Slack end-to-end | **BLOCKED_BY_CREDENTIAL** | OAuth app credentials required (Slack workspace install). |
 | 1226 | Email end-to-end | **BLOCKED_BY_CREDENTIAL** | Gmail OAuth (reuses 1224) + Microsoft 365 OAuth + SMTP gateway. |
-| 1227 | OCR / Observe end-to-end | **NOT_STARTED** | Provider selection (Tesseract local / AWS Textract / Google Vision). |
+| 1227 | OCR / Observe end-to-end | **PROD-READY** (DEMO_FIXTURE + PLAIN_TEXT always work; TESSERACT_LOCAL = NEEDS_PROVIDER_INSTALL; AWS Textract / Google Vision = BLOCKED_BY_CREDENTIAL) | Governed Observe pipeline: capture → provider text extraction → Phase 1213 structured extraction (decisions / commitments / roster-aware suggested follow-ups) → workspace attach imports the ledger (UNRESOLVED commitments; human confirms owners). Suggested follow-ups are never auto-executed. 4 routes at /api/v1/otzar/observe/*; 1 NEW table + 3 enums + 5 audit literals; unit 9/9 + integration 8/8 green. **Needs prod schema push** for `observe_captures`. |
 | 1228 | DMW backend substrate | **PROD-READY** | Foundation #321 merged; DMW Registry as unified read view over existing substrate (Entity + ConsentGrant + TeamDelegation + SwarmBoundary + ExternalCollaborator); 10 DMW types as closed-vocab projection (HUMAN/ENTERPRISE/AI_TWIN/etc.); 6 routes at /api/v1/dmw/*; integration test 7/7 green. **No prod schema migration needed** — uses existing substrate. |
 | 1229 | COSMP backend substrate | **PROD-READY** | Foundation #322 merged; COSMP capsule list / revoke / audit surface; DMW revocation gate integration (`isCapsuleUsable` refuses revoked DMWs); 3 routes at /api/v1/cosmp/capsules/*; integration test 6/6 green. **No prod schema migration needed** — uses existing MemoryCapsule substrate. |
 | 1230 | Production onboarding / admin readiness | **PROD-READY** | Foundation #323 merged; 11-step admin checklist + DEMO/PRODUCTION mode; auto-computed from existing substrate (ActionPolicy / OrgSettings / ConnectorBinding / STT providers); 3 routes at /api/v1/onboarding/*; integration test 4/4 green. **Needs prod schema push** for `OrgOnboardingState` table. |
@@ -80,6 +80,7 @@ The Phase 1221 / 1222 / 1223 / 1230 substrates add a total of **13 new tables** 
 | 1223 | `audio_captures`, `transcript_segments` |
 | 1230 | `org_onboarding_states` |
 | 1233 | `compliance_share_packages` |
+| 1227 | `observe_captures` |
 
 Plus **32 new audit literals** (10 WORKSPACE_* + 7 EXTERNAL_* + 6 MEETING_CAPTURE_* + 6 AUDIO_CAPTURE_/STT_* + 3 ONBOARDING_*).
 
@@ -143,7 +144,7 @@ For live in-meeting capture (vs. post-meeting transcript ingest):
 | **Slack notifications** | "Send to Slack" button creates draft Action only | OAuth Slack + Webhook + per-channel scope grant | 1225 implementation |
 | **Email send** | Draft-only via existing Comms surface | OAuth Gmail (1224) or Microsoft Graph or SMTP gateway | 1226 implementation |
 | **Jira ticket creation** | Draft-only | OAuth Atlassian + REST API | future phase |
-| **OCR / document capture** | Manual upload + plain-text extraction | Tesseract.js (local) or AWS Textract / Google Vision | 1227 implementation |
+| **OCR / document capture (Observe)** | Real governed Observe pipeline on local test DB (sample + pasted text → decisions/commitments/follow-ups → workspace attach) | Push schema to prod; real image OCR engines activate by provider swap (Tesseract install or AWS/Google credentials) | 1 destructive Founder action + provider activation |
 | **DMW consent / scope management** | Underlying Foundation substrate live | Public CT consent UI + permission revocation flow | 1228 CT integration |
 | **COSMP 7-op routing** | Live in Elixir/BEAM coordination layer | Public CT layer translating user actions → COSMP ops | 1229 CT integration |
 | **Org onboarding (first-run)** | Manual operator seed | Wizard + admin invite + default ActionPolicy seeding | 1230 implementation |

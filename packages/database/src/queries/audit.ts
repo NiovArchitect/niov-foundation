@@ -448,7 +448,18 @@ export type AuditEventType =
   | "COMPLIANCE_SHARE_PACKAGE_CREATED"
   | "COMPLIANCE_SHARE_PACKAGE_ACCESSED"
   | "COMPLIANCE_SHARE_PACKAGE_REVOKED"
-  | "COMPLIANCE_SHARE_PACKAGE_EXPIRED";
+  | "COMPLIANCE_SHARE_PACKAGE_EXPIRED"
+  // Phase 1227 — OCR/Observe lifecycle. 5 NEW append-only
+  // literals. SAFE details: observe_capture_id / org_entity_id /
+  // provider (closed-vocab) / source_type (closed-vocab) /
+  // extraction_mode / counts / workspace_id.
+  // FORBIDDEN (RULE 0): raw document bytes, full extracted text,
+  // storage paths, credential material.
+  | "OBSERVE_PROVIDER_STATUS_CHECKED"
+  | "OBSERVE_CAPTURE_RECEIVED"
+  | "OBSERVE_CAPTURE_EXTRACTED"
+  | "OBSERVE_CAPTURE_FAILED"
+  | "OBSERVE_CAPTURE_ATTACHED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -609,6 +620,12 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "COMPLIANCE_SHARE_PACKAGE_ACCESSED",
   "COMPLIANCE_SHARE_PACKAGE_REVOKED",
   "COMPLIANCE_SHARE_PACKAGE_EXPIRED",
+  // Phase 1227 OCR/Observe lifecycle.
+  "OBSERVE_PROVIDER_STATUS_CHECKED",
+  "OBSERVE_CAPTURE_RECEIVED",
+  "OBSERVE_CAPTURE_EXTRACTED",
+  "OBSERVE_CAPTURE_FAILED",
+  "OBSERVE_CAPTURE_ATTACHED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

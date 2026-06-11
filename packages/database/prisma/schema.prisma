@@ -3402,3 +3402,64 @@ model ComplianceSharePackage {
   @@index([created_at])
   @@map("compliance_share_packages")
 }
+
+// =============================================================================
+// Phase 1227 — OCR / Observe (governed document observation)
+// =============================================================================
+// An ObserveCapture is one governed "let Otzar read this" event:
+// capture → provider OCR/text extraction → structured extraction
+// (summary / decisions / commitments / suggested follow-ups via the
+// Phase 1213 comms-extract pipeline) → optional workspace attach.
+// Suggested follow-ups are NEVER auto-executed — Action rows land
+// only when the operator confirms via the existing Phase 1208 path.
+// The `extraction` Json carries SAFE projections only (summaries,
+// closed-vocab labels, short excerpts) — never raw document bytes.
+
+enum OCRProviderType {
+  DEMO_FIXTURE
+  PLAIN_TEXT
+  TESSERACT_LOCAL
+  AWS_TEXTRACT
+  GOOGLE_VISION
+}
+
+enum ObserveSourceType {
+  IMAGE
+  PDF
+  DOCUMENT
+  SCREENSHOT
+  PLAIN_TEXT_SOURCE
+  DEMO
+}
+
+enum ObserveCaptureStatus {
+  RECEIVED
+  EXTRACTED
+  FAILED
+  ATTACHED
+}
+
+model ObserveCapture {
+  observe_capture_id     String               @id @default(uuid()) @db.Uuid
+  org_entity_id          String               @db.Uuid
+  captured_by_entity_id  String               @db.Uuid
+  provider               OCRProviderType      @default(DEMO_FIXTURE)
+  source_type            ObserveSourceType    @default(DEMO)
+  title                  String?
+  extracted_text_summary String?
+  extraction             Json                 @default("{}")
+  status                 ObserveCaptureStatus @default(RECEIVED)
+  failure_class          String?
+  failure_message        String?
+  workspace_id           String?              @db.Uuid
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  @@index([org_entity_id])
+  @@index([captured_by_entity_id])
+  @@index([workspace_id])
+  @@index([org_entity_id, status])
+  @@map("observe_captures")
+}

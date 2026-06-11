@@ -64,6 +64,20 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1227** OCR / Observe — DONE (backend). Governed Observe
+  pipeline: `GET/POST /api/v1/otzar/observe/*` — provider adapter
+  (DEMO_FIXTURE + PLAIN_TEXT always work; TESSERACT_LOCAL honestly
+  NEEDS_PROVIDER_INSTALL pending a RULE 21 dependency arc; AWS
+  Textract / Google Vision BLOCKED_BY_CREDENTIAL, and honest
+  NEEDS_PROVIDER_INSTALL even when keys are present until the real
+  clients land) → Phase 1213 structured extraction (summary /
+  decisions / commitments / roster-aware suggested follow-ups) →
+  `ObserveCapture` row → optional workspace attach that imports
+  decisions + UNRESOLVED commitments into the collaboration ledger.
+  Suggested follow-ups are NEVER auto-executed (zero Action rows
+  created; Phase 1208 confirm path only). 5 NEW audit literals.
+  Unit 9/9 + integration 8/8 green. **Needs prod schema push** for
+  `observe_captures` (+3 enums). CT Observe surface is the follow-on.
 - **Phase 1234** My Day intelligence (first real Python
   intelligence consumer) — DONE. `GET
   /api/v1/otzar/my-day/intelligence` builds the caller's SAFE
@@ -102,6 +116,8 @@ Phases 1221 + 1222 + 1223 + 1230 add **13 new Prisma tables**:
   `meeting_participant_consents`.
 - 1223 (2): `audio_captures`, `transcript_segments`.
 - 1230 (1): `org_onboarding_states`.
+- 1227 (1): `observe_captures` (+ 3 enums: `OCRProviderType`,
+  `ObserveSourceType`, `ObserveCaptureStatus`).
 - 1233 (1): `compliance_share_packages` (+ 3 enums:
   `SharePackageStatus`, `SharePackageScope`,
   `SharePackageRedactionProfile`).
