@@ -64,6 +64,15 @@ bounded Founder queue 1215–1232 substantially complete.
   / _REVOKED / _EXPIRED); lapsed packages flip to EXPIRED on
   first touch. Unit test 8/8 + integration test 7/7 green.
   **Needs prod schema push** for `compliance_share_packages`.
+- **Phase 1249** Voice-seat provider registry — DONE. The three
+  recommended voice seats (per the research-verified provider
+  recommendation) join the connector registry with honest
+  BLOCKED_BY_CREDENTIAL status, setup steps, and demo fallbacks:
+  ELEVENLABS_TTS, ASSEMBLYAI_STT, OPENAI_REALTIME ('speech never
+  bypasses approval' stated in steps). This completes the
+  credential enumeration — every key the Founder needs now appears
+  in the readiness endpoint and Connector Health. NO schema
+  changes.
 - **Phase 1248** Mock/dev settlement rail — DONE (the final
   authorized prep deliverable). settlement-readiness.service.ts
   implements the ADR-0094 rail-adapter seam: MOCK_RAIL produces

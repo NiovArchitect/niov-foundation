@@ -32,7 +32,10 @@ export type ConnectorProviderName =
   | "OCR_AWS_TEXTRACT"
   | "OCR_GOOGLE_VISION"
   | "CIRCLE_GATEWAY"
-  | "COINBASE_BASE";
+  | "COINBASE_BASE"
+  | "ELEVENLABS_TTS"
+  | "ASSEMBLYAI_STT"
+  | "OPENAI_REALTIME";
 
 export type ConnectorProviderCategory =
   | "PRODUCTIVITY"
@@ -316,6 +319,60 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
     app_review_required: false,
     can_write: false,
     phase: 1227,
+  },
+  {
+    provider_name: "ELEVENLABS_TTS",
+    category: "AI",
+    display_name: "ElevenLabs (production voice output)",
+    description:
+      "High-quality, low-latency text-to-speech (~75ms). The recommended first paid voice-output seat per the verified voice provider recommendation.",
+    required_envs: ["ELEVENLABS_API_KEY"],
+    oauth_scopes: [],
+    setup_docs_url: "https://elevenlabs.io/docs",
+    app_review_required: false,
+    can_write: false,
+    phase: 1249,
+    setup_steps: [
+      "Create an ElevenLabs account and provide the API key to your deployment.",
+      "Until then, browser/device voice output works everywhere as the fallback.",
+    ],
+    demo_mode_available: true,
+  },
+  {
+    provider_name: "ASSEMBLYAI_STT",
+    category: "AI",
+    display_name: "AssemblyAI (meeting diarization)",
+    description:
+      "Streaming speech-to-text with speaker attribution — the recommended meeting-intelligence seat.",
+    required_envs: ["ASSEMBLYAI_API_KEY"],
+    oauth_scopes: [],
+    setup_docs_url: "https://www.assemblyai.com/docs",
+    app_review_required: false,
+    can_write: false,
+    phase: 1249,
+    setup_steps: [
+      "Create an AssemblyAI account and provide the API key to your deployment.",
+      "Until then, manual transcripts and browser voice exercise the same meeting pipeline.",
+    ],
+    demo_mode_available: true,
+  },
+  {
+    provider_name: "OPENAI_REALTIME",
+    category: "AI",
+    display_name: "OpenAI Realtime (natural conversation)",
+    description:
+      "Native speech-to-speech with true interruption handling — the recommended seat for fully natural voice conversation.",
+    required_envs: ["OPENAI_API_KEY"],
+    oauth_scopes: [],
+    setup_docs_url: "https://platform.openai.com/docs",
+    app_review_required: false,
+    can_write: false,
+    phase: 1249,
+    setup_steps: [
+      "Provide an OpenAI API key to your deployment.",
+      "Voice still confirms governed actions before anything executes — speech never bypasses approval.",
+    ],
+    demo_mode_available: true,
   },
   {
     provider_name: "CIRCLE_GATEWAY",
