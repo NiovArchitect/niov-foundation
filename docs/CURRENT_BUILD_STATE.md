@@ -159,7 +159,7 @@ bounded Founder queue 1215–1232 substantially complete.
   authorization.
 - **Phase 1246** Final readiness truth pass — DONE. The Circle/Base
   gate condition is MET: every non-blockchain capability is PROD,
-  PROD-READY pending APPROVE PROD SCHEMA PUSH (15 additive tables),
+  PROD-READY pending APPROVE PROD SCHEMA PUSH (25 additive tables — 15 product + 10 Work Comms),
   or honestly credential/app-review blocked. Truth is
   triple-mirrored: the readiness matrix (human), CAPABILITY_TRUTH in
   handoff-readiness.service.ts (machine, test-locked), and the

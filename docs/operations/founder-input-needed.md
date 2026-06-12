@@ -28,7 +28,7 @@ npx prisma db push --schema=prisma/schema.prisma --skip-generate
 
 Unlocks (flips PROD-READY → PROD): Collaboration Workspaces +
 External Collaborators, Meeting Capture, Voice tables, Observe/OCR,
-Onboarding persistence, Regulator Share Packages (15 additive tables).
+Onboarding persistence, Regulator Share Packages, and the Work Comms substrate (25 additive tables — 15 product + 10 Work Comms).
 
 ## 1. API keys (each activates instantly; adapter + status + fallback already shipped)
 

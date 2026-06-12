@@ -158,3 +158,42 @@ describe("Phase 1250 — transaction policy gate (pure)", () => {
     }
   });
 });
+
+describe("Phase 1256C — Work Comms schema package is present and complete", () => {
+  it("all 10 Work Comms tables + 4 enums exist in the Prisma schema (additive package)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const schema = readFileSync(
+      new URL(
+        "../../packages/database/prisma/schema.prisma",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    for (const table of [
+      "work_comms_identities",
+      "work_comms_org_profiles",
+      "work_comms_threads",
+      "work_comms_participants",
+      "work_comms_messages",
+      "work_comms_call_sessions",
+      "work_comms_transcript_segments",
+      "work_comms_extractions",
+      "work_comms_consent_events",
+      "work_comms_retention_policies",
+    ]) {
+      expect(schema, table).toContain(`@@map("${table}")`);
+    }
+    for (const en of [
+      "WorkCommsConsentState",
+      "WorkCommsThreadType",
+      "WorkCommsParticipantRole",
+      "WorkCommsMessageSource",
+    ]) {
+      expect(schema).toContain(`enum ${en}`);
+    }
+    // Phone numbers are never plaintext: hash + secret ref only.
+    expect(schema).toContain("phone_e164_hash");
+    expect(schema).toContain("phone_secret_ref");
+    expect(schema).not.toContain("phone_e164_plain");
+  });
+});

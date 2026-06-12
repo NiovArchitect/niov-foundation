@@ -3463,3 +3463,243 @@ model ObserveCapture {
   @@index([org_entity_id, status])
   @@map("observe_captures")
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 1256C — Otzar Work Comms schema package (ADDITIVE ONLY).
+// Design: docs/otzar/WORK_COMMS_DESIGN.md. Employer-scoped,
+// CONSENTED work communication — personal WhatsApp monitoring is
+// NOT supported and will not be built. These models land on the
+// local/test DB now; PRODUCTION push remains gated on the literal
+// Founder approval phrase per ADR-0025 discipline. No services or
+// routes consume them yet (substrate-first; runtime slices follow
+// separate authorization). Plain UUID columns without FK cascades
+// per the ConnectorBinding precedent. Phone numbers are stored as
+// a HASH plus a vault secret reference — never plaintext.
+// ═══════════════════════════════════════════════════════════════
+
+enum WorkCommsConsentState {
+  NOT_REQUESTED
+  REQUESTED
+  CONSENTED
+  DECLINED
+  REVOKED
+  POLICY_EXEMPT_INTERNAL
+  UNKNOWN_EXTERNAL
+}
+
+enum WorkCommsThreadType {
+  DIRECT
+  GROUP
+  EXTERNAL
+  CALL
+  WORKSPACE
+}
+
+enum WorkCommsParticipantRole {
+  EMPLOYEE
+  ADMIN
+  EXTERNAL
+  AI_TWIN
+  AI_EMPLOYEE
+}
+
+enum WorkCommsMessageSource {
+  APP
+  SMS
+  VOICE_TRANSCRIPT
+  WHATSAPP_BUSINESS
+  IMPORT
+}
+
+model WorkCommsIdentity {
+  work_comms_identity_id String    @id @default(uuid()) @db.Uuid
+  entity_id              String    @db.Uuid
+  org_entity_id          String    @db.Uuid
+  phone_e164_hash        String
+  phone_secret_ref       String?
+  phone_verified_at      DateTime?
+  consent_state          WorkCommsConsentState @default(NOT_REQUESTED)
+  linked_by_entity_id    String?   @db.Uuid
+  status                 String    @default("PENDING")
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+  deleted_at             DateTime?
+
+  @@unique([entity_id, org_entity_id])
+  @@index([org_entity_id, status])
+  @@index([phone_e164_hash])
+  @@map("work_comms_identities")
+}
+
+model WorkCommsOrgProfile {
+  org_profile_id      String    @id @default(uuid()) @db.Uuid
+  org_entity_id       String    @db.Uuid
+  entity_id           String    @db.Uuid
+  work_display_name   String
+  role_label          String?
+  work_number_alias   String?
+  retention_policy_id String?   @db.Uuid
+  capture_policy      String    @default("CONSENT_REQUIRED")
+  quiet_hours         Json?
+  status              String    @default("ACTIVE")
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  @@unique([org_entity_id, entity_id])
+  @@index([org_entity_id, status])
+  @@map("work_comms_org_profiles")
+}
+
+model WorkCommsThread {
+  thread_id                String              @id @default(uuid()) @db.Uuid
+  org_entity_id            String              @db.Uuid
+  thread_type              WorkCommsThreadType
+  title                    String?
+  workspace_id             String?             @db.Uuid
+  external_collaborator_id String?             @db.Uuid
+  created_by_entity_id     String              @db.Uuid
+  retention_policy_id      String?             @db.Uuid
+  capture_policy           String              @default("CONSENT_REQUIRED")
+  status                   String              @default("ACTIVE")
+  created_at               DateTime            @default(now())
+  updated_at               DateTime            @updatedAt
+  deleted_at               DateTime?
+
+  @@index([org_entity_id, thread_type, status])
+  @@index([workspace_id])
+  @@map("work_comms_threads")
+}
+
+model WorkCommsParticipant {
+  participant_id           String                   @id @default(uuid()) @db.Uuid
+  thread_id                String                   @db.Uuid
+  entity_id                String?                  @db.Uuid
+  external_collaborator_id String?                  @db.Uuid
+  work_comms_identity_id   String?                  @db.Uuid
+  role                     WorkCommsParticipantRole @default(EMPLOYEE)
+  consent_state            WorkCommsConsentState    @default(NOT_REQUESTED)
+  access_level             String                   @default("MEMBER")
+  joined_at                DateTime                 @default(now())
+  left_at                  DateTime?
+
+  @@index([thread_id, role])
+  @@index([entity_id])
+  @@map("work_comms_participants")
+}
+
+model WorkCommsMessage {
+  message_id     String                 @id @default(uuid()) @db.Uuid
+  thread_id      String                 @db.Uuid
+  org_entity_id  String                 @db.Uuid
+  sender_role    WorkCommsParticipantRole @default(EMPLOYEE)
+  sender_id      String?                @db.Uuid
+  content_ref    String?
+  safe_summary   String?
+  source         WorkCommsMessageSource @default(APP)
+  audit_ref      String?                @db.Uuid
+  created_at     DateTime               @default(now())
+  edited_at      DateTime?
+  deleted_at     DateTime?
+
+  @@index([thread_id, created_at])
+  @@index([org_entity_id, source])
+  @@map("work_comms_messages")
+}
+
+model WorkCommsCallSession {
+  call_session_id     String    @id @default(uuid()) @db.Uuid
+  org_entity_id       String    @db.Uuid
+  thread_id           String?   @db.Uuid
+  provider            String
+  provider_call_ref   String?
+  workspace_id        String?   @db.Uuid
+  started_at          DateTime  @default(now())
+  ended_at            DateTime?
+  recording_state     String    @default("NOT_RECORDING")
+  transcription_state String    @default("NOT_TRANSCRIBING")
+  consent_state       WorkCommsConsentState @default(NOT_REQUESTED)
+  status              String    @default("ACTIVE")
+  failure_reason      String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  @@index([org_entity_id, status])
+  @@index([thread_id])
+  @@map("work_comms_call_sessions")
+}
+
+model WorkCommsTranscriptSegment {
+  segment_id               String    @id @default(uuid()) @db.Uuid
+  call_session_id          String    @db.Uuid
+  org_entity_id            String    @db.Uuid
+  speaker_participant_id   String?   @db.Uuid
+  speaker_label            String?
+  segment_text             String
+  start_ms                 Int
+  end_ms                   Int
+  confidence               Float?
+  redaction_state          String    @default("NONE")
+  memory_candidate_status  String    @default("NOT_PROPOSED")
+  action_extraction_status String    @default("NOT_EXTRACTED")
+  created_at               DateTime  @default(now())
+
+  @@index([call_session_id, start_ms])
+  @@index([org_entity_id])
+  @@map("work_comms_transcript_segments")
+}
+
+model WorkCommsExtraction {
+  extraction_id    String    @id @default(uuid()) @db.Uuid
+  org_entity_id    String    @db.Uuid
+  call_session_id  String?   @db.Uuid
+  thread_id        String?   @db.Uuid
+  kind             String
+  summary          String
+  owner_entity_id  String?   @db.Uuid
+  linked_action_id String?   @db.Uuid
+  status           String    @default("PROPOSED")
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  @@index([org_entity_id, kind, status])
+  @@index([call_session_id])
+  @@map("work_comms_extractions")
+}
+
+model WorkCommsConsentEvent {
+  consent_event_id String                @id @default(uuid()) @db.Uuid
+  org_entity_id    String                @db.Uuid
+  participant_id   String?               @db.Uuid
+  call_session_id  String?               @db.Uuid
+  thread_id        String?               @db.Uuid
+  consent_type     String
+  consent_state    WorkCommsConsentState
+  consent_text_version String?
+  source           String                @default("APP")
+  occurred_at      DateTime              @default(now())
+  revoked_at       DateTime?
+
+  @@index([org_entity_id, occurred_at])
+  @@index([call_session_id])
+  @@map("work_comms_consent_events")
+}
+
+model WorkCommsRetentionPolicy {
+  retention_policy_id   String    @id @default(uuid()) @db.Uuid
+  org_entity_id         String    @db.Uuid
+  display_name          String
+  message_retention_days Int?
+  transcript_retention_days Int?
+  audio_retention_days  Int?
+  deletion_behavior     String    @default("SOFT_DELETE")
+  legal_hold            Boolean   @default(false)
+  created_by_entity_id  String    @db.Uuid
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  deleted_at            DateTime?
+
+  @@unique([org_entity_id, display_name])
+  @@index([org_entity_id, legal_hold])
+  @@map("work_comms_retention_policies")
+}
