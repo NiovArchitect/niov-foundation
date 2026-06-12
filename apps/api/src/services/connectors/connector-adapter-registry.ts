@@ -35,7 +35,10 @@ export type ConnectorProviderName =
   | "COINBASE_BASE"
   | "ELEVENLABS_TTS"
   | "ASSEMBLYAI_STT"
-  | "OPENAI_REALTIME";
+  | "OPENAI_REALTIME"
+  | "TWILIO_VOICE"
+  | "LIVEKIT"
+  | "WHATSAPP_BUSINESS";
 
 export type ConnectorProviderCategory =
   | "PRODUCTIVITY"
@@ -411,6 +414,67 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
       "Create a Coinbase Developer Platform project and provide the API key pair to your deployment.",
       "Every settlement intent will require policy evaluation, dual-control approval, and audit before any rail call fires (per ADR-0094).",
       "No funds move, no private keys are handled, and no transactions are submitted until the Founder explicitly authorizes the implementation phase.",
+    ],
+    demo_mode_available: false,
+  },
+  // ── Phase 1254 — Otzar Work Comms providers (design slice). ──
+  // Employer-scoped, CONSENTED work communication only. Personal
+  // WhatsApp monitoring is NOT supported and will not be built; the
+  // WHATSAPP_BUSINESS entry is the official Meta Business API path
+  // only. See docs/otzar/WORK_COMMS_DESIGN.md.
+  {
+    provider_name: "TWILIO_VOICE",
+    category: "COMMUNICATIONS",
+    display_name: "Twilio (work voice / SMS / number verification)",
+    description:
+      "Work-line calling, SMS, and phone-number OTP verification for Otzar Work Comms. Consent-first: capture requires participant consent per org policy.",
+    required_envs: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"],
+    oauth_scopes: [],
+    setup_docs_url: "https://www.twilio.com/docs/voice",
+    app_review_required: false,
+    can_write: false,
+    phase: 1254,
+    setup_steps: [
+      "Create a Twilio account and provision a work number for the org.",
+      "Provide the Account SID + Auth Token to your deployment.",
+      "Every outbound call/SMS rides a governed Action with approval; transcripts require participant consent.",
+    ],
+    demo_mode_available: false,
+  },
+  {
+    provider_name: "LIVEKIT",
+    category: "COMMUNICATIONS",
+    display_name: "LiveKit (app-native work calls)",
+    description:
+      "WebRTC rooms for app-native Otzar Work Comms calls with visible capture indicators and consent state.",
+    required_envs: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_URL"],
+    oauth_scopes: [],
+    setup_docs_url: "https://docs.livekit.io/",
+    app_review_required: false,
+    can_write: false,
+    phase: 1254,
+    setup_steps: [
+      "Create a LiveKit Cloud project (or self-host) and provide the key pair + URL.",
+      "Calls show a visible capture indicator; transcription requires consent per org policy.",
+    ],
+    demo_mode_available: false,
+  },
+  {
+    provider_name: "WHATSAPP_BUSINESS",
+    category: "COMMUNICATIONS",
+    display_name: "WhatsApp Business (official Meta API only)",
+    description:
+      "OFFICIAL Meta WhatsApp Business messaging for org business numbers, where Meta's API and policies permit. Personal WhatsApp monitoring is NOT supported and will not be built.",
+    required_envs: ["WHATSAPP_BUSINESS_TOKEN", "WHATSAPP_BUSINESS_PHONE_ID"],
+    oauth_scopes: [],
+    setup_docs_url: "https://developers.facebook.com/docs/whatsapp",
+    app_review_required: true,
+    can_write: false,
+    phase: 1254,
+    setup_steps: [
+      "Create a Meta Business + WhatsApp Business account and pass Meta's app review.",
+      "Business-number messaging only — consented, policy-bound, audited.",
+      "Personal WhatsApp calls/messages are out of scope by design.",
     ],
     demo_mode_available: false,
   },

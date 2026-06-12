@@ -81,6 +81,18 @@ What real Circle/Base/USDC settlement needs from you (in order):
 Private keys: NOT_HANDLED — custody stays with the external provider
 under any future authorization. Real funds: NOT_AUTHORIZED.
 
+### Work Comms providers (Phase 1254 — when you want Work Comms live)
+
+- `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` — work-line voice/SMS +
+  phone-number OTP verification.
+- `LIVEKIT_API_KEY` + `LIVEKIT_API_SECRET` + `LIVEKIT_URL` —
+  app-native work calls.
+- `WHATSAPP_BUSINESS_TOKEN` + `WHATSAPP_BUSINESS_PHONE_ID` — official
+  Meta Business API only (app review required). Personal WhatsApp
+  monitoring is not supported and will not be built.
+- Plus your explicit authorization for the additive Work Comms schema
+  (10 models, design in docs/otzar/WORK_COMMS_DESIGN.md).
+
 ## 4. Honest non-input residuals (no action needed from you)
 
 - Chat proposed-action extractor: regex-canonical today; the

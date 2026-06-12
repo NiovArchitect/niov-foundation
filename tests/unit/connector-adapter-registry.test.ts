@@ -76,7 +76,17 @@ describe("connector adapter registry", () => {
             r.category !== "AI" &&
             r.category !== "SETTLEMENT",
         )
-        .every((r) => r.oauth_scopes.length > 0 || r.provider_name === "SMTP_EMAIL"),
+        .every(
+          (r) =>
+            r.oauth_scopes.length > 0 ||
+            r.provider_name === "SMTP_EMAIL" ||
+            // Phase 1254 Work Comms providers authenticate by API
+            // key/token, not OAuth scopes (Twilio/LiveKit keys; the
+            // Meta Business token's scopes live in Meta app review).
+            r.provider_name === "TWILIO_VOICE" ||
+            r.provider_name === "LIVEKIT" ||
+            r.provider_name === "WHATSAPP_BUSINESS",
+        ),
     ).toBe(true);
   });
 
