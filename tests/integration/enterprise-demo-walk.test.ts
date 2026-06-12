@@ -228,7 +228,9 @@ describe("Phase 1245 — the deterministic enterprise demo walk", () => {
     const readiness = await getHandoffReadinessForCaller(adminId);
     expect(readiness.ok).toBe(true);
     if (readiness.ok === false) throw new Error("readiness");
-    expect(readiness.readiness.schema.pending_push).toBe(true);
+    // 2026-06-12: the approved push landed — the pending set is empty
+    // until the next schema-bearing phase appends to it.
+    expect(readiness.readiness.schema.pending_push).toBe(false);
     expect(readiness.readiness.connectors.length).toBeGreaterThan(5);
 
     // ── Steps 6-7: My Day ranked intelligence (fixture-honest) ──

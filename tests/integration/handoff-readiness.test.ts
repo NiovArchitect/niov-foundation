@@ -69,11 +69,15 @@ describe("Phase 1242 — handoff readiness", () => {
     expect(v.org.checklist_steps_total).toBe(11);
     expect(v.runtimes.length).toBeGreaterThanOrEqual(6);
     expect(v.connectors.length).toBeGreaterThan(5);
-    // Pending schema is represented honestly with the approval gate.
-    expect(v.schema.pending_push).toBe(true);
+    // Schema truth post-2026-06-12 push: pending set is empty and the
+    // note records the landed push; the gate machinery stays for the
+    // next schema-bearing phase.
+    expect(v.schema.pending_push).toBe(PENDING_SCHEMA_TABLES.length > 0);
     expect(v.schema.pending_tables).toEqual([...PENDING_SCHEMA_TABLES]);
     expect(v.schema.approval_phrase).toBe(APPROVAL_PHRASE);
-    expect(v.schema.note).toContain("additive only");
+    expect(v.schema.note).toContain(
+      PENDING_SCHEMA_TABLES.length > 0 ? "additive only" : "in sync",
+    );
     // Capability classes are closed-vocab.
     for (const row of v.capabilities) {
       expect(CAPABILITY_CLASSES).toContain(row.classification);

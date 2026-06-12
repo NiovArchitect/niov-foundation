@@ -8,8 +8,14 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-06-11 (Phase 1251 Ambient Work OS + Phase 1250
-Governed Transaction Readiness + Enterprise Reality Hardening Pass)
+**Last updated:** 2026-06-12 — **PRODUCTION SCHEMA PUSHED** (Founder
+typed APPROVE PROD SCHEMA PUSH; credentials rotated + verified;
+preflight additive-only — 52 tables / 69 types / 177 indexes /
+19 columns, zero destructive ops; post-push diff EMPTY; pending set
+now empty). AI brain LIVE on Anthropic; full voice stack keyed
+(Deepgram + Whisper + ElevenLabs + AssemblyAI + OpenAI Realtime;
+OpenAI account still needs billing). Phase 1259 premium TTS runtime
+in flight.
 (**Otzar Phases 1221 + 1222 + 1223 + 1228 + 1229 + 1230 + 1231 +
 1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
 bounded Founder queue 1215–1232 substantially complete.

@@ -81,18 +81,18 @@ export const CAPABILITY_TRUTH: readonly CapabilityRow[] = [
   { capability: "AI Employees", classification: "PROD", note: "Provisioning, boundaries, and the deactivation kill switch are live." },
   { capability: "Twin collaboration", classification: "PROD", note: "Governed end-to-end; sensitive requests require approval." },
   { capability: "BEAM coordination", classification: "PROD", note: "Live status surfaces are in place; the runtime activates by deployment configuration." },
-  { capability: "Collaboration Workspaces & external stakeholders", classification: "PROD_READY_PENDING_SCHEMA_PUSH", note: "Fully built and tested; goes live with the pending production schema update." },
-  { capability: "Meeting capture (manual & API ingest)", classification: "PROD_READY_PENDING_SCHEMA_PUSH", note: "Fully built and tested; goes live with the pending production schema update." },
-  { capability: "Voice capture & transcription", classification: "PROD_READY_PENDING_SCHEMA_PUSH", note: "Sample and browser paths always work; Whisper/Deepgram activate with keys after the schema update." },
-  { capability: "Observe (let Otzar read documents)", classification: "PROD_READY_PENDING_SCHEMA_PUSH", note: "Sample and pasted-text reading work end-to-end; goes live with the pending schema update." },
-  { capability: "Compliance share packages (regulator sharing)", classification: "PROD_READY_PENDING_SCHEMA_PUSH", note: "Purpose-bound, redacted, revocable regulator views; goes live with the pending schema update." },
-  { capability: "Onboarding checklist & admin readiness", classification: "PROD_READY_PENDING_SCHEMA_PUSH", note: "The checklist works now; persistence goes live with the pending schema update." },
+  { capability: "Collaboration Workspaces & external stakeholders", classification: "PROD", note: "Live — the production schema landed 2026-06-12." },
+  { capability: "Meeting capture (manual & API ingest)", classification: "PROD", note: "Live — manual transcript and API ingest work on production; live Meet/Zoom/Teams auto-ingest still needs the organization's connector credentials." },
+  { capability: "Voice capture & transcription", classification: "PROD", note: "Live — schema landed and the Deepgram/Whisper keys are configured; sample and browser paths always work." },
+  { capability: "Observe (let Otzar read documents)", classification: "PROD", note: "Live — sample and pasted-text reading on production; cloud OCR remains optional per credentials." },
+  { capability: "Compliance share packages (regulator sharing)", classification: "PROD", note: "Live — purpose-bound, redacted, revocable regulator views on production." },
+  { capability: "Onboarding checklist & admin readiness", classification: "PROD", note: "Live — checklist plus persistence on production." },
   { capability: "Live Google Meet / Zoom / Teams auto-ingest", classification: "BLOCKED_BY_CREDENTIALS", note: "Manual transcript upload exercises the full pipeline today." },
   { capability: "Google Workspace / Gmail / Calendar", classification: "BLOCKED_BY_APP_REVIEW", note: "Needs the organization's Google Cloud setup and Google's app verification." },
   { capability: "Slack / Microsoft 365 / Zoom connectors", classification: "BLOCKED_BY_CREDENTIALS", note: "Setup paths and status are ready; each needs the organization's app credentials." },
   { capability: "Governed transaction substrate (intent → policy → approval → proof)", classification: "PROD", note: "Live on the current schema (Phase 1250): DMW actors propose, policy gates by amount and actor class, humans approve (dual control above $1,000), and every step is audit-chained. AI, device, and machine actors never auto-approve." },
   { capability: "Mock settlement rail (development/demo)", classification: "DEMO_ONLY", note: "The only executable rail. Produces clearly-labeled mock receipts — settles nothing, moves no funds, handles no keys." },
-  { capability: "Otzar Work Comms (employer-scoped, consented)", classification: "NOT_STARTED", note: "Schema package PREPARED and verified additive-only (Phase 1256C: 10 tables + 4 enums, live on the test DB). Personal WhatsApp monitoring is NOT supported and will not be built; official WhatsApp Business API is the only WhatsApp path. Goes further with the Founder schema approval, provider credentials (Twilio/LiveKit), and the runtime slices." },
+  { capability: "Otzar Work Comms (employer-scoped, consented)", classification: "NOT_STARTED", note: "Schema is LIVE on production (pushed 2026-06-12). Personal WhatsApp monitoring is NOT supported and will not be built; official WhatsApp Business API is the only WhatsApp path. Runtime slices, provider credentials (Twilio/LiveKit), and the BEAM service remain pending." },
   { capability: "Circle / Base / USDC settlement", classification: "BLOCKED_BY_CREDENTIALS", note: "Architecture prepared (ADR-0094 governed-transaction standard; Circle + Base rail adapters registered with honest blockers). No funds move and nothing is wired until the Founder explicitly authorizes implementation and credentials exist." },
 ] as const;
 
@@ -138,36 +138,18 @@ export interface HandoffReadinessView {
  *  readiness matrix §production schema migration. UPDATE when a
  *  schema-bearing phase lands. */
 export const PENDING_SCHEMA_TABLES: readonly string[] = [
-  "collaboration_workspaces",
-  "collaboration_memberships",
-  "collaboration_decisions",
-  "collaboration_commitments",
-  "collaboration_shared_context",
-  "external_collaborators",
-  "workspace_external_memberships",
-  "external_commitments",
-  "meeting_captures",
-  "meeting_participant_consents",
-  "audio_captures",
-  "transcript_segments",
-  "org_onboarding_states",
-  "compliance_share_packages",
-  "observe_captures",
-  // Phase 1256C — Work Comms schema package (design: WORK_COMMS_DESIGN.md).
-  "work_comms_identities",
-  "work_comms_org_profiles",
-  "work_comms_threads",
-  "work_comms_participants",
-  "work_comms_messages",
-  "work_comms_call_sessions",
-  "work_comms_transcript_segments",
-  "work_comms_extractions",
-  "work_comms_consent_events",
-  "work_comms_retention_policies",
-] as const;
+  // EMPTY since 2026-06-12: the Founder-approved additive push landed
+  // every pending object (52 tables / 69 types / 177 indexes /
+  // 19 columns; verified additive-only; post-push diff EMPTY). New
+  // schema-bearing phases append here until their push is approved.
+];
 
 export const APPROVAL_PHRASE = "APPROVE PROD SCHEMA PUSH";
 
+// WHAT: Boolean presence check for an env-provided setting.
+// INPUT: process.env value.
+// OUTPUT: true when set and non-empty.
+// WHY: readiness reports presence only — never values.
 function envPresent(name: string): boolean {
   const v = process.env[name];
   return typeof v === "string" && v.length > 0;
@@ -295,10 +277,17 @@ export async function getHandoffReadinessForCaller(
       runtimes,
       connectors,
       schema: {
-        pending_push: true,
+        // 2026-06-12: the Founder-approved additive push landed; the
+        // post-push diff is EMPTY. pending_push flips true again only
+        // when a new schema-bearing phase appends to
+        // PENDING_SCHEMA_TABLES.
+        pending_push: PENDING_SCHEMA_TABLES.length > 0,
         pending_tables: [...PENDING_SCHEMA_TABLES],
         approval_phrase: APPROVAL_PHRASE,
-        note: "The pending update is additive only — no existing data changes. It requires the Founder's explicit approval phrase before it touches production.",
+        note:
+          PENDING_SCHEMA_TABLES.length > 0
+            ? "The pending update is additive only — no existing data changes. It requires the Founder's explicit approval phrase before it touches production."
+            : "Production schema is in sync — the Founder-approved additive push landed 2026-06-12 (52 tables, 69 types, 177 indexes, 19 columns; zero destructive operations).",
       },
       demo_prod_separation: {
         mode,
