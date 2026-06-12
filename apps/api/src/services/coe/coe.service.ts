@@ -47,6 +47,35 @@ export const TOKENS_PER_CAPSULE_ESTIMATE = 200;
 // WHY: Spec: "exclude relevance_score < 0.2 (intentional forgetting)".
 export const RELEVANCE_FORGET_FLOOR = 0.2;
 
+// WHAT: How many capsule negotiations may run at once (Phase 1253).
+// INPUT: Used as a constant.
+// OUTPUT: A number.
+// WHY: Every negotiate opens its own Prisma interactive transaction.
+//      Unbounded Promise.all over 20+ selected capsules starves the
+//      connection pool → P2028 "unable to start a transaction in the
+//      given time" (observed live on /otzar/my-twin/voice-intents).
+export const NEGOTIATE_CONCURRENCY = 4;
+
+// WHAT: Order-preserving map with a concurrency ceiling.
+// INPUT: items + max parallel + an async mapper.
+// OUTPUT: results in the same order as items.
+// WHY: STEP 5 below must not open more simultaneous transactions
+//      than the pool can start; chunking keeps the contract simple
+//      and deterministic.
+export async function mapWithBoundedConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const chunk = items.slice(i, i + limit);
+    const settled = await Promise.all(chunk.map(fn));
+    results.push(...settled);
+  }
+  return results;
+}
+
 // WHAT: One entry in the returned context package.
 // INPUT: Used as a return type only.
 // OUTPUT: None.
@@ -314,16 +343,22 @@ export class COEService {
       runningTokens += s.capsule.payload_size_tokens;
     }
 
-    // STEP 5 -- negotiate in parallel for every selected capsule.
-    const negotiations = await Promise.all(
-      selected.map((s) =>
+    // STEP 5 -- negotiate for every selected capsule with BOUNDED
+    // concurrency (Phase 1253). Each negotiate opens its own Prisma
+    // interactive transaction; an unbounded Promise.all over 20+
+    // capsules starves the connection pool and surfaces as P2028
+    // ("unable to start a transaction in the given time"). Four at a
+    // time keeps the pool healthy; result order matches `selected`.
+    const negotiations = await mapWithBoundedConcurrency(
+      selected,
+      NEGOTIATE_CONCURRENCY,
+      (s) =>
         this.negotiateService.negotiate(
           sessionToken,
           s.capsule.capsule_id,
           "FULL",
           { ip_address: context.ip_address ?? null },
         ),
-      ),
     );
 
     // Filter to those granted; count denials.

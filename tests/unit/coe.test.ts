@@ -425,3 +425,24 @@ describe("recordOutcome", () => {
     expect(result.code).toBe("INVALID_REQUEST");
   });
 });
+
+describe("Phase 1253 — bounded negotiation concurrency", () => {
+  it("mapWithBoundedConcurrency preserves order and never exceeds the ceiling", async () => {
+    const { mapWithBoundedConcurrency, NEGOTIATE_CONCURRENCY } = await import(
+      "../../apps/api/src/services/coe/coe.service.js"
+    );
+    expect(NEGOTIATE_CONCURRENCY).toBeLessThanOrEqual(8);
+    let inFlight = 0;
+    let peak = 0;
+    const items = Array.from({ length: 23 }, (_, i) => i);
+    const results = await mapWithBoundedConcurrency(items, 4, async (i) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return i * 2;
+    });
+    expect(results).toEqual(items.map((i) => i * 2));
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+});
