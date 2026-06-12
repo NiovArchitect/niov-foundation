@@ -483,7 +483,17 @@ export type AuditEventType =
   | "TRANSACTION_INTENT_APPROVED"
   | "TRANSACTION_INTENT_DENIED"
   | "TRANSACTION_INTENT_REVOKED"
-  | "TRANSACTION_MOCK_SETTLED";
+  | "TRANSACTION_MOCK_SETTLED"
+  // Phase 1261 Priority C OAuth connector lifecycle (append-only per
+  // ADR-0042 §Q-γ.1). SAFE details: provider + scopes + expires_in +
+  // account_label + scrubbed reason codes. FORBIDDEN: authorization
+  // codes, access/refresh tokens, client secrets, state JWTs, raw
+  // provider response bodies, encrypted token envelopes.
+  | "CONNECTOR_OAUTH_STARTED"
+  | "CONNECTOR_OAUTH_CONNECTED"
+  | "CONNECTOR_OAUTH_FAILED"
+  | "CONNECTOR_OAUTH_VERIFIED"
+  | "CONNECTOR_OAUTH_REVOKED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -656,6 +666,12 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "TRANSACTION_INTENT_DENIED",
   "TRANSACTION_INTENT_REVOKED",
   "TRANSACTION_MOCK_SETTLED",
+  // Phase 1261 Priority C OAuth connector lifecycle.
+  "CONNECTOR_OAUTH_STARTED",
+  "CONNECTOR_OAUTH_CONNECTED",
+  "CONNECTOR_OAUTH_FAILED",
+  "CONNECTOR_OAUTH_VERIFIED",
+  "CONNECTOR_OAUTH_REVOKED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
