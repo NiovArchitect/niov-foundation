@@ -7,13 +7,15 @@ and merged: adapters, setup UI, honest status, mock/demo fallbacks,
 and docs exist for every entry. Machine mirror:
 `GET /api/v1/otzar/production-readiness`.
 
-## 0. URGENT — production database credentials (discovered this run)
+## 0. ✅ DONE 2026-06-12 — credentials rotated + production schema pushed
 
-The production schema push was Founder-approved and the preflight was
-attempted — it **aborted safely at authentication**: both
-`DATABASE_URL` and `DIRECT_URL` in the deployment env fail with
-Prisma P1000 (invalid credentials) against the production Supabase
-host. No diff ran; nothing was pushed; nothing was harmed.
+RESOLVED: credentials were rotated and verified 2026-06-12; the
+preflight ran clean (verified additive-only — 52 tables / 69 types /
+177 indexes / 19 columns / 2 enum values; ZERO destructive
+operations; saved at /tmp/prod-schema-diff-verified-20260612-0503.sql)
+and the Founder typed the exact approval phrase. The push completed
+in 34s; the post-push diff is EMPTY ("This is an empty migration.").
+All schema-pending capabilities are now schema-live.
 
 **Needed:** rotate/refresh the production Supabase credentials and
 update `.env` (`DATABASE_URL` + `DIRECT_URL`).
