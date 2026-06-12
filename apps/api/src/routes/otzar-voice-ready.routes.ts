@@ -149,13 +149,23 @@ export async function registerOtzarVoiceReadyRoutes(
           ? body.token_budget
           : undefined;
 
-      const result = await otzarService.conductSession({
-        token,
-        message: text,
-        conversation_id: conversationId,
-        conversation_history: history,
-        token_budget: tokenBudget,
-      });
+      // Phase 1253: unexpected throws (e.g. transient DB-pool
+      // pressure) become a calm retryable envelope, never a raw 500.
+      let result: Awaited<ReturnType<typeof otzarService.conductSession>>;
+      try {
+        result = await otzarService.conductSession({
+          token,
+          message: text,
+          conversation_id: conversationId,
+          conversation_history: history,
+          token_budget: tokenBudget,
+        });
+      } catch (err) {
+        request.log.error({ err }, "voice-intent conductSession threw");
+        return reply
+          .code(503)
+          .send({ ok: false, code: "OTZAR_BUSY_TRY_AGAIN" });
+      }
       if (!result.ok) {
         return reply.code(statusForCode(result.code)).send(result);
       }

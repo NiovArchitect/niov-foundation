@@ -126,13 +126,25 @@ export async function registerOtzarRoutes(
         ))
       : [];
 
-    const result = await otzarService.conductSession({
-      token,
-      message: body.message,
-      conversation_id: conversationId,
-      conversation_history: history,
-      token_budget: tokenBudget,
-    });
+    // Phase 1253: an unexpected throw (e.g. transient DB-pool
+    // pressure) must never reach the employee as a raw 500 — it
+    // becomes a calm, retryable closed-vocab envelope. Details stay
+    // in the structured logs.
+    let result: Awaited<ReturnType<typeof otzarService.conductSession>>;
+    try {
+      result = await otzarService.conductSession({
+        token,
+        message: body.message,
+        conversation_id: conversationId,
+        conversation_history: history,
+        token_budget: tokenBudget,
+      });
+    } catch (err) {
+      request.log.error({ err }, "conductSession threw");
+      return reply
+        .code(503)
+        .send({ ok: false, code: "OTZAR_BUSY_TRY_AGAIN" });
+    }
     if (!result.ok) {
       return reply.code(statusForCode(result.code)).send(result);
     }
