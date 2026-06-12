@@ -22,11 +22,13 @@ import { logger } from "../../logger.js";
 /** Bounded preview/assistant utterances — premium TTS is metered. */
 export const TTS_MAX_TEXT_LENGTH = 600;
 
-/** Configurable voice; default is a widely-available ElevenLabs
- *  stock voice (warm, calm register). Operators can pin their own
- *  original Otzar voice via ELEVENLABS_VOICE_ID — never a clone of
- *  any person or protected voice. */
-const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
+/** Configurable voice; default is the ElevenLabs PREMADE voice
+ *  "Sarah" (mature, reassuring, confident — the Otzar register).
+ *  Premade voices work on every plan; LIBRARY voices 402 on free
+ *  plans ("paid_plan_required" — found live, Phase 1259). Operators
+ *  pin their own original Otzar voice via ELEVENLABS_VOICE_ID —
+ *  never a clone of any person or protected voice. */
+const DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 const DEFAULT_MODEL_ID = "eleven_turbo_v2_5";
 
 // WHAT: TTS-payload-only pronunciation transform.
