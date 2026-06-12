@@ -89,7 +89,7 @@ the readiness endpoint. Voice provider activation order:
 
 ## 16. What requires production schema approval
 
-15 additive tables (listed in the readiness endpoint and the matrix).
+25 additive tables — 15 product + 10 Work Comms (listed in the readiness endpoint and the matrix).
 **Nothing touches production until the Founder types
 `APPROVE PROD SCHEMA PUSH`.** The diff is additive only; the
 verification commands are in the readiness matrix §1.

@@ -92,7 +92,7 @@ export const CAPABILITY_TRUTH: readonly CapabilityRow[] = [
   { capability: "Slack / Microsoft 365 / Zoom connectors", classification: "BLOCKED_BY_CREDENTIALS", note: "Setup paths and status are ready; each needs the organization's app credentials." },
   { capability: "Governed transaction substrate (intent → policy → approval → proof)", classification: "PROD", note: "Live on the current schema (Phase 1250): DMW actors propose, policy gates by amount and actor class, humans approve (dual control above $1,000), and every step is audit-chained. AI, device, and machine actors never auto-approve." },
   { capability: "Mock settlement rail (development/demo)", classification: "DEMO_ONLY", note: "The only executable rail. Produces clearly-labeled mock receipts — settles nothing, moves no funds, handles no keys." },
-  { capability: "Otzar Work Comms (employer-scoped, consented)", classification: "NOT_STARTED", note: "Designed (Phase 1254: docs/otzar/WORK_COMMS_DESIGN.md): phone-linked work identity, multi-employer isolation, consent-gated transcripts, BEAM realtime substrate. Personal WhatsApp monitoring is NOT supported and will not be built; official WhatsApp Business API is the only WhatsApp path. Needs Founder-authorized additive schema + provider credentials (Twilio/LiveKit)." },
+  { capability: "Otzar Work Comms (employer-scoped, consented)", classification: "NOT_STARTED", note: "Schema package PREPARED and verified additive-only (Phase 1256C: 10 tables + 4 enums, live on the test DB). Personal WhatsApp monitoring is NOT supported and will not be built; official WhatsApp Business API is the only WhatsApp path. Goes further with the Founder schema approval, provider credentials (Twilio/LiveKit), and the runtime slices." },
   { capability: "Circle / Base / USDC settlement", classification: "BLOCKED_BY_CREDENTIALS", note: "Architecture prepared (ADR-0094 governed-transaction standard; Circle + Base rail adapters registered with honest blockers). No funds move and nothing is wired until the Founder explicitly authorizes implementation and credentials exist." },
 ] as const;
 
@@ -153,6 +153,17 @@ export const PENDING_SCHEMA_TABLES: readonly string[] = [
   "org_onboarding_states",
   "compliance_share_packages",
   "observe_captures",
+  // Phase 1256C — Work Comms schema package (design: WORK_COMMS_DESIGN.md).
+  "work_comms_identities",
+  "work_comms_org_profiles",
+  "work_comms_threads",
+  "work_comms_participants",
+  "work_comms_messages",
+  "work_comms_call_sessions",
+  "work_comms_transcript_segments",
+  "work_comms_extractions",
+  "work_comms_consent_events",
+  "work_comms_retention_policies",
 ] as const;
 
 export const APPROVAL_PHRASE = "APPROVE PROD SCHEMA PUSH";

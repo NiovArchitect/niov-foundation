@@ -100,7 +100,7 @@ in the bounded queue.
 | Bucket | Items |
 |---|---|
 | **PROD** (live now) | Identity/Entity, Actions + policy + executor, Notifications + replies, Audit chain, MemoryCapsule/COSMP, DMW Registry + revocation gate, My Day intelligence (fixture path), Ambient shell + quiet mode, Calendar-aware auto quiet (substrate path), Dandelion growth + welcome + consent gate, AI Employees + kill switch, Twin collaboration governance, BEAM status consumers, Handoff readiness aggregate + runbook, Connector setup guidance, the executable 29-step demo walk, Governed transaction substrate (Phase 1250: intent → policy → approval → mock proof; mock rail DEMO_ONLY) |
-| **PROD-READY pending `APPROVE PROD SCHEMA PUSH`** (15 additive tables) | Collaboration Workspaces + external stakeholders, Meeting capture, Voice capture tables, Observe captures, Onboarding persistence, Compliance share packages |
+| **PROD-READY pending `APPROVE PROD SCHEMA PUSH`** (25 additive tables — 15 product + 10 Work Comms) | Collaboration Workspaces + external stakeholders, Meeting capture, Voice capture tables, Observe captures, Onboarding persistence, Compliance share packages, Work Comms substrate (schema only; runtime slices follow separate authorization) |
 | **BLOCKED_BY_CREDENTIALS / APP_REVIEW** | Google Workspace/Gmail/Calendar (+ ~6-week Google verification), Slack, Microsoft 365, Zoom, Whisper/Deepgram keys, ElevenLabs/Sesame/Realtime-2 TTS seats, cloud OCR (AWS/Google), live meeting auto-ingest |
 | **NOT_STARTED (deliberately last)** | Circle / Base / USDC REAL settlement (BLOCKED_BY_CREDENTIALS + explicit Founder authorization required per ADR-0094) — the governance it mounts on is now PROVEN live: Phase 1250's governed transaction substrate (intent → policy → approval → mock proof, audit-chained) runs on the current schema with the mock rail DEMO_ONLY |
 
@@ -121,7 +121,7 @@ These are the items a real enterprise client needs before signing a contract. Wi
 
 ### 1. Production schema migration (Phases 1221 / 1222 / 1223 / 1227 / 1230 / 1233) — **Founder-authorized destructive action**
 
-The Phase 1221 / 1222 / 1223 / 1227 / 1230 / 1233 substrates add a total of **15 new tables** that are PROD-READY in code but not pushed to production Supabase:
+The Phase 1221 / 1222 / 1223 / 1227 / 1230 / 1233 substrates add **15 product tables**, and Phase 1256C adds the **10 Work Comms tables** (+4 enums; verified additive-only; design in docs/otzar/WORK_COMMS_DESIGN.md) — **25 additive tables total**, not yet pushed to production Supabase:
 
 | Phase | New tables |
 |---|---|
