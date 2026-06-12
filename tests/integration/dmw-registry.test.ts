@@ -123,6 +123,13 @@ describe("Phase 1228 — DMW Registry", () => {
     expect(twins.length).toBe(1);
   });
 
+  it("getDMWByIdForCaller returns enumeration-safe not-found for non-UUID ids (Phase 1252; never a Prisma 500)", async () => {
+    for (const bad of ["my", "me'; DROP TABLE", "1234", ""]) {
+      const res = await getDMWByIdForCaller(bad, sadeilId);
+      expect(res).toEqual({ ok: false, code: "DMW_NOT_FOUND" });
+    }
+  });
+
   it("getDMWByIdForCaller refuses cross-org access", async () => {
     const otherOrgId = await makeOrgEntity("Other DMW Org");
     const outsiderId = await makePerson("Outsider", otherOrgId);

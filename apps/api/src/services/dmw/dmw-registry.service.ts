@@ -290,6 +290,15 @@ export async function getDMWByIdForCaller(
   | { ok: true; entry: DMWRegistryEntry }
   | { ok: false; code: string }
 > {
+  // Phase 1252: non-UUID ids are enumeration-safe not-found, never a
+  // Prisma P2023 throw (defense in depth with the route-tier guard).
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      dmwId,
+    )
+  ) {
+    return { ok: false, code: "DMW_NOT_FOUND" };
+  }
   // Could be an entity_id OR an external_collaborator_id.
   const entry =
     (await buildEntryForEntity(dmwId)) ??

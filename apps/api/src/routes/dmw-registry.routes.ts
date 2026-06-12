@@ -79,6 +79,15 @@ export async function registerDMWRegistryRoutes(
       const session = await authService.validateSession(token, "read");
       if (!session.valid)
         return reply.code(401).send({ ok: false, code: session.code });
+      // Phase 1252: non-UUID ids are enumeration-safe 404s, never a
+      // Prisma P2023 500.
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          request.params.dmw_id,
+        )
+      ) {
+        return reply.code(404).send({ ok: false, code: "DMW_NOT_FOUND" });
+      }
       const result = await getDMWByIdForCaller(
         request.params.dmw_id,
         session.entity_id,
