@@ -116,12 +116,18 @@ async function ensureFounder(
   const passwordHash = await hashPassword(password);
   if (existing !== null) {
     // Update password hash + display name to keep idempotency.
+    // Phase 1252: pin clearance_level 5 — the Founder reviews the
+    // admin surfaces (production readiness, Dandelion growth,
+    // compliance, settlement readiness) which gate on the Phase 1230
+    // org-admin convention clearance_level >= 4. Without this the
+    // local review hits ADMIN_REQUIRED everywhere.
     await prisma.entity.update({
       where: { entity_id: existing.entity_id },
       data: {
         display_name: FOUNDER_DISPLAY_NAME,
         password_hash: passwordHash,
         status: "ACTIVE",
+        clearance_level: 5,
       },
     });
     return { entity_id: existing.entity_id, created: false };
@@ -132,6 +138,7 @@ async function ensureFounder(
     email: FOUNDER_EMAIL,
     password,
     public_key: `founder-bootstrap-${FOUNDER_DISPLAY_NAME.toLowerCase()}-pubkey`,
+    clearance_level: 5,
   });
   return { entity_id: founder.entity_id, created: true };
 }
