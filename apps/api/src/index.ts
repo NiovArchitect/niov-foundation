@@ -809,6 +809,30 @@ export {
 // downgraded to "fixture" until VS5 lands.
 export { SelfHostedCsm1bVoiceProvider } from "./services/voice/self-hosted-csm-1b.provider.js";
 
+// Phase 1264 — desktop voice-input transcription (OpenAI Whisper).
+// The Tauri WKWebView has no Web Speech API; the desktop app records
+// audio and POSTs it to /api/v1/otzar/voice/transcribe, which calls
+// this service. Audio is never stored; transcript rides the same
+// governed conductSession chat path as typed input.
+export {
+  callWhisperTranscription,
+  callDeepgramTranscription,
+  transcribeVoiceCommandForCaller,
+  classifyOpenAiHttp,
+  classifyDeepgramHttp,
+  filenameForMime,
+  MAX_AUDIO_BYTES,
+  WHISPER_MODEL,
+  WHISPER_ENDPOINT,
+  DEEPGRAM_MODEL,
+  DEEPGRAM_ENDPOINT,
+  type TranscriptionProvider,
+  type TranscribeFailureCode,
+  type ProviderTranscriptionResult,
+  type WhisperResult,
+  type TranscribeForCallerResult,
+} from "./services/voice/transcription.service.js";
+
 // ADR-0090 §10 PY4 TypeScript client wrapper seat. The
 // PythonIntelligenceClient wraps a PythonTransport; the default
 // transport is FixturePythonTransport (deterministic outputs per
