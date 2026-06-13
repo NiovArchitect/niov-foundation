@@ -120,6 +120,17 @@ function providerConfig(provider: OAuthProviderKey): OAuthProviderConfig {
         token_auth: "body",
         scopes: [
           "https://www.googleapis.com/auth/calendar.readonly",
+          // Phase 1271 — least-privilege scheduling-read scopes for
+          // free/busy + meeting-proposal intelligence. Additive: a
+          // re-consent issues a token that carries these; the existing
+          // calendar.readonly already covers the freeBusy query, so
+          // these narrow the future ask, they do not unblock new power.
+          // NO event-write, NO full calendar, NO Gmail-send, NO Drive
+          // scopes are added here (Phase 1271 §Scope Strategy Group 1).
+          "https://www.googleapis.com/auth/calendar.freebusy",
+          "https://www.googleapis.com/auth/calendar.events.freebusy",
+          "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+          "https://www.googleapis.com/auth/calendar.settings.readonly",
           "https://www.googleapis.com/auth/gmail.readonly",
           "https://www.googleapis.com/auth/drive.metadata.readonly",
         ],

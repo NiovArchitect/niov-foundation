@@ -48,8 +48,24 @@ async function fetchWithTimeout(
 export type ConnectorDataReadCode =
   | "NOT_CONNECTED"
   | "TOKEN_REFRESH_FAILED"
+  // Phase 1271 — the stored token reached the provider but was
+  // rejected for auth/scope reasons (HTTP 401/403): the granted
+  // scopes don't cover this read, or the token is no longer valid.
+  // The honest remedy is a re-consent (reconnect), NOT a retry. We
+  // surface this distinctly so the UI can say "reconnect" rather than
+  // a generic provider error — without introspecting token internals.
+  | "SCOPE_REAUTH_REQUIRED"
   | "PROVIDER_ERROR"
   | "INVALID_REQUEST";
+
+// WHAT: Map a provider HTTP status to the honest failure code.
+// WHY: 401 (invalid/expired token) and 403 (insufficient scope) both
+//      mean a re-consent is required — never a silent retry. Any other
+//      non-2xx is an upstream provider error.
+function codeForProviderStatus(status: number): ConnectorDataReadCode {
+  if (status === 401 || status === 403) return "SCOPE_REAUTH_REQUIRED";
+  return "PROVIDER_ERROR";
+}
 
 export interface ConnectorDataReadFailure {
   ok: false;
@@ -156,7 +172,7 @@ export async function listZoomRecordingsForOrg(args: {
   }
   if (!res.ok) {
     await emitDataRead(args, "zoom", "recordings", 0, `http_${res.status}`);
-    return { ok: false, code: "PROVIDER_ERROR" };
+    return { ok: false, code: codeForProviderStatus(res.status) };
   }
 
   let json: { meetings?: unknown };
@@ -247,7 +263,7 @@ export async function getCalendarFreeBusyForOrg(args: {
   }
   if (!res.ok) {
     await emitDataRead(args, "google", "freebusy", 0, `http_${res.status}`);
-    return { ok: false, code: "PROVIDER_ERROR" };
+    return { ok: false, code: codeForProviderStatus(res.status) };
   }
 
   let json: { calendars?: Record<string, unknown> };
