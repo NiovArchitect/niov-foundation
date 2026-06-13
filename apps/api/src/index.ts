@@ -816,12 +816,16 @@ export { SelfHostedCsm1bVoiceProvider } from "./services/voice/self-hosted-csm-1
 // governed conductSession chat path as typed input.
 export {
   callWhisperTranscription,
+  callDeepgramTranscription,
   transcribeVoiceCommandForCaller,
   classifyOpenAiHttp,
+  classifyDeepgramHttp,
   filenameForMime,
   MAX_AUDIO_BYTES,
   WHISPER_MODEL,
   WHISPER_ENDPOINT,
+  DEEPGRAM_MODEL,
+  DEEPGRAM_ENDPOINT,
   type TranscriptionProvider,
   type TranscribeFailureCode,
   type ProviderTranscriptionResult,

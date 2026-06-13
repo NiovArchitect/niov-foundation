@@ -28,9 +28,12 @@
 import { readFileSync } from "node:fs";
 import {
   callWhisperTranscription,
+  callDeepgramTranscription,
   WHISPER_MODEL,
   WHISPER_ENDPOINT,
+  DEEPGRAM_MODEL,
   type TranscribeFailureCode,
+  type ProviderTranscriptionResult,
 } from "@niov/api";
 
 /** Build a tiny, valid 16-bit PCM mono WAV of silence — enough for a
@@ -71,7 +74,7 @@ function diagnose(code: TranscribeFailureCode | "OK"): string {
     case "OK":
       return "OpenAI Whisper path is FULLY WORKING (auth + billing + model all good).";
     case "STT_NO_SPEECH":
-      return "OpenAI is REACHABLE, AUTHORIZED, and BILLED — it processed the audio and heard no speech (expected for the silent probe). The Whisper path WORKS; the in-app billing error is NOT a key/billing problem for a real clip.";
+      return "This provider is REACHABLE, AUTHORIZED, and BILLED — it processed the audio and heard no speech (expected for the silent probe). This provider's transcription path WORKS for a real clip.";
     case "STT_NOT_CONFIGURED":
       return "OPENAI_API_KEY is not present in THIS process. Run this with the API's environment loaded, or set the key in the deployment.";
     case "STT_PROVIDER_AUTH_FAILED":
@@ -91,13 +94,40 @@ function diagnose(code: TranscribeFailureCode | "OK"): string {
   }
 }
 
+function reportProvider(
+  label: string,
+  result: ProviderTranscriptionResult,
+): void {
+  if (result.ok) {
+    console.log(`${label} result_code:`, "OK");
+    console.log(`${label} transcript_length:`, result.transcript.length); // length only
+    console.log(`${label} DIAGNOSIS:`, diagnose("OK"));
+  } else {
+    console.log(`${label} result_code:`, result.code);
+    console.log(`${label} http_status:`, result.httpStatus ?? "n/a");
+    console.log(`${label} DIAGNOSIS:`, diagnose(result.code));
+  }
+}
+
+/** "Works" = the provider reached audio processing (transcript or a
+ *  definitive NO_SPEECH on the silent probe). */
+function providerWorks(r: ProviderTranscriptionResult): boolean {
+  return r.ok || r.code === "STT_NO_SPEECH";
+}
+
 async function main(): Promise<void> {
-  const key = process.env.OPENAI_API_KEY;
-  const keyPresent = typeof key === "string" && key.length >= 10;
-  // Boolean only — never the value.
-  console.log("OPENAI_API_KEY present:", keyPresent);
-  console.log("model:", WHISPER_MODEL);
-  console.log("endpoint:", WHISPER_ENDPOINT);
+  const openaiPresent =
+    typeof process.env.OPENAI_API_KEY === "string" &&
+    process.env.OPENAI_API_KEY.length >= 10;
+  const deepgramPresent =
+    typeof process.env.DEEPGRAM_API_KEY === "string" &&
+    process.env.DEEPGRAM_API_KEY.length >= 10;
+  // Booleans only — never the values.
+  console.log("OPENAI_API_KEY present:", openaiPresent);
+  console.log("DEEPGRAM_API_KEY present:", deepgramPresent);
+  console.log("openai model:", WHISPER_MODEL);
+  console.log("openai endpoint:", WHISPER_ENDPOINT);
+  console.log("deepgram model:", DEEPGRAM_MODEL);
 
   const argPath = process.argv[2];
   let audio: Buffer;
@@ -112,18 +142,26 @@ async function main(): Promise<void> {
     console.log(`audio: in-memory silent WAV (${audio.length} bytes, ${mime})`);
   }
 
-  const result = await callWhisperTranscription(audio, mime);
-  if (result.ok) {
-    console.log("provider:", result.provider);
-    console.log("result_code:", "OK");
-    console.log("transcript_length:", result.transcript.length); // length only
-    console.log("DIAGNOSIS:", diagnose("OK"));
+  const openai = await callWhisperTranscription(audio, mime);
+  reportProvider("[openai-whisper]", openai);
+  const deepgram = await callDeepgramTranscription(audio, mime);
+  reportProvider("[deepgram]", deepgram);
+
+  // Combined verdict for the desktop fallback chain.
+  const openaiOk = providerWorks(openai);
+  const deepgramOk = providerWorks(deepgram);
+  let verdict: string;
+  if (openaiOk) {
+    verdict =
+      "OpenAI Whisper is serving transcription — desktop voice works on the primary provider.";
+  } else if (deepgramOk) {
+    verdict =
+      "OpenAI is blocked but Deepgram is serving transcription — desktop voice works via the FALLBACK provider.";
   } else {
-    console.log("provider:", "openai-whisper");
-    console.log("result_code:", result.code);
-    console.log("http_status:", result.httpStatus ?? "n/a");
-    console.log("DIAGNOSIS:", diagnose(result.code));
+    verdict =
+      "Neither provider is currently serving transcription — desktop voice is honestly degraded (see codes above).";
   }
+  console.log("CHAIN VERDICT:", verdict);
 }
 
 main().catch((err: unknown) => {
