@@ -60,6 +60,9 @@ function ctx(over: Partial<AuthorityContext>): AuthorityContext {
     caller_can_assign_task_to_target: true,
     caller_can_request_confirmation_from_target: true,
     caller_can_use_target_twin: false,
+    caller_timezone: "America/Los_Angeles",
+    target_timezone: null,
+    org_default_timezone: "America/Los_Angeles",
     ...over,
   };
 }
