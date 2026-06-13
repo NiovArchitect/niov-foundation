@@ -49,6 +49,8 @@ function statusForCode(code: string): number {
       return 409; // connection not present / disabled
     case "TOKEN_REFRESH_FAILED":
       return 409; // needs reconnect
+    case "SCOPE_REAUTH_REQUIRED":
+      return 409; // token rejected for auth/scope — re-consent needed
     case "INVALID_REQUEST":
       return 422;
     default:

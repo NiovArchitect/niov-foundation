@@ -139,9 +139,9 @@ describe("listZoomRecordingsForOrg", () => {
     expect(writeAuditEventMock.mock.calls[0]![0].outcome).toBe("DENIED");
   });
 
-  it("maps a provider non-200 to PROVIDER_ERROR with a scrubbed reason", async () => {
+  it("maps a provider 5xx to PROVIDER_ERROR with a scrubbed reason", async () => {
     tokenMock.mockResolvedValue({ ok: true, access_token: "zoom-tok" });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(401, {}));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(500, {}));
 
     const r = await listZoomRecordingsForOrg({
       actor_entity_id: ACTOR,
@@ -153,7 +153,22 @@ describe("listZoomRecordingsForOrg", () => {
     expect(r.code).toBe("PROVIDER_ERROR");
     const audit = writeAuditEventMock.mock.calls[0]![0];
     expect(audit.outcome).toBe("DENIED");
-    expect(audit.details.reason).toBe("http_401");
+    expect(audit.details.reason).toBe("http_500");
+  });
+
+  it("maps a provider 401/403 to SCOPE_REAUTH_REQUIRED (reconnect, not retry)", async () => {
+    tokenMock.mockResolvedValue({ ok: true, access_token: "zoom-tok" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(403, {}));
+
+    const r = await listZoomRecordingsForOrg({
+      actor_entity_id: ACTOR,
+      org_entity_id: ORG,
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("expected failure");
+    expect(r.code).toBe("SCOPE_REAUTH_REQUIRED");
+    expect(writeAuditEventMock.mock.calls[0]![0].outcome).toBe("DENIED");
   });
 });
 

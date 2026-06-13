@@ -128,6 +128,50 @@ describe("Phase 1261 — provider vocabulary + registry coherence", () => {
     }
   });
 
+  it("Phase 1271 — Google requests the scheduling-read scopes and NOT broad calendar/Gmail-send/Drive scopes", async () => {
+    setGoogleEnvs();
+    const start = await startOAuthForOrg({
+      provider_slug: "google",
+      org_entity_id: ORG_ID,
+      actor_entity_id: ACTOR_ID,
+    });
+    expect(start.ok).toBe(true);
+    const url = new URL((start as { authorize_url: string }).authorize_url);
+    // Exact-token set (space-joined) so prefixes like ".../calendar"
+    // don't false-match ".../calendar.readonly".
+    const requested = new Set(
+      (url.searchParams.get("scope") ?? "").split(/\s+/).filter(Boolean),
+    );
+
+    // Group 1 (request now): least-privilege scheduling reads.
+    for (const s of [
+      "https://www.googleapis.com/auth/calendar.freebusy",
+      "https://www.googleapis.com/auth/calendar.events.freebusy",
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+      "https://www.googleapis.com/auth/calendar.settings.readonly",
+    ]) {
+      expect(requested.has(s)).toBe(true);
+    }
+
+    // Group 2/3 (deferred / gated): MUST NOT be requested by default.
+    for (const forbidden of [
+      "https://www.googleapis.com/auth/calendar", // full calendar (see/edit/share/delete)
+      "https://www.googleapis.com/auth/calendar.events", // event write
+      "https://www.googleapis.com/auth/calendar.acls",
+      "https://www.googleapis.com/auth/calendar.calendars",
+      "https://www.googleapis.com/auth/calendar.app.created",
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/gmail.compose",
+      "https://www.googleapis.com/auth/gmail.drafts.create",
+      "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive.meet.readonly",
+    ]) {
+      expect(requested.has(forbidden)).toBe(false);
+    }
+  });
+
   it("the five Phase 1261 audit literals are registered append-only", () => {
     for (const literal of [
       "CONNECTOR_OAUTH_STARTED",
