@@ -937,3 +937,52 @@ export async function revokeOAuthConnection(args: {
   });
   return { ok: true };
 }
+
+// WHAT: Resolve a live, non-expired access token for one org +
+//        provider, refreshing + re-sealing it when needed.
+// INPUT: provider key + org_entity_id.
+// OUTPUT: { ok: true; access_token } | { ok: false; code } where
+//         code is NOT_CONNECTED (no usable envelope) or
+//         TOKEN_REFRESH_FAILED (expired + refresh rejected).
+// WHY: Phase 1270 read-only data bridges (Zoom recordings, Calendar
+//      free/busy) need a valid Bearer token without re-implementing
+//      the load → refresh → re-seal dance verifyOAuthConnection
+//      already owns. The raw token NEVER leaves the server boundary;
+//      callers use it only as an outbound Authorization header and
+//      MUST NOT log, persist, or return it. When a refresh produces
+//      a new envelope we re-seal it so the next read does not refresh
+//      again (mirrors the verify path's persistence intent).
+export async function getProviderAccessTokenForOrg(args: {
+  provider: OAuthProviderKey;
+  org_entity_id: string;
+}): Promise<
+  | { ok: true; access_token: string }
+  | { ok: false; code: "NOT_CONNECTED" | "TOKEN_REFRESH_FAILED" }
+> {
+  const cfg = providerConfig(args.provider);
+  const loaded = await loadEnvelope({
+    org_entity_id: args.org_entity_id,
+    provider: args.provider,
+  });
+  if (loaded.ok === false) return { ok: false, code: "NOT_CONNECTED" };
+  const refreshed = await refreshIfExpired(cfg, loaded.envelope);
+  if (refreshed === null) return { ok: false, code: "TOKEN_REFRESH_FAILED" };
+  // Re-seal only when refresh actually rotated the token, so steady
+  // state is a single decrypt with no write.
+  if (refreshed.access_token !== loaded.envelope.access_token) {
+    try {
+      const enc = makeContentEncryption();
+      await persistMetadata({
+        org_entity_id: args.org_entity_id,
+        provider: args.provider,
+        meta: loaded.meta,
+        sealed: enc.encrypt(JSON.stringify(refreshed)),
+      });
+    } catch {
+      // A re-seal failure is non-fatal: the in-memory refreshed token
+      // is still valid for this request; the next request refreshes
+      // again. Never surface or log the token material.
+    }
+  }
+  return { ok: true, access_token: refreshed.access_token };
+}
