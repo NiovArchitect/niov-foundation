@@ -118,6 +118,7 @@ import { registerOtzarDandelionRoutes } from "./routes/otzar-dandelion.routes.js
 import { registerOtzarAiEmployeesRoutes } from "./routes/otzar-ai-employees.routes.js";
 import { registerOtzarSettlementRoutes } from "./routes/otzar-settlement.routes.js";
 import { registerOtzarVoiceTtsRoutes } from "./routes/otzar-voice-tts.routes.js";
+import { registerOtzarVoiceTranscribeRoutes } from "./routes/otzar-voice-transcribe.routes.js";
 import { registerOtzarBeamStatusRoutes } from "./routes/otzar-beam-status.routes.js";
 import { registerConnectorAdapterStatusRoutes } from "./routes/connector-adapter-status.routes.js";
 import { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
@@ -730,6 +731,7 @@ export async function buildApp(
   await registerOtzarAiEmployeesRoutes(app, authService);
   await registerOtzarSettlementRoutes(app, authService);
   await registerOtzarVoiceTtsRoutes(app, authService);
+  await registerOtzarVoiceTranscribeRoutes(app, authService);
   await registerOtzarBeamStatusRoutes(app, authService);
   await registerConnectorAdapterStatusRoutes(app, authService);
   await registerOrgCollaborationPolicyRoutes(app, authService);
