@@ -817,8 +817,14 @@ export { SelfHostedCsm1bVoiceProvider } from "./services/voice/self-hosted-csm-1
 export {
   callWhisperTranscription,
   transcribeVoiceCommandForCaller,
+  classifyOpenAiHttp,
+  filenameForMime,
   MAX_AUDIO_BYTES,
+  WHISPER_MODEL,
+  WHISPER_ENDPOINT,
+  type TranscriptionProvider,
   type TranscribeFailureCode,
+  type ProviderTranscriptionResult,
   type WhisperResult,
   type TranscribeForCallerResult,
 } from "./services/voice/transcription.service.js";
