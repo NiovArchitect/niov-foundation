@@ -150,6 +150,7 @@ export interface LedgerFilters {
   work_plan_id?: string;
   source_type?: string;
   priority?: string;
+  proposed_action_id?: string;
 }
 
 // WHAT: List ledger entries for an org with optional filters + caller
@@ -174,6 +175,7 @@ export async function listLedgerEntries(args: {
   if (f.work_plan_id !== undefined) where.work_plan_id = f.work_plan_id;
   if (f.source_type !== undefined) where.source_type = f.source_type;
   if (f.priority !== undefined) where.priority = f.priority;
+  if (f.proposed_action_id !== undefined) where.proposed_action_id = f.proposed_action_id;
   if (!args.is_manager) {
     // Employee: only entries that involve them.
     where.OR = [
@@ -351,6 +353,11 @@ export interface WorkLedgerView {
   created_at: string;
   updated_at: string;
   verified_at: string | null;
+  // Phase 1281 — coordination runtime, attached by the route after the
+  // governed BEAM dispatch (not persisted this phase; reflects the real
+  // dispatch result, never faked).
+  coordination_runtime?: string;
+  coordination_watcher?: string;
 }
 
 interface LedgerRow {
