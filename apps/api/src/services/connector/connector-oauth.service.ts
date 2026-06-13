@@ -949,6 +949,28 @@ export async function revokeOAuthConnection(args: {
   return { ok: true };
 }
 
+// WHAT: Read the GRANTED scopes stored for one org + provider.
+// INPUT: provider key + org_entity_id.
+// OUTPUT: the granted scope strings (from the consent that issued the
+//         stored token), or null when there is no usable connection.
+// WHY: Capability gating (e.g. "may this token create a calendar
+//      event?") must reason about what was ACTUALLY granted at consent
+//      time — never the currently-requested cfg.scopes (that would fake
+//      readiness before a re-consent). exchangeCode persists the
+//      token-response `scope` list into metadata; this returns that.
+//      Scope STRINGS only — no token material ever leaves here.
+export async function getProviderGrantedScopes(args: {
+  provider: OAuthProviderKey;
+  org_entity_id: string;
+}): Promise<string[] | null> {
+  const loaded = await loadEnvelope({
+    org_entity_id: args.org_entity_id,
+    provider: args.provider,
+  });
+  if (loaded.ok === false) return null;
+  return [...loaded.meta.scopes];
+}
+
 // WHAT: Resolve a live, non-expired access token for one org +
 //        provider, refreshing + re-sealing it when needed.
 // INPUT: provider key + org_entity_id.

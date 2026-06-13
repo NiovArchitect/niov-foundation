@@ -501,7 +501,16 @@ export type AuditEventType =
   // reason code. FORBIDDEN: access/refresh tokens, raw provider
   // response bodies, recording download URLs, meeting titles,
   // attendee identities, free/busy event details.
-  | "CONNECTOR_DATA_READ";
+  | "CONNECTOR_DATA_READ"
+  // Phase 1272 — gated calendar event creation. Emitted on every
+  // create ATTEMPT: outcome SUCCESS only when an event was actually
+  // created on the provider (all gates passed + event-write scope
+  // present), outcome DENIED with a scrubbed gate code otherwise
+  // (EVENT_WRITE_SCOPE_MISSING / NEEDS_SELECTED_TIME / NEEDS_APPROVAL
+  // / …). SAFE details: gate code + participant_count +
+  // has_selected_time booleans only. FORBIDDEN: tokens, attendee
+  // identities/emails, event titles, raw provider bodies.
+  | "CALENDAR_EVENT_CREATE";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -682,6 +691,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONNECTOR_OAUTH_REVOKED",
   // Phase 1270 read-only connector data bridges.
   "CONNECTOR_DATA_READ",
+  // Phase 1272 gated calendar event creation.
+  "CALENDAR_EVENT_CREATE",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
