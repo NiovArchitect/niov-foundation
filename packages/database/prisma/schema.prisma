@@ -22,18 +22,18 @@ datasource db {
 // or governments. Every action in the system is performed by an Entity,
 // and every Memory Capsule is owned by an Entity.
 model Entity {
-  entity_id            String        @id @default(uuid()) @db.Uuid
+  entity_id            String       @id @default(uuid()) @db.Uuid
   entity_type          EntityType
   display_name         String
-  email                String?       @unique
+  email                String?      @unique
   password_hash        String?
-  status               EntityStatus  @default(ACTIVE)
-  clearance_level      Int           @default(0)
+  status               EntityStatus @default(ACTIVE)
+  clearance_level      Int          @default(0)
   public_key           String
-  failed_auth_attempts Int           @default(0)
+  failed_auth_attempts Int          @default(0)
   suspended_at         DateTime?
-  created_at           DateTime      @default(now())
-  updated_at           DateTime      @updatedAt
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
   deleted_at           DateTime?
   // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
   // Sub-decision 2: data-tier jurisdictional anchor for the entity.
@@ -116,8 +116,8 @@ model MemoryCapsule {
   // or when tokens_tokenizer doesn't match the currently-configured
   // PREFERRED_LLM. Both default to safe fallbacks so existing 383
   // baseline writes that don't set them keep working.
-  tokens              Int?    @default(0)
-  tokens_tokenizer    String? @default("anthropic")
+  tokens              Int?      @default(0)
+  tokens_tokenizer    String?   @default("anthropic")
   // Section 11C: structured due-date for COMMITMENT capsules so
   // priming.getCommitmentsDueSoon can query [now, now+48h] without
   // string-parsing payload_summary. Nullable -- only COMMITMENT
@@ -127,9 +127,9 @@ model MemoryCapsule {
   storage_location String
   storage_tier     StorageTier @default(WARM)
 
-  clearance_required Int     @default(0)
-  access_count       Int     @default(0)
-  content_hash       String
+  clearance_required     Int     @default(0)
+  access_count           Int     @default(0)
+  content_hash           String
   // ADR-0045 G5.3 Q-G5.3-α α-1 LOCK: embedding lag detection
   // metadata. Set after successful embedding generation at write-tier
   // only (per Q-G5.3-γ γ-1). Stale-embedding detectable via
@@ -138,13 +138,13 @@ model MemoryCapsule {
   // lands via Prisma update (per Q-G5.3-θ θ-1). Per Q-G5.3-β β-1
   // no @@index at G5.3 (no filtering surface yet).
   embedding_content_hash String?
-  ai_access_blocked  Boolean @default(false)
+  ai_access_blocked      Boolean @default(false)
   // D-2D-D10-4 validation gate flag (RAA 12.8 §5.2): when true, a
   // restricted-class entity's NEGOTIATE is denied (VALIDATION_REQUIRED)
   // until a human clears the gate. Read-side mirror of ai_access_blocked;
   // the escalation-coupling (gate fail -> COMPLIANCE_GATE escalation)
   // lands in [D-2D-D10-5].
-  requires_validation Boolean @default(false)
+  requires_validation    Boolean @default(false)
 
   connected_capsule_ids String[]
   connected_entity_ids  String[]
@@ -158,11 +158,11 @@ model MemoryCapsule {
   // created_session_id are NEVER overwritten. updated_by /
   // updated_session_id reflect the most recent edit. previous_version
   // is the version before the most recent update.
-  created_by         String?  @db.Uuid
-  created_session_id String?  @db.Uuid
+  created_by         String?                      @db.Uuid
+  created_session_id String?                      @db.Uuid
   write_reason       String?
-  updated_by         String?  @db.Uuid
-  updated_session_id String?  @db.Uuid
+  updated_by         String?                      @db.Uuid
+  updated_session_id String?                      @db.Uuid
   previous_version   Int?
   mutation_type      MutationType?
   // ADR-0055 Wave 2C: optional, nullable link to the OtzarConversation
@@ -170,20 +170,20 @@ model MemoryCapsule {
   // capsules and for non-CORRECTION capsules. No FK to OtzarConversation;
   // service code (processCorrection / getConversationCorrections) owns the
   // existence + self-scope check (Section 9 pattern). No backfill.
-  conversation_id    String?  @db.Uuid
+  conversation_id    String?                      @db.Uuid
   embedding          Unsupported("vector(1536)")?
 
-  created_at       DateTime  @default(now())
-  last_accessed_at DateTime?
-  last_updated_at  DateTime  @updatedAt
+  created_at             DateTime  @default(now())
+  last_accessed_at       DateTime?
+  last_updated_at        DateTime  @updatedAt
   // ADR-0045 G5.3 Q-G5.3-α α-1 LOCK: timestamp of last successful
   // embedding generation. Paired with embedding_content_hash for
   // stale-embedding detection. Set only when embeddingResult.ok per
   // Q-G5.3-γ γ-1 + Q-G5.3-ε ε-1. Preserved on UPDATE failure
   // (Q-G5.3-θ θ-1) and MERGE/NOOP (Q-G5.3-ζ + Q-G5.3-η).
   embedding_generated_at DateTime?
-  expires_at       DateTime?
-  deleted_at       DateTime?
+  expires_at             DateTime?
+  deleted_at             DateTime?
   // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
   // Sub-decision 2: data-tier jurisdictional anchor for the capsule.
   // Defaulted at service-tier per Sub-decision 5 (cascade: explicit
@@ -191,10 +191,10 @@ model MemoryCapsule {
   // → null; cascade lands at sub-phase 3 register substantively).
   // Immutable after creation per Sub-decision 4 (cross-region transfer
   // is forward-queued explicit workflow with own audit semantics).
-  jurisdiction      String?
+  jurisdiction           String?
 
-  wallet      Wallet       @relation(fields: [wallet_id], references: [wallet_id], onDelete: Cascade)
-  entity      Entity       @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
+  wallet      Wallet              @relation(fields: [wallet_id], references: [wallet_id], onDelete: Cascade)
+  entity      Entity              @relation(fields: [entity_id], references: [entity_id], onDelete: Cascade)
   permissions Permission[]
   escalations EscalationRequest[]
 
@@ -606,18 +606,18 @@ enum MutationType {
 // Section 15 may retrofit a raw-SQL partial unique as a belt-and-
 // suspenders check.
 model Hive {
-  hive_id              String     @id @default(uuid()) @db.Uuid
-  hive_name            String
-  created_by           String     @db.Uuid
-  hive_type            HiveType
-  governance_terms     Json       @default("{}")
-  aggregate_capsule_id String?    @db.Uuid
-  member_count         Int        @default(0)
-  status               HiveStatus @default(ACTIVE)
-  org_entity_id        String?    @db.Uuid
-  is_default_enterprise Boolean   @default(false)
-  created_at           DateTime   @default(now())
-  updated_at           DateTime   @updatedAt
+  hive_id               String     @id @default(uuid()) @db.Uuid
+  hive_name             String
+  created_by            String     @db.Uuid
+  hive_type             HiveType
+  governance_terms      Json       @default("{}")
+  aggregate_capsule_id  String?    @db.Uuid
+  member_count          Int        @default(0)
+  status                HiveStatus @default(ACTIVE)
+  org_entity_id         String?    @db.Uuid
+  is_default_enterprise Boolean    @default(false)
+  created_at            DateTime   @default(now())
+  updated_at            DateTime   @updatedAt
 
   members HiveMembership[]
 
@@ -713,18 +713,18 @@ model ApiKey {
 // holder_share_usd is computed at create time so historical splits
 // stay accurate even if the protocol ratio is later adjusted.
 model MonetizationEvent {
-  event_id                String              @id @default(uuid()) @db.Uuid
-  capsule_id              String              @db.Uuid
-  accessor_entity_id      String              @db.Uuid
-  wallet_holder_entity_id String              @db.Uuid
+  event_id                String             @id @default(uuid()) @db.Uuid
+  capsule_id              String             @db.Uuid
+  accessor_entity_id      String             @db.Uuid
+  wallet_holder_entity_id String             @db.Uuid
   capsule_type            CapsuleType
   gross_value_usd         Float
   niov_fee_usd            Float
   holder_share_usd        Float
-  status                  MonetizationStatus  @default(PENDING)
-  retry_count             Int                 @default(0)
+  status                  MonetizationStatus @default(PENDING)
+  retry_count             Int                @default(0)
   failure_reason          String?
-  created_at              DateTime            @default(now())
+  created_at              DateTime           @default(now())
   processed_at            DateTime?
 
   @@index([wallet_holder_entity_id])
@@ -740,12 +740,12 @@ model MonetizationEvent {
 // in USD; settlement to a real bank rail is a future-section
 // concern.
 model WalletBalance {
-  balance_id             String   @id @default(uuid()) @db.Uuid
-  entity_id              String   @unique @db.Uuid
-  available_balance_usd  Float    @default(0)
-  pending_balance_usd    Float    @default(0)
-  lifetime_earned_usd    Float    @default(0)
-  updated_at             DateTime @updatedAt
+  balance_id            String   @id @default(uuid()) @db.Uuid
+  entity_id             String   @unique @db.Uuid
+  available_balance_usd Float    @default(0)
+  pending_balance_usd   Float    @default(0)
+  lifetime_earned_usd   Float    @default(0)
+  updated_at            DateTime @updatedAt
 
   @@map("wallet_balances")
 }
@@ -923,11 +923,11 @@ model TwinSkill {
 // HOLDER_SHARE / NIOV_FEE_SHARE constants; the wire-up from
 // constants -> DB lands in a later section.
 model MonetizationConfig {
-  config_id       String   @id @default(uuid()) @db.Uuid
-  niov_fee_share  Float    @default(0.30)
-  holder_share    Float    @default(0.70)
-  updated_at      DateTime @updatedAt
-  updated_by      String?  @db.Uuid
+  config_id      String   @id @default(uuid()) @db.Uuid
+  niov_fee_share Float    @default(0.30)
+  holder_share   Float    @default(0.70)
+  updated_at     DateTime @updatedAt
+  updated_by     String?  @db.Uuid
 
   @@map("monetization_config")
 }
@@ -951,13 +951,13 @@ model MonetizationConfig {
 // ENTITLEMENT_INSUFFICIENT and emits ENTITLEMENT_CHECK_DENIED
 // audit event on denial per ADR-0042 §Q-γ.1 clean-transition.
 model Entitlement {
-  org_entity_id          String   @id @db.Uuid
-  plan_archetype_id      String
-  feature_entitlements   Json     @default("{}")
-  capability_packs       String[] @default([])
-  catalog_version        String   @default("1.0.0")
-  created_at             DateTime @default(now())
-  updated_at             DateTime @updatedAt
+  org_entity_id        String   @id @db.Uuid
+  plan_archetype_id    String
+  feature_entitlements Json     @default("{}")
+  capability_packs     String[] @default([])
+  catalog_version      String   @default("1.0.0")
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
 
   @@map("entitlements")
 }
@@ -980,12 +980,12 @@ model Entitlement {
 // per ADR-0042 §Q-γ.1 clean-transition discipline; the
 // pre-emission audit invariant per RULE 4 is preserved.
 model UsageMeter {
-  org_entity_id     String   @db.Uuid
-  meter_id          String
-  current_value     BigInt   @default(0)
-  last_recorded_at  DateTime @default(now())
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  org_entity_id    String   @db.Uuid
+  meter_id         String
+  current_value    BigInt   @default(0)
+  last_recorded_at DateTime @default(now())
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
   @@id([org_entity_id, meter_id])
   @@index([org_entity_id])
@@ -1010,18 +1010,18 @@ model UsageMeter {
 // transition so the audit chain itself is the receipt at this
 // slice per ADR-0002.
 model ConsentGrant {
-  consent_id          String              @id @default(uuid()) @db.Uuid
-  grantor_entity_id   String              @db.Uuid
-  grantee_entity_id   String              @db.Uuid
-  purpose             String
-  permission_id       String?             @db.Uuid
-  consent_state       ConsentState        @default(REQUESTED)
-  valid_from          DateTime            @default(now())
-  valid_until         DateTime?
-  revoked_at          DateTime?
-  revoked_by          String?             @db.Uuid
-  created_at          DateTime            @default(now())
-  updated_at          DateTime            @updatedAt
+  consent_id        String       @id @default(uuid()) @db.Uuid
+  grantor_entity_id String       @db.Uuid
+  grantee_entity_id String       @db.Uuid
+  purpose           String
+  permission_id     String?      @db.Uuid
+  consent_state     ConsentState @default(REQUESTED)
+  valid_from        DateTime     @default(now())
+  valid_until       DateTime?
+  revoked_at        DateTime?
+  revoked_by        String?      @db.Uuid
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
 
   @@index([grantor_entity_id])
   @@index([grantee_entity_id])
@@ -1053,13 +1053,13 @@ enum ConsentState {
 // the service tier (per Section 9 §13 — Prisma FKs would
 // complicate cross-tenant reads; service-tier enforces).
 model Receipt {
-  receipt_id        String   @id @default(uuid()) @db.Uuid
-  consent_id        String   @db.Uuid
-  permission_id     String?  @db.Uuid
-  audit_event_id    String?  @db.Uuid
-  timestamp_sealed  DateTime @default(now())
-  receipt_hash      String
-  created_at        DateTime @default(now())
+  receipt_id       String   @id @default(uuid()) @db.Uuid
+  consent_id       String   @db.Uuid
+  permission_id    String?  @db.Uuid
+  audit_event_id   String?  @db.Uuid
+  timestamp_sealed DateTime @default(now())
+  receipt_hash     String
+  created_at       DateTime @default(now())
 
   @@index([consent_id])
   @@index([audit_event_id])
@@ -1120,15 +1120,15 @@ model ConversationMemoryScope {
 // atomically via Prisma's increment operator (same pattern as
 // UsageMeter from PR #233).
 model VoiceAccessLog {
-  conversation_id          String   @db.Uuid
-  entity_id                String   @db.Uuid
-  voice_provider           String
-  duration_seconds         BigInt   @default(0)
-  capsule_access_count     BigInt   @default(0)
-  signals_projected_count  BigInt   @default(0)
-  last_recorded_at         DateTime @default(now())
-  created_at               DateTime @default(now())
-  updated_at               DateTime @updatedAt
+  conversation_id         String   @db.Uuid
+  entity_id               String   @db.Uuid
+  voice_provider          String
+  duration_seconds        BigInt   @default(0)
+  capsule_access_count    BigInt   @default(0)
+  signals_projected_count BigInt   @default(0)
+  last_recorded_at        DateTime @default(now())
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
 
   @@id([conversation_id, entity_id, voice_provider])
   @@index([conversation_id])
@@ -1154,19 +1154,19 @@ model VoiceAccessLog {
 // SwarmBoundary model is deferred to a follow-up DMW DM3-B
 // slice; V1 covers the delegation-creation register only.
 model TeamDelegation {
-  delegation_id         String                 @id @default(uuid()) @db.Uuid
-  delegator_entity_id   String                 @db.Uuid
-  team_entity_id        String                 @db.Uuid
-  capability_scope      String[]               @default([])
-  supervision_required  Boolean                @default(true)
-  revocation_bridge_id  String?                @db.Uuid
-  valid_from            DateTime               @default(now())
-  valid_until           DateTime?
-  status                TeamDelegationStatus   @default(ACTIVE)
-  revoked_at            DateTime?
-  revoked_by            String?                @db.Uuid
-  created_at            DateTime               @default(now())
-  updated_at            DateTime               @updatedAt
+  delegation_id        String               @id @default(uuid()) @db.Uuid
+  delegator_entity_id  String               @db.Uuid
+  team_entity_id       String               @db.Uuid
+  capability_scope     String[]             @default([])
+  supervision_required Boolean              @default(true)
+  revocation_bridge_id String?              @db.Uuid
+  valid_from           DateTime             @default(now())
+  valid_until          DateTime?
+  status               TeamDelegationStatus @default(ACTIVE)
+  revoked_at           DateTime?
+  revoked_by           String?              @db.Uuid
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
 
   @@index([delegator_entity_id])
   @@index([team_entity_id])
@@ -1203,13 +1203,13 @@ enum TeamDelegationStatus {
 // at this slice; encoded but no consumer enforces yet) names
 // the relaxation.
 model SwarmBoundary {
-  team_entity_id        String              @id @db.Uuid
-  capsule_access_mode   CapsuleAccessMode   @default(METADATA_ONLY)
-  cross_team_reach      Boolean             @default(false)
-  escalation_on_exceed  EscalationOnExceed  @default(DENY)
-  declared_by           String              @db.Uuid
-  created_at            DateTime            @default(now())
-  updated_at            DateTime            @updatedAt
+  team_entity_id       String             @id @db.Uuid
+  capsule_access_mode  CapsuleAccessMode  @default(METADATA_ONLY)
+  cross_team_reach     Boolean            @default(false)
+  escalation_on_exceed EscalationOnExceed @default(DENY)
+  declared_by          String             @db.Uuid
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
 
   @@index([declared_by])
   @@map("swarm_boundaries")
@@ -1309,25 +1309,25 @@ model IntegrationCredential {
 // callers MUST redact sensitive content before persistence.
 // body_summary is a short bounded string for inbox-list views.
 model Notification {
-  notification_id      String    @id @default(uuid()) @db.Uuid
-  org_entity_id        String    @db.Uuid
-  recipient_entity_id  String    @db.Uuid
-  source_entity_id     String    @db.Uuid
+  notification_id     String    @id @default(uuid()) @db.Uuid
+  org_entity_id       String    @db.Uuid
+  recipient_entity_id String    @db.Uuid
+  source_entity_id    String    @db.Uuid
   // Back-link to the originating Action when the notification was
   // dispatched via the ADR-0057 action runtime. Nullable so future
   // direct-API notification creation paths can persist without a
   // synthetic Action wrapper.
-  action_id            String?   @db.Uuid
+  action_id           String?   @db.Uuid
   // Free-form class label (e.g., "ACTION_PROPOSED",
   // "DUAL_CONTROL_REQUEST"). Open string at sub-phase 1; a future
   // wave may promote to a NotificationClass enum per the
   // CapsuleType extension protocol precedent (ADR-0021).
-  notification_class   String
-  body_summary         String
-  body_redacted        Json?
-  created_at           DateTime  @default(now())
-  read_at              DateTime?
-  deleted_at           DateTime?
+  notification_class  String
+  body_summary        String
+  body_redacted       Json?
+  created_at          DateTime  @default(now())
+  read_at             DateTime?
+  deleted_at          DateTime?
 
   // Recipient inbox list — covers the canonical
   // "unread notifications for me" + "all notifications for me"
@@ -1445,9 +1445,9 @@ model CompoundingMetrics {
 // floor up when retrievals run lean (under-using their budget) or
 // down when retrievals run hot but with poor success.
 model FeedbackConfig {
-  config_id        String   @id @default(uuid()) @db.Uuid
-  relevance_floor  Float    @default(0.2)
-  updated_at       DateTime @updatedAt
+  config_id       String   @id @default(uuid()) @db.Uuid
+  relevance_floor Float    @default(0.2)
+  updated_at      DateTime @updatedAt
 
   @@map("feedback_config")
 }
@@ -1483,12 +1483,12 @@ model PermissionSuggestion {
 // patent claim US 12,517,919 + the privacy invariant test in
 // tests/unit/feedback.test.ts.
 model MonetizationSuggestion {
-  suggestion_id        String   @id @default(uuid()) @db.Uuid
-  entity_id            String   @db.Uuid // wallet HOLDER, never accessor
-  capsule_type         String
-  demand_level         String   // LOW | MEDIUM | HIGH
-  estimated_value_usd  Float
-  created_at           DateTime @default(now())
+  suggestion_id       String   @id @default(uuid()) @db.Uuid
+  entity_id           String   @db.Uuid // wallet HOLDER, never accessor
+  capsule_type        String
+  demand_level        String // LOW | MEDIUM | HIGH
+  estimated_value_usd Float
+  created_at          DateTime @default(now())
 
   @@index([entity_id])
   @@map("monetization_suggestions")
@@ -1523,21 +1523,21 @@ model FeedbackLoopHealth {
 // ═══════════════════════════════════════════════════════════════════
 
 model OtzarConversation {
-  conversation_id String   @id @default(uuid()) @db.Uuid
-  entity_id       String   @db.Uuid
-  twin_id         String   @db.Uuid
-  source_type     String   @default("CHAT")
-  participants    String[] @default([])
-  message_count   Int      @default(0)
-  status          String   @default("ACTIVE")
-  started_at      DateTime @default(now())
-  closed_at       DateTime?
+  conversation_id    String    @id @default(uuid()) @db.Uuid
+  entity_id          String    @db.Uuid
+  twin_id            String    @db.Uuid
+  source_type        String    @default("CHAT")
+  participants       String[]  @default([])
+  message_count      Int       @default(0)
+  status             String    @default("ACTIVE")
+  started_at         DateTime  @default(now())
+  closed_at          DateTime?
   // ADR-0054 Wave 2B: explicit, nullable link to the CONVERSATION_LEARNING
   // summary capsule written at close. Additive; null for pre-existing/active
   // conversations (no backfill). Replaces fragile storage_location parsing
   // (D-OTZ-3) as the canonical conversation->summary link. Set by
   // closeConversation / degradedClose; read by getConversationDetail.
-  summary_capsule_id String? @db.Uuid
+  summary_capsule_id String?   @db.Uuid
 
   @@index([entity_id])
   @@map("otzar_conversations")
@@ -1766,22 +1766,22 @@ enum BreakGlassStatus {
 // target_entity_id is structurally nullable; it MUST NEVER silently fall
 // back to source_entity_id (GAP-C1 self-resolution guard preserved).
 model Action {
-  action_id          String           @id @default(uuid()) @db.Uuid
-  source_entity_id   String           @db.Uuid
-  org_entity_id      String           @db.Uuid
-  target_entity_id   String?          @db.Uuid
-  action_type        ActionType
-  risk_tier          ActionRiskTier
-  policy_envelope    Json
-  payload_summary    String
-  payload_redacted   Json
-  idempotency_key    String           @unique
-  escalation_id      String?          @db.Uuid
-  status             ActionStatus     @default(PROPOSED)
-  expires_at         DateTime?
-  created_at         DateTime         @default(now())
-  updated_at         DateTime         @updatedAt
-  deleted_at         DateTime?
+  action_id        String         @id @default(uuid()) @db.Uuid
+  source_entity_id String         @db.Uuid
+  org_entity_id    String         @db.Uuid
+  target_entity_id String?        @db.Uuid
+  action_type      ActionType
+  risk_tier        ActionRiskTier
+  policy_envelope  Json
+  payload_summary  String
+  payload_redacted Json
+  idempotency_key  String         @unique
+  escalation_id    String?        @db.Uuid
+  status           ActionStatus   @default(PROPOSED)
+  expires_at       DateTime?
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @updatedAt
+  deleted_at       DateTime?
 
   @@index([org_entity_id, status, created_at])
   @@index([source_entity_id, status])
@@ -1860,12 +1860,12 @@ model ActionResult {
 // (org_entity_id, action_type, risk_tier) is UNIQUE — at most one policy
 // row per org per action-type per risk-tier.
 model ActionPolicy {
-  policy_id                  String          @id @default(uuid()) @db.Uuid
-  org_entity_id              String          @db.Uuid
-  action_type                ActionType
-  risk_tier                  ActionRiskTier
-  default_decision           ActionDecision
-  require_admin_capability   String?
+  policy_id                   String         @id @default(uuid()) @db.Uuid
+  org_entity_id               String         @db.Uuid
+  action_type                 ActionType
+  risk_tier                   ActionRiskTier
+  default_decision            ActionDecision
+  require_admin_capability    String?
   // ADR-0057 Wave 6: optional per-(org, action_type, risk_tier)
   // overrides for the executor's retry budget and per-attempt
   // timeout (LOCK-GAP-1 / LOCK-GAP-2 promotion). When NULL the
@@ -1876,11 +1876,11 @@ model ActionPolicy {
   // terminalization). attempt_timeout_ms_override is the
   // per-attempt timeout ceiling in milliseconds. Either field
   // independently nullable.
-  retry_budget                 Int?
-  attempt_timeout_ms_override  Int?
-  updated_by                 String          @db.Uuid
-  created_at                 DateTime        @default(now())
-  updated_at                 DateTime        @updatedAt
+  retry_budget                Int?
+  attempt_timeout_ms_override Int?
+  updated_by                  String         @db.Uuid
+  created_at                  DateTime       @default(now())
+  updated_at                  DateTime       @updatedAt
 
   @@unique([org_entity_id, action_type, risk_tier])
   @@index([org_entity_id])
@@ -1981,17 +1981,17 @@ enum ActionAttemptOutcome {
 // canonical source and grows behind Founder QLOCK; an enum would
 // add a migration per new connector type).
 model ConnectorBinding {
-  binding_id            String    @id @default(uuid()) @db.Uuid
-  org_entity_id         String    @db.Uuid
-  type                  String
-  display_name          String
-  config                Json      @default("{}")
-  secret_ref            String?
-  enabled               Boolean   @default(true)
-  created_by_entity_id  String    @db.Uuid
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @updatedAt
-  deleted_at            DateTime?
+  binding_id           String    @id @default(uuid()) @db.Uuid
+  org_entity_id        String    @db.Uuid
+  type                 String
+  display_name         String
+  config               Json      @default("{}")
+  secret_ref           String?
+  enabled              Boolean   @default(true)
+  created_by_entity_id String    @db.Uuid
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  deleted_at           DateTime?
 
   @@unique([org_entity_id, type, display_name])
   @@index([org_entity_id, enabled, deleted_at])
@@ -2019,21 +2019,21 @@ model ConnectorBinding {
 // bridge IDs / secret refs ever persist here (enforced at the
 // service tier).
 model PlaygroundScenario {
-  scenario_id          String    @id @default(uuid()) @db.Uuid
-  owner_entity_id      String    @db.Uuid
-  org_entity_id        String?   @db.Uuid
-  title                String
-  description          String?
-  goal_summary         String?
-  status               String    @default("DRAFT")
-  scenario_type        String    @default("MANUAL")
-  input_refs           Json      @default("{}")
-  constraints          Json      @default("{}")
-  expected_outputs     Json      @default("{}")
-  governance_findings  Json      @default("{}")
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
-  archived_at          DateTime?
+  scenario_id         String    @id @default(uuid()) @db.Uuid
+  owner_entity_id     String    @db.Uuid
+  org_entity_id       String?   @db.Uuid
+  title               String
+  description         String?
+  goal_summary        String?
+  status              String    @default("DRAFT")
+  scenario_type       String    @default("MANUAL")
+  input_refs          Json      @default("{}")
+  constraints         Json      @default("{}")
+  expected_outputs    Json      @default("{}")
+  governance_findings Json      @default("{}")
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  archived_at         DateTime?
 
   @@index([org_entity_id, owner_entity_id, status])
   @@index([owner_entity_id, archived_at, created_at])
@@ -2064,21 +2064,21 @@ model PlaygroundScenario {
 // correction text, raw transcript excerpts, and cross-employee /
 // cross-org aggregation at v1.
 model OtzarProposedPattern {
-  pattern_id          String    @id @default(uuid()) @db.Uuid
-  owner_entity_id     String    @db.Uuid
-  source_signal_type  String    // closed-vocab per ADR-0066 §4
-  pattern_label       String    // closed-vocab per ADR-0066 §4
-  safe_summary        String    // canonical template only; never raw text
-  confidence_label    String    @default("MEDIUM") // closed-vocab LOW|MEDIUM|HIGH
-  status              String    @default("PROPOSED") // closed-vocab PROPOSED|ACCEPTED|REJECTED|ARCHIVED
-  occurrence_count    Int       @default(1)
-  first_signal_at     DateTime
-  last_signal_at      DateTime
-  proposed_at         DateTime  @default(now())
-  reviewed_at         DateTime?
-  archived_at         DateTime?
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
+  pattern_id         String    @id @default(uuid()) @db.Uuid
+  owner_entity_id    String    @db.Uuid
+  source_signal_type String // closed-vocab per ADR-0066 §4
+  pattern_label      String // closed-vocab per ADR-0066 §4
+  safe_summary       String // canonical template only; never raw text
+  confidence_label   String    @default("MEDIUM") // closed-vocab LOW|MEDIUM|HIGH
+  status             String    @default("PROPOSED") // closed-vocab PROPOSED|ACCEPTED|REJECTED|ARCHIVED
+  occurrence_count   Int       @default(1)
+  first_signal_at    DateTime
+  last_signal_at     DateTime
+  proposed_at        DateTime  @default(now())
+  reviewed_at        DateTime?
+  archived_at        DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
 
   @@index([owner_entity_id, status, proposed_at])
   @@index([owner_entity_id, archived_at])
@@ -2166,29 +2166,29 @@ enum TwinAuthorityScopeType {
 }
 
 model TwinAuthorityGrant {
-  grant_id              String                        @id @default(uuid()) @db.Uuid
-  org_entity_id         String                        @db.Uuid
-  grantor_entity_id     String                        @db.Uuid
-  grantee_entity_id     String                        @db.Uuid
-  scope_type            TwinAuthorityScopeType
-  scope_id              String?                       @db.Uuid
-  action_type           String?
-  connector_type        String?
-  connector_binding_id  String?                       @db.Uuid
-  duration_class        TwinAuthorityDurationClass
-  sensitivity_class     TwinAuthoritySensitivityClass @default(MODERATE)
-  state                 TwinAuthorityGrantState       @default(ACTIVE)
-  effective_from        DateTime                      @default(now())
-  expires_at            DateTime?
-  revoked_at            DateTime?
-  revoked_by_entity_id  String?                       @db.Uuid
-  consumed_at           DateTime?
-  purpose_summary       String
-  constraints_json      Json                          @default("{}")
-  consent_grant_id      String?                       @db.Uuid
-  receipt_id            String?                       @db.Uuid
-  created_at            DateTime                      @default(now())
-  updated_at            DateTime                      @updatedAt
+  grant_id             String                        @id @default(uuid()) @db.Uuid
+  org_entity_id        String                        @db.Uuid
+  grantor_entity_id    String                        @db.Uuid
+  grantee_entity_id    String                        @db.Uuid
+  scope_type           TwinAuthorityScopeType
+  scope_id             String?                       @db.Uuid
+  action_type          String?
+  connector_type       String?
+  connector_binding_id String?                       @db.Uuid
+  duration_class       TwinAuthorityDurationClass
+  sensitivity_class    TwinAuthoritySensitivityClass @default(MODERATE)
+  state                TwinAuthorityGrantState       @default(ACTIVE)
+  effective_from       DateTime                      @default(now())
+  expires_at           DateTime?
+  revoked_at           DateTime?
+  revoked_by_entity_id String?                       @db.Uuid
+  consumed_at          DateTime?
+  purpose_summary      String
+  constraints_json     Json                          @default("{}")
+  consent_grant_id     String?                       @db.Uuid
+  receipt_id           String?                       @db.Uuid
+  created_at           DateTime                      @default(now())
+  updated_at           DateTime                      @updatedAt
 
   @@index([org_entity_id])
   @@index([grantor_entity_id])
@@ -2285,25 +2285,25 @@ enum TwinCorrectionRetentionClass {
 }
 
 model TwinCorrectionMemory {
-  correction_id            String                        @id @default(uuid()) @db.Uuid
-  org_entity_id            String                        @db.Uuid
-  owner_entity_id          String                        @db.Uuid
-  created_by_entity_id     String                        @db.Uuid
-  scope_type               TwinCorrectionScopeType
-  scope_id                 String?                       @db.Uuid
-  correction_type          TwinCorrectionType
-  state                    TwinCorrectionState           @default(ACTIVE)
-  sensitivity_class        TwinAuthoritySensitivityClass @default(MODERATE)
-  retention_class          TwinCorrectionRetentionClass  @default(STANDARD)
-  safe_summary             String
-  source_message_id        String?                       @db.Uuid
-  source_conversation_id   String?                       @db.Uuid
-  effective_from           DateTime                      @default(now())
-  expires_at               DateTime?
-  revoked_at               DateTime?
-  superseded_by_id         String?                       @db.Uuid
-  created_at               DateTime                      @default(now())
-  updated_at               DateTime                      @updatedAt
+  correction_id          String                        @id @default(uuid()) @db.Uuid
+  org_entity_id          String                        @db.Uuid
+  owner_entity_id        String                        @db.Uuid
+  created_by_entity_id   String                        @db.Uuid
+  scope_type             TwinCorrectionScopeType
+  scope_id               String?                       @db.Uuid
+  correction_type        TwinCorrectionType
+  state                  TwinCorrectionState           @default(ACTIVE)
+  sensitivity_class      TwinAuthoritySensitivityClass @default(MODERATE)
+  retention_class        TwinCorrectionRetentionClass  @default(STANDARD)
+  safe_summary           String
+  source_message_id      String?                       @db.Uuid
+  source_conversation_id String?                       @db.Uuid
+  effective_from         DateTime                      @default(now())
+  expires_at             DateTime?
+  revoked_at             DateTime?
+  superseded_by_id       String?                       @db.Uuid
+  created_at             DateTime                      @default(now())
+  updated_at             DateTime                      @updatedAt
 
   @@index([org_entity_id])
   @@index([owner_entity_id])
@@ -2388,29 +2388,29 @@ enum TwinCollaborationBlockedReason {
 }
 
 model TwinCollaborationRequest {
-  collaboration_id          String                          @id @default(uuid()) @db.Uuid
-  org_entity_id             String                          @db.Uuid
-  requester_entity_id       String                          @db.Uuid
-  requester_twin_entity_id  String?                         @db.Uuid
-  target_entity_id          String?                         @db.Uuid
-  target_twin_entity_id     String?                         @db.Uuid
-  target_team_id            String?                         @db.Uuid
-  target_project_id         String?                         @db.Uuid
-  workflow_id               String?                         @db.Uuid
-  action_id                 String?                         @db.Uuid
-  request_type              TwinCollaborationRequestType
-  target_type               TwinCollaborationTargetType
-  state                     TwinCollaborationState          @default(REQUESTED)
-  sensitivity_class         TwinAuthoritySensitivityClass   @default(MODERATE)
-  safe_summary              String
-  requested_by_ai           Boolean                         @default(false)
-  requires_approval         Boolean                         @default(false)
-  approval_grant_id         String?                         @db.Uuid
-  blocked_reason            TwinCollaborationBlockedReason?
-  expires_at                DateTime?
-  completed_at              DateTime?
-  created_at                DateTime                        @default(now())
-  updated_at                DateTime                        @updatedAt
+  collaboration_id         String                          @id @default(uuid()) @db.Uuid
+  org_entity_id            String                          @db.Uuid
+  requester_entity_id      String                          @db.Uuid
+  requester_twin_entity_id String?                         @db.Uuid
+  target_entity_id         String?                         @db.Uuid
+  target_twin_entity_id    String?                         @db.Uuid
+  target_team_id           String?                         @db.Uuid
+  target_project_id        String?                         @db.Uuid
+  workflow_id              String?                         @db.Uuid
+  action_id                String?                         @db.Uuid
+  request_type             TwinCollaborationRequestType
+  target_type              TwinCollaborationTargetType
+  state                    TwinCollaborationState          @default(REQUESTED)
+  sensitivity_class        TwinAuthoritySensitivityClass   @default(MODERATE)
+  safe_summary             String
+  requested_by_ai          Boolean                         @default(false)
+  requires_approval        Boolean                         @default(false)
+  approval_grant_id        String?                         @db.Uuid
+  blocked_reason           TwinCollaborationBlockedReason?
+  expires_at               DateTime?
+  completed_at             DateTime?
+  created_at               DateTime                        @default(now())
+  updated_at               DateTime                        @updatedAt
 
   @@index([org_entity_id])
   @@index([requester_entity_id])
@@ -2461,14 +2461,14 @@ enum WorkProjectMemberRole {
 }
 
 model WorkProject {
-  project_id              String           @id @default(uuid()) @db.Uuid
-  org_entity_id           String           @db.Uuid
-  name                    String
-  state                   WorkProjectState @default(ACTIVE)
-  created_by_entity_id    String           @db.Uuid
-  archived_at             DateTime?
-  created_at              DateTime         @default(now())
-  updated_at              DateTime         @updatedAt
+  project_id           String           @id @default(uuid()) @db.Uuid
+  org_entity_id        String           @db.Uuid
+  name                 String
+  state                WorkProjectState @default(ACTIVE)
+  created_by_entity_id String           @db.Uuid
+  archived_at          DateTime?
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
 
   @@index([org_entity_id])
   @@index([org_entity_id, state])
@@ -2477,13 +2477,13 @@ model WorkProject {
 }
 
 model WorkProjectMember {
-  project_member_id      String                 @id @default(uuid()) @db.Uuid
-  project_id             String                 @db.Uuid
-  org_entity_id          String                 @db.Uuid
-  entity_id              String                 @db.Uuid
-  role                   WorkProjectMemberRole  @default(MEMBER)
-  created_at             DateTime               @default(now())
-  updated_at             DateTime               @updatedAt
+  project_member_id String                @id @default(uuid()) @db.Uuid
+  project_id        String                @db.Uuid
+  org_entity_id     String                @db.Uuid
+  entity_id         String                @db.Uuid
+  role              WorkProjectMemberRole @default(MEMBER)
+  created_at        DateTime              @default(now())
+  updated_at        DateTime              @updatedAt
 
   @@unique([project_id, entity_id])
   @@index([project_id])
@@ -2541,18 +2541,18 @@ enum OrgCollaborationOutcome {
 }
 
 model OrgCollaborationPolicy {
-  policy_id                  String                          @id @default(uuid()) @db.Uuid
-  org_entity_id              String                          @db.Uuid
-  collaboration_scope        OrgCollaborationScope
-  request_type               TwinCollaborationRequestType?
-  sensitivity_class          TwinAuthoritySensitivityClass?
-  outcome                    OrgCollaborationOutcome         @default(NEEDS_APPROVAL)
+  policy_id                   String                         @id @default(uuid()) @db.Uuid
+  org_entity_id               String                         @db.Uuid
+  collaboration_scope         OrgCollaborationScope
+  request_type                TwinCollaborationRequestType?
+  sensitivity_class           TwinAuthoritySensitivityClass?
+  outcome                     OrgCollaborationOutcome        @default(NEEDS_APPROVAL)
   requires_employee_authority Boolean                        @default(false)
-  requires_admin_approval    Boolean                         @default(false)
-  requires_dual_control      Boolean                         @default(false)
-  connector_write_allowed    Boolean                         @default(false)
-  created_at                 DateTime                        @default(now())
-  updated_at                 DateTime                        @updatedAt
+  requires_admin_approval     Boolean                        @default(false)
+  requires_dual_control       Boolean                        @default(false)
+  connector_write_allowed     Boolean                        @default(false)
+  created_at                  DateTime                       @default(now())
+  updated_at                  DateTime                       @updatedAt
 
   // One policy row per (org, scope, request_type, sensitivity_class)
   // tuple — more-specific tuples override the org default.
@@ -2614,20 +2614,20 @@ enum ConnectorOperationClass {
 }
 
 model ConnectorScopeGrant {
-  grant_id                  String                    @id @default(uuid()) @db.Uuid
-  org_entity_id             String                    @db.Uuid
-  connection_id             String                    @db.Uuid
-  scope_type                ConnectorScopeType
-  scope_id                  String?                   @db.Uuid
-  allowed_operations        ConnectorOperationClass[]
-  requires_employee_authority Boolean                 @default(true)
-  requires_admin_approval   Boolean                   @default(false)
-  requires_dual_control     Boolean                   @default(false)
-  created_by_entity_id      String                    @db.Uuid
-  created_at                DateTime                  @default(now())
-  updated_at                DateTime                  @updatedAt
-  expires_at                DateTime?
-  revoked_at                DateTime?
+  grant_id                    String                    @id @default(uuid()) @db.Uuid
+  org_entity_id               String                    @db.Uuid
+  connection_id               String                    @db.Uuid
+  scope_type                  ConnectorScopeType
+  scope_id                    String?                   @db.Uuid
+  allowed_operations          ConnectorOperationClass[]
+  requires_employee_authority Boolean                   @default(true)
+  requires_admin_approval     Boolean                   @default(false)
+  requires_dual_control       Boolean                   @default(false)
+  created_by_entity_id        String                    @db.Uuid
+  created_at                  DateTime                  @default(now())
+  updated_at                  DateTime                  @updatedAt
+  expires_at                  DateTime?
+  revoked_at                  DateTime?
 
   @@index([org_entity_id])
   @@index([connection_id])
@@ -2678,19 +2678,19 @@ enum McpPolicyOutcome {
 }
 
 model McpServerConnection {
-  mcp_connection_id    String           @id @default(uuid()) @db.Uuid
-  org_entity_id        String           @db.Uuid
+  mcp_connection_id    String            @id @default(uuid()) @db.Uuid
+  org_entity_id        String            @db.Uuid
   display_name         String
   server_url           String
-  auth_mode            McpAuthMode      @default(MCP_AUTH)
+  auth_mode            McpAuthMode       @default(MCP_AUTH)
   secret_ref           String?
-  status               McpServerStatus  @default(NOT_CONFIGURED)
+  status               McpServerStatus   @default(NOT_CONFIGURED)
   tool_policy_mode     McpToolPolicyMode @default(BLOCKED_BY_DEFAULT)
   allowed_tool_names   String[]
   blocked_tool_names   String[]
-  created_by_entity_id String           @db.Uuid
-  created_at           DateTime         @default(now())
-  updated_at           DateTime         @updatedAt
+  created_by_entity_id String            @db.Uuid
+  created_at           DateTime          @default(now())
+  updated_at           DateTime          @updatedAt
   revoked_at           DateTime?
   last_health_check_at DateTime?
   policies             McpToolPolicy[]
@@ -2702,22 +2702,22 @@ model McpServerConnection {
 }
 
 model McpToolPolicy {
-  policy_id              String              @id @default(uuid()) @db.Uuid
-  org_entity_id          String              @db.Uuid
-  mcp_connection_id      String              @db.Uuid
-  tool_name              String
-  operation_class        McpOperationClass
-  outcome                McpPolicyOutcome    @default(NEEDS_APPROVAL)
-  requires_employee_authority Boolean        @default(true)
-  requires_dmw_scope     Boolean             @default(true)
-  requires_admin_approval Boolean            @default(false)
-  redaction_policy       String?
-  output_retention_policy String?
-  created_by_entity_id   String              @db.Uuid
-  created_at             DateTime            @default(now())
-  updated_at             DateTime            @updatedAt
-  revoked_at             DateTime?
-  server                 McpServerConnection @relation(fields: [mcp_connection_id], references: [mcp_connection_id])
+  policy_id                   String              @id @default(uuid()) @db.Uuid
+  org_entity_id               String              @db.Uuid
+  mcp_connection_id           String              @db.Uuid
+  tool_name                   String
+  operation_class             McpOperationClass
+  outcome                     McpPolicyOutcome    @default(NEEDS_APPROVAL)
+  requires_employee_authority Boolean             @default(true)
+  requires_dmw_scope          Boolean             @default(true)
+  requires_admin_approval     Boolean             @default(false)
+  redaction_policy            String?
+  output_retention_policy     String?
+  created_by_entity_id        String              @db.Uuid
+  created_at                  DateTime            @default(now())
+  updated_at                  DateTime            @updatedAt
+  revoked_at                  DateTime?
+  server                      McpServerConnection @relation(fields: [mcp_connection_id], references: [mcp_connection_id])
 
   @@unique([mcp_connection_id, tool_name, operation_class])
   @@index([org_entity_id])
@@ -2809,24 +2809,24 @@ enum CollaborationSharedContextSensitivity {
 }
 
 model CollaborationWorkspace {
-  workspace_id            String                              @id @default(uuid()) @db.Uuid
-  org_entity_id           String                              @db.Uuid
-  title                   String
-  description             String?
-  created_by_entity_id    String                              @db.Uuid
-  status                  CollaborationWorkspaceStatus        @default(ACTIVE)
-  visibility              CollaborationWorkspaceVisibility    @default(INTERNAL_ONLY)
-  source_type             CollaborationWorkspaceSourceType    @default(MANUAL)
-  source_conversation_id  String?                             @db.Uuid
-  archived_at             DateTime?
-  created_at              DateTime                            @default(now())
-  updated_at              DateTime                            @updatedAt
-  deleted_at              DateTime?
+  workspace_id           String                           @id @default(uuid()) @db.Uuid
+  org_entity_id          String                           @db.Uuid
+  title                  String
+  description            String?
+  created_by_entity_id   String                           @db.Uuid
+  status                 CollaborationWorkspaceStatus     @default(ACTIVE)
+  visibility             CollaborationWorkspaceVisibility @default(INTERNAL_ONLY)
+  source_type            CollaborationWorkspaceSourceType @default(MANUAL)
+  source_conversation_id String?                          @db.Uuid
+  archived_at            DateTime?
+  created_at             DateTime                         @default(now())
+  updated_at             DateTime                         @updatedAt
+  deleted_at             DateTime?
 
-  members                 CollaborationMembership[]
-  decisions               CollaborationDecision[]
-  commitments             CollaborationCommitment[]
-  shared_context          CollaborationSharedContext[]
+  members        CollaborationMembership[]
+  decisions      CollaborationDecision[]
+  commitments    CollaborationCommitment[]
+  shared_context CollaborationSharedContext[]
 
   @@index([org_entity_id])
   @@index([org_entity_id, status])
@@ -2836,25 +2836,25 @@ model CollaborationWorkspace {
 }
 
 model CollaborationMembership {
-  membership_id            String                               @id @default(uuid()) @db.Uuid
-  workspace_id             String                               @db.Uuid
-  org_entity_id            String                               @db.Uuid
-  member_entity_id         String                               @db.Uuid
-  member_display_name      String
-  member_email             String?
-  role_label               String
-  responsibility_summary   String?
-  member_type              CollaborationMembershipType          @default(INTERNAL)
-  access_level             CollaborationMembershipAccessLevel   @default(CONTRIBUTE)
-  status                   CollaborationMembershipStatus        @default(ACTIVE)
-  invited_by_entity_id     String?                              @db.Uuid
-  accepted_at              DateTime?
-  revoked_at               DateTime?
-  created_at               DateTime                             @default(now())
-  updated_at               DateTime                             @updatedAt
-  deleted_at               DateTime?
+  membership_id          String                             @id @default(uuid()) @db.Uuid
+  workspace_id           String                             @db.Uuid
+  org_entity_id          String                             @db.Uuid
+  member_entity_id       String                             @db.Uuid
+  member_display_name    String
+  member_email           String?
+  role_label             String
+  responsibility_summary String?
+  member_type            CollaborationMembershipType        @default(INTERNAL)
+  access_level           CollaborationMembershipAccessLevel @default(CONTRIBUTE)
+  status                 CollaborationMembershipStatus      @default(ACTIVE)
+  invited_by_entity_id   String?                            @db.Uuid
+  accepted_at            DateTime?
+  revoked_at             DateTime?
+  created_at             DateTime                           @default(now())
+  updated_at             DateTime                           @updatedAt
+  deleted_at             DateTime?
 
-  workspace                CollaborationWorkspace               @relation(fields: [workspace_id], references: [workspace_id])
+  workspace CollaborationWorkspace @relation(fields: [workspace_id], references: [workspace_id])
 
   @@unique([workspace_id, member_entity_id])
   @@index([workspace_id])
@@ -2865,17 +2865,17 @@ model CollaborationMembership {
 }
 
 model CollaborationDecision {
-  decision_id              String                  @id @default(uuid()) @db.Uuid
-  workspace_id             String                  @db.Uuid
-  org_entity_id            String                  @db.Uuid
-  text                     String
-  source_conversation_id   String?                 @db.Uuid
-  source_excerpt           String?
-  added_by_entity_id       String                  @db.Uuid
-  created_at               DateTime                @default(now())
-  deleted_at               DateTime?
+  decision_id            String    @id @default(uuid()) @db.Uuid
+  workspace_id           String    @db.Uuid
+  org_entity_id          String    @db.Uuid
+  text                   String
+  source_conversation_id String?   @db.Uuid
+  source_excerpt         String?
+  added_by_entity_id     String    @db.Uuid
+  created_at             DateTime  @default(now())
+  deleted_at             DateTime?
 
-  workspace                CollaborationWorkspace  @relation(fields: [workspace_id], references: [workspace_id])
+  workspace CollaborationWorkspace @relation(fields: [workspace_id], references: [workspace_id])
 
   @@index([workspace_id])
   @@index([org_entity_id])
@@ -2884,26 +2884,26 @@ model CollaborationDecision {
 }
 
 model CollaborationCommitment {
-  commitment_id            String                                   @id @default(uuid()) @db.Uuid
-  workspace_id             String                                   @db.Uuid
-  org_entity_id            String                                   @db.Uuid
-  owner_entity_id          String?                                  @db.Uuid
-  owner_display_name       String
-  text                     String
-  due_date                 DateTime?
-  source_conversation_id   String?                                  @db.Uuid
-  source_excerpt           String?
-  assignment_reason        String
-  confidence               CollaborationCommitmentConfidence        @default(MEDIUM)
-  resolution_status        CollaborationCommitmentResolutionStatus  @default(UNRESOLVED)
-  related_action_id        String?                                  @db.Uuid
-  status                   CollaborationCommitmentStatus            @default(PROPOSED)
-  added_by_entity_id       String                                   @db.Uuid
-  created_at               DateTime                                 @default(now())
-  updated_at               DateTime                                 @updatedAt
-  deleted_at               DateTime?
+  commitment_id          String                                  @id @default(uuid()) @db.Uuid
+  workspace_id           String                                  @db.Uuid
+  org_entity_id          String                                  @db.Uuid
+  owner_entity_id        String?                                 @db.Uuid
+  owner_display_name     String
+  text                   String
+  due_date               DateTime?
+  source_conversation_id String?                                 @db.Uuid
+  source_excerpt         String?
+  assignment_reason      String
+  confidence             CollaborationCommitmentConfidence       @default(MEDIUM)
+  resolution_status      CollaborationCommitmentResolutionStatus @default(UNRESOLVED)
+  related_action_id      String?                                 @db.Uuid
+  status                 CollaborationCommitmentStatus           @default(PROPOSED)
+  added_by_entity_id     String                                  @db.Uuid
+  created_at             DateTime                                @default(now())
+  updated_at             DateTime                                @updatedAt
+  deleted_at             DateTime?
 
-  workspace                CollaborationWorkspace                   @relation(fields: [workspace_id], references: [workspace_id])
+  workspace CollaborationWorkspace @relation(fields: [workspace_id], references: [workspace_id])
 
   @@index([workspace_id])
   @@index([workspace_id, status])
@@ -2914,19 +2914,19 @@ model CollaborationCommitment {
 }
 
 model CollaborationSharedContext {
-  shared_context_id        String                                  @id @default(uuid()) @db.Uuid
-  workspace_id             String                                  @db.Uuid
-  org_entity_id            String                                  @db.Uuid
-  context_type             CollaborationSharedContextType
-  context_ref_id           String?                                 @db.Uuid
-  title                    String
-  summary                  String
-  sensitivity              CollaborationSharedContextSensitivity   @default(INTERNAL)
-  shared_by_entity_id      String                                  @db.Uuid
-  created_at               DateTime                                @default(now())
-  deleted_at               DateTime?
+  shared_context_id   String                                @id @default(uuid()) @db.Uuid
+  workspace_id        String                                @db.Uuid
+  org_entity_id       String                                @db.Uuid
+  context_type        CollaborationSharedContextType
+  context_ref_id      String?                               @db.Uuid
+  title               String
+  summary             String
+  sensitivity         CollaborationSharedContextSensitivity @default(INTERNAL)
+  shared_by_entity_id String                                @db.Uuid
+  created_at          DateTime                              @default(now())
+  deleted_at          DateTime?
 
-  workspace                CollaborationWorkspace                  @relation(fields: [workspace_id], references: [workspace_id])
+  workspace CollaborationWorkspace @relation(fields: [workspace_id], references: [workspace_id])
 
   @@index([workspace_id])
   @@index([workspace_id, context_type])
@@ -2971,31 +2971,31 @@ enum MeetingParticipantConsentState {
 }
 
 model MeetingCapture {
-  meeting_capture_id        String                       @id @default(uuid()) @db.Uuid
-  org_entity_id             String                       @db.Uuid
-  provider                  MeetingCaptureProvider       @default(MANUAL_UPLOAD)
-  provider_meeting_id       String?
-  title                     String
-  scheduled_start           DateTime?
-  scheduled_end             DateTime?
-  recorded_start            DateTime?
-  recorded_end              DateTime?
-  participant_count         Int                          @default(0)
-  status                    MeetingCaptureStatus         @default(PENDING)
-  workspace_id              String?                      @db.Uuid
-  source_conversation_id    String?                      @db.Uuid
+  meeting_capture_id     String                 @id @default(uuid()) @db.Uuid
+  org_entity_id          String                 @db.Uuid
+  provider               MeetingCaptureProvider @default(MANUAL_UPLOAD)
+  provider_meeting_id    String?
+  title                  String
+  scheduled_start        DateTime?
+  scheduled_end          DateTime?
+  recorded_start         DateTime?
+  recorded_end           DateTime?
+  participant_count      Int                    @default(0)
+  status                 MeetingCaptureStatus   @default(PENDING)
+  workspace_id           String?                @db.Uuid
+  source_conversation_id String?                @db.Uuid
   // SAFE summary only — never carries raw transcript.
-  summary                   String?
+  summary                String?
   // Bounded transcript text. May be null when only metadata is
   // captured (e.g. a meeting reminder). For real-time integrations
   // the transcript will be appended in chunks.
-  transcript                String?
-  captured_by_entity_id     String                       @db.Uuid
-  created_at                DateTime                     @default(now())
-  updated_at                DateTime                     @updatedAt
-  deleted_at                DateTime?
+  transcript             String?
+  captured_by_entity_id  String                 @db.Uuid
+  created_at             DateTime               @default(now())
+  updated_at             DateTime               @updatedAt
+  deleted_at             DateTime?
 
-  participants              MeetingParticipantConsent[]
+  participants MeetingParticipantConsent[]
 
   @@index([org_entity_id])
   @@index([org_entity_id, status])
@@ -3006,23 +3006,23 @@ model MeetingCapture {
 }
 
 model MeetingParticipantConsent {
-  meeting_participant_consent_id  String                            @id @default(uuid()) @db.Uuid
-  meeting_capture_id              String                            @db.Uuid
-  org_entity_id                   String                            @db.Uuid
+  meeting_participant_consent_id String                         @id @default(uuid()) @db.Uuid
+  meeting_capture_id             String                         @db.Uuid
+  org_entity_id                  String                         @db.Uuid
   // Either entity_id (internal participant) or
   // external_collaborator_id (external participant) — exactly one.
-  participant_entity_id           String?                           @db.Uuid
-  external_collaborator_id        String?                           @db.Uuid
-  display_name                    String
-  email                           String?
-  consent_state                   MeetingParticipantConsentState    @default(PENDING)
-  consent_source                  String?                           // e.g. "google_meet_invite" / "zoom_meeting_settings" / "manual_check_box"
-  consent_recorded_at             DateTime?
-  created_at                      DateTime                          @default(now())
-  updated_at                      DateTime                          @updatedAt
-  deleted_at                      DateTime?
+  participant_entity_id          String?                        @db.Uuid
+  external_collaborator_id       String?                        @db.Uuid
+  display_name                   String
+  email                          String?
+  consent_state                  MeetingParticipantConsentState @default(PENDING)
+  consent_source                 String? // e.g. "google_meet_invite" / "zoom_meeting_settings" / "manual_check_box"
+  consent_recorded_at            DateTime?
+  created_at                     DateTime                       @default(now())
+  updated_at                     DateTime                       @updatedAt
+  deleted_at                     DateTime?
 
-  meeting_capture                 MeetingCapture                    @relation(fields: [meeting_capture_id], references: [meeting_capture_id])
+  meeting_capture MeetingCapture @relation(fields: [meeting_capture_id], references: [meeting_capture_id])
 
   @@index([meeting_capture_id])
   @@index([participant_entity_id])
@@ -3091,27 +3091,27 @@ enum ExternalRiskLevel {
 }
 
 model ExternalCollaborator {
-  external_collaborator_id   String                       @id @default(uuid()) @db.Uuid
-  org_entity_id              String                       @db.Uuid
-  display_name               String
-  email                      String?
-  company_name               String?
-  relationship_type          ExternalRelationshipType     @default(OTHER)
-  status                     ExternalCollaboratorStatus   @default(TRACKED_EXTERNAL)
-  internal_owner_entity_id   String?                      @db.Uuid
-  purpose_summary            String?
-  goals_summary              String?
-  needs_from_us              String?
-  we_need_from_them          String?
-  allowed_context_policy     String?
-  risk_level                 ExternalRiskLevel            @default(LOW)
-  created_by_entity_id       String                       @db.Uuid
-  created_at                 DateTime                     @default(now())
-  updated_at                 DateTime                     @updatedAt
-  deleted_at                 DateTime?
+  external_collaborator_id String                     @id @default(uuid()) @db.Uuid
+  org_entity_id            String                     @db.Uuid
+  display_name             String
+  email                    String?
+  company_name             String?
+  relationship_type        ExternalRelationshipType   @default(OTHER)
+  status                   ExternalCollaboratorStatus @default(TRACKED_EXTERNAL)
+  internal_owner_entity_id String?                    @db.Uuid
+  purpose_summary          String?
+  goals_summary            String?
+  needs_from_us            String?
+  we_need_from_them        String?
+  allowed_context_policy   String?
+  risk_level               ExternalRiskLevel          @default(LOW)
+  created_by_entity_id     String                     @db.Uuid
+  created_at               DateTime                   @default(now())
+  updated_at               DateTime                   @updatedAt
+  deleted_at               DateTime?
 
-  workspace_memberships      WorkspaceExternalMembership[]
-  external_commitments       ExternalCommitment[]
+  workspace_memberships WorkspaceExternalMembership[]
+  external_commitments  ExternalCommitment[]
 
   @@index([org_entity_id])
   @@index([org_entity_id, status])
@@ -3121,24 +3121,24 @@ model ExternalCollaborator {
 }
 
 model WorkspaceExternalMembership {
-  workspace_external_membership_id  String                       @id @default(uuid()) @db.Uuid
-  workspace_id                      String                       @db.Uuid
-  external_collaborator_id          String                       @db.Uuid
-  org_entity_id                     String                       @db.Uuid
-  access_level                      WorkspaceExternalAccessLevel @default(NONE)
-  status                            ExternalCollaboratorStatus   @default(TRACKED_EXTERNAL)
-  project_role                      String?
-  internal_owner_entity_id          String?                      @db.Uuid
-  invited_by_entity_id              String?                      @db.Uuid
-  approved_by_entity_id             String?                      @db.Uuid
-  invited_at                        DateTime?
-  approved_at                       DateTime?
-  revoked_at                        DateTime?
-  created_at                        DateTime                     @default(now())
-  updated_at                        DateTime                     @updatedAt
-  deleted_at                        DateTime?
+  workspace_external_membership_id String                       @id @default(uuid()) @db.Uuid
+  workspace_id                     String                       @db.Uuid
+  external_collaborator_id         String                       @db.Uuid
+  org_entity_id                    String                       @db.Uuid
+  access_level                     WorkspaceExternalAccessLevel @default(NONE)
+  status                           ExternalCollaboratorStatus   @default(TRACKED_EXTERNAL)
+  project_role                     String?
+  internal_owner_entity_id         String?                      @db.Uuid
+  invited_by_entity_id             String?                      @db.Uuid
+  approved_by_entity_id            String?                      @db.Uuid
+  invited_at                       DateTime?
+  approved_at                      DateTime?
+  revoked_at                       DateTime?
+  created_at                       DateTime                     @default(now())
+  updated_at                       DateTime                     @updatedAt
+  deleted_at                       DateTime?
 
-  external_collaborator             ExternalCollaborator         @relation(fields: [external_collaborator_id], references: [external_collaborator_id])
+  external_collaborator ExternalCollaborator @relation(fields: [external_collaborator_id], references: [external_collaborator_id])
 
   @@unique([workspace_id, external_collaborator_id])
   @@index([workspace_id])
@@ -3154,30 +3154,30 @@ model WorkspaceExternalMembership {
 // owners (entity_id) and external owners (external_collaborator_id)
 // never share a single ambiguous owner column.
 model ExternalCommitment {
-  external_commitment_id    String                       @id @default(uuid()) @db.Uuid
-  workspace_id              String                       @db.Uuid
-  org_entity_id             String                       @db.Uuid
-  external_collaborator_id  String                       @db.Uuid
-  direction                 ExternalCommitmentDirection
-  text                      String
-  due_date                  DateTime?
-  source_conversation_id    String?                      @db.Uuid
-  source_excerpt            String?
+  external_commitment_id   String                            @id @default(uuid()) @db.Uuid
+  workspace_id             String                            @db.Uuid
+  org_entity_id            String                            @db.Uuid
+  external_collaborator_id String                            @db.Uuid
+  direction                ExternalCommitmentDirection
+  text                     String
+  due_date                 DateTime?
+  source_conversation_id   String?                           @db.Uuid
+  source_excerpt           String?
   // For EXTERNAL_OWES_INTERNAL: the internal team member who owns
   // following up. For INTERNAL_OWES_EXTERNAL: the internal team
   // member responsible for delivering.
-  internal_owner_entity_id  String?                      @db.Uuid
+  internal_owner_entity_id String?                           @db.Uuid
   // The internal SEND_INTERNAL_NOTIFICATION action created as a
   // reminder to the internal owner. NEVER an external send.
-  related_action_id         String?                      @db.Uuid
-  status                    CollaborationCommitmentStatus @default(PROPOSED)
-  confidence                CollaborationCommitmentConfidence @default(MEDIUM)
-  added_by_entity_id        String                       @db.Uuid
-  created_at                DateTime                     @default(now())
-  updated_at                DateTime                     @updatedAt
-  deleted_at                DateTime?
+  related_action_id        String?                           @db.Uuid
+  status                   CollaborationCommitmentStatus     @default(PROPOSED)
+  confidence               CollaborationCommitmentConfidence @default(MEDIUM)
+  added_by_entity_id       String                            @db.Uuid
+  created_at               DateTime                          @default(now())
+  updated_at               DateTime                          @updatedAt
+  deleted_at               DateTime?
 
-  external_collaborator     ExternalCollaborator         @relation(fields: [external_collaborator_id], references: [external_collaborator_id])
+  external_collaborator ExternalCollaborator @relation(fields: [external_collaborator_id], references: [external_collaborator_id])
 
   @@index([workspace_id])
   @@index([external_collaborator_id])
@@ -3224,24 +3224,24 @@ enum OnboardingMode {
 }
 
 model OrgOnboardingState {
-  org_entity_id              String          @id @db.Uuid
-  mode                       OnboardingMode  @default(DEMO)
+  org_entity_id                         String         @id @db.Uuid
+  mode                                  OnboardingMode @default(DEMO)
   // Each step holds an ISO timestamp when marked complete.
-  org_created_at             DateTime?
-  admins_invited_at          DateTime?
-  roles_assigned_at          DateTime?
-  role_archetypes_assigned_at DateTime?
-  action_policy_configured_at DateTime?
-  connector_status_reviewed_at DateTime?
-  dmw_defaults_configured_at DateTime?
-  cosmp_defaults_configured_at DateTime?
-  demo_seed_loaded_at        DateTime?
+  org_created_at                        DateTime?
+  admins_invited_at                     DateTime?
+  roles_assigned_at                     DateTime?
+  role_archetypes_assigned_at           DateTime?
+  action_policy_configured_at           DateTime?
+  connector_status_reviewed_at          DateTime?
+  dmw_defaults_configured_at            DateTime?
+  cosmp_defaults_configured_at          DateTime?
+  demo_seed_loaded_at                   DateTime?
   prod_schema_migration_acknowledged_at DateTime?
-  ready_for_production_at    DateTime?
-  notes                      String?
-  updated_by_entity_id       String?         @db.Uuid
-  created_at                 DateTime        @default(now())
-  updated_at                 DateTime        @updatedAt
+  ready_for_production_at               DateTime?
+  notes                                 String?
+  updated_by_entity_id                  String?        @db.Uuid
+  created_at                            DateTime       @default(now())
+  updated_at                            DateTime       @updatedAt
 
   @@map("org_onboarding_states")
 }
@@ -3280,32 +3280,32 @@ enum AudioCaptureStatus {
 }
 
 model AudioCapture {
-  audio_capture_id          String                  @id @default(uuid()) @db.Uuid
-  org_entity_id             String                  @db.Uuid
-  captured_by_entity_id     String                  @db.Uuid
-  provider                  STTProviderType         @default(DEMO_FIXTURE)
-  provider_status_at_start  STTProviderStatus       @default(DEMO_ONLY)
-  mode                      AudioCaptureMode        @default(DEMO_AUDIO_SAMPLE)
+  audio_capture_id         String             @id @default(uuid()) @db.Uuid
+  org_entity_id            String             @db.Uuid
+  captured_by_entity_id    String             @db.Uuid
+  provider                 STTProviderType    @default(DEMO_FIXTURE)
+  provider_status_at_start STTProviderStatus  @default(DEMO_ONLY)
+  mode                     AudioCaptureMode   @default(DEMO_AUDIO_SAMPLE)
   // Synthetic storage pointer; never the raw audio bytes.
-  storage_ref               String?
-  duration_ms               Int?
-  status                    AudioCaptureStatus      @default(RECEIVED)
+  storage_ref              String?
+  duration_ms              Int?
+  status                   AudioCaptureStatus @default(RECEIVED)
   // Optional handoff target — when set, the transcript is fed
   // into the named MeetingCapture's transcript field on finalize.
-  meeting_capture_id        String?                 @db.Uuid
-  workspace_id              String?                 @db.Uuid
-  title                     String?
+  meeting_capture_id       String?            @db.Uuid
+  workspace_id             String?            @db.Uuid
+  title                    String?
   // Aggregated full transcript (sum of all segments). NULL until
   // status === TRANSCRIBED.
-  full_transcript           String?
-  summary                   String?
-  failure_class             String?
-  failure_message           String?
-  created_at                DateTime                @default(now())
-  updated_at                DateTime                @updatedAt
-  deleted_at                DateTime?
+  full_transcript          String?
+  summary                  String?
+  failure_class            String?
+  failure_message          String?
+  created_at               DateTime           @default(now())
+  updated_at               DateTime           @updatedAt
+  deleted_at               DateTime?
 
-  segments                  TranscriptSegment[]
+  segments TranscriptSegment[]
 
   @@index([org_entity_id])
   @@index([captured_by_entity_id])
@@ -3316,25 +3316,25 @@ model AudioCapture {
 }
 
 model TranscriptSegment {
-  transcript_segment_id     String                  @id @default(uuid()) @db.Uuid
-  audio_capture_id          String                  @db.Uuid
-  org_entity_id             String                  @db.Uuid
+  transcript_segment_id String    @id @default(uuid()) @db.Uuid
+  audio_capture_id      String    @db.Uuid
+  org_entity_id         String    @db.Uuid
   // Speaker label as provided by the STT provider; may be
   // "Speaker 1" / "Sadeil" / "Unknown" depending on diarization
   // capability. Bounded.
-  speaker_label             String?
+  speaker_label         String?
   // Segment timing in milliseconds from capture start.
-  start_ms                  Int
-  end_ms                    Int
+  start_ms              Int
+  end_ms                Int
   // Bounded transcript text for this segment.
-  text                      String
+  text                  String
   // Provider's reported confidence (0..1) when available.
-  confidence                Float?
-  is_final                  Boolean                 @default(true)
-  created_at                DateTime                @default(now())
-  deleted_at                DateTime?
+  confidence            Float?
+  is_final              Boolean   @default(true)
+  created_at            DateTime  @default(now())
+  deleted_at            DateTime?
 
-  audio_capture             AudioCapture            @relation(fields: [audio_capture_id], references: [audio_capture_id])
+  audio_capture AudioCapture @relation(fields: [audio_capture_id], references: [audio_capture_id])
 
   @@index([audio_capture_id])
   @@index([audio_capture_id, start_ms])
@@ -3512,17 +3512,17 @@ enum WorkCommsMessageSource {
 }
 
 model WorkCommsIdentity {
-  work_comms_identity_id String    @id @default(uuid()) @db.Uuid
-  entity_id              String    @db.Uuid
-  org_entity_id          String    @db.Uuid
+  work_comms_identity_id String                @id @default(uuid()) @db.Uuid
+  entity_id              String                @db.Uuid
+  org_entity_id          String                @db.Uuid
   phone_e164_hash        String
   phone_secret_ref       String?
   phone_verified_at      DateTime?
   consent_state          WorkCommsConsentState @default(NOT_REQUESTED)
-  linked_by_entity_id    String?   @db.Uuid
-  status                 String    @default("PENDING")
-  created_at             DateTime  @default(now())
-  updated_at             DateTime  @updatedAt
+  linked_by_entity_id    String?               @db.Uuid
+  status                 String                @default("PENDING")
+  created_at             DateTime              @default(now())
+  updated_at             DateTime              @updatedAt
   deleted_at             DateTime?
 
   @@unique([entity_id, org_entity_id])
@@ -3589,18 +3589,18 @@ model WorkCommsParticipant {
 }
 
 model WorkCommsMessage {
-  message_id     String                 @id @default(uuid()) @db.Uuid
-  thread_id      String                 @db.Uuid
-  org_entity_id  String                 @db.Uuid
-  sender_role    WorkCommsParticipantRole @default(EMPLOYEE)
-  sender_id      String?                @db.Uuid
-  content_ref    String?
-  safe_summary   String?
-  source         WorkCommsMessageSource @default(APP)
-  audit_ref      String?                @db.Uuid
-  created_at     DateTime               @default(now())
-  edited_at      DateTime?
-  deleted_at     DateTime?
+  message_id    String                   @id @default(uuid()) @db.Uuid
+  thread_id     String                   @db.Uuid
+  org_entity_id String                   @db.Uuid
+  sender_role   WorkCommsParticipantRole @default(EMPLOYEE)
+  sender_id     String?                  @db.Uuid
+  content_ref   String?
+  safe_summary  String?
+  source        WorkCommsMessageSource   @default(APP)
+  audit_ref     String?                  @db.Uuid
+  created_at    DateTime                 @default(now())
+  edited_at     DateTime?
+  deleted_at    DateTime?
 
   @@index([thread_id, created_at])
   @@index([org_entity_id, source])
@@ -3608,21 +3608,21 @@ model WorkCommsMessage {
 }
 
 model WorkCommsCallSession {
-  call_session_id     String    @id @default(uuid()) @db.Uuid
-  org_entity_id       String    @db.Uuid
-  thread_id           String?   @db.Uuid
+  call_session_id     String                @id @default(uuid()) @db.Uuid
+  org_entity_id       String                @db.Uuid
+  thread_id           String?               @db.Uuid
   provider            String
   provider_call_ref   String?
-  workspace_id        String?   @db.Uuid
-  started_at          DateTime  @default(now())
+  workspace_id        String?               @db.Uuid
+  started_at          DateTime              @default(now())
   ended_at            DateTime?
-  recording_state     String    @default("NOT_RECORDING")
-  transcription_state String    @default("NOT_TRANSCRIBING")
+  recording_state     String                @default("NOT_RECORDING")
+  transcription_state String                @default("NOT_TRANSCRIBING")
   consent_state       WorkCommsConsentState @default(NOT_REQUESTED)
-  status              String    @default("ACTIVE")
+  status              String                @default("ACTIVE")
   failure_reason      String?
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
 
   @@index([org_entity_id, status])
   @@index([thread_id])
@@ -3630,19 +3630,19 @@ model WorkCommsCallSession {
 }
 
 model WorkCommsTranscriptSegment {
-  segment_id               String    @id @default(uuid()) @db.Uuid
-  call_session_id          String    @db.Uuid
-  org_entity_id            String    @db.Uuid
-  speaker_participant_id   String?   @db.Uuid
+  segment_id               String   @id @default(uuid()) @db.Uuid
+  call_session_id          String   @db.Uuid
+  org_entity_id            String   @db.Uuid
+  speaker_participant_id   String?  @db.Uuid
   speaker_label            String?
   segment_text             String
   start_ms                 Int
   end_ms                   Int
   confidence               Float?
-  redaction_state          String    @default("NONE")
-  memory_candidate_status  String    @default("NOT_PROPOSED")
-  action_extraction_status String    @default("NOT_EXTRACTED")
-  created_at               DateTime  @default(now())
+  redaction_state          String   @default("NONE")
+  memory_candidate_status  String   @default("NOT_PROPOSED")
+  action_extraction_status String   @default("NOT_EXTRACTED")
+  created_at               DateTime @default(now())
 
   @@index([call_session_id, start_ms])
   @@index([org_entity_id])
@@ -3650,17 +3650,17 @@ model WorkCommsTranscriptSegment {
 }
 
 model WorkCommsExtraction {
-  extraction_id    String    @id @default(uuid()) @db.Uuid
-  org_entity_id    String    @db.Uuid
-  call_session_id  String?   @db.Uuid
-  thread_id        String?   @db.Uuid
+  extraction_id    String   @id @default(uuid()) @db.Uuid
+  org_entity_id    String   @db.Uuid
+  call_session_id  String?  @db.Uuid
+  thread_id        String?  @db.Uuid
   kind             String
   summary          String
-  owner_entity_id  String?   @db.Uuid
-  linked_action_id String?   @db.Uuid
-  status           String    @default("PROPOSED")
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @updatedAt
+  owner_entity_id  String?  @db.Uuid
+  linked_action_id String?  @db.Uuid
+  status           String   @default("PROPOSED")
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
   @@index([org_entity_id, kind, status])
   @@index([call_session_id])
@@ -3668,17 +3668,17 @@ model WorkCommsExtraction {
 }
 
 model WorkCommsConsentEvent {
-  consent_event_id String                @id @default(uuid()) @db.Uuid
-  org_entity_id    String                @db.Uuid
-  participant_id   String?               @db.Uuid
-  call_session_id  String?               @db.Uuid
-  thread_id        String?               @db.Uuid
-  consent_type     String
-  consent_state    WorkCommsConsentState
+  consent_event_id     String                @id @default(uuid()) @db.Uuid
+  org_entity_id        String                @db.Uuid
+  participant_id       String?               @db.Uuid
+  call_session_id      String?               @db.Uuid
+  thread_id            String?               @db.Uuid
+  consent_type         String
+  consent_state        WorkCommsConsentState
   consent_text_version String?
-  source           String                @default("APP")
-  occurred_at      DateTime              @default(now())
-  revoked_at       DateTime?
+  source               String                @default("APP")
+  occurred_at          DateTime              @default(now())
+  revoked_at           DateTime?
 
   @@index([org_entity_id, occurred_at])
   @@index([call_session_id])
@@ -3686,20 +3686,75 @@ model WorkCommsConsentEvent {
 }
 
 model WorkCommsRetentionPolicy {
-  retention_policy_id   String    @id @default(uuid()) @db.Uuid
-  org_entity_id         String    @db.Uuid
-  display_name          String
-  message_retention_days Int?
+  retention_policy_id       String    @id @default(uuid()) @db.Uuid
+  org_entity_id             String    @db.Uuid
+  display_name              String
+  message_retention_days    Int?
   transcript_retention_days Int?
-  audio_retention_days  Int?
-  deletion_behavior     String    @default("SOFT_DELETE")
-  legal_hold            Boolean   @default(false)
-  created_by_entity_id  String    @db.Uuid
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @updatedAt
-  deleted_at            DateTime?
+  audio_retention_days      Int?
+  deletion_behavior         String    @default("SOFT_DELETE")
+  legal_hold                Boolean   @default(false)
+  created_by_entity_id      String    @db.Uuid
+  created_at                DateTime  @default(now())
+  updated_at                DateTime  @updatedAt
+  deleted_at                DateTime?
 
   @@unique([org_entity_id, display_name])
   @@index([org_entity_id, legal_hold])
   @@map("work_comms_retention_policies")
+}
+
+// WorkLedgerEntry — Phase 1279 durable Work Ledger (ADR-pending; Option
+// 2 per the Phase 1279 inspection). The durable, tenant-scoped record of
+// work extracted from conversations/meetings: commitments, tasks,
+// decisions, blockers, follow-ups, etc. LINKS to existing durable
+// objects by id (loose, service-joined — no Prisma back-relations, same
+// pattern as AuditEvent's entity refs) rather than replacing them:
+// proposed_action_id → ProposedAction, audit_event_id → AuditEvent,
+// notification_id → Notification, project_id → WorkProject. Enum-like
+// fields are String, validated in TS (the AuditEvent.event_type pattern).
+// extraction_source records WHICH runtime produced it (never claims
+// PYTHON_ENRICHED unless Python actually enriched). Powers My Work,
+// Team Work, blind spots, and future BEAM/Python loops.
+model WorkLedgerEntry {
+  ledger_entry_id     String    @id @default(uuid()) @db.Uuid
+  org_entity_id       String    @db.Uuid
+  ledger_type         String
+  source_type         String    @default("VOICE_COMMAND")
+  source_command      String?
+  conversation_id     String?   @db.Uuid
+  work_plan_id        String?
+  project_id          String?   @db.Uuid
+  goal_id             String?   @db.Uuid
+  proposed_action_id  String?   @db.Uuid
+  audit_event_id      String?   @db.Uuid
+  notification_id     String?   @db.Uuid
+  requester_entity_id String?   @db.Uuid
+  owner_entity_id     String?   @db.Uuid
+  target_entity_id    String?   @db.Uuid
+  title               String
+  summary             String?
+  details             Json      @default("{}")
+  priority            String    @default("ROUTINE")
+  status              String    @default("DRAFT")
+  authority_decision  String?
+  policy_reason_code  String?
+  extraction_source   String    @default("TYPESCRIPT_DETERMINISTIC")
+  confidence_score    Float?
+  evidence            Json      @default("[]")
+  next_action         String?
+  due_at              DateTime?
+  expires_at          DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  verified_at         DateTime?
+
+  @@index([org_entity_id, status])
+  @@index([org_entity_id, ledger_type])
+  @@index([owner_entity_id])
+  @@index([target_entity_id])
+  @@index([requester_entity_id])
+  @@index([work_plan_id])
+  @@index([project_id])
+  @@map("work_ledger_entries")
 }

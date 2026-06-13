@@ -1,0 +1,232 @@
+// FILE: work-os-ledger.routes.ts
+// PURPOSE: Phase 1279 — HTTP surface for the durable Work Ledger:
+//            POST   /api/v1/work-os/ledger
+//            GET    /api/v1/work-os/ledger
+//            GET    /api/v1/work-os/ledger/:id
+//            PATCH  /api/v1/work-os/ledger/:id
+//            GET    /api/v1/work-os/my-work
+//            GET    /api/v1/work-os/team-work
+//            GET    /api/v1/work-os/blind-spots
+//          Bearer-gated; tenant-scoped via the caller's org; manager
+//          scope via TAR.can_admin_org. No cross-tenant reads.
+// CONNECTS TO: work-os/work-ledger.service.ts, governance/org.ts.
+
+import type { FastifyInstance, FastifyReply } from "fastify";
+import type { AuthService } from "../services/auth.service.js";
+import { prisma } from "@niov/database";
+import { getOrgEntityId } from "../services/governance/org.js";
+import {
+  createLedgerEntry,
+  listLedgerEntries,
+  getLedgerEntry,
+  patchLedgerEntry,
+  getMyWork,
+  getTeamWork,
+  getBlindSpots,
+  type LedgerFilters,
+} from "../services/work-os/work-ledger.service.js";
+
+function bearerFrom(value: string | string[] | undefined): string | null {
+  if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
+  const token = value.slice("Bearer ".length).trim();
+  return token.length === 0 ? null : token;
+}
+
+async function resolveOrgOrFail(
+  entityId: string,
+  reply: FastifyReply,
+): Promise<string | null> {
+  try {
+    return await getOrgEntityId(entityId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "unknown";
+    if (message === "NOT_IN_ANY_ORG" || message === "ORG_HIERARCHY_TOO_DEEP") {
+      await reply
+        .code(404)
+        .send({ ok: false, code: "NO_ORG_FOR_CALLER", message: "Caller is not in an organization" });
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function isManager(entityId: string): Promise<boolean> {
+  const tar = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: entityId },
+    select: { can_admin_org: true },
+  });
+  return tar?.can_admin_org === true;
+}
+
+function strParam(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+export async function registerWorkOsLedgerRoutes(
+  app: FastifyInstance,
+  authService: AuthService,
+): Promise<void> {
+  const auth = async (
+    request: { headers: { authorization?: string | string[] } },
+    reply: FastifyReply,
+    scope: "read" | "write",
+  ): Promise<{ entity_id: string; org_entity_id: string; manager: boolean } | null> => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      await reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      return null;
+    }
+    const session = await authService.validateSession(token, scope);
+    if (!session.valid) {
+      await reply.code(401).send({ ok: false, code: session.code });
+      return null;
+    }
+    const org = await resolveOrgOrFail(session.entity_id, reply);
+    if (org === null) return null;
+    return {
+      entity_id: session.entity_id,
+      org_entity_id: org,
+      manager: await isManager(session.entity_id),
+    };
+  };
+
+  // ── Create ──
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/work-os/ledger",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      const result = await createLedgerEntry({
+        org_entity_id: ctx.org_entity_id,
+        ledger_type: typeof b.ledger_type === "string" ? b.ledger_type : "",
+        title: typeof b.title === "string" ? b.title : "",
+        // Caller is the default requester/owner unless explicitly given.
+        requester_entity_id:
+          strParam(b.requester_entity_id) ?? ctx.entity_id,
+        ...(strParam(b.owner_entity_id) ? { owner_entity_id: strParam(b.owner_entity_id) } : { owner_entity_id: ctx.entity_id }),
+        ...(strParam(b.target_entity_id) ? { target_entity_id: strParam(b.target_entity_id) } : {}),
+        ...(strParam(b.source_type) ? { source_type: strParam(b.source_type) } : {}),
+        ...(strParam(b.source_command) ? { source_command: strParam(b.source_command) } : {}),
+        ...(strParam(b.conversation_id) ? { conversation_id: strParam(b.conversation_id) } : {}),
+        ...(strParam(b.work_plan_id) ? { work_plan_id: strParam(b.work_plan_id) } : {}),
+        ...(strParam(b.project_id) ? { project_id: strParam(b.project_id) } : {}),
+        ...(strParam(b.proposed_action_id) ? { proposed_action_id: strParam(b.proposed_action_id) } : {}),
+        ...(strParam(b.audit_event_id) ? { audit_event_id: strParam(b.audit_event_id) } : {}),
+        ...(strParam(b.notification_id) ? { notification_id: strParam(b.notification_id) } : {}),
+        ...(strParam(b.summary) ? { summary: strParam(b.summary) } : {}),
+        ...(strParam(b.priority) ? { priority: strParam(b.priority) } : {}),
+        ...(strParam(b.status) ? { status: strParam(b.status) } : {}),
+        ...(strParam(b.extraction_source) ? { extraction_source: strParam(b.extraction_source) } : {}),
+        ...(strParam(b.next_action) ? { next_action: strParam(b.next_action) } : {}),
+        ...(typeof b.confidence_score === "number" ? { confidence_score: b.confidence_score } : {}),
+        ...(Array.isArray(b.evidence) ? { evidence: b.evidence } : {}),
+        ...(b.details !== undefined && typeof b.details === "object" && b.details !== null
+          ? { details: b.details as Record<string, unknown> }
+          : {}),
+        ...(strParam(b.due_at) ? { due_at: strParam(b.due_at) } : {}),
+      });
+      if (result.ok === false)
+        return reply.code(result.code === "INVALID_REQUEST" ? 422 : 404).send(result);
+      return reply.code(201).send({ ok: true, entry: result.entry });
+    },
+  );
+
+  // ── List ──
+  app.get<{ Querystring: Record<string, string> }>(
+    "/api/v1/work-os/ledger",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const q = request.query ?? {};
+      const filters: LedgerFilters = {};
+      for (const k of ["ledger_type", "status", "owner", "target", "project_id", "goal_id", "work_plan_id", "source_type", "priority"] as const) {
+        const v = strParam(q[k]);
+        if (v !== undefined) (filters as Record<string, string>)[k] = v;
+      }
+      const entries = await listLedgerEntries({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        filters,
+      });
+      return reply.code(200).send({ ok: true, entries });
+    },
+  );
+
+  // ── Get one ──
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await getLedgerEntry({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      if (result.ok === false) return reply.code(404).send(result);
+      return reply.code(200).send({ ok: true, entry: result.entry });
+    },
+  );
+
+  // ── Patch ──
+  app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/work-os/ledger/:id",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      const result = await patchLedgerEntry({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        patch: {
+          ...(strParam(b.status) ? { status: strParam(b.status) } : {}),
+          ...(strParam(b.next_action) ? { next_action: strParam(b.next_action) } : {}),
+          ...(strParam(b.priority) ? { priority: strParam(b.priority) } : {}),
+        },
+      });
+      if (result.ok === false)
+        return reply.code(result.code === "INVALID_REQUEST" ? 422 : 404).send(result);
+      return reply.code(200).send({ ok: true, entry: result.entry });
+    },
+  );
+
+  // ── My Work ──
+  app.get("/api/v1/work-os/my-work", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const items = await getMyWork({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+    });
+    return reply.code(200).send({ ok: true, items });
+  });
+
+  // ── Team Work ──
+  app.get("/api/v1/work-os/team-work", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const result = await getTeamWork({
+      org_entity_id: ctx.org_entity_id,
+      is_manager: ctx.manager,
+    });
+    if (result.ok === false) return reply.code(403).send(result);
+    return reply.code(200).send({ ok: true, entries: result.entries });
+  });
+
+  // ── Blind spots ──
+  app.get("/api/v1/work-os/blind-spots", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const items = await getBlindSpots({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+      is_manager: ctx.manager,
+    });
+    return reply.code(200).send({ ok: true, items });
+  });
+}
