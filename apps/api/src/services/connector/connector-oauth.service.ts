@@ -188,7 +188,12 @@ function providerConfig(provider: OAuthProviderKey): OAuthProviderConfig {
         client_id_env: "ZOOM_OAUTH_CLIENT_ID",
         client_secret_env: "ZOOM_OAUTH_CLIENT_SECRET",
         extra_authorize_params: {},
-        probe_url: "https://api.zoom.us/v2/users/me",
+        // The verify probe MUST exercise a granted scope. The Zoom
+        // app holds only recording:read (registry row), so probing
+        // /users/me (needs user:read) returns 400 even with a valid
+        // token. List-recordings IS covered by recording:read and
+        // returns 200 (empty list on accounts with no recordings).
+        probe_url: "https://api.zoom.us/v2/users/me/recordings?page_size=1",
         probe_method: "GET",
       };
   }
