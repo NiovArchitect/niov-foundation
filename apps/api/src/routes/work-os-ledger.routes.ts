@@ -25,6 +25,12 @@ import {
   getBlindSpots,
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
+import {
+  dispatchWorkOsEvent,
+  eventTypeForLedger,
+  type WorkOsEvent,
+} from "../services/coordination/beam-fabric-client.js";
+import { randomUUID } from "node:crypto";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -128,7 +134,39 @@ export async function registerWorkOsLedgerRoutes(
       });
       if (result.ok === false)
         return reply.code(result.code === "INVALID_REQUEST" ? 422 : 404).send(result);
-      return reply.code(201).send({ ok: true, entry: result.entry });
+
+      // Phase 1281 — governed BEAM fanout AFTER a successful ledger
+      // create. Best-effort: dispatch never blocks/fails the create; the
+      // honest coordination result rides back in the response.
+      const entry = result.entry;
+      const event: WorkOsEvent = {
+        event_id: randomUUID(),
+        org_entity_id: entry.org_entity_id,
+        ledger_entry_id: entry.ledger_entry_id,
+        event_type: eventTypeForLedger(entry.ledger_type, entry.status),
+        ledger_type: entry.ledger_type,
+        status: entry.status,
+        priority: entry.priority,
+        source_type: entry.source_type,
+        extraction_source: entry.extraction_source,
+        ...(entry.work_plan_id !== null ? { work_plan_id: entry.work_plan_id } : {}),
+        ...(entry.owner_entity_id !== null ? { owner_entity_id: entry.owner_entity_id } : {}),
+        ...(entry.requester_entity_id !== null ? { requester_entity_id: entry.requester_entity_id } : {}),
+        ...(entry.target_entity_id !== null ? { target_entity_id: entry.target_entity_id } : {}),
+        ...(entry.next_action !== null ? { next_action: entry.next_action } : {}),
+        ...(entry.due_at !== null ? { due_at: entry.due_at } : {}),
+        audit_required: true,
+        created_at: entry.created_at,
+      };
+      const coord = await dispatchWorkOsEvent(event);
+      return reply.code(201).send({
+        ok: true,
+        entry: {
+          ...entry,
+          coordination_runtime: coord.coordination_runtime,
+          ...(coord.watcher !== undefined ? { coordination_watcher: coord.watcher } : {}),
+        },
+      });
     },
   );
 
@@ -140,7 +178,7 @@ export async function registerWorkOsLedgerRoutes(
       if (ctx === null) return;
       const q = request.query ?? {};
       const filters: LedgerFilters = {};
-      for (const k of ["ledger_type", "status", "owner", "target", "project_id", "goal_id", "work_plan_id", "source_type", "priority"] as const) {
+      for (const k of ["ledger_type", "status", "owner", "target", "project_id", "goal_id", "work_plan_id", "source_type", "priority", "proposed_action_id"] as const) {
         const v = strParam(q[k]);
         if (v !== undefined) (filters as Record<string, string>)[k] = v;
       }

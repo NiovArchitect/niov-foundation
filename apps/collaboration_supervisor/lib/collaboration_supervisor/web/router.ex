@@ -84,11 +84,58 @@ defmodule CollaborationSupervisor.Web.Router do
     end
   end
 
+  # --- Work OS event fanout (Phase 1281) -----------------------------------
+  # Governed coordination only: BEAM accepts a WorkOsEvent emitted by
+  # Foundation after a WorkLedgerEntry is created, classifies which
+  # watchdog category applies, and acknowledges. BEAM never executes an
+  # external write — it coordinates/supervises/fans out only.
+  post "/events/work-os" do
+    body = conn.body_params
+
+    with true <- is_map(body),
+         tenant when is_binary(tenant) and tenant != "" <- Map.get(body, "tenant_id"),
+         event_id when is_binary(event_id) and event_id != "" <- Map.get(body, "event_id"),
+         ledger_id when is_binary(ledger_id) and ledger_id != "" <-
+           Map.get(body, "ledger_entry_id") do
+      status = Map.get(body, "status", "")
+      due_at = Map.get(body, "due_at")
+      next_action = Map.get(body, "next_action")
+      watcher = classify_watcher(status, due_at, next_action)
+
+      json(conn, 202, %{
+        accepted: true,
+        runtime: "BEAM",
+        event_id: event_id,
+        ledger_entry_id: ledger_id,
+        watcher: watcher
+      })
+    else
+      _ -> json(conn, 422, %{error: "invalid_work_os_event"})
+    end
+  end
+
   match _ do
     json(conn, 404, %{error: "not_found"})
   end
 
   # --- Helpers ------------------------------------------------------------
+
+  # Phase 1281 watchdog classification. No external action is taken yet —
+  # the category tells Foundation/Blind Spots what to watch.
+  defp classify_watcher(status, _due, _next)
+       when status in ["BLOCKED", "RUNTIME_MISSING"],
+       do: "blocker"
+
+  defp classify_watcher("NEEDS_PARTICIPANT_CONFIRMATION", _due, _next),
+    do: "confirmation"
+
+  defp classify_watcher(_status, due, _next) when is_binary(due) and due != "",
+    do: "due_date"
+
+  defp classify_watcher(_status, _due, next) when is_nil(next) or next == "",
+    do: "no_next_action"
+
+  defp classify_watcher(_status, _due, _next), do: "none"
 
   defp parse_state_param(%{"state" => value}) when is_binary(value) do
     case NextTick.parse_state(value) do
