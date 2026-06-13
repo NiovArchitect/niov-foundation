@@ -14,6 +14,12 @@
 // (never upgraded to PYTHON_ENRICHED unless the caller proves it).
 
 import { prisma } from "@niov/database";
+import {
+  extractWorkSignals,
+  type EnrichmentRuntimeConfig,
+  type WorkSignalExtractionResult,
+} from "../intelligence/python-enrichment.service.js";
+import { recordExecutionAttempt } from "./execution-verification.service.js";
 
 export const LEDGER_TYPES = [
   "COMMITMENT", "TASK", "DECISION", "BLOCKER", "MEETING", "FOLLOW_UP",
@@ -71,6 +77,15 @@ export interface CreateLedgerInput {
   next_action?: string;
   due_at?: string;
   expires_at?: string;
+  // Phase 1282 — advisory Python conversation-to-work enrichment. When
+  // `enable_python_enrichment` is true and `enrichment_text` is present,
+  // Foundation asks the Python worker for ADDITIONAL closed-vocab signals.
+  // Deterministic extraction stays primary: extraction_source is only
+  // upgraded to PYTHON_ENRICHED when Python actually returns signals AND
+  // the caller did not pin an explicit extraction_source.
+  enrichment_text?: string;
+  enable_python_enrichment?: boolean;
+  enrichment_runtime?: EnrichmentRuntimeConfig;
 }
 
 export type LedgerFailureCode = "INVALID_REQUEST" | "NOT_FOUND";
@@ -101,10 +116,52 @@ export async function createLedgerEntry(
   if (!LEDGER_STATUSES.includes(status as (typeof LEDGER_STATUSES)[number])) {
     return { ok: false, code: "INVALID_REQUEST", message: "invalid status" };
   }
-  const extraction = input.extraction_source ?? "TYPESCRIPT_DETERMINISTIC";
+  let extraction = input.extraction_source ?? "TYPESCRIPT_DETERMINISTIC";
   if (!EXTRACTION_SOURCES.includes(extraction as (typeof EXTRACTION_SOURCES)[number])) {
     return { ok: false, code: "INVALID_REQUEST", message: "invalid extraction_source" };
   }
+
+  // Phase 1282 — advisory Python enrichment. Runs BEFORE the write so the
+  // (closed-vocab, audit-safe) signals can be merged into details. Never
+  // overrides target resolution/policy/status — it only annotates and,
+  // when it actually contributed signals on the default extraction path,
+  // upgrades extraction_source to PYTHON_ENRICHED.
+  let enrichment: WorkSignalExtractionResult | null = null;
+  const callerPinnedExtraction = input.extraction_source !== undefined;
+  if (
+    input.enable_python_enrichment === true &&
+    typeof input.enrichment_text === "string" &&
+    input.enrichment_text.trim().length > 0
+  ) {
+    enrichment = await extractWorkSignals(
+      {
+        text: input.enrichment_text,
+        ...(input.source_type !== undefined ? { source_type: input.source_type } : {}),
+      },
+      input.enrichment_runtime ?? {},
+    );
+    if (
+      enrichment.status === "PYTHON_ENRICHED" &&
+      enrichment.signals.length > 0 &&
+      !callerPinnedExtraction
+    ) {
+      extraction = "PYTHON_ENRICHED";
+    }
+  }
+
+  const detailsWithEnrichment: Record<string, unknown> = {
+    ...(input.details ?? {}),
+    ...(enrichment !== null
+      ? {
+          python_enrichment: {
+            status: enrichment.status,
+            signals: enrichment.signals,
+            primary_signal: enrichment.primary_signal,
+            multi_intent: enrichment.multi_intent,
+          },
+        }
+      : {}),
+  };
 
   const row = await prisma.workLedgerEntry.create({
     data: {
@@ -124,7 +181,7 @@ export async function createLedgerEntry(
       ...(optStr(input.target_entity_id) ? { target_entity_id: input.target_entity_id } : {}),
       title: input.title,
       ...(optStr(input.summary) ? { summary: input.summary } : {}),
-      details: (input.details ?? {}) as object,
+      details: detailsWithEnrichment as object,
       priority: input.priority ?? "ROUTINE",
       status,
       ...(optStr(input.authority_decision) ? { authority_decision: input.authority_decision } : {}),
@@ -137,6 +194,40 @@ export async function createLedgerEntry(
       ...(input.expires_at !== undefined ? { expires_at: new Date(input.expires_at) } : {}),
     },
   });
+
+  // Phase 1282 — auto-record execution evidence. The internal ledger write
+  // is proven (INTERNAL_RECORD, VERIFIED). When Python enrichment ran, record
+  // its real outcome: VERIFIED when it actually returned signals, FAILED
+  // otherwise (honest — never faked). Best-effort: evidence recording can
+  // never break the ledger write.
+  await recordExecutionAttempt({
+    ledger_entry_id: row.ledger_entry_id,
+    org_entity_id: row.org_entity_id,
+    attempt_type: "WORK_LEDGER_CREATE",
+    runtime: "TYPESCRIPT",
+    evidence_type: "INTERNAL_RECORD",
+    status: "VERIFIED",
+    detail: { ledger_type: row.ledger_type, status: row.status },
+  });
+  if (enrichment !== null) {
+    const enriched =
+      enrichment.status === "PYTHON_ENRICHED" && enrichment.signals.length > 0;
+    await recordExecutionAttempt({
+      ledger_entry_id: row.ledger_entry_id,
+      org_entity_id: row.org_entity_id,
+      attempt_type: "PYTHON_ENRICHMENT",
+      runtime: "PYTHON",
+      evidence_type: "PROVIDER_RESPONSE",
+      status: enriched ? "VERIFIED" : "FAILED",
+      detail: {
+        enrichment_status: enrichment.status,
+        signal_count: enrichment.signals.length,
+        multi_intent: enrichment.multi_intent,
+      },
+      ...(enriched ? {} : { error_code: enrichment.status }),
+    });
+  }
+
   return { ok: true, entry: projectLedger(row) };
 }
 
@@ -358,6 +449,15 @@ export interface WorkLedgerView {
   // dispatch result, never faked).
   coordination_runtime?: string;
   coordination_watcher?: string;
+  // Phase 1282 — advisory Python enrichment truth surfaced for View/Why.
+  // Present only when enrichment ran; reflects the real Python outcome
+  // (status names the degrade path when Python was not used).
+  python_enrichment?: {
+    status: string;
+    signals: Array<{ signal_type: string; confidence: string; evidence_phrase: string }>;
+    primary_signal: string | null;
+    multi_intent: boolean;
+  };
 }
 
 interface LedgerRow {
@@ -386,9 +486,42 @@ interface LedgerRow {
   created_at: Date;
   updated_at: Date;
   verified_at: Date | null;
+  details?: unknown;
+}
+
+// WHAT: Pull the typed python_enrichment block out of the details JSON.
+// OUTPUT: a normalized enrichment summary, or undefined when absent.
+// WHY: surfaces the advisory Python truth for View/Why without leaking the
+//      rest of the opaque details blob.
+function enrichmentFromDetails(
+  details: unknown,
+): WorkLedgerView["python_enrichment"] | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const pe = (details as Record<string, unknown>).python_enrichment;
+  if (typeof pe !== "object" || pe === null) return undefined;
+  const o = pe as Record<string, unknown>;
+  const rawSignals = Array.isArray(o.signals) ? o.signals : [];
+  const signals = rawSignals.flatMap((s) => {
+    if (typeof s !== "object" || s === null) return [];
+    const sr = s as Record<string, unknown>;
+    return [
+      {
+        signal_type: String(sr.signal_type ?? ""),
+        confidence: String(sr.confidence ?? ""),
+        evidence_phrase: String(sr.evidence_phrase ?? ""),
+      },
+    ];
+  });
+  return {
+    status: String(o.status ?? "UNKNOWN"),
+    signals,
+    primary_signal: typeof o.primary_signal === "string" ? o.primary_signal : null,
+    multi_intent: o.multi_intent === true,
+  };
 }
 
 function projectLedger(row: LedgerRow): WorkLedgerView {
+  const enrichment = enrichmentFromDetails(row.details);
   return {
     ledger_entry_id: row.ledger_entry_id,
     org_entity_id: row.org_entity_id,
@@ -415,5 +548,6 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
     verified_at: row.verified_at !== null ? row.verified_at.toISOString() : null,
+    ...(enrichment !== undefined ? { python_enrichment: enrichment } : {}),
   };
 }
