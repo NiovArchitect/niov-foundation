@@ -123,6 +123,7 @@ import { registerConnectorAdapterStatusRoutes } from "./routes/connector-adapter
 import { registerOrgCollaborationPolicyRoutes } from "./routes/org-collaboration-policy.routes.js";
 import { registerOtzarVoiceReadyRoutes } from "./routes/otzar-voice-ready.routes.js";
 import { registerConnectorRailsRoutes } from "./routes/connector-rails.routes.js";
+import { registerConnectorDataRoutes } from "./routes/connector-data.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
@@ -735,6 +736,7 @@ export async function buildApp(
   await registerOrgCollaborationPolicyRoutes(app, authService);
   await registerOtzarVoiceReadyRoutes(app, otzarService);
   await registerConnectorRailsRoutes(app, authService);
+  await registerConnectorDataRoutes(app, authService);
   await registerAdminLlmStatusRoutes(app, authService);
 
   // Idempotent seed on every boot so a fresh DB has the seven

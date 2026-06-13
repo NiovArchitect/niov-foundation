@@ -493,7 +493,15 @@ export type AuditEventType =
   | "CONNECTOR_OAUTH_CONNECTED"
   | "CONNECTOR_OAUTH_FAILED"
   | "CONNECTOR_OAUTH_VERIFIED"
-  | "CONNECTOR_OAUTH_REVOKED";
+  | "CONNECTOR_OAUTH_REVOKED"
+  // Phase 1270 read-only connector data bridges (Zoom cloud
+  // recordings list, Google Calendar free/busy). Emitted on every
+  // external read egress made with an org's stored OAuth token.
+  // SAFE details: provider + resource + result_count + scrubbed
+  // reason code. FORBIDDEN: access/refresh tokens, raw provider
+  // response bodies, recording download URLs, meeting titles,
+  // attendee identities, free/busy event details.
+  | "CONNECTOR_DATA_READ";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -672,6 +680,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONNECTOR_OAUTH_FAILED",
   "CONNECTOR_OAUTH_VERIFIED",
   "CONNECTOR_OAUTH_REVOKED",
+  // Phase 1270 read-only connector data bridges.
+  "CONNECTOR_DATA_READ",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
