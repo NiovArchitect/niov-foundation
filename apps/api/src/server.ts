@@ -126,6 +126,7 @@ import { registerConnectorRailsRoutes } from "./routes/connector-rails.routes.js
 import { registerConnectorDataRoutes } from "./routes/connector-data.routes.js";
 import { registerCalendarEventRoutes } from "./routes/calendar-event.routes.js";
 import { registerWorkOsAuthorityRoutes } from "./routes/work-os-authority.routes.js";
+import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
@@ -741,6 +742,7 @@ export async function buildApp(
   await registerConnectorDataRoutes(app, authService);
   await registerCalendarEventRoutes(app, authService);
   await registerWorkOsAuthorityRoutes(app, authService);
+  await registerSystemRuntimeRoutes(app, authService);
   await registerAdminLlmStatusRoutes(app, authService);
 
   // Idempotent seed on every boot so a fresh DB has the seven
