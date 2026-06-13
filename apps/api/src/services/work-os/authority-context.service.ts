@@ -143,7 +143,18 @@ export interface AuthorityContext {
   caller_can_assign_task_to_target: boolean;
   caller_can_request_confirmation_from_target: boolean;
   caller_can_use_target_twin: boolean;
+  // Phase 1274 — enterprise time context. Timezones are read from real
+  // EntityProfile.timezone (nullable → caller shows a labeled fallback,
+  // never a fabricated zone). org_default_timezone is a demo-labeled
+  // fallback until an OrgSettings.timezone field lands (next bridge).
+  caller_timezone: string | null;
+  target_timezone: string | null;
+  org_default_timezone: string;
 }
+
+// Demo-labeled org default until OrgSettings.timezone exists (next
+// bridge). Surfaced to the UI as a fallback, never as configured fact.
+const ORG_DEFAULT_TIMEZONE_FALLBACK = "America/Los_Angeles";
 
 export interface ActionPolicyResult {
   action: WorkOsAction;
@@ -295,6 +306,19 @@ export async function buildAuthorityContext(args: {
   const target = resolution.match;
   const targetRoleTitle: string | null = target?.role_title ?? null;
 
+  // Real timezones from EntityProfile (nullable — never invented).
+  const callerProfile = await prisma.entityProfile.findUnique({
+    where: { entity_id: args.caller_entity_id },
+    select: { timezone: true },
+  });
+  const targetProfile =
+    target === null
+      ? null
+      : await prisma.entityProfile.findUnique({
+          where: { entity_id: target.entity_id },
+          select: { timezone: true },
+        });
+
   // Manager authority (REAL): an org-admin / founder in the same org
   // has managerial authority over the org's members. (A future direct
   // manager→report EntityMembership edge would also satisfy this.)
@@ -325,5 +349,8 @@ export async function buildAuthorityContext(args: {
     caller_can_request_confirmation_from_target:
       resolution.code === "RESOLVED_INTERNAL_ENTITY",
     caller_can_use_target_twin: false, // no delegated-authority runtime yet
+    caller_timezone: callerProfile?.timezone ?? null,
+    target_timezone: targetProfile?.timezone ?? null,
+    org_default_timezone: ORG_DEFAULT_TIMEZONE_FALLBACK,
   };
 }

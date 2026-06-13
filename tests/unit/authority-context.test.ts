@@ -19,6 +19,7 @@ const { prismaMock, getOrgEntityIdMock } = vi.hoisted(() => ({
   prismaMock: {
     entityMembership: { findMany: vi.fn(), findFirst: vi.fn() },
     tokenAttributeRepository: { findUnique: vi.fn() },
+    entityProfile: { findUnique: vi.fn() },
   },
   getOrgEntityIdMock: vi.fn(),
 }));
@@ -67,6 +68,8 @@ beforeEach(() => {
   prismaMock.entityMembership.findMany.mockReset();
   prismaMock.entityMembership.findFirst.mockReset();
   prismaMock.tokenAttributeRepository.findUnique.mockReset();
+  prismaMock.entityProfile.findUnique.mockReset();
+  prismaMock.entityProfile.findUnique.mockResolvedValue(null);
   getOrgEntityIdMock.mockReset();
 });
 
@@ -203,6 +206,30 @@ describe("resolveTargetInOrg + buildAuthorityContext (live-data derived)", () =>
     expect(evaluateWorkOsAction("CREATE_INTERNAL_MEETING", context).decision).toBe(
       "REQUIRES_TARGET_CONFIRMATION",
     );
+  });
+
+  it("reads real EntityProfile timezones (nullable) + a labeled org default", async () => {
+    getOrgEntityIdMock.mockResolvedValue(ORG);
+    prismaMock.tokenAttributeRepository.findUnique.mockResolvedValue({
+      can_admin_org: true,
+    });
+    prismaMock.entityMembership.findFirst.mockResolvedValue({
+      role_title: "ORG_ADMIN",
+      is_admin: true,
+    });
+    prismaMock.entityMembership.findMany.mockResolvedValue(roster);
+    // Caller has a configured zone; target has none → null (never faked).
+    prismaMock.entityProfile.findUnique
+      .mockResolvedValueOnce({ timezone: "America/Los_Angeles" }) // caller
+      .mockResolvedValueOnce({ timezone: null }); // target
+
+    const context = await buildAuthorityContext({
+      caller_entity_id: SADEIL,
+      target_name: "Vishesh",
+    });
+    expect(context.caller_timezone).toBe("America/Los_Angeles");
+    expect(context.target_timezone).toBeNull();
+    expect(context.org_default_timezone).toBe("America/Los_Angeles");
   });
 
   it("unknown target yields NOT_FOUND in the built context", async () => {
