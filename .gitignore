@@ -1,5 +1,13 @@
 .env
 .env.local
+
+# Editor / shell backups of env files (e.g. .env.save written by `cp`
+# or an editor). These can contain real secrets — never commit them.
+# Guard added in Phase 1263 so `git add -A` cannot stage an env backup.
+.env.save
+.env.*.save
+*.env.save
+
 node_modules/
 .next/
 dist/
