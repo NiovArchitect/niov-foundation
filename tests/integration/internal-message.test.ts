@@ -244,6 +244,68 @@ describe("human-authority direct internal message", () => {
     expect(casual?.signal).toBeUndefined(); // casual note → no clutter
   });
 
+  it("waiting-on v1: tracking a TASK signal creates directional work both sides see", async () => {
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil WO`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David WO`);
+
+    // Sadeil asks David for something → a NOTIFICATION message row.
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: "Please send the proof-layer notes" },
+    });
+    const messageId = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+
+    // Sadeil confirms it as a TASK → directional work entry.
+    const track = await app.inject({
+      method: "POST",
+      url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { ledger_type: "TASK" },
+    });
+    expect(track.statusCode).toBe(201);
+
+    // Sadeil is waiting ON David.
+    const sWait = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/waiting-on/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    const sj = sWait.json() as { waiting_on_them: unknown[]; pending_from_them: unknown[] };
+    expect(sj.waiting_on_them.length).toBe(1);
+    expect(sj.pending_from_them.length).toBe(0);
+
+    // David sees it as a pending ask FROM Sadeil.
+    const dWait = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/waiting-on/with/${sadeil.id}`,
+      headers: { authorization: `Bearer ${david.token}` },
+    });
+    const dj = dWait.json() as { waiting_on_them: unknown[]; pending_from_them: unknown[] };
+    expect(dj.pending_from_them.length).toBe(1);
+    expect(dj.waiting_on_them.length).toBe(0);
+
+    // It also appears in David's My Work (he owns it).
+    const myWork = await app.inject({
+      method: "GET",
+      url: "/api/v1/work-os/my-work",
+      headers: { authorization: `Bearer ${david.token}` },
+    });
+    const items = (myWork.json() as { items: Array<{ ledger_type: string }> }).items;
+    expect(items.some((i) => i.ledger_type === "TASK")).toBe(true);
+
+    // An unrelated user cannot track the message or see the relationship.
+    const stranger = await member(ORG_ID, `${TEST_PREFIX}Stranger WO`);
+    const sneaky = await app.inject({
+      method: "POST",
+      url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${stranger.token}` },
+      payload: { ledger_type: "TASK" },
+    });
+    expect(sneaky.statusCode).toBe(404);
+  });
+
   it("a different recipient is a different thread", async () => {
     const a = await member(ORG_ID, `${TEST_PREFIX}Multi A`);
     const b = await member(ORG_ID, `${TEST_PREFIX}Multi B`);

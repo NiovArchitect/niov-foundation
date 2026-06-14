@@ -40,6 +40,8 @@ import {
 import {
   deliverHumanInternalMessage,
   getDirectMessageThread,
+  trackThreadSignalAsWork,
+  getWaitingOnWith,
 } from "../services/collaboration/internal-message.service.js";
 import { makeNotificationService } from "../services/notification/notification.service.js";
 import { randomUUID } from "node:crypto";
@@ -363,6 +365,38 @@ export async function registerWorkOsLedgerRoutes(
       if (result.ok === false) {
         return reply.code(result.code === "INVALID_TARGET_ID" ? 422 : 404).send(result);
       }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // ── Track a thread signal as directional work (Phase 1285 Wave 4) ──
+  app.post<{ Params: { messageId: string }; Body: Record<string, unknown> }>(
+    "/api/v1/work-os/threads/messages/:messageId/track-signal",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const ledgerType = strParam((request.body ?? {}).ledger_type) ?? "";
+      const result = await trackThreadSignalAsWork(
+        ctx.org_entity_id,
+        ctx.entity_id,
+        request.params.messageId,
+        ledgerType,
+      );
+      if (result.ok === false) {
+        return reply.code(result.code === "NOT_FOUND" ? 404 : 422).send(result);
+      }
+      return reply.code(201).send(result);
+    },
+  );
+
+  // ── Waiting-on relationship with a teammate (Phase 1285 Wave 4) ──
+  app.get<{ Params: { entityId: string } }>(
+    "/api/v1/work-os/waiting-on/with/:entityId",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await getWaitingOnWith(ctx.org_entity_id, ctx.entity_id, request.params.entityId);
+      if (result.ok === false) return reply.code(422).send(result);
       return reply.code(200).send(result);
     },
   );
