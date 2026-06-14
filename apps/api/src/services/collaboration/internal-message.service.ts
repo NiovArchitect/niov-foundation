@@ -23,6 +23,7 @@
 import { prisma } from "@niov/database";
 import {
   resolveCollaborationTarget,
+  isUuid,
   type GovernedTarget,
 } from "./target-resolver.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
@@ -159,4 +160,122 @@ function humanizeDeliveryFailure(code: string): string {
     default:
       return "The note could not be delivered.";
   }
+}
+
+// ── Direct-message threads (Phase 1284 Wave 2) ───────────────────────────
+// A persistent person-to-person thread is DERIVED from the durable
+// WorkLedgerEntry NOTIFICATION rows already written for every internal
+// message (no new model/migration). Both participants can read it because
+// the ledger rows have requester=sender + target=recipient, and each
+// participant is requester on the messages they sent and target on the ones
+// they received. Tenant-scoped; only the two participants' rows are returned.
+
+export interface ThreadMessageView {
+  message_id: string;
+  sender_entity_id: string;
+  sender_display_name: string;
+  sender_role_title: string | null;
+  body: string;
+  created_at: string;
+  from_me: boolean;
+}
+
+export interface DirectThreadView {
+  ok: true;
+  thread_key: string;
+  participants: Array<{ entity_id: string; display_name: string; role_title: string | null }>;
+  messages: ThreadMessageView[];
+  latest_message_at: string | null;
+}
+
+export type DirectThreadResult =
+  | DirectThreadView
+  | { ok: false; code: "INVALID_TARGET_ID" | "NOT_FOUND" };
+
+// WHAT: Deterministic thread key for a direct person-to-person thread.
+function directThreadKey(orgEntityId: string, a: string, b: string): string {
+  const pair = [a, b].sort().join("+");
+  return `${orgEntityId}:DIRECT_PERSON:${pair}`;
+}
+
+// WHAT: Load the caller's direct-message thread with another org member.
+// OUTPUT: the full ordered exchange (both directions), or a clean failure.
+// WHY: messages between the same two people thread together instead of
+//      becoming scattered one-off notifications (Phase 1284 Wave 2).
+export async function getDirectMessageThread(
+  orgEntityId: string,
+  callerEntityId: string,
+  otherRef: string,
+): Promise<DirectThreadResult> {
+  // Resolve the other participant (accepts a UUID or a name).
+  let otherId: string | null = null;
+  if (isUuid(otherRef)) {
+    otherId = otherRef;
+  } else {
+    const r = await resolveCollaborationTarget(orgEntityId, otherRef);
+    if (r.kind === "RESOLVED" && r.target_entity_id !== null) otherId = r.target_entity_id;
+  }
+  if (otherId === null) return { ok: false, code: "INVALID_TARGET_ID" };
+
+  // Both directions of the pair, internal-note ledger rows only, tenant-scoped.
+  const rows = await prisma.workLedgerEntry.findMany({
+    where: {
+      org_entity_id: orgEntityId,
+      ledger_type: "NOTIFICATION",
+      OR: [
+        { requester_entity_id: callerEntityId, target_entity_id: otherId },
+        { requester_entity_id: otherId, target_entity_id: callerEntityId },
+      ],
+    },
+    orderBy: { created_at: "asc" },
+    take: 200,
+    select: {
+      ledger_entry_id: true,
+      requester_entity_id: true,
+      source_command: true,
+      summary: true,
+      created_at: true,
+    },
+  });
+  if (rows.length === 0) return { ok: false, code: "NOT_FOUND" };
+
+  // Display names for the two participants.
+  const ids = [callerEntityId, otherId];
+  const [entities, memberships] = await Promise.all([
+    prisma.entity.findMany({
+      where: { entity_id: { in: ids } },
+      select: { entity_id: true, display_name: true },
+    }),
+    prisma.entityMembership.findMany({
+      where: { parent_id: orgEntityId, child_id: { in: ids }, is_active: true },
+      select: { child_id: true, role_title: true },
+    }),
+  ]);
+  const nameOf = new Map(entities.map((e) => [e.entity_id, e.display_name ?? "(unknown)"]));
+  const roleOf = new Map(memberships.map((m) => [m.child_id, m.role_title]));
+
+  const messages: ThreadMessageView[] = rows.map((r) => {
+    const sender = r.requester_entity_id ?? "";
+    return {
+      message_id: r.ledger_entry_id,
+      sender_entity_id: sender,
+      sender_display_name: nameOf.get(sender) ?? "(unknown)",
+      sender_role_title: roleOf.get(sender) ?? null,
+      body: r.source_command ?? r.summary ?? "",
+      created_at: r.created_at.toISOString(),
+      from_me: sender === callerEntityId,
+    };
+  });
+
+  return {
+    ok: true,
+    thread_key: directThreadKey(orgEntityId, callerEntityId, otherId),
+    participants: ids.map((id) => ({
+      entity_id: id,
+      display_name: nameOf.get(id) ?? "(unknown)",
+      role_title: roleOf.get(id) ?? null,
+    })),
+    messages,
+    latest_message_at: messages.length > 0 ? messages[messages.length - 1]!.created_at : null,
+  };
 }
