@@ -37,7 +37,14 @@ import {
   getExecutionProofSummary,
   type AttemptFilters,
 } from "../services/work-os/execution-verification.service.js";
+import { deliverHumanInternalMessage } from "../services/collaboration/internal-message.service.js";
+import { makeNotificationService } from "../services/notification/notification.service.js";
 import { randomUUID } from "node:crypto";
+
+// Internal-only notification service (no connector fan-out) for the
+// human-authority direct internal-message path. Internal Otzar inbox only —
+// no Slack/email/calendar/external delivery.
+const internalOnlyNotificationService = makeNotificationService({});
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -302,6 +309,39 @@ export async function registerWorkOsLedgerRoutes(
     if (result.ok === false) return reply.code(403).send(result);
     return reply.code(200).send({ ok: true, entries: result.entries });
   });
+
+  // ── Human-authority direct internal message (Phase 1284 Wave 2) ──
+  // A human sends a LOW-risk internal Otzar-inbox note to an org member.
+  // Resolves the recipient via the general resolver; delivers directly under
+  // the sender's own authority through the governed notification service.
+  // Never sends external; AI-initiated callers are GATED.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/work-os/internal-messages",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      const recipientRef =
+        strParam(b.recipient) ?? strParam(b.recipient_ref) ?? strParam(b.target) ?? "";
+      const message = strParam(b.message) ?? strParam(b.body) ?? "";
+      const result = await deliverHumanInternalMessage({
+        orgEntityId: ctx.org_entity_id,
+        senderEntityId: ctx.entity_id,
+        recipientRef,
+        message,
+        notificationService: internalOnlyNotificationService,
+      });
+      if (result.ok) return reply.code(201).send(result);
+      // Honest, human-readable failure states — never a dead end.
+      const code =
+        result.status === "NEEDS_RESOLUTION"
+          ? 422
+          : result.status === "GATED"
+            ? 409
+            : 422;
+      return reply.code(code).send(result);
+    },
+  );
 
   // ── Execution attempts (Phase 1282) — tenant-scoped evidence list ──
   app.get<{ Querystring: Record<string, string> }>(
