@@ -3758,3 +3758,28 @@ model WorkLedgerEntry {
   @@index([project_id])
   @@map("work_ledger_entries")
 }
+
+// Phase 1282 — durable proof that a runtime step against a WorkLedgerEntry
+// actually happened. An attempt is EVIDENCE, never an action: creating a
+// VERIFIED attempt does not execute anything. Foundation auto-records a
+// VERIFIED attempt for the internal ledger write, and records the real
+// outcome of the BEAM fanout and Python enrichment (VERIFIED on a proven
+// provider response, FAILED otherwise). Tenant-scoped by org_entity_id.
+model ExecutionAttempt {
+  attempt_id      String    @id @default(uuid()) @db.Uuid
+  ledger_entry_id String    @db.Uuid
+  org_entity_id   String    @db.Uuid
+  attempt_type    String // WORK_LEDGER_CREATE | BEAM_FANOUT | PYTHON_ENRICHMENT | CONNECTOR_EXECUTION
+  runtime         String // TYPESCRIPT | BEAM | PYTHON | CONNECTOR
+  evidence_type   String // INTERNAL_RECORD | PROVIDER_RESPONSE | CONNECTOR_RECEIPT
+  status          String // VERIFIED | FAILED | PENDING | UNVERIFIED
+  detail          Json      @default("{}")
+  error_code      String?
+  created_at      DateTime  @default(now())
+  verified_at     DateTime?
+
+  @@index([org_entity_id, ledger_entry_id])
+  @@index([org_entity_id, status])
+  @@index([ledger_entry_id])
+  @@map("execution_attempts")
+}

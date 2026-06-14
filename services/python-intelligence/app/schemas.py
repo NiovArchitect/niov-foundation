@@ -174,6 +174,61 @@ class ProjectRiskForecastResponse(BaseModel):
     provider_mode: Literal["PYTHON"] = "PYTHON"
 
 
+# --- Conversation-to-work enrichment (Phase 1282) ---------------------------
+# Advisory-only. Foundation's deterministic TypeScript extraction is always
+# primary; this service surfaces ADDITIONAL closed-vocab work signals from a
+# safe utterance. It NEVER decides ownership/policy/target — Foundation does.
+# No LLM. No chain-of-thought. Detection is general phrase heuristics only.
+
+WorkSignalType = Literal[
+    "FOLLOW_UP",
+    "COMMITMENT",
+    "TASK",
+    "DELEGATION",
+    "DECISION",
+    "BLOCKER",
+    "APPROVAL_NEEDED",
+]
+
+WorkSignalConfidence = Literal["HIGH", "MEDIUM", "LOW"]
+
+
+class WorkSignalExtractionInput(BaseModel):
+    """A single safe utterance to analyse for work signals.
+
+    ``text`` is the user's own spoken/typed command within their tenant;
+    Foundation governs the call. We never persist it here and never echo
+    more than the short matched marker phrase back.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=4000)
+    source_type: Optional[str] = Field(default=None, max_length=40)
+
+
+class WorkSignal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    signal_type: WorkSignalType
+    confidence: WorkSignalConfidence
+    evidence_phrase: str = Field(min_length=1, max_length=120)
+
+
+class WorkSignalExtractionResult(BaseModel):
+    """Closed-vocab advisory signals. ``primary_signal`` is the highest-
+    confidence signal (None when nothing detected). ``multi_intent`` is
+    True when two or more distinct signal types are present.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    signals: list[WorkSignal]
+    primary_signal: Optional[WorkSignalType] = None
+    multi_intent: bool = False
+    provider_mode: Literal["PYTHON"] = "PYTHON"
+
+
 # --- Health -----------------------------------------------------------------
 
 

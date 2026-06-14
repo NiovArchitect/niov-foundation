@@ -30,6 +30,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI
 
+from .enricher import extract_work_signals
 from .forecaster import forecast_project_risk
 from .ranker import rank_next_actions
 from .schemas import (
@@ -38,6 +39,8 @@ from .schemas import (
     NextActionRankingResult,
     ProjectRiskForecastRequest,
     ProjectRiskForecastResponse,
+    WorkSignalExtractionInput,
+    WorkSignalExtractionResult,
 )
 
 
@@ -72,3 +75,12 @@ def forecast_project_risk_route(
     payload: ProjectRiskForecastRequest,
 ) -> ProjectRiskForecastResponse:
     return forecast_project_risk(payload.projects)
+
+
+@app.post("/jobs/extract-work-signals", response_model=WorkSignalExtractionResult)
+def extract_work_signals_route(
+    payload: WorkSignalExtractionInput,
+) -> WorkSignalExtractionResult:
+    # Advisory enrichment only. Foundation's deterministic extraction stays
+    # primary; this never decides ownership/policy/target and never executes.
+    return extract_work_signals(payload)

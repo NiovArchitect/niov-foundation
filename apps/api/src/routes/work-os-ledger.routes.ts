@@ -30,6 +30,11 @@ import {
   eventTypeForLedger,
   type WorkOsEvent,
 } from "../services/coordination/beam-fabric-client.js";
+import {
+  recordExecutionAttempt,
+  listExecutionAttempts,
+  type AttemptFilters,
+} from "../services/work-os/execution-verification.service.js";
 import { randomUUID } from "node:crypto";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
@@ -131,6 +136,11 @@ export async function registerWorkOsLedgerRoutes(
           ? { details: b.details as Record<string, unknown> }
           : {}),
         ...(strParam(b.due_at) ? { due_at: strParam(b.due_at) } : {}),
+        // Phase 1282 — advisory Python enrichment opt-in. Deterministic
+        // extraction stays primary; Python only annotates + may upgrade
+        // extraction_source when it actually returns signals.
+        ...(strParam(b.enrichment_text) ? { enrichment_text: strParam(b.enrichment_text) } : {}),
+        ...(b.enable_python_enrichment === true ? { enable_python_enrichment: true } : {}),
       });
       if (result.ok === false)
         return reply.code(result.code === "INVALID_REQUEST" ? 422 : 404).send(result);
@@ -159,6 +169,27 @@ export async function registerWorkOsLedgerRoutes(
         created_at: entry.created_at,
       };
       const coord = await dispatchWorkOsEvent(event);
+
+      // Phase 1282 — record the BEAM fanout as execution evidence. VERIFIED
+      // only on a proven BEAM accept; FAILED otherwise (honest — never a
+      // fake green). Best-effort: never blocks the response.
+      await recordExecutionAttempt({
+        ledger_entry_id: entry.ledger_entry_id,
+        org_entity_id: entry.org_entity_id,
+        attempt_type: "BEAM_FANOUT",
+        runtime: "BEAM",
+        evidence_type: "PROVIDER_RESPONSE",
+        status: coord.coordination_runtime === "BEAM_DISPATCHED" ? "VERIFIED" : "FAILED",
+        detail: {
+          coordination_runtime: coord.coordination_runtime,
+          ...(coord.watcher !== undefined ? { watcher: coord.watcher } : {}),
+          event_type: event.event_type,
+        },
+        ...(coord.coordination_runtime === "BEAM_DISPATCHED"
+          ? {}
+          : { error_code: coord.error_code ?? coord.coordination_runtime }),
+      });
+
       return reply.code(201).send({
         ok: true,
         entry: {
@@ -255,6 +286,45 @@ export async function registerWorkOsLedgerRoutes(
     if (result.ok === false) return reply.code(403).send(result);
     return reply.code(200).send({ ok: true, entries: result.entries });
   });
+
+  // ── Execution attempts (Phase 1282) — tenant-scoped evidence list ──
+  app.get<{ Querystring: Record<string, string> }>(
+    "/api/v1/work-os/execution-attempts",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const q = request.query ?? {};
+      const filters: AttemptFilters = {};
+      const led = strParam(q.ledger_entry_id);
+      const st = strParam(q.status);
+      if (led !== undefined) filters.ledger_entry_id = led;
+      if (st !== undefined) filters.status = st;
+      const attempts = await listExecutionAttempts(ctx.org_entity_id, filters);
+      return reply.code(200).send({ ok: true, attempts });
+    },
+  );
+
+  // ── Execution attempts for one ledger entry ──
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id/execution-attempts",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      // Tenant isolation: the entry read enforces org scope first; if the
+      // caller cannot see the entry, they get no attempts.
+      const entry = await getLedgerEntry({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      if (entry.ok === false) return reply.code(404).send(entry);
+      const attempts = await listExecutionAttempts(ctx.org_entity_id, {
+        ledger_entry_id: request.params.id,
+      });
+      return reply.code(200).send({ ok: true, attempts });
+    },
+  );
 
   // ── Blind spots ──
   app.get("/api/v1/work-os/blind-spots", async (request, reply) => {
