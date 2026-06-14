@@ -255,6 +255,154 @@ export type DirectThreadResult =
   | DirectThreadView
   | { ok: false; code: "INVALID_TARGET_ID" | "NOT_FOUND" };
 
+// ── Waiting-On Relationships v1 (Phase 1285 slice 4) ─────────────────────
+// Confirming a thread signal creates a DIRECTIONAL Work Ledger entry derived
+// from the source message row (which already carries requester=sender +
+// target=recipient). Direction is set on the BACKEND because the frontend
+// does not hold the caller's entity_id. The resulting entry surfaces as
+// "waiting on <owner>" for the requester and a pending ask for the owner.
+
+const TRACKABLE_LEDGER_TYPES = new Set([
+  "TASK", "FOLLOW_UP", "APPROVAL", "BLOCKER", "DECISION",
+]);
+// Active (not-done) statuses for waiting-on derivation.
+const WAITING_ACTIVE_NOT_IN = ["CANCELLED", "EXPIRED", "VERIFIED", "EXECUTED"];
+
+export type TrackSignalResult =
+  | { ok: true; ledger_entry_id: string }
+  | { ok: false; code: "INVALID_REQUEST" | "NOT_FOUND" };
+
+// WHAT: Promote a confirmed thread signal into a directional Work Ledger entry,
+//        linked to the source message. Caller must be a participant of the
+//        source message (tenant + participant scoped).
+export async function trackThreadSignalAsWork(
+  orgEntityId: string,
+  callerEntityId: string,
+  sourceMessageId: string,
+  ledgerType: string,
+): Promise<TrackSignalResult> {
+  if (!TRACKABLE_LEDGER_TYPES.has(ledgerType)) {
+    return { ok: false, code: "INVALID_REQUEST" };
+  }
+  if (!isUuid(sourceMessageId)) return { ok: false, code: "INVALID_REQUEST" };
+  const src = await prisma.workLedgerEntry.findFirst({
+    where: { ledger_entry_id: sourceMessageId, org_entity_id: orgEntityId, ledger_type: "NOTIFICATION" },
+    select: {
+      requester_entity_id: true,
+      target_entity_id: true,
+      source_command: true,
+      conversation_id: true,
+    },
+  });
+  if (src === null) return { ok: false, code: "NOT_FOUND" };
+  const sender = src.requester_entity_id;
+  const recipient = src.target_entity_id;
+  // Participant gate (RULE 0): only the two people on the message can track it.
+  if (callerEntityId !== sender && callerEntityId !== recipient) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  if (sender === null || recipient === null) return { ok: false, code: "INVALID_REQUEST" };
+
+  // Direction: a request/follow-up/approval is OWNED by the recipient (the
+  // doer) and REQUESTED by the sender. A blocker/decision is owned by whoever
+  // raised it (the sender).
+  const ownedByRecipient = ledgerType === "TASK" || ledgerType === "FOLLOW_UP" || ledgerType === "APPROVAL";
+  const owner = ownedByRecipient ? recipient : sender;
+  const body = (src.source_command ?? "").slice(0, 2000);
+
+  const created = await createLedgerEntry({
+    org_entity_id: orgEntityId,
+    ledger_type: ledgerType,
+    source_type: "CHAT",
+    source_command: body,
+    title: body.slice(0, 60),
+    summary: body.slice(0, 200),
+    requester_entity_id: sender,
+    owner_entity_id: owner,
+    target_entity_id: recipient,
+    status: "PROPOSED",
+    priority: "ROUTINE",
+    ...(src.conversation_id !== null ? { conversation_id: src.conversation_id } : {}),
+    details: { derived_from: "thread_signal", source_message_id: sourceMessageId },
+  });
+  if (created.ok === false) return { ok: false, code: "INVALID_REQUEST" };
+  return { ok: true, ledger_entry_id: created.entry.ledger_entry_id };
+}
+
+export interface WaitingOnItem {
+  ledger_entry_id: string;
+  ledger_type: string;
+  title: string;
+  status: string;
+  requester_entity_id: string | null;
+  owner_entity_id: string | null;
+  due_at: string | null;
+  source_message_id: string | null;
+}
+
+export interface WaitingOnView {
+  ok: true;
+  // Work the caller is waiting on FROM the other party (caller requested, other owns).
+  waiting_on_them: WaitingOnItem[];
+  // Work the other party is waiting on FROM the caller (other requested, caller owns).
+  pending_from_them: WaitingOnItem[];
+}
+
+// WHAT: Derive the waiting-on relationship between the caller and another
+//        org member from durable Work Ledger entries (never faked).
+export async function getWaitingOnWith(
+  orgEntityId: string,
+  callerEntityId: string,
+  otherRef: string,
+): Promise<WaitingOnView | { ok: false; code: "INVALID_TARGET_ID" }> {
+  let otherId: string | null = isUuid(otherRef) ? otherRef : null;
+  if (otherId === null) {
+    const r = await resolveCollaborationTarget(orgEntityId, otherRef);
+    if (r.kind === "RESOLVED" && r.target_entity_id !== null) otherId = r.target_entity_id;
+  }
+  if (otherId === null) return { ok: false, code: "INVALID_TARGET_ID" };
+
+  const rows = await prisma.workLedgerEntry.findMany({
+    where: {
+      org_entity_id: orgEntityId,
+      ledger_type: { in: [...TRACKABLE_LEDGER_TYPES] },
+      status: { notIn: WAITING_ACTIVE_NOT_IN },
+      OR: [
+        { requester_entity_id: callerEntityId, owner_entity_id: otherId },
+        { requester_entity_id: otherId, owner_entity_id: callerEntityId },
+      ],
+    },
+    orderBy: { created_at: "desc" },
+    take: 100,
+    select: {
+      ledger_entry_id: true, ledger_type: true, title: true, status: true,
+      requester_entity_id: true, owner_entity_id: true, due_at: true, details: true,
+    },
+  });
+  const project = (r: (typeof rows)[number]): WaitingOnItem => ({
+    ledger_entry_id: r.ledger_entry_id,
+    ledger_type: r.ledger_type,
+    title: r.title,
+    status: r.status,
+    requester_entity_id: r.requester_entity_id,
+    owner_entity_id: r.owner_entity_id,
+    due_at: r.due_at !== null ? r.due_at.toISOString() : null,
+    source_message_id:
+      typeof r.details === "object" && r.details !== null
+        ? ((r.details as Record<string, unknown>).source_message_id as string | undefined) ?? null
+        : null,
+  });
+  return {
+    ok: true,
+    waiting_on_them: rows
+      .filter((r) => r.requester_entity_id === callerEntityId && r.owner_entity_id === otherId)
+      .map(project),
+    pending_from_them: rows
+      .filter((r) => r.requester_entity_id === otherId && r.owner_entity_id === callerEntityId)
+      .map(project),
+  };
+}
+
 // WHAT: Deterministic thread key for a direct person-to-person thread.
 function directThreadKey(orgEntityId: string, a: string, b: string): string {
   const pair = [a, b].sort().join("+");
