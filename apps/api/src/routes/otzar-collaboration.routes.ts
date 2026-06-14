@@ -85,6 +85,8 @@ function httpCodeForFailure(code: string): number {
       return 403;
     case "INVALID_STATE_TRANSITION":
       return 409;
+    case "INVALID_TARGET_ID":
+      return 422;
     default:
       return 400;
   }

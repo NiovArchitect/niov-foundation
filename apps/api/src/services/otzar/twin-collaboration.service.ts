@@ -38,6 +38,7 @@ import type {
 } from "@prisma/client";
 import { prisma } from "@niov/database";
 import { isActiveProjectMember } from "./work-project.service.js";
+import { isUuid } from "../collaboration/target-resolver.service.js";
 import {
   evaluateOrgCollaborationPolicy,
   type OrgCollaborationScope,
@@ -118,7 +119,11 @@ export type CollaborationTransitionResult =
         | "NOT_TARGET"
         | "INVALID_STATE_TRANSITION"
         | "CROSS_ORG_DENIED"
-        | "TARGET_NOT_FOUND";
+        | "TARGET_NOT_FOUND"
+        // Phase 1284 — a provided target id was not a valid UUID. Returned
+        // BEFORE any Prisma UUID lookup so a typed name / display id can
+        // never crash the query with a raw Prisma UUID parse error.
+        | "INVALID_TARGET_ID";
     };
 
 // WHAT: Map a raw row to the safe employee-facing projection.
@@ -195,6 +200,20 @@ export async function createTwinCollaborationRequestForCaller(
   const sensitivity = input.sensitivityClass ?? "MODERATE";
   const requestedByAi = input.requestedByAi ?? false;
   const requiresApproval = input.requiresApproval ?? false;
+
+  // Phase 1284 — validate every provided target id is a UUID BEFORE any
+  // Prisma lookup. A typed name / display id must never reach a UUID column
+  // (that produced the raw "Error creating UUID, invalid character" crash).
+  for (const candidate of [
+    input.targetEntityId,
+    input.targetTwinEntityId,
+    input.targetTeamId,
+    input.targetProjectId,
+  ]) {
+    if (candidate !== undefined && candidate !== null && !isUuid(candidate)) {
+      return { ok: false, code: "INVALID_TARGET_ID" };
+    }
+  }
 
   // Cross-org guards. Only check candidate IDs that were provided.
   if (input.targetEntityId !== undefined && input.targetEntityId !== null) {
