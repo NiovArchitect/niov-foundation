@@ -23,6 +23,7 @@ import {
   getMyWork,
   getTeamWork,
   getBlindSpots,
+  recordCoordinationOnLedger,
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
 import {
@@ -33,6 +34,7 @@ import {
 import {
   recordExecutionAttempt,
   listExecutionAttempts,
+  getExecutionProofSummary,
   type AttemptFilters,
 } from "../services/work-os/execution-verification.service.js";
 import { randomUUID } from "node:crypto";
@@ -190,6 +192,19 @@ export async function registerWorkOsLedgerRoutes(
           : { error_code: coord.error_code ?? coord.coordination_runtime }),
       });
 
+      // Phase 1283 PART E + F — persist the coordination summary onto the
+      // ledger row's details and create internal watcher state (BEAM
+      // watcher category). Best-effort: a persistence miss surfaces a safe
+      // warning, never fakes the cache and never blocks the response.
+      const persisted = await recordCoordinationOnLedger({
+        org_entity_id: entry.org_entity_id,
+        ledger_entry_id: entry.ledger_entry_id,
+        coordination_runtime: coord.coordination_runtime,
+        coordination_event_id: event.event_id,
+        ...(coord.watcher !== undefined ? { coordination_watcher: coord.watcher } : {}),
+        ...(coord.error_code !== undefined ? { coordination_error_code: coord.error_code } : {}),
+      });
+
       return reply.code(201).send({
         ok: true,
         entry: {
@@ -197,6 +212,7 @@ export async function registerWorkOsLedgerRoutes(
           coordination_runtime: coord.coordination_runtime,
           ...(coord.watcher !== undefined ? { coordination_watcher: coord.watcher } : {}),
         },
+        ...(persisted.ok ? {} : { coordination_warning: persisted.warning }),
       });
     },
   );
@@ -323,6 +339,24 @@ export async function registerWorkOsLedgerRoutes(
         ledger_entry_id: request.params.id,
       });
       return reply.code(200).send({ ok: true, attempts });
+    },
+  );
+
+  // ── Execution proof summary for one ledger entry (Phase 1283) ──
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id/execution-proof",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const entry = await getLedgerEntry({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      if (entry.ok === false) return reply.code(404).send(entry);
+      const proof = await getExecutionProofSummary(ctx.org_entity_id, request.params.id);
+      return reply.code(200).send({ ok: true, proof });
     },
   );
 

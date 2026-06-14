@@ -13,13 +13,28 @@
 // entry never executes anything. extraction_source is preserved verbatim
 // (never upgraded to PYTHON_ENRICHED unless the caller proves it).
 
+import { randomUUID } from "node:crypto";
 import { prisma } from "@niov/database";
 import {
   extractWorkSignals,
   type EnrichmentRuntimeConfig,
   type WorkSignalExtractionResult,
 } from "../intelligence/python-enrichment.service.js";
-import { recordExecutionAttempt } from "./execution-verification.service.js";
+import {
+  recordExecutionAttempt,
+  getFailedAttemptDigests,
+} from "./execution-verification.service.js";
+
+// Phase 1283 — BEAM watcher category → durable internal watcher type. "none"
+// maps to null (no watcher created). Internal Work OS state only — a watcher
+// NEVER sends an external notification.
+const WATCHER_TYPE_BY_CATEGORY: Record<string, string | undefined> = {
+  blocker: "BLOCKER",
+  confirmation: "CONFIRMATION",
+  due_date: "DUE_DATE",
+  no_next_action: "NO_NEXT_ACTION",
+  none: undefined,
+};
 
 export const LEDGER_TYPES = [
   "COMMITMENT", "TASK", "DECISION", "BLOCKER", "MEETING", "FOLLOW_UP",
@@ -231,6 +246,80 @@ export async function createLedgerEntry(
   return { ok: true, entry: projectLedger(row) };
 }
 
+export interface CoordinationRecordInput {
+  org_entity_id: string;
+  ledger_entry_id: string;
+  coordination_runtime: string;
+  coordination_event_id?: string;
+  coordination_watcher?: string;
+  coordination_error_code?: string;
+}
+
+// WHAT: Persist a lightweight coordination summary + (if actionable) an
+//        internal watcher onto the ledger row's details, AFTER the BEAM
+//        dispatch result is known. execution_attempts remains the detailed
+//        proof source; this is the summary/cache so My Work etc. can show
+//        coordination without replaying the original create response.
+// OUTPUT: ok + the watcher created (if any), or a safe warning — never fakes
+//         persistence and never throws on the create hot path.
+// WHY: PART E + PART F (Phase 1283). A watcher is internal Work OS state
+//      only; it NEVER sends an external notification.
+export async function recordCoordinationOnLedger(
+  input: CoordinationRecordInput,
+): Promise<{ ok: true; watcher_created: boolean } | { ok: false; warning: string }> {
+  try {
+    const row = await prisma.workLedgerEntry.findFirst({
+      where: { ledger_entry_id: input.ledger_entry_id, org_entity_id: input.org_entity_id },
+      select: { details: true },
+    });
+    if (row === null) {
+      return { ok: false, warning: "ledger entry not found for coordination persistence" };
+    }
+    const details =
+      typeof row.details === "object" && row.details !== null
+        ? ({ ...(row.details as Record<string, unknown>) })
+        : {};
+
+    details.coordination = {
+      runtime: input.coordination_runtime,
+      event_id: input.coordination_event_id ?? null,
+      watcher: input.coordination_watcher ?? null,
+      dispatched_at: new Date().toISOString(),
+      error_code: input.coordination_error_code ?? null,
+    };
+
+    let watcherCreated = false;
+    const watcherType =
+      input.coordination_watcher !== undefined
+        ? WATCHER_TYPE_BY_CATEGORY[input.coordination_watcher]
+        : undefined;
+    if (watcherType !== undefined) {
+      const existing = Array.isArray(details.watchers)
+        ? (details.watchers as unknown[])
+        : [];
+      existing.push({
+        watcher_id: randomUUID(),
+        watcher_type: watcherType,
+        status: "ACTIVE",
+        source_runtime: input.coordination_runtime === "BEAM_DISPATCHED" ? "BEAM" : "TYPESCRIPT",
+        escalation_level: "NONE",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      details.watchers = existing;
+      watcherCreated = true;
+    }
+
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: input.ledger_entry_id },
+      data: { details: details as object },
+    });
+    return { ok: true, watcher_created: watcherCreated };
+  } catch {
+    return { ok: false, warning: "coordination persistence failed" };
+  }
+}
+
 export interface LedgerFilters {
   ledger_type?: string;
   status?: string;
@@ -415,7 +504,59 @@ export async function getBlindSpots(args: {
     orderBy: { created_at: "desc" },
     take: 200,
   });
-  return rows.map(projectLedger);
+  const statusBased = rows.map(projectLedger);
+
+  // PART C — also surface rows whose runtime proof FAILED, even if their
+  // ledger status looks fine. "Not attempted" is never a failure; only an
+  // actual FAILED execution attempt counts. Tenant-scoped via the digest.
+  const digests = await getFailedAttemptDigests(args.org_entity_id);
+  const byId = new Map(statusBased.map((e) => [e.ledger_entry_id, e]));
+  const missingIds = [...digests.keys()].filter((id) => !byId.has(id));
+  if (missingIds.length > 0) {
+    const failedRows = await prisma.workLedgerEntry.findMany({
+      where: {
+        ...scope,
+        ledger_entry_id: { in: missingIds },
+        NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
+      },
+      orderBy: { created_at: "desc" },
+      take: 200,
+    });
+    for (const r of failedRows) {
+      const v = projectLedger(r);
+      byId.set(v.ledger_entry_id, v);
+      statusBased.push(v);
+    }
+  }
+  // Tag every row that has a failed-attempt digest with the proof-failure
+  // reason + severity (rows already present for a status reason get tagged
+  // too, so the UI can route them to the runtime-issues section).
+  for (const [id, digest] of digests) {
+    const v = byId.get(id);
+    if (v === undefined) continue;
+    const { reason, severity } = classifyProofFailure(digest.failed_attempt_types);
+    v.blind_spot_reason = reason;
+    v.blind_spot_severity = severity;
+  }
+  return statusBased;
+}
+
+// WHAT: pick the dominant blind-spot reason + severity from failed attempt
+//        types. EXECUTION_FAILED (core write) > COORDINATION_FAILED (BEAM,
+//        internal-only) > ENRICHMENT_FAILED (deterministic fallback worked).
+function classifyProofFailure(
+  failedTypes: string[],
+): { reason: string; severity: string } {
+  if (failedTypes.includes("WORK_LEDGER_CREATE") || failedTypes.includes("CONNECTOR_EXECUTION")) {
+    return { reason: "EXECUTION_FAILED", severity: "HIGH" };
+  }
+  if (failedTypes.includes("BEAM_FANOUT")) {
+    return { reason: "COORDINATION_FAILED", severity: "MEDIUM" };
+  }
+  if (failedTypes.includes("PYTHON_ENRICHMENT")) {
+    return { reason: "ENRICHMENT_FAILED", severity: "LOW" };
+  }
+  return { reason: "VERIFICATION_MISSING", severity: "MEDIUM" };
 }
 
 export interface WorkLedgerView {
@@ -458,6 +599,30 @@ export interface WorkLedgerView {
     primary_signal: string | null;
     multi_intent: boolean;
   };
+  // Phase 1283 — persisted coordination summary (PART E) read back from
+  // details.coordination, so My Work / Team Work / Blind Spots show the BEAM
+  // outcome without the original create response.
+  coordination?: {
+    runtime: string;
+    event_id: string | null;
+    watcher: string | null;
+    dispatched_at: string | null;
+    error_code: string | null;
+  };
+  // Phase 1283 — internal watcher state (PART F). Never sends anything.
+  watchers?: Array<{
+    watcher_id: string;
+    watcher_type: string;
+    status: string;
+    source_runtime: string;
+    escalation_level: string;
+    created_at: string;
+  }>;
+  // Phase 1283 — set only when this row surfaces in Blind Spots because of a
+  // runtime/verification failure (PART C). Status-derived blind spots leave
+  // this undefined.
+  blind_spot_reason?: string;
+  blind_spot_severity?: string;
 }
 
 interface LedgerRow {
@@ -520,8 +685,49 @@ function enrichmentFromDetails(
   };
 }
 
+// WHAT: pull the persisted coordination summary out of details (PART E).
+function coordinationFromDetails(details: unknown): WorkLedgerView["coordination"] | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const c = (details as Record<string, unknown>).coordination;
+  if (typeof c !== "object" || c === null) return undefined;
+  const o = c as Record<string, unknown>;
+  if (typeof o.runtime !== "string") return undefined;
+  return {
+    runtime: o.runtime,
+    event_id: typeof o.event_id === "string" ? o.event_id : null,
+    watcher: typeof o.watcher === "string" ? o.watcher : null,
+    dispatched_at: typeof o.dispatched_at === "string" ? o.dispatched_at : null,
+    error_code: typeof o.error_code === "string" ? o.error_code : null,
+  };
+}
+
+// WHAT: pull internal watcher state out of details (PART F).
+function watchersFromDetails(details: unknown): WorkLedgerView["watchers"] | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const w = (details as Record<string, unknown>).watchers;
+  if (!Array.isArray(w)) return undefined;
+  const out = w.flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const o = item as Record<string, unknown>;
+    if (typeof o.watcher_type !== "string") return [];
+    return [
+      {
+        watcher_id: String(o.watcher_id ?? ""),
+        watcher_type: o.watcher_type,
+        status: String(o.status ?? "ACTIVE"),
+        source_runtime: String(o.source_runtime ?? "BEAM"),
+        escalation_level: String(o.escalation_level ?? "NONE"),
+        created_at: String(o.created_at ?? ""),
+      },
+    ];
+  });
+  return out.length > 0 ? out : undefined;
+}
+
 function projectLedger(row: LedgerRow): WorkLedgerView {
   const enrichment = enrichmentFromDetails(row.details);
+  const coordination = coordinationFromDetails(row.details);
+  const watchers = watchersFromDetails(row.details);
   return {
     ledger_entry_id: row.ledger_entry_id,
     org_entity_id: row.org_entity_id,
@@ -549,5 +755,7 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
     updated_at: row.updated_at.toISOString(),
     verified_at: row.verified_at !== null ? row.verified_at.toISOString() : null,
     ...(enrichment !== undefined ? { python_enrichment: enrichment } : {}),
+    ...(coordination !== undefined ? { coordination } : {}),
+    ...(watchers !== undefined ? { watchers } : {}),
   };
 }

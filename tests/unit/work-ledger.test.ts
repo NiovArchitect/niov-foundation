@@ -15,7 +15,14 @@ const { prismaMock } = vi.hoisted(() => ({
       create: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
+    },
+    // Phase 1283 — getBlindSpots now reads failed execution attempts to
+    // surface runtime/verification issues. Default to none for the existing
+    // status-based assertions; proof-failure behavior is covered live.
+    executionAttempt: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
   },
 }));
