@@ -37,7 +37,10 @@ import {
   getExecutionProofSummary,
   type AttemptFilters,
 } from "../services/work-os/execution-verification.service.js";
-import { deliverHumanInternalMessage } from "../services/collaboration/internal-message.service.js";
+import {
+  deliverHumanInternalMessage,
+  getDirectMessageThread,
+} from "../services/collaboration/internal-message.service.js";
 import { makeNotificationService } from "../services/notification/notification.service.js";
 import { randomUUID } from "node:crypto";
 
@@ -340,6 +343,27 @@ export async function registerWorkOsLedgerRoutes(
             ? 409
             : 422;
       return reply.code(code).send(result);
+    },
+  );
+
+  // ── Direct-message thread with a teammate (Phase 1284 Wave 3) ──
+  // Returns the persistent person-to-person thread (both directions) derived
+  // from the durable internal-note ledger rows. Participant-scoped + tenant-
+  // isolated by construction (only rows where the caller is requester/target).
+  app.get<{ Params: { entityId: string } }>(
+    "/api/v1/work-os/threads/with/:entityId",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await getDirectMessageThread(
+        ctx.org_entity_id,
+        ctx.entity_id,
+        request.params.entityId,
+      );
+      if (result.ok === false) {
+        return reply.code(result.code === "INVALID_TARGET_ID" ? 422 : 404).send(result);
+      }
+      return reply.code(200).send(result);
     },
   );
 

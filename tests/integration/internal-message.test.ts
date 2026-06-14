@@ -165,6 +165,78 @@ describe("human-authority direct internal message", () => {
     expect((res.json() as { resolution: { kind: string } }).resolution.kind).toBe("INVALID_ID");
   });
 
+  it("threads two messages + a reply between the same two people (both see the full exchange)", async () => {
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil Thread`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David Thread`);
+
+    async function send(token: string, recipient: string, message: string): Promise<void> {
+      const r = await app.inject({
+        method: "POST",
+        url: "/api/v1/work-os/internal-messages",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { recipient, message },
+      });
+      expect(r.statusCode).toBe(201);
+    }
+    // Sadeil → David twice, then David → Sadeil (reply).
+    await send(sadeil.token, david.id, "First message to David");
+    await send(sadeil.token, david.id, "Second message to David");
+    await send(david.token, sadeil.id, "David reply to Sadeil");
+
+    // David sees the full thread with Sadeil (both directions, ordered).
+    const davidThread = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/threads/with/${sadeil.id}`,
+      headers: { authorization: `Bearer ${david.token}` },
+    });
+    expect(davidThread.statusCode).toBe(200);
+    const dt = davidThread.json() as { messages: Array<{ body: string; from_me: boolean }> };
+    const bodies = dt.messages.map((m) => m.body);
+    expect(bodies).toContain("First message to David");
+    expect(bodies).toContain("Second message to David");
+    expect(bodies).toContain("David reply to Sadeil");
+    expect(dt.messages.length).toBe(3);
+
+    // Sadeil sees the SAME exchange in the same thread.
+    const sadeilThread = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/threads/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    expect(sadeilThread.statusCode).toBe(200);
+    expect((sadeilThread.json() as { messages: unknown[] }).messages.length).toBe(3);
+
+    // An unrelated user cannot see the thread.
+    const stranger = await member(ORG_ID, `${TEST_PREFIX}Stranger`);
+    const strangerView = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/threads/with/${sadeil.id}`,
+      headers: { authorization: `Bearer ${stranger.token}` },
+    });
+    expect(strangerView.statusCode).toBe(404); // no thread between stranger + sadeil
+  });
+
+  it("a different recipient is a different thread", async () => {
+    const a = await member(ORG_ID, `${TEST_PREFIX}Multi A`);
+    const b = await member(ORG_ID, `${TEST_PREFIX}Multi B`);
+    const c = await member(ORG_ID, `${TEST_PREFIX}Multi C`);
+    await app.inject({
+      method: "POST", url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${a.token}` },
+      payload: { recipient: b.id, message: "to B only" },
+    });
+    const threadAC = await app.inject({
+      method: "GET", url: `/api/v1/work-os/threads/with/${c.id}`,
+      headers: { authorization: `Bearer ${a.token}` },
+    });
+    expect(threadAC.statusCode).toBe(404); // A↔C has no messages
+    const threadAB = await app.inject({
+      method: "GET", url: `/api/v1/work-os/threads/with/${b.id}`,
+      headers: { authorization: `Bearer ${a.token}` },
+    });
+    expect(threadAB.statusCode).toBe(200);
+  });
+
   it("blocks an empty message", async () => {
     const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sender Three`);
     const dave = await member(ORG_ID, `${TEST_PREFIX}Recipient Three`);
