@@ -75,7 +75,11 @@ export async function dispatchWorkOsEvent(
     const res = await fetchFn(`${beamUrl}/events/work-os`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(event),
+      // The BEAM /events/work-os contract keys the tenant as `tenant_id`;
+      // Foundation's tenant IS org_entity_id. Send both so the event
+      // validates (BEAM 422s a payload missing tenant_id) while the
+      // org_entity_id field remains for any consumer that reads it.
+      body: JSON.stringify({ ...event, tenant_id: event.org_entity_id }),
       signal: controller.signal,
     });
     if (!res.ok) {

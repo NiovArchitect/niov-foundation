@@ -86,6 +86,22 @@ describe("dispatchWorkOsEvent", () => {
     expect(captured).not.toMatch(/token|secret|password|authorization/i);
     expect(captured).toContain("led-1");
   });
+
+  it("includes tenant_id (= org_entity_id) so the BEAM contract validates", async () => {
+    let captured = "";
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      captured = String(init.body);
+      return { ok: true, status: 202, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+    await dispatchWorkOsEvent(event({ org_entity_id: "org-xyz" }), {
+      enabled: true,
+      beamUrl: "http://b",
+      fetchImpl,
+    });
+    const body = JSON.parse(captured) as { tenant_id?: string; org_entity_id?: string };
+    expect(body.tenant_id).toBe("org-xyz");
+    expect(body.org_entity_id).toBe("org-xyz");
+  });
 });
 
 describe("eventTypeForLedger", () => {
