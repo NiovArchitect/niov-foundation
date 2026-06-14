@@ -216,6 +216,34 @@ describe("human-authority direct internal message", () => {
     expect(strangerView.statusCode).toBe(404); // no thread between stranger + sadeil
   });
 
+  it("thread-signal v1: a question is flagged QUESTION; a casual note has no signal", async () => {
+    const a = await member(ORG_ID, `${TEST_PREFIX}Signal A`);
+    const b = await member(ORG_ID, `${TEST_PREFIX}Signal B`);
+    async function send(token: string, recipient: string, message: string): Promise<void> {
+      const r = await app.inject({
+        method: "POST",
+        url: "/api/v1/work-os/internal-messages",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { recipient, message },
+      });
+      expect(r.statusCode).toBe(201);
+    }
+    // Deterministic signals (no Python needed in the test env):
+    await send(a.token, b.id, "Did you finish the proof-layer review?"); // QUESTION
+    await send(a.token, b.id, "Good afternoon, the 4th of July is near."); // casual → none
+
+    const thread = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/threads/with/${b.id}`,
+      headers: { authorization: `Bearer ${a.token}` },
+    });
+    const msgs = (thread.json() as { messages: Array<{ body: string; signal?: { signal_type: string } }> }).messages;
+    const question = msgs.find((m) => m.body.includes("proof-layer review"));
+    const casual = msgs.find((m) => m.body.includes("4th of July"));
+    expect(question?.signal?.signal_type).toBe("QUESTION");
+    expect(casual?.signal).toBeUndefined(); // casual note → no clutter
+  });
+
   it("a different recipient is a different thread", async () => {
     const a = await member(ORG_ID, `${TEST_PREFIX}Multi A`);
     const b = await member(ORG_ID, `${TEST_PREFIX}Multi B`);

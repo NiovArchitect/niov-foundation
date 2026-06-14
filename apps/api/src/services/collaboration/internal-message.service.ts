@@ -132,6 +132,13 @@ export async function deliverHumanInternalMessage(
     priority: "ROUTINE",
     notification_id: delivery.notification.notification_id,
     next_action: "Awaiting recipient response",
+    // Phase 1285 slice 3 — run the existing advisory extractor on the message
+    // body so the thread/cockpit can surface a POSSIBLE work signal (task /
+    // blocker / decision / commitment / follow-up). Advisory only: this
+    // annotates the message-derived ledger row; it does NOT auto-create a
+    // task. Foundation/user decides whether it becomes durable work.
+    enable_python_enrichment: true,
+    enrichment_text: message.slice(0, BODY_MAX),
   });
   if (ledger.ok) ledgerId = ledger.entry.ledger_entry_id;
 
@@ -170,6 +177,15 @@ function humanizeDeliveryFailure(code: string): string {
 // participant is requester on the messages they sent and target on the ones
 // they received. Tenant-scoped; only the two participants' rows are returned.
 
+// Phase 1285 slice 3 — a POSSIBLE work signal advisorily detected on the
+// message body. Never auto-promoted to a task; the UI surfaces it as a
+// "possible" item the user can confirm into the Work Ledger.
+export interface ThreadMessageSignal {
+  signal_type: string; // TASK | DELEGATION | BLOCKER | DECISION | COMMITMENT | FOLLOW_UP | APPROVAL_NEEDED
+  confidence: string; // HIGH | MEDIUM | LOW
+  evidence_phrase: string;
+}
+
 export interface ThreadMessageView {
   message_id: string;
   sender_entity_id: string;
@@ -178,6 +194,53 @@ export interface ThreadMessageView {
   body: string;
   created_at: string;
   from_me: boolean;
+  // Present only when an advisory work signal was detected on this message.
+  signal?: ThreadMessageSignal;
+}
+
+// Map the advisory extractor's raw vocab to the Phase 1285 signal taxonomy.
+// Only work-ish signals map; casual/none are left out (no clutter).
+const RAW_TO_TAXONOMY: Record<string, string> = {
+  TASK: "TASK_REQUEST",
+  DELEGATION: "TASK_REQUEST",
+  BLOCKER: "BLOCKER",
+  DECISION: "DECISION",
+  COMMITMENT: "COMMITMENT",
+  FOLLOW_UP: "FOLLOW_UP",
+  APPROVAL_NEEDED: "APPROVAL_LIKE",
+};
+
+// WHAT: derive the POSSIBLE work signal for a message from its ledger row's
+//        details.python_enrichment (advisory) + a deterministic QUESTION
+//        fallback. Returns undefined for casual/STATUS/NONE (no clutter).
+// WHY: conservative — only surfaces a "possible" signal; never auto-promotes.
+function signalForMessage(details: unknown, body: string): ThreadMessageSignal | undefined {
+  if (typeof details === "object" && details !== null) {
+    const pe = (details as Record<string, unknown>).python_enrichment;
+    if (typeof pe === "object" && pe !== null) {
+      const o = pe as Record<string, unknown>;
+      if (o.status === "PYTHON_ENRICHED") {
+        const primary = typeof o.primary_signal === "string" ? o.primary_signal : null;
+        const taxonomy = primary !== null ? RAW_TO_TAXONOMY[primary] : undefined;
+        if (taxonomy !== undefined) {
+          const signals = Array.isArray(o.signals) ? o.signals : [];
+          const match = signals.find(
+            (s) => typeof s === "object" && s !== null && (s as Record<string, unknown>).signal_type === primary,
+          ) as Record<string, unknown> | undefined;
+          return {
+            signal_type: taxonomy,
+            confidence: typeof match?.confidence === "string" ? match.confidence : "LOW",
+            evidence_phrase: typeof match?.evidence_phrase === "string" ? match.evidence_phrase : "",
+          };
+        }
+      }
+    }
+  }
+  // Deterministic QUESTION fallback — real, not faked (body asks something).
+  if (/\?\s*$/.test(body.trim())) {
+    return { signal_type: "QUESTION", confidence: "LOW", evidence_phrase: "?" };
+  }
+  return undefined;
 }
 
 export interface DirectThreadView {
@@ -235,6 +298,7 @@ export async function getDirectMessageThread(
       source_command: true,
       summary: true,
       created_at: true,
+      details: true,
     },
   });
   if (rows.length === 0) return { ok: false, code: "NOT_FOUND" };
@@ -256,14 +320,17 @@ export async function getDirectMessageThread(
 
   const messages: ThreadMessageView[] = rows.map((r) => {
     const sender = r.requester_entity_id ?? "";
+    const body = r.source_command ?? r.summary ?? "";
+    const signal = signalForMessage(r.details, body);
     return {
       message_id: r.ledger_entry_id,
       sender_entity_id: sender,
       sender_display_name: nameOf.get(sender) ?? "(unknown)",
       sender_role_title: roleOf.get(sender) ?? null,
-      body: r.source_command ?? r.summary ?? "",
+      body,
       created_at: r.created_at.toISOString(),
       from_me: sender === callerEntityId,
+      ...(signal !== undefined ? { signal } : {}),
     };
   });
 
