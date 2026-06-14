@@ -81,6 +81,23 @@ export type NotificationStatusLabel = "UNREAD" | "READ";
 //      raw entity_id is forensic-only and lives on the row + on the
 //      back-referenced AuditEvent chain (queryable by admins, not
 //      surfaced on the recipient's inbox).
+// Phase 1284 — governed recipient-visible sender identity. The INTENDED
+// recipient of a work message must know who is communicating with them
+// (hierarchy / RBAC / project ownership / compliance / accountability).
+// This is projected ONLY to the recipient (queries are recipient-scoped),
+// carries only safe display fields (display_name / role_title / source_kind /
+// authority_label), and labels AI/system origins so a Twin/system message is
+// never mistaken for a human one. It exposes no private memory or context.
+export type NotificationSourceKind = "HUMAN" | "AI_TWIN" | "AI_EMPLOYEE" | "SYSTEM";
+
+export interface NotificationSender {
+  entity_id: string;
+  display_name: string;
+  role_title: string | null;
+  source_kind: NotificationSourceKind;
+  authority_label: string;
+}
+
 export interface SafeNotificationView {
   notification_id: string;
   notification_class: string;
@@ -89,6 +106,8 @@ export interface SafeNotificationView {
   created_at: string;
   read_at: string | null;
   status: NotificationStatusLabel;
+  // Present when the sender resolves to a known entity; null otherwise.
+  sender: NotificationSender | null;
 }
 
 // WHAT: The query-string-shaped input the list route accepts. All
@@ -226,14 +245,17 @@ export type NotificationMutationResult =
 //      org_entity_id + deleted_at + recipient_entity_id are NEVER
 //      part of the SafeNotificationView shape — the type system
 //      enforces this.
-function projectNotificationView(row: {
-  notification_id: string;
-  notification_class: string;
-  body_summary: string;
-  action_id: string | null;
-  created_at: Date;
-  read_at: Date | null;
-}): SafeNotificationView {
+function projectNotificationView(
+  row: {
+    notification_id: string;
+    notification_class: string;
+    body_summary: string;
+    action_id: string | null;
+    created_at: Date;
+    read_at: Date | null;
+  },
+  sender: NotificationSender | null = null,
+): SafeNotificationView {
   return {
     notification_id: row.notification_id,
     notification_class: row.notification_class,
@@ -242,12 +264,16 @@ function projectNotificationView(row: {
     created_at: row.created_at.toISOString(),
     read_at: row.read_at === null ? null : row.read_at.toISOString(),
     status: row.read_at === null ? "UNREAD" : "READ",
+    sender,
   };
 }
 
-// WHAT: SAFE column subset every read-side query selects. Excludes
-//        body_redacted, source_entity_id, org_entity_id, deleted_at,
-//        recipient_entity_id (already known via the caller scope).
+// WHAT: SAFE column subset every read-side query selects. body_redacted,
+//        deleted_at, recipient_entity_id are NEVER selected. source_entity_id
+//        + org_entity_id are selected ONLY to build the governed sender
+//        display object below (Phase 1284) — they are not surfaced raw in the
+//        view except as sender.entity_id (which the Founder posture allows for
+//        the intended recipient).
 const SAFE_NOTIFICATION_SELECT = {
   notification_id: true,
   notification_class: true,
@@ -255,7 +281,68 @@ const SAFE_NOTIFICATION_SELECT = {
   action_id: true,
   created_at: true,
   read_at: true,
+  source_entity_id: true,
+  org_entity_id: true,
 } as const;
+
+// WHAT: Map an entity_type (+ optional system-principal flag) to the
+//        recipient-facing source kind. Labels AI/system clearly so a Twin or
+//        system message is never shown as a human-authored one.
+function sourceKindFor(entityType: string): NotificationSourceKind {
+  if (entityType === "PERSON") return "HUMAN";
+  if (entityType === "AI_AGENT") return "AI_TWIN";
+  return "SYSTEM";
+}
+
+function authorityLabelFor(kind: NotificationSourceKind): string {
+  switch (kind) {
+    case "HUMAN":
+      return "Sent directly";
+    case "AI_TWIN":
+      return "Sent by AI Twin";
+    case "AI_EMPLOYEE":
+      return "Sent by AI employee";
+    default:
+      return "System";
+  }
+}
+
+// WHAT: Batch-resolve the governed sender display object for a set of rows.
+// INPUT: rows carrying source_entity_id + org_entity_id (recipient-scoped).
+// OUTPUT: a map source_entity_id -> NotificationSender (safe fields only).
+// WHY: one query for entities + one for memberships (role_title), so the
+//      inbox can show "From Sadeil Lewis (Founder)" without N+1 and without
+//      leaking private context.
+async function buildSenderMap(
+  rows: ReadonlyArray<{ source_entity_id: string; org_entity_id: string }>,
+): Promise<Map<string, NotificationSender>> {
+  const map = new Map<string, NotificationSender>();
+  const sourceIds = [...new Set(rows.map((r) => r.source_entity_id))];
+  if (sourceIds.length === 0) return map;
+  const orgIds = [...new Set(rows.map((r) => r.org_entity_id))];
+  const [entities, memberships] = await Promise.all([
+    prisma.entity.findMany({
+      where: { entity_id: { in: sourceIds } },
+      select: { entity_id: true, display_name: true, entity_type: true },
+    }),
+    prisma.entityMembership.findMany({
+      where: { child_id: { in: sourceIds }, parent_id: { in: orgIds }, is_active: true },
+      select: { child_id: true, role_title: true },
+    }),
+  ]);
+  const roleByChild = new Map(memberships.map((m) => [m.child_id, m.role_title]));
+  for (const e of entities) {
+    const kind = sourceKindFor(e.entity_type);
+    map.set(e.entity_id, {
+      entity_id: e.entity_id,
+      display_name: e.display_name ?? "(unknown)",
+      role_title: roleByChild.get(e.entity_id) ?? null,
+      source_kind: kind,
+      authority_label: authorityLabelFor(kind),
+    });
+  }
+  return map;
+}
 
 // WHAT: List the caller's inbox notifications.
 // INPUT: callerEntityId + normalized filters.
@@ -290,6 +377,7 @@ export async function listNotificationsForCaller(
     }),
     prisma.notification.count({ where }),
   ]);
+  const senderMap = await buildSenderMap(rows);
   return {
     ok: true,
     httpStatus: 200,
@@ -297,7 +385,9 @@ export async function listNotificationsForCaller(
       page: filters.page,
       page_size: filters.page_size,
       total,
-      notifications: rows.map(projectNotificationView),
+      notifications: rows.map((r) =>
+        projectNotificationView(r, senderMap.get(r.source_entity_id) ?? null),
+      ),
     },
   };
 }

@@ -107,13 +107,36 @@ describe("human-authority direct internal message", () => {
     expect(inbox.statusCode).toBe(200);
     const items = (inbox.json() as { notifications?: Array<{ body_summary: string; source_entity_id: string }>; items?: Array<{ body_summary: string; source_entity_id: string }> });
     const list = items.notifications ?? items.items ?? [];
-    const got = list.find((n) => n.body_summary.includes("good morning"));
+    const got = list.find((n) => n.body_summary.includes("good morning")) as
+      | { body_summary: string; sender?: { entity_id: string; display_name: string; source_kind: string } }
+      | undefined;
     expect(got).toBeDefined();
-    // NOTE: the inbox projection deliberately omits source_entity_id (a prior
-    // Founder privacy direction). Surfacing "From Sadeil Lewis" requires a
-    // separate authorized projection change — tracked as a Phase 1284
-    // follow-up. Delivery + recipient scoping are proven here.
     expect(sj.recipient_entity_id).toBe(david.id);
+    // Phase 1284 governed sender identity: the intended recipient sees who
+    // sent it, labeled HUMAN (not raw UUID only).
+    expect(got?.sender?.entity_id).toBe(sadeil.id);
+    expect(got?.sender?.display_name).toContain("Sadeil");
+    expect(got?.sender?.source_kind).toBe("HUMAN");
+  });
+
+  it("does not leak the message OR sender to an unrelated user", async () => {
+    const sender = await member(ORG_ID, `${TEST_PREFIX}Isolation Sender`);
+    const recipient = await member(ORG_ID, `${TEST_PREFIX}Isolation Recipient`);
+    const unrelated = await member(ORG_ID, `${TEST_PREFIX}Unrelated User`);
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sender.token}` },
+      payload: { recipient: recipient.id, message: "secret iso note xyz" },
+    });
+    const inbox = await app.inject({
+      method: "GET",
+      url: "/api/v1/notifications",
+      headers: { authorization: `Bearer ${unrelated.token}` },
+    });
+    const j = inbox.json() as { notifications?: Array<{ body_summary: string }>; items?: Array<{ body_summary: string }> };
+    const list = j.notifications ?? j.items ?? [];
+    expect(list.some((n) => n.body_summary.includes("secret iso note xyz"))).toBe(false);
   });
 
   it("returns NEEDS_RESOLUTION (not a fabricated person) for an unknown recipient", async () => {
