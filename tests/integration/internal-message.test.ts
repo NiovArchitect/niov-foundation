@@ -432,6 +432,65 @@ describe("human-authority direct internal message", () => {
     expect(mAfter?.signal?.tracked).toBe(true);
   });
 
+  it("completion: owner marks complete; requester cannot; waiting-on clears", async () => {
+    // Phase 1285-E — the loop's terminal state. Only the OWNER (David) may mark
+    // the task complete; the requester (Sadeil) cannot self-complete David's
+    // work. On completion, Sadeil's waiting-on clears.
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil CMP`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David CMP`);
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: "Please send me the signed contract" },
+    });
+    const messageId = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+    const track = await app.inject({
+      method: "POST", url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${sadeil.token}` }, payload: { ledger_type: "TASK" },
+    });
+    const ledgerId = (track.json() as { ledger_entry_id: string }).ledger_entry_id;
+
+    // can_complete is server-computed: true for David (owner), not for Sadeil.
+    const dMyWork = await app.inject({
+      method: "GET", url: "/api/v1/work-os/my-work",
+      headers: { authorization: `Bearer ${david.token}` },
+    });
+    const dEntry = (dMyWork.json() as { items: Array<{ ledger_entry_id: string; can_complete?: boolean; source_message_id?: string }> })
+      .items.find((i) => i.ledger_entry_id === ledgerId);
+    expect(dEntry?.can_complete).toBe(true);
+    expect(dEntry?.source_message_id).toBe(messageId); // proof link present
+    const sMyWork = await app.inject({
+      method: "GET", url: "/api/v1/work-os/my-work",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    const sEntry = (sMyWork.json() as { items: Array<{ ledger_entry_id: string; can_complete?: boolean }> })
+      .items.find((i) => i.ledger_entry_id === ledgerId);
+    expect(sEntry?.can_complete ?? false).toBe(false);
+
+    // Requester (Sadeil) cannot mark it complete → 403.
+    const deny = await app.inject({
+      method: "PATCH", url: `/api/v1/work-os/ledger/${ledgerId}`,
+      headers: { authorization: `Bearer ${sadeil.token}` }, payload: { status: "EXECUTED" },
+    });
+    expect(deny.statusCode).toBe(403);
+
+    // Owner (David) marks it complete → 200.
+    const done = await app.inject({
+      method: "PATCH", url: `/api/v1/work-os/ledger/${ledgerId}`,
+      headers: { authorization: `Bearer ${david.token}` }, payload: { status: "EXECUTED" },
+    });
+    expect(done.statusCode).toBe(200);
+    expect((done.json() as { entry: { status: string } }).entry.status).toBe("EXECUTED");
+
+    // Sadeil's waiting-on with David now clears (no longer active).
+    const sWait = await app.inject({
+      method: "GET", url: `/api/v1/work-os/waiting-on/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    expect((sWait.json() as { waiting_on_them: unknown[] }).waiting_on_them.length).toBe(0);
+  });
+
   it("thread signal: a casual note surfaces NO signal (no chip noise)", async () => {
     const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil CAS`);
     const david = await member(ORG_ID, `${TEST_PREFIX}David CAS`);

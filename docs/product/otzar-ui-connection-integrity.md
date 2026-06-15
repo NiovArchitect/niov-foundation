@@ -65,8 +65,8 @@ NEEDS-GUI (manual validation only).
 | --- | --- | --- |
 | owned/pending tasks | CONNECTED | `myWork` |
 | owner/requester/due | CONNECTED | — |
-| source proof link | PARTIAL | source_message_id in details, not yet linked (#10) |
-| complete/resolve | DEAD | needs control + owner-guard (#9) |
+| source proof link | CONNECTED (1285-E) | `source_message_id` on the view, shown in View/Why |
+| complete/resolve | CONNECTED (1285-E) | owner-only "Mark complete" → owner-guarded PATCH → My Work refresh; requester→403 |
 
 ### 6. Team Work (`TeamWork.tsx`)
 
