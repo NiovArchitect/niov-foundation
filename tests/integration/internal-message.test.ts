@@ -306,6 +306,151 @@ describe("human-authority direct internal message", () => {
     expect(sneaky.statusCode).toBe(404);
   });
 
+  it("waiting-on v1: DAVID (the recipient) tracking keeps requester=Sadeil, owner=David", async () => {
+    // Phase 1285-C — directionality is derived from the SOURCE message, never
+    // from the actor. Whoever clicks "Add to Work Ledger" gets the same result.
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil DT`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David DT`);
+
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: "Please send me the proof-layer notes" },
+    });
+    const messageId = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+
+    // DAVID (the recipient/asked person) clicks Add to Work Ledger.
+    const track = await app.inject({
+      method: "POST",
+      url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${david.token}` },
+      payload: { ledger_type: "TASK" },
+    });
+    expect(track.statusCode).toBe(201);
+    const ledgerId = (track.json() as { ledger_entry_id: string }).ledger_entry_id;
+
+    // Direction is UNCHANGED: Sadeil still waits on David; David still owes Sadeil.
+    const sWait = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/waiting-on/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    const sj = sWait.json() as { waiting_on_them: unknown[]; pending_from_them: unknown[] };
+    expect(sj.waiting_on_them.length).toBe(1);
+    expect(sj.pending_from_them.length).toBe(0);
+
+    const dWait = await app.inject({
+      method: "GET",
+      url: `/api/v1/work-os/waiting-on/with/${sadeil.id}`,
+      headers: { authorization: `Bearer ${david.token}` },
+    });
+    const dj = dWait.json() as { pending_from_them: unknown[]; waiting_on_them: unknown[] };
+    expect(dj.pending_from_them.length).toBe(1);
+    expect(dj.waiting_on_them.length).toBe(0);
+
+    // The ledger row records requester=Sadeil, owner/target=David, tracked_by=David.
+    const row = await prisma.workLedgerEntry.findUnique({
+      where: { ledger_entry_id: ledgerId },
+      select: { requester_entity_id: true, owner_entity_id: true, target_entity_id: true, details: true },
+    });
+    expect(row?.requester_entity_id).toBe(sadeil.id);
+    expect(row?.owner_entity_id).toBe(david.id);
+    expect(row?.target_entity_id).toBe(david.id);
+    expect((row?.details as { tracked_by?: string }).tracked_by).toBe(david.id);
+  });
+
+  it("waiting-on v1: tracking the SAME message twice is idempotent (no duplicate)", async () => {
+    // Phase 1285-C — clicking Add twice (or from both participants' chips) must
+    // return the existing entry, never a duplicate.
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil DUP`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David DUP`);
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: "Please review the launch checklist" },
+    });
+    const messageId = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+
+    const first = await app.inject({
+      method: "POST", url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${sadeil.token}` }, payload: { ledger_type: "TASK" },
+    });
+    const second = await app.inject({
+      method: "POST", url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${david.token}` }, payload: { ledger_type: "TASK" },
+    });
+    const id1 = (first.json() as { ledger_entry_id: string }).ledger_entry_id;
+    const id2 = (second.json() as { ledger_entry_id: string }).ledger_entry_id;
+    expect(id1).toBe(id2); // same entry returned, not a new one
+
+    // Sadeil still has exactly ONE waiting-on item with David.
+    const sWait = await app.inject({
+      method: "GET", url: `/api/v1/work-os/waiting-on/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    expect((sWait.json() as { waiting_on_them: unknown[] }).waiting_on_them.length).toBe(1);
+  });
+
+  it("thread signal: 'please send me …' surfaces a TASK_REQUEST without Python; the tracked flag flips after Add", async () => {
+    // Phase 1285-C — deterministic fallback means the chip appears even when the
+    // advisory Python extractor is unavailable; and the thread message's signal
+    // carries tracked=true once it's in the Work Ledger.
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil SIG`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David SIG`);
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: "Please send me the Q3 numbers" },
+    });
+    const messageId = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+
+    // Thread shows a TASK_REQUEST signal, not yet tracked.
+    const before = await app.inject({
+      method: "GET", url: `/api/v1/work-os/threads/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    const mBefore = (before.json() as { messages: Array<{ message_id: string; signal?: { signal_type: string; tracked?: boolean } }> })
+      .messages.find((m) => m.message_id === messageId);
+    expect(mBefore?.signal?.signal_type).toBe("TASK_REQUEST");
+    expect(mBefore?.signal?.tracked ?? false).toBe(false);
+
+    await app.inject({
+      method: "POST", url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${sadeil.token}` }, payload: { ledger_type: "TASK" },
+    });
+
+    // After Add, the same message's signal carries tracked=true.
+    const after = await app.inject({
+      method: "GET", url: `/api/v1/work-os/threads/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    const mAfter = (after.json() as { messages: Array<{ message_id: string; signal?: { tracked?: boolean } }> })
+      .messages.find((m) => m.message_id === messageId);
+    expect(mAfter?.signal?.tracked).toBe(true);
+  });
+
+  it("thread signal: a casual note surfaces NO signal (no chip noise)", async () => {
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil CAS`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David CAS`);
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: "Have a great weekend" },
+    });
+    const messageId = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+    const th = await app.inject({
+      method: "GET", url: `/api/v1/work-os/threads/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    const m = (th.json() as { messages: Array<{ message_id: string; signal?: unknown }> })
+      .messages.find((x) => x.message_id === messageId);
+    expect(m?.signal).toBeUndefined();
+  });
+
   it("a different recipient is a different thread", async () => {
     const a = await member(ORG_ID, `${TEST_PREFIX}Multi A`);
     const b = await member(ORG_ID, `${TEST_PREFIX}Multi B`);

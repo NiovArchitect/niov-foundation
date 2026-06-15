@@ -184,6 +184,11 @@ export interface ThreadMessageSignal {
   signal_type: string; // TASK | DELEGATION | BLOCKER | DECISION | COMMITMENT | FOLLOW_UP | APPROVAL_NEEDED
   confidence: string; // HIGH | MEDIUM | LOW
   evidence_phrase: string;
+  // Phase 1285-C — true when this message has ALREADY been tracked into the
+  // Work Ledger (a derived directional entry exists for it). Lets the chip
+  // render an "Already tracked" terminal state across reloads instead of
+  // re-offering "Add to Work Ledger" (and the backend track call is idempotent).
+  tracked?: boolean;
 }
 
 export interface ThreadMessageView {
@@ -215,11 +220,13 @@ const RAW_TO_TAXONOMY: Record<string, string> = {
 //        fallback. Returns undefined for casual/STATUS/NONE (no clutter).
 // WHY: conservative — only surfaces a "possible" signal; never auto-promotes.
 function signalForMessage(details: unknown, body: string): ThreadMessageSignal | undefined {
+  let pythonEnriched = false;
   if (typeof details === "object" && details !== null) {
     const pe = (details as Record<string, unknown>).python_enrichment;
     if (typeof pe === "object" && pe !== null) {
       const o = pe as Record<string, unknown>;
       if (o.status === "PYTHON_ENRICHED") {
+        pythonEnriched = true;
         const primary = typeof o.primary_signal === "string" ? o.primary_signal : null;
         const taxonomy = primary !== null ? RAW_TO_TAXONOMY[primary] : undefined;
         if (taxonomy !== undefined) {
@@ -236,9 +243,35 @@ function signalForMessage(details: unknown, body: string): ThreadMessageSignal |
       }
     }
   }
+  const b = body.trim();
   // Deterministic QUESTION fallback — real, not faked (body asks something).
-  if (/\?\s*$/.test(body.trim())) {
+  if (/\?\s*$/.test(b)) {
     return { signal_type: "QUESTION", confidence: "LOW", evidence_phrase: "?" };
+  }
+  // When Python WAS available and surfaced no work signal, respect that
+  // judgment — do NOT apply heuristics (avoids noise on casual messages
+  // Python already classified as STATUS/NONE).
+  if (pythonEnriched) return undefined;
+  // Phase 1285-C deterministic fallback — when the advisory Python extractor
+  // is unavailable, a conservative LOW-confidence heuristic still surfaces a
+  // POSSIBLE signal so the chip → track → waiting-on loop works without it.
+  // Most specific first. Never auto-promotes; the user confirms it.
+  const low = b.toLowerCase();
+  if (/\b(blocked|blocker|stuck on|can'?t proceed|cannot proceed|waiting on|held up)\b/.test(low)) {
+    return { signal_type: "BLOCKER", confidence: "LOW", evidence_phrase: "blocked" };
+  }
+  if (/\b(need(?:s)? a decision|we (?:should|need to) decide|which (?:option|approach|way)|sign[- ]?off|approve or reject)\b/.test(low)) {
+    return { signal_type: "DECISION", confidence: "LOW", evidence_phrase: "decision" };
+  }
+  if (/\b(approve|approval|authori[sz]e|your sign[- ]?off)\b/.test(low)) {
+    return { signal_type: "APPROVAL_LIKE", confidence: "LOW", evidence_phrase: "approval" };
+  }
+  if (
+    /\b(please|can you|could you|would you|can i get|could i get|i need|send me|share|review|check|prepare|update|fix|finish|complete|by (?:eod|cob|end of day|today|tomorrow|monday|tuesday|wednesday|thursday|friday))\b/.test(
+      low,
+    )
+  ) {
+    return { signal_type: "TASK_REQUEST", confidence: "LOW", evidence_phrase: "request" };
   }
   return undefined;
 }
@@ -303,6 +336,19 @@ export async function trackThreadSignalAsWork(
   }
   if (sender === null || recipient === null) return { ok: false, code: "INVALID_REQUEST" };
 
+  // Idempotency (Phase 1285-C): if this source message was already tracked as
+  // this ledger type, return the existing entry. Clicking "Add to Work Ledger"
+  // twice (or from both participants' chips) never creates a duplicate.
+  const existing = await prisma.workLedgerEntry.findFirst({
+    where: {
+      org_entity_id: orgEntityId,
+      ledger_type: ledgerType,
+      details: { path: ["source_message_id"], equals: sourceMessageId },
+    },
+    select: { ledger_entry_id: true },
+  });
+  if (existing !== null) return { ok: true, ledger_entry_id: existing.ledger_entry_id };
+
   // Direction: a request/follow-up/approval is OWNED by the recipient (the
   // doer) and REQUESTED by the sender. A blocker/decision is owned by whoever
   // raised it (the sender).
@@ -323,7 +369,14 @@ export async function trackThreadSignalAsWork(
     status: "PROPOSED",
     priority: "ROUTINE",
     ...(src.conversation_id !== null ? { conversation_id: src.conversation_id } : {}),
-    details: { derived_from: "thread_signal", source_message_id: sourceMessageId },
+    // Direction (requester/owner) is derived from the SOURCE message, never
+    // from the actor. tracked_by records who confirmed the signal (may be
+    // either participant) for audit — it must not flip requester/owner.
+    details: {
+      derived_from: "thread_signal",
+      source_message_id: sourceMessageId,
+      tracked_by: callerEntityId,
+    },
   });
   if (created.ok === false) return { ok: false, code: "INVALID_REQUEST" };
   return { ok: true, ledger_entry_id: created.entry.ledger_entry_id };
@@ -466,10 +519,34 @@ export async function getDirectMessageThread(
   const nameOf = new Map(entities.map((e) => [e.entity_id, e.display_name ?? "(unknown)"]));
   const roleOf = new Map(memberships.map((m) => [m.child_id, m.role_title]));
 
+  // Phase 1285-C — which of these messages have ALREADY been tracked into the
+  // Work Ledger (a derived directional entry links back via source_message_id).
+  // Lets each message's chip render an "Already tracked" terminal state.
+  const trackedSet = new Set<string>();
+  const derived = await prisma.workLedgerEntry.findMany({
+    where: {
+      org_entity_id: orgEntityId,
+      ledger_type: { in: [...TRACKABLE_LEDGER_TYPES] },
+      details: { path: ["derived_from"], equals: "thread_signal" },
+    },
+    select: { details: true },
+  });
+  for (const d of derived) {
+    const smid =
+      typeof d.details === "object" && d.details !== null
+        ? (d.details as Record<string, unknown>).source_message_id
+        : undefined;
+    if (typeof smid === "string") trackedSet.add(smid);
+  }
+
   const messages: ThreadMessageView[] = rows.map((r) => {
     const sender = r.requester_entity_id ?? "";
     const body = r.source_command ?? r.summary ?? "";
     const signal = signalForMessage(r.details, body);
+    const trackedSignal =
+      signal !== undefined && trackedSet.has(r.ledger_entry_id)
+        ? { ...signal, tracked: true }
+        : signal;
     return {
       message_id: r.ledger_entry_id,
       sender_entity_id: sender,
@@ -478,7 +555,7 @@ export async function getDirectMessageThread(
       body,
       created_at: r.created_at.toISOString(),
       from_me: sender === callerEntityId,
-      ...(signal !== undefined ? { signal } : {}),
+      ...(trackedSignal !== undefined ? { signal: trackedSignal } : {}),
     };
   });
 
