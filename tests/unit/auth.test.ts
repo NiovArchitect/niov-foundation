@@ -84,6 +84,27 @@ describe("login (happy path)", () => {
     expect(result.clearance_ceiling).toBe(6);
   });
 
+  it("Phase 1285-F: login is case-insensitive + trims the email", async () => {
+    const { service } = makeService();
+    const { entity, email, password } = await makeLoginableEntity();
+    // Same entity resolves whether the email is upper, mixed, or padded.
+    for (const variant of [
+      email.toUpperCase(),
+      email.replace(/^./, (c) => c.toUpperCase()),
+      `  ${email}  `,
+    ]) {
+      const r = await service.login(variant, password, ["read"]);
+      expect(r.ok, `variant "${variant}"`).toBe(true);
+      if (r.ok) {
+        const validated = await service.validateSession(r.token, "read");
+        expect(validated.valid && validated.entity_id).toBe(entity.entity_id);
+      }
+    }
+    // A genuinely unknown email still fails.
+    const bad = await service.login("nobody-here@niov.test", password, ["read"]);
+    expect(bad.ok).toBe(false);
+  });
+
   it("writes a LOGIN_SUCCESS audit event for the actor", async () => {
     const { service } = makeService();
     const { entity, email, password } = await makeLoginableEntity();
