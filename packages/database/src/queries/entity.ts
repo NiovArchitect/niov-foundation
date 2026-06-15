@@ -208,15 +208,20 @@ export async function getEntityByEmail(
   email: string,
   actorId: string | null = null,
 ): Promise<Entity | null> {
+  // Phase 1285-F — email lookup is case-insensitive + trimmed. Casing must
+  // never gate access: David@niovlabs.com / DAVID@NIOVLABS.COM / the stored
+  // lowercase form all resolve the same entity. Uses Postgres case-insensitive
+  // equality so it matches regardless of how the address was stored.
+  const normalized = email.trim();
   return withAudit(
     {
       action: "ENTITY_READ_BY_EMAIL",
       actor_id: actorId,
-      meta: { email },
+      meta: { email: normalized.toLowerCase() },
     },
     async (tx) => {
       return tx.entity.findFirst({
-        where: { email, deleted_at: null },
+        where: { email: { equals: normalized, mode: "insensitive" }, deleted_at: null },
       });
     },
   );
