@@ -56,8 +56,9 @@ Cross-repo: backend is `niov-foundation` (Fastify/Prisma/Python/BEAM); UI is
 | 6 | PersonCockpit / InboxThread did not refresh waiting-on after Add (needed app restart) | CT | P1 (dead UI) | FIXED — `onTracked` callback reloads thread + waiting-on |
 | 7 | `tracked_by` not recorded on the ledger entry | FND | P2 (audit) | FIXED — `details.tracked_by = caller` (does not flip direction) |
 | 8 | No centralized Sadeil-side waiting-on surface (only PersonCockpit) | CT | P2 | DEFERRED — Team Work waiting-on panel (next patch) |
-| 9 | No completion/resolve UI for David's task | CT | P2 | DEFERRED — PATCH `/work-os/ledger/:id` exists; needs a "Mark done" control + owner-guard |
-| 10 | My Work / Work Ledger item doesn't link back to source message | CT | P3 | DEFERRED — `details.source_message_id` available |
+| 9 | No completion/resolve flow for David's task | CT/FND | P2 | FIXED (1285-E) — owner-guarded PATCH + server `can_complete` + My Work "Mark complete" + refresh; requester→403; waiting-on clears |
+| 10 | My Work / Work Ledger item doesn't link back to source message | CT/FND | P3 | FIXED (1285-E) — `source_message_id` exposed on the view + shown in View/Why |
+| 13 | COE `recordOutcome` accepted foreign capsule_ids (could bump another entity's relevance) | FND | P1 (security) | FIXED (1285-E) — RULE 0 ownership filter on used + candidate ids |
 | 11 | Python enrichment awaited on the send path (up to 2s latency; never fails delivery — `extractWorkSignals` catches) | FND | P3 | DEFERRED — async/fire-and-forget refactor (governed) |
 | 12 | No due-date / stale / unanswered-ask watcher beyond BEAM fanout-on-create | FND | P3 | DEFERRED — needs governed scheduler (no ungoverned workers) |
 
@@ -76,14 +77,16 @@ Cross-repo: backend is `niov-foundation` (Fastify/Prisma/Python/BEAM); UI is
 | correction | CORRECTION memory capsule (caller-scoped) | incorrect_description, correct_behavior |
 | proof | execution attempts + ledger details | BEAM_FANOUT, PYTHON_ENRICHMENT, source_message_id |
 
-## 5. Ranked fix list — shipped this phase
+## 5. Ranked fix list — shipped
 
-P0/P1 (loop-breaking, shipped): #1, #2, #3, #4, #5, #6, #7.
+Phase 1285-C (loop-breaking): #1, #2, #3, #4, #5, #6, #7.
+Phase 1285-E (loop terminal state + security): #9 completion/resolve flow
+(owner-guarded), #10 source-message proof link, #13 COE recordOutcome RULE 0
+ownership guard.
 
 ## 6. Deferred (documented, not shipped)
 
-#8 Team Work waiting-on panel · #9 completion control + owner-guard on PATCH ·
-#10 source-message link in My Work · #11 async Python enrichment · #12 governed
+#8 Team Work waiting-on panel · #11 async Python enrichment · #12 governed
 due-date/stale watchers. None block the validated 1-to-1 loop; each is additive.
 
 ## 7. Fixable now vs needs deeper model

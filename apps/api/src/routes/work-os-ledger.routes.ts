@@ -287,7 +287,15 @@ export async function registerWorkOsLedgerRoutes(
         },
       });
       if (result.ok === false)
-        return reply.code(result.code === "INVALID_REQUEST" ? 422 : 404).send(result);
+        return reply
+          .code(
+            result.code === "INVALID_REQUEST"
+              ? 422
+              : result.code === "FORBIDDEN"
+                ? 403
+                : 404,
+          )
+          .send(result);
       return reply.code(200).send({ ok: true, entry: result.entry });
     },
   );

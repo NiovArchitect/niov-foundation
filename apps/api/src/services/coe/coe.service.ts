@@ -602,8 +602,34 @@ export class COEService {
       return { ok: true, recorded: 0 };
     }
 
+    // RULE 0 ownership guard (Phase 1285-E): a caller may only record outcomes
+    // for capsules in their OWN wallet. Without this, a caller could pass
+    // arbitrary capsule_ids and bump/decay ANOTHER entity's capsule relevance
+    // via the Loop 1 hook. Resolve the caller's wallet and keep only owned,
+    // non-deleted capsule ids; silently drop the rest (never error on a
+    // foreign id — just refuse to act on it).
+    const wallet = await prisma.wallet.findUnique({
+      where: { entity_id: session.entity_id },
+      select: { wallet_id: true },
+    });
+    if (wallet === null) {
+      return { ok: false, code: "INVALID_REQUEST", message: "Entity has no wallet" };
+    }
+    const owned = await prisma.memoryCapsule.findMany({
+      where: {
+        capsule_id: { in: capsuleIdsUsed },
+        wallet_id: wallet.wallet_id,
+        deleted_at: null,
+      },
+      select: { capsule_id: true },
+    });
+    const ownedIds = owned.map((c) => c.capsule_id);
+    if (ownedIds.length === 0) {
+      return { ok: true, recorded: 0 };
+    }
+
     const created = await Promise.all(
-      capsuleIdsUsed.map((capsuleId) =>
+      ownedIds.map((capsuleId) =>
         prisma.cOEOutcome.create({
           data: {
             session_id: sessionIdHint ?? session.session_id,
@@ -624,8 +650,13 @@ export class COEService {
       details: {
         action: "COE_RECORD_OUTCOME",
         success,
-        capsule_count: capsuleIdsUsed.length,
-        capsule_ids: capsuleIdsUsed,
+        capsule_count: ownedIds.length,
+        capsule_ids: ownedIds,
+        // Surface when foreign/unknown ids were supplied and dropped (audit
+        // honesty — the caller asked to record more than they own).
+        ...(ownedIds.length !== capsuleIdsUsed.length
+          ? { dropped_unowned_count: capsuleIdsUsed.length - ownedIds.length }
+          : {}),
       },
     });
 
@@ -635,16 +666,29 @@ export class COEService {
     // for the relevance-tuning signal). Default = undefined → no-op
     // for tests + any caller that doesn't pass a hook.
     if (this.feedbackHook !== undefined) {
-      const candidates =
+      // Candidates feed the decay side of Loop 1 — they MUST be owned too, or a
+      // caller could decay another entity's capsules. Filter provided
+      // candidates to the caller's wallet; default to the owned used set.
+      let candidates = ownedIds;
+      if (
         Array.isArray(context.candidate_capsule_ids) &&
         context.candidate_capsule_ids.length > 0
-          ? context.candidate_capsule_ids
-          : capsuleIdsUsed;
+      ) {
+        const ownedCandidates = await prisma.memoryCapsule.findMany({
+          where: {
+            capsule_id: { in: context.candidate_capsule_ids },
+            wallet_id: wallet.wallet_id,
+            deleted_at: null,
+          },
+          select: { capsule_id: true },
+        });
+        candidates = ownedCandidates.map((c) => c.capsule_id);
+      }
       try {
         await this.feedbackHook.onRecordOutcome({
           outcome_ids: created.map((c) => c.outcome_id),
           candidate_capsule_ids: candidates,
-          used_capsule_ids: capsuleIdsUsed,
+          used_capsule_ids: ownedIds,
         });
       } catch (err) {
         // Log but don't fail the outcome write -- relevance tuning
@@ -653,7 +697,7 @@ export class COEService {
       }
     }
 
-    return { ok: true, recorded: capsuleIdsUsed.length };
+    return { ok: true, recorded: ownedIds.length };
   }
 }
 

@@ -393,13 +393,21 @@ describe("parallel negotiate", () => {
 });
 
 describe("recordOutcome", () => {
-  it("writes one COEOutcome row per capsule_id", async () => {
-    const { auth, coe } = makeServices();
+  it("writes one COEOutcome row per OWNED capsule_id", async () => {
+    const { auth, write, coe } = makeServices();
     const owner = await loginAs(auth);
-    // Use freshly-minted UUIDs so cross-run pollution cannot inflate
-    // the count -- coe_outcomes has no FK to entities and is therefore
-    // not cleaned up by cleanupTestData via cascade.
-    const ids = [randomUUID(), randomUUID()];
+    // Phase 1285-E — recordOutcome now records ONLY capsules the caller owns.
+    // Create two real capsules in the owner's wallet and record outcomes.
+    const c1 = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE", decay_type: "TIME_BASED",
+      topic_tags: ["a"], payload_summary: "one", content: "one",
+    });
+    const c2 = await write.createCapsule(owner.token, {
+      capsule_type: "PREFERENCE", decay_type: "TIME_BASED",
+      topic_tags: ["b"], payload_summary: "two", content: "two",
+    });
+    if (!c1.ok || !c2.ok) throw new Error("create capsule failed");
+    const ids = [c1.capsule_id, c2.capsule_id];
     const result = await coe.recordOutcome(owner.token, null, ids, true);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -409,6 +417,23 @@ describe("recordOutcome", () => {
     });
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.success === true)).toBe(true);
+  });
+
+  it("RULE 0: drops capsule_ids the caller does NOT own (no foreign outcome rows)", async () => {
+    const { auth, coe } = makeServices();
+    const owner = await loginAs(auth);
+    // Foreign / unknown capsule ids — not in the caller's wallet.
+    const foreign = [randomUUID(), randomUUID()];
+    const result = await coe.recordOutcome(owner.token, null, foreign, true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Nothing recorded; no outcome rows written for capsules the caller
+    // doesn't own (prevents bumping another entity's capsule relevance).
+    expect(result.recorded).toBe(0);
+    const rows = await prisma.cOEOutcome.findMany({
+      where: { capsule_id: { in: foreign } },
+    });
+    expect(rows).toHaveLength(0);
   });
 
   it("rejects with INVALID_REQUEST when capsule_ids_used is not an array", async () => {

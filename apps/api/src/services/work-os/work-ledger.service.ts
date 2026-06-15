@@ -103,7 +103,7 @@ export interface CreateLedgerInput {
   enrichment_runtime?: EnrichmentRuntimeConfig;
 }
 
-export type LedgerFailureCode = "INVALID_REQUEST" | "NOT_FOUND";
+export type LedgerFailureCode = "INVALID_REQUEST" | "NOT_FOUND" | "FORBIDDEN";
 
 export interface LedgerFailure {
   ok: false;
@@ -411,6 +411,26 @@ export async function patchLedgerEntry(args: {
     if (!LEDGER_STATUSES.includes(args.patch.status as (typeof LEDGER_STATUSES)[number])) {
       return { ok: false, code: "INVALID_REQUEST", message: "invalid status" };
     }
+    // Completion authority (Phase 1285-E): only the OWNER (the doer) or a
+    // manager may mark a task DONE (EXECUTED/VERIFIED) — a requester must not
+    // self-complete the other person's work. The REQUESTER (or owner/manager)
+    // may CANCEL (withdraw) the ask. getLedgerEntry already guarantees the
+    // caller is a participant, so this only narrows the done/cancel verbs.
+    const e = existing.entry;
+    const isOwner = e.owner_entity_id === args.caller_entity_id;
+    const isRequester = e.requester_entity_id === args.caller_entity_id;
+    const DONE_STATUSES = new Set(["EXECUTED", "VERIFIED"]);
+    if (DONE_STATUSES.has(args.patch.status) && !args.is_manager && !isOwner) {
+      return { ok: false, code: "FORBIDDEN", message: "only the owner can mark this complete" };
+    }
+    if (
+      args.patch.status === "CANCELLED" &&
+      !args.is_manager &&
+      !isOwner &&
+      !isRequester
+    ) {
+      return { ok: false, code: "FORBIDDEN", message: "only the owner or requester can cancel" };
+    }
     data.status = args.patch.status;
     if (args.patch.status === "VERIFIED") data.verified_at = new Date();
   }
@@ -441,7 +461,17 @@ export async function getMyWork(args: {
     orderBy: { created_at: "desc" },
     take: 200,
   });
-  return rows.map(projectLedger);
+  // Server-computed completion authority (Phase 1285-E): the caller may mark a
+  // task complete only when they OWN it and it is still active. Mirrors the
+  // PATCH guard so the UI shows the control exactly where the action will work.
+  const DONE = new Set(["EXECUTED", "VERIFIED", "CANCELLED", "EXPIRED"]);
+  return rows.map((row) => {
+    const view = projectLedger(row);
+    if (row.owner_entity_id === args.caller_entity_id && !DONE.has(row.status)) {
+      view.can_complete = true;
+    }
+    return view;
+  });
 }
 
 export type TeamWorkResult =
@@ -623,6 +653,13 @@ export interface WorkLedgerView {
   // this undefined.
   blind_spot_reason?: string;
   blind_spot_severity?: string;
+  // Phase 1285-E — the thread message this work was tracked from (proof link).
+  // Lifted from details.source_message_id so My Work can show "View thread".
+  source_message_id?: string;
+  // Phase 1285-E — server-computed completion authority for the requesting
+  // caller (My Work only): true when the caller OWNS this active task and may
+  // mark it complete. The PATCH route re-enforces this; this only drives UI.
+  can_complete?: boolean;
 }
 
 interface LedgerRow {
@@ -728,7 +765,12 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
   const enrichment = enrichmentFromDetails(row.details);
   const coordination = coordinationFromDetails(row.details);
   const watchers = watchersFromDetails(row.details);
+  const sourceMessageId =
+    typeof row.details === "object" && row.details !== null
+      ? (row.details as Record<string, unknown>).source_message_id
+      : undefined;
   return {
+    ...(typeof sourceMessageId === "string" ? { source_message_id: sourceMessageId } : {}),
     ledger_entry_id: row.ledger_entry_id,
     org_entity_id: row.org_entity_id,
     ledger_type: row.ledger_type,
