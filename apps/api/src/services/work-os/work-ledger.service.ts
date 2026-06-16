@@ -681,10 +681,16 @@ export async function getBlindSpotFeed(args: {
     };
     const ownerLabel = ownerName ?? "the owner";
 
+    // Collect every rule this entry trips, then surface ONLY the single
+    // highest-priority risk for it — one piece of work is one blind spot, never
+    // double-counted across sections. Priority order (most actionable first):
+    // OVERDUE_WORK > UNRESOLVED_BLOCKER > STALE_WAITING_ON > NO_NEXT_ACTION.
+    const candidates: BlindSpotFeedItem[] = [];
+
     // A. OVERDUE_WORK — active item past its due date.
     if (r.due_at !== null && r.due_at.getTime() < now) {
       const overdueDays = daysSince(r.due_at);
-      items.push({
+      candidates.push({
         ...base,
         blind_spot_id: `OVERDUE_WORK:${r.ledger_entry_id}`,
         type: "OVERDUE_WORK",
@@ -696,7 +702,7 @@ export async function getBlindSpotFeed(args: {
     }
     // C. UNRESOLVED_BLOCKER — an active BLOCKER entry.
     if (r.ledger_type === "BLOCKER") {
-      items.push({
+      candidates.push({
         ...base,
         blind_spot_id: `UNRESOLVED_BLOCKER:${r.ledger_entry_id}`,
         type: "UNRESOLVED_BLOCKER",
@@ -714,7 +720,7 @@ export async function getBlindSpotFeed(args: {
       now - r.updated_at.getTime() > STALE_MS
     ) {
       const staleDays = daysSince(r.updated_at);
-      items.push({
+      candidates.push({
         ...base,
         blind_spot_id: `STALE_WAITING_ON:${r.ledger_entry_id}`,
         type: "STALE_WAITING_ON",
@@ -726,7 +732,7 @@ export async function getBlindSpotFeed(args: {
     }
     // D. NO_NEXT_ACTION — ownerless or missing a next action.
     if (r.owner_entity_id === null || r.next_action === null || r.next_action === "") {
-      items.push({
+      candidates.push({
         ...base,
         blind_spot_id: `NO_NEXT_ACTION:${r.ledger_entry_id}`,
         type: "NO_NEXT_ACTION",
@@ -736,6 +742,10 @@ export async function getBlindSpotFeed(args: {
         detection_rule: "active item with no owner or no next_action",
       });
     }
+
+    // Surface the top-priority candidate for this entry (already pushed in
+    // priority order above, so the first is the most important).
+    if (candidates[0] !== undefined) items.push(candidates[0]);
   }
   return items;
 }
