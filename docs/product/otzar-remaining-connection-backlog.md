@@ -18,7 +18,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 1 | Team Work waiting-on panel | P0 | GUI_VALIDATED (1285-G + 1285-I nav, 2026-06-16) |
 | 2 | Cross-surface View/Why consistency | P0 | LIVE expanded (1285-J + 1285-L: My Work/Team Work/Thread/Cockpit/Blind Spots/NotificationBell/Action Center/Comms — all on the shared ViewWhyPanel) |
 | 3 | Action Center stale-artifact cleanup | P1 | NOT_STARTED |
-| 4 | Comms final cleanup | P1 | NOT_STARTED |
+| 4 | Comms final cleanup | P1 | IN_PROGRESS (1285-L2: default cockpit repaired + blockers surfaced + follow-up View/Why; recent-artifacts endpoint = documented backend gap) |
 | 8 | Richer thread/work queries | P1 | PARTIAL (WAITING_ON live; rest NOT_STARTED) |
 | 5 | Blind Spots watcher feed | P2 | NOT_STARTED |
 | 6 | BEAM watcher routes | P2 | NOT_STARTED |
@@ -107,7 +107,22 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 - RBAC/ABAC: approver authority enforced.
 - Tests: card renders human-readable; approve executes; human notes absent.
 
-## 4. Comms final cleanup — NOT_STARTED (P1)
+## 4. Comms final cleanup — IN_PROGRESS (1285-L2)
+
+- Shipped (1285-L2): the default Comms page is now a conversation-intelligence
+  cockpit — capture controls + "what Otzar turns conversations into" (Follow-ups
+  / Decisions / Blockers / Commitments wired; Questions / Tasks "coming next") +
+  the capture→work flow + an HONEST "Recent conversation intelligence" empty
+  state (no fake artifacts). Blockers/risks now render in the review view.
+  Follow-up cards carry the shared View/Why (source/confidence/extraction).
+  Direct messages never route to Comms (verified).
+- DOCUMENTED BACKEND GAP: there is no recent-Comms-artifacts endpoint — captures
+  /imports + extracted work are transient (Phase 1213 design; no CommsSession
+  model). The "Recent conversation intelligence" section is an honest empty
+  state until a `GET /otzar/comms/recent` (or persisted CommsSession + ledger
+  backlink) lands. Next step for a fully populated cockpit.
+
+## 4b. (superseded) Comms final cleanup — original notes
 
 - Goal: Comms = conversation capture/intelligence only (capture, import,
   transcript, extracted follow-ups/decisions/blockers/commitments, conversion

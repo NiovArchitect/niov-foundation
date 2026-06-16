@@ -154,8 +154,16 @@ Slice **1285-K** LANDED the remaining reconciliation:
   MESSAGE_CREATED + THREAD_UPDATED; PersonCockpit + InboxThread subscribe (with
   the existing reload paths kept). Threads now stay in sync across views.
 
-Remaining (next slices, build-forward): roll the shared View/Why panel onto
-NotificationBell + Action Center + Comms extracted artifacts (Blind Spots
-already covered via WorkLedgerItem); converge the 7 projection types onto a
+Slice **1285-L** LANDED the shared View/Why on NotificationBell, Action Center
+(safe SafeActionView fields + honest governed-restriction note; raw DUAL_CONTROL
+never a primary label), and Comms follow-ups — all via the one ViewWhyPanel.
+
+Slice **1285-L2** repaired the default Comms page into a conversation-intelligence
+cockpit (categories + flow + honest "recent intelligence" empty state; blockers
+now surfaced). Documented backend gap: no recent-Comms-artifacts endpoint
+(captures are transient) — the cockpit's recent section is an honest empty state
+until a persisted CommsSession/endpoint lands.
+
+Remaining (next slices, build-forward): converge the 7 projection types onto a
 single UnifiedViewWhy server shape; retire local reload paths once each event
-path is GUI-proven.
+path is GUI-proven; persist Comms artifacts (recent-artifacts endpoint).
