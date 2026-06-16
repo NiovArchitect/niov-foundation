@@ -27,6 +27,11 @@ import {
   type GovernedTarget,
 } from "./target-resolver.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
+import {
+  resolveEntityNames,
+  nameFrom,
+  UNRESOLVED_ENTITY_LABEL,
+} from "../identity/resolve-entities.js";
 import type { NotificationService } from "../notification/notification.service.js";
 
 const BODY_MAX = 2000;
@@ -123,7 +128,7 @@ export async function deliverHumanInternalMessage(
     ledger_type: "NOTIFICATION",
     source_type: "CHAT",
     source_command: message.slice(0, BODY_MAX),
-    title: `Internal note to ${resolution.display_name ?? "teammate"}`,
+    title: `Internal note to ${resolution.display_name ?? UNRESOLVED_ENTITY_LABEL}`,
     summary: message.slice(0, 200),
     requester_entity_id: input.senderEntityId,
     owner_entity_id: input.senderEntityId,
@@ -148,7 +153,7 @@ export async function deliverHumanInternalMessage(
     notification_id: delivery.notification.notification_id,
     ledger_entry_id: ledgerId,
     recipient_entity_id: resolution.target_entity_id,
-    recipient_display_name: resolution.display_name ?? "teammate",
+    recipient_display_name: resolution.display_name ?? UNRESOLVED_ENTITY_LABEL,
     sender_display_name: sender.display_name ?? "you",
   };
 }
@@ -504,19 +509,17 @@ export async function getDirectMessageThread(
   });
   if (rows.length === 0) return { ok: false, code: "NOT_FOUND" };
 
-  // Display names for the two participants.
+  // Display names for the two participants — via the SINGLE shared resolver
+  // (Phase 1285-K), so the thread renders the same canonical "Unknown entity"
+  // label as every other surface; role_title stays a membership lookup.
   const ids = [callerEntityId, otherId];
-  const [entities, memberships] = await Promise.all([
-    prisma.entity.findMany({
-      where: { entity_id: { in: ids } },
-      select: { entity_id: true, display_name: true },
-    }),
+  const [names, memberships] = await Promise.all([
+    resolveEntityNames(ids),
     prisma.entityMembership.findMany({
       where: { parent_id: orgEntityId, child_id: { in: ids }, is_active: true },
       select: { child_id: true, role_title: true },
     }),
   ]);
-  const nameOf = new Map(entities.map((e) => [e.entity_id, e.display_name ?? "(unknown)"]));
   const roleOf = new Map(memberships.map((m) => [m.child_id, m.role_title]));
 
   // Phase 1285-C — which of these messages have ALREADY been tracked into the
@@ -550,7 +553,7 @@ export async function getDirectMessageThread(
     return {
       message_id: r.ledger_entry_id,
       sender_entity_id: sender,
-      sender_display_name: nameOf.get(sender) ?? "(unknown)",
+      sender_display_name: nameFrom(names, sender),
       sender_role_title: roleOf.get(sender) ?? null,
       body,
       created_at: r.created_at.toISOString(),
@@ -564,7 +567,7 @@ export async function getDirectMessageThread(
     thread_key: directThreadKey(orgEntityId, callerEntityId, otherId),
     participants: ids.map((id) => ({
       entity_id: id,
-      display_name: nameOf.get(id) ?? "(unknown)",
+      display_name: nameFrom(names, id),
       role_title: roleOf.get(id) ?? null,
     })),
     messages,
