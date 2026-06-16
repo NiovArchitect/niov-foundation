@@ -461,6 +461,122 @@ export async function getWaitingOnWith(
   };
 }
 
+// ── Relationship work graph (Phase 1285-M) ───────────────────────────────────
+// Durable answers to "what did David complete / what blockers involve David /
+// what decisions did David and I make / what does David owe me / what is David
+// waiting on me for" — all from the Work Ledger, pair-scoped + tenant-isolated.
+
+const RELATIONSHIP_DONE_IN = ["EXECUTED", "VERIFIED"];
+
+export interface RelationshipItem {
+  ledger_entry_id: string;
+  ledger_type: string;
+  title: string;
+  status: string;
+  requester_entity_id: string | null;
+  owner_entity_id: string | null;
+  requester_display_name: string;
+  owner_display_name: string;
+  due_at: string | null;
+  updated_at: string;
+  source_message_id: string | null;
+}
+
+export interface RelationshipWorkView {
+  ok: true;
+  other_display_name: string;
+  // caller requested, other owns, active.
+  waiting_on_them: RelationshipItem[];
+  // other requested, caller owns, active.
+  pending_from_them: RelationshipItem[];
+  // done items (EXECUTED/VERIFIED), either direction.
+  completed: RelationshipItem[];
+  // BLOCKER entries, either direction, active.
+  blockers: RelationshipItem[];
+  // DECISION entries, either direction.
+  decisions: RelationshipItem[];
+}
+
+// WHAT: the full directional work graph between the caller and one other org
+//        member, from durable Work Ledger entries. Participant + tenant scoped;
+//        identity via the single resolver (never a raw UUID).
+export async function getRelationshipWork(
+  orgEntityId: string,
+  callerEntityId: string,
+  otherRef: string,
+): Promise<RelationshipWorkView | { ok: false; code: "INVALID_TARGET_ID" }> {
+  let otherId: string | null = isUuid(otherRef) ? otherRef : null;
+  if (otherId === null) {
+    const r = await resolveCollaborationTarget(orgEntityId, otherRef);
+    if (r.kind === "RESOLVED" && r.target_entity_id !== null) otherId = r.target_entity_id;
+  }
+  if (otherId === null) return { ok: false, code: "INVALID_TARGET_ID" };
+
+  const rows = await prisma.workLedgerEntry.findMany({
+    where: {
+      org_entity_id: orgEntityId,
+      ledger_type: { in: [...TRACKABLE_LEDGER_TYPES] },
+      // BOTH parties must be involved (via requester / owner / target). This
+      // captures TASK/FOLLOW_UP (requester↔owner) AND BLOCKER/DECISION (owned by
+      // the raiser, with the other party as target).
+      AND: [
+        {
+          OR: [
+            { requester_entity_id: callerEntityId },
+            { owner_entity_id: callerEntityId },
+            { target_entity_id: callerEntityId },
+          ],
+        },
+        {
+          OR: [
+            { requester_entity_id: otherId },
+            { owner_entity_id: otherId },
+            { target_entity_id: otherId },
+          ],
+        },
+      ],
+    },
+    orderBy: { updated_at: "desc" },
+    take: 200,
+    select: {
+      ledger_entry_id: true, ledger_type: true, title: true, status: true,
+      requester_entity_id: true, owner_entity_id: true, due_at: true, updated_at: true, details: true,
+    },
+  });
+  const names = await resolveEntityNames([callerEntityId, otherId]);
+  const project = (r: (typeof rows)[number]): RelationshipItem => ({
+    ledger_entry_id: r.ledger_entry_id,
+    ledger_type: r.ledger_type,
+    title: r.title,
+    status: r.status,
+    requester_entity_id: r.requester_entity_id,
+    owner_entity_id: r.owner_entity_id,
+    requester_display_name: nameFrom(names, r.requester_entity_id),
+    owner_display_name: nameFrom(names, r.owner_entity_id),
+    due_at: r.due_at !== null ? r.due_at.toISOString() : null,
+    updated_at: r.updated_at.toISOString(),
+    source_message_id:
+      typeof r.details === "object" && r.details !== null
+        ? ((r.details as Record<string, unknown>).source_message_id as string | undefined) ?? null
+        : null,
+  });
+  const isActive = (s: string): boolean => !WAITING_ACTIVE_NOT_IN.includes(s);
+  const items = rows.map(project);
+  return {
+    ok: true,
+    other_display_name: nameFrom(names, otherId),
+    waiting_on_them: items.filter(
+      (r) => isActive(r.status) && r.requester_entity_id === callerEntityId && r.owner_entity_id === otherId,
+    ),
+    pending_from_them: items.filter(
+      (r) => isActive(r.status) && r.requester_entity_id === otherId && r.owner_entity_id === callerEntityId,
+    ),
+    completed: items.filter((r) => RELATIONSHIP_DONE_IN.includes(r.status)),
+    blockers: items.filter((r) => r.ledger_type === "BLOCKER" && isActive(r.status)),
+    decisions: items.filter((r) => r.ledger_type === "DECISION"),
+  };
+}
+
 // WHAT: Deterministic thread key for a direct person-to-person thread.
 function directThreadKey(orgEntityId: string, a: string, b: string): string {
   const pair = [a, b].sort().join("+");
