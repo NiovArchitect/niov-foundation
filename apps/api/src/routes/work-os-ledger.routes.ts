@@ -23,6 +23,7 @@ import {
   getMyWork,
   getTeamWork,
   getBlindSpots,
+  getBlindSpotFeed,
   recordCoordinationOnLedger,
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
@@ -486,6 +487,19 @@ export async function registerWorkOsLedgerRoutes(
     const ctx = await auth(request, reply, "read");
     if (ctx === null) return;
     const items = await getBlindSpots({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+      is_manager: ctx.manager,
+    });
+    return reply.code(200).send({ ok: true, items });
+  });
+
+  // ── Typed risk feed (Phase 1285-N) — overdue / stale waiting-on / unresolved
+  //    blocker / no-next-action, with severity + recommended action. ──
+  app.get("/api/v1/work-os/blind-spots/feed", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const items = await getBlindSpotFeed({
       org_entity_id: ctx.org_entity_id,
       caller_entity_id: ctx.entity_id,
       is_manager: ctx.manager,

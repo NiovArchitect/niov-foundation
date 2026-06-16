@@ -44,6 +44,7 @@ import {
   getLedgerEntry,
   getTeamWork,
   getBlindSpots,
+  getBlindSpotFeed,
 } from "../../apps/api/src/services/work-os/work-ledger.service.js";
 
 const ORG = "org-1";
@@ -203,5 +204,67 @@ describe("getBlindSpots", () => {
     expect(where.org_entity_id).toBe(ORG);
     expect(where.OR).toBeDefined(); // employee narrowing
     expect(JSON.stringify(where.AND)).toContain("BLOCKED");
+  });
+});
+
+describe("getBlindSpotFeed (Phase 1285-N) — typed risk detection", () => {
+  const NOW = Date.parse("2026-06-16T12:00:00.000Z");
+  const past = (ms: number) => new Date(NOW - ms);
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("classifies overdue / blocker / stale-waiting-on / no-owner with severity + canonical names", async () => {
+    prismaMock.entity.findMany.mockResolvedValue([
+      { entity_id: "ent-other", display_name: "David Odie" },
+    ]);
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([
+      // overdue TASK owned by caller, due 10d ago
+      row({ ledger_entry_id: "ov", ledger_type: "TASK", status: "PROPOSED", due_at: past(10 * DAY), updated_at: past(1 * DAY) }),
+      // active blocker
+      row({ ledger_entry_id: "bl", ledger_type: "BLOCKER", status: "PROPOSED", due_at: null }),
+      // stale directional waiting-on: caller requested, other owns, no update 3d
+      row({ ledger_entry_id: "st", ledger_type: "TASK", status: "PROPOSED", requester_entity_id: CALLER, owner_entity_id: "ent-other", target_entity_id: "ent-other", due_at: null, updated_at: past(3 * DAY) }),
+      // ownerless
+      row({ ledger_entry_id: "no", ledger_type: "TASK", status: "NEEDS_OWNER", owner_entity_id: null, requester_entity_id: CALLER, next_action: null, due_at: null, updated_at: past(1 * 60 * 60 * 1000) }),
+    ]);
+    const feed = await getBlindSpotFeed({ org_entity_id: ORG, caller_entity_id: CALLER, is_manager: false, now: NOW });
+    const byType = (t: string) => feed.filter((f) => f.type === t);
+
+    expect(byType("OVERDUE_WORK").length).toBe(1);
+    expect(byType("OVERDUE_WORK")[0]!.severity).toBe("HIGH"); // >7d overdue
+    expect(byType("UNRESOLVED_BLOCKER").length).toBe(1);
+    expect(byType("UNRESOLVED_BLOCKER")[0]!.severity).toBe("HIGH");
+    const stale = byType("STALE_WAITING_ON")[0]!;
+    expect(stale).toBeDefined();
+    expect(stale.owner_display_name).toBe("David Odie"); // canonical, not UUID
+    expect(stale.recommended_action.toLowerCase()).toContain("nudge");
+    const noOwner = byType("NO_NEXT_ACTION").find((f) => f.ledger_entry_id === "no")!;
+    expect(noOwner.severity).toBe("HIGH");
+    expect(noOwner.recommended_action.toLowerCase()).toContain("assign an owner");
+    // Every item has a deterministic id, a recommended action, and a rule.
+    for (const f of feed) {
+      expect(f.blind_spot_id).toContain(f.ledger_entry_id);
+      expect(f.recommended_action.length).toBeGreaterThan(0);
+      expect(f.detection_rule.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("scopes to the caller for non-managers; managers see org-wide", async () => {
+    prismaMock.entity.findMany.mockResolvedValue([]);
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([]);
+    await getBlindSpotFeed({ org_entity_id: ORG, caller_entity_id: CALLER, is_manager: false, now: NOW });
+    expect(prismaMock.workLedgerEntry.findMany.mock.calls[0]![0].where.OR).toBeDefined();
+    prismaMock.workLedgerEntry.findMany.mockClear();
+    await getBlindSpotFeed({ org_entity_id: ORG, caller_entity_id: CALLER, is_manager: true, now: NOW });
+    expect(prismaMock.workLedgerEntry.findMany.mock.calls[0]![0].where.OR).toBeUndefined();
+    expect(prismaMock.workLedgerEntry.findMany.mock.calls[0]![0].where.org_entity_id).toBe(ORG);
+  });
+
+  it("excludes done work via the query filter (CANCELLED/EXPIRED/VERIFIED/EXECUTED)", async () => {
+    prismaMock.entity.findMany.mockResolvedValue([]);
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([]);
+    await getBlindSpotFeed({ org_entity_id: ORG, caller_entity_id: CALLER, is_manager: false, now: NOW });
+    const where = prismaMock.workLedgerEntry.findMany.mock.calls[0]![0].where;
+    expect(JSON.stringify(where.NOT)).toContain("EXECUTED");
+    expect(JSON.stringify(where.NOT)).toContain("VERIFIED");
   });
 });
