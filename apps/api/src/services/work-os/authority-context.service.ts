@@ -83,7 +83,7 @@ export async function resolveTargetInOrg(
     })
     .map((m) => ({
       entity_id: m.child.entity_id,
-      display_name: m.child.display_name ?? "(unknown)",
+      display_name: m.child.display_name ?? "Unknown entity",
       role_title: m.role_title,
     }));
 

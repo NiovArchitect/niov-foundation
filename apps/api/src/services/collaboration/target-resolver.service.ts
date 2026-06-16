@@ -143,7 +143,7 @@ export async function resolveCollaborationTarget(
       kind: "RESOLVED",
       target_type: opts.hint ?? tt,
       target_entity_id: membership.child.entity_id,
-      display_name: membership.child.display_name ?? "(unknown)",
+      display_name: membership.child.display_name ?? "Unknown entity",
       role_title: membership.role_title,
       is_external: false,
       candidates: [],

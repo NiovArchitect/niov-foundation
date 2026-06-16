@@ -138,9 +138,24 @@ Phase 1 audit: COMPLETE. Slice **1285-H** LANDED the contract foundation:
   (TASK_COMPLETED/LEDGER_UPDATED/WAITING_ON_CHANGED); subscribed in My Work +
   Team Work (auto cross-surface refresh). Existing callbacks/polling untouched.
 
-Remaining (next slices, build-forward): adopt the resolver in the remaining
-backend services (internal-message thread, collaboration-workspace, target/
-authority resolvers) + remaining CT fallbacks (AmbientOtzarBar "your teammate",
-CollaborationWorkspaceDetail "(unresolved)"); migrate more surfaces onto
-WorkStateChanged (message send/reply, People cockpit) and retire local paths
-once proven; converge the 7 projection types onto UnifiedViewWhy.
+Slice **1285-J** LANDED the shared View/Why: `view-why.ts` model + `ViewWhyPanel`
+consumed by WorkLedgerItem (My Work / Team Work / Blind Spots) + thread messages
+(ThreadSignalChip "Why" in PersonCockpit + InboxThread). Canonical labels, no
+UUIDs, honest missing-proof note.
+
+Slice **1285-K** LANDED the remaining reconciliation:
+- Backend: `getDirectMessageThread` adopts `resolveEntityNames`; the canonical
+  "Unknown entity" label replaces every `"(unknown)"`/`"teammate"` fallback in
+  internal-message (thread + delivery), target-resolver, authority-context, and
+  notification-read. (`"(you)"` self-label intentionally preserved.)
+- CT: AmbientOtzarBar "your teammate" + CollaborationWorkspaceDetail
+  "(unresolved)" → canonical label.
+- WorkStateChanged: message send (PersonCockpit) + reply (InboxThread) emit
+  MESSAGE_CREATED + THREAD_UPDATED; PersonCockpit + InboxThread subscribe (with
+  the existing reload paths kept). Threads now stay in sync across views.
+
+Remaining (next slices, build-forward): roll the shared View/Why panel onto
+NotificationBell + Action Center + Comms extracted artifacts (Blind Spots
+already covered via WorkLedgerItem); converge the 7 projection types onto a
+single UnifiedViewWhy server shape; retire local reload paths once each event
+path is GUI-proven.

@@ -16,7 +16,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 10 | Short confirmation phrases for active drafts | P0 | GUI_VALIDATED (1285-F, 2026-06-16) |
 | 11 | Case-insensitive email login | P0 | GUI_VALIDATED (1285-F, 2026-06-16) |
 | 1 | Team Work waiting-on panel | P0 | GUI_VALIDATED (1285-G + 1285-I nav, 2026-06-16) |
-| 2 | Cross-surface View/Why consistency | P0 | IN_PROGRESS (1285-J) |
+| 2 | Cross-surface View/Why consistency | P0 | LIVE (1285-J: My Work/Team Work/Thread/Cockpit/Blind Spots; NotificationBell/Action Center/Comms remain) |
 | 3 | Action Center stale-artifact cleanup | P1 | NOT_STARTED |
 | 4 | Comms final cleanup | P1 | NOT_STARTED |
 | 8 | Richer thread/work queries | P1 | PARTIAL (WAITING_ON live; rest NOT_STARTED) |

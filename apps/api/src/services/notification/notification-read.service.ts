@@ -335,7 +335,7 @@ async function buildSenderMap(
     const kind = sourceKindFor(e.entity_type);
     map.set(e.entity_id, {
       entity_id: e.entity_id,
-      display_name: e.display_name ?? "(unknown)",
+      display_name: e.display_name ?? "Unknown entity",
       role_title: roleByChild.get(e.entity_id) ?? null,
       source_kind: kind,
       authority_label: authorityLabelFor(kind),
