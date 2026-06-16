@@ -578,6 +578,74 @@ describe("human-authority direct internal message", () => {
     expect(m?.signal).toBeUndefined();
   });
 
+  it("relationship work (1285-M): completed + blockers + decisions + inverse waiting-on, pair-scoped", async () => {
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil REL`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David REL`);
+
+    // Track helper: send msg from `from` to `to`, then track as `type`.
+    async function trackFrom(
+      from: { id: string; token: string },
+      to: { id: string },
+      message: string,
+      type: string,
+    ): Promise<string> {
+      const send = await app.inject({
+        method: "POST", url: "/api/v1/work-os/internal-messages",
+        headers: { authorization: `Bearer ${from.token}` },
+        payload: { recipient: to.id, message },
+      });
+      const mid = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+      const tr = await app.inject({
+        method: "POST", url: `/api/v1/work-os/threads/messages/${mid}/track-signal`,
+        headers: { authorization: `Bearer ${from.token}` },
+        payload: { ledger_type: type },
+      });
+      return (tr.json() as { ledger_entry_id: string }).ledger_entry_id;
+    }
+
+    // Sadeil → David TASK (Sadeil waiting on David); David → Sadeil TASK (David
+    // waiting on Sadeil); a BLOCKER and a DECISION raised by Sadeil re: David.
+    const sadeilTask = await trackFrom(sadeil, david, "Please send the proof-layer notes", "TASK");
+    await trackFrom(david, sadeil, "Please approve my PR", "TASK");
+    await trackFrom(sadeil, david, "We are blocked on the Google reconnect", "BLOCKER");
+    await trackFrom(sadeil, david, "We decided to ship Friday", "DECISION");
+
+    // Complete Sadeil's task (David owns it) → moves to completed.
+    await app.inject({
+      method: "PATCH", url: `/api/v1/work-os/ledger/${sadeilTask}`,
+      headers: { authorization: `Bearer ${david.token}` }, payload: { status: "EXECUTED" },
+    });
+
+    const rel = await app.inject({
+      method: "GET", url: `/api/v1/work-os/relationship/with/${david.id}`,
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    expect(rel.statusCode).toBe(200);
+    const g = rel.json() as {
+      other_display_name: string;
+      waiting_on_them: unknown[]; pending_from_them: unknown[];
+      completed: Array<{ ledger_entry_id: string; owner_display_name: string }>;
+      blockers: Array<{ ledger_type: string }>; decisions: Array<{ ledger_type: string }>;
+    };
+    expect(g.other_display_name).toContain("David REL");
+    expect(g.completed.some((c) => c.ledger_entry_id === sadeilTask)).toBe(true);
+    expect(g.completed[0]?.owner_display_name).toContain("David REL"); // canonical name, not UUID
+    expect(g.pending_from_them.length).toBeGreaterThanOrEqual(1); // David's PR ask
+    expect(g.blockers.some((b) => b.ledger_type === "BLOCKER")).toBe(true);
+    expect(g.decisions.some((d) => d.ledger_type === "DECISION")).toBe(true);
+    // Sadeil's completed task is no longer in active waiting_on_them.
+    expect((g.waiting_on_them as Array<{ ledger_entry_id: string }>).some((w) => w.ledger_entry_id === sadeilTask)).toBe(false);
+
+    // Tenant/pair isolation: an unrelated user's relationship with David is empty.
+    const stranger = await member(ORG_ID, `${TEST_PREFIX}Stranger REL`);
+    const strRel = await app.inject({
+      method: "GET", url: `/api/v1/work-os/relationship/with/${david.id}`,
+      headers: { authorization: `Bearer ${stranger.token}` },
+    });
+    const sg = strRel.json() as { completed: unknown[]; blockers: unknown[]; decisions: unknown[]; pending_from_them: unknown[] };
+    expect(sg.completed.length + sg.blockers.length + sg.decisions.length + sg.pending_from_them.length).toBe(0);
+  });
+
   it("a different recipient is a different thread", async () => {
     const a = await member(ORG_ID, `${TEST_PREFIX}Multi A`);
     const b = await member(ORG_ID, `${TEST_PREFIX}Multi B`);

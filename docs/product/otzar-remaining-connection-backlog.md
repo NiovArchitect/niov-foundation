@@ -19,7 +19,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 2 | Cross-surface View/Why consistency | P0 | LIVE expanded (1285-J + 1285-L: My Work/Team Work/Thread/Cockpit/Blind Spots/NotificationBell/Action Center/Comms — all on the shared ViewWhyPanel) |
 | 3 | Action Center stale-artifact cleanup | P1 | NOT_STARTED |
 | 4 | Comms final cleanup | P1 | IN_PROGRESS (1285-L2: default cockpit repaired + blockers surfaced + follow-up View/Why; recent-artifacts endpoint = documented backend gap) |
-| 8 | Richer thread/work queries | P1 | PARTIAL (WAITING_ON live; rest NOT_STARTED) |
+| 8 | Richer thread/work queries | P1 | LIVE (1285-M: completed / blockers / decisions / inverse-waiting-on / overdue / changed / summary + latest-say — all durable; pending GUI validation) |
 | 5 | Blind Spots watcher feed | P2 | NOT_STARTED |
 | 6 | BEAM watcher routes | P2 | NOT_STARTED |
 | 7 | Ask Twin wiring | P2 | NOT_STARTED (disabled-honest today) |

@@ -42,6 +42,7 @@ import {
   getDirectMessageThread,
   trackThreadSignalAsWork,
   getWaitingOnWith,
+  getRelationshipWork,
 } from "../services/collaboration/internal-message.service.js";
 import { makeNotificationService } from "../services/notification/notification.service.js";
 import { randomUUID } from "node:crypto";
@@ -404,6 +405,20 @@ export async function registerWorkOsLedgerRoutes(
       const ctx = await auth(request, reply, "read");
       if (ctx === null) return;
       const result = await getWaitingOnWith(ctx.org_entity_id, ctx.entity_id, request.params.entityId);
+      if (result.ok === false) return reply.code(422).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // ── Relationship work graph with a teammate (Phase 1285-M) ──
+  // Durable answers to completed / blockers / decisions / both waiting-on
+  // directions. Participant + tenant scoped by getRelationshipWork.
+  app.get<{ Params: { entityId: string } }>(
+    "/api/v1/work-os/relationship/with/:entityId",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await getRelationshipWork(ctx.org_entity_id, ctx.entity_id, request.params.entityId);
       if (result.ok === false) return reply.code(422).send(result);
       return reply.code(200).send(result);
     },
