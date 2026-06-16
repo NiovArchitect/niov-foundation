@@ -491,6 +491,74 @@ describe("human-authority direct internal message", () => {
     expect((sWait.json() as { waiting_on_them: unknown[] }).waiting_on_them.length).toBe(0);
   });
 
+  it("team waiting-on: a manager sees the directional ask with names + source proof; completion changes status; non-manager is denied", async () => {
+    // Phase 1285-G — the 1-to-1 loop scaled to the manager/team view.
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil TEAM`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}David TEAM`);
+    // Grant Sadeil manager authority (team-work is can_admin_org gated). The
+    // TAR already exists (login requires it), so update in place.
+    await prisma.tokenAttributeRepository.updateMany({
+      where: { entity_id: sadeil.id },
+      data: { can_admin_org: true },
+    });
+
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: "Please send me the proof-layer notes" },
+    });
+    const messageId = (send.json() as { ledger_entry_id: string }).ledger_entry_id;
+    const track = await app.inject({
+      method: "POST", url: `/api/v1/work-os/threads/messages/${messageId}/track-signal`,
+      headers: { authorization: `Bearer ${sadeil.token}` }, payload: { ledger_type: "TASK" },
+    });
+    const ledgerId = (track.json() as { ledger_entry_id: string }).ledger_entry_id;
+
+    // Manager Team Work includes the directional ask, with display names +
+    // source-message proof (not raw-UUID-only).
+    const team = await app.inject({
+      method: "GET", url: "/api/v1/work-os/team-work",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    expect(team.statusCode).toBe(200);
+    const entries = (team.json() as {
+      entries: Array<{
+        ledger_entry_id: string; status: string; ledger_type: string;
+        owner_display_name?: string; requester_display_name?: string; source_message_id?: string;
+      }>;
+    }).entries;
+    const row = entries.find((e) => e.ledger_entry_id === ledgerId);
+    expect(row).toBeDefined();
+    expect(row!.ledger_type).toBe("TASK");
+    expect(row!.owner_display_name).toContain("David TEAM");
+    expect(row!.requester_display_name).toContain("Sadeil TEAM");
+    expect(row!.source_message_id).toBe(messageId);
+    expect(["PROPOSED", "READY_TO_EXECUTE", "EXECUTING", "NEEDS_OWNER", "NEEDS_APPROVAL"]).toContain(row!.status);
+
+    // David completes it → the team row now reflects EXECUTED (the CT
+    // waiting-on panel filters done statuses out).
+    const done = await app.inject({
+      method: "PATCH", url: `/api/v1/work-os/ledger/${ledgerId}`,
+      headers: { authorization: `Bearer ${david.token}` }, payload: { status: "EXECUTED" },
+    });
+    expect(done.statusCode).toBe(200);
+    const team2 = await app.inject({
+      method: "GET", url: "/api/v1/work-os/team-work",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+    });
+    const row2 = (team2.json() as { entries: Array<{ ledger_entry_id: string; status: string }> })
+      .entries.find((e) => e.ledger_entry_id === ledgerId);
+    expect(row2?.status).toBe("EXECUTED");
+
+    // A non-manager cannot view team work at all.
+    const denied = await app.inject({
+      method: "GET", url: "/api/v1/work-os/team-work",
+      headers: { authorization: `Bearer ${david.token}` },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+
   it("thread signal: a casual note surfaces NO signal (no chip noise)", async () => {
     const sadeil = await member(ORG_ID, `${TEST_PREFIX}Sadeil CAS`);
     const david = await member(ORG_ID, `${TEST_PREFIX}David CAS`);

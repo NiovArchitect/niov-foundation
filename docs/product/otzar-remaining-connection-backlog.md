@@ -13,9 +13,9 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 
 | # | Item | Priority | Status |
 | --- | --- | --- | --- |
-| 10 | Short confirmation phrases for active drafts | P0 | LIVE (1285-F) |
-| 11 | Case-insensitive email login | P0 | LIVE (1285-F) |
-| 1 | Team Work waiting-on panel | P0 | NOT_STARTED |
+| 10 | Short confirmation phrases for active drafts | P0 | GUI_VALIDATED (1285-F, 2026-06-16) |
+| 11 | Case-insensitive email login | P0 | GUI_VALIDATED (1285-F, 2026-06-16) |
+| 1 | Team Work waiting-on panel | P0 | IN_PROGRESS (1285-G) |
 | 2 | Cross-surface View/Why consistency | P0 | NOT_STARTED |
 | 3 | Action Center stale-artifact cleanup | P1 | NOT_STARTED |
 | 4 | Comms final cleanup | P1 | NOT_STARTED |
@@ -27,7 +27,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 
 ---
 
-## 10. Short confirmation phrases for active drafts — LIVE (1285-F)
+## 10. Short confirmation phrases for active drafts — GUI_VALIDATED (1285-F, 2026-06-16)
 
 - Current state: FIXED. Root cause was NOT the confirm-phrase list — it was
   that gratitude/social utterances ("Thank Sadeil …") were stopworded in the CT
@@ -45,7 +45,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
   confirm; cleared after success (no duplicate); cross-session isolation.
 - GUI: David "Thank Sadeil for being an amazing boss" → "yes" → delivered.
 
-## 11. Case-insensitive email login — LIVE (1285-F)
+## 11. Case-insensitive email login — GUI_VALIDATED (1285-F, 2026-06-16)
 
 - Current state: FIXED. Email trimmed + lowercased at the backend auth lookup
   and normalized in the CT login form before submit.
@@ -60,21 +60,27 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 - Tests: backend login with mixed/upper case resolves; invalid still 401.
 - GUI: David logs in with any casing.
 
-## 1. Team Work waiting-on panel — NOT_STARTED (P0)
+## 1. Team Work waiting-on panel — IN_PROGRESS (1285-G; pending GUI validation)
 
 - Goal: managers/admins see relationship-level waiting-on across the team, not
   only inside one PersonCockpit.
-- Show: waiting on X (per person), pending by person/project, source thread/
-  message proof, due, status, owner, requester, next action.
-- System of record: Work Ledger / waiting-on derived records (never memory).
-- UI: TeamWork.tsx (new waiting-on section).
-- Backend: needs a team-scoped waiting-on aggregate (new
-  `GET /work-os/team-waiting-on` or extend team-work) — manager-gated.
-- Proof: source_message_id per row.
-- RBAC/ABAC: manager/admin only; tenant-scoped; unrelated user cannot see.
-- Tests: Sadeil(manager) sees "waiting on David: proof-layer notes"; David sees
-  in My Work; David completes → clears from team view; unrelated denied.
-- GUI: Team Work shows the matrix; completion clears it.
+- Shipped (1285-G): `getTeamWork` now enriches each entry with owner/requester/
+  target display names (one batched, tenant-scoped lookup). TeamWork.tsx adds a
+  "Waiting on team" panel that filters the manager's team-work to ACTIVE
+  directional asks (TASK/FOLLOW_UP/APPROVAL/BLOCKER/DECISION, requester≠owner,
+  status not done), groups them by owner with names + requested-by + status +
+  age + due + source-message proof + View/Why; completion (owner marks EXECUTED)
+  drops the item on reload. Reuses the existing `/work-os/team-work` route per
+  the reuse-first directive (no new endpoint).
+- System of record: Work Ledger directional entries (never memory/counts).
+- UI: TeamWork.tsx "Waiting on team" + WorkLedgerItem View/Why (now name-aware).
+- Backend: `getTeamWork` enrichment (manager-gated, can_admin_org).
+- Proof: source_message_id per row; View/Why shows owner/requester/source.
+- RBAC/ABAC: manager/admin only; tenant-scoped; non-manager → 403.
+- Tests: backend integration (manager sees ask w/ names + source proof;
+  completion → EXECUTED; non-manager denied); CT pure-logic unit (filter/group/
+  age). Empty state: "Nothing tracked as waiting on the team right now."
+- GUI (pending): Team Work shows "Waiting on David: …"; completion clears it.
 
 ## 2. Cross-surface View/Why consistency — NOT_STARTED (P0)
 

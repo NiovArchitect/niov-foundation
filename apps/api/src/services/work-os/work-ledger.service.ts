@@ -498,7 +498,31 @@ export async function getTeamWork(args: {
     orderBy: { created_at: "desc" },
     take: 300,
   });
-  return { ok: true, entries: rows.map(projectLedger) };
+  // Phase 1285-G — enrich with participant display names so the Team Work
+  // waiting-on panel can show "Waiting on David · requested by Sadeil" instead
+  // of raw UUIDs. One batched lookup; tenant-scoped by the rows above.
+  const ids = new Set<string>();
+  for (const r of rows) {
+    for (const id of [r.owner_entity_id, r.requester_entity_id, r.target_entity_id]) {
+      if (id !== null) ids.add(id);
+    }
+  }
+  const entities =
+    ids.size > 0
+      ? await prisma.entity.findMany({
+          where: { entity_id: { in: [...ids] } },
+          select: { entity_id: true, display_name: true },
+        })
+      : [];
+  const nameOf = new Map(entities.map((e) => [e.entity_id, e.display_name ?? "(unknown)"]));
+  const entries = rows.map((row) => {
+    const view = projectLedger(row);
+    if (row.owner_entity_id !== null) view.owner_display_name = nameOf.get(row.owner_entity_id);
+    if (row.requester_entity_id !== null) view.requester_display_name = nameOf.get(row.requester_entity_id);
+    if (row.target_entity_id !== null) view.target_display_name = nameOf.get(row.target_entity_id);
+    return view;
+  });
+  return { ok: true, entries };
 }
 
 // Blind spots — ledger-derived (no AI guessing): attention-needing
@@ -656,6 +680,12 @@ export interface WorkLedgerView {
   // Phase 1285-E — the thread message this work was tracked from (proof link).
   // Lifted from details.source_message_id so My Work can show "View thread".
   source_message_id?: string;
+  // Phase 1285-G — human-readable participant names (resolved server-side for
+  // the Team Work waiting-on panel; never raw-UUID-only labels). Present only
+  // on surfaces that enrich them (Team Work).
+  owner_display_name?: string;
+  requester_display_name?: string;
+  target_display_name?: string;
   // Phase 1285-E — server-computed completion authority for the requesting
   // caller (My Work only): true when the caller OWNS this active task and may
   // mark it complete. The PATCH route re-enforces this; this only drives UI.

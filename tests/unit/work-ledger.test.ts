@@ -24,6 +24,12 @@ const { prismaMock } = vi.hoisted(() => ({
     executionAttempt: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    // Phase 1285-G — getTeamWork now batch-resolves participant display names.
+    // Default to none (names left undefined); name enrichment is covered by the
+    // internal-message integration test against real entities.
+    entity: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
