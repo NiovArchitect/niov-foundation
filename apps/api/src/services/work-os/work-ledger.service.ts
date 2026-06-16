@@ -24,6 +24,7 @@ import {
   recordExecutionAttempt,
   getFailedAttemptDigests,
 } from "./execution-verification.service.js";
+import { resolveEntityNames, nameFrom } from "../identity/resolve-entities.js";
 
 // Phase 1283 — BEAM watcher category → durable internal watcher type. "none"
 // maps to null (no watcher created). Internal Work OS state only — a watcher
@@ -461,17 +462,19 @@ export async function getMyWork(args: {
     orderBy: { created_at: "desc" },
     take: 200,
   });
+  // Phase 1285-H — enrich names via the shared resolver so My Work carries the
+  // same identity fields as Team Work (no surface renders a UUID).
+  const entries = await enrichParticipantNames(rows);
   // Server-computed completion authority (Phase 1285-E): the caller may mark a
   // task complete only when they OWN it and it is still active. Mirrors the
   // PATCH guard so the UI shows the control exactly where the action will work.
   const DONE = new Set(["EXECUTED", "VERIFIED", "CANCELLED", "EXPIRED"]);
-  return rows.map((row) => {
-    const view = projectLedger(row);
+  rows.forEach((row, i) => {
     if (row.owner_entity_id === args.caller_entity_id && !DONE.has(row.status)) {
-      view.can_complete = true;
+      entries[i]!.can_complete = true;
     }
-    return view;
   });
+  return entries;
 }
 
 export type TeamWorkResult =
@@ -498,31 +501,27 @@ export async function getTeamWork(args: {
     orderBy: { created_at: "desc" },
     take: 300,
   });
-  // Phase 1285-G — enrich with participant display names so the Team Work
-  // waiting-on panel can show "Waiting on David · requested by Sadeil" instead
-  // of raw UUIDs. One batched lookup; tenant-scoped by the rows above.
-  const ids = new Set<string>();
-  for (const r of rows) {
-    for (const id of [r.owner_entity_id, r.requester_entity_id, r.target_entity_id]) {
-      if (id !== null) ids.add(id);
-    }
-  }
-  const entities =
-    ids.size > 0
-      ? await prisma.entity.findMany({
-          where: { entity_id: { in: [...ids] } },
-          select: { entity_id: true, display_name: true },
-        })
-      : [];
-  const nameOf = new Map(entities.map((e) => [e.entity_id, e.display_name ?? "(unknown)"]));
-  const entries = rows.map((row) => {
+  // Phase 1285-G/H — enrich with participant display names via the SINGLE
+  // shared resolver (canonical identity contract: a label always, never a raw
+  // UUID; "Unknown entity" + unresolved when absent).
+  const entries = await enrichParticipantNames(rows);
+  return { ok: true, entries };
+}
+
+// WHAT: project ledger rows + attach owner/requester/target display names from
+//        the one shared resolver. Shared by Team Work + My Work so the same
+//        entity renders identically on both surfaces.
+async function enrichParticipantNames(rows: LedgerRow[]): Promise<WorkLedgerView[]> {
+  const names = await resolveEntityNames(
+    rows.flatMap((r) => [r.owner_entity_id, r.requester_entity_id, r.target_entity_id]),
+  );
+  return rows.map((row) => {
     const view = projectLedger(row);
-    if (row.owner_entity_id !== null) view.owner_display_name = nameOf.get(row.owner_entity_id);
-    if (row.requester_entity_id !== null) view.requester_display_name = nameOf.get(row.requester_entity_id);
-    if (row.target_entity_id !== null) view.target_display_name = nameOf.get(row.target_entity_id);
+    if (row.owner_entity_id !== null) view.owner_display_name = nameFrom(names, row.owner_entity_id);
+    if (row.requester_entity_id !== null) view.requester_display_name = nameFrom(names, row.requester_entity_id);
+    if (row.target_entity_id !== null) view.target_display_name = nameFrom(names, row.target_entity_id);
     return view;
   });
-  return { ok: true, entries };
 }
 
 // Blind spots — ledger-derived (no AI guessing): attention-needing
