@@ -248,6 +248,25 @@ describe("getBlindSpotFeed (Phase 1285-N) — typed risk detection", () => {
     }
   });
 
+  it("surfaces one blind spot per entry — the highest-priority risk, never double-counted", async () => {
+    prismaMock.entity.findMany.mockResolvedValue([
+      { entity_id: "ent-other", display_name: "David Odie" },
+    ]);
+    // One entry that trips BOTH stale-waiting-on AND no-next-action: it must
+    // appear exactly once, as the higher-priority STALE_WAITING_ON.
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([
+      row({
+        ledger_entry_id: "multi", ledger_type: "TASK", status: "PROPOSED",
+        requester_entity_id: CALLER, owner_entity_id: "ent-other", target_entity_id: "ent-other",
+        next_action: null, due_at: null, updated_at: past(3 * DAY),
+      }),
+    ]);
+    const feed = await getBlindSpotFeed({ org_entity_id: ORG, caller_entity_id: CALLER, is_manager: false, now: NOW });
+    expect(feed.length).toBe(1);
+    expect(feed[0]!.type).toBe("STALE_WAITING_ON");
+    expect(feed.filter((f) => f.ledger_entry_id === "multi").length).toBe(1);
+  });
+
   it("scopes to the caller for non-managers; managers see org-wide", async () => {
     prismaMock.entity.findMany.mockResolvedValue([]);
     prismaMock.workLedgerEntry.findMany.mockResolvedValue([]);
