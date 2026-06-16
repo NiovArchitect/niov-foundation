@@ -53,6 +53,9 @@ surfaces whose routes existed but had no nav entry.)
 | Mark complete | `PATCH /work-os/ledger/:id` | WorkLedgerItem (owner) | CONTEXTUAL_SURFACE | owner/manager | INTENTIONALLY_CONTEXTUAL |
 | Reply / send internal note | `/work-os/internal-messages` | InboxThread / PersonCockpit | CONTEXTUAL_SURFACE | participants | INTENTIONALLY_CONTEXTUAL |
 | View / Why (work + message proof) | projections + execution-attempts | WorkLedgerItem drawer, thread message | PROOF_ONLY / CONTEXTUAL_SURFACE | participants | INTENTIONALLY_CONTEXTUAL (1285-J unifies) |
+| View / Why (notification) | SafeNotificationView + route | NotificationBell "Why" disclosure | CONTEXTUAL_SURFACE / PROOF_ONLY | recipient | INTENTIONALLY_CONTEXTUAL (1285-L) |
+| View / Why (governed action) | SafeActionView (safe fields only) | Action Center "View / Why" disclosure | CONTEXTUAL_SURFACE / PROOF_ONLY (approver-visible) | approver | INTENTIONALLY_CONTEXTUAL (1285-L; requester/target/policy-envelope stay governed) |
+| View / Why (Comms follow-up) | CommsSuggestedAction (source/confidence/extraction) | Comms FollowUpCard "Why" disclosure | CONTEXTUAL_SURFACE / PROOF_ONLY | operator | INTENTIONALLY_CONTEXTUAL (1285-L) |
 | Waiting-on / thread queries | `/work-os/waiting-on`, `/threads/with` | Otzar chat (AmbientOtzarBar) | CHAT_ACCESSIBLE | participants | INTENTIONALLY_VISIBLE (chat) |
 | Signal extraction | Python `/jobs/extract-work-signals` + deterministic | surfaces as the chip | AMBIENT_ONLY (+ CONTEXTUAL via chip) | n/a | INTENTIONALLY_AMBIENT |
 | Python enrichment | `python-enrichment.service` | View/Why only | AMBIENT_ONLY / PROOF_ONLY | n/a | INTENTIONALLY_AMBIENT |
