@@ -13,7 +13,10 @@ import {
   envelopeUpgradesExtraction,
   buildMeetingIntelligenceEnvelope,
   validateMeetingEnvelope,
+  buildSemanticRetrievalEnvelope,
+  validateSemanticRetrievalEnvelope,
   type MeetingIntelligenceExtractionResult,
+  type SemanticRerankExtractionResult,
 } from "../../apps/api/src/services/intelligence/python-intelligence.js";
 import type { WorkSignalExtractionResult } from "../../apps/api/src/services/intelligence/python-enrichment.service.js";
 
@@ -129,6 +132,69 @@ describe("buildMeetingIntelligenceEnvelope + validateMeetingEnvelope (Phase 1285
   });
   it("no authority for NO_SIGNAL / unavailable", () => {
     const e = validateMeetingEnvelope(buildMeetingIntelligenceEnvelope(meetingResult({ status: "PYTHON_NOT_CONFIGURED", candidates: [] }), 0, NOW));
+    expect(e.authority).toBe(null);
+  });
+});
+
+describe("buildSemanticRetrievalEnvelope + validateSemanticRetrievalEnvelope (Phase 1285-W)", () => {
+  function rerank(over: Partial<SemanticRerankExtractionResult> = {}): SemanticRerankExtractionResult {
+    return {
+      status: "PYTHON_ENRICHED",
+      ranked: [
+        { candidate_id: "led-1", score: 9, reason: "Matched query terms in the title" },
+        { candidate_id: "led-2", score: 4, reason: "Matched a related person" },
+      ],
+      ...over,
+    };
+  }
+
+  it("builds a SEMANTIC_RETRIEVAL envelope carrying the ranked candidates", () => {
+    const e = buildSemanticRetrievalEnvelope(rerank(), 12, NOW);
+    expect(e.capability).toBe("SEMANTIC_RETRIEVAL");
+    expect(e.source).toBe("PYTHON_ADVISORY");
+    expect(e.status).toBe("PYTHON_ENRICHED");
+    expect(e.candidates.length).toBe(2);
+    expect(e.reasoning_summary).toBe(null); // never raw chain-of-thought
+    expect(e.provenance).toBe("python:semantic-rerank");
+  });
+
+  it("200 with no ranked candidates is NO_SIGNAL; unavailability/error map explicitly", () => {
+    expect(buildSemanticRetrievalEnvelope(rerank({ status: "PYTHON_ENRICHED", ranked: [] }), 0, NOW).status).toBe("NO_SIGNAL");
+    expect(buildSemanticRetrievalEnvelope(rerank({ status: "PYTHON_NOT_CONFIGURED", ranked: [] }), 0, NOW).status).toBe("NOT_CONFIGURED");
+    expect(buildSemanticRetrievalEnvelope(rerank({ status: "PYTHON_UNHEALTHY", ranked: [] }), 0, NOW).status).toBe("UNHEALTHY");
+    expect(buildSemanticRetrievalEnvelope(rerank({ status: "PYTHON_TIMEOUT", ranked: [] }), 0, NOW).status).toBe("TIMEOUT");
+    expect(buildSemanticRetrievalEnvelope(rerank({ status: "PYTHON_JOB_FAILED", ranked: [] }), 0, NOW).status).toBe("ERROR");
+  });
+
+  it("FOUNDATION_VALIDATED only over ids in the allowed set", () => {
+    const e = validateSemanticRetrievalEnvelope(buildSemanticRetrievalEnvelope(rerank(), 10, NOW), new Set(["led-1", "led-2"]));
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect(e.candidates.length).toBe(2);
+  });
+
+  it("rejects an unknown / cross-tenant id and warns; keeps the allowed ones", () => {
+    const drift = rerank({
+      ranked: [
+        { candidate_id: "led-1", score: 9, reason: "ok" },
+        { candidate_id: "FOREIGN-TENANT-row", score: 99, reason: "drift" },
+      ],
+    });
+    const e = validateSemanticRetrievalEnvelope(buildSemanticRetrievalEnvelope(drift, 10, NOW), new Set(["led-1"]));
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect(e.candidates.map((c) => (c as { candidate_id: string }).candidate_id)).toEqual(["led-1"]);
+    expect(e.warnings.join(" ")).toMatch(/rejected: not in the Foundation-allowed set/);
+  });
+
+  it("DOWNGRADES when EVERY reranked id is unknown (pure drift)", () => {
+    const allForeign = rerank({ ranked: [{ candidate_id: "FOREIGN", score: 99, reason: "drift" }] });
+    const e = validateSemanticRetrievalEnvelope(buildSemanticRetrievalEnvelope(allForeign, 10, NOW), new Set(["led-1"]));
+    expect(e.status).toBe("FOUNDATION_DOWNGRADED");
+    expect(e.authority).toBe(null);
+    expect(e.candidates).toEqual([]);
+  });
+
+  it("no authority for NO_SIGNAL / unavailable", () => {
+    const e = validateSemanticRetrievalEnvelope(buildSemanticRetrievalEnvelope(rerank({ status: "PYTHON_NOT_CONFIGURED", ranked: [] }), 0, NOW), new Set(["led-1"]));
     expect(e.authority).toBe(null);
   });
 });
