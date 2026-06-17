@@ -31,6 +31,32 @@ export type {
 export { requireAuth } from "./middleware/auth.middleware.js";
 export { registerAuthRoutes } from "./routes/auth.routes.js";
 
+// Phase 1288-B — Foundation generalized Entity & Authority Envelope.
+export {
+  FoundationAuthorityService,
+  computeAuthorityEnvelope,
+  AUTHORITY_CLEARANCE_MAX,
+} from "./services/foundation/authority.service.js";
+export type {
+  AuthorityEnvelope,
+  AuthorityResult,
+  EntityClass,
+  SettlementMode,
+  CosmpOp,
+  CanKnow,
+  CanDo,
+  CanRequest,
+  CanPay,
+  RequiresApproval,
+  MemoryScope,
+  DeviceScope,
+  AppScope,
+  SpendScope,
+  ApprovalPolicy,
+  AuthorityProvenance,
+} from "./services/foundation/authority.service.js";
+export { registerFoundationRoutes } from "./routes/foundation.routes.js";
+
 export {
   NegotiateService,
   scopeMin,

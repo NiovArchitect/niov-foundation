@@ -418,3 +418,18 @@ describe("ADR-0057 §10 — Action audit literals defined (no emission)", () => 
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1288-B — the Foundation Entity & Authority Envelope literal is DEFINED
+// as an append-only addition and IS emitted by the authority evaluator (proof
+// of every envelope evaluation). These tests assert the literal vocabulary is
+// present + recognized + non-duplicated. Mirrors the AUDIT.1 precedent.
+describe("1288-B — Foundation authority audit literal defined", () => {
+  it("AUTHORITY_ENVELOPE_EVALUATED is present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("AUTHORITY_ENVELOPE_EVALUATED");
+    expect(isKnownAuditEventType("AUTHORITY_ENVELOPE_EVALUATED")).toBe(true);
+  });
+
+  it("the literal set has no duplicates after the 1288-B append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});
