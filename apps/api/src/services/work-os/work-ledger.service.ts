@@ -743,6 +743,18 @@ export interface WorkLedgerView {
     primary_signal: string | null;
     multi_intent: boolean;
   };
+  // Phase 1285-V — advisory meeting / ambient-perception intelligence, read back
+  // from details.meeting_intelligence so the Work Ledger surface shows the
+  // governed perception outcome. Safe projection only: status + authority +
+  // capability + summary + short closed-vocab candidates (never the raw
+  // transcript, never chain-of-thought).
+  meeting_intelligence?: {
+    status: string;
+    authority: string | null;
+    capability: string;
+    summary: string | null;
+    candidates: Array<{ candidate_type: string; text: string; confidence: string }>;
+  };
   // Phase 1283 — persisted coordination summary (PART E) read back from
   // details.coordination, so My Work / Team Work / Blind Spots show the BEAM
   // outcome without the original create response.
@@ -888,8 +900,41 @@ function watchersFromDetails(details: unknown): WorkLedgerView["watchers"] | und
   return out.length > 0 ? out : undefined;
 }
 
+// WHAT: pull the advisory meeting-intelligence envelope out of details into a
+//        SAFE projection (Phase 1285-V). Short candidates only; never the raw
+//        transcript or chain-of-thought.
+function meetingIntelligenceFromDetails(
+  details: unknown,
+): WorkLedgerView["meeting_intelligence"] | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const mi = (details as Record<string, unknown>).meeting_intelligence;
+  if (typeof mi !== "object" || mi === null) return undefined;
+  const o = mi as Record<string, unknown>;
+  const rawCandidates = Array.isArray(o.candidates) ? o.candidates : [];
+  const candidates = rawCandidates.flatMap((c) => {
+    if (typeof c !== "object" || c === null) return [];
+    const cr = c as Record<string, unknown>;
+    if (typeof cr.candidate_type !== "string") return [];
+    return [
+      {
+        candidate_type: String(cr.candidate_type),
+        text: String(cr.text ?? "").slice(0, 280),
+        confidence: String(cr.confidence ?? ""),
+      },
+    ];
+  });
+  return {
+    status: String(o.status ?? "UNKNOWN"),
+    authority: typeof o.authority === "string" ? o.authority : null,
+    capability: String(o.capability ?? "MEETING_INTELLIGENCE"),
+    summary: typeof o.summary === "string" ? o.summary : null,
+    candidates,
+  };
+}
+
 function projectLedger(row: LedgerRow): WorkLedgerView {
   const enrichment = enrichmentFromDetails(row.details);
+  const meetingIntelligence = meetingIntelligenceFromDetails(row.details);
   const coordination = coordinationFromDetails(row.details);
   const watchers = watchersFromDetails(row.details);
   const sourceMessageId =
@@ -924,6 +969,7 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
     updated_at: row.updated_at.toISOString(),
     verified_at: row.verified_at !== null ? row.verified_at.toISOString() : null,
     ...(enrichment !== undefined ? { python_enrichment: enrichment } : {}),
+    ...(meetingIntelligence !== undefined ? { meeting_intelligence: meetingIntelligence } : {}),
     ...(coordination !== undefined ? { coordination } : {}),
     ...(watchers !== undefined ? { watchers } : {}),
   };
