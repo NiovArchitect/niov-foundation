@@ -54,6 +54,30 @@ import { projectActionView, type SafeActionView } from "./views.js";
 import { getOrgEntityId } from "../governance/org.js";
 import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entities.js";
 
+// WHAT: Extract the recipient entity_id from an Action's payload_redacted JSON,
+//        for SEND_INTERNAL_NOTIFICATION rows that carry the recipient there
+//        rather than in the structural target_entity_id (governance) column.
+// INPUT: the payload_redacted JSON value (Prisma JsonValue).
+// OUTPUT: the recipient entity_id string, or null.
+// WHY: ADR-0057 §10 Amendment 1 — the notification's recipient is the
+//      conceptual target. We read it server-side ONLY to resolve a display
+//      label; the payload itself and the UUID never leave the service tier.
+export function recipientIdFromPayload(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const rid = (payload as Record<string, unknown>).recipient_entity_id;
+  return typeof rid === "string" && rid.length > 0 ? rid : null;
+}
+
+// WHAT: The effective target id for label resolution: the structural
+//        target_entity_id if set, else the payload recipient (notifications).
+// WHY: keeps batch-resolution + per-row labeling consistent.
+function effectiveTargetId(
+  target_entity_id: string | null,
+  payload_redacted: unknown,
+): string | null {
+  return target_entity_id ?? recipientIdFromPayload(payload_redacted);
+}
+
 // WHAT: Resolve an Action's target + source entity ids to SAFE display-name
 //        labels (never the UUID). null when there is no id or it is unresolved.
 // INPUT: the resolved-names map + the two ids off the Action row.
@@ -63,7 +87,7 @@ import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entit
 //      leave the service tier.
 function labelsFor(
   names: Map<string, ResolvedName>,
-  target_entity_id: string | null,
+  target_id: string | null,
   source_entity_id: string | null,
 ): { target_label: string | null; requester_label: string | null } {
   const pick = (id: string | null): string | null => {
@@ -72,7 +96,7 @@ function labelsFor(
     // Unresolved → null so the UI shows "recipient unavailable", never a UUID.
     return r === undefined || r.unresolved ? null : r.display_name;
   };
-  return { target_label: pick(target_entity_id), requester_label: pick(source_entity_id) };
+  return { target_label: pick(target_id), requester_label: pick(source_entity_id) };
 }
 
 // WHAT: Maximum number of Action rows returned in one page.
@@ -391,8 +415,12 @@ export async function listActionsForCaller(
 
   // Resolve target + source entity ids to SAFE display labels for this page
   // (ADR-0057 §10 Amendment 1). One batched lookup; UUIDs never leave here.
+  // Target falls back to the payload recipient for notification rows.
   const names = await resolveEntityNames(
-    rows.flatMap((r) => [r.target_entity_id, r.source_entity_id]),
+    rows.flatMap((r) => [
+      effectiveTargetId(r.target_entity_id, r.payload_redacted),
+      r.source_entity_id,
+    ]),
   );
 
   return {
@@ -403,7 +431,11 @@ export async function listActionsForCaller(
         projectActionView(
           r,
           undefined,
-          labelsFor(names, r.target_entity_id, r.source_entity_id),
+          labelsFor(
+            names,
+            effectiveTargetId(r.target_entity_id, r.payload_redacted),
+            r.source_entity_id,
+          ),
         ),
       ),
       page: filters.page,
