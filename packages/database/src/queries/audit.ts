@@ -510,7 +510,19 @@ export type AuditEventType =
   // / …). SAFE details: gate code + participant_count +
   // has_selected_time booleans only. FORBIDDEN: tokens, attendee
   // identities/emails, event titles, raw provider bodies.
-  | "CALENDAR_EVENT_CREATE";
+  | "CALENDAR_EVENT_CREATE"
+  // Phase 1288-B — Foundation generalized Entity & Authority Envelope.
+  // Emitted whenever the Foundation authority evaluator computes an
+  // AuthorityEnvelope for an entity (self via /foundation/authority/me,
+  // or a same-org target via /foundation/entities/:id/authority).
+  // outcome SUCCESS when the envelope is returned; DENIED with a scrubbed
+  // reason (CROSS_TENANT_FORBIDDEN / NOT_AUTHORIZED / TARGET_NOT_FOUND)
+  // when an evaluation is refused. SAFE details: subject_entity_type +
+  // self_scope + clearance_ceiling booleans/scalars only. FORBIDDEN: raw
+  // TAR flag dumps, other entities' identities/emails, capsule contents,
+  // bearer tokens. Additive literal only — no ADR-0002 amendment (the
+  // append-only chain + BEFORE DELETE trigger are unchanged).
+  | "AUTHORITY_ENVELOPE_EVALUATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -693,6 +705,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONNECTOR_DATA_READ",
   // Phase 1272 gated calendar event creation.
   "CALENDAR_EVENT_CREATE",
+  // Phase 1288-B Foundation Entity & Authority Envelope evaluation.
+  "AUTHORITY_ENVELOPE_EVALUATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

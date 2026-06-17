@@ -126,6 +126,8 @@ import { registerConnectorRailsRoutes } from "./routes/connector-rails.routes.js
 import { registerConnectorDataRoutes } from "./routes/connector-data.routes.js";
 import { registerCalendarEventRoutes } from "./routes/calendar-event.routes.js";
 import { registerWorkOsAuthorityRoutes } from "./routes/work-os-authority.routes.js";
+import { registerFoundationRoutes } from "./routes/foundation.routes.js";
+import { FoundationAuthorityService } from "./services/foundation/authority.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -291,6 +293,8 @@ export async function buildApp(
     nonceStore: sessionNonceStore,
   });
   const complianceService = new ComplianceService(authService);
+  // Phase 1288-B — Foundation generalized Entity & Authority Envelope.
+  const foundationAuthorityService = new FoundationAuthorityService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -706,6 +710,7 @@ export async function buildApp(
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);
+  await registerFoundationRoutes(app, foundationAuthorityService);
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);
