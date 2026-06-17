@@ -14,6 +14,46 @@
   ADR-0042 (capsule mutation discrimination — additive-audit-literal
   precedent).
 
+## Amendment 1 — SAFE recipient/requester display labels on the Action read surface (Founder-authorized 2026-06-16)
+
+**Status:** Accepted 2026-06-16. **Authorization:** explicit Founder
+authorization per RULE 20 (Otzar Work OS Phase 1285-N follow-up, BLOCKER 2):
+the Action Center cannot keep rendering generic "Internal note" cards — an
+authorized approver/admin must see *who* an action is for to make a decision —
+but message body / payload / envelope must stay forbidden.
+
+**Decision.** `SafeActionView` (`apps/api/src/services/action/views.ts`) gains
+two OPTIONAL fields, resolved by the read services
+(`list.service.ts` + `get.service.ts`) via the canonical
+`resolveEntityNames` resolver:
+
+- `target_label?: string | null` — the recipient's resolved DISPLAY NAME.
+- `requester_label?: string | null` — the source/requester's resolved DISPLAY NAME.
+
+**Narrow scope — what this does NOT change:**
+
+- These are display-name labels ONLY. The routing UUIDs `target_entity_id` and
+  `source_entity_id` remain FORBIDDEN in the response per §10 (unchanged); they
+  never leave the service tier.
+- Raw `payload_summary` / `payload_redacted` body text, the full policy
+  envelope, `policy_envelope_hash`, and every other §10 forbidden field stay
+  forbidden (unchanged). Message body is NOT exposed server-side.
+- A label is `null` when the entity cannot be resolved — the UI renders
+  "recipient unavailable" + an unresolved badge, never a UUID, never a fake.
+- Authorization is unchanged: labels ride the existing self-scope (caller ==
+  `source_entity_id`) OR `can_admin_org`-over-same-org read spine. A
+  cross-tenant reader gets no rows, hence no labels — no cross-tenant leakage,
+  no permission bypass.
+- `projectActionView` stays a pure mapper (ADR-0026 §5 Pattern 6): the service
+  resolves names and passes a `SafeActionLabels` object in; the mapper only
+  copies the safe labels.
+
+The `tests/unit/no-leak-guard.test.ts` forbidden-token anchor is preserved
+(`target_label` / `requester_label` are not forbidden tokens; the UUID + body
+tokens still never serialize). Integration coverage at
+`tests/integration/action-list.test.ts` asserts the labels resolve to display
+names AND that the UUIDs + payload body never appear in the response.
+
 ## Context
 
 Section 2 of the 10 required production sections per the Founder Directive

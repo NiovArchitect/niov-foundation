@@ -50,6 +50,26 @@ export interface SafeActionView {
   decision_reason?: string;
   created_at: string;
   updated_at: string;
+  // ── ADR-0057 §10 Amendment 1 (Founder-authorized 2026-06-16, BLOCKER 2) ──
+  // SAFE resolved DISPLAY-NAME labels for the action's recipient + requester,
+  // so an authorized approver/admin sees "internal note to David Odie" instead
+  // of a generic card. These are display names ONLY — never the routing UUIDs
+  // (target_entity_id / source_entity_id stay forbidden), never the message
+  // body / payload_summary / policy envelope. Resolved by the service tier
+  // (self/admin-scoped reads); null when the entity cannot be resolved (CT
+  // renders "recipient unavailable" + an unresolved badge). Optional so the
+  // create-time projection — which does not resolve names — omits them.
+  target_label?: string | null;
+  requester_label?: string | null;
+}
+
+// WHAT: SAFE display-name labels passed into the projection by the service
+//        tier (it owns the DB-backed name resolution; the mapper stays pure).
+// WHY: Keeps projectActionView a pure transformation per ADR-0026 §5 Pattern 6
+//      — the service resolves names, the mapper just copies the safe labels.
+export interface SafeActionLabels {
+  target_label?: string | null;
+  requester_label?: string | null;
 }
 
 // WHAT: Map a full Action row + an optional decision_reason marker
@@ -70,6 +90,7 @@ export interface SafeActionView {
 export function projectActionView(
   action: Action,
   decision_reason?: string,
+  labels?: SafeActionLabels,
 ): SafeActionView {
   const safe: SafeActionView = {
     action_id: action.action_id,
@@ -85,6 +106,14 @@ export function projectActionView(
   }
   if (decision_reason !== undefined) {
     safe.decision_reason = decision_reason;
+  }
+  // SAFE labels only — copied verbatim from the service-resolved display names.
+  // Never the entity_id; the routing UUID is not in scope here by construction.
+  if (labels?.target_label !== undefined) {
+    safe.target_label = labels.target_label;
+  }
+  if (labels?.requester_label !== undefined) {
+    safe.requester_label = labels.requester_label;
   }
   return safe;
 }

@@ -478,6 +478,89 @@ describe("GET /api/v1/actions — org_scope path", () => {
   });
 });
 
+describe("GET /api/v1/actions — SAFE recipient/requester labels (ADR-0057 §10 Amendment 1)", () => {
+  it("resolves target_label + requester_label to display names; never the routing UUID", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgMember({
+      orgId,
+      autonomy_level: "EXECUTIVE_OVERRIDE",
+    });
+    const target = await makeOrgMember({ orgId });
+    await seedAutoApprovePolicy(orgId, caller.entityId);
+
+    const callerEntity = await prisma.entity.findUniqueOrThrow({
+      where: { entity_id: caller.entityId },
+      select: { display_name: true },
+    });
+    const targetEntity = await prisma.entity.findUniqueOrThrow({
+      where: { entity_id: target.entityId },
+      select: { display_name: true },
+    });
+
+    // Create an action TARGETING the distinct named member.
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/actions",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "SEND_INTERNAL_NOTIFICATION",
+        idempotency_key: `ik-${randomUUID()}`,
+        target_entity_id: target.entityId,
+        payload_summary: "label-test-summary-secret",
+        payload_redacted: {
+          recipient_entity_id: target.entityId,
+          notification_class: "label-test",
+          body_summary: "label-test-body-secret",
+        },
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(created.statusCode).toBe(200);
+    const actionId = (created.json() as { action: { action_id: string } }).action.action_id;
+
+    const r = await list(caller);
+    expect(r.statusCode).toBe(200);
+    const b = r.body as {
+      items: Array<{
+        action_id: string;
+        target_label?: string | null;
+        requester_label?: string | null;
+      }>;
+    };
+    const item = b.items.find((i) => i.action_id === actionId);
+    expect(item).toBeDefined();
+    // SAFE display-name labels resolved for the authorized self-scoped reader.
+    expect(item?.target_label).toBe(targetEntity.display_name);
+    expect(item?.requester_label).toBe(callerEntity.display_name);
+
+    // The routing UUIDs + payload body MUST NEVER appear in the response body.
+    expect(r.rawBody.includes(target.entityId)).toBe(false);
+    expect(r.rawBody.includes(caller.entityId)).toBe(false);
+    expect(r.rawBody.includes("label-test-summary-secret")).toBe(false);
+    expect(r.rawBody.includes("label-test-body-secret")).toBe(false);
+    expect(r.rawBody.includes("target_entity_id")).toBe(false);
+    expect(r.rawBody.includes("source_entity_id")).toBe(false);
+  });
+
+  it("cross-tenant reader cannot see another org's action or its labels", async () => {
+    const orgA = await makeTestOrg();
+    const orgB = await makeTestOrg();
+    const callerA = await makeOrgMember({
+      orgId: orgA,
+      autonomy_level: "EXECUTIVE_OVERRIDE",
+    });
+    const callerB = await makeOrgMember({ orgId: orgB });
+    await seedAutoApprovePolicy(orgA, callerA.entityId);
+    const a1 = await createApprovedAction(callerA);
+
+    // callerB (different org, self-scope) must not see callerA's action at all.
+    const r = await list(callerB);
+    expect(r.statusCode).toBe(200);
+    const b = r.body as { items: Array<{ action_id: string }> };
+    expect(b.items.map((i) => i.action_id)).not.toContain(a1);
+  });
+});
+
 describe("GET /api/v1/actions — soft-delete invisibility", () => {
   it("soft-deleted Actions are excluded from list results", async () => {
     const orgId = await makeTestOrg();

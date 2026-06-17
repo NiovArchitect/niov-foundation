@@ -52,6 +52,28 @@ import type {
 } from "@prisma/client";
 import { projectActionView, type SafeActionView } from "./views.js";
 import { getOrgEntityId } from "../governance/org.js";
+import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entities.js";
+
+// WHAT: Resolve an Action's target + source entity ids to SAFE display-name
+//        labels (never the UUID). null when there is no id or it is unresolved.
+// INPUT: the resolved-names map + the two ids off the Action row.
+// OUTPUT: { target_label, requester_label } — display names or null.
+// WHY: ADR-0057 §10 Amendment 1 — the approver/admin sees "to David Odie", not
+//      a routing UUID. Resolution is a display-name projection; the UUIDs never
+//      leave the service tier.
+function labelsFor(
+  names: Map<string, ResolvedName>,
+  target_entity_id: string | null,
+  source_entity_id: string | null,
+): { target_label: string | null; requester_label: string | null } {
+  const pick = (id: string | null): string | null => {
+    if (id === null) return null;
+    const r = names.get(id);
+    // Unresolved → null so the UI shows "recipient unavailable", never a UUID.
+    return r === undefined || r.unresolved ? null : r.display_name;
+  };
+  return { target_label: pick(target_entity_id), requester_label: pick(source_entity_id) };
+}
 
 // WHAT: Maximum number of Action rows returned in one page.
 //        Mirrors MAX_AUDIT_EVENTS_PAGE_SIZE = 100 precedent.
@@ -367,11 +389,23 @@ export async function listActionsForCaller(
     prisma.action.count({ where }),
   ]);
 
+  // Resolve target + source entity ids to SAFE display labels for this page
+  // (ADR-0057 §10 Amendment 1). One batched lookup; UUIDs never leave here.
+  const names = await resolveEntityNames(
+    rows.flatMap((r) => [r.target_entity_id, r.source_entity_id]),
+  );
+
   return {
     ok: true,
     httpStatus: 200,
     view: {
-      items: rows.map((r) => projectActionView(r)),
+      items: rows.map((r) =>
+        projectActionView(
+          r,
+          undefined,
+          labelsFor(names, r.target_entity_id, r.source_entity_id),
+        ),
+      ),
       page: filters.page,
       page_size: filters.page_size,
       total,
