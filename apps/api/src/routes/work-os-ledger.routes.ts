@@ -27,6 +27,7 @@ import {
   recordCoordinationOnLedger,
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
+import { getWatcherFeed } from "../services/work-os/watcher.service.js";
 import {
   dispatchWorkOsEvent,
   eventTypeForLedger,
@@ -505,5 +506,22 @@ export async function registerWorkOsLedgerRoutes(
       is_manager: ctx.manager,
     });
     return reply.code(200).send({ ok: true, items });
+  });
+
+  // ── Governed watcher feed (Phase 1285-P) — the richer WatcherFinding
+  //    contract over durable work state: typed risk + canonical participants +
+  //    source proof + detection metadata + recommended next action. Foundation
+  //    is the policy authority; BEAM (advisory) will later feed candidates into
+  //    this same shape (re-validated + re-scoped here). Scope mirrors the blind-
+  //    spots feed: employee sees own/owned/requested work; manager sees org. ──
+  app.get("/api/v1/work-os/watchers/feed", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const findings = await getWatcherFeed({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+      is_manager: ctx.manager,
+    });
+    return reply.code(200).send({ ok: true, findings });
   });
 }
