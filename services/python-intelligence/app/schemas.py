@@ -338,6 +338,73 @@ class SemanticRerankResult(BaseModel):
     provider_mode: Literal["PYTHON"] = "PYTHON"
 
 
+# --- Risk scoring (Phase 1285-X) --------------------------------------------
+# ADVISORY only. Foundation assembles a scoped, deterministic candidate set
+# (watcher findings over durable work — overdue / blocked / waiting-on / no-
+# next-action) and sends ONLY safe summaries + boolean signal flags here. This
+# service scores + explains + recommends; it NEVER creates work, notifies anyone,
+# decides scope/ownership/permission, or returns a candidate_id that was not in
+# the input. No LLM, no chain-of-thought. Deterministic watcher findings stay
+# primary; Foundation validates + scopes every score.
+
+RiskSeverity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+RiskConfidence = Literal["HIGH", "MEDIUM", "LOW"]
+RiskSignal = Literal[
+    "OVERDUE",
+    "BLOCKED",
+    "WAITING_ON",
+    "NO_NEXT_ACTION",
+    "AGING",
+    "HIGH_BASE_SEVERITY",
+]
+
+
+class RiskScoreCandidate(BaseModel):
+    """One Foundation-scoped work/watcher candidate's safe summary + signals.
+    ``related_people`` are resolved display names (never raw UUIDs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_id: str = Field(min_length=1, max_length=200)
+    candidate_type: str = Field(min_length=1, max_length=60)
+    title: str = Field(min_length=1, max_length=400)
+    summary: Optional[str] = Field(default=None, max_length=2000)
+    base_severity: RiskSeverity
+    age_hours: Optional[float] = Field(default=None, ge=0)
+    overdue: bool = False
+    blocked: bool = False
+    waiting_on: bool = False
+    no_next_action: bool = False
+    related_people: list[str] = Field(default_factory=list, max_length=40)
+
+
+class RiskScoringInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: list[RiskScoreCandidate] = Field(default_factory=list, max_length=500)
+    max_results: Optional[int] = Field(default=None, ge=1, le=500)
+
+
+class RiskScore(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_id: str = Field(min_length=1, max_length=200)
+    risk_score: int = Field(ge=0, le=100)
+    severity: RiskSeverity
+    confidence: RiskConfidence
+    reason: str = Field(min_length=1, max_length=200)
+    contributing_signals: list[RiskSignal] = Field(default_factory=list, max_length=8)
+    suggested_next_action: str = Field(min_length=1, max_length=160)
+    human_review_needed: bool
+
+
+class RiskScoringResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scores: list[RiskScore]
+    provider_mode: Literal["PYTHON"] = "PYTHON"
+
+
 # --- Health -----------------------------------------------------------------
 
 

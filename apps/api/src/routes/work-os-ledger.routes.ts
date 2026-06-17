@@ -30,6 +30,7 @@ import {
 import { getWatcherFeed } from "../services/work-os/watcher.service.js";
 import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
 import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.service.js";
+import { assessWorkRisk } from "../services/work-os/risk-scoring.service.js";
 import { capturePerception } from "../services/perception/ambient-perception.service.js";
 import type { AmbientSourceType } from "../services/intelligence/python-intelligence.js";
 import {
@@ -603,4 +604,22 @@ export async function registerWorkOsLedgerRoutes(
       return reply.code(200).send({ ok: true, results, envelope });
     },
   );
+
+  // ── Risk assessment (Phase 1285-X) — advisory RISK_SCORING over the
+  //    deterministic watcher findings (overdue / blocked / waiting-on /
+  //    no-next-action). Foundation assembles the scoped findings (employee sees
+  //    own/owned/requested; manager sees org), enriches each with an advisory
+  //    risk_assessment, and re-validates every score against the allowed set.
+  //    The deterministic findings stay primary; nothing is created or notified;
+  //    no result blocks on Python. read-scoped. ──
+  app.get("/api/v1/work-os/risk/assessment", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const { findings, envelope } = await assessWorkRisk({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+      is_manager: ctx.manager,
+    });
+    return reply.code(200).send({ ok: true, findings, envelope });
+  });
 }
