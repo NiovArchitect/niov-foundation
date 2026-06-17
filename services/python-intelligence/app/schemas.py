@@ -229,6 +229,61 @@ class WorkSignalExtractionResult(BaseModel):
     provider_mode: Literal["PYTHON"] = "PYTHON"
 
 
+# --- Meeting / ambient-perception intelligence (Phase 1285-V) ---------------
+# ADVISORY only. Foundation governs the call, validates + scopes + audits the
+# output, and decides what becomes governed work. No LLM, no chain-of-thought,
+# no raw transcript retained. Detection is deterministic phrase/structure
+# heuristics; evidence_phrase is a SHORT matched snippet, never the full
+# transcript. The same contract is the runway for future glasses/lens ambient
+# context packets (capture -> normalize -> deterministic -> advisory ->
+# Foundation validation -> governed surfaces).
+
+MeetingCandidateType = Literal[
+    "SUMMARY",
+    "DECISION",
+    "ACTION_ITEM",
+    "BLOCKER",
+    "RISK",
+    "OPEN_QUESTION",
+    "COMMITMENT",
+    "FOLLOW_UP",
+    "DRAFT_SUGGESTION",
+]
+
+MeetingCandidateConfidence = Literal["HIGH", "MEDIUM", "LOW"]
+
+
+class MeetingIntelligenceInput(BaseModel):
+    """A captured perception stream (meeting transcript / conversation note /
+    imported notes). Foundation governs the call; we never persist it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    transcript: str = Field(min_length=1, max_length=20000)
+    source_type: Optional[str] = Field(default=None, max_length=40)
+
+
+class MeetingIntelligenceCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_type: MeetingCandidateType
+    # A short, safe extraction (never the full transcript).
+    text: str = Field(min_length=1, max_length=280)
+    confidence: MeetingCandidateConfidence
+    evidence_phrase: str = Field(min_length=1, max_length=160)
+
+
+class MeetingIntelligenceResult(BaseModel):
+    """Advisory meeting intelligence. ``summary`` is a concise deterministic
+    synthesis (None when nothing usable). Candidates are closed-vocab."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: Optional[str] = Field(default=None, max_length=600)
+    candidates: list[MeetingIntelligenceCandidate]
+    provider_mode: Literal["PYTHON"] = "PYTHON"
+
+
 # --- Health -----------------------------------------------------------------
 
 
