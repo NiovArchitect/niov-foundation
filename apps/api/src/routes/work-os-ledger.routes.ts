@@ -31,6 +31,17 @@ import { getWatcherFeed } from "../services/work-os/watcher.service.js";
 import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
 import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.service.js";
 import { assessWorkRisk } from "../services/work-os/risk-scoring.service.js";
+import { evaluateDraftTone } from "../services/work-os/draft-tone.service.js";
+import type { DraftChannel } from "../services/intelligence/python-draft-tone.service.js";
+
+const DRAFT_CHANNELS: ReadonlyArray<DraftChannel> = [
+  "internal_message",
+  "email",
+  "meeting_follow_up",
+  "action_proposal",
+  "voice_draft",
+  "unknown",
+];
 import { capturePerception } from "../services/perception/ambient-perception.service.js";
 import type { AmbientSourceType } from "../services/intelligence/python-intelligence.js";
 import {
@@ -622,4 +633,57 @@ export async function registerWorkOsLedgerRoutes(
     });
     return reply.code(200).send({ ok: true, findings, envelope });
   });
+
+  // ── Draft tone evaluation (Phase 1285-Y) — advisory DRAFT_TONE over a
+  //    PROPOSED message (internal note / reply / follow-up / action-proposal /
+  //    future ambient/voice draft). Foundation computes a deterministic
+  //    assessment, optionally refines it via Python, and validates the suggested
+  //    revision is safe (no em dash, no new recipient/link, intent preserved).
+  //    The original draft is preserved + primary; nothing is sent or created;
+  //    approval gates are Foundation-authoritative. Evaluative read; no
+  //    persistence. read-scoped. ──
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/work-os/draft-tone/evaluate",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      const draftText = typeof b.draft_text === "string" ? b.draft_text : "";
+      if (draftText.trim().length === 0) {
+        return reply
+          .code(422)
+          .send({ ok: false, code: "INVALID_REQUEST", message: "draft_text is required" });
+      }
+      const channel =
+        typeof b.channel === "string" && (DRAFT_CHANNELS as readonly string[]).includes(b.channel)
+          ? (b.channel as DraftChannel)
+          : "unknown";
+      // recipient_context: accept display_name (never trust a raw id as a label)
+      // + internal flag only. No recipient is resolved or added here.
+      let recipientContext: { display_name?: string; relationship?: string; internal: boolean } | undefined;
+      const rc = b.recipient_context;
+      if (typeof rc === "object" && rc !== null) {
+        const r = rc as Record<string, unknown>;
+        recipientContext = {
+          internal: r.internal === true,
+          ...(typeof r.display_name === "string" ? { display_name: r.display_name } : {}),
+          ...(typeof r.relationship === "string" ? { relationship: r.relationship } : {}),
+        };
+      }
+      const constraints =
+        typeof b.constraints === "object" && b.constraints !== null &&
+        typeof (b.constraints as Record<string, unknown>).approval_required === "boolean"
+          ? { approval_required: (b.constraints as Record<string, unknown>).approval_required as boolean }
+          : undefined;
+      const { assessment, envelope } = await evaluateDraftTone({
+        draft_text: draftText,
+        channel,
+        ...(recipientContext !== undefined ? { recipient_context: recipientContext } : {}),
+        ...(typeof b.intent === "string" ? { intent: b.intent } : {}),
+        ...(constraints !== undefined ? { constraints } : {}),
+        ...(typeof b.draft_id === "string" ? { draft_id: b.draft_id } : {}),
+      });
+      return reply.code(200).send({ ok: true, assessment, envelope });
+    },
+  );
 }
