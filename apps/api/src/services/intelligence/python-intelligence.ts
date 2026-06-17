@@ -71,7 +71,15 @@ export type AmbientSourceType =
   | "VOICE_NOTE"
   | "CONVERSATION_SNIPPET"
   | "IMPORTED_NOTES"
-  // Reserved for future ambient input adapters (not built now):
+  // Device-originated TEXT ambient packets (Phase 1287-A glasses/lens adapter).
+  // These carry a short, user-confirmed TEXT note/context — never a raw camera
+  // frame and never visual/biometric data (those stay reserved below).
+  | "GLASSES_NOTE"
+  | "LENS_CONTEXT"
+  | "AMBIENT_DEVICE_PACKET"
+  // Reserved for future ambient input adapters (not built now). GLASSES_VISUAL_
+  // FRAME stays reserved — Foundation does NOT process raw frames / images /
+  // appearance / biometrics in this or the 1287-A adapter phase.
   | "GLASSES_VISUAL_FRAME"
   | "SCREEN_CONTEXT"
   | "DOCUMENT_CONTEXT"

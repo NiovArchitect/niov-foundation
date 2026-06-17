@@ -31,6 +31,7 @@ vi.mock(
 
 import {
   capturePerception,
+  captureDevicePerception,
   enrichMeetingIntelligenceAsync,
 } from "../../apps/api/src/services/perception/ambient-perception.service.js";
 
@@ -125,6 +126,93 @@ describe("capturePerception — deterministic capture is primary + non-blocking"
     if (!glasses.ok) expect(glasses.message).toMatch(/reserved for a future ambient input/);
     // No capture row created for invalid input.
     expect(prismaMock.workLedgerEntry.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("captureDevicePerception — glasses/lens adapter (Phase 1287-A)", () => {
+  const goodConsent = { user_initiated: true, capture_visible_to_user: true, bystander_sensitive: false };
+
+  it("accepts a valid user-initiated glasses note: durable MEETING entry + safe consent/device/visibility metadata", async () => {
+    extractMock.mockImplementation(() => new Promise(() => {})); // hang — capture must not await
+    const r = await captureDevicePerception({
+      org_entity_id: ORG,
+      caller_entity_id: CALLER,
+      source_type: "GLASSES_NOTE",
+      text: "Note to self: ship the launch checklist by Friday.",
+      consent: goodConsent,
+      device_context: { device_type: "glasses", device_id: "hw-secret-123", capture_mode: "user_tapped" },
+      visibility: { scope: "private" },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.disposition).toBe("STORED");
+    const data = prismaMock.workLedgerEntry.create.mock.calls[0]![0].data as Record<string, any>;
+    expect(data.ledger_type).toBe("MEETING");
+    expect(data.source_type).toBe("AMBIENT_DEVICE");
+    expect(data.owner_entity_id).toBe(CALLER); // session is the only authority
+    expect(data.details.ambient_source_type).toBe("GLASSES_NOTE");
+    expect(data.details.device_context).toEqual({ device_type: "glasses", capture_mode: "user_tapped" });
+    expect(data.details.consent.user_initiated).toBe(true);
+    expect(data.details.visibility.scope).toBe("private");
+    expect(data.details.meeting_intelligence.status).toBe("PENDING");
+    // device_id (untrusted hardware id) is NEVER stored.
+    expect(JSON.stringify(data.details)).not.toContain("hw-secret-123");
+  });
+
+  it("rejects empty text and a reserved visual source (no row created)", async () => {
+    expect((await captureDevicePerception({ org_entity_id: ORG, caller_entity_id: CALLER, source_type: "GLASSES_NOTE", text: "  ", consent: goodConsent })).ok).toBe(false);
+    const visual = await captureDevicePerception({ org_entity_id: ORG, caller_entity_id: CALLER, source_type: "GLASSES_VISUAL_FRAME", text: "a face", consent: goodConsent });
+    expect(visual.ok).toBe(false);
+    if (!visual.ok) expect(visual.code).toBe("SOURCE_NOT_SUPPORTED");
+    expect(prismaMock.workLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a raw camera frame / image payload (RAW_FRAME_REJECTED, no row, no recognition)", async () => {
+    const r = await captureDevicePerception({
+      org_entity_id: ORG, caller_entity_id: CALLER, source_type: "GLASSES_NOTE", text: "x",
+      consent: goodConsent, raw_media_keys: ["image"],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("RAW_FRAME_REJECTED");
+    expect(prismaMock.workLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-user-initiated / invisible capture (CONSENT_REQUIRED, no row)", async () => {
+    const notInitiated = await captureDevicePerception({ org_entity_id: ORG, caller_entity_id: CALLER, source_type: "GLASSES_NOTE", text: "x", consent: { user_initiated: false, capture_visible_to_user: true, bystander_sensitive: false } });
+    expect(notInitiated.ok).toBe(false);
+    if (!notInitiated.ok) expect(notInitiated.code).toBe("CONSENT_REQUIRED");
+    const invisible = await captureDevicePerception({ org_entity_id: ORG, caller_entity_id: CALLER, source_type: "GLASSES_NOTE", text: "x", consent: { user_initiated: true, capture_visible_to_user: false, bystander_sensitive: false } });
+    expect(invisible.ok).toBe(false);
+    expect(prismaMock.workLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks bystander-sensitive capture unless private; private downgrades + strips the person hint", async () => {
+    const blocked = await captureDevicePerception({ org_entity_id: ORG, caller_entity_id: CALLER, source_type: "LENS_CONTEXT", text: "overheard a plan", consent: { user_initiated: true, capture_visible_to_user: true, bystander_sensitive: true }, visibility: { scope: "org" } });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.code).toBe("BYSTANDER_BLOCKED");
+    expect(prismaMock.workLedgerEntry.create).not.toHaveBeenCalled();
+
+    extractMock.mockImplementation(() => new Promise(() => {}));
+    const priv = await captureDevicePerception({
+      org_entity_id: ORG, caller_entity_id: CALLER, source_type: "LENS_CONTEXT", text: "overheard a plan",
+      consent: { user_initiated: true, capture_visible_to_user: true, bystander_sensitive: true },
+      visibility: { scope: "private" }, context_hint: { related_person_name: "A Bystander", related_project: "Launch" },
+    });
+    expect(priv.ok).toBe(true);
+    if (priv.ok) expect(priv.disposition).toBe("STORED_PRIVATE_DOWNGRADED");
+    const data = prismaMock.workLedgerEntry.create.mock.calls[0]![0].data as Record<string, any>;
+    // The named bystander is dropped; the non-identifying project hint stays.
+    expect(data.details.context_hint?.related_person_name).toBeUndefined();
+    expect(data.details.context_hint?.related_project).toBe("Launch");
+    expect(JSON.stringify(data.details)).not.toContain("A Bystander");
+  });
+
+  it("captures deterministically even when Python is unavailable (no fake enrichment)", async () => {
+    extractMock.mockResolvedValue({ status: "PYTHON_NOT_CONFIGURED", summary: null, candidates: [] });
+    const r = await captureDevicePerception({ org_entity_id: ORG, caller_entity_id: CALLER, source_type: "AMBIENT_DEVICE_PACKET", text: "ship it Friday", consent: goodConsent });
+    expect(r.ok).toBe(true); // deterministic capture is primary; Python state does not block it
+    const data = prismaMock.workLedgerEntry.create.mock.calls[0]![0].data as Record<string, any>;
+    expect(data.details.meeting_intelligence.status).toBe("PENDING"); // honest pending at create time
+    expect(data.extraction_source).toBe("TYPESCRIPT_DETERMINISTIC");
   });
 });
 
