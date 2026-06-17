@@ -8,7 +8,10 @@ Tier 4 PR-specific build-log:
 [`docs/build-log/`](build-log/). Tier 5 ADRs:
 [`docs/architecture/decisions/`](architecture/decisions/).
 
-**Last updated:** 2026-06-12 — **PRODUCTION SCHEMA PUSHED** (Founder
+**Last updated:** 2026-06-17 — **Foundation-Scale Arc IN FLIGHT** (see
+"Foundation-Scale Arc (Phase 1288+)" section below; 1288-B Generalized
+Entity & Authority Envelope LANDED, PR #425). Earlier 2026-06-12 —
+**PRODUCTION SCHEMA PUSHED** (Founder
 typed APPROVE PROD SCHEMA PUSH; credentials rotated + verified;
 preflight additive-only — 52 tables / 69 types / 177 indexes /
 19 columns, zero destructive ops; post-push diff EMPTY; pending set
@@ -19,6 +22,49 @@ in flight.
 (**Otzar Phases 1221 + 1222 + 1223 + 1228 + 1229 + 1230 + 1231 +
 1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
 bounded Founder queue 1215–1232 substantially complete.
+
+## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
+
+**Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
+AI agents, devices, apps, games, SaaS, worlds, marketplaces, decentralized
+memory, microtransactions, and ambient computing. **Otzar is the first proving
+application, not the platform.** The ambient AI brain and Foundation-scale
+substrate are still forming — these phases harden the primitives that let
+agents/devices/applications/worlds operate safely at scale. Memory Capsules
+remain first-class (DMW = container, Capsule = atomic unit, COSMP = access
+protocol, COE = scoped assembly, Authority Envelope = know/do/request/pay/
+approve, Audit/Proof = evidence). Authority is decided by Foundation only —
+never by an LLM, Python, BEAM, a device, or an app.
+
+Authorized autonomous sequence (back-to-back; mock-only economics; stop only on
+a true stop condition):
+
+- **1288-B Generalized Entity & Authority Envelope — LANDED 2026-06-17**
+  (PR [#425](https://github.com/NiovArchitect/niov-foundation/pull/425) `e53a215`).
+  NEW `apps/api/src/services/foundation/authority.service.ts`
+  (`computeAuthorityEnvelope` pure + deterministic; `FoundationAuthorityService`
+  with `getMyAuthorityForCaller` + `evaluateAuthorityForCaller`) + NEW
+  `apps/api/src/routes/foundation.routes.ts` (`GET /api/v1/foundation/authority/me`
+  + `GET /api/v1/foundation/entities/:entity_id/authority`) + additive audit
+  literal `AUTHORITY_ENVELOPE_EVALUATED`. Read-only projection derived from
+  Entity+TAR+Wallet; five dimensions (can_know/can_do/can_request/can_pay/
+  requires_approval) + explicit `memory_scope` + device/app/spend scope.
+  `can_pay` settlement_mode = DISABLED (1290-A may move to MOCK_ONLY only).
+  Cross-tenant fail-closed; non-human entities cannot self-authorize; RULE 0
+  sovereignty (only PERSON). +16 tests; CI green (typecheck 0 / unit 371 /
+  integration 111 / Python / Elixir); live-proven. **No schema migration.**
+  RULE 13 catch: the dual-control target-resolver self-deadlock is ALREADY
+  CLOSED on main (`resolveDualControlTarget`) — 1288-B did not touch
+  dual-control. `work-os/authority-context.service.ts` is the distinct
+  Otzar-layer concept (not duplicated).
+- **1289-A COSMP / DMW / Memory Capsule Hardening** — NEXT (device/agent/app
+  memory-scope enforcement as ADDITIVE gates; ProofOfAccess; minimal safe
+  cascade revocation — surface the boundary if ambiguous; preserve existing
+  NEGOTIATE/READ/SHARE/REVOKE + COE baselines unchanged).
+- **1290-A Economic substrate contracts** — MOCK_ONLY / PROVIDER_DEFERRED /
+  FUTURE_ONCHAIN only; no real provider/funds/secrets.
+- **1291-A Ambient device protocol** · **1292-A Marketplace substrate** ·
+  **1293-A GOVSEC / observability / metering / production hardening.**
 
 ### Final close-out state (Founder closeout #2)
 
