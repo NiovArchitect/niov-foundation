@@ -46,7 +46,12 @@ const DRAFT_CHANNELS: ReadonlyArray<DraftChannel> = [
   "voice_draft",
   "unknown",
 ];
-import { capturePerception } from "../services/perception/ambient-perception.service.js";
+import {
+  capturePerception,
+  captureDevicePerception,
+  type DeviceContextInput,
+  type VisibilityInput,
+} from "../services/perception/ambient-perception.service.js";
 import type { AmbientSourceType } from "../services/intelligence/python-intelligence.js";
 import {
   dispatchWorkOsEvent,
@@ -581,6 +586,79 @@ export async function registerWorkOsLedgerRoutes(
         return reply.code(422).send({ ok: false, code: result.code, message: result.message });
       }
       return reply.code(200).send({ ok: true, entry: result.entry });
+    },
+  );
+
+  // ── Glasses / lens device-capture adapter (Phase 1287-A) — the governed
+  //    intake contract for future device-originated TEXT ambient packets. NOT
+  //    always-on capture, NOT a camera/hardware path. Raw frames / images /
+  //    visual / biometric are rejected; consent (user-initiated + visible) is
+  //    required; bystander-sensitive packets store privately or are blocked;
+  //    device-provided identity is ignored (the authed session is the only
+  //    authority). Deterministic capture NEVER blocks on Python. auth write. ──
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/work-os/perception/device-capture",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      // Raw camera frames / images are NEVER accepted — surface them to the
+      // service so it can reject honestly.
+      const FORBIDDEN_MEDIA_KEYS = [
+        "image", "image_data", "image_base64", "frame", "frames", "raw_frame", "video", "photo", "media",
+      ];
+      const rawMediaKeys = FORBIDDEN_MEDIA_KEYS.filter((k) => k in b);
+
+      const obj = (v: unknown): Record<string, unknown> =>
+        typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
+      const consentRaw = obj(b.consent);
+      const deviceRaw = obj(b.device_context);
+      const visRaw = obj(b.visibility);
+      const hintRaw = obj(b.context_hint);
+
+      const DEVICE_TYPES = ["glasses", "lens", "earbuds", "desktop", "mobile", "unknown"] as const;
+      const CAPTURE_MODES = ["manual", "voice_confirmed", "user_tapped", "scheduled", "unknown"] as const;
+      const SCOPES = ["private", "thread", "org", "unknown"] as const;
+      const deviceType = (DEVICE_TYPES as readonly string[]).includes(deviceRaw.device_type as string)
+        ? (deviceRaw.device_type as DeviceContextInput["device_type"])
+        : "unknown";
+      const captureMode = (CAPTURE_MODES as readonly string[]).includes(deviceRaw.capture_mode as string)
+        ? (deviceRaw.capture_mode as DeviceContextInput["capture_mode"])
+        : "unknown";
+      const scope = (SCOPES as readonly string[]).includes(visRaw.scope as string)
+        ? (visRaw.scope as VisibilityInput["scope"])
+        : "unknown";
+
+      const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
+
+      const result = await captureDevicePerception({
+        org_entity_id: ctx.org_entity_id, // session is the only authority
+        caller_entity_id: ctx.entity_id,
+        source_type: (typeof b.source_type === "string" ? b.source_type : "") as AmbientSourceType,
+        text: typeof b.text === "string" ? b.text : "",
+        raw_media_keys: rawMediaKeys,
+        consent: {
+          user_initiated: consentRaw.user_initiated === true,
+          capture_visible_to_user: consentRaw.capture_visible_to_user === true,
+          bystander_sensitive: consentRaw.bystander_sensitive === true,
+          ...(typeof consentRaw.recording_disclosed === "boolean"
+            ? { recording_disclosed: consentRaw.recording_disclosed }
+            : {}),
+        },
+        device_context: { device_type: deviceType, capture_mode: captureMode },
+        visibility: { scope },
+        ...(str(b.observed_at) !== undefined ? { observed_at: str(b.observed_at) } : {}),
+        context_hint: {
+          ...(str(hintRaw.meeting_title) !== undefined ? { meeting_title: str(hintRaw.meeting_title) } : {}),
+          ...(str(hintRaw.related_person_name) !== undefined ? { related_person_name: str(hintRaw.related_person_name) } : {}),
+          ...(str(hintRaw.related_project) !== undefined ? { related_project: str(hintRaw.related_project) } : {}),
+          ...(str(hintRaw.location_label) !== undefined ? { location_label: str(hintRaw.location_label) } : {}),
+        },
+      });
+      if (result.ok === false) {
+        return reply.code(422).send({ ok: false, code: result.code, message: result.message });
+      }
+      return reply.code(200).send({ ok: true, entry: result.entry, disposition: result.disposition });
     },
   );
 
