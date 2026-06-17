@@ -23,7 +23,8 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 5 | Blind Spots watcher feed | P2 | LIVE + GUI_VALIDATED (1285-N) → richer governed watcher feed (1285-P: GET /work-os/watchers/feed, WatcherFinding contract, 6 groups, pending GUI validation) |
 | 6 | BEAM watcher routes | P2 | IN_PROGRESS (1285-P: Foundation deterministic watcher service + route LIVE; BEAM watcher actor bridge deferred as P2 — no stable BEAM watcher-evaluation route exists; see docs/product/otzar-watcher-routes.md) |
 | 7 | Ask Twin wiring | P2 | LIVE self-ask (1285-R: governed conductSession + COE; Work-OS questions route deterministically; another person's Twin stays disabled-honest; pending GUI validation). Cross-entity Ask Twin remains a separate future backend contract. |
-| 9 | Async Python enrichment | P2 | NOT_STARTED (deterministic fallback live) |
+| 9 | Async Python enrichment | P2 | LIVE (1285-U: ambient Python intelligence contract — PythonIntelligenceEnvelope + Foundation validation; work-signal enrichment now async/non-blocking, deterministic primary) |
+| 12 | Ambient perception intelligence (meeting/transcript) | P2 | LIVE (1285-V: POST /work-os/perception/capture — durable MEETING capture + async MEETING_INTELLIGENCE via Python /jobs/meeting-intelligence; Foundation-validated envelope projected on the Work Ledger; runway for glasses/lenses. Backlog: 1285-W semantic retrieval, 1285-X risk scoring, 1285-Y draft tone, 1285-Z operational analytics, later glasses/lens input adapter) |
 
 ---
 
