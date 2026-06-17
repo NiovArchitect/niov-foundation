@@ -822,7 +822,14 @@ function enrichmentFromDetails(
   const pe = (details as Record<string, unknown>).python_enrichment;
   if (typeof pe !== "object" || pe === null) return undefined;
   const o = pe as Record<string, unknown>;
-  const rawSignals = Array.isArray(o.signals) ? o.signals : [];
+  // Phase 1285-U — the stored block is now a PythonIntelligenceEnvelope whose
+  // advisory items live in `candidates`; fall back to the legacy `signals`
+  // field so pre-1285-U rows still project faithfully.
+  const rawSignals = Array.isArray(o.candidates)
+    ? o.candidates
+    : Array.isArray(o.signals)
+      ? o.signals
+      : [];
   const signals = rawSignals.flatMap((s) => {
     if (typeof s !== "object" || s === null) return [];
     const sr = s as Record<string, unknown>;
