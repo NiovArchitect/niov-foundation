@@ -494,6 +494,73 @@ class DraftToneResult(BaseModel):
     provider_mode: Literal["PYTHON"] = "PYTHON"
 
 
+# --- Operational analytics (Phase 1285-Z) -----------------------------------
+# ADVISORY only. Foundation assembles a SCOPED execution-health snapshot
+# (deterministic metrics + top items) and sends ONLY safe summaries here. This
+# service aggregates, scores, and summarizes; it NEVER creates work, notifies
+# anyone, sends a message, introduces a new item or person, or references an id
+# outside the snapshot. No LLM, no chain-of-thought. Deterministic metrics stay
+# primary; Foundation re-validates + re-scopes the result.
+
+OpsExecutionStatus = Literal["HEALTHY", "WATCH", "AT_RISK", "CRITICAL"]
+OpsScope = Literal["personal", "team", "org"]
+OpsConfidence = Literal["HIGH", "MEDIUM", "LOW"]
+
+
+class OpsMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total_work: int = Field(ge=0)
+    overdue_count: int = Field(ge=0)
+    blocked_count: int = Field(ge=0)
+    waiting_on_count: int = Field(ge=0)
+    no_next_action_count: int = Field(ge=0)
+    high_risk_count: int = Field(ge=0)
+    critical_risk_count: int = Field(ge=0)
+    recent_completed_count: int = Field(ge=0)
+    recent_failed_count: int = Field(ge=0)
+
+
+class OpsTopItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str = Field(min_length=1, max_length=200)
+    item_type: str = Field(min_length=1, max_length=60)
+    title: str = Field(min_length=1, max_length=400)
+    summary: Optional[str] = Field(default=None, max_length=2000)
+    status: Optional[str] = Field(default=None, max_length=60)
+    severity: Optional[str] = Field(default=None, max_length=20)
+    risk_score: Optional[int] = Field(default=None, ge=0, le=100)
+    related_people: list[str] = Field(default_factory=list, max_length=40)
+    age_hours: Optional[float] = Field(default=None, ge=0)
+
+
+class OperationalAnalyticsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: str = Field(min_length=1, max_length=200)
+    scope: OpsScope
+    metrics: OpsMetrics
+    top_items: list[OpsTopItem] = Field(default_factory=list, max_length=200)
+    max_results: Optional[int] = Field(default=None, ge=1, le=50)
+
+
+class OperationalAnalyticsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    health_score: int = Field(ge=0, le=100)
+    execution_status: OpsExecutionStatus
+    summary: str = Field(min_length=1, max_length=600)
+    top_risks: list[str] = Field(default_factory=list, max_length=20)
+    recurring_blockers: list[str] = Field(default_factory=list, max_length=20)
+    overloaded_people: list[str] = Field(default_factory=list, max_length=20)
+    suggested_focus: list[str] = Field(default_factory=list, max_length=20)
+    recommended_next_actions: list[str] = Field(default_factory=list, max_length=20)
+    confidence: OpsConfidence
+    human_review_needed: bool
+    provider_mode: Literal["PYTHON"] = "PYTHON"
+
+
 # --- Health -----------------------------------------------------------------
 
 

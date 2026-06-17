@@ -33,6 +33,10 @@ import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.s
 import { assessWorkRisk } from "../services/work-os/risk-scoring.service.js";
 import { evaluateDraftTone } from "../services/work-os/draft-tone.service.js";
 import type { DraftChannel } from "../services/intelligence/python-draft-tone.service.js";
+import {
+  evaluateOperationalHealth,
+  type OperationalScope,
+} from "../services/work-os/operational-analytics.service.js";
 
 const DRAFT_CHANNELS: ReadonlyArray<DraftChannel> = [
   "internal_message",
@@ -684,6 +688,33 @@ export async function registerWorkOsLedgerRoutes(
         ...(typeof b.draft_id === "string" ? { draft_id: b.draft_id } : {}),
       });
       return reply.code(200).send({ ok: true, assessment, envelope });
+    },
+  );
+
+  // ── Operational health (Phase 1285-Z) — advisory OPERATIONAL_ANALYTICS over a
+  //    Foundation-scoped execution-health snapshot (Work Ledger + watcher + risk
+  //    + execution attempts). Deterministic health_score + status + counts are
+  //    PRIMARY; Python enriches the narrative when validated. scope=personal
+  //    (default) is caller-scoped; team/org require manager and otherwise fall
+  //    back to personal. Nothing is created/sent. read-scoped. ──
+  app.get<{ Querystring: Record<string, string> }>(
+    "/api/v1/work-os/operational-health",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const requested = strParam((request.query ?? {}).scope);
+      // team/org require manager; otherwise the safe default is personal.
+      const scope: OperationalScope =
+        (requested === "team" || requested === "org") && ctx.manager
+          ? (requested as OperationalScope)
+          : "personal";
+      const { health, envelope } = await evaluateOperationalHealth({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        scope,
+      });
+      return reply.code(200).send({ ok: true, health, envelope });
     },
   );
 }

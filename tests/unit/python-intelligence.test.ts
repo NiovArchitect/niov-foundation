@@ -19,10 +19,13 @@ import {
   validateRiskScoringEnvelope,
   buildDraftToneEnvelope,
   validateDraftToneEnvelope,
+  buildOperationalAnalyticsEnvelope,
+  validateOperationalAnalyticsEnvelope,
   type MeetingIntelligenceExtractionResult,
   type SemanticRerankExtractionResult,
   type RiskScoringExtractionResult,
   type DraftToneExtractionResult,
+  type OperationalAnalyticsExtractionResult,
 } from "../../apps/api/src/services/intelligence/python-intelligence.js";
 import type { WorkSignalExtractionResult } from "../../apps/api/src/services/intelligence/python-enrichment.service.js";
 
@@ -336,6 +339,75 @@ describe("buildDraftToneEnvelope + validateDraftToneEnvelope (Phase 1285-Y)", ()
 
   it("no authority for unavailable", () => {
     const e = validateDraftToneEnvelope(buildDraftToneEnvelope(tone({}, "PYTHON_UNHEALTHY"), 0, NOW), { originalDraft: ORIG, approvalRequired: false });
+    expect(e.authority).toBe(null);
+  });
+});
+
+describe("buildOperationalAnalyticsEnvelope + validateOperationalAnalyticsEnvelope (Phase 1285-Z)", () => {
+  function ops(over: Record<string, unknown> = {}, status: OperationalAnalyticsExtractionResult["status"] = "PYTHON_ENRICHED"): OperationalAnalyticsExtractionResult {
+    if (status !== "PYTHON_ENRICHED") return { status, analytics: null };
+    return {
+      status,
+      analytics: {
+        health_score: 62,
+        execution_status: "WATCH",
+        summary: "12 active items: 3 blocked, 2 overdue. Execution status WATCH.",
+        top_risks: ["Compliance blocker (CRITICAL)"],
+        recurring_blockers: ["Compliance blocker"],
+        overloaded_people: ["Vishesh Patel"],
+        suggested_focus: ["Compliance blocker"],
+        recommended_next_actions: ["Clear the blockers first."],
+        confidence: "HIGH",
+        human_review_needed: true,
+        ...over,
+      },
+    };
+  }
+  const KNOWN = new Set(["Vishesh Patel", "Annie Wu"]);
+
+  it("builds an OPERATIONAL_ANALYTICS envelope with the analytics candidate", () => {
+    const e = buildOperationalAnalyticsEnvelope(ops(), 13, NOW);
+    expect(e.capability).toBe("OPERATIONAL_ANALYTICS");
+    expect(e.status).toBe("PYTHON_ENRICHED");
+    expect(e.candidates.length).toBe(1);
+    expect(e.reasoning_summary).toBe(null);
+    expect(e.provenance).toBe("python:operational-analytics");
+  });
+
+  it("200 with no analytics is NO_SIGNAL; unavailability/error map explicitly", () => {
+    expect(buildOperationalAnalyticsEnvelope({ status: "PYTHON_ENRICHED", analytics: null }, 0, NOW).status).toBe("NO_SIGNAL");
+    expect(buildOperationalAnalyticsEnvelope(ops({}, "PYTHON_NOT_CONFIGURED"), 0, NOW).status).toBe("NOT_CONFIGURED");
+    expect(buildOperationalAnalyticsEnvelope(ops({}, "PYTHON_TIMEOUT"), 0, NOW).status).toBe("TIMEOUT");
+    expect(buildOperationalAnalyticsEnvelope(ops({}, "PYTHON_JOB_FAILED"), 0, NOW).status).toBe("ERROR");
+  });
+
+  it("FOUNDATION_VALIDATED for a clean snapshot-scoped narrative", () => {
+    const e = validateOperationalAnalyticsEnvelope(buildOperationalAnalyticsEnvelope(ops(), 10, NOW), { knownPeople: KNOWN });
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect((e.candidates[0] as { overloaded_people: string[] }).overloaded_people).toEqual(["Vishesh Patel"]);
+  });
+
+  it("drops an overloaded person not in the snapshot and warns", () => {
+    const e = validateOperationalAnalyticsEnvelope(buildOperationalAnalyticsEnvelope(ops({ overloaded_people: ["Vishesh Patel", "Ghost Person"] }), 10, NOW), { knownPeople: KNOWN });
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect((e.candidates[0] as { overloaded_people: string[] }).overloaded_people).toEqual(["Vishesh Patel"]);
+    expect(e.warnings.join(" ")).toMatch(/not in the snapshot were dropped/);
+  });
+
+  it("sanitizes em dashes out of the narrative prose", () => {
+    const e = validateOperationalAnalyticsEnvelope(buildOperationalAnalyticsEnvelope(ops({ summary: "All clear — nothing blocked." }), 10, NOW), { knownPeople: KNOWN });
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect(/[—–]/.test((e.candidates[0] as { summary: string }).summary)).toBe(false);
+  });
+
+  it("DOWNGRADES when the narrative leaks an id outside the snapshot (UUID token)", () => {
+    const e = validateOperationalAnalyticsEnvelope(buildOperationalAnalyticsEnvelope(ops({ top_risks: ["see 11111111-2222-3333-4444-555555555555"] }), 10, NOW), { knownPeople: KNOWN });
+    expect(e.status).toBe("FOUNDATION_DOWNGRADED");
+    expect(e.authority).toBe(null);
+  });
+
+  it("no authority for unavailable", () => {
+    const e = validateOperationalAnalyticsEnvelope(buildOperationalAnalyticsEnvelope(ops({}, "PYTHON_UNHEALTHY"), 0, NOW), { knownPeople: KNOWN });
     expect(e.authority).toBe(null);
   });
 });

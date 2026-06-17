@@ -140,13 +140,33 @@ export interface DraftToneCandidate {
   preserves_intent: boolean;
 }
 
+// ── Operational analytics (Phase 1285-Z) ────────────────────────────────────
+// An advisory execution-health assessment over a Foundation-scoped snapshot.
+// Foundation re-validates it: overloaded_people must be names from the snapshot;
+// no id is referenced outside the snapshot; em dashes are sanitized from the
+// recipient-facing prose. health_score/execution_status are advisory here — the
+// surfaced numbers stay Foundation-deterministic.
+export interface OperationalAnalyticsCandidate {
+  health_score: number;
+  execution_status: string; // HEALTHY | WATCH | AT_RISK | CRITICAL
+  summary: string;
+  top_risks: string[];
+  recurring_blockers: string[];
+  overloaded_people: string[];
+  suggested_focus: string[];
+  recommended_next_actions: string[];
+  confidence: string;
+  human_review_needed: boolean;
+}
+
 // The advisory items an envelope can carry, across capabilities.
 export type PythonCandidate =
   | PythonSignalCandidate
   | MeetingIntelligenceCandidate
   | SemanticRankCandidate
   | RiskScoreCandidate
-  | DraftToneCandidate;
+  | DraftToneCandidate
+  | OperationalAnalyticsCandidate;
 
 // The closed-vocab result the semantic-rerank client returns to Foundation.
 export interface SemanticRerankExtractionResult {
@@ -164,6 +184,12 @@ export interface RiskScoringExtractionResult {
 export interface DraftToneExtractionResult {
   status: EnrichmentStatus;
   assessment: DraftToneCandidate | null;
+}
+
+// The closed-vocab result the operational-analytics client returns to Foundation.
+export interface OperationalAnalyticsExtractionResult {
+  status: EnrichmentStatus;
+  analytics: OperationalAnalyticsCandidate | null;
 }
 
 // The closed-vocab result the meeting/perception client returns to Foundation.
@@ -673,4 +699,116 @@ export function validateDraftToneEnvelope(
     };
   }
   return { ...envelope, candidates: [candidate], authority: "FOUNDATION_VALIDATED" };
+}
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+function sanitizeProse(s: string): string {
+  return s.replace(/\s*[—–]\s*/g, ", ");
+}
+
+// WHAT: wrap an OPERATIONAL_ANALYTICS runtime result into the envelope.
+// WHY: Phase 1285-Z — the analytics summary + lists are advisory. A 200 with no
+//      analytics is NO_SIGNAL; unavailability/failure map to cause.
+export function buildOperationalAnalyticsEnvelope(
+  result: OperationalAnalyticsExtractionResult,
+  latencyMs: number,
+  nowIso: string,
+): PythonIntelligenceEnvelope {
+  let status: PythonEnrichmentStatus;
+  switch (result.status) {
+    case "PYTHON_ENRICHED":
+      status = result.analytics !== null ? "PYTHON_ENRICHED" : "NO_SIGNAL";
+      break;
+    case "PYTHON_NOT_CONFIGURED":
+      status = "NOT_CONFIGURED";
+      break;
+    case "PYTHON_UNHEALTHY":
+      status = "UNHEALTHY";
+      break;
+    case "PYTHON_TIMEOUT":
+      status = "TIMEOUT";
+      break;
+    default:
+      status = "ERROR"; // PYTHON_JOB_FAILED / PYTHON_INVALID_RESPONSE
+  }
+  const enriched = status === "PYTHON_ENRICHED";
+  return {
+    status,
+    source: "PYTHON_ADVISORY",
+    authority: null,
+    capability: "OPERATIONAL_ANALYTICS",
+    model: null,
+    version: null,
+    latency_ms: latencyMs,
+    confidence: enriched ? (result.analytics?.confidence ?? null) : null,
+    candidates: result.analytics !== null ? [result.analytics] : [],
+    summary: enriched ? (result.analytics?.summary ?? null) : null,
+    reasoning_summary: null,
+    provenance: "python:operational-analytics",
+    warnings: [],
+    error_code: enriched ? null : status,
+    updated_at: nowIso,
+  };
+}
+
+// WHAT: Foundation's validation of an operational-analytics envelope.
+// INPUT: a pre-validation envelope + the snapshot's known display names.
+// OUTPUT: the envelope with overloaded_people re-scoped + prose sanitized.
+// WHY: Foundation is the authority. Python may NOT introduce a person who is not
+//      in the snapshot (overloaded_people is filtered to known names), reference
+//      an id outside the snapshot (a UUID-looking token in the prose is drift →
+//      DOWNGRADED), or emit recipient-facing em dashes (sanitized). An empty
+//      summary is DOWNGRADED. Note: health_score / execution_status here are
+//      advisory — the SERVICE surfaces the Foundation-deterministic numbers.
+export function validateOperationalAnalyticsEnvelope(
+  envelope: PythonIntelligenceEnvelope,
+  ctx: { knownPeople: ReadonlySet<string> },
+): PythonIntelligenceEnvelope {
+  if (envelope.status !== "PYTHON_ENRICHED" || envelope.candidates.length === 0) {
+    return { ...envelope, authority: null };
+  }
+  const raw = envelope.candidates[0] as OperationalAnalyticsCandidate;
+  const warnings = [...envelope.warnings];
+
+  const keptPeople = raw.overloaded_people.filter((p) => ctx.knownPeople.has(p));
+  if (keptPeople.length !== raw.overloaded_people.length) {
+    warnings.push("overloaded_people entries not in the snapshot were dropped");
+  }
+
+  const candidate: OperationalAnalyticsCandidate = {
+    ...raw,
+    summary: sanitizeProse(raw.summary),
+    top_risks: raw.top_risks.map(sanitizeProse),
+    recurring_blockers: raw.recurring_blockers.map(sanitizeProse),
+    overloaded_people: keptPeople.map(sanitizeProse),
+    suggested_focus: raw.suggested_focus.map(sanitizeProse),
+    recommended_next_actions: raw.recommended_next_actions.map(sanitizeProse),
+  };
+
+  const allProse = [
+    candidate.summary,
+    ...candidate.top_risks,
+    ...candidate.recurring_blockers,
+    ...candidate.suggested_focus,
+    ...candidate.recommended_next_actions,
+  ];
+  if (candidate.summary.trim().length === 0) {
+    return {
+      ...envelope,
+      status: "FOUNDATION_DOWNGRADED",
+      authority: null,
+      candidates: [],
+      warnings: [...warnings, "empty analytics summary"],
+    };
+  }
+  if (allProse.some((s) => UUID_RE.test(s))) {
+    return {
+      ...envelope,
+      status: "FOUNDATION_DOWNGRADED",
+      authority: null,
+      candidates: [],
+      warnings: [...warnings, "analytics referenced an id outside the snapshot"],
+    };
+  }
+  return { ...envelope, candidates: [candidate], authority: "FOUNDATION_VALIDATED", warnings };
 }

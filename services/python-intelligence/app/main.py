@@ -33,6 +33,7 @@ from fastapi import FastAPI
 from .enricher import extract_work_signals
 from .forecaster import forecast_project_risk
 from .meeting import extract_meeting_intelligence
+from .analytics import operational_analytics
 from .draft_tone import evaluate_draft_tone
 from .ranker import rank_next_actions
 from .rerank import rerank_candidates
@@ -41,6 +42,8 @@ from .schemas import (
     DraftToneInput,
     DraftToneResult,
     HealthResponse,
+    OperationalAnalyticsInput,
+    OperationalAnalyticsResult,
     MeetingIntelligenceInput,
     MeetingIntelligenceResult,
     NextActionRankingInput,
@@ -139,3 +142,15 @@ def draft_tone_route(payload: DraftToneInput) -> DraftToneResult:
     # user's intent. The suggested_revision is a safe transform of the original
     # (no em dash). Foundation re-validates the revision + keeps approval gates.
     return evaluate_draft_tone(payload)
+
+
+@app.post("/jobs/operational-analytics", response_model=OperationalAnalyticsResult)
+def operational_analytics_route(
+    payload: OperationalAnalyticsInput,
+) -> OperationalAnalyticsResult:
+    # Phase 1285-Z — advisory operational analytics over a Foundation-scoped
+    # execution-health snapshot. This aggregates, scores, and summarizes ONLY;
+    # it never creates work, notifies anyone, sends a message, introduces a new
+    # item or person, or references an id outside the snapshot. Deterministic
+    # metrics stay primary; Foundation re-validates + re-scopes the result.
+    return operational_analytics(payload)
