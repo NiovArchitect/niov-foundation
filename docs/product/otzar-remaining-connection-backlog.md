@@ -17,7 +17,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 11 | Case-insensitive email login | P0 | GUI_VALIDATED (1285-F, 2026-06-16) |
 | 1 | Team Work waiting-on panel | P0 | GUI_VALIDATED (1285-G + 1285-I nav, 2026-06-16) |
 | 2 | Cross-surface View/Why consistency | P0 | LIVE expanded (1285-J + 1285-L: My Work/Team Work/Thread/Cockpit/Blind Spots/NotificationBell/Action Center/Comms — all on the shared ViewWhyPanel) |
-| 3 | Action Center stale-artifact cleanup | P1 | NOT_STARTED |
+| 3 | Action Center stale-artifact cleanup | P1 | LIVE (1285-S: actionable-only "Needs decision" count + honest class labels — Low-risk internal note / Already handled / Historical / No action needed; non-destructive classification, no dismiss route exists; pending GUI validation) |
 | 4 | Comms final cleanup | P1 | IN_PROGRESS (1285-L2: default cockpit repaired + blockers surfaced + follow-up View/Why; recent-artifacts endpoint = documented backend gap) |
 | 8 | Richer thread/work queries | P1 | LIVE (1285-M: completed / blockers / decisions / inverse-waiting-on / overdue / changed / summary + latest-say — all durable; pending GUI validation) |
 | 5 | Blind Spots watcher feed | P2 | LIVE + GUI_VALIDATED (1285-N) → richer governed watcher feed (1285-P: GET /work-os/watchers/feed, WatcherFinding contract, 6 groups, pending GUI validation) |
@@ -96,16 +96,30 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 - RBAC/ABAC: never expose another tenant's or unpermitted teammate's data.
 - Tests: no raw id without human-readable meaning + source proof.
 
-## 3. Action Center stale-artifact cleanup — NOT_STARTED (P1)
+## 3. Action Center stale-artifact cleanup — LIVE (1285-S; pending GUI validation)
 
-- Goal: no raw `DUAL_CONTROL:ACTION_CREATE_SEND_INTERNAL_NOTIFICATION` copy.
-- Fix: human-readable titles (requester/target/action/risk/reason/source);
-  hide/label stale test artifacts; clickable detail; approve/reject executes or
-  explains; low-risk human notes never route here.
-- System of record: ProposedAction / dual-control records.
-- UI: ActionCenter + ProposedActionCard.
-- RBAC/ABAC: approver authority enforced.
-- Tests: card renders human-readable; approve executes; human notes absent.
+- Human-readable titles + recipient labels + clickable View/Why landed in
+  1285-O (BLOCKER 2). Phase 1285-S adds the trust layer:
+  - NEW `src/lib/work-os/action-classify.ts` `classifyAction`:
+    ACTIONABLE_PENDING (PROPOSED + live escalation) / NEEDS_REVIEW (PROPOSED,
+    no escalation) / NEEDS_ATTENTION (FAILED/TIMED_OUT) /
+    LOW_RISK_INTERNAL_NOTE / HISTORICAL_EXECUTED / NON_ACTIONABLE.
+  - The "Needs decision" badge counts ONLY actionable items; actionable sort
+    first; non-actionable proposals stay visible but labeled "No action needed
+    right now"; historical / low-risk items show an honest class badge.
+  - Refreshes on WorkStateChanged + approve/reject reload.
+- Non-destructive: there is NO action dismiss/archive route, so the fix is
+  classification + labeling, never deletion, never fake-clear. Real pending
+  governed approvals stay prominent and actionable.
+- System of record: Action rows (SafeActionView). UI: ActionCenter. RBAC/ABAC:
+  approver authority enforced server-side (self-scoped list).
+- Tests: classifier 7/7; ActionCenter pending count excludes non-actionable;
+  historical low-risk note labeled + not counted; WorkStateChanged refresh;
+  approve/reject + View/Why intact. CT PR #117.
+- Note: per Phase 1284 doctrine low-risk human notes should deliver directly
+  (not as governed Actions); pre-existing historical note Actions are now
+  labeled rather than cluttering the actionable view. Stopping their creation
+  at the source is a separate Foundation routing concern, not 1285-S.
 
 ## 4. Comms final cleanup — IN_PROGRESS (1285-L2)
 
