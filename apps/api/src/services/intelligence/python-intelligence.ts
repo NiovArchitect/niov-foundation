@@ -95,8 +95,28 @@ export interface MeetingIntelligenceCandidate {
   evidence_phrase: string;
 }
 
+// ── Semantic retrieval (Phase 1285-W) ───────────────────────────────────────
+// An advisory rank for ONE candidate Foundation already allowed. Python returns
+// only candidate_ids it was sent; Foundation re-validates every id against the
+// allowed set before any result is surfaced. score is advisory; reason is a
+// short closed phrase (never raw chain-of-thought).
+export interface SemanticRankCandidate {
+  candidate_id: string;
+  score: number;
+  reason: string;
+}
+
 // The advisory items an envelope can carry, across capabilities.
-export type PythonCandidate = PythonSignalCandidate | MeetingIntelligenceCandidate;
+export type PythonCandidate =
+  | PythonSignalCandidate
+  | MeetingIntelligenceCandidate
+  | SemanticRankCandidate;
+
+// The closed-vocab result the semantic-rerank client returns to Foundation.
+export interface SemanticRerankExtractionResult {
+  status: EnrichmentStatus;
+  ranked: SemanticRankCandidate[];
+}
 
 // The closed-vocab result the meeting/perception client returns to Foundation.
 export interface MeetingIntelligenceExtractionResult {
@@ -309,7 +329,7 @@ export function validateMeetingEnvelope(
     return { ...envelope, authority: null };
   }
   const hasConfident = envelope.candidates.some(
-    (c) => c.confidence === "HIGH" || c.confidence === "MEDIUM",
+    (c) => "confidence" in c && (c.confidence === "HIGH" || c.confidence === "MEDIUM"),
   );
   if (!hasConfident) {
     // Only low-confidence candidates: keep as advisory but mark it needs review.
@@ -321,4 +341,93 @@ export function validateMeetingEnvelope(
     };
   }
   return { ...envelope, authority: "FOUNDATION_VALIDATED" };
+}
+
+// WHAT: wrap a SEMANTIC_RETRIEVAL rerank runtime result into the envelope.
+// WHY: Phase 1285-W — the rerank is advisory ordering metadata over candidates
+//      Foundation already scoped. A 200 with no ranked candidates is NO_SIGNAL
+//      (Python found no relevance — Foundation's deterministic order stands);
+//      unavailability/failure map to their explicit cause.
+export function buildSemanticRetrievalEnvelope(
+  result: SemanticRerankExtractionResult,
+  latencyMs: number,
+  nowIso: string,
+): PythonIntelligenceEnvelope {
+  let status: PythonEnrichmentStatus;
+  switch (result.status) {
+    case "PYTHON_ENRICHED":
+      status = result.ranked.length > 0 ? "PYTHON_ENRICHED" : "NO_SIGNAL";
+      break;
+    case "PYTHON_NOT_CONFIGURED":
+      status = "NOT_CONFIGURED";
+      break;
+    case "PYTHON_UNHEALTHY":
+      status = "UNHEALTHY";
+      break;
+    case "PYTHON_TIMEOUT":
+      status = "TIMEOUT";
+      break;
+    default:
+      status = "ERROR"; // PYTHON_JOB_FAILED / PYTHON_INVALID_RESPONSE
+  }
+  const enriched = status === "PYTHON_ENRICHED";
+  return {
+    status,
+    source: "PYTHON_ADVISORY",
+    authority: null,
+    capability: "SEMANTIC_RETRIEVAL",
+    model: null,
+    version: null,
+    latency_ms: latencyMs,
+    confidence: null,
+    candidates: result.ranked,
+    summary: enriched ? `Reranked ${result.ranked.length} candidate(s).` : null,
+    reasoning_summary: null,
+    provenance: "python:semantic-rerank",
+    warnings: [],
+    error_code: enriched ? null : status,
+    updated_at: nowIso,
+  };
+}
+
+// WHAT: Foundation's validation of a semantic-rerank envelope.
+// INPUT: a pre-validation envelope + the set of candidate_ids Foundation allowed.
+// OUTPUT: the envelope with unknown ids dropped + authority set.
+// WHY: Foundation is the authority. Python may ONLY rank candidates Foundation
+//      already scoped — any returned id NOT in the allowed set is a cross-tenant
+//      / unknown / drift result and is rejected here before it can surface. A
+//      rerank that, after rejection, has at least one allowed id is
+//      FOUNDATION_VALIDATED; a rerank where EVERY id was unknown is
+//      FOUNDATION_DOWNGRADED (drift — the deterministic order stands); anything
+//      not enriched carries no authority.
+export function validateSemanticRetrievalEnvelope(
+  envelope: PythonIntelligenceEnvelope,
+  allowedIds: ReadonlySet<string>,
+): PythonIntelligenceEnvelope {
+  if (envelope.status !== "PYTHON_ENRICHED") {
+    return { ...envelope, authority: null };
+  }
+  const ranked = envelope.candidates.filter(
+    (c): c is SemanticRankCandidate =>
+      "candidate_id" in c && allowedIds.has((c as SemanticRankCandidate).candidate_id),
+  );
+  const droppedUnknown = envelope.candidates.length - ranked.length;
+  const warnings = [...envelope.warnings];
+  if (droppedUnknown > 0) {
+    warnings.push(
+      `${droppedUnknown} reranked candidate(s) rejected: not in the Foundation-allowed set`,
+    );
+  }
+  if (ranked.length === 0) {
+    // Python returned only ids Foundation never allowed — drift. Keep advisory
+    // but mark needs-review; the deterministic ordering is what surfaces.
+    return {
+      ...envelope,
+      status: "FOUNDATION_DOWNGRADED",
+      authority: null,
+      candidates: [],
+      warnings,
+    };
+  }
+  return { ...envelope, candidates: ranked, authority: "FOUNDATION_VALIDATED", warnings };
 }

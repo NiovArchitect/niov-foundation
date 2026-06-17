@@ -284,6 +284,60 @@ class MeetingIntelligenceResult(BaseModel):
     provider_mode: Literal["PYTHON"] = "PYTHON"
 
 
+# --- Semantic retrieval rerank (Phase 1285-W) -------------------------------
+# ADVISORY only. Foundation assembles a scoped, RBAC/ABAC-checked candidate set
+# and sends ONLY safe summaries here (titles, short summaries, resolved display
+# names — never raw private content, never raw entity UUIDs as the meaning).
+# This service reranks the candidates Foundation already allowed by deterministic
+# lexical relevance. It NEVER returns a candidate_id that was not in the input,
+# never requests more data, never invents content, and produces no embeddings.
+# No LLM, no chain-of-thought. Foundation re-validates every returned id and
+# treats scores as advisory.
+
+
+class SemanticRerankCandidate(BaseModel):
+    """One Foundation-allowed candidate's safe summary. ``related_people`` are
+    resolved display names (never raw UUIDs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_id: str = Field(min_length=1, max_length=200)
+    candidate_type: str = Field(min_length=1, max_length=60)
+    title: str = Field(min_length=1, max_length=400)
+    summary: Optional[str] = Field(default=None, max_length=2000)
+    source_type: Optional[str] = Field(default=None, max_length=60)
+    created_at: Optional[str] = Field(default=None, max_length=40)
+    updated_at: Optional[str] = Field(default=None, max_length=40)
+    related_people: list[str] = Field(default_factory=list, max_length=40)
+    status: Optional[str] = Field(default=None, max_length=60)
+
+
+class SemanticRerankInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=2000)
+    candidates: list[SemanticRerankCandidate] = Field(default_factory=list, max_length=500)
+    max_results: Optional[int] = Field(default=None, ge=1, le=200)
+
+
+class RankedCandidate(BaseModel):
+    """An advisory rank for a candidate Foundation already allowed. ``score`` is
+    a relative relevance integer; ``reason`` is a short closed phrase (no CoT)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_id: str = Field(min_length=1, max_length=200)
+    score: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=160)
+
+
+class SemanticRerankResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ranked_candidates: list[RankedCandidate]
+    provider_mode: Literal["PYTHON"] = "PYTHON"
+
+
 # --- Health -----------------------------------------------------------------
 
 

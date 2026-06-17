@@ -34,6 +34,7 @@ from .enricher import extract_work_signals
 from .forecaster import forecast_project_risk
 from .meeting import extract_meeting_intelligence
 from .ranker import rank_next_actions
+from .rerank import rerank_candidates
 from .schemas import (
     HealthResponse,
     MeetingIntelligenceInput,
@@ -42,6 +43,8 @@ from .schemas import (
     NextActionRankingResult,
     ProjectRiskForecastRequest,
     ProjectRiskForecastResponse,
+    SemanticRerankInput,
+    SemanticRerankResult,
     WorkSignalExtractionInput,
     WorkSignalExtractionResult,
 )
@@ -98,3 +101,14 @@ def meeting_intelligence_route(
     # ownership/scope authority; this never decides ownership/policy/target,
     # never executes, never sends, and never retains the transcript.
     return extract_meeting_intelligence(payload)
+
+
+@app.post("/jobs/semantic-rerank", response_model=SemanticRerankResult)
+def semantic_rerank_route(payload: SemanticRerankInput) -> SemanticRerankResult:
+    # Phase 1285-W — advisory semantic rerank over a Foundation-scoped candidate
+    # set. Foundation already enforced RBAC/ABAC + tenant scope when it assembled
+    # the candidates; this only reorders them by deterministic lexical relevance.
+    # It returns ONLY candidate_ids present in the input, never grants permission,
+    # never decides scope, and never becomes the source of truth. Foundation
+    # re-validates every returned id.
+    return rerank_candidates(payload)

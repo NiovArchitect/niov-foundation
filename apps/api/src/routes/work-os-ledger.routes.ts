@@ -29,6 +29,7 @@ import {
 } from "../services/work-os/work-ledger.service.js";
 import { getWatcherFeed } from "../services/work-os/watcher.service.js";
 import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
+import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.service.js";
 import { capturePerception } from "../services/perception/ambient-perception.service.js";
 import type { AmbientSourceType } from "../services/intelligence/python-intelligence.js";
 import {
@@ -564,6 +565,42 @@ export async function registerWorkOsLedgerRoutes(
         return reply.code(422).send({ ok: false, code: result.code, message: result.message });
       }
       return reply.code(200).send({ ok: true, entry: result.entry });
+    },
+  );
+
+  // ── Semantic retrieval query (Phase 1285-W) — meaning-based retrieval over
+  //    durable Work Ledger records (work / decisions / blockers / follow-ups /
+  //    commitments / meeting captures / notifications / internal-note rows).
+  //    Foundation assembles a SCOPED candidate set (self/owned/requested/
+  //    targeted, tenant-isolated), computes a deterministic lexical ranking,
+  //    and OPTIONALLY asks the advisory Python reranker to reorder ONLY those
+  //    candidates. Foundation re-validates every reranked id against the
+  //    allowed set; no result blocks on Python. read-scoped. ──
+  app.post<{ Body: { query?: unknown; source_filter?: unknown; limit?: unknown } }>(
+    "/api/v1/work-os/semantic-retrieval/query",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      const query = typeof b.query === "string" ? b.query : "";
+      if (query.trim().length === 0) {
+        return reply
+          .code(422)
+          .send({ ok: false, code: "INVALID_REQUEST", message: "query is required" });
+      }
+      const source_filter = Array.isArray(b.source_filter)
+        ? b.source_filter.filter((s): s is string => typeof s === "string" && s.length > 0)
+        : undefined;
+      const limit =
+        typeof b.limit === "number" && Number.isFinite(b.limit) ? b.limit : undefined;
+      const { results, envelope } = await querySemanticRetrieval({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        query,
+        ...(source_filter !== undefined && source_filter.length > 0 ? { source_filter } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      });
+      return reply.code(200).send({ ok: true, results, envelope });
     },
   );
 }
