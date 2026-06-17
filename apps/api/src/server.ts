@@ -640,7 +640,14 @@ export async function buildApp(
       cb(null, isAllowedCorsOrigin(origin ?? undefined, corsAllowedOrigins));
     },
     credentials: true,
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    // PUT is required for the notification read/dismiss routes
+    // (PUT /api/v1/notifications/:id/read + /dismiss). Without it the
+    // browser/Tauri webview CORS preflight omits PUT from
+    // Access-Control-Allow-Methods and silently blocks the request, which the
+    // client surfaces as a NETWORK_ERROR ("Couldn't update just now") — see
+    // Phase 1285-Q. Keep this list a superset of every HTTP verb the API
+    // actually serves cross-origin.
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
   });
 

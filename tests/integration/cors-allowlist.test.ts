@@ -179,6 +179,29 @@ describe("CONSOLE.1 CORS allowlist — preflight (OPTIONS)", () => {
     expect(acao).not.toBe(DISALLOWED_ORIGIN);
     expect(acao).not.toBe("*");
   });
+
+  it("D. allowed methods include every verb the API serves cross-origin (PUT — Phase 1285-Q)", async () => {
+    // PUT was missing, so the browser/Tauri webview blocked the notification
+    // read/dismiss PUT preflight → NETWORK_ERROR ("Couldn't update just now").
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/api/v1/notifications/00000000-0000-0000-0000-000000000000/read",
+      headers: {
+        origin: ALLOWED_DEV_ORIGIN,
+        "access-control-request-method": "PUT",
+        "access-control-request-headers": "authorization,content-type",
+      },
+      remoteAddress: "10.232.0.4",
+    });
+    expect(res.statusCode).toBeLessThan(400);
+    expect(res.headers["access-control-allow-origin"]).toBe(ALLOWED_DEV_ORIGIN);
+    const allowMethods = String(
+      res.headers["access-control-allow-methods"] ?? "",
+    ).toUpperCase();
+    for (const verb of ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      expect(allowMethods).toContain(verb);
+    }
+  });
 });
 
 describe("CONSOLE.1 CORS allowlist — CORS is not authorization", () => {
