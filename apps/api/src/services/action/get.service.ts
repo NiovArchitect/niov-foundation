@@ -35,6 +35,7 @@ import type { Action } from "@prisma/client";
 import { projectActionView, type SafeActionView, type SafeActionLabels } from "./views.js";
 import { getOrgEntityId } from "../governance/org.js";
 import { resolveEntityNames } from "../identity/resolve-entities.js";
+import { recipientIdFromPayload } from "./list.service.js";
 
 // WHAT: RFC 4122 UUID regex (mirrors create + cancel validators).
 // INPUT: None.
@@ -195,17 +196,16 @@ export async function getActionForCaller(
 
   // Resolve target + source to SAFE display labels (ADR-0057 §10 Amendment 1);
   // unresolved → null so the UI shows "recipient unavailable", never a UUID.
-  const names = await resolveEntityNames([
-    action.target_entity_id,
-    action.source_entity_id,
-  ]);
+  // Target falls back to the payload recipient for notification rows.
+  const targetId = action.target_entity_id ?? recipientIdFromPayload(action.payload_redacted);
+  const names = await resolveEntityNames([targetId, action.source_entity_id]);
   const labelOf = (id: string | null): string | null => {
     if (id === null) return null;
     const r = names.get(id);
     return r === undefined || r.unresolved ? null : r.display_name;
   };
   const labels: SafeActionLabels = {
-    target_label: labelOf(action.target_entity_id),
+    target_label: labelOf(targetId),
     requester_label: labelOf(action.source_entity_id),
   };
 

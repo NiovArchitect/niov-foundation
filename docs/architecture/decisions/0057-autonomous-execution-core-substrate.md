@@ -30,6 +30,14 @@ two OPTIONAL fields, resolved by the read services
 - `target_label?: string | null` — the recipient's resolved DISPLAY NAME.
 - `requester_label?: string | null` — the source/requester's resolved DISPLAY NAME.
 
+For `target_label`, the structural `target_entity_id` (governance / dual-control
+target) is used when present; for `SEND_INTERNAL_NOTIFICATION` rows that carry
+the recipient only in `payload_redacted.recipient_entity_id`, the service reads
+that id **server-side ONLY** to resolve a display label. `target_entity_id`
+keeps its dual-control routing meaning (it is NOT repurposed as the recipient),
+and the payload + the recipient UUID never leave the service tier — only the
+resolved label does.
+
 **Narrow scope — what this does NOT change:**
 
 - These are display-name labels ONLY. The routing UUIDs `target_entity_id` and

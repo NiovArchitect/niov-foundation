@@ -542,6 +542,52 @@ describe("GET /api/v1/actions — SAFE recipient/requester labels (ADR-0057 §10
     expect(r.rawBody.includes("source_entity_id")).toBe(false);
   });
 
+  it("falls back to the payload recipient for target_label when target_entity_id is unset (notifications)", async () => {
+    const orgId = await makeTestOrg();
+    const caller = await makeOrgMember({
+      orgId,
+      autonomy_level: "EXECUTIVE_OVERRIDE",
+    });
+    const recipient = await makeOrgMember({ orgId });
+    await seedAutoApprovePolicy(orgId, caller.entityId);
+    const recipientEntity = await prisma.entity.findUniqueOrThrow({
+      where: { entity_id: recipient.entityId },
+      select: { display_name: true },
+    });
+
+    // NO top-level target_entity_id — recipient lives only in payload_redacted.
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/actions",
+      headers: { authorization: `Bearer ${caller.token}` },
+      payload: {
+        action_type: "SEND_INTERNAL_NOTIFICATION",
+        idempotency_key: `ik-${randomUUID()}`,
+        payload_summary: "fallback-summary-secret",
+        payload_redacted: {
+          recipient_entity_id: recipient.entityId,
+          notification_class: "fallback-test",
+          body_summary: "fallback-body-secret",
+        },
+      },
+      remoteAddress: caller.ip,
+    });
+    expect(created.statusCode).toBe(200);
+    const actionId = (created.json() as { action: { action_id: string } }).action.action_id;
+
+    const r = await list(caller);
+    const b = r.body as {
+      items: Array<{ action_id: string; target_label?: string | null }>;
+    };
+    const item = b.items.find((i) => i.action_id === actionId);
+    expect(item?.target_label).toBe(recipientEntity.display_name);
+    // The recipient UUID + payload body still NEVER appear in the response.
+    expect(r.rawBody.includes(recipient.entityId)).toBe(false);
+    expect(r.rawBody.includes("fallback-summary-secret")).toBe(false);
+    expect(r.rawBody.includes("fallback-body-secret")).toBe(false);
+    expect(r.rawBody.includes("recipient_entity_id")).toBe(false);
+  });
+
   it("cross-tenant reader cannot see another org's action or its labels", async () => {
     const orgA = await makeTestOrg();
     const orgB = await makeTestOrg();
