@@ -128,4 +128,36 @@ describe("getRecentCommsArtifacts (Phase 1285-T)", () => {
     const arts = await getRecentCommsArtifacts({ org_entity_id: ORG, caller_entity_id: CALLER });
     expect(arts).toEqual([]);
   });
+
+  it("projects meeting_intelligence ONLY when the row carries it (Phase 1286-C)", async () => {
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([
+      row({
+        ledger_entry_id: "mtg",
+        ledger_type: "TASK",
+        title: "Launch sync",
+        details: {
+          source_message_id: "msg-9",
+          meeting_intelligence: {
+            status: "PYTHON_ENRICHED",
+            authority: "FOUNDATION_VALIDATED",
+            capability: "MEETING_INTELLIGENCE",
+            summary: "Launch follow-up meeting.",
+            candidates: [
+              { candidate_type: "DECISION", text: "Go with the new copy.", confidence: "HIGH" },
+              { candidate_type: "BLOCKER", text: "Waiting on compliance.", confidence: "MEDIUM" },
+            ],
+          },
+        },
+      }),
+      row({ ledger_entry_id: "plain", ledger_type: "FOLLOW_UP" }), // no meeting_intelligence
+    ]);
+    const arts = await getRecentCommsArtifacts({ org_entity_id: ORG, caller_entity_id: CALLER });
+    const mtg = arts.find((a) => a.artifact_id === "mtg")!;
+    const plain = arts.find((a) => a.artifact_id === "plain")!;
+    expect(mtg.meeting_intelligence).toBeDefined();
+    expect(mtg.meeting_intelligence!.summary).toBe("Launch follow-up meeting.");
+    expect(mtg.meeting_intelligence!.candidates.map((c) => c.candidate_type)).toEqual(["DECISION", "BLOCKER"]);
+    // Absent on rows that do not carry it — never faked.
+    expect(plain.meeting_intelligence).toBeUndefined();
+  });
 });
