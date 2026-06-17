@@ -28,6 +28,7 @@ import {
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
 import { getWatcherFeed } from "../services/work-os/watcher.service.js";
+import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
 import {
   dispatchWorkOsEvent,
   eventTypeForLedger,
@@ -523,5 +524,21 @@ export async function registerWorkOsLedgerRoutes(
       is_manager: ctx.manager,
     });
     return reply.code(200).send({ ok: true, findings });
+  });
+
+  // ── Comms recent-artifacts feed (Phase 1285-T) — durable projection over the
+  //    Work Ledger of conversation-derived artifacts (follow-ups / decisions /
+  //    blockers / captured work / internal-note notifications), self-scoped +
+  //    tenant-isolated. Powers the Comms cockpit "Recent conversation
+  //    intelligence" list. next_cursor is null (single recent page; no fake
+  //    pagination). ──
+  app.get("/api/v1/work-os/comms/recent-artifacts", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const artifacts = await getRecentCommsArtifacts({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+    });
+    return reply.code(200).send({ ok: true, artifacts, next_cursor: null });
   });
 }
