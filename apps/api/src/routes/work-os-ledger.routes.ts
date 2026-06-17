@@ -29,6 +29,8 @@ import {
 } from "../services/work-os/work-ledger.service.js";
 import { getWatcherFeed } from "../services/work-os/watcher.service.js";
 import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
+import { capturePerception } from "../services/perception/ambient-perception.service.js";
+import type { AmbientSourceType } from "../services/intelligence/python-intelligence.js";
 import {
   dispatchWorkOsEvent,
   eventTypeForLedger,
@@ -541,4 +543,27 @@ export async function registerWorkOsLedgerRoutes(
     });
     return reply.code(200).send({ ok: true, artifacts, next_cursor: null });
   });
+
+  // ── Ambient perception capture (Phase 1285-V) — capture a meeting transcript
+  //    / conversation note / imported notes into a durable, governed record
+  //    (deterministic Work Ledger MEETING entry) and kick off async advisory
+  //    meeting intelligence. Deterministic capture NEVER blocks on Python. ──
+  app.post<{ Body: { source_type?: string; text?: string } }>(
+    "/api/v1/work-os/perception/capture",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      const result = await capturePerception({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        source_type: (typeof b.source_type === "string" ? b.source_type : "") as AmbientSourceType,
+        text: typeof b.text === "string" ? b.text : "",
+      });
+      if (result.ok === false) {
+        return reply.code(422).send({ ok: false, code: result.code, message: result.message });
+      }
+      return reply.code(200).send({ ok: true, entry: result.entry });
+    },
+  );
 }

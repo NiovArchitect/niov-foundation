@@ -32,9 +32,12 @@ from fastapi import FastAPI
 
 from .enricher import extract_work_signals
 from .forecaster import forecast_project_risk
+from .meeting import extract_meeting_intelligence
 from .ranker import rank_next_actions
 from .schemas import (
     HealthResponse,
+    MeetingIntelligenceInput,
+    MeetingIntelligenceResult,
     NextActionRankingInput,
     NextActionRankingResult,
     ProjectRiskForecastRequest,
@@ -84,3 +87,14 @@ def extract_work_signals_route(
     # Advisory enrichment only. Foundation's deterministic extraction stays
     # primary; this never decides ownership/policy/target and never executes.
     return extract_work_signals(payload)
+
+
+@app.post("/jobs/meeting-intelligence", response_model=MeetingIntelligenceResult)
+def meeting_intelligence_route(
+    payload: MeetingIntelligenceInput,
+) -> MeetingIntelligenceResult:
+    # Phase 1285-V — advisory meeting / ambient-perception intelligence.
+    # Foundation's deterministic capture stays primary and is the sole policy/
+    # ownership/scope authority; this never decides ownership/policy/target,
+    # never executes, never sends, and never retains the transcript.
+    return extract_meeting_intelligence(payload)

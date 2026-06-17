@@ -11,8 +11,22 @@ import {
   buildWorkSignalEnvelope,
   validateAdvisoryEnvelope,
   envelopeUpgradesExtraction,
+  buildMeetingIntelligenceEnvelope,
+  validateMeetingEnvelope,
+  type MeetingIntelligenceExtractionResult,
 } from "../../apps/api/src/services/intelligence/python-intelligence.js";
 import type { WorkSignalExtractionResult } from "../../apps/api/src/services/intelligence/python-enrichment.service.js";
+
+function meetingResult(over: Partial<MeetingIntelligenceExtractionResult> = {}): MeetingIntelligenceExtractionResult {
+  return {
+    status: "PYTHON_ENRICHED",
+    summary: "Launch follow-up meeting.",
+    candidates: [
+      { candidate_type: "DECISION", text: "We decided to go with the new copy.", confidence: "HIGH", evidence_phrase: "we decided" },
+    ],
+    ...over,
+  };
+}
 
 const NOW = "2026-06-17T12:00:00.000Z";
 
@@ -81,5 +95,40 @@ describe("envelopeUpgradesExtraction — deterministic truth stays primary", () 
     const noSig = validateAdvisoryEnvelope(buildWorkSignalEnvelope(extraction({ signals: [] }), 0, NOW));
     expect(envelopeUpgradesExtraction(noSig, false)).toBe(false);
     expect(envelopeUpgradesExtraction(pendingEnvelope("WORK_SIGNAL_EXTRACTION", NOW), false)).toBe(false);
+  });
+});
+
+describe("buildMeetingIntelligenceEnvelope + validateMeetingEnvelope (Phase 1285-V)", () => {
+  it("builds a MEETING_INTELLIGENCE perception envelope with candidates + summary", () => {
+    const e = buildMeetingIntelligenceEnvelope(meetingResult(), 30, NOW);
+    expect(e.capability).toBe("MEETING_INTELLIGENCE");
+    expect(e.source).toBe("PYTHON_ADVISORY");
+    expect(e.status).toBe("PYTHON_ENRICHED");
+    expect(e.candidates.length).toBe(1);
+    expect(e.summary).toBe("Launch follow-up meeting.");
+    expect(e.reasoning_summary).toBe(null); // never raw chain-of-thought
+  });
+  it("200 with no candidates is NO_SIGNAL; unavailability/error map explicitly", () => {
+    expect(buildMeetingIntelligenceEnvelope(meetingResult({ status: "PYTHON_ENRICHED", candidates: [] }), 0, NOW).status).toBe("NO_SIGNAL");
+    expect(buildMeetingIntelligenceEnvelope(meetingResult({ status: "PYTHON_NOT_CONFIGURED", candidates: [] }), 0, NOW).status).toBe("NOT_CONFIGURED");
+    expect(buildMeetingIntelligenceEnvelope(meetingResult({ status: "PYTHON_TIMEOUT", candidates: [] }), 0, NOW).status).toBe("TIMEOUT");
+    expect(buildMeetingIntelligenceEnvelope(meetingResult({ status: "PYTHON_JOB_FAILED", candidates: [] }), 0, NOW).status).toBe("ERROR");
+  });
+  it("FOUNDATION_VALIDATED when a confident candidate exists", () => {
+    const e = validateMeetingEnvelope(buildMeetingIntelligenceEnvelope(meetingResult(), 10, NOW));
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+  });
+  it("DOWNGRADES to needs-review when ALL candidates are low-confidence", () => {
+    const lowOnly = meetingResult({
+      candidates: [{ candidate_type: "FOLLOW_UP", text: "maybe circle back", confidence: "LOW", evidence_phrase: "circle back" }],
+    });
+    const e = validateMeetingEnvelope(buildMeetingIntelligenceEnvelope(lowOnly, 10, NOW));
+    expect(e.status).toBe("FOUNDATION_DOWNGRADED");
+    expect(e.authority).toBe(null);
+    expect(e.warnings.join(" ")).toMatch(/low-confidence/);
+  });
+  it("no authority for NO_SIGNAL / unavailable", () => {
+    const e = validateMeetingEnvelope(buildMeetingIntelligenceEnvelope(meetingResult({ status: "PYTHON_NOT_CONFIGURED", candidates: [] }), 0, NOW));
+    expect(e.authority).toBe(null);
   });
 });
