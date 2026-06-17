@@ -112,6 +112,133 @@ export async function dispatchWorkOsEvent(
   }
 }
 
+// ── Watcher actor bridge (Phase 1287-B) ─────────────────────────────────────
+// Foundation sends a bounded, SCOPED candidate set (derived from its own
+// deterministic watcher findings) to the long-lived BEAM watcher actor and
+// receives ADVISORY candidate findings. Foundation re-validates every candidate
+// (id ∈ allowed set, watcher_type matches the deterministic finding, closed-vocab
+// severity, safe text) before anything is surfaced. Honest status, never throws.
+
+export type BeamWatcherStatus =
+  | "BEAM_ENRICHED"
+  | "NOT_CONFIGURED"
+  | "UNHEALTHY"
+  | "TIMEOUT"
+  | "ERROR";
+
+// The safe candidate Foundation sends (ids + closed-vocab + signals only).
+export interface BeamWatcherCandidateInput {
+  candidate_id: string;
+  watcher_type: string;
+  severity: string;
+  status?: string;
+  age_hours?: number | null;
+  overdue?: boolean;
+  blocked?: boolean;
+  waiting_on?: boolean;
+  no_next_action?: boolean;
+}
+
+// One advisory candidate BEAM returns.
+export interface BeamWatcherCandidate {
+  candidate_id: string;
+  watcher_type: string;
+  severity: string;
+  reason: string;
+  recommendation: string;
+  confidence: string;
+  source: string; // "BEAM_ADVISORY"
+}
+
+export interface BeamWatcherResult {
+  status: BeamWatcherStatus;
+  candidates: BeamWatcherCandidate[];
+  correlation_id: string;
+  actor_id: string | null;
+  evaluated_at: string | null;
+}
+
+const WATCHER_TYPES = ["OVERDUE_WORK", "UNRESOLVED_BLOCKER", "STALE_WAITING_ON", "NO_NEXT_ACTION"];
+const WATCHER_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+
+function emptyWatcher(status: BeamWatcherStatus, correlation_id: string): BeamWatcherResult {
+  return { status, candidates: [], correlation_id, actor_id: null, evaluated_at: null };
+}
+
+// WHAT: validate a raw BEAM watcher response into a closed-vocab result.
+// WHY: BEAM is advisory; Foundation refuses to trust anything not closed-vocab.
+//      reason/recommendation are length-capped defensively. (Authoritative
+//      id/scope validation happens in the watcher service against the allowed
+//      set — this is shape validation only.)
+function validateWatcherResponse(raw: unknown, correlation_id: string): BeamWatcherResult | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (!Array.isArray(o.candidates)) return null;
+  const candidates: BeamWatcherCandidate[] = [];
+  for (const item of o.candidates) {
+    if (typeof item !== "object" || item === null) continue;
+    const c = item as Record<string, unknown>;
+    if (typeof c.candidate_id !== "string" || c.candidate_id.length === 0) continue;
+    if (!WATCHER_TYPES.includes(c.watcher_type as string)) continue;
+    candidates.push({
+      candidate_id: c.candidate_id,
+      watcher_type: c.watcher_type as string,
+      severity: WATCHER_SEVERITIES.includes(c.severity as string) ? (c.severity as string) : "MEDIUM",
+      reason: typeof c.reason === "string" ? c.reason.slice(0, 200) : "",
+      recommendation: typeof c.recommendation === "string" ? c.recommendation.slice(0, 200) : "",
+      confidence: typeof c.confidence === "string" && c.confidence.length > 0 ? c.confidence : "MEDIUM",
+      source: typeof c.source === "string" ? c.source : "BEAM_ADVISORY",
+    });
+  }
+  return {
+    status: "BEAM_ENRICHED",
+    candidates,
+    correlation_id: typeof o.correlation_id === "string" ? o.correlation_id : correlation_id,
+    actor_id: typeof o.actor_id === "string" ? o.actor_id : null,
+    evaluated_at: typeof o.evaluated_at === "string" ? o.evaluated_at : null,
+  };
+}
+
+// WHAT: ask the long-lived BEAM watcher actor to confirm + score a bounded,
+//        scoped candidate set. Never throws; honest status when BEAM is off /
+//        unhealthy / slow / drifting.
+export async function evaluateWatchersOnBeam(
+  input: { tenant_id: string; correlation_id: string; candidates: BeamWatcherCandidateInput[] },
+  config: BeamDispatchConfig = {},
+): Promise<BeamWatcherResult> {
+  const enabled = config.enabled ?? process.env.BEAM_RUNTIME_ENABLED === "true";
+  const beamUrl = config.beamUrl ?? process.env.BEAM_RUNTIME_URL ?? null;
+  if (!enabled || beamUrl === null || beamUrl.length === 0) {
+    return emptyWatcher("NOT_CONFIGURED", input.correlation_id);
+  }
+  if (input.candidates.length === 0) {
+    return emptyWatcher("BEAM_ENRICHED", input.correlation_id); // nothing to evaluate, no call
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const fetchFn = config.fetchImpl ?? fetch;
+  try {
+    const res = await fetchFn(`${beamUrl}/watchers/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_id: input.tenant_id,
+        correlation_id: input.correlation_id,
+        candidates: input.candidates,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return emptyWatcher("ERROR", input.correlation_id);
+    const raw = (await res.json()) as unknown;
+    return validateWatcherResponse(raw, input.correlation_id) ?? emptyWatcher("ERROR", input.correlation_id);
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === "AbortError";
+    return emptyWatcher(aborted ? "TIMEOUT" : "UNHEALTHY", input.correlation_id);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Map a ledger_type to the WorkOsEvent event_type.
 export function eventTypeForLedger(ledgerType: string, status: string): string {
   if (status === "BLOCKED") return "BLOCKER_CREATED";

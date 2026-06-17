@@ -23,6 +23,7 @@ defmodule CollaborationSupervisor.Web.Router do
 
   alias CollaborationSupervisor.CollaborationProcess
   alias CollaborationSupervisor.NextTick
+  alias CollaborationSupervisor.WatcherActor
 
   plug Plug.Logger, log: :debug
 
@@ -111,6 +112,35 @@ defmodule CollaborationSupervisor.Web.Router do
       })
     else
       _ -> json(conn, 422, %{error: "invalid_work_os_event"})
+    end
+  end
+
+  # --- Watcher actor bridge (Phase 1287-B) ---------------------------------
+  # Foundation assembles a bounded, SCOPED candidate set (from its own
+  # deterministic watcher findings) and asks the long-lived watcher actor to
+  # confirm + score them. BEAM is ADVISORY: it returns closed-vocab candidates,
+  # never invents a candidate_id/watcher_type, never decides scope/permission,
+  # never creates work, never notifies. Foundation re-validates every candidate.
+  post "/watchers/evaluate" do
+    body = conn.body_params
+
+    with true <- is_map(body),
+         tenant when is_binary(tenant) and tenant != "" <- Map.get(body, "tenant_id"),
+         correlation when is_binary(correlation) and correlation != "" <-
+           Map.get(body, "correlation_id"),
+         candidates when is_list(candidates) <- Map.get(body, "candidates") do
+      {:ok, result} = WatcherActor.evaluate(candidates)
+
+      json(conn, 202, %{
+        ok: true,
+        runtime: "BEAM",
+        correlation_id: correlation,
+        actor_id: result.actor_id,
+        evaluated_at: result.evaluated_at,
+        candidates: result.candidates
+      })
+    else
+      _ -> json(conn, 422, %{error: "invalid_watcher_request"})
     end
   end
 

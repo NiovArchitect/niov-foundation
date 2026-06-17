@@ -27,7 +27,10 @@ import {
   recordCoordinationOnLedger,
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
-import { getWatcherFeed } from "../services/work-os/watcher.service.js";
+import {
+  getWatcherFeed,
+  getWatcherFeedWithBeamAdvisory,
+} from "../services/work-os/watcher.service.js";
 import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
 import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.service.js";
 import { assessWorkRisk } from "../services/work-os/risk-scoring.service.js";
@@ -539,16 +542,31 @@ export async function registerWorkOsLedgerRoutes(
   //    is the policy authority; BEAM (advisory) will later feed candidates into
   //    this same shape (re-validated + re-scoped here). Scope mirrors the blind-
   //    spots feed: employee sees own/owned/requested work; manager sees org. ──
-  app.get("/api/v1/work-os/watchers/feed", async (request, reply) => {
-    const ctx = await auth(request, reply, "read");
-    if (ctx === null) return;
-    const findings = await getWatcherFeed({
-      org_entity_id: ctx.org_entity_id,
-      caller_entity_id: ctx.entity_id,
-      is_manager: ctx.manager,
-    });
-    return reply.code(200).send({ ok: true, findings });
-  });
+  app.get<{ Querystring: Record<string, string> }>(
+    "/api/v1/work-os/watchers/feed",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      // Phase 1287-B — ?include_beam=true opts into the long-lived BEAM watcher
+      // actor's advisory annotations. Default is deterministic-only (unchanged):
+      // Blind Spots + risk scoring keep using the deterministic feed with no BEAM
+      // latency. No user flow blocks on BEAM (honest beam.status on fallback).
+      if (strParam((request.query ?? {}).include_beam) === "true") {
+        const { findings, beam } = await getWatcherFeedWithBeamAdvisory({
+          org_entity_id: ctx.org_entity_id,
+          caller_entity_id: ctx.entity_id,
+          is_manager: ctx.manager,
+        });
+        return reply.code(200).send({ ok: true, findings, beam });
+      }
+      const findings = await getWatcherFeed({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      return reply.code(200).send({ ok: true, findings });
+    },
+  );
 
   // ── Comms recent-artifacts feed (Phase 1285-T) — durable projection over the
   //    Work Ledger of conversation-derived artifacts (follow-ups / decisions /
