@@ -900,10 +900,15 @@ function watchersFromDetails(details: unknown): WorkLedgerView["watchers"] | und
   return out.length > 0 ? out : undefined;
 }
 
+// The SAFE meeting-intelligence projection shape (Phase 1285-V). Reused by the
+// Comms recent-artifacts projection (Phase 1286-C) so both surfaces share one
+// shape + one safe extractor.
+export type MeetingIntelligenceProjection = NonNullable<WorkLedgerView["meeting_intelligence"]>;
+
 // WHAT: pull the advisory meeting-intelligence envelope out of details into a
 //        SAFE projection (Phase 1285-V). Short candidates only; never the raw
 //        transcript or chain-of-thought.
-function meetingIntelligenceFromDetails(
+export function meetingIntelligenceFromDetails(
   details: unknown,
 ): WorkLedgerView["meeting_intelligence"] | undefined {
   if (typeof details !== "object" || details === null) return undefined;

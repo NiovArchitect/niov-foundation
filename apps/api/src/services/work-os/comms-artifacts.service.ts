@@ -14,6 +14,10 @@
 import { prisma } from "@niov/database";
 import type { WorkLedgerEntry } from "@prisma/client";
 import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entities.js";
+import {
+  meetingIntelligenceFromDetails,
+  type MeetingIntelligenceProjection,
+} from "./work-ledger.service.js";
 
 export type CommsArtifactType =
   | "DIRECT_MESSAGE"
@@ -51,6 +55,10 @@ export interface RecentCommsArtifact {
     kind: "work" | "thread" | "notification" | "none";
     route: string | null;
   };
+  // Phase 1286-C — the SAFE advisory meeting-intelligence projection (Phase
+  // 1285-V), present ONLY when the underlying ledger row carries it. Read-only;
+  // never the raw transcript or chain-of-thought. Absent on non-meeting rows.
+  meeting_intelligence?: MeetingIntelligenceProjection;
 }
 
 const DEFAULT_LIMIT = 30;
@@ -131,6 +139,7 @@ export async function getRecentCommsArtifacts(args: {
         : (r.requester_entity_id ?? r.owner_entity_id ?? r.target_entity_id);
     const relatedId = counterpartId === args.caller_entity_id ? null : counterpartId;
     const sourceMessageId = sourceMessageIdOf(r.details);
+    const meetingIntelligence = meetingIntelligenceFromDetails(r.details);
     return {
       artifact_id: r.ledger_entry_id,
       artifact_type: artifactTypeFor(r.ledger_type),
@@ -149,6 +158,9 @@ export async function getRecentCommsArtifacts(args: {
       // Every artifact resolves to a real, navigable destination (the durable
       // Work surface). No dead links, no fabricated routes.
       destination: { kind: "work" as const, route: "/app/my-work" },
+      // Present only when the row genuinely carries meeting intelligence; absent
+      // (field omitted) otherwise — never faked.
+      ...(meetingIntelligence !== undefined ? { meeting_intelligence: meetingIntelligence } : {}),
     };
   });
 }
