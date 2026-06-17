@@ -39,7 +39,57 @@ defmodule CollaborationSupervisor.Web.RouterTest do
         :ok
     end
 
+    # Phase 1287-B — the long-lived watcher actor the /watchers/evaluate route
+    # delegates to (default module-name registration).
+    case Process.whereis(CollaborationSupervisor.WatcherActor) do
+      nil ->
+        {:ok, _} = start_supervised(CollaborationSupervisor.WatcherActor)
+
+      _pid ->
+        :ok
+    end
+
     :ok
+  end
+
+  describe "POST /watchers/evaluate" do
+    test "confirms scoped candidates and returns closed-vocab advisory findings" do
+      payload =
+        Jason.encode!(%{
+          "tenant_id" => "org-1",
+          "correlation_id" => "corr-1",
+          "candidates" => [
+            %{"candidate_id" => "led-1", "watcher_type" => "UNRESOLVED_BLOCKER", "severity" => "HIGH"},
+            %{"candidate_id" => "bad", "watcher_type" => "NONSENSE"}
+          ]
+        })
+
+      conn =
+        conn(:post, "/watchers/evaluate", payload)
+        |> put_req_header("content-type", "application/json")
+
+      conn = Router.call(conn, Router.init([]))
+      assert conn.status == 202
+      body = Jason.decode!(conn.resp_body)
+      assert body["ok"] == true
+      assert body["runtime"] == "BEAM"
+      assert body["correlation_id"] == "corr-1"
+      assert body["actor_id"] == "watcher_actor"
+      assert is_binary(body["evaluated_at"])
+      # Only the valid candidate is confirmed; the unknown type is dropped.
+      assert [%{"candidate_id" => "led-1", "source" => "BEAM_ADVISORY"}] = body["candidates"]
+    end
+
+    test "422 on a malformed request (missing tenant / correlation / candidates)" do
+      for bad <- [%{"correlation_id" => "c", "candidates" => []}, %{"tenant_id" => "o", "candidates" => []}, %{"tenant_id" => "o", "correlation_id" => "c"}] do
+        conn =
+          conn(:post, "/watchers/evaluate", Jason.encode!(bad))
+          |> put_req_header("content-type", "application/json")
+
+        conn = Router.call(conn, Router.init([]))
+        assert conn.status == 422
+      end
+    end
   end
 
   describe "GET /health" do

@@ -30,6 +30,8 @@ defmodule CollaborationSupervisor.Application do
       {Registry, keys: :unique, name: CollaborationSupervisor.Registry},
       {DynamicSupervisor,
        strategy: :one_for_one, name: CollaborationSupervisor.DynamicSupervisor},
+      # Phase 1287-B — the long-lived, supervised watcher evaluation actor.
+      CollaborationSupervisor.WatcherActor,
       web_listener_spec(port)
     ]
 

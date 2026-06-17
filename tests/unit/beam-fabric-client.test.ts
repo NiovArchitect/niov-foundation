@@ -9,8 +9,49 @@ import { describe, expect, it } from "vitest";
 import {
   dispatchWorkOsEvent,
   eventTypeForLedger,
+  evaluateWatchersOnBeam,
   type WorkOsEvent,
+  type BeamWatcherCandidateInput,
 } from "../../apps/api/src/services/coordination/beam-fabric-client.js";
+
+const wcands: BeamWatcherCandidateInput[] = [
+  { candidate_id: "led-1", watcher_type: "UNRESOLVED_BLOCKER", severity: "HIGH", blocked: true },
+];
+
+describe("evaluateWatchersOnBeam — advisory, honest, never throws", () => {
+  it("NOT_CONFIGURED when BEAM is disabled (no fetch attempted)", async () => {
+    let called = false;
+    const fetchImpl = (async () => { called = true; return new Response("{}", { status: 202 }); }) as unknown as typeof fetch;
+    const r = await evaluateWatchersOnBeam({ tenant_id: "org-1", correlation_id: "c1", candidates: wcands }, { enabled: false, beamUrl: "http://x", fetchImpl });
+    expect(r.status).toBe("NOT_CONFIGURED");
+    expect(called).toBe(false);
+  });
+  it("BEAM_ENRICHED with no fetch when there are no candidates", async () => {
+    let called = false;
+    const fetchImpl = (async () => { called = true; return new Response("{}", { status: 202 }); }) as unknown as typeof fetch;
+    const r = await evaluateWatchersOnBeam({ tenant_id: "org-1", correlation_id: "c1", candidates: [] }, { enabled: true, beamUrl: "http://x", fetchImpl });
+    expect(r.status).toBe("BEAM_ENRICHED");
+    expect(r.candidates).toEqual([]);
+    expect(called).toBe(false);
+  });
+  it("BEAM_ENRICHED on 202; parses closed-vocab candidates + actor metadata", async () => {
+    const body = JSON.stringify({ ok: true, runtime: "BEAM", correlation_id: "c1", actor_id: "watcher_actor", evaluated_at: "2026-06-17T20:00:00Z", candidates: [{ candidate_id: "led-1", watcher_type: "UNRESOLVED_BLOCKER", severity: "HIGH", reason: "Open blocker confirmed.", recommendation: "Escalate.", confidence: "HIGH", source: "BEAM_ADVISORY" }, { candidate_id: "x", watcher_type: "NONSENSE" }] });
+    const fetchImpl = (async () => new Response(body, { status: 202, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+    const r = await evaluateWatchersOnBeam({ tenant_id: "org-1", correlation_id: "c1", candidates: wcands }, { enabled: true, beamUrl: "http://x", fetchImpl });
+    expect(r.status).toBe("BEAM_ENRICHED");
+    expect(r.actor_id).toBe("watcher_actor");
+    expect(r.candidates.length).toBe(1); // the NONSENSE type is dropped at parse
+    expect(r.candidates[0]!.candidate_id).toBe("led-1");
+  });
+  it("ERROR on non-2xx; TIMEOUT on abort; UNHEALTHY on throw", async () => {
+    const fail = (async () => new Response("no", { status: 500 })) as unknown as typeof fetch;
+    expect((await evaluateWatchersOnBeam({ tenant_id: "o", correlation_id: "c", candidates: wcands }, { enabled: true, beamUrl: "http://x", fetchImpl: fail })).status).toBe("ERROR");
+    const abort = (async () => { const e = new Error("a"); e.name = "AbortError"; throw e; }) as unknown as typeof fetch;
+    expect((await evaluateWatchersOnBeam({ tenant_id: "o", correlation_id: "c", candidates: wcands }, { enabled: true, beamUrl: "http://x", fetchImpl: abort })).status).toBe("TIMEOUT");
+    const boom = (async () => { throw new Error("conn"); }) as unknown as typeof fetch;
+    expect((await evaluateWatchersOnBeam({ tenant_id: "o", correlation_id: "c", candidates: wcands }, { enabled: true, beamUrl: "http://x", fetchImpl: boom })).status).toBe("UNHEALTHY");
+  });
+});
 
 function event(over: Partial<WorkOsEvent> = {}): WorkOsEvent {
   return {

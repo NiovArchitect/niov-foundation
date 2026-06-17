@@ -15,9 +15,17 @@
 //              names); packages/database (prisma); docs/product/
 //              otzar-watcher-routes.md (the BEAM bridge contract, P2).
 
+import { randomUUID } from "node:crypto";
 import { prisma } from "@niov/database";
 import type { WorkLedgerEntry } from "@prisma/client";
 import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entities.js";
+import {
+  evaluateWatchersOnBeam,
+  type BeamDispatchConfig,
+  type BeamWatcherCandidateInput,
+  type BeamWatcherResult,
+  type BeamWatcherStatus,
+} from "../coordination/beam-fabric-client.js";
 
 // WHAT: the deterministic watcher rule taxonomy. LIVE rules are detected from
 //        durable state today; DEFERRED rules are part of the contract but are
@@ -88,6 +96,20 @@ export interface WatcherFinding {
   recommendation: {
     next_action: string;
     action_kind: WatcherActionKind;
+  };
+  // Phase 1287-B — OPTIONAL advisory annotation from the long-lived BEAM watcher
+  // actor, present only when a validated BEAM candidate matched this finding's
+  // ledger_entry_id. The deterministic finding above stays primary; this is
+  // additive (Foundation never lets BEAM create/replace a finding).
+  beam_advisory?: {
+    confirmed: boolean;
+    confidence: string;
+    reason: string;
+    recommendation: string;
+    actor_id: string | null;
+    correlation_id: string;
+    evaluated_at: string | null;
+    source: "BEAM_ADVISORY";
   };
 }
 
@@ -396,4 +418,132 @@ export async function getBlindSpotFeed(args: {
   const now = args.now ?? Date.now();
   const scanned = await scanWatcherFindings({ ...args, now });
   return scanned.map((x) => toBlindSpotFeedItem(x.finding, x.row, now));
+}
+
+// ── BEAM watcher actor bridge (Phase 1287-B) ────────────────────────────────
+// Deterministic findings remain PRIMARY. Foundation optionally asks the
+// long-lived BEAM watcher actor to confirm + score them, then re-validates every
+// returned candidate against the allowed set and annotates matching findings.
+// BEAM never creates/replaces a finding; unknown/unsafe candidates are dropped.
+
+const BEAM_WATCHER_SEVERITIES = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
+const EM_DASH_RE = /[—–]/;
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+export interface WatcherBeamStatus {
+  status: BeamWatcherStatus;
+  correlation_id: string;
+  actor_id: string | null;
+  confirmed_count: number;
+  dropped_count: number;
+}
+
+// WHAT: derive a SAFE, scoped BEAM candidate input from a deterministic finding.
+// WHY: the candidate carries only ids + closed-vocab + boolean signals — never a
+//      raw transcript / payload. candidate_id is the ledger_entry_id.
+export function toBeamWatcherCandidate(f: WatcherFinding): BeamWatcherCandidateInput | null {
+  const id = f.source.ledger_entry_id;
+  if (id === null) return null;
+  return {
+    candidate_id: id,
+    watcher_type: f.watcher_type,
+    severity: f.severity,
+    ...(f.detection.age_hours !== null ? { age_hours: f.detection.age_hours } : {}),
+    overdue: f.watcher_type === "OVERDUE_WORK",
+    blocked: f.watcher_type === "UNRESOLVED_BLOCKER",
+    waiting_on: f.watcher_type === "STALE_WAITING_ON",
+    no_next_action: f.watcher_type === "NO_NEXT_ACTION",
+  };
+}
+
+// WHAT: validate BEAM candidates against the allowed deterministic findings and
+//        annotate matches. INPUT: the deterministic findings + the BEAM result +
+//        the correlation id. OUTPUT: annotated findings + confirmed/dropped counts.
+// WHY: Foundation is the authority. A candidate is accepted ONLY when its
+//      candidate_id is an allowed ledger_entry_id AND its watcher_type matches
+//      that finding's type AND severity is closed-vocab AND the text carries no
+//      em dash / leaked id. Everything else is dropped. No new/duplicate finding.
+export function mergeBeamWatcherAdvisory(
+  findings: WatcherFinding[],
+  result: BeamWatcherResult,
+  correlation_id: string,
+): { findings: WatcherFinding[]; confirmed_count: number; dropped_count: number } {
+  if (result.status !== "BEAM_ENRICHED" || result.candidates.length === 0) {
+    return { findings, confirmed_count: 0, dropped_count: 0 };
+  }
+  const allowed = new Map<string, WatcherFinding>();
+  for (const f of findings) {
+    if (f.source.ledger_entry_id !== null) allowed.set(f.source.ledger_entry_id, f);
+  }
+  const accepted = new Map<string, BeamWatcherResult["candidates"][number]>();
+  let dropped = 0;
+  for (const c of result.candidates) {
+    const det = allowed.get(c.candidate_id);
+    const safeText = `${c.reason} ${c.recommendation}`;
+    if (
+      det === undefined || // unknown / cross-scope id BEAM was never given
+      c.watcher_type !== det.watcher_type || // cannot change the finding's type
+      !BEAM_WATCHER_SEVERITIES.has(c.severity) ||
+      EM_DASH_RE.test(safeText) ||
+      UUID_RE.test(safeText)
+    ) {
+      dropped++;
+      continue;
+    }
+    accepted.set(c.candidate_id, c);
+  }
+  const annotated = findings.map((f) => {
+    const id = f.source.ledger_entry_id;
+    const c = id !== null ? accepted.get(id) : undefined;
+    if (c === undefined) return f;
+    return {
+      ...f,
+      beam_advisory: {
+        confirmed: true,
+        confidence: c.confidence,
+        reason: c.reason,
+        recommendation: c.recommendation,
+        actor_id: result.actor_id,
+        correlation_id,
+        evaluated_at: result.evaluated_at,
+        source: "BEAM_ADVISORY" as const,
+      },
+    };
+  });
+  return { findings: annotated, confirmed_count: accepted.size, dropped_count: dropped };
+}
+
+// WHAT: the watcher feed enriched with advisory BEAM annotations (opt-in).
+// INPUT: org + caller + manager flag (+ optional BEAM config for tests).
+// OUTPUT: { findings (deterministic, BEAM-annotated where validated), beam }.
+// WHY: deterministic findings are computed FIRST and stand alone if BEAM is
+//      down (honest beam.status); no user flow blocks on BEAM.
+export async function getWatcherFeedWithBeamAdvisory(args: {
+  org_entity_id: string;
+  caller_entity_id: string;
+  is_manager: boolean;
+  beamConfig?: BeamDispatchConfig;
+  now?: number;
+}): Promise<{ findings: WatcherFinding[]; beam: WatcherBeamStatus }> {
+  const findings = await getWatcherFeed(args);
+  const correlation_id = randomUUID();
+  const candidates = findings
+    .map(toBeamWatcherCandidate)
+    .filter((c): c is BeamWatcherCandidateInput => c !== null);
+
+  const result = await evaluateWatchersOnBeam(
+    { tenant_id: args.org_entity_id, correlation_id, candidates },
+    args.beamConfig ?? {},
+  );
+  const merged = mergeBeamWatcherAdvisory(findings, result, correlation_id);
+  return {
+    findings: merged.findings,
+    beam: {
+      status: result.status,
+      correlation_id,
+      actor_id: result.actor_id,
+      confirmed_count: merged.confirmed_count,
+      dropped_count: merged.dropped_count,
+    },
+  };
 }
