@@ -15,11 +15,17 @@
 
 import { randomUUID } from "node:crypto";
 import { prisma } from "@niov/database";
+import { logger } from "../../logger.js";
 import {
   extractWorkSignals,
   type EnrichmentRuntimeConfig,
-  type WorkSignalExtractionResult,
 } from "../intelligence/python-enrichment.service.js";
+import {
+  pendingEnvelope,
+  buildWorkSignalEnvelope,
+  validateAdvisoryEnvelope,
+  envelopeUpgradesExtraction,
+} from "../intelligence/python-intelligence.js";
 import {
   recordExecutionAttempt,
   getFailedAttemptDigests,
@@ -137,45 +143,21 @@ export async function createLedgerEntry(
     return { ok: false, code: "INVALID_REQUEST", message: "invalid extraction_source" };
   }
 
-  // Phase 1282 — advisory Python enrichment. Runs BEFORE the write so the
-  // (closed-vocab, audit-safe) signals can be merged into details. Never
-  // overrides target resolution/policy/status — it only annotates and,
-  // when it actually contributed signals on the default extraction path,
-  // upgrades extraction_source to PYTHON_ENRICHED.
-  let enrichment: WorkSignalExtractionResult | null = null;
+  // Phase 1285-U — advisory Python enrichment is now ASYNC + best-effort.
+  // Deterministic extraction is the primary source of truth and the ledger
+  // write NEVER blocks on Python. When enrichment is requested we mark the
+  // block PENDING up front; a fire-and-forget task (after the write) attaches
+  // the real Python outcome and only then may upgrade extraction_source.
   const callerPinnedExtraction = input.extraction_source !== undefined;
-  if (
+  const enrichmentRequested =
     input.enable_python_enrichment === true &&
     typeof input.enrichment_text === "string" &&
-    input.enrichment_text.trim().length > 0
-  ) {
-    enrichment = await extractWorkSignals(
-      {
-        text: input.enrichment_text,
-        ...(input.source_type !== undefined ? { source_type: input.source_type } : {}),
-      },
-      input.enrichment_runtime ?? {},
-    );
-    if (
-      enrichment.status === "PYTHON_ENRICHED" &&
-      enrichment.signals.length > 0 &&
-      !callerPinnedExtraction
-    ) {
-      extraction = "PYTHON_ENRICHED";
-    }
-  }
+    input.enrichment_text.trim().length > 0;
 
   const detailsWithEnrichment: Record<string, unknown> = {
     ...(input.details ?? {}),
-    ...(enrichment !== null
-      ? {
-          python_enrichment: {
-            status: enrichment.status,
-            signals: enrichment.signals,
-            primary_signal: enrichment.primary_signal,
-            multi_intent: enrichment.multi_intent,
-          },
-        }
+    ...(enrichmentRequested
+      ? { python_enrichment: pendingEnvelope("WORK_SIGNAL_EXTRACTION", new Date().toISOString()) }
       : {}),
   };
 
@@ -225,26 +207,128 @@ export async function createLedgerEntry(
     status: "VERIFIED",
     detail: { ledger_type: row.ledger_type, status: row.status },
   });
-  if (enrichment !== null) {
-    const enriched =
-      enrichment.status === "PYTHON_ENRICHED" && enrichment.signals.length > 0;
-    await recordExecutionAttempt({
+  // Phase 1285-U — kick off Python enrichment WITHOUT awaiting it: the ledger
+  // write + response are already complete and never wait on Python. The task
+  // patches details.python_enrichment with the real outcome and records the
+  // PYTHON_ENRICHMENT execution attempt when it finishes (bounded by the
+  // service's own timeout). Fire-and-forget; failures are swallowed + logged.
+  if (enrichmentRequested) {
+    void enrichLedgerEntryAsync({
       ledger_entry_id: row.ledger_entry_id,
       org_entity_id: row.org_entity_id,
+      text: input.enrichment_text as string,
+      ...(input.source_type !== undefined ? { source_type: input.source_type } : {}),
+      ...(input.enrichment_runtime !== undefined ? { runtime: input.enrichment_runtime } : {}),
+      caller_pinned_extraction: callerPinnedExtraction,
+    });
+  }
+
+  return { ok: true, entry: projectLedger(row) };
+}
+
+// WHAT: best-effort, NON-BLOCKING Python advisory enrichment for an already-
+//        created ledger entry. Runs the WORK_SIGNAL_EXTRACTION capability
+//        through the general Python intelligence contract: build the envelope,
+//        let Foundation validate it, store it on details.python_enrichment, and
+//        ONLY upgrade extraction_source when Foundation validated a real
+//        enrichment (and the caller did not pin extraction).
+// INPUT: the row id + org + the text to enrich (+ optional source/runtime).
+// OUTPUT: none (fire-and-forget). NEVER throws; failures degrade to an ERROR
+//         envelope on the row + a warn log (no raw text logged).
+// WHY: Phase 1285-U — deterministic truth stays primary; Python is advisory and
+//      may be absent/slow/unhealthy without affecting any user flow. Foundation
+//      is the authority that accepts / rejects / downgrades Python output.
+export async function enrichLedgerEntryAsync(args: {
+  ledger_entry_id: string;
+  org_entity_id: string;
+  text: string;
+  source_type?: string;
+  runtime?: EnrichmentRuntimeConfig;
+  caller_pinned_extraction: boolean;
+}): Promise<void> {
+  try {
+    const startedAt = Date.now();
+    const result = await extractWorkSignals(
+      {
+        text: args.text,
+        ...(args.source_type !== undefined ? { source_type: args.source_type } : {}),
+      },
+      args.runtime ?? {},
+    );
+    // Wrap in the general advisory envelope, then let Foundation validate it
+    // (advisory work-signals are accepted as metadata only; never mutate owner/
+    // requester/target/status/policy/scope).
+    const envelope = validateAdvisoryEnvelope(
+      buildWorkSignalEnvelope(result, Date.now() - startedAt, new Date().toISOString()),
+    );
+
+    const current = await prisma.workLedgerEntry.findFirst({
+      where: { ledger_entry_id: args.ledger_entry_id, org_entity_id: args.org_entity_id },
+      select: { details: true, extraction_source: true },
+    });
+    if (current === null) return; // row gone (deleted/cross-tenant): nothing to patch.
+
+    const baseDetails =
+      typeof current.details === "object" && current.details !== null
+        ? (current.details as Record<string, unknown>)
+        : {};
+    const upgradeExtraction = envelopeUpgradesExtraction(envelope, args.caller_pinned_extraction);
+
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: args.ledger_entry_id },
+      data: {
+        details: { ...baseDetails, python_enrichment: envelope } as object,
+        ...(upgradeExtraction ? { extraction_source: "PYTHON_ENRICHED" } : {}),
+      },
+    });
+
+    const enriched = envelope.status === "PYTHON_ENRICHED";
+    await recordExecutionAttempt({
+      ledger_entry_id: args.ledger_entry_id,
+      org_entity_id: args.org_entity_id,
       attempt_type: "PYTHON_ENRICHMENT",
       runtime: "PYTHON",
       evidence_type: "PROVIDER_RESPONSE",
       status: enriched ? "VERIFIED" : "FAILED",
       detail: {
-        enrichment_status: enrichment.status,
-        signal_count: enrichment.signals.length,
-        multi_intent: enrichment.multi_intent,
+        enrichment_status: envelope.status,
+        authority: envelope.authority,
+        capability: envelope.capability,
+        signal_count: envelope.candidates.length,
+        latency_ms: envelope.latency_ms,
       },
-      ...(enriched ? {} : { error_code: enrichment.status }),
+      ...(enriched ? {} : { error_code: envelope.status }),
     });
+  } catch (err) {
+    // Best-effort: never let async enrichment break anything. Log the FACT of
+    // failure (no raw enrichment text / no payload) and mark the row ERROR.
+    logger.warn(
+      { ledger_entry_id: args.ledger_entry_id, err: err instanceof Error ? err.message : "unknown" },
+      "[work-ledger] async Python enrichment failed",
+    );
+    try {
+      const current = await prisma.workLedgerEntry.findFirst({
+        where: { ledger_entry_id: args.ledger_entry_id, org_entity_id: args.org_entity_id },
+        select: { details: true },
+      });
+      if (current === null) return;
+      const baseDetails =
+        typeof current.details === "object" && current.details !== null
+          ? (current.details as Record<string, unknown>)
+          : {};
+      const errorEnvelope = {
+        ...pendingEnvelope("WORK_SIGNAL_EXTRACTION", new Date().toISOString()),
+        status: "ERROR" as const,
+        error_code: "ERROR",
+      };
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: args.ledger_entry_id },
+        data: { details: { ...baseDetails, python_enrichment: errorEnvelope } as object },
+      });
+    } catch {
+      // give up silently — the deterministic row is already intact.
+    }
   }
-
-  return { ok: true, entry: projectLedger(row) };
 }
 
 export interface CoordinationRecordInput {
