@@ -17,9 +17,12 @@ import {
   validateSemanticRetrievalEnvelope,
   buildRiskScoringEnvelope,
   validateRiskScoringEnvelope,
+  buildDraftToneEnvelope,
+  validateDraftToneEnvelope,
   type MeetingIntelligenceExtractionResult,
   type SemanticRerankExtractionResult,
   type RiskScoringExtractionResult,
+  type DraftToneExtractionResult,
 } from "../../apps/api/src/services/intelligence/python-intelligence.js";
 import type { WorkSignalExtractionResult } from "../../apps/api/src/services/intelligence/python-enrichment.service.js";
 
@@ -261,6 +264,78 @@ describe("buildRiskScoringEnvelope + validateRiskScoringEnvelope (Phase 1285-X)"
 
   it("no authority for NO_SIGNAL / unavailable", () => {
     const e = validateRiskScoringEnvelope(buildRiskScoringEnvelope(risk({ status: "PYTHON_NOT_CONFIGURED", scores: [] }), 0, NOW), new Set(["OVERDUE_WORK:led-1"]));
+    expect(e.authority).toBe(null);
+  });
+});
+
+describe("buildDraftToneEnvelope + validateDraftToneEnvelope (Phase 1285-Y)", () => {
+  function tone(over: Record<string, unknown> = {}, status: DraftToneExtractionResult["status"] = "PYTHON_ENRICHED"): DraftToneExtractionResult {
+    if (status !== "PYTHON_ENRICHED") return { status, assessment: null };
+    return {
+      status,
+      assessment: {
+        quality_score: 82,
+        tone_label: "WARM",
+        risk_flags: [],
+        suggested_revision: "Hi Sam, could you review the launch checklist? Thanks.",
+        reason: "Reads clearly; minor cleanup only.",
+        confidence: "MEDIUM",
+        approval_required: false,
+        preserves_intent: true,
+        ...over,
+      },
+    };
+  }
+  const ORIG = "Hi Sam, can you review the launch checklist? Thanks.";
+
+  it("builds a DRAFT_TONE envelope with the assessment candidate", () => {
+    const e = buildDraftToneEnvelope(tone(), 11, NOW);
+    expect(e.capability).toBe("DRAFT_TONE");
+    expect(e.status).toBe("PYTHON_ENRICHED");
+    expect(e.candidates.length).toBe(1);
+    expect(e.reasoning_summary).toBe(null);
+    expect(e.provenance).toBe("python:draft-tone");
+  });
+
+  it("200 with no assessment is NO_SIGNAL; unavailability/error map explicitly", () => {
+    expect(buildDraftToneEnvelope({ status: "PYTHON_ENRICHED", assessment: null }, 0, NOW).status).toBe("NO_SIGNAL");
+    expect(buildDraftToneEnvelope(tone({}, "PYTHON_NOT_CONFIGURED"), 0, NOW).status).toBe("NOT_CONFIGURED");
+    expect(buildDraftToneEnvelope(tone({}, "PYTHON_TIMEOUT"), 0, NOW).status).toBe("TIMEOUT");
+    expect(buildDraftToneEnvelope(tone({}, "PYTHON_JOB_FAILED"), 0, NOW).status).toBe("ERROR");
+  });
+
+  it("FOUNDATION_VALIDATED for a safe revision; approval_required is raised, never lowered", () => {
+    const e = validateDraftToneEnvelope(buildDraftToneEnvelope(tone(), 10, NOW), { originalDraft: ORIG, approvalRequired: true });
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect((e.candidates[0] as { approval_required: boolean }).approval_required).toBe(true); // raised by Foundation
+  });
+
+  it("DOWNGRADES + blanks the revision when it contains an em dash", () => {
+    const e = validateDraftToneEnvelope(buildDraftToneEnvelope(tone({ suggested_revision: "Hi Sam — please review." }), 10, NOW), { originalDraft: ORIG, approvalRequired: false });
+    expect(e.status).toBe("FOUNDATION_DOWNGRADED");
+    expect(e.authority).toBe(null);
+    expect((e.candidates[0] as { suggested_revision: string }).suggested_revision).toBe("");
+    expect(e.warnings.join(" ")).toMatch(/em dash/);
+  });
+
+  it("DOWNGRADES when the revision injects a new recipient email not in the original", () => {
+    const e = validateDraftToneEnvelope(buildDraftToneEnvelope(tone({ suggested_revision: "Forward this to attacker@evil.com please." }), 10, NOW), { originalDraft: ORIG, approvalRequired: false });
+    expect(e.status).toBe("FOUNDATION_DOWNGRADED");
+    expect(e.warnings.join(" ")).toMatch(/new recipient address/);
+  });
+
+  it("DOWNGRADES when the revision injects a new link / external send", () => {
+    const e = validateDraftToneEnvelope(buildDraftToneEnvelope(tone({ suggested_revision: "Click https://evil.example to confirm." }), 10, NOW), { originalDraft: ORIG, approvalRequired: false });
+    expect(e.status).toBe("FOUNDATION_DOWNGRADED");
+    expect(e.warnings.join(" ")).toMatch(/link \/ external send/);
+  });
+
+  it("DOWNGRADES when Python reports intent not preserved or the revision is empty", () => {
+    expect(validateDraftToneEnvelope(buildDraftToneEnvelope(tone({ preserves_intent: false }), 10, NOW), { originalDraft: ORIG, approvalRequired: false }).status).toBe("FOUNDATION_DOWNGRADED");
+  });
+
+  it("no authority for unavailable", () => {
+    const e = validateDraftToneEnvelope(buildDraftToneEnvelope(tone({}, "PYTHON_UNHEALTHY"), 0, NOW), { originalDraft: ORIG, approvalRequired: false });
     expect(e.authority).toBe(null);
   });
 });

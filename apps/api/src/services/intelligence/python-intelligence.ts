@@ -123,12 +123,30 @@ export interface RiskScoreCandidate {
   human_review_needed: boolean;
 }
 
+// ── Draft tone (Phase 1285-Y) ───────────────────────────────────────────────
+// An advisory assessment of ONE proposed message + a SAFE suggested revision.
+// Foundation re-validates the revision (no em dash, no new recipient/email/URL,
+// intent preserved) and keeps approval gates authoritative; the original draft
+// is always preserved and primary. reason is a short closed phrase (never raw
+// chain-of-thought).
+export interface DraftToneCandidate {
+  quality_score: number; // 0..100
+  tone_label: string;
+  risk_flags: string[];
+  suggested_revision: string;
+  reason: string;
+  confidence: string; // HIGH | MEDIUM | LOW
+  approval_required: boolean;
+  preserves_intent: boolean;
+}
+
 // The advisory items an envelope can carry, across capabilities.
 export type PythonCandidate =
   | PythonSignalCandidate
   | MeetingIntelligenceCandidate
   | SemanticRankCandidate
-  | RiskScoreCandidate;
+  | RiskScoreCandidate
+  | DraftToneCandidate;
 
 // The closed-vocab result the semantic-rerank client returns to Foundation.
 export interface SemanticRerankExtractionResult {
@@ -140,6 +158,12 @@ export interface SemanticRerankExtractionResult {
 export interface RiskScoringExtractionResult {
   status: EnrichmentStatus;
   scores: RiskScoreCandidate[];
+}
+
+// The closed-vocab result the draft-tone client returns to Foundation.
+export interface DraftToneExtractionResult {
+  status: EnrichmentStatus;
+  assessment: DraftToneCandidate | null;
 }
 
 // The closed-vocab result the meeting/perception client returns to Foundation.
@@ -541,4 +565,112 @@ export function validateRiskScoringEnvelope(
     };
   }
   return { ...envelope, candidates: scored, authority: "FOUNDATION_VALIDATED", warnings };
+}
+
+// WHAT: wrap a DRAFT_TONE runtime result into the envelope.
+// WHY: Phase 1285-Y — the assessment + suggested revision are advisory. A 200
+//      with no assessment is NO_SIGNAL; unavailability/failure map to cause.
+export function buildDraftToneEnvelope(
+  result: DraftToneExtractionResult,
+  latencyMs: number,
+  nowIso: string,
+): PythonIntelligenceEnvelope {
+  let status: PythonEnrichmentStatus;
+  switch (result.status) {
+    case "PYTHON_ENRICHED":
+      status = result.assessment !== null ? "PYTHON_ENRICHED" : "NO_SIGNAL";
+      break;
+    case "PYTHON_NOT_CONFIGURED":
+      status = "NOT_CONFIGURED";
+      break;
+    case "PYTHON_UNHEALTHY":
+      status = "UNHEALTHY";
+      break;
+    case "PYTHON_TIMEOUT":
+      status = "TIMEOUT";
+      break;
+    default:
+      status = "ERROR"; // PYTHON_JOB_FAILED / PYTHON_INVALID_RESPONSE
+  }
+  const enriched = status === "PYTHON_ENRICHED";
+  return {
+    status,
+    source: "PYTHON_ADVISORY",
+    authority: null,
+    capability: "DRAFT_TONE",
+    model: null,
+    version: null,
+    latency_ms: latencyMs,
+    confidence: enriched ? (result.assessment?.confidence ?? null) : null,
+    candidates: result.assessment !== null ? [result.assessment] : [],
+    summary: enriched ? `Assessed draft tone (${result.assessment?.tone_label}).` : null,
+    reasoning_summary: null,
+    provenance: "python:draft-tone",
+    warnings: [],
+    error_code: enriched ? null : status,
+    updated_at: nowIso,
+  };
+}
+
+const EM_DASH_RE = /[—–]/; // em dash + en dash
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const URL_RE = /https?:\/\/\S+/gi;
+
+function emailsIn(text: string): Set<string> {
+  return new Set((text.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()));
+}
+function urlsIn(text: string): Set<string> {
+  return new Set((text.match(URL_RE) ?? []).map((u) => u.toLowerCase()));
+}
+
+// WHAT: Foundation's validation of a draft-tone envelope.
+// INPUT: a pre-validation envelope + the original draft + the deterministic
+//        approval_required (Foundation-authoritative — Python can never LOWER it).
+// OUTPUT: the envelope with the assessment safety-checked + approval raised.
+// WHY: Foundation is the authority. Python may only SUGGEST a revision. The
+//      suggested_revision is DOWNGRADED (blanked, advisory metadata kept) when it
+//      is empty, contains an em/en dash, injects a new recipient email or URL not
+//      in the original (recipient / external-send guard), reports
+//      preserves_intent=false, or balloons abnormally. The original draft is
+//      never mutated here; approval_required is always raised to the deterministic
+//      value. A safe, intent-preserving revision is FOUNDATION_VALIDATED.
+export function validateDraftToneEnvelope(
+  envelope: PythonIntelligenceEnvelope,
+  ctx: { originalDraft: string; approvalRequired: boolean },
+): PythonIntelligenceEnvelope {
+  if (envelope.status !== "PYTHON_ENRICHED" || envelope.candidates.length === 0) {
+    return { ...envelope, authority: null };
+  }
+  const raw = envelope.candidates[0] as DraftToneCandidate;
+  // approval_required is Foundation-authoritative: Python can raise, never lower.
+  const approval_required = ctx.approvalRequired || raw.approval_required === true;
+  const candidate: DraftToneCandidate = { ...raw, approval_required };
+
+  const revision = candidate.suggested_revision ?? "";
+  const origEmails = emailsIn(ctx.originalDraft);
+  const origUrls = urlsIn(ctx.originalDraft);
+  const newEmail = [...emailsIn(revision)].some((e) => !origEmails.has(e));
+  const newUrl = [...urlsIn(revision)].some((u) => !origUrls.has(u));
+  const tooLong = revision.length > ctx.originalDraft.length * 4 + 200;
+
+  const reasons: string[] = [];
+  if (revision.trim().length === 0) reasons.push("empty suggested revision");
+  if (EM_DASH_RE.test(revision)) reasons.push("suggested revision contains an em dash");
+  if (newEmail) reasons.push("suggested revision injects a new recipient address");
+  if (newUrl) reasons.push("suggested revision injects a new link / external send");
+  if (candidate.preserves_intent === false) reasons.push("Python reported intent not preserved");
+  if (tooLong) reasons.push("suggested revision balloons beyond the original");
+
+  if (reasons.length > 0) {
+    // Unsafe rewrite — keep the advisory tone metadata but drop the revision and
+    // mark needs-review. The original draft (held by the caller) stays primary.
+    return {
+      ...envelope,
+      status: "FOUNDATION_DOWNGRADED",
+      authority: null,
+      candidates: [{ ...candidate, suggested_revision: "" }],
+      warnings: [...envelope.warnings, `suggested revision rejected: ${reasons.join("; ")}`],
+    };
+  }
+  return { ...envelope, candidates: [candidate], authority: "FOUNDATION_VALIDATED" };
 }

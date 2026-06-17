@@ -33,10 +33,13 @@ from fastapi import FastAPI
 from .enricher import extract_work_signals
 from .forecaster import forecast_project_risk
 from .meeting import extract_meeting_intelligence
+from .draft_tone import evaluate_draft_tone
 from .ranker import rank_next_actions
 from .rerank import rerank_candidates
 from .risk import score_risk
 from .schemas import (
+    DraftToneInput,
+    DraftToneResult,
     HealthResponse,
     MeetingIntelligenceInput,
     MeetingIntelligenceResult,
@@ -126,3 +129,13 @@ def score_risk_route(payload: RiskScoringInput) -> RiskScoringResult:
     # Deterministic watcher findings stay primary; Foundation re-validates every
     # score and treats it as advisory.
     return score_risk(payload)
+
+
+@app.post("/jobs/draft-tone", response_model=DraftToneResult)
+def draft_tone_route(payload: DraftToneInput) -> DraftToneResult:
+    # Phase 1285-Y — advisory draft tone / quality intelligence. This evaluates a
+    # PROPOSED message and proposes a cleaner revision; it NEVER sends, approves,
+    # decides recipients or permissions, impersonates anyone, or overwrites the
+    # user's intent. The suggested_revision is a safe transform of the original
+    # (no em dash). Foundation re-validates the revision + keeps approval gates.
+    return evaluate_draft_tone(payload)

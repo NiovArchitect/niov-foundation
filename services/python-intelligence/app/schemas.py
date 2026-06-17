@@ -405,6 +405,95 @@ class RiskScoringResult(BaseModel):
     provider_mode: Literal["PYTHON"] = "PYTHON"
 
 
+# --- Draft tone intelligence (Phase 1285-Y) ---------------------------------
+# ADVISORY only. Foundation governs the call and is the sole authority on send /
+# approval / recipients / intent. This service evaluates a PROPOSED message and
+# proposes a cleaner revision; it NEVER sends, approves, decides recipients or
+# permissions, impersonates anyone, or overwrites the user's intent. No LLM, no
+# chain-of-thought. Detection is deterministic phrase/structure heuristics; the
+# suggested_revision is a safe transform of the original (em-dashes removed, mild
+# softening) — recipient-facing text never contains an em dash.
+
+DraftChannel = Literal[
+    "internal_message",
+    "email",
+    "meeting_follow_up",
+    "action_proposal",
+    "voice_draft",
+    "unknown",
+]
+
+DraftToneLabel = Literal[
+    "CLEAR",
+    "WARM",
+    "DIRECT",
+    "TOO_HARSH",
+    "TOO_VAGUE",
+    "TOO_LONG",
+    "NEEDS_CONTEXT",
+    "EXECUTIVE_READY",
+    "RISKY",
+]
+
+DraftRiskFlag = Literal[
+    "EM_DASH",
+    "HARSH_TONE",
+    "BLAME_LANGUAGE",
+    "AMBIGUOUS_RECIPIENT",
+    "MISSING_CONTEXT",
+    "TOO_MANY_WORDS",
+    "POSSIBLE_POLICY_RISK",
+    "EXTERNAL_SEND_REQUIRES_APPROVAL",
+]
+
+DraftConfidence = Literal["HIGH", "MEDIUM", "LOW"]
+
+
+class DraftRecipientContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: Optional[str] = Field(default=None, max_length=200)
+    relationship: Optional[str] = Field(default=None, max_length=80)
+    internal: bool
+
+
+class DraftConstraints(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    no_em_dash: bool = True
+    preserve_intent: bool = True
+    approval_required: Optional[bool] = None
+
+
+class DraftToneInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    draft_id: Optional[str] = Field(default=None, max_length=200)
+    draft_text: str = Field(min_length=1, max_length=8000)
+    channel: DraftChannel
+    recipient_context: Optional[DraftRecipientContext] = None
+    intent: Optional[str] = Field(default=None, max_length=2000)
+    constraints: Optional[DraftConstraints] = None
+
+
+class DraftToneResult(BaseModel):
+    """Advisory draft assessment + a safe suggested revision. ``suggested_revision``
+    is a transform of the original (never an em dash); ``preserves_intent`` is the
+    deterministic guarantee that no recipient/commitment was added."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quality_score: int = Field(ge=0, le=100)
+    tone_label: DraftToneLabel
+    risk_flags: list[DraftRiskFlag] = Field(default_factory=list, max_length=12)
+    suggested_revision: str = Field(min_length=1, max_length=8000)
+    reason: str = Field(min_length=1, max_length=300)
+    confidence: DraftConfidence
+    approval_required: bool
+    preserves_intent: bool
+    provider_mode: Literal["PYTHON"] = "PYTHON"
+
+
 # --- Health -----------------------------------------------------------------
 
 
