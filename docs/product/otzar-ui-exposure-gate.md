@@ -64,7 +64,8 @@ surfaces whose routes existed but had no nav entry.)
 | resolveEntityNames | `identity/resolve-entities` | none | SYSTEM_INTERNAL_ONLY | n/a | INTENTIONALLY_INTERNAL |
 | identity resolution / canonical labels | resolver + CT canonical-entity | renders names everywhere | SYSTEM_INTERNAL_ONLY (mechanism) | n/a | INTENTIONALLY_INTERNAL |
 | source_message_id / extraction_source / policy reason / execution attempts / correction history | projections + audit | View/Why panels | PROOF_ONLY | participants/admin | INTENTIONALLY_CONTEXTUAL (1285-J) |
-| Ask Twin | (not wired) | PersonCockpit "coming next" copy | COMING_NEXT_DISABLED | all | INTENTIONALLY_DISABLED (not fake) |
+| Ask your Twin (self) | governed conductSession + COE | My Twin "Ask your Twin" box | CONTEXTUAL_SURFACE | all (self-scoped) | LIVE (1285-R; Work-OS questions route deterministically; governed self answer) |
+| Ask another person's Twin | (no cross-entity contract) | disabled-honest → Collaboration | COMING_NEXT_DISABLED | all | INTENTIONALLY_DISABLED (not fake; no impersonation) |
 | org diagnostics / audit verify | audit/verify-chain | admin surfaces | ADMIN_ONLY / PROOF_ONLY | admin/regulator | INTENTIONALLY_ADMIN_ONLY |
 | internal event bus / raw BEAM / raw Python jobs / token-session mechanics | various | none | SYSTEM_INTERNAL_ONLY | n/a | INTENTIONALLY_INTERNAL |
 | Blind Spots watcher feed | `/work-os/blind-spots` (+ watcher routes TBD) | `/app/blind-spots` | PRIMARY_NAV (feed) / AMBIENT (watchers) | all (own) / admin | NEEDS decision (backlog #5/#6) |
