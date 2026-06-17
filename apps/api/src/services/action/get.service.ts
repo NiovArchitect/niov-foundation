@@ -32,8 +32,9 @@
 
 import { prisma } from "@niov/database";
 import type { Action } from "@prisma/client";
-import { projectActionView, type SafeActionView } from "./views.js";
+import { projectActionView, type SafeActionView, type SafeActionLabels } from "./views.js";
 import { getOrgEntityId } from "../governance/org.js";
+import { resolveEntityNames } from "../identity/resolve-entities.js";
 
 // WHAT: RFC 4122 UUID regex (mirrors create + cancel validators).
 // INPUT: None.
@@ -112,9 +113,10 @@ function projectActionDetailView(
   action: Action,
   attempt_count: number,
   last_result_summary: string | null,
+  labels?: SafeActionLabels,
 ): SafeActionDetailView {
   return {
-    ...projectActionView(action),
+    ...projectActionView(action, undefined, labels),
     attempt_count,
     last_result_summary,
   };
@@ -191,9 +193,25 @@ export async function getActionForCaller(
     }
   }
 
+  // Resolve target + source to SAFE display labels (ADR-0057 §10 Amendment 1);
+  // unresolved → null so the UI shows "recipient unavailable", never a UUID.
+  const names = await resolveEntityNames([
+    action.target_entity_id,
+    action.source_entity_id,
+  ]);
+  const labelOf = (id: string | null): string | null => {
+    if (id === null) return null;
+    const r = names.get(id);
+    return r === undefined || r.unresolved ? null : r.display_name;
+  };
+  const labels: SafeActionLabels = {
+    target_label: labelOf(action.target_entity_id),
+    requester_label: labelOf(action.source_entity_id),
+  };
+
   return {
     ok: true,
     httpStatus: 200,
-    view: projectActionDetailView(action, attemptCount, lastResultSummary),
+    view: projectActionDetailView(action, attemptCount, lastResultSummary, labels),
   };
 }
