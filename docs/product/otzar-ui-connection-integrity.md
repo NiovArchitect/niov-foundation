@@ -56,7 +56,7 @@ NEEDS-GUI (manual validation only).
 | Waiting on / is waiting on you | CONNECTED | `waitingOn`; refreshes after Add (#6) |
 | signal chip Add | CONNECTED | tracked flag + refresh |
 | Request help | PARTIAL | callback wired; downstream collaboration request is minimal |
-| Ask Twin | DISABLED-HONEST | "Ask-Twin coming next" copy (not fake) |
+| Ask Twin | SELF-ASK LIVE (1285-R) | self-scoped governed conductSession + Work-OS routing; another person's Twin stays disabled-honest |
 | shared/recent badges | MOCK | counts are placeholders (display only) |
 
 ### 5. My Work (`MyWork.tsx`)
@@ -108,8 +108,9 @@ NEEDS-GUI (manual validation only).
 
 | Affordance | Status | Note |
 | --- | --- | --- |
-| Ask Twin | DISABLED-HONEST | "coming next"; not fake |
-| scoped answer / no impersonation | N/A | not yet wired |
+| Ask Twin (self) | LIVE (1285-R) | My Twin "Ask your Twin" box → governed conductSession; Work-OS questions route deterministically |
+| Ask another person's Twin | DISABLED-HONEST | routes to Collaboration; never answers for / impersonates another Twin |
+| scoped answer / no impersonation | LIVE for self (1285-R) | self answer is COE permission-scoped + attributed + provenance; cross-entity is a future backend contract |
 
 ### 12. Corrections
 

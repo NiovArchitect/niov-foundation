@@ -22,7 +22,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 8 | Richer thread/work queries | P1 | LIVE (1285-M: completed / blockers / decisions / inverse-waiting-on / overdue / changed / summary + latest-say — all durable; pending GUI validation) |
 | 5 | Blind Spots watcher feed | P2 | LIVE + GUI_VALIDATED (1285-N) → richer governed watcher feed (1285-P: GET /work-os/watchers/feed, WatcherFinding contract, 6 groups, pending GUI validation) |
 | 6 | BEAM watcher routes | P2 | IN_PROGRESS (1285-P: Foundation deterministic watcher service + route LIVE; BEAM watcher actor bridge deferred as P2 — no stable BEAM watcher-evaluation route exists; see docs/product/otzar-watcher-routes.md) |
-| 7 | Ask Twin wiring | P2 | NOT_STARTED (disabled-honest today) |
+| 7 | Ask Twin wiring | P2 | LIVE self-ask (1285-R: governed conductSession + COE; Work-OS questions route deterministically; another person's Twin stays disabled-honest; pending GUI validation). Cross-entity Ask Twin remains a separate future backend contract. |
 | 9 | Async Python enrichment | P2 | NOT_STARTED (deterministic fallback live) |
 
 ---
@@ -193,14 +193,30 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
   a governed action.
 - Tests: watcher create/read/resolve; Blind Spots consumes watcher data.
 
-## 7. Ask Twin wiring — NOT_STARTED (P2; disabled-honest today)
+## 7. Ask Twin wiring — LIVE self-ask (1285-R; pending GUI validation)
 
-- Goal: Ask Twin is real or clearly disabled — never fake.
-- When wired: authorized thread/work/project context only; owner boundary; no
-  impersonation; answer labeled Twin/system-generated; proof; no private/
-  unscoped memory; can propose next action, never silently execute.
-- Tests: Ask Twin from David cockpit answers from scoped context or says
-  unavailable.
+- Goal: Ask Twin is real or clearly disabled, never fake.
+- Phase 1285-R (self-scoped only): a new "Ask your Twin" box on the My Twin
+  page. Three deterministic paths via `src/lib/work-os/ask-twin.ts`
+  `classifyAskTwin`:
+  - Known Work OS question routes to its durable surface (My Work / Blind
+    Spots / Team Work), never the LLM (shared `matchWorkOsQuery`).
+  - A question aimed at another person's Twin is disabled-honest: Otzar will
+    not answer for or impersonate someone else's Twin; it offers a governed
+    request in Collaboration. No LLM call, no fake answer.
+  - A genuine self question calls the LIVE governed `conductSession` endpoint
+    (`POST /otzar/conversation/message`, COE permission-scoped + audited +
+    RULE 0). The answer is labeled "Answered by your Twin from your governed
+    context" with transparency + provenance (title/scope, never a raw UUID).
+    Proposed external writes stay approval-gated (shown as proposals, never
+    executed). No new backend; no frontend-only LLM.
+- Cross-entity Ask Twin (answering as / for another person's Twin) remains a
+  SEPARATE future backend contract: cross-DMW scoping + consent/authority +
+  no-impersonation safeguards. Not built in 1285-R.
+- Tests: classifier routing (work-os / other-twin / self); My Twin Ask box
+  (work-os routes without an LLM call; other-twin disabled-honest with no LLM
+  and no fake; self-ask renders governed answer + transparency + provenance
+  without a raw UUID; honest error with no fake on failure).
 
 ## 8. Richer thread/work queries — PARTIAL (P1)
 
