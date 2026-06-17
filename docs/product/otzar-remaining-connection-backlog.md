@@ -20,7 +20,7 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 3 | Action Center stale-artifact cleanup | P1 | NOT_STARTED |
 | 4 | Comms final cleanup | P1 | IN_PROGRESS (1285-L2: default cockpit repaired + blockers surfaced + follow-up View/Why; recent-artifacts endpoint = documented backend gap) |
 | 8 | Richer thread/work queries | P1 | LIVE (1285-M: completed / blockers / decisions / inverse-waiting-on / overdue / changed / summary + latest-say — all durable; pending GUI validation) |
-| 5 | Blind Spots watcher feed | P2 | NOT_STARTED |
+| 5 | Blind Spots watcher feed | P2 | LIVE (1285-N: typed risk feed — overdue/stale/blocker/no-next-action, one risk per entry, canonical names + proof + recommended action; UNANSWERED_ASK/STALE_COMMITMENT deferred; pending GUI validation) |
 | 6 | BEAM watcher routes | P2 | NOT_STARTED |
 | 7 | Ask Twin wiring | P2 | NOT_STARTED (disabled-honest today) |
 | 9 | Async Python enrichment | P2 | NOT_STARTED (deterministic fallback live) |
@@ -130,14 +130,38 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 - UI: Comms page; notification-routing (DM never → Comms — already true).
 - Tests: DM notification never opens Comms; extracted work links to ledger.
 
-## 5. Blind Spots watcher feed — NOT_STARTED (P2)
+## 5. Blind Spots watcher feed — LIVE (1285-N, pending GUI validation)
 
 - Goal: surface risk from real work state: stale waiting-on, overdue
   commitments, unresolved blockers, unanswered asks, no-next-action, repeated
   ignored corrections, blocked projects.
-- System of record: Work Ledger + watchers (see #6).
-- UI: BlindSpots.tsx feed with source/owner/requester/age/reason/next-action.
-- Tests: stale David→Sadeil ask appears with proof; no fake blind spots.
+- System of record: Work Ledger (durable rows only; no AI guessing, no fake
+  risk). BEAM watchers (#6) remain a future enrichment source.
+- Backend: `getBlindSpotFeed` (work-ledger.service.ts) +
+  `GET /api/v1/work-os/blind-spots/feed` (auth: read). One blind spot per
+  ledger entry — the single highest-priority risk, never double-counted:
+  `OVERDUE_WORK > UNRESOLVED_BLOCKER > STALE_WAITING_ON > NO_NEXT_ACTION`.
+  Each item carries severity, canonical owner/requester names (never a raw
+  UUID), age_days, due_at, source_message_id proof, recommended action, and
+  the detection_rule string. Terminal statuses excluded by query. Scope:
+  employee sees own; manager (can_admin_org) sees team; tenant-isolated.
+- UI: BlindSpots.tsx typed feed grouped into Overdue / Stale waiting-on /
+  Blockers / No next action; severity badge + owner/requester + age/due +
+  recommended action + Why (shared ViewWhyPanel → detection rule + proof);
+  honest empty state "No blind spots detected right now."; legacy
+  runtime/verification + ledger-status sections preserved below, deduped by
+  ledger_entry_id; refreshes on WorkStateChanged.
+- v1 detection rules IMPLEMENTED: OVERDUE_WORK, UNRESOLVED_BLOCKER,
+  STALE_WAITING_ON, NO_NEXT_ACTION.
+- DEFERRED (not safely detectable from durable state in v1, documented not
+  faked): UNANSWERED_ASK, STALE_COMMITMENT — and repeated-ignored-correction
+  / blocked-project signals, which need #6 watcher state + Wave 3 drift
+  detection (ADR-0055).
+- Tests: stale David→Sadeil ask appears with proof + canonical names; overdue
+  / blocker / no-owner classified with severity; multi-rule entry collapses to
+  one; manager vs caller scope; completed excluded; no fake blind spots;
+  CT feed renders + empty/error honest + View/Why + no raw UUID.
+- Foundation PRs #401 (feed) + #402 (collapse); CT PR #111.
 
 ## 6. BEAM watcher routes — NOT_STARTED (P2)
 
