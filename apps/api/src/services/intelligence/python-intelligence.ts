@@ -106,16 +106,40 @@ export interface SemanticRankCandidate {
   reason: string;
 }
 
+// ── Risk scoring (Phase 1285-X) ─────────────────────────────────────────────
+// An advisory risk assessment for ONE candidate Foundation already scoped (a
+// deterministic watcher finding over durable work). Foundation re-validates the
+// candidate_id against the allowed set; severity/signals are closed-vocab; the
+// deterministic watcher finding stays primary. reason is a short closed phrase
+// (never raw chain-of-thought).
+export interface RiskScoreCandidate {
+  candidate_id: string;
+  risk_score: number; // 0..100
+  severity: string; // LOW | MEDIUM | HIGH | CRITICAL
+  confidence: string; // HIGH | MEDIUM | LOW
+  reason: string;
+  contributing_signals: string[];
+  suggested_next_action: string;
+  human_review_needed: boolean;
+}
+
 // The advisory items an envelope can carry, across capabilities.
 export type PythonCandidate =
   | PythonSignalCandidate
   | MeetingIntelligenceCandidate
-  | SemanticRankCandidate;
+  | SemanticRankCandidate
+  | RiskScoreCandidate;
 
 // The closed-vocab result the semantic-rerank client returns to Foundation.
 export interface SemanticRerankExtractionResult {
   status: EnrichmentStatus;
   ranked: SemanticRankCandidate[];
+}
+
+// The closed-vocab result the risk-scoring client returns to Foundation.
+export interface RiskScoringExtractionResult {
+  status: EnrichmentStatus;
+  scores: RiskScoreCandidate[];
 }
 
 // The closed-vocab result the meeting/perception client returns to Foundation.
@@ -430,4 +454,91 @@ export function validateSemanticRetrievalEnvelope(
     };
   }
   return { ...envelope, candidates: ranked, authority: "FOUNDATION_VALIDATED", warnings };
+}
+
+// WHAT: wrap a RISK_SCORING runtime result into the envelope.
+// WHY: Phase 1285-X — risk scores are advisory metadata over deterministic
+//      watcher findings. A 200 with no scores is NO_SIGNAL (nothing to assess —
+//      the deterministic findings stand); unavailability/failure map to cause.
+export function buildRiskScoringEnvelope(
+  result: RiskScoringExtractionResult,
+  latencyMs: number,
+  nowIso: string,
+): PythonIntelligenceEnvelope {
+  let status: PythonEnrichmentStatus;
+  switch (result.status) {
+    case "PYTHON_ENRICHED":
+      status = result.scores.length > 0 ? "PYTHON_ENRICHED" : "NO_SIGNAL";
+      break;
+    case "PYTHON_NOT_CONFIGURED":
+      status = "NOT_CONFIGURED";
+      break;
+    case "PYTHON_UNHEALTHY":
+      status = "UNHEALTHY";
+      break;
+    case "PYTHON_TIMEOUT":
+      status = "TIMEOUT";
+      break;
+    default:
+      status = "ERROR"; // PYTHON_JOB_FAILED / PYTHON_INVALID_RESPONSE
+  }
+  const enriched = status === "PYTHON_ENRICHED";
+  return {
+    status,
+    source: "PYTHON_ADVISORY",
+    authority: null,
+    capability: "RISK_SCORING",
+    model: null,
+    version: null,
+    latency_ms: latencyMs,
+    confidence: null,
+    candidates: result.scores,
+    summary: enriched ? `Scored ${result.scores.length} risk candidate(s).` : null,
+    reasoning_summary: null,
+    provenance: "python:risk-scoring",
+    warnings: [],
+    error_code: enriched ? null : status,
+    updated_at: nowIso,
+  };
+}
+
+// WHAT: Foundation's validation of a risk-scoring envelope.
+// INPUT: a pre-validation envelope + the set of candidate_ids Foundation allowed.
+// OUTPUT: the envelope with unknown ids dropped + authority set.
+// WHY: Foundation is the authority. Python may ONLY score candidates Foundation
+//      already scoped — any returned id NOT in the allowed set is unknown /
+//      cross-tenant / drift and is rejected here before it can surface. A
+//      scoring that, after rejection, has at least one allowed id is
+//      FOUNDATION_VALIDATED; an all-unknown result is FOUNDATION_DOWNGRADED (the
+//      deterministic findings stand); anything not enriched carries no authority.
+export function validateRiskScoringEnvelope(
+  envelope: PythonIntelligenceEnvelope,
+  allowedIds: ReadonlySet<string>,
+): PythonIntelligenceEnvelope {
+  if (envelope.status !== "PYTHON_ENRICHED") {
+    return { ...envelope, authority: null };
+  }
+  const scored = envelope.candidates.filter(
+    (c): c is RiskScoreCandidate =>
+      "candidate_id" in c &&
+      "risk_score" in c &&
+      allowedIds.has((c as RiskScoreCandidate).candidate_id),
+  );
+  const droppedUnknown = envelope.candidates.length - scored.length;
+  const warnings = [...envelope.warnings];
+  if (droppedUnknown > 0) {
+    warnings.push(
+      `${droppedUnknown} risk score(s) rejected: not in the Foundation-allowed set`,
+    );
+  }
+  if (scored.length === 0) {
+    return {
+      ...envelope,
+      status: "FOUNDATION_DOWNGRADED",
+      authority: null,
+      candidates: [],
+      warnings,
+    };
+  }
+  return { ...envelope, candidates: scored, authority: "FOUNDATION_VALIDATED", warnings };
 }

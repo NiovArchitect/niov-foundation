@@ -35,6 +35,7 @@ from .forecaster import forecast_project_risk
 from .meeting import extract_meeting_intelligence
 from .ranker import rank_next_actions
 from .rerank import rerank_candidates
+from .risk import score_risk
 from .schemas import (
     HealthResponse,
     MeetingIntelligenceInput,
@@ -43,6 +44,8 @@ from .schemas import (
     NextActionRankingResult,
     ProjectRiskForecastRequest,
     ProjectRiskForecastResponse,
+    RiskScoringInput,
+    RiskScoringResult,
     SemanticRerankInput,
     SemanticRerankResult,
     WorkSignalExtractionInput,
@@ -112,3 +115,14 @@ def semantic_rerank_route(payload: SemanticRerankInput) -> SemanticRerankResult:
     # never decides scope, and never becomes the source of truth. Foundation
     # re-validates every returned id.
     return rerank_candidates(payload)
+
+
+@app.post("/jobs/score-risk", response_model=RiskScoringResult)
+def score_risk_route(payload: RiskScoringInput) -> RiskScoringResult:
+    # Phase 1285-X — advisory risk scoring over a Foundation-scoped candidate set
+    # (deterministic watcher findings over durable work). This scores, explains,
+    # and recommends ONLY; it never creates work, notifies anyone, decides scope/
+    # ownership/permission, or returns a candidate_id not present in the input.
+    # Deterministic watcher findings stay primary; Foundation re-validates every
+    # score and treats it as advisory.
+    return score_risk(payload)

@@ -15,8 +15,11 @@ import {
   validateMeetingEnvelope,
   buildSemanticRetrievalEnvelope,
   validateSemanticRetrievalEnvelope,
+  buildRiskScoringEnvelope,
+  validateRiskScoringEnvelope,
   type MeetingIntelligenceExtractionResult,
   type SemanticRerankExtractionResult,
+  type RiskScoringExtractionResult,
 } from "../../apps/api/src/services/intelligence/python-intelligence.js";
 import type { WorkSignalExtractionResult } from "../../apps/api/src/services/intelligence/python-enrichment.service.js";
 
@@ -195,6 +198,69 @@ describe("buildSemanticRetrievalEnvelope + validateSemanticRetrievalEnvelope (Ph
 
   it("no authority for NO_SIGNAL / unavailable", () => {
     const e = validateSemanticRetrievalEnvelope(buildSemanticRetrievalEnvelope(rerank({ status: "PYTHON_NOT_CONFIGURED", ranked: [] }), 0, NOW), new Set(["led-1"]));
+    expect(e.authority).toBe(null);
+  });
+});
+
+describe("buildRiskScoringEnvelope + validateRiskScoringEnvelope (Phase 1285-X)", () => {
+  function risk(over: Partial<RiskScoringExtractionResult> = {}): RiskScoringExtractionResult {
+    return {
+      status: "PYTHON_ENRICHED",
+      scores: [
+        { candidate_id: "OVERDUE_WORK:led-1", risk_score: 85, severity: "CRITICAL", confidence: "HIGH", reason: "overdue; critical risk.", contributing_signals: ["OVERDUE", "HIGH_BASE_SEVERITY"], suggested_next_action: "Follow up.", human_review_needed: true },
+        { candidate_id: "NO_NEXT_ACTION:led-2", risk_score: 32, severity: "MEDIUM", confidence: "LOW", reason: "no next action; medium risk.", contributing_signals: ["NO_NEXT_ACTION"], suggested_next_action: "Assign owner.", human_review_needed: false },
+      ],
+      ...over,
+    };
+  }
+
+  it("builds a RISK_SCORING envelope carrying the scored candidates", () => {
+    const e = buildRiskScoringEnvelope(risk(), 14, NOW);
+    expect(e.capability).toBe("RISK_SCORING");
+    expect(e.source).toBe("PYTHON_ADVISORY");
+    expect(e.status).toBe("PYTHON_ENRICHED");
+    expect(e.candidates.length).toBe(2);
+    expect(e.reasoning_summary).toBe(null); // never raw chain-of-thought
+    expect(e.provenance).toBe("python:risk-scoring");
+  });
+
+  it("200 with no scores is NO_SIGNAL; unavailability/error map explicitly", () => {
+    expect(buildRiskScoringEnvelope(risk({ status: "PYTHON_ENRICHED", scores: [] }), 0, NOW).status).toBe("NO_SIGNAL");
+    expect(buildRiskScoringEnvelope(risk({ status: "PYTHON_NOT_CONFIGURED", scores: [] }), 0, NOW).status).toBe("NOT_CONFIGURED");
+    expect(buildRiskScoringEnvelope(risk({ status: "PYTHON_UNHEALTHY", scores: [] }), 0, NOW).status).toBe("UNHEALTHY");
+    expect(buildRiskScoringEnvelope(risk({ status: "PYTHON_TIMEOUT", scores: [] }), 0, NOW).status).toBe("TIMEOUT");
+    expect(buildRiskScoringEnvelope(risk({ status: "PYTHON_JOB_FAILED", scores: [] }), 0, NOW).status).toBe("ERROR");
+  });
+
+  it("FOUNDATION_VALIDATED only over ids in the allowed set", () => {
+    const e = validateRiskScoringEnvelope(buildRiskScoringEnvelope(risk(), 10, NOW), new Set(["OVERDUE_WORK:led-1", "NO_NEXT_ACTION:led-2"]));
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect(e.candidates.length).toBe(2);
+  });
+
+  it("rejects an unknown / cross-tenant id and warns; keeps the allowed ones", () => {
+    const drift = risk({
+      scores: [
+        { candidate_id: "OVERDUE_WORK:led-1", risk_score: 85, severity: "CRITICAL", confidence: "HIGH", reason: "r", contributing_signals: ["OVERDUE"], suggested_next_action: "a", human_review_needed: true },
+        { candidate_id: "FOREIGN-TENANT-finding", risk_score: 99, severity: "CRITICAL", confidence: "HIGH", reason: "drift", contributing_signals: ["BLOCKED"], suggested_next_action: "a", human_review_needed: true },
+      ],
+    });
+    const e = validateRiskScoringEnvelope(buildRiskScoringEnvelope(drift, 10, NOW), new Set(["OVERDUE_WORK:led-1"]));
+    expect(e.authority).toBe("FOUNDATION_VALIDATED");
+    expect(e.candidates.map((c) => (c as { candidate_id: string }).candidate_id)).toEqual(["OVERDUE_WORK:led-1"]);
+    expect(e.warnings.join(" ")).toMatch(/rejected: not in the Foundation-allowed set/);
+  });
+
+  it("DOWNGRADES when EVERY scored id is unknown (pure drift)", () => {
+    const allForeign = risk({ scores: [{ candidate_id: "FOREIGN", risk_score: 99, severity: "CRITICAL", confidence: "HIGH", reason: "drift", contributing_signals: ["BLOCKED"], suggested_next_action: "a", human_review_needed: true }] });
+    const e = validateRiskScoringEnvelope(buildRiskScoringEnvelope(allForeign, 10, NOW), new Set(["OVERDUE_WORK:led-1"]));
+    expect(e.status).toBe("FOUNDATION_DOWNGRADED");
+    expect(e.authority).toBe(null);
+    expect(e.candidates).toEqual([]);
+  });
+
+  it("no authority for NO_SIGNAL / unavailable", () => {
+    const e = validateRiskScoringEnvelope(buildRiskScoringEnvelope(risk({ status: "PYTHON_NOT_CONFIGURED", scores: [] }), 0, NOW), new Set(["OVERDUE_WORK:led-1"]));
     expect(e.authority).toBe(null);
   });
 });
