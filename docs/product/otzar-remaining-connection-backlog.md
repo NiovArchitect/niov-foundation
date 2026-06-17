@@ -20,8 +20,8 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 | 3 | Action Center stale-artifact cleanup | P1 | NOT_STARTED |
 | 4 | Comms final cleanup | P1 | IN_PROGRESS (1285-L2: default cockpit repaired + blockers surfaced + follow-up View/Why; recent-artifacts endpoint = documented backend gap) |
 | 8 | Richer thread/work queries | P1 | LIVE (1285-M: completed / blockers / decisions / inverse-waiting-on / overdue / changed / summary + latest-say — all durable; pending GUI validation) |
-| 5 | Blind Spots watcher feed | P2 | LIVE (1285-N: typed risk feed — overdue/stale/blocker/no-next-action, one risk per entry, canonical names + proof + recommended action; UNANSWERED_ASK/STALE_COMMITMENT deferred; pending GUI validation) |
-| 6 | BEAM watcher routes | P2 | NOT_STARTED |
+| 5 | Blind Spots watcher feed | P2 | LIVE + GUI_VALIDATED (1285-N) → richer governed watcher feed (1285-P: GET /work-os/watchers/feed, WatcherFinding contract, 6 groups, pending GUI validation) |
+| 6 | BEAM watcher routes | P2 | IN_PROGRESS (1285-P: Foundation deterministic watcher service + route LIVE; BEAM watcher actor bridge deferred as P2 — no stable BEAM watcher-evaluation route exists; see docs/product/otzar-watcher-routes.md) |
 | 7 | Ask Twin wiring | P2 | NOT_STARTED (disabled-honest today) |
 | 9 | Async Python enrichment | P2 | NOT_STARTED (deterministic fallback live) |
 
@@ -130,7 +130,19 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
 - UI: Comms page; notification-routing (DM never → Comms — already true).
 - Tests: DM notification never opens Comms; extracted work links to ledger.
 
-## 5. Blind Spots watcher feed — LIVE (1285-N, pending GUI validation)
+## 5. Blind Spots watcher feed — LIVE + GUI_VALIDATED (1285-N); richer watcher feed (1285-P, pending GUI validation)
+
+- Phase 1285-P upgrade: detection now lives in a single deterministic detector
+  (`watcher.service.ts`). `getWatcherFeed` exposes the richer `WatcherFinding`
+  contract at `GET /api/v1/work-os/watchers/feed` (canonical participants +
+  source proof + detection metadata + recommended next action + action_kind);
+  `getBlindSpotFeed` is now a thin projection of the same scan (no duplication).
+  BlindSpots.tsx consumes `watchersFeed` as the primary feed, grouped into 6
+  sections (Overdue / Stale waiting-on / Blockers / No next action / Unanswered
+  asks / Commitments; empty groups omitted). Voice routing for blind-spot /
+  overdue / at-risk / stale / follow-up / unresolved-blocker questions is
+  deterministic → /app/blind-spots. Foundation PR #406; CT PR #113. See
+  `docs/product/otzar-watcher-routes.md`.
 
 - Goal: surface risk from real work state: stale waiting-on, overdue
   commitments, unresolved blockers, unanswered asks, no-next-action, repeated
@@ -163,7 +175,16 @@ Priority order (by loop impact): P0 = 10, 11, 1, 2 · P1 = 3, 4, 8 · P2 = 5, 6,
   CT feed renders + empty/error honest + View/Why + no raw UUID.
 - Foundation PRs #401 (feed) + #402 (collapse); CT PR #111.
 
-## 6. BEAM watcher routes — NOT_STARTED (P2)
+## 6. BEAM watcher routes — IN_PROGRESS (1285-P Foundation; BEAM actor bridge = P2)
+
+- Phase 1285-P landed the Foundation half: the governed watcher service +
+  `GET /api/v1/work-os/watchers/feed` (deterministic, BEAM-independent). The
+  BEAM watcher *actor* bridge (`POST /beam/watchers/evaluate`) is deferred as
+  **Phase 1285-P2** because BEAM exposes dispatch + health only — no stable
+  watcher-evaluation route exists. Faking it was explicitly avoided. The feed
+  contract is structured as exactly what BEAM will feed; Foundation stays the
+  policy authority (re-validates + re-scopes candidates). See
+  `docs/product/otzar-watcher-routes.md` §"BEAM bridge — Phase 1285-P2".
 
 - Goal: make BEAM watchers visible + governable.
 - Needed: GET watchers, GET detail, PATCH status, next_check_at,
