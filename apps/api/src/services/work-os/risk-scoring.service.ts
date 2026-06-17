@@ -237,5 +237,17 @@ export async function assessWorkRisk(args: {
   });
 }
 
+// WHAT: assess a set of watcher findings with the DETERMINISTIC risk heuristic
+//        only (no Python). Ordered by risk_score desc.
+// WHY: consumers that need deterministic risk WITHOUT an advisory Python round-
+//      trip (e.g. the operational-analytics snapshot, Phase 1285-Z) reuse this so
+//      the snapshot stays fully deterministic and makes a single Python call of
+//      its own.
+export function assessFindingsDeterministic(findings: WatcherFinding[]): RiskAssessedFinding[] {
+  return findings
+    .map((f) => ({ ...f, risk_assessment: deterministicAssessment(f) }))
+    .sort((a, b) => b.risk_assessment.risk_score - a.risk_assessment.risk_score);
+}
+
 // Exposed for unit tests (the pure pieces).
 export const __internals = { deterministicAssessment, signalsOf, toPayload };
