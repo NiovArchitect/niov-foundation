@@ -236,7 +236,19 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
-### Phase 1301-A — Cross-Org Marketplace Discovery (gated, provider-opt-in) — IN_PROGRESS 2026-06-18
+### Phase 1301-A — Cross-Org Marketplace Discovery (gated, provider-opt-in) — LANDED 2026-06-18 (PR #443)
+
+> **Production activation PENDING (Founder-gated).** Merged to `main` + CI-green +
+> integration-proven end-to-end (26/26 through real Fastify + local test DB with
+> the column). The additive `MarketplaceDiscoveryScope` enum + `discovery_scope`
+> column live only in the local test DB — **production Supabase does NOT have them
+> yet**. The live `:3000` API runs against production and was deliberately NOT
+> restarted (its regenerated Prisma client would reference a column prod lacks,
+> breaking all marketplace listing reads). Activating 1301-A in production needs an
+> explicit Founder **"APPROVE PROD SCHEMA PUSH — additive only"** + redeploy of the
+> prod-pointed API. A read-only prod-parity diff should scope the full delta first
+> (last prod push 2026-06-12 — 1294-A…1299-B schema may also be unpushed). `main`
+> is ahead of production until then.
 
 Adds an **opt-in cross-org discovery catalog** to the marketplace substrate. By
 default a PUBLISHED personal/org-less listing was visible only to its provider
