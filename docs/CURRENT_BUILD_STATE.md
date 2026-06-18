@@ -163,14 +163,26 @@ Otzar.app rebuilt + relaunched (PID 28504 at last check); API/Python/BEAM all
 healthy (200). Both repos clean, on `main`, synced; all arc PRs merged; no arc
 branches left open; `.env.save` remains untracked/gitignored.
 
-### ⏸️ 1304-A deliberately deferred (NOT for lack of time)
+### ✅ 1304-A — Review/Federation-Cloud notification routing (CT-first; mostly verify, small additive)
 
-Review/marketplace notification+badge integration was skipped on purpose: at the time
-the marketplace-badge half would poll `/discover`, which 404'd against prod pre-push —
-it would ship dormant (cosmetic, rule 2); the review-badge half already shipped in
-1300-B and a second notification surface is stale clutter (rule 7). **As of 1303-C the
-`/discover` route is live against prod (401 unauth, not 404)**, so the dormancy reason
-no longer holds — revisit 1304-A as a real-data badge if/when the Founder re-queues it.
+Investigation found most 1304-A targets already shipped: the **Review Center badge**
+(1300-B: `use-reviewable-count` → `summary.pending_review_count`, scope `org_reviewable`,
+in `AdminSidebar`), **hardened mark-read** (optimistic + rollback + reconcile), and the
+**safe Marketplace shell** (`/marketplace` → `discover`, now live against prod). Per
+RULE 1 those were **not** rebuilt. The one additive code change: `notificationRoute()`
+gained forward-looking `review`→`/review-center` and `marketplace`→`/marketplace`
+mappings (inert until a backend notification *generator* exists — Foundation writes
+audit events only today). The **marketplace urgent nav badge is deferred** (`/discover`
+returns no count; an urgent badge would mislead). CT PR #127. No Foundation code/schema
+change.
+
+**Federation Cloud is not only individual listings.** Doctrine now records **DMW data
+cohorts** as a first-class *future* Federation Cloud product class (privacy-preserving
+aggregate/depersonalized signals composed from many governed DMW/Capsule scopes; no raw
+data; consent/proof/retention/revocation/audit/metering still Foundation-governed). See
+`docs/reference/federation-cloud-doctrine.md` §"DMW cohorts". Cohort mechanics are
+**not** implemented — forward phase **1305-A: Federation Cloud Cohort Data Product
+Substrate** (backend-only). No cohort counts/badges/UI/monetization exist or are implied.
 
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
