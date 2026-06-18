@@ -580,7 +580,14 @@ export type AuditEventType =
   | "MARKETPLACE_DATA_CONSENT_RECORDED"
   | "MARKETPLACE_DATA_GRANT_EVALUATED"
   | "MARKETPLACE_DATA_GRANT_CREATED"
-  | "MARKETPLACE_DATA_GRANT_REVOKED";
+  | "MARKETPLACE_DATA_GRANT_REVOKED"
+  // Phase 1295-A — COSMP-governed data-read delivery for a marketplace grant.
+  // Emitted on every grant read: SUCCESS (DELIVERED / NO_MATCH) or DENIED
+  // (scrubbed reason). SAFE details: grant_id + listing_id + data_package_id +
+  // access_mode + intended_use + status + result_count + proof_delivery.
+  // FORBIDDEN: raw capsule body/IDs, storage location, embeddings, payload
+  // content, PII, secrets. Additive — no ADR-0002 amendment.
+  | "MARKETPLACE_DATA_GRANT_READ_EVALUATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -781,6 +788,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MARKETPLACE_DATA_GRANT_EVALUATED",
   "MARKETPLACE_DATA_GRANT_CREATED",
   "MARKETPLACE_DATA_GRANT_REVOKED",
+  // Phase 1295-A COSMP-governed data-read delivery.
+  "MARKETPLACE_DATA_GRANT_READ_EVALUATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

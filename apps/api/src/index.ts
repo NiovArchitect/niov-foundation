@@ -73,6 +73,15 @@ export type {
   QuoteResult,
 } from "./services/foundation/economic-policy.service.js";
 
+// Phase 1295-A — COSMP-governed marketplace data-read delivery.
+export { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
+export type {
+  SafeReadItem,
+  SafeReadItemProof,
+  DataGrantReadResult,
+  DataGrantReadResponse,
+} from "./services/foundation/marketplace-data-delivery.service.js";
+
 // Phase 1293-A — Foundation observability + metering enforcement.
 export {
   FoundationObservabilityService,
