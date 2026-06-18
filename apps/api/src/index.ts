@@ -73,6 +73,22 @@ export type {
   QuoteResult,
 } from "./services/foundation/economic-policy.service.js";
 
+// Phase 1293-A — Foundation observability + metering enforcement.
+export {
+  FoundationObservabilityService,
+  buildObservabilityEnvelope,
+  evaluateMeterThreshold,
+} from "./services/foundation/observability.service.js";
+export type {
+  ObservabilityOutcome,
+  MeterThresholdDecision,
+  ObservabilityEnvelope,
+  MeterThresholdResult,
+  ObservabilitySnapshot,
+  SnapshotResult,
+  MeterCheckResult,
+} from "./services/foundation/observability.service.js";
+
 // Phase 1292-A — Foundation marketplace substrate.
 export {
   FoundationMarketplaceService,

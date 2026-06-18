@@ -27,6 +27,7 @@ import type { FoundationProofService } from "../services/foundation/proof-of-acc
 import type { FoundationEconomicService } from "../services/foundation/economic-policy.service.js";
 import type { FoundationAmbientDeviceService } from "../services/foundation/ambient-device.service.js";
 import type { FoundationMarketplaceService } from "../services/foundation/marketplace.service.js";
+import type { FoundationObservabilityService } from "../services/foundation/observability.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -59,6 +60,8 @@ const FAILURE_STATUS: Record<string, number> = {
   INVALID_USE_RIGHT: 422,
   LISTING_NOT_FOUND: 404,
   DATA_PACKAGE_NOT_FOUND: 404,
+  INVALID_METER_ID: 422,
+  INVALID_LIMIT: 422,
 };
 
 function failureStatus(code: string): number {
@@ -72,6 +75,7 @@ export async function registerFoundationRoutes(
   economicService: FoundationEconomicService,
   ambientDeviceService: FoundationAmbientDeviceService,
   marketplaceService: FoundationMarketplaceService,
+  observabilityService: FoundationObservabilityService,
 ): Promise<void> {
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
@@ -334,6 +338,47 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, access: result.access });
+    },
+  );
+
+  // ── Observability + metering enforcement (1293-A) ───────────────────────
+  // SAFE observability snapshot of the caller's own org usage meters.
+  app.get(
+    "/api/v1/foundation/observability/snapshot",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result =
+        await observabilityService.getObservabilitySnapshotForCaller(token);
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, snapshot: result.snapshot });
+    },
+  );
+
+  // Metering enforcement evaluator: check an org meter against a limit.
+  app.post<{ Body: { meter_id?: unknown; limit?: unknown } }>(
+    "/api/v1/foundation/observability/meter-check",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      if (typeof b.meter_id !== "string" || typeof b.limit !== "number")
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+      const result = await observabilityService.checkMeterThresholdForCaller(
+        token,
+        b.meter_id,
+        b.limit,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, result: result.result });
     },
   );
 }

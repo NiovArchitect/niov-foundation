@@ -474,3 +474,14 @@ describe("1292-A — Foundation marketplace audit literals defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1293-A — Foundation observability / metering-enforcement literal.
+describe("1293-A — Foundation observability audit literal defined", () => {
+  it("USAGE_METER_THRESHOLD_REACHED present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("USAGE_METER_THRESHOLD_REACHED");
+    expect(isKnownAuditEventType("USAGE_METER_THRESHOLD_REACHED")).toBe(true);
+  });
+  it("the literal set has no duplicates after the 1293-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});
