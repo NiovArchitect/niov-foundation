@@ -272,3 +272,26 @@ stop condition #7. An **APPROVED request delivers NO data, NO signal, NO payout*
 projected). Still forward-substrate after 1307-A: proof + safe aggregate signal
 delivery (1308-A), usage metering + mock economics (1309-A), contribution-weighted
 revenue share, and any cohort UI / counts / monetization.
+
+**Phase 1308-A — LANDED (proof + safe-signal delivery; threshold ENFORCED).** The
+delivery gate now exists: `CohortDeliveryService` +
+`POST /api/v1/foundation/cohorts/:id/access-requests/:rid/deliver`. This is the
+**one** place the `minimum_cohort_size` floor is enforced —
+`threshold_enforced` flips **true** — computed against the **live, consent-aware,
+uncapped** eligible-contributor count. A buyer with an APPROVED, non-expired
+request receives a governed **proof-of-threshold** when the floor is met, or an
+honest **suppression** (`MINIMUM_COHORT_SIZE_NOT_MET`) when it is not. The ONLY
+privacy mechanism is the threshold gate
+(`privacy_method:"MINIMUM_COHORT_SIZE_THRESHOLD_ONLY"`) — explicitly **not**
+k-anonymity, **not** differential privacy, **not** a real aggregation guarantee.
+The numeric cohort aggregate is honestly deferred (`signal_available:false`) —
+1308-A delivers a proof, not numbers; numeric aggregate payloads are
+forward-substrate pending real buyer demand + a privacy review. No raw bodies, no
+contributor identities, no exact count ever reach the buyer (the exact count
+lives only in the internal audit, for 1309-A metering). CHILDREN is hard
+re-blocked at delivery (defense-in-depth); high-sensitivity is not re-blocked (the
+1307-A human review already cleared it); there is no entity_type gate at delivery
+(the human gate was at decide-time — consuming ≠ granting). **Stateless** (audit-
+only) → no schema change, no `1308-B`. Still forward-substrate after 1308-A: real
+numeric aggregate payloads, usage metering + mock economics (1309-A),
+contribution-weighted revenue share, and any cohort UI / counts / monetization.
