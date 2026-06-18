@@ -130,6 +130,7 @@ import { registerFoundationRoutes } from "./routes/foundation.routes.js";
 import { FoundationAuthorityService } from "./services/foundation/authority.service.js";
 import { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
 import { FoundationEconomicService } from "./services/foundation/economic-policy.service.js";
+import { FoundationAmbientDeviceService } from "./services/foundation/ambient-device.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -301,6 +302,10 @@ export async function buildApp(
   const foundationProofService = new FoundationProofService(authService);
   // Phase 1290-A — Foundation economic substrate (mock-only).
   const foundationEconomicService = new FoundationEconomicService(authService);
+  // Phase 1291-A — Foundation ambient device protocol.
+  const foundationAmbientDeviceService = new FoundationAmbientDeviceService(
+    authService,
+  );
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -721,6 +726,7 @@ export async function buildApp(
     foundationAuthorityService,
     foundationProofService,
     foundationEconomicService,
+    foundationAmbientDeviceService,
   );
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);

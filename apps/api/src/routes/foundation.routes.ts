@@ -25,6 +25,7 @@ import type { FastifyInstance } from "fastify";
 import type { FoundationAuthorityService } from "../services/foundation/authority.service.js";
 import type { FoundationProofService } from "../services/foundation/proof-of-access.service.js";
 import type { FoundationEconomicService } from "../services/foundation/economic-policy.service.js";
+import type { FoundationAmbientDeviceService } from "../services/foundation/ambient-device.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -63,6 +64,7 @@ export async function registerFoundationRoutes(
   authorityService: FoundationAuthorityService,
   proofService: FoundationProofService,
   economicService: FoundationEconomicService,
+  ambientDeviceService: FoundationAmbientDeviceService,
 ): Promise<void> {
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
@@ -164,5 +166,35 @@ export async function registerFoundationRoutes(
           ? 402
           : 403;
     return reply.code(httpStatus).send({ ok: true, quote: result.quote });
+  });
+
+  // Ambient device packet — governed disposition (1291-A). Text only; raw
+  // frames/biometrics forbidden; device identity never trusted. Returns 200
+  // with the governed decision (including BLOCKED) so the device gets the
+  // honest disposition; 401 / 422 for auth / malformed.
+  app.post<{
+    Body: Record<string, unknown>;
+  }>("/api/v1/foundation/devices/ambient-packets", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null)
+      return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+    const body = request.body ?? {};
+    if (
+      typeof body.source_type !== "string" ||
+      typeof body.mode !== "string" ||
+      typeof body.text !== "string" ||
+      typeof body.consent !== "object" ||
+      body.consent === null
+    )
+      return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+    const result = await ambientDeviceService.evaluateAmbientPacketForCaller(
+      token,
+      body as never,
+    );
+    if (result.ok === false)
+      return reply
+        .code(failureStatus(result.code))
+        .send({ ok: false, code: result.code });
+    return reply.code(200).send({ ok: true, packet: result.packet });
   });
 }

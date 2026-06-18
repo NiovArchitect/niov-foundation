@@ -108,7 +108,30 @@ a true stop condition):
   migration. **Backlog (Founder-gated):** persistent SpendPolicy /
   SpendingCapability / PaymentIntent models; real provider selection (separate
   RULE 21 research arc + Founder decision); marketplace seller offers.
-- **1291-A Ambient device protocol** · **1292-A Marketplace substrate** ·
+- **1291-A Ambient device protocol — LANDED 2026-06-17.** Promotes the
+  1287-A device-capture adapter into a reusable Foundation protocol. NEW
+  `apps/api/src/services/foundation/ambient-device.service.ts` +
+  `POST /api/v1/foundation/devices/ambient-packets` — pure `evaluateAmbientPacket`
+  renders a governed `AmbientMemoryDisposition` (TRANSIENT_ONLY /
+  WORK_LEDGER_ONLY / MEMORY_CAPSULE_PRIVATE / MEMORY_CAPSULE_ORG /
+  REQUIRES_CONFIRMATION / BLOCKED) for an ambient device packet (glasses / lens
+  / goggles / earbuds / desktop / mobile). Preserves every 1287-A prohibition:
+  TEXT ONLY (raw frames/visual/biometric keys → BLOCKED), no face/biometric
+  recognition, no location capture, consent required (no always-on), device-
+  claimed identity NEVER trusted/stored. **Verifiable no-view/voice
+  confirmation**: no_view_command / audio_confirmation → REQUIRES_CONFIRMATION
+  unless `user_confirmed` with a real `confirmation_mode` (a recorded
+  voice_confirmed flag alone is NOT enough — no fake confirmation).
+  **Bystander-sensitive NEVER becomes org memory** (downgrades to PRIVATE or
+  REQUIRES_CONFIRMATION). Org memory gated on visibility=org + confirmed +
+  caller `memory_scope.can_write_capsules` (composes the 1288-B authority
+  envelope). Additive audit literal `AMBIENT_PACKET_EVALUATED` (SAFE metadata
+  only — never packet text / device_id / raw media). No schema migration.
+  The disposition IS the policy contract; actual capsule-write-under-policy is
+  forward-substrate (keeps it additive). **Backlog (Founder-gated):** wiring the
+  capsule write per disposition; device entity identity model; additional device
+  source types.
+- **1292-A Marketplace substrate** ·
   **1293-A GOVSEC / observability / metering / production hardening.**
 
 ### Final close-out state (Founder closeout #2)
