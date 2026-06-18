@@ -1238,6 +1238,54 @@ enum CohortProductStatus {
   ARCHIVED
 }
 
+// Phase 1306-A — internal contribution accounting for a cohort data product.
+// Records WHICH DMW / capsule scope contributes, the consent basis, and the
+// eligibility window — WITHOUT ever exposing contributor identity to buyers.
+// contributor_entity_id / contributor_org_entity_id / wallet_id are
+// INTERNAL-ONLY (never projected over HTTP). No real signal delivery, no
+// payout, no revenue share in 1306-A. Eligibility additionally honors the
+// linked consent's live state (revoked_at / expires_at) at evaluation time.
+model CohortContribution {
+  contribution_id           String                   @id @default(uuid()) @db.Uuid
+  cohort_product_id         String                   @db.Uuid
+  // INTERNAL-ONLY identity fields — never returned in any HTTP projection.
+  contributor_entity_id     String                   @db.Uuid
+  contributor_org_entity_id String?                  @db.Uuid
+  // The contributing DMW (Wallet) reference; INTERNAL-ONLY.
+  wallet_id                 String?                  @db.Uuid
+  // Capsule-type / scope label the contribution covers (never raw capsule IDs).
+  contribution_scope        String
+  // Reserved for future contribution-weighted revenue share (mock-only later).
+  contribution_weight       Float                    @default(1.0)
+  // Links the consent basis (marketplace_data_consents.consent_id). Eligibility
+  // honors this consent's revoked_at / expires_at at evaluation time.
+  consent_record_id         String?                  @db.Uuid
+  status                    CohortContributionStatus @default(ELIGIBLE)
+  eligible_from             DateTime?
+  eligible_until            DateTime?
+  revoked_at                DateTime?
+  created_at                DateTime                 @default(now())
+  updated_at                DateTime                 @updatedAt
+  deleted_at                DateTime?
+
+  @@index([cohort_product_id])
+  @@index([contributor_entity_id])
+  @@index([status])
+  @@index([consent_record_id])
+  @@map("cohort_contributions")
+}
+
+// Phase 1306-A — lifecycle for a cohort contribution. ELIGIBLE = counts toward
+// the cohort (subject to live consent + window); REVOKED = provider/admin
+// withdrew it; EXPIRED = window lapsed (reserved; 1306-A computes expiry lazily,
+// no sweep); PAUSED = temporarily excluded. Stable set → Prisma enum.
+enum CohortContributionStatus {
+  ELIGIBLE
+  REVOKED
+  EXPIRED
+  PAUSED
+}
+
 // Phase 1297-A — HighSensitivityReview: the durable, governed human-review
 // record that turns a REQUIRES_REVIEW high-sensitivity policy decision (per
 // the 1296-A evaluator) into an auditable, scope-bound, expiring approval — or

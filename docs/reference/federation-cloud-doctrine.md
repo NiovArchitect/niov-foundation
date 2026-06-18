@@ -238,3 +238,19 @@ contributors, NO real signal delivery, NO real aggregation/privacy math
 Still forward-substrate (NOT built): `CohortContribution` / `CohortAccessGrant`
 / `CohortUsageLedger` / `CohortProof`, real aggregation + privacy math, the
 buyer request/settlement flow, and any cohort UI / counts / monetization.
+
+**Phase 1306-A — LANDED (`CohortContribution` accounting only).** The internal
+contribution-accounting substrate now exists: the `CohortContribution` model +
+`CohortContributionStatus` enum + `CohortContributionService` (provider/admin
+record/list/revoke) + nested routes under `/api/v1/foundation/cohorts/:id/contributions`.
+Contributor identity (`contributor_entity_id` / `contributor_org_entity_id` /
+`wallet_id`) is **internal-only — never returned over HTTP**; buyers have no
+contribution-facing surface at all. Eligibility honors the linked consent's live
+state (a revoked/expired `marketplace_data_consents` row drops the contribution
+from the eligible count) per RULE 0. `threshold_enforced` **remains false** — the
+`minimum_cohort_size` floor is accounted but not enforced at any delivery point
+until 1308-A. Still forward-substrate after 1306-A: `CohortAccessRequest` (1307-A),
+proof + safe aggregate signal delivery (1308-A), usage metering + mock economics
+(1309-A), contribution-weighted revenue share, and any cohort UI / counts /
+monetization. The earlier "NO `CohortContribution` table" sentence above describes
+the 1305-A state and is preserved as contemporaneous record.

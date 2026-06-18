@@ -127,13 +127,14 @@ import { registerConnectorDataRoutes } from "./routes/connector-data.routes.js";
 import { registerCalendarEventRoutes } from "./routes/calendar-event.routes.js";
 import { registerWorkOsAuthorityRoutes } from "./routes/work-os-authority.routes.js";
 import { registerFoundationRoutes } from "./routes/foundation.routes.js";
-import { registerCohortRoutes } from "./routes/cohort.routes.js";
+import { registerCohortRoutes, registerCohortContributionRoutes } from "./routes/cohort.routes.js";
 import { FoundationAuthorityService } from "./services/foundation/authority.service.js";
 import { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
 import { FoundationEconomicService } from "./services/foundation/economic-policy.service.js";
 import { FoundationAmbientDeviceService } from "./services/foundation/ambient-device.service.js";
 import { FoundationMarketplaceService } from "./services/foundation/marketplace.service.js";
 import { FederationCloudCohortService } from "./services/foundation/federation-cloud-cohort.service.js";
+import { CohortContributionService } from "./services/foundation/cohort-contribution.service.js";
 import { FoundationObservabilityService } from "./services/foundation/observability.service.js";
 import { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 import { FoundationHighSensitivityReviewService } from "./services/foundation/high-sensitivity-review.service.js";
@@ -325,6 +326,8 @@ export async function buildApp(
   const federationCloudCohortService = new FederationCloudCohortService(
     authService,
   );
+  // Phase 1306-A — cohort contribution accounting (internal; provider/admin).
+  const cohortContributionService = new CohortContributionService(authService);
   // Phase 1295-A — COSMP-governed marketplace data-read delivery.
   const marketplaceDataDeliveryService = new MarketplaceDataDeliveryService(
     authService,
@@ -761,6 +764,7 @@ export async function buildApp(
     foundationHighSensitivityReviewService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
+  await registerCohortContributionRoutes(app, cohortContributionService);
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);

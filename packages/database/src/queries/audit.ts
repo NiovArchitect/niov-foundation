@@ -598,6 +598,13 @@ export type AuditEventType =
   | "COHORT_PRODUCT_UPDATED"
   | "COHORT_PRODUCT_ARCHIVED"
   | "COHORT_ACCESS_EVALUATED"
+  // Phase 1306-A — cohort contribution accounting. Internal accounting only;
+  // details carry IDs / enums / booleans (never contributor identities, never
+  // wallet IDs, never raw data). COHORT_CONTRIBUTION_EXPIRED is reserved
+  // (1306-A computes expiry lazily; no sweep emits it yet). Additive.
+  | "COHORT_CONTRIBUTION_RECORDED"
+  | "COHORT_CONTRIBUTION_REVOKED"
+  | "COHORT_CONTRIBUTION_EXPIRED"
   // Phase 1296-A — dedicated high-sensitivity policy gate evaluation. Emitted
   // when the high-sensitivity evaluator runs for a HIGH_SENSITIVITY / policy-
   // gated package (HEALTH / MEDICAL / BIOMETRIC / CHILDREN / BYSTANDER /
@@ -865,6 +872,10 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "COHORT_PRODUCT_UPDATED",
   "COHORT_PRODUCT_ARCHIVED",
   "COHORT_ACCESS_EVALUATED",
+  // Phase 1306-A cohort contribution accounting substrate.
+  "COHORT_CONTRIBUTION_RECORDED",
+  "COHORT_CONTRIBUTION_REVOKED",
+  "COHORT_CONTRIBUTION_EXPIRED",
   // Phase 1296-A dedicated high-sensitivity policy gate.
   "HIGH_SENSITIVITY_POLICY_EVALUATED",
   // Phase 1297-A high-sensitivity human-review workflow lifecycle.
