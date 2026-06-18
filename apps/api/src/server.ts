@@ -131,6 +131,7 @@ import {
   registerCohortRoutes,
   registerCohortContributionRoutes,
   registerCohortAccessRequestRoutes,
+  registerCohortDeliveryRoutes,
 } from "./routes/cohort.routes.js";
 import { FoundationAuthorityService } from "./services/foundation/authority.service.js";
 import { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
@@ -140,6 +141,7 @@ import { FoundationMarketplaceService } from "./services/foundation/marketplace.
 import { FederationCloudCohortService } from "./services/foundation/federation-cloud-cohort.service.js";
 import { CohortContributionService } from "./services/foundation/cohort-contribution.service.js";
 import { CohortAccessRequestService } from "./services/foundation/cohort-access-request.service.js";
+import { CohortDeliveryService } from "./services/foundation/cohort-delivery.service.js";
 import { FoundationObservabilityService } from "./services/foundation/observability.service.js";
 import { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 import { FoundationHighSensitivityReviewService } from "./services/foundation/high-sensitivity-review.service.js";
@@ -335,6 +337,8 @@ export async function buildApp(
   const cohortContributionService = new CohortContributionService(authService);
   // Phase 1307-A — cohort access request lifecycle (buyer requests; human decides).
   const cohortAccessRequestService = new CohortAccessRequestService(authService);
+  // Phase 1308-A — cohort proof + safe-signal delivery (threshold enforced here).
+  const cohortDeliveryService = new CohortDeliveryService(authService);
   // Phase 1295-A — COSMP-governed marketplace data-read delivery.
   const marketplaceDataDeliveryService = new MarketplaceDataDeliveryService(
     authService,
@@ -773,6 +777,7 @@ export async function buildApp(
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
   await registerCohortAccessRequestRoutes(app, cohortAccessRequestService);
+  await registerCohortDeliveryRoutes(app, cohortDeliveryService);
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);

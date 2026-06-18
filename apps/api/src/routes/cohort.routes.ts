@@ -16,6 +16,7 @@ import type { FastifyInstance } from "fastify";
 import type { FederationCloudCohortService } from "../services/foundation/federation-cloud-cohort.service.js";
 import type { CohortContributionService } from "../services/foundation/cohort-contribution.service.js";
 import type { CohortAccessRequestService } from "../services/foundation/cohort-access-request.service.js";
+import type { CohortDeliveryService } from "../services/foundation/cohort-delivery.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // WHY: cohort routes are unauthenticated at the Fastify layer; the service
@@ -61,6 +62,10 @@ const FAILURE_STATUS: Record<string, number> = {
   SELF_APPROVAL_FORBIDDEN: 403,
   REQUEST_NOT_PENDING: 409,
   REQUEST_NOT_REVOCABLE: 409,
+  // Phase 1308-A delivery gate.
+  DELIVERY_NOT_AUTHORIZED: 403,
+  REQUEST_EXPIRED: 409,
+  CHILDREN_DATA_BLOCKED: 403,
 };
 
 function failureStatus(code: string): number {
@@ -355,6 +360,35 @@ export async function registerCohortAccessRequestRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, access_request: result.access_request });
+    },
+  );
+}
+
+// WHAT: Register the Phase 1308-A cohort PROOF + SAFE-SIGNAL delivery route.
+// WHY: the buyer consumes their APPROVED access request — the gate enforces the
+//      minimum_cohort_size threshold (threshold_enforced flips true) and returns
+//      a SAFE proof-of-threshold (or an honest suppression). NO raw data, NO
+//      identities, NO numeric aggregate (signal_available stays false).
+export async function registerCohortDeliveryRoutes(
+  app: FastifyInstance,
+  deliveryService: CohortDeliveryService,
+): Promise<void> {
+  app.post<{ Params: { id: string; rid: string } }>(
+    "/api/v1/foundation/cohorts/:id/access-requests/:rid/deliver",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await deliveryService.deliverCohortSignalForCaller(
+        token,
+        request.params.id,
+        request.params.rid,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, delivery: result.delivery });
     },
   );
 }

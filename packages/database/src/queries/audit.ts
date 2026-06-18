@@ -614,6 +614,13 @@ export type AuditEventType =
   | "COHORT_ACCESS_DECIDED"
   | "COHORT_ACCESS_REVOKED"
   | "COHORT_ACCESS_EXPIRED"
+  // Phase 1308-A — cohort proof + safe-signal delivery (threshold ENFORCED here).
+  // Details carry IDs / enums / booleans + the internal eligible_count (audit is
+  // never buyer-facing) — never raw data, never contributor identities. No
+  // numeric aggregate is delivered (signal_available=false). Additive.
+  | "COHORT_SIGNAL_DELIVERED"
+  | "COHORT_DELIVERY_SUPPRESSED"
+  | "COHORT_DELIVERY_DENIED"
   // Phase 1296-A — dedicated high-sensitivity policy gate evaluation. Emitted
   // when the high-sensitivity evaluator runs for a HIGH_SENSITIVITY / policy-
   // gated package (HEALTH / MEDICAL / BIOMETRIC / CHILDREN / BYSTANDER /
@@ -890,6 +897,10 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "COHORT_ACCESS_DECIDED",
   "COHORT_ACCESS_REVOKED",
   "COHORT_ACCESS_EXPIRED",
+  // Phase 1308-A cohort proof + safe-signal delivery substrate.
+  "COHORT_SIGNAL_DELIVERED",
+  "COHORT_DELIVERY_SUPPRESSED",
+  "COHORT_DELIVERY_DENIED",
   // Phase 1296-A dedicated high-sensitivity policy gate.
   "HIGH_SENSITIVITY_POLICY_EVALUATED",
   // Phase 1297-A high-sensitivity human-review workflow lifecycle.

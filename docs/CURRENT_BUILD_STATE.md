@@ -397,6 +397,41 @@ then restarted the prod API from main so access-request routes are live + compat
 - **Tests:** `tests/unit/activate-cohort-access-request-prod-schema.test.ts` (5).
 - **Cohort access request schema is production-active.**
 
+### ✅ 1308-A — Cohort Proof + Safe-Signal Delivery (threshold ENFORCED here)
+
+The delivery layer 1305/1306/1307 deferred — the **one** place the
+`minimum_cohort_size` floor is enforced (`threshold_enforced` flips **true**). A
+buyer with an **APPROVED, non-expired** access request asks to deliver; the gate
+enforces the threshold against the **live, consent-aware, uncapped** eligible-
+contributor count and returns a governed **proof-of-threshold** — or an honest
+suppression. **Stateless** (audit-only; mirrors `MarketplaceDataDeliveryService`
++ `FoundationProofService`) → **no schema change, no 1308-B**.
+
+- **Service:** `apps/api/src/services/foundation/cohort-delivery.service.ts` —
+  pure `evaluateDeliveryGate` (APPROVED + decided + ACTIVE + not-expired; CHILDREN
+  the only hard re-block — high-sensitivity already cleared by the 1307-A human
+  review) + pure `buildDeliveryView` (flips `threshold_enforced:true`, mints a
+  proof only when met) + `liveEligibleCount` (accurate, **uncapped**: SQL `count`
+  for no-consent rows + consent-liveness resolution for consent-bearing rows —
+  reuses exported `isContributionEligible`).
+- **Honesty (no fake privacy math):** the ONLY privacy mechanism is the threshold
+  gate (`privacy_method:"MINIMUM_COHORT_SIZE_THRESHOLD_ONLY"`) — **not**
+  k-anonymity, **not** differential privacy. The numeric aggregate is honestly
+  deferred (`signal_available:false`); 1308-A delivers a proof-of-threshold, not a
+  numeric cohort aggregate. NO raw bodies, NO contributor identities, NO exact
+  count ever reaches the buyer (the exact count lives only in the internal audit).
+- **No entity_type gate at delivery** (intentional, commented): the human gate
+  fired at 1307-A decide-time; an AI buyer consuming an aggregate under a human-
+  approved grant is in-bounds (consuming ≠ granting).
+- **Route:** `POST /api/v1/foundation/cohorts/:id/access-requests/:rid/deliver`
+  (buyer-scoped; enumeration-safe `ACCESS_REQUEST_NOT_FOUND`). **Audit (every
+  attempt):** `COHORT_SIGNAL_DELIVERED` / `COHORT_DELIVERY_SUPPRESSED` /
+  `COHORT_DELIVERY_DENIED` (+ internal `eligible_count` for 1309-A metering).
+- **Tests:** `tests/unit/cohort-delivery-gate.test.ts` (11) +
+  `tests/integration/foundation-cohort-delivery.test.ts` (6, incl. below-floor
+  suppression, at-floor delivery, PENDING→not-authorized, expired window,
+  CHILDREN defense-in-depth re-block, cross-owner enumeration-safe, no-leak).
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
