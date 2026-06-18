@@ -225,20 +225,20 @@ describe("Foundation high-sensitivity review workflow (1297-A)", () => {
     expect((again.json() as { review: { review_id: string } }).review.review_id).toBe(rv.review_id);
   });
 
-  it("buyer cannot approve a provider's review (NOT_AUTHORIZED_REVIEWER)", async () => {
+  it("buyer cannot approve a provider's review (REVIEWER_IS_BUYER) — 1299-A", async () => {
     const lid = await makePackage(PROVIDER_TOKEN, { sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["MEDICAL"], access_mode: "SAFE_PROJECTION" });
     const rid = (await createReview({ listing_id: lid, intended_use: "ANALYTICS" }, BUYER_TOKEN)).json() as { review: { review_id: string } };
     const res = await approve(rid.review.review_id, {}, BUYER_TOKEN);
     expect(res.statusCode).toBe(403);
-    expect((res.json() as { code: string }).code).toBe("NOT_AUTHORIZED_REVIEWER");
+    expect((res.json() as { code: string }).code).toBe("REVIEWER_IS_BUYER");
   });
 
-  it("a non-human (AI_AGENT) provider cannot approve (NON_HUMAN_REVIEWER_FORBIDDEN)", async () => {
+  it("a non-human (AI_AGENT) provider cannot approve (REVIEWER_IS_NON_HUMAN) — 1299-A", async () => {
     const lid = await makePackage(AI_PROVIDER_TOKEN, { sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["MEDICAL"], access_mode: "SAFE_PROJECTION" });
     const rid = (await createReview({ listing_id: lid, intended_use: "ANALYTICS" }, BUYER_TOKEN)).json() as { review: { review_id: string } };
     const res = await approve(rid.review.review_id, {}, AI_PROVIDER_TOKEN);
     expect(res.statusCode).toBe(403);
-    expect((res.json() as { code: string }).code).toBe("NON_HUMAN_REVIEWER_FORBIDDEN");
+    expect((res.json() as { code: string }).code).toBe("REVIEWER_IS_NON_HUMAN");
   });
 
   it("approval cannot broaden the access mode (MEDICAL + SAFE_PROJECTION → rejected)", async () => {

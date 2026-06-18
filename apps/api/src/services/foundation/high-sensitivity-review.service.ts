@@ -20,6 +20,22 @@
 //          never self-approve another provider's data; a personal-DMW owner may
 //          self-review their OWN package only for PROOF_ONLY, always audited.
 //
+//          Phase 1299-A — ORG-COMPLIANCE REVIEWER DELEGATION. Reviewer
+//          eligibility is widened from "only the provider entity" to a governed
+//          delegation model: the provider owner (or personal-DMW owner) PLUS
+//          authorized humans inside the provider's ORG (org admins, TAR
+//          can_admin_org, compliance / privacy / legal / DPO, data-governance,
+//          supervisors) may approve / deny on the org's behalf. The decision is
+//          a PURE evaluator (high-sensitivity-reviewer-policy.ts) over facts the
+//          service resolves (Entity type, EntityMembership role, TAR authority,
+//          provider-org membership). Delegation grants NO new access rights — an
+//          approval still only permits the category's safe modes, never raw
+//          body / training / model-improvement / redistribution / commercial.
+//          Cross-tenant reviewers stay invisible (REVIEW_NOT_FOUND) and DENIED.
+//          REVOKE keeps the shipped buyer stop-use (provider OR buyer OR an
+//          org-authorized reviewer may revoke). Every eligibility decision is
+//          audited (HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED).
+//
 // CONNECTS TO:
 //   - apps/api/src/services/foundation/high-sensitivity-policy.ts
 //     (evaluateHighSensitivityAccess + highSensitivityReviewApprovableModes +
@@ -56,15 +72,10 @@ import {
   isHighSensitivityPackage,
   HIGH_SENSITIVITY_REVIEW_GATE_REASONS,
 } from "./high-sensitivity-policy.js";
-
-// Human-class entities that may act as reviewers. AI_AGENT / DEVICE /
-// APPLICATION are non-human and can never review (RULE 0).
-const HUMAN_REVIEWER_TYPES = new Set([
-  "PERSON",
-  "COMPANY",
-  "GOVERNMENT",
-  "REGULATOR",
-]);
+import {
+  evaluateHighSensitivityReviewerEligibility,
+  type ReviewerEligibilityFacts,
+} from "./high-sensitivity-reviewer-policy.js";
 
 // Default approval lifetime when the reviewer does not specify one (no
 // perpetual high-sensitivity access — every approval expires).
@@ -394,27 +405,44 @@ export class FoundationHighSensitivityReviewService {
     return { ok: true, review: toSafeReview(created) };
   }
 
-  // Load a review the caller (provider OR buyer) may see (enumeration-safe).
-  private async loadOwnReview(
+  // Load a review the caller may see (enumeration-safe). Visible to the provider
+  // entity, the buyer entity, OR an active member of the provider's org (1299-A
+  // delegation). A cross-tenant caller gets null → REVIEW_NOT_FOUND (invisible).
+  private async loadReviewForReviewer(
     reviewId: string,
     callerEntityId: string,
   ): Promise<HighSensitivityReview | null> {
     const r = await prisma.highSensitivityReview.findFirst({
       where: { review_id: reviewId },
     });
+    if (r === null) return null;
     if (
-      r === null ||
-      (r.provider_entity_id !== callerEntityId && r.buyer_entity_id !== callerEntityId)
+      r.provider_entity_id === callerEntityId ||
+      r.buyer_entity_id === callerEntityId
     )
-      return null;
-    return r;
+      return r;
+    // Org-delegated visibility — the caller must have an ACTIVE membership in
+    // the PROVIDER's org specifically (not merely "some org"); a membership in
+    // any other org confers no visibility (confused-deputy guard). Personal-DMW
+    // packages (provider_org null) are visible only to the provider/buyer above.
+    if (r.provider_org_entity_id !== null) {
+      const m = await prisma.entityMembership.findFirst({
+        where: {
+          child_id: callerEntityId,
+          parent_id: r.provider_org_entity_id,
+          is_active: true,
+        },
+      });
+      if (m !== null) return r;
+    }
+    return null;
   }
 
-  // WHAT: Read one review (provider OR buyer only; enumeration-safe).
+  // WHAT: Read one review (provider, buyer, or an org-delegated reviewer).
   async getReviewForCaller(sessionToken: string, reviewId: string): Promise<ReviewResult> {
     const validation = await this.authService.validateSession(sessionToken, "read");
     if (!validation.valid) return { ok: false, code: validation.code };
-    const r = await this.loadOwnReview(reviewId, validation.entity_id);
+    const r = await this.loadReviewForReviewer(reviewId, validation.entity_id);
     if (r === null) return { ok: false, code: "REVIEW_NOT_FOUND" };
     return { ok: true, review: toSafeReview(r) };
   }
@@ -436,23 +464,116 @@ export class FoundationHighSensitivityReviewService {
     return { ok: true, reviews: rows.map(toSafeReview) };
   }
 
-  // Verify the caller may act as the reviewer on this review (human-class +
-  // is the package provider). Returns a failure code or null when eligible.
-  private async reviewerEligibility(
+  // WHAT: Resolve the reviewer's facts and decide eligibility via the PURE
+  //       evaluator, auditing the decision (1299-A delegation).
+  // INPUT: the review row + the candidate reviewer's entity id.
+  // OUTPUT: { eligible, code, scope, reason_codes }. code is null when eligible,
+  //         else the first closed reviewer reason code (the failure code the
+  //         caller sees). Always emits HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_
+  //         EVALUATED (SUCCESS when eligible, DENIED otherwise) per RULE 4.
+  // WHY: The service owns all I/O (Entity type, provider-org membership, the
+  //      reviewer's EntityMembership role, TAR can_admin_org); the evaluator owns
+  //      the policy. Cross-tenant is invisible at the loader and DENIED here.
+  private async checkReviewerEligibility(
     review: HighSensitivityReview,
     reviewerEntityId: string,
-  ): Promise<string | null> {
+  ): Promise<{ eligible: boolean; code: string | null; scope: string; reason_codes: string[] }> {
     const reviewer: Entity | null = await prisma.entity.findFirst({
       where: { entity_id: reviewerEntityId, deleted_at: null },
     });
-    if (reviewer === null) return "ENTITY_NOT_FOUND";
-    // No AI_AGENT / DEVICE / APPLICATION may review (RULE 0).
-    if (!HUMAN_REVIEWER_TYPES.has(reviewer.entity_type))
-      return "NON_HUMAN_REVIEWER_FORBIDDEN";
-    // Only the package provider (data owner) may approve/deny.
-    if (review.provider_entity_id !== reviewerEntityId)
-      return "NOT_AUTHORIZED_REVIEWER";
-    return null;
+    if (reviewer === null) {
+      await this.auditReviewerEligibility(review, reviewerEntityId, false, "DENIED", ["REVIEWER_NOT_FOUND"]);
+      return { eligible: false, code: "ENTITY_NOT_FOUND", scope: "DENIED", reason_codes: ["ENTITY_NOT_FOUND"] };
+    }
+
+    const packageIsPersonal = review.provider_org_entity_id === null;
+
+    // Reviewer facts MUST come from the PROVIDER ORG that owns the package — a
+    // reviewer's admin / compliance role in ANY OTHER org must never authorize
+    // here (confused-deputy guard). The membership is resolved strictly by
+    // (child_id = reviewer, parent_id = provider org). Personal-DMW packages
+    // have no org to delegate into, so the org facts stay false/null and only
+    // the owner / provider path can approve.
+    let reviewerInProviderOrg = false;
+    let membershipIsAdmin = false;
+    let membershipRoleTitle: string | null = null;
+    let membershipActive = false;
+    let reviewerCanAdminOrg = false;
+    if (!packageIsPersonal) {
+      const providerOrg = review.provider_org_entity_id as string;
+      // Resolve WITHOUT an is_active filter so reviewer_in_provider_org and
+      // membership_active are both truthful facts (prefer active, then admin).
+      const membership = await prisma.entityMembership.findFirst({
+        where: { child_id: reviewerEntityId, parent_id: providerOrg },
+        orderBy: [{ is_active: "desc" }, { is_admin: "desc" }],
+      });
+      reviewerInProviderOrg = membership !== null;
+      membershipIsAdmin = membership?.is_admin ?? false;
+      membershipRoleTitle = membership?.role_title ?? null;
+      membershipActive = membership?.is_active ?? false;
+      // TAR can_admin_org is an ADDITIVE admin signal — only consulted WITH a
+      // provider-org membership (the evaluator gates it behind reviewer_in_
+      // provider_org + membership_active; TAR alone never authorizes).
+      const tar = await prisma.tokenAttributeRepository.findUnique({
+        where: { entity_id: reviewerEntityId },
+      });
+      reviewerCanAdminOrg =
+        tar !== null && tar.status === "ACTIVE" && tar.can_admin_org === true;
+    }
+
+    const facts: ReviewerEligibilityFacts = {
+      reviewer_entity_type: reviewer.entity_type,
+      reviewer_is_provider: review.provider_entity_id === reviewerEntityId,
+      reviewer_is_buyer: review.buyer_entity_id === reviewerEntityId,
+      package_is_personal: packageIsPersonal,
+      reviewer_in_provider_org: reviewerInProviderOrg,
+      membership_is_admin: membershipIsAdmin,
+      membership_role_title: membershipRoleTitle,
+      membership_active: membershipActive,
+      reviewer_can_admin_org: reviewerCanAdminOrg,
+      sensitive_categories: review.sensitive_categories,
+    };
+
+    const decision = evaluateHighSensitivityReviewerEligibility(facts);
+    await this.auditReviewerEligibility(
+      review,
+      reviewerEntityId,
+      decision.eligible,
+      decision.eligible ? "SUCCESS" : "DENIED",
+      decision.reason_codes,
+      decision.reviewer_scope,
+    );
+
+    return {
+      eligible: decision.eligible,
+      code: decision.eligible ? null : (decision.reason_codes[0] ?? "REVIEWER_NOT_ORG_AUTHORIZED"),
+      scope: decision.reviewer_scope,
+      reason_codes: decision.reason_codes,
+    };
+  }
+
+  // Audit a reviewer-eligibility decision (labels only — no raw content).
+  private async auditReviewerEligibility(
+    review: HighSensitivityReview,
+    reviewerEntityId: string,
+    eligible: boolean,
+    outcome: "SUCCESS" | "DENIED",
+    reasonCodes: string[],
+    scope = "DENIED",
+  ): Promise<void> {
+    await writeAuditEvent({
+      event_type: "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED",
+      outcome,
+      actor_entity_id: reviewerEntityId,
+      denial_reason: eligible ? null : (reasonCodes[0] ?? null),
+      details: {
+        ...reviewAuditDetails("HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED", review),
+        candidate_reviewer_entity_id: reviewerEntityId,
+        reviewer_eligible: eligible,
+        reviewer_scope: scope,
+        reviewer_reason_codes: reasonCodes,
+      },
+    });
   }
 
   // WHAT: Approve a pending review for specific safe access mode(s).
@@ -471,13 +592,14 @@ export class FoundationHighSensitivityReviewService {
     if (!validation.valid) return { ok: false, code: validation.code };
     const reviewerEntityId = validation.entity_id;
 
-    const review = await this.loadOwnReview(reviewId, reviewerEntityId);
+    const review = await this.loadReviewForReviewer(reviewId, reviewerEntityId);
     if (review === null) return { ok: false, code: "REVIEW_NOT_FOUND" };
     if (review.status !== "PENDING_REVIEW")
       return { ok: false, code: "REVIEW_NOT_PENDING" };
 
-    const eligibility = await this.reviewerEligibility(review, reviewerEntityId);
-    if (eligibility !== null) return { ok: false, code: eligibility };
+    const eligibility = await this.checkReviewerEligibility(review, reviewerEntityId);
+    if (!eligibility.eligible)
+      return { ok: false, code: eligibility.code ?? "REVIEWER_NOT_ORG_AUTHORIZED" };
 
     // Category-aware approvable set (raw never; training/model-improvement
     // never; CHILDREN / unknown → empty).
@@ -568,12 +690,13 @@ export class FoundationHighSensitivityReviewService {
     if (!validation.valid) return { ok: false, code: validation.code };
     const reviewerEntityId = validation.entity_id;
 
-    const review = await this.loadOwnReview(reviewId, reviewerEntityId);
+    const review = await this.loadReviewForReviewer(reviewId, reviewerEntityId);
     if (review === null) return { ok: false, code: "REVIEW_NOT_FOUND" };
     if (review.status !== "PENDING_REVIEW")
       return { ok: false, code: "REVIEW_NOT_PENDING" };
-    const eligibility = await this.reviewerEligibility(review, reviewerEntityId);
-    if (eligibility !== null) return { ok: false, code: eligibility };
+    const eligibility = await this.checkReviewerEligibility(review, reviewerEntityId);
+    if (!eligibility.eligible)
+      return { ok: false, code: eligibility.code ?? "REVIEWER_NOT_ORG_AUTHORIZED" };
 
     const updated = await prisma.highSensitivityReview.update({
       where: { review_id: reviewId },
@@ -595,7 +718,10 @@ export class FoundationHighSensitivityReviewService {
     return { ok: true, review: toSafeReview(updated) };
   }
 
-  // WHAT: Revoke an approved review (provider OR buyer may stop it).
+  // WHAT: Revoke an approved review. The shipped 1297-A semantics let the
+  //        PROVIDER or the BUYER stop it (buyer stop-use is intentional). 1299-A
+  //        additionally lets an org-authorized reviewer revoke on the org's
+  //        behalf — but NEVER weakens buyer stop-use.
   // WHY: .../reviews/:id/revoke. Idempotent. No cascade is claimed.
   async revokeReviewForCaller(
     sessionToken: string,
@@ -606,8 +732,20 @@ export class FoundationHighSensitivityReviewService {
     if (!validation.valid) return { ok: false, code: validation.code };
     const callerEntityId = validation.entity_id;
 
-    const review = await this.loadOwnReview(reviewId, callerEntityId);
+    const review = await this.loadReviewForReviewer(reviewId, callerEntityId);
     if (review === null) return { ok: false, code: "REVIEW_NOT_FOUND" };
+
+    // Provider and buyer are always parties (preserve shipped buyer stop-use).
+    // Any other caller must pass the org-delegated eligibility check.
+    const isParty =
+      review.provider_entity_id === callerEntityId ||
+      review.buyer_entity_id === callerEntityId;
+    if (!isParty) {
+      const eligibility = await this.checkReviewerEligibility(review, callerEntityId);
+      if (!eligibility.eligible)
+        return { ok: false, code: eligibility.code ?? "REVIEWER_NOT_ORG_AUTHORIZED" };
+    }
+
     if (review.status === "REVOKED") return { ok: true, review: toSafeReview(review) }; // idempotent
     if (review.status !== "APPROVED")
       return { ok: false, code: "REVIEW_NOT_APPROVED" };

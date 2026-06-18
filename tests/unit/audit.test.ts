@@ -559,3 +559,14 @@ describe("1298-A — Foundation retention audit literals defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1299-A — org-compliance reviewer delegation literal.
+describe("1299-A — Foundation reviewer-eligibility audit literal defined", () => {
+  it("the reviewer-eligibility literal is present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED");
+    expect(isKnownAuditEventType("HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED")).toBe(true);
+  });
+  it("the literal set has no duplicates after the 1299-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

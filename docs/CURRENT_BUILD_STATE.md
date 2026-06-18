@@ -236,6 +236,66 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1299-A — Org-Compliance Reviewer Delegation — LANDED 2026-06-18
+
+Widens high-sensitivity review authority from "only the package provider entity"
+(1297-A) to a governed delegation model — without ever granting new access
+rights or weakening any prior gate. **No schema change** (reuses
+`EntityMembership.is_admin` / `role_title` / `is_active`, `TAR.can_admin_org`,
+provider-org membership) → no `prisma db push`.
+
+- **NEW** `apps/api/src/services/foundation/high-sensitivity-reviewer-policy.ts`
+  — PURE `evaluateHighSensitivityReviewerEligibility(facts)` over RESOLVED facts
+  (the service owns all I/O). Returns `{ eligible, reviewer_scope (OWNER |
+  PERSONAL_OWNER | ORG_ADMIN | COMPLIANCE | GOVERNANCE | SUPERVISOR | DENIED),
+  reason_codes (closed vocab), approval_limitations (pinned false), audit_required }`.
+- **Decision tree (RULE 0 first):** non-human (AI_AGENT/DEVICE/APPLICATION) →
+  DENY `REVIEWER_IS_NON_HUMAN`; CHILDREN → DENY `CHILDREN_DATA_REVIEW_NOT_SUPPORTED`;
+  provider entity → OWNER / PERSONAL_OWNER; a buyer (≠ provider) → DENY
+  `REVIEWER_IS_BUYER` (no self-serve, even if org admin); personal package +
+  non-owner → DENY `REVIEWER_NOT_PROVIDER_OWNER`; org package + reviewer not in
+  provider org → DENY `REVIEWER_CROSS_TENANT`; inactive provider-org membership →
+  `REVIEWER_MEMBERSHIP_INACTIVE`; provider-org admin membership / admin role →
+  ORG_ADMIN; compliance/privacy/legal/DPO → COMPLIANCE; data-governance/steward →
+  GOVERNANCE; supervisory → SUPERVISOR; else → DENY `REVIEWER_NOT_ORG_AUTHORIZED`.
+- **Confused-deputy guard (Founder-directed mid-phase):** reviewer role/admin
+  facts are resolved STRICTLY from the provider-org membership
+  (`child_id = reviewer, parent_id = provider_org`) — a reviewer's admin role in
+  ANY OTHER org never authorizes here. The loader's org-delegated visibility is
+  likewise scoped to an ACTIVE provider-org membership (cross-tenant → invisible
+  `REVIEW_NOT_FOUND`).
+- **RULE 13 surface — global TAR `can_admin_org`:** TAR is a per-entity (global)
+  flag, so it can be true because the entity administers a *different* org.
+  It is therefore treated as **corroborating only** (recorded in audit) and does
+  NOT independently elevate a plain provider-org member — admin elevation
+  requires a provider-org-attributable signal (`membership.is_admin` or an admin
+  role title). This is the fail-closed reading of the Founder's "membership PLUS
+  the TAR signal" (literal) vs "authority from the provider org, not any other
+  org" (prose); independent TAR elevation for provider-org members is a one-line
+  Founder-authorized change if desired.
+- **Revoke preserves shipped buyer stop-use:** provider OR buyer OR an
+  org-authorized reviewer may revoke (1297-A buyer stop-use intact).
+- **Delegation grants NO new rights:** raw body / training / model-improvement /
+  redistribution / commercial stay pinned false; the read path is unchanged (only
+  the approved safe mode; no raw content). Role-keyword matching is substring-based
+  (e.g. "Lead"/"Manager" → SUPERVISOR), consistent with the Founder-authorized
+  supervisory-reviewer scope.
+- **Audit literal (additive, 1):** `HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED`
+  (SUCCESS on eligible, DENIED on every ineligible attempt; safe labels +
+  candidate_reviewer_entity_id + reviewer_scope + reason_codes; never raw content).
+- **DB-guard compliance (1297-B):** no schema push performed. Never raw content;
+  mock economics unchanged; no AI/Python/BEAM/device/app self-authorization.
+- **Tests:** unit `foundation-high-sensitivity-reviewer-policy` (16, incl. both
+  confused-deputy channels) + audit lock (2) + integration
+  `foundation-reviewer-delegation` (14: PENDING opens, buyer/AI/unauthorized/
+  cross-tenant/inactive/global-TAR-plain-member all denied, org admin + compliance
+  approve, read no-raw, buyer + org revoke, personal-DMW non-owner denied, audited).
+  Typecheck 0; full unit tier 2492/2493 (1 known connector-oauth `.env` artifact);
+  integration `foundation-reviewer-delegation` 14/14 + `foundation-high-sensitivity-review`
+  regression 13/13. Two 1297-A assertions refined to the new closed reviewer codes.
+- **Backlog (Founder-gated):** real per-capsule content read; CT UI; real
+  settlement; cross-org discovery.
+
 ### Phase 1298-A — Retention-Policy Enforcement Engine — LANDED 2026-06-17
 
 Makes retention real and enforceable: access can no longer live longer than
