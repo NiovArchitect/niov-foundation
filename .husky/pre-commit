@@ -26,7 +26,7 @@ set -e
 # `packages/database/package.json` `db:push` script are allowlisted;
 # `scripts/test-db-up.sh` post-retrofit invokes the wrapper, not a bare push).
 echo "→ db-push guard (ADR-0025 Schema-Push-Target Discipline)"
-DBPUSH_ALLOWLIST="scripts/prisma-db-push-test.sh packages/database/package.json .husky/pre-commit scripts/test-db-push-wrapper.sh"
+DBPUSH_ALLOWLIST="scripts/prisma-db-push-guard.sh scripts/prisma-db-push-test.sh packages/database/package.json .husky/pre-commit scripts/test-db-push-wrapper.sh"
 DBPUSH_VIOLATIONS=""
 for file in $(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.sh$|/package\.json$|^package\.json$' || true); do
   allowed=0

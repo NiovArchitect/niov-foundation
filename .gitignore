@@ -1,5 +1,10 @@
 .env
 .env.local
+# Saved/backup env copies (e.g. `cp .env .env.save`) — contain production
+# credentials; never committed (Phase 1297-B production-safety hardening).
+.env.save
+.env.*.save
+*.env.save
 node_modules/
 .next/
 dist/

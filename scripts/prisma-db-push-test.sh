@@ -36,67 +36,17 @@ if [[ ! -f "$ENV_TEST_PATH" ]]; then
   exit 1
 fi
 
-# Load .env.test into the environment.
+# Load .env.test into the environment (pins BOTH DATABASE_URL and DIRECT_URL to
+# the local test DB — the canonical pin that survived the 1297-B incident).
 set -a
 # shellcheck disable=SC1091
 source "$ENV_TEST_PATH"
 set +a
 
-# Fail-closed check (b): DATABASE_URL unset or empty after sourcing .env.test.
-if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "ERROR: DATABASE_URL is not set in .env.test." >&2
-  echo "       Cannot determine the schema-push target." >&2
-  echo "       Per ADR-0025: schema-push commands require an explicit env-target qualifier." >&2
-  exit 1
-fi
-
-# WHAT: Extract the host segment from a postgresql:// connection URL.
-# INPUT: a URL like postgresql://user:pass@host:port/db?params.
-# OUTPUT: the host (echoed); e.g. "localhost".
-# WHY: the fail-closed check needs the host to verify it is localhost;
-#      parsing is pure parameter-expansion (no external deps).
-extract_host() {
-  local url="$1"
-  url="${url#postgresql://}"
-  url="${url#postgres://}"
-  # Strip a user:pass@ prefix if present.
-  if [[ "$url" == *"@"* ]]; then
-    url="${url##*@}"
-  fi
-  # Trim at the first ':' (port) or '/' (db path), whichever comes first.
-  url="${url%%:*}"
-  url="${url%%/*}"
-  printf '%s' "$url"
-}
-
-DATABASE_URL_HOST="$(extract_host "$DATABASE_URL")"
-
-# Fail-closed check (c): DATABASE_URL host must be localhost / 127.0.0.1.
-if [[ "$DATABASE_URL_HOST" != "localhost" && "$DATABASE_URL_HOST" != "127.0.0.1" ]]; then
-  echo "ERROR: DATABASE_URL host is '$DATABASE_URL_HOST', not localhost." >&2
-  echo "       The test-DB wrapper refuses to push schema to a non-localhost target." >&2
-  echo "       Per ADR-0025: production schema changes go through the deploy pipeline, never via db push." >&2
-  echo "       If this is meant to be the test DB (foundation_test), check that .env.test DATABASE_URL points to localhost:5433." >&2
-  exit 1
-fi
-
-# Fail-closed check (d): DIRECT_URL host (if set) must also be localhost.
-if [[ -n "${DIRECT_URL:-}" ]]; then
-  DIRECT_URL_HOST="$(extract_host "$DIRECT_URL")"
-  if [[ "$DIRECT_URL_HOST" != "localhost" && "$DIRECT_URL_HOST" != "127.0.0.1" ]]; then
-    echo "ERROR: DIRECT_URL host is '$DIRECT_URL_HOST', not localhost." >&2
-    echo "       The test-DB wrapper refuses to use a non-localhost DIRECT_URL." >&2
-    echo "       Per ADR-0025: production schema changes go through the deploy pipeline, never via db push." >&2
-    exit 1
-  fi
-fi
-
-# All fail-closed validation passed; invoke Prisma with the validated env.
-echo "✓ Schema-push target validated: ${DATABASE_URL_HOST} (test DB)"
-echo "  Invoking: prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate"
-
-npx prisma db push \
-  --schema=packages/database/prisma/schema.prisma \
-  --skip-generate
-
-echo "✓ Schema-push complete (test DB)."
+# Phase 1297-B: delegate the actual BOTH-URL validation + push to the shared
+# fail-closed guard (single source of truth). The guard requires BOTH
+# DATABASE_URL and DIRECT_URL set + localhost, rejects cloud/production hosts and
+# destructive flags, and prints only redacted host summaries. After sourcing
+# .env.test above, the ambient env it validates is exactly the pinned test DB.
+echo "✓ .env.test loaded; delegating to the db-push guard (BOTH-URL validation)."
+exec bash "$REPO_ROOT/scripts/prisma-db-push-guard.sh" --skip-generate
