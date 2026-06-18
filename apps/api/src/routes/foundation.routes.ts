@@ -26,6 +26,7 @@ import type { FoundationAuthorityService } from "../services/foundation/authorit
 import type { FoundationProofService } from "../services/foundation/proof-of-access.service.js";
 import type { FoundationEconomicService } from "../services/foundation/economic-policy.service.js";
 import type { FoundationAmbientDeviceService } from "../services/foundation/ambient-device.service.js";
+import type { FoundationMarketplaceService } from "../services/foundation/marketplace.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -53,6 +54,11 @@ const FAILURE_STATUS: Record<string, number> = {
   CAPSULE_NOT_FOUND: 404,
   INVALID_PURPOSE: 422,
   INVALID_SETTLEMENT_MODE: 422,
+  INVALID_LISTING_TYPE: 422,
+  INVALID_ACCESS_MODE: 422,
+  INVALID_USE_RIGHT: 422,
+  LISTING_NOT_FOUND: 404,
+  DATA_PACKAGE_NOT_FOUND: 404,
 };
 
 function failureStatus(code: string): number {
@@ -65,6 +71,7 @@ export async function registerFoundationRoutes(
   proofService: FoundationProofService,
   economicService: FoundationEconomicService,
   ambientDeviceService: FoundationAmbientDeviceService,
+  marketplaceService: FoundationMarketplaceService,
 ): Promise<void> {
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
@@ -197,4 +204,136 @@ export async function registerFoundationRoutes(
         .send({ ok: false, code: result.code });
     return reply.code(200).send({ ok: true, packet: result.packet });
   });
+
+  // ── Marketplace substrate (1292-A) ──────────────────────────────────────
+  // Create a listing (provider = caller).
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/foundation/marketplace/listings",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      if (typeof b.listing_type !== "string" || typeof b.title !== "string")
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+      const result = await marketplaceService.createListingForCaller(
+        token,
+        b as never,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, listing: result.listing });
+    },
+  );
+
+  // Discover listings (own + PUBLISHED in caller's org).
+  app.get<{ Querystring: { listing_type?: string } }>(
+    "/api/v1/foundation/marketplace/listings",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.listListingsForCaller(token, {
+        listing_type: request.query.listing_type,
+      });
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, listings: result.listings });
+    },
+  );
+
+  // Read one listing.
+  app.get<{ Params: { listing_id: string } }>(
+    "/api/v1/foundation/marketplace/listings/:listing_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.getListingForCaller(
+        token,
+        request.params.listing_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, listing: result.listing });
+    },
+  );
+
+  // Evaluate governed access to a listing (discover/use/request/pay/approval).
+  app.post<{ Params: { listing_id: string } }>(
+    "/api/v1/foundation/marketplace/listings/:listing_id/access",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.evaluateListingAccessForCaller(
+        token,
+        request.params.listing_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, access: result.access });
+    },
+  );
+
+  // ── Data marketplace (1292-A) ───────────────────────────────────────────
+  // Create a DATA_PACKAGE listing (permissioned governed-access product).
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/foundation/marketplace/data-packages",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      if (typeof b.title !== "string" || typeof b.description !== "string")
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+      const result = await marketplaceService.createDataPackageForCaller(
+        token,
+        b as never,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({
+        ok: true,
+        listing: result.listing,
+        data_package: result.data_package,
+      });
+    },
+  );
+
+  // Evaluate governed access to a DATA_PACKAGE for an intended use.
+  app.post<{ Params: { listing_id: string }; Body: { intended_use?: unknown } }>(
+    "/api/v1/foundation/marketplace/listings/:listing_id/data-access",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const intendedUse =
+        typeof request.body?.intended_use === "string"
+          ? request.body.intended_use
+          : "";
+      if (intendedUse.length === 0)
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+      const result = await marketplaceService.evaluateDataAccessForCaller(
+        token,
+        request.params.listing_id,
+        intendedUse,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, access: result.access });
+    },
+  );
 }

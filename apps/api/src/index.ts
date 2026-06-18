@@ -73,6 +73,27 @@ export type {
   QuoteResult,
 } from "./services/foundation/economic-policy.service.js";
 
+// Phase 1292-A — Foundation marketplace substrate.
+export {
+  FoundationMarketplaceService,
+  MARKETPLACE_LISTING_TYPES,
+  DATA_ACCESS_MODES,
+  DATA_USE_RIGHTS,
+} from "./services/foundation/marketplace.service.js";
+export type {
+  SafeListingView,
+  ListingAccessDecision,
+  CreateListingResult,
+  ListListingsResult,
+  GetListingResult,
+  ListingAccessResult,
+  DataUseRight,
+  SafeDataPackageView,
+  DataAccessDecision,
+  CreateDataPackageResult,
+  DataAccessResult,
+} from "./services/foundation/marketplace.service.js";
+
 // Phase 1291-A — Foundation ambient device protocol.
 export {
   FoundationAmbientDeviceService,

@@ -461,3 +461,16 @@ describe("1291-A — Foundation ambient-packet audit literal defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1292-A — Foundation marketplace substrate literals (append-only).
+describe("1292-A — Foundation marketplace audit literals defined", () => {
+  it("MARKETPLACE_LISTING_CREATED + MARKETPLACE_ACCESS_EVALUATED present + recognized", () => {
+    for (const lit of ["MARKETPLACE_LISTING_CREATED", "MARKETPLACE_ACCESS_EVALUATED"] as const) {
+      expect(AUDIT_EVENT_TYPE_VALUES).toContain(lit);
+      expect(isKnownAuditEventType(lit)).toBe(true);
+    }
+  });
+  it("the literal set has no duplicates after the 1292-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});
