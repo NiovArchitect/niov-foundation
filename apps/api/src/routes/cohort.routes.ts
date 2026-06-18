@@ -15,6 +15,7 @@
 import type { FastifyInstance } from "fastify";
 import type { FederationCloudCohortService } from "../services/foundation/federation-cloud-cohort.service.js";
 import type { CohortContributionService } from "../services/foundation/cohort-contribution.service.js";
+import type { CohortAccessRequestService } from "../services/foundation/cohort-access-request.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // WHY: cohort routes are unauthenticated at the Fastify layer; the service
@@ -48,6 +49,18 @@ const FAILURE_STATUS: Record<string, number> = {
   CONSENT_MISMATCH: 422,
   CONSENT_INACTIVE: 409,
   CONTRIBUTION_NOT_FOUND: 404,
+  // Phase 1307-A access request lifecycle.
+  COHORT_NOT_ACTIVE: 409,
+  ACCESS_MODE_NOT_OFFERED: 422,
+  USE_NOT_PERMITTED: 422,
+  TRAINING_NOT_PERMITTED: 422,
+  MODEL_IMPROVEMENT_NOT_PERMITTED: 422,
+  ACCESS_REQUEST_NOT_FOUND: 404,
+  INVALID_DECISION: 422,
+  INVALID_EXPIRY: 422,
+  SELF_APPROVAL_FORBIDDEN: 403,
+  REQUEST_NOT_PENDING: 409,
+  REQUEST_NOT_REVOCABLE: 409,
 };
 
 function failureStatus(code: string): number {
@@ -232,6 +245,116 @@ export async function registerCohortContributionRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, contribution: result.contribution });
+    },
+  );
+}
+
+// WHAT: Register the Phase 1307-A cohort ACCESS REQUEST lifecycle routes.
+// WHY: a buyer requests access (open to AI buyers — requesting ≠ granting); a
+//      HUMAN provider/admin decides or revokes (the service enforces the
+//      human-decider gate + self-approval forbidden). No data delivered here.
+export async function registerCohortAccessRequestRoutes(
+  app: FastifyInstance,
+  accessRequestService: CohortAccessRequestService,
+): Promise<void> {
+  // Create an access request (the caller is the buyer).
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/foundation/cohorts/:id/access-requests",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      const result = await accessRequestService.createAccessRequestForCaller(
+        token,
+        request.params.id,
+        {
+          intended_use: b.intended_use as string | undefined,
+          requested_access_mode: b.requested_access_mode as string | undefined,
+          retention_policy: b.retention_policy as string | null | undefined,
+        },
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, access_request: result.access_request });
+    },
+  );
+
+  // List access requests — manager sees all; buyer sees own.
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/foundation/cohorts/:id/access-requests",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await accessRequestService.listAccessRequestsForCaller(
+        token,
+        request.params.id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({
+        ok: true,
+        access_requests: result.access_requests,
+        is_manager: result.is_manager,
+      });
+    },
+  );
+
+  // Decide a PENDING request (APPROVED / DENIED) — human provider/admin only.
+  app.post<{
+    Params: { id: string; rid: string };
+    Body: { decision?: string; decision_reason?: string | null; expires_at?: string | null };
+  }>(
+    "/api/v1/foundation/cohorts/:id/access-requests/:rid/decide",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      const result = await accessRequestService.decideAccessRequestForCaller(
+        token,
+        request.params.id,
+        request.params.rid,
+        {
+          decision: b.decision,
+          decision_reason: b.decision_reason,
+          expires_at: b.expires_at,
+        },
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, access_request: result.access_request });
+    },
+  );
+
+  // Revoke a PENDING / APPROVED request — human provider/admin only.
+  app.post<{
+    Params: { id: string; rid: string };
+    Body: { decision_reason?: string | null };
+  }>(
+    "/api/v1/foundation/cohorts/:id/access-requests/:rid/revoke",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await accessRequestService.revokeAccessRequestForCaller(
+        token,
+        request.params.id,
+        request.params.rid,
+        { decision_reason: (request.body ?? {}).decision_reason },
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, access_request: result.access_request });
     },
   );
 }

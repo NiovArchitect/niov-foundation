@@ -605,6 +605,15 @@ export type AuditEventType =
   | "COHORT_CONTRIBUTION_RECORDED"
   | "COHORT_CONTRIBUTION_REVOKED"
   | "COHORT_CONTRIBUTION_EXPIRED"
+  // Phase 1307-A — cohort access request lifecycle. A buyer REQUESTS access; a
+  // HUMAN provider/admin DECIDES (APPROVED/DENIED) or REVOKES. Details carry IDs
+  // / enums / booleans only (never raw data, never contributor identities). No
+  // signal is delivered by an approval in 1307-A. COHORT_ACCESS_EXPIRED is
+  // reserved (windows lapse lazily; no sweep emits it yet). Additive.
+  | "COHORT_ACCESS_REQUESTED"
+  | "COHORT_ACCESS_DECIDED"
+  | "COHORT_ACCESS_REVOKED"
+  | "COHORT_ACCESS_EXPIRED"
   // Phase 1296-A — dedicated high-sensitivity policy gate evaluation. Emitted
   // when the high-sensitivity evaluator runs for a HIGH_SENSITIVITY / policy-
   // gated package (HEALTH / MEDICAL / BIOMETRIC / CHILDREN / BYSTANDER /
@@ -876,6 +885,11 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "COHORT_CONTRIBUTION_RECORDED",
   "COHORT_CONTRIBUTION_REVOKED",
   "COHORT_CONTRIBUTION_EXPIRED",
+  // Phase 1307-A cohort access request lifecycle substrate.
+  "COHORT_ACCESS_REQUESTED",
+  "COHORT_ACCESS_DECIDED",
+  "COHORT_ACCESS_REVOKED",
+  "COHORT_ACCESS_EXPIRED",
   // Phase 1296-A dedicated high-sensitivity policy gate.
   "HIGH_SENSITIVITY_POLICY_EVALUATED",
   // Phase 1297-A high-sensitivity human-review workflow lifecycle.

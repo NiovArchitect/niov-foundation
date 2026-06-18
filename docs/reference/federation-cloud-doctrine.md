@@ -254,3 +254,21 @@ proof + safe aggregate signal delivery (1308-A), usage metering + mock economics
 (1309-A), contribution-weighted revenue share, and any cohort UI / counts /
 monetization. The earlier "NO `CohortContribution` table" sentence above describes
 the 1305-A state and is preserved as contemporaneous record.
+
+**Phase 1307-A — LANDED (`CohortAccessRequest` lifecycle; no delivery).** The
+governed access-request lifecycle a **buyer** follows BEFORE any signal/proof is
+delivered now exists: the `CohortAccessRequest` model + `CohortAccessRequestStatus`
+enum + `CohortAccessRequestService` (`create`/`list`/`decide`/`revoke`) + nested
+routes under `/api/v1/foundation/cohorts/:id/access-requests`. A buyer requests a
+`(use, access_mode)`; CHILDREN cohorts auto-`DENY` at intake; HIGH_SENSITIVITY is
+`PENDING` + `requires_review`; everything admissible is `PENDING` — **never
+auto-approved**. **Requesting is NOT granting**: an AI buyer
+(AI_AGENT/DEVICE/APPLICATION) MAY create a request, but only a **HUMAN** entity may
+**decide or revoke** (a restricted AI class is refused `NOT_AUTHORIZED`), and a
+buyer can **never** approve its own request (`SELF_APPROVAL_FORBIDDEN`) — RULE 0 +
+stop condition #7. An **APPROVED request delivers NO data, NO signal, NO payout**
+(`signal_available: false`) — it is permission-to-proceed only; real delivery is
+1308-A. `provider_org` / `buyer_org` / `decided_by` are internal-only (never
+projected). Still forward-substrate after 1307-A: proof + safe aggregate signal
+delivery (1308-A), usage metering + mock economics (1309-A), contribution-weighted
+revenue share, and any cohort UI / counts / monetization.

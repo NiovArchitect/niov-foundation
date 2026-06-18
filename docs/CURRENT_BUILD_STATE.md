@@ -342,6 +342,39 @@ then restarted the prod API from main so contribution routes are live + compatib
 - **Tests:** `tests/unit/activate-cohort-contribution-prod-schema.test.ts` (5).
 - **Cohort contribution schema is production-active.**
 
+### 🔄 1307-A — Cohort Access Request Lifecycle (IN PROGRESS until merged + proven)
+
+The governed lifecycle a **buyer** follows BEFORE any signal/proof is delivered
+(delivery is 1308-A): a buyer requests a `(use, access_mode)` against a cohort it
+can see; a **HUMAN** provider/admin **decides** (`APPROVED`/`DENIED`); the
+provider may later **revoke**; windows **expire** (lazy). An approved request is
+**permission-to-proceed only** — it delivers **no data, no signal, no payout**.
+
+- **Schema (additive):** `CohortAccessRequest` model + `CohortAccessRequestStatus`
+  enum (`PENDING`/`APPROVED`/`DENIED`/`REVOKED`/`EXPIRED`). `provider_org_entity_id`
+  / `buyer_org_entity_id` / `decided_by_entity_id` are **INTERNAL** (never
+  projected). `proof_required` mirrors the cohort flag at request time.
+- **Service:** `apps/api/src/services/foundation/cohort-access-request.service.ts`
+  — `create` (buyer; open to AI buyers — **requesting ≠ granting**) / `list`
+  (manager sees all, buyer sees own) / `decide` / `revoke`. Pure
+  `evaluateAccessRequestIntake(cohort, request)`: CHILDREN → auto-`DENIED`;
+  HIGH_SENSITIVITY → `PENDING` + `requires_review`; mode/use must be **offered**;
+  everything admissible is `PENDING` (a human decides — **never auto-approved**).
+- **ADVISOR MUST-FIX (RULE 0 + stop condition #7) — proven:** `decide`/`revoke`
+  gate the actor to a **HUMAN** entity (restricted AI class
+  AI_AGENT/DEVICE/APPLICATION → `NOT_AUTHORIZED`, checked *after* manager
+  recognition), and a buyer can **never** approve its own request
+  (`buyer_entity_id === caller` → `SELF_APPROVAL_FORBIDDEN`). `create` stays open
+  to AI buyers.
+- **Routes:** `POST/GET /api/v1/foundation/cohorts/:id/access-requests`,
+  `POST …/:rid/decide`, `POST …/:rid/revoke`. **Audit:** `COHORT_ACCESS_REQUESTED`
+  / `_DECIDED` / `_REVOKED` (+ `_EXPIRED` reserved — **no sweep**).
+- **Tests:** `tests/unit/cohort-access-request-intake.test.ts` (7) +
+  `tests/integration/foundation-cohort-access-requests.test.ts` (8, incl. both
+  must-fixes, CHILDREN auto-deny, enumeration-safe NOT_FOUND, no-leak, RULE 10).
+- **Schema change → 1307-B prod activation BEFORE any prod-API restart from main**
+  (the `discovery_scope` lesson).
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
