@@ -568,7 +568,19 @@ export type AuditEventType =
   // for DENY. SAFE details: meter_id + decision + current + limit + ratio.
   // FORBIDDEN: PII, raw payloads, secrets, other tenants' data. Additive — no
   // ADR-0002 amendment.
-  | "USAGE_METER_THRESHOLD_REACHED";
+  | "USAGE_METER_THRESHOLD_REACHED"
+  // Phase 1294-A — data marketplace grants / consent ledger. Emitted across the
+  // durable grant lifecycle (consent recorded; grant evaluated/created/revoked).
+  // outcome SUCCESS or DENIED (scrubbed reason). SAFE details: grant_id +
+  // listing_id + data_package_id + intended_use + access_mode + status +
+  // consent_required + opt_in_required + proof_required + proof_delivery +
+  // sensitivity_class + economic_decision + reason_code. FORBIDDEN: raw capsule
+  // body/IDs, storage location, embeddings, personal PII, provider/buyer
+  // secrets, real settlement data. Additive — no ADR-0002 amendment.
+  | "MARKETPLACE_DATA_CONSENT_RECORDED"
+  | "MARKETPLACE_DATA_GRANT_EVALUATED"
+  | "MARKETPLACE_DATA_GRANT_CREATED"
+  | "MARKETPLACE_DATA_GRANT_REVOKED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -764,6 +776,11 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MARKETPLACE_DATA_ACCESS_EVALUATED",
   // Phase 1293-A observability / metering enforcement.
   "USAGE_METER_THRESHOLD_REACHED",
+  // Phase 1294-A data marketplace grants / consent ledger.
+  "MARKETPLACE_DATA_CONSENT_RECORDED",
+  "MARKETPLACE_DATA_GRANT_EVALUATED",
+  "MARKETPLACE_DATA_GRANT_CREATED",
+  "MARKETPLACE_DATA_GRANT_REVOKED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

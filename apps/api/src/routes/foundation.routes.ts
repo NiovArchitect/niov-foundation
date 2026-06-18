@@ -62,6 +62,12 @@ const FAILURE_STATUS: Record<string, number> = {
   DATA_PACKAGE_NOT_FOUND: 404,
   INVALID_METER_ID: 422,
   INVALID_LIMIT: 422,
+  INVALID_SENSITIVITY_CLASS: 422,
+  CONSENT_REQUIRED: 409,
+  OPT_IN_REQUIRED: 409,
+  USE_NOT_PERMITTED: 403,
+  PAYMENT_DENIED: 402,
+  GRANT_NOT_FOUND: 404,
 };
 
 function failureStatus(code: string): number {
@@ -338,6 +344,95 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, access: result.access });
+    },
+  );
+
+  // ── Data marketplace grants / consent ledger (1294-A) ───────────────────
+  // Create a durable governed data grant (+ consent) for a DATA_PACKAGE.
+  app.post<{ Params: { listing_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/foundation/marketplace/listings/:listing_id/data-grants",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      if (typeof b.intended_use !== "string" || b.intended_use.length === 0)
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+      const result = await marketplaceService.createDataGrantForCaller(
+        token,
+        request.params.listing_id,
+        {
+          intended_use: b.intended_use,
+          consent_confirmed: b.consent_confirmed === true,
+          opt_in_confirmed: b.opt_in_confirmed === true,
+          expires_at:
+            typeof b.expires_at === "string" ? b.expires_at : undefined,
+        },
+      );
+      if (result.ok === false)
+        return reply.code(failureStatus(result.code)).send({
+          ok: false,
+          code: result.code,
+          ...(result.denied_reasons
+            ? { denied_reasons: result.denied_reasons }
+            : {}),
+        });
+      return reply.code(201).send({ ok: true, grant: result.grant });
+    },
+  );
+
+  // Revoke a data grant.
+  app.post<{ Params: { grant_id: string }; Body: { reason?: unknown } }>(
+    "/api/v1/foundation/marketplace/data-grants/:grant_id/revoke",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.revokeDataGrantForCaller(
+        token,
+        request.params.grant_id,
+        typeof request.body?.reason === "string" ? request.body.reason : undefined,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, grant: result.grant });
+    },
+  );
+
+  // List the caller's data grants (provider + buyer).
+  app.get(
+    "/api/v1/foundation/marketplace/data-grants",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.listDataGrantsForCaller(token);
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, grants: result.grants });
+    },
+  );
+
+  // Read one data grant.
+  app.get<{ Params: { grant_id: string } }>(
+    "/api/v1/foundation/marketplace/data-grants/:grant_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.getDataGrantForCaller(
+        token,
+        request.params.grant_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, grant: result.grant });
     },
   );
 

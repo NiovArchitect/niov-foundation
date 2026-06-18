@@ -485,3 +485,16 @@ describe("1293-A — Foundation observability audit literal defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1294-A — data marketplace grant / consent ledger literals.
+describe("1294-A — Foundation data-grant audit literals defined", () => {
+  it("all four grant/consent literals present + recognized", () => {
+    for (const lit of ["MARKETPLACE_DATA_CONSENT_RECORDED", "MARKETPLACE_DATA_GRANT_EVALUATED", "MARKETPLACE_DATA_GRANT_CREATED", "MARKETPLACE_DATA_GRANT_REVOKED"] as const) {
+      expect(AUDIT_EVENT_TYPE_VALUES).toContain(lit);
+      expect(isKnownAuditEventType(lit)).toBe(true);
+    }
+  });
+  it("the literal set has no duplicates after the 1294-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});
