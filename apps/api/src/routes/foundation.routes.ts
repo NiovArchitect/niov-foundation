@@ -7,6 +7,10 @@
 //            - GET /api/v1/foundation/entities/:entity_id/authority
 //                a same-org target's envelope (org-admin only; cross-tenant
 //                fail-closed).
+//            - GET /api/v1/foundation/capsules/:capsule_id/access-proof
+//                (1289-A.1) the caller's own Memory Capsule proof-of-access
+//                (permission state + tamper-evident audit evidence;
+//                enumeration-safe CAPSULE_NOT_FOUND when no basis).
 //
 //          The `foundation` namespace is deliberately NOT Otzar-specific:
 //          this is platform substrate that future apps/worlds/devices/agents
@@ -19,6 +23,7 @@
 
 import type { FastifyInstance } from "fastify";
 import type { FoundationAuthorityService } from "../services/foundation/authority.service.js";
+import type { FoundationProofService } from "../services/foundation/proof-of-access.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -43,6 +48,7 @@ const FAILURE_STATUS: Record<string, number> = {
   NO_ORG_FOR_CALLER: 404,
   ENTITY_NOT_FOUND: 404,
   TARGET_NOT_FOUND: 404,
+  CAPSULE_NOT_FOUND: 404,
 };
 
 function failureStatus(code: string): number {
@@ -52,6 +58,7 @@ function failureStatus(code: string): number {
 export async function registerFoundationRoutes(
   app: FastifyInstance,
   authorityService: FoundationAuthorityService,
+  proofService: FoundationProofService,
 ): Promise<void> {
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
@@ -83,6 +90,25 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, authority: result.authority });
+    },
+  );
+
+  // The caller's own Memory Capsule proof-of-access (1289-A.1).
+  app.get<{ Params: { capsule_id: string } }>(
+    "/api/v1/foundation/capsules/:capsule_id/access-proof",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await proofService.getCapsuleAccessProofForCaller(
+        token,
+        request.params.capsule_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, proof: result.proof });
     },
   );
 }

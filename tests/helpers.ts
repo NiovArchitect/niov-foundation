@@ -148,6 +148,22 @@ export async function cleanupTestData(): Promise<void> {
   });
 
   if (ids.length > 0) {
+    // escalation_requests reference entities (source/target/resolved_by) via
+    // non-cascading FKs. The COSMP validation gate (requires_validation +
+    // restricted-class NEGOTIATE) auto-creates COMPLIANCE_GATE escalations, so
+    // entity deletes hit escalation_requests_target_entity_id_fkey unless we
+    // clear them first. Same hardening class as the actions/lawful_bases sweep
+    // above (Phase 1250). Scoped to test entities; CI's fresh DB is unaffected.
+    await prisma.escalationRequest.deleteMany({
+      where: {
+        OR: [
+          { source_entity_id: { in: ids } },
+          { target_entity_id: { in: ids } },
+          { resolved_by_entity_id: { in: ids } },
+        ],
+      },
+    });
+
     await prisma.auditLog.deleteMany({
       where: { entity_id: { in: ids } },
     });
