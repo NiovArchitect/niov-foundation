@@ -29,7 +29,8 @@ import type { FoundationAmbientDeviceService } from "../services/foundation/ambi
 import type { FoundationMarketplaceService } from "../services/foundation/marketplace.service.js";
 import type { FoundationObservabilityService } from "../services/foundation/observability.service.js";
 import type { MarketplaceDataDeliveryService } from "../services/foundation/marketplace-data-delivery.service.js";
-import type { FoundationHighSensitivityReviewService } from "../services/foundation/high-sensitivity-review.service.js";
+import type { FoundationHighSensitivityReviewService, ReviewListScope } from "../services/foundation/high-sensitivity-review.service.js";
+import { REVIEW_LIST_SCOPES } from "../services/foundation/high-sensitivity-review.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -77,6 +78,7 @@ const FAILURE_STATUS: Record<string, number> = {
   // Phase 1297-A — high-sensitivity review workflow.
   INVALID_REQUEST: 422,
   REVIEW_NOT_FOUND: 404,
+  INVALID_SCOPE: 422,
   REVIEW_NOT_APPLICABLE: 409,
   REVIEW_NOT_REQUIRED: 409,
   REVIEW_NOT_PENDING: 409,
@@ -536,18 +538,55 @@ export async function registerFoundationRoutes(
     },
   );
 
-  // List the caller's reviews (as provider OR buyer).
-  app.get("/api/v1/foundation/high-sensitivity/reviews", async (request, reply) => {
-    const token = bearerFrom(request.headers.authorization);
-    if (token === null)
-      return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
-    const result = await reviewService.listReviewsForCaller(token);
-    if (result.ok === false)
-      return reply
-        .code(failureStatus(result.code))
-        .send({ ok: false, code: result.code });
-    return reply.code(200).send({ ok: true, reviews: result.reviews });
-  });
+  // List reviews the caller may see, by scope (1299-B):
+  //   ?scope=mine (default) | org_reviewable | org_history
+  app.get<{ Querystring: { scope?: string } }>(
+    "/api/v1/foundation/high-sensitivity/reviews",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const raw = request.query?.scope;
+      if (typeof raw === "string" && raw.length > 0 && !REVIEW_LIST_SCOPES.has(raw))
+        return reply.code(422).send({ ok: false, code: "INVALID_SCOPE" });
+      const scope = (raw ?? "mine") as ReviewListScope;
+      const result = await reviewService.listReviewsForCaller(token, scope);
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({
+        ok: true,
+        scope: result.scope,
+        reviews: result.reviews,
+        ...(result.summary !== undefined ? { summary: result.summary } : {}),
+      });
+    },
+  );
+
+  // SAFE lifecycle/eligibility audit projection for one review (1299-B).
+  // Visible to provider, buyer, or an AUTHORIZED provider-org reviewer.
+  app.get<{ Params: { review_id: string } }>(
+    "/api/v1/foundation/high-sensitivity/reviews/:review_id/audit",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await reviewService.getReviewAuditForCaller(
+        token,
+        request.params.review_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({
+        ok: true,
+        review: result.review,
+        audit_events: result.audit_events,
+      });
+    },
+  );
 
   // Read one review (provider OR buyer only; enumeration-safe).
   app.get<{ Params: { review_id: string } }>(

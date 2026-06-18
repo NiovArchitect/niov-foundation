@@ -236,6 +236,65 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1299-B — Reviewer Audit + Visibility Surface — LANDED 2026-06-18
+
+Adds governed backend visibility for high-sensitivity reviews + a safe audit
+projection so authorized providers, buyers, and org-compliance reviewers can see
+the reviews and lifecycle history they are allowed to see — **visibility is
+authority-bound and is NOT approval authority**. **No schema change** (reuses
+`provider_org_entity_id` column + audit `details.review_id` JSON) → no
+`prisma db push`. **No new audit literal** (reads of labels-only governance data
+aren't audited — consistent with the shipped read endpoints; avoids noise).
+
+- **Scoped list** — `GET /high-sensitivity/reviews?scope=mine|org_reviewable|org_history`.
+  `mine` = provider OR buyer (the shipped default, unchanged). `org_reviewable` =
+  PENDING reviews in the caller's provider org, **excluding the caller's own
+  purchases**. `org_history` = all statuses in the caller's provider org. Org
+  scopes carry a safe `summary` (pending/approved/denied/revoked/expired +
+  expiring_soon). Invalid scope → 422 `INVALID_SCOPE`.
+- **Audit projection** — NEW `GET /high-sensitivity/reviews/:id/audit` →
+  `getReviewAuditForCaller`. Returns the safe review + a lifecycle/eligibility
+  projection (event_type, outcome, timestamp, denial_reason, status, access_mode,
+  candidate_reviewer_entity_id, reviewer_scope, reviewer_reason_codes). Fields are
+  **cherry-picked field-by-field** (no blind `...details` spread) so a future
+  emitter can't leak through. Queries `auditEvent` by `details.review_id` JSON
+  path + the 6 review literals.
+- **Single fact-resolver (no drift):** the org-membership + TAR resolution is
+  extracted into one `resolveOrgMembershipFacts`; BOTH the approval gate
+  (`checkReviewerEligibility`) and the visibility gate (`resolveOrgReviewerContext`)
+  call it. The visibility gate runs the **same 1299-A pure evaluator** over a
+  synthetic generic review, so it inherits the confused-deputy guard + the TAR
+  corroborating-only ruling and can never be looser than approval.
+  `confersOrgReviewVisibility` gates org scopes — **OWNER / PERSONAL_OWNER
+  excluded** (owners see their own via `mine`, never other providers' reviews).
+- **Intentional asymmetry (stated):** the audit route is **tighter** than the
+  GET-review loader — a plain active org member can fetch the review object but
+  NOT its audit trail (the trail reveals who-attempted + eligibility outcomes), so
+  non-party audit access requires an authorized org reviewer. Personal-DMW review
+  audit is visible only to provider/buyer; cross-tenant → invisible
+  `REVIEW_NOT_FOUND`.
+- **Visibility ≠ authority:** approve/deny/revoke still re-check 1299-A
+  eligibility per review; CHILDREN reviews may be visible in org governance lists
+  but remain never-approvable. Multi-org callers key off the org from
+  `getOrgEntityId` (worst case under-visibility, never a leak).
+- **No-leak:** projection built in the service (not a no-leak scan root), so
+  wire-level `payload.not.toContain(...)` asserts guard both list + audit
+  responses; route passes through already-projected safe objects only.
+- **Tests:** unit `foundation-high-sensitivity-reviewer-policy` 19 (+3 for
+  `confersOrgReviewVisibility`: org scopes true, OWNER/PERSONAL_OWNER false,
+  denied/plain/non-human/cross-tenant/buyer false). Integration
+  `foundation-reviewer-visibility` 15 (mine, org_reviewable admin+compliance,
+  empty for plain/non-human/cross-tenant, buyer-own excluded, org_history +
+  summary, personal hidden + audit invisible, invalid scope 422, safe audit
+  projection + eligibility outcomes + no-raw, buyer audit, visibility≠approval,
+  approve-after-view). Typecheck 0; integration regression
+  delegation 14 + 1297-A 13 + retention 11 = 38/38; no-console + no-leak + audit
+  48/48. Verified the Prisma `details.review_id` JSON-path filter against local DB.
+- **TAR ruling preserved** (Founder, 1299-A): global `TAR.can_admin_org` stays
+  corroborating-only; not changed here.
+- **Backlog (Founder-gated):** real per-capsule content read; CT UI; real
+  settlement; cross-org discovery.
+
 ### Phase 1299-A — Org-Compliance Reviewer Delegation — LANDED 2026-06-18
 
 Widens high-sensitivity review authority from "only the package provider entity"

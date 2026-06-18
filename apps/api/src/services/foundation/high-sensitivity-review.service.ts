@@ -73,6 +73,7 @@ import {
   HIGH_SENSITIVITY_REVIEW_GATE_REASONS,
 } from "./high-sensitivity-policy.js";
 import {
+  confersOrgReviewVisibility,
   evaluateHighSensitivityReviewerEligibility,
   type ReviewerEligibilityFacts,
 } from "./high-sensitivity-reviewer-policy.js";
@@ -121,9 +122,61 @@ export interface SafeReviewView {
 export type ReviewResult =
   | { ok: true; review: SafeReviewView }
   | { ok: false; code: string; denied_reasons?: string[] };
+
+// 1299-B — the visibility scopes for listing reviews.
+//   mine          — reviews where the caller is provider OR buyer (default).
+//   org_reviewable — PENDING reviews in the caller's provider org (excluding the
+//                    caller's own purchases); authorized org reviewers only.
+//   org_history    — ALL reviews (any status) in the caller's provider org;
+//                    authorized org reviewers only.
+export type ReviewListScope = "mine" | "org_reviewable" | "org_history";
+export const REVIEW_LIST_SCOPES: ReadonlySet<string> = new Set([
+  "mine",
+  "org_reviewable",
+  "org_history",
+]);
+
+// 1299-B — safe lifecycle/status counts for an org-scoped review list.
+export interface ReviewSummary {
+  pending_review_count: number;
+  approved_count: number;
+  denied_count: number;
+  revoked_count: number;
+  expired_count: number;
+  expiring_soon_count: number; // APPROVED + expires within 7 days
+}
+
 export type ReviewListResult =
-  | { ok: true; reviews: SafeReviewView[] }
+  | { ok: true; reviews: SafeReviewView[]; scope: ReviewListScope; summary?: ReviewSummary }
   | { ok: false; code: string };
+
+// 1299-B — a single SAFE audit/lifecycle projection row (labels only — never raw
+// content / payload / storage_location / embedding / content_hash / secrets).
+export interface SafeReviewAuditEvent {
+  event_type: string;
+  outcome: string;
+  timestamp: string;
+  denial_reason: string | null;
+  status: string | null;
+  access_mode: string | null;
+  candidate_reviewer_entity_id: string | null;
+  reviewer_scope: string | null;
+  reviewer_reason_codes: string[];
+}
+export type ReviewAuditResult =
+  | { ok: true; review: SafeReviewView; audit_events: SafeReviewAuditEvent[] }
+  | { ok: false; code: string };
+
+// The 6 high-sensitivity review lifecycle audit literals projected by the audit
+// surface (1299-B). Kept local so the projection query stays self-documenting.
+const REVIEW_AUDIT_EVENT_TYPES = [
+  "HIGH_SENSITIVITY_REVIEW_CREATED",
+  "HIGH_SENSITIVITY_REVIEW_APPROVED",
+  "HIGH_SENSITIVITY_REVIEW_DENIED",
+  "HIGH_SENSITIVITY_REVIEW_REVOKED",
+  "HIGH_SENSITIVITY_REVIEW_EXPIRED",
+  "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED",
+] as const;
 
 function toSafeReview(r: HighSensitivityReview): SafeReviewView {
   return {
@@ -156,6 +209,55 @@ function toSafeReview(r: HighSensitivityReview): SafeReviewView {
     revoked_at: r.revoked_at?.toISOString() ?? null,
     denial_reason: r.denial_reason,
     created_at: r.created_at.toISOString(),
+  };
+}
+
+// An all-zero review summary (returned for unauthorized/empty org scopes).
+function emptyReviewSummary(): ReviewSummary {
+  return {
+    pending_review_count: 0,
+    approved_count: 0,
+    denied_count: 0,
+    revoked_count: 0,
+    expired_count: 0,
+    expiring_soon_count: 0,
+  };
+}
+
+// Read one string field from an audit-details JSON blob, or null. Used to
+// cherry-pick SAFE fields field-by-field (never a blind spread — a future
+// emitter must not leak a new field through this projection).
+function detailString(details: unknown, key: string): string | null {
+  if (typeof details !== "object" || details === null) return null;
+  const v = (details as Record<string, unknown>)[key];
+  return typeof v === "string" ? v : null;
+}
+
+// Project ONE audit row into the SAFE review-audit shape (1299-B). Only the
+// enumerated label fields are surfaced; raw content can never appear because it
+// is never read here.
+function toSafeReviewAuditEvent(e: {
+  event_type: string;
+  outcome: string;
+  timestamp: Date;
+  denial_reason: string | null;
+  details: unknown;
+}): SafeReviewAuditEvent {
+  const codes = (() => {
+    if (typeof e.details !== "object" || e.details === null) return [];
+    const v = (e.details as Record<string, unknown>)["reviewer_reason_codes"];
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  })();
+  return {
+    event_type: e.event_type,
+    outcome: e.outcome,
+    timestamp: e.timestamp.toISOString(),
+    denial_reason: e.denial_reason,
+    status: detailString(e.details, "status"),
+    access_mode: detailString(e.details, "access_mode"),
+    candidate_reviewer_entity_id: detailString(e.details, "candidate_reviewer_entity_id"),
+    reviewer_scope: detailString(e.details, "reviewer_scope"),
+    reviewer_reason_codes: codes,
   };
 }
 
@@ -275,6 +377,93 @@ export class FoundationHighSensitivityReviewService {
     } catch {
       return null;
     }
+  }
+
+  // WHAT: Resolve a candidate reviewer's PROVIDER-ORG-scoped membership + TAR
+  //        facts. SINGLE source of truth shared by the approval gate
+  //        (checkReviewerEligibility) and the 1299-B visibility gate
+  //        (resolveOrgReviewerContext) so the two can never drift.
+  // INPUT: the candidate entity id + the provider org id.
+  // OUTPUT: the org-membership facts the pure evaluator consumes.
+  // WHY: membership is resolved strictly by (child_id, parent_id = provider org)
+  //      — a role in any OTHER org never leaks in (confused-deputy guard); TAR
+  //      can_admin_org is the GLOBAL per-entity flag, recorded as corroborating
+  //      only (the evaluator never elevates on it alone — Founder ruling 1299-A).
+  private async resolveOrgMembershipFacts(
+    entityId: string,
+    providerOrgEntityId: string,
+  ): Promise<{
+    reviewer_in_provider_org: boolean;
+    membership_is_admin: boolean;
+    membership_role_title: string | null;
+    membership_active: boolean;
+    reviewer_can_admin_org: boolean;
+  }> {
+    // Resolve WITHOUT an is_active filter so reviewer_in_provider_org and
+    // membership_active are both truthful (prefer active, then admin).
+    const membership = await prisma.entityMembership.findFirst({
+      where: { child_id: entityId, parent_id: providerOrgEntityId },
+      orderBy: [{ is_active: "desc" }, { is_admin: "desc" }],
+    });
+    const tar = await prisma.tokenAttributeRepository.findUnique({
+      where: { entity_id: entityId },
+    });
+    return {
+      reviewer_in_provider_org: membership !== null,
+      membership_is_admin: membership?.is_admin ?? false,
+      membership_role_title: membership?.role_title ?? null,
+      membership_active: membership?.is_active ?? false,
+      reviewer_can_admin_org:
+        tar !== null && tar.status === "ACTIVE" && tar.can_admin_org === true,
+    };
+  }
+
+  // WHAT: Decide whether a caller is an AUTHORIZED ORG REVIEWER for their own
+  //        provider org (the coarse gate for org-wide review VISIBILITY).
+  // INPUT: the caller's entity id.
+  // OUTPUT: { org, authorized, scope } — org is the caller's COMPANY org (or
+  //         null), authorized is true only for an org-reviewer scope.
+  // WHY: 1299-B list (org_reviewable / org_history) + audit visibility. Reuses
+  //      the SAME pure evaluator as the approval gate over a synthetic generic
+  //      (non-personal, non-CHILDREN, not-provider, not-buyer) review, so the
+  //      visibility gate inherits the confused-deputy + TAR rulings and can never
+  //      be looser than approval. Non-human / orgless / unauthorized → not
+  //      authorized. A multi-org caller keys off the membership resolved for the
+  //      org returned by getOrgEntityId (worst case under-visibility, never a
+  //      leak).
+  private async resolveOrgReviewerContext(
+    callerEntityId: string,
+  ): Promise<{ org: string | null; authorized: boolean; scope: string }> {
+    const caller: Entity | null = await prisma.entity.findFirst({
+      where: { entity_id: callerEntityId, deleted_at: null },
+    });
+    if (caller === null) return { org: null, authorized: false, scope: "DENIED" };
+    let org: string | null;
+    try {
+      org = await getOrgEntityId(callerEntityId);
+    } catch {
+      org = null;
+    }
+    if (org === null) return { org: null, authorized: false, scope: "DENIED" };
+
+    const m = await this.resolveOrgMembershipFacts(callerEntityId, org);
+    const decision = evaluateHighSensitivityReviewerEligibility({
+      reviewer_entity_type: caller.entity_type,
+      reviewer_is_provider: false,
+      reviewer_is_buyer: false,
+      package_is_personal: false,
+      reviewer_in_provider_org: m.reviewer_in_provider_org,
+      membership_is_admin: m.membership_is_admin,
+      membership_role_title: m.membership_role_title,
+      membership_active: m.membership_active,
+      reviewer_can_admin_org: m.reviewer_can_admin_org,
+      sensitive_categories: [],
+    });
+    return {
+      org,
+      authorized: confersOrgReviewVisibility(decision),
+      scope: decision.reviewer_scope,
+    };
   }
 
   // WHAT: Open (or fetch the existing) human review for a REQUIRES_REVIEW
@@ -447,21 +636,142 @@ export class FoundationHighSensitivityReviewService {
     return { ok: true, review: toSafeReview(r) };
   }
 
-  // WHAT: List the caller's reviews (as provider OR buyer). Scope-safe.
-  async listReviewsForCaller(sessionToken: string): Promise<ReviewListResult> {
+  // WHAT: List reviews the caller may see, by scope (1299-B). Scope-safe.
+  // INPUT: token + optional scope (default "mine").
+  // OUTPUT: { ok:true, reviews, scope, summary? } or { ok:false, code }.
+  // WHY: "mine" = provider OR buyer (the shipped behavior). "org_reviewable" /
+  //      "org_history" expose the caller's PROVIDER-ORG reviews, gated by the
+  //      coarse org-reviewer authorization (same evaluator as approval; TAR +
+  //      confused-deputy rulings inherited). A non-human / unauthorized / orgless
+  //      / cross-tenant caller gets an EMPTY list (enumeration-safe, never another
+  //      org's data). Personal-DMW reviews (provider_org null) never appear in an
+  //      org scope. Visibility is NOT approval authority — approve/deny/revoke
+  //      still re-check eligibility per review.
+  async listReviewsForCaller(
+    sessionToken: string,
+    scope: ReviewListScope = "mine",
+  ): Promise<ReviewListResult> {
     const validation = await this.authService.validateSession(sessionToken, "read");
     if (!validation.valid) return { ok: false, code: validation.code };
+    const callerEntityId = validation.entity_id;
+
+    if (scope === "mine") {
+      const rows = await prisma.highSensitivityReview.findMany({
+        where: {
+          OR: [
+            { provider_entity_id: callerEntityId },
+            { buyer_entity_id: callerEntityId },
+          ],
+        },
+        orderBy: { created_at: "desc" },
+        take: 100,
+      });
+      return { ok: true, reviews: rows.map(toSafeReview), scope };
+    }
+
+    // Org scopes — require an authorized org reviewer in the caller's org.
+    const ctx = await this.resolveOrgReviewerContext(callerEntityId);
+    if (ctx.org === null || !ctx.authorized)
+      return { ok: true, reviews: [], scope, summary: emptyReviewSummary() };
+
+    const baseWhere =
+      scope === "org_reviewable"
+        ? {
+            provider_org_entity_id: ctx.org,
+            status: "PENDING_REVIEW" as const,
+            // A reviewer may never browse their OWN purchases as "reviewable"
+            // (no self-serve approval surface).
+            NOT: { buyer_entity_id: callerEntityId },
+          }
+        : { provider_org_entity_id: ctx.org };
+
     const rows = await prisma.highSensitivityReview.findMany({
-      where: {
-        OR: [
-          { provider_entity_id: validation.entity_id },
-          { buyer_entity_id: validation.entity_id },
-        ],
-      },
+      where: baseWhere,
       orderBy: { created_at: "desc" },
-      take: 100,
+      take: 200,
     });
-    return { ok: true, reviews: rows.map(toSafeReview) };
+    const summary = await this.orgReviewSummary(ctx.org);
+    return { ok: true, reviews: rows.map(toSafeReview), scope, summary };
+  }
+
+  // Compute SAFE status counts for an org's reviews (1299-B summary).
+  private async orgReviewSummary(orgEntityId: string): Promise<ReviewSummary> {
+    const grouped = await prisma.highSensitivityReview.groupBy({
+      by: ["status"],
+      where: { provider_org_entity_id: orgEntityId },
+      _count: { _all: true },
+    });
+    const count = (s: string): number =>
+      grouped.find((g) => g.status === s)?._count._all ?? 0;
+    const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiring_soon_count = await prisma.highSensitivityReview.count({
+      where: {
+        provider_org_entity_id: orgEntityId,
+        status: "APPROVED",
+        expires_at: { not: null, lte: soon },
+      },
+    });
+    return {
+      pending_review_count: count("PENDING_REVIEW"),
+      approved_count: count("APPROVED"),
+      denied_count: count("DENIED"),
+      revoked_count: count("REVOKED"),
+      expired_count: count("EXPIRED"),
+      expiring_soon_count,
+    };
+  }
+
+  // WHAT: Project the SAFE lifecycle/eligibility audit trail for one review.
+  // INPUT: token + review_id.
+  // OUTPUT: { ok:true, review, audit_events } or { ok:false, code }.
+  // WHY: GET /high-sensitivity/reviews/:id/audit. Visible to the provider, the
+  //      buyer, OR an AUTHORIZED provider-org reviewer (NOTE: tighter than the
+  //      GET-review loader, which admits any active org member — the audit trail
+  //      reveals who-attempted + eligibility outcomes, so it is reviewer-gated).
+  //      Personal-DMW review audit is visible only to provider/buyer. Cross-tenant
+  //      → REVIEW_NOT_FOUND (invisible). Projects ONLY safe labels (never raw
+  //      content); audit details are cherry-picked field-by-field (no blind
+  //      spread) so a future emitter cannot leak through this surface.
+  async getReviewAuditForCaller(
+    sessionToken: string,
+    reviewId: string,
+  ): Promise<ReviewAuditResult> {
+    const validation = await this.authService.validateSession(sessionToken, "read");
+    if (!validation.valid) return { ok: false, code: validation.code };
+    const callerEntityId = validation.entity_id;
+
+    const review = await prisma.highSensitivityReview.findFirst({
+      where: { review_id: reviewId },
+    });
+    if (review === null) return { ok: false, code: "REVIEW_NOT_FOUND" };
+
+    const isParty =
+      review.provider_entity_id === callerEntityId ||
+      review.buyer_entity_id === callerEntityId;
+    if (!isParty) {
+      // Non-party callers must be an AUTHORIZED reviewer in the review's
+      // provider org (personal-DMW reviews have no org → invisible to non-party).
+      if (review.provider_org_entity_id === null)
+        return { ok: false, code: "REVIEW_NOT_FOUND" };
+      const ctx = await this.resolveOrgReviewerContext(callerEntityId);
+      if (!ctx.authorized || ctx.org !== review.provider_org_entity_id)
+        return { ok: false, code: "REVIEW_NOT_FOUND" };
+    }
+
+    const events = await prisma.auditEvent.findMany({
+      where: {
+        event_type: { in: [...REVIEW_AUDIT_EVENT_TYPES] },
+        details: { path: ["review_id"], equals: reviewId },
+      },
+      orderBy: { timestamp: "asc" },
+      take: 200,
+    });
+
+    return {
+      ok: true,
+      review: toSafeReview(review),
+      audit_events: events.map(toSafeReviewAuditEvent),
+    };
   }
 
   // WHAT: Resolve the reviewer's facts and decide eligibility via the PURE
@@ -494,43 +804,32 @@ export class FoundationHighSensitivityReviewService {
     // (child_id = reviewer, parent_id = provider org). Personal-DMW packages
     // have no org to delegate into, so the org facts stay false/null and only
     // the owner / provider path can approve.
-    let reviewerInProviderOrg = false;
-    let membershipIsAdmin = false;
-    let membershipRoleTitle: string | null = null;
-    let membershipActive = false;
-    let reviewerCanAdminOrg = false;
-    if (!packageIsPersonal) {
-      const providerOrg = review.provider_org_entity_id as string;
-      // Resolve WITHOUT an is_active filter so reviewer_in_provider_org and
-      // membership_active are both truthful facts (prefer active, then admin).
-      const membership = await prisma.entityMembership.findFirst({
-        where: { child_id: reviewerEntityId, parent_id: providerOrg },
-        orderBy: [{ is_active: "desc" }, { is_admin: "desc" }],
-      });
-      reviewerInProviderOrg = membership !== null;
-      membershipIsAdmin = membership?.is_admin ?? false;
-      membershipRoleTitle = membership?.role_title ?? null;
-      membershipActive = membership?.is_active ?? false;
-      // TAR can_admin_org is an ADDITIVE admin signal — only consulted WITH a
-      // provider-org membership (the evaluator gates it behind reviewer_in_
-      // provider_org + membership_active; TAR alone never authorizes).
-      const tar = await prisma.tokenAttributeRepository.findUnique({
-        where: { entity_id: reviewerEntityId },
-      });
-      reviewerCanAdminOrg =
-        tar !== null && tar.status === "ACTIVE" && tar.can_admin_org === true;
-    }
+    // Org facts come from the SINGLE shared resolver (provider-org-scoped
+    // membership + TAR) so the approval gate and the 1299-B visibility gate can
+    // never drift. Personal-DMW packages have no org to delegate into.
+    const org = packageIsPersonal
+      ? {
+          reviewer_in_provider_org: false,
+          membership_is_admin: false,
+          membership_role_title: null,
+          membership_active: false,
+          reviewer_can_admin_org: false,
+        }
+      : await this.resolveOrgMembershipFacts(
+          reviewerEntityId,
+          review.provider_org_entity_id as string,
+        );
 
     const facts: ReviewerEligibilityFacts = {
       reviewer_entity_type: reviewer.entity_type,
       reviewer_is_provider: review.provider_entity_id === reviewerEntityId,
       reviewer_is_buyer: review.buyer_entity_id === reviewerEntityId,
       package_is_personal: packageIsPersonal,
-      reviewer_in_provider_org: reviewerInProviderOrg,
-      membership_is_admin: membershipIsAdmin,
-      membership_role_title: membershipRoleTitle,
-      membership_active: membershipActive,
-      reviewer_can_admin_org: reviewerCanAdminOrg,
+      reviewer_in_provider_org: org.reviewer_in_provider_org,
+      membership_is_admin: org.membership_is_admin,
+      membership_role_title: org.membership_role_title,
+      membership_active: org.membership_active,
+      reviewer_can_admin_org: org.reviewer_can_admin_org,
       sensitive_categories: review.sensitive_categories,
     };
 
