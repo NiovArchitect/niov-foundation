@@ -114,28 +114,28 @@ deserializability is closed **by construction** — the enum type holds exactly
 contain a value Prisma's enum can't deserialize. An end-to-end authenticated read remains
 the only fully-empirical confirmation and needs explicit Founder go.
 
-**⚠️ Otzar APPLICATION entity orphans (prod) — pinned + deferred (1303-D).** Every API
-boot without `OTZAR_ENTITY_ID` set auto-creates a new Otzar APPLICATION entity. A
-Founder-authorized read-only inventory (safe identity fields only) found **exactly 4
-APPLICATION entities in prod, all named "Otzar", all ACTIVE, all functionally empty**
-(each: 1 auto-seeded wallet, 0 sessions, 0 api_keys, 0 capsules):
+**✅ Otzar APPLICATION entity orphans — CLEANED UP (1303-E soft-delete; Founder-approved).**
+Prior unpinned API boots auto-created Otzar APPLICATION entities. A Founder-authorized
+read-only inventory found **4 prod APPLICATION entities, all named "Otzar", all
+functionally empty** (each: 1 auto-seeded wallet, 0 sessions, 0 api_keys, 0 capsules).
+1303-E soft-deleted the **three orphans** (RULE 10: `deleted_at = now()`) and preserved
+the pinned canonical:
 
-| entity_id | created_at (UTC) | role |
+| entity_id | created_at (UTC) | disposition (after 1303-E) |
 | --- | --- | --- |
-| `a35f644a-7855-4bab-8f67-6cd225e58645` | 2026-06-16 23:35 | orphan candidate (oldest) |
-| `0a6fd440-3a45-45e2-a167-1bb1e5ee7cb5` | 2026-06-17 23:12 | orphan candidate |
-| `5fe4c5d9-9b20-43f7-9efd-97e7763ca99a` | 2026-06-18 15:45 | orphan candidate (incident PID 58266) |
-| **`8347070c-0aae-48b4-99e8-b62414488bf8`** | 2026-06-18 15:48 | **provisional canonical (pinned in `.env`)** |
+| `a35f644a-7855-4bab-8f67-6cd225e58645` | 2026-06-16 23:35 | **soft-deleted** (`deleted_at` SET) |
+| `0a6fd440-3a45-45e2-a167-1bb1e5ee7cb5` | 2026-06-17 23:12 | **soft-deleted** (`deleted_at` SET) |
+| `5fe4c5d9-9b20-43f7-9efd-97e7763ca99a` | 2026-06-18 15:45 | **soft-deleted** (`deleted_at` SET) |
+| **`8347070c-0aae-48b4-99e8-b62414488bf8`** | 2026-06-18 15:48 | **canonical — ACTIVE, pinned in `.env`** |
 
-Because all 4 are empty equivalents, there is no safe way to single out an "original
-stable" entity → **Founder rule 3 applied: pinned the running entity `8347070c…` as
-provisional canonical** and persisted `OTZAR_ENTITY_ID` to the gitignored `.env`. Boots
-now reuse it (no new orphans). **Orphan cleanup is DEFERRED pending explicit Founder
-approval of the exact IDs.** Future safe soft-delete (per RULE 10) =
-`UPDATE entities SET deleted_at = now() WHERE entity_id IN (a35f644a…, 0a6fd440…, 5fe4c5d9…) AND deleted_at IS NULL`
-— re-verify 0 sessions/keys/capsules immediately before; each orphan's 1:1 `wallets` row
-has no `deleted_at` column (Wallet→Entity is `onDelete: Cascade`) and stays inert. No
-soft-delete was performed in 1303-D.
+**End state (verified):** APPLICATION total = 4 · active = **1** (canonical) · soft-deleted = 3.
+The mutation was performed by the one-off, approval-gated, soft-delete-only script
+`scripts/soft-delete-otzar-orphans-prod.ts` (exact 3-ID allowlist; preflight re-verified
+0 sessions/keys/capsules; asserted exactly 3 rows affected; canonical asserted absent
+from the allowlist). **No hard delete, no wallet-row deletion, no schema mutation, no
+`prisma db push`.** The orphans' rows and their 1:1 inert `wallets` rows remain (RULE 10);
+`Wallet` has no `deleted_at` column (`Wallet→Entity onDelete: Cascade`). Boots reuse the
+pinned `OTZAR_ENTITY_ID`, so no new orphans accrue.
 
 ### 🟡 #3 Queued Founder design decisions (not bugs — product-shape calls)
 
