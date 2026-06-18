@@ -638,7 +638,16 @@ export type AuditEventType =
   // / reviewer_scope / reviewer_reason_codes. FORBIDDEN: raw capsule body,
   // medical/health/biometric/children content, PII, secrets. Additive — no
   // ADR-0002 amendment.
-  | "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED";
+  | "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED"
+  // Phase 1301-A — cross-org marketplace discovery opt-in. Emitted when a
+  // provider sets a listing's discovery_scope (PRIVATE ↔ CROSS_ORG). outcome
+  // SUCCESS when the policy change is applied; DENIED when a high-sensitivity
+  // data package is refused cross-org reach (DISCOVERY_BLOCKED_HIGH_SENSITIVITY).
+  // SAFE details: listing_id + listing_type + status + discovery_scope +
+  // is_data_package + sensitivity_class (label) + reason_code. FORBIDDEN: raw
+  // capsule body/IDs, package internals, PII, provider secrets, real settlement
+  // data. Additive — no ADR-0002 amendment.
+  | "MARKETPLACE_DISCOVERY_POLICY_UPDATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -856,6 +865,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "RETENTION_SWEEP_COMPLETED",
   // Phase 1299-A org-compliance reviewer delegation.
   "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED",
+  // Phase 1301-A cross-org marketplace discovery opt-in.
+  "MARKETPLACE_DISCOVERY_POLICY_UPDATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

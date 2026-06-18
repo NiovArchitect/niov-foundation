@@ -236,6 +236,52 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1301-A — Cross-Org Marketplace Discovery (gated, provider-opt-in) — IN_PROGRESS 2026-06-18
+
+Adds an **opt-in cross-org discovery catalog** to the marketplace substrate. By
+default a PUBLISHED personal/org-less listing was visible only to its provider
+(same-org PUBLISHED stayed in-org) — there was no way to reach other orgs without
+weakening tenant isolation. 1301-A adds a provider-controlled reach flag so a
+provider can deliberately surface a listing's **SAFE metadata projection** to
+other orgs. Cross-org discovery stays **listing-level, opt-in, and auditable** —
+never a grant, never raw content, never a capsule/consent/quote touch.
+
+- **Additive schema** — NEW enum `MarketplaceDiscoveryScope { PRIVATE CROSS_ORG }`
+  + `discovery_scope MarketplaceDiscoveryScope @default(PRIVATE)` on
+  `MarketplaceListing` + `@@index([discovery_scope])`. **Orthogonal to `status`**
+  (lifecycle ≠ reach). Existing rows default to PRIVATE → not discoverable.
+  `PUBLIC` (org-less open reach) is **deliberately deferred** — not an enum value
+  this phase; no default public exposure. Applied via guarded `npm run db:push:test`
+  (never bare push); CI applies it via `npm run db:push` (additive, no migration
+  file).
+- **Provider-only setter** — `PATCH /marketplace/listings/:id/discovery`
+  (`setListingDiscoveryPolicyForCaller`). Non-provider/unknown → enumeration-safe
+  `LISTING_NOT_FOUND`. Scope ∉ {PRIVATE, CROSS_ORG} → `INVALID_DISCOVERY_SCOPE`
+  (this is how `"PUBLIC"` is refused). CROSS_ORG requires `status === PUBLISHED`
+  → else `LISTING_NOT_PUBLISHED`. A **high-sensitivity** data package
+  (`isHighSensitivityPackage` — HIGH_SENSITIVITY class OR HEALTH/MEDICAL/
+  BIOMETRIC/CHILDREN) can NEVER be CROSS_ORG, personal or org →
+  `DISCOVERY_BLOCKED_HIGH_SENSITIVITY`. PRIVATE (retract) always allowed. Every
+  change/denial → NEW append-only `MARKETPLACE_DISCOVERY_POLICY_UPDATED` audit
+  (no ADR-0002 amendment).
+- **Separate metadata-only read path** — `GET /marketplace/discover`
+  (`discoverListingsForCaller`). Returns PUBLISHED + CROSS_ORG listings,
+  **excluding the caller's own + same-org listings** (no dupes with the default
+  surface), as `toSafeListing` projections only. **Read-time high-sensitivity
+  re-exclusion** (defense-in-depth, one batched package lookup) even if a package
+  reached CROSS_ORG out of band. Grants NOTHING — using a discovered listing still
+  runs the full access/grant/consent path.
+- **Tests** — +9 integration (opt-in→cross-org-visible; same-org/own excluded;
+  default-PRIVATE invisible; DRAFT block; invalid-scope incl. PUBLIC; non-provider
+  enumeration-safe; high-sensitivity set-time block; read-time defense; safe-
+  projection-only no-leak; retract) + 1 unit (audit literal lock). Full unit tier +
+  typecheck (0 errors) + no-leak + no-console green locally; full integration tier
+  is CI's source of truth.
+- **Advisor checkpoint** — design pre-approved with 4 refinements (CI schema
+  mechanism verified first; discovery_scope orthogonal to status; high-sensitivity
+  hard-block regardless of opt-in; enforce twice + defer PUBLIC). Final advisor
+  pass **before merge** per amendment rule 11 (policy-sensitive phase).
+
 ### Phase 1299-B — Reviewer Audit + Visibility Surface — LANDED 2026-06-18
 
 Adds governed backend visibility for high-sensitivity reviews + a safe audit

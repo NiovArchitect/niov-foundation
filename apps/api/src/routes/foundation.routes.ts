@@ -63,6 +63,10 @@ const FAILURE_STATUS: Record<string, number> = {
   INVALID_USE_RIGHT: 422,
   LISTING_NOT_FOUND: 404,
   DATA_PACKAGE_NOT_FOUND: 404,
+  // Phase 1301-A — cross-org discovery opt-in.
+  INVALID_DISCOVERY_SCOPE: 422,
+  LISTING_NOT_PUBLISHED: 409,
+  DISCOVERY_BLOCKED_HIGH_SENSITIVITY: 403,
   INVALID_METER_ID: 422,
   INVALID_LIMIT: 422,
   INVALID_SENSITIVITY_CLASS: 422,
@@ -295,6 +299,55 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, listings: result.listings });
+    },
+  );
+
+  // Phase 1301-A — cross-org discovery catalog (PUBLISHED + provider-opted-in to
+  // CROSS_ORG, excluding the caller's own + same-org listings). Metadata-only —
+  // never a grant, never raw content.
+  app.get<{ Querystring: { listing_type?: string } }>(
+    "/api/v1/foundation/marketplace/discover",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.discoverListingsForCaller(token, {
+        listing_type: request.query.listing_type,
+      });
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, listings: result.listings });
+    },
+  );
+
+  // Phase 1301-A — set a listing's cross-org discovery reach (provider-opt-in
+  // only). Body: { discovery_scope: "PRIVATE" | "CROSS_ORG" }.
+  app.patch<{
+    Params: { listing_id: string };
+    Body: { discovery_scope?: unknown };
+  }>(
+    "/api/v1/foundation/marketplace/listings/:listing_id/discovery",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const scope =
+        typeof request.body?.discovery_scope === "string"
+          ? request.body.discovery_scope
+          : "";
+      const result =
+        await marketplaceService.setListingDiscoveryPolicyForCaller(
+          token,
+          request.params.listing_id,
+          scope,
+        );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, listing: result.listing });
     },
   );
 

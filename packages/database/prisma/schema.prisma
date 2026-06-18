@@ -942,6 +942,14 @@ model MarketplaceListing {
   // Trust/proof metadata (advisory; e.g. provider attestation, audit refs).
   trust_metadata        Json                     @default("{}")
   status                MarketplaceListingStatus @default(DRAFT)
+  // Phase 1301-A — cross-org discovery REACH (orthogonal to `status`, which is
+  // lifecycle). PRIVATE (default) = visible only to the provider + same-org
+  // PUBLISHED viewers (the pre-1301-A behavior; existing rows keep it). CROSS_ORG
+  // = the provider has explicitly opted this PUBLISHED listing into the cross-org
+  // discovery catalog. PUBLIC (open, no org) is forward-substrate and deliberately
+  // NOT a value this phase — no default public exposure. High-sensitivity data
+  // packages can NEVER be CROSS_ORG (enforced at set-time AND read-time).
+  discovery_scope       MarketplaceDiscoveryScope @default(PRIVATE)
   created_at            DateTime                 @default(now())
   updated_at            DateTime                 @updatedAt
   deleted_at            DateTime?
@@ -950,6 +958,7 @@ model MarketplaceListing {
   @@index([provider_org_entity_id])
   @@index([listing_type])
   @@index([status])
+  @@index([discovery_scope])
   @@map("marketplace_listings")
 }
 
@@ -974,6 +983,18 @@ enum MarketplaceListingStatus {
   PRIVATE
   PUBLISHED
   DELISTED
+}
+
+// Phase 1301-A — cross-org marketplace discovery reach (provider-opt-in only).
+// Orthogonal to MarketplaceListingStatus (lifecycle). PRIVATE = no cross-org
+// reach (the pre-1301-A default; provider + same-org PUBLISHED viewers only).
+// CROSS_ORG = provider explicitly opted a PUBLISHED listing into the cross-org
+// discovery catalog (metadata-only browse; never a grant, never raw content).
+// A future PUBLIC value (open, org-less reach) is forward-substrate and is NOT
+// added here — there is no default public exposure in this phase.
+enum MarketplaceDiscoveryScope {
+  PRIVATE
+  CROSS_ORG
 }
 
 // Phase 1292-A data marketplace — how a buyer may access the data product.

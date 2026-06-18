@@ -570,3 +570,14 @@ describe("1299-A — Foundation reviewer-eligibility audit literal defined", () 
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1301-A — cross-org marketplace discovery opt-in literal.
+describe("1301-A — Foundation cross-org discovery audit literal defined", () => {
+  it("MARKETPLACE_DISCOVERY_POLICY_UPDATED is present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("MARKETPLACE_DISCOVERY_POLICY_UPDATED");
+    expect(isKnownAuditEventType("MARKETPLACE_DISCOVERY_POLICY_UPDATED")).toBe(true);
+  });
+  it("the literal set has no duplicates after the 1301-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

@@ -156,6 +156,7 @@ export type {
   MarketplaceListing,
   MarketplaceListingType,
   MarketplaceListingStatus,
+  MarketplaceDiscoveryScope,
   MarketplaceDataPackage,
   DataAccessMode,
   DataSensitivityClass,
