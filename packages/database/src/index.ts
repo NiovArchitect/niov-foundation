@@ -163,6 +163,9 @@ export type {
   MarketplaceDataConsent,
   MarketplaceDataGrant,
   MarketplaceDataGrantStatus,
+  // Phase 1305-A Federation Cloud cohort data product substrate.
+  CohortDataProduct,
+  CohortProductStatus,
   HighSensitivityReview,
   HighSensitivityReviewStatus,
   Session,

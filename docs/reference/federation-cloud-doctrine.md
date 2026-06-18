@@ -215,3 +215,26 @@ personal-DMW opt-in defaults, and AI-agent/device microtransaction hooks. 1305-A
 implemented, allow raw data, enable real settlement, or enable training/model-
 improvement by default. Until 1305-A lands, cohorts are doctrine only — no cohort
 counts, badges, UI, or monetization anywhere.
+
+**Phase 1305-A — LANDED (registry + policy evaluator only).** The backend
+substrate now exists: the additive `CohortDataProduct` registry model
+(`packages/database/prisma/schema.prisma`) + `CohortProductStatus` enum, the
+`FederationCloudCohortService`
+(`apps/api/src/services/foundation/federation-cloud-cohort.service.ts`) with a
+pure `evaluateCohortPolicy` decision engine + SAFE projection, and the bearer-
+gated routes `POST/GET /api/v1/foundation/cohorts`, `GET …/:id`,
+`PATCH …/:id/status`, `POST …/:id/evaluate` (`apps/api/src/routes/cohort.routes.ts`).
+Audit literals `COHORT_PRODUCT_REGISTERED / _UPDATED / _ARCHIVED /
+COHORT_ACCESS_EVALUATED` (additive; no ADR-0002 amendment). Governance is forced
+safe (consent/opt-in/proof/revocation/raw_body_excluded true); training /
+model-improvement / redistribution / commercial-use default false;
+`minimum_cohort_size >= 50`; HIGH_SENSITIVITY → `REVIEW_REQUIRED`; CHILDREN →
+`DENIED`; CROSS_ORG discovery is STANDARD-only. **Honesty markers are explicit
+and always set:** `threshold_enforced=false` and `signal_available` /
+`signal_delivered=false` — there is NO `CohortContribution` table, NO real
+contributors, NO real signal delivery, NO real aggregation/privacy math
+(k-anonymity / differential privacy NOT implemented), and NO settlement.
+`ALLOW_EVALUATION` means "admissible in principle", never "here is a signal".
+Still forward-substrate (NOT built): `CohortContribution` / `CohortAccessGrant`
+/ `CohortUsageLedger` / `CohortProof`, real aggregation + privacy math, the
+buyer request/settlement flow, and any cohort UI / counts / monetization.
