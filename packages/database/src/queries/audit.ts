@@ -561,7 +561,14 @@ export type AuditEventType =
   // payment_decision (mock-only) + reason_code. FORBIDDEN: raw capsule body,
   // storage location, embeddings, capsule IDs, PII, provider/buyer secrets,
   // real settlement data. Additive — no ADR-0002 amendment.
-  | "MARKETPLACE_DATA_ACCESS_EVALUATED";
+  | "MARKETPLACE_DATA_ACCESS_EVALUATED"
+  // Phase 1293-A — Foundation observability / metering enforcement. Emitted
+  // when an org usage meter crosses its WARN (>= 80%) or DENY (>= limit)
+  // threshold via the meter-check evaluator. outcome SUCCESS for WARN, DENIED
+  // for DENY. SAFE details: meter_id + decision + current + limit + ratio.
+  // FORBIDDEN: PII, raw payloads, secrets, other tenants' data. Additive — no
+  // ADR-0002 amendment.
+  | "USAGE_METER_THRESHOLD_REACHED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -755,6 +762,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MARKETPLACE_ACCESS_EVALUATED",
   // Phase 1292-A data marketplace.
   "MARKETPLACE_DATA_ACCESS_EVALUATED",
+  // Phase 1293-A observability / metering enforcement.
+  "USAGE_METER_THRESHOLD_REACHED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

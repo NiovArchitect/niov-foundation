@@ -166,7 +166,43 @@ a true stop condition):
   ProofOfAccess delivery per data-access decision; capsule_id_allowlist (raw-ref)
   variant; consent/opt-in record persistence; cross-org marketplace discovery;
   bystander-block enforcement at listing creation; CT marketplace UI.
-- **1293-A GOVSEC / observability / metering / production hardening.**
+- **1293-A GOVSEC / observability / metering / production hardening — LANDED
+  2026-06-17.** NEW `apps/api/src/services/foundation/observability.service.ts`
+  + `GET /api/v1/foundation/observability/snapshot` +
+  `POST /api/v1/foundation/observability/meter-check`. (1) `buildObservabilityEnvelope`
+  — a SAFE, correlation-bearing structured record (correlation_id / runtime /
+  action / outcome / latency / policy_decision + entity/org ID refs; never
+  email/display_name/content). (2) `evaluateMeterThreshold` — the metering-
+  ENFORCEMENT evaluator the substrate lacked (ALLOW / WARN ≥80% / DENY ≥limit),
+  turning the tracking-only 1290-A/B6-α meters into a governable gate. (3)
+  `getObservabilitySnapshotForCaller` (SAFE own-org meter snapshot) +
+  `checkMeterThresholdForCaller` (emits `USAGE_METER_THRESHOLD_REACHED` on
+  WARN/DENY). Additive audit literal `USAGE_METER_THRESHOLD_REACHED`. No schema
+  migration. **Honest scope (RULE 13, not theater):** the evaluator is OPT-IN
+  (not silently wired to auto-deny existing flows — live per-meter enforcement
+  still needs a Founder pricing decision per ADR-0093); a full OpenTelemetry/
+  Prometheus export pipeline (GOVSEC.6) + an automated key-rotation service
+  (GOVSEC.9) are genuine multi-phase efforts documented as forward-substrate,
+  not faked. BEAM already has its own telemetry (sub-phase 11). Key-rotation
+  posture: frozen `CRYPTO_CONFIG` + boot-validation remain the anchor.
+  **Backlog (Founder-gated):** OTel/Prometheus exporter; cross-runtime trace
+  propagation; automated key rotation; wiring meter enforcement into specific
+  flows once pricing lands; SLO definitions/alerting.
+
+### Foundation-Scale Arc — sequence complete (1288-B → 1293-A)
+
+All six authorized phases LANDED + CI-green + merged + live-proven:
+1288-B Entity & Authority Envelope · 1289-A COSMP/DMW/Memory-Capsule hardening
+(ProofOfAccess + APPLICATION gate) · 1290-A Economic substrate (spend policy +
+HTTP 402 quote, mock-only) · 1291-A Ambient device protocol · 1292-A Marketplace
+substrate (capability + governed data lanes, mock-only) · 1293-A Observability +
+metering enforcement. Foundation is the platform; Otzar is the proving app.
+Everything mock-only for economics (no real provider/funds/secrets/chain) and
+additive (only one schema migration: the 1292-A marketplace tables). The ambient
+AI brain + Foundation-scale substrate remain forming — these phases hardened the
+governed primitives. **Phase-global status NOT auto-flipped** (closure of this
+arc is scoped to these six phases; broader Foundation completion is a separate
+Founder decision).
 
 ### Final close-out state (Founder closeout #2)
 
