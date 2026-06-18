@@ -193,14 +193,28 @@ describe("Foundation data-marketplace grants — PERSONAL DMW (null org)", () =>
     expect(g.status).toBe("ACTIVE");
   });
 
-  it("a HIGH_SENSITIVITY (health) personal package is DENIED pending a dedicated policy gate", async () => {
+  it("MEDICAL personal package (non-proof mode) requires review → grant DENIED (1296-A)", async () => {
     const res = await createDataPackage({ title: "My health", description: "personal health signals", access_mode: "SAFE_PROJECTION", allowed_use: ["PERSONALIZATION"], status: "PUBLISHED", sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["HEALTH", "MEDICAL"] }, PERSONAL_TOKEN);
     const id = (res.json() as { listing: { listing_id: string } }).listing.listing_id;
     const g = await grant(id, { intended_use: "PERSONALIZATION", consent_confirmed: true, opt_in_confirmed: true }, PERSONAL_TOKEN);
     expect(g.statusCode).toBe(403);
     const body = g.json() as { code: string; denied_reasons?: string[] };
     expect(body.code).toBe("USE_NOT_PERMITTED");
-    expect(body.denied_reasons).toContain("high-sensitivity-requires-dedicated-policy-gate");
+    expect(body.denied_reasons).toContain("MEDICAL_DATA_REQUIRES_DEDICATED_REVIEW");
+  });
+
+  it("HEALTH-only personal package (SAFE_PROJECTION) is now GRANTABLE under strict controls (1296-A)", async () => {
+    const res = await createDataPackage({ title: "My wellness", description: "personal wellness signals", access_mode: "SAFE_PROJECTION", allowed_use: ["PERSONALIZATION"], status: "PUBLISHED", sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["HEALTH"] }, PERSONAL_TOKEN);
+    const id = (res.json() as { listing: { listing_id: string } }).listing.listing_id;
+    const g = await grant(id, { intended_use: "PERSONALIZATION", consent_confirmed: true, opt_in_confirmed: true }, PERSONAL_TOKEN);
+    expect(g.statusCode).toBe(201);
+    expect((g.json() as { grant: { status: string } }).grant.status).toBe("ACTIVE");
+    // CHILDREN remains denied outright.
+    const c = await createDataPackage({ title: "Kids", description: "x", access_mode: "SAFE_PROJECTION", allowed_use: ["PERSONALIZATION"], status: "PUBLISHED", sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["CHILDREN"] }, PERSONAL_TOKEN);
+    const cid = (c.json() as { listing: { listing_id: string } }).listing.listing_id;
+    const cg = await grant(cid, { intended_use: "PERSONALIZATION", consent_confirmed: true, opt_in_confirmed: true }, PERSONAL_TOKEN);
+    expect(cg.statusCode).toBe(403);
+    expect((cg.json() as { denied_reasons?: string[] }).denied_reasons).toContain("CHILDREN_DATA_REQUIRES_DEDICATED_REVIEW");
   });
 
   it("a different user cannot see/grant a personal listing (invisible without grant)", async () => {

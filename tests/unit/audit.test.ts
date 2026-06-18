@@ -509,3 +509,14 @@ describe("1295-A — Foundation data-read audit literal defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1296-A — dedicated high-sensitivity policy gate literal.
+describe("1296-A — Foundation high-sensitivity policy audit literal defined", () => {
+  it("HIGH_SENSITIVITY_POLICY_EVALUATED present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("HIGH_SENSITIVITY_POLICY_EVALUATED");
+    expect(isKnownAuditEventType("HIGH_SENSITIVITY_POLICY_EVALUATED")).toBe(true);
+  });
+  it("the literal set has no duplicates after the 1296-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

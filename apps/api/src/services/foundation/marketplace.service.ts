@@ -52,6 +52,7 @@ import type { AuthService } from "../auth.service.js";
 import { getOrgEntityId } from "../governance/org.js";
 import { computeAuthorityEnvelope } from "./authority.service.js";
 import { evaluateSpendPolicy } from "./economic-policy.service.js";
+import { evaluateHighSensitivityAccess } from "./high-sensitivity-policy.js";
 import { recordUsageForOrg } from "../billing/usage-meter.service.js";
 
 export const MARKETPLACE_LISTING_TYPES = [
@@ -859,17 +860,57 @@ export class FoundationMarketplaceService {
       denied.push("training-not-permitted");
     if (intendedUse === "MODEL_IMPROVEMENT" && !pkg.model_improvement_allowed)
       denied.push("model-improvement-not-permitted");
-    // 4b. Sensitivity gate (1294-A): HIGH_SENSITIVITY or any policy-gated
-    //     category (health / medical / biometric / children) is denied until a
-    //     dedicated policy gate is authorized. Personal health/medical data is
-    //     never granted through the generic marketplace path.
-    const policyGated =
+    // 4b. Sensitivity gate (1296-A): HIGH_SENSITIVITY / policy-gated categories
+    //     now run the DEDICATED high-sensitivity policy evaluator (graded
+    //     ALLOW_SAFE_PROJECTION / ALLOW_PROOF_ONLY / ALLOW_AGGREGATED /
+    //     REQUIRES_REVIEW / DENY). Consent/opt-in are enforced separately at the
+    //     grant tier; here we evaluate the access SHAPE (assume-confirmed) and
+    //     verify the package's own access_mode is permitted for its sensitivity.
+    //     Raw content is never allowed; this gate only ever permits safe modes.
+    const isHighSensitivity =
       pkg.sensitivity_class === "HIGH_SENSITIVITY" ||
       pkg.sensitive_categories.some((c) =>
         (POLICY_GATED_CATEGORIES as readonly string[]).includes(c),
       );
-    if (policyGated)
-      denied.push("high-sensitivity-requires-dedicated-policy-gate");
+    if (isHighSensitivity) {
+      const hs = evaluateHighSensitivityAccess({
+        sensitivity_class: pkg.sensitivity_class,
+        sensitive_categories: pkg.sensitive_categories,
+        access_mode: pkg.access_mode,
+        intended_use: intendedUse,
+        consent_confirmed: true,
+        opt_in_confirmed: true,
+        training_allowed: pkg.training_allowed,
+        model_improvement_allowed: pkg.model_improvement_allowed,
+        redistribution_allowed: pkg.redistribution_allowed,
+        commercial_use_allowed: pkg.commercial_use_allowed,
+        depersonalized_only: pkg.depersonalized_only,
+        aggregate_only: pkg.aggregate_only,
+        retention_policy: pkg.retention_policy,
+      });
+      if (!hs.decision.startsWith("ALLOW"))
+        denied.push(hs.reason_codes[0] ?? "HIGH_SENSITIVITY_DEFAULT_DENY");
+      else if (!hs.allowed_access_modes.includes(pkg.access_mode))
+        denied.push("access-mode-not-allowed-for-sensitivity");
+      await writeAuditEvent({
+        event_type: "HIGH_SENSITIVITY_POLICY_EVALUATED",
+        outcome: hs.decision.startsWith("ALLOW") ? "SUCCESS" : "DENIED",
+        actor_entity_id: validation.entity_id,
+        denial_reason: hs.decision.startsWith("ALLOW") ? null : hs.reason_codes[0] ?? null,
+        details: {
+          action: "HIGH_SENSITIVITY_POLICY_EVALUATED",
+          listing_id: listing.listing_id,
+          data_package_id: pkg.data_package_id,
+          sensitivity_class: pkg.sensitivity_class,
+          sensitive_categories: pkg.sensitive_categories,
+          intended_use: intendedUse,
+          access_mode: pkg.access_mode,
+          decision: hs.decision,
+          reason_codes: hs.reason_codes,
+          human_review_required: hs.human_review_required,
+        },
+      });
+    }
     // 5. Redistribution / commercial gating (cross-cutting flags).
     //    (Surfaced as obligations; intended_use covers the primary right.)
 
