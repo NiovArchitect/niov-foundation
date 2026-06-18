@@ -236,6 +236,42 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1303-A — Governed Per-Capsule Delivery Hardening: content-query oracle — IN_PROGRESS 2026-06-18
+
+Closes a content-inference side channel in the marketplace data-read delivery
+path (`marketplace-data-delivery.service.ts`). The optional `query` param
+substring-matched `payload_summary` **unconditionally** — including in modes
+where the summary is SUPPRESSED (PROOF_ONLY / CAPSULE_REFERENCE / depersonalized-
+only / aggregate-only). A buyer who could not *see* the summary could still
+*probe* it: varying `query` and watching which items appear/disappear (against the
+stable `capsule_type` + timestamps they do receive) reconstructs suppressed
+content — a substring oracle. That contradicts "safe-projection/proof-only; NO raw
+body."
+
+- **Fix (single gate):** the content query applies **only when the safe summary
+  is itself delivered** (`applyContentQuery = includeSummary && q.length > 0`).
+  When suppressed, `query` is ignored; `capsule_type_filter` still narrows by type
+  (type is already visible — no oracle there). One predicate, no new code path.
+- **No `safe_summary` length-bound** — in modes where the summary is shown the
+  buyer is authorized to see it; truncation closes no threat (would be cosmetic
+  churn). Deliberately omitted.
+- **Tests (+3 integration, property-style):** PROOF_ONLY — matching / non-matching
+  / no `query` all return the identical item set (oracle closed); depersonalized-
+  only — `query` ignored; SAFE_PROJECTION regression — `query` STILL filters
+  (1 vs 0), proving legitimate search is preserved. Full data-read tier 13/13;
+  typecheck 0 errors.
+- **Founder item flagged (NOT done here — product-shape decision):** even after
+  this fix, suppressed/aggregate modes still return a **per-capsule enumeration**
+  (`capsule_type` + created/updated timestamps + a `grant_id#index` proof_reference
+  per item). The query-fix stops *content* leakage; it does not stop existence/
+  timing enumeration. For `aggregate_only` especially, per-capsule rows arguably
+  contradict "aggregate" — what an aggregate/proof-only read *should* return
+  (a count? bucketed stats?) is a delivery-shape product decision, not an
+  autonomous one. Deferred to the Founder.
+- **Production:** like 1301-A, integration tests (real Fastify + local test DB) are
+  the proof; the prod `:3000` API was not restarted. Activation rides the same
+  pending prod schema push.
+
 ### Phase 1301-A — Cross-Org Marketplace Discovery (gated, provider-opt-in) — LANDED 2026-06-18 (PR #443)
 
 > **Production activation PENDING (Founder-gated).** Merged to `main` + CI-green +

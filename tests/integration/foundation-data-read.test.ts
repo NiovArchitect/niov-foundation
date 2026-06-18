@@ -212,3 +212,63 @@ describe("Foundation data-read — high-sensitivity gate (1296-A)", () => {
     expect((res.json() as { denied_reasons?: string[] }).denied_reasons).toContain("REVIEW_REQUIRED");
   });
 });
+
+describe("Foundation data-read — content-query oracle hardening (1303-A)", () => {
+  // An ISOLATED provider with EXACTLY two canary capsules, so item counts are
+  // deterministic regardless of capsules other tests left on shared providers.
+  const ALPHA = `${TEST_PREFIX}oracle-canary-alpha`;
+  const BETA = `${TEST_PREFIX}oracle-canary-beta`;
+
+  async function isolatedSetup(): Promise<{ providerToken: string; providerId: string; buyerToken: string }> {
+    const org = await createEntity({ entity_type: "COMPANY", display_name: `${TEST_PREFIX}orc_${randomUUID()}`, email: `${TEST_PREFIX}orc_${randomUUID()}@niov.test`, public_key: "k", clearance_level: 0 });
+    const prov = await member(org.entity_id, ["read", "write"]);
+    const buyer = await member(org.entity_id, ["read", "write"]);
+    await addCapsule(prov.id, { payload_summary: ALPHA });
+    await addCapsule(prov.id, { payload_summary: BETA });
+    return { providerToken: prov.token, providerId: prov.id, buyerToken: buyer.token };
+  }
+  function itemCount(res: { json: () => unknown }): number {
+    return (res.json() as { read: { items: unknown[] } }).read.items.length;
+  }
+
+  it("PROOF_ONLY: the content query never narrows results (no substring oracle on suppressed summaries)", async () => {
+    const s = await isolatedSetup();
+    const gid = await pkgAndGrant(s.providerToken, { access_mode: "PROOF_ONLY" }, "ANALYTICS", s.buyerToken);
+    // Summary is suppressed in PROOF_ONLY, so a buyer must not be able to probe
+    // it: a matching query, a non-matching query, and no query must ALL return
+    // the identical item set (both canaries) — no content-based narrowing.
+    const matching = await read(gid, { access_mode: "PROOF_ONLY", query: "oracle-canary-alpha" }, s.buyerToken);
+    const nonMatching = await read(gid, { access_mode: "PROOF_ONLY", query: "zzz-definitely-no-such-summary" }, s.buyerToken);
+    const noQuery = await read(gid, { access_mode: "PROOF_ONLY" }, s.buyerToken);
+    expect(matching.statusCode).toBe(200);
+    expect(itemCount(matching)).toBe(2);
+    expect(itemCount(nonMatching)).toBe(2);
+    expect(itemCount(noQuery)).toBe(2);
+    // And the summary itself never crosses the wire in PROOF_ONLY.
+    expect(matching.payload).not.toContain("oracle-canary-alpha");
+    expect(matching.payload).not.toContain("safe_summary");
+  });
+
+  it("depersonalized-only (summary suppressed) also ignores the content query", async () => {
+    const s = await isolatedSetup();
+    const gid = await pkgAndGrant(s.providerToken, { depersonalized_only: true }, "ANALYTICS", s.buyerToken);
+    const matching = await read(gid, {}, s.buyerToken);
+    const nonMatching = await read(gid, { query: "zzz-definitely-no-such-summary" }, s.buyerToken);
+    expect(matching.statusCode).toBe(200);
+    expect(itemCount(matching)).toBe(itemCount(nonMatching)); // no oracle
+    expect(matching.payload).not.toContain("oracle-canary-alpha");
+  });
+
+  it("regression — SAFE_PROJECTION (summary delivered): the content query STILL filters legitimately", async () => {
+    const s = await isolatedSetup();
+    const gid = await pkgAndGrant(s.providerToken, { access_mode: "SAFE_PROJECTION" }, "PERSONALIZATION", s.buyerToken);
+    // Summary IS delivered here (buyer is authorized to see it), so search works.
+    const alpha = await read(gid, { access_mode: "SAFE_PROJECTION", query: "oracle-canary-alpha" }, s.buyerToken);
+    const none = await read(gid, { access_mode: "SAFE_PROJECTION", query: "zzz-definitely-no-such-summary" }, s.buyerToken);
+    expect(alpha.statusCode).toBe(200);
+    expect(itemCount(alpha)).toBe(1); // only the alpha canary matches
+    expect(itemCount(none)).toBe(0); // a non-matching query correctly narrows to empty
+    // Summary present when authorized.
+    expect(alpha.payload).toContain("oracle-canary-alpha");
+  });
+});

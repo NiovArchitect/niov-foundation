@@ -372,6 +372,15 @@ export class MarketplaceDataDeliveryService {
       const now = new Date().toISOString();
       const includeSummary = !NO_SUMMARY_MODES.has(effectiveMode) &&
         !pkg.depersonalized_only && !pkg.aggregate_only;
+      // 1303-A — close the content-inference oracle. The `query` filter
+      // substring-matches payload_summary; if it ran while the summary is
+      // SUPPRESSED (proof-only / capsule-reference / depersonalized / aggregate),
+      // a buyer who cannot SEE the summary could still PROBE it — varying `query`
+      // and watching which items appear/disappear reconstructs suppressed content
+      // (a substring oracle). So the content query only applies when the summary
+      // is itself delivered. When suppressed, `query` is ignored (capsule_type_
+      // filter still narrows by type, which is already visible — no oracle).
+      const applyContentQuery = includeSummary && q.length > 0;
 
       items = candidates
         .filter((c) => {
@@ -382,7 +391,7 @@ export class MarketplaceDataDeliveryService {
           )
             return false;
           if (
-            q.length > 0 &&
+            applyContentQuery &&
             !c.payload_summary.toLowerCase().includes(q)
           )
             return false;
