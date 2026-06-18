@@ -29,6 +29,12 @@ Autonomous overnight arc (1300-B → 1301-A → 1302-A → 1303-A) complete. **A
 phases merged green.** A recovering session must internalize the items below
 **before touching the runtime**.
 
+> **Terminology (Founder doctrine, 2026-06-18):** "Foundation" is the governed
+> substrate; **"NIOV Labs Federation Cloud"** is the marketplace/exchange layer
+> powered by Foundation; the Marketplace UI is one surface of Federation Cloud.
+> Do not conflate them. The 1301-A/1302-A/1303-A marketplace arc is the **first
+> Federation Cloud surface**. Full doctrine: `docs/reference/federation-cloud-doctrine.md`.
+
 ### 🔴 #1 FRAGILE STATE — do NOT restart the prod `:3000` API
 
 `main` is **ahead of production** across 1301-A + 1302-A + 1303-A. The running
@@ -42,17 +48,43 @@ marketplace listing read breaks** (the regenerated Prisma client SELECTs a
 `discovery_scope` column prod lacks). Do not restart `:3000` from `main` until the
 production schema is migrated. This is the one thing that bites if forgotten.
 
-### 🟠 #2 The single action that activates the whole arc in production (Founder-gated)
+### 🟠 #2 Production activation — VERIFIED parity (read-only) + BLOCKED on push mechanism
 
-**Founder must authorize: `APPROVE PROD SCHEMA PUSH — additive only` + redeploy the
-prod-pointed API.** This activates 1301-A discovery + 1302-A shell + 1303-A
-hardening in production at once.
+**Founder approval received (2026-06-18): `APPROVE PROD SCHEMA PUSH — additive only`.**
+A read-only parity check (`scripts/verify-production-parity.ts`, proven SELECT-only,
+secret-redacting) was run against prod (`host=aws-1-us-east-2.pooler.supabase.com
+database=postgres port=6543`). **No production mutation occurred — read-only only.**
 
-- **First** run the read-only parity diff to scope the REAL delta —
-  `scripts/verify-production-parity.ts` (ADR-0047). **Do not assume it is only
-  `discovery_scope`**: last prod push was 2026-06-12, so 1294-A…1299-B schema may
-  also be unpushed. The morning (attended) session should run the parity script;
-  an unattended session must NOT connect to prod.
+**Verified prod state — production ALREADY HAS** (✓): the 1294–1299 + ADR-0037/0042/0043
+column substrate — jurisdiction columns (entities/memory_capsules/audit_events +
+org_settings.default_jurisdiction), `memory_capsules.mutation_type`,
+`memory_capsules.embedding` vector(1536), pgvector extension, both audit
+append-only triggers.
+
+**Verified MISSING in prod** (additive-only):
+- `discovery_scope` column + `MarketplaceDiscoveryScope` enum + `discovery_scope`
+  index (**1301-A**) — known-missing (pushed only to local test DB); NOT covered by
+  the parity script's current 11 checks (script predates 1301-A).
+- `memory_capsules_embedding_hnsw_idx` (**pre-existing ADR-0043 gap**, REQUIRED) —
+  separate scope; `CREATE INDEX` for HNSW takes a write-blocking lock on
+  `memory_capsules` (cost scales with embedded-row count, NOT queried) → needs
+  `CONCURRENTLY` + a row-count check; applied via `scripts/apply-hnsw-index.ts`, not
+  `prisma db push`. NOT part of the 1301-A arc.
+- `idempotency_keys` table — INFO only (Ecto-owned; BEAM not deployed; expected absent).
+
+**🚧 BLOCKER — no compliant push mechanism exists.** The enum+column can only be
+applied via `prisma db push`, but the 1297-B guard (`prisma-db-push-guard.sh`)
+**refuses prod by design** (denylist + localhost-only, ADR-0025), there is **no
+migrations dir** (so `migrate deploy` is unavailable), and `deploy-production.yml`
+has **no schema step** (it is a stubbed `workflow_dispatch` no-op). The Founder
+directive also forbids bypassing the guard / bare `prisma db push` / setting only
+`DATABASE_URL`. **Activation is paused pending a Founder-chosen mechanism** (confirm
+the 2026-06-12 manual mechanism + authorize it for this delta · OR a Founder-authorized
+one-off raw-DDL `apply-*.ts` script · OR add an additive-schema step to the deploy
+pipeline). Also note: `:3000` is a local `tsx src/server.ts` process on the operator
+Mac against prod Supabase — there is no live cloud deploy; "redeploy" = restart that
+local process. Strict order once unblocked: **push schema → re-run parity → THEN
+restart `:3000` from main** (the restart is itself the dangerous step).
 
 ### 🟡 #3 Queued Founder design decisions (not bugs — product-shape calls)
 
