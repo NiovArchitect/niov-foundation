@@ -35,25 +35,43 @@ phases merged green.** A recovering session must internalize the items below
 > Do not conflate them. The 1301-A/1302-A/1303-A marketplace arc is the **first
 > Federation Cloud surface**. Full doctrine: `docs/reference/federation-cloud-doctrine.md`.
 
-### 🔴 #1 FRAGILE STATE — do NOT restart the prod `:3000` API
+### ✅ #1 RESOLVED — prod schema ACTIVATED + `:3000` restarted from `main` (1303-C)
 
-`main` is **ahead of production** across 1301-A + 1302-A + 1303-A. The running
-`:3000` Foundation process is **pre-1301-A code pointed at production Supabase**,
-and was **deliberately left running old code** (NOT restarted) all night. The
-additive `MarketplaceDiscoveryScope` enum + `discovery_scope` column exist **only
-in the local test DB**, not in production.
+`main` is now **in sync with production** for the 1301-A additive delta. The running
+`:3000` Foundation process (**PID 65031**) is **current `main` code pointed at
+production Supabase**, restarted 2026-06-18 *after* the additive schema was applied
+and re-parity confirmed. The `MarketplaceDiscoveryScope` enum + `discovery_scope`
+column + index now exist **in production** (verified present, idempotent apply).
 
-**If that process dies and anything restarts it from `main` against prod, every
-marketplace listing read breaks** (the regenerated Prisma client SELECTs a
-`discovery_scope` column prod lacks). Do not restart `:3000` from `main` until the
-production schema is migrated. This is the one thing that bites if forgotten.
+**Redis launch requirement (operational — bit me during 1303-C restart):** the
+working API requires `REDIS_URL=redis://localhost:6379` (the operator's SSH tunnel
+on `:6379` → live Redis; `ssh` PID was LISTEN at recovery). The **root `.env`
+`REDIS_URL` is an `https://` Upstash REST URL that ioredis CANNOT use** (→ `connect
+ENOTSOCK /` → `MaxRetriesPerRequestError` → 500 on every Redis-backed route). Launch
+must **export `REDIS_URL=redis://localhost:6379`** (dotenv does not override a
+pre-set var) and load the rest of root `.env` via `DOTENV_CONFIG_PATH=<repo>/.env`
+from the `apps/api` cwd (or launch from repo root). Exact working relaunch:
+`cd apps/api && REDIS_URL=redis://localhost:6379 OTZAR_ENTITY_ID=<pinned> DOTENV_CONFIG_PATH=<repo>/.env node --require dotenv/config --import tsx src/server.ts`.
+Persisting a valid `rediss://`/`redis://` `REDIS_URL` to `.env` would remove the
+export requirement.
 
-### 🟠 #2 Production activation — VERIFIED parity (read-only) + BLOCKED on push mechanism
+### ✅ #2 Production activation — DONE (additive-only, Founder-authorized one-off script)
 
-**Founder approval received (2026-06-18): `APPROVE PROD SCHEMA PUSH — additive only`.**
+**Founder approval (2026-06-18): `APPROVE PROD SCHEMA PUSH — additive only`** → Option 1
+(one-off raw-DDL script). The 1301-A additive delta was applied to prod via
+`scripts/apply-marketplace-discovery-scope-prod.ts` (merged `b9a3d25`): approval-phrase
+gate + both-URL target-clarity + secret-redaction + `FORBIDDEN_TOKENS` self-scan
+(DROP/DELETE/TRUNCATE/etc.) + `--dry-run`/`--help` + read-only post-verify. Three
+idempotent DDL statements over `DIRECT_URL`: enum `MarketplaceDiscoveryScope` (DO-block),
+`ALTER TABLE marketplace_listings ADD COLUMN IF NOT EXISTS discovery_scope NOT NULL
+DEFAULT 'PRIVATE'`, `CREATE INDEX IF NOT EXISTS`. **All three verified present in prod;
+zero destructive ops; 1297-B db-push guard untouched (never bypassed).** Re-parity
+confirms only the pre-existing HNSW index drift remains (separate scope, NOT 1301-A).
+
+> _History (read-only parity that preceded the apply):_
 A read-only parity check (`scripts/verify-production-parity.ts`, proven SELECT-only,
 secret-redacting) was run against prod (`host=aws-1-us-east-2.pooler.supabase.com
-database=postgres port=6543`). **No production mutation occurred — read-only only.**
+database=postgres port=6543`). **No production mutation occurred during parity — read-only only.**
 
 **Verified prod state — production ALREADY HAS** (✓): the 1294–1299 + ADR-0037/0042/0043
 column substrate — jurisdiction columns (entities/memory_capsules/audit_events +
@@ -72,19 +90,35 @@ append-only triggers.
   `prisma db push`. NOT part of the 1301-A arc.
 - `idempotency_keys` table — INFO only (Ecto-owned; BEAM not deployed; expected absent).
 
-**🚧 BLOCKER — no compliant push mechanism exists.** The enum+column can only be
-applied via `prisma db push`, but the 1297-B guard (`prisma-db-push-guard.sh`)
-**refuses prod by design** (denylist + localhost-only, ADR-0025), there is **no
-migrations dir** (so `migrate deploy` is unavailable), and `deploy-production.yml`
-has **no schema step** (it is a stubbed `workflow_dispatch` no-op). The Founder
-directive also forbids bypassing the guard / bare `prisma db push` / setting only
-`DATABASE_URL`. **Activation is paused pending a Founder-chosen mechanism** (confirm
-the 2026-06-12 manual mechanism + authorize it for this delta · OR a Founder-authorized
-one-off raw-DDL `apply-*.ts` script · OR add an additive-schema step to the deploy
-pipeline). Also note: `:3000` is a local `tsx src/server.ts` process on the operator
-Mac against prod Supabase — there is no live cloud deploy; "redeploy" = restart that
-local process. Strict order once unblocked: **push schema → re-run parity → THEN
-restart `:3000` from main** (the restart is itself the dangerous step).
+**✅ BLOCKER RESOLVED.** The 1297-B guard (`prisma-db-push-guard.sh`) **refuses prod by
+design** (denylist + localhost-only, ADR-0025), there is **no migrations dir** (so
+`migrate deploy` is unavailable), and `deploy-production.yml` has **no schema step**.
+Rather than loosen the guard or bare-`prisma db push`, the Founder authorized a one-off
+raw-DDL script (above). The guard was **never bypassed**. `:3000` is a local
+`tsx src/server.ts` process on the operator Mac against prod Supabase — there is no live
+cloud deploy; "redeploy" = restart that local process. The strict order was followed:
+**applied additive schema → re-ran parity → restarted `:3000` from main**, then recovered
+the Redis-launch regression (see #1).
+
+**Live-proof scope (honest):** health 200; marketplace `listings` 401 not 500 (Redis OK);
+`discover` route 401 not 404 (route live); Python :8000, BEAM :4001, CT :5173 all 200.
+**Not exercised:** an *authenticated* listing read that triggers the `discovery_scope`
+SELECT — minting a prod session / ad-hoc prod app-table reads are outside the Founder's
+read-only-parity authorization, so this was deliberately not run. The original #1 break
+(Prisma SELECTing a **missing** column) is closed by verified column existence; enum
+deserializability is closed **by construction** — the enum type holds exactly
+`PRIVATE`/`CROSS_ORG` and the column is `NOT NULL DEFAULT 'PRIVATE'`, so prod cannot
+contain a value Prisma's enum can't deserialize. An end-to-end authenticated read remains
+the only fully-empirical confirmation and needs explicit Founder go.
+
+**⚠️ Otzar APPLICATION entity orphans (prod):** every API boot without `OTZAR_ENTITY_ID`
+set auto-creates a new Otzar APPLICATION entity. This arc's restarts created multiple:
+`5fe4c5d9-9b20-43f7-9efd-97e7763ca99a` (PID 58266) and `8347070c-0aae-48b4-99e8-b62414488bf8`
+(PID 59477), plus PID 69267's earlier auto-created one. The current process (PID 65031) is
+pinned to `8347070c…` via a process env export (NOT persisted). **Founder decision needed:**
+confirm the canonical `OTZAR_ENTITY_ID` and persist it to `.env` (soft-delete the orphans
+per RULE 10). Until persisted, the `:3000` relaunch line in #1 MUST carry
+`OTZAR_ENTITY_ID=<canonical>` or it spawns yet another orphan.
 
 ### 🟡 #3 Queued Founder design decisions (not bugs — product-shape calls)
 
@@ -114,12 +148,12 @@ branches left open; `.env.save` remains untracked/gitignored.
 
 ### ⏸️ 1304-A deliberately deferred (NOT for lack of time)
 
-Review/marketplace notification+badge integration was skipped on purpose: the
-marketplace-badge half would poll `/discover`, which **404s against prod until the
-schema push** — it would ship dormant (cosmetic, rule 2); the review-badge half
-already shipped in 1300-B and a second notification surface is stale clutter
-(rule 7). Revisit **after** prod activation makes `/discover` live, so a badge has
-real data.
+Review/marketplace notification+badge integration was skipped on purpose: at the time
+the marketplace-badge half would poll `/discover`, which 404'd against prod pre-push —
+it would ship dormant (cosmetic, rule 2); the review-badge half already shipped in
+1300-B and a second notification surface is stale clutter (rule 7). **As of 1303-C the
+`/discover` route is live against prod (401 unauth, not 404)**, so the dormancy reason
+no longer holds — revisit 1304-A as a real-data badge if/when the Founder re-queues it.
 
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
