@@ -321,6 +321,27 @@ identity to buyers**. No real signal delivery, no payout, no revenue share.
   revenue share; real aggregate/proof delivery (1308-A). Schema change → **1306-B
   prod activation** before any prod-API restart from main.
 
+### ✅ 1306-B — Cohort contribution schema production activation
+
+Activated the additive 1306-A contribution schema in the **prod-connected** DB,
+then restarted the prod API from main so contribution routes are live + compatible.
+
+- **Read-only parity:** `prisma migrate diff` (prod → schema) emitted **only**
+  `CREATE TYPE "CohortContributionStatus"` + `CREATE TABLE "cohort_contributions"`
+  + 4 `CREATE INDEX` — **zero DROP/ALTER** (`cohort_data_products` already present
+  from 1305-B).
+- **Activation:** `scripts/activate-cohort-contribution-prod-schema.ts` — exact
+  scope, idempotent (`IF NOT EXISTS` / `pg_type` guard), approval-gated
+  (`NIOV_APPROVE_COHORT_PROD_SCHEMA`), prefers `DIRECT_URL`, redacts URL, never
+  DROP/ALTER. Applied cleanly: before `table=false/enum=false` → after `true/true`;
+  verified 15 columns in prod. NOT `prisma db push`; 1297-B guard untouched.
+- **Restart proof:** prod API relaunched (canonical launch; Redis tunnel +
+  `OTZAR_ENTITY_ID` preserved). New PID connects **only to :6543 (prod pooler)**.
+  All contribution routes return **401** unauth (registered); cohort routes still
+  401; API/Python/BEAM/CT health **200**.
+- **Tests:** `tests/unit/activate-cohort-contribution-prod-schema.test.ts` (5).
+- **Cohort contribution schema is production-active.**
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
