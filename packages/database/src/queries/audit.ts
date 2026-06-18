@@ -534,7 +534,17 @@ export type AuditEventType =
   // addresses, counterparty PII. No real settlement exists by construction
   // (ADR-0094 bans; only MOCK_ONLY is executable). Additive literal — no
   // ADR-0002 amendment.
-  | "ECONOMIC_INTENT_QUOTED";
+  | "ECONOMIC_INTENT_QUOTED"
+  // Phase 1291-A — Foundation ambient device protocol. Emitted when the
+  // ambient-device evaluator renders a governed disposition for a device packet
+  // (glasses/lens/earbud/desktop/mobile; text only). outcome SUCCESS for any
+  // non-BLOCKED disposition; DENIED (scrubbed reason_code) for BLOCKED. SAFE
+  // details: source_type + mode + disposition + reason_code +
+  // requires_confirmation + allowed_into_org_memory + bystander_sensitive +
+  // visibility_scope + device_identity_trusted (always false). FORBIDDEN:
+  // packet text, raw media, device_id, location, biometric data, PII. Additive
+  // literal — no ADR-0002 amendment.
+  | "AMBIENT_PACKET_EVALUATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -721,6 +731,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "AUTHORITY_ENVELOPE_EVALUATED",
   // Phase 1290-A Foundation economic substrate quote (mock-only).
   "ECONOMIC_INTENT_QUOTED",
+  // Phase 1291-A Foundation ambient device protocol disposition.
+  "AMBIENT_PACKET_EVALUATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

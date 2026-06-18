@@ -447,3 +447,17 @@ describe("1290-A — Foundation economic-intent audit literal defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1291-A — the Foundation ambient-device protocol literal is DEFINED as an
+// append-only addition and IS emitted by the ambient-device evaluator (proof of
+// every governed disposition). Mirrors the AUDIT.1 precedent.
+describe("1291-A — Foundation ambient-packet audit literal defined", () => {
+  it("AMBIENT_PACKET_EVALUATED is present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("AMBIENT_PACKET_EVALUATED");
+    expect(isKnownAuditEventType("AMBIENT_PACKET_EVALUATED")).toBe(true);
+  });
+
+  it("the literal set has no duplicates after the 1291-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

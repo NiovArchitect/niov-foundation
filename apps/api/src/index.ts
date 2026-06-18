@@ -73,6 +73,29 @@ export type {
   QuoteResult,
 } from "./services/foundation/economic-policy.service.js";
 
+// Phase 1291-A — Foundation ambient device protocol.
+export {
+  FoundationAmbientDeviceService,
+  evaluateAmbientPacket,
+  AMBIENT_DEVICE_SOURCE_TYPES,
+  AMBIENT_DEVICE_MODES,
+  AMBIENT_MEMORY_DISPOSITIONS,
+} from "./services/foundation/ambient-device.service.js";
+export type {
+  AmbientDeviceSourceType,
+  AmbientDeviceMode,
+  AmbientMemoryDisposition,
+  ConfirmationMode,
+  AmbientConsent,
+  AmbientConfirmation,
+  AmbientVisibility,
+  AmbientPacketInput,
+  AmbientPacketDecision,
+  AmbientDeviceEnvelopeInputs,
+  AmbientDevicePacketResult,
+  AmbientPacketResult,
+} from "./services/foundation/ambient-device.service.js";
+
 // Phase 1289-A — Foundation Memory Capsule proof-of-access.
 export { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
 export type {
