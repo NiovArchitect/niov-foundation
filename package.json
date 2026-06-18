@@ -22,7 +22,7 @@
     "db:push:test": "bash scripts/prisma-db-push-test.sh",
     "db:generate": "npm --workspace @niov/database run db:generate",
     "db:migrate": "npm --workspace @niov/database run db:migrate",
-    "db:push": "npm --workspace @niov/database run db:push",
+    "db:push": "bash scripts/prisma-db-push-guard.sh",
     "docs:gen": "typedoc",
     "docs:check": "typedoc --emit none"
   },

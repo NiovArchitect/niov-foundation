@@ -14,7 +14,7 @@
   "scripts": {
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
+    "db:push": "bash ../../scripts/prisma-db-push-guard.sh",
     "db:studio": "prisma studio"
   },
   "dependencies": {

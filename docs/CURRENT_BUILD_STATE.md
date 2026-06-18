@@ -236,6 +236,61 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1297-B — Production Schema-Push Incident Closeout + DB Guard Hardening — LANDED 2026-06-17
+
+Production-safety hardening only (no product-feature changes). Closes out the
+Phase 1297-A incident where a schema push reached production.
+
+- **Root cause:** a bare `npx prisma db push` was run with only `DATABASE_URL`
+  set inline. The datasource declares `directUrl = env("DIRECT_URL")`
+  (`schema.prisma:15`) and `prisma db push` connects via **directUrl**; Prisma
+  auto-loaded `.env` (production creds), so the additive DDL applied to the
+  production Supabase DB. The canonical wrapper (`npm run db:push:test`) was
+  bypassed, and the pre-commit db-push guard only inspects **staged files** — it
+  cannot see an interactively-typed command.
+- **Impact:** **additive but unauthorized** — `CREATE TABLE high_sensitivity_reviews`
+  + `CREATE TYPE HighSensitivityReviewStatus`, no drops (`prisma db push`
+  reported "in sync"; everything else was already in sync from prior merges).
+  Empty table, identical to the deploy-time DDL this work requires. Assessed
+  from the schema diff, **not** a production read: a direct prod query was
+  correctly blocked by auto-mode and was not performed. **No production
+  inspection or rollback was performed** (would require explicit Founder
+  authorization). This is NOT called harmless — it was a process violation.
+- **Hardening (fail-closed, ambient-env):** NEW `scripts/prisma-db-push-guard.sh`
+  validates **both** `DATABASE_URL` and `DIRECT_URL` before any push — both must
+  be set and `localhost`/`127.0.0.1`; cloud/pooler hosts (supabase, pooler,
+  amazonaws, rds, neon, render, azure) are rejected; destructive flags
+  (`--accept-data-loss`/`--force-reset`) are refused; only redacted host
+  summaries are printed; **no production escape path** (prod goes through the
+  deploy pipeline per ADR-0025). Supports `--check` (validate-only).
+- **Routing:** root `db:push` and the `@niov/database` workspace `db:push` now
+  invoke the guard (bare `prisma db push` removed from both). The wrapper
+  `scripts/prisma-db-push-test.sh` pins `.env.test` then delegates to the guard
+  (single validation core). CI's `npm run db:push` (unit + integration + Elixir
+  jobs) validates its localhost job-env and passes; a prod-env push is blocked.
+  The guard is allowlisted in `.husky/pre-commit`.
+- **.env.save:** added to `.gitignore` (`.env.save` / `.env.*.save` / `*.env.save`);
+  it was already untracked and was never committed.
+- **Tests:** `tests/unit/db-push-guard.test.ts` (12, CI-enforced) — allow
+  localhost+localhost; deny the literal incident (DIRECT_URL unset); deny prod
+  DIRECT_URL with localhost DATABASE_URL; deny pooler host; deny unset
+  DATABASE_URL; refuse destructive flag; redaction; both `db:push` scripts route
+  through the guard; no `scripts/*.sh` bare-pushes outside the allowlist;
+  `.env.save` git-ignored. Wrapper smoke test 3/3. Exact CI path
+  (`npm run db:push`, both localhost) exercised locally → push succeeds.
+- **Operational rule going forward:** *Prisma `db push` must only be run through
+  the guarded scripts that pin/validate BOTH `DATABASE_URL` and `DIRECT_URL`
+  (`npm run db:push:test`, or `npm run db:push` which now routes through the
+  guard). A bare `npx prisma db push` is forbidden.*
+- **Residual (honest):** a hand-typed bare `npx prisma db push` outside the npm
+  scripts cannot be intercepted by tooling — the class is **reduced, not
+  eliminated**; it is documented as forbidden and the pre-commit guard catches it
+  if ever committed.
+- **ADR note (RULE 20):** ADR-0025 (Schema-Push-Target Discipline) was **not
+  edited** — RULE/ADR changes are Founder-only. A proposed ADR-0025 amendment
+  (add the ambient-env guard + mandatory-DIRECT_URL + cloud-denylist to the
+  canonical discipline) is available for Founder review but is not applied.
+
 ### Phase 1297-A — High-Sensitivity Review Workflow Engine — LANDED 2026-06-17
 
 Turns the 1296-A `REQUIRES_REVIEW` decision (previously a dead end) into a
