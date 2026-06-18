@@ -63,6 +63,7 @@ import {
   resolveReviewDecisionForGrantRead,
   REVIEW_GATE_REASONS,
 } from "./high-sensitivity-review.service.js";
+import { evaluateRetentionPolicy } from "./retention-policy.service.js";
 import { recordUsageForOrg } from "../billing/usage-meter.service.js";
 
 export const MARKETPLACE_LISTING_TYPES = [
@@ -1089,6 +1090,9 @@ export class FoundationMarketplaceService {
     // The grant is issued for the package's offered mode by default; a human
     // review may downgrade it to an approved safe mode (1297-A).
     let grantAccessMode: DataAccessMode = pkg.access_mode;
+    // A governing review's expiry caps the grant's (1298-A) — a grant never
+    // outlives the human review that authorized it.
+    let reviewExpiresAt: Date | null = null;
     if (!decision.use_permitted) {
       // The high-sensitivity REQUIRES_REVIEW blocker can be lifted ONLY by a
       // matching APPROVED human review; every OTHER denial still blocks.
@@ -1128,6 +1132,7 @@ export class FoundationMarketplaceService {
       grantAccessMode = resolved.approved_access_modes.includes(pkg.access_mode)
         ? pkg.access_mode
         : (resolved.approved_access_modes[0] as DataAccessMode);
+      reviewExpiresAt = resolved.expires_at;
     }
 
     // Consent + opt-in are required by the package → must be explicitly confirmed.
@@ -1147,10 +1152,45 @@ export class FoundationMarketplaceService {
       return { ok: false, code: "PAYMENT_DENIED" };
     }
 
+    // Retention enforcement (1298-A): derive + validate the grant's finite
+    // expiry from the package retention policy + sensitivity. High-sensitivity
+    // is ALWAYS finite (capped, never outliving the governing review); standard
+    // may be until-revoked (null). Reviewed grants cap by the review's expiry.
+    const retention = evaluateRetentionPolicy({
+      retention_policy: pkg.retention_policy,
+      sensitivity_class: pkg.sensitivity_class,
+      sensitive_categories: pkg.sensitive_categories,
+      explicit_expires_at: input.expires_at,
+      review_expires_at: reviewExpiresAt,
+      now: new Date(),
+    });
+    await writeAuditEvent({
+      event_type: "RETENTION_POLICY_EVALUATED",
+      outcome: retention.allowed ? "SUCCESS" : "DENIED",
+      actor_entity_id: buyerEntityId,
+      denial_reason: retention.allowed ? null : retention.reason_codes[0] ?? null,
+      details: {
+        action: "RETENTION_POLICY_EVALUATED",
+        listing_id: listingId,
+        data_package_id: pkg.data_package_id,
+        sensitivity_class: pkg.sensitivity_class,
+        retention_policy: retention.retention_policy,
+        expires_at: retention.expires_at,
+        applied_default: retention.applied_default,
+        result: retention.allowed ? "ALLOWED" : "DENIED",
+        reason_codes: retention.reason_codes,
+      },
+    });
+    if (!retention.allowed) {
+      await emitEval("DENIED", retention.reason_codes[0] ?? "retention-not-permitted", false);
+      return {
+        ok: false,
+        code: retention.reason_codes[0] ?? "RETENTION_POLICY_REQUIRED",
+        denied_reasons: retention.reason_codes,
+      };
+    }
     const expiresAt =
-      typeof input.expires_at === "string" && input.expires_at.length > 0
-        ? new Date(input.expires_at)
-        : null;
+      retention.expires_at !== null ? new Date(retention.expires_at) : null;
 
     const { consent, grant } = await prisma.$transaction(async (tx) => {
       // The consent record is recorded by the PROVIDER's declared policy on

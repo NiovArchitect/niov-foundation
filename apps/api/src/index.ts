@@ -100,6 +100,23 @@ export type {
   ReviewListResult,
 } from "./services/foundation/high-sensitivity-review.service.js";
 
+// Phase 1298-A — retention-policy enforcement engine.
+export {
+  FoundationRetentionService,
+  evaluateRetentionPolicy,
+  computeExpiryFromRetentionPolicy,
+  normalizeRetentionPolicy,
+  RETENTION_POLICY_KINDS,
+  RETENTION_REASON_CODES,
+} from "./services/foundation/retention-policy.service.js";
+export type {
+  RetentionPolicyKind,
+  RetentionReasonCode,
+  RetentionDecision,
+  RetentionInput,
+  RetentionSweepResult,
+} from "./services/foundation/retention-policy.service.js";
+
 // Phase 1295-A — COSMP-governed marketplace data-read delivery.
 export { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 export type {

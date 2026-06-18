@@ -236,6 +236,51 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1298-A — Retention-Policy Enforcement Engine — LANDED 2026-06-17
+
+Makes retention real and enforceable: access can no longer live longer than
+policy allows. **No schema change** (grant + review statuses already include
+`EXPIRED`; consent enforced lazily) → no `prisma db push`.
+
+- **NEW** `apps/api/src/services/foundation/retention-policy.service.ts` — pure
+  `evaluateRetentionPolicy` / `computeExpiryFromRetentionPolicy` /
+  `normalizeRetentionPolicy` (closed `RETENTION_POLICY_KINDS` vocab) +
+  `FoundationRetentionService.sweepExpiredMarketplaceAccess`.
+- **Two-layer enforcement.** Layer 1 (lazy at use): grant creation derives +
+  validates a finite expiry via the evaluator; grant read fails closed on
+  expired grant/consent/review, lazily marks the grant `EXPIRED`, and audits
+  (`MARKETPLACE_DATA_GRANT_EXPIRED` / `MARKETPLACE_DATA_CONSENT_EXPIRED`, reason
+  `RETENTION_EXPIRED`). Layer 2 (sweep): `sweepExpiredMarketplaceAccess` marks
+  expired `ACTIVE` grants + `APPROVED` reviews `EXPIRED`, audits expired
+  consents, emits `RETENTION_SWEEP_COMPLETED`; wired as an **hourly cron tick**
+  in the existing scheduler (NO-OP in test, audited under
+  `SYSTEM_PRINCIPALS.SCHEDULER`); never deletes rows.
+- **Retention rules.** High-sensitivity is **always finite** — never
+  `UNTIL_REVOKED`; missing retention **default-applies** a finite 30d window
+  (audited `RETENTION_DEFAULT_APPLIED`, so 1296-A's grantable HEALTH stays
+  grantable); explicit `UNTIL_REVOKED` or an unrecognized retention string on
+  high-sensitivity is rejected; window capped at 90d
+  (`RETENTION_TOO_LONG_FOR_SENSITIVITY`); a reviewed grant's expiry caps to (and
+  never outlives) the governing review. Standard/low sensitivity may be
+  until-revoked (null). Review approval now enforces the same 90d ceiling.
+  Consent expiry capped to the grant's.
+- **Audit literals (additive, 4):** `RETENTION_POLICY_EVALUATED`,
+  `MARKETPLACE_DATA_GRANT_EXPIRED`, `MARKETPLACE_DATA_CONSENT_EXPIRED`,
+  `RETENTION_SWEEP_COMPLETED`.
+- **DB-guard compliance (1297-B):** no schema push performed; if one were
+  needed it would go through `npm run db:push:test`. Never raw content; mock
+  economics unchanged; AI/device/app cannot extend retention.
+- **Tests:** unit `foundation-retention-policy` (13) + audit lock (4) +
+  integration `foundation-retention` (11: default finite HS expiry, standard
+  until-revoked, 7-day window, ONE_YEAR-too-long deny, expired grant/consent
+  fail-closed + audit, sweep expires grants + reviews + emits sweep-complete,
+  safe read before expiry, AI retention enforced, RETENTION_POLICY_EVALUATED).
+  Typecheck 0; unit 2475/2476 (1 known connector-oauth `.env` artifact);
+  integration regression 60/60. No route added (system sweep runs via the
+  scheduler tick; an admin route is deferred).
+- **Backlog (Founder-gated):** real per-capsule content read; CT UI; real
+  settlement; cross-org discovery; org-compliance reviewer delegation.
+
 ### Phase 1297-B — Production Schema-Push Incident Closeout + DB Guard Hardening — LANDED 2026-06-17
 
 Production-safety hardening only (no product-feature changes). Closes out the

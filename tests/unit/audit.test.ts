@@ -540,3 +540,22 @@ describe("1297-A — Foundation high-sensitivity review audit literals defined",
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1298-A — retention-policy enforcement literals.
+describe("1298-A — Foundation retention audit literals defined", () => {
+  const literals = [
+    "RETENTION_POLICY_EVALUATED",
+    "MARKETPLACE_DATA_GRANT_EXPIRED",
+    "MARKETPLACE_DATA_CONSENT_EXPIRED",
+    "RETENTION_SWEEP_COMPLETED",
+  ] as const;
+  it("all 4 retention literals are present + recognized", () => {
+    for (const lit of literals) {
+      expect(AUDIT_EVENT_TYPE_VALUES).toContain(lit);
+      expect(isKnownAuditEventType(lit)).toBe(true);
+    }
+  });
+  it("the literal set has no duplicates after the 1298-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});
