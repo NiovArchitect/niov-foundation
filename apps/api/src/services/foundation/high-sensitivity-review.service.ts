@@ -69,6 +69,9 @@ const HUMAN_REVIEWER_TYPES = new Set([
 // Default approval lifetime when the reviewer does not specify one (no
 // perpetual high-sensitivity access — every approval expires).
 const DEFAULT_REVIEW_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// High-sensitivity ceiling for a review approval (1298-A — no long-lived
+// high-sensitivity access; mirrors the retention evaluator's 90-day cap).
+const MAX_REVIEW_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 // SAFE projection of a review record (no raw content — labels + lifecycle only).
 export interface SafeReviewView {
@@ -187,6 +190,9 @@ export async function resolveReviewDecisionForGrantRead(
   allowed: boolean;
   review_id: string | null;
   approved_access_modes: DataAccessMode[];
+  // The live review's expiry (1298-A) — grant creation caps the grant's expiry
+  // to this so a grant never outlives the human review that authorized it.
+  expires_at: Date | null;
   code: string;
 }> {
   const candidates = await prisma.highSensitivityReview.findMany({
@@ -221,7 +227,7 @@ export async function resolveReviewDecisionForGrantRead(
   }
 
   if (live === null)
-    return { allowed: false, review_id: null, approved_access_modes: [], code: "REVIEW_REQUIRED" };
+    return { allowed: false, review_id: null, approved_access_modes: [], expires_at: null, code: "REVIEW_REQUIRED" };
 
   const approved = live.approved_access_modes as DataAccessMode[];
   if (!approved.includes(requestedMode))
@@ -229,6 +235,7 @@ export async function resolveReviewDecisionForGrantRead(
       allowed: false,
       review_id: live.review_id,
       approved_access_modes: approved,
+      expires_at: live.expires_at,
       code: "REVIEW_MODE_NOT_APPROVED",
     };
 
@@ -236,6 +243,7 @@ export async function resolveReviewDecisionForGrantRead(
     allowed: true,
     review_id: live.review_id,
     approved_access_modes: approved,
+    expires_at: live.expires_at,
     code: "REVIEW_OK",
   };
 }
@@ -504,12 +512,15 @@ export class FoundationHighSensitivityReviewService {
     if (isSelfReview && !(requested.length === 1 && requested[0] === "PROOF_ONLY"))
       return { ok: false, code: "SELF_REVIEW_NOT_PERMITTED" };
 
-    // Mandatory expiry (default 30d); a provided expiry must be in the future.
+    // Mandatory expiry (default 30d); a provided expiry must be in the future
+    // and within the high-sensitivity ceiling (1298-A — no long-lived approvals).
     let expiresAt: Date;
     if (typeof input.expires_at === "string" && input.expires_at.length > 0) {
       const parsed = new Date(input.expires_at);
       if (Number.isNaN(parsed.getTime()) || parsed <= new Date())
         return { ok: false, code: "INVALID_EXPIRY" };
+      if (parsed.getTime() - Date.now() > MAX_REVIEW_TTL_MS)
+        return { ok: false, code: "RETENTION_TOO_LONG_FOR_SENSITIVITY" };
       expiresAt = parsed;
     } else {
       expiresAt = new Date(Date.now() + DEFAULT_REVIEW_TTL_MS);

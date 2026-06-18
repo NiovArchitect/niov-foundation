@@ -135,6 +135,7 @@ import { FoundationMarketplaceService } from "./services/foundation/marketplace.
 import { FoundationObservabilityService } from "./services/foundation/observability.service.js";
 import { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 import { FoundationHighSensitivityReviewService } from "./services/foundation/high-sensitivity-review.service.js";
+import { FoundationRetentionService } from "./services/foundation/retention-policy.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -325,6 +326,8 @@ export async function buildApp(
   // Phase 1297-A — high-sensitivity human-review workflow engine.
   const foundationHighSensitivityReviewService =
     new FoundationHighSensitivityReviewService(authService);
+  // Phase 1298-A — retention-policy enforcement (sweep wired into the scheduler).
+  const foundationRetentionService = new FoundationRetentionService();
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -827,6 +830,7 @@ export async function buildApp(
   const scheduler: SchedulerHandle = startScheduler(
     feedbackService,
     otzarService,
+    foundationRetentionService,
   );
   // Attach to the app so callers (production main, tests asserting
   // scheduler state) can reach it without a second buildApp return

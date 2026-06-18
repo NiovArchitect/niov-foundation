@@ -12,6 +12,7 @@ import * as cron from "node-cron";
 import { SYSTEM_PRINCIPALS, writeAuditEvent } from "@niov/database";
 import type { FeedbackService } from "./feedback.service.js";
 import type { OtzarService } from "../otzar/otzar.service.js";
+import type { FoundationRetentionService } from "../foundation/retention-policy.service.js";
 
 // WHAT: Wrap one cron-scheduled loop call so success and failure
 //        both emit hash-chained audit rows under the SCHEDULER
@@ -103,6 +104,7 @@ export interface SchedulerHandle {
 export function startScheduler(
   feedbackService: FeedbackService,
   otzarService?: OtzarService,
+  retentionService?: FoundationRetentionService,
 ): SchedulerHandle {
   if (process.env.NODE_ENV === "test") {
     return {
@@ -157,6 +159,21 @@ export function startScheduler(
       cron.schedule("*/30 * * * *", () => {
         void runLoopWithAudit("otzar_auto_close", () =>
           otzarService.runAutoCloseSweep(),
+        );
+      }),
+    );
+  }
+
+  // Phase 1298-A — retention enforcement sweep, hourly. Marks expired ACTIVE
+  // grants + APPROVED high-sensitivity reviews EXPIRED and audits expired
+  // consents (under SYSTEM_PRINCIPALS.SCHEDULER via runLoopWithAudit). Only
+  // registered when a retentionService is provided; tests invoke
+  // sweepExpiredMarketplaceAccess() directly (cron is NO-OP in test).
+  if (retentionService !== undefined) {
+    tasks.push(
+      cron.schedule("0 * * * *", () => {
+        void runLoopWithAudit("retention_sweep", () =>
+          retentionService.sweepExpiredMarketplaceAccess(),
         );
       }),
     );

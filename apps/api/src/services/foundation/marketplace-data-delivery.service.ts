@@ -153,14 +153,34 @@ export class MarketplaceDataDeliveryService {
       });
     };
 
-    // Grant must be ACTIVE + not expired.
+    // Grant must be ACTIVE + not expired. Retention enforcement (1298-A): a
+    // lapsed grant is lazily marked EXPIRED + audited, and the read fails closed.
     if (grant.status !== "ACTIVE") {
       await emitDenied(["grant-not-active"]);
       return { ok: false, code: "GRANT_NOT_ACTIVE", denied_reasons: ["grant-not-active"] };
     }
     if (grant.expires_at !== null && grant.expires_at <= new Date()) {
-      await emitDenied(["grant-expired"]);
-      return { ok: false, code: "GRANT_EXPIRED", denied_reasons: ["grant-expired"] };
+      await prisma.marketplaceDataGrant.update({
+        where: { grant_id: grant.grant_id },
+        data: { status: "EXPIRED" },
+      });
+      await writeAuditEvent({
+        event_type: "MARKETPLACE_DATA_GRANT_EXPIRED",
+        outcome: "SUCCESS",
+        actor_entity_id: buyerEntityId,
+        details: {
+          action: "MARKETPLACE_DATA_GRANT_EXPIRED",
+          grant_id: grant.grant_id,
+          listing_id: grant.listing_id,
+          data_package_id: grant.data_package_id,
+          access_mode: grant.access_mode,
+          expires_at: grant.expires_at.toISOString(),
+          result: "EXPIRED",
+          source: "READ",
+        },
+      });
+      await emitDenied(["RETENTION_EXPIRED"]);
+      return { ok: false, code: "GRANT_EXPIRED", denied_reasons: ["RETENTION_EXPIRED"] };
     }
 
     // Consent must exist + not be revoked/expired.
@@ -168,13 +188,27 @@ export class MarketplaceDataDeliveryService {
       const consent = await prisma.marketplaceDataConsent.findFirst({
         where: { consent_id: grant.consent_record_id },
       });
-      if (
-        consent === null ||
-        consent.revoked_at !== null ||
-        (consent.expires_at !== null && consent.expires_at <= new Date())
-      ) {
+      if (consent === null || consent.revoked_at !== null) {
         await emitDenied(["consent-not-active"]);
         return { ok: false, code: "CONSENT_NOT_ACTIVE", denied_reasons: ["consent-not-active"] };
+      }
+      if (consent.expires_at !== null && consent.expires_at <= new Date()) {
+        await writeAuditEvent({
+          event_type: "MARKETPLACE_DATA_CONSENT_EXPIRED",
+          outcome: "SUCCESS",
+          actor_entity_id: buyerEntityId,
+          details: {
+            action: "MARKETPLACE_DATA_CONSENT_EXPIRED",
+            consent_id: consent.consent_id,
+            listing_id: grant.listing_id,
+            data_package_id: grant.data_package_id,
+            expires_at: consent.expires_at.toISOString(),
+            result: "EXPIRED",
+            source: "READ",
+          },
+        });
+        await emitDenied(["RETENTION_EXPIRED"]);
+        return { ok: false, code: "CONSENT_EXPIRED", denied_reasons: ["RETENTION_EXPIRED"] };
       }
     }
 

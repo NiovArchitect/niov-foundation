@@ -613,7 +613,21 @@ export type AuditEventType =
   | "HIGH_SENSITIVITY_REVIEW_APPROVED"
   | "HIGH_SENSITIVITY_REVIEW_DENIED"
   | "HIGH_SENSITIVITY_REVIEW_REVOKED"
-  | "HIGH_SENSITIVITY_REVIEW_EXPIRED";
+  | "HIGH_SENSITIVITY_REVIEW_EXPIRED"
+  // Phase 1298-A — retention-policy enforcement. RETENTION_POLICY_EVALUATED on
+  // every grant-creation retention decision (allow / default-applied / deny).
+  // MARKETPLACE_DATA_GRANT_EXPIRED + MARKETPLACE_DATA_CONSENT_EXPIRED when a
+  // lapsed grant/consent is detected (lazily at read or by the sweep).
+  // RETENTION_SWEEP_COMPLETED summarizes a maintenance sweep tick (system
+  // principal SCHEDULER). SAFE details: grant_id / consent_id / review_id /
+  // listing_id / data_package_id / sensitivity_class / retention_policy /
+  // expires_at / result / reason_codes / counts. FORBIDDEN: raw capsule body,
+  // medical/health/biometric/children content, PII, secrets. Additive — no
+  // ADR-0002 amendment.
+  | "RETENTION_POLICY_EVALUATED"
+  | "MARKETPLACE_DATA_GRANT_EXPIRED"
+  | "MARKETPLACE_DATA_CONSENT_EXPIRED"
+  | "RETENTION_SWEEP_COMPLETED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -824,6 +838,11 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "HIGH_SENSITIVITY_REVIEW_DENIED",
   "HIGH_SENSITIVITY_REVIEW_REVOKED",
   "HIGH_SENSITIVITY_REVIEW_EXPIRED",
+  // Phase 1298-A retention-policy enforcement.
+  "RETENTION_POLICY_EVALUATED",
+  "MARKETPLACE_DATA_GRANT_EXPIRED",
+  "MARKETPLACE_DATA_CONSENT_EXPIRED",
+  "RETENTION_SWEEP_COMPLETED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
