@@ -113,3 +113,105 @@ Cloud modules (access-request lifecycle, provider approval queue, metering after
 grant, pricing/market-rate, transaction-cut ledger, settlement research,
 misuse/dispute, reputation, third-party SDK/API, admin/ops console, production
 observability) remain to be built and are **not** implied by the shipped arc.
+
+## Federation Cloud is NOT only individual listings — DMW cohorts are a future product class
+
+**Status:** Strategic doctrine (Founder-authorized, 2026-06-18). Forward-looking —
+**no cohort mechanics are implemented yet.** This section exists so build sessions
+stop treating Federation Cloud as merely a one-listing-at-a-time marketplace. It
+adds **naming and future-proofing only**; it is **not** an ADR and introduces no
+RULE. Do not implement cohort models, counts, UI, or monetization from this section.
+
+Federation Cloud is the privacy-preserving, AI-native, **Foundation-governed** data /
+capability **exchange** for the AI-agent / device / world economy. It is the strategic
+problem space that concepts like Google Privacy Sandbox aimed at (useful market/user/
+context signals without uncontrolled raw personal-data extraction) — **used only as a
+strategic analogy, not a model to copy.** Foundation keeps sovereignty, consent,
+proof, retention, revocation, audit, and transaction permissioning; Federation Cloud
+packages those governed primitives into exchangeable products.
+
+### Federation Cloud data/capability product classes (future)
+
+1. Individual data packages
+2. Enterprise / org data packages
+3. Personal DMW data packages
+4. Memory Capsule bundles
+5. Safe-projection products
+6. Proof-only products
+7. Retrieval / query products
+8. Aggregate signal products
+9. Depersonalized signal products
+10. **DMW data cohorts** ← a first-class future product class, not just listings
+11. Agent / device transaction-data cohorts
+12. App / world / game behavior cohorts
+13. Market-rate cohort products
+14. Metered cohort access
+15. Future revenue share / transaction cuts
+16. Future settlement (still deferred)
+
+### Definitions (future vocabulary)
+
+- **DMW** — governed memory wallet/container for a person, org, app, agent, device.
+- **Memory Capsule** — the atomic governed memory/data unit.
+- **Data Package** — a product over one provider's selected DMW/Capsule scopes.
+- **Cohort Data Product** — a governed aggregate / depersonalized / signal product
+  composed from **many** DMW or Memory Capsule scopes under policy. **Never exposes
+  raw individual capsules by default.**
+- **Cohort Signal** — the buyer-facing output (aggregate count, trend, distribution,
+  score, intent band, context cluster, proof-only result, safe summary).
+- **Cohort Membership** — the policy-bound, consent-aware, revocable, sensitivity-aware
+  rule deciding whether a DMW/Capsule may contribute.
+- **Contribution Accounting** — privacy-safe record of which DMWs contributed (for
+  future revenue share, revocation impact, and proof) **without exposing raw
+  identities to buyers.**
+- **Usage Unit** — the metered thing a buyer consumes (one cohort query, aggregate
+  signal, proof, safe projection, personalization result, agent/device action
+  authorization, world/app context access, retrieval result, marketplace access event).
+- **Foundation Proof** — Foundation proves the buyer was allowed to access the signal
+  and (eventually) that the transaction/payment/use was allowed.
+
+### Cohorts must never be a backdoor for raw data
+
+Default cohort rules (design intent — enforce when built, do **not** fake): no raw
+Memory Capsule body · no direct identity exposure · no `storage_location` · no
+embedding payload · no sensitive `content_hash` · no raw medical/biometric/children
+content · no bystander-sensitive leakage · no training/model-improvement unless
+explicitly allowed · no redistribution/resale/commercial use unless explicitly allowed
+· minimum-cohort-size + sensitivity thresholds eventually enforced · k-anonymity /
+small-cell-suppression / differential-privacy-style noise / query-budget concepts are
+design targets — **do not claim them if not implemented** · proof + audit required ·
+consent / opt-in / revocation enforceable · revenue share must account for contributing
+DMWs if monetized. HEALTH stricter; MEDICAL stricter than HEALTH; BIOMETRIC stricter;
+**CHILDREN remains denied** unless a dedicated future program is Founder-authorized.
+
+Cohort **access modes** (future vocabulary, safest-first): `COHORT_PROOF_ONLY`,
+`COHORT_AGGREGATE_SIGNAL`, `COHORT_DEPERSONALIZED_SIGNAL`, `COHORT_TREND`,
+`COHORT_DISTRIBUTION`, `COHORT_SCORE`, `COHORT_RETRIEVAL_QUERY` (strict scoping only),
+`COHORT_INTENT_BAND`, `COHORT_CONTEXT_CLUSTER`, `COHORT_MARKET_RATE`,
+`COHORT_EVALUATION_SIGNAL`, `COHORT_PERSONALIZATION_SIGNAL`. Raw individual data is
+**never** a default mode. Purpose limitation is required (defaults: TRAINING denied,
+MODEL_IMPROVEMENT denied, REDISTRIBUTION denied, RESALE denied, COMMERCIAL_USE denied,
+RAW_ACCESS denied).
+
+### Microtransaction framing
+
+Anyone can move money. **Foundation proves the transaction was allowed; Federation
+Cloud routes, meters, prices, and monetizes the exchange.** Future metered/priced
+units include safe-projection reads, proof-only reads, retrieval queries, cohort
+signals, aggregate insights, personalization events, LLM-context calls, agent-runtime
+access, device transactions, app/world context requests, data-grant usage, and
+marketplace requests. Real settlement remains deferred until a Founder-chosen provider.
+
+### Forward phase
+
+**Phase 1305-A: Federation Cloud Cohort Data Product Substrate** (backend-only, not
+CT-UI-first) will investigate/design: `CohortDataProduct` / `CohortContribution` /
+`CohortAccessGrant` / `CohortUsageLedger` / `CohortProof` (or equivalents),
+cohort-access-mode vocabulary, minimum-aggregation thresholds, consent inheritance,
+revocation effects, retention/expiry, proof shape, a **mock** economic usage ledger,
+buyer request flow, no-leak cohort projections, high-sensitivity cohort denial rules,
+personal-DMW opt-in defaults, and AI-agent/device microtransaction hooks. 1305-A must
+**not** create fake cohorts/demand, claim differential-privacy/k-anonymity if not
+implemented, allow raw data, enable real settlement, or enable training/model-
+improvement by default. Until 1305-A lands, cohorts are doctrine only — no cohort
+counts, badges, UI, or monetization anywhere.
