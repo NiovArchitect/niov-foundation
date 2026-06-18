@@ -162,6 +162,8 @@ export type {
   MarketplaceDataConsent,
   MarketplaceDataGrant,
   MarketplaceDataGrantStatus,
+  HighSensitivityReview,
+  HighSensitivityReviewStatus,
   Session,
   SessionStatus,
   Hive,

@@ -47,8 +47,11 @@ import {
 } from "@niov/database";
 import type { AuthService } from "../auth.service.js";
 import { computeAuthorityEnvelope } from "./authority.service.js";
-import { POLICY_GATED_CATEGORIES } from "./marketplace.service.js";
-import { evaluateHighSensitivityAccess } from "./high-sensitivity-policy.js";
+import {
+  evaluateHighSensitivityAccess,
+  isHighSensitivityPackage,
+} from "./high-sensitivity-policy.js";
+import { resolveReviewDecisionForGrantRead } from "./high-sensitivity-review.service.js";
 
 const READ_RESULT_MAX = 50;
 const READ_RESULT_DEFAULT = 10;
@@ -192,26 +195,30 @@ export class MarketplaceDataDeliveryService {
     if (grant.intended_use === "MODEL_IMPROVEMENT" && !pkg.model_improvement_allowed)
       denied.push("model-improvement-not-permitted");
 
-    // Effective access mode: the grant's mode, or a narrower PROOF_ONLY request.
-    const requested = (input.access_mode ?? pkg.access_mode) as DataAccessMode;
+    // Effective access mode: the GRANT's authorized mode, or a narrower
+    // PROOF_ONLY request. The grant (not the package) is the authorization
+    // basis — a high-sensitivity review may have downgraded the grant to a
+    // narrower safe mode than the package offers (1297-A), and a package may be
+    // edited after a grant is issued; honoring the grant prevents both from
+    // silently widening access.
+    const requested = (input.access_mode ?? grant.access_mode) as DataAccessMode;
     const effectiveMode: DataAccessMode =
-      requested === pkg.access_mode || requested === "PROOF_ONLY"
+      requested === grant.access_mode || requested === "PROOF_ONLY"
         ? requested
-        : pkg.access_mode;
-    if (requested !== pkg.access_mode && requested !== "PROOF_ONLY")
+        : grant.access_mode;
+    if (requested !== grant.access_mode && requested !== "PROOF_ONLY")
       denied.push("access-mode-exceeds-grant");
 
-    // Sensitivity gate (1296-A): high-sensitivity / policy-gated packages re-run
-    // the DEDICATED high-sensitivity policy evaluator at READ time, against the
-    // effective mode. Only the evaluator's allowed safe modes may be delivered;
-    // raw content is never permitted. CHILDREN -> deny; MEDICAL/BIOMETRIC ->
-    // proof-only or review; HEALTH -> safe projection under strict controls.
-    if (
-      pkg.sensitivity_class === "HIGH_SENSITIVITY" ||
-      pkg.sensitive_categories.some((c) =>
-        (POLICY_GATED_CATEGORIES as readonly string[]).includes(c),
-      )
-    ) {
+    // Sensitivity gate (1296-A + 1297-A): high-sensitivity / policy-gated
+    // packages re-run the DEDICATED high-sensitivity policy evaluator at READ
+    // time, against the effective mode. Only safe modes may be delivered; raw
+    // content is never permitted. CHILDREN -> deny; MEDICAL/BIOMETRIC ->
+    // proof-only auto, else review; HEALTH -> safe projection under strict
+    // controls. When the evaluator returns REQUIRES_REVIEW, a matching APPROVED
+    // human review (consulted here) may authorize the effective safe mode —
+    // re-checked live (not expired / not revoked) at every read (1297-A).
+    let reviewIdForRead: string | null = null;
+    if (isHighSensitivityPackage(pkg.sensitivity_class, pkg.sensitive_categories)) {
       const hs = evaluateHighSensitivityAccess({
         sensitivity_class: pkg.sensitivity_class,
         sensitive_categories: pkg.sensitive_categories,
@@ -227,15 +234,27 @@ export class MarketplaceDataDeliveryService {
         aggregate_only: pkg.aggregate_only,
         retention_policy: pkg.retention_policy,
       });
-      if (!hs.decision.startsWith("ALLOW"))
+      if (hs.decision === "REQUIRES_REVIEW") {
+        const resolved = await resolveReviewDecisionForGrantRead(
+          buyerEntityId,
+          grant.data_package_id,
+          grant.intended_use,
+          effectiveMode,
+        );
+        if (resolved.allowed) reviewIdForRead = resolved.review_id;
+        else denied.push("REVIEW_REQUIRED");
+      } else if (!hs.decision.startsWith("ALLOW")) {
         denied.push(hs.reason_codes[0] ?? "HIGH_SENSITIVITY_DEFAULT_DENY");
-      else if (!hs.allowed_access_modes.includes(effectiveMode))
+      } else if (!hs.allowed_access_modes.includes(effectiveMode)) {
         denied.push("access-mode-not-allowed-for-sensitivity");
+      }
+      const sensitivityAllowed =
+        hs.decision.startsWith("ALLOW") || reviewIdForRead !== null;
       await writeAuditEvent({
         event_type: "HIGH_SENSITIVITY_POLICY_EVALUATED",
-        outcome: hs.decision.startsWith("ALLOW") ? "SUCCESS" : "DENIED",
+        outcome: sensitivityAllowed ? "SUCCESS" : "DENIED",
         actor_entity_id: buyerEntityId,
-        denial_reason: hs.decision.startsWith("ALLOW") ? null : hs.reason_codes[0] ?? null,
+        denial_reason: sensitivityAllowed ? null : hs.reason_codes[0] ?? null,
         details: {
           action: "HIGH_SENSITIVITY_POLICY_EVALUATED",
           listing_id: grant.listing_id,
@@ -248,6 +267,7 @@ export class MarketplaceDataDeliveryService {
           decision: hs.decision,
           reason_codes: hs.reason_codes,
           human_review_required: hs.human_review_required,
+          review_id: reviewIdForRead,
         },
       });
     }
@@ -370,6 +390,7 @@ export class MarketplaceDataDeliveryService {
         status,
         result_count: items.length,
         proof_delivery: "PER_CAPSULE_AT_READ_TIME",
+        review_id: reviewIdForRead,
       },
     });
 

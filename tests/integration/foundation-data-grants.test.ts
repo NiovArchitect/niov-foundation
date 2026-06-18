@@ -193,13 +193,15 @@ describe("Foundation data-marketplace grants — PERSONAL DMW (null org)", () =>
     expect(g.status).toBe("ACTIVE");
   });
 
-  it("MEDICAL personal package (non-proof mode) requires review → grant DENIED (1296-A)", async () => {
+  it("MEDICAL personal package (non-proof mode) needs a human review → grant REVIEW_REQUIRED (1297-A)", async () => {
     const res = await createDataPackage({ title: "My health", description: "personal health signals", access_mode: "SAFE_PROJECTION", allowed_use: ["PERSONALIZATION"], status: "PUBLISHED", sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["HEALTH", "MEDICAL"] }, PERSONAL_TOKEN);
     const id = (res.json() as { listing: { listing_id: string } }).listing.listing_id;
+    // Without an APPROVED high-sensitivity review the grant cannot be created
+    // (1297-A): the REQUIRES_REVIEW gate is surfaced, not a flat denial.
     const g = await grant(id, { intended_use: "PERSONALIZATION", consent_confirmed: true, opt_in_confirmed: true }, PERSONAL_TOKEN);
-    expect(g.statusCode).toBe(403);
+    expect(g.statusCode).toBe(409);
     const body = g.json() as { code: string; denied_reasons?: string[] };
-    expect(body.code).toBe("USE_NOT_PERMITTED");
+    expect(body.code).toBe("REVIEW_REQUIRED");
     expect(body.denied_reasons).toContain("MEDICAL_DATA_REQUIRES_DEDICATED_REVIEW");
   });
 

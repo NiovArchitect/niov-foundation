@@ -597,7 +597,23 @@ export type AuditEventType =
   // decision + reason_codes + human_review_required. FORBIDDEN: raw capsule
   // body, medical/health/biometric/children content, PII, secrets. Additive —
   // no ADR-0002 amendment.
-  | "HIGH_SENSITIVITY_POLICY_EVALUATED";
+  | "HIGH_SENSITIVITY_POLICY_EVALUATED"
+  // Phase 1297-A — high-sensitivity human-review workflow lifecycle. Emitted
+  // when a REQUIRES_REVIEW high-sensitivity decision is turned into a durable,
+  // scope-bound, expiring review record and as it transitions. CREATED (a
+  // pending review opened) / APPROVED (reviewer authorized specific safe modes)
+  // / DENIED (reviewer or policy refused) / REVOKED (a prior approval pulled) /
+  // EXPIRED (approval lapsed at expires_at, detected lazily). SAFE details:
+  // review_id + listing_id + data_package_id + grant_id + sensitivity_class +
+  // sensitive_categories + intended_use + access_mode + status + reason_codes +
+  // approved_access_modes + reviewer_entity_id ref. FORBIDDEN: raw capsule body,
+  // medical/health/biometric/children content, payload, content_hash, storage
+  // location, embeddings, PII, secrets. Additive — no ADR-0002 amendment.
+  | "HIGH_SENSITIVITY_REVIEW_CREATED"
+  | "HIGH_SENSITIVITY_REVIEW_APPROVED"
+  | "HIGH_SENSITIVITY_REVIEW_DENIED"
+  | "HIGH_SENSITIVITY_REVIEW_REVOKED"
+  | "HIGH_SENSITIVITY_REVIEW_EXPIRED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -802,6 +818,12 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MARKETPLACE_DATA_GRANT_READ_EVALUATED",
   // Phase 1296-A dedicated high-sensitivity policy gate.
   "HIGH_SENSITIVITY_POLICY_EVALUATED",
+  // Phase 1297-A high-sensitivity human-review workflow lifecycle.
+  "HIGH_SENSITIVITY_REVIEW_CREATED",
+  "HIGH_SENSITIVITY_REVIEW_APPROVED",
+  "HIGH_SENSITIVITY_REVIEW_DENIED",
+  "HIGH_SENSITIVITY_REVIEW_REVOKED",
+  "HIGH_SENSITIVITY_REVIEW_EXPIRED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

@@ -52,7 +52,17 @@ import type { AuthService } from "../auth.service.js";
 import { getOrgEntityId } from "../governance/org.js";
 import { computeAuthorityEnvelope } from "./authority.service.js";
 import { evaluateSpendPolicy } from "./economic-policy.service.js";
-import { evaluateHighSensitivityAccess } from "./high-sensitivity-policy.js";
+import {
+  evaluateHighSensitivityAccess,
+  isHighSensitivityPackage,
+} from "./high-sensitivity-policy.js";
+// Canonical home of POLICY_GATED_CATEGORIES is the pure policy module; re-export
+// here so existing importers (data-delivery, the @niov/api barrel) are stable.
+export { POLICY_GATED_CATEGORIES } from "./high-sensitivity-policy.js";
+import {
+  resolveReviewDecisionForGrantRead,
+  REVIEW_GATE_REASONS,
+} from "./high-sensitivity-review.service.js";
 import { recordUsageForOrg } from "../billing/usage-meter.service.js";
 
 export const MARKETPLACE_LISTING_TYPES = [
@@ -106,18 +116,6 @@ export const DATA_SENSITIVITY_CLASSES = [
   "HIGH_SENSITIVITY",
 ] as const;
 
-// Categories that REQUIRE a dedicated policy gate (not yet implemented). A data
-// package tagged with any of these — or classed HIGH_SENSITIVITY — is denied at
-// grant time. Personal health / medical / biometric / children-class data is
-// never granted through the generic marketplace path. Extensible: new labels
-// are governable without a schema change.
-export const POLICY_GATED_CATEGORIES = [
-  "HEALTH",
-  "MEDICAL",
-  "BIOMETRIC",
-  "CHILDREN",
-] as const;
-
 const DATA_GRANT_METER = "meter.marketplace-data-grants.v1";
 
 export interface SafeDataPackageView {
@@ -156,6 +154,12 @@ export interface DataAccessDecision {
   denied_reasons: string[];
   requires_consent: boolean;
   requires_opt_in: boolean;
+  // Phase 1297-A — true when the dedicated high-sensitivity gate returned
+  // REQUIRES_REVIEW for this access shape: not a flat denial, but a human
+  // review is needed before a grant/read may proceed (see the
+  // high-sensitivity-review workflow). Distinct from a hard DENY (CHILDREN /
+  // missing consent / training), which is never review-approvable.
+  review_required: boolean;
   proof_required: boolean;
   // A data-marketplace access decision NEVER returns raw capsule content —
   // governed COSMP reads (under explicit permission + ProofOfAccess) are the
@@ -867,11 +871,11 @@ export class FoundationMarketplaceService {
     //     grant tier; here we evaluate the access SHAPE (assume-confirmed) and
     //     verify the package's own access_mode is permitted for its sensitivity.
     //     Raw content is never allowed; this gate only ever permits safe modes.
-    const isHighSensitivity =
-      pkg.sensitivity_class === "HIGH_SENSITIVITY" ||
-      pkg.sensitive_categories.some((c) =>
-        (POLICY_GATED_CATEGORIES as readonly string[]).includes(c),
-      );
+    const isHighSensitivity = isHighSensitivityPackage(
+      pkg.sensitivity_class,
+      pkg.sensitive_categories,
+    );
+    let reviewRequired = false;
     if (isHighSensitivity) {
       const hs = evaluateHighSensitivityAccess({
         sensitivity_class: pkg.sensitivity_class,
@@ -888,6 +892,10 @@ export class FoundationMarketplaceService {
         aggregate_only: pkg.aggregate_only,
         retention_policy: pkg.retention_policy,
       });
+      // REQUIRES_REVIEW is surfaced (review_required) but still blocks the
+      // *automatic* decision: a grant/read only proceeds when a matching human
+      // review has been APPROVED (consulted at grant creation + read time).
+      reviewRequired = hs.decision === "REQUIRES_REVIEW";
       if (!hs.decision.startsWith("ALLOW"))
         denied.push(hs.reason_codes[0] ?? "HIGH_SENSITIVITY_DEFAULT_DENY");
       else if (!hs.allowed_access_modes.includes(pkg.access_mode))
@@ -955,6 +963,7 @@ export class FoundationMarketplaceService {
       denied_reasons: denied,
       requires_consent: pkg.consent_required,
       requires_opt_in: pkg.user_opt_in_required,
+      review_required: reviewRequired,
       proof_required: pkg.proof_required,
       raw_body_excluded: true,
       honors: {
@@ -1077,13 +1086,48 @@ export class FoundationMarketplaceService {
     );
     if (evalResult.ok === false) return { ok: false, code: evalResult.code };
     const decision = evalResult.access;
+    // The grant is issued for the package's offered mode by default; a human
+    // review may downgrade it to an approved safe mode (1297-A).
+    let grantAccessMode: DataAccessMode = pkg.access_mode;
     if (!decision.use_permitted) {
-      await emitEval("DENIED", decision.denied_reasons[0] ?? "use-not-permitted", false);
-      return {
-        ok: false,
-        code: "USE_NOT_PERMITTED",
-        denied_reasons: decision.denied_reasons,
-      };
+      // The high-sensitivity REQUIRES_REVIEW blocker can be lifted ONLY by a
+      // matching APPROVED human review; every OTHER denial still blocks.
+      const hardBlockers = decision.denied_reasons.filter(
+        (r) => !REVIEW_GATE_REASONS.has(r),
+      );
+      if (!decision.review_required || hardBlockers.length > 0) {
+        await emitEval(
+          "DENIED",
+          hardBlockers[0] ?? decision.denied_reasons[0] ?? "use-not-permitted",
+          false,
+        );
+        return {
+          ok: false,
+          code: "USE_NOT_PERMITTED",
+          denied_reasons:
+            hardBlockers.length > 0 ? hardBlockers : decision.denied_reasons,
+        };
+      }
+      // Only the review gate remains — consult an approved human review.
+      const resolved = await resolveReviewDecisionForGrantRead(
+        buyerEntityId,
+        pkg.data_package_id,
+        input.intended_use,
+        pkg.access_mode,
+      );
+      if (resolved.approved_access_modes.length === 0) {
+        await emitEval("REVIEW_REQUIRED", "high-sensitivity-review-required", false);
+        return {
+          ok: false,
+          code: "REVIEW_REQUIRED",
+          denied_reasons: decision.denied_reasons,
+        };
+      }
+      // An approval exists — issue the grant for an approved safe mode (prefer
+      // the offered mode when approved, else the safest approved mode).
+      grantAccessMode = resolved.approved_access_modes.includes(pkg.access_mode)
+        ? pkg.access_mode
+        : (resolved.approved_access_modes[0] as DataAccessMode);
     }
 
     // Consent + opt-in are required by the package → must be explicitly confirmed.
@@ -1121,7 +1165,7 @@ export class FoundationMarketplaceService {
           provider_org_entity_id: pkg.provider_org_entity_id,
           consenting_entity_id: pkg.provider_entity_id,
           allowed_use: pkg.allowed_use,
-          access_mode: pkg.access_mode,
+          access_mode: grantAccessMode,
           training_allowed: pkg.training_allowed,
           model_improvement_allowed: pkg.model_improvement_allowed,
           redistribution_allowed: pkg.redistribution_allowed,
@@ -1140,7 +1184,7 @@ export class FoundationMarketplaceService {
           buyer_org_entity_id: buyerOrg,
           granted_by_entity_id: buyerEntityId,
           intended_use: input.intended_use,
-          access_mode: pkg.access_mode,
+          access_mode: grantAccessMode,
           status: "ACTIVE",
           consent_record_id: consent.consent_id,
           proof_required: pkg.proof_required,
@@ -1161,7 +1205,7 @@ export class FoundationMarketplaceService {
         consent_id: consent.consent_id,
         listing_id: listingId,
         data_package_id: pkg.data_package_id,
-        access_mode: pkg.access_mode,
+        access_mode: grant.access_mode,
       },
     });
     await writeAuditEvent({
@@ -1174,7 +1218,7 @@ export class FoundationMarketplaceService {
         listing_id: listingId,
         data_package_id: pkg.data_package_id,
         intended_use: input.intended_use,
-        access_mode: pkg.access_mode,
+        access_mode: grant.access_mode,
         status: grant.status,
         proof_required: grant.proof_required,
         proof_delivery: grant.proof_delivery,

@@ -76,7 +76,10 @@ export type {
 // Phase 1296-A — dedicated high-sensitivity policy gate.
 export {
   evaluateHighSensitivityAccess,
+  highSensitivityReviewApprovableModes,
+  isHighSensitivityPackage,
   HIGH_SENSITIVITY_REASON_CODES,
+  HIGH_SENSITIVITY_REVIEW_GATE_REASONS,
 } from "./services/foundation/high-sensitivity-policy.js";
 export type {
   HighSensitivityReasonCode,
@@ -84,6 +87,18 @@ export type {
   HighSensitivityPolicyInput,
   HighSensitivityPolicyDecision,
 } from "./services/foundation/high-sensitivity-policy.js";
+
+// Phase 1297-A — high-sensitivity human-review workflow engine.
+export {
+  FoundationHighSensitivityReviewService,
+  resolveReviewDecisionForGrantRead,
+  REVIEW_GATE_REASONS,
+} from "./services/foundation/high-sensitivity-review.service.js";
+export type {
+  SafeReviewView,
+  ReviewResult,
+  ReviewListResult,
+} from "./services/foundation/high-sensitivity-review.service.js";
 
 // Phase 1295-A — COSMP-governed marketplace data-read delivery.
 export { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";

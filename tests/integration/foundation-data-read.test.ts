@@ -204,8 +204,11 @@ describe("Foundation data-read — high-sensitivity gate (1296-A)", () => {
     const who = await app.inject({ method: "GET", url: "/api/v1/foundation/authority/me", headers: { authorization: `Bearer ${BUYER_TOKEN}` } });
     const buyerId = (who.json() as { authority: { entity_id: string } }).authority.entity_id;
     const g = await prisma.marketplaceDataGrant.create({ data: { listing_id: listing.listing_id, data_package_id: pkg.data_package_id, provider_entity_id: PROVIDER_ID, buyer_entity_id: buyerId, granted_by_entity_id: buyerId, intended_use: "ANALYTICS", access_mode: "SAFE_PROJECTION", status: "ACTIVE" } });
+    // 1297-A: a MEDICAL SAFE_PROJECTION grant with no APPROVED human review is
+    // blocked at read time with REVIEW_REQUIRED (the review path, not a flat
+    // category denial); raw content is still never delivered.
     const res = await read(g.grant_id, {}, BUYER_TOKEN);
     expect(res.statusCode).toBe(403);
-    expect((res.json() as { denied_reasons?: string[] }).denied_reasons).toContain("MEDICAL_DATA_REQUIRES_DEDICATED_REVIEW");
+    expect((res.json() as { denied_reasons?: string[] }).denied_reasons).toContain("REVIEW_REQUIRED");
   });
 });
