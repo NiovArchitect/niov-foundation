@@ -627,7 +627,18 @@ export type AuditEventType =
   | "RETENTION_POLICY_EVALUATED"
   | "MARKETPLACE_DATA_GRANT_EXPIRED"
   | "MARKETPLACE_DATA_CONSENT_EXPIRED"
-  | "RETENTION_SWEEP_COMPLETED";
+  | "RETENTION_SWEEP_COMPLETED"
+  // Phase 1299-A — org-compliance reviewer delegation. Emitted on every
+  // reviewer-eligibility decision for a high-sensitivity review (approve / deny /
+  // org-delegated revoke): SUCCESS when the candidate human is an authorized
+  // reviewer (provider owner, personal owner, org admin, compliance, governance,
+  // supervisor), DENIED otherwise (non-human, buyer, cross-tenant, unauthorized,
+  // CHILDREN). SAFE details: review_id / listing_id / data_package_id /
+  // sensitivity_class / sensitive_categories (labels) / candidate_reviewer_entity_id
+  // / reviewer_scope / reviewer_reason_codes. FORBIDDEN: raw capsule body,
+  // medical/health/biometric/children content, PII, secrets. Additive — no
+  // ADR-0002 amendment.
+  | "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -843,6 +854,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MARKETPLACE_DATA_GRANT_EXPIRED",
   "MARKETPLACE_DATA_CONSENT_EXPIRED",
   "RETENTION_SWEEP_COMPLETED",
+  // Phase 1299-A org-compliance reviewer delegation.
+  "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

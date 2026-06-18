@@ -100,6 +100,19 @@ export type {
   ReviewListResult,
 } from "./services/foundation/high-sensitivity-review.service.js";
 
+// Phase 1299-A — org-compliance reviewer delegation (pure eligibility policy).
+export {
+  evaluateHighSensitivityReviewerEligibility,
+  HUMAN_REVIEWER_ENTITY_TYPES,
+  REVIEWER_REASON_CODES,
+} from "./services/foundation/high-sensitivity-reviewer-policy.js";
+export type {
+  ReviewerScope,
+  ReviewerReasonCode,
+  ReviewerEligibilityFacts,
+  ReviewerEligibilityDecision,
+} from "./services/foundation/high-sensitivity-reviewer-policy.js";
+
 // Phase 1298-A — retention-policy enforcement engine.
 export {
   FoundationRetentionService,
