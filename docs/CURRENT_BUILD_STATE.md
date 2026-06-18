@@ -131,8 +131,42 @@ a true stop condition):
   forward-substrate (keeps it additive). **Backlog (Founder-gated):** wiring the
   capsule write per disposition; device entity identity model; additional device
   source types.
-- **1292-A Marketplace substrate** ·
-  **1293-A GOVSEC / observability / metering / production hardening.**
+- **1292-A Marketplace substrate (TWO lanes) — LANDED 2026-06-17.** The
+  governed exchange layer for the Oasis/Foundation vision: capabilities AND
+  permissioned data access. NEW `apps/api/src/services/foundation/marketplace.service.ts`
+  + `/api/v1/foundation/marketplace/*` routes, + additive Prisma tables
+  `marketplace_listings` + `marketplace_data_packages` (Prisma-owned; no Ecto
+  mirror).
+  **Lane 1 — Capability marketplace:** `MarketplaceListing` (AGENT / SKILL /
+  TOOL / DEVICE / APP / WORLD / CONNECTOR / SERVICE) + create / discover / get /
+  `…/access` evaluator (can_discover/use/request/pay/requires_approval) composing
+  the 1288-B authority envelope + 1290-A mock-only spend-policy. Tenant-scoped
+  discovery (own + PUBLISHED in-org; cross-org invisible).
+  **Lane 2 — Data marketplace:** `DATA_PACKAGE` listing type + `MarketplaceDataPackage`
+  companion (a PERMISSIONED ACCESS PRODUCT over capsule scopes — the provider's
+  DMW stays the governed container; never raw uncontrolled data). `DataAccessMode`
+  enum (PROOF_ONLY / SAFE_PROJECTION / RETRIEVAL_QUERY / CAPSULE_REFERENCE /
+  AGGREGATED_SIGNAL / DEPERSONALIZED_SIGNAL / MEMORY_CAPSULE_BUNDLE /
+  LLM_CONTEXT_ACCESS / APP_WORLD_PERSONALIZATION). `DATA_USE_RIGHTS` closed vocab
+  (APP_FEATURE / AGENT_RUNTIME / TOOL_RUNTIME / LLM_CONTEXT / ANALYTICS /
+  PERSONALIZATION / EVALUATION / TRAINING / MODEL_IMPROVEMENT / RESEARCH /
+  MARKETPLACE_SERVICE). `…/data-access` evaluator composes authority + package
+  policy + 1290-A mock economics; **safe defaults** (raw capsule body NEVER
+  returned; training / model-improvement / redistribution / commercial DENIED
+  unless opted in; consent + opt-in + revocation + proof required by default).
+  Honors clearance/jurisdiction/retention/revocation at COSMP read time
+  (`raw_body_excluded:true`; actual content via COSMP + 1289-A ProofOfAccess
+  only). Non-human buyers (AI_AGENT/DEVICE/APPLICATION) never auto-originate
+  payment (NEEDS_APPROVAL). 4 added economic purposes (MEMORY_CAPSULE_EXPORT_PROOF
+  / MEMORY_RETRIEVAL_QUERY / MEMORY_ENRICHMENT / APP_MEMORY_ACCESS /
+  WORLD_MEMORY_ACCESS). Additive audit literals MARKETPLACE_LISTING_CREATED /
+  MARKETPLACE_ACCESS_EVALUATED / MARKETPLACE_DATA_ACCESS_EVALUATED (SAFE metadata
+  only). Mock-only economics throughout (no real provider/funds/secrets/chain).
+  **Backlog (Founder-gated):** wiring an actual COSMP-governed data grant +
+  ProofOfAccess delivery per data-access decision; capsule_id_allowlist (raw-ref)
+  variant; consent/opt-in record persistence; cross-org marketplace discovery;
+  bystander-block enforcement at listing creation; CT marketplace UI.
+- **1293-A GOVSEC / observability / metering / production hardening.**
 
 ### Final close-out state (Founder closeout #2)
 

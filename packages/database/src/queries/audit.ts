@@ -544,7 +544,24 @@ export type AuditEventType =
   // visibility_scope + device_identity_trusted (always false). FORBIDDEN:
   // packet text, raw media, device_id, location, biometric data, PII. Additive
   // literal — no ADR-0002 amendment.
-  | "AMBIENT_PACKET_EVALUATED";
+  | "AMBIENT_PACKET_EVALUATED"
+  // Phase 1292-A — Foundation marketplace substrate. MARKETPLACE_LISTING_CREATED
+  // on provider listing creation; MARKETPLACE_ACCESS_EVALUATED when the access
+  // evaluator renders a governed access decision. SAFE details: listing_id +
+  // listing_type + status/can_use/can_pay/requires_approval + payment_decision
+  // (mock-only) + reason_code. FORBIDDEN: provider internals, raw pricing
+  // secrets, real settlement data, PII. Additive — no ADR-0002 amendment.
+  | "MARKETPLACE_LISTING_CREATED"
+  | "MARKETPLACE_ACCESS_EVALUATED"
+  // Phase 1292-A data marketplace — emitted when the data-access evaluator
+  // renders a governed access decision for a DATA_PACKAGE listing. outcome
+  // SUCCESS when access would be permitted, DENIED (scrubbed reason_code)
+  // otherwise. SAFE details: listing_id + data_package_id + access_mode +
+  // intended_use + can_access + requires_consent/opt_in + proof_required +
+  // payment_decision (mock-only) + reason_code. FORBIDDEN: raw capsule body,
+  // storage location, embeddings, capsule IDs, PII, provider/buyer secrets,
+  // real settlement data. Additive — no ADR-0002 amendment.
+  | "MARKETPLACE_DATA_ACCESS_EVALUATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -733,6 +750,11 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "ECONOMIC_INTENT_QUOTED",
   // Phase 1291-A Foundation ambient device protocol disposition.
   "AMBIENT_PACKET_EVALUATED",
+  // Phase 1292-A Foundation marketplace substrate.
+  "MARKETPLACE_LISTING_CREATED",
+  "MARKETPLACE_ACCESS_EVALUATED",
+  // Phase 1292-A data marketplace.
+  "MARKETPLACE_DATA_ACCESS_EVALUATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
