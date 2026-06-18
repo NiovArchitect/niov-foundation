@@ -587,7 +587,17 @@ export type AuditEventType =
   // access_mode + intended_use + status + result_count + proof_delivery.
   // FORBIDDEN: raw capsule body/IDs, storage location, embeddings, payload
   // content, PII, secrets. Additive — no ADR-0002 amendment.
-  | "MARKETPLACE_DATA_GRANT_READ_EVALUATED";
+  | "MARKETPLACE_DATA_GRANT_READ_EVALUATED"
+  // Phase 1296-A — dedicated high-sensitivity policy gate evaluation. Emitted
+  // when the high-sensitivity evaluator runs for a HIGH_SENSITIVITY / policy-
+  // gated package (HEALTH / MEDICAL / BIOMETRIC / CHILDREN / BYSTANDER /
+  // LOCATION). outcome SUCCESS (an ALLOW_* decision) or DENIED (DENY /
+  // REQUIRES_REVIEW). SAFE details: listing_id + data_package_id + grant_id +
+  // sensitivity_class + sensitive_categories + intended_use + access_mode +
+  // decision + reason_codes + human_review_required. FORBIDDEN: raw capsule
+  // body, medical/health/biometric/children content, PII, secrets. Additive —
+  // no ADR-0002 amendment.
+  | "HIGH_SENSITIVITY_POLICY_EVALUATED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -790,6 +800,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MARKETPLACE_DATA_GRANT_REVOKED",
   // Phase 1295-A COSMP-governed data-read delivery.
   "MARKETPLACE_DATA_GRANT_READ_EVALUATED",
+  // Phase 1296-A dedicated high-sensitivity policy gate.
+  "HIGH_SENSITIVITY_POLICY_EVALUATED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

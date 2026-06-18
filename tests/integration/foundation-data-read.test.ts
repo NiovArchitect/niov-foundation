@@ -156,14 +156,14 @@ describe("Foundation marketplace data-read delivery (1295-A)", () => {
     // bypassing the create-time gate, to prove the READ-side gate is independent.
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { entity_id: PROVIDER_ID } });
     const listing = await prisma.marketplaceListing.create({ data: { listing_type: "DATA_PACKAGE", provider_entity_id: PROVIDER_ID, title: "H", description: "d", required_authority: [], required_memory_scope: [], status: "PUBLISHED" } });
-    const pkg = await prisma.marketplaceDataPackage.create({ data: { listing_id: listing.listing_id, provider_entity_id: PROVIDER_ID, access_mode: "SAFE_PROJECTION", capsule_type_allowlist: ["PREFERENCE"], allowed_use: ["ANALYTICS"], sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["HEALTH"] } });
+    const pkg = await prisma.marketplaceDataPackage.create({ data: { listing_id: listing.listing_id, provider_entity_id: PROVIDER_ID, access_mode: "SAFE_PROJECTION", capsule_type_allowlist: ["PREFERENCE"], allowed_use: ["ANALYTICS"], sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["CHILDREN"] } });
     // Find the buyer entity id from a fresh login is overkill; create grant with buyer = a known id.
     const buyerWho = await app.inject({ method: "GET", url: "/api/v1/foundation/authority/me", headers: { authorization: `Bearer ${BUYER_TOKEN}` } });
     const buyerId = (buyerWho.json() as { authority: { entity_id: string } }).authority.entity_id;
     const grant = await prisma.marketplaceDataGrant.create({ data: { listing_id: listing.listing_id, data_package_id: pkg.data_package_id, provider_entity_id: PROVIDER_ID, buyer_entity_id: buyerId, granted_by_entity_id: buyerId, intended_use: "ANALYTICS", access_mode: "SAFE_PROJECTION", status: "ACTIVE" } });
     const res = await read(grant.grant_id, {}, BUYER_TOKEN);
     expect(res.statusCode).toBe(403);
-    expect((res.json() as { denied_reasons?: string[] }).denied_reasons).toContain("high-sensitivity-requires-dedicated-policy-gate");
+    expect((res.json() as { denied_reasons?: string[] }).denied_reasons).toContain("CHILDREN_DATA_REQUIRES_DEDICATED_REVIEW");
   });
 
   it("an AI buyer reads safe projections but never sees ai_access_blocked capsules", async () => {
@@ -176,5 +176,36 @@ describe("Foundation marketplace data-read delivery (1295-A)", () => {
     const res = await read(gid, {}, AI_TOKEN);
     expect(res.statusCode).toBe(200);
     expect(res.payload).not.toContain("AI-BLOCKED-MARKER"); // excluded
+  });
+});
+
+describe("Foundation data-read — high-sensitivity gate (1296-A)", () => {
+  it("HEALTH safe-projection grant is now readable under strict controls", async () => {
+    await addCapsule(PROVIDER_ID, { payload_summary: `${TEST_PREFIX}wellness signal` });
+    const gid = await pkgAndGrant(
+      PROVIDER_TOKEN,
+      { sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["HEALTH"] },
+      "PERSONALIZATION",
+      BUYER_TOKEN,
+    );
+    const res = await read(gid, { access_mode: "SAFE_PROJECTION" }, BUYER_TOKEN);
+    expect(res.statusCode).toBe(200);
+    const r = (res.json() as { read: { status: string; raw_body_excluded: boolean } }).read;
+    expect(["DELIVERED", "NO_MATCH"]).toContain(r.status);
+    expect(r.raw_body_excluded).toBe(true);
+    // Still never raw content.
+    expect(res.payload).not.toContain("payload_content");
+    expect(res.payload).not.toContain("storage_location");
+  });
+
+  it("a MEDICAL grant (injected) is denied at read (review required)", async () => {
+    const listing = await prisma.marketplaceListing.create({ data: { listing_type: "DATA_PACKAGE", provider_entity_id: PROVIDER_ID, title: "Med", description: "d", required_authority: [], required_memory_scope: [], status: "PUBLISHED" } });
+    const pkg = await prisma.marketplaceDataPackage.create({ data: { listing_id: listing.listing_id, provider_entity_id: PROVIDER_ID, access_mode: "SAFE_PROJECTION", capsule_type_allowlist: ["PREFERENCE"], allowed_use: ["ANALYTICS"], sensitivity_class: "HIGH_SENSITIVITY", sensitive_categories: ["MEDICAL"] } });
+    const who = await app.inject({ method: "GET", url: "/api/v1/foundation/authority/me", headers: { authorization: `Bearer ${BUYER_TOKEN}` } });
+    const buyerId = (who.json() as { authority: { entity_id: string } }).authority.entity_id;
+    const g = await prisma.marketplaceDataGrant.create({ data: { listing_id: listing.listing_id, data_package_id: pkg.data_package_id, provider_entity_id: PROVIDER_ID, buyer_entity_id: buyerId, granted_by_entity_id: buyerId, intended_use: "ANALYTICS", access_mode: "SAFE_PROJECTION", status: "ACTIVE" } });
+    const res = await read(g.grant_id, {}, BUYER_TOKEN);
+    expect(res.statusCode).toBe(403);
+    expect((res.json() as { denied_reasons?: string[] }).denied_reasons).toContain("MEDICAL_DATA_REQUIRES_DEDICATED_REVIEW");
   });
 });

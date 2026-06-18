@@ -236,6 +236,38 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1296-A — High-Sensitivity Policy Gates — LANDED 2026-06-17
+
+Replaces the 1294-A/1295-A blanket high-sensitivity DENY with a dedicated graded
+policy gate. NEW pure module
+`apps/api/src/services/foundation/high-sensitivity-policy.ts`
+(`evaluateHighSensitivityAccess` → ALLOW_SAFE_PROJECTION / ALLOW_PROOF_ONLY /
+ALLOW_AGGREGATED / REQUIRES_REVIEW / DENY + closed-vocab reason codes), wired
+into `evaluateDataAccessForCaller` (grant eval/creation) + `readDataGrantForCaller`
+(read). No schema migration. Additive audit literal
+`HIGH_SENSITIVITY_POLICY_EVALUATED`.
+- **Invariants:** `raw_body_allowed:false` always; `proof_required:true` always;
+  training / model-improvement / redistribution / commercial **force-denied**;
+  consent + opt-in mandatory; training/model-improvement intents denied outright.
+- **Category behavior:** CHILDREN → DENY; MEDICAL + BIOMETRIC → ALLOW_PROOF_ONLY
+  if mode PROOF_ONLY else REQUIRES_REVIEW; HEALTH → ALLOW_SAFE_PROJECTION (proof
+  + safe projection) under strict controls; BYSTANDER → ALLOW_AGGREGATED /
+  proof-only / review; LOCATION → safe projection only with retention else
+  review; HIGH_SENSITIVITY with no recognized category → REQUIRES_REVIEW
+  (fail-safe). Worst category wins; unknown kinds → review (never silent-allow).
+- **Behavior change (RULE 13):** HEALTH safe-projection is now grantable +
+  readable under strict controls (was blanket-denied); the two existing tests
+  updated (data-grants MEDICAL keeps denial with new
+  `MEDICAL_DATA_REQUIRES_DEDICATED_REVIEW` reason + adds HEALTH-allowed; data-read
+  defense switched to CHILDREN). Still **never raw content**.
+- Personal DMW high-sensitivity follows the same gates; AI/DEVICE/APPLICATION
+  cannot bypass. Tests (+18): unit foundation-high-sensitivity-policy + audit lock
+  + integration HEALTH-allowed / MEDICAL-review / CHILDREN-deny at grant + read.
+  Typecheck 0; full unit 2433/2434; integration regression 41/41.
+- **Backlog (Founder-gated):** dedicated children/biometric/medical review
+  programs; real decrypted content read; retention-enforcement engine; CT UI;
+  real settlement; cross-org discovery.
+
 ### Phase 1295-A — COSMP Data-Read Delivery for Marketplace Grants — LANDED 2026-06-17
 
 Makes an ACTIVE data grant usable via a COSMP-governed **safe-projection** read

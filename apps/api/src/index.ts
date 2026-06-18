@@ -73,6 +73,18 @@ export type {
   QuoteResult,
 } from "./services/foundation/economic-policy.service.js";
 
+// Phase 1296-A — dedicated high-sensitivity policy gate.
+export {
+  evaluateHighSensitivityAccess,
+  HIGH_SENSITIVITY_REASON_CODES,
+} from "./services/foundation/high-sensitivity-policy.js";
+export type {
+  HighSensitivityReasonCode,
+  HighSensitivityDecisionKind,
+  HighSensitivityPolicyInput,
+  HighSensitivityPolicyDecision,
+} from "./services/foundation/high-sensitivity-policy.js";
+
 // Phase 1295-A — COSMP-governed marketplace data-read delivery.
 export { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 export type {
