@@ -17,6 +17,7 @@ import type { FederationCloudCohortService } from "../services/foundation/federa
 import type { CohortContributionService } from "../services/foundation/cohort-contribution.service.js";
 import type { CohortAccessRequestService } from "../services/foundation/cohort-access-request.service.js";
 import type { CohortDeliveryService } from "../services/foundation/cohort-delivery.service.js";
+import type { CohortMeteringService } from "../services/foundation/cohort-metering.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // WHY: cohort routes are unauthenticated at the Fastify layer; the service
@@ -389,6 +390,32 @@ export async function registerCohortDeliveryRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, delivery: result.delivery });
+    },
+  );
+}
+
+// WHAT: Register the Phase 1309-A cohort USAGE METERING route.
+// WHY: provider/admin-only read of a cohort's delivery usage + a MOCK economic
+//      estimate (is_mock; no settlement). Stateless — meters off 1308-A audit.
+export async function registerCohortMeteringRoutes(
+  app: FastifyInstance,
+  meteringService: CohortMeteringService,
+): Promise<void> {
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/foundation/cohorts/:id/usage",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await meteringService.getCohortUsageForCaller(
+        token,
+        request.params.id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, usage: result.usage });
     },
   );
 }

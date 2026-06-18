@@ -132,6 +132,7 @@ import {
   registerCohortContributionRoutes,
   registerCohortAccessRequestRoutes,
   registerCohortDeliveryRoutes,
+  registerCohortMeteringRoutes,
 } from "./routes/cohort.routes.js";
 import { FoundationAuthorityService } from "./services/foundation/authority.service.js";
 import { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
@@ -142,6 +143,7 @@ import { FederationCloudCohortService } from "./services/foundation/federation-c
 import { CohortContributionService } from "./services/foundation/cohort-contribution.service.js";
 import { CohortAccessRequestService } from "./services/foundation/cohort-access-request.service.js";
 import { CohortDeliveryService } from "./services/foundation/cohort-delivery.service.js";
+import { CohortMeteringService } from "./services/foundation/cohort-metering.service.js";
 import { FoundationObservabilityService } from "./services/foundation/observability.service.js";
 import { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 import { FoundationHighSensitivityReviewService } from "./services/foundation/high-sensitivity-review.service.js";
@@ -339,6 +341,8 @@ export async function buildApp(
   const cohortAccessRequestService = new CohortAccessRequestService(authService);
   // Phase 1308-A — cohort proof + safe-signal delivery (threshold enforced here).
   const cohortDeliveryService = new CohortDeliveryService(authService);
+  // Phase 1309-A — cohort usage metering + mock economics (stateless; off audit).
+  const cohortMeteringService = new CohortMeteringService(authService);
   // Phase 1295-A — COSMP-governed marketplace data-read delivery.
   const marketplaceDataDeliveryService = new MarketplaceDataDeliveryService(
     authService,
@@ -778,6 +782,7 @@ export async function buildApp(
   await registerCohortContributionRoutes(app, cohortContributionService);
   await registerCohortAccessRequestRoutes(app, cohortAccessRequestService);
   await registerCohortDeliveryRoutes(app, cohortDeliveryService);
+  await registerCohortMeteringRoutes(app, cohortMeteringService);
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);
