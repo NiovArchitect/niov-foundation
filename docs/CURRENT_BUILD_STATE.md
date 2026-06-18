@@ -288,6 +288,39 @@ restarted the prod API from main so cohort routes are live and compatible.
   service logic is proven by the 1305-A integration suite + the live route
   registration here.
 
+### ✅ 1306-A — Cohort Contribution Accounting Substrate (internal; provider/admin)
+
+Internal accounting of **which DMW / capsule scope contributes** to a cohort, the
+consent basis, and the eligibility window — so a future safe-aggregate/proof
+layer can count eligible contributors **without exposing any contributor
+identity to buyers**. No real signal delivery, no payout, no revenue share.
+
+- **Schema (additive):** `CohortContribution` model + `CohortContributionStatus`
+  enum (`ELIGIBLE`/`REVOKED`/`EXPIRED`/`PAUSED`). `contributor_entity_id` /
+  `contributor_org_entity_id` / `wallet_id` are **INTERNAL-ONLY** (never
+  projected over HTTP). `consent_record_id` links `marketplace_data_consents`.
+- **Service:** `apps/api/src/services/foundation/cohort-contribution.service.ts`
+  — `record` / `list` / `revoke`, authz = **cohort provider-owner OR same-org
+  `admin_org`** (enumeration-safe `COHORT_PRODUCT_NOT_FOUND`). Pure
+  `isContributionEligible(row, now, consentActive)` + consent-aware
+  `eligible_count` summary.
+- **Consent/revocation honored at READ (RULE 0):** a contribution whose linked
+  consent is later revoked/expired (`marketplace_data_consents.revoked_at` /
+  `expires_at`) **immediately drops out of the eligible count** — proven by an
+  integration test. Consent enforced at record-time when `consent_required`.
+- **Routes:** `POST/GET /api/v1/foundation/cohorts/:id/contributions`,
+  `POST …/:id/contributions/:cid/revoke`. **Audit:** `COHORT_CONTRIBUTION_RECORDED`
+  / `_REVOKED` (+ `_EXPIRED` reserved — expiry is computed lazily; **no sweep**).
+- **`threshold_enforced` stays false** — accounting exists, but the
+  `minimum_cohort_size` floor is not enforced at any delivery point until 1308-A.
+- **Tests:** `tests/unit/cohort-contribution-eligibility.test.ts` (7) +
+  `tests/integration/foundation-cohort-contributions.test.ts` (4, incl. identity
+  no-leak + consent-withdrawal-drops-eligibility + RULE 10 revoke).
+- **Deferred forward-substrate:** a contributor-initiated consent-withdrawal
+  endpoint (eligibility already honors `revoked_at`); contribution-weighted
+  revenue share; real aggregate/proof delivery (1308-A). Schema change → **1306-B
+  prod activation** before any prod-API restart from main.
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for

@@ -166,6 +166,9 @@ export type {
   // Phase 1305-A Federation Cloud cohort data product substrate.
   CohortDataProduct,
   CohortProductStatus,
+  // Phase 1306-A cohort contribution accounting substrate.
+  CohortContribution,
+  CohortContributionStatus,
   HighSensitivityReview,
   HighSensitivityReviewStatus,
   Session,

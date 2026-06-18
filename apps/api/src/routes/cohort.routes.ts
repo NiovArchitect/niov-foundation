@@ -14,6 +14,7 @@
 
 import type { FastifyInstance } from "fastify";
 import type { FederationCloudCohortService } from "../services/foundation/federation-cloud-cohort.service.js";
+import type { CohortContributionService } from "../services/foundation/cohort-contribution.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // WHY: cohort routes are unauthenticated at the Fastify layer; the service
@@ -40,6 +41,13 @@ const FAILURE_STATUS: Record<string, number> = {
   INVALID_COHORT_SIZE: 422,
   INVALID_DISCOVERY_SCOPE: 422,
   INVALID_STATUS: 422,
+  // Phase 1306-A contribution accounting.
+  INVALID_CONTRIBUTION_SCOPE: 422,
+  CONSENT_REQUIRED: 422,
+  CONSENT_NOT_FOUND: 404,
+  CONSENT_MISMATCH: 422,
+  CONSENT_INACTIVE: 409,
+  CONTRIBUTION_NOT_FOUND: 404,
 };
 
 function failureStatus(code: string): number {
@@ -158,4 +166,72 @@ export async function registerCohortRoutes(
       access: result.access,
     });
   });
+}
+
+// WHAT: Register the Phase 1306-A cohort CONTRIBUTION accounting routes.
+// WHY: provider/admin-only internal accounting; NO buyer-facing identities.
+export async function registerCohortContributionRoutes(
+  app: FastifyInstance,
+  contributionService: CohortContributionService,
+): Promise<void> {
+  // Record a contribution (provider/admin only).
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/foundation/cohorts/:id/contributions",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await contributionService.recordContributionForCaller(
+        token,
+        request.params.id,
+        (request.body ?? {}) as never,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, contribution: result.contribution });
+    },
+  );
+
+  // List contributions (provider/admin only) — safe rows + eligible summary.
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/foundation/cohorts/:id/contributions",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await contributionService.listContributionsForCaller(
+        token,
+        request.params.id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply
+        .code(200)
+        .send({ ok: true, contributions: result.contributions, summary: result.summary });
+    },
+  );
+
+  // Revoke a contribution (provider/admin only).
+  app.post<{ Params: { id: string; cid: string } }>(
+    "/api/v1/foundation/cohorts/:id/contributions/:cid/revoke",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await contributionService.revokeContributionForCaller(
+        token,
+        request.params.id,
+        request.params.cid,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, contribution: result.contribution });
+    },
+  );
 }
