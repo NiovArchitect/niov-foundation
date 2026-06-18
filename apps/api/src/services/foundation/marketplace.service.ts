@@ -14,9 +14,18 @@
 //          spend-policy (mock-only economics). No unauthorized entity can use a
 //          listing; an app/world/service listing never bypasses authority;
 //          listing access never silently grants capsule access; settlement is
-//          mock-only (no real funds/provider). Tenant-scoped: discovery is
-//          confined to the caller's org + their own listings (cross-org
-//          marketplace discovery is forward-substrate).
+//          mock-only (no real funds/provider). Tenant-scoped: the default
+//          discovery surface (listListingsForCaller) is confined to the caller's
+//          org + their own listings.
+//
+//          Phase 1301-A adds an OPT-IN cross-org discovery catalog: a provider
+//          may flip a PUBLISHED listing's discovery_scope to CROSS_ORG to make
+//          its SAFE metadata projection browsable by other orgs
+//          (discoverListingsForCaller). It is metadata-only — never a grant,
+//          never raw content, never a capsule/consent/quote touch. High-
+//          sensitivity data packages can NEVER be cross-org (set-time + read-
+//          time enforced). PUBLIC (org-less open reach) remains forward-
+//          substrate; there is no default public exposure.
 //
 // CONNECTS TO:
 //   - packages/database MarketplaceListing model + prisma + writeAuditEvent.
@@ -42,6 +51,7 @@ import {
   type MarketplaceListing,
   type MarketplaceListingType,
   type MarketplaceListingStatus,
+  type MarketplaceDiscoveryScope,
   type MarketplaceDataPackage,
   type DataAccessMode,
   type DataSensitivityClass,
@@ -290,6 +300,9 @@ export interface SafeListingView {
   required_memory_scope: string[];
   trust_metadata: unknown;
   status: MarketplaceListingStatus;
+  // Phase 1301-A — cross-org reach (PRIVATE | CROSS_ORG). Safe to surface: it is
+  // a provider-set reach label, not an authority/permission internal.
+  discovery_scope: MarketplaceDiscoveryScope;
   created_at: string;
 }
 
@@ -328,6 +341,16 @@ export type GetListingResult =
 export type ListingAccessResult =
   | { ok: true; access: ListingAccessDecision }
   | { ok: false; code: string };
+// Phase 1301-A — cross-org discovery surfaces.
+export type SetDiscoveryPolicyResult =
+  | { ok: true; listing: SafeListingView }
+  | { ok: false; code: string };
+export type DiscoverListingsResult =
+  | { ok: true; listings: SafeListingView[] }
+  | { ok: false; code: string };
+// The discovery_scope values a provider may set (PUBLIC is forward-substrate;
+// refusing it here is how this phase declines org-less open reach).
+export const MARKETPLACE_DISCOVERY_SCOPES = ["PRIVATE", "CROSS_ORG"] as const;
 
 function toSafeListing(l: MarketplaceListing): SafeListingView {
   return {
@@ -342,6 +365,7 @@ function toSafeListing(l: MarketplaceListing): SafeListingView {
     required_memory_scope: l.required_memory_scope,
     trust_metadata: l.trust_metadata,
     status: l.status,
+    discovery_scope: l.discovery_scope,
     created_at: l.created_at.toISOString(),
   };
 }
@@ -494,6 +518,179 @@ export class FoundationMarketplaceService {
       take: 100,
     });
     return { ok: true, listings: rows.map(toSafeListing) };
+  }
+
+  // WHAT: Set a listing's cross-org discovery REACH (provider-opt-in only).
+  // INPUT: session token + listing_id + the new discovery_scope.
+  // OUTPUT: the updated SAFE listing, or a scrubbed failure code.
+  // WHY: PATCH /api/v1/foundation/marketplace/listings/:id/discovery. The only
+  //      way a listing enters the cross-org catalog. Provider-only + enumeration-
+  //      safe; CROSS_ORG requires PUBLISHED; high-sensitivity data packages can
+  //      NEVER be cross-org (personal OR org); the opt-in is audited. PUBLIC
+  //      (org-less open reach) is refused here — no default public exposure.
+  async setListingDiscoveryPolicyForCaller(
+    sessionToken: string,
+    listingId: string,
+    discoveryScope: string,
+  ): Promise<SetDiscoveryPolicyResult> {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "write",
+    );
+    if (!validation.valid) return { ok: false, code: validation.code };
+
+    if (
+      !(MARKETPLACE_DISCOVERY_SCOPES as readonly string[]).includes(
+        discoveryScope,
+      )
+    )
+      return { ok: false, code: "INVALID_DISCOVERY_SCOPE" };
+    const scope = discoveryScope as MarketplaceDiscoveryScope;
+
+    // Provider-only + enumeration-safe: a non-provider (or unknown id) gets the
+    // same LISTING_NOT_FOUND as a missing row — never confirm another provider's
+    // listing exists.
+    const listing = await prisma.marketplaceListing.findFirst({
+      where: { listing_id: listingId, deleted_at: null },
+    });
+    if (listing === null || listing.provider_entity_id !== validation.entity_id)
+      return { ok: false, code: "LISTING_NOT_FOUND" };
+
+    // Opting INTO cross-org reach is guarded; retracting to PRIVATE is always safe.
+    if (scope === "CROSS_ORG") {
+      // Reach only makes sense for a PUBLISHED listing. (Orthogonal to status,
+      // but a DRAFT / PRIVATE / DELISTED listing is never cross-org-discoverable.)
+      if (listing.status !== "PUBLISHED")
+        return { ok: false, code: "LISTING_NOT_PUBLISHED" };
+
+      // High-sensitivity data packages can NEVER be cross-org — regardless of
+      // provider opt-in, personal or org. (Set-time half of the two-point check;
+      // discoverListingsForCaller re-enforces it at read time.)
+      const pkg = await prisma.marketplaceDataPackage.findFirst({
+        where: { listing_id: listingId, deleted_at: null },
+      });
+      if (
+        pkg !== null &&
+        isHighSensitivityPackage(pkg.sensitivity_class, pkg.sensitive_categories)
+      ) {
+        await writeAuditEvent({
+          event_type: "MARKETPLACE_DISCOVERY_POLICY_UPDATED",
+          outcome: "DENIED",
+          actor_entity_id: validation.entity_id,
+          details: {
+            action: "MARKETPLACE_DISCOVERY_POLICY_UPDATED",
+            listing_id: listing.listing_id,
+            listing_type: listing.listing_type,
+            status: listing.status,
+            discovery_scope: listing.discovery_scope, // unchanged
+            is_data_package: true,
+            sensitivity_class: pkg.sensitivity_class,
+            reason_code: "DISCOVERY_BLOCKED_HIGH_SENSITIVITY",
+          },
+        });
+        return { ok: false, code: "DISCOVERY_BLOCKED_HIGH_SENSITIVITY" };
+      }
+    }
+
+    const updated = await prisma.marketplaceListing.update({
+      where: { listing_id: listingId },
+      data: { discovery_scope: scope },
+    });
+
+    await writeAuditEvent({
+      event_type: "MARKETPLACE_DISCOVERY_POLICY_UPDATED",
+      outcome: "SUCCESS",
+      actor_entity_id: validation.entity_id,
+      details: {
+        action: "MARKETPLACE_DISCOVERY_POLICY_UPDATED",
+        listing_id: updated.listing_id,
+        listing_type: updated.listing_type,
+        status: updated.status,
+        discovery_scope: updated.discovery_scope,
+        is_data_package: updated.listing_type === "DATA_PACKAGE",
+        reason_code: "DISCOVERY_POLICY_SET",
+      },
+    });
+
+    return { ok: true, listing: toSafeListing(updated) };
+  }
+
+  // WHAT: The cross-org discovery catalog — PUBLISHED listings other providers
+  //       have OPTED IN to cross-org reach. Metadata-only.
+  // INPUT: session token + optional listing_type filter.
+  // OUTPUT: SAFE listing projections (toSafeListing) — never capsules, grants,
+  //         consent, quotes, or provider internals.
+  // WHY: GET /api/v1/foundation/marketplace/discover. A SEPARATE read path from
+  //      listListingsForCaller (the default same-org surface) — it grants
+  //      NOTHING; using a discovered listing still runs the full access/grant/
+  //      consent path. Excludes the caller's own + same-org listings (no dupes)
+  //      and re-excludes any high-sensitivity data package at read time.
+  async discoverListingsForCaller(
+    sessionToken: string,
+    filter?: { listing_type?: string },
+  ): Promise<DiscoverListingsResult> {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "read",
+    );
+    if (!validation.valid) return { ok: false, code: validation.code };
+    const orgEntityId = await this.callerOrgOrNull(validation.entity_id);
+
+    const typeFilter =
+      filter?.listing_type !== undefined &&
+      (MARKETPLACE_LISTING_TYPES as readonly string[]).includes(
+        filter.listing_type,
+      )
+        ? { listing_type: filter.listing_type as MarketplaceListingType }
+        : {};
+
+    const rows = await prisma.marketplaceListing.findMany({
+      where: {
+        deleted_at: null,
+        status: "PUBLISHED" as MarketplaceListingStatus,
+        discovery_scope: "CROSS_ORG" as MarketplaceDiscoveryScope,
+        ...typeFilter,
+        // Exclude the caller's OWN listings (already on the default surface).
+        provider_entity_id: { not: validation.entity_id },
+        // Exclude the caller's SAME-ORG listings (also already visible) — only
+        // applies when the caller has an org. Personal callers see all cross-org.
+        ...(orgEntityId !== null
+          ? {
+              OR: [
+                { provider_org_entity_id: null },
+                { provider_org_entity_id: { not: orgEntityId } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { created_at: "desc" },
+      take: 100,
+    });
+
+    // Read-time defense-in-depth: never surface a high-sensitivity data package
+    // in the cross-org catalog, even if one slipped to CROSS_ORG out of band
+    // (e.g. a package added/reclassified after the listing was opted in). One
+    // batched lookup over the DATA_PACKAGE listings in the result set.
+    const dataPackageListingIds = rows
+      .filter((r) => r.listing_type === "DATA_PACKAGE")
+      .map((r) => r.listing_id);
+    const blocked = new Set<string>();
+    if (dataPackageListingIds.length > 0) {
+      const pkgs = await prisma.marketplaceDataPackage.findMany({
+        where: { listing_id: { in: dataPackageListingIds }, deleted_at: null },
+      });
+      for (const p of pkgs) {
+        if (
+          isHighSensitivityPackage(p.sensitivity_class, p.sensitive_categories)
+        )
+          blocked.add(p.listing_id);
+      }
+    }
+
+    const listings = rows
+      .filter((r) => !blocked.has(r.listing_id))
+      .map(toSafeListing);
+    return { ok: true, listings };
   }
 
   private async loadVisibleListing(
