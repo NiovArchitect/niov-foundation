@@ -95,6 +95,8 @@ export {
   MARKETPLACE_LISTING_TYPES,
   DATA_ACCESS_MODES,
   DATA_USE_RIGHTS,
+  DATA_SENSITIVITY_CLASSES,
+  POLICY_GATED_CATEGORIES,
 } from "./services/foundation/marketplace.service.js";
 export type {
   SafeListingView,
@@ -108,6 +110,9 @@ export type {
   DataAccessDecision,
   CreateDataPackageResult,
   DataAccessResult,
+  SafeDataGrantView,
+  DataGrantResult,
+  DataGrantListResult,
 } from "./services/foundation/marketplace.service.js";
 
 // Phase 1291-A — Foundation ambient device protocol.

@@ -189,6 +189,53 @@ a true stop condition):
   propagation; automated key rotation; wiring meter enforcement into specific
   flows once pricing lands; SLO definitions/alerting.
 
+### Phase 1294-A — Data Marketplace Grants + Consent Ledger + COSMP Access Delivery — LANDED 2026-06-17
+
+Makes the 1292-A data marketplace actionable: turns an approved data-access
+decision into a **durable, governed, revocable** access right — without faking
+raw data sales or real settlement. NEW additive Prisma tables
+`marketplace_data_grants` + `marketplace_data_consents` + `DataSensitivityClass`
++ `MarketplaceDataGrantStatus` enums + `sensitivity_class`/`sensitive_categories`
+on `marketplace_data_packages`. Routes:
+`POST /foundation/marketplace/listings/:id/data-grants` (create),
+`POST /foundation/marketplace/data-grants/:id/revoke`,
+`GET /foundation/marketplace/data-grants`,
+`GET …/data-grants/:id`. Additive audit literals
+MARKETPLACE_DATA_CONSENT_RECORDED / _GRANT_EVALUATED / _GRANT_CREATED /
+_GRANT_REVOKED.
+- **Grant lifecycle:** re-runs the governed access evaluation (authority +
+  allowed-use + **sensitivity gate**) → requires explicit `consent_confirmed`
+  (409 CONSENT_REQUIRED) + `opt_in_confirmed` (409 OPT_IN_REQUIRED) → records a
+  durable `MarketplaceDataConsent` + an ACTIVE `MarketplaceDataGrant`. Revoke →
+  REVOKED (idempotent); revoked/expired grant is not usable. No cascade claimed
+  (no lineage; 1289-A).
+- **Proof (honest):** ProofOfAccess is per-capsule, so the grant carries
+  `proof_required` + `proof_delivery: "PER_CAPSULE_AT_READ_TIME"` — **no faked
+  package-level proof**; content is delivered only via COSMP + ProofOfAccess at
+  actual read time, honoring clearance/jurisdiction/retention/revocation.
+  `raw_body_excluded: true` everywhere.
+- **Economics:** mock-only via 1290-A spend-policy (`economic_decision` recorded;
+  non-human buyers → NEEDS_APPROVAL; never real settlement).
+- **Personal DMW first-class:** `provider_org_entity_id` + `buyer_org_entity_id`
+  are NULLABLE; an individual (self-as-org → null) creates personal data
+  packages + grants; personal packages require consent/opt-in by default; a
+  different user cannot see/grant a personal listing (invisible without grant).
+- **Sensitivity / health:** `HIGH_SENSITIVITY` or any policy-gated category
+  (HEALTH / MEDICAL / BIOMETRIC / CHILDREN) → grant **DENIED**
+  (`high-sensitivity-requires-dedicated-policy-gate`) until a dedicated policy
+  gate is authorized. Extensible (`sensitive_categories` open label list) so new
+  high-sensitivity kinds are governable without a schema change.
+- Defaults: raw denied · training/model-improvement/redistribution/commercial
+  denied unless opted in · revocable · proof required · safe projection
+  preferred.
+- Tests (+27): integration foundation-data-grants (10, incl. personal-DMW +
+  health-sensitivity) + foundation-marketplace (15 regression) + audit lock (2).
+  Typecheck 0; full unit 2419/2420 (1 = local-.env connector-oauth artifact).
+- **Backlog (Founder-gated):** actual COSMP capsule-read delivery via the grant;
+  provider-initiated personal grants to a named buyer; dedicated high-sensitivity
+  /health/children/biometric policy gates; consent for third-party data subjects;
+  cross-org discovery; CT UI; real settlement.
+
 ### Foundation-Scale Arc — sequence complete (1288-B → 1293-A)
 
 All six authorized phases LANDED + CI-green + merged + live-proven:

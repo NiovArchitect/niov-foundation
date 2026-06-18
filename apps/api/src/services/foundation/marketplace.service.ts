@@ -44,6 +44,9 @@ import {
   type MarketplaceListingStatus,
   type MarketplaceDataPackage,
   type DataAccessMode,
+  type DataSensitivityClass,
+  type MarketplaceDataGrant,
+  type MarketplaceDataGrantStatus,
 } from "@niov/database";
 import type { AuthService } from "../auth.service.js";
 import { getOrgEntityId } from "../governance/org.js";
@@ -96,10 +99,31 @@ export const DATA_USE_RIGHTS = [
 ] as const;
 export type DataUseRight = (typeof DATA_USE_RIGHTS)[number];
 
+export const DATA_SENSITIVITY_CLASSES = [
+  "STANDARD",
+  "SENSITIVE",
+  "HIGH_SENSITIVITY",
+] as const;
+
+// Categories that REQUIRE a dedicated policy gate (not yet implemented). A data
+// package tagged with any of these — or classed HIGH_SENSITIVITY — is denied at
+// grant time. Personal health / medical / biometric / children-class data is
+// never granted through the generic marketplace path. Extensible: new labels
+// are governable without a schema change.
+export const POLICY_GATED_CATEGORIES = [
+  "HEALTH",
+  "MEDICAL",
+  "BIOMETRIC",
+  "CHILDREN",
+] as const;
+
+const DATA_GRANT_METER = "meter.marketplace-data-grants.v1";
+
 export interface SafeDataPackageView {
   data_package_id: string;
   listing_id: string;
   provider_entity_id: string;
+  provider_org_entity_id: string | null;
   access_mode: DataAccessMode;
   capsule_type_allowlist: string[];
   allowed_use: string[];
@@ -115,6 +139,8 @@ export interface SafeDataPackageView {
   aggregate_only: boolean;
   minimum_aggregation_size: number | null;
   proof_required: boolean;
+  sensitivity_class: DataSensitivityClass;
+  sensitive_categories: string[];
   pricing_model: unknown;
   created_at: string;
 }
@@ -162,11 +188,67 @@ export type DataAccessResult =
   | { ok: true; access: DataAccessDecision }
   | { ok: false; code: string };
 
+// SAFE projection of a durable data grant (no raw capsule body / IDs / PII).
+export interface SafeDataGrantView {
+  grant_id: string;
+  listing_id: string;
+  data_package_id: string;
+  provider_entity_id: string;
+  provider_org_entity_id: string | null;
+  buyer_entity_id: string;
+  buyer_org_entity_id: string | null;
+  intended_use: string;
+  access_mode: DataAccessMode;
+  status: MarketplaceDataGrantStatus;
+  consent_record_id: string | null;
+  proof_required: boolean;
+  proof_delivery: string;
+  economic_decision: string | null;
+  // A grant never delivers raw content; reads remain COSMP + ProofOfAccess.
+  raw_body_excluded: true;
+  cascade_revocation_supported: false;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export type DataGrantResult =
+  | { ok: true; grant: SafeDataGrantView }
+  | { ok: false; code: string; denied_reasons?: string[] };
+export type DataGrantListResult =
+  | { ok: true; grants: SafeDataGrantView[] }
+  | { ok: false; code: string };
+
+function toSafeGrant(g: MarketplaceDataGrant): SafeDataGrantView {
+  return {
+    grant_id: g.grant_id,
+    listing_id: g.listing_id,
+    data_package_id: g.data_package_id,
+    provider_entity_id: g.provider_entity_id,
+    provider_org_entity_id: g.provider_org_entity_id,
+    buyer_entity_id: g.buyer_entity_id,
+    buyer_org_entity_id: g.buyer_org_entity_id,
+    intended_use: g.intended_use,
+    access_mode: g.access_mode,
+    status: g.status,
+    consent_record_id: g.consent_record_id,
+    proof_required: g.proof_required,
+    proof_delivery: g.proof_delivery,
+    economic_decision: g.economic_decision,
+    raw_body_excluded: true,
+    cascade_revocation_supported: false,
+    expires_at: g.expires_at?.toISOString() ?? null,
+    revoked_at: g.revoked_at?.toISOString() ?? null,
+    created_at: g.created_at.toISOString(),
+  };
+}
+
 function toSafeDataPackage(d: MarketplaceDataPackage): SafeDataPackageView {
   return {
     data_package_id: d.data_package_id,
     listing_id: d.listing_id,
     provider_entity_id: d.provider_entity_id,
+    provider_org_entity_id: d.provider_org_entity_id,
     access_mode: d.access_mode,
     capsule_type_allowlist: d.capsule_type_allowlist,
     allowed_use: d.allowed_use,
@@ -182,6 +264,8 @@ function toSafeDataPackage(d: MarketplaceDataPackage): SafeDataPackageView {
     aggregate_only: d.aggregate_only,
     minimum_aggregation_size: d.minimum_aggregation_size,
     proof_required: d.proof_required,
+    sensitivity_class: d.sensitivity_class,
+    sensitive_categories: d.sensitive_categories,
     pricing_model: d.pricing_model,
     created_at: d.created_at.toISOString(),
   };
@@ -268,9 +352,15 @@ function pricingAmountUsd(pricing: unknown): number {
 export class FoundationMarketplaceService {
   constructor(private readonly authService: AuthService) {}
 
+  // Resolve the caller's organizational parent, or null for a PERSONAL DMW.
+  // An individual with no organizational parent resolves to themselves
+  // (self-as-org); we map that to null so personal data products + grants are
+  // first-class and never mistaken for an org tenant (Founder personal-DMW
+  // doctrine). A real org member resolves to the distinct COMPANY id.
   private async callerOrgOrNull(entityId: string): Promise<string | null> {
     try {
-      return await getOrgEntityId(entityId);
+      const org = await getOrgEntityId(entityId);
+      return org === entityId ? null : org;
     } catch {
       return null;
     }
@@ -589,6 +679,8 @@ export class FoundationMarketplaceService {
       aggregate_only?: boolean;
       minimum_aggregation_size?: number | null;
       proof_required?: boolean;
+      sensitivity_class?: string;
+      sensitive_categories?: string[];
     },
   ): Promise<CreateDataPackageResult> {
     const validation = await this.authService.validateSession(
@@ -614,6 +706,14 @@ export class FoundationMarketplaceService {
       if (!(DATA_USE_RIGHTS as readonly string[]).includes(u))
         return { ok: false, code: "INVALID_USE_RIGHT" };
     }
+
+    const sensitivityClass = (input.sensitivity_class ??
+      "STANDARD") as DataSensitivityClass;
+    if (!(DATA_SENSITIVITY_CLASSES as readonly string[]).includes(sensitivityClass))
+      return { ok: false, code: "INVALID_SENSITIVITY_CLASS" };
+    const sensitiveCategories = Array.isArray(input.sensitive_categories)
+      ? input.sensitive_categories.filter((s) => typeof s === "string")
+      : [];
 
     const status: MarketplaceListingStatus =
       input.status === "PUBLISHED" ||
@@ -670,6 +770,8 @@ export class FoundationMarketplaceService {
               ? input.minimum_aggregation_size
               : null,
           proof_required: input.proof_required !== false,
+          sensitivity_class: sensitivityClass,
+          sensitive_categories: sensitiveCategories,
           pricing_model: pricing,
         },
       });
@@ -757,6 +859,17 @@ export class FoundationMarketplaceService {
       denied.push("training-not-permitted");
     if (intendedUse === "MODEL_IMPROVEMENT" && !pkg.model_improvement_allowed)
       denied.push("model-improvement-not-permitted");
+    // 4b. Sensitivity gate (1294-A): HIGH_SENSITIVITY or any policy-gated
+    //     category (health / medical / biometric / children) is denied until a
+    //     dedicated policy gate is authorized. Personal health/medical data is
+    //     never granted through the generic marketplace path.
+    const policyGated =
+      pkg.sensitivity_class === "HIGH_SENSITIVITY" ||
+      pkg.sensitive_categories.some((c) =>
+        (POLICY_GATED_CATEGORIES as readonly string[]).includes(c),
+      );
+    if (policyGated)
+      denied.push("high-sensitivity-requires-dedicated-policy-gate");
     // 5. Redistribution / commercial gating (cross-cutting flags).
     //    (Surfaced as obligations; intended_use covers the primary right.)
 
@@ -853,5 +966,284 @@ export class FoundationMarketplaceService {
     }
 
     return { ok: true, access: decision };
+  }
+
+  // WHAT: Create a durable, governed marketplace DATA grant (+ consent record).
+  // WHY: POST /api/v1/foundation/marketplace/listings/:id/data-grants. Turns an
+  //      approved data-access decision into a durable, revocable access right.
+  //      Permissioned access only — NO raw capsule content, NO ownership
+  //      transfer; proof is delivered PER_CAPSULE_AT_READ_TIME by COSMP +
+  //      ProofOfAccess (never faked here). Personal DMWs (null provider/buyer
+  //      org) are first-class. High-sensitivity / health / medical / biometric
+  //      / children data is denied until a dedicated policy gate lands.
+  async createDataGrantForCaller(
+    sessionToken: string,
+    listingId: string,
+    input: {
+      intended_use: string;
+      consent_confirmed?: boolean;
+      opt_in_confirmed?: boolean;
+      expires_at?: string;
+    },
+  ): Promise<DataGrantResult> {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "write",
+    );
+    if (!validation.valid) return { ok: false, code: validation.code };
+
+    const buyerEntityId = validation.entity_id;
+    const buyerOrg = await this.callerOrgOrNull(buyerEntityId);
+    const listing = await this.loadVisibleListing(
+      listingId,
+      buyerEntityId,
+      buyerOrg,
+    );
+    if (listing === null || listing.listing_type !== "DATA_PACKAGE")
+      return { ok: false, code: "LISTING_NOT_FOUND" };
+    const pkg = await prisma.marketplaceDataPackage.findFirst({
+      where: { listing_id: listingId, deleted_at: null },
+    });
+    if (pkg === null) return { ok: false, code: "DATA_PACKAGE_NOT_FOUND" };
+
+    const emitEval = (
+      status: string,
+      reason: string,
+      ok: boolean,
+    ): Promise<unknown> =>
+      writeAuditEvent({
+        event_type: "MARKETPLACE_DATA_GRANT_EVALUATED",
+        outcome: ok ? "SUCCESS" : "DENIED",
+        actor_entity_id: buyerEntityId,
+        denial_reason: ok ? null : reason,
+        details: {
+          action: "MARKETPLACE_DATA_GRANT_EVALUATED",
+          listing_id: listingId,
+          data_package_id: pkg.data_package_id,
+          intended_use: input.intended_use,
+          access_mode: pkg.access_mode,
+          status,
+          sensitivity_class: pkg.sensitivity_class,
+          reason_code: reason,
+        },
+      });
+
+    // Re-run the governed access evaluation (authority + use + sensitivity).
+    const evalResult = await this.evaluateDataAccessForCaller(
+      sessionToken,
+      listingId,
+      input.intended_use,
+    );
+    if (evalResult.ok === false) return { ok: false, code: evalResult.code };
+    const decision = evalResult.access;
+    if (!decision.use_permitted) {
+      await emitEval("DENIED", decision.denied_reasons[0] ?? "use-not-permitted", false);
+      return {
+        ok: false,
+        code: "USE_NOT_PERMITTED",
+        denied_reasons: decision.denied_reasons,
+      };
+    }
+
+    // Consent + opt-in are required by the package → must be explicitly confirmed.
+    if (pkg.consent_required && input.consent_confirmed !== true) {
+      await emitEval("PENDING_CONSENT", "consent-required", false);
+      return { ok: false, code: "CONSENT_REQUIRED" };
+    }
+    if (pkg.user_opt_in_required && input.opt_in_confirmed !== true) {
+      await emitEval("PENDING_CONSENT", "opt-in-required", false);
+      return { ok: false, code: "OPT_IN_REQUIRED" };
+    }
+
+    // Economic decision (mock-only) for priced packages.
+    const economicDecision = decision.payment?.decision ?? null;
+    if (economicDecision === "DENIED") {
+      await emitEval("DENIED", "payment-denied", false);
+      return { ok: false, code: "PAYMENT_DENIED" };
+    }
+
+    const expiresAt =
+      typeof input.expires_at === "string" && input.expires_at.length > 0
+        ? new Date(input.expires_at)
+        : null;
+
+    const { consent, grant } = await prisma.$transaction(async (tx) => {
+      // The consent record is recorded by the PROVIDER's declared policy on
+      // behalf of the data subject; here the buyer's confirmation is captured
+      // against the provider's package terms. (A provider-side opt-in workflow
+      // for third-party subjects is forward-substrate.)
+      const consent = await tx.marketplaceDataConsent.create({
+        data: {
+          listing_id: listingId,
+          data_package_id: pkg.data_package_id,
+          provider_entity_id: pkg.provider_entity_id,
+          provider_org_entity_id: pkg.provider_org_entity_id,
+          consenting_entity_id: pkg.provider_entity_id,
+          allowed_use: pkg.allowed_use,
+          access_mode: pkg.access_mode,
+          training_allowed: pkg.training_allowed,
+          model_improvement_allowed: pkg.model_improvement_allowed,
+          redistribution_allowed: pkg.redistribution_allowed,
+          commercial_use_allowed: pkg.commercial_use_allowed,
+          retention_policy: pkg.retention_policy,
+          expires_at: expiresAt,
+        },
+      });
+      const grant = await tx.marketplaceDataGrant.create({
+        data: {
+          listing_id: listingId,
+          data_package_id: pkg.data_package_id,
+          provider_entity_id: pkg.provider_entity_id,
+          provider_org_entity_id: pkg.provider_org_entity_id,
+          buyer_entity_id: buyerEntityId,
+          buyer_org_entity_id: buyerOrg,
+          granted_by_entity_id: buyerEntityId,
+          intended_use: input.intended_use,
+          access_mode: pkg.access_mode,
+          status: "ACTIVE",
+          consent_record_id: consent.consent_id,
+          proof_required: pkg.proof_required,
+          proof_delivery: "PER_CAPSULE_AT_READ_TIME",
+          economic_decision: economicDecision,
+          expires_at: expiresAt,
+        },
+      });
+      return { consent, grant };
+    });
+
+    await writeAuditEvent({
+      event_type: "MARKETPLACE_DATA_CONSENT_RECORDED",
+      outcome: "SUCCESS",
+      actor_entity_id: buyerEntityId,
+      details: {
+        action: "MARKETPLACE_DATA_CONSENT_RECORDED",
+        consent_id: consent.consent_id,
+        listing_id: listingId,
+        data_package_id: pkg.data_package_id,
+        access_mode: pkg.access_mode,
+      },
+    });
+    await writeAuditEvent({
+      event_type: "MARKETPLACE_DATA_GRANT_CREATED",
+      outcome: "SUCCESS",
+      actor_entity_id: buyerEntityId,
+      details: {
+        action: "MARKETPLACE_DATA_GRANT_CREATED",
+        grant_id: grant.grant_id,
+        listing_id: listingId,
+        data_package_id: pkg.data_package_id,
+        intended_use: input.intended_use,
+        access_mode: pkg.access_mode,
+        status: grant.status,
+        proof_required: grant.proof_required,
+        proof_delivery: grant.proof_delivery,
+        economic_decision: economicDecision,
+        sensitivity_class: pkg.sensitivity_class,
+      },
+    });
+    if (buyerOrg !== null) {
+      try {
+        await recordUsageForOrg(buyerOrg, DATA_GRANT_METER, 1);
+      } catch {
+        // metering hiccup — grant stands.
+      }
+    }
+
+    return { ok: true, grant: toSafeGrant(grant) };
+  }
+
+  // WHAT: Revoke a marketplace data grant (provider-side). Future use denied.
+  // WHY: POST /api/v1/foundation/marketplace/data-grants/:grant_id/revoke.
+  //      Only the provider (or the granting buyer stopping their own use) may
+  //      revoke. No cascade is claimed (no lineage substrate). Audited.
+  async revokeDataGrantForCaller(
+    sessionToken: string,
+    grantId: string,
+    reason?: string,
+  ): Promise<DataGrantResult> {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "write",
+    );
+    if (!validation.valid) return { ok: false, code: validation.code };
+    const grant = await prisma.marketplaceDataGrant.findFirst({
+      where: { grant_id: grantId },
+    });
+    // Enumeration-safe: only provider or buyer of the grant may even see it.
+    if (
+      grant === null ||
+      (grant.provider_entity_id !== validation.entity_id &&
+        grant.buyer_entity_id !== validation.entity_id)
+    )
+      return { ok: false, code: "GRANT_NOT_FOUND" };
+    if (grant.status === "REVOKED")
+      return { ok: true, grant: toSafeGrant(grant) }; // idempotent
+
+    const updated = await prisma.marketplaceDataGrant.update({
+      where: { grant_id: grantId },
+      data: {
+        status: "REVOKED",
+        revoked_at: new Date(),
+        revocation_reason:
+          typeof reason === "string" && reason.length > 0 ? reason : null,
+      },
+    });
+    await writeAuditEvent({
+      event_type: "MARKETPLACE_DATA_GRANT_REVOKED",
+      outcome: "SUCCESS",
+      actor_entity_id: validation.entity_id,
+      details: {
+        action: "MARKETPLACE_DATA_GRANT_REVOKED",
+        grant_id: grantId,
+        listing_id: grant.listing_id,
+        status: "REVOKED",
+        cascade_claimed: false,
+      },
+    });
+    return { ok: true, grant: toSafeGrant(updated) };
+  }
+
+  // WHAT: List the caller's data grants (as provider OR buyer). Scope-safe.
+  async listDataGrantsForCaller(
+    sessionToken: string,
+  ): Promise<DataGrantListResult> {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "read",
+    );
+    if (!validation.valid) return { ok: false, code: validation.code };
+    const rows = await prisma.marketplaceDataGrant.findMany({
+      where: {
+        OR: [
+          { provider_entity_id: validation.entity_id },
+          { buyer_entity_id: validation.entity_id },
+        ],
+      },
+      orderBy: { created_at: "desc" },
+      take: 100,
+    });
+    return { ok: true, grants: rows.map(toSafeGrant) };
+  }
+
+  // WHAT: Read one data grant (provider OR buyer only; enumeration-safe).
+  async getDataGrantForCaller(
+    sessionToken: string,
+    grantId: string,
+  ): Promise<DataGrantResult> {
+    const validation = await this.authService.validateSession(
+      sessionToken,
+      "read",
+    );
+    if (!validation.valid) return { ok: false, code: validation.code };
+    const grant = await prisma.marketplaceDataGrant.findFirst({
+      where: { grant_id: grantId },
+    });
+    if (
+      grant === null ||
+      (grant.provider_entity_id !== validation.entity_id &&
+        grant.buyer_entity_id !== validation.entity_id)
+    )
+      return { ok: false, code: "GRANT_NOT_FOUND" };
+    return { ok: true, grant: toSafeGrant(grant) };
   }
 }
