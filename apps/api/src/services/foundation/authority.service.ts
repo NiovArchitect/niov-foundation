@@ -276,13 +276,15 @@ function entityClassFor(t: EntityType): EntityClass {
   }
 }
 
-// WHAT: AI_AGENT or DEVICE — the "restricted AI class".
+// WHAT: AI_AGENT, DEVICE, or APPLICATION — the "restricted (non-human) class".
 // WHY: Mirrors negotiate.service.ts:142 isRestrictedAiClass (private there).
 //      These entities respect ai_access_blocked + requires_validation gates.
 //      Duplicated deliberately (RULE 13 surfaced): the COSMP runtime stays
-//      the source of truth; this is its declarative mirror.
+//      the source of truth; this is its declarative mirror. Phase 1289-A
+//      added APPLICATION here in lockstep with the COSMP runtime so the
+//      envelope's memory_scope reflects the real gate.
 function isRestrictedAiClass(t: EntityType): boolean {
-  return t === "AI_AGENT" || t === "DEVICE";
+  return t === "AI_AGENT" || t === "DEVICE" || t === "APPLICATION";
 }
 
 // WHAT: Compute the AuthorityEnvelope for an entity from persisted substrate.

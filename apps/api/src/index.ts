@@ -57,6 +57,17 @@ export type {
 } from "./services/foundation/authority.service.js";
 export { registerFoundationRoutes } from "./routes/foundation.routes.js";
 
+// Phase 1289-A — Foundation Memory Capsule proof-of-access.
+export { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
+export type {
+  MemoryCapsuleAccessProof,
+  ProofResult,
+  ProofAccessState,
+  ProofEvidence,
+  ProofEvidenceEvent,
+  ProofNotes,
+} from "./services/foundation/proof-of-access.service.js";
+
 export {
   NegotiateService,
   scopeMin,

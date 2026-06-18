@@ -57,10 +57,34 @@ a true stop condition):
   CLOSED on main (`resolveDualControlTarget`) — 1288-B did not touch
   dual-control. `work-os/authority-context.service.ts` is the distinct
   Otzar-layer concept (not duplicated).
-- **1289-A COSMP / DMW / Memory Capsule Hardening** — NEXT (device/agent/app
-  memory-scope enforcement as ADDITIVE gates; ProofOfAccess; minimal safe
-  cascade revocation — surface the boundary if ambiguous; preserve existing
-  NEGOTIATE/READ/SHARE/REVOKE + COE baselines unchanged).
+- **1289-A COSMP / DMW / Memory Capsule Hardening — LANDED 2026-06-17.**
+  (A.1) NEW `apps/api/src/services/foundation/proof-of-access.service.ts` +
+  `GET /api/v1/foundation/capsules/:capsule_id/access-proof` — read-only
+  `MemoryCapsuleAccessProof` (permission state incl. REVOKED/EXPIRED + capsule
+  governance flags + tamper-evident audit evidence via queryAuditEvents +
+  verifyAuditChain; enumeration-safe `CAPSULE_NOT_FOUND`; no-leak: no
+  content/storage/embedding/raw payload). (A.2) APPLICATION added to the
+  restricted (non-human) class in `negotiate.service.ts:isRestrictedAiClass`
+  (+ authority.service mirror) — apps now respect `ai_access_blocked` +
+  `requires_validation` on NON-OWNED capsules like AI_AGENT/DEVICE; verified
+  zero-regression additive hardening (no APPLICATION capsule-read flow exists;
+  owner-shortcut + own-wallet reads unaffected; PERSON unchanged; AI_AGENT
+  FULL→SUMMARY cap stays AI_AGENT-only). No schema migration.
+  **SURFACED FINDING (A.3, RULE 13):** cascade revocation is NOT implemented
+  because the substrate cannot support it safely AND there is nothing to
+  cascade to — the Permission model records NO grant lineage (no
+  parent/source/derived column) and sovereignty rules forbid a non-owner from
+  granting, so transitive re-sharing (A→B→C) is structurally impossible and
+  `can_share_forward` is inert. Per the Founder directive ("if full cascade is
+  not possible, document the exact reason and add a safe denied state rather
+  than pretending cascade exists"), 1289-A documents this honestly: ProofOfAccess
+  `notes` carries `transitive_sharing_supported:false` +
+  `cascade_revocation_supported:false` + `memory_portability_supported:false`;
+  the existing ownership gate already fail-closes (`CAPSULES_NOT_OWNED`); and
+  `revokeBridge` invalidates the direct grantee's sessions. **Backlog
+  (forward-substrate, needs Founder authorization):** permission-lineage
+  columns + cascade-revoke + memory portability/federation across apps/worlds
+  + cross-entity/admin proof-of-access.
 - **1290-A Economic substrate contracts** — MOCK_ONLY / PROVIDER_DEFERRED /
   FUTURE_ONCHAIN only; no real provider/funds/secrets.
 - **1291-A Ambient device protocol** · **1292-A Marketplace substrate** ·

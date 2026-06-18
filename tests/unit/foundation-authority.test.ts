@@ -172,6 +172,21 @@ describe("computeAuthorityEnvelope — APPLICATION cannot self-authorize", () =>
     expect(env.app_scope.can_invoke_tools).toBe(true);
     expect(env.can_do.can_invoke_app_tools).toBe(true);
   });
+
+  it("APPLICATION is in the restricted (non-human) class for memory scope (1289-A.2)", () => {
+    const env = computeAuthorityEnvelope({
+      entity: entity("APPLICATION"),
+      tar: tar({ clearance_ceiling: 2 }),
+      wallet: wallet("ENTERPRISE"),
+    });
+    // Phase 1289-A.2: APPLICATION now respects the capsule-access gates like
+    // AI_AGENT/DEVICE — it must not read AI-blocked / validation-gated capsules.
+    expect(env.memory_scope.respects_ai_access_blocked).toBe(true);
+    expect(env.memory_scope.requires_validation_gate).toBe(true);
+    expect(env.requires_approval.sensitive_capsule_access).toBe(true);
+    // But APPLICATION is NOT FULL→SUMMARY capped (that cap is AI_AGENT-only).
+    expect(env.memory_scope.full_access_capped_to_summary).toBe(false);
+  });
 });
 
 describe("computeAuthorityEnvelope — economic substrate not yet enabled", () => {

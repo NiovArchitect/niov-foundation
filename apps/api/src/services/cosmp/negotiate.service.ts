@@ -139,8 +139,21 @@ export function scopeMin(a: AccessScope, b: AccessScope): AccessScope {
 // WHY: Spec lumps AI_AGENT + DEVICE + ROBOT into the restricted
 //      class. ROBOT is intentionally absent from our enum (Section 1F
 //      decision); when we add ROBOT later we extend this guard.
+//      Phase 1289-A: APPLICATION joins the restricted class — a non-human
+//      application entity reading a NON-OWNED capsule must respect
+//      ai_access_blocked + requires_validation just like AI_AGENT/DEVICE
+//      (RULE 0 — non-human entities never get a higher default ceiling than
+//      a human, and an app must not read capsules a human walled off from
+//      AI). This is additive hardening: owner reads still bypass via the
+//      owner shortcut, and no existing flow authenticates an APPLICATION
+//      entity as a cross-entity capsule reader (Otzar operates on PERSON
+//      sessions). The FULL→SUMMARY cap below stays AI_AGENT-only.
 function isRestrictedAiClass(entityType: string): boolean {
-  return entityType === "AI_AGENT" || entityType === "DEVICE";
+  return (
+    entityType === "AI_AGENT" ||
+    entityType === "DEVICE" ||
+    entityType === "APPLICATION"
+  );
 }
 
 // WHAT: Determine whether an AI_AGENT can keep FULL scope despite the

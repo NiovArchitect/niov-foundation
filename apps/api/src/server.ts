@@ -128,6 +128,7 @@ import { registerCalendarEventRoutes } from "./routes/calendar-event.routes.js";
 import { registerWorkOsAuthorityRoutes } from "./routes/work-os-authority.routes.js";
 import { registerFoundationRoutes } from "./routes/foundation.routes.js";
 import { FoundationAuthorityService } from "./services/foundation/authority.service.js";
+import { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -295,6 +296,8 @@ export async function buildApp(
   const complianceService = new ComplianceService(authService);
   // Phase 1288-B — Foundation generalized Entity & Authority Envelope.
   const foundationAuthorityService = new FoundationAuthorityService(authService);
+  // Phase 1289-A — Foundation Memory Capsule proof-of-access.
+  const foundationProofService = new FoundationProofService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -710,7 +713,11 @@ export async function buildApp(
   await registerAnalyticsRoutes(app, authService, analyticsService);
   await registerWalletRoutes(app, monetizationService, authService);
   await registerComplianceRoutes(app, complianceService);
-  await registerFoundationRoutes(app, foundationAuthorityService);
+  await registerFoundationRoutes(
+    app,
+    foundationAuthorityService,
+    foundationProofService,
+  );
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);
   await registerOrgRoutes(app, authService);
