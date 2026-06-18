@@ -498,3 +498,14 @@ describe("1294-A — Foundation data-grant audit literals defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1295-A — COSMP-governed marketplace data-read delivery literal.
+describe("1295-A — Foundation data-read audit literal defined", () => {
+  it("MARKETPLACE_DATA_GRANT_READ_EVALUATED present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("MARKETPLACE_DATA_GRANT_READ_EVALUATED");
+    expect(isKnownAuditEventType("MARKETPLACE_DATA_GRANT_READ_EVALUATED")).toBe(true);
+  });
+  it("the literal set has no duplicates after the 1295-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

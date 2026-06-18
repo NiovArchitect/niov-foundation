@@ -28,6 +28,7 @@ import type { FoundationEconomicService } from "../services/foundation/economic-
 import type { FoundationAmbientDeviceService } from "../services/foundation/ambient-device.service.js";
 import type { FoundationMarketplaceService } from "../services/foundation/marketplace.service.js";
 import type { FoundationObservabilityService } from "../services/foundation/observability.service.js";
+import type { MarketplaceDataDeliveryService } from "../services/foundation/marketplace-data-delivery.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -68,6 +69,10 @@ const FAILURE_STATUS: Record<string, number> = {
   USE_NOT_PERMITTED: 403,
   PAYMENT_DENIED: 402,
   GRANT_NOT_FOUND: 404,
+  GRANT_NOT_ACTIVE: 409,
+  GRANT_EXPIRED: 409,
+  CONSENT_NOT_ACTIVE: 409,
+  READ_NOT_PERMITTED: 403,
 };
 
 function failureStatus(code: string): number {
@@ -82,6 +87,7 @@ export async function registerFoundationRoutes(
   ambientDeviceService: FoundationAmbientDeviceService,
   marketplaceService: FoundationMarketplaceService,
   observabilityService: FoundationObservabilityService,
+  dataDeliveryService: MarketplaceDataDeliveryService,
 ): Promise<void> {
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
@@ -433,6 +439,42 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, grant: result.grant });
+    },
+  );
+
+  // COSMP-governed safe data-read delivery for a grant (1295-A). Returns SAFE
+  // projections only (never raw content); per-item grant proof at read time.
+  app.post<{ Params: { grant_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/foundation/marketplace/data-grants/:grant_id/read",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      const result = await dataDeliveryService.readDataGrantForCaller(
+        token,
+        request.params.grant_id,
+        {
+          access_mode:
+            typeof b.access_mode === "string" ? b.access_mode : undefined,
+          query: typeof b.query === "string" ? b.query : undefined,
+          capsule_type_filter: Array.isArray(b.capsule_type_filter)
+            ? (b.capsule_type_filter as unknown[]).filter(
+                (x): x is string => typeof x === "string",
+              )
+            : undefined,
+          limit: typeof b.limit === "number" ? b.limit : undefined,
+        },
+      );
+      if (result.ok === false)
+        return reply.code(failureStatus(result.code)).send({
+          ok: false,
+          code: result.code,
+          ...(result.denied_reasons
+            ? { denied_reasons: result.denied_reasons }
+            : {}),
+        });
+      return reply.code(200).send({ ok: true, read: result.read });
     },
   );
 

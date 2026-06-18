@@ -133,6 +133,7 @@ import { FoundationEconomicService } from "./services/foundation/economic-policy
 import { FoundationAmbientDeviceService } from "./services/foundation/ambient-device.service.js";
 import { FoundationMarketplaceService } from "./services/foundation/marketplace.service.js";
 import { FoundationObservabilityService } from "./services/foundation/observability.service.js";
+import { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -314,6 +315,10 @@ export async function buildApp(
   );
   // Phase 1293-A — Foundation observability + metering enforcement.
   const foundationObservabilityService = new FoundationObservabilityService(
+    authService,
+  );
+  // Phase 1295-A — COSMP-governed marketplace data-read delivery.
+  const marketplaceDataDeliveryService = new MarketplaceDataDeliveryService(
     authService,
   );
   const negotiateService = new NegotiateService(
@@ -739,6 +744,7 @@ export async function buildApp(
     foundationAmbientDeviceService,
     foundationMarketplaceService,
     foundationObservabilityService,
+    marketplaceDataDeliveryService,
   );
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);

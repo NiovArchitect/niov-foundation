@@ -236,6 +236,39 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1295-A — COSMP Data-Read Delivery for Marketplace Grants — LANDED 2026-06-17
+
+Makes an ACTIVE data grant usable via a COSMP-governed **safe-projection** read
+path — never raw data export, never a COSMP bypass. NEW
+`apps/api/src/services/foundation/marketplace-data-delivery.service.ts` +
+`POST /foundation/marketplace/data-grants/:id/read`. No schema migration.
+Additive audit literal `MARKETPLACE_DATA_GRANT_READ_EVALUATED`.
+- **Authorization basis = the grant** (a marketplace buyer holds no Permission
+  on the provider's capsules; the grant authorizes safe-projection access).
+  Validates buyer-only + enumeration-safe; grant ACTIVE + not expired; consent
+  active; package not HIGH_SENSITIVITY/policy-gated; intended_use still allowed;
+  requested mode == grant mode or PROOF_ONLY (narrower).
+- **Safe projection only** — provider-wallet capsules in `capsule_type_allowlist`,
+  `deleted_at null`, `clearance_required ≤ buyer ceiling`, EXCLUDING
+  ai_access_blocked + requires_validation (non-owner buyer) + jurisdiction
+  mismatch; returns capsule_type + (renamed) `safe_summary` where the mode
+  permits + sensitivity + timestamps + provenance + per-item grant-proof
+  attestation. NEVER raw body / payload_content / storage_location /
+  content_hash / embedding (`raw_body_excluded:true`). Modes: PROOF_ONLY (no
+  summary) / SAFE_PROJECTION / MEMORY_CAPSULE_BUNDLE / CAPSULE_REFERENCE /
+  RETRIEVAL_QUERY (deterministic scoped filter; Python rerank deferred).
+- **Honest proof:** per-item `result: "MARKETPLACE_GRANT_AUTHORIZED"` +
+  `proof_delivery: "PER_CAPSULE_AT_READ_TIME"` + `chain_verified` — NOT a faked
+  COSMP Permission proof; decrypted content still needs an explicit COSMP
+  permission (forward-substrate).
+- Personal DMW reads work (null org); AI/DEVICE/APPLICATION cannot bypass
+  (ai_access_blocked/requires_validation capsules excluded for all marketplace
+  buyers). Tests (+11): integration foundation-data-read (8) + audit lock (2);
+  typecheck 0; full unit 2421/2422; marketplace+grants+proof regression 30/30.
+- **Backlog (Founder-gated):** real per-capsule COSMP Permission read of
+  decrypted content; Python rerank for RETRIEVAL_QUERY; high-sensitivity gates
+  (1296-A); CT UI; real settlement; cross-org discovery.
+
 ### Foundation-Scale Arc — sequence complete (1288-B → 1293-A)
 
 All six authorized phases LANDED + CI-green + merged + live-proven:
