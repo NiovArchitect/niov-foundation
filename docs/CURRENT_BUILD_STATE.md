@@ -35,25 +35,28 @@ phases merged green.** A recovering session must internalize the items below
 > Do not conflate them. The 1301-A/1302-A/1303-A marketplace arc is the **first
 > Federation Cloud surface**. Full doctrine: `docs/reference/federation-cloud-doctrine.md`.
 
-### ✅ #1 RESOLVED — prod schema ACTIVATED + `:3000` restarted from `main` (1303-C)
+### ✅ #1 RESOLVED + STABILIZED (1303-C activation, 1303-D launch hardening)
 
-`main` is now **in sync with production** for the 1301-A additive delta. The running
-`:3000` Foundation process (**PID 65031**) is **current `main` code pointed at
-production Supabase**, restarted 2026-06-18 *after* the additive schema was applied
-and re-parity confirmed. The `MarketplaceDiscoveryScope` enum + `discovery_scope`
-column + index now exist **in production** (verified present, idempotent apply).
+`main` is **in sync with production** for the 1301-A additive delta. The running
+`:3000` Foundation process (**PID 71720**, relaunched 1303-D) is **current `main`
+code pointed at production Supabase**. The `MarketplaceDiscoveryScope` enum +
+`discovery_scope` column + index exist **in production** (verified present, idempotent
+apply). _(History: 1303-C first restarted as PID 65031 after the activation; 1303-D
+restarted once more from a corrected `.env` — see below.)_
 
-**Redis launch requirement (operational — bit me during 1303-C restart):** the
-working API requires `REDIS_URL=redis://localhost:6379` (the operator's SSH tunnel
-on `:6379` → live Redis; `ssh` PID was LISTEN at recovery). The **root `.env`
-`REDIS_URL` is an `https://` Upstash REST URL that ioredis CANNOT use** (→ `connect
-ENOTSOCK /` → `MaxRetriesPerRequestError` → 500 on every Redis-backed route). Launch
-must **export `REDIS_URL=redis://localhost:6379`** (dotenv does not override a
-pre-set var) and load the rest of root `.env` via `DOTENV_CONFIG_PATH=<repo>/.env`
-from the `apps/api` cwd (or launch from repo root). Exact working relaunch:
-`cd apps/api && REDIS_URL=redis://localhost:6379 OTZAR_ENTITY_ID=<pinned> DOTENV_CONFIG_PATH=<repo>/.env node --require dotenv/config --import tsx src/server.ts`.
-Persisting a valid `rediss://`/`redis://` `REDIS_URL` to `.env` would remove the
-export requirement.
+**Redis launch — STABILIZED in 1303-D (no export needed anymore).** Root `.env`'s
+`REDIS_URL` was an `https://` Upstash REST URL that **ioredis CANNOT use** (→ `connect
+ENOTSOCK /` → `MaxRetriesPerRequestError` → 500 on every Redis-backed route). The
+working runtime reaches Redis at `redis://localhost:6379` via an **existing SSH tunnel**
+on `:6379`. 1303-D **persisted the fix to the gitignored local `.env`**:
+`REDIS_URL=redis://localhost:6379` + `OTZAR_ENTITY_ID=8347070c-0aae-48b4-99e8-b62414488bf8`
+(provisional canonical — see #2 orphan note). `.env` is **untracked/gitignored**
+(`.gitignore:1`), never committed. **Stable relaunch (no env export):**
+`cd apps/api && DOTENV_CONFIG_PATH=<repo>/.env node --require dotenv/config --import tsx src/server.ts`
+(`DOTENV_CONFIG_PATH` is needed only because the launch cwd is `apps/api`, not repo root).
+Verified: boot reuses the pinned entity (**no new orphan**; prod APPLICATION count held
+at 4), **zero Redis errors**, health 200. A future real cloud Redis would replace the
+tunnel value with a `rediss://` URL in `.env`.
 
 ### ✅ #2 Production activation — DONE (additive-only, Founder-authorized one-off script)
 
@@ -111,14 +114,28 @@ deserializability is closed **by construction** — the enum type holds exactly
 contain a value Prisma's enum can't deserialize. An end-to-end authenticated read remains
 the only fully-empirical confirmation and needs explicit Founder go.
 
-**⚠️ Otzar APPLICATION entity orphans (prod):** every API boot without `OTZAR_ENTITY_ID`
-set auto-creates a new Otzar APPLICATION entity. This arc's restarts created multiple:
-`5fe4c5d9-9b20-43f7-9efd-97e7763ca99a` (PID 58266) and `8347070c-0aae-48b4-99e8-b62414488bf8`
-(PID 59477), plus PID 69267's earlier auto-created one. The current process (PID 65031) is
-pinned to `8347070c…` via a process env export (NOT persisted). **Founder decision needed:**
-confirm the canonical `OTZAR_ENTITY_ID` and persist it to `.env` (soft-delete the orphans
-per RULE 10). Until persisted, the `:3000` relaunch line in #1 MUST carry
-`OTZAR_ENTITY_ID=<canonical>` or it spawns yet another orphan.
+**⚠️ Otzar APPLICATION entity orphans (prod) — pinned + deferred (1303-D).** Every API
+boot without `OTZAR_ENTITY_ID` set auto-creates a new Otzar APPLICATION entity. A
+Founder-authorized read-only inventory (safe identity fields only) found **exactly 4
+APPLICATION entities in prod, all named "Otzar", all ACTIVE, all functionally empty**
+(each: 1 auto-seeded wallet, 0 sessions, 0 api_keys, 0 capsules):
+
+| entity_id | created_at (UTC) | role |
+| --- | --- | --- |
+| `a35f644a-7855-4bab-8f67-6cd225e58645` | 2026-06-16 23:35 | orphan candidate (oldest) |
+| `0a6fd440-3a45-45e2-a167-1bb1e5ee7cb5` | 2026-06-17 23:12 | orphan candidate |
+| `5fe4c5d9-9b20-43f7-9efd-97e7763ca99a` | 2026-06-18 15:45 | orphan candidate (incident PID 58266) |
+| **`8347070c-0aae-48b4-99e8-b62414488bf8`** | 2026-06-18 15:48 | **provisional canonical (pinned in `.env`)** |
+
+Because all 4 are empty equivalents, there is no safe way to single out an "original
+stable" entity → **Founder rule 3 applied: pinned the running entity `8347070c…` as
+provisional canonical** and persisted `OTZAR_ENTITY_ID` to the gitignored `.env`. Boots
+now reuse it (no new orphans). **Orphan cleanup is DEFERRED pending explicit Founder
+approval of the exact IDs.** Future safe soft-delete (per RULE 10) =
+`UPDATE entities SET deleted_at = now() WHERE entity_id IN (a35f644a…, 0a6fd440…, 5fe4c5d9…) AND deleted_at IS NULL`
+— re-verify 0 sessions/keys/capsules immediately before; each orphan's 1:1 `wallets` row
+has no `deleted_at` column (Wallet→Entity is `onDelete: Cascade`) and stays inert. No
+soft-delete was performed in 1303-D.
 
 ### 🟡 #3 Queued Founder design decisions (not bugs — product-shape calls)
 
