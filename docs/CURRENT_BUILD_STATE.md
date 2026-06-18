@@ -342,7 +342,7 @@ then restarted the prod API from main so contribution routes are live + compatib
 - **Tests:** `tests/unit/activate-cohort-contribution-prod-schema.test.ts` (5).
 - **Cohort contribution schema is production-active.**
 
-### 🔄 1307-A — Cohort Access Request Lifecycle (IN PROGRESS until merged + proven)
+### ✅ 1307-A — Cohort Access Request Lifecycle (buyer requests; HUMAN decides)
 
 The governed lifecycle a **buyer** follows BEFORE any signal/proof is delivered
 (delivery is 1308-A): a buyer requests a `(use, access_mode)` against a cohort it
@@ -372,8 +372,30 @@ provider may later **revoke**; windows **expire** (lazy). An approved request is
 - **Tests:** `tests/unit/cohort-access-request-intake.test.ts` (7) +
   `tests/integration/foundation-cohort-access-requests.test.ts` (8, incl. both
   must-fixes, CHILDREN auto-deny, enumeration-safe NOT_FOUND, no-leak, RULE 10).
-- **Schema change → 1307-B prod activation BEFORE any prod-API restart from main**
-  (the `discovery_scope` lesson).
+- **PR [#458](https://github.com/NiovArchitect/niov-foundation/pull/458) `e3d1ebf`
+  — LANDED;** all 5 CI tiers green. Schema change → **1307-B prod activation
+  BEFORE any prod-API restart from main** (the `discovery_scope` lesson).
+
+### ✅ 1307-B — Cohort access request schema production activation
+
+Activated the additive 1307-A access-request schema in the **prod-connected** DB,
+then restarted the prod API from main so access-request routes are live + compatible.
+
+- **Read-only parity:** `prisma migrate diff` (prod → schema) emitted **only**
+  `CREATE TYPE "CohortAccessRequestStatus"` + `CREATE TABLE "cohort_access_requests"`
+  + 4 `CREATE INDEX` — **zero DROP/ALTER** (`cohort_data_products` from 1305-B +
+  `cohort_contributions` from 1306-B already present, untouched).
+- **Activation:** `scripts/activate-cohort-access-request-prod-schema.ts` — exact
+  scope, idempotent (`IF NOT EXISTS` / `pg_type` guard), approval-gated
+  (`NIOV_APPROVE_COHORT_PROD_SCHEMA`), prefers `DIRECT_URL`, redacts URL, never
+  DROP/ALTER. Applied cleanly: before `table=false/enum=false` → after `true/true`;
+  re-run is a no-op; post-apply parity for the table is empty. NOT `prisma db push`.
+- **Restart proof:** prod API relaunched (canonical launch; Redis tunnel +
+  `OTZAR_ENTITY_ID` preserved). New PID connects **only to :6543 (prod pooler)**;
+  access-request routes return **401** unauth (registered); cohort + contribution
+  routes still 401; API/Python/BEAM/CT health **200**.
+- **Tests:** `tests/unit/activate-cohort-access-request-prod-schema.test.ts` (5).
+- **Cohort access request schema is production-active.**
 
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
