@@ -23,6 +23,72 @@ in flight.
 1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
 bounded Founder queue 1215–1232 substantially complete.
 
+## ⚠️ Overnight Arc Recoverability Report (2026-06-18) — READ FIRST
+
+Autonomous overnight arc (1300-B → 1301-A → 1302-A → 1303-A) complete. **All four
+phases merged green.** A recovering session must internalize the items below
+**before touching the runtime**.
+
+### 🔴 #1 FRAGILE STATE — do NOT restart the prod `:3000` API
+
+`main` is **ahead of production** across 1301-A + 1302-A + 1303-A. The running
+`:3000` Foundation process is **pre-1301-A code pointed at production Supabase**,
+and was **deliberately left running old code** (NOT restarted) all night. The
+additive `MarketplaceDiscoveryScope` enum + `discovery_scope` column exist **only
+in the local test DB**, not in production.
+
+**If that process dies and anything restarts it from `main` against prod, every
+marketplace listing read breaks** (the regenerated Prisma client SELECTs a
+`discovery_scope` column prod lacks). Do not restart `:3000` from `main` until the
+production schema is migrated. This is the one thing that bites if forgotten.
+
+### 🟠 #2 The single action that activates the whole arc in production (Founder-gated)
+
+**Founder must authorize: `APPROVE PROD SCHEMA PUSH — additive only` + redeploy the
+prod-pointed API.** This activates 1301-A discovery + 1302-A shell + 1303-A
+hardening in production at once.
+
+- **First** run the read-only parity diff to scope the REAL delta —
+  `scripts/verify-production-parity.ts` (ADR-0047). **Do not assume it is only
+  `discovery_scope`**: last prod push was 2026-06-12, so 1294-A…1299-B schema may
+  also be unpushed. The morning (attended) session should run the parity script;
+  an unattended session must NOT connect to prod.
+
+### 🟡 #3 Queued Founder design decisions (not bugs — product-shape calls)
+
+- **1303-A delivery shape:** suppressed/`aggregate_only` reads still return a
+  per-capsule enumeration (type + timestamps + `grant_id#index` proof per item).
+  Content leakage is closed; existence/timing enumeration is not. What should an
+  aggregate/proof-only read return — a count? bucketed stats? — is a product
+  decision.
+- **1302-A cross-org request-access:** the discovery shell is **browse-only by
+  design** (no cross-org access endpoint exists; faking it / loosening
+  `loadVisibleListing` were both refused). Does a real provider-reaching request
+  get built? That is Foundation-first + a tenant-exposure design (what a provider
+  in org A sees about a requester in org B) + advisor-before-merge.
+
+### ✅ Shipped this arc (all merged green; SHAs)
+
+| Phase | What | Repo | SHA |
+| --- | --- | --- | --- |
+| 1300-B | Review Center polish (badge, deny-with-reason, a11y) | CT | `14d15b2` |
+| 1301-A | Cross-org marketplace discovery (gated, opt-in) | Foundation | `52ce1de` (+doc `fa0e738`) |
+| 1302-A | Marketplace cross-org discovery shell (browse + honest request-access) | CT | `6a6c62f` |
+| 1303-A | Governed delivery hardening — content-query oracle closed | Foundation | `80851ae` |
+
+Otzar.app rebuilt + relaunched (PID 28504 at last check); API/Python/BEAM all
+healthy (200). Both repos clean, on `main`, synced; all arc PRs merged; no arc
+branches left open; `.env.save` remains untracked/gitignored.
+
+### ⏸️ 1304-A deliberately deferred (NOT for lack of time)
+
+Review/marketplace notification+badge integration was skipped on purpose: the
+marketplace-badge half would poll `/discover`, which **404s against prod until the
+schema push** — it would ship dormant (cosmetic, rule 2); the review-badge half
+already shipped in 1300-B and a second notification surface is stale clutter
+(rule 7). Revisit **after** prod activation makes `/discover` live, so a badge has
+real data.
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
@@ -236,7 +302,11 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
-### Phase 1303-A — Governed Per-Capsule Delivery Hardening: content-query oracle — IN_PROGRESS 2026-06-18
+### Phase 1303-A — Governed Per-Capsule Delivery Hardening: content-query oracle — LANDED 2026-06-18 (PR #445)
+
+> **Production activation PENDING (Founder-gated)** — same prod schema push as
+> 1301-A. Merged + CI-green + integration-proven (13/13); the prod `:3000` API was
+> not restarted. See the Recoverability Report at the top of this file.
 
 Closes a content-inference side channel in the marketplace data-read delivery
 path (`marketplace-data-delivery.service.ts`). The optional `query` param
