@@ -184,6 +184,43 @@ data; consent/proof/retention/revocation/audit/metering still Foundation-governe
 **not** implemented — forward phase **1305-A: Federation Cloud Cohort Data Product
 Substrate** (backend-only). No cohort counts/badges/UI/monetization exist or are implied.
 
+### ✅ 1304-B — Control Tower login/session recovery fix (CT)
+
+CT login failed with **"Login request failed (SESSION_INVALID)"** because the api-client
+flattened every 401 — including the *unauthenticated* login route — into
+`SESSION_INVALID` and fired `onUnauthorized()`/logout. Fix at the smallest correct layer:
+an `authRoute` flag on `request()` so a 401 on `auth.login`/`auth.logout` surfaces the
+real body code (`INVALID_CREDENTIALS` / `SUSPENDED`) without a spurious logout; the store
+maps those to honest, recoverable copy and never shows "SESSION_INVALID" on the login
+screen. Protected-route 401 behavior (logout + SESSION_INVALID) is unchanged. CT PR #128
+(`4b1c06c`); 7 new tests; Tauri app rebuilt + relaunched. No Foundation change.
+
+### ✅ 1304-C — Full demo team account provisioning + Founder login (prod-connected demo DB)
+
+The prod-connected DB had **no `NIOV Labs` org and zero `@niovlabs.com` accounts** (the 205
+existing PERSON rows are `__niov_test__…@niov.test` integration fixtures — untouched). A
+narrow, approval-gated, idempotent one-off script provisioned the full team demo footprint.
+
+- **Org/company created:** `NIOV Labs` (`bootstrap-org@niovlabs.com`) entity
+  `ec667158-6ddb-4e4f-910e-e5dde11a6151`.
+- **8 demo accounts created** (exact allowlist, `firstname@niovlabs.com`): `sadeil`,
+  `david`, `vishesh`, `samiksha`, `shweta`, `william`, `annie`, `walter` @niovlabs.com,
+  each an org member (Sadeil = `FOUNDER`; teammates by title).
+- **Founder/admin authority (Sadeil only):** `can_admin_org` + clearance 5.
+- **Login proof:** all 8 accounts → HTTP **200 + token present**. **Wrong-password →
+  401** (auth/lockout not weakened). Founder token accepted by the Notifications / Review
+  Center / Marketplace / Action Center / Ask-your-Twin / Operational Health / Comms
+  backing endpoints.
+- **Password discipline:** supplied via the `DEMO_SHARED_PASSWORD` runtime env **only** —
+  value **not recorded** here, never echoed; **no password hash recorded**.
+- **Safety:** no unrelated accounts touched; `__niov_test__` fixtures not touched; **no
+  schema mutation / no DDL / no `db push`**; no deletes (RULE 10); no secrets committed.
+- **Artifacts:** `scripts/provision-demo-team-accounts.ts` (allowlist + dual env-gate:
+  `DEMO_SHARED_PASSWORD` + exact `NIOV_APPROVE_DEMO_TEAM_ACCOUNTS` phrase + `--dry-run`/
+  `--help` + redacted DB URL), `scripts/verify-demo-logins.ts` (read-only login proof),
+  `tests/unit/provision-demo-team-accounts.test.ts` (safety invariants, 6/6).
+- **Reversible:** demo-specific entities, soft-deletable per RULE 10 if ever needed.
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
