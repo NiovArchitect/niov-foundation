@@ -522,7 +522,19 @@ export type AuditEventType =
   // TAR flag dumps, other entities' identities/emails, capsule contents,
   // bearer tokens. Additive literal only — no ADR-0002 amendment (the
   // append-only chain + BEFORE DELETE trigger are unchanged).
-  | "AUTHORITY_ENVELOPE_EVALUATED";
+  | "AUTHORITY_ENVELOPE_EVALUATED"
+  // Phase 1290-A — Foundation economic substrate (mock-only). Emitted when the
+  // economic-policy evaluator issues a 402-style quote for a proposed economic
+  // intent (agent/device/app/memory/marketplace microtransaction). outcome
+  // SUCCESS for ALLOWED_MOCK / PAYMENT_REQUIRED quotes; DENIED (with a scrubbed
+  // reason_code) for policy/settlement-mode refusals. SAFE details: amount_usd
+  // + asset (USDC_MOCK only) + settlement_mode + purpose + actor_entity_type +
+  // decision + reason_code + required_approvals + real_provider_enabled (always
+  // false). FORBIDDEN: private/API keys, env, provider responses, chain
+  // addresses, counterparty PII. No real settlement exists by construction
+  // (ADR-0094 bans; only MOCK_ONLY is executable). Additive literal — no
+  // ADR-0002 amendment.
+  | "ECONOMIC_INTENT_QUOTED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -707,6 +719,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CALENDAR_EVENT_CREATE",
   // Phase 1288-B Foundation Entity & Authority Envelope evaluation.
   "AUTHORITY_ENVELOPE_EVALUATED",
+  // Phase 1290-A Foundation economic substrate quote (mock-only).
+  "ECONOMIC_INTENT_QUOTED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
