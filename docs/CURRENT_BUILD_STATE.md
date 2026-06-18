@@ -236,6 +236,57 @@ _GRANT_REVOKED.
   /health/children/biometric policy gates; consent for third-party data subjects;
   cross-org discovery; CT UI; real settlement.
 
+### Phase 1297-A — High-Sensitivity Review Workflow Engine — LANDED 2026-06-17
+
+Turns the 1296-A `REQUIRES_REVIEW` decision (previously a dead end) into a
+durable, governed, scope-bound, EXPIRING human-review workflow. NEW model
+`HighSensitivityReview` + `HighSensitivityReviewStatus` (PENDING_REVIEW /
+APPROVED / DENIED / EXPIRED / REVOKED), Prisma-owned (no Ecto mirror), all policy
+evidence typed (sensitivity_class, sensitive_categories, policy_decision,
+policy_reason_codes, approved_access_modes + pinned-false invariant columns).
+NEW `apps/api/src/services/foundation/high-sensitivity-review.service.ts`
+(create / get / list / approve / deny / revoke + shared
+`resolveReviewDecisionForGrantRead`). 6 routes under
+`/api/v1/foundation/high-sensitivity/reviews`. 5 additive audit literals
+(`HIGH_SENSITIVITY_REVIEW_CREATED/APPROVED/DENIED/REVOKED/EXPIRED`).
+- **Approvable-modes fix:** the 1296-A evaluator returns
+  `allowed_access_modes:[]` for every REQUIRES_REVIEW case, so a new pure helper
+  `highSensitivityReviewApprovableModes` (co-located in the policy module) defines
+  the category-aware set a human may authorize (MEDICAL→PROOF_ONLY; BIOMETRIC/
+  BYSTANDER→proof+aggregate/deperson; HEALTH/LOCATION→up to safe projection;
+  CHILDREN/unknown/no-consent/training→∅). Raw never; elevated rights never.
+- **Shared resolver** consulted at BOTH grant creation and read: an APPROVED,
+  live (not expired/revoked) review upgrades REQUIRES_REVIEW into an effective
+  ALLOW for the approved safe mode; grant is downgraded to that mode; read
+  re-checks liveness every time (revoke/expire block instantly). Read now honors
+  the **grant's** access_mode, not the package's (latent widening bug fixed).
+- **Reviewer eligibility:** human-class only (AI_AGENT/DEVICE/APPLICATION →
+  `NON_HUMAN_REVIEWER_FORBIDDEN`); must be the package provider (buyer
+  self-approval structurally blocked); personal-DMW owner self-review allowed
+  only for PROOF_ONLY, audited. CHILDREN recorded DENIED, never approvable.
+  Never raw content; cross-tenant reviews invisible.
+- Tests (+~36): unit foundation-high-sensitivity-review (approvable modes +
+  gate-reason set) + audit lock (5 literals) + integration
+  foundation-high-sensitivity-review (13 cases: lifecycle, eligibility,
+  no-broaden, revoke/expire-blocks-read, personal self-review, cross-tenant,
+  audit). Typecheck 0; full unit 2448/2449 (1 = known connector-oauth `.env`
+  artifact); integration regression 54/54 (review+data-read+data-grants+
+  marketplace+proof).
+- **⚠ Production-safety incident (surfaced per RULE 13):** the initial schema
+  push used a raw `npx prisma db push` with only `DATABASE_URL` set inline; the
+  datasource also reads `directUrl = env("DIRECT_URL")`, which Prisma loaded from
+  `.env` → the migration ran against **production Supabase** instead of the local
+  test DB. The change was purely additive (`CREATE TABLE high_sensitivity_reviews`
+  + `CREATE TYPE` — no drops, table empty, identical to the deploy-time DDL this
+  PR requires), so no data was lost. The canonical guarded wrapper
+  `npm run db:push:test` (pins BOTH `DATABASE_URL` + `DIRECT_URL` to localhost,
+  fail-closed) was then used for the local push and is the discipline going
+  forward; raw `prisma db push` for the test DB is the trap (ADR-0025 /
+  D-2D-D10-4). Flagged for Founder awareness.
+- **Backlog (Founder-gated):** real decrypted content read; CT review/marketplace
+  UI; retention-enforcement engine; org-compliance reviewer delegation;
+  cross-org discovery; real settlement.
+
 ### Phase 1296-A — High-Sensitivity Policy Gates — LANDED 2026-06-17
 
 Replaces the 1294-A/1295-A blanket high-sensitivity DENY with a dedicated graded

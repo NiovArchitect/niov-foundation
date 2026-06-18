@@ -134,6 +134,7 @@ import { FoundationAmbientDeviceService } from "./services/foundation/ambient-de
 import { FoundationMarketplaceService } from "./services/foundation/marketplace.service.js";
 import { FoundationObservabilityService } from "./services/foundation/observability.service.js";
 import { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
+import { FoundationHighSensitivityReviewService } from "./services/foundation/high-sensitivity-review.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -321,6 +322,9 @@ export async function buildApp(
   const marketplaceDataDeliveryService = new MarketplaceDataDeliveryService(
     authService,
   );
+  // Phase 1297-A — high-sensitivity human-review workflow engine.
+  const foundationHighSensitivityReviewService =
+    new FoundationHighSensitivityReviewService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -745,6 +749,7 @@ export async function buildApp(
     foundationMarketplaceService,
     foundationObservabilityService,
     marketplaceDataDeliveryService,
+    foundationHighSensitivityReviewService,
   );
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);

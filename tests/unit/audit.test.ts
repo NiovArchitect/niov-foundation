@@ -520,3 +520,23 @@ describe("1296-A — Foundation high-sensitivity policy audit literal defined", 
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1297-A — high-sensitivity human-review workflow lifecycle literals.
+describe("1297-A — Foundation high-sensitivity review audit literals defined", () => {
+  const literals = [
+    "HIGH_SENSITIVITY_REVIEW_CREATED",
+    "HIGH_SENSITIVITY_REVIEW_APPROVED",
+    "HIGH_SENSITIVITY_REVIEW_DENIED",
+    "HIGH_SENSITIVITY_REVIEW_REVOKED",
+    "HIGH_SENSITIVITY_REVIEW_EXPIRED",
+  ] as const;
+  it("all 5 review-lifecycle literals are present + recognized", () => {
+    for (const lit of literals) {
+      expect(AUDIT_EVENT_TYPE_VALUES).toContain(lit);
+      expect(isKnownAuditEventType(lit)).toBe(true);
+    }
+  });
+  it("the literal set has no duplicates after the 1297-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

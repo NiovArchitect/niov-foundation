@@ -29,6 +29,7 @@ import type { FoundationAmbientDeviceService } from "../services/foundation/ambi
 import type { FoundationMarketplaceService } from "../services/foundation/marketplace.service.js";
 import type { FoundationObservabilityService } from "../services/foundation/observability.service.js";
 import type { MarketplaceDataDeliveryService } from "../services/foundation/marketplace-data-delivery.service.js";
+import type { FoundationHighSensitivityReviewService } from "../services/foundation/high-sensitivity-review.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -73,6 +74,21 @@ const FAILURE_STATUS: Record<string, number> = {
   GRANT_EXPIRED: 409,
   CONSENT_NOT_ACTIVE: 409,
   READ_NOT_PERMITTED: 403,
+  // Phase 1297-A — high-sensitivity review workflow.
+  INVALID_REQUEST: 422,
+  REVIEW_NOT_FOUND: 404,
+  REVIEW_NOT_APPLICABLE: 409,
+  REVIEW_NOT_REQUIRED: 409,
+  REVIEW_NOT_PENDING: 409,
+  REVIEW_NOT_APPROVED: 409,
+  REVIEW_NOT_APPROVABLE: 409,
+  REVIEW_REQUIRED: 409,
+  NON_HUMAN_REVIEWER_FORBIDDEN: 403,
+  NOT_AUTHORIZED_REVIEWER: 403,
+  SELF_REVIEW_NOT_PERMITTED: 403,
+  APPROVED_MODE_NOT_ALLOWED: 422,
+  INVALID_APPROVED_MODES: 422,
+  INVALID_EXPIRY: 422,
 };
 
 function failureStatus(code: string): number {
@@ -88,6 +104,7 @@ export async function registerFoundationRoutes(
   marketplaceService: FoundationMarketplaceService,
   observabilityService: FoundationObservabilityService,
   dataDeliveryService: MarketplaceDataDeliveryService,
+  reviewService: FoundationHighSensitivityReviewService,
 ): Promise<void> {
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
@@ -475,6 +492,133 @@ export async function registerFoundationRoutes(
             : {}),
         });
       return reply.code(200).send({ ok: true, read: result.read });
+    },
+  );
+
+  // ── High-sensitivity human-review workflow (1297-A) ─────────────────────
+  // Open (or fetch) a review for a REQUIRES_REVIEW high-sensitivity package.
+  app.post<{ Body: { listing_id?: unknown; intended_use?: unknown } }>(
+    "/api/v1/foundation/high-sensitivity/reviews",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      if (typeof b.listing_id !== "string" || b.listing_id.length === 0)
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+      if (typeof b.intended_use !== "string" || b.intended_use.length === 0)
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST" });
+      const result = await reviewService.createReviewForCaller(token, b.listing_id, {
+        intended_use: b.intended_use,
+      });
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, review: result.review });
+    },
+  );
+
+  // List the caller's reviews (as provider OR buyer).
+  app.get("/api/v1/foundation/high-sensitivity/reviews", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null)
+      return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+    const result = await reviewService.listReviewsForCaller(token);
+    if (result.ok === false)
+      return reply
+        .code(failureStatus(result.code))
+        .send({ ok: false, code: result.code });
+    return reply.code(200).send({ ok: true, reviews: result.reviews });
+  });
+
+  // Read one review (provider OR buyer only; enumeration-safe).
+  app.get<{ Params: { review_id: string } }>(
+    "/api/v1/foundation/high-sensitivity/reviews/:review_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await reviewService.getReviewForCaller(
+        token,
+        request.params.review_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, review: result.review });
+    },
+  );
+
+  // Approve a pending review for specific safe access mode(s) (provider-only).
+  app.post<{
+    Params: { review_id: string };
+    Body: { approved_access_modes?: unknown; expires_at?: unknown };
+  }>(
+    "/api/v1/foundation/high-sensitivity/reviews/:review_id/approve",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const b = request.body ?? {};
+      const result = await reviewService.approveReviewForCaller(
+        token,
+        request.params.review_id,
+        {
+          approved_access_modes: Array.isArray(b.approved_access_modes)
+            ? (b.approved_access_modes as unknown[]).filter(
+                (x): x is string => typeof x === "string",
+              )
+            : undefined,
+          expires_at: typeof b.expires_at === "string" ? b.expires_at : undefined,
+        },
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, review: result.review });
+    },
+  );
+
+  // Deny a pending review (provider-only).
+  app.post<{ Params: { review_id: string }; Body: { reason?: unknown } }>(
+    "/api/v1/foundation/high-sensitivity/reviews/:review_id/deny",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await reviewService.denyReviewForCaller(
+        token,
+        request.params.review_id,
+        typeof request.body?.reason === "string" ? request.body.reason : undefined,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, review: result.review });
+    },
+  );
+
+  // Revoke an approved review (provider OR buyer).
+  app.post<{ Params: { review_id: string }; Body: { reason?: unknown } }>(
+    "/api/v1/foundation/high-sensitivity/reviews/:review_id/revoke",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await reviewService.revokeReviewForCaller(
+        token,
+        request.params.review_id,
+        typeof request.body?.reason === "string" ? request.body.reason : undefined,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, review: result.review });
     },
   );
 

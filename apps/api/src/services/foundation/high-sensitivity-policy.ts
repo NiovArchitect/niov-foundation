@@ -29,6 +29,37 @@
 
 import type { DataAccessMode } from "@niov/database";
 
+// Categories that REQUIRE the dedicated high-sensitivity policy gate. A data
+// package tagged with any of these — or classed HIGH_SENSITIVITY — is routed
+// through evaluateHighSensitivityAccess instead of the generic access path.
+// Extensible: new labels are governable without a schema change. (Canonical
+// home is this pure policy module; marketplace.service re-exports it for
+// back-compat so consumers + the barrel keep their import paths.)
+export const POLICY_GATED_CATEGORIES = [
+  "HEALTH",
+  "MEDICAL",
+  "BIOMETRIC",
+  "CHILDREN",
+] as const;
+
+// WHAT: Is this package governed by the high-sensitivity gate?
+// INPUT: a package's sensitivity_class + sensitive_categories.
+// OUTPUT: true when HIGH_SENSITIVITY-classed or any policy-gated category.
+// WHY: single source of truth for the "route through the dedicated gate"
+//      predicate, shared by the access-eval, read, and review paths (no
+//      duplicated literal that could drift).
+export function isHighSensitivityPackage(
+  sensitivityClass: string,
+  sensitiveCategories: string[],
+): boolean {
+  return (
+    sensitivityClass === "HIGH_SENSITIVITY" ||
+    sensitiveCategories.some((c) =>
+      (POLICY_GATED_CATEGORIES as readonly string[]).includes(c),
+    )
+  );
+}
+
 export const HIGH_SENSITIVITY_REASON_CODES = [
   "HIGH_SENSITIVITY_DEFAULT_DENY",
   "CONSENT_REQUIRED",
@@ -56,6 +87,21 @@ export const HIGH_SENSITIVITY_REASON_CODES = [
 ] as const;
 export type HighSensitivityReasonCode =
   (typeof HIGH_SENSITIVITY_REASON_CODES)[number];
+
+// The reason codes the evaluator emits FIRST for a REQUIRES_REVIEW decision —
+// the set of denials that a human review can lift (as opposed to a hard DENY
+// like CHILDREN / missing consent / training, which review can never approve).
+// Phase 1297-A: grant creation tolerates ONLY these as remaining blockers when
+// a matching review is APPROVED; any other denial still blocks.
+export const HIGH_SENSITIVITY_REVIEW_GATE_REASONS = [
+  "MEDICAL_DATA_REQUIRES_DEDICATED_REVIEW",
+  "BIOMETRIC_DATA_REQUIRES_DEDICATED_REVIEW",
+  "HEALTH_DATA_REQUIRES_DEDICATED_REVIEW",
+  "BYSTANDER_SENSITIVE_REQUIRES_DEPERSONALIZATION",
+  "RETENTION_LIMIT_REQUIRED",
+  "JURISDICTION_POLICY_REQUIRED",
+  "DEDICATED_POLICY_GATE_MISSING",
+] as const;
 
 export type HighSensitivityDecisionKind =
   | "ALLOW_SAFE_PROJECTION"
@@ -267,4 +313,54 @@ export function evaluateHighSensitivityAccess(
 
   // HIGH_SENSITIVITY class but no recognized category — fail safe to review.
   return review(["DEDICATED_POLICY_GATE_MISSING"]);
+}
+
+// WHAT: The set of SAFE access modes a HUMAN REVIEWER may authorize for a
+//       high-sensitivity REQUIRES_REVIEW decision (Phase 1297-A).
+// INPUT: the same policy input the evaluator sees.
+// OUTPUT: the category-aware "review-approvable" modes — a non-empty set ONLY
+//         where a reviewer is permitted to upgrade a REQUIRES_REVIEW into an
+//         effective ALLOW; empty where review can never approve.
+// WHY: The 1296-A evaluator returns allowed_access_modes = [] for every
+//      REQUIRES_REVIEW case (review() inherits deny()), so an approval bound to
+//      that set could authorize nothing. Human review exists precisely to allow
+//      a mode the AUTOMATED gate will not auto-allow — so the approval bound is
+//      this dedicated, category-aware set, NOT the auto-allow set. Raw body is
+//      never a member (no raw mode exists); CHILDREN / UNKNOWN and any hard-deny
+//      condition (missing consent/opt-in, training, model-improvement) return
+//      [] so review can only ever record a denial there. Pure + deterministic;
+//      policy stays in this one gate file (no split across services).
+export function highSensitivityReviewApprovableModes(
+  input: HighSensitivityPolicyInput,
+): DataAccessMode[] {
+  // Hard-deny conditions are never review-approvable.
+  if (!input.consent_confirmed || !input.opt_in_confirmed) return [];
+  if (input.intended_use === "TRAINING") return [];
+  if (input.intended_use === "MODEL_IMPROVEMENT") return [];
+
+  const cat = worstCategory(input.sensitive_categories);
+  switch (cat) {
+    // CHILDREN is denied outright pending a dedicated children-data program.
+    case "CHILDREN":
+      return [];
+    // MEDICAL — a reviewer may authorize PROOF_ONLY only (safe projection of
+    // medical data stays review-required by default; raw is never permitted).
+    case "MEDICAL":
+      return ["PROOF_ONLY"];
+    // BIOMETRIC — proof-only or aggregate/depersonalized signals (no raw, no
+    // recognition, no identity inference).
+    case "BIOMETRIC":
+      return ["PROOF_ONLY", "AGGREGATED_SIGNAL", "DEPERSONALIZED_SIGNAL"];
+    // HEALTH / LOCATION — a reviewer may authorize up to safe projection.
+    case "HEALTH":
+    case "LOCATION":
+      return ["PROOF_ONLY", "SAFE_PROJECTION"];
+    // BYSTANDER — proof-only or aggregate/depersonalized.
+    case "BYSTANDER":
+      return ["PROOF_ONLY", "AGGREGATED_SIGNAL", "DEPERSONALIZED_SIGNAL"];
+    // Unrecognized high-sensitivity category — NOT generically approvable; a
+    // dedicated policy gate is required first (fail-safe; never silent-allow).
+    default:
+      return [];
+  }
 }
