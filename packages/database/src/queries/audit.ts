@@ -588,6 +588,16 @@ export type AuditEventType =
   // FORBIDDEN: raw capsule body/IDs, storage location, embeddings, payload
   // content, PII, secrets. Additive — no ADR-0002 amendment.
   | "MARKETPLACE_DATA_GRANT_READ_EVALUATED"
+  // Phase 1305-A — Federation Cloud cohort data product substrate. Registry +
+  // policy-evaluation events only; NO real cohort signal, NO raw data, NO
+  // settlement in 1305-A. Details carry IDs / closed-vocab enums / booleans
+  // only (never raw bodies, contributor identities, or counts of real
+  // contributors — threshold_enforced=false). Additive — no ADR-0002 amendment
+  // (ADR-0042 §Q-γ.1 clean-transition precedent).
+  | "COHORT_PRODUCT_REGISTERED"
+  | "COHORT_PRODUCT_UPDATED"
+  | "COHORT_PRODUCT_ARCHIVED"
+  | "COHORT_ACCESS_EVALUATED"
   // Phase 1296-A — dedicated high-sensitivity policy gate evaluation. Emitted
   // when the high-sensitivity evaluator runs for a HIGH_SENSITIVITY / policy-
   // gated package (HEALTH / MEDICAL / BIOMETRIC / CHILDREN / BYSTANDER /
@@ -850,6 +860,11 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "MARKETPLACE_DATA_GRANT_REVOKED",
   // Phase 1295-A COSMP-governed data-read delivery.
   "MARKETPLACE_DATA_GRANT_READ_EVALUATED",
+  // Phase 1305-A Federation Cloud cohort data product substrate.
+  "COHORT_PRODUCT_REGISTERED",
+  "COHORT_PRODUCT_UPDATED",
+  "COHORT_PRODUCT_ARCHIVED",
+  "COHORT_ACCESS_EVALUATED",
   // Phase 1296-A dedicated high-sensitivity policy gate.
   "HIGH_SENSITIVITY_POLICY_EVALUATED",
   // Phase 1297-A high-sensitivity human-review workflow lifecycle.

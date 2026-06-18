@@ -221,6 +221,42 @@ narrow, approval-gated, idempotent one-off script provisioned the full team demo
   `tests/unit/provision-demo-team-accounts.test.ts` (safety invariants, 6/6).
 - **Reversible:** demo-specific entities, soft-deletable per RULE 10 if ever needed.
 
+### ✅ 1305-A — Federation Cloud Cohort Data Product Substrate (backend-only; registry + policy evaluator)
+
+Backend substrate for DMW data **cohorts** as a future Federation Cloud product
+class — **registry + policy evaluation only**. NO cohort UI, NO real signal, NO
+real contributors, NO real aggregation / privacy math (k-anonymity / differential
+privacy NOT implemented or implied), NO buyer demand, NO settlement.
+
+- **Schema (additive):** `CohortDataProduct` model + `CohortProductStatus` enum
+  in `schema.prisma` (applied to the test DB via `db:push:test`; CI pushes it to
+  the containerized test DB). No mutation of existing tables.
+- **Service:** `apps/api/src/services/foundation/federation-cloud-cohort.service.ts`
+  — `FederationCloudCohortService` (register / list / get / status-transition /
+  evaluate) + the pure, unit-tested `evaluateCohortPolicy` decision engine + SAFE
+  projection (`toSafeCohort`).
+- **Routes:** `apps/api/src/routes/cohort.routes.ts` — bearer-gated
+  `POST/GET /api/v1/foundation/cohorts`, `GET …/:id`, `PATCH …/:id/status`,
+  `POST …/:id/evaluate`; wired in `server.ts`.
+- **Audit literals (additive; no ADR-0002 amendment):** `COHORT_PRODUCT_REGISTERED`,
+  `COHORT_PRODUCT_UPDATED`, `COHORT_PRODUCT_ARCHIVED`, `COHORT_ACCESS_EVALUATED`
+  (details carry IDs / closed-vocab enums / booleans only).
+- **Governed by construction:** consent / opt-in / proof / revocation /
+  `raw_body_excluded` forced **true**; training / model-improvement /
+  redistribution / commercial-use default **false**; `minimum_cohort_size >= 50`;
+  access modes limited to AGGREGATED / DEPERSONALIZED / PROOF (no raw / per-
+  individual); HIGH_SENSITIVITY → `REVIEW_REQUIRED`; CHILDREN → `DENIED`;
+  CROSS_ORG discovery STANDARD-only; tenant-scoped + enumeration-safe.
+- **Honesty markers always set:** `threshold_enforced=false`,
+  `signal_available`/`signal_delivered=false`; `ALLOW_EVALUATION` means
+  "admissible in principle", never a delivered signal.
+- **Tests:** `tests/unit/cohort-policy-evaluator.test.ts` (10) +
+  `tests/integration/foundation-cohorts.test.ts` (8, incl. wire no-leak +
+  ARCHIVE soft-retire per RULE 10). Forward-substrate (NOT built):
+  `CohortContribution` / `CohortAccessGrant` / `CohortUsageLedger` / `CohortProof`,
+  real aggregation, buyer/settlement flow, cohort UI. See
+  `docs/reference/federation-cloud-doctrine.md` §Forward phase (1305-A LANDED).
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
