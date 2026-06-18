@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  confersOrgReviewVisibility,
   evaluateHighSensitivityReviewerEligibility,
   type ReviewerEligibilityFacts,
 } from "@niov/api";
@@ -159,6 +160,45 @@ describe("evaluateHighSensitivityReviewerEligibility — org delegation", () => 
     );
     expect(d.eligible).toBe(false);
     expect(d.reason_codes).toContain("REVIEWER_NOT_ORG_AUTHORIZED");
+  });
+});
+
+describe("confersOrgReviewVisibility — 1299-B org-review list/audit gate", () => {
+  it("the four org-reviewer scopes confer org-wide visibility", () => {
+    const cases: Array<[Partial<ReviewerEligibilityFacts>, string]> = [
+      [{ membership_is_admin: true }, "ORG_ADMIN"],
+      [{ membership_role_title: "Compliance Officer" }, "COMPLIANCE"],
+      [{ membership_role_title: "Data Governance Steward" }, "GOVERNANCE"],
+      [{ membership_role_title: "Team Supervisor" }, "SUPERVISOR"],
+    ];
+    for (const [over, scope] of cases) {
+      const d = evaluateHighSensitivityReviewerEligibility(facts(over));
+      expect(d.reviewer_scope).toBe(scope);
+      expect(confersOrgReviewVisibility(d)).toBe(true);
+    }
+  });
+
+  it("OWNER / PERSONAL_OWNER do NOT confer org-wide visibility (own reviews only)", () => {
+    const owner = evaluateHighSensitivityReviewerEligibility(facts({ reviewer_is_provider: true }));
+    expect(owner.reviewer_scope).toBe("OWNER");
+    expect(confersOrgReviewVisibility(owner)).toBe(false);
+    const personal = evaluateHighSensitivityReviewerEligibility(
+      facts({ reviewer_is_provider: true, package_is_personal: true }),
+    );
+    expect(personal.reviewer_scope).toBe("PERSONAL_OWNER");
+    expect(confersOrgReviewVisibility(personal)).toBe(false);
+  });
+
+  it("a denied / plain / non-human / cross-tenant caller never confers visibility", () => {
+    for (const over of [
+      { membership_role_title: "Software Engineer" }, // plain → DENIED
+      { reviewer_entity_type: "AI_AGENT", membership_is_admin: true }, // non-human
+      { reviewer_in_provider_org: false, membership_is_admin: true }, // cross-tenant
+      { reviewer_is_buyer: true, membership_is_admin: true }, // buyer
+    ]) {
+      const d = evaluateHighSensitivityReviewerEligibility(facts(over));
+      expect(confersOrgReviewVisibility(d)).toBe(false);
+    }
   });
 });
 

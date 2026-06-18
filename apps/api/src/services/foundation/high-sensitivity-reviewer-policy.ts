@@ -135,6 +135,32 @@ const PINNED_LIMITS = Object.freeze({
   commercial_use_allowed: false as const,
 });
 
+// The reviewer scopes that confer ORG-WIDE review VISIBILITY (1299-B): an
+// authorized provider-org reviewer may list / inspect the org's reviews. OWNER
+// and PERSONAL_OWNER are deliberately EXCLUDED — being one package's provider
+// lets you see your OWN reviews (the "mine" scope), never other providers'
+// reviews across the org.
+export const ORG_REVIEWER_SCOPES: ReadonlySet<ReviewerScope> = new Set([
+  "ORG_ADMIN",
+  "COMPLIANCE",
+  "GOVERNANCE",
+  "SUPERVISOR",
+]);
+
+// WHAT: Does this eligibility decision confer org-wide review visibility?
+// INPUT: a ReviewerEligibilityDecision.
+// OUTPUT: true only for an eligible decision whose scope is an org-reviewer
+//         scope (not OWNER / PERSONAL_OWNER / DENIED).
+// WHY: The 1299-B list/audit gate reuses the SAME pure evaluator as the approval
+//      gate, so org-review visibility inherits the confused-deputy + TAR-
+//      corroborating-only guarantees automatically (no second authorization path
+//      that could drift looser than approval).
+export function confersOrgReviewVisibility(
+  decision: ReviewerEligibilityDecision,
+): boolean {
+  return decision.eligible && ORG_REVIEWER_SCOPES.has(decision.reviewer_scope);
+}
+
 function roleMatches(role: string | null, keywords: string[]): boolean {
   if (typeof role !== "string" || role.length === 0) return false;
   const r = role.toLowerCase();

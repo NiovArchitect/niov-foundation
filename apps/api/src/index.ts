@@ -89,20 +89,30 @@ export type {
 } from "./services/foundation/high-sensitivity-policy.js";
 
 // Phase 1297-A — high-sensitivity human-review workflow engine.
+// Phase 1299-B — scoped visibility + audit projection (REVIEW_LIST_SCOPES, scope
+// + summary on list, getReviewAuditForCaller).
 export {
   FoundationHighSensitivityReviewService,
   resolveReviewDecisionForGrantRead,
   REVIEW_GATE_REASONS,
+  REVIEW_LIST_SCOPES,
 } from "./services/foundation/high-sensitivity-review.service.js";
 export type {
   SafeReviewView,
   ReviewResult,
   ReviewListResult,
+  ReviewListScope,
+  ReviewSummary,
+  SafeReviewAuditEvent,
+  ReviewAuditResult,
 } from "./services/foundation/high-sensitivity-review.service.js";
 
 // Phase 1299-A — org-compliance reviewer delegation (pure eligibility policy).
+// Phase 1299-B — org-review visibility predicate (confersOrgReviewVisibility).
 export {
   evaluateHighSensitivityReviewerEligibility,
+  confersOrgReviewVisibility,
+  ORG_REVIEWER_SCOPES,
   HUMAN_REVIEWER_ENTITY_TYPES,
   REVIEWER_REASON_CODES,
 } from "./services/foundation/high-sensitivity-reviewer-policy.js";
