@@ -169,6 +169,9 @@ export type {
   // Phase 1306-A cohort contribution accounting substrate.
   CohortContribution,
   CohortContributionStatus,
+  // Phase 1307-A cohort access request lifecycle substrate.
+  CohortAccessRequest,
+  CohortAccessRequestStatus,
   HighSensitivityReview,
   HighSensitivityReviewStatus,
   Session,

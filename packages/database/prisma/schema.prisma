@@ -1286,6 +1286,67 @@ enum CohortContributionStatus {
   PAUSED
 }
 
+// Phase 1307-A — a BUYER's governed request for access to a cohort data product.
+// This is the lifecycle BEFORE any signal/proof is delivered (delivery is 1308-A):
+// a buyer asks for a (use, access_mode); a HUMAN provider/admin decides
+// (APPROVED / DENIED); the provider may later REVOKE; windows EXPIRE. CHILDREN
+// data is auto-DENIED at intake; HIGH_SENSITIVITY routes to requires_review
+// (still a human decides). Requesting is NOT granting — an AI buyer may request,
+// but only a human (non-AI_AGENT/DEVICE/APPLICATION) entity may decide or revoke,
+// and a buyer can never approve their own request (RULE 0). No data is delivered
+// by an approval in 1307-A; an approved request is permission-to-proceed only.
+model CohortAccessRequest {
+  request_id              String                     @id @default(uuid()) @db.Uuid
+  cohort_product_id       String                     @db.Uuid
+  // The requesting buyer (the caller at create time).
+  buyer_entity_id         String                     @db.Uuid
+  buyer_org_entity_id     String?                    @db.Uuid
+  // Denormalized cohort owner at request time (who decides). INTERNAL routing.
+  provider_entity_id      String                     @db.Uuid
+  provider_org_entity_id  String?                    @db.Uuid
+  // The requested (use, access_mode) — validated against the cohort's offered
+  // closed-vocab sets at create time.
+  intended_use            String
+  requested_access_mode   String
+  status                  CohortAccessRequestStatus  @default(PENDING)
+  // Mirrors the cohort's high-sensitivity gate at request time (a human must
+  // review before approving). proof_required mirrors the cohort's proof flag.
+  requires_review         Boolean                    @default(false)
+  proof_required          Boolean                    @default(false)
+  retention_policy        String?
+  // Free-text reason a human recorded on the decision (decided/denied/revoked).
+  decision_reason         String?
+  // INTERNAL — which human entity decided/revoked (audit-side, never projected).
+  decided_by_entity_id    String?                    @db.Uuid
+  requested_at            DateTime                   @default(now())
+  decided_at              DateTime?
+  // Optional access window end for an APPROVED request (no perpetual access).
+  expires_at              DateTime?
+  created_at              DateTime                   @default(now())
+  updated_at              DateTime                   @updatedAt
+  deleted_at              DateTime?
+
+  @@index([cohort_product_id])
+  @@index([buyer_entity_id])
+  @@index([provider_entity_id])
+  @@index([status])
+  @@map("cohort_access_requests")
+}
+
+// Phase 1307-A — lifecycle for a cohort access request. PENDING = awaiting a
+// human provider/admin decision; APPROVED = a human authorized the (use,mode)
+// (permission-to-proceed only — NO data delivered in 1307-A); DENIED = a human
+// (or the CHILDREN auto-block) refused; REVOKED = a human withdrew a prior
+// PENDING/APPROVED request; EXPIRED = the window lapsed (reserved; lazy, no
+// sweep). Stable set → Prisma enum.
+enum CohortAccessRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  REVOKED
+  EXPIRED
+}
+
 // Phase 1297-A — HighSensitivityReview: the durable, governed human-review
 // record that turns a REQUIRES_REVIEW high-sensitivity policy decision (per
 // the 1296-A evaluator) into an auditable, scope-bound, expiring approval — or
