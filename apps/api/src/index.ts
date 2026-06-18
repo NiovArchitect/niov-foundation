@@ -57,6 +57,22 @@ export type {
 } from "./services/foundation/authority.service.js";
 export { registerFoundationRoutes } from "./routes/foundation.routes.js";
 
+// Phase 1290-A — Foundation economic substrate (mock-only).
+export {
+  FoundationEconomicService,
+  evaluateSpendPolicy,
+  ECONOMIC_PURPOSES,
+} from "./services/foundation/economic-policy.service.js";
+export type {
+  EconomicPurpose,
+  SpendPolicyDecision,
+  SpendPolicyInput,
+  SpendPolicyResult,
+  PaymentRequiredQuote,
+  QuoteStatus,
+  QuoteResult,
+} from "./services/foundation/economic-policy.service.js";
+
 // Phase 1289-A — Foundation Memory Capsule proof-of-access.
 export { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
 export type {

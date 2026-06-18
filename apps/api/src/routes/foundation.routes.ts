@@ -24,6 +24,7 @@
 import type { FastifyInstance } from "fastify";
 import type { FoundationAuthorityService } from "../services/foundation/authority.service.js";
 import type { FoundationProofService } from "../services/foundation/proof-of-access.service.js";
+import type { FoundationEconomicService } from "../services/foundation/economic-policy.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -49,6 +50,8 @@ const FAILURE_STATUS: Record<string, number> = {
   ENTITY_NOT_FOUND: 404,
   TARGET_NOT_FOUND: 404,
   CAPSULE_NOT_FOUND: 404,
+  INVALID_PURPOSE: 422,
+  INVALID_SETTLEMENT_MODE: 422,
 };
 
 function failureStatus(code: string): number {
@@ -59,6 +62,7 @@ export async function registerFoundationRoutes(
   app: FastifyInstance,
   authorityService: FoundationAuthorityService,
   proofService: FoundationProofService,
+  economicService: FoundationEconomicService,
 ): Promise<void> {
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
@@ -111,4 +115,54 @@ export async function registerFoundationRoutes(
       return reply.code(200).send({ ok: true, proof: result.proof });
     },
   );
+
+  // Economic intent quote — HTTP 402-style payment-required handshake (1290-A).
+  // Mock-only: 200 ALLOWED_MOCK / 402 PAYMENT_REQUIRED / 403 DENIED. No funds.
+  app.post<{
+    Body: {
+      amount_usd?: unknown;
+      purpose?: unknown;
+      settlement_mode?: unknown;
+      per_transaction_cap?: unknown;
+      spend_limit?: unknown;
+      spent_so_far?: unknown;
+    };
+  }>("/api/v1/foundation/economic/quote", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null)
+      return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+    const body = request.body ?? {};
+    if (typeof body.amount_usd !== "number" || typeof body.purpose !== "string")
+      return reply
+        .code(422)
+        .send({ ok: false, code: "INVALID_REQUEST" });
+    const result = await economicService.quoteEconomicIntentForCaller(token, {
+      amount_usd: body.amount_usd,
+      purpose: body.purpose,
+      settlement_mode:
+        typeof body.settlement_mode === "string"
+          ? body.settlement_mode
+          : undefined,
+      per_transaction_cap:
+        typeof body.per_transaction_cap === "number"
+          ? body.per_transaction_cap
+          : null,
+      spend_limit:
+        typeof body.spend_limit === "number" ? body.spend_limit : null,
+      spent_so_far:
+        typeof body.spent_so_far === "number" ? body.spent_so_far : null,
+    });
+    if (result.ok === false)
+      return reply
+        .code(failureStatus(result.code))
+        .send({ ok: false, code: result.code });
+    // HTTP disposition mirrors the quote status: 402 when payment is required.
+    const httpStatus =
+      result.quote.status === "ALLOWED_MOCK"
+        ? 200
+        : result.quote.status === "PAYMENT_REQUIRED"
+          ? 402
+          : 403;
+    return reply.code(httpStatus).send({ ok: true, quote: result.quote });
+  });
 }

@@ -433,3 +433,17 @@ describe("1288-B — Foundation authority audit literal defined", () => {
     expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
   });
 });
+
+// Phase 1290-A — the Foundation economic-substrate quote literal is DEFINED as
+// an append-only addition and IS emitted by the economic-policy evaluator (proof
+// of every 402-style quote). Mirrors the AUDIT.1 precedent.
+describe("1290-A — Foundation economic-intent audit literal defined", () => {
+  it("ECONOMIC_INTENT_QUOTED is present + recognized", () => {
+    expect(AUDIT_EVENT_TYPE_VALUES).toContain("ECONOMIC_INTENT_QUOTED");
+    expect(isKnownAuditEventType("ECONOMIC_INTENT_QUOTED")).toBe(true);
+  });
+
+  it("the literal set has no duplicates after the 1290-A append", () => {
+    expect(new Set(AUDIT_EVENT_TYPE_VALUES).size).toBe(AUDIT_EVENT_TYPE_VALUES.length);
+  });
+});

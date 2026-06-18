@@ -129,6 +129,7 @@ import { registerWorkOsAuthorityRoutes } from "./routes/work-os-authority.routes
 import { registerFoundationRoutes } from "./routes/foundation.routes.js";
 import { FoundationAuthorityService } from "./services/foundation/authority.service.js";
 import { FoundationProofService } from "./services/foundation/proof-of-access.service.js";
+import { FoundationEconomicService } from "./services/foundation/economic-policy.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -298,6 +299,8 @@ export async function buildApp(
   const foundationAuthorityService = new FoundationAuthorityService(authService);
   // Phase 1289-A — Foundation Memory Capsule proof-of-access.
   const foundationProofService = new FoundationProofService(authService);
+  // Phase 1290-A — Foundation economic substrate (mock-only).
+  const foundationEconomicService = new FoundationEconomicService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -717,6 +720,7 @@ export async function buildApp(
     app,
     foundationAuthorityService,
     foundationProofService,
+    foundationEconomicService,
   );
   await registerDeveloperRoutes(app, authService);
   await registerPlatformRoutes(app, authService);

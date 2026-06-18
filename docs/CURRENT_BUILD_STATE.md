@@ -85,8 +85,29 @@ a true stop condition):
   (forward-substrate, needs Founder authorization):** permission-lineage
   columns + cascade-revoke + memory portability/federation across apps/worlds
   + cross-entity/admin proof-of-access.
-- **1290-A Economic substrate contracts** — MOCK_ONLY / PROVIDER_DEFERRED /
-  FUTURE_ONCHAIN only; no real provider/funds/secrets.
+- **1290-A Economic substrate contracts — LANDED 2026-06-17.** NEW
+  `apps/api/src/services/foundation/economic-policy.service.ts` +
+  `POST /api/v1/foundation/economic/quote` — a mock-only **spend-policy
+  evaluator** (`evaluateSpendPolicy`: ALLOW_MOCK / NEEDS_APPROVAL / DENIED;
+  per-transaction cap + spend-limit + GATS amount tiers; non-human actors
+  AI_AGENT/DEVICE/APPLICATION NEVER auto-originate per RULE 0 + ADR-0094 §8;
+  dual-control ≥ $1000) + an **HTTP 402-style quote / payment-required
+  handshake** (`PaymentRequiredQuote`: 200 ALLOWED_MOCK / 402 PAYMENT_REQUIRED
+  / 403 DENIED) + the **economic-intent purpose vocabulary** (AGENT_TO_AGENT /
+  DEVICE_TO_DEVICE / APP_TO_AGENT / SERVICE/TOOL/COMPUTE_USAGE /
+  MEMORY_CAPSULE_READ/WRITE/SHARE / MEMORY_RETRIEVAL_QUERY /
+  MARKETPLACE_PURCHASE / SUBSCRIPTION / METERED_ACCESS). Additive audit literal
+  `ECONOMIC_INTENT_QUOTED`; metering hook `meter.economic-intent-quotes.v1`.
+  **COMPOSES, does not duplicate, GATS (ADR-0094):** GATS owns the mock-intent
+  lifecycle (propose/approve/revoke/settle, event-sourced, USDC_MOCK/MOCK_RAIL);
+  the quote's `next_step` points to the GATS surface. **Mock-only by
+  construction** — only `MOCK_ONLY` is executable; `PROVIDER_DEFERRED` /
+  `FUTURE_ONCHAIN` / `DISABLED` are DENIED with honest "Founder decision
+  required" reasons; `real_provider_enabled` hardcoded false; no real provider/
+  funds/secrets/chain (ADR-0094 five inviolable bans preserved). No schema
+  migration. **Backlog (Founder-gated):** persistent SpendPolicy /
+  SpendingCapability / PaymentIntent models; real provider selection (separate
+  RULE 21 research arc + Founder decision); marketplace seller offers.
 - **1291-A Ambient device protocol** · **1292-A Marketplace substrate** ·
   **1293-A GOVSEC / observability / metering / production hardening.**
 
