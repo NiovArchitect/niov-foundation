@@ -257,6 +257,37 @@ privacy NOT implemented or implied), NO buyer demand, NO settlement.
   real aggregation, buyer/settlement flow, cohort UI. See
   `docs/reference/federation-cloud-doctrine.md` §Forward phase (1305-A LANDED).
 
+### ✅ 1305-B — Cohort schema production activation + runtime compatibility
+
+Activated the additive 1305-A cohort schema in the **prod-connected** DB, then
+restarted the prod API from main so cohort routes are live and compatible.
+
+- **Read-only parity:** `prisma migrate diff` (prod → schema) emitted **only**
+  `CREATE TYPE "CohortProductStatus"` + `CREATE TABLE "cohort_data_products"` +
+  5 `CREATE INDEX` — **zero DROP/ALTER**, referencing pre-existing enums. The
+  fixed-check parity verifier confirmed prior substrate present; its one REQUIRED
+  miss (`memory_capsules_embedding_hnsw_idx`) is a **pre-existing, out-of-scope
+  prod gap** (directive: do not touch HNSW) — unrelated to cohorts.
+- **Activation:** `scripts/activate-cohort-prod-schema.ts` — exact-scope,
+  idempotent (`IF NOT EXISTS` / `pg_type` guard), approval-gated
+  (`NIOV_APPROVE_COHORT_PROD_SCHEMA`), prefers `DIRECT_URL`, redacts the URL,
+  never DROP/ALTER, never touches `memory_capsules`/HNSW. Applied cleanly:
+  before `table=false/enum=false` → after `table=true/enum=true`; verified 31
+  columns + 6 indexes. NOT `prisma db push`; 1297-B guard untouched.
+- **Restart proof:** prod API relaunched reproducing the canonical launch
+  (cwd `apps/api`, root `.env` via `DOTENV_CONFIG_PATH`, `REDIS_URL=redis://localhost:6379`
+  tunnel + `OTZAR_ENTITY_ID` preserved). New PID connects **only to :6543 (prod
+  pooler)** — zero :5433 — so it is provably on prod, not the local test DB. All
+  cohort routes return **401** unauth (registered, not 404/500); marketplace +
+  notifications still 401; login pipeline 401 on wrong-pw; 9 `@niovlabs.com` rows
+  present (8 demo + org). API/Python/BEAM/CT health all 200.
+- **Tests:** `tests/unit/activate-cohort-prod-schema.test.ts` (6 — additive-only,
+  approval gate, idempotency, no-leak, no memory_capsules/HNSW).
+- **Cohort schema is production-active.** Authenticated end-to-end cohort calls
+  against prod require a logged-in session (Founder/demo login); the route +
+  service logic is proven by the 1305-A integration suite + the live route
+  registration here.
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
