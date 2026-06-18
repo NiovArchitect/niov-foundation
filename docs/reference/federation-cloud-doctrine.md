@@ -295,3 +295,20 @@ re-blocked at delivery (defense-in-depth); high-sensitivity is not re-blocked (t
 only) → no schema change, no `1308-B`. Still forward-substrate after 1308-A: real
 numeric aggregate payloads, usage metering + mock economics (1309-A),
 contribution-weighted revenue share, and any cohort UI / counts / monetization.
+
+**Phase 1309-A — LANDED (usage metering + mock economics; stateless).** A read-only
+metering surface for a cohort **provider/admin** now exists: `CohortMeteringService`
++ `GET /api/v1/foundation/cohorts/:id/usage`. It meters off the existing 1308-A
+delivery audit events (`COHORT_SIGNAL_DELIVERED` / `_SUPPRESSED` / `_DENIED`),
+splitting usage by outcome and access mode, and computes a clearly-labelled **MOCK**
+economic estimate — `is_mock:true`, `settlement_mode:"MOCK_ONLY"`,
+`asset:"USDC_MOCK"`: NO funds move, NO settlement, NO payout, NO revenue share, NO
+chain. The estimate is computed on-read from the cohort's advisory
+`pricing_model.unit_price_usd` × the DELIVERED count (one billable unit per
+delivered delivery; suppressed/denied never bill) and is **never persisted as a
+charge**. The response carries AGGREGATE counts + the mock estimate only — no
+per-event detail, no buyer/contributor identities, no exact eligible-contributor
+count. **Stateless** (off audit) → no schema, no new audit literal, no `1309-B`.
+Still forward-substrate after 1309-A: real numeric aggregate payloads, real
+settlement rails, contribution-weighted revenue share, buyer self-usage views, a
+CT cohort governance surface (1310-A), and any cohort UI / counts / monetization.

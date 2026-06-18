@@ -432,6 +432,33 @@ suppression. **Stateless** (audit-only; mirrors `MarketplaceDataDeliveryService`
   suppression, at-floor delivery, PENDING→not-authorized, expired window,
   CHILDREN defense-in-depth re-block, cross-owner enumeration-safe, no-leak).
 
+### ✅ 1309-A — Cohort Usage Metering + Mock Economics (stateless; off audit)
+
+A read-only metering surface for a cohort **provider/admin**: how many times the
+1308-A delivery gate ran, split by outcome (delivered / suppressed / denied) and
+by access mode, plus a clearly-labelled **MOCK** economic estimate. **Stateless** —
+it meters off the existing 1308-A delivery audit events (`COHORT_SIGNAL_DELIVERED`
+/ `_SUPPRESSED` / `_DENIED`) via an indexed `event_type` + `details`
+cohort_product_id JSON-path count → **no schema, no new audit literal, no 1309-B,
+no delivery-path change**.
+
+- **Service:** `apps/api/src/services/foundation/cohort-metering.service.ts` —
+  `getCohortUsageForCaller` (provider/admin-only; enumeration-safe
+  `COHORT_PRODUCT_NOT_FOUND`) + pure `readUnitPriceUsd` + pure
+  `computeMockEconomics`.
+- **Mock-only economics (non-negotiable):** `is_mock:true`,
+  `settlement_mode:"MOCK_ONLY"`, `asset:"USDC_MOCK"` — NO funds move, NO
+  settlement, NO payout, NO revenue share, NO chain. Computed on-read from the
+  cohort's advisory `pricing_model.unit_price_usd` × delivered count (one billable
+  unit per DELIVERED delivery; suppressed/denied never bill); **never persisted as
+  a charge**. Mirrors `economic-policy` / `settlement-readiness` patterns.
+- **Route:** `GET /api/v1/foundation/cohorts/:id/usage` — returns AGGREGATE counts
+  + the mock estimate ONLY (no per-event detail, no buyer/contributor identities,
+  no exact eligible-contributor count — that lives only inside the audit row).
+- **Tests:** `tests/unit/cohort-mock-economics.test.ts` (6) +
+  `tests/integration/foundation-cohort-metering.test.ts` (3, incl. real
+  suppressed+delivered+denied audit aggregation, provider-only authz, zero-state).
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
