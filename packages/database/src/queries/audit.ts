@@ -708,7 +708,14 @@ export type AuditEventType =
   // FORBIDDEN: contributor raw payloads, internal source material, PII, wallet
   // ids. Additive — no ADR-0002 amendment.
   | "ATTRIBUTION_COMPUTED"
-  | "ATTRIBUTION_VIEWED";
+  | "ATTRIBUTION_VIEWED"
+  // F-1324 Policy Lineage Graph — append-only literal recording that a policy
+  // decision lineage was resolved/viewed (explainability access). Projection
+  // only; NOT policy engine internals. SAFE details: proof_reference +
+  // resource_type + resource_id + decision + viewer_role + rule_class_count.
+  // FORBIDDEN: raw policy code, private payloads, capsule bodies, chain secrets.
+  // Additive — no ADR-0002 amendment.
+  | "POLICY_LINEAGE_VIEWED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -952,6 +959,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   // F-1323 Contribution Attribution Ledger — attribution-accounting literals.
   "ATTRIBUTION_COMPUTED",
   "ATTRIBUTION_VIEWED",
+  // F-1324 Policy Lineage Graph — explainability access literal.
+  "POLICY_LINEAGE_VIEWED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

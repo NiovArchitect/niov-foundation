@@ -151,6 +151,7 @@ import { MarketplaceDataDeliveryService } from "./services/foundation/marketplac
 import { FoundationHighSensitivityReviewService } from "./services/foundation/high-sensitivity-review.service.js";
 import { FoundationRetentionService } from "./services/foundation/retention-policy.service.js";
 import { FoundationProofEventsService } from "./services/foundation/proof-events.service.js";
+import { PolicyLineageService } from "./services/foundation/policy-lineage.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -361,6 +362,8 @@ export async function buildApp(
   const foundationProofEventsService = new FoundationProofEventsService(
     authService,
   );
+  // F-1324 — policy lineage graph (explainability projection; read-only).
+  const policyLineageService = new PolicyLineageService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -787,6 +790,7 @@ export async function buildApp(
     marketplaceDataDeliveryService,
     foundationHighSensitivityReviewService,
     foundationProofEventsService,
+    policyLineageService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
