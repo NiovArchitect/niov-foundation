@@ -18,6 +18,7 @@ import type { CohortContributionService } from "../services/foundation/cohort-co
 import type { CohortAccessRequestService } from "../services/foundation/cohort-access-request.service.js";
 import type { CohortDeliveryService } from "../services/foundation/cohort-delivery.service.js";
 import type { CohortMeteringService } from "../services/foundation/cohort-metering.service.js";
+import type { CohortAttributionService } from "../services/foundation/cohort-attribution.service.js";
 
 // WHAT: Pull the bearer token out of an Authorization header.
 // WHY: cohort routes are unauthenticated at the Fastify layer; the service
@@ -474,6 +475,32 @@ export async function registerCohortMeteringRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, usage: result.usage });
+    },
+  );
+}
+
+// WHAT: Register the F-1323 cohort CONTRIBUTION ATTRIBUTION route.
+// WHY: provider/admin/contributor/buyer read of a cohort's derived attribution
+//      ledger (equal-weight v1). Role-scoped + redaction-correct; mock-only.
+export async function registerCohortAttributionRoutes(
+  app: FastifyInstance,
+  attributionService: CohortAttributionService,
+): Promise<void> {
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/foundation/cohorts/:id/attribution",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await attributionService.getCohortAttributionForCaller(
+        token,
+        request.params.id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, attribution: result.attribution });
     },
   );
 }

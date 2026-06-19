@@ -698,7 +698,17 @@ export type AuditEventType =
   // content telemetry. SAFE details: listing_id + listing_type + visibility_scope
   // (the listing's discovery_scope) + reason_code. FORBIDDEN: search payloads,
   // private query strings, raw filters, package internals, PII.
-  | "LISTING_DISCOVERED";
+  | "LISTING_DISCOVERED"
+  // F-1323 Contribution Attribution Ledger — append-only attribution-accounting
+  // literals. ATTRIBUTION ONLY: not payout, not settlement, not tokenomics, not a
+  // real charge. ATTRIBUTION_COMPUTED: the deterministic equal-weight attribution
+  // snapshot was computed (the aggregate truth). ATTRIBUTION_VIEWED: a viewer
+  // accessed it. SAFE details: cohort_product_id + active_contributor_count +
+  // total_weight + metered_usage_total + mock_value_total + viewer_role.
+  // FORBIDDEN: contributor raw payloads, internal source material, PII, wallet
+  // ids. Additive — no ADR-0002 amendment.
+  | "ATTRIBUTION_COMPUTED"
+  | "ATTRIBUTION_VIEWED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -939,6 +949,9 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   // F-1322 Proof Fidelity Completion — sovereign proof literals (append-only).
   "CONSENT_REVOKED",
   "LISTING_DISCOVERED",
+  // F-1323 Contribution Attribution Ledger — attribution-accounting literals.
+  "ATTRIBUTION_COMPUTED",
+  "ATTRIBUTION_VIEWED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
