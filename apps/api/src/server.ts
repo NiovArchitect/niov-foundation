@@ -155,6 +155,7 @@ import { PolicyLineageService } from "./services/foundation/policy-lineage.servi
 import { SettlementIntentService } from "./services/foundation/settlement-intent.service.js";
 import { CapabilityContractService } from "./services/foundation/capability-contract.service.js";
 import { EntityGraphService } from "./services/foundation/entity-graph.service.js";
+import { Avp2ResourceContractService } from "./services/foundation/avp2-resource-contract.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -373,6 +374,8 @@ export async function buildApp(
   const capabilityContractService = new CapabilityContractService(authService);
   // F-1327 — entity relationship graph (derived projection; read-only).
   const entityGraphService = new EntityGraphService(authService);
+  // F-1329 — AVP² resource contract projection (derived; quotable, mock-only).
+  const avp2ResourceContractService = new Avp2ResourceContractService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -803,6 +806,7 @@ export async function buildApp(
     settlementIntentService,
     capabilityContractService,
     entityGraphService,
+    avp2ResourceContractService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
