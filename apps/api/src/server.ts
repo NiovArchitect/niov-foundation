@@ -152,6 +152,7 @@ import { FoundationHighSensitivityReviewService } from "./services/foundation/hi
 import { FoundationRetentionService } from "./services/foundation/retention-policy.service.js";
 import { FoundationProofEventsService } from "./services/foundation/proof-events.service.js";
 import { PolicyLineageService } from "./services/foundation/policy-lineage.service.js";
+import { SettlementIntentService } from "./services/foundation/settlement-intent.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -364,6 +365,8 @@ export async function buildApp(
   );
   // F-1324 — policy lineage graph (explainability projection; read-only).
   const policyLineageService = new PolicyLineageService(authService);
+  // F-1325 — settlement intent graph (derived economic obligations; mock-only).
+  const settlementIntentService = new SettlementIntentService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -791,6 +794,7 @@ export async function buildApp(
     foundationHighSensitivityReviewService,
     foundationProofEventsService,
     policyLineageService,
+    settlementIntentService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
