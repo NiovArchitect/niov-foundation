@@ -715,7 +715,28 @@ export type AuditEventType =
   // resource_type + resource_id + decision + viewer_role + rule_class_count.
   // FORBIDDEN: raw policy code, private payloads, capsule bodies, chain secrets.
   // Additive — no ADR-0002 amendment.
-  | "POLICY_LINEAGE_VIEWED";
+  | "POLICY_LINEAGE_VIEWED"
+  // AVP² (Agent Verification & Payment Protocol) quote → accept → access loop —
+  // append-only lifecycle literals. The loop IS the protocol: an agent quotes
+  // governed access, accepts a quote, and records an access attempt; each step is
+  // a ledger event, reconstructed by querying details JSON-path (no new schema).
+  // Economics are MOCK-ONLY; no real payment, no live delivery, no execution, no
+  // content. AVP2_QUOTE_CREATED (F-1330): an agent requested a quote for a
+  // resource contract. SAFE details: quote_id + listing_id + resource_id +
+  // resource_type + intended_use + mock_price + settlement_mode + expires_at +
+  // proof_basis + policy_basis. AVP2_QUOTE_ACCEPTED (F-1331): the quote's creator
+  // accepted it; a mock settlement intent is PROJECTED. SAFE details: quote_id +
+  // acceptance_id + listing_id + resource_id + mock_price + settlement_mode +
+  // settlement_status + access_token_hash. AVP2_ACCESS_RECORDED (F-1332): an
+  // access attempt was recorded against an accepted quote; delivery is NOT
+  // enabled in Foundation. SAFE details: quote_id + acceptance_id + access_id +
+  // listing_id + resource_id + delivered + delivery_reason + proof_reference.
+  // FORBIDDEN everywhere: raw content, content bodies, fragment bodies, payloads,
+  // raw access_token, capsule bodies, secrets, PII, wallet ids. Additive — no
+  // ADR-0002 amendment (ADR-0042 §Q-γ.1 clean-transition).
+  | "AVP2_QUOTE_CREATED"
+  | "AVP2_QUOTE_ACCEPTED"
+  | "AVP2_ACCESS_RECORDED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -961,6 +982,10 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "ATTRIBUTION_VIEWED",
   // F-1324 Policy Lineage Graph — explainability access literal.
   "POLICY_LINEAGE_VIEWED",
+  // AVP² quote → accept → access loop — append-only lifecycle literals.
+  "AVP2_QUOTE_CREATED",
+  "AVP2_QUOTE_ACCEPTED",
+  "AVP2_ACCESS_RECORDED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
