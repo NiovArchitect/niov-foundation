@@ -34,6 +34,7 @@ import { REVIEW_LIST_SCOPES } from "../services/foundation/high-sensitivity-revi
 import type { FoundationProofEventsService } from "../services/foundation/proof-events.service.js";
 import type { PolicyLineageService } from "../services/foundation/policy-lineage.service.js";
 import type { SettlementIntentService } from "../services/foundation/settlement-intent.service.js";
+import type { CapabilityContractService } from "../services/foundation/capability-contract.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -145,6 +146,7 @@ export async function registerFoundationRoutes(
   proofEventsService: FoundationProofEventsService,
   policyLineageService: PolicyLineageService,
   settlementIntentService: SettlementIntentService,
+  capabilityContractService: CapabilityContractService,
 ): Promise<void> {
   // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
   // append-only audit ledger. Never a log dump: scope-filtered, authorization-
@@ -226,6 +228,27 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, ...result.settlement });
+    },
+  );
+
+  // F-1326 — Callable Capability Contracts. How a capability (listing) may be
+  // invoked under governance. Contracts only — no live execution. Visible to
+  // anyone who can see the capability (enumeration-safe LISTING_NOT_FOUND).
+  app.get<{ Params: { listing_id: string } }>(
+    "/api/v1/foundation/marketplace/listings/:listing_id/contracts",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await capabilityContractService.getContractsForCaller(
+        token,
+        request.params.listing_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, ...result.contracts });
     },
   );
 
