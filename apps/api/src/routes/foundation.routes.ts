@@ -33,6 +33,7 @@ import type { FoundationHighSensitivityReviewService, ReviewListScope } from "..
 import { REVIEW_LIST_SCOPES } from "../services/foundation/high-sensitivity-review.service.js";
 import type { FoundationProofEventsService } from "../services/foundation/proof-events.service.js";
 import type { PolicyLineageService } from "../services/foundation/policy-lineage.service.js";
+import type { SettlementIntentService } from "../services/foundation/settlement-intent.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -143,6 +144,7 @@ export async function registerFoundationRoutes(
   reviewService: FoundationHighSensitivityReviewService,
   proofEventsService: FoundationProofEventsService,
   policyLineageService: PolicyLineageService,
+  settlementIntentService: SettlementIntentService,
 ): Promise<void> {
   // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
   // append-only audit ledger. Never a log dump: scope-filtered, authorization-
@@ -203,6 +205,27 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, ...result.lineage });
+    },
+  );
+
+  // F-1325 — Settlement Intent Graph. The caller's economic obligation intents
+  // (as payer and/or payee). Derived, mock-only, read-only. Optional filters:
+  // status (PROJECTED|MATURED|VOIDED|REVOKED) + role (payer|payee).
+  app.get<{ Querystring: { status?: string; role?: string } }>(
+    "/api/v1/foundation/settlement/intents",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await settlementIntentService.getSettlementIntentsForCaller(token, {
+        status: request.query.status,
+        role: request.query.role,
+      });
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, ...result.settlement });
     },
   );
 
