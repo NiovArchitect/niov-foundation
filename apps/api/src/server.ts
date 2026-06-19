@@ -154,6 +154,7 @@ import { FoundationProofEventsService } from "./services/foundation/proof-events
 import { PolicyLineageService } from "./services/foundation/policy-lineage.service.js";
 import { SettlementIntentService } from "./services/foundation/settlement-intent.service.js";
 import { CapabilityContractService } from "./services/foundation/capability-contract.service.js";
+import { EntityGraphService } from "./services/foundation/entity-graph.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -370,6 +371,8 @@ export async function buildApp(
   const settlementIntentService = new SettlementIntentService(authService);
   // F-1326 — callable capability contracts (derived; contracts only, no execution).
   const capabilityContractService = new CapabilityContractService(authService);
+  // F-1327 — entity relationship graph (derived projection; read-only).
+  const entityGraphService = new EntityGraphService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -799,6 +802,7 @@ export async function buildApp(
     policyLineageService,
     settlementIntentService,
     capabilityContractService,
+    entityGraphService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
