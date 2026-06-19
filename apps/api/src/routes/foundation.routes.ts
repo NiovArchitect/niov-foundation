@@ -37,6 +37,10 @@ import type { SettlementIntentService } from "../services/foundation/settlement-
 import type { CapabilityContractService } from "../services/foundation/capability-contract.service.js";
 import type { EntityGraphService } from "../services/foundation/entity-graph.service.js";
 import type { Avp2ResourceContractService } from "../services/foundation/avp2-resource-contract.service.js";
+import type {
+  Avp2QuoteService,
+  Avp2QuoteRequest,
+} from "../services/foundation/avp2-quote.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -131,6 +135,10 @@ const FAILURE_STATUS: Record<string, number> = {
   LINEAGE_NOT_FOUND: 404,
   // F-1327 — entity relationship graph.
   GRAPH_NOT_FOUND: 404,
+  // F-1330 — AVP² quote intent layer.
+  LISTING_ID_REQUIRED: 422,
+  INTENDED_USE_REQUIRED: 422,
+  INVALID_QUANTITY: 422,
 };
 
 function failureStatus(code: string): number {
@@ -153,6 +161,7 @@ export async function registerFoundationRoutes(
   capabilityContractService: CapabilityContractService,
   entityGraphService: EntityGraphService,
   avp2ResourceContractService: Avp2ResourceContractService,
+  avp2QuoteService: Avp2QuoteService,
 ): Promise<void> {
   // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
   // append-only audit ledger. Never a log dump: scope-filtered, authorization-
@@ -297,6 +306,29 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, ...result.contracts });
+    },
+  );
+
+  // F-1330 — AVP² Quote Intent Layer. Step 1 of the quote→accept→access loop:
+  // the agent does not scrape — it asks for a quote. Resolves a SPECIFIC
+  // resource_id to a deterministic mock price + governance and records an
+  // append-only AVP2_QUOTE_CREATED event. Intent only — no charge, no grant,
+  // no delivery. Enumeration-safe LISTING_NOT_FOUND / RESOURCE_NOT_FOUND.
+  app.post<{ Body: Avp2QuoteRequest }>(
+    "/api/v1/foundation/avp2/quote",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await avp2QuoteService.createQuoteForCaller(
+        token,
+        request.body ?? {},
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, quote: result.quote });
     },
   );
 
