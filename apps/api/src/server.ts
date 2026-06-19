@@ -153,6 +153,7 @@ import { FoundationRetentionService } from "./services/foundation/retention-poli
 import { FoundationProofEventsService } from "./services/foundation/proof-events.service.js";
 import { PolicyLineageService } from "./services/foundation/policy-lineage.service.js";
 import { SettlementIntentService } from "./services/foundation/settlement-intent.service.js";
+import { CapabilityContractService } from "./services/foundation/capability-contract.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -367,6 +368,8 @@ export async function buildApp(
   const policyLineageService = new PolicyLineageService(authService);
   // F-1325 — settlement intent graph (derived economic obligations; mock-only).
   const settlementIntentService = new SettlementIntentService(authService);
+  // F-1326 — callable capability contracts (derived; contracts only, no execution).
+  const capabilityContractService = new CapabilityContractService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -795,6 +798,7 @@ export async function buildApp(
     foundationProofEventsService,
     policyLineageService,
     settlementIntentService,
+    capabilityContractService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
