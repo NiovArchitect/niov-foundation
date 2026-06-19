@@ -574,6 +574,10 @@ export class CohortContributionService {
     });
     if (mine.length === 0) return { ok: false, code: "NOT_JOINED" };
 
+    // F-1322: the contributor's org (best-effort) for the sovereign consent-
+    // revoke audit field. Null when orgless — never throws.
+    const orgId = await this.callerOrgOrNull(v.entity_id);
+
     for (const row of mine) {
       await prisma.cohortContribution.update({
         where: { contribution_id: row.contribution_id },
@@ -588,6 +592,25 @@ export class CohortContributionService {
           cohort_product_id: cohortProductId,
           contribution_id: row.contribution_id,
           status: "REVOKED",
+          self_initiated: true,
+        },
+      });
+      // F-1322: a contributor explicitly revoking participation IS the sovereign
+      // act of withdrawing consent (RULE 0) — emitted as its own first-class
+      // proof event, DISTINCT from a grant revoke. Additive: the existing
+      // COHORT_CONTRIBUTION_REVOKED emission above is preserved unchanged.
+      await writeAuditEvent({
+        event_type: "CONSENT_REVOKED",
+        outcome: "SUCCESS",
+        actor_entity_id: v.entity_id,
+        details: {
+          action: "CONSENT_REVOKED",
+          resource_type: "contribution",
+          resource_id: row.contribution_id,
+          contribution_id: row.contribution_id,
+          cohort_product_id: cohortProductId,
+          org_entity_id: orgId,
+          reason_code: "CONTRIBUTOR_WITHDREW_CONSENT",
           self_initiated: true,
         },
       });
