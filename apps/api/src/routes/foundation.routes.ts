@@ -41,6 +41,7 @@ import type {
   Avp2QuoteService,
   Avp2QuoteRequest,
 } from "../services/foundation/avp2-quote.service.js";
+import type { Avp2AcceptService } from "../services/foundation/avp2-accept.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -139,6 +140,10 @@ const FAILURE_STATUS: Record<string, number> = {
   LISTING_ID_REQUIRED: 422,
   INTENDED_USE_REQUIRED: 422,
   INVALID_QUANTITY: 422,
+  // F-1331 — AVP² quote acceptance layer.
+  QUOTE_ID_REQUIRED: 422,
+  QUOTE_NOT_FOUND: 404,
+  QUOTE_EXPIRED: 409,
 };
 
 function failureStatus(code: string): number {
@@ -162,6 +167,7 @@ export async function registerFoundationRoutes(
   entityGraphService: EntityGraphService,
   avp2ResourceContractService: Avp2ResourceContractService,
   avp2QuoteService: Avp2QuoteService,
+  avp2AcceptService: Avp2AcceptService,
 ): Promise<void> {
   // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
   // append-only audit ledger. Never a log dump: scope-filtered, authorization-
@@ -329,6 +335,29 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(201).send({ ok: true, quote: result.quote });
+    },
+  );
+
+  // F-1331 — AVP² Quote Acceptance Layer. Step 2 of the loop: the quote's
+  // CREATOR accepts it, projecting a MOCK settlement intent (PROJECTED) and
+  // minting a single-use access_token for the access step. Actor-bound,
+  // expiry-checked, first-accept-wins idempotent. Enumeration-safe
+  // QUOTE_NOT_FOUND. Mock-only; no charge, no delivery.
+  app.post<{ Params: { quote_id: string } }>(
+    "/api/v1/foundation/avp2/quote/:quote_id/accept",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await avp2AcceptService.acceptQuoteForCaller(
+        token,
+        request.params.quote_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, acceptance: result.acceptance });
     },
   );
 
