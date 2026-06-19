@@ -680,7 +680,25 @@ export type AuditEventType =
   // is_data_package + sensitivity_class (label) + reason_code. FORBIDDEN: raw
   // capsule body/IDs, package internals, PII, provider secrets, real settlement
   // data. Additive — no ADR-0002 amendment.
-  | "MARKETPLACE_DISCOVERY_POLICY_UPDATED";
+  | "MARKETPLACE_DISCOVERY_POLICY_UPDATED"
+  // F-1322 Proof Fidelity Completion — two sovereign proof literals upgrading
+  // the F-1321 feed's last MISSING classes to EXACT. Append-only; no rename, no
+  // collapse with grant-revoke. Additive — no ADR-0002 amendment.
+  //
+  // CONSENT_REVOKED: a contributor explicitly revokes their consent and access
+  // is terminated. DISTINCT from MARKETPLACE_DATA_GRANT_REVOKED (a provider/buyer
+  // revoking a grant) — consent revocation is the data subject's own sovereign
+  // act (RULE 0), legally distinct from grant lifecycle. SAFE details:
+  // resource_type (grant|contribution) + resource_id + cohort_product_id /
+  // grant_id + reason_code + org_entity_id. FORBIDDEN: raw payload, capsule body,
+  // contributor PII, wallet ids.
+  | "CONSENT_REVOKED"
+  // LISTING_DISCOVERED: a marketplace listing becomes visible to a requester
+  // (a single-listing view/discovery occurrence). Discovery TELEMETRY, not
+  // content telemetry. SAFE details: listing_id + listing_type + visibility_scope
+  // (the listing's discovery_scope) + reason_code. FORBIDDEN: search payloads,
+  // private query strings, raw filters, package internals, PII.
+  | "LISTING_DISCOVERED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -918,6 +936,9 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "HIGH_SENSITIVITY_REVIEWER_ELIGIBILITY_EVALUATED",
   // Phase 1301-A cross-org marketplace discovery opt-in.
   "MARKETPLACE_DISCOVERY_POLICY_UPDATED",
+  // F-1322 Proof Fidelity Completion — sovereign proof literals (append-only).
+  "CONSENT_REVOKED",
+  "LISTING_DISCOVERED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

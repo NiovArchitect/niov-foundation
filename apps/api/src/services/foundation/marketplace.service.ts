@@ -804,6 +804,26 @@ export class FoundationMarketplaceService {
       orgEntityId,
     );
     if (l === null) return { ok: false, code: "LISTING_NOT_FOUND" };
+    // F-1322: a listing becoming visible to a REQUESTER (not its own provider)
+    // is a first-class discovery occurrence. Discovery TELEMETRY only — never the
+    // query string, filters, or any content. visibility_scope = the listing's
+    // provider-set discovery reach.
+    if (l.provider_entity_id !== validation.entity_id) {
+      await writeAuditEvent({
+        event_type: "LISTING_DISCOVERED",
+        outcome: "SUCCESS",
+        actor_entity_id: validation.entity_id,
+        details: {
+          action: "LISTING_DISCOVERED",
+          resource_type: "listing",
+          resource_id: l.listing_id,
+          listing_id: l.listing_id,
+          listing_type: l.listing_type,
+          visibility_scope: l.discovery_scope,
+          reason_code: "LISTING_VIEWED_BY_REQUESTER",
+        },
+      });
+    }
     return { ok: true, listing: toSafeListing(l) };
   }
 

@@ -84,7 +84,7 @@ export const PROOF_EVENT_CLASSES: ProofClassSpec[] = [
   { event_class: "REQUEST_APPROVED", sources: ["COHORT_ACCESS_DECIDED"], fidelity: "DERIVED", resource_type: "ACCESS_REQUEST", actor_role: "PROVIDER", roles: ["provider"], match: decisionIs("APPROVED"), fidelity_note: "Derived from COHORT_ACCESS_DECIDED (decision in details), not a distinct literal." },
   { event_class: "REQUEST_DENIED", sources: ["COHORT_ACCESS_DECIDED"], fidelity: "DERIVED", resource_type: "ACCESS_REQUEST", actor_role: "PROVIDER", roles: ["provider"], match: decisionIs("DENIED"), fidelity_note: "Derived from COHORT_ACCESS_DECIDED (decision in details), not a distinct literal." },
   { event_class: "CONSENT_GRANTED", sources: ["MARKETPLACE_DATA_CONSENT_RECORDED", "CONSENT_GRANT_RECORDED"], fidelity: "EXACT", resource_type: "CONSENT", actor_role: "CONTRIBUTOR", roles: ["contributor", "buyer"] },
-  { event_class: "CONSENT_REVOKED", sources: [], fidelity: "MISSING", resource_type: "CONSENT", actor_role: "CONTRIBUTOR", roles: ["contributor"], fidelity_note: "No distinct consent-revoked literal yet; consent withdrawal currently surfaces as GRANT_REVOKED / CONSENT_EXPIRED." },
+  { event_class: "CONSENT_REVOKED", sources: ["CONSENT_REVOKED"], fidelity: "EXACT", resource_type: "CONSENT", actor_role: "CONTRIBUTOR", roles: ["contributor"] },
   { event_class: "GRANT_CREATED", sources: ["MARKETPLACE_DATA_GRANT_CREATED"], fidelity: "EXACT", resource_type: "DATA_GRANT", actor_role: "PROVIDER", roles: ["provider", "buyer"] },
   { event_class: "GRANT_READ", sources: ["MARKETPLACE_DATA_GRANT_READ_EVALUATED"], fidelity: "EXACT", resource_type: "DATA_GRANT", actor_role: "BUYER", roles: ["buyer"], match: outcomeIs("SUCCESS") },
   { event_class: "GRANT_DENIED", sources: ["MARKETPLACE_DATA_GRANT_READ_EVALUATED"], fidelity: "DERIVED", resource_type: "DATA_GRANT", actor_role: "BUYER", roles: ["buyer"], match: outcomeIs("DENIED"), fidelity_note: "Derived from MARKETPLACE_DATA_GRANT_READ_EVALUATED with outcome=DENIED." },
@@ -96,7 +96,7 @@ export const PROOF_EVENT_CLASSES: ProofClassSpec[] = [
   { event_class: "COHORT_DELIVERY_SUPPRESSED", sources: ["COHORT_DELIVERY_SUPPRESSED"], fidelity: "EXACT", resource_type: "COHORT", actor_role: "PROVIDER", roles: ["provider"] },
   { event_class: "COHORT_DELIVERY_DENIED", sources: ["COHORT_DELIVERY_DENIED"], fidelity: "EXACT", resource_type: "COHORT", actor_role: "PROVIDER", roles: ["provider"] },
   { event_class: "LISTING_REGISTERED", sources: ["MARKETPLACE_LISTING_CREATED"], fidelity: "EXACT", resource_type: "LISTING", actor_role: "PROVIDER", roles: ["provider"] },
-  { event_class: "LISTING_DISCOVERED", sources: [], fidelity: "MISSING", resource_type: "LISTING", actor_role: "BUYER", roles: ["buyer"], fidelity_note: "Discovery is a read (GET) and is not audited; no source literal exists." },
+  { event_class: "LISTING_DISCOVERED", sources: ["LISTING_DISCOVERED"], fidelity: "EXACT", resource_type: "LISTING", actor_role: "BUYER", roles: ["buyer"] },
   { event_class: "LISTING_ACCESS_EVALUATED", sources: ["MARKETPLACE_ACCESS_EVALUATED"], fidelity: "EXACT", resource_type: "LISTING", actor_role: "BUYER", roles: ["buyer"] },
   { event_class: "METER_INCREMENTED", sources: ["USAGE_METER_THRESHOLD_REACHED", "USAGE_METER_RECORDED", "DATA_MONETIZED"], fidelity: "PARTIAL", resource_type: "METER", actor_role: "SYSTEM", roles: ["provider", "buyer"], fidelity_note: "Metering is recorded at thresholds/monetization points, not as a per-unit increment stream; meter_delta may be null." },
   { event_class: "SETTLEMENT_INTENT_CREATED", sources: ["ECONOMIC_INTENT_QUOTED"], fidelity: "EXACT", resource_type: "SETTLEMENT", actor_role: "BUYER", roles: ["provider", "buyer"], fidelity_note: "Settlement is mock-only; no real funds move." },
@@ -481,7 +481,7 @@ export class FoundationProofEventsService {
           : spec.resource_type === "COHORT_CONTRIBUTION" ? strOrNull(details.contribution_id)
             : spec.resource_type === "COHORT" ? strOrNull(details.cohort_product_id)
               : spec.resource_type === "LISTING" ? strOrNull(details.listing_id)
-                : spec.resource_type === "CONSENT" ? strOrNull(details.grant_id) ?? strOrNull(details.consent_record_id)
+                : spec.resource_type === "CONSENT" ? strOrNull(details.contribution_id) ?? strOrNull(details.grant_id) ?? strOrNull(details.consent_record_id)
                   : strOrNull(details.listing_id) ?? strOrNull(details.grant_id) ?? strOrNull(details.cohort_product_id);
 
     // actor identity: only when same-tenant / a party / the caller themselves.

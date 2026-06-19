@@ -79,9 +79,15 @@ describe("F-1321 proof-event class catalog", () => {
     expect(new Set(PROOF_SOURCE_LITERALS)).toEqual(fromClasses);
   });
 
-  it("LISTING_DISCOVERED and CONSENT_REVOKED are honestly marked MISSING", () => {
+  it("F-1322: LISTING_DISCOVERED and CONSENT_REVOKED are now EXACT (sovereign literals)", () => {
     const byClass = new Map(PROOF_EVENT_CLASSES.map((c) => [c.event_class, c]));
-    expect(byClass.get("LISTING_DISCOVERED")?.fidelity).toBe("MISSING");
-    expect(byClass.get("CONSENT_REVOKED")?.fidelity).toBe("MISSING");
+    expect(byClass.get("LISTING_DISCOVERED")?.fidelity).toBe("EXACT");
+    expect(byClass.get("LISTING_DISCOVERED")?.sources).toEqual(["LISTING_DISCOVERED"]);
+    expect(byClass.get("CONSENT_REVOKED")?.fidelity).toBe("EXACT");
+    expect(byClass.get("CONSENT_REVOKED")?.sources).toEqual(["CONSENT_REVOKED"]);
+  });
+
+  it("F-1322: no proof class remains MISSING (fidelity completion)", () => {
+    expect(PROOF_EVENT_CLASSES.filter((c) => c.fidelity === "MISSING")).toEqual([]);
   });
 });

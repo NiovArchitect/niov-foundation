@@ -193,8 +193,8 @@ describe("F-1321 — Scoped Proof Event Feed", () => {
     for (const e of body.events) expect(e.proof_reference.length).toBeGreaterThan(0);
     // No raw content / internal counts / secrets on the wire.
     for (const t of FORBIDDEN) expect(raw).not.toContain(t);
-    // Fidelity notes are surfaced (MISSING/DERIVED/PARTIAL classes).
-    expect(body.fidelity_notes.some((n) => n.event_class === "LISTING_DISCOVERED")).toBe(true);
+    // Fidelity notes are surfaced for non-EXACT classes (DERIVED/PARTIAL).
+    expect(body.fidelity_notes.some((n) => n.event_class === "POLICY_EVALUATED")).toBe(true);
   });
 
   it("default scope is self (no scope param)", async () => {
@@ -285,5 +285,100 @@ describe("F-1321 — Scoped Proof Event Feed", () => {
       if (e.resource_type === "SETTLEMENT" || e.resource_type === "METER") expect(e.is_mock).toBe(true);
       else expect(e.is_mock).toBe(false);
     }
+  });
+});
+
+// ── F-1322 Proof Fidelity Completion ─────────────────────────────────────────
+async function registerCohort(): Promise<string> {
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/v1/foundation/cohorts",
+    headers: auth(PROVIDER_TOKEN),
+    payload: {
+      title: "Consent revoke cohort",
+      description: "d",
+      cohort_type: "CONSUMER_BEHAVIOR",
+      access_modes: ["AGGREGATED_SIGNAL"],
+      allowed_uses: ["ANALYTICS"],
+      status: "ACTIVE",
+    },
+  });
+  if (res.statusCode !== 201 && res.statusCode !== 200) throw new Error(`cohort failed: ${res.statusCode} ${res.body}`);
+  return (res.json() as { cohort: { cohort_product_id: string } }).cohort.cohort_product_id;
+}
+
+describe("F-1322 — Proof Fidelity Completion (CONSENT_REVOKED + LISTING_DISCOVERED)", () => {
+  it("contributor withdrawal emits an EXACT CONSENT_REVOKED proof event (distinct, sovereign)", async () => {
+    const cohortId = await registerCohort();
+    const join = await app.inject({
+      method: "POST",
+      url: `/api/v1/foundation/cohorts/${cohortId}/join`,
+      headers: auth(BUYER_TOKEN),
+      payload: { contribution_scope: "PREFERENCE" },
+    });
+    expect([200, 201]).toContain(join.statusCode);
+    const withdraw = await app.inject({
+      method: "POST",
+      url: `/api/v1/foundation/cohorts/${cohortId}/withdraw`,
+      headers: auth(BUYER_TOKEN),
+      payload: {},
+    });
+    expect([200, 201]).toContain(withdraw.statusCode);
+
+    const { status, body, raw } = await feed(BUYER_TOKEN, "?scope=self&event_type=CONSENT_REVOKED");
+    expect(status).toBe(200);
+    expect(body.events.length).toBeGreaterThanOrEqual(1);
+    const ev = body.events[0];
+    expect(ev?.event_type).toBe("CONSENT_REVOKED");
+    expect(ev?.resource_type).toBe("CONSENT");
+    expect(ev?.resource_id).not.toBeNull();
+    expect(ev?.proof_reference.length).toBeGreaterThan(0);
+    // No raw payload / contributor PII on the wire.
+    for (const t of FORBIDDEN) expect(raw).not.toContain(t);
+    // It is no longer a fidelity gap.
+    expect(body.fidelity_notes.some((n) => n.event_class === "CONSENT_REVOKED")).toBe(false);
+  });
+
+  it("a requester viewing a published listing emits an EXACT LISTING_DISCOVERED proof event", async () => {
+    const listingId = await registerListing(); // PUBLISHED, provider-owned
+    // BUYER (same org, not the provider) discovers it via the single-listing read.
+    const view = await app.inject({
+      method: "GET",
+      url: `/api/v1/foundation/marketplace/listings/${listingId}`,
+      headers: auth(BUYER_TOKEN),
+    });
+    expect(view.statusCode).toBe(200);
+
+    const { status, body } = await feed(BUYER_TOKEN, "?scope=self&event_type=LISTING_DISCOVERED");
+    expect(status).toBe(200);
+    const discovered = body.events.find((e) => e.resource_id === listingId);
+    expect(discovered).toBeDefined();
+    expect(discovered?.event_type).toBe("LISTING_DISCOVERED");
+    expect(discovered?.resource_type).toBe("LISTING");
+    expect(body.fidelity_notes.some((n) => n.event_class === "LISTING_DISCOVERED")).toBe(false);
+  });
+
+  it("a provider reading their OWN listing does NOT emit LISTING_DISCOVERED (not a discovery occurrence)", async () => {
+    const listingId = await registerListing();
+    const before = await feed(PROVIDER_TOKEN, "?scope=self&event_type=LISTING_DISCOVERED");
+    const beforeCount = before.body.events.filter((e) => e.resource_id === listingId).length;
+    const view = await app.inject({
+      method: "GET",
+      url: `/api/v1/foundation/marketplace/listings/${listingId}`,
+      headers: auth(PROVIDER_TOKEN),
+    });
+    expect(view.statusCode).toBe(200);
+    const after = await feed(PROVIDER_TOKEN, "?scope=self&event_type=LISTING_DISCOVERED");
+    const afterCount = after.body.events.filter((e) => e.resource_id === listingId).length;
+    expect(afterCount).toBe(beforeCount);
+  });
+
+  it("the new literals are auth-scoped: a cross-tenant stranger's self feed never sees them", async () => {
+    // The stranger (orgB) performed no consent revoke / listing discovery; self
+    // scope is actor=caller by construction, so neither literal can appear.
+    const { status, body } = await feed(STRANGER_TOKEN, "?scope=self");
+    expect(status).toBe(200);
+    expect(body.events.some((e) => e.event_type === "CONSENT_REVOKED")).toBe(false);
+    expect(body.events.some((e) => e.event_type === "LISTING_DISCOVERED")).toBe(false);
   });
 });
