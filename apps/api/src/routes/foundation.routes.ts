@@ -42,6 +42,10 @@ import type {
   Avp2QuoteRequest,
 } from "../services/foundation/avp2-quote.service.js";
 import type { Avp2AcceptService } from "../services/foundation/avp2-accept.service.js";
+import type {
+  Avp2AccessService,
+  Avp2AccessRequest,
+} from "../services/foundation/avp2-access.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -144,6 +148,9 @@ const FAILURE_STATUS: Record<string, number> = {
   QUOTE_ID_REQUIRED: 422,
   QUOTE_NOT_FOUND: 404,
   QUOTE_EXPIRED: 409,
+  // F-1332 — AVP² access receipt layer.
+  ACCESS_TOKEN_REQUIRED: 422,
+  ACCESS_DENIED: 403,
 };
 
 function failureStatus(code: string): number {
@@ -168,6 +175,7 @@ export async function registerFoundationRoutes(
   avp2ResourceContractService: Avp2ResourceContractService,
   avp2QuoteService: Avp2QuoteService,
   avp2AcceptService: Avp2AcceptService,
+  avp2AccessService: Avp2AccessService,
 ): Promise<void> {
   // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
   // append-only audit ledger. Never a log dump: scope-filtered, authorization-
@@ -358,6 +366,29 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(201).send({ ok: true, acceptance: result.acceptance });
+    },
+  );
+
+  // F-1332 — AVP² Access Receipt Layer. Step 3 (the close): the agent presents
+  // the single-use access_token from acceptance; Foundation RECORDS the access
+  // and returns a Proof-of-Access. content_delivery.delivered is ALWAYS false
+  // (DELIVERY_NOT_ENABLED_IN_FOUNDATION) — the hard safety net. Token-verified by
+  // hash + actor-bound; enumeration-safe ACCESS_DENIED. Mock-only; no content.
+  app.post<{ Body: Avp2AccessRequest }>(
+    "/api/v1/foundation/avp2/access",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await avp2AccessService.recordAccessForCaller(
+        token,
+        request.body ?? {},
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, receipt: result.receipt });
     },
   );
 
