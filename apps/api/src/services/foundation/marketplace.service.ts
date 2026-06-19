@@ -273,6 +273,44 @@ export type BuyerGrantConsoleResult =
   | { ok: true; console: BuyerGrantConsoleView }
   | { ok: false; code: string };
 
+// ── Phase 1312-A — Contributor Sovereignty projections ──────────────────────
+// The PROVIDER's view of one grant on THEIR data: who has access, under what
+// policy, how it has been used, and its revocation status. The core product
+// truth — data is not sold; governed access is leased under consent + proof, and
+// revocation must be VISIBLE. Revocation itself uses the existing
+// revokeDataGrantForCaller; this view surfaces the controls' context.
+
+export interface ProviderGrantSovereigntyView {
+  grant: SafeDataGrantView;
+  resource: { listing_title: string | null; listing_type: string | null };
+  policy: {
+    allowed_uses: string[];
+    training_allowed: boolean;
+    model_improvement_allowed: boolean;
+    sensitivity_class: DataSensitivityClass | null;
+    aggregate_only: boolean;
+    depersonalized_only: boolean;
+    raw_body_excluded: true;
+  };
+  usage: DataGrantUsageSummary;
+  sovereignty: {
+    // Whether this grant is currently in force (ACTIVE, unexpired, unrevoked).
+    is_active: boolean;
+    // Whether the provider can revoke it now (in-force grants only).
+    revocable: boolean;
+    status: MarketplaceDataGrantStatus;
+    revoked_at: string | null;
+    revocation_reason: string | null;
+    expires_at: string | null;
+    // Revocation is enforced at READ time (delivery re-checks ACTIVE + consent).
+    revocation_enforced_at_read: true;
+  };
+}
+
+export type ProviderGrantSovereigntyResult =
+  | { ok: true; sovereignty: ProviderGrantSovereigntyView }
+  | { ok: false; code: string };
+
 function toSafeGrant(g: MarketplaceDataGrant): SafeDataGrantView {
   return {
     grant_id: g.grant_id,
@@ -1710,6 +1748,79 @@ export class FoundationMarketplaceService {
           is_mock: true,
           economic_decision: grant.economic_decision,
           note: "Mock-only settlement intent — no funds move and no settlement exists.",
+        },
+      },
+    };
+  }
+
+  // WHAT: The Contributor Sovereignty view for ONE grant on the caller's data —
+  //       who has access, under what policy, how it has been used, and its
+  //       revocation status. Phase 1312-A.
+  // WHY: GET /marketplace/data-grants/:grant_id/sovereignty. Provider-scoped +
+  //      enumeration safe (a grant the caller is not the PROVIDER of →
+  //      GRANT_NOT_FOUND). Revocation itself is the existing
+  //      revokeDataGrantForCaller; this surfaces the controls' context. The core
+  //      truth: governed access is leased under consent + proof — and revocation
+  //      is VISIBLE and enforced at read time.
+  async getProviderGrantSovereigntyForCaller(
+    sessionToken: string,
+    grantId: string,
+  ): Promise<ProviderGrantSovereigntyResult> {
+    const validation = await this.authService.validateSession(sessionToken, "read");
+    if (!validation.valid) return { ok: false, code: validation.code };
+
+    const grant = await prisma.marketplaceDataGrant.findFirst({
+      where: { grant_id: grantId },
+    });
+    // Provider-scoped: only the data owner sees the sovereignty view.
+    if (grant === null || grant.provider_entity_id !== validation.entity_id)
+      return { ok: false, code: "GRANT_NOT_FOUND" };
+
+    const [pkg, listing, usage] = await Promise.all([
+      prisma.marketplaceDataPackage.findFirst({
+        where: { data_package_id: grant.data_package_id },
+      }),
+      prisma.marketplaceListing.findFirst({
+        where: { listing_id: grant.listing_id },
+        select: { title: true, listing_type: true },
+      }),
+      this.grantUsageSummary(grant.grant_id),
+    ]);
+
+    const now = Date.now();
+    const isActive =
+      grant.status === "ACTIVE" &&
+      grant.revoked_at === null &&
+      (grant.expires_at === null || grant.expires_at.getTime() > now);
+    // In-force grants (ACTIVE or still PENDING_CONSENT) can be revoked.
+    const revocable = grant.status === "ACTIVE" || grant.status === "PENDING_CONSENT";
+
+    return {
+      ok: true,
+      sovereignty: {
+        grant: toSafeGrant(grant),
+        resource: {
+          listing_title: listing?.title ?? null,
+          listing_type: listing?.listing_type ?? null,
+        },
+        policy: {
+          allowed_uses: pkg?.allowed_use ?? [],
+          training_allowed: pkg?.training_allowed ?? false,
+          model_improvement_allowed: pkg?.model_improvement_allowed ?? false,
+          sensitivity_class: pkg?.sensitivity_class ?? null,
+          aggregate_only: pkg?.aggregate_only ?? false,
+          depersonalized_only: pkg?.depersonalized_only ?? false,
+          raw_body_excluded: true,
+        },
+        usage,
+        sovereignty: {
+          is_active: isActive,
+          revocable,
+          status: grant.status,
+          revoked_at: grant.revoked_at?.toISOString() ?? null,
+          revocation_reason: grant.revocation_reason,
+          expires_at: grant.expires_at?.toISOString() ?? null,
+          revocation_enforced_at_read: true,
         },
       },
     };

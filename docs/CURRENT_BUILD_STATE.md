@@ -491,6 +491,27 @@ new audit literal.
   role-filtered list, console policy+usage+mock-settlement, buyer-scoped
   enumeration safety (provider/outsider → 404), no-leak.
 
+### ✅ 1312-A — Contributor Sovereignty backend + revoke-enforcement proof
+
+The core product truth made visible + proven: **data is not sold; governed access
+is leased under consent + proof, and revocation is VISIBLE and ENFORCED.**
+Provider-side view + the proof that revoked access cannot be used. No schema, no
+new audit literal (revocation already exists; this surfaces + proves it).
+
+- **Service** (`marketplace.service.ts`): `getProviderGrantSovereigntyForCaller(
+  token, grantId)` — provider-scoped; enumeration-safe `GRANT_NOT_FOUND`. Returns
+  grant + resource label + access policy + audit-derived usage + a **sovereignty**
+  block (`is_active`, `revocable`, `status`, `revoked_at`, `revocation_reason`,
+  `expires_at`, `revocation_enforced_at_read:true`). Revocation itself uses the
+  existing `revokeDataGrantForCaller` + `/data-grants/:id/revoke` route; the
+  provider-filtered list uses `my-data-grants?role=provider` (landed 1311-B).
+- **Route:** `GET /marketplace/data-grants/:grant_id/sovereignty`.
+- **Tests:** `tests/integration/foundation-contributor-sovereignty.test.ts` (3) —
+  provider-scoped sovereignty view (buyer → 404); **CORE TRUTH: after the provider
+  revokes, the buyer's previously-working read is REFUSED** (revoked access cannot
+  be used; row persists REVOKED per RULE 10); sovereignty view reflects withdrawal;
+  provider role-filtered list.
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for
