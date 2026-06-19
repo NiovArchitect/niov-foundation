@@ -459,6 +459,38 @@ no delivery-path change**.
   `tests/integration/foundation-cohort-metering.test.ts` (3, incl. real
   suppressed+delivered+denied audit aggregation, provider-only authz, zero-state).
 
+### ✅ 1311-A — Federation Cloud governed-economy arc: investigation
+
+Mapped the existing marketplace/grant/consent substrate before extending (Founder
+Gap Closure directive). Key finding: `MarketplaceDataGrant` already carries the
+full lifecycle; **revocation already exists** (`revokeDataGrantForCaller`, provider
+OR buyer) and is **enforced at read time** (delivery re-checks grant ACTIVE +
+consent live). The gaps were the **views**, not the enforcement: no buyer-filtered
+"my purchases", no provider-filtered "grants on my data", no per-grant usage
+summary. Smallest coherent extension = filtered SAFE views + usage-off-audit.
+
+### ✅ 1311-B — Buyer Access Console backend
+
+A buyer-facing view of WHAT they have access to, over their OWN grants. Reuses the
+existing `SafeDataGrantView` + the 1309-A usage-off-audit pattern. No schema, no
+new audit literal.
+
+- **Service** (`marketplace.service.ts`): `listDataGrantsByRoleForCaller(token,
+  role)` (buyer | provider — back-compat `listDataGrantsForCaller` untouched) +
+  `getBuyerGrantConsoleForCaller(token, grantId)` (buyer-scoped; enumeration-safe
+  `GRANT_NOT_FOUND`) + private `grantUsageSummary` (read/denied counts +
+  last-accessed derived from `MARKETPLACE_DATA_GRANT_READ_EVALUATED` audit events).
+- **Console view:** grant + governed resource label (listing title/type) + access
+  **policy** (allowed uses / training / sensitivity / aggregate-only /
+  raw_body_excluded) + **usage** (read_count / denied_count / last_accessed_at) +
+  **mock-only settlement intent** (`is_mock`, economic_decision). No raw content,
+  no other buyers' grants.
+- **Routes:** `GET /marketplace/my-data-grants?role=buyer|provider`,
+  `GET /marketplace/data-grants/:grant_id/console`.
+- **Tests:** `tests/integration/foundation-buyer-access-console.test.ts` (4) —
+  role-filtered list, console policy+usage+mock-settlement, buyer-scoped
+  enumeration safety (provider/outsider → 404), no-leak.
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for

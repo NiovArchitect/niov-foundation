@@ -512,6 +512,49 @@ export async function registerFoundationRoutes(
     },
   );
 
+  // Phase 1311-B / 1312-A — list the caller's grants filtered to ONE role:
+  // "buyer" (what I purchased / have access to) or "provider" (grants on my
+  // data). Default buyer. The mixed-role /data-grants stays for back-compat.
+  app.get<{ Querystring: { role?: string } }>(
+    "/api/v1/foundation/marketplace/my-data-grants",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const role = request.query.role === "provider" ? "provider" : "buyer";
+      const result = await marketplaceService.listDataGrantsByRoleForCaller(
+        token,
+        role,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, role, grants: result.grants });
+    },
+  );
+
+  // Phase 1311-B — the Buyer Access Console summary for ONE of the caller's
+  // grants (grant + resource label + access policy + audit-derived usage +
+  // mock-only settlement intent). Buyer-scoped; enumeration-safe.
+  app.get<{ Params: { grant_id: string } }>(
+    "/api/v1/foundation/marketplace/data-grants/:grant_id/console",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.getBuyerGrantConsoleForCaller(
+        token,
+        request.params.grant_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, console: result.console });
+    },
+  );
+
   // Read one data grant.
   app.get<{ Params: { grant_id: string } }>(
     "/api/v1/foundation/marketplace/data-grants/:grant_id",

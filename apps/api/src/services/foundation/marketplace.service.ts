@@ -235,6 +235,44 @@ export type DataGrantListResult =
   | { ok: true; grants: SafeDataGrantView[] }
   | { ok: false; code: string };
 
+// ── Phase 1311-B — Buyer Access Console projections ─────────────────────────
+// SAFE buyer-facing summaries over the buyer's OWN grants. Usage is derived from
+// the append-only audit chain (MARKETPLACE_DATA_GRANT_READ_EVALUATED) — never a
+// new persisted counter. Never exposes raw capsule content, other buyers' grants,
+// or contributor identities beyond the provider already on the SAFE grant view.
+
+export interface DataGrantUsageSummary {
+  // Successful reads of this grant (from the audit chain).
+  read_count: number;
+  // Denied read attempts (governance held — useful buyer signal).
+  denied_count: number;
+  last_accessed_at: string | null;
+}
+
+export interface BuyerGrantConsoleView {
+  grant: SafeDataGrantView;
+  // The governed resource the grant is over (safe label only).
+  resource: { listing_title: string | null; listing_type: string | null };
+  // The policy governing the buyer's access (from the data package).
+  policy: {
+    allowed_uses: string[];
+    training_allowed: boolean;
+    model_improvement_allowed: boolean;
+    sensitivity_class: DataSensitivityClass | null;
+    aggregate_only: boolean;
+    depersonalized_only: boolean;
+    minimum_aggregation_size: number | null;
+    raw_body_excluded: true;
+  };
+  usage: DataGrantUsageSummary;
+  // Mock-only spend/settlement intent — no funds move, no settlement exists.
+  settlement: { is_mock: true; economic_decision: string | null; note: string };
+}
+
+export type BuyerGrantConsoleResult =
+  | { ok: true; console: BuyerGrantConsoleView }
+  | { ok: false; code: string };
+
 function toSafeGrant(g: MarketplaceDataGrant): SafeDataGrantView {
   return {
     grant_id: g.grant_id,
@@ -1567,5 +1605,113 @@ export class FoundationMarketplaceService {
     )
       return { ok: false, code: "GRANT_NOT_FOUND" };
     return { ok: true, grant: toSafeGrant(grant) };
+  }
+
+  // WHAT: List the caller's grants filtered to ONE role — "buyer" (what I have
+  //       access to / purchased) or "provider" (grants on MY data). Phase 1311-B
+  //       buyer console + 1312-A contributor sovereignty both consume this; the
+  //       mixed-role listDataGrantsForCaller stays for back-compat.
+  // WHY: GET /marketplace/my-data-grants?role=buyer|provider.
+  async listDataGrantsByRoleForCaller(
+    sessionToken: string,
+    role: "buyer" | "provider",
+  ): Promise<DataGrantListResult> {
+    const validation = await this.authService.validateSession(sessionToken, "read");
+    if (!validation.valid) return { ok: false, code: validation.code };
+    const where =
+      role === "provider"
+        ? { provider_entity_id: validation.entity_id }
+        : { buyer_entity_id: validation.entity_id };
+    const rows = await prisma.marketplaceDataGrant.findMany({
+      where,
+      orderBy: { created_at: "desc" },
+      take: 200,
+    });
+    return { ok: true, grants: rows.map(toSafeGrant) };
+  }
+
+  // WHAT: Derive a grant's usage from the append-only audit chain — successful
+  //       reads, denied attempts, and the last access instant.
+  // WHY: no persisted read counter exists; the audit chain is the source of
+  //      truth (mirrors the 1309-A metering-off-audit pattern).
+  private async grantUsageSummary(grantId: string): Promise<DataGrantUsageSummary> {
+    const base = {
+      event_type: "MARKETPLACE_DATA_GRANT_READ_EVALUATED",
+      details: { path: ["grant_id"], equals: grantId },
+    } as const;
+    const [read_count, denied_count, lastRead] = await Promise.all([
+      prisma.auditEvent.count({ where: { ...base, outcome: "SUCCESS" } }),
+      prisma.auditEvent.count({ where: { ...base, outcome: "DENIED" } }),
+      prisma.auditEvent.findFirst({
+        where: { ...base, outcome: "SUCCESS" },
+        orderBy: { timestamp: "desc" },
+        select: { timestamp: true },
+      }),
+    ]);
+    return {
+      read_count,
+      denied_count,
+      last_accessed_at: lastRead?.timestamp.toISOString() ?? null,
+    };
+  }
+
+  // WHAT: The Buyer Access Console summary for ONE of the caller's grants —
+  //       grant + governed resource label + the access policy + audit-derived
+  //       usage + mock-only settlement intent.
+  // WHY: GET /marketplace/data-grants/:grant_id/console. Buyer-scoped + enumeration
+  //      safe (a grant the caller is not the BUYER of → GRANT_NOT_FOUND). Never
+  //      raw content; never other buyers' grants; never contributor identities
+  //      beyond the provider already on the SAFE grant view.
+  async getBuyerGrantConsoleForCaller(
+    sessionToken: string,
+    grantId: string,
+  ): Promise<BuyerGrantConsoleResult> {
+    const validation = await this.authService.validateSession(sessionToken, "read");
+    if (!validation.valid) return { ok: false, code: validation.code };
+
+    const grant = await prisma.marketplaceDataGrant.findFirst({
+      where: { grant_id: grantId },
+    });
+    // Buyer-scoped: only the BUYER sees their own access console (enumeration-safe).
+    if (grant === null || grant.buyer_entity_id !== validation.entity_id)
+      return { ok: false, code: "GRANT_NOT_FOUND" };
+
+    const [pkg, listing, usage] = await Promise.all([
+      prisma.marketplaceDataPackage.findFirst({
+        where: { data_package_id: grant.data_package_id },
+      }),
+      prisma.marketplaceListing.findFirst({
+        where: { listing_id: grant.listing_id },
+        select: { title: true, listing_type: true },
+      }),
+      this.grantUsageSummary(grant.grant_id),
+    ]);
+
+    return {
+      ok: true,
+      console: {
+        grant: toSafeGrant(grant),
+        resource: {
+          listing_title: listing?.title ?? null,
+          listing_type: listing?.listing_type ?? null,
+        },
+        policy: {
+          allowed_uses: pkg?.allowed_use ?? [],
+          training_allowed: pkg?.training_allowed ?? false,
+          model_improvement_allowed: pkg?.model_improvement_allowed ?? false,
+          sensitivity_class: pkg?.sensitivity_class ?? null,
+          aggregate_only: pkg?.aggregate_only ?? false,
+          depersonalized_only: pkg?.depersonalized_only ?? false,
+          minimum_aggregation_size: pkg?.minimum_aggregation_size ?? null,
+          raw_body_excluded: true,
+        },
+        usage,
+        settlement: {
+          is_mock: true,
+          economic_decision: grant.economic_decision,
+          note: "Mock-only settlement intent — no funds move and no settlement exists.",
+        },
+      },
+    };
   }
 }
