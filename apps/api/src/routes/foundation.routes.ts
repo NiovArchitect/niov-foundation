@@ -35,6 +35,7 @@ import type { FoundationProofEventsService } from "../services/foundation/proof-
 import type { PolicyLineageService } from "../services/foundation/policy-lineage.service.js";
 import type { SettlementIntentService } from "../services/foundation/settlement-intent.service.js";
 import type { CapabilityContractService } from "../services/foundation/capability-contract.service.js";
+import type { EntityGraphService } from "../services/foundation/entity-graph.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -127,6 +128,8 @@ const FAILURE_STATUS: Record<string, number> = {
   INVALID_CURSOR: 422,
   // F-1324 — policy lineage graph.
   LINEAGE_NOT_FOUND: 404,
+  // F-1327 — entity relationship graph.
+  GRAPH_NOT_FOUND: 404,
 };
 
 function failureStatus(code: string): number {
@@ -147,6 +150,7 @@ export async function registerFoundationRoutes(
   policyLineageService: PolicyLineageService,
   settlementIntentService: SettlementIntentService,
   capabilityContractService: CapabilityContractService,
+  entityGraphService: EntityGraphService,
 ): Promise<void> {
   // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
   // append-only audit ledger. Never a log dump: scope-filtered, authorization-
@@ -249,6 +253,27 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, ...result.contracts });
+    },
+  );
+
+  // F-1327 — Entity Relationship Graph. A read-only projection of how an entity
+  // relates to the ecosystem (ownership / provides / purchases / contributes /
+  // uses). Scoped to self / own-org / org-member; enumeration-safe GRAPH_NOT_FOUND.
+  app.get<{ Params: { entity_id: string } }>(
+    "/api/v1/foundation/graph/:entity_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await entityGraphService.getGraphForCaller(
+        token,
+        request.params.entity_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, ...result.graph });
     },
   );
 
