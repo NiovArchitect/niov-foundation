@@ -512,6 +512,30 @@ new audit literal (revocation already exists; this surfaces + proves it).
   be used; row persists REVOKED per RULE 10); sovereignty view reflects withdrawal;
   provider role-filtered list.
 
+### ✅ 1313-A — Cohort Registry: contributor self-service (join / withdraw / list-own)
+
+Closes the deferred 1306-A gap — **contributor-initiated** cohort participation
+(the 1305-A registry already had create/list; 1307-A had request-access). A
+contributor opts THEIR OWN scope in (the act of joining IS the consent — RULE 0)
+and withdraws at will. No schema, no new audit literal (reuses
+`COHORT_CONTRIBUTION_RECORDED` / `_REVOKED` with a `self_initiated:true` detail).
+
+- **Service** (`cohort-contribution.service.ts`): `joinCohortForCaller` (caller =
+  contributor; visible-cohort scoped; self-consent `consent_record_id=null`;
+  idempotent per (cohort, contributor, scope) → `ALREADY_JOINED`) +
+  `withdrawFromCohortForCaller` (flips the caller's ELIGIBLE contributions to
+  REVOKED — RULE 10 soft; `NOT_JOINED` when none) +
+  `listMyCohortContributionsForCaller` (caller's OWN participation only).
+- **Routes:** `POST /cohorts/:id/join`, `POST /cohorts/:id/withdraw`,
+  `GET /cohorts/my-contributions`.
+- **Eligibility integration:** a self-join (null consent) counts toward the
+  provider's eligible count immediately; withdrawal drops it — proven against the
+  1306-A consent-aware count + the 1308-A threshold gate.
+- **Tests:** `tests/integration/foundation-cohort-self-service.test.ts` (3) —
+  join (self-consent) + idempotent + counts toward eligibility; my-participation
+  view (no other contributors) + withdrawal drops eligibility (row persists
+  REVOKED) + NOT_JOINED; enumeration-safe COHORT_PRODUCT_NOT_FOUND.
+
 ## Foundation-Scale Arc (Phase 1288+) — IN FLIGHT
 
 **Founder re-anchor (2026-06-17):** Foundation is the governed substrate for

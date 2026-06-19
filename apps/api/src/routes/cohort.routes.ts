@@ -51,6 +51,9 @@ const FAILURE_STATUS: Record<string, number> = {
   CONSENT_MISMATCH: 422,
   CONSENT_INACTIVE: 409,
   CONTRIBUTION_NOT_FOUND: 404,
+  // Phase 1313-A contributor self-service join/withdraw.
+  ALREADY_JOINED: 409,
+  NOT_JOINED: 409,
   // Phase 1307-A access request lifecycle.
   COHORT_NOT_ACTIVE: 409,
   ACCESS_MODE_NOT_OFFERED: 422,
@@ -251,6 +254,61 @@ export async function registerCohortContributionRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(200).send({ ok: true, contribution: result.contribution });
+    },
+  );
+
+  // Phase 1313-A — contributor self-service: list MY cohort participation.
+  // Static path beats /cohorts/:id (UUID) in Fastify; safe.
+  app.get(
+    "/api/v1/foundation/cohorts/my-contributions",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await contributionService.listMyCohortContributionsForCaller(token);
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, contributions: result.contributions });
+    },
+  );
+
+  // Phase 1313-A — contributor self-service: JOIN a cohort (opt-in; the act of
+  // joining IS the consent, RULE 0). The caller is the contributor.
+  app.post<{ Params: { id: string }; Body: { contribution_scope?: string } }>(
+    "/api/v1/foundation/cohorts/:id/join",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await contributionService.joinCohortForCaller(token, request.params.id, {
+        contribution_scope: (request.body ?? {}).contribution_scope,
+      });
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(201).send({ ok: true, contribution: result.contribution });
+    },
+  );
+
+  // Phase 1313-A — contributor self-service: WITHDRAW from a cohort (opt-out).
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/foundation/cohorts/:id/withdraw",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await contributionService.withdrawFromCohortForCaller(
+        token,
+        request.params.id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, withdrawn_count: result.withdrawn_count });
     },
   );
 }

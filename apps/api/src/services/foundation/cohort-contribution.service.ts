@@ -119,6 +119,33 @@ interface ConsentState {
   provider_entity_id: string | null;
 }
 
+// ── Phase 1313-A — contributor self-service (join / withdraw / list-own) ─────
+// A contributor opts THEIR OWN data scope into a cohort (the act of joining IS
+// the consent — RULE 0 human sovereignty) and can withdraw at any time. The
+// contributor sees only their OWN participation, never other contributors.
+
+// SAFE view of the CALLER's own cohort participation (no other contributors).
+export interface MyCohortContributionView {
+  contribution_id: string;
+  cohort_product_id: string;
+  contribution_scope: string;
+  status: CohortContributionStatus;
+  joined_at: string;
+  withdrawn_at: string | null;
+  // The contributor self-consented by joining; honesty marker.
+  self_initiated: true;
+}
+
+export type JoinCohortResult =
+  | { ok: true; contribution: MyCohortContributionView }
+  | { ok: false; code: string };
+export type WithdrawCohortResult =
+  | { ok: true; withdrawn_count: number }
+  | { ok: false; code: string };
+export type ListMyContributionsResult =
+  | { ok: true; contributions: MyCohortContributionView[] }
+  | { ok: false; code: string };
+
 export class CohortContributionService {
   constructor(private readonly authService: AuthService) {}
 
@@ -423,5 +450,164 @@ export class CohortContributionService {
         ? true
         : (await this.consentState(updated.consent_record_id, now)).active;
     return { ok: true, contribution: this.toSafe(updated, consentActive, now) };
+  }
+
+  // ── Phase 1313-A — contributor self-service ───────────────────────────────
+
+  // The cohort IFF the CALLER can see it to join (own, or ACTIVE in the caller's
+  // org); else null (enumeration-safe). A contributor joins a cohort it can see.
+  private async loadVisibleCohort(
+    cohortProductId: string,
+    entityId: string,
+    orgEntityId: string | null,
+  ): Promise<CohortDataProduct | null> {
+    const row = await prisma.cohortDataProduct.findFirst({
+      where: { cohort_product_id: cohortProductId, deleted_at: null },
+    });
+    if (row === null) return null;
+    const ownedByCaller = row.provider_entity_id === entityId;
+    const visibleInOrg =
+      orgEntityId !== null &&
+      row.provider_org_entity_id === orgEntityId &&
+      row.status === "ACTIVE";
+    return ownedByCaller || visibleInOrg ? row : null;
+  }
+
+  private toMine(row: CohortContribution): MyCohortContributionView {
+    return {
+      contribution_id: row.contribution_id,
+      cohort_product_id: row.cohort_product_id,
+      contribution_scope: row.contribution_scope,
+      status: row.status,
+      joined_at: row.created_at.toISOString(),
+      withdrawn_at: row.revoked_at?.toISOString() ?? null,
+      self_initiated: true,
+    };
+  }
+
+  // WHAT: A contributor opts THEIR OWN data scope into a cohort. The act of
+  //       joining IS the consent (RULE 0) — the contribution is self-consented
+  //       (consent_record_id null). Idempotent per (cohort, contributor, scope).
+  // WHY: POST /api/v1/foundation/cohorts/:id/join.
+  async joinCohortForCaller(
+    sessionToken: string,
+    cohortProductId: string,
+    input: { contribution_scope?: string },
+  ): Promise<JoinCohortResult> {
+    const v = await this.authService.validateSession(sessionToken, "write");
+    if (!v.valid) return { ok: false, code: v.code };
+
+    if (typeof input.contribution_scope !== "string" || input.contribution_scope.trim().length === 0)
+      return { ok: false, code: "INVALID_REQUEST" };
+
+    const orgId = await this.callerOrgOrNull(v.entity_id);
+    const cohort = await this.loadVisibleCohort(cohortProductId, v.entity_id, orgId);
+    if (cohort === null) return { ok: false, code: "COHORT_PRODUCT_NOT_FOUND" };
+
+    if (
+      cohort.capsule_type_allowlist.length > 0 &&
+      !cohort.capsule_type_allowlist.includes(input.contribution_scope)
+    )
+      return { ok: false, code: "INVALID_CONTRIBUTION_SCOPE" };
+
+    // Idempotent: one active self-contribution per (cohort, contributor, scope).
+    const existing = await prisma.cohortContribution.findFirst({
+      where: {
+        cohort_product_id: cohort.cohort_product_id,
+        contributor_entity_id: v.entity_id,
+        contribution_scope: input.contribution_scope,
+        status: "ELIGIBLE",
+        deleted_at: null,
+      },
+    });
+    if (existing !== null) return { ok: false, code: "ALREADY_JOINED" };
+
+    const created = await prisma.cohortContribution.create({
+      data: {
+        cohort_product_id: cohort.cohort_product_id,
+        contributor_entity_id: v.entity_id,
+        contributor_org_entity_id: orgId,
+        contribution_scope: input.contribution_scope,
+        // Self-consent: the contributor joining IS the consent act (RULE 0).
+        consent_record_id: null,
+        status: "ELIGIBLE",
+      },
+    });
+
+    await writeAuditEvent({
+      event_type: "COHORT_CONTRIBUTION_RECORDED",
+      outcome: "SUCCESS",
+      actor_entity_id: v.entity_id,
+      details: {
+        action: "COHORT_CONTRIBUTION_RECORDED",
+        cohort_product_id: cohort.cohort_product_id,
+        contribution_id: created.contribution_id,
+        contribution_scope: created.contribution_scope,
+        status: created.status,
+        self_initiated: true,
+      },
+    });
+
+    return { ok: true, contribution: this.toMine(created) };
+  }
+
+  // WHAT: A contributor withdraws THEIR OWN participation in a cohort — every
+  //       ELIGIBLE self-contribution to the cohort flips to REVOKED (RULE 10
+  //       soft; the row stays). Drops out of the eligible count immediately.
+  // WHY: POST /api/v1/foundation/cohorts/:id/withdraw.
+  async withdrawFromCohortForCaller(
+    sessionToken: string,
+    cohortProductId: string,
+  ): Promise<WithdrawCohortResult> {
+    const v = await this.authService.validateSession(sessionToken, "write");
+    if (!v.valid) return { ok: false, code: v.code };
+
+    const now = new Date();
+    const mine = await prisma.cohortContribution.findMany({
+      where: {
+        cohort_product_id: cohortProductId,
+        contributor_entity_id: v.entity_id,
+        status: "ELIGIBLE",
+        deleted_at: null,
+      },
+      select: { contribution_id: true },
+    });
+    if (mine.length === 0) return { ok: false, code: "NOT_JOINED" };
+
+    for (const row of mine) {
+      await prisma.cohortContribution.update({
+        where: { contribution_id: row.contribution_id },
+        data: { status: "REVOKED", revoked_at: now },
+      });
+      await writeAuditEvent({
+        event_type: "COHORT_CONTRIBUTION_REVOKED",
+        outcome: "SUCCESS",
+        actor_entity_id: v.entity_id,
+        details: {
+          action: "COHORT_CONTRIBUTION_REVOKED",
+          cohort_product_id: cohortProductId,
+          contribution_id: row.contribution_id,
+          status: "REVOKED",
+          self_initiated: true,
+        },
+      });
+    }
+    return { ok: true, withdrawn_count: mine.length };
+  }
+
+  // WHAT: List the CALLER's own cohort participation (which cohorts they joined +
+  //       status). Never other contributors.
+  // WHY: GET /api/v1/foundation/cohorts/my-contributions.
+  async listMyCohortContributionsForCaller(
+    sessionToken: string,
+  ): Promise<ListMyContributionsResult> {
+    const v = await this.authService.validateSession(sessionToken, "read");
+    if (!v.valid) return { ok: false, code: v.code };
+    const rows = await prisma.cohortContribution.findMany({
+      where: { contributor_entity_id: v.entity_id, deleted_at: null },
+      orderBy: { created_at: "desc" },
+      take: 200,
+    });
+    return { ok: true, contributions: rows.map((r) => this.toMine(r)) };
   }
 }
