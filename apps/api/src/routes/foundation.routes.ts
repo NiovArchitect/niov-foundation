@@ -32,6 +32,7 @@ import type { MarketplaceDataDeliveryService } from "../services/foundation/mark
 import type { FoundationHighSensitivityReviewService, ReviewListScope } from "../services/foundation/high-sensitivity-review.service.js";
 import { REVIEW_LIST_SCOPES } from "../services/foundation/high-sensitivity-review.service.js";
 import type { FoundationProofEventsService } from "../services/foundation/proof-events.service.js";
+import type { PolicyLineageService } from "../services/foundation/policy-lineage.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -122,6 +123,8 @@ const FAILURE_STATUS: Record<string, number> = {
   INVALID_FROM: 422,
   INVALID_TO: 422,
   INVALID_CURSOR: 422,
+  // F-1324 — policy lineage graph.
+  LINEAGE_NOT_FOUND: 404,
 };
 
 function failureStatus(code: string): number {
@@ -139,6 +142,7 @@ export async function registerFoundationRoutes(
   dataDeliveryService: MarketplaceDataDeliveryService,
   reviewService: FoundationHighSensitivityReviewService,
   proofEventsService: FoundationProofEventsService,
+  policyLineageService: PolicyLineageService,
 ): Promise<void> {
   // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
   // append-only audit ledger. Never a log dump: scope-filtered, authorization-
@@ -180,6 +184,27 @@ export async function registerFoundationRoutes(
         .send({ ok: false, code: result.code });
     return reply.code(200).send({ ok: true, ...result.feed });
   });
+
+  // F-1324 — Policy Lineage Graph. Resolve a proof_reference (an audit-chain
+  // event_hash) into its causal policy decision lineage. Projection only;
+  // role-scoped + enumeration-safe (LINEAGE_NOT_FOUND).
+  app.get<{ Params: { proof_reference: string } }>(
+    "/api/v1/foundation/policy/lineage/:proof_reference",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await policyLineageService.getPolicyLineageForCaller(
+        token,
+        request.params.proof_reference,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, ...result.lineage });
+    },
+  );
 
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
