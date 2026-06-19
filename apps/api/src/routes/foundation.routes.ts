@@ -31,6 +31,7 @@ import type { FoundationObservabilityService } from "../services/foundation/obse
 import type { MarketplaceDataDeliveryService } from "../services/foundation/marketplace-data-delivery.service.js";
 import type { FoundationHighSensitivityReviewService, ReviewListScope } from "../services/foundation/high-sensitivity-review.service.js";
 import { REVIEW_LIST_SCOPES } from "../services/foundation/high-sensitivity-review.service.js";
+import type { FoundationProofEventsService } from "../services/foundation/proof-events.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -112,6 +113,15 @@ const FAILURE_STATUS: Record<string, number> = {
   RETENTION_EXPIRES_AT_IN_PAST: 422,
   RETENTION_UNTIL_REVOKED_NOT_ALLOWED: 422,
   RETENTION_TOO_LONG_FOR_SENSITIVITY: 422,
+  // F-1321 — scoped proof event feed.
+  RESOURCE_ID_REQUIRED: 422,
+  RESOURCE_NOT_FOUND: 404,
+  NOT_IN_ANY_ORG: 404,
+  INVALID_EVENT_TYPE: 422,
+  INVALID_STATUS: 422,
+  INVALID_FROM: 422,
+  INVALID_TO: 422,
+  INVALID_CURSOR: 422,
 };
 
 function failureStatus(code: string): number {
@@ -128,7 +138,49 @@ export async function registerFoundationRoutes(
   observabilityService: FoundationObservabilityService,
   dataDeliveryService: MarketplaceDataDeliveryService,
   reviewService: FoundationHighSensitivityReviewService,
+  proofEventsService: FoundationProofEventsService,
 ): Promise<void> {
+  // F-1321 — Scoped Proof Event Feed. A read-only governed PROJECTION over the
+  // append-only audit ledger. Never a log dump: scope-filtered, authorization-
+  // gated, field-allowlisted. Query: scope (default self) + optional resource_id,
+  // event_type, status, from, to, limit, cursor.
+  app.get<{
+    Querystring: {
+      scope?: string;
+      resource_id?: string;
+      event_type?: string;
+      status?: string;
+      from?: string;
+      to?: string;
+      limit?: string;
+      cursor?: string;
+    };
+  }>("/api/v1/foundation/proof/events", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null)
+      return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+    const q = request.query;
+    const parsedLimit =
+      q.limit !== undefined && q.limit.length > 0 ? Number(q.limit) : undefined;
+    if (parsedLimit !== undefined && !Number.isFinite(parsedLimit))
+      return reply.code(422).send({ ok: false, code: "INVALID_LIMIT" });
+    const result = await proofEventsService.getProofEventsForCaller(token, {
+      scope: q.scope,
+      resource_id: q.resource_id,
+      event_type: q.event_type,
+      status: q.status,
+      from: q.from,
+      to: q.to,
+      limit: parsedLimit,
+      cursor: q.cursor,
+    });
+    if (result.ok === false)
+      return reply
+        .code(failureStatus(result.code))
+        .send({ ok: false, code: result.code });
+    return reply.code(200).send({ ok: true, ...result.feed });
+  });
+
   // The caller's own authority envelope.
   app.get("/api/v1/foundation/authority/me", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
