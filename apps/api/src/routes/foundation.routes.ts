@@ -555,6 +555,28 @@ export async function registerFoundationRoutes(
     },
   );
 
+  // Phase 1312-A — the Contributor Sovereignty view for ONE grant on the
+  // caller's data (who has access + policy + usage + revocation status).
+  // Provider-scoped; enumeration-safe. Revocation uses the existing
+  // /data-grants/:grant_id/revoke route.
+  app.get<{ Params: { grant_id: string } }>(
+    "/api/v1/foundation/marketplace/data-grants/:grant_id/sovereignty",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const result = await marketplaceService.getProviderGrantSovereigntyForCaller(
+        token,
+        request.params.grant_id,
+      );
+      if (result.ok === false)
+        return reply
+          .code(failureStatus(result.code))
+          .send({ ok: false, code: result.code });
+      return reply.code(200).send({ ok: true, sovereignty: result.sovereignty });
+    },
+  );
+
   // Read one data grant.
   app.get<{ Params: { grant_id: string } }>(
     "/api/v1/foundation/marketplace/data-grants/:grant_id",
