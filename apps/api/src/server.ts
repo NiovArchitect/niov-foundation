@@ -157,6 +157,7 @@ import { CapabilityContractService } from "./services/foundation/capability-cont
 import { EntityGraphService } from "./services/foundation/entity-graph.service.js";
 import { Avp2ResourceContractService } from "./services/foundation/avp2-resource-contract.service.js";
 import { Avp2QuoteService } from "./services/foundation/avp2-quote.service.js";
+import { Avp2AcceptService } from "./services/foundation/avp2-accept.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -379,6 +380,8 @@ export async function buildApp(
   const avp2ResourceContractService = new Avp2ResourceContractService(authService);
   // F-1330 — AVP² quote intent layer (the agent asks for a quote; mock-only).
   const avp2QuoteService = new Avp2QuoteService(authService);
+  // F-1331 — AVP² quote acceptance layer (commitment → PROJECTED; mock-only).
+  const avp2AcceptService = new Avp2AcceptService(authService);
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -811,6 +814,7 @@ export async function buildApp(
     entityGraphService,
     avp2ResourceContractService,
     avp2QuoteService,
+    avp2AcceptService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
