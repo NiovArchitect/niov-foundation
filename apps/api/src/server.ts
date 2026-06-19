@@ -148,6 +148,7 @@ import { FoundationObservabilityService } from "./services/foundation/observabil
 import { MarketplaceDataDeliveryService } from "./services/foundation/marketplace-data-delivery.service.js";
 import { FoundationHighSensitivityReviewService } from "./services/foundation/high-sensitivity-review.service.js";
 import { FoundationRetentionService } from "./services/foundation/retention-policy.service.js";
+import { FoundationProofEventsService } from "./services/foundation/proof-events.service.js";
 import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
@@ -352,6 +353,10 @@ export async function buildApp(
     new FoundationHighSensitivityReviewService(authService);
   // Phase 1298-A — retention-policy enforcement (sweep wired into the scheduler).
   const foundationRetentionService = new FoundationRetentionService();
+  // F-1321 — scoped proof event feed (read-only audit projection; trust spine).
+  const foundationProofEventsService = new FoundationProofEventsService(
+    authService,
+  );
   const negotiateService = new NegotiateService(
     authService,
     declarationStore,
@@ -777,6 +782,7 @@ export async function buildApp(
     foundationObservabilityService,
     marketplaceDataDeliveryService,
     foundationHighSensitivityReviewService,
+    foundationProofEventsService,
   );
   await registerCohortRoutes(app, federationCloudCohortService);
   await registerCohortContributionRoutes(app, cohortContributionService);
