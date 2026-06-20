@@ -46,6 +46,7 @@ import type {
   Avp2AccessService,
   Avp2AccessRequest,
 } from "../services/foundation/avp2-access.service.js";
+import { Avp2PositiveSmokeSeedService } from "../services/foundation/avp2-positive-smoke-seed.service.js";
 
 // WHAT: Extract a Bearer token from the Authorization header.
 // INPUT: the raw header value.
@@ -389,6 +390,69 @@ export async function registerFoundationRoutes(
           .code(failureStatus(result.code))
           .send({ ok: false, code: result.code });
       return reply.code(201).send({ ok: true, receipt: result.receipt });
+    },
+  );
+
+  // F-1362 — AVP² positive-smoke admin SEED (LOCAL/DEV ONLY). Creates (or
+  // idempotently reuses) a SAFE, non-production, PRIVATE, mock-settlement-only
+  // MarketplaceListing + CONTENT_FRAGMENT resource through the SAME governed
+  // createListingForCaller path the AVP² flow quotes against — never isolated
+  // data, never a governance bypass. Disabled by default; refuses in production;
+  // requires a valid session bearer (the provider). Returns IDs + safe metadata
+  // only (the materializer-facing flat shape) — never a token, content, or proof
+  // body. Seeding is NOT live proof; the live proof is the niov-avp positive
+  // smoke driving quote→accept→access→proof against this listing.
+  const avp2PositiveSmokeSeedService = new Avp2PositiveSmokeSeedService(
+    marketplaceService,
+  );
+  const SEED_FAILURE_STATUS: Record<string, number> = {
+    SAFE_SEED_REQUIRED: 422,
+    REAL_PAYMENT_NOT_ALLOWED: 422,
+    PUBLIC_LISTING_NOT_ALLOWED: 422,
+    PRODUCTION_DATA_NOT_ALLOWED: 422,
+    PRIVATE_USER_DATA_NOT_ALLOWED: 422,
+    UNSUPPORTED_PROTOCOL: 422,
+    UNSUPPORTED_RESOURCE_TYPE: 422,
+    SEED_CONTRACT_INVALID: 422,
+  };
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/foundation/avp2/admin/positive-smoke/seed",
+    async (request, reply) => {
+      // Refuse in production; off by default in dev/test.
+      if (process.env.NODE_ENV === "production")
+        return reply.code(403).send({
+          ok: false,
+          error: { code: "SEED_DISABLED_IN_PRODUCTION", message: "Seed endpoint is disabled in production." },
+        });
+      if (process.env.FOUNDATION_ENABLE_LOCAL_AVP_SEED !== "true")
+        return reply.code(404).send({
+          ok: false,
+          error: { code: "SEED_NOT_ENABLED", message: "Seed endpoint is not enabled." },
+        });
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "Bearer token required." },
+        });
+      const foundationBaseUrl =
+        process.env.FOUNDATION_PUBLIC_BASE_URL ??
+        `${request.protocol}://${request.hostname}/api/v1`;
+      const result = await avp2PositiveSmokeSeedService.seedForCaller(
+        token,
+        request.body ?? {},
+        foundationBaseUrl,
+      );
+      if (result.ok === false) {
+        const status = SEED_FAILURE_STATUS[result.code] ?? failureStatus(result.code);
+        return reply.code(status).send({
+          ok: false,
+          error: { code: result.code, message: "Safe seed contract rejected." },
+        });
+      }
+      // Flat shape at top level (the niov-avp materializer reads listing_id etc.
+      // directly) plus the Foundation `ok:true` convention.
+      return reply.code(200).send({ ok: true, ...result.seed });
     },
   );
 
