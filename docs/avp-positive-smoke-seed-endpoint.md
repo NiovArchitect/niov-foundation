@@ -94,6 +94,29 @@ npm run smoke:foundation-positive:readiness -- --strict
 npm run smoke:foundation-positive -- --strict
 ```
 
+## Repeatable local live server harness (F-1363)
+
+`npm run avp:positive-live-server` (`scripts/avp-positive-live-server.mts`) boots the
+real Fastify app against the **local test DB** with in-memory nonce/rate stores,
+enables the dev-gated seed endpoint, and mints a local session token through the
+real `/api/v1/foundation/auth/login` path — writing safe runtime metadata to
+`/tmp/avp-live.json` (chmod 600, token local-only, never committed).
+
+Safety: it loads `.env.test` with **`override: true`** and dynamic-imports the
+workspace packages **after**, so the Prisma client is built against
+`localhost:5433`, never the root `.env` production target; it refuses
+`NODE_ENV=production` and a non-local `DATABASE_URL` (unless
+`AVP_LIVE_ALLOW_NONLOCAL_DB=true`); the READY line prints `token=[REDACTED]`.
+
+The niov-avp orchestrator `npm run foundation:positive:live-local` drives this
+harness end-to-end (DB up → server → local auth → seed apply → readiness `--strict`
+→ positive smoke `--strict` → cleanup) and is the one-command **local live PASS**.
+Anchored by `tests/unit/avp-positive-live-server-safety.test.ts`.
+
+> Local live PASS = real Foundation app + local/test DB + real auth/session + real
+> seed endpoint + real AVP² quote/accept/access/proof. It is **not** hosted
+> production proof.
+
 ## Tests
 
 `tests/integration/foundation-avp2-positive-smoke-seed.test.ts` proves: disabled
