@@ -19,6 +19,7 @@
     "test:db-push-wrapper": "bash scripts/test-db-push-wrapper.sh",
     "db:test:up": "bash scripts/test-db-up.sh",
     "db:test:down": "bash scripts/test-db-down.sh",
+    "avp:positive-live-server": "tsx scripts/avp-positive-live-server.mts",
     "db:push:test": "bash scripts/prisma-db-push-test.sh",
     "db:generate": "npm --workspace @niov/database run db:generate",
     "db:migrate": "npm --workspace @niov/database run db:migrate",
