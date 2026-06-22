@@ -99,6 +99,7 @@ import {
 import { registerOtzarRoutes } from "./routes/otzar.routes.js";
 import { registerOtzarProposedPatternRoutes } from "./routes/otzar-proposed-pattern.routes.js";
 import { registerOtzarObservationRoutes } from "./routes/otzar-observation.routes.js";
+import { registerOtzarVoiceNoteRoutes } from "./routes/otzar-voice-note.routes.js";
 import { registerOtzarAuthorityGrantsRoutes } from "./routes/otzar-authority-grants.routes.js";
 import { registerOtzarCorrectionMemoryRoutes } from "./routes/otzar-correction-memory.routes.js";
 import { registerOtzarCollaborationRoutes } from "./routes/otzar-collaboration.routes.js";
@@ -843,6 +844,8 @@ export async function buildApp(
   await registerOtzarRoutes(app, otzarService);
   await registerOtzarProposedPatternRoutes(app, otzarProposedPatternService);
   await registerOtzarObservationRoutes(app, observationService, authService);
+  // [OTZAR-RETURN-11-FOUNDATION] read-only voice-note revoke PLAN endpoint.
+  registerOtzarVoiceNoteRoutes(app, authService);
   await registerOtzarAuthorityGrantsRoutes(app, authService);
   await registerOtzarCorrectionMemoryRoutes(app, authService);
   await registerOtzarCollaborationRoutes(app, authService);

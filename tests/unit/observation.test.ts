@@ -32,6 +32,7 @@ import {
   ensureAuditTriggers,
   makeEntityInput,
 } from "../helpers.js";
+import { voiceNoteRevokePlanForCaller } from "../../apps/api/src/services/otzar/voice-note-revoke-plan.service.js";
 
 const TEST_JWT_SECRET = "observation-test-secret-do-not-use-in-prod";
 const TEST_KEY = randomBytes(32);
@@ -934,5 +935,177 @@ describe("ObservationService.observe -- voice_note_id grouping", () => {
     });
     // Grouping only — nothing is tombstoned.
     for (const row of rows) expect(row.deleted_at).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// [OTZAR-RETURN-11-FOUNDATION] read-only note-scoped revoke PLAN
+// ──────────────────────────────────────────────────────────────────
+
+describe("voiceNoteRevokePlanForCaller -- read-only revoke plan", () => {
+  // A voice note that fans out to BOTH wallets (decision -> org, commitment +
+  // work_pattern -> caller).
+  function crossWalletServices() {
+    return makeServices({
+      mockResponses: [
+        {
+          ok: true,
+          text: JSON.stringify({
+            decisions: [{ topic: "renewal", outcome: "decided" }],
+            commitments: [{ description: "send the contract" }],
+            key_topics: ["pricing"],
+            external_entities_mentioned: [],
+          }),
+          provider: "mock",
+          model: "mock-1",
+        },
+      ],
+    });
+  }
+
+  // A voice note that mints ONLY caller-wallet capsules (no decisions).
+  function callerOnlyServices() {
+    return makeServices({
+      mockResponses: [
+        {
+          ok: true,
+          text: JSON.stringify({
+            decisions: [],
+            commitments: [{ description: "send the contract" }],
+            key_topics: ["pricing"],
+            external_entities_mentioned: [],
+          }),
+          provider: "mock",
+          model: "mock-1",
+        },
+      ],
+    });
+  }
+
+  async function makeVoiceNote(services: ReturnType<typeof makeServices>) {
+    const owner = await loginAs(services.auth);
+    await attachOrg(owner.entity.entity_id);
+    const r = await services.observation.observe({
+      token: owner.token,
+      content: `voice-plan-${randomUUID()}`,
+      event_type: "NOTE",
+      source: "voice_note_capture",
+    });
+    if (!r.ok || r.skipped) throw new Error("expected a voice note");
+    return { owner, voiceNoteId: r.voice_note_id as string, capsuleIds: r.capsule_ids };
+  }
+
+  it("a caller+org group plans PARTIAL_REQUIRES_AUTHORITY; apply stays false; no payload returned", async () => {
+    const svc = crossWalletServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    const plan = await voiceNoteRevokePlanForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId,
+    });
+    expect(plan.plan_status).toBe("PARTIAL_REQUIRES_AUTHORITY");
+    expect(plan.apply_allowed).toBe(false);
+    expect(plan.hard_delete_allowed).toBe(false);
+    expect(plan.external_side_effects).toBe(false);
+    expect(plan.raw_audio_scope).toBe("NONE");
+    expect(plan.payload_returned).toBe(false);
+    expect(plan.capsule_count).toBe(capsuleIds.length);
+    const scopes = new Set(plan.capsules.map((c) => c.wallet_scope));
+    expect(scopes.has("caller")).toBe(true);
+    expect(scopes.has("org")).toBe(true);
+    // Org-wallet capsule needs org authority; caller-wallet capsule can revoke.
+    expect(plan.capsules.some((c) => c.wallet_scope === "org" && c.authority_status === "REQUIRES_ORG_AUTHORITY" && c.proposed_action === "SKIP_UNAUTHORIZED")).toBe(true);
+    expect(plan.capsules.some((c) => c.wallet_scope === "caller" && c.authority_status === "CAN_REVOKE" && c.proposed_action === "SOFT_REVOKE")).toBe(true);
+    // No payload leak: only the safe fields are present.
+    for (const c of plan.capsules) {
+      expect(Object.keys(c).sort()).toEqual(["authority_status", "capsule_id", "current_status", "proposed_action", "wallet_scope"]);
+    }
+    const blob = JSON.stringify(plan).toLowerCase();
+    expect(blob).not.toContain("payload_summary");
+    expect(blob).not.toContain("content_hash");
+    expect(blob).not.toContain("storage_location");
+  });
+
+  it("a caller-only group plans COMPLETE_CAN_APPLY but apply_allowed is still false", async () => {
+    const svc = callerOnlyServices();
+    const { owner, voiceNoteId } = await makeVoiceNote(svc);
+    const plan = await voiceNoteRevokePlanForCaller({ callerEntityId: owner.entity.entity_id, voiceNoteId });
+    expect(plan.plan_status).toBe("COMPLETE_CAN_APPLY");
+    expect(plan.apply_allowed).toBe(false);
+    for (const c of plan.capsules) {
+      expect(c.wallet_scope).toBe("caller");
+      expect(c.authority_status).toBe("CAN_REVOKE");
+      expect(c.proposed_action).toBe("SOFT_REVOKE");
+    }
+  });
+
+  it("an unrelated / random voice_note_id returns NOT_FOUND with no capsule ids (enumeration-safe)", async () => {
+    const svc = crossWalletServices();
+    const { owner } = await makeVoiceNote(svc);
+    const plan = await voiceNoteRevokePlanForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId: randomUUID(),
+    });
+    expect(plan.plan_status).toBe("NOT_FOUND");
+    expect(plan.capsule_count).toBe(0);
+    expect(plan.capsules).toEqual([]);
+  });
+
+  it("a group already fully revoked plans ALREADY_REVOKED (NOOP per capsule)", async () => {
+    const svc = callerOnlyServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    // Soft-revoke the caller-owned capsules directly (test setup, not the plan).
+    await prisma.memoryCapsule.updateMany({
+      where: { capsule_id: { in: capsuleIds } },
+      data: { deleted_at: new Date() },
+    });
+    const plan = await voiceNoteRevokePlanForCaller({ callerEntityId: owner.entity.entity_id, voiceNoteId });
+    expect(plan.plan_status).toBe("ALREADY_REVOKED");
+    for (const c of plan.capsules) {
+      expect(c.current_status).toBe("REVOKED");
+      expect(c.proposed_action).toBe("NOOP_ALREADY_REVOKED");
+    }
+  });
+
+  it("a partially-revoked caller-only group still plans COMPLETE (revoked ones are NOOP, not blockers)", async () => {
+    const svc = makeServices({
+      mockResponses: [
+        {
+          ok: true,
+          text: JSON.stringify({
+            decisions: [],
+            commitments: [{ description: "send the contract" }],
+            key_topics: ["pricing"],
+            external_entities_mentioned: [],
+          }),
+          provider: "mock",
+          model: "mock-1",
+        },
+      ],
+    });
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    expect(capsuleIds.length).toBeGreaterThanOrEqual(2);
+    // Revoke exactly one capsule, leave the rest active.
+    await prisma.memoryCapsule.update({ where: { capsule_id: capsuleIds[0] }, data: { deleted_at: new Date() } });
+    const plan = await voiceNoteRevokePlanForCaller({ callerEntityId: owner.entity.entity_id, voiceNoteId });
+    expect(plan.plan_status).toBe("COMPLETE_CAN_APPLY");
+    expect(plan.apply_allowed).toBe(false);
+    expect(plan.capsules.some((c) => c.proposed_action === "NOOP_ALREADY_REVOKED")).toBe(true);
+    expect(plan.capsules.some((c) => c.proposed_action === "SOFT_REVOKE")).toBe(true);
+  });
+
+  it("MUTATES NOTHING: deleted_at is unchanged before/after planning", async () => {
+    const svc = crossWalletServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    const before = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: capsuleIds } },
+      select: { capsule_id: true, deleted_at: true },
+    });
+    await voiceNoteRevokePlanForCaller({ callerEntityId: owner.entity.entity_id, voiceNoteId });
+    const after = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: capsuleIds } },
+      select: { capsule_id: true, deleted_at: true },
+    });
+    expect(after).toEqual(before);
+    for (const row of after) expect(row.deleted_at).toBeNull();
   });
 });
