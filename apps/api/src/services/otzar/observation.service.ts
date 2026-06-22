@@ -38,6 +38,10 @@ export interface ObserveSuccess {
   ok: true;
   skipped?: false;
   capsule_ids: string[];
+  // [OTZAR-RETURN-10-FOUNDATION] present only for a voice-note observe; the
+  // durable grouping id shared by every capsule in capsule_ids. Omitted for
+  // non-voice observations (backward compatible).
+  voice_note_id?: string;
   extracted_summary: {
     decisions: number;
     commitments: number;
@@ -76,6 +80,12 @@ export interface ObserveInput {
   content: string;
   event_type: string; // e.g., "MEETING", "MESSAGE", "EMAIL"
   org_entity_id?: string;
+  // [OTZAR-RETURN-10-FOUNDATION] forward-only voice-note grouping. When
+  // source === "voice_note_capture", every capsule minted by this call shares
+  // one voice_note_id (generated here if not supplied) and it is returned.
+  // Non-voice observations are unaffected (no id persisted, none returned).
+  source?: string;
+  voice_note_id?: string;
 }
 
 export interface CorrectionInput {
@@ -241,6 +251,17 @@ export class ObservationService {
     }
     const callerEntityId = session.entity_id;
 
+    // [OTZAR-RETURN-10-FOUNDATION] forward-only voice-note grouping id. A
+    // supplied id is honored; otherwise one is generated ONLY for the
+    // voice-note path (source === "voice_note_capture"). Non-voice observations
+    // stay null (backward compatible). This only GROUPS — no revoke/delete.
+    const voiceNoteId: string | null =
+      typeof input.voice_note_id === "string" && input.voice_note_id.length > 0
+        ? input.voice_note_id
+        : input.source === "voice_note_capture"
+          ? randomUUID()
+          : null;
+
     // Resolve org. Caller can override (admin tooling); else look up.
     let orgEntityId: string | null = null;
     if (typeof input.org_entity_id === "string" && input.org_entity_id.length > 0) {
@@ -356,6 +377,7 @@ export class ObservationService {
         content_hash: contentHash,
         actor_entity_id: callerEntityId,
         commitment_date: null,
+        voice_note_id: voiceNoteId,
       });
       capsuleIds.push(id);
       decisionsCount++;
@@ -374,6 +396,7 @@ export class ObservationService {
         content_hash: contentHash,
         actor_entity_id: callerEntityId,
         commitment_date: parseCommitmentDate(c.due),
+        voice_note_id: voiceNoteId,
       });
       capsuleIds.push(id);
       commitmentsCount++;
@@ -391,6 +414,7 @@ export class ObservationService {
         content_hash: contentHash,
         actor_entity_id: callerEntityId,
         commitment_date: null,
+        voice_note_id: voiceNoteId,
       });
       capsuleIds.push(id);
       workPatternsCount++;
@@ -412,6 +436,8 @@ export class ObservationService {
     return {
       ok: true,
       capsule_ids: capsuleIds,
+      // [OTZAR-RETURN-10-FOUNDATION] returned only for the voice-note path.
+      ...(voiceNoteId !== null ? { voice_note_id: voiceNoteId } : {}),
       extracted_summary: {
         decisions: decisionsCount,
         commitments: commitmentsCount,
@@ -718,6 +744,9 @@ export class ObservationService {
     // conversation_id = null; processCorrection passes the validated id
     // or null.
     conversation_id?: string | null;
+    // [OTZAR-RETURN-10-FOUNDATION] forward-only voice-note grouping id; null for
+    // non-voice writes (correction / non-voice observe).
+    voice_note_id?: string | null;
   }): Promise<string> {
     const newCapsuleId = randomUUID();
     const tokens = countTokensAnthropic(args.payload_summary);
@@ -739,6 +768,7 @@ export class ObservationService {
         commitment_date: args.commitment_date,
         created_by: args.actor_entity_id,
         conversation_id: args.conversation_id ?? null,
+        voice_note_id: args.voice_note_id ?? null,
       },
     });
     await writeAuditEvent({

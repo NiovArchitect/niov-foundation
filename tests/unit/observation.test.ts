@@ -820,3 +820,119 @@ describe("commitment_date wire-up (11B priming stub → real)", () => {
     expect(priming.text).toContain("follow up with vendor");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────
+// [OTZAR-RETURN-10-FOUNDATION] forward-only voice-note grouping id
+// ──────────────────────────────────────────────────────────────────
+
+describe("ObservationService.observe -- voice_note_id grouping", () => {
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // A mock that mints capsules across BOTH wallets: a DECISION (org wallet) +
+  // a COMMITMENT and a WORK_PATTERN (caller wallet) — exactly the cross-wallet
+  // fan-out the grouping id must span.
+  function fanOutServices() {
+    return makeServices({
+      mockResponses: [
+        {
+          ok: true,
+          text: JSON.stringify({
+            decisions: [{ topic: "renewal", outcome: "decided" }],
+            commitments: [{ description: "send the contract" }],
+            key_topics: ["pricing"],
+            external_entities_mentioned: [],
+          }),
+          provider: "mock",
+          model: "mock-1",
+        },
+      ],
+    });
+  }
+
+  it("a non-voice observe returns NO voice_note_id and persists null (backward compatible)", async () => {
+    const { auth, observation } = fanOutServices();
+    const owner = await loginAs(auth);
+    await attachOrg(owner.entity.entity_id);
+    const r = await observation.observe({
+      token: owner.token,
+      content: `non-voice-${randomUUID()}`,
+      event_type: "MEETING",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.skipped) return;
+    expect(r.voice_note_id).toBeUndefined();
+    expect(r.capsule_ids.length).toBeGreaterThan(0);
+    const rows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: r.capsule_ids } },
+      select: { voice_note_id: true },
+    });
+    for (const row of rows) expect(row.voice_note_id).toBeNull();
+  });
+
+  it("a voice-note observe (source) GENERATES a voice_note_id shared by every minted capsule", async () => {
+    const { auth, observation } = fanOutServices();
+    const owner = await loginAs(auth);
+    await attachOrg(owner.entity.entity_id);
+    const r = await observation.observe({
+      token: owner.token,
+      content: `voice-${randomUUID()}`,
+      event_type: "NOTE",
+      source: "voice_note_capture",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.skipped) return;
+    expect(typeof r.voice_note_id).toBe("string");
+    expect(UUID_RE.test(r.voice_note_id ?? "")).toBe(true);
+    expect(r.capsule_ids.length).toBeGreaterThanOrEqual(2); // fan-out across wallets
+    const rows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: r.capsule_ids } },
+      select: { voice_note_id: true },
+    });
+    expect(rows.length).toBe(r.capsule_ids.length);
+    for (const row of rows) expect(row.voice_note_id).toBe(r.voice_note_id);
+  });
+
+  it("a SUPPLIED voice_note_id is honored and persisted on every capsule", async () => {
+    const { auth, observation } = fanOutServices();
+    const owner = await loginAs(auth);
+    await attachOrg(owner.entity.entity_id);
+    const supplied = randomUUID();
+    const r = await observation.observe({
+      token: owner.token,
+      content: `voice-supplied-${randomUUID()}`,
+      event_type: "NOTE",
+      source: "voice_note_capture",
+      voice_note_id: supplied,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.skipped) return;
+    expect(r.voice_note_id).toBe(supplied);
+    const rows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: r.capsule_ids } },
+      select: { voice_note_id: true },
+    });
+    for (const row of rows) expect(row.voice_note_id).toBe(supplied);
+  });
+
+  it("the capsule_ids shape is unchanged and capsules are active (no revoke/delete)", async () => {
+    const { auth, observation } = fanOutServices();
+    const owner = await loginAs(auth);
+    await attachOrg(owner.entity.entity_id);
+    const r = await observation.observe({
+      token: owner.token,
+      content: `voice-shape-${randomUUID()}`,
+      event_type: "NOTE",
+      source: "voice_note_capture",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok || r.skipped) return;
+    expect(Array.isArray(r.capsule_ids)).toBe(true);
+    const rows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: r.capsule_ids } },
+      select: { deleted_at: true },
+    });
+    // Grouping only — nothing is tombstoned.
+    for (const row of rows) expect(row.deleted_at).toBeNull();
+  });
+});
