@@ -146,6 +146,66 @@ describe("POST /otzar/observe", () => {
     );
   });
 
+  // [OTZAR-RETURN-10-FOUNDATION] forward-only voice-note grouping id.
+  it("a voice-note observe (source) returns 200 + a UUID voice_note_id", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/observe",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: {
+        content: `observe-voice-${randomUUID()}`,
+        event_type: "NOTE",
+        source: "voice_note_capture",
+      },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { ok: boolean; voice_note_id?: string; capsule_ids: string[] };
+    expect(body.ok).toBe(true);
+    expect(typeof body.voice_note_id).toBe("string");
+    expect(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        body.voice_note_id ?? "",
+      ),
+    ).toBe(true);
+  });
+
+  it("a non-voice observe returns 200 with NO voice_note_id (backward compatible)", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/observe",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { content: `observe-plain-${randomUUID()}`, event_type: "MEETING" },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { ok: boolean; voice_note_id?: string };
+    expect(body.ok).toBe(true);
+    expect(body.voice_note_id).toBeUndefined();
+  });
+
+  it("a non-UUID voice_note_id is rejected with 422", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/observe",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: {
+        content: `observe-badid-${randomUUID()}`,
+        event_type: "NOTE",
+        source: "voice_note_capture",
+        voice_note_id: "not-a-uuid",
+      },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as { ok: boolean; message?: string };
+    expect(body.ok).toBe(false);
+    expect((body.message ?? "").toLowerCase()).toContain("voice_note_id");
+  });
+
   it("duplicate content within 24h returns { skipped: true }", async () => {
     const ctx = await loginWithOrg();
     const content = `observe-dedup-${randomUUID()}`;

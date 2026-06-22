@@ -171,6 +171,12 @@ model MemoryCapsule {
   // service code (processCorrection / getConversationCorrections) owns the
   // existence + self-scope check (Section 9 pattern). No backfill.
   conversation_id    String?                      @db.Uuid
+  // [OTZAR-RETURN-10-FOUNDATION] forward-only grouping id: capsules minted by a
+  // single voice-note observe call share one voice_note_id, so a FUTURE governed
+  // note-scoped revoke-plan can identify the group. Nullable + backward-
+  // compatible: pre-existing capsules and non-voice observations stay null. This
+  // chunk only GROUPS — it never revokes, deletes, or applies anything.
+  voice_note_id      String?                      @db.Uuid
   embedding          Unsupported("vector(1536)")?
 
   created_at             DateTime  @default(now())
@@ -206,6 +212,8 @@ model MemoryCapsule {
   @@index([deleted_at])
   @@index([jurisdiction])
   @@index([topic_tags], type: Gin)
+  // [OTZAR-RETURN-10-FOUNDATION] group lookup for future note-scoped planning.
+  @@index([voice_note_id])
   // ADR-0055 Wave 2C: composite index supporting the per-conversation
   // CORRECTION count + last-seen query for
   // GET /api/v1/otzar/conversations/:id/corrections.

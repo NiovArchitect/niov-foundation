@@ -159,10 +159,10 @@ const KNOWN_LEGITIMATE_HITS: Readonly<Record<string, readonly LegitimateHit[]>> 
   ],
   "apps/api/src/routes/otzar-observation.routes.ts": [
     {
-      line: 153,
+      line: 179,
       token: "target_capsule_id",
       reason:
-        "Service input argument passed to observationService.processCorrection — not a response body or audit-details field",
+        "Service input argument passed to observationService.processCorrection — not a response body or audit-details field. Line shifted 153 → 179 by the [OTZAR-RETURN-10-FOUNDATION] voice-note grouping addition (+26 lines: UUID_RE const + the optional source/voice_note_id parse + 422 validation block in the observe handler above).",
     },
   ],
   "apps/api/src/services/otzar/conversation-detail.ts": [

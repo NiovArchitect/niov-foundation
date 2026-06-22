@@ -18,6 +18,11 @@ function bearerFrom(value: string | string[] | undefined): string | null {
   return token.length === 0 ? null : token;
 }
 
+// [OTZAR-RETURN-10-FOUNDATION] a supplied voice_note_id must be a UUID (the
+// MemoryCapsule.voice_note_id column is @db.Uuid).
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function statusForCode(code: string): number {
   switch (code) {
     case "SESSION_INVALID":
@@ -52,6 +57,9 @@ export async function registerOtzarObservationRoutes(
       content?: unknown;
       event_type?: unknown;
       org_entity_id?: unknown;
+      // [OTZAR-RETURN-10-FOUNDATION] optional forward-only voice-note grouping.
+      source?: unknown;
+      voice_note_id?: unknown;
     };
   }>("/api/v1/otzar/observe", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
@@ -81,11 +89,29 @@ export async function registerOtzarObservationRoutes(
       typeof body.org_entity_id === "string" && body.org_entity_id.length > 0
         ? body.org_entity_id
         : undefined;
+    // [OTZAR-RETURN-10-FOUNDATION] optional voice-note grouping. A supplied
+    // voice_note_id must be a UUID (the column is @db.Uuid) — reject early with
+    // a clean 422 rather than letting the DB throw. `source` is a free string.
+    const source =
+      typeof body.source === "string" && body.source.length > 0 ? body.source : undefined;
+    let voiceNoteId: string | undefined;
+    if (typeof body.voice_note_id === "string" && body.voice_note_id.length > 0) {
+      if (!UUID_RE.test(body.voice_note_id)) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "voice_note_id must be a UUID",
+        });
+      }
+      voiceNoteId = body.voice_note_id;
+    }
     const result = await observationService.observe({
       token,
       content: body.content,
       event_type: body.event_type,
       org_entity_id: orgEntityId,
+      ...(source !== undefined ? { source } : {}),
+      ...(voiceNoteId !== undefined ? { voice_note_id: voiceNoteId } : {}),
     });
     if (!result.ok) {
       return reply.code(statusForCode(result.code)).send(result);
