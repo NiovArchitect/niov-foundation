@@ -373,3 +373,88 @@ describe("POST /otzar/correction", () => {
     expect(leakCheck).toBeNull();
   });
 });
+
+// [OTZAR-RETURN-11-FOUNDATION] read-only note-scoped revoke PLAN route.
+describe("POST /otzar/voice-notes/:voice_note_id/revoke-plan", () => {
+  async function createVoiceNote(ctx: { token: string; ip: string }) {
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/observe",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: {
+        content: `voice-plan-route-${randomUUID()}`,
+        event_type: "NOTE",
+        source: "voice_note_capture",
+      },
+      remoteAddress: ctx.ip,
+    });
+    return (r.json() as { voice_note_id: string }).voice_note_id;
+  }
+
+  it("401 when unauthenticated", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${randomUUID()}/revoke-plan`,
+      payload: { reason: "user_requested_undo_plan" },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("422 when voice_note_id is not a UUID", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/voice-notes/not-a-uuid/revoke-plan",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: "user_requested_undo_plan" },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("NOT_FOUND (no leak) for an unrelated voice_note_id", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${randomUUID()}/revoke-plan`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: "user_requested_undo_plan" },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { plan_status: string; capsule_count: number; capsules: unknown[] };
+    expect(body.plan_status).toBe("NOT_FOUND");
+    expect(body.capsule_count).toBe(0);
+    expect(body.capsules).toEqual([]);
+  });
+
+  it("returns a plan-only result for the caller's own voice note; no payload leak; apply not allowed", async () => {
+    const ctx = await loginWithOrg();
+    const voiceNoteId = await createVoiceNote(ctx);
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${voiceNoteId}/revoke-plan`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: "user_requested_undo_plan" },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      mode: string;
+      apply_allowed: boolean;
+      payload_returned: boolean;
+      capsule_count: number;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.mode).toBe("PLAN_ONLY");
+    expect(body.apply_allowed).toBe(false);
+    expect(body.payload_returned).toBe(false);
+    expect(body.capsule_count).toBeGreaterThanOrEqual(1);
+    // No-leak: the response exposes no capsule payload/content/storage.
+    const raw = response.body.toLowerCase();
+    expect(raw).not.toContain("payload_summary");
+    expect(raw).not.toContain("content_hash");
+    expect(raw).not.toContain("storage_location");
+  });
+});
