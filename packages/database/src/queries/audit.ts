@@ -234,6 +234,11 @@ export type AuditEventType =
   | "VOICE_INTENT_EXPIRED"
   | "VOICE_INTENT_REDACTED"
   | "VOICE_INTENT_DELIVERED"
+  // [OTZAR-RETURN-12-FOUNDATION] governed voice-note undo apply: a summary,
+  // SAFE-details audit emitted once per apply that actually soft-revokes
+  // caller-owned grouped capsules (per-capsule soft revokes still audit as
+  // CAPSULE_DELETED). Never on a no-op/already-revoked re-apply.
+  | "VOICE_NOTE_REVOKE_APPLIED"
   // W5 Action Promotion Runtime per ADR-0086 + ADR-0042 §Q-γ.1
   // clean-transition discipline. 1 NEW append-only literal. Emitted
   // by proposed-action-promotion.service.ts after the Section 2
@@ -840,6 +845,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "VOICE_INTENT_EXPIRED",
   "VOICE_INTENT_REDACTED",
   "VOICE_INTENT_DELIVERED",
+  // [OTZAR-RETURN-12-FOUNDATION] governed voice-note undo apply summary.
+  "VOICE_NOTE_REVOKE_APPLIED",
   // W5 Action Promotion Runtime per ADR-0086 + ADR-0042 §Q-γ.1.
   "PROPOSED_ACTION_REFERENCED",
   // Section 8 Billing Completion B5-α per ADR-0093 §5 Candidate A.

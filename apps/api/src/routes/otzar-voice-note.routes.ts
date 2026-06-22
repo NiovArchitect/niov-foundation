@@ -1,15 +1,22 @@
 // FILE: otzar-voice-note.routes.ts
-// PURPOSE: [OTZAR-RETURN-11-FOUNDATION] HTTP surface for the READ-ONLY,
-//          note-scoped voice-note revoke PLAN. One route:
-//            POST /api/v1/otzar/voice-notes/:voice_note_id/revoke-plan
-//          Bearer-validated ("read"), no admin gate. It plans only — it never
-//          revokes, deletes, applies, or writes audit, and never returns capsule
-//          payload. The :voice_note_id must be a UUID.
-// CONNECTS TO: voiceNoteRevokePlanForCaller, AuthService.
+// PURPOSE: HTTP surface for the note-scoped voice-note revoke chain. Two routes:
+//   [OTZAR-RETURN-11-FOUNDATION] READ-ONLY plan:
+//     POST /api/v1/otzar/voice-notes/:voice_note_id/revoke-plan  ("read")
+//       Plans only — never revokes, deletes, applies, or writes audit, and never
+//       returns capsule payload.
+//   [OTZAR-RETURN-12-FOUNDATION] MUTATING supervised apply:
+//     POST /api/v1/otzar/voice-notes/:voice_note_id/revoke-apply ("write")
+//       Soft-revokes (deleted_at) ONLY the caller-owned, active capsules grouped
+//       under the note. Org/unknown capsules are skipped; never hard-deletes;
+//       never returns capsule payload. Bearer-validated, no admin gate.
+//   The :voice_note_id must be a UUID for both.
+// CONNECTS TO: voiceNoteRevokePlanForCaller, voiceNoteRevokeApplyForCaller,
+//   AuthService.
 
 import type { FastifyInstance } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import { voiceNoteRevokePlanForCaller } from "../services/otzar/voice-note-revoke-plan.service.js";
+import { voiceNoteRevokeApplyForCaller } from "../services/otzar/voice-note-revoke-apply.service.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -50,5 +57,43 @@ export function registerOtzarVoiceNoteRoutes(
       voiceNoteId,
     });
     return reply.code(200).send(plan);
+  });
+
+  app.post<{
+    Params: { voice_note_id: string };
+    Body: { reason?: unknown };
+  }>("/api/v1/otzar/voice-notes/:voice_note_id/revoke-apply", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+    }
+    // "write" — apply mutates (soft-revoke + audit). Matches the per-capsule
+    // COSMP revoke route, which also validates the "write" scope.
+    const session = await authService.validateSession(token, "write");
+    if (!session.valid) {
+      return reply.code(401).send({ ok: false, code: session.code });
+    }
+    const voiceNoteId = request.params.voice_note_id;
+    if (!UUID_RE.test(voiceNoteId)) {
+      return reply.code(422).send({
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "voice_note_id must be a UUID",
+      });
+    }
+    const rawReason = request.body?.reason;
+    if (rawReason !== undefined && typeof rawReason !== "string") {
+      return reply.code(422).send({
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "reason must be a string",
+      });
+    }
+    const result = await voiceNoteRevokeApplyForCaller({
+      callerEntityId: session.entity_id,
+      voiceNoteId,
+      ...(rawReason === undefined ? {} : { reason: rawReason }),
+    });
+    return reply.code(200).send(result);
   });
 }
