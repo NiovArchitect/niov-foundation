@@ -33,6 +33,7 @@ import {
   makeEntityInput,
 } from "../helpers.js";
 import { voiceNoteRevokePlanForCaller } from "../../apps/api/src/services/otzar/voice-note-revoke-plan.service.js";
+import { voiceNoteRevokeApplyForCaller } from "../../apps/api/src/services/otzar/voice-note-revoke-apply.service.js";
 
 const TEST_JWT_SECRET = "observation-test-secret-do-not-use-in-prod";
 const TEST_KEY = randomBytes(32);
@@ -1107,5 +1108,242 @@ describe("voiceNoteRevokePlanForCaller -- read-only revoke plan", () => {
     });
     expect(after).toEqual(before);
     for (const row of after) expect(row.deleted_at).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// [OTZAR-RETURN-12-FOUNDATION] MUTATING note-scoped revoke APPLY
+// ──────────────────────────────────────────────────────────────────
+
+describe("voiceNoteRevokeApplyForCaller -- supervised revoke apply", () => {
+  // Reuse the RETURN-11 wallet/note shapes verbatim so apply is tested against
+  // the exact group structures the plan already classifies.
+  function crossWalletServices() {
+    return makeServices({
+      mockResponses: [
+        {
+          ok: true,
+          text: JSON.stringify({
+            decisions: [{ topic: "renewal", outcome: "decided" }],
+            commitments: [{ description: "send the contract" }],
+            key_topics: ["pricing"],
+            external_entities_mentioned: [],
+          }),
+          provider: "mock",
+          model: "mock-1",
+        },
+      ],
+    });
+  }
+
+  function callerOnlyServices() {
+    return makeServices({
+      mockResponses: [
+        {
+          ok: true,
+          text: JSON.stringify({
+            decisions: [],
+            commitments: [{ description: "send the contract" }],
+            key_topics: ["pricing"],
+            external_entities_mentioned: [],
+          }),
+          provider: "mock",
+          model: "mock-1",
+        },
+      ],
+    });
+  }
+
+  async function makeVoiceNote(services: ReturnType<typeof makeServices>) {
+    const owner = await loginAs(services.auth);
+    await attachOrg(owner.entity.entity_id);
+    const r = await services.observation.observe({
+      token: owner.token,
+      content: `voice-apply-${randomUUID()}`,
+      event_type: "NOTE",
+      source: "voice_note_capture",
+    });
+    if (!r.ok || r.skipped) throw new Error("expected a voice note");
+    return { owner, voiceNoteId: r.voice_note_id as string, capsuleIds: r.capsule_ids };
+  }
+
+  async function summaryAuditCount(actorEntityId: string): Promise<number> {
+    return prisma.auditEvent.count({
+      where: { event_type: "VOICE_NOTE_REVOKE_APPLIED", actor_entity_id: actorEntityId },
+    });
+  }
+
+  it("a caller-only group APPLIES: all caller capsules soft-revoked, audit emitted, no hard delete", async () => {
+    const svc = callerOnlyServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    const result = await voiceNoteRevokeApplyForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId,
+    });
+    expect(result.apply_status).toBe("APPLIED");
+    expect(result.mode).toBe("APPLY");
+    expect(result.event_type).toBe("NOTE");
+    expect(new Set(result.revoked_capsule_ids)).toEqual(new Set(capsuleIds));
+    expect(result.skipped_capsules).toEqual([]);
+    expect(result.already_revoked_capsule_ids).toEqual([]);
+    expect(result.audit_id).toBeTruthy();
+    expect(result.external_side_effects).toBe(false);
+    expect(result.hard_delete_performed).toBe(false);
+    expect(result.payload_returned).toBe(false);
+    expect(result.raw_audio_scope).toBe("NONE");
+
+    // SOFT revoke: rows still exist, deleted_at set (no hard delete / row loss).
+    const rows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: capsuleIds } },
+      select: { capsule_id: true, deleted_at: true },
+    });
+    expect(rows.length).toBe(capsuleIds.length);
+    for (const row of rows) expect(row.deleted_at).not.toBeNull();
+
+    // Exactly one summary audit for this actor.
+    expect(await summaryAuditCount(owner.entity.entity_id)).toBe(1);
+  });
+
+  it("a caller+org group PARTIAL_APPLIES: caller revoked, org capsule SKIPPED + left active", async () => {
+    const svc = crossWalletServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    const result = await voiceNoteRevokeApplyForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId,
+    });
+    expect(result.apply_status).toBe("PARTIAL_APPLIED");
+    expect(result.revoked_capsule_ids.length).toBeGreaterThanOrEqual(1);
+    expect(result.skipped_capsules.length).toBeGreaterThanOrEqual(1);
+    expect(result.skipped_capsules.some((s) => s.wallet_scope === "org" && s.reason === "REQUIRES_ORG_AUTHORITY")).toBe(true);
+    // Honest message: never claims a complete undo when capsules remain.
+    expect(result.message.toLowerCase()).toContain("could not be revoked");
+
+    // The org-wallet (skipped) capsules remain ACTIVE; only caller ones revoked.
+    const skippedIds = result.skipped_capsules.map((s) => s.capsule_id);
+    const skippedRows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: skippedIds } },
+      select: { deleted_at: true },
+    });
+    for (const row of skippedRows) expect(row.deleted_at).toBeNull();
+
+    const revokedRows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: result.revoked_capsule_ids } },
+      select: { deleted_at: true },
+    });
+    for (const row of revokedRows) expect(row.deleted_at).not.toBeNull();
+
+    // No row was hard-deleted: all original capsules still present.
+    const all = await prisma.memoryCapsule.count({ where: { capsule_id: { in: capsuleIds } } });
+    expect(all).toBe(capsuleIds.length);
+  });
+
+  it("is IDEMPOTENT: re-apply returns ALREADY_REVOKED, mutates nothing, writes NO new summary audit", async () => {
+    const svc = callerOnlyServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    await voiceNoteRevokeApplyForCaller({ callerEntityId: owner.entity.entity_id, voiceNoteId });
+    expect(await summaryAuditCount(owner.entity.entity_id)).toBe(1);
+
+    const before = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: capsuleIds } },
+      select: { capsule_id: true, deleted_at: true },
+      orderBy: { capsule_id: "asc" },
+    });
+    const second = await voiceNoteRevokeApplyForCaller({ callerEntityId: owner.entity.entity_id, voiceNoteId });
+    expect(second.apply_status).toBe("ALREADY_REVOKED");
+    expect(second.revoked_capsule_ids).toEqual([]);
+    expect(second.audit_id).toBeUndefined();
+    expect(new Set(second.already_revoked_capsule_ids)).toEqual(new Set(capsuleIds));
+
+    const after = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: capsuleIds } },
+      select: { capsule_id: true, deleted_at: true },
+      orderBy: { capsule_id: "asc" },
+    });
+    expect(after).toEqual(before);
+    // No SECOND summary audit on the no-op re-apply.
+    expect(await summaryAuditCount(owner.entity.entity_id)).toBe(1);
+  });
+
+  it("an unrelated / random voice_note_id returns NOT_FOUND and mutates nothing (enumeration-safe)", async () => {
+    const svc = callerOnlyServices();
+    const { owner } = await makeVoiceNote(svc);
+    const result = await voiceNoteRevokeApplyForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId: randomUUID(),
+    });
+    expect(result.apply_status).toBe("NOT_FOUND");
+    expect(result.capsule_count).toBe(0);
+    expect(result.revoked_capsule_ids).toEqual([]);
+    expect(result.audit_id).toBeUndefined();
+    expect(await summaryAuditCount(owner.entity.entity_id)).toBe(0);
+  });
+
+  it("REFUSES (no mutation, no audit) when the caller's DMW is not active", async () => {
+    const svc = callerOnlyServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    // Suspend the caller entity -> isDMWActive(caller) === false.
+    await prisma.entity.update({
+      where: { entity_id: owner.entity.entity_id },
+      data: { status: "SUSPENDED" },
+    });
+    const result = await voiceNoteRevokeApplyForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId,
+    });
+    expect(result.apply_status).toBe("REFUSED");
+    expect(result.revoked_capsule_ids).toEqual([]);
+    expect(result.audit_id).toBeUndefined();
+    expect(result.reason_codes).toContain("DMW_NOT_ACTIVE");
+
+    const rows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: capsuleIds } },
+      select: { deleted_at: true },
+    });
+    for (const row of rows) expect(row.deleted_at).toBeNull();
+    expect(await summaryAuditCount(owner.entity.entity_id)).toBe(0);
+  });
+
+  it("refuses ALL (UNSAFE_TO_APPLY, no mutation) when an active capsule has undetermined authority", async () => {
+    // Cross-wallet note, then DETACH the org so getOrgEntityId no longer resolves:
+    // the still-active org-wallet capsule classifies as unknown authority. Apply
+    // must refuse the WHOLE group and revoke nothing (plan would say UNSAFE too).
+    const svc = crossWalletServices();
+    const { owner, voiceNoteId, capsuleIds } = await makeVoiceNote(svc);
+    await prisma.entityMembership.updateMany({
+      where: { child_id: owner.entity.entity_id },
+      data: { is_active: false },
+    });
+    const result = await voiceNoteRevokeApplyForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId,
+    });
+    expect(result.apply_status).toBe("UNSAFE_TO_APPLY");
+    expect(result.revoked_capsule_ids).toEqual([]);
+    expect(result.audit_id).toBeUndefined();
+    expect(result.skipped_capsules.some((s) => s.reason === "UNKNOWN_AUTHORITY")).toBe(true);
+
+    // MUTATES NOTHING: every capsule in the group stays active.
+    const rows = await prisma.memoryCapsule.findMany({
+      where: { capsule_id: { in: capsuleIds } },
+      select: { deleted_at: true },
+    });
+    for (const row of rows) expect(row.deleted_at).toBeNull();
+    expect(await summaryAuditCount(owner.entity.entity_id)).toBe(0);
+  });
+
+  it("returns NO capsule payload: skipped entries carry only safe fields; envelope leaks no forbidden tokens", async () => {
+    const svc = crossWalletServices();
+    const { owner, voiceNoteId } = await makeVoiceNote(svc);
+    const result = await voiceNoteRevokeApplyForCaller({
+      callerEntityId: owner.entity.entity_id,
+      voiceNoteId,
+    });
+    for (const s of result.skipped_capsules) {
+      expect(Object.keys(s).sort()).toEqual(["capsule_id", "reason", "wallet_scope"]);
+    }
+    const blob = JSON.stringify(result).toLowerCase();
+    for (const token of ["payload_summary", "payload_content", "content_hash", "storage_location", "raw_body", "embedding"]) {
+      expect(blob).not.toContain(token);
+    }
   });
 });

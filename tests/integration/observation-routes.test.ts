@@ -458,3 +458,132 @@ describe("POST /otzar/voice-notes/:voice_note_id/revoke-plan", () => {
     expect(raw).not.toContain("storage_location");
   });
 });
+
+// [OTZAR-RETURN-12-FOUNDATION] MUTATING supervised revoke APPLY route.
+describe("POST /otzar/voice-notes/:voice_note_id/revoke-apply", () => {
+  async function createVoiceNote(ctx: { token: string; ip: string }) {
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/observe",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: {
+        content: `voice-apply-route-${randomUUID()}`,
+        event_type: "NOTE",
+        source: "voice_note_capture",
+      },
+      remoteAddress: ctx.ip,
+    });
+    return (r.json() as { voice_note_id: string }).voice_note_id;
+  }
+
+  it("401 when unauthenticated", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${randomUUID()}/revoke-apply`,
+      payload: { reason: "user_requested_undo" },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("422 when voice_note_id is not a UUID", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/voice-notes/not-a-uuid/revoke-apply",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: "user_requested_undo" },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("422 when reason is not a string", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${randomUUID()}/revoke-apply`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: 42 },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("NOT_FOUND (no mutation, no leak) for an unrelated voice_note_id", async () => {
+    const ctx = await loginWithOrg();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${randomUUID()}/revoke-apply`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: "user_requested_undo" },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      apply_status: string;
+      capsule_count: number;
+      revoked_capsule_ids: string[];
+      audit_id?: string;
+    };
+    expect(body.apply_status).toBe("NOT_FOUND");
+    expect(body.capsule_count).toBe(0);
+    expect(body.revoked_capsule_ids).toEqual([]);
+    expect(body.audit_id).toBeUndefined();
+  });
+
+  it("applies the caller's own voice note (soft revoke), flags safe, no leak; re-apply is idempotent", async () => {
+    const ctx = await loginWithOrg();
+    const voiceNoteId = await createVoiceNote(ctx);
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${voiceNoteId}/revoke-apply`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: "user_requested_undo" },
+      remoteAddress: ctx.ip,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      mode: string;
+      apply_status: string;
+      revoked_capsule_ids: string[];
+      hard_delete_performed: boolean;
+      payload_returned: boolean;
+      external_side_effects: boolean;
+      raw_audio_scope: string;
+      audit_id?: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.mode).toBe("APPLY");
+    expect(["APPLIED", "PARTIAL_APPLIED"]).toContain(body.apply_status);
+    expect(body.revoked_capsule_ids.length).toBeGreaterThanOrEqual(1);
+    expect(body.hard_delete_performed).toBe(false);
+    expect(body.payload_returned).toBe(false);
+    expect(body.external_side_effects).toBe(false);
+    expect(body.raw_audio_scope).toBe("NONE");
+    expect(body.audit_id).toBeTruthy();
+    // No-leak: no capsule payload/content/storage in the response.
+    const raw = response.body.toLowerCase();
+    expect(raw).not.toContain("payload_summary");
+    expect(raw).not.toContain("content_hash");
+    expect(raw).not.toContain("storage_location");
+
+    // Idempotent re-apply: nothing left to revoke -> ALREADY_REVOKED, no audit.
+    const second = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/voice-notes/${voiceNoteId}/revoke-apply`,
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { reason: "user_requested_undo" },
+      remoteAddress: ctx.ip,
+    });
+    expect(second.statusCode).toBe(200);
+    const sbody = second.json() as { apply_status: string; revoked_capsule_ids: string[]; audit_id?: string };
+    // Idempotence contract: nothing NEW is revoked and no new summary audit is
+    // written. Terminal status is ALREADY_REVOKED for a caller-only note, or
+    // PARTIAL_APPLIED when an un-revocable org capsule remains in the group
+    // (RETURN-12 never revokes org-wallet capsules) — both are honest no-ops.
+    expect(["ALREADY_REVOKED", "PARTIAL_APPLIED"]).toContain(sbody.apply_status);
+    expect(sbody.revoked_capsule_ids).toEqual([]);
+    expect(sbody.audit_id).toBeUndefined();
+  });
+});
