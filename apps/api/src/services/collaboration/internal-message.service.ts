@@ -20,7 +20,7 @@
 //   - Internal Otzar inbox channel ONLY. No Slack/email/calendar/external.
 //   - Recipient must resolve to an in-org member (tenant isolation).
 
-import { prisma } from "@niov/database";
+import { prisma, writeAuditEvent } from "@niov/database";
 import {
   resolveCollaborationTarget,
   isUuid,
@@ -54,6 +54,8 @@ export type InternalMessageResult =
       recipient_entity_id: string;
       recipient_display_name: string;
       sender_display_name: string;
+      /** [OTZAR-V1-LIVE-2A] append-only audit id proving who routed work to whom. */
+      audit_event_id: string;
     }
   // The recipient could not be resolved to a single in-org member. The
   // governed target carries human-readable copy + candidates for the UI.
@@ -147,6 +149,25 @@ export async function deliverHumanInternalMessage(
   });
   if (ledger.ok) ledgerId = ledger.entry.ledger_entry_id;
 
+  // [OTZAR-V1-LIVE-2A-FOUNDATION] Append-only audit proof of the human-authority
+  // routing action. Until now this path wrote only Notification + Work-Ledger
+  // rows and left NO audit-chain entry, so the most common cross-teammate
+  // routing action could not be proven from the audit ledger. SAFE details only
+  // (actor/target + ids + channel) — never the message body.
+  const auditEvent = await writeAuditEvent({
+    event_type: "INTERNAL_MESSAGE_DELIVERED",
+    outcome: "SUCCESS",
+    actor_entity_id: input.senderEntityId,
+    target_entity_id: resolution.target_entity_id,
+    details: {
+      notification_id: delivery.notification.notification_id,
+      ledger_entry_id: ledgerId,
+      channel: "INTERNAL_OTZAR_INBOX",
+      notification_class: "DIRECT_MESSAGE",
+      sender_authority: "HUMAN_DIRECT",
+    },
+  });
+
   return {
     ok: true,
     status: "DELIVERED",
@@ -155,6 +176,7 @@ export async function deliverHumanInternalMessage(
     recipient_entity_id: resolution.target_entity_id,
     recipient_display_name: resolution.display_name ?? UNRESOLVED_ENTITY_LABEL,
     sender_display_name: sender.display_name ?? "you",
+    audit_event_id: auditEvent.audit_id,
   };
 }
 
