@@ -1,0 +1,55 @@
+# Render Blueprint — Foundation API serving Otzar (api.otzar.ai). [OTZAR-LIVE-DEPLOY-1]
+#
+# Use it: Render dashboard → New + → Blueprint → connect this repo
+# (niov-foundation) → Render reads this file → Apply.
+#
+# SECRETS ARE NOT IN THIS FILE. Every secret below is marked `sync: false`, so
+# Render will prompt you to paste each value in the dashboard when the service is
+# created (and never stores them in git). Non-secret config has literal values.
+#
+# REDIS_URL: create a Render Key Value first (New + → Key Value, name otzar-redis),
+# then paste its Internal Redis URL into the REDIS_URL prompt. (Left as sync:false
+# rather than auto-wired, to keep this Blueprint resilient across Render versions.)
+#
+# After the service is created, add the custom domain api.otzar.ai in Settings →
+# Custom Domains; Render shows the exact CNAME target for Namecheap. The container
+# binds 0.0.0.0:$PORT (Render sets PORT) and serves health at /api/v1/health.
+services:
+  - type: web
+    runtime: docker
+    name: otzar-api
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    # Always-on paid tier (recommended: the Action scheduler that executes
+    # approved work runs continuously). Change to `free` for a cheaper instance
+    # that sleeps on idle (cold starts; scheduler pauses while asleep).
+    plan: starter
+    autoDeploy: true
+    envVars:
+      # --- non-secret config ---
+      - key: NODE_ENV
+        value: production
+      - key: CLOUD_TARGET
+        value: production
+      - key: VOICE_STT_PROVIDER
+        value: elevenlabs
+      - key: ELEVENLABS_STT_MODEL
+        value: scribe_v1
+      - key: CONTROL_TOWER_URL
+        value: https://app.otzar.ai
+      # --- secrets: paste each value in the Render dashboard (never in git) ---
+      - key: DATABASE_URL          # Supabase pooled URL (append ?pgbouncer=true&connection_limit=1)
+        sync: false
+      - key: DIRECT_URL            # Supabase direct (5432) URL — for prisma db push
+        sync: false
+      - key: REDIS_URL             # Render Key Value Internal URL (create it first)
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY        # generate locally: openssl rand -hex 32  (REQUIRED in production)
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
