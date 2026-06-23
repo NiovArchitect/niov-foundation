@@ -587,3 +587,76 @@ describe("POST /otzar/voice-notes/:voice_note_id/revoke-apply", () => {
     expect(sbody.audit_id).toBeUndefined();
   });
 });
+
+// [OTZAR-V1-LIVE-1A-FOUNDATION] Demo intake must be refused at the HTTP boundary
+// in a non-demo environment. The app is built under NODE_ENV=test (demo allowed),
+// and isDemoModeAllowed() is evaluated at request time, so each test temporarily
+// simulates a deployment by setting NODE_ENV="staging" around the single inject
+// (restored in finally). "staging" avoids the production-only boot/crypto branches.
+describe("Demo-mode guard on intake routes (LIVE-1A)", () => {
+  it("422 DEMO_MODE_NOT_ALLOWED for force_mode DEMO_SCRIPTED on /otzar/comms/extract in a non-demo env", async () => {
+    const ctx = await loginWithOrg();
+    const prev = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "staging";
+      delete process.env.ALLOW_DEMO_MODE;
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/otzar/comms/extract",
+        headers: { authorization: `Bearer ${ctx.token}` },
+        payload: { captured_text: "anything", force_mode: "DEMO_SCRIPTED" },
+        remoteAddress: ctx.ip,
+      });
+      expect(response.statusCode).toBe(422);
+      expect((response.json() as { code: string }).code).toBe("DEMO_MODE_NOT_ALLOWED");
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
+  });
+
+  it("422 DEMO_MODE_NOT_ALLOWED for provider DEMO_FIXTURE on /otzar/observe/extract in a non-demo env", async () => {
+    const ctx = await loginWithOrg();
+    const prev = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "staging";
+      delete process.env.ALLOW_DEMO_MODE;
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/otzar/observe/extract",
+        headers: { authorization: `Bearer ${ctx.token}` },
+        payload: { provider: "DEMO_FIXTURE", source_type: "DEMO" },
+        remoteAddress: ctx.ip,
+      });
+      expect(response.statusCode).toBe(422);
+      expect((response.json() as { code: string }).code).toBe("DEMO_MODE_NOT_ALLOWED");
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
+  });
+
+  it("ALLOW_DEMO_MODE=true permits demo intake even under a non-demo env (not 422)", async () => {
+    const ctx = await loginWithOrg();
+    const prevEnv = process.env.NODE_ENV;
+    const prevAllow = process.env.ALLOW_DEMO_MODE;
+    try {
+      process.env.NODE_ENV = "staging";
+      process.env.ALLOW_DEMO_MODE = "true";
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/otzar/comms/extract",
+        headers: { authorization: `Bearer ${ctx.token}` },
+        payload: { captured_text: "anything", force_mode: "DEMO_SCRIPTED" },
+        remoteAddress: ctx.ip,
+      });
+      // The guard PERMITTED the request (the point of this test): not a 422.
+      // The exact extraction_mode shape is covered by the comms-extract unit
+      // tests; here we only assert the demo request was accepted, not refused.
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { ok: boolean }).ok).toBe(true);
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+      if (prevAllow === undefined) delete process.env.ALLOW_DEMO_MODE;
+      else process.env.ALLOW_DEMO_MODE = prevAllow;
+    }
+  });
+});

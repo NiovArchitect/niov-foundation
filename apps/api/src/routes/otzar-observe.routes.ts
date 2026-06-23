@@ -21,6 +21,10 @@ import {
   OBSERVE_PROVIDERS,
   OBSERVE_SOURCE_TYPES,
 } from "../services/otzar/observe-intake.service.js";
+import {
+  isDemoModeAllowed,
+  DEMO_MODE_NOT_ALLOWED,
+} from "../services/otzar/demo-mode.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -105,6 +109,20 @@ export async function registerOtzarObserveRoutes(
         body.force_mode === "LOCAL_FALLBACK"
           ? body.force_mode
           : undefined;
+      // [OTZAR-V1-LIVE-1A-FOUNDATION] Refuse explicit demo intake (a DEMO_SCRIPTED
+      // force_mode or the DEMO_FIXTURE OCR provider) in a non-demo environment so
+      // scripted/fixture output never silently replaces real extraction.
+      if (
+        (forceMode === "DEMO_SCRIPTED" || provider === "DEMO_FIXTURE") &&
+        !isDemoModeAllowed()
+      ) {
+        return reply.code(422).send({
+          ok: false,
+          code: DEMO_MODE_NOT_ALLOWED,
+          message:
+            "Demo intake modes (DEMO_SCRIPTED / DEMO_FIXTURE) are disabled in this environment. Set ALLOW_DEMO_MODE=true to enable them.",
+        });
+      }
       const result = await extractObserveCaptureForCaller(
         {
           callerEntityId: session.entity_id,

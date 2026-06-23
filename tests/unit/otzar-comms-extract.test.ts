@@ -6,7 +6,7 @@
 //          recipient-resolution + privacy invariants.
 // CONNECTS TO: apps/api/src/services/otzar/comms-extract.service.ts.
 
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { LLMProvider, LLMResult } from "@niov/api";
 
 // Mock the buildIdentityContext that the extract service depends on
@@ -186,6 +186,54 @@ describe("extractFromCapturedText — LOCAL_FALLBACK + force_mode", () => {
     );
     expect(out.extraction_mode).toBe("DEMO_SCRIPTED");
     expect(out.suggested_actions).toHaveLength(3);
+  });
+});
+
+// [OTZAR-V1-LIVE-1A-FOUNDATION] Demo intake must never silently mask the real
+// LLM path in staging/production. These cases drive the env gate at the
+// extraction chokepoint by temporarily simulating a non-demo deployment
+// (NODE_ENV="staging" avoids the production-only boot/crypto branches). The
+// surrounding suite runs under NODE_ENV=test, where demo stays allowed, so the
+// existing fixture tests above are unaffected.
+describe("extractFromCapturedText — demo-mode environment gate (LIVE-1A)", () => {
+  const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+  const ORIGINAL_ALLOW = process.env.ALLOW_DEMO_MODE;
+  afterEach(() => {
+    if (ORIGINAL_NODE_ENV === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    if (ORIGINAL_ALLOW === undefined) delete process.env.ALLOW_DEMO_MODE;
+    else process.env.ALLOW_DEMO_MODE = ORIGINAL_ALLOW;
+  });
+
+  it("does NOT auto-run scripted demo in a non-demo env (canonical fixture -> LOCAL_FALLBACK, not DEMO_SCRIPTED)", async () => {
+    process.env.NODE_ENV = "staging";
+    delete process.env.ALLOW_DEMO_MODE;
+    const out = await extractFromCapturedText(
+      { viewerEntityId: "v", captured_text: DEMO_FIXTURE },
+      null,
+    );
+    expect(out.extraction_mode).not.toBe("DEMO_SCRIPTED");
+    expect(out.extraction_mode).toBe("LOCAL_FALLBACK");
+  });
+
+  it("does NOT run an explicit force_mode DEMO_SCRIPTED in a non-demo env", async () => {
+    process.env.NODE_ENV = "staging";
+    delete process.env.ALLOW_DEMO_MODE;
+    const out = await extractFromCapturedText(
+      { viewerEntityId: "v", captured_text: "anything", force_mode: "DEMO_SCRIPTED" },
+      null,
+    );
+    expect(out.extraction_mode).not.toBe("DEMO_SCRIPTED");
+  });
+
+  it("ALLOW_DEMO_MODE=true re-enables demo even under a non-demo NODE_ENV", async () => {
+    process.env.NODE_ENV = "staging";
+    process.env.ALLOW_DEMO_MODE = "true";
+    const out = await extractFromCapturedText(
+      { viewerEntityId: "v", captured_text: DEMO_FIXTURE },
+      null,
+    );
+    expect(out.extraction_mode).toBe("DEMO_SCRIPTED");
   });
 });
 
