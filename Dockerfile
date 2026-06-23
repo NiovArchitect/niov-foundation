@@ -79,9 +79,10 @@ USER niov
 
 EXPOSE 3000
 
-# /health is a public Fastify route — see apps/api/src/routes/health.routes.ts.
+# /api/v1/health is the public Fastify health route — see
+# apps/api/src/routes/health.routes.ts (registerHealthRoutes). [OTZAR-LIVE-DEPLOY-0]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -fsS http://localhost:3000/health || exit 1
+  CMD curl -fsS http://localhost:3000/api/v1/health || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["npm", "--workspace", "@niov/api", "run", "start"]
