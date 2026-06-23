@@ -8,6 +8,10 @@
 
 import type { FastifyInstance } from "fastify";
 import type { OtzarService } from "../services/otzar/otzar.service.js";
+import {
+  isDemoModeAllowed,
+  DEMO_MODE_NOT_ALLOWED,
+} from "../services/otzar/demo-mode.js";
 
 // WHAT: Hard ceiling on caller-supplied token_budget. Above this,
 //        reject with BUDGET_TOO_LARGE 422 -- protects the LLM
@@ -298,6 +302,16 @@ export async function registerOtzarRoutes(
       body.force_mode === "LOCAL_FALLBACK"
         ? body.force_mode
         : undefined;
+    // [OTZAR-V1-LIVE-1A-FOUNDATION] Refuse an explicit demo-intake request in a
+    // non-demo environment so scripted output never masks the real LLM path.
+    if (force_mode === "DEMO_SCRIPTED" && !isDemoModeAllowed()) {
+      return reply.code(422).send({
+        ok: false,
+        code: DEMO_MODE_NOT_ALLOWED,
+        message:
+          "Demo intake mode is disabled in this environment. Set ALLOW_DEMO_MODE=true to enable it.",
+      });
+    }
     const result = await otzarService.extractFromComms({
       token,
       captured_text: body.captured_text,

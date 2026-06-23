@@ -54,6 +54,7 @@
 
 import type { LLMProvider } from "../llm/llm.service.js";
 import { buildIdentityContext } from "./identity-context.js";
+import { isDemoModeAllowed } from "./demo-mode.js";
 import type { ProposedActionTargetCandidate } from "./proposed-action-extractor.js";
 
 export type CommsExtractionMode =
@@ -350,12 +351,22 @@ export async function extractFromCapturedText(
     email: p.email,
   }));
 
-  // force_mode wins if set; otherwise auto-detect demo fixture.
+  // [OTZAR-V1-LIVE-1A-FOUNDATION] Demo intake is canned, not real extraction.
+  // It must never silently run in staging/production: a canonical-fixture text
+  // would otherwise auto-return scripted output and mask whether the real LLM
+  // path works. force_mode wins if set; otherwise auto-detect the demo fixture —
+  // but ONLY when demo mode is allowed here. When it is not allowed, both the
+  // auto-detected AND the explicitly-forced demo paths fall through to the real
+  // LLM / LOCAL_FALLBACK path (the route layer additionally rejects an explicit
+  // demo request with 422 for a clear caller error).
+  const demoAllowed = isDemoModeAllowed();
   const effectiveMode: CommsExtractionMode | "AUTO" =
     input.force_mode ??
-    (isCanonicalDemoFixture(input.captured_text) ? "DEMO_SCRIPTED" : "AUTO");
+    (demoAllowed && isCanonicalDemoFixture(input.captured_text)
+      ? "DEMO_SCRIPTED"
+      : "AUTO");
 
-  if (effectiveMode === "DEMO_SCRIPTED") {
+  if (effectiveMode === "DEMO_SCRIPTED" && demoAllowed) {
     return buildDemoExtraction(roster);
   }
 
