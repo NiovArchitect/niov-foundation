@@ -680,3 +680,61 @@ describe("human-authority direct internal message", () => {
     expect((res.json() as { status: string }).status).toBe("BLOCKED");
   });
 });
+
+// [OTZAR-V1-LIVE-2A-FOUNDATION] Human work-routing must leave an append-only
+// audit-chain entry so Foundation can prove who routed work to whom. Previously
+// this path wrote only Notification + Work-Ledger rows and no audit event.
+describe("human-authority internal message — audit proof (LIVE-2A)", () => {
+  it("emits an append-only INTERNAL_MESSAGE_DELIVERED audit (actor=sender, target=recipient), returns audit_event_id, and leaks NO message body", async () => {
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}Audit Sender`);
+    const david = await member(ORG_ID, `${TEST_PREFIX}Audit Recipient`);
+    const secret = "audit body marker zzz";
+    const send = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: david.id, message: secret },
+    });
+    expect(send.statusCode).toBe(201);
+    const sj = send.json() as {
+      status: string;
+      audit_event_id?: string;
+      notification_id: string;
+      ledger_entry_id: string | null;
+    };
+    expect(sj.status).toBe("DELIVERED");
+    expect(sj.audit_event_id).toBeTruthy();
+
+    const audit = await prisma.auditEvent.findUnique({
+      where: { audit_id: sj.audit_event_id as string },
+    });
+    expect(audit).not.toBeNull();
+    expect(audit?.event_type).toBe("INTERNAL_MESSAGE_DELIVERED");
+    expect(audit?.actor_entity_id).toBe(sadeil.id);
+    expect(audit?.target_entity_id).toBe(david.id);
+    // SAFE details only — ids + channel, NEVER the message body.
+    const details = JSON.stringify(audit?.details ?? {});
+    expect(details).toContain(sj.notification_id);
+    expect(details).toContain("INTERNAL_OTZAR_INBOX");
+    expect(details).not.toContain(secret);
+  });
+
+  it("writes NO INTERNAL_MESSAGE_DELIVERED audit when delivery does not happen (empty message -> BLOCKED)", async () => {
+    const sadeil = await member(ORG_ID, `${TEST_PREFIX}NoAudit Sender`);
+    const dave = await member(ORG_ID, `${TEST_PREFIX}NoAudit Recipient`);
+    const before = await prisma.auditEvent.count({
+      where: { event_type: "INTERNAL_MESSAGE_DELIVERED", actor_entity_id: sadeil.id },
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/work-os/internal-messages",
+      headers: { authorization: `Bearer ${sadeil.token}` },
+      payload: { recipient: dave.id, message: "   " },
+    });
+    expect(res.statusCode).toBe(422);
+    const after = await prisma.auditEvent.count({
+      where: { event_type: "INTERNAL_MESSAGE_DELIVERED", actor_entity_id: sadeil.id },
+    });
+    expect(after).toBe(before);
+  });
+});
