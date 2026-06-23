@@ -71,6 +71,11 @@ COPY apps/api apps/api
 COPY packages/auth packages/auth
 COPY packages/database packages/database
 
+# bcrypt is a native module npm nests under packages/auth (not hoisted);
+# the root node_modules copy above misses it. Bring it from the deps stage
+# so the runtime image has the Linux-built native addon.
+COPY --from=deps /repo/packages/auth/node_modules ./packages/auth/node_modules
+
 # Non-root runtime
 RUN groupadd --system --gid 1001 niov && \
     useradd --system --uid 1001 --gid niov --home /repo niov && \
