@@ -221,3 +221,113 @@ To deploy with NIOV-hosted AI/voice:
 **The Founder does NOT need to provide customer Slack/Google/
 Microsoft/etc. keys.** Each customer admin connects their own tools
 through Control Tower; those keys live at tenant vault paths.
+
+## 6. Render live deploy (api.otzar.ai / app.otzar.ai)
+
+Operational record from OTZAR-LIVE-DEPLOY-1 — the production deploy of
+the Foundation API (`otzar-api`) and the Control Tower frontend
+(`otzar-app`) on Render. This section captures the env requirements
+and the gotchas that cost a few failed boots so they do not recur.
+**No secret values appear here — only variable names and non-secret
+literals.**
+
+### 6.1 `otzar-api` (Foundation API web service)
+
+Set these in the Render service env. The five literal values below are
+non-secret; the rest are secrets pasted in the Render dashboard (never
+in git).
+
+| Variable | Value / source | Notes |
+|---|---|---|
+| `NODE_ENV` | `production` | literal |
+| `CLOUD_TARGET` | `production` | literal |
+| `CONTROL_TOWER_URL` | `https://app.otzar.ai` | literal |
+| `VOICE_STT_PROVIDER` | `elevenlabs` | literal — ElevenLabs v1 STT |
+| `ELEVENLABS_STT_MODEL` | `scribe_v1` | literal — ElevenLabs v1 STT model |
+| `DATABASE_URL` | secret (Postgres pooled URL) | **paste WITHOUT surrounding quotes** — see 6.3 |
+| `DIRECT_URL` | secret (Postgres direct URL) | **paste WITHOUT surrounding quotes** — see 6.3; used for `db:push`/migrations |
+| `REDIS_URL` | Render Key Value **internal** URL | create the Key Value first, then copy its internal `redis://…` URL — do NOT use a local `.env` Redis URL |
+| `JWT_SECRET` | secret | session token signing key |
+| `ENCRYPTION_KEY` | secret (generate once) | see 6.4 — generate one value, store it, keep it stable |
+| `ANTHROPIC_API_KEY` | secret | |
+| `ELEVENLABS_API_KEY` | secret | ElevenLabs v1 voice |
+| `OPENAI_API_KEY` | secret | **required at boot** — see 6.2 |
+| `OTZAR_ENTITY_ID` | value (existing app entity id) | see 6.2 |
+
+### 6.2 Boot-required vars that are easy to miss
+
+- **`OPENAI_API_KEY` is required for the API to boot.** The embedding
+  provider (`OpenAIEmbeddingProvider`) is constructed at startup
+  (`getEmbeddingProvider` → `buildApp`), so a missing key crashes the
+  process before `/api/v1/health` is reachable, not lazily at first
+  use. See §9.1 of `docs/operations/deployment-runbook.md`.
+- **`OTZAR_ENTITY_ID` should be set.** If absent, the boot validation
+  warns and `seedOtzarEntity` creates a brand-new APPLICATION entity on
+  startup. Set it to the existing application entity id to avoid
+  spawning a duplicate.
+
+### 6.3 DATABASE_URL / DIRECT_URL must NOT carry surrounding quotes
+
+A local `.env` commonly quotes connection URLs:
+
+```
+DATABASE_URL="postgresql://USER:PASS@HOST:PORT/DB?params"
+```
+
+The Render value must be the **unquoted** string:
+
+```
+postgresql://USER:PASS@HOST:PORT/DB?params
+```
+
+NOT:
+
+```
+"postgresql://USER:PASS@HOST:PORT/DB?params"
+```
+
+If the surrounding quotes are copied in, Prisma fails at boot with
+`Error validating datasource db: the URL must start with the protocol
+postgresql:// or postgres://` (it sees the leading `"`). The same
+applies to `DIRECT_URL`. Strip the wrapping quotes when copying either
+value into Render.
+
+### 6.4 ENCRYPTION_KEY stability
+
+`ENCRYPTION_KEY` is generated once (e.g. `openssl rand -hex 32`),
+stored in Render, and then kept **stable**. Anything encrypted under
+one key cannot be decrypted under another, so regenerating it after
+data exists breaks decryption of stored content (e.g. encrypted OAuth
+tokens). Generate it a single time and do not rotate it casually.
+
+### 6.5 `otzar-app` (Control Tower frontend, static site)
+
+| Variable | Value | Notes |
+|---|---|---|
+| `VITE_FOUNDATION_API_URL` | `https://api.otzar.ai/api/v1` | PUBLIC build-time value baked into the static bundle — not a secret |
+
+### 6.6 Custom domains (Namecheap)
+
+Add exactly these two CNAME records in Namecheap → Advanced DNS:
+
+| Type | Host | Value | TTL |
+|---|---|---|---|
+| CNAME | `api` | `otzar-api.onrender.com` | Automatic |
+| CNAME | `app` | `otzar-app.onrender.com` | Automatic |
+
+- Host is just `api` / `app` (Namecheap appends the domain); no
+  trailing dot.
+- **Leave root `otzar.ai` (`@`) and `www.otzar.ai` untouched.** Render
+  verifies the subdomains and issues TLS once DNS propagates.
+
+### 6.7 Deploy verification
+
+A healthy `otzar-api` returns:
+
+```
+GET https://otzar-api.onrender.com/api/v1/health → 200
+{ "ok": true, "version": "0.0.1", "database": "connected" }
+```
+
+`"database": "connected"` confirms the Postgres connection succeeded
+(reachable host, valid credentials, seeding completed).
