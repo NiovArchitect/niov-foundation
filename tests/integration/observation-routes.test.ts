@@ -660,3 +660,60 @@ describe("Demo-mode guard on intake routes (LIVE-1A)", () => {
     }
   });
 });
+
+// [OTZAR-V1-LIVE-4A-FOUNDATION] Inline speech-to-text route. Auth + validation +
+// the honest "not configured" path (the real provider call requires a key that
+// is never set in tests; happy-path transcription is covered by the service unit
+// test with an injected provider).
+describe("POST /otzar/voice/transcribe (LIVE-4A)", () => {
+  const VALID_B64 = Buffer.from("fake-audio").toString("base64");
+
+  it("401 when unauthenticated", async () => {
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/voice/transcribe",
+      payload: { audio_base64: VALID_B64, mime_type: "audio/webm" },
+    });
+    expect(r.statusCode).toBe(401);
+  });
+
+  it("422 when audio_base64 / mime_type are missing", async () => {
+    const ctx = await loginWithOrg();
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/voice/transcribe",
+      headers: { authorization: `Bearer ${ctx.token}` },
+      payload: { mime_type: "audio/webm" },
+      remoteAddress: ctx.ip,
+    });
+    expect(r.statusCode).toBe(422);
+  });
+
+  it("503 VOICE_STT_PROVIDER_NOT_CONFIGURED when no server STT provider is set", async () => {
+    const ctx = await loginWithOrg();
+    const prevEleven = process.env.ELEVENLABS_API_KEY;
+    const prevDeep = process.env.DEEPGRAM_API_KEY;
+    const prevPref = process.env.VOICE_STT_PROVIDER;
+    try {
+      delete process.env.ELEVENLABS_API_KEY;
+      delete process.env.DEEPGRAM_API_KEY;
+      delete process.env.VOICE_STT_PROVIDER;
+      const r = await app.inject({
+        method: "POST",
+        url: "/api/v1/otzar/voice/transcribe",
+        headers: { authorization: `Bearer ${ctx.token}` },
+        payload: { audio_base64: VALID_B64, mime_type: "audio/webm" },
+        remoteAddress: ctx.ip,
+      });
+      expect(r.statusCode).toBe(503);
+      expect((r.json() as { code: string }).code).toBe("VOICE_STT_PROVIDER_NOT_CONFIGURED");
+    } finally {
+      if (prevEleven === undefined) delete process.env.ELEVENLABS_API_KEY;
+      else process.env.ELEVENLABS_API_KEY = prevEleven;
+      if (prevDeep === undefined) delete process.env.DEEPGRAM_API_KEY;
+      else process.env.DEEPGRAM_API_KEY = prevDeep;
+      if (prevPref === undefined) delete process.env.VOICE_STT_PROVIDER;
+      else process.env.VOICE_STT_PROVIDER = prevPref;
+    }
+  });
+});
