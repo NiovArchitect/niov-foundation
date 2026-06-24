@@ -32,6 +32,11 @@
 
 import { prisma } from "@niov/database";
 import { createActionForCaller } from "../action/action.service.js";
+// [OTZAR-LIVE-6] response reconciliation — the reply must land in the A↔B thread.
+import { createLedgerEntry } from "../work-os/work-ledger.service.js";
+import { getOrgEntityId } from "../governance/org.js";
+
+const REPLY_BODY_MAX = 2000;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -138,6 +143,36 @@ export async function replyToNotificationForCaller(
       ...(result.message !== undefined ? { message: result.message } : {}),
     };
   }
+
+  // [OTZAR-LIVE-6] Response reconciliation. The outbound internal-message path
+  // (deliverHumanInternalMessage) writes BOTH a Notification and a durable
+  // Work-Ledger NOTIFICATION row; getDirectMessageThread (the A↔B thread the
+  // sender's "did they respond?" lookups read) queries WorkLedgerEntry, NOT
+  // Notification. The reply path above only created a Notification, so a reply
+  // was invisible to the original sender. Mirror the outbound row for the reply —
+  // requester = replier (caller), target = original sender — so the reply appears
+  // in the thread. Best-effort: the reply itself already succeeded; a missing
+  // thread row must never fail the (delivered) reply.
+  try {
+    const orgEntityId = await getOrgEntityId(callerEntityId);
+    await createLedgerEntry({
+      org_entity_id: orgEntityId,
+      ledger_type: "NOTIFICATION",
+      source_type: "CHAT",
+      source_command: body.slice(0, REPLY_BODY_MAX),
+      title: "Reply to internal note",
+      summary: body.slice(0, 200),
+      requester_entity_id: callerEntityId,
+      owner_entity_id: callerEntityId,
+      target_entity_id: row.source_entity_id,
+      status: "EXECUTED",
+      priority: "ROUTINE",
+      next_action: "Reply delivered",
+    });
+  } catch {
+    // Non-fatal — the governed reply was already delivered above.
+  }
+
   return {
     ok: true,
     httpStatus: 200,

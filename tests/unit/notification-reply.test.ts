@@ -18,11 +18,19 @@ const mockedPrisma = vi.hoisted(() => ({
 const mockedAction = vi.hoisted(() => ({
   createActionForCaller: vi.fn(),
 }));
+// [OTZAR-LIVE-6] the reply now mirrors the outbound Work-Ledger NOTIFICATION row.
+const mockedLedger = vi.hoisted(() => ({ createLedgerEntry: vi.fn() }));
+const mockedOrg = vi.hoisted(() => ({ getOrgEntityId: vi.fn() }));
 vi.mock("@niov/database", () => mockedPrisma);
 vi.mock(
   "../../apps/api/src/services/action/action.service.js",
   () => mockedAction,
 );
+vi.mock(
+  "../../apps/api/src/services/work-os/work-ledger.service.js",
+  () => mockedLedger,
+);
+vi.mock("../../apps/api/src/services/governance/org.js", () => mockedOrg);
 
 import { replyToNotificationForCaller } from "../../apps/api/src/services/notification/notification-reply.service.js";
 
@@ -31,6 +39,44 @@ const SOURCE_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("[OTZAR-LIVE-6] replyToNotificationForCaller — response reconciliation", () => {
+  it("writes a thread-visible Work-Ledger NOTIFICATION row (requester=replier, target=original sender)", async () => {
+    mockedPrisma.prisma.notification.findFirst.mockResolvedValue({ source_entity_id: SOURCE_UUID });
+    mockedAction.createActionForCaller.mockResolvedValue({ ok: true, view: { action_id: "act-1", status: "SUCCEEDED" } });
+    mockedOrg.getOrgEntityId.mockResolvedValue("org-1");
+    mockedLedger.createLedgerEntry.mockResolvedValue({ ok: true, entry: { ledger_entry_id: "led-1" } });
+
+    const r = await replyToNotificationForCaller("the-replier", {
+      notificationId: VALID_UUID,
+      body_summary: "  I will be ready for today's meeting  ",
+      idempotency_key: "k",
+    });
+
+    expect(r.ok).toBe(true);
+    expect(mockedLedger.createLedgerEntry).toHaveBeenCalledTimes(1);
+    const arg = mockedLedger.createLedgerEntry.mock.calls[0]![0] as Record<string, unknown>;
+    expect(arg.ledger_type).toBe("NOTIFICATION");
+    expect(arg.requester_entity_id).toBe("the-replier"); // the replier (B)
+    expect(arg.target_entity_id).toBe(SOURCE_UUID); // the original sender (A)
+    expect(arg.org_entity_id).toBe("org-1");
+    expect(String(arg.source_command)).toContain("ready"); // body, trimmed
+  });
+
+  it("a ledger-write failure does NOT fail the already-delivered reply", async () => {
+    mockedPrisma.prisma.notification.findFirst.mockResolvedValue({ source_entity_id: SOURCE_UUID });
+    mockedAction.createActionForCaller.mockResolvedValue({ ok: true, view: { action_id: "act-1", status: "SUCCEEDED" } });
+    mockedOrg.getOrgEntityId.mockRejectedValue(new Error("org lookup failed"));
+
+    const r = await replyToNotificationForCaller("the-replier", {
+      notificationId: VALID_UUID,
+      body_summary: "done",
+      idempotency_key: "k",
+    });
+
+    expect(r.ok).toBe(true); // best-effort: a missing thread row never blocks the reply
+  });
 });
 
 describe("replyToNotificationForCaller — input validation", () => {
