@@ -841,6 +841,7 @@ export {
   createTwin,
   findNextApprover,
 } from "./services/governance/twin.service.js";
+export { resolveRoleTemplateSlug } from "./services/governance/role-template-resolver.js";
 export type {
   CreateTwinInput,
   CreateTwinResult,
