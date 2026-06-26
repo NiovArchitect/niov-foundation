@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createTwin,
   findNextApprover,
+  seedAgentTemplates,
 } from "@niov/api";
 import { createEntity, prisma } from "@niov/database";
 import {
@@ -201,6 +202,88 @@ describe("findNextApprover", () => {
       findNextApprover(tx, employee.entity_id),
     );
     expect(approver).toBe(adminId);
+  });
+});
+
+describe("createTwin -- role-template provisioning", () => {
+  beforeAll(async () => {
+    // Ensure the 13 seeded role templates exist for the lookups below.
+    await seedAgentTemplates();
+  });
+
+  // Build a standard (non-admin) owner inside an org with a default Hive.
+  async function makeStandardOwner(): Promise<{ orgId: string; ownerId: string }> {
+    const { orgId } = await makeOrgWithAdminAndDefaultHive();
+    const owner = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: orgId,
+        child_id: owner.entity_id,
+        hierarchy_level: 1,
+        is_admin: false,
+        is_active: true,
+      },
+    });
+    return { orgId, ownerId: owner.entity_id };
+  }
+
+  it("assigns the matching role template from the role title", async () => {
+    const { orgId, ownerId } = await makeStandardOwner();
+    const result = await createTwin({
+      owner_entity_id: ownerId,
+      org_entity_id: orgId,
+      role_title: "Senior Software Engineer",
+      is_admin_invite: false,
+    });
+    const twinConfig = await prisma.twinConfig.findUnique({
+      where: { twin_id: result.entity_id },
+    });
+    expect(twinConfig?.role_template).toBe("software-engineer");
+  });
+
+  it("leaves role_template null for an unknown role (generalist fallback)", async () => {
+    const { orgId, ownerId } = await makeStandardOwner();
+    const result = await createTwin({
+      owner_entity_id: ownerId,
+      org_entity_id: orgId,
+      role_title: "Intern",
+      is_admin_invite: false,
+    });
+    const twinConfig = await prisma.twinConfig.findUnique({
+      where: { twin_id: result.entity_id },
+    });
+    expect(twinConfig?.role_template).toBeNull();
+  });
+
+  it("respects the org boundary: a template owned by another org is not applied", async () => {
+    // Point the seeded marketing template at a FOREIGN org, then provision a
+    // twin in a DIFFERENT org with a matching title — it must NOT be applied.
+    const foreignOrg = await createEntity(
+      makeEntityInput({ entity_type: "COMPANY" }),
+    );
+    await prisma.agentTemplate.update({
+      where: { role_name: "marketing-manager" },
+      data: { org_entity_id: foreignOrg.entity_id, is_custom: true },
+    });
+    try {
+      const { orgId, ownerId } = await makeStandardOwner();
+      const result = await createTwin({
+        owner_entity_id: ownerId,
+        org_entity_id: orgId,
+        role_title: "Marketing Manager",
+        is_admin_invite: false,
+      });
+      const twinConfig = await prisma.twinConfig.findUnique({
+        where: { twin_id: result.entity_id },
+      });
+      expect(twinConfig?.role_template).toBeNull();
+    } finally {
+      // Restore the seeded template to a standard (null-org) row.
+      await prisma.agentTemplate.update({
+        where: { role_name: "marketing-manager" },
+        data: { org_entity_id: null, is_custom: false },
+      });
+    }
   });
 });
 

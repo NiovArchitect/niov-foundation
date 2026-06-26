@@ -25,6 +25,7 @@ import {
   writeWalletCreateAudit,
 } from "@niov/database";
 import { createSystemPermission } from "./system-permission.js";
+import { resolveRoleTemplateSlug } from "./role-template-resolver.js";
 
 // WHAT: Inputs for createTwin.
 // INPUT: Used as a parameter type only.
@@ -231,12 +232,36 @@ async function createTwinInTx(
     ? await findNextApprover(tx, input.owner_entity_id)
     : input.owner_entity_id;
   const autonomyLevel = isAdmin ? "EXECUTIVE_OVERRIDE" : "APPROVAL_REQUIRED";
+
+  // Resolve the matching role template so the twin is role-ready out of the box.
+  // The Section 11 runtime path is live: AgentTemplate rows are seeded on boot
+  // and otzar.service reads TwinConfig.role_template -> template_content into the
+  // LLM prompt (Layer 2). Here we WRITE the value the reader expects. An unknown
+  // / generic role resolves to null and the twin keeps the generalist runtime
+  // fallback (no fabricated template). Org boundary preserved: only a standard
+  // (null-org) template or one owned by THIS org is ever applied.
+  const roleTemplateSlug = resolveRoleTemplateSlug(roleTitle);
+  let appliedRoleTemplate: string | null = null;
+  if (roleTemplateSlug !== null) {
+    const template = await tx.agentTemplate.findUnique({
+      where: { role_name: roleTemplateSlug },
+      select: { role_name: true, org_entity_id: true },
+    });
+    if (
+      template !== null &&
+      (template.org_entity_id === null ||
+        template.org_entity_id === input.org_entity_id)
+    ) {
+      appliedRoleTemplate = template.role_name;
+    }
+  }
+
   const twinConfig = await tx.twinConfig.create({
     data: {
       twin_id: twinEntityId,
       autonomy_level: autonomyLevel,
       swarm_enabled: false,
-      role_template: null,
+      role_template: appliedRoleTemplate,
       is_admin_twin: isAdmin,
       approver_entity_id: approverEntityId,
     },
@@ -331,11 +356,10 @@ async function createTwinInTx(
     defaultHiveMembershipId = membershipId;
   }
 
-  // STEP 6 -- role-template application is deferred until Section 11
-  // (when AgentTemplate model + /templates/roles/ files ship).
-  // Silent skip: TwinConfig.role_template stays null. TODO(Section
-  // 11): load the matching role-template by role_title and persist
-  // its skill packages + system prompt.
+  // STEP 6 -- role-template application now happens at STEP 4 (above): the
+  // matching template slug is resolved from role_title and persisted on
+  // TwinConfig.role_template, which the runtime LLM layer reads. Unknown roles
+  // stay null and use the generalist runtime fallback.
 
   // STEP 7 -- summary audit event so the entire twin-creation
   // operation has one canonical entry in the hash chain.
@@ -353,6 +377,7 @@ async function createTwinInTx(
         owner_entity_id: input.owner_entity_id,
         org_entity_id: input.org_entity_id,
         role_title: roleTitle,
+        role_template_applied: appliedRoleTemplate,
         is_admin_twin: isAdmin,
         autonomy_level: autonomyLevel,
         approver_entity_id: approverEntityId,
