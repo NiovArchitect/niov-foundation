@@ -919,12 +919,25 @@ export type {
   ContextScope,
   LedgerState,
 } from "./services/otzar/autonomy.js";
-export { recommendDirection } from "./services/otzar/decision-recommendation.js";
+export { recommendDirection, recommendResearch } from "./services/otzar/decision-recommendation.js";
 export type {
   DecisionRecommendation,
   NextBestAction,
   RecommendationReason,
+  ResearchRecommendation,
+  ResearchScope,
 } from "./services/otzar/decision-recommendation.js";
+export {
+  extractDecisionSignals,
+  buildDecisionInputFromTranscript,
+} from "./services/otzar/decision-rights-extraction.js";
+export type { ExtractedDecisionSignals } from "./services/otzar/decision-rights-extraction.js";
+export {
+  isAutoSendEnabled,
+  canAutoSend,
+  AUTO_SEND_DISABLED,
+} from "./services/otzar/autonomy-policy.js";
+export type { AutoSendPolicy } from "./services/otzar/autonomy-policy.js";
 
 export {
   executePhase0,
