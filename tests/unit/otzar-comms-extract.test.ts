@@ -379,6 +379,7 @@ describe("extractFromCapturedText — privacy invariants (RULE 0)", () => {
           "confidence",
           "resolution_status",
           "recipient_governance",
+          "autonomy",
         ].sort(),
       );
       expect(Object.keys(s.target).sort()).toEqual(

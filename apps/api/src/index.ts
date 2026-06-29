@@ -899,6 +899,32 @@ export type {
   WorkGraphEdge,
   EdgeDurability,
 } from "./services/otzar/work-graph-evidence.js";
+export {
+  computeDecisionRights,
+  frameTaskFromStrategicDirection,
+} from "./services/otzar/decision-rights.js";
+export type {
+  DecisionRights,
+  DecisionInput,
+  DecisionDomain,
+  AuthorityType,
+  AlignmentState,
+  DecisionSignal,
+} from "./services/otzar/decision-rights.js";
+export { computeAutonomyDecision } from "./services/otzar/autonomy.js";
+export type {
+  AutonomyDecision,
+  AutonomyMode,
+  ActionRisk,
+  ContextScope,
+  LedgerState,
+} from "./services/otzar/autonomy.js";
+export { recommendDirection } from "./services/otzar/decision-recommendation.js";
+export type {
+  DecisionRecommendation,
+  NextBestAction,
+  RecommendationReason,
+} from "./services/otzar/decision-recommendation.js";
 
 export {
   executePhase0,
