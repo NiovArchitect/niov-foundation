@@ -71,6 +71,8 @@ import {
   type ResponsibilityRole,
 } from "./responsibility-graph.js";
 import { computeAutonomyDecision, type AutonomyDecision } from "./autonomy.js";
+import { computeDecisionRights, type DecisionDomain } from "./decision-rights.js";
+import { buildDecisionInputFromTranscript } from "./decision-rights-extraction.js";
 
 export type CommsExtractionMode =
   | "DEMO_SCRIPTED"
@@ -378,6 +380,21 @@ function classifyWorkDomain(text: string): WorkDomain {
   return "general";
 }
 
+function workDomainToDecisionDomain(d: WorkDomain): DecisionDomain {
+  switch (d) {
+    case "engineering": return "technical";
+    case "product": return "product";
+    case "legal": return "legal";
+    case "finance": return "finance";
+    case "sales": return "customer";
+    case "marketing": return "strategic";
+    case "operations": return "execution";
+    case "general":
+    case "unknown":
+    default: return "execution";
+  }
+}
+
 function mapResponsibilityToWorkConnection(role: ResponsibilityRole): WorkConnectionType {
   switch (role) {
     case "meeting_lead": return "meeting_lead";
@@ -415,6 +432,14 @@ export function governExtraction(
   const graph = buildResponsibilityGraph(capturedText);
   const ref = provablyReferenced(capturedText, null, roster);
   const workDomain = classifyWorkDomain(`${pre.summary} ${capturedText}`);
+  // [SECTION-12-WORKGRAPH] Decision-rights for the meeting, extracted from the
+  // transcript (authority/expertise/dissent). Makes the per-action autonomy
+  // verdict decision-aware: unresolved disagreement or authority<->expertise
+  // conflict blocks autonomy; alignment raises confidence. Backend-internal —
+  // does not change the suggested-action contract shape.
+  const decision = computeDecisionRights(
+    buildDecisionInputFromTranscript(capturedText, workDomainToDecisionDomain(workDomain)),
+  );
 
   const suggested_actions: CommsSuggestedAction[] = pre.suggested_actions.map((a) => {
     const firstName = a.target.display_name.split(/\s+/)[0] ?? a.target.display_name;
@@ -453,9 +478,9 @@ export function governExtraction(
           ? "AMBIGUOUS"
           : "RESTRICTED"
         : a.resolution_status;
-    // Earned-autonomy verdict from the governance proof path (no auto-send is
-    // enabled; this only tells the UI whether/why it WOULD be auto-eligible).
-    const autonomy = computeAutonomyDecision({ governance });
+    // Earned-autonomy verdict from the governance proof path + the meeting's
+    // decision-rights (no auto-send is enabled; advisory only).
+    const autonomy = computeAutonomyDecision({ governance, decision });
     return { ...a, recipient_governance: governance, autonomy, resolution_status };
   });
 

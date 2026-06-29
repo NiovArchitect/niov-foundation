@@ -154,3 +154,66 @@ export function recommendDirection(args: {
     policyBlocked,
   };
 }
+
+// ── B2: governed research recommendation (memory-first, no external leak) ────
+export type ResearchScope =
+  | "public_best_practice"
+  | "technical_docs"
+  | "security_guidance"
+  | "policy_compliance"
+  | "tool_behavior"
+  | "market_customer";
+
+export interface ResearchRecommendation {
+  researchNeeded: boolean;
+  researchQuestion: string | null;
+  allowedResearchScope: ResearchScope[];
+  /** ALWAYS true — private transcript/org content is never sent to external
+   *  research. Research is best-practice / public only. */
+  privateContextProhibited: true;
+  /** Suggested external source kinds (labels only — nothing is fetched here). */
+  sourceTypesSuggested: string[];
+  decisionOwner: string | null;
+}
+
+const DOMAIN_RESEARCH_SCOPE: Record<string, ResearchScope[]> = {
+  technical: ["technical_docs", "public_best_practice", "tool_behavior"],
+  security: ["security_guidance", "public_best_practice"],
+  architecture: ["technical_docs", "public_best_practice"],
+  legal: ["policy_compliance"],
+  finance: ["policy_compliance", "public_best_practice"],
+  product: ["market_customer", "public_best_practice"],
+  customer: ["market_customer"],
+};
+
+/**
+ * Recommend GOVERNED research when internal memory/evidence is insufficient.
+ * Memory-first: if internalEvidence exists, research is NOT needed. Never
+ * fetches anything and never permits private context to leave the tenant; it
+ * only labels what kind of public research would help and who owns the decision.
+ * Research never overrides policy or org authority.
+ */
+export function recommendResearch(args: {
+  decision: DecisionRights;
+  internalEvidence?: RecommendationReason[];
+  question?: string | null;
+  policyAllows?: boolean;
+}): ResearchRecommendation {
+  const d = args.decision;
+  const internal = args.internalEvidence ?? [];
+  const policyBlocked = args.policyAllows === false;
+  const scope = DOMAIN_RESEARCH_SCOPE[d.decisionDomain] ?? [];
+  // Memory-first: only recommend research when internal evidence is thin AND
+  // confidence is not high AND the domain benefits from external best-practice.
+  // Policy-blocked decisions never route to research instead of approval.
+  const researchNeeded =
+    internal.length === 0 && d.confidence !== "high" && scope.length > 0 && !policyBlocked;
+  return {
+    researchNeeded,
+    researchQuestion: researchNeeded ? args.question ?? `Best practice for this ${d.decisionDomain} decision?` : null,
+    allowedResearchScope: researchNeeded ? scope : [],
+    privateContextProhibited: true,
+    sourceTypesSuggested: researchNeeded ? ["docs", "standards", "vendor_docs"] : [],
+    decisionOwner: d.decisionOwner ?? d.escalationTarget,
+  };
+}

@@ -12,8 +12,21 @@
 //          SCOPE (per founder guidance): design the model now; DO NOT build the
 //          multi-app ingestion platform in one pass. Today only the transcript
 //          connector emits events (transcriptGraphToEvidence). The model + the
-//          reconciliation are source-agnostic, so adding a Slack/Jira/GitHub
-//          connector later is a new producer, not a redesign.
+//          reconciliation are source-agnostic, so adding a connector later is a
+//          new producer, not a redesign.
+//
+//          TODO(future connectors) — each becomes a producer emitting EvidenceEvent
+//          with its sourceType; NO fake readiness until actually wired:
+//            - chat (Slack/Teams)        -> sourceType "chat"
+//            - email                     -> sourceType "email"
+//            - calendar (Google/O365)    -> sourceType "calendar"
+//            - docs (Drive/Notion)       -> sourceType "doc"
+//            - tickets (Jira/Linear)     -> sourceType "ticket"
+//            - GitHub PRs/commits        -> sourceType "pr" / "commit"
+//            - approvals                 -> sourceType "approval"
+//            - Work Ledger               -> sourceType "work_ledger"
+//            - AI Twin interactions      -> sourceType "ai_twin_interaction"
+//          Proven extensible by tests/unit/work-graph-sourcetype-extensibility.test.ts.
 //
 //          NO-LEAK: every edge carries scope + sensitivity + allowedViewers /
 //          allowedActors + policyStatus + expiry. Multi-source does not mean
