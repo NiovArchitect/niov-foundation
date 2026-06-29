@@ -721,11 +721,14 @@ export type {
 } from "./services/otzar/proposed-action-extractor.js";
 
 // Phase 1213 [OTZAR-AMBIENT-COMMS].
-export { extractFromCapturedText } from "./services/otzar/comms-extract.service.js";
+export { extractFromCapturedText, governExtraction } from "./services/otzar/comms-extract.service.js";
 export type {
   CommsExtractionResult,
   CommsExtractionMode,
   CommsSuggestedAction,
+  CommsLeadCard,
+  PreGovExtraction,
+  PreGovSuggestedAction,
 } from "./services/otzar/comms-extract.service.js";
 
 export { projectConversationDetail } from "./services/otzar/conversation-detail.js";
@@ -846,6 +849,56 @@ export type {
   CreateTwinInput,
   CreateTwinResult,
 } from "./services/governance/twin.service.js";
+
+export {
+  classifyRecipient,
+  provablyReferenced,
+  resolveTokenToEntities,
+  extractNameTokens,
+  isSendReady,
+} from "./services/otzar/recipient-governance.js";
+export type {
+  RecipientGovernance,
+  RecipientSafety,
+  AutonomyEligibility,
+  WorkConnectionType,
+  MentionStatus,
+  ParticipantStatus,
+  ClassifyRecipientInput,
+  RosterEntry,
+  WorkDomain,
+} from "./services/otzar/recipient-governance.js";
+export {
+  buildResponsibilityGraph,
+  buildLeadCoordinationCard,
+} from "./services/otzar/responsibility-graph.js";
+export type {
+  ResponsibilityGraph,
+  ResponsibilityNode,
+  ResponsibilityRole,
+} from "./services/otzar/responsibility-graph.js";
+export {
+  buildLearningEvent,
+  buildDisambiguationCorrection,
+  correctionsForContext,
+} from "./services/otzar/work-graph-learning.js";
+export type {
+  LearningEvent,
+  LearningOutcome,
+  OrgRecipientCorrection,
+} from "./services/otzar/work-graph-learning.js";
+export {
+  reconcileEvidence,
+  transcriptGraphToEvidence,
+  relationDurability,
+} from "./services/otzar/work-graph-evidence.js";
+export type {
+  EvidenceEvent,
+  EvidenceSourceType,
+  WorkRelation,
+  WorkGraphEdge,
+  EdgeDurability,
+} from "./services/otzar/work-graph-evidence.js";
 
 export {
   executePhase0,
