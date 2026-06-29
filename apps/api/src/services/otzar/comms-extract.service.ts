@@ -56,6 +56,20 @@ import type { LLMProvider } from "../llm/llm.service.js";
 import { buildIdentityContext } from "./identity-context.js";
 import { isDemoModeAllowed } from "./demo-mode.js";
 import type { ProposedActionTargetCandidate } from "./proposed-action-extractor.js";
+import {
+  classifyRecipient,
+  provablyReferenced,
+  type RecipientGovernance,
+  type RosterEntry,
+  type WorkConnectionType,
+  type WorkDomain,
+} from "./recipient-governance.js";
+import {
+  buildResponsibilityGraph,
+  buildLeadCoordinationCard,
+  type ResponsibilityGraph,
+  type ResponsibilityRole,
+} from "./responsibility-graph.js";
 
 export type CommsExtractionMode =
   | "DEMO_SCRIPTED"
@@ -78,12 +92,38 @@ export interface CommsSuggestedAction {
   source_excerpt: string | null;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   /** How recipient resolution landed. RESOLVED + confidence HIGH is
-   *  the "ready to Send" state. */
+   *  the "ready to Send" state. Downgraded to AMBIGUOUS/RESTRICTED when
+   *  the recipient-governance gate cannot confirm the recipient. */
   resolution_status:
     | "RESOLVED"
     | "UNRESOLVED"
     | "AMBIGUOUS"
     | "RESTRICTED";
+  /** [SECTION-12-WORKGRAPH] Deterministic recipient-safety verdict + proof
+   *  path. The card is only "Send"-ready when
+   *  recipient_governance.recipientSafety === "confirmed". This is computed by a
+   *  gate that NEVER trusts the LLM's resolved recipient — it independently
+   *  verifies a provable path from the transcript to the exact entity_id. */
+  recipient_governance: RecipientGovernance;
+}
+
+/** Shape before the governance gate runs (no recipient_governance). Exported so
+ *  the governance wiring (governExtraction) is deterministically unit-testable
+ *  without the DB or the LLM. */
+export type PreGovSuggestedAction = Omit<CommsSuggestedAction, "recipient_governance">;
+export interface PreGovExtraction {
+  summary: string;
+  decisions: string[];
+  commitments: string[];
+  risks_or_blockers: string[];
+  suggested_actions: PreGovSuggestedAction[];
+  extraction_mode: CommsExtractionMode;
+}
+
+export interface CommsLeadCard {
+  lead: string;
+  body: string;
+  tracks: Array<{ name: string; role: ResponsibilityRole; workItem: string | null }>;
 }
 
 export interface CommsExtractionResult {
@@ -93,6 +133,12 @@ export interface CommsExtractionResult {
   risks_or_blockers: string[];
   suggested_actions: CommsSuggestedAction[];
   extraction_mode: CommsExtractionMode;
+  /** [SECTION-12-WORKGRAPH] Responsibility graph derived from the transcript —
+   *  who leads / owns / supports / reviews / is optional. Drives card
+   *  generation and the recipient-governance work-connection proof. */
+  responsibility_graph: ResponsibilityGraph;
+  /** Lead/coordinator card when a meeting lead is detected, else null. */
+  lead_card: CommsLeadCard | null;
 }
 
 const CANONICAL_FIXTURE_KEY =
@@ -127,7 +173,7 @@ function buildDemoExtraction(
     display_name: string;
     email: string | null;
   }>,
-): CommsExtractionResult {
+): PreGovExtraction {
   const findPeer = (
     firstName: string,
   ): { entity_id: string; display_name: string; email: string | null } | null => {
@@ -169,7 +215,7 @@ function buildDemoExtraction(
     },
   ];
 
-  const suggested_actions: CommsSuggestedAction[] = candidates.map((c) => {
+  const suggested_actions: PreGovSuggestedAction[] = candidates.map((c) => {
     const peer = findPeer(c.firstName);
     if (peer === null) {
       return {
@@ -233,7 +279,7 @@ function parseLLMExtraction(
     display_name: string;
     email: string | null;
   }>,
-): CommsExtractionResult | null {
+): PreGovExtraction | null {
   let parsed: unknown;
   try {
     // Strip a leading ```json / ``` if the LLM wrapped its output.
@@ -263,7 +309,7 @@ function parseLLMExtraction(
   const sa = Array.isArray(o.suggested_actions)
     ? (o.suggested_actions as unknown[])
     : [];
-  const suggested: CommsSuggestedAction[] = [];
+  const suggested: PreGovSuggestedAction[] = [];
   for (let i = 0; i < sa.length; i++) {
     const r = sa[i];
     if (r === null || typeof r !== "object") continue;
@@ -310,6 +356,109 @@ function parseLLMExtraction(
   };
 }
 
+// Free-text work-domain classifier (heuristic over the transcript) used only as
+// a soft role-match signal — there is no typed Department model yet.
+function classifyWorkDomain(text: string): WorkDomain {
+  const t = text.toLowerCase();
+  if (/integration|deploy|backend|frontend|\bapi\b|auth|token|endpoint|engineer|\bcode\b|repo|openclaw|\bui\b/.test(t)) return "engineering";
+  if (/campaign|\bbrand\b|marketing|social media|launch announcement/.test(t)) return "marketing";
+  if (/contract|\blegal\b|compliance|\bnda\b/.test(t)) return "legal";
+  if (/invoice|budget|finance|pricing/.test(t)) return "finance";
+  if (/pipeline|\bdeal\b|prospect|quota/.test(t)) return "sales";
+  if (/roadmap|spec|product requirement/.test(t)) return "product";
+  return "general";
+}
+
+function mapResponsibilityToWorkConnection(role: ResponsibilityRole): WorkConnectionType {
+  switch (role) {
+    case "meeting_lead": return "meeting_lead";
+    case "founder_context_authority": return "founder_context_authority";
+    case "owner": return "transcript_assignee";
+    case "support": return "support_role";
+    case "reviewer": return "approval_owner";
+    case "approver": return "approval_owner";
+    case "optional_advisor": return "optional_advisor";
+  }
+}
+
+function rosterRole(
+  roster: ReadonlyArray<RosterEntry>,
+  entityId: string | null,
+): string | null {
+  if (entityId === null) return null;
+  return roster.find((p) => p.entity_id === entityId)?.title ?? null;
+}
+
+/**
+ * [SECTION-12-WORKGRAPH] The deterministic recipient-governance gate. Runs AFTER
+ * the LLM/demo extraction and NEVER trusts the LLM's resolved recipient: for
+ * every suggested action it independently verifies a provable path (transcript
+ * mention / responsibility-graph work connection) to the exact entity_id and
+ * classifies recipient safety + autonomy eligibility. Unsafe recipients are
+ * downgraded so the CT card cannot show a normal "Send". Also attaches the
+ * transcript responsibility graph + lead coordination card.
+ */
+export function governExtraction(
+  pre: PreGovExtraction,
+  capturedText: string,
+  roster: ReadonlyArray<RosterEntry>,
+): CommsExtractionResult {
+  const graph = buildResponsibilityGraph(capturedText);
+  const ref = provablyReferenced(capturedText, null, roster);
+  const workDomain = classifyWorkDomain(`${pre.summary} ${capturedText}`);
+
+  const suggested_actions: CommsSuggestedAction[] = pre.suggested_actions.map((a) => {
+    const firstName = a.target.display_name.split(/\s+/)[0] ?? a.target.display_name;
+    const node = graph.nodes.find(
+      (n) => n.name.toLowerCase() === firstName.toLowerCase(),
+    );
+    const governance: RecipientGovernance = classifyRecipient(
+      {
+        target: {
+          entity_id: a.target.entity_id,
+          display_name: a.target.display_name,
+          email: a.target.email,
+          role: rosterRole(roster, a.target.entity_id),
+        },
+        sourceExcerpt: a.source_excerpt,
+        transcriptText: capturedText,
+        roster,
+        participantEntityIds: null, // raw-text capture carries no participant list
+        ...(node !== undefined
+          ? { workConnectionType: mapResponsibilityToWorkConnection(node.role) }
+          : {}),
+        workDomain,
+        policyStatus: "unknown",
+        sensitivity: "internal",
+      },
+      ref,
+    );
+    // Keep the legacy resolution_status in lock-step with the safety verdict.
+    // Only DOWNGRADE a recipient the extractor thought was RESOLVED — an honestly
+    // UNRESOLVED recipient (null entity / empty roster) stays UNRESOLVED, never
+    // mislabeled AMBIGUOUS. This is what catches the RESOLVED-but-unsafe Shweta
+    // case (-> RESTRICTED) without corrupting honest non-resolution.
+    const resolution_status: CommsSuggestedAction["resolution_status"] =
+      a.resolution_status === "RESOLVED" && governance.recipientSafety !== "confirmed"
+        ? governance.recipientSafety === "ambiguous"
+          ? "AMBIGUOUS"
+          : "RESTRICTED"
+        : a.resolution_status;
+    return { ...a, recipient_governance: governance, resolution_status };
+  });
+
+  return {
+    summary: pre.summary,
+    decisions: pre.decisions,
+    commitments: pre.commitments,
+    risks_or_blockers: pre.risks_or_blockers,
+    suggested_actions,
+    extraction_mode: pre.extraction_mode,
+    responsibility_graph: graph,
+    lead_card: buildLeadCoordinationCard(graph),
+  };
+}
+
 const LLM_EXTRACTION_SYSTEM_PROMPT =
   "You are Otzar, a governed AI Twin. Organize the captured conversation " +
   "into a structured JSON object with EXACT shape:\n" +
@@ -323,9 +472,15 @@ const LLM_EXTRACTION_SYSTEM_PROMPT =
   '      "draft_text": string,\n' +
   '      "source_excerpt": string | null,\n' +
   '      "confidence": "HIGH" | "MEDIUM" | "LOW" } ] }\n' +
-  "Only suggest follow-ups for clear commitments or asks. Use the org " +
-  "roster names verbatim. Never invent people not in the roster -- if " +
-  "the speaker named someone unknown, omit the suggested action.\n" +
+  "Only suggest follow-ups for clear commitments or asks. RECIPIENT SAFETY: " +
+  "resolve a name ONLY when the transcript name clearly matches a roster entry " +
+  "by exact name or first name. NEVER phonetically guess or substitute a " +
+  "similar-sounding but DIFFERENT roster name for a name that is not clearly " +
+  "present. If the " +
+  "transcript names someone who is NOT clearly in the roster, OMIT the " +
+  "suggested action -- never pick the nearest-sounding roster member. If two " +
+  "roster members could match the same name, OMIT and let the human " +
+  "disambiguate.\n" +
   "Output JSON only, no markdown, no explanation.";
 
 export interface ExtractFromTextInput {
@@ -345,10 +500,12 @@ export async function extractFromCapturedText(
   llmProvider: LLMProvider | null,
 ): Promise<CommsExtractionResult> {
   const identity = await buildIdentityContext(input.viewerEntityId);
-  const roster = identity.org_roster.map((p) => ({
+  const roster: RosterEntry[] = identity.org_roster.map((p) => ({
     entity_id: p.entity_id,
     display_name: p.display_name,
     email: p.email,
+    title: p.title,
+    shared_project_count: p.shared_project_count,
   }));
 
   // [OTZAR-V1-LIVE-1A-FOUNDATION] Demo intake is canned, not real extraction.
@@ -367,7 +524,7 @@ export async function extractFromCapturedText(
       : "AUTO");
 
   if (effectiveMode === "DEMO_SCRIPTED" && demoAllowed) {
-    return buildDemoExtraction(roster);
+    return governExtraction(buildDemoExtraction(roster), input.captured_text, roster);
   }
 
   // LLM path.
@@ -382,21 +539,27 @@ export async function extractFromCapturedText(
       });
       if (result.ok) {
         const parsed = parseLLMExtraction(result.text, roster);
-        if (parsed !== null) return parsed;
+        if (parsed !== null) {
+          return governExtraction(parsed, input.captured_text, roster);
+        }
       }
     } catch {
       // Fall through to LOCAL_FALLBACK.
     }
   }
 
-  // LOCAL_FALLBACK -- honest empty extraction.
-  return {
-    summary:
-      "Otzar captured this conversation but live extraction isn't configured. Connect an LLM provider, or use demo capture mode to see organized output.",
-    decisions: [],
-    commitments: [],
-    risks_or_blockers: [],
-    suggested_actions: [],
-    extraction_mode: "LOCAL_FALLBACK",
-  };
+  // LOCAL_FALLBACK -- honest empty extraction (still governed for shape parity).
+  return governExtraction(
+    {
+      summary:
+        "Otzar captured this conversation but live extraction isn't configured. Connect an LLM provider, or use demo capture mode to see organized output.",
+      decisions: [],
+      commitments: [],
+      risks_or_blockers: [],
+      suggested_actions: [],
+      extraction_mode: "LOCAL_FALLBACK",
+    },
+    input.captured_text,
+    roster,
+  );
 }

@@ -460,7 +460,9 @@ export function renderIdentityPreamble(ctx: IdentityContext): string {
       "If the viewer asks who they are, answer using the [VIEWER IDENTITY] block above.",
     "[ACTION DRAFTING DISCIPLINE]",
     "When the viewer asks you to send/message/tell/ask/remind/nudge/follow-up-with another person, INFER FIRST, DRAFT FIRST, ASK ONLY ON REAL AMBIGUITY. " +
-      "Step 1 (resolve target): use [ORG ROSTER] above. A first-name reference resolves to the roster entry whose display_name starts with that name; if multiple match, prefer the one with the highest shared_project_count, then highest recent_collab_count. Only ask 'which X?' when two or more candidates have IDENTICAL shared_project_count AND recent_collab_count. " +
+      "Step 1 (resolve target): use [ORG ROSTER] above. A name reference resolves ONLY to a roster entry whose display_name EXACTLY equals the name or whose first name equals it. " +
+      "NEVER phonetically guess or substitute a similar-sounding but DIFFERENT roster name for a name that is not clearly present; a name that does not clearly match a roster entry is UNRESOLVED -- ask one focused question, never silently pick the nearest-sounding member. " +
+      "If MORE THAN ONE roster entry matches the name, you MUST ask one focused 'Did you mean <A> or <B>?' question -- do NOT auto-pick by shared_project_count or recent_collab_count. Those counts may ORDER the candidates you present, but they NEVER authorize a silent choice between distinct people. " +
       "Step 2 (resolve channel): default to an internal Otzar proposed-action / internal note. Do not ask which channel first. " +
       "Step 3 (resolve tone): default to direct but professional. Do not ask which tone first. " +
       "Step 4 (DRAFT the message immediately) and present it in this exact shape: " +

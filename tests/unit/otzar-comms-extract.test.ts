@@ -349,6 +349,24 @@ describe("extractFromCapturedText — privacy invariants (RULE 0)", () => {
       { viewerEntityId: "v", captured_text: DEMO_FIXTURE },
       null,
     );
+    const GOVERNANCE_KEYS = [
+      "entity_id",
+      "display_name",
+      "email",
+      "role",
+      "participantStatus",
+      "mentionStatus",
+      "workConnectionType",
+      "evidence",
+      "roleMatch",
+      "hierarchyConnection",
+      "projectConnection",
+      "policyStatus",
+      "sensitivity",
+      "confidence",
+      "recipientSafety",
+      "autonomyEligibility",
+    ].sort();
     for (const s of out.suggested_actions) {
       expect(Object.keys(s).sort()).toEqual(
         [
@@ -360,11 +378,15 @@ describe("extractFromCapturedText — privacy invariants (RULE 0)", () => {
           "source_excerpt",
           "confidence",
           "resolution_status",
+          "recipient_governance",
         ].sort(),
       );
       expect(Object.keys(s.target).sort()).toEqual(
         ["display_name", "email", "entity_id"].sort(),
       );
+      // The governance verdict only carries closed-vocab proof-path fields —
+      // never TAR / wallet / clearance / permission internals.
+      expect(Object.keys(s.recipient_governance).sort()).toEqual(GOVERNANCE_KEYS);
     }
   });
 });
