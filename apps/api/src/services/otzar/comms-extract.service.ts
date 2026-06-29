@@ -70,6 +70,7 @@ import {
   type ResponsibilityGraph,
   type ResponsibilityRole,
 } from "./responsibility-graph.js";
+import { computeAutonomyDecision, type AutonomyDecision } from "./autonomy.js";
 
 export type CommsExtractionMode =
   | "DEMO_SCRIPTED"
@@ -105,12 +106,20 @@ export interface CommsSuggestedAction {
    *  gate that NEVER trusts the LLM's resolved recipient — it independently
    *  verifies a provable path from the transcript to the exact entity_id. */
   recipient_governance: RecipientGovernance;
+  /** [SECTION-12-WORKGRAPH] Earned-autonomy verdict: whether this action WOULD be
+   *  auto-eligible in a future trusted mode (and why), its risk, minimized
+   *  context scope, approval reason, and the Sent/Waiting/Needs-review/Blocked
+   *  ledger bucket. No auto-send is enabled — advisory only. */
+  autonomy: AutonomyDecision;
 }
 
-/** Shape before the governance gate runs (no recipient_governance). Exported so
- *  the governance wiring (governExtraction) is deterministically unit-testable
- *  without the DB or the LLM. */
-export type PreGovSuggestedAction = Omit<CommsSuggestedAction, "recipient_governance">;
+/** Shape before the governance gate runs (no recipient_governance / autonomy).
+ *  Exported so the governance wiring (governExtraction) is deterministically
+ *  unit-testable without the DB or the LLM. */
+export type PreGovSuggestedAction = Omit<
+  CommsSuggestedAction,
+  "recipient_governance" | "autonomy"
+>;
 export interface PreGovExtraction {
   summary: string;
   decisions: string[];
@@ -444,7 +453,10 @@ export function governExtraction(
           ? "AMBIGUOUS"
           : "RESTRICTED"
         : a.resolution_status;
-    return { ...a, recipient_governance: governance, resolution_status };
+    // Earned-autonomy verdict from the governance proof path (no auto-send is
+    // enabled; this only tells the UI whether/why it WOULD be auto-eligible).
+    const autonomy = computeAutonomyDecision({ governance });
+    return { ...a, recipient_governance: governance, autonomy, resolution_status };
   });
 
   return {
