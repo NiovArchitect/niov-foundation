@@ -8,13 +8,15 @@
 //            (employee; creates Action(PROPOSED, RECORD_CAPSULE) —
 //            memory is saved only after the user approves it)
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import {
   getOnboardingIntrosForCaller,
   getOrgGrowthForCaller,
   proposeOnboardingMemoryForCaller,
 } from "../services/otzar/dandelion-growth.service.js";
+import { listOrgSeeds, approveSeed, rejectSeed, holdSeed } from "../services/otzar/dandelion-seed.service.js";
+import { getOrgEntityId } from "../services/governance/org.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -57,6 +59,59 @@ export async function registerOtzarDandelionRoutes(
     }
     return reply.code(200).send({ ok: true, growth: result.growth });
   });
+
+  // ── Admin-governed Dandelion seed queue (Organization Seeding) ──────────────
+  // Gated on the admin_org capability — non-admins get OPERATION_NOT_PERMITTED.
+  // Tenant-isolated. Approve/reject/hold NEVER auto-apply or grant access.
+  async function adminOrg(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<{ adminId: string; orgId: string } | null> {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      return null;
+    }
+    const session = await authService.validateSession(token, "admin_org");
+    if (!session.valid) {
+      reply.code(session.code === "OPERATION_NOT_PERMITTED" ? 403 : 401).send({ ok: false, code: session.code });
+      return null;
+    }
+    try {
+      const orgId = await getOrgEntityId(session.entity_id);
+      return { adminId: session.entity_id, orgId };
+    } catch {
+      reply.code(404).send({ ok: false, code: "NO_ORG_FOR_CALLER" });
+      return null;
+    }
+  }
+
+  app.get("/api/v1/org/dandelion/seeds", async (request, reply) => {
+    const ctx = await adminOrg(request, reply);
+    if (ctx === null) return;
+    const seeds = await listOrgSeeds(ctx.orgId);
+    return reply.code(200).send({ ok: true, seeds });
+  });
+
+  for (const [verb, fn] of [
+    ["approve", approveSeed],
+    ["reject", rejectSeed],
+    ["hold", holdSeed],
+  ] as const) {
+    app.post<{ Params: { id: string }; Body: { reason?: unknown } }>(
+      `/api/v1/org/dandelion/seeds/:id/${verb}`,
+      async (request, reply) => {
+        const ctx = await adminOrg(request, reply);
+        if (ctx === null) return;
+        const reason = isStr((request.body ?? {}).reason) ? ((request.body as { reason: string }).reason) : undefined;
+        const result = await fn({ seedId: request.params.id, orgEntityId: ctx.orgId, adminEntityId: ctx.adminId, ...(reason !== undefined ? { reason } : {}) });
+        if (result.ok === false) {
+          return reply.code(result.code === "NOT_FOUND" ? 404 : 422).send(result);
+        }
+        return reply.code(200).send(result);
+      },
+    );
+  }
 
   app.get("/api/v1/otzar/dandelion/onboarding", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);

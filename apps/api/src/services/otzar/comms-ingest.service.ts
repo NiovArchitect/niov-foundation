@@ -348,6 +348,39 @@ export async function ingestTranscript(
     },
   });
 
+  // 7) Persist each Dandelion seed as a governed, individually-actionable
+  //    ORG_SEEDING ledger row (the admin seed queue). Org-scoped (no person
+  //    owner/target/requester) so it never appears in employee My Work / Team
+  //    Work. Approval-required seeds start SEED_NEEDS_REVIEW; the admin
+  //    approve/reject/hold lifecycle never auto-applies (dandelion-seed.service).
+  for (const seed of wgMemory.seeds) {
+    await createLedgerEntry({
+      org_entity_id: orgEntityId,
+      ledger_type: "ORG_SEEDING",
+      source_type: "TRANSCRIPT",
+      title: seed.recommendedAction,
+      status: seed.approvalRequired ? "SEED_NEEDS_REVIEW" : "SEED_PROPOSED",
+      priority: "ROUTINE",
+      extraction_source: "TYPESCRIPT_DETERMINISTIC",
+      evidence: [{ quote: seed.sourceEvidence }],
+      details: {
+        source: "transcript_ingest",
+        seed_type: seed.seedType,
+        subject_name: seed.subjectName,
+        subject_entity_id: seed.subjectEntityId,
+        source_conversation_id: meetingCaptureId,
+        meeting_capture_id: meetingCaptureId,
+        confidence: seed.confidence,
+        approval_required: seed.approvalRequired,
+        policy_status: seed.policyStatus,
+        scope: seed.scope,
+        sensitivity: seed.sensitivity,
+        risk_if_ignored: seed.riskIfIgnored,
+        recommended_action: seed.recommendedAction,
+      },
+    });
+  }
+
   return {
     ok: true,
     conversation: {
