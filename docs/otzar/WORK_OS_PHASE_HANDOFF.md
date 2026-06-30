@@ -46,6 +46,32 @@ The connected loop: transcript → persisted conversation → work item (per-own
 - **DEFINED BOUNDARY (honest, not faked):** per-seed admin **approve/reject lifecycle via `OtzarProposedPattern`** (additive migration) is the next increment — seeds today are real, persisted, scoped, approval-gated, and NEVER auto-applied; surfacing them as individually-actionable admin rows is the Admin-IA slice.
 - **CHECKPOINT RESULT (Phase 6):** connected to Phase 4/5 (execution plans + connector gaps → seeds) ✓ · no duplicate model, schema unchanged ✓ · noisy tail seeds nothing ✓ · no cross-user leak (scoped viewers) ✓ · 7 unit + 6/6 integration green · 2788 unit no-regression · typecheck 0.
 
-## Phase 7 — UI tightening (NEXT — Comms + Action Center)
-- Read this doc + grep: `Comms`, `ActionCenter`, `MyWork`, `CommsIngestResult`, `execution`, `dandelion_seeds`. Surface (succinctly, no button soup, no raw IDs): execution mode + next-best-action + connector/setup blockers on each work item; recent conversations; (admin) the dandelion_seeds. Reflect backend truth only.
-- **Deploy ordering:** Phase 4+5+6 are backend-only on branch `otzar-workos-slice2-execution-connectors` (no migration) — deploy Foundation first, then CT (Phase 7).
+## Phase 7 — UI tightening (DONE — Comms execution surfacing; CT branch `otzar-workos-slice2-execution-ui`)
+- **Goal:** Comms shows each work item's execution mode + connector/setup blocker — backend truth, human language, no jargon/raw-IDs/button-soup.
+- **Files:** CT `src/lib/types/foundation.ts` (mirror `CommsIngestWorkItem.execution` + `CommsDandelionSeed` + result fields) + `src/pages/app/Comms.tsx` (per-item execution line + `execModeLabel` map) + `tests/unit/comms-page.test.tsx`.
+- **Rails reused (NO duplicates):** extends the existing "Work Otzar created" card + `CommsIngestResult` type; no new page/store. UI reflects backend truth only (execution plan + capability from the ingest result).
+- **Tests:** comms-page 18/18 (incl. exec-line render: "Needs a tool connected · GitHub isn't connected"). CT typecheck 0, lint 0.
+- **CHECKPOINT RESULT (Phase 7):** reflects Phase 4/5/6 data ✓ · no fake state ✓ · no raw IDs / no developer language ✓ · no button soup ✓ · committed `69fe036` (CT), pending deploy.
+- **DEFINED BOUNDARY:** Action Center page (`/app/action-center`, `MyWork`) showing execution mode + waiting-on-tools is the next CT increment; admin "Organization Seeding" (dandelion_seeds) is the Admin-IA slice. Employee Comms surfacing shipped here.
+
+## DEPLOY LOG
+- Slice 1: FND `be840e7`, CT `index-CQdDXt86.js` (live).
+- Phase 4–6: FND `ada6727` (PR #496, live `dep-d9221qr7`). Live-verified: execution plans (repo_access→connector_required/GitHub/not_connected), Dandelion seed (grant_tool_access, approval-gated), 11 work-graph events, reload-persists.
+- Phase 7 CT: branch `otzar-workos-slice2-execution-ui` `69fe036` — deploying.
+
+---
+
+## Dandelion Seed Lifecycle — admin approve/reject/hold (LIVE)
+- **Goal:** Dandelion seeds become individually actionable, admin-governed items. Admin sees a governed queue, can approve / hold / reject each one; **approve advances to a setup action and NEVER grants access**; nothing auto-applies; non-admins are denied; no cross-tenant leak.
+- **Rail (no migration, no duplicate system):** seeds persist as `WorkLedgerEntry` rows with `ledger_type="ORG_SEEDING"` and `SEED_*` statuses (`SEED_PROPOSED|NEEDS_REVIEW|APPROVED|REJECTED|HELD|APPLIED|BLOCKED|EXPIRED`) — TS consts only, the column already exists in prod. ORG_SEEDING is **excluded** from `getTeamWork`/`getMyWork` (line ~592) so seeds never appear as employee work.
+- **Backend (FND `ba671fb`, PR #497, live `dep-d9221qr7`→api.otzar.ai):**
+  - `services/otzar/dandelion-seed.service.ts` — `listOrgSeeds` (tenant-scoped), `loadSeed` (org+type guard → null cross-tenant), `transition` (updates details + writes `ADMIN_ACTION` audit), `approveSeed` (for grant_tool_access/connector_setup creates a `TASK`/`NEEDS_APPROVAL` setup action with `from_seed_id`; `resulting_action` = "setup action created … not granted automatically" — NO grant), `rejectSeed`, `holdSeed`.
+  - `comms-ingest.service.ts` — after the MEETING entry, persists each `wgMemory.seeds` as an ORG_SEEDING row (status from `approvalRequired`).
+  - `routes/otzar-dandelion.routes.ts` — `adminOrg()` helper (`validateSession(token,"admin_org")` → 403/404); `GET /org/dandelion/seeds`; `POST /org/dandelion/seeds/:id/{approve,reject,hold}` (optional `reason` body).
+- **Frontend (CT `566b351`, deploy `dep-d922sh6q1p3s73eq9me0`, live bundle `index-fmHC2c5g.js`):** `pages/OrganizationSeeding.tsx` + nav "Organization Seeding" + route; `api.otzar.dandelionSeeds.{list,approve,reject,hold}` + `OrgSeed` types. Human labels (`SEED_TYPE_LABEL`/`STATUS_LABEL`), source evidence shown as "Why: …", confidence/risk/approval, no raw IDs, calm empty + admin-denied states. "Approve setup" copy is honest (server enforces no auto-grant).
+- **Tests:** FND integration `dandelion-seed.test.ts` 4/4 (tenant isolation; approve→setup TASK + **no** connectorBinding + ADMIN_ACTION audit; reject/hold persist; cross-tenant write → NOT_FOUND). CT unit `organization-seeding.test.tsx` 4/4 (render, approve calls endpoint, admin-denied 403, empty). Full gates green both repos.
+- **Live (HTTP layer):** `/org/dandelion/seeds` flips 404→**401** (route live + gated); `/organization-seeding` → 200; bundle flipped `oe3uZKCc→fmHC2c5g`. Behavioral live-verify script `scratchpad/live-seed-lifecycle.mjs` (ingest-as-admin → list → approve/hold/reject → non-admin 403 → no employee-work leak) is ready; pending `DEMO_SHARED_PASSWORD` (sanctioned credential gate).
+- **DO NOT BREAK:** no-migration ORG_SEEDING rail; approve never grants (setup action only); ORG_SEEDING excluded from employee/team work; admin_org gate on all seed routes; tenant isolation in `loadSeed`; every transition writes ADMIN_ACTION audit; honest "not granted automatically" copy.
+
+### DEPLOY LOG (append)
+- Dandelion seed lifecycle: FND `ba671fb` (PR #497, api.otzar.ai live, seeds route 401-gated). CT `566b351` (deploy `dep-d922sh6q1p3s73eq9me0`, live bundle `index-fmHC2c5g.js`, /organization-seeding 200).
