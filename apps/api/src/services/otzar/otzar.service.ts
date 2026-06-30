@@ -42,6 +42,8 @@ import {
   type CommsExtractionResult,
   type CommsExtractionMode,
 } from "./comms-extract.service.js";
+import { ingestTranscript } from "./comms-ingest.service.js";
+import type { IngestTranscriptResult } from "./comms-ingest.service.js";
 import {
   truncateToTokenBudget,
   TokenBudgetExceededError,
@@ -396,6 +398,29 @@ export interface ExtractCommsInput {
 export interface ExtractCommsSuccess {
   ok: true;
   extraction: CommsExtractionResult;
+}
+
+// WHAT: Inputs for ingestComms — the governed transcript → owned-work pass.
+// WHY: Token + captured text (+ optional title / force_mode). Unlike
+//      extractFromComms (ephemeral, read-only), ingest PERSISTS a durable
+//      conversation record and creates per-owner Work Ledger rows, so it
+//      requires "write" authority.
+export interface IngestCommsInput {
+  token: string;
+  captured_text: string;
+  title?: string;
+  force_mode?: CommsExtractionMode;
+}
+
+export interface IngestCommsSuccess {
+  ok: true;
+  result: IngestTranscriptResult;
+}
+
+export interface IngestCommsFailure {
+  ok: false;
+  code: string;
+  message: string;
 }
 
 // WHAT: Inputs for getContextHealth.
@@ -2000,6 +2025,37 @@ export class OtzarService {
       ok: true,
       extraction: result,
     };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // ingestComms -- the governed transcript → owned-work pass. Persists
+  // the captured conversation as a durable source-of-truth record and
+  // turns commitments into per-owner Work Ledger rows under proof (the
+  // noisy tail is quarantined; unproven owners become NEEDS_OWNER for
+  // review, never auto-assigned). Requires "write" authority because it
+  // creates durable rows (unlike the read-only extractFromComms).
+  // ──────────────────────────────────────────────────────────────
+  async ingestComms(
+    input: IngestCommsInput,
+  ): Promise<IngestCommsSuccess | IngestCommsFailure> {
+    const session = await this.authService.validateSession(input.token, "write");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Comms ingest denied" };
+    }
+    if (typeof input.captured_text !== "string" || input.captured_text.trim().length === 0) {
+      return { ok: false, code: "INVALID_HISTORY", message: "captured_text is required (non-empty string)" };
+    }
+    const result = await ingestTranscript({
+      callerEntityId: session.entity_id,
+      capturedText: input.captured_text,
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.force_mode !== undefined ? { forceMode: input.force_mode } : {}),
+      llmProvider: this.llmProvider,
+    });
+    if (!result.ok) {
+      return { ok: false, code: result.code, message: result.message };
+    }
+    return { ok: true, result };
   }
 
   // ──────────────────────────────────────────────────────────────

@@ -933,6 +933,34 @@ export {
 } from "./services/otzar/decision-rights-extraction.js";
 export type { ExtractedDecisionSignals } from "./services/otzar/decision-rights-extraction.js";
 export {
+  segmentTranscriptQuality,
+  WORK_ELIGIBLE,
+  QUARANTINED,
+} from "./services/otzar/transcript-quality.js";
+export type {
+  SegmentQuality,
+  TranscriptSegment,
+  TranscriptQualityResult,
+} from "./services/otzar/transcript-quality.js";
+export { ingestTranscript } from "./services/otzar/comms-ingest.service.js";
+export type {
+  IngestTranscriptInput,
+  IngestTranscriptResult,
+  IngestTranscriptFailure,
+  IngestedWorkItem,
+} from "./services/otzar/comms-ingest.service.js";
+export { planWorkItems } from "./services/otzar/work-item-planner.js";
+export type {
+  WorkItemPlan,
+  WorkItemPlanResult,
+  WorkItemSourceEvidence,
+  WorkLedgerType,
+  WorkItemStatus,
+  SupportEdge,
+  NameResolution,
+  ResolveName,
+} from "./services/otzar/work-item-planner.js";
+export {
   isAutoSendEnabled,
   canAutoSend,
   AUTO_SEND_DISABLED,
