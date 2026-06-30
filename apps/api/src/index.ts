@@ -950,6 +950,43 @@ export type {
   IngestedWorkItem,
 } from "./services/otzar/comms-ingest.service.js";
 export { planWorkItems } from "./services/otzar/work-item-planner.js";
+export {
+  computeCapabilityState,
+  requiredConnectorToProviderType,
+  isReachable,
+  needsSetup,
+  resolveConnectorCapability,
+} from "./services/otzar/connector-capability.js";
+export type {
+  ConnectorCapabilityState,
+  RequiredConnector,
+  ConnectorOperation,
+  CapabilityFacts,
+  ResolveCapabilityArgs,
+} from "./services/otzar/connector-capability.js";
+export {
+  classifyExecutionType,
+  connectorForExecutionType,
+  planExecution,
+} from "./services/otzar/execution-planner.js";
+export { buildWorkGraphMemory } from "./services/otzar/work-graph-memory.js";
+export type {
+  WorkGraphEventType,
+  GovernedWorkEvent,
+  DandelionSeedType,
+  DandelionSeed,
+  WorkGraphWorkItem,
+  WorkGraphSupportEdge,
+  BuildWorkGraphMemoryInput,
+  WorkGraphMemoryResult,
+} from "./services/otzar/work-graph-memory.js";
+export type {
+  ExecutionType,
+  ExecutionMode,
+  ExecutionPlan,
+  PolicyStatus,
+  PlanExecutionInput,
+} from "./services/otzar/execution-planner.js";
 export type {
   WorkItemPlan,
   WorkItemPlanResult,
