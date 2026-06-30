@@ -46,6 +46,10 @@ const WATCHER_TYPE_BY_CATEGORY: Record<string, string | undefined> = {
 export const LEDGER_TYPES = [
   "COMMITMENT", "TASK", "DECISION", "BLOCKER", "MEETING", "FOLLOW_UP",
   "APPROVAL", "EXECUTION", "COLLABORATION", "NOTIFICATION", "CORRECTION",
+  // Phase 6+ — a governed admin org-seeding suggestion (Dandelion) sourced from
+  // work evidence. Org-scoped (owner/target/requester null); only the admin seed
+  // queue lists these — they never appear in employee My Work / Team Work.
+  "ORG_SEEDING",
 ] as const;
 export const SOURCE_TYPES = [
   "VOICE_COMMAND", "CHAT", "MEETING", "TRANSCRIPT", "CONNECTOR", "SYSTEM", "MANUAL",
@@ -60,6 +64,9 @@ export const LEDGER_STATUSES = [
   "NEEDS_AUTHORITY", "NEEDS_APPROVAL", "NEEDS_CALLER_CONFIRMATION",
   "READY_TO_EXECUTE", "EXECUTING", "EXECUTED", "VERIFIED", "BLOCKED",
   "RUNTIME_MISSING", "CANCELLED", "EXPIRED",
+  // Dandelion org-seeding seed lifecycle (admin-governed; ORG_SEEDING entries).
+  "SEED_PROPOSED", "SEED_NEEDS_REVIEW", "SEED_APPROVED", "SEED_REJECTED",
+  "SEED_HELD", "SEED_APPLIED", "SEED_BLOCKED", "SEED_EXPIRED",
 ] as const;
 export const EXTRACTION_SOURCES = [
   "TYPESCRIPT_DETERMINISTIC", "PYTHON_ENRICHED", "MANUAL", "CONNECTOR",
@@ -580,6 +587,9 @@ export async function getTeamWork(args: {
   const rows = await prisma.workLedgerEntry.findMany({
     where: {
       org_entity_id: args.org_entity_id,
+      // ORG_SEEDING entries are admin org-seeding suggestions, not work — they
+      // live in the admin seed queue, never in the Team Work view.
+      ledger_type: { not: "ORG_SEEDING" },
       NOT: { status: { in: ["CANCELLED", "EXPIRED", "VERIFIED"] } },
     },
     orderBy: { created_at: "desc" },

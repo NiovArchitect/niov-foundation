@@ -980,6 +980,13 @@ export type {
   BuildWorkGraphMemoryInput,
   WorkGraphMemoryResult,
 } from "./services/otzar/work-graph-memory.js";
+export {
+  listOrgSeeds,
+  approveSeed,
+  rejectSeed,
+  holdSeed,
+} from "./services/otzar/dandelion-seed.service.js";
+export type { OrgSeedView } from "./services/otzar/dandelion-seed.service.js";
 export type {
   ExecutionType,
   ExecutionMode,
