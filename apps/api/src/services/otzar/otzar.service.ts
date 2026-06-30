@@ -2032,13 +2032,16 @@ export class OtzarService {
   // the captured conversation as a durable source-of-truth record and
   // turns commitments into per-owner Work Ledger rows under proof (the
   // noisy tail is quarantined; unproven owners become NEEDS_OWNER for
-  // review, never auto-assigned). Requires "write" authority because it
-  // creates durable rows (unlike the read-only extractFromComms).
+  // review, never auto-assigned). Gated on "read" (the authenticated-
+  // employee tier, EmployeeGuard / can_read_capsules) like the other
+  // employee self-scoped governed writes (correction-memory): the real
+  // write governance — ownership proof, no-auto-send, no-leak, audit —
+  // is enforced in-service, not by the capability tier.
   // ──────────────────────────────────────────────────────────────
   async ingestComms(
     input: IngestCommsInput,
   ): Promise<IngestCommsSuccess | IngestCommsFailure> {
-    const session = await this.authService.validateSession(input.token, "write");
+    const session = await this.authService.validateSession(input.token, "read");
     if (!session.valid) {
       return { ok: false, code: session.code, message: "Comms ingest denied" };
     }
