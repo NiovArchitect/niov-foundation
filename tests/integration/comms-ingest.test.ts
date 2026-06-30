@@ -164,4 +164,25 @@ describe("comms-ingest — transcript becomes durable owned work (DB)", () => {
       expect(self?.status).toBe("PROPOSED");
     }
   });
+
+  it("attaches a typed execution plan; connector-backed work with no connector is connector_required (Phase 4/5)", async () => {
+    const r = await ingestTranscript({ callerEntityId: callerId, capturedText: TRANSCRIPT, llmProvider: null });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const david = r.work_items.find((w) => w.owner_entity_id === davidId);
+    expect(david).toBeDefined();
+    // The repo-access commitment classifies to a GitHub-backed plan.
+    expect(david!.execution.execution_type).toBe("repo_access");
+    expect(david!.execution.required_connector).toBe("GITHUB");
+    // The test org has no GitHub connector → a visible setup-required blocker, not dropped.
+    expect(["not_connected", "connector_missing"]).toContain(david!.execution.capability_state);
+    expect(david!.execution.execution_mode).toBe("connector_required");
+    expect(david!.execution.blocker_reason).not.toBeNull();
+    // The plan is persisted on the ledger row's details (survives reload).
+    const row = await prisma.workLedgerEntry.findFirst({
+      where: { org_entity_id: orgId, owner_entity_id: davidId, ledger_type: "COMMITMENT", source_type: "TRANSCRIPT" },
+    });
+    const plan = (row?.details as { execution_plan?: { executionType?: string } } | null)?.execution_plan;
+    expect(plan?.executionType).toBe("repo_access");
+  });
 });

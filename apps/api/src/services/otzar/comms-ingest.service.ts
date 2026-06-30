@@ -29,6 +29,10 @@ import type { CommsExtractionMode, CommsExtractionResult } from "./comms-extract
 import { segmentTranscriptQuality } from "./transcript-quality.js";
 import { planWorkItems } from "./work-item-planner.js";
 import type { NameResolution, ResolveName, WorkItemPlan } from "./work-item-planner.js";
+import { classifyExecutionType, connectorForExecutionType, planExecution } from "./execution-planner.js";
+import type { ExecutionPlan } from "./execution-planner.js";
+import { resolveConnectorCapability } from "./connector-capability.js";
+import type { ConnectorCapabilityState } from "./connector-capability.js";
 import { resolveTokenToEntities } from "./recipient-governance.js";
 import type { RosterEntry, RecipientConfidence } from "./recipient-governance.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
@@ -53,6 +57,16 @@ export interface IngestedWorkItem {
   status: string;
   needs_review: boolean;
   review_reason: string | null;
+  /** Phase 4/5 — the typed execution plan + connector capability for this item. */
+  execution: {
+    execution_type: ExecutionPlan["executionType"];
+    execution_mode: ExecutionPlan["executionMode"];
+    required_connector: ExecutionPlan["requiredConnector"];
+    capability_state: ConnectorCapabilityState | null;
+    approval_required: boolean;
+    blocker_reason: string | null;
+    next_best_action: ExecutionPlan["nextBestAction"];
+  };
 }
 
 export interface IngestTranscriptResult {
@@ -191,6 +205,33 @@ export async function ingestTranscript(
   // 5a) One owned Work Ledger row per planned work item (proven → owned; else NEEDS_OWNER).
   const workItems: IngestedWorkItem[] = [];
   for (const w of plan.workItems) {
+    // Phase 4/5 — classify the work, resolve the connector capability (only for
+    // connector-backed types), and build the typed execution plan. A missing/
+    // unauthorized tool becomes a visible connector_required/permission_required
+    // blocker on the item (never silently dropped). An unproven owner means we
+    // lack the context to act, so capability is left unresolved.
+    // Classify once from title + evidence so the connector resolution and the
+    // execution plan agree (the title alone can be terse).
+    const execType = classifyExecutionType(`${w.title} ${w.sourceEvidence.quote}`);
+    const { connector, operation } = connectorForExecutionType(execType);
+    let capabilityState: ConnectorCapabilityState | null = null;
+    if (operation !== null && connector !== "NONE" && connector !== "INTERNAL" && !w.needsReview) {
+      const cap = await resolveConnectorCapability({
+        orgEntityId,
+        actorEntityId: w.ownerEntityId ?? input.callerEntityId,
+        requiredConnector: connector,
+        operation,
+      });
+      capabilityState = cap.state;
+    }
+    const execPlan = planExecution({
+      title: w.title,
+      evidenceQuote: w.sourceEvidence.quote,
+      capabilityState,
+      confidence: w.confidence,
+      forceType: execType,
+    });
+
     const created = await createLedgerEntry({
       org_entity_id: orgEntityId,
       ledger_type: w.ledgerType,
@@ -216,8 +257,13 @@ export async function ingestTranscript(
         owner_name: w.ownerName,
         needs_review: w.needsReview,
         ...(w.reviewReason ? { review_reason: w.reviewReason } : {}),
+        execution_plan: execPlan,
       },
-      ...(w.needsReview ? { next_action: "Confirm the owner before assigning this work." } : {}),
+      ...(w.needsReview
+        ? { next_action: "Confirm the owner before assigning this work." }
+        : execPlan.blockerReason !== null
+          ? { next_action: execPlan.blockerReason }
+          : {}),
     });
     workItems.push({
       ledger_entry_id: created.ok ? created.entry.ledger_entry_id : null,
@@ -228,6 +274,15 @@ export async function ingestTranscript(
       status: w.status,
       needs_review: w.needsReview,
       review_reason: w.reviewReason,
+      execution: {
+        execution_type: execPlan.executionType,
+        execution_mode: execPlan.executionMode,
+        required_connector: execPlan.requiredConnector,
+        capability_state: execPlan.capabilityState,
+        approval_required: execPlan.approvalRequired,
+        blocker_reason: execPlan.blockerReason,
+        next_best_action: execPlan.nextBestAction,
+      },
     });
   }
 
