@@ -150,4 +150,18 @@ describe("comms-ingest — transcript becomes durable owned work (DB)", () => {
       expect([callerId, davidId, eveId]).toContain(row.owner_entity_id);
     }
   });
+
+  it("the caller named as an owner resolves to themselves (not held as unknown)", async () => {
+    // The caller ("Sadeil Caller") captures a meeting where they are the owner.
+    const t = "Sadeil owns the launch checklist and will finish it today.";
+    const r = await ingestTranscript({ callerEntityId: callerId, capturedText: t, llmProvider: null });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    if (r.work_items.some((w) => /sadeil/i.test(w.owner_name))) {
+      const self = r.work_items.find((w) => w.owner_entity_id === callerId);
+      expect(self).toBeDefined();
+      expect(self?.needs_review).toBe(false);
+      expect(self?.status).toBe("PROPOSED");
+    }
+  });
 });
