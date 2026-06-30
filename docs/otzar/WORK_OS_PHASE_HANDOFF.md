@@ -35,6 +35,17 @@ The connected loop: transcript → persisted conversation → work item (per-own
 - **Continuity:** capability state attaches to each execution plan; missing connector → setup-required blocker on the item; consumed by the execution planner mode.
 - **CHECKPOINT RESULT (Phase 4+5):** connected to Slice-1 rails ✓ · no duplicate model ✓ · schema unchanged ✓ · no-auto-send preserved ✓ · 30 unit + 5 integration green · typecheck 0.
 
-## Phase 6 — Work Graph + memory compounding + Dandelion (NEXT — not started)
-- Read this doc + grep: `work-graph-evidence`, `work-graph-learning`, `MemoryCapsule`, `OtzarProposedPattern`, `ADR-0082` (Dandelion), `OtzarConversation`, audit. Reuse: persist `transcriptGraphToEvidence`→`reconcileEvidence` edges + learning events (MemoryCapsule), extend `OtzarProposedPattern` for Dandelion seeds. Noisy tail must seed nothing. No cross-user leak. Approval-gated seeds.
-- **Dependency:** consumes the execution plans + capability gaps from Phase 4/5 (connector gap → Dandelion connector-setup seed).
+## Phase 6 — Work Graph + memory compounding + Dandelion (DONE, same branch)
+- **Goal:** a processed ingest produces governed Work-Graph/Organization-Memory events + admin-governed Dandelion org-seeding suggestions from real work evidence — scoped, evidence-backed, approval-gated, no auto-invite, no leak.
+- **Files added:** `apps/api/src/services/otzar/work-graph-memory.ts` (pure `buildWorkGraphMemory`). Wired in `comms-ingest.service.ts`.
+- **Contracts added:** `GovernedWorkEvent` (8 event types), `DandelionSeed` (7 seed types), `buildWorkGraphMemory()`. Exported from `@niov/api`. Each event/seed carries sourceConversationId, sourceEvidence, sourceType, confidence, scope (MemoryScope), sensitivity, policyStatus, allowedViewers, timestamp.
+- **Rails reused (NO duplicates):** reuses `MemoryScope` (work-graph-learning). Persists events + seeds on the durable **MEETING `WorkLedgerEntry.details`** (`work_graph_events`, `dandelion_seeds`) — scoped (org_entity_id), audited (createLedgerEntry), queryable. **No new model, schema unchanged.**
+- **Governance:** only TRUSTED-segment work reaches it (noisy tail seeds nothing). An UNPROVEN owner → `confirm_or_activate_person` seed (approvalRequired, needs_review), NEVER a trusted ownership edge. A connector capability gap (Phase 4/5) → `grant_tool_access`/`connector_setup` seed for admin. Support roles → support edges + `confirm_support_role` seed, never owners. allowedViewers scoped to org members (never global). No auto-invite. Every seed has evidence.
+- **Tests:** `tests/unit/work-graph-memory.test.ts` (7) + comms-ingest integration (seeds generated + persisted + scoped). typecheck 0. Full unit suite 2788 green (no regression).
+- **Runtime/language:** `keep_in_typescript_now` (governs what enters the org source-of-truth + admin approvals = Foundation authority tier; ADR-0090 §3). Future cross-source reconciliation/ranking = PYTHON_ENRICHED boundary.
+- **DEFINED BOUNDARY (honest, not faked):** per-seed admin **approve/reject lifecycle via `OtzarProposedPattern`** (additive migration) is the next increment — seeds today are real, persisted, scoped, approval-gated, and NEVER auto-applied; surfacing them as individually-actionable admin rows is the Admin-IA slice.
+- **CHECKPOINT RESULT (Phase 6):** connected to Phase 4/5 (execution plans + connector gaps → seeds) ✓ · no duplicate model, schema unchanged ✓ · noisy tail seeds nothing ✓ · no cross-user leak (scoped viewers) ✓ · 7 unit + 6/6 integration green · 2788 unit no-regression · typecheck 0.
+
+## Phase 7 — UI tightening (NEXT — Comms + Action Center)
+- Read this doc + grep: `Comms`, `ActionCenter`, `MyWork`, `CommsIngestResult`, `execution`, `dandelion_seeds`. Surface (succinctly, no button soup, no raw IDs): execution mode + next-best-action + connector/setup blockers on each work item; recent conversations; (admin) the dandelion_seeds. Reflect backend truth only.
+- **Deploy ordering:** Phase 4+5+6 are backend-only on branch `otzar-workos-slice2-execution-connectors` (no migration) — deploy Foundation first, then CT (Phase 7).

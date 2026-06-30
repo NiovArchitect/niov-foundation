@@ -185,4 +185,29 @@ describe("comms-ingest — transcript becomes durable owned work (DB)", () => {
     const plan = (row?.details as { execution_plan?: { executionType?: string } } | null)?.execution_plan;
     expect(plan?.executionType).toBe("repo_access");
   });
+
+  it("writes governed Work-Graph/memory events + Dandelion seeds, persisted + scoped (Phase 6)", async () => {
+    const r = await ingestTranscript({ callerEntityId: callerId, capturedText: TRANSCRIPT, llmProvider: null });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Governed events written; a connector gap (David's GitHub repo access, not connected)
+    // produced an approval-gated org-seeding suggestion.
+    expect(r.work_graph_event_count).toBeGreaterThan(0);
+    const toolSeed = r.dandelion_seeds.find((s) => s.seedType === "grant_tool_access" || s.seedType === "connector_setup");
+    expect(toolSeed).toBeDefined();
+    expect(toolSeed!.approvalRequired).toBe(true);
+    expect(toolSeed!.sourceEvidence.length).toBeGreaterThan(0);
+    // Persisted on the durable MEETING record, scoped to org members (no global leak).
+    const meeting = await prisma.workLedgerEntry.findFirst({
+      where: { org_entity_id: orgId, ledger_type: "MEETING", source_type: "TRANSCRIPT" },
+      orderBy: { created_at: "desc" },
+    });
+    const details = meeting?.details as { dandelion_seeds?: unknown[]; work_graph_events?: Array<{ allowedViewers?: string[] }> } | null;
+    expect(Array.isArray(details?.dandelion_seeds)).toBe(true);
+    expect((details?.work_graph_events?.length ?? 0)).toBeGreaterThan(0);
+    for (const e of details?.work_graph_events ?? []) {
+      expect(e.allowedViewers).toContain(davidId); // scoped to real org members
+      expect(e.allowedViewers).not.toContain("*"); // never global
+    }
+  });
 });

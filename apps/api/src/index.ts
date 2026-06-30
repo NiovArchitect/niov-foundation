@@ -969,6 +969,17 @@ export {
   connectorForExecutionType,
   planExecution,
 } from "./services/otzar/execution-planner.js";
+export { buildWorkGraphMemory } from "./services/otzar/work-graph-memory.js";
+export type {
+  WorkGraphEventType,
+  GovernedWorkEvent,
+  DandelionSeedType,
+  DandelionSeed,
+  WorkGraphWorkItem,
+  WorkGraphSupportEdge,
+  BuildWorkGraphMemoryInput,
+  WorkGraphMemoryResult,
+} from "./services/otzar/work-graph-memory.js";
 export type {
   ExecutionType,
   ExecutionMode,

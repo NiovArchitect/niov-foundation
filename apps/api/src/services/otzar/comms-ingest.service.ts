@@ -33,6 +33,8 @@ import { classifyExecutionType, connectorForExecutionType, planExecution } from 
 import type { ExecutionPlan } from "./execution-planner.js";
 import { resolveConnectorCapability } from "./connector-capability.js";
 import type { ConnectorCapabilityState } from "./connector-capability.js";
+import { buildWorkGraphMemory } from "./work-graph-memory.js";
+import type { DandelionSeed, WorkGraphWorkItem } from "./work-graph-memory.js";
 import { resolveTokenToEntities } from "./recipient-governance.js";
 import type { RosterEntry, RecipientConfidence } from "./recipient-governance.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
@@ -88,6 +90,10 @@ export interface IngestTranscriptResult {
   work_items: IngestedWorkItem[];
   support_edges: Array<{ name: string; relation: string; entity_id: string | null }>;
   counts: { owned: number; needs_review: number; support_edges: number };
+  /** Phase 6 — governed Dandelion org-seeding suggestions (admin-reviewed) +
+   *  the count of governed Work-Graph/memory events written for this conversation. */
+  dandelion_seeds: DandelionSeed[];
+  work_graph_event_count: number;
   /** The full governed extraction (summary, decisions, commitments,
    *  suggested_actions with recipient trust + responsibility graph) so the
    *  Comms UI keeps its existing trust-chip review surface unchanged. */
@@ -204,6 +210,7 @@ export async function ingestTranscript(
 
   // 5a) One owned Work Ledger row per planned work item (proven → owned; else NEEDS_OWNER).
   const workItems: IngestedWorkItem[] = [];
+  const wgItems: WorkGraphWorkItem[] = [];
   for (const w of plan.workItems) {
     // Phase 4/5 — classify the work, resolve the connector capability (only for
     // connector-backed types), and build the typed execution plan. A missing/
@@ -284,7 +291,31 @@ export async function ingestTranscript(
         next_best_action: execPlan.nextBestAction,
       },
     });
+    wgItems.push({
+      ownerName: w.ownerName,
+      ownerEntityId: w.ownerEntityId,
+      title: w.title,
+      needsReview: w.needsReview,
+      confidence: w.confidence,
+      sourceEvidence: w.sourceEvidence.quote,
+      executionType: execPlan.executionType,
+      requiredConnector: execPlan.requiredConnector,
+      capabilityState: execPlan.capabilityState,
+    });
   }
+
+  // 6) Phase 6 — governed Work-Graph / Organization-Memory events + Dandelion
+  //    org-seeding suggestions from the TRUSTED work only (the noisy tail seeds
+  //    nothing). Scoped to org members (no global memory); approval-gated seeds;
+  //    unproven owners become identity/activation seeds, never trusted edges.
+  const wgMemory = buildWorkGraphMemory({
+    sourceConversationId: meetingCaptureId,
+    nowIso: new Date().toISOString(),
+    allowedViewers: roster.map((r) => r.entity_id),
+    decisions: extraction.decisions,
+    workItems: wgItems,
+    supportEdges: plan.supportEdges.map((e) => ({ name: e.name, entityId: e.entityId, relation: e.relation, workItem: e.workItem, evidence: e.evidence })),
+  });
 
   // 5b) The conversation itself as a durable MEETING ledger row (Recent Conversations).
   await createLedgerEntry({
@@ -309,6 +340,11 @@ export async function ingestTranscript(
       decisions: extraction.decisions,
       owned_work_items: workItems.filter((w) => !w.needs_review).length,
       needs_review_items: workItems.filter((w) => w.needs_review).length,
+      // Phase 6 — governed work-graph events + Dandelion seeds persisted on the
+      // durable conversation record (scoped, audited, queryable). Per-seed admin
+      // approve/reject lifecycle (OtzarProposedPattern) is the defined next boundary.
+      work_graph_events: wgMemory.events,
+      dandelion_seeds: wgMemory.seeds,
     },
   });
 
@@ -335,6 +371,8 @@ export async function ingestTranscript(
       needs_review: plan.needsReviewCount,
       support_edges: plan.supportEdges.length,
     },
+    dandelion_seeds: wgMemory.seeds,
+    work_graph_event_count: wgMemory.events.length,
     extraction,
   };
 }
