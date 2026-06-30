@@ -75,3 +75,17 @@ The connected loop: transcript → persisted conversation → work item (per-own
 
 ### DEPLOY LOG (append)
 - Dandelion seed lifecycle: FND `ba671fb` (PR #497, api.otzar.ai live, seeds route 401-gated). CT `566b351` (deploy `dep-d922sh6q1p3s73eq9me0`, live bundle `index-fmHC2c5g.js`, /organization-seeding 200).
+
+---
+
+## Admin Center IA reorg — eight production sections (CT)
+- **Goal:** turn the admin sprawl (7 nav groups / 31 flat entries) into a production enterprise control center — powerful underneath, calm on the surface. Eight approved sections; every visible control on a real rail; stubs hidden; the two connector surfaces folded into one destination; employee shell untouched and isolated.
+- **Sections (NAV_GROUP_ORDER):** Overview · People & Roles · Tools & Connections · Work Graph & Memory · Policies & Approvals · Workflows & Automation · Audit & Activity · Diagnostics.
+- **Approved placements:** Billing & Entitlements → Overview · Organization Seeding + Onboarding → People & Roles · Reports → Audit & Activity · Data retention → Diagnostics · Marketplace/Cohorts/Access&Grants/Access Control → Work Graph & Memory · Review Center + Pending Approvals → Policies & Approvals.
+- **Connector fold:** new `pages/ToolsConnections.tsx` — ONE "Tools & Connections" landing (`/tools-connections`) that COMPOSES the two existing surfaces as tabs: "Connected Tools" (`ConnectorsAdminPage`) + "Integrations & MCP" (`ConnectorRailsAdmin`). The two underlying routes (`/connectors`, `/connector-rails`) stay registered (deep-link safe) but are no longer nav entries. CommandCenterPanel quick-links repointed to `/tools-connections`.
+- **Stubs:** the 7 placeholder screens (Analytics, Conversations, Workflows, Playground, Settings, Documentation, Intelligence) keep `comingSoon:true` → hidden from the sidebar, routes preserved. AdminSidebar now skips any section with zero visible items (no bare headers).
+- **Vocabulary:** human-readable descriptions; no raw IDs, no "connector binding"/"MCP rail"/"TAR"/"schema" as primary labels (advanced detail lives inside the Tools tabs).
+- **Employee isolation:** `nav-employee.ts` untouched this slice; a test locks the wall (disjoint routes, all employee routes under `/app/`, no Organization Seeding, no diagnostics, no implementation jargon). Employee copy polish + minimal-nav curation is the dedicated next slice (#29).
+- **Tests (CT):** `admin-nav-sections` (8 sections + per-section membership + fold + stub-hide + sidebar render), `admin-route-safety` (every nav route + folded connector routes + 7 stub routes resolve in App.tsx), `admin-employee-isolation`, `tools-connections` (landing render + tab switch). Updated stale group/label asserts in admin-command-center-panel, review-center, marketplace-discovery, billing-preview, connectors-admin, admin-nav-coming-soon. Full suite green; typecheck 0; lint 0 errors; build ok.
+- **DO NOT BREAK:** 8 sections in order; stubs hidden but routed; `/connectors` + `/connector-rails` routes preserved; employee shell isolated; Organization Seeding under People & Roles; Reports under Audit & Activity; Billing under Overview; Onboarding under People & Roles.
+- **Credential-gated (sanctioned):** the 4 live smokes (comms-governance, conversation-memory, response-reconciliation, response-roundtrip) and admin/employee nav screenshots need login (`DEMO_SHARED_PASSWORD`) — pending, same gate as the seed slice. HTTP-layer live checks (bundle flip, `/tools-connections` 200, `/organization-seeding` 200) are the ceiling without it.
