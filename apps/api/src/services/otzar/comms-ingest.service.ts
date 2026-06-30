@@ -125,6 +125,13 @@ export async function ingestTranscript(
     title: p.title,
     shared_project_count: p.shared_project_count,
   }));
+  // org_roster is the caller's PEERS (excludes the caller). Add the caller so a
+  // meeting capturer who is also named as an owner ("David owns X" when David
+  // captured the meeting) resolves to themselves rather than being held as an
+  // unknown owner.
+  if (!roster.some((r) => r.entity_id === input.callerEntityId)) {
+    roster.push({ entity_id: input.callerEntityId, display_name: identity.viewer.display_name, email: null });
+  }
   const nameById = new Map(roster.map((r) => [r.entity_id, r.display_name]));
 
   // 1) Quality gate — only trusted segments may seed work; the noisy tail is quarantined.
