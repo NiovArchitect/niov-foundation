@@ -323,6 +323,58 @@ export async function registerOtzarRoutes(
     return reply.code(200).send(result);
   });
 
+  // POST /api/v1/otzar/comms/ingest -- the governed transcript → owned-work
+  // pass. Unlike /comms/extract (ephemeral, read-only), this PERSISTS the
+  // captured conversation as a durable source-of-truth record and creates
+  // per-owner Work Ledger rows under proof: the noisy post-meeting tail is
+  // quarantined (never seeds work) and an unproven owner becomes NEEDS_OWNER
+  // for review (never auto-assigned). Requires "write" authority.
+  app.post<{
+    Body: { captured_text?: unknown; title?: unknown; force_mode?: unknown };
+  }>("/api/v1/otzar/comms/ingest", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const body = request.body ?? {};
+    if (typeof body.captured_text !== "string" || body.captured_text.length === 0) {
+      return reply.code(422).send({
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "captured_text is required (non-empty string)",
+      });
+    }
+    const force_mode =
+      body.force_mode === "DEMO_SCRIPTED" ||
+      body.force_mode === "LLM" ||
+      body.force_mode === "LOCAL_FALLBACK"
+        ? body.force_mode
+        : undefined;
+    if (force_mode === "DEMO_SCRIPTED" && !isDemoModeAllowed()) {
+      return reply.code(422).send({
+        ok: false,
+        code: DEMO_MODE_NOT_ALLOWED,
+        message:
+          "Demo intake mode is disabled in this environment. Set ALLOW_DEMO_MODE=true to enable it.",
+      });
+    }
+    const title = typeof body.title === "string" ? body.title : undefined;
+    const result = await otzarService.ingestComms({
+      token,
+      captured_text: body.captured_text,
+      ...(title !== undefined ? { title } : {}),
+      ...(force_mode !== undefined ? { force_mode } : {}),
+    });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
   // GET /api/v1/otzar/conversations -- metadata-only continuity feed for
   // the caller's OWN conversations. Self-scoped: bearer + "read"
   // capability only (no admin gate). ?skip= & ?take= pagination (take
