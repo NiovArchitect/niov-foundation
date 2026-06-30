@@ -25,7 +25,7 @@
 import { getOrgEntityId } from "../governance/org.js";
 import { buildIdentityContext } from "./identity-context.js";
 import { extractFromCapturedText } from "./comms-extract.service.js";
-import type { CommsExtractionMode } from "./comms-extract.service.js";
+import type { CommsExtractionMode, CommsExtractionResult } from "./comms-extract.service.js";
 import { segmentTranscriptQuality } from "./transcript-quality.js";
 import { planWorkItems } from "./work-item-planner.js";
 import type { NameResolution, ResolveName, WorkItemPlan } from "./work-item-planner.js";
@@ -74,6 +74,10 @@ export interface IngestTranscriptResult {
   work_items: IngestedWorkItem[];
   support_edges: Array<{ name: string; relation: string; entity_id: string | null }>;
   counts: { owned: number; needs_review: number; support_edges: number };
+  /** The full governed extraction (summary, decisions, commitments,
+   *  suggested_actions with recipient trust + responsibility graph) so the
+   *  Comms UI keeps its existing trust-chip review surface unchanged. */
+  extraction: CommsExtractionResult;
 }
 
 export interface IngestTranscriptFailure {
@@ -269,5 +273,6 @@ export async function ingestTranscript(
       needs_review: plan.needsReviewCount,
       support_edges: plan.supportEdges.length,
     },
+    extraction,
   };
 }
