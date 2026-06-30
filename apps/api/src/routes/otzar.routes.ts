@@ -328,7 +328,8 @@ export async function registerOtzarRoutes(
   // captured conversation as a durable source-of-truth record and creates
   // per-owner Work Ledger rows under proof: the noisy post-meeting tail is
   // quarantined (never seeds work) and an unproven owner becomes NEEDS_OWNER
-  // for review (never auto-assigned). Requires "write" authority.
+  // for review (never auto-assigned). Gated on the authenticated-employee tier
+  // ("read", like correction-memory); the write governance is enforced in-service.
   app.post<{
     Body: { captured_text?: unknown; title?: unknown; force_mode?: unknown };
   }>("/api/v1/otzar/comms/ingest", async (request, reply) => {
