@@ -102,3 +102,44 @@ The connected loop: transcript → persisted conversation → work item (per-own
 - **Tests:** `ambient-nav` (minimal primary incl. Comms; dense labels off the primary surface; More curated with hidden ones absent), `employee-nav` (new primary/more lists, hidden route-only set, no-Dandelion copy ban), `admin-employee-isolation` (Dandelion re-added to the employee jargon ban). Full suite green; typecheck 0; lint 0 errors; build ok.
 - **DO NOT BREAK:** AmbientNav is the live employee surface; hidden items stay routed (deep-link safe); employees never see admin sections / Organization Seeding / diagnostics; no Dandelion/implementation jargon in employee copy; Comms + Action Center + People + Memory reachable on the primary rail.
 - **Credential-gated (sanctioned):** employee-nav screenshot + the 4 live smokes need `DEMO_SHARED_PASSWORD` — pending. HTTP-layer checks (bundle flip, `/app` 200) are the ceiling without it.
+
+---
+
+## Deep Work OS live smoke suite — product-behaviour acceptance (CT)
+Generic smokes prove the app is alive; these prove **Otzar is actually Otzar**. All assert product behaviour on the REAL default extraction path (no forced LOCAL_FALLBACK), so they catch the regressions production would hit. Env-gated; skip is explicit ("SKIPPED: DEMO_SHARED_PASSWORD missing"), never a pass.
+
+### Files
+- `tests/e2e/workos-helpers.ts` — API login, real-path `ingest`, `getMyWork`, `listSeeds`, `seedAction` (always sends a body — avoids FST_ERR_CTP_EMPTY_JSON_BODY), `semanticQuery`, `mask`, `ev`, `runMarker`. UI_BASE (app.otzar.ai) vs API_BASE (api.otzar.ai) decoupled.
+- `tests/e2e/workos-fixtures.ts` — canonical transcripts (primary: David/Pratham/Shiney + noisy tail + GitHub gap + grant_tool_access seed; follow-up: memory compounding; private: isolation marker) + invariant matchers.
+- `tests/e2e/workos-smoke-reporter.ts` — compact table (test · PASS/FAIL/SKIP · duration · masked evidence).
+- `tests/e2e/otzar-live-workos-loop.spec.ts` — transcript → governed work (5 tests).
+- `tests/e2e/otzar-live-workos-memory.spec.ts` — recall/compounding/isolation (4 tests).
+- `tests/e2e/otzar-live-workos-admin.spec.ts` — governed seed lifecycle, safe mutation (4 tests).
+- `tests/e2e/otzar-live-workos-ia.spec.ts` — employee minimal + admin 8-section IA (4 tests).
+- `tests/unit/workos-smoke-contract.test.ts` — deterministic offline contract guard (9 tests; runs in `npm run test`).
+
+### package scripts
+`test:e2e:live:workos` · `:workos:memory` · `:workos:admin` · `:workos:ia` · `:workos:full` (4 deep + 4 baseline).
+
+### What each proves (live-verified green)
+- **loop**: conversation persisted (source of truth) · noisy tail quarantined + creates no work · David resolves as owner · every item has a typed execution plan · GitHub gap surfaces as a visible blocker (not silent drop) · tool gap → approval-required org seed (no auto-grant) · noisy tail → no seed · work-graph events written · survives reload.
+- **memory**: org work is recallable + grounded (id+provenance, not hallucination) · compounds across conversations (one recallable record) · per-user isolated (a private marker does NOT leak to another user) · BOUNDARY test documents that org-wide cross-employee memory query is NOT built (Phase 6).
+- **admin**: admin sees the governed queue · non-admin → 403 · approve = setup action, access NOT granted · hold/reject persist. SAFE: only mutates seeds THIS run created (matched by `source_conversation_id === ingest meeting_capture_id`), never a pre-existing prod seed; no grant, no send, no invite.
+- **ia**: employee ambient rail = Today·Needs me·Comms·People·Memory; zero admin surfaces; More curated (route-only hidden absent) · admin nav.ts has the 8 sections + placements + connector fold · folded/moved/stub routes all resolve (deep-link safe).
+
+### Env vars & safe-mutation rules
+- `DEMO_SHARED_PASSWORD` (required; skip if missing). `OTZAR_SMOKE_EMAIL` (default vishesh), `OTZAR_SMOKE_ADMIN_EMAIL` (default sadeil, API-only), `OTZAR_SMOKE_NONADMIN_EMAIL` (default david). `OTZAR_API_BASE_URL` (default api.otzar.ai), `OTZAR_SMOKE_BASE_URL` (UI, default app.otzar.ai).
+- Mutation is scoped to this-run seeds via `source_conversation_id`. Non-destructive residue: each admin run leaves a few test seeds + one setup TASK in prod (no delete endpoint). Never grants access / sends / invites / auto-applies.
+
+### Fails loudly when
+transcript doesn't persist · owner mapping regresses (David lost) · noisy tail creates work/seeds · execution plan missing · GitHub gap silently ready/dropped · Dandelion seed missing when expected · approve auto-grants · non-admin not blocked · employee nav leaks an admin surface · admin route safety lost · recall not grounded / leaks cross-user.
+
+### Skips (honest) when
+`DEMO_SHARED_PASSWORD` missing; admin/non-admin demo user unavailable. Skip text says SKIPPED + reason.
+
+### Run before/after deploy
+`npm run test` (unit incl. contract) always; `npm run test:e2e:live:workos:full` after a deploy to app.otzar.ai/api.otzar.ai. A red here means a real product regression, not a flaky 200.
+
+## Capability truth (audits — the roadmap spec)
+WHOLE + governed: WorkLedger source-of-truth · transcript transform · per-transcript identity resolution · teammate awareness · twin collab (governed, no auto-send) · gap-filling · self-scoped grounded recall · execution planning + approval gate.
+SILOED / MISSING (ranked, the real "complete & whole" work): (A) single-source manual intake → generalize transform + multi-source ETL into the ONE ledger; (B) no unified query layer → org-wide data-grounded retrieval; (C) per-source identity → cross-source reconciliation; (D) no Goal model → goal/objective + work↔goal + progress; (E) no org-wide recall (Phase 6); (F) dormant connector/MCP write-back → governed execution (Agentforce parity), no auto-send. The smoke suite asserts what EXISTS and pins each gap as a boundary check so future ETL slices land against a suite that proves them.
