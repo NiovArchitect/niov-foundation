@@ -184,3 +184,51 @@ describe("execution proof layer", () => {
     expect(res.statusCode).toBe(404); // cross-tenant entry read denied first
   });
 });
+
+// ── [PROD-UX-SCALE] my-work server pagination — the fixed take:200 truncated
+//    silently once a caller crossed 200 items (observed live). ──
+describe("GET /work-os/my-work pagination", () => {
+  it("pages with skip/take, reports has_more, and never duplicates rows", async () => {
+    const { token } = await login();
+    for (let i = 0; i < 5; i++) {
+      await createLedger(token, { ledger_type: "FOLLOW_UP", title: `page item ${i}` });
+    }
+    const p1 = await app.inject({
+      method: "GET",
+      url: "/api/v1/work-os/my-work?take=2",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(p1.statusCode).toBe(200);
+    const b1 = p1.json() as { items: Array<{ ledger_entry_id: string }>; has_more: boolean; skip: number; take: number };
+    expect(b1.items).toHaveLength(2);
+    expect(b1.has_more).toBe(true);
+    expect(b1.skip).toBe(0);
+    const p2 = await app.inject({
+      method: "GET",
+      url: "/api/v1/work-os/my-work?skip=2&take=2",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const b2 = p2.json() as { items: Array<{ ledger_entry_id: string }>; has_more: boolean };
+    expect(b2.items).toHaveLength(2);
+    const ids1 = new Set(b1.items.map((i) => i.ledger_entry_id));
+    expect(b2.items.some((i) => ids1.has(i.ledger_entry_id))).toBe(false);
+    // Default call (no params) stays the legacy first page + has_more field.
+    const legacy = await app.inject({
+      method: "GET",
+      url: "/api/v1/work-os/my-work",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const bl = legacy.json() as { items: unknown[]; has_more: boolean };
+    expect(bl.items.length).toBeGreaterThanOrEqual(5);
+    expect(bl.has_more).toBe(false);
+    // Scoping is preserved: another caller sees NONE of these rows.
+    const other = await login();
+    const theirPage = await app.inject({
+      method: "GET",
+      url: "/api/v1/work-os/my-work?take=200",
+      headers: { authorization: `Bearer ${other.token}` },
+    });
+    const tb = theirPage.json() as { items: Array<{ ledger_entry_id: string }> };
+    expect(tb.items.some((i) => ids1.has(i.ledger_entry_id))).toBe(false);
+  });
+});

@@ -579,6 +579,9 @@ export async function patchLedgerEntry(args: {
 export async function getMyWork(args: {
   org_entity_id: string;
   caller_entity_id: string;
+  // [PROD-UX-SCALE] optional server pagination; absent → legacy first page.
+  skip?: number;
+  take?: number;
 }): Promise<WorkLedgerView[]> {
   const rows = await prisma.workLedgerEntry.findMany({
     where: {
@@ -593,8 +596,11 @@ export async function getMyWork(args: {
       ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
     },
-    orderBy: { created_at: "desc" },
-    take: 200,
+    // Stable pagination order: created_at DESC with the id as a tiebreaker so
+    // rows can never duplicate or vanish across pages.
+    orderBy: [{ created_at: "desc" }, { ledger_entry_id: "desc" }],
+    skip: args.skip ?? 0,
+    take: args.take ?? 200,
   });
   // Phase 1285-H — enrich names via the shared resolver so My Work carries the
   // same identity fields as Team Work (no surface renders a UUID).
