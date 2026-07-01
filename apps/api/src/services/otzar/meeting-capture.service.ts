@@ -345,6 +345,28 @@ export type AttachCaptureResult =
       message?: string;
     };
 
+/**
+ * Slice A — dedupe/idempotency anchor for source-agnostic intake. A connector
+ * source event carries a stable external id (stored as `provider_meeting_id`);
+ * if a capture already exists for (org, external id) we can skip re-ingesting so
+ * the SAME source event never mints duplicate work. NOTE: `provider_meeting_id`
+ * has no DB unique constraint, so this is a sequential (check-then-insert) guard
+ * — it dedupes re-POSTs but does not harden against concurrent duplicates.
+ * Transcript captures never set `provider_meeting_id`, so they are never matched.
+ */
+export async function findCaptureByExternalId(
+  orgEntityId: string,
+  externalId: string,
+): Promise<{ meeting_capture_id: string } | null> {
+  if (externalId.trim().length === 0) return null;
+  const row = await prisma.meetingCapture.findFirst({
+    where: { org_entity_id: orgEntityId, provider_meeting_id: externalId },
+    select: { meeting_capture_id: true },
+    orderBy: { created_at: "desc" },
+  });
+  return row ? { meeting_capture_id: row.meeting_capture_id } : null;
+}
+
 export async function attachCaptureToWorkspaceForCaller(
   input: AttachCaptureInput,
 ): Promise<AttachCaptureResult> {

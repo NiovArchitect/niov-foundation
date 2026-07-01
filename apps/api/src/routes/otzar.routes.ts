@@ -7,7 +7,7 @@
 //              the service via the bearer token).
 
 import type { FastifyInstance } from "fastify";
-import type { OtzarService } from "../services/otzar/otzar.service.js";
+import type { OtzarService, IngestSourceEventInput } from "../services/otzar/otzar.service.js";
 import {
   isDemoModeAllowed,
   DEMO_MODE_NOT_ALLOWED,
@@ -66,6 +66,8 @@ function statusForCode(code: string): number {
       return 404;
     case "INVALID_HISTORY":
       return 422;
+    case "ALREADY_INGESTED":
+      return 409;
     case "TOKEN_BUDGET_EXCEEDED":
       return 413;
     case "LLM_UNAVAILABLE":
@@ -375,6 +377,48 @@ export async function registerOtzarRoutes(
     }
     return reply.code(200).send(result);
   });
+
+  // POST /api/v1/otzar/ingest/source-event -- Slice A. Source-agnostic intake:
+  // any NON-transcript source (Slack message, email thread, webhook, MCP event,
+  // manual capture) is normalized to a source event and flows through the SAME
+  // governed chain into the SAME WorkLedger as transcripts — no second ledger,
+  // no per-app silo. Re-posting the same source event is idempotent (dedupe on
+  // the stable external id → 409 ALREADY_INGESTED). Same "read"-tier gate as
+  // /comms/ingest; write governance enforced in-service.
+  app.post<{ Body: { source?: Record<string, unknown>; force_mode?: unknown } }>(
+    "/api/v1/otzar/ingest/source-event",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      }
+      const body = request.body ?? {};
+      const src = body.source;
+      if (typeof src !== "object" || src === null) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "source object is required" });
+      }
+      const force_mode =
+        body.force_mode === "LLM" || body.force_mode === "LOCAL_FALLBACK" || body.force_mode === "DEMO_SCRIPTED"
+          ? body.force_mode
+          : undefined;
+      if (force_mode === "DEMO_SCRIPTED" && !isDemoModeAllowed()) {
+        return reply.code(422).send({
+          ok: false,
+          code: DEMO_MODE_NOT_ALLOWED,
+          message: "Demo intake mode is disabled in this environment. Set ALLOW_DEMO_MODE=true to enable it.",
+        });
+      }
+      const result = await otzarService.ingestSourceEvent({
+        token,
+        source: src as unknown as IngestSourceEventInput["source"],
+        ...(force_mode !== undefined ? { force_mode } : {}),
+      });
+      if (!result.ok) {
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
 
   // GET /api/v1/otzar/conversations -- metadata-only continuity feed for
   // the caller's OWN conversations. Self-scoped: bearer + "read"

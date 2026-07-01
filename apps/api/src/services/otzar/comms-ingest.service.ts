@@ -38,7 +38,14 @@ import type { DandelionSeed, WorkGraphWorkItem } from "./work-graph-memory.js";
 import { resolveTokenToEntities } from "./recipient-governance.js";
 import type { RosterEntry, RecipientConfidence } from "./recipient-governance.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
-import { receiveMeetingCaptureForCaller } from "./meeting-capture.service.js";
+import { receiveMeetingCaptureForCaller, findCaptureByExternalId } from "./meeting-capture.service.js";
+import {
+  type WorkSourceEvent,
+  sourceDedupeKey,
+  sourceEvidenceDetails,
+  normalizeSourceContent,
+} from "./source-event.js";
+import { randomUUID } from "node:crypto";
 
 type LLMProvider = Parameters<typeof extractFromCapturedText>[1];
 
@@ -128,16 +135,66 @@ export async function ingestTranscript(
   if (typeof input.capturedText !== "string" || input.capturedText.trim().length === 0) {
     return { ok: false, code: "INVALID_REQUEST", message: "capturedText is required (non-empty string)" };
   }
+  // Transcript ingestion is ONE source through the shared path — a transcript is
+  // just a source event. Behaviour is preserved exactly: a unique per-paste id
+  // (never deduped) and a MANUAL_UPLOAD capture with no external id.
+  return ingestSourceEvent(
+    {
+      sourceType: "TRANSCRIPT",
+      sourceSystem: "TRANSCRIPT",
+      sourceId: `transcript-${randomUUID()}`,
+      actor: { name: "" },
+      participants: [],
+      timestamp: new Date().toISOString(),
+      callerEntityId: input.callerEntityId,
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      content: input.capturedText,
+    },
+    { llmProvider: input.llmProvider, ...(input.forceMode !== undefined ? { forceMode: input.forceMode } : {}) },
+  );
+}
+
+export interface IngestSourceEventDeps {
+  llmProvider: LLMProvider;
+  forceMode?: CommsExtractionMode;
+}
+
+/**
+ * Slice A — the SINGLE source-agnostic intake core. Every source (transcript,
+ * meeting, Slack, Gmail, …) normalizes to a WorkSourceEvent and flows through the
+ * SAME chain into the SAME canonical WorkLedger. No parallel path, no second
+ * ledger. New behaviour (dedupe, non-transcript quality, source provenance) is
+ * confined to non-transcript sources so the proven transcript path is unchanged.
+ */
+export async function ingestSourceEvent(
+  event: WorkSourceEvent,
+  deps: IngestSourceEventDeps,
+): Promise<IngestTranscriptResult | IngestTranscriptFailure> {
+  if (typeof event.content !== "string" || event.content.trim().length === 0) {
+    return { ok: false, code: "INVALID_REQUEST", message: "source event content is required (non-empty string)" };
+  }
+  const isTranscript = event.sourceSystem === "TRANSCRIPT";
 
   let orgEntityId: string;
   try {
-    orgEntityId = await getOrgEntityId(input.callerEntityId);
+    orgEntityId = event.orgEntityId ?? (await getOrgEntityId(event.callerEntityId));
   } catch {
     return { ok: false, code: "NO_ORG_FOR_CALLER", message: "Caller has no organization." };
   }
 
+  // Dedupe/idempotency — connector sources carry a stable external id; if this
+  // event already produced a capture for the org, do not mint duplicate work.
+  // Transcripts have a unique per-paste id and are never matched.
+  const dedupeKey = sourceDedupeKey(event);
+  if (!isTranscript) {
+    const existing = await findCaptureByExternalId(orgEntityId, dedupeKey);
+    if (existing !== null) {
+      return { ok: false, code: "ALREADY_INGESTED", message: `This source event was already ingested (${dedupeKey}).` };
+    }
+  }
+
   // Roster for strict, proof-only owner resolution (same matcher recipient-governance uses).
-  const identity = await buildIdentityContext(input.callerEntityId);
+  const identity = await buildIdentityContext(event.callerEntityId);
   const roster: RosterEntry[] = identity.org_roster.map((p) => ({
     entity_id: p.entity_id,
     display_name: p.display_name,
@@ -146,26 +203,38 @@ export async function ingestTranscript(
     shared_project_count: p.shared_project_count,
   }));
   // org_roster is the caller's PEERS (excludes the caller). Add the caller so a
-  // meeting capturer who is also named as an owner ("David owns X" when David
-  // captured the meeting) resolves to themselves rather than being held as an
-  // unknown owner.
-  if (!roster.some((r) => r.entity_id === input.callerEntityId)) {
-    roster.push({ entity_id: input.callerEntityId, display_name: identity.viewer.display_name, email: null });
+  // capturer who is also named as an owner resolves to themselves.
+  if (!roster.some((r) => r.entity_id === event.callerEntityId)) {
+    roster.push({ entity_id: event.callerEntityId, display_name: identity.viewer.display_name, email: null });
   }
   const nameById = new Map(roster.map((r) => [r.entity_id, r.display_name]));
 
-  // 1) Quality gate — only trusted segments may seed work; the noisy tail is quarantined.
-  const quality = segmentTranscriptQuality(input.capturedText);
+  // Source-descriptor fields threaded into every ledger row so the canonical
+  // record can always prove where work came from. For transcript these are
+  // exactly the historical values (source:"transcript_ingest", no provenance).
+  const srcType = event.sourceType;
+  const srcLabel = isTranscript ? "transcript_ingest" : `${event.sourceSystem.toLowerCase()}_ingest`;
+  const provenance: Record<string, unknown> = isTranscript ? {} : sourceEvidenceDetails(event);
 
-  // 2) Governed extraction on the TRUSTED text only (noisy tail cannot create commitments).
-  const extractionText = quality.stats.trusted > 0 ? quality.trustedText : input.capturedText;
+  // 1) Quality gate — only trusted segments may seed work; noise is quarantined.
+  //    Transcript uses the transcript segmenter; other sources use the generic
+  //    content normaliser (same shape → identical downstream chain).
+  const quality = isTranscript
+    ? segmentTranscriptQuality(event.content)
+    : (() => {
+        const n = normalizeSourceContent(event.content);
+        return { trustedText: n.trustedText, stats: n.stats, noisyTailStartIndex: n.stats.noisy_tail_start_index };
+      })();
+
+  // 2) Governed extraction on the TRUSTED text only (noise cannot create commitments).
+  const extractionText = quality.stats.trusted > 0 ? quality.trustedText : event.content;
   const extraction = await extractFromCapturedText(
     {
-      viewerEntityId: input.callerEntityId,
+      viewerEntityId: event.callerEntityId,
       captured_text: extractionText,
-      ...(input.forceMode !== undefined ? { force_mode: input.forceMode } : {}),
+      ...(deps.forceMode !== undefined ? { force_mode: deps.forceMode } : {}),
     },
-    input.llmProvider,
+    deps.llmProvider,
   );
 
   // 3) Plan per-owner work items under proof (proven owner only; else NEEDS_OWNER).
@@ -194,13 +263,17 @@ export async function ingestTranscript(
     }
     return { display_name: name, consent_state: "EXTERNAL_TRACKED" as const };
   });
-  const title = conversationTitle(input.title, extraction.summary);
+  const title = conversationTitle(event.title ?? undefined, extraction.summary);
   const capture = await receiveMeetingCaptureForCaller({
-    callerEntityId: input.callerEntityId,
-    provider: "MANUAL_UPLOAD",
+    callerEntityId: event.callerEntityId,
+    // Transcript keeps the historical MANUAL_UPLOAD capture with NO external id
+    // (never deduped). Connector sources use API_INGEST + the stable external id
+    // (the dedupe anchor).
+    provider: isTranscript ? "MANUAL_UPLOAD" : "API_INGEST",
+    ...(isTranscript ? {} : { providerMeetingId: dedupeKey }),
     title,
     summary: extraction.summary,
-    transcript: input.capturedText,
+    transcript: event.content,
     participants,
   });
   if (!capture.ok) {
@@ -225,7 +298,7 @@ export async function ingestTranscript(
     if (operation !== null && connector !== "NONE" && connector !== "INTERNAL" && !w.needsReview) {
       const cap = await resolveConnectorCapability({
         orgEntityId,
-        actorEntityId: w.ownerEntityId ?? input.callerEntityId,
+        actorEntityId: w.ownerEntityId ?? event.callerEntityId,
         requiredConnector: connector,
         operation,
       });
@@ -242,9 +315,9 @@ export async function ingestTranscript(
     const created = await createLedgerEntry({
       org_entity_id: orgEntityId,
       ledger_type: w.ledgerType,
-      source_type: "TRANSCRIPT",
+      source_type: srcType,
       ...(w.ownerEntityId !== null ? { owner_entity_id: w.ownerEntityId } : {}),
-      requester_entity_id: input.callerEntityId,
+      requester_entity_id: event.callerEntityId,
       title: w.title,
       ...(w.sourceEvidence.workItem ? { summary: w.sourceEvidence.workItem } : {}),
       status: w.status,
@@ -259,7 +332,8 @@ export async function ingestTranscript(
         },
       ],
       details: {
-        source: "transcript_ingest",
+        source: srcLabel,
+        ...provenance,
         meeting_capture_id: meetingCaptureId,
         owner_name: w.ownerName,
         needs_review: w.needsReview,
@@ -321,14 +395,15 @@ export async function ingestTranscript(
   await createLedgerEntry({
     org_entity_id: orgEntityId,
     ledger_type: "MEETING",
-    source_type: "TRANSCRIPT",
-    owner_entity_id: input.callerEntityId,
+    source_type: srcType,
+    owner_entity_id: event.callerEntityId,
     title,
     summary: extraction.summary,
     status: "VERIFIED",
     extraction_source: "TYPESCRIPT_DETERMINISTIC",
     details: {
-      source: "transcript_ingest",
+      source: srcLabel,
+      ...provenance,
       meeting_capture_id: meetingCaptureId,
       participant_count: capture.meeting_capture.participant_count,
       quality: {
@@ -357,14 +432,15 @@ export async function ingestTranscript(
     await createLedgerEntry({
       org_entity_id: orgEntityId,
       ledger_type: "ORG_SEEDING",
-      source_type: "TRANSCRIPT",
+      source_type: srcType,
       title: seed.recommendedAction,
       status: seed.approvalRequired ? "SEED_NEEDS_REVIEW" : "SEED_PROPOSED",
       priority: "ROUTINE",
       extraction_source: "TYPESCRIPT_DETERMINISTIC",
       evidence: [{ quote: seed.sourceEvidence }],
       details: {
-        source: "transcript_ingest",
+        source: srcLabel,
+        ...provenance,
         seed_type: seed.seedType,
         subject_name: seed.subjectName,
         subject_entity_id: seed.subjectEntityId,

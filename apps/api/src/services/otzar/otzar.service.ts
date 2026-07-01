@@ -42,7 +42,8 @@ import {
   type CommsExtractionResult,
   type CommsExtractionMode,
 } from "./comms-extract.service.js";
-import { ingestTranscript } from "./comms-ingest.service.js";
+import { ingestTranscript, ingestSourceEvent as ingestSourceEventCore } from "./comms-ingest.service.js";
+import type { WorkSourceEvent, SourceSystem } from "./source-event.js";
 import type { IngestTranscriptResult } from "./comms-ingest.service.js";
 import {
   truncateToTokenBudget,
@@ -415,6 +416,28 @@ export interface IngestCommsInput {
 export interface IngestCommsSuccess {
   ok: true;
   result: IngestTranscriptResult;
+}
+
+// WHAT: Inputs for ingestSourceEvent — Slice A source-agnostic intake. A
+//       normalized source payload (any non-transcript source) + optional mode.
+export interface IngestSourceEventInput {
+  token: string;
+  source: {
+    sourceType?: string;
+    sourceSystem: SourceSystem;
+    sourceId: string;
+    sourceUrl?: string | null;
+    actor?: { name?: string; handle?: string };
+    participants?: Array<{ name: string }>;
+    timestamp?: string;
+    title?: string | null;
+    content: string;
+    sensitivity?: "public" | "internal" | "confidential" | "restricted";
+    connectorIdentity?: string | null;
+    dedupeKey?: string | null;
+    ingestionRunId?: string | null;
+  };
+  force_mode?: CommsExtractionMode;
 }
 
 export interface IngestCommsFailure {
@@ -2054,6 +2077,58 @@ export class OtzarService {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.force_mode !== undefined ? { forceMode: input.force_mode } : {}),
       llmProvider: this.llmProvider,
+    });
+    if (!result.ok) {
+      return { ok: false, code: result.code, message: result.message };
+    }
+    return { ok: true, result };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // ingestSourceEvent -- Slice A. The source-agnostic sibling of ingestComms:
+  // any NON-transcript source (Slack message, email thread, webhook, MCP event,
+  // manual capture) is normalized to a WorkSourceEvent and flows through the
+  // SAME governed chain into the SAME WorkLedger. Same "read"-tier gate + in-
+  // service write governance as ingestComms. Re-ingesting the same source event
+  // is idempotent (dedupe on the stable external id). Transcripts stay on
+  // /comms/ingest — this endpoint refuses TRANSCRIPT to keep the paths honest.
+  // ──────────────────────────────────────────────────────────────
+  async ingestSourceEvent(
+    input: IngestSourceEventInput,
+  ): Promise<IngestCommsSuccess | IngestCommsFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Source-event ingest denied" };
+    }
+    const s = input.source;
+    if (s === undefined || s === null || typeof s.content !== "string" || s.content.trim().length === 0) {
+      return { ok: false, code: "INVALID_REQUEST", message: "source.content is required (non-empty string)" };
+    }
+    if (typeof s.sourceId !== "string" || s.sourceId.trim().length === 0) {
+      return { ok: false, code: "INVALID_REQUEST", message: "source.sourceId is required" };
+    }
+    if (s.sourceSystem === "TRANSCRIPT") {
+      return { ok: false, code: "INVALID_REQUEST", message: "Use /otzar/comms/ingest for transcripts." };
+    }
+    const event: WorkSourceEvent = {
+      sourceType: typeof s.sourceType === "string" && s.sourceType.length > 0 ? s.sourceType : "CONNECTOR",
+      sourceSystem: s.sourceSystem,
+      sourceId: s.sourceId,
+      sourceUrl: s.sourceUrl ?? null,
+      actor: { name: s.actor?.name ?? "", ...(s.actor?.handle ? { handle: s.actor.handle } : {}) },
+      participants: Array.isArray(s.participants) ? s.participants.map((p) => ({ name: p.name })) : [],
+      timestamp: s.timestamp ?? new Date().toISOString(),
+      callerEntityId: session.entity_id,
+      title: s.title ?? null,
+      content: s.content,
+      ...(s.sensitivity ? { sensitivity: s.sensitivity } : {}),
+      connectorIdentity: s.connectorIdentity ?? null,
+      dedupeKey: s.dedupeKey ?? null,
+      ingestionRunId: s.ingestionRunId ?? null,
+    };
+    const result = await ingestSourceEventCore(event, {
+      llmProvider: this.llmProvider,
+      ...(input.force_mode !== undefined ? { forceMode: input.force_mode } : {}),
     });
     if (!result.ok) {
       return { ok: false, code: result.code, message: result.message };
