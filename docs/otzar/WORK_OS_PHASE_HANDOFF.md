@@ -253,3 +253,39 @@ one canonical entity per person across sources; transcript path unchanged; deter
 
 ## Capability roadmap update
 Slices A (multi-source ETL) + B (unified query + grounding) + C (cross-source identity) close gaps A/B/C. Remaining: **D** Goal layer (user + org objectives, work↔goal, progress) · **E** wire org-query grounding into conductSession (data-grounded answering) · **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (loop · etl · identity · orgquery · memory · admin · ia · 4 baseline) is the acceptance layer for D–F.
+
+---
+
+## Slice D — Goal layer (objectives, work↔goal, progress rollup) (FND)
+Turns the dangling `goal_id` forward-reference into a real objective users and the org can steer by. Closes the audit's biggest product gap ("Otzar knows '5 overdue' but not '40% to the Q3 target'"). NO new table, NO second system: a goal is a `WorkLedgerEntry` with `ledger_type:"GOAL"` (same rail as ORG_SEEDING seeds); work links via the existing `goal_id` column; progress is a DETERMINISTIC rollup of the linked work's status.
+
+### Files
+- `apps/api/src/services/work-os/goal.service.ts` (NEW): `createGoal` (personal | org), `linkWorkToGoal` / `unlinkWorkFromGoal` (sets/clears `goal_id`, scoped), `getGoalProgress` (rollup: linked_count, done_count, blocked_count, `progress_pct = round(done/total*100)`, by_status), `listGoals` (self | org).
+- `work-ledger.service.ts`: added `"GOAL"` to `LEDGER_TYPES` + `GOAL_ACTIVE/GOAL_ACHIEVED/GOAL_ARCHIVED` to `LEDGER_STATUSES` (TS-const, no migration). Excluded `GOAL` from `getMyWork` + `getTeamWork` (alongside `ORG_SEEDING`).
+- `org-query.service.ts`: excluded `GOAL` from the self/project/team/org work scopes (goals are their own surface).
+- Routes: `POST /work-os/goals`, `GET /work-os/goals?scope=`, `GET /work-os/goals/:id/progress`, `POST /work-os/goals/:id/link|unlink`.
+- Barrel exports added.
+
+### Honest progress semantics
+`progress_pct` is **work-completion under the objective** (share of linked work in EXECUTED/VERIFIED) — a real, deterministic rollup, NOT a fabricated business metric. A goal can carry a free-text `target` (e.g. "Q3") for context; the % is computed from work, not invented.
+
+### Governance / no-leak
+Org-scoped (a goal in another org is `GOAL_NOT_FOUND` cross-tenant). Personal goals belong to their owner/requester; org goals (owner null) require **manager** authority to create and list. Uninvolved users can't read a personal goal's progress (`NOT_PERMITTED`). GOAL rows never appear in My Work / Team Work / org-query work scopes.
+
+### Reuses (no new model)
+`WorkLedgerEntry` + `createLedgerEntry` (the rail) · the existing `goal_id` column (work→goal link) · `resolveEntityNames` · the `auth` helper's `manager`=can_admin_org. **Did NOT build:** a Goal table/migration; a metric/KPI engine; goal→goal hierarchies (future).
+
+### Tests (all green)
+- Integration `goal.test.ts` (5): create + link + deterministic progress (50% → 100% after unlink); GOAL excluded from My Work; org goals need manager + self-scoped listing; no cross-tenant leak; uninvolved can't read progress.
+- Parity: getMyWork/getTeamWork/org-query GOAL-exclusion — full unit + integration suites green.
+- Foundation typecheck 0.
+- Live: new `otzar-live-workos-goal.spec.ts` (+ `test:e2e:live:workos:goal`, folded into `:full`).
+
+### Deploy + live verification
+FND `be3cce1` (PR #508, merged, otzar-api live). Routes `/work-os/goals` (+ `/:id/link|unlink|progress`) live + gated (401 unauthenticated). CT smoke `6ccf778`. **Live: goal smoke 3/3** — create a goal → link real ingested work → deterministic progress rollup (linked/done/%); self-scoped goal list; non-manager org goal → 403 NOT_PERMITTED. Full-suite parity (`test:e2e:live:workos:full`, now 36 checks) confirming. Local gate: typecheck 0 · unit 2811 · integration 1866 · goal integration 5/5.
+
+### DO NOT BREAK
+a goal is a GOAL ledger row (no new table); work→goal via goal_id; progress = deterministic work rollup (not a fake metric); GOAL excluded from work views; org goals manager-gated; personal goal progress owner-only; org-scoped (no cross-tenant).
+
+## Capability roadmap update
+Slices A (multi-source ETL) + B (unified query + grounding) + C (identity reconciliation) + D (Goal layer) close gaps A–D. Remaining: **E** wire org-query grounding into `conductSession` (data-grounded answering) · **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (loop · etl · identity · orgquery · goal · memory · admin · ia · 4 baseline) is the acceptance layer for E–F.
