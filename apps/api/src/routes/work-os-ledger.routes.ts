@@ -13,8 +13,17 @@
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
-import { prisma } from "@niov/database";
+import {
+  prisma,
+  createConnectorBinding,
+  listConnectorBindingsForOrg,
+  writeAuditEvent,
+} from "@niov/database";
 import { getOrgEntityId } from "../services/governance/org.js";
+import {
+  promoteCommitmentToAction,
+  reconcileLedgerExecutionState,
+} from "../services/work-os/execution-bridge.js";
 import {
   createLedgerEntry,
   listLedgerEntries,
@@ -973,6 +982,125 @@ export async function registerWorkOsLedgerRoutes(
         scope,
       });
       return reply.code(200).send({ ok: true, health, envelope });
+    },
+  );
+
+  // ────────────────────────────────────────────────────────────────
+  // Slice F — governed connector/MCP write-back (flag-gated).
+  // OTZAR_WORK_WRITEBACK must equal "on"; otherwise these endpoints are
+  // inert (404 feature_disabled) so a flag-off deploy is byte-identical
+  // in behavior to the pre-Slice-F surface. No auto-send: /execute only
+  // CREATES a governed Action (approval-gated); execution happens via the
+  // existing approved-Action lifecycle.
+  // ────────────────────────────────────────────────────────────────
+  const writebackEnabled = (): boolean => process.env["OTZAR_WORK_WRITEBACK"] === "on";
+
+  // Promote a caller-owned commitment to a governed INVOKE_CONNECTOR Action.
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id/execute",
+    async (request, reply) => {
+      if (!writebackEnabled()) {
+        return reply.code(404).send({ ok: false, code: "FEATURE_DISABLED" });
+      }
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const result = await promoteCommitmentToAction({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      // outcome !== action_created is still a governed, honest result
+      // (blocked_setup_required / not_executable / unsupported_connector),
+      // returned 200 with ok:false so the caller can render the reason.
+      return reply.code(200).send(result);
+    },
+  );
+
+  // Reconcile a commitment's execution state from its linked Action.
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id/reconcile-execution",
+    async (request, reply) => {
+      if (!writebackEnabled()) {
+        return reply.code(404).send({ ok: false, code: "FEATURE_DISABLED" });
+      }
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await reconcileLedgerExecutionState({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      return reply.code(200).send(result);
+    },
+  );
+
+  // Admin-only setup path: register (idempotently) the org's SLACK_WRITE
+  // ConnectorBinding. secret_ref is the env-var NAME (SLACK_BOT_TOKEN) —
+  // never the token value; the value is only ever read from process.env
+  // inside the provider. Not auto-created during execution: a binding is
+  // only ever created here, by an admin, audited.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/work-os/connector-bindings/slack-write",
+    async (request, reply) => {
+      if (!writebackEnabled()) {
+        return reply.code(404).send({ ok: false, code: "FEATURE_DISABLED" });
+      }
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      if (!ctx.manager) {
+        return reply.code(403).send({ ok: false, code: "ADMIN_REQUIRED" });
+      }
+      const b = request.body ?? {};
+      const defaultChannel = strParam(b.default_channel);
+      if (defaultChannel === undefined) {
+        return reply.code(422).send({ ok: false, code: "MISSING_DEFAULT_CHANNEL", message: "default_channel is required (the Slack channel id, e.g. from SLACK_TEST_CHANNEL_ID)" });
+      }
+      // secret_ref defaults to the canonical env-var NAME; a caller may
+      // override the name but NEVER supplies a token value here.
+      const secretRef = strParam(b.secret_ref) ?? "SLACK_BOT_TOKEN";
+      // Idempotent: if an enabled SLACK_WRITE binding already exists for
+      // this org, return it rather than creating a duplicate.
+      const existing = (await listConnectorBindingsForOrg(ctx.org_entity_id, { enabled: true }))
+        .find((x) => String(x.type) === "SLACK_WRITE");
+      if (existing !== undefined) {
+        return reply.code(200).send({
+          ok: true,
+          created: false,
+          binding_id: existing.binding_id,
+          type: "SLACK_WRITE",
+        });
+      }
+      const binding = await createConnectorBinding({
+        org_entity_id: ctx.org_entity_id,
+        type: "SLACK_WRITE",
+        display_name: "Slack (governed write-back)",
+        // config.use_real gates the real Slack API in the provider (the
+        // SLACK_USE_REAL env master switch must also be "1").
+        config: { default_channel: defaultChannel, use_real: true },
+        secret_ref: secretRef,
+        created_by_entity_id: ctx.entity_id,
+      });
+      const audit = await writeAuditEvent({
+        event_type: "ADMIN_ACTION",
+        outcome: "SUCCESS",
+        actor_entity_id: ctx.entity_id,
+        target_entity_id: ctx.org_entity_id,
+        details: {
+          action: "connector_binding_created",
+          connector_type: "SLACK_WRITE",
+          binding_id: binding.binding_id,
+          secret_ref: secretRef,
+        },
+      });
+      return reply.code(201).send({
+        ok: true,
+        created: true,
+        binding_id: binding.binding_id,
+        type: "SLACK_WRITE",
+        audit_event_id: typeof audit === "object" && audit !== null && "audit_id" in audit ? (audit as { audit_id: string }).audit_id : undefined,
+      });
     },
   );
 }

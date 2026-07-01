@@ -37,7 +37,7 @@ function makeInvocation(
 }
 
 describe("CONNECTOR_REGISTRY — frozen-anchor contract", () => {
-  it("contains the Wave 1 connector types plus C2 SLACK_READ + C3 GOOGLE_WORKSPACE_READ + C4-A JIRA_CLOUD_READ + C4-B LINEAR_READ + C-GitHub GITHUB_READ + C5 MICROSOFT_365_READ extensions — 6/6 connector matrix at RUNTIME_READY", () => {
+  it("contains the read matrix plus the Slice F write connectors (SLACK_WRITE + MCP_INVOKE)", () => {
     const keys = Object.keys(CONNECTOR_REGISTRY);
     expect(keys.sort()).toEqual([
       "FIXTURE_ECHO",
@@ -45,9 +45,13 @@ describe("CONNECTOR_REGISTRY — frozen-anchor contract", () => {
       "GOOGLE_WORKSPACE_READ",
       "JIRA_CLOUD_READ",
       "LINEAR_READ",
+      // Work-OS Slice F — real MCP tool invocation.
+      "MCP_INVOKE",
       "MICROSOFT_365_READ",
       "OUTBOUND_WEBHOOK",
       "SLACK_READ",
+      // Work-OS Slice F — first real WRITE connector.
+      "SLACK_WRITE",
     ]);
   });
 

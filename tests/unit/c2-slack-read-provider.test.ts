@@ -44,7 +44,9 @@ describe("C2 — SLACK_READ registry extension", () => {
   });
 
   it("returns null for unknown candidate strings", () => {
-    expect(getConnectorTypeDefinition("SLACK_WRITE")).toBeNull();
+    // NB: SLACK_WRITE + MCP_INVOKE are now KNOWN types (Work-OS Slice F);
+    // use a still-unknown candidate here.
+    expect(getConnectorTypeDefinition("TELEGRAM_WRITE")).toBeNull();
     expect(getConnectorTypeDefinition("")).toBeNull();
   });
 

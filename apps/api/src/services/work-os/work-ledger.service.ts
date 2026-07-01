@@ -32,6 +32,11 @@ import {
 } from "./execution-verification.service.js";
 import { resolveEntityNames, nameFrom } from "../identity/resolve-entities.js";
 
+// Slice F — UUID shape guard for the ledger→Action link backfill on
+// patchLedgerEntry (proposed_action_id / audit_event_id).
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Phase 1283 — BEAM watcher category → durable internal watcher type. "none"
 // maps to null (no watcher created). Internal Work OS state only — a watcher
 // NEVER sends an external notification.
@@ -500,7 +505,18 @@ export async function patchLedgerEntry(args: {
   org_entity_id: string;
   caller_entity_id: string;
   is_manager: boolean;
-  patch: { status?: string; next_action?: string; priority?: string };
+  patch: {
+    status?: string;
+    next_action?: string;
+    priority?: string;
+    // Slice F — the ledger→Action link backfill. Both columns already
+    // exist on WorkLedgerEntry; before Slice F nothing populated them.
+    // The execution bridge sets proposed_action_id when it creates the
+    // governed Action, and audit_event_id when an audit row anchors the
+    // transition. UUID-shaped; anything else is rejected.
+    proposed_action_id?: string;
+    audit_event_id?: string;
+  };
 }): Promise<{ ok: true; entry: WorkLedgerView } | LedgerFailure> {
   const existing = await getLedgerEntry(args);
   if (existing.ok === false) return existing;
@@ -534,6 +550,18 @@ export async function patchLedgerEntry(args: {
   }
   if (args.patch.next_action !== undefined) data.next_action = args.patch.next_action;
   if (args.patch.priority !== undefined) data.priority = args.patch.priority;
+  if (args.patch.proposed_action_id !== undefined) {
+    if (!UUID_RE.test(args.patch.proposed_action_id)) {
+      return { ok: false, code: "INVALID_REQUEST", message: "invalid proposed_action_id" };
+    }
+    data.proposed_action_id = args.patch.proposed_action_id;
+  }
+  if (args.patch.audit_event_id !== undefined) {
+    if (!UUID_RE.test(args.patch.audit_event_id)) {
+      return { ok: false, code: "INVALID_REQUEST", message: "invalid audit_event_id" };
+    }
+    data.audit_event_id = args.patch.audit_event_id;
+  }
   const row = await prisma.workLedgerEntry.update({
     where: { ledger_entry_id: args.ledger_entry_id },
     data,
@@ -748,6 +776,14 @@ export interface WorkLedgerView {
   created_at: string;
   updated_at: string;
   verified_at: string | null;
+  // Slice F — the ledger→Action link + the stored execution plan, so the
+  // execution bridge (and CT surfaces) can read what a commitment executes
+  // through and which governed Action it was promoted to. proposed_action_id
+  // is null until the bridge creates the Action; execution_plan is the
+  // camelCase plan object from details.execution_plan (safe projection —
+  // already surfaced by org-query).
+  proposed_action_id?: string;
+  execution_plan?: Record<string, unknown>;
   // Phase 1281 — coordination runtime, attached by the route after the
   // governed BEAM dispatch (not persisted this phase; reflects the real
   // dispatch result, never faked).
@@ -839,6 +875,7 @@ interface LedgerRow {
   created_at: Date;
   updated_at: Date;
   verified_at: Date | null;
+  proposed_action_id: string | null;
   details?: unknown;
 }
 
@@ -961,12 +998,22 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
   const meetingIntelligence = meetingIntelligenceFromDetails(row.details);
   const coordination = coordinationFromDetails(row.details);
   const watchers = watchersFromDetails(row.details);
-  const sourceMessageId =
+  const detailsObj =
     typeof row.details === "object" && row.details !== null
-      ? (row.details as Record<string, unknown>).source_message_id
+      ? (row.details as Record<string, unknown>)
+      : undefined;
+  const sourceMessageId = detailsObj?.source_message_id;
+  const executionPlan =
+    detailsObj !== undefined &&
+    typeof detailsObj.execution_plan === "object" &&
+    detailsObj.execution_plan !== null &&
+    !Array.isArray(detailsObj.execution_plan)
+      ? (detailsObj.execution_plan as Record<string, unknown>)
       : undefined;
   return {
     ...(typeof sourceMessageId === "string" ? { source_message_id: sourceMessageId } : {}),
+    ...(row.proposed_action_id !== null ? { proposed_action_id: row.proposed_action_id } : {}),
+    ...(executionPlan !== undefined ? { execution_plan: executionPlan } : {}),
     ledger_entry_id: row.ledger_entry_id,
     org_entity_id: row.org_entity_id,
     ledger_type: row.ledger_type,
