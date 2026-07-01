@@ -192,7 +192,7 @@ export async function queryOrgWork(args: OrgQueryArgs): Promise<OrgQueryOutcome>
       { target_entity_id: caller_entity_id },
       { requester_entity_id: caller_entity_id },
     ];
-    where.ledger_type = { not: "ORG_SEEDING" }; // seeds are admin org-seeding, not personal work
+    where.ledger_type = { notIn: ["ORG_SEEDING", "GOAL"] }; // seeds are admin org-seeding, not personal work
     where.status = { notIn: [...CLOSED_STATUSES] };
   } else if (scope === "project") {
     const projectId = args.project_id;
@@ -204,13 +204,13 @@ export async function queryOrgWork(args: OrgQueryArgs): Promise<OrgQueryOutcome>
       return { ok: false, code: "NOT_PROJECT_MEMBER", message: "Caller is not an active member of this project." };
     }
     where.project_id = projectId;
-    where.ledger_type = { not: "ORG_SEEDING" };
+    where.ledger_type = { notIn: ["ORG_SEEDING", "GOAL"] };
     where.status = { notIn: [...CLOSED_STATUSES] };
   } else if (scope === "team" || scope === "org") {
     if (!is_manager) {
       return { ok: false, code: "SCOPE_NOT_PERMITTED", message: "Team/org scope requires manager authority." };
     }
-    where.ledger_type = { not: "ORG_SEEDING" };
+    where.ledger_type = { notIn: ["ORG_SEEDING", "GOAL"] };
     where.status = { notIn: [...CLOSED_STATUSES] };
   } else if (scope === "admin") {
     if (!is_manager) {

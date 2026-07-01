@@ -40,6 +40,13 @@ import {
   type OrgQueryFilter,
   type OrgQuerySort,
 } from "../services/work-os/org-query.service.js";
+import {
+  createGoal,
+  linkWorkToGoal,
+  unlinkWorkFromGoal,
+  getGoalProgress,
+  listGoals,
+} from "../services/work-os/goal.service.js";
 import { assessWorkRisk } from "../services/work-os/risk-scoring.service.js";
 import { evaluateDraftTone } from "../services/work-os/draft-tone.service.js";
 import type { DraftChannel } from "../services/intelligence/python-draft-tone.service.js";
@@ -785,6 +792,89 @@ export async function registerWorkOsLedgerRoutes(
         ...(typeof b.intent === "string" ? { intent: b.intent } : {}),
       });
       return reply.code(200).send(grounded);
+    },
+  );
+
+  // ── Slice D — the GOAL LAYER. Objectives users/orgs steer by. A goal is a
+  //    GOAL-typed WorkLedger row; work links via goal_id; progress rolls up from
+  //    the linked work. Same "read"-tier gate; scope/authority enforced in-service.
+  // POST /api/v1/work-os/goals — create a personal or org objective.
+  app.post<{ Body: { title?: unknown; description?: unknown; scope?: unknown; owner_entity_id?: unknown; target?: unknown; due_at?: unknown } }>(
+    "/api/v1/work-os/goals",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      if (typeof b.title !== "string" || b.title.trim().length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "title is required" });
+      }
+      const result = await createGoal({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        title: b.title,
+        ...(typeof b.description === "string" ? { description: b.description } : {}),
+        ...(b.scope === "org" || b.scope === "personal" ? { scope: b.scope } : {}),
+        ...(typeof b.owner_entity_id === "string" ? { owner_entity_id: b.owner_entity_id } : {}),
+        ...(typeof b.target === "string" ? { target: b.target } : {}),
+        ...(typeof b.due_at === "string" ? { due_at: b.due_at } : {}),
+      });
+      if (!result.ok) return reply.code(result.code === "NOT_PERMITTED" ? 403 : 422).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // GET /api/v1/work-os/goals?scope=self|org — list goals in scope.
+  app.get<{ Querystring: { scope?: string } }>("/api/v1/work-os/goals", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const scope = request.query.scope === "org" ? "org" : "self";
+    const result = await listGoals({ org_entity_id: ctx.org_entity_id, caller_entity_id: ctx.entity_id, is_manager: ctx.manager, scope });
+    if (!result.ok) return reply.code(result.code === "NOT_PERMITTED" ? 403 : 422).send(result);
+    return reply.code(200).send(result);
+  });
+
+  // GET /api/v1/work-os/goals/:id/progress — deterministic rollup of linked work.
+  app.get<{ Params: { id: string } }>("/api/v1/work-os/goals/:id/progress", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const result = await getGoalProgress({ org_entity_id: ctx.org_entity_id, caller_entity_id: ctx.entity_id, is_manager: ctx.manager, goal_id: request.params.id });
+    if (!result.ok) return reply.code(result.code === "GOAL_NOT_FOUND" ? 404 : result.code === "NOT_PERMITTED" ? 403 : 422).send(result);
+    return reply.code(200).send(result);
+  });
+
+  // POST /api/v1/work-os/goals/:id/link — link a work item to this goal.
+  app.post<{ Params: { id: string }; Body: { ledger_entry_id?: unknown } }>(
+    "/api/v1/work-os/goals/:id/link",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      if (typeof b.ledger_entry_id !== "string" || b.ledger_entry_id.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "ledger_entry_id is required" });
+      }
+      const result = await linkWorkToGoal({ org_entity_id: ctx.org_entity_id, caller_entity_id: ctx.entity_id, is_manager: ctx.manager, ledger_entry_id: b.ledger_entry_id, goal_id: request.params.id });
+      if (!result.ok) {
+        const status = result.code === "GOAL_NOT_FOUND" || result.code === "WORK_NOT_FOUND" ? 404 : result.code === "NOT_PERMITTED" ? 403 : 422;
+        return reply.code(status).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /api/v1/work-os/goals/:id/unlink — unlink a work item.
+  app.post<{ Params: { id: string }; Body: { ledger_entry_id?: unknown } }>(
+    "/api/v1/work-os/goals/:id/unlink",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      if (typeof b.ledger_entry_id !== "string" || b.ledger_entry_id.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "ledger_entry_id is required" });
+      }
+      const result = await unlinkWorkFromGoal({ org_entity_id: ctx.org_entity_id, caller_entity_id: ctx.entity_id, is_manager: ctx.manager, ledger_entry_id: b.ledger_entry_id });
+      if (!result.ok) return reply.code(result.code === "WORK_NOT_FOUND" ? 404 : result.code === "NOT_PERMITTED" ? 403 : 422).send(result);
+      return reply.code(200).send(result);
     },
   );
 

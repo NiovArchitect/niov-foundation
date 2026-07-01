@@ -50,6 +50,10 @@ export const LEDGER_TYPES = [
   // work evidence. Org-scoped (owner/target/requester null); only the admin seed
   // queue lists these — they never appear in employee My Work / Team Work.
   "ORG_SEEDING",
+  // Slice D — a user or org OBJECTIVE. Work links to it via goal_id; progress is
+  // rolled up from the linked work. Like ORG_SEEDING, GOAL rows are their own
+  // surface (the goals API) and are excluded from the work views/queries.
+  "GOAL",
 ] as const;
 export const SOURCE_TYPES = [
   "VOICE_COMMAND", "CHAT", "MEETING", "TRANSCRIPT", "CONNECTOR", "SYSTEM", "MANUAL",
@@ -67,6 +71,8 @@ export const LEDGER_STATUSES = [
   // Dandelion org-seeding seed lifecycle (admin-governed; ORG_SEEDING entries).
   "SEED_PROPOSED", "SEED_NEEDS_REVIEW", "SEED_APPROVED", "SEED_REJECTED",
   "SEED_HELD", "SEED_APPLIED", "SEED_BLOCKED", "SEED_EXPIRED",
+  // Slice D — goal lifecycle (GOAL entries).
+  "GOAL_ACTIVE", "GOAL_ACHIEVED", "GOAL_ARCHIVED",
 ] as const;
 export const EXTRACTION_SOURCES = [
   "TYPESCRIPT_DETERMINISTIC", "PYTHON_ENRICHED", "MANUAL", "CONNECTOR",
@@ -548,6 +554,9 @@ export async function getMyWork(args: {
         { target_entity_id: args.caller_entity_id },
         { requester_entity_id: args.caller_entity_id },
       ],
+      // Seeds are the admin queue; GOAL rows are objectives (their own surface) —
+      // neither is "work" in My Work.
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
     },
     orderBy: { created_at: "desc" },
@@ -587,9 +596,9 @@ export async function getTeamWork(args: {
   const rows = await prisma.workLedgerEntry.findMany({
     where: {
       org_entity_id: args.org_entity_id,
-      // ORG_SEEDING entries are admin org-seeding suggestions, not work — they
-      // live in the admin seed queue, never in the Team Work view.
-      ledger_type: { not: "ORG_SEEDING" },
+      // ORG_SEEDING entries are admin org-seeding suggestions, GOAL rows are
+      // objectives (their own surface) — neither is Team Work.
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED", "VERIFIED"] } },
     },
     orderBy: { created_at: "desc" },
