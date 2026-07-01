@@ -45,9 +45,10 @@ export interface WorkSourceEvent {
   /** Stable id within the source system (message id, thread id, doc id, issue id). */
   sourceId: string;
   sourceUrl?: string | null;
-  /** Who authored/sent the signal. */
-  actor: { name: string; entityId?: string | null; handle?: string | null };
-  participants: Array<{ name: string; entityId?: string | null }>;
+  /** Who authored/sent the signal. `email`/`handle` enable cross-source identity
+   *  reconciliation (Slice C) when the display name alone doesn't match. */
+  actor: { name: string; entityId?: string | null; handle?: string | null; email?: string | null };
+  participants: Array<{ name: string; entityId?: string | null; email?: string | null; handle?: string | null }>;
   /** ISO 8601. */
   timestamp: string;
   /** Org scope; resolved from the caller when absent. */

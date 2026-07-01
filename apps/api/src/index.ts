@@ -957,6 +957,13 @@ export {
   slackMessageToSourceEvent,
 } from "./services/otzar/source-event.js";
 export type { WorkSourceEvent, SourceSystem, SourceEvidenceSpan } from "./services/otzar/source-event.js";
+export {
+  reconcileIdentity,
+  reconcileParticipants,
+  reconcileAgainst,
+  loadOrgMembers,
+} from "./services/otzar/identity-reconciliation.service.js";
+export type { IdentityHint, ReconciledIdentity, ReconcileMethod } from "./services/otzar/identity-reconciliation.service.js";
 export { planWorkItems } from "./services/otzar/work-item-planner.js";
 export {
   computeCapabilityState,

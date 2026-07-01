@@ -46,6 +46,7 @@ import {
   normalizeSourceContent,
 } from "./source-event.js";
 import { randomUUID } from "node:crypto";
+import { reconcileParticipants } from "./identity-reconciliation.service.js";
 
 type LLMProvider = Parameters<typeof extractFromCapturedText>[1];
 
@@ -208,6 +209,39 @@ export async function ingestSourceEvent(
     roster.push({ entity_id: event.callerEntityId, display_name: identity.viewer.display_name, email: null });
   }
   const nameById = new Map(roster.map((r) => [r.entity_id, r.display_name]));
+
+  // Slice C — CROSS-SOURCE IDENTITY RECONCILIATION. A source event carries its
+  // actor + participants with per-source identifiers (email/handle). Resolve each
+  // to a canonical org entity (email → username → name; deterministic, org-scoped,
+  // ambiguous held) and add the resolved person's SOURCE-LOCAL name as a roster
+  // alias, so the content owner-resolver unifies the SAME person across sources
+  // (e.g. "Dave" + david@acme in a Slack message → the David the transcript named).
+  // Transcript ingestion has no external identifiers, so this is a no-op there.
+  if (!isTranscript) {
+    const hints = [
+      ...(event.actor.name || event.actor.email || event.actor.handle
+        ? [{ name: event.actor.name, email: event.actor.email ?? null, handle: event.actor.handle ?? null }]
+        : []),
+      ...event.participants.map((p) => ({ name: p.name, email: p.email ?? null, handle: p.handle ?? null })),
+    ];
+    if (hints.length > 0) {
+      const reconciled = await reconcileParticipants(orgEntityId, hints);
+      for (const { hint, resolved } of reconciled) {
+        const nm = (hint.name ?? "").trim();
+        if (resolved.entity_id !== null && nm.length > 0) {
+          // Only alias when the source-local name does NOT already resolve to this
+          // entity (else we'd add a duplicate roster row and turn a clean match
+          // into a false "ambiguous"). The alias is for names like "Dave" that the
+          // display name doesn't cover but the email/handle reconciled.
+          const alreadyResolves = resolveTokenToEntities(nm, roster).includes(resolved.entity_id);
+          if (!alreadyResolves) {
+            roster.push({ entity_id: resolved.entity_id, display_name: nm, email: hint.email ?? null });
+            if (!nameById.has(resolved.entity_id)) nameById.set(resolved.entity_id, nm);
+          }
+        }
+      }
+    }
+  }
 
   // Source-descriptor fields threaded into every ledger row so the canonical
   // record can always prove where work came from. For transcript these are
