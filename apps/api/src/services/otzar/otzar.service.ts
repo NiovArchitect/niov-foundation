@@ -44,6 +44,8 @@ import {
 } from "./comms-extract.service.js";
 import { ingestTranscript, ingestSourceEvent as ingestSourceEventCore } from "./comms-ingest.service.js";
 import type { WorkSourceEvent, SourceSystem } from "./source-event.js";
+import { groundContextForAgent } from "../work-os/org-query.service.js";
+import { formatWorkGroundingBlock } from "../work-os/work-grounding.js";
 import type { IngestTranscriptResult } from "./comms-ingest.service.js";
 import {
   truncateToTokenBudget,
@@ -1054,6 +1056,30 @@ export class OtzarService {
       }
     }
 
+    // Slice E — DATA-GROUNDED ANSWERING (gated dark by default via
+    // OTZAR_WORK_GROUNDING=on). When enabled, inject a BOUNDED, caller-scoped
+    // block of the caller's OWN governed work (org-query grounding, self-scope)
+    // as an OUTSIDE-BUDGET sidecar — appended to the system prompt like
+    // L_ALIGNMENT, NOT added to the truncation bundle — so it never displaces the
+    // L8 conversation history. Empty when grounding is insufficient (no facts →
+    // no block → the model is told to say it doesn't know, not fabricate). Never
+    // fatal: any failure degrades to the prior prompt. Absence of the flag leaves
+    // the prompt byte-identical to before.
+    let L_WORK_GROUNDING = "";
+    if (process.env.OTZAR_WORK_GROUNDING === "on" && orgEntityId !== null) {
+      try {
+        const grounded = await groundContextForAgent({
+          org_entity_id: orgEntityId,
+          caller_entity_id: ownerEntityId,
+          is_manager: false, // self-scope only — the caller's own record, never org-wide
+          query: input.message,
+        });
+        if (grounded.sufficient) L_WORK_GROUNDING = formatWorkGroundingBlock(grounded.results);
+      } catch {
+        L_WORK_GROUNDING = "";
+      }
+    }
+
     // LAYER 6 -- TaskQueue (stub: no table yet, returns []).
     // TODO(Section 14 admin tooling): query TaskQueue where
     // assignee_id = twin.entity_id AND status IN ('OPEN',
@@ -1154,6 +1180,9 @@ export class OtzarService {
       identityPreamble,
       truncated.final.priming,
       L_ALIGNMENT,
+      // Slice E — grounded work context (outside the truncation budget; "" unless
+      // OTZAR_WORK_GROUNDING=on and there are caller-scoped facts to ground on).
+      L_WORK_GROUNDING,
       truncated.final.L1,
       truncated.final.L2,
       truncated.final.L3,

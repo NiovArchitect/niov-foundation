@@ -42,6 +42,7 @@ import {
 import { ContentEncryption } from "@niov/auth";
 import { createEntity, prisma } from "@niov/database";
 import { ComplianceService } from "@niov/api";
+import { createLedgerEntry } from "../../apps/api/src/services/work-os/work-ledger.service.js";
 import {
   cleanupTestData,
   ensureAuditTriggers,
@@ -2056,5 +2057,64 @@ describe("getConversationCorrections", () => {
     expect(json).not.toContain("employee_score");
     expect(json).not.toContain("best_practice_learned");
     expect(json).not.toContain("manager_visibility");
+  });
+});
+
+// Slice E — the org-query grounding (Slice B) wired into conductSession as an
+// OUTSIDE-BUDGET sidecar, gated by OTZAR_WORK_GROUNDING. Proves: OFF (default) is
+// byte-identical (no block); ON injects a bounded, self-scoped block citing the
+// caller's OWN real work; ON with no matching work injects NOTHING (no fabrication).
+describe("conductSession — Slice E work grounding (gated, outside-budget)", () => {
+  const stub = { ok: true as const, text: "stub", provider: "mock", model: "mock-1" };
+
+  async function ownerInOrgWithWork(title: string): Promise<{ auth: ReturnType<typeof makeServices>["auth"]; otzar: ReturnType<typeof makeServices>["otzar"]; llm: ReturnType<typeof makeServices>["llm"]; token: string }> {
+    const svc = makeServices({ mockResponses: [stub, stub, stub] });
+    const owner = await loginAs(svc.auth);
+    await attachTwin(owner.entity.entity_id);
+    const org = await createEntity(makeEntityInput({ entity_type: "COMPANY" }));
+    await prisma.entityMembership.create({ data: { parent_id: org.entity_id, child_id: owner.entity.entity_id, is_active: true } });
+    const created = await createLedgerEntry({
+      org_entity_id: org.entity_id, ledger_type: "COMMITMENT", source_type: "MANUAL",
+      owner_entity_id: owner.entity.entity_id, requester_entity_id: owner.entity.entity_id,
+      title, status: "PROPOSED", extraction_source: "MANUAL",
+      evidence: [{ quote: `Owner will handle: ${title}.` }],
+    });
+    expect(created.ok).toBe(true);
+    return { auth: svc.auth, otzar: svc.otzar, llm: svc.llm, token: owner.token };
+  }
+
+  it("OFF is byte-identical (no block); ON injects the caller's own work, self-scoped", async () => {
+    const { otzar, llm, token } = await ownerInOrgWithWork("Calibrate the Orion telemetry array");
+    const prev = process.env.OTZAR_WORK_GROUNDING;
+    try {
+      delete process.env.OTZAR_WORK_GROUNDING;
+      const off = await otzar.conductSession({ token, message: "what's the status of the Orion telemetry work?", conversation_history: [], token_budget: 8000 });
+      expect(off.ok).toBe(true);
+      expect(llm.getCalls().at(-1)!.system).not.toContain("YOUR WORK RECORD");
+
+      process.env.OTZAR_WORK_GROUNDING = "on";
+      const on = await otzar.conductSession({ token, message: "what's the status of the Orion telemetry work?", conversation_history: [], token_budget: 8000 });
+      expect(on.ok).toBe(true);
+      const onPrompt = llm.getCalls().at(-1)!.system;
+      expect(onPrompt).toContain("YOUR WORK RECORD");
+      expect(onPrompt).toContain("Orion telemetry");
+    } finally {
+      if (prev === undefined) delete process.env.OTZAR_WORK_GROUNDING;
+      else process.env.OTZAR_WORK_GROUNDING = prev;
+    }
+  });
+
+  it("ON with no matching work injects NO block (honest — no fabrication)", async () => {
+    const { otzar, llm, token } = await ownerInOrgWithWork("Calibrate the Orion telemetry array");
+    const prev = process.env.OTZAR_WORK_GROUNDING;
+    try {
+      process.env.OTZAR_WORK_GROUNDING = "on";
+      const r = await otzar.conductSession({ token, message: "zzqxjvk unrelated nonsense with no matching work record", conversation_history: [], token_budget: 8000 });
+      expect(r.ok).toBe(true);
+      expect(llm.getCalls().at(-1)!.system).not.toContain("YOUR WORK RECORD");
+    } finally {
+      if (prev === undefined) delete process.env.OTZAR_WORK_GROUNDING;
+      else process.env.OTZAR_WORK_GROUNDING = prev;
+    }
   });
 });
