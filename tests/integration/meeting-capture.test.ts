@@ -12,6 +12,7 @@ import { createEntity } from "../../packages/database/src/queries/entity.js";
 import {
   receiveMeetingCaptureForCaller,
   attachCaptureToWorkspaceForCaller,
+  getMeetingCaptureTranscriptForCaller,
 } from "../../apps/api/src/services/otzar/meeting-capture.service.js";
 import { createCollaborationWorkspaceForCaller } from "../../apps/api/src/services/otzar/collaboration-workspace.service.js";
 
@@ -115,6 +116,39 @@ describe("Phase 1222 — MeetingCapture", () => {
     expect(r.meeting_capture.provider).toBe("GOOGLE_MEET");
     expect(r.meeting_capture.has_transcript).toBe(false);
     expect(r.participants.length).toBe(2);
+  });
+
+  it("P0C — the captor can reopen the original transcript; a non-captor is denied (no leak)", async () => {
+    const r = await receiveMeetingCaptureForCaller({
+      callerEntityId: sadeilId,
+      provider: "MANUAL_UPLOAD",
+      title: "Source reopen test",
+      transcript: "Sadeil: we ship Friday. David: I'll prep the release notes.",
+      participants: [
+        { display_name: "Sadeil MC", participant_entity_id: sadeilId, consent_state: "CONSENTED" },
+      ],
+    });
+    if (r.ok === false) throw new Error("receive failed");
+    const id = r.meeting_capture.meeting_capture_id;
+
+    // The captor reopens the ORIGINAL source text.
+    const mine = await getMeetingCaptureTranscriptForCaller(id, sadeilId);
+    expect(mine.ok).toBe(true);
+    if (mine.ok) {
+      expect(mine.has_transcript).toBe(true);
+      expect(mine.transcript).toContain("release notes");
+      expect(mine.title).toBe("Source reopen test");
+    }
+
+    // A non-captor (capture is not attached to any workspace) is denied the text.
+    const other = await getMeetingCaptureTranscriptForCaller(id, davidId);
+    expect(other.ok).toBe(false);
+    if (other.ok === false) expect(other.httpStatus).toBe(403);
+
+    // A bogus id is a clean 404, never a leak.
+    const missing = await getMeetingCaptureTranscriptForCaller("00000000-0000-4000-8000-000000000000", sadeilId);
+    expect(missing.ok).toBe(false);
+    if (missing.ok === false) expect(missing.httpStatus).toBe(404);
   });
 
   it("a NOT_CONSENTED participant → BLOCKED_PARTICIPANT_CONSENT + attach fails", async () => {
