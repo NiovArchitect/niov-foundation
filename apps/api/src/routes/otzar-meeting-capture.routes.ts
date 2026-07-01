@@ -16,6 +16,7 @@ import type { AuthService } from "../services/auth.service.js";
 import {
   attachCaptureToWorkspaceForCaller,
   getMeetingCaptureDetailForCaller,
+  getMeetingCaptureTranscriptForCaller,
   listMeetingCapturesForCaller,
   receiveMeetingCaptureForCaller,
   updateParticipantConsentForCaller,
@@ -203,6 +204,33 @@ export async function registerOtzarMeetingCaptureRoutes(
         ok: true,
         meeting_capture: result.meeting_capture,
         participants: result.participants,
+      });
+    },
+  );
+
+  // GET original transcript / source text (caller-scoped; the only surface that
+  // returns it). PROD-UX-P0C — reopen a saved conversation's source.
+  app.get<{ Params: { meeting_capture_id: string } }>(
+    "/api/v1/otzar/meeting-captures/:meeting_capture_id/transcript",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const result = await getMeetingCaptureTranscriptForCaller(
+        request.params.meeting_capture_id,
+        session.entity_id,
+      );
+      if (result.ok === false)
+        return reply.code(result.httpStatus).send({ ok: false, code: result.code });
+      return reply.code(200).send({
+        ok: true,
+        meeting_capture_id: result.meeting_capture_id,
+        title: result.title,
+        transcript: result.transcript,
+        has_transcript: result.has_transcript,
       });
     },
   );

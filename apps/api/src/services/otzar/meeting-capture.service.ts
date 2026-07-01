@@ -496,18 +496,25 @@ export type GetCaptureDetailResult =
     }
   | { ok: false; httpStatus: 403 | 404; code: string };
 
-export async function getMeetingCaptureDetailForCaller(
+// Shared caller-scoped access gate for a meeting capture: the caller must have
+// captured it OR be an ACTIVE member of the linked workspace. Everyone else (a
+// non-participant, a cross-org caller) gets NOT_FOUND / NOT_ALLOWED and never sees
+// any capture content. Used by both the detail read and the transcript read so the
+// permission logic lives in exactly one place.
+type LoadCaptureGate =
+  | { ok: true; capture: NonNullable<Awaited<ReturnType<typeof prisma.meetingCapture.findFirst>>> }
+  | { ok: false; httpStatus: 403 | 404; code: string };
+
+async function loadCaptureForCaller(
   meetingCaptureId: string,
   callerEntityId: string,
-): Promise<GetCaptureDetailResult> {
+): Promise<LoadCaptureGate> {
   const capture = await prisma.meetingCapture.findFirst({
     where: { meeting_capture_id: meetingCaptureId, deleted_at: null },
   });
   if (capture === null) {
     return { ok: false, httpStatus: 404, code: "MEETING_CAPTURE_NOT_FOUND" };
   }
-  // Permission gate: caller must have captured it OR be a member of
-  // the linked workspace.
   let allowed = capture.captured_by_entity_id === callerEntityId;
   if (!allowed && capture.workspace_id !== null) {
     const m = await prisma.collaborationMembership.findFirst({
@@ -524,6 +531,16 @@ export async function getMeetingCaptureDetailForCaller(
   if (!allowed) {
     return { ok: false, httpStatus: 403, code: "NOT_ALLOWED" };
   }
+  return { ok: true, capture };
+}
+
+export async function getMeetingCaptureDetailForCaller(
+  meetingCaptureId: string,
+  callerEntityId: string,
+): Promise<GetCaptureDetailResult> {
+  const gate = await loadCaptureForCaller(meetingCaptureId, callerEntityId);
+  if (gate.ok === false) return gate;
+  const capture = gate.capture;
   const consents = await prisma.meetingParticipantConsent.findMany({
     where: { meeting_capture_id: capture.meeting_capture_id, deleted_at: null },
     orderBy: { created_at: "asc" },
@@ -542,6 +559,44 @@ export async function getMeetingCaptureDetailForCaller(
       consent_source: c.consent_source,
       consent_recorded_at: c.consent_recorded_at?.toISOString() ?? null,
     })),
+  };
+}
+
+// ─── service: read the original transcript / source (caller-scoped) ──────────
+export type GetCaptureTranscriptResult =
+  | {
+      ok: true;
+      httpStatus: 200;
+      meeting_capture_id: string;
+      title: string;
+      transcript: string | null;
+      has_transcript: boolean;
+    }
+  | { ok: false; httpStatus: 403 | 404; code: string };
+
+// PROD-UX-P0C: reopen a saved conversation's ORIGINAL transcript/source text. The
+// transcript is stored bounded on the capture and deliberately kept out of the safe
+// list/detail projections — this is the ONLY surface that returns it, and only to a
+// caller who passes the same access gate (captured-by OR active workspace member).
+// A non-participant / cross-org caller gets NOT_FOUND / NOT_ALLOWED, never the text.
+export async function getMeetingCaptureTranscriptForCaller(
+  meetingCaptureId: string,
+  callerEntityId: string,
+): Promise<GetCaptureTranscriptResult> {
+  const gate = await loadCaptureForCaller(meetingCaptureId, callerEntityId);
+  if (gate.ok === false) return gate;
+  const capture = gate.capture;
+  const transcript =
+    typeof capture.transcript === "string" && capture.transcript.length > 0
+      ? capture.transcript
+      : null;
+  return {
+    ok: true,
+    httpStatus: 200,
+    meeting_capture_id: capture.meeting_capture_id,
+    title: capture.title,
+    transcript,
+    has_transcript: transcript !== null,
   };
 }
 
