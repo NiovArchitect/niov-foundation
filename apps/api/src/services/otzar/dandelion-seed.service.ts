@@ -24,6 +24,13 @@ export interface OrgSeedView {
   seed_id: string;
   seed_type: string;
   subject_name: string | null;
+  /** The resolved org entity for the subject when known (else null). */
+  subject_entity_id: string | null;
+  /** Stable grouping key for the Organization Seeding queues: the resolved entity id
+   *  when known, else the normalized subject name, else the seed type. The frontend
+   *  clusters duplicate suggestions for the same person/target under one grouped card
+   *  (so five "activate David" seeds render as one David group, at 5,000-person scale). */
+  subject_key: string;
   recommended_action: string;
   source_evidence: string | null;
   source_conversation_id: string | null;
@@ -72,10 +79,21 @@ type SeedRow = {
 function projectSeed(row: SeedRow): OrgSeedView {
   const d = (row.details ?? {}) as SeedDetails;
   const ev = Array.isArray(row.evidence) ? (row.evidence as Array<{ quote?: string }>) : [];
+  const subjectName = d.subject_name ?? null;
+  const subjectEntityId = d.subject_entity_id ?? null;
+  const seedType = d.seed_type ?? "unknown";
+  const subjectKey =
+    subjectEntityId !== null
+      ? `entity:${subjectEntityId}`
+      : subjectName !== null && subjectName.trim().length > 0
+        ? `name:${subjectName.trim().toLowerCase()}`
+        : `type:${seedType}`;
   return {
     seed_id: row.ledger_entry_id,
-    seed_type: d.seed_type ?? "unknown",
-    subject_name: d.subject_name ?? null,
+    seed_type: seedType,
+    subject_name: subjectName,
+    subject_entity_id: subjectEntityId,
+    subject_key: subjectKey,
     recommended_action: d.recommended_action ?? row.title,
     source_evidence: ev[0]?.quote ?? null,
     source_conversation_id: d.source_conversation_id ?? null,

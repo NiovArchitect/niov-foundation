@@ -159,8 +159,19 @@ export function buildWorkGraphMemory(input: BuildWorkGraphMemoryInput): WorkGrap
   }
 
   // 3) Per work item: commitment + ownership/identity + capability-gap events + seeds.
+  // Cluster identity-activation seeds by person: one "confirm or activate" seed per
+  // named person, NOT one per mention (a transcript naming "David" in 5 commitments
+  // must produce ONE person seed, not 5). Cross-transcript clustering happens at the
+  // Organization Seeding list layer (grouped queues); this keeps a single ingest clean.
+  const seenPersonSeedKeys = new Set<string>();
   for (const w of input.workItems) {
     if (w.needsReview || w.ownerEntityId === null) {
+      const personKey = w.ownerName.trim().toLowerCase();
+      // No named person (owner referenced only by pronoun/indirect) → the NEEDS_OWNER
+      // work item is the review surface; do NOT seed a phantom person.
+      if (personKey.length === 0) continue;
+      if (seenPersonSeedKeys.has(personKey)) continue; // already seeded this person
+      seenPersonSeedKeys.add(personKey);
       // UNPROVEN owner — NOT a trusted edge. Seed an admin identity/activation review.
       seeds.push({
         ...base,
