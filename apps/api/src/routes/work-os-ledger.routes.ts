@@ -33,6 +33,13 @@ import {
 } from "../services/work-os/watcher.service.js";
 import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
 import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.service.js";
+import {
+  queryOrgWork,
+  groundContextForAgent,
+  type OrgQueryScope,
+  type OrgQueryFilter,
+  type OrgQuerySort,
+} from "../services/work-os/org-query.service.js";
 import { assessWorkRisk } from "../services/work-os/risk-scoring.service.js";
 import { evaluateDraftTone } from "../services/work-os/draft-tone.service.js";
 import type { DraftChannel } from "../services/intelligence/python-draft-tone.service.js";
@@ -713,6 +720,71 @@ export async function registerWorkOsLedgerRoutes(
         ...(limit !== undefined ? { limit } : {}),
       });
       return reply.code(200).send({ ok: true, results, envelope });
+    },
+  );
+
+  // POST /api/v1/work-os/org-query -- Slice B. The UNIFIED, governed org query
+  // over the one canonical WorkLedger. One flexible surface (extend, not
+  // duplicate): scope self|project|team|org|admin; optional query (lexical),
+  // project_id, filter all|blockers|connector_gaps|seeds, sort relevance|recent.
+  // Scope is enforced in-service: self=own rows, project=active membership,
+  // team/org/admin=manager. Admin seeds only in admin scope. No cross-tenant leak;
+  // rows are post-quarantine; only scoped summary + evidence are returned.
+  app.post<{
+    Body: { scope?: unknown; query?: unknown; project_id?: unknown; filter?: unknown; sort?: unknown; limit?: unknown };
+  }>("/api/v1/work-os/org-query", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const b = request.body ?? {};
+    const scopeIn = typeof b.scope === "string" ? b.scope : "self";
+    const validScopes: OrgQueryScope[] = ["self", "project", "team", "org", "admin"];
+    if (!validScopes.includes(scopeIn as OrgQueryScope)) {
+      return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "invalid scope" });
+    }
+    const filter: OrgQueryFilter | undefined =
+      b.filter === "blockers" || b.filter === "connector_gaps" || b.filter === "seeds" || b.filter === "all"
+        ? b.filter
+        : undefined;
+    const sort: OrgQuerySort | undefined = b.sort === "recent" || b.sort === "relevance" ? b.sort : undefined;
+    const result = await queryOrgWork({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+      is_manager: ctx.manager,
+      scope: scopeIn as OrgQueryScope,
+      ...(typeof b.query === "string" && b.query.trim().length > 0 ? { query: b.query } : {}),
+      ...(typeof b.project_id === "string" && b.project_id.length > 0 ? { project_id: b.project_id } : {}),
+      ...(filter !== undefined ? { filter } : {}),
+      ...(sort !== undefined ? { sort } : {}),
+      ...(typeof b.limit === "number" && Number.isFinite(b.limit) ? { limit: b.limit } : {}),
+    });
+    if (!result.ok) {
+      const status = result.code === "SCOPE_NOT_PERMITTED" ? 403 : result.code === "NOT_PROJECT_MEMBER" ? 403 : 422;
+      return reply.code(status).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
+  // POST /api/v1/work-os/org-query/ground -- Slice B. What Otzar calls BEFORE it
+  // answers or acts: governed, evidence-bearing context for (caller, org, query),
+  // with an explicit sufficient=false + reason when there isn't enough — so the
+  // agent grounds on real data or declines, never hallucinates.
+  app.post<{ Body: { query?: unknown; intent?: unknown } }>(
+    "/api/v1/work-os/org-query/ground",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      if (typeof b.query !== "string" || b.query.trim().length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "query is required" });
+      }
+      const grounded = await groundContextForAgent({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        query: b.query,
+        ...(typeof b.intent === "string" ? { intent: b.intent } : {}),
+      });
+      return reply.code(200).send(grounded);
     },
   );
 
