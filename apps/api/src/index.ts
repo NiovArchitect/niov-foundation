@@ -942,13 +942,21 @@ export type {
   TranscriptSegment,
   TranscriptQualityResult,
 } from "./services/otzar/transcript-quality.js";
-export { ingestTranscript } from "./services/otzar/comms-ingest.service.js";
+export { ingestTranscript, ingestSourceEvent } from "./services/otzar/comms-ingest.service.js";
 export type {
   IngestTranscriptInput,
   IngestTranscriptResult,
   IngestTranscriptFailure,
   IngestedWorkItem,
+  IngestSourceEventDeps,
 } from "./services/otzar/comms-ingest.service.js";
+export {
+  sourceDedupeKey,
+  sourceEvidenceDetails,
+  normalizeSourceContent,
+  slackMessageToSourceEvent,
+} from "./services/otzar/source-event.js";
+export type { WorkSourceEvent, SourceSystem, SourceEvidenceSpan } from "./services/otzar/source-event.js";
 export { planWorkItems } from "./services/otzar/work-item-planner.js";
 export {
   computeCapabilityState,
