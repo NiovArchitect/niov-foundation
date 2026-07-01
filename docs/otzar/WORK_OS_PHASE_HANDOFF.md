@@ -184,3 +184,38 @@ FND `8cfed73` (PR #502, merged, otzar-api live `dep-d9281guq1p3s73ep1g60`). Rout
 
 ### DO NOT BREAK
 one path (transcript delegates to ingestSourceEvent); transcript capture stays MANUAL_UPLOAD/no external id; dedupe only for connector sources; `source_type:"CONNECTOR"` + source_system in details for connector rows; no new ledger; org-scoped (no cross-tenant leak). Next: automated connector pull (Slack binding) + handle→entity resolution + Gmail/Docs content sources.
+
+---
+
+## Slice B — Unified Org Query Layer (governed, scoped, agent-grounding) (FND)
+Now that many source types feed the ONE WorkLedger (Slice A), Slice B is the governed query LAYER that retrieves the whole org picture from that canonical source of truth. NO new data model, NO second memory, NO separate graph — it reads the same `WorkLedgerEntry` every source now feeds.
+
+### Files
+- `apps/api/src/services/work-os/org-query.service.ts` (NEW):
+  - `queryOrgWork(args)` — scopes `self | project | team | org | admin`; optional lexical `query` (stopword-filtered, deterministic, matches title+summary+evidence quote), `project_id`, `filter` (all|blockers|connector_gaps|seeds), `sort` (relevance|recent), `limit`. Rich `OrgQueryResult`: id, type, title, summary, source_type, **source_system** (lowercased), **source_evidence**, source_conversation_id, owner, requester, project_id, project/team hints, status, confidence, sensitivity, scope_label, created/updated, **execution** plan, **connector_gap**, **dandelion_seed**, **audit_pointer**.
+  - `groundContextForAgent({org, caller, is_manager, query, intent})` — what Otzar calls BEFORE answering/acting: retrieves governed, evidence-bearing rows for the caller; returns `sufficient` + `reason`; on no match `sufficient:false` with "do not fabricate…". Never invents — only real ledger rows the caller may see.
+- `apps/api/src/routes/work-os-ledger.routes.ts` — `POST /work-os/org-query` (one flexible surface; scope enforced in-service via the `auth` helper's `manager`=can_admin_org) + `POST /work-os/org-query/ground`.
+
+### Governance / no-leak (enforced BEFORE the read)
+- self = own rows (OR owner/target/requester), excludes ORG_SEEDING + closed. project = **active membership** (`isActiveProjectMember`) else `NOT_PROJECT_MEMBER`. team/org/admin = **manager** (can_admin_org) else `SCOPE_NOT_PERMITTED`. admin scope = ORG_SEEDING only (the Dandelion queue). Cross-tenant scoped by `org_entity_id`. Rows are post-quarantine (noise never became a row → never returned); only scoped summary + evidence quote returned, never raw transcript.
+- One query surface answers all the required questions (what work/mine/project/team/org, commitments-by-source, decisions, blockers via `filter=blockers`, connector gaps via `filter=connector_gaps`, pending seeds via admin scope, source evidence on every result, recent via `sort=recent`).
+
+### Cross-source unification
+Transcript rows (`source_system=transcript`) and Slice-A connector rows (`source_system=slack`) come back through ONE query — the un-siloed picture, live-proven.
+
+### Tests (all green)
+- `tests/integration/org-query.test.ts` (8, DB): self cross-source+evidence; uninvolved no-leak; team/org manager gate; project membership (member vs `NOT_PROJECT_MEMBER`); connector_gaps GitHub; admin-only seeds (+ non-admin `SCOPE_NOT_PERMITTED`, seeds excluded from self/org); no cross-tenant leak; agent grounding sufficient vs insufficient (honest refusal). Deterministic (no LLM).
+- Foundation typecheck 0; unit + integration suites green.
+- Live: new `otzar-live-workos-orgquery.spec.ts` (+ `test:e2e:live:workos:orgquery`, folded into `:full`).
+
+### Agent grounding = data-grounded behaviour
+`POST /work-os/org-query/ground` is the seam that moves Otzar from static prompt context to data-grounded: it returns real, scoped, evidence-bearing rows or an explicit `sufficient:false`. NOTE (boundary): wiring this into `conductSession`'s 8-layer context assembly (COEService.assembleContext seam) is the next increment — the grounding service is callable today; the live conductSession path is unchanged to avoid destabilizing it.
+
+### Deploy + live verification
+FND `284a2f6` (PR #504, merged, otzar-api live `dep-d9298l741pts73ceofqg`). Routes `POST /work-os/org-query` + `/work-os/org-query/ground` live + gated (401 unauthenticated). CT smoke `0261570`. **Live: org-query 5/5** (self both-sources+evidence+no-noise; connector_gaps GitHub; admin-only seeds; non-admin 403 admin/org; grounding sufficient + honest insufficient) and **full suite 30 passed · 0 failed · 0 skipped** — all prior parity (loop/etl/memory/admin/ia + 4 baseline) preserved. Local gate: typecheck 0 · unit 2805 · integration 1857 · org-query integration 8/8. Run before/after deploy: `npm run test:e2e:live:workos:full`.
+
+### DO NOT BREAK
+one query layer over the one ledger (no new model/memory/graph); scope enforced before read; admin seeds admin-only; project needs membership; team/org needs manager; no cross-tenant/raw-transcript/noise leak; grounding never fabricates (sufficient=false when empty).
+
+## Capability roadmap update
+Slice A (multi-source ETL) + Slice B (unified query + grounding) close gaps **A** and **B** of the "make Otzar whole" roadmap. Remaining: **C** cross-source identity reconciliation · **D** Goal layer · **E** wire grounding into conductSession (data-grounded answering) · **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (now loop + etl + orgquery + memory + admin + ia + 4 baseline) is the acceptance layer for each.
