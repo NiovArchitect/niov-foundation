@@ -31,6 +31,12 @@ import {
   getFailedAttemptDigests,
 } from "./execution-verification.service.js";
 import { resolveEntityNames, nameFrom } from "../identity/resolve-entities.js";
+// [PROD-UX-P0R] — pure routing/autonomy decision projection over persisted
+// decider outputs (never recomputes policy; never mutates).
+import {
+  projectRoutingDecision,
+  type RoutingDecisionView,
+} from "./routing-decision.js";
 
 // Slice F — UUID shape guard for the ledger→Action link backfill on
 // patchLedgerEntry (proposed_action_id / audit_event_id).
@@ -602,6 +608,12 @@ export async function getMyWork(args: {
       entries[i]!.can_complete = true;
     }
   });
+  // [PROD-UX-P0R] — attach the routing/autonomy decision projection to every
+  // item. PURE read over the already-projected view (persisted decider
+  // outputs only); additive optional field, existing fields untouched.
+  for (const entry of entries) {
+    entry.routing = projectRoutingDecision(entry);
+  }
   return entries;
 }
 
@@ -784,6 +796,14 @@ export interface WorkLedgerView {
   // already surfaced by org-query).
   proposed_action_id?: string;
   execution_plan?: Record<string, unknown>;
+  // [PROD-UX-P0R] — the anchoring audit event link (persisted column; set by
+  // the execution bridge / callers via patchLedgerEntry). Surfaced so the
+  // routing projection can expose an audit_pointer. Additive + optional.
+  audit_event_id?: string;
+  // [PROD-UX-P0R] — the routing/autonomy decision PROJECTION for this row
+  // (pure read over persisted decider outputs; see routing-decision.ts).
+  // Attached by getMyWork and the :id/routing-decision route. Additive.
+  routing?: RoutingDecisionView;
   // Phase 1281 — coordination runtime, attached by the route after the
   // governed BEAM dispatch (not persisted this phase; reflects the real
   // dispatch result, never faked).
@@ -876,6 +896,9 @@ interface LedgerRow {
   updated_at: Date;
   verified_at: Date | null;
   proposed_action_id: string | null;
+  // [PROD-UX-P0R] — persisted column (schema.prisma WorkLedgerEntry). Optional
+  // here so older row-shaped fixtures without it still project.
+  audit_event_id?: string | null;
   details?: unknown;
 }
 
@@ -1013,6 +1036,8 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
   return {
     ...(typeof sourceMessageId === "string" ? { source_message_id: sourceMessageId } : {}),
     ...(row.proposed_action_id !== null ? { proposed_action_id: row.proposed_action_id } : {}),
+    // [PROD-UX-P0R] — surface the persisted audit link for routing projections.
+    ...(typeof row.audit_event_id === "string" ? { audit_event_id: row.audit_event_id } : {}),
     ...(executionPlan !== undefined ? { execution_plan: executionPlan } : {}),
     ledger_entry_id: row.ledger_entry_id,
     org_entity_id: row.org_entity_id,

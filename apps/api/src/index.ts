@@ -973,6 +973,14 @@ export {
 } from "./services/work-os/goal.service.js";
 export type { GoalView, GoalProgress, GoalFailure } from "./services/work-os/goal.service.js";
 export { planWorkItems } from "./services/otzar/work-item-planner.js";
+// [PROD-UX-P0R] — pure routing/autonomy decision projection over persisted
+// Work Ledger decider outputs (no policy recompute; no mutation).
+export { projectRoutingDecision } from "./services/work-os/routing-decision.js";
+export type {
+  RoutingLane,
+  RoutingDecisionView,
+  RoutingProjectionInput,
+} from "./services/work-os/routing-decision.js";
 export {
   computeCapabilityState,
   requiredConnectorToProviderType,

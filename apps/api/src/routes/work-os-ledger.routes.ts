@@ -36,6 +36,8 @@ import {
   recordCoordinationOnLedger,
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
+// [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
+import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import {
   getWatcherFeed,
   getWatcherFeedWithBeamAdvisory,
@@ -531,6 +533,29 @@ export async function registerWorkOsLedgerRoutes(
       if (entry.ok === false) return reply.code(404).send(entry);
       const proof = await getExecutionProofSummary(ctx.org_entity_id, request.params.id);
       return reply.code(200).send({ ok: true, proof });
+    },
+  );
+
+  // ── Routing/autonomy decision projection for one ledger entry ([PROD-UX-P0R]).
+  //    PURE read over the persisted decider outputs (status, authority fields,
+  //    details.execution_plan, links) — never recomputes policy, never mutates,
+  //    no audit write (read-only, matching the other :id read routes). Tenant +
+  //    participant scope enforced by getLedgerEntry (404 pattern preserved). ──
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id/routing-decision",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await getLedgerEntry({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      if (result.ok === false) return reply.code(404).send(result);
+      return reply
+        .code(200)
+        .send({ ok: true, routing: projectRoutingDecision(result.entry) });
     },
   );
 
