@@ -86,6 +86,14 @@ import type {
 } from "../../security/privileged-endpoints.js";
 import { dualControlDescription } from "../../security/privileged-endpoints.js";
 import { logger } from "../../logger.js";
+// Work-OS Slice F — approving an Action-paired dual-control escalation must
+// approve the paired Action using the EXISTING Action state-machine guard
+// (no second approval system, no direct execution here). One-directional
+// imports: state-machine.ts imports nothing from this module (no cycle); the
+// ACTION_APPROVED decision audit is written via writeAuditEvent (already
+// imported), mirroring action.service's create-time emission, to avoid the
+// action.service ↔ escalation.service import cycle.
+import { assertActionTransition } from "../action/state-machine.js";
 
 // WHAT: The named-fields shape createEscalationForCaller accepts.
 // INPUT: Used as a parameter type only.
@@ -620,7 +628,7 @@ async function transitionPendingForCaller(
       },
       tx,
     );
-    return tx.escalationRequest.update({
+    const updatedEscalation = await tx.escalationRequest.update({
       where: { escalation_id: escalationId },
       data: {
         status: toStatus,
@@ -631,6 +639,64 @@ async function transitionPendingForCaller(
           : {}),
       },
     });
+
+    // Work-OS Slice F — Action-approval linkage. When this escalation is the
+    // paired dual-control escalation of an Action (Action.escalation_id ===
+    // this escalation, backfilled by createActionForCaller step 6c) and we
+    // just APPROVED it, approve that Action through the EXISTING Action state
+    // machine so the scheduler admits it (APPROVED → SCHEDULED) and the
+    // executor runs the governed connector write. Guarantees:
+    //   - two-person invariant: caller !== source is enforced above, so the
+    //     resolver of the Action's approval is never its requester;
+    //   - resolver authority: the target/resolver gate is enforced above;
+    //   - linkage: the Action.escalation_id FK is the exact, non-fragile link
+    //     (a route-tier dual-control escalation has NO paired Action → no-op,
+    //     behavior unchanged);
+    //   - Action still PROPOSED: only a PROPOSED action is transitioned
+    //     (idempotent; a re-approval or a non-PROPOSED action is a no-op);
+    //   - transition validity + ACTION_APPROVED audit come from the existing
+    //     transitionActionStatus (assert PROPOSED → APPROVED + safe audit).
+    // Rejection (toStatus REJECTED) leaves the Action untouched — unchanged
+    // behavior. NO Slack/connector call happens here; execution stays with
+    // the scheduler/executor after admission.
+    if (toStatus === "APPROVED") {
+      const pairedAction = await tx.action.findFirst({
+        where: { escalation_id: escalationId, status: "PROPOSED", deleted_at: null },
+        select: { action_id: true, status: true },
+      });
+      if (pairedAction !== null) {
+        // Guard the transition against the canonical Action state machine
+        // (PROPOSED → APPROVED is legal; anything else throws).
+        assertActionTransition(pairedAction.status, "APPROVED");
+        await tx.action.update({
+          where: { action_id: pairedAction.action_id },
+          data: { status: "APPROVED" },
+        });
+        // ACTION_APPROVED decision audit — SAFE details only (ids + linkage +
+        // policy basis). The paired ESCALATION_APPROVED audit (above) carries
+        // escalation_id + resolver; together the two rows reconstruct the full
+        // approval chain (source, resolver, action, escalation, basis).
+        await writeAuditEvent(
+          {
+            event_type: "ACTION_APPROVED",
+            outcome: "SUCCESS",
+            actor_entity_id: callerEntityId,
+            target_entity_id: existing.source_entity_id,
+            details: {
+              action_id: pairedAction.action_id,
+              escalation_id: escalationId,
+              resolved_by_entity_id: callerEntityId,
+              source_entity_id: existing.source_entity_id,
+              decision: "REQUIRE_DUAL_CONTROL",
+              decision_reason: "dual-control-escalation-approved",
+            },
+          },
+          tx,
+        );
+      }
+    }
+
+    return updatedEscalation;
   });
 }
 

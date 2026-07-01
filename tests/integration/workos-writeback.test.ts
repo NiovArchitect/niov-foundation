@@ -36,7 +36,11 @@ import {
 } from "@niov/api";
 import { randomBytes } from "node:crypto";
 import { ContentEncryption } from "@niov/auth";
-import { createConnectorBinding, createEntity, prisma } from "@niov/database";
+import { computeTARHash, createConnectorBinding, createEntity, prisma } from "@niov/database";
+import {
+  approveEscalationForCaller,
+  createEscalationForCaller,
+} from "../../apps/api/src/services/governance/escalation.service.js";
 import {
   cleanupTestData,
   ensureAuditTriggers,
@@ -319,5 +323,119 @@ describe("Slice F bridge — full governed execution loop (auto-approve test org
       expect(finalEntry.entry.status).toBe("EXECUTED");
       expect(finalEntry.entry.proposed_action_id).toBe(actionId);
     }
+  });
+});
+
+// Make a DISTINCT org admin (can_admin_org) to serve as the dual-control
+// approver — resolveDualControlTarget Class B picks an active same-org admin.
+async function makeAdminApprover(orgId: string): Promise<string> {
+  const entity = await createEntity(makeEntityInput({ entity_type: "PERSON" }));
+  await prisma.entityMembership.create({
+    data: { parent_id: orgId, child_id: entity.entity_id, role_title: "ADMIN", is_active: true },
+  });
+  const tar = await prisma.tokenAttributeRepository.findUnique({ where: { entity_id: entity.entity_id } });
+  if (tar === null) throw new Error("approver TAR missing");
+  const newHash = computeTARHash({
+    can_login: tar.can_login, can_read_capsules: tar.can_read_capsules,
+    can_write_capsules: tar.can_write_capsules, can_share_capsules: tar.can_share_capsules,
+    can_create_hives: tar.can_create_hives, can_access_external_api: tar.can_access_external_api,
+    can_admin_niov: tar.can_admin_niov, can_admin_org: true,
+    clearance_ceiling: tar.clearance_ceiling, monetization_role: tar.monetization_role,
+    compliance_frameworks: tar.compliance_frameworks, status: tar.status,
+  });
+  await prisma.tokenAttributeRepository.update({
+    where: { entity_id: entity.entity_id },
+    data: { can_admin_org: true, tar_hash: newHash },
+  });
+  return entity.entity_id;
+}
+
+describe("Slice F — dual-control escalation approval flips the paired Action (end-to-end)", () => {
+  it("promote → PROPOSED+escalation → distinct admin approves → Action APPROVED → executor runs SlackWriteProvider → SUCCEEDED; audits present; no auto-send", async () => {
+    const orgId = await makeOrg(false); // default: INVOKE_CONNECTOR → dual-control
+    const sourceId = await makeMember(orgId, false); // the requester (non-admin)
+    await makeAdminApprover(orgId); // distinct org admin → dual-control target
+    await makeSlackBinding(orgId, sourceId);
+    const entryId = await makeSlackCommitment(orgId, sourceId, "Dual-control post to team channel");
+
+    const result = await promoteCommitmentToAction({
+      ledger_entry_id: entryId, org_entity_id: orgId, caller_entity_id: sourceId, is_manager: false,
+    });
+    expect(result.outcome).toBe("action_created");
+    expect(result.action_status).toBe("PROPOSED");
+    expect(result.escalation_id).toBeTruthy();
+    const actionId = result.action_id!;
+    const escId = result.escalation_id!;
+
+    // No auto-send: BEFORE approval, ticking the scheduler/executor must NOT run it.
+    await tickActionScheduler({});
+    await tickActionExecutor({});
+    expect((await prisma.action.findUnique({ where: { action_id: actionId } }))?.status).toBe("PROPOSED");
+
+    // Source (requester) cannot approve their own dual-control escalation.
+    await expect(approveEscalationForCaller(sourceId, escId)).rejects.toThrow(/FORBIDDEN/);
+
+    // An unrelated user (not target/resolver) cannot approve.
+    const strangerOrg = await makeOrg(false);
+    const strangerId = await makeMember(strangerOrg, false);
+    await expect(approveEscalationForCaller(strangerId, escId)).rejects.toThrow(/FORBIDDEN/);
+
+    // The distinct admin approver (the resolved dual-control target) approves →
+    // the paired Action flips PROPOSED → APPROVED via the state machine.
+    const esc = await prisma.escalationRequest.findUnique({ where: { escalation_id: escId } });
+    const approverId = esc!.target_entity_id;
+    expect(approverId).not.toBe(sourceId);
+    await approveEscalationForCaller(approverId, escId);
+    expect((await prisma.action.findUnique({ where: { action_id: actionId } }))?.status).toBe("APPROVED");
+
+    // Both audits present: ESCALATION_APPROVED + ACTION_APPROVED for this action.
+    const actionApproved = await prisma.auditEvent.findMany({
+      where: { event_type: "ACTION_APPROVED", details: { path: ["action_id"], equals: actionId } },
+    });
+    expect(actionApproved.length).toBeGreaterThan(0);
+    const escApproved = await prisma.auditEvent.findMany({
+      where: { details: { path: ["action"], equals: "ESCALATION_APPROVED" } },
+    });
+    expect(escApproved.length).toBeGreaterThan(0);
+
+    // Scheduler admits APPROVED → SCHEDULED, executor runs the REAL SlackWriteProvider
+    // (fixture mode, no real post) → SUCCEEDED.
+    let status = "";
+    for (let i = 0; i < 12; i++) {
+      await tickActionScheduler({});
+      await tickActionExecutor({});
+      status = (await prisma.action.findUnique({ where: { action_id: actionId } }))?.status ?? "";
+      if (status === "SUCCEEDED" || status === "FAILED" || status === "EXPIRED") break;
+    }
+    expect(status).toBe("SUCCEEDED");
+
+    const attempts = await prisma.actionAttempt.findMany({ where: { action_id: actionId }, orderBy: { attempt_number: "desc" }, take: 1 });
+    const res0 = attempts[0] === undefined ? null : await prisma.actionResult.findFirst({ where: { attempt_id: attempts[0].attempt_id } });
+    expect(JSON.stringify(res0?.result_metadata ?? {})).toContain("SlackWriteProvider");
+
+    // Reconcile → ledger EXECUTED, linked.
+    const rec = await reconcileLedgerExecutionState({ ledger_entry_id: entryId, org_entity_id: orgId, caller_entity_id: sourceId, is_manager: false });
+    expect(rec.ledger_status).toBe("EXECUTED");
+  });
+
+  it("approving a NON-Action escalation leaves actions untouched (unchanged behavior)", async () => {
+    const orgId = await makeOrg(false);
+    const sourceId = await makeMember(orgId, false);
+    const approverId = await makeAdminApprover(orgId);
+    // A plain escalation with NO paired Action (Action.escalation_id never set).
+    const esc = await createEscalationForCaller(sourceId, {
+      target_entity_id: approverId,
+      escalation_type: "COMPLIANCE_GATE",
+      severity: "HIGH",
+      description: "unit: non-action escalation",
+      expires_at: null,
+    });
+    // Approving it succeeds and does NOT create/flip any action.
+    const before = await prisma.action.count();
+    await approveEscalationForCaller(approverId, esc.escalation_id);
+    const after = await prisma.action.count();
+    expect(after).toBe(before);
+    const updated = await prisma.escalationRequest.findUnique({ where: { escalation_id: esc.escalation_id } });
+    expect(updated?.status).toBe("APPROVED");
   });
 });
