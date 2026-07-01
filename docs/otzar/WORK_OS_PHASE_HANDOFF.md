@@ -335,3 +335,65 @@ The call site is hardcoded `groundContextForAgent({ caller_entity_id: ownerEntit
 
 ## Capability roadmap update
 A + B + C + D + E done. Remaining: **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (loop · etl · identity · orgquery · goal · grounding · memory · admin · ia · 4 baseline) is the acceptance layer for F.
+
+---
+
+## Slice F — governed connector/MCP write-back (Slack write + MCP invoke) (FND + CT)
+The final Work OS roadmap item: the ledger's execution layer. A caller-owned commitment becomes a **real governed connector write** — routed through the EXISTING ADR-0057 Action executor, approval-gated, audited, no auto-send.
+
+### Why the bridge reused the existing Action executor (no second executor)
+Grep-first audit found a complete ADR-0057 Action subsystem already exists (`services/action/`: real `INVOKE_CONNECTOR` handler calling `provider.invoke()`, `policy-evaluator`, `state-machine`, `executor`, `scheduler` cron, `attempt`, `createActionForCaller`) with e2e tests. The Work OS ledger carried an `execution_plan` (Phase 4 `execution-planner`) and a **dangling `proposed_action_id` FK that nothing populated**. Slice F is the BRIDGE between these two worlds — building a second executor/approval system would duplicate a battle-tested, audited rail and fork governance. The bridge composes `createActionForCaller` (the single policy-evaluator + approval gate); execution runs through the existing scheduler/executor cron + connector provider.
+
+### Rails reused (NO duplicates)
+`createActionForCaller` (single gate) · Action policy-evaluator + dual-control escalation + approval lifecycle · scheduler/executor cron (`tickActionScheduler`/`tickActionExecutor`, live on otzar-api, NO-OP only under NODE_ENV=test) · `getConnectorProviderAsync` provider registry · `ConnectorBinding` model + `createConnectorBinding`/`listConnectorBindingsForOrg` · `resolveConnectorCapability` · `McpToolPolicy`/`findMatchingPolicy` · `writeAuditEvent` (ACTION_* chain) · `patchLedgerEntry` (extended) · existing `WorkLedgerEntry` (no new table).
+
+### Slack write provider (`slack-write.provider.ts`)
+`chat.postMessage`. Bot token resolved from `secret_ref` (env-var NAME `SLACK_BOT_TOKEN`) INSIDE the provider — never logged, never in delivery_metadata, never returned. Real receipt: `{mode, channel, ts, permalink?}`. Fixture-first: the real Slack API is reached ONLY under `SLACK_USE_REAL=1` + `binding.config.use_real=true` + secret_ref resolves (so no test posts to a real workspace). Errors mapped to closed error_class; `missing_scope` surfaces the needed scope (e.g. `chat:write`); `channel_not_found`/`not_in_channel` → VALIDATION; `invalid_auth` → AUTH. Reached ONLY from an approved INVOKE_CONNECTOR Action (never auto-send).
+
+### MCP invoke provider (`mcp-invoke.provider.ts`)
+Real MCP JSON-RPC 2.0 `tools/call` over HTTP. `auth_mode NONE_FOR_LOCAL_MOCK` (local mock server, http allowed) is the tested/live-verified path; `API_KEY`/`MCP_AUTH` resolve a Bearer token from secret_ref and require https. Per-tool `McpToolPolicy` (resolved upstream) enforced as a defensive last-hop check (BLOCK/DRAFT_ONLY refused). Bounded, non-sensitive result summary.
+
+### Bridge (`execution-bridge.ts`)
+`promoteCommitmentToAction`: loads the caller's commitment → reads `execution_plan.requiredConnector` → maps to the write connector binding type (SLACK→SLACK_WRITE, MCP_SERVER→MCP_INVOKE) → **hard gate: an enabled binding must exist** (else ledger BLOCKED setup-required, NO action, never a fake success) → builds the invocation_payload → `createActionForCaller(INVOKE_CONNECTOR, idempotency_key=wledger:<id>)` → links `proposed_action_id` + sets ledger status from the Action status. `reconcileLedgerExecutionState`: re-reads the linked Action → maps status onto the ledger (EXECUTING→EXECUTED/BLOCKED/CANCELLED). Self-scoped, deterministic, degrade-safe.
+
+### Flag behaviour
+`OTZAR_WORK_WRITEBACK` unset/≠"on" → the three routes (`/ledger/:id/execute`, `/reconcile-execution`, `/connector-bindings/slack-write`) return `404 FEATURE_DISABLED` → **byte-identical to the pre-Slice-F surface**. `="on"` → routes active; execution still requires the governed Action lifecycle.
+
+### Action approval-lifecycle wire (fix surfaced by live verification, in-scope)
+Live verification exposed a PRE-EXISTING gap in the ADR-0057 Action lifecycle: a dual-control Action landed PROPOSED with a paired EscalationRequest, but `/escalations/:id/approve` only transitioned the escalation — nothing flipped the paired Action PROPOSED→APPROVED, so the scheduler (admits only APPROVED) never ran it and the executor never reached the connector provider. The action sat PROPOSED forever. This is in-scope for Slice F (its purpose is governed connector write-back *through the existing Action lifecycle*). **Fix (FND PR #514, `50fac5af`):** a service-layer hook in `transitionPendingForCaller` (same tx, only on APPROVE) looks up the paired Action by the existing `Action.escalation_id` FK; if a still-PROPOSED Action exists, it transitions to APPROVED via the canonical state-machine guard `assertActionTransition` + an `ACTION_APPROVED` decision audit (`writeAuditEvent` — avoids the action.service↔escalation.service cycle; `transitionActionStatus` only emits lifecycle events). Preserved: two-person invariant (caller≠source), target/resolver authority, PENDING→APPROVED gate, and fully unchanged behavior for route-tier dual-control escalations with no paired Action (FK lookup → null → no-op). No second approval system, no second executor, no direct execution from the escalation service.
+
+### Production flag state — **ON** (write-back live-verified)
+- otzar-api LIVE at `50fac5af` (bridge+providers `737087d` #513 + approval-linkage wire `50fac5af` #514).
+- Env (presence only, never values): `OTZAR_WORK_WRITEBACK=on`, `SLACK_USE_REAL=1`, `SLACK_TEST_CHANNEL_ID` present, `SLACK_BOT_TOKEN` present.
+- `SLACK_WRITE` ConnectorBinding registered by an org admin via the admin setup route (audited, idempotent; `secret_ref=SLACK_BOT_TOKEN`, `default_channel` from the test channel).
+- **Deploy 1 (flag OFF)**: baseline 4-smoke suite GREEN (zero regression in the shipped/off config).
+- **Deploy 2 (flag ON)**: real governed write-back verified end-to-end.
+- Leave-ON is safe (approval-gated, self-scoped, degrade-safe). Revert: `PUT …/env-vars/OTZAR_WORK_WRITEBACK {"value":"off"}` → routes 404-inert.
+
+### Tests
+- Unit: `slack-write-provider` (10 — fixture gate, validation, all error mappings via mocked fetch, missing_scope, token never in result), `mcp-invoke-provider` guards (5 — BLOCK refusal, https-required, secret-required, tool_name, fixtures), `execution-bridge-helpers` (9 — status map, governed text, per-connector payload, plan reader).
+- Integration: `workos-writeback` (8 — no-binding→BLOCKED (no fake), no-auto-send ×2, idempotency, **full auto-approve loop**: promote→executor→REAL SlackWriteProvider (fixture)→SUCCEEDED→reconcile→EXECUTED with ACTION_* audit; **dual-control end-to-end**: promote→PROPOSED+escalation→distinct admin approves→Action APPROVED→executor→SUCCEEDED→EXECUTED, source-can't-self-approve, unrelated-can't-approve, ACTION_APPROVED+ESCALATION_APPROVED audits; non-Action escalation approval leaves actions untouched), `mcp-invoke-provider` real JSON-RPC round-trip vs local mock (3).
+- Regression for the wire fix: 53/53 escalation-routes + dual-control-* + action-lifecycle + invoke-connector.
+- Gates: typecheck 0 · full unit 2841 · full integration 1877 (+1 skip) · no-console · no-leak — all green. FND CI #513 + #514 5/5 each. CT typecheck 0.
+
+### Live verification (real, not faked)
+- **Real Slack `chat.postMessage`**: a governed commitment → INVOKE_CONNECTOR `SLACK_WRITE` Action → dual-control approval by a DISTINCT resolver (sadeil ≠ vishesh) → Action PROPOSED→APPROVED (the wire) → scheduler admitted → executor ran `SlackWriteProvider` → **real post to channel `C090K5KGS6B`, ts `1782924452.082959`, permalink `https://niovlabsworkspace.slack.com/archives/C090K5KGS6B/p1782924452082959`**, `delivery.mode="real"` (NOT the fixture zero-ts). Ledger reconciled to `EXECUTED`; `proposed_action_id` matched the Action. No auto-send (PROPOSED until approval). No token in any output.
+- **CT live smoke** `otzar-live-workos-writeback.spec.ts` (CT `7a3ddbd`) — PASSES: asserts `mode:"real"` + real channel/ts (not fixture) + ledger EXECUTED + link; skips clean unless `OTZAR_WORK_WRITEBACK_LIVE=on` + `OTZAR_APPROVER_EMAIL` (a distinct admin).
+- **MCP**: local/mock JSON-RPC 2.0 `tools/call` — 3/3 real round-trips (integration tier). External production MCP NOT claimed (see boundary).
+- **Baseline ×3 under flag ON**: GREEN — comms-governance · conversation-memory · response-reconciliation · response-roundtrip, 4/4 each ×3 (no regression under the on-config). (Flag-OFF baseline also 4/4 pre-enable.)
+
+### MCP boundary (honest)
+- MCP local/mock invoke is implemented + verified (JSON-RPC 2.0 `tools/call`, named tool, receipt/audit, honest error mapping, no secret leak, `NONE_FOR_LOCAL_MOCK`).
+- **External production MCP server support remains a later hardening step** requiring the official Streamable HTTP client/session (initialize/initialized, protocol-version/session headers, transport-level auth) — NOT a hand-rolled POST. No external MCP live server was claimed or faked; `mcp-invoke.provider.ts` already requires https + secret_ref for non-mock auth modes as the transport-auth seam.
+
+### DO-NOT-BREAK
+- No second executor / no second approval system / no new data model.
+- No auto-send: `promote` only CREATES a governed Action; the executor runs it only via the approved lifecycle.
+- Token never printed/logged/returned; `secret_ref` is the env-var NAME only.
+- Missing connector/binding → BLOCKED setup-required, never a fake success.
+- Slack post only through the governed Action lifecycle (INVOKE_CONNECTOR handler).
+- MCP external production server NOT claimed unless actually verified against a real URL+token (v1 = local mock only; external = official Streamable HTTP client/session/auth, deferred).
+- Escalation-approval → Action-approval linkage: keep it (approving an Action-paired dual-control escalation must approve the paired Action); route-tier dual-control escalations (no paired Action) must remain unaffected; two-person invariant (caller≠source) must hold; never execute the connector from the escalation service.
+
+## Capability roadmap update — FINAL
+A + B + C + D + E + F done. The full governed Work OS loop is closed: transcript/source → owned WorkLedger → responsibility/identity/goals → grounded answering → **governed connector/MCP execution**. Remaining work is deepening (more app-specific write providers, real external MCP servers via official Streamable HTTP, richer approval UX) rather than new rails.
