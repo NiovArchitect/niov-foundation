@@ -143,3 +143,44 @@ transcript doesn't persist · owner mapping regresses (David lost) · noisy tail
 ## Capability truth (audits — the roadmap spec)
 WHOLE + governed: WorkLedger source-of-truth · transcript transform · per-transcript identity resolution · teammate awareness · twin collab (governed, no auto-send) · gap-filling · self-scoped grounded recall · execution planning + approval gate.
 SILOED / MISSING (ranked, the real "complete & whole" work): (A) single-source manual intake → generalize transform + multi-source ETL into the ONE ledger; (B) no unified query layer → org-wide data-grounded retrieval; (C) per-source identity → cross-source reconciliation; (D) no Goal model → goal/objective + work↔goal + progress; (E) no org-wide recall (Phase 6); (F) dormant connector/MCP write-back → governed execution (Agentforce parity), no auto-send. The smoke suite asserts what EXISTS and pins each gap as a boundary check so future ETL slices land against a suite that proves them.
+
+---
+
+## Slice A — source-agnostic multi-source ETL into the ONE WorkLedger (FND)
+Un-silos intake WITHOUT a new data model. Transcript ingestion becomes ONE source through a shared source-agnostic core; every source normalizes to a `WorkSourceEvent` and flows through the SAME chain into the SAME `WorkLedgerEntry`. No second ledger, no per-app silo.
+
+### Files
+- `apps/api/src/services/otzar/source-event.ts` (NEW) — `WorkSourceEvent` contract (sourceType/sourceSystem/sourceId/sourceUrl/actor/participants/timestamp/org/content/evidence/sensitivity/dedupeKey/ingestionRunId/…), `sourceDedupeKey`, `sourceEvidenceDetails`, `normalizeSourceContent` (generic quality — noise quarantined so it can't mint work), `slackMessageToSourceEvent` (adapter).
+- `apps/api/src/services/otzar/comms-ingest.service.ts` — `ingestTranscript` is now a THIN ADAPTER over the new `ingestSourceEvent(event, deps)` core. Transcript path is byte-identical (MANUAL_UPLOAD capture, no external id, per-paste unique id → never deduped, `source_type:"TRANSCRIPT"`, `details.source:"transcript_ingest"`). Non-transcript sources: generic quality, `API_INGEST` capture + external id, `source_type:"CONNECTOR"` + full source-evidence details, dedupe.
+- `apps/api/src/services/otzar/meeting-capture.service.ts` — `findCaptureByExternalId(org, externalId)` dedupe lookup.
+- `apps/api/src/services/otzar/otzar.service.ts` — `ingestSourceEvent` service method (validateSession "read"; refuses TRANSCRIPT — transcripts stay on /comms/ingest).
+- `apps/api/src/routes/otzar.routes.ts` — `POST /api/v1/otzar/ingest/source-event` (409 ALREADY_INGESTED on dedupe).
+- Barrel exports added (`ingestSourceEvent`, `WorkSourceEvent`, adapters).
+
+### The one path
+`WorkSourceEvent → quality/normalize → identity resolution → comms-extract → work-item-planner → execution-planner → connector-capability → createLedgerEntry(source_type + source evidence) → Work-Graph/memory events → Dandelion seeds → audit`. Transcript and connector sources traverse identical code; only the source-descriptor fields differ.
+
+### Dedupe / idempotency (honest bound)
+Connector events carry a stable external id (`sourceDedupeKey` = explicit or `system:id`), stored as `MeetingCapture.provider_meeting_id`. Re-ingesting the same event → `409 ALREADY_INGESTED`, zero duplicate work. `provider_meeting_id` has NO DB unique constraint, so this is a sequential (check-then-insert) guard — it dedupes re-POSTs but does not harden against concurrent duplicates. Transcripts never set an external id → never matched.
+
+### Connector reality (no fake)
+- Slack `conversations.history` is the one read rail returning real text → `slackMessageToSourceEvent` adapter ships. **Automated Slack PULL requires a connected Slack binding; until then the source is connector_missing/setup_required** and events are PUSHED to `/ingest/source-event`. Documented, not claimed.
+- Gmail/Drive/Jira/Linear/GitHub/M365 read providers return metadata/counts only (no content) — not wired as content sources.
+- MCP has registration but NO invoke handler — not claimed as live ingestion.
+- No scheduler/poller/queue for source ingestion — all intake is request/push-driven (cron exists only for Action execution).
+- **Actor handle→entity resolution is follow-on**: a real Slack handle (`@david`, `U0123`) won't resolve on the display-name roster, so real Slack actors land NEEDS_OWNER unless the owner is named in the message text. The generic-endpoint path proves intake; handle resolution is the next increment.
+
+### Tests (all green)
+- `tests/unit/source-event.test.ts` (10) — dedupe stability/idempotency, source-evidence preservation, generic noise quarantine, Slack adapter.
+- `tests/integration/source-event-ingest.test.ts` (5, DB) — non-transcript intake through the SAME path (owner resolved, source_type+evidence, GitHub gap, work-graph, seeds, scoping); idempotent re-ingest (no dup work); different id re-ingests; noisy-only → no owned work; no cross-tenant leak.
+- `tests/integration/comms-ingest.test.ts` (6, DB) — transcript parity preserved.
+- Foundation typecheck 0.
+
+### Acceptance mapping
+non-transcript source → normalized event ✓ · same WorkLedger path ✓ · sourceType/source evidence on rows ✓ · execution planner runs ✓ · connector capability runs ✓ · work-graph events ✓ · Dandelion seeds ✓ · dedupe ✓ · identity resolution no leak ✓ · noise → no high-confidence work ✓ · transcript ingestion preserved ✓ · new non-transcript intake smoke added.
+
+### Deploy + live verification
+FND `8cfed73` (PR #502, merged, otzar-api live `dep-d9281guq1p3s73ep1g60`). Route `/otzar/ingest/source-event` live + gated (401). CT smoke `89ad571`. **Live: 25 passed · 0 failed · 0 skipped** — transcript parity (loop/memory/admin) preserved through the refactor + 4 new ETL tests (Slack-shaped event → governed work + source evidence; entered same my-work ledger; re-post → 409 ALREADY_INGESTED no dup; transcript refused). Run before/after deploy: `npm run test:e2e:live:workos:full`.
+
+### DO NOT BREAK
+one path (transcript delegates to ingestSourceEvent); transcript capture stays MANUAL_UPLOAD/no external id; dedupe only for connector sources; `source_type:"CONNECTOR"` + source_system in details for connector rows; no new ledger; org-scoped (no cross-tenant leak). Next: automated connector pull (Slack binding) + handle→entity resolution + Gmail/Docs content sources.
