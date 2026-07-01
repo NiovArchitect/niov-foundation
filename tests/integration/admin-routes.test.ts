@@ -1316,3 +1316,116 @@ describe.skip("standard twin removed from default Hive on offboarding loses org-
     // and the twin's session is invalidated.
   });
 });
+
+// ── [PROD-UX-HIER] POST /org/hierarchy/assign — admin authoring of the
+//    person→person reporting structure (manager + role/department). ──
+describe("POST /org/hierarchy/assign (PROD-UX-HIER)", () => {
+  async function addMember(ctx: Awaited<ReturnType<typeof createOrgAndAdmin>>, tag: string) {
+    const email = `${TEST_PREFIX}${tag}_${randomUUID()}@niov.test`;
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email, password: "correct-horse-battery", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(r.statusCode).toBe(201);
+    return { entity_id: (r.json() as { entity_id: string }).entity_id, email };
+  }
+  const assign = (
+    token: string,
+    ip: string,
+    payload: Record<string, unknown>,
+  ) =>
+    app.inject({
+      method: "POST",
+      url: "/api/v1/org/hierarchy/assign",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+      remoteAddress: ip,
+    });
+
+  it("admin assigns a manager + role + department; the person edge becomes readable", async () => {
+    const ctx = await createOrgAndAdmin();
+    const manager = await addMember(ctx, "mgr");
+    const person = await addMember(ctx, "person");
+    const r = await assign(ctx.adminToken, ctx.adminIp, {
+      person_entity_id: person.entity_id,
+      manager_entity_id: manager.entity_id,
+      role_title: "Engineer",
+      department: "Product",
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json() as { ok: boolean; membership_id: string; audit_event_id: string };
+    expect(body.ok).toBe(true);
+    expect(body.audit_event_id.length).toBeGreaterThan(0);
+    const hier = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/hierarchy",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const ms = (hier.json() as { memberships: Array<{ parent_id: string; child_id: string; role_title: string | null; department: string | null }> }).memberships;
+    const edge = ms.find((m) => m.parent_id === manager.entity_id && m.child_id === person.entity_id);
+    expect(edge).toBeDefined();
+    expect(edge!.role_title).toBe("Engineer");
+    expect(edge!.department).toBe("Product");
+  });
+
+  it("a non-admin member is refused (403), same gate as the read", async () => {
+    const ctx = await createOrgAndAdmin();
+    const member = await addMember(ctx, "emp");
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email: member.email, password: "correct-horse-battery", requested_operations: ["read", "write"] },
+      remoteAddress: "10.99.77.7",
+    });
+    const token = (login.json() as { token: string }).token;
+    const r = await assign(token, "10.99.77.7", {
+      person_entity_id: member.entity_id,
+      manager_entity_id: null,
+      role_title: "Self promotion",
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("cross-org assignment is a 404 (no leak); unknown ids are 404", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    const bPerson = await addMember(orgB, "bperson");
+    const cross = await assign(orgA.adminToken, orgA.adminIp, {
+      person_entity_id: bPerson.entity_id,
+      manager_entity_id: null,
+    });
+    expect(cross.statusCode).toBe(404);
+    const unknown = await assign(orgA.adminToken, orgA.adminIp, {
+      person_entity_id: randomUUID(),
+      manager_entity_id: null,
+    });
+    expect(unknown.statusCode).toBe(404);
+  });
+
+  it("cycles are refused (422 CYCLE) and re-parenting retires the old edge", async () => {
+    const ctx = await createOrgAndAdmin();
+    const a = await addMember(ctx, "ha");
+    const b = await addMember(ctx, "hb");
+    const c = await addMember(ctx, "hc");
+    expect((await assign(ctx.adminToken, ctx.adminIp, { person_entity_id: b.entity_id, manager_entity_id: a.entity_id })).statusCode).toBe(200);
+    const cycle = await assign(ctx.adminToken, ctx.adminIp, { person_entity_id: a.entity_id, manager_entity_id: b.entity_id });
+    expect(cycle.statusCode).toBe(422);
+    expect((cycle.json() as { code: string }).code).toBe("CYCLE");
+    // Re-parent b under c: exactly ONE active manager edge for b remains.
+    expect((await assign(ctx.adminToken, ctx.adminIp, { person_entity_id: b.entity_id, manager_entity_id: c.entity_id })).statusCode).toBe(200);
+    const hier = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/hierarchy",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const ms = (hier.json() as { memberships: Array<{ parent_id: string; child_id: string }> }).memberships;
+    const managersOfB = ms.filter((m) => m.child_id === b.entity_id && m.parent_id !== ctx.orgId);
+    expect(managersOfB).toHaveLength(1);
+    expect(managersOfB[0]!.parent_id).toBe(c.entity_id);
+  });
+});
