@@ -289,3 +289,46 @@ a goal is a GOAL ledger row (no new table); work→goal via goal_id; progress = 
 
 ## Capability roadmap update
 Slices A (multi-source ETL) + B (unified query + grounding) + C (identity reconciliation) + D (Goal layer) close gaps A–D. Remaining: **E** wire org-query grounding into `conductSession` (data-grounded answering) · **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (loop · etl · identity · orgquery · goal · memory · admin · ia · 4 baseline) is the acceptance layer for E–F.
+
+---
+
+## Slice E — org-query grounding wired into conductSession (data-grounded answering) (FND)
+Moves Otzar from static prompt context to answering from real WorkLedger facts: the Slice B grounding service is now injected into conductSession — gated dark by default, additive, self-scoped, bounded.
+
+### Why L6 was rejected
+The obvious slot (L6, the empty TaskQueue stub) is **NEVER-TRIM**: the truncation floor is `priming + L1 + L2 + L3 + L4 + L6`, subtracted from the budget BEFORE the trimmable layers (L8 history, L5 capsules) are fit. Injecting any non-empty L6 would force MORE trimming of **L8 conversation history** — which the conversation-memory and response-roundtrip smokes depend on. Putting an advisory, trimmable-by-nature grounding block into an identity, never-trim slot is a category error (advisor).
+
+### Why an outside-budget sidecar
+The grounding is appended to the system prompt like **`L_ALIGNMENT`** — OUTSIDE the truncation bundle. It does not enter `truncateToTokenBudget`, so it **cannot displace L8** (proven by construction: the bundle + truncation are untouched). Bounded small (≤5 rows, title ≤120, evidence ≤90) like L_ALIGNMENT, so it needs no trimming.
+
+### Files
+- `apps/api/src/services/work-os/work-grounding.ts` (NEW): `formatWorkGroundingBlock(results)` — bounded, labeled "[YOUR WORK RECORD … answer from these; if the answer isn't here, say you don't have that information rather than inventing it …]". Empty input → "" (prompt unchanged).
+- `apps/api/src/services/otzar/otzar.service.ts` (conductSession): computes `L_WORK_GROUNDING` after `L_ALIGNMENT`, appended to the systemPrompt array (which filters empty strings). Runs ONLY when `process.env.OTZAR_WORK_GROUNDING === "on"` && `orgEntityId !== null`; calls `groundContextForAgent({org, caller: ownerEntityId, is_manager: false, query: message})` (SELF-SCOPE only — never org-wide); on `grounded.sufficient` formats the block; any error → "" (degrade to prior prompt).
+
+### Flag behaviour
+- `OTZAR_WORK_GROUNDING` unset/anything-but-"on" → `L_WORK_GROUNDING=""` → filtered out → **prompt byte-identical to before** (proven: full conductSession unit suite unchanged).
+- `="on"` → bounded self-scoped block injected when there are matching caller-owned facts; empty when insufficient (no fabrication).
+
+### Production flag state — **ON** (verified live)
+- **Deploy 1 (flag OFF)**: backend `cc08845` went live on otzar-api with `OTZAR_WORK_GROUNDING` unset → baseline 4-smoke suite GREEN (comms-governance · conversation-memory · response-reconciliation · response-roundtrip). Proves the shipped/off config is a zero-regression baseline.
+- **Deploy 2 (flag ON)**: set `OTZAR_WORK_GROUNDING=on` via Render env API (`PUT /v1/services/srv-d8t17sm7r5hc73ed5h6g/env-vars/OTZAR_WORK_GROUNDING`) → redeploy live at commit `cc088457`.
+  - On-mode grounding smoke GREEN (2/2): Otzar cited the caller's own freshly-ingested `orionflux…` telemetry-calibration ledger fact, and declined to fabricate a status for work it has no record of.
+  - Baseline 4-smoke suite GREEN ×3 under the flag-ON config → no regression from the injected sidecar.
+- **Final state: OTZAR_WORK_GROUNDING=on remains enabled on otzar-api.** Grounding is self-scoped, bounded, and degrades to the prior prompt on any error, so leaving it ON is safe. To revert instantly: `PUT …/env-vars/OTZAR_WORK_GROUNDING {"value":"off"}` (or delete the key) → byte-identical old behavior on next deploy.
+- CT live smoke landed: `otzar-control-tower@f760322` (`otzar-live-workos-grounding.spec.ts` + `conversationMessage` helper + `test:e2e:live:workos:grounding` script).
+
+### Tests
+- Unit `work-grounding.test.ts` (4): empty→"", labeled block, evidence+connector-gap included, capped 5 rows / truncated title+evidence.
+- Unit (DB-backed) `otzar.test.ts` Slice-E block (2): OFF byte-identical (no "YOUR WORK RECORD"); ON injects the caller's OWN work self-scoped (cites it); ON with no matching work → NO block (honest).
+- Full conductSession unit suite unchanged (flag-off invariant).
+- Live: `otzar-live-workos-grounding.spec.ts` — ON-mode: Otzar answers from the caller's real work; does not fabricate work it has no record of. Skips cleanly unless `OTZAR_WORK_GROUNDING_LIVE=on`.
+
+### DO-NOT-BREAK
+- No L8 displacement (grounding is outside the truncation bundle — never in it).
+- Self-scope only (no org-wide / admin-only facts in normal answering).
+- OFF (flag unset) = old behavior, byte-identical.
+- Errors degrade to empty grounding (never fatal to a conversation).
+- Bounded block; prompt budget/truncation bundle unchanged.
+
+## Capability roadmap update
+A + B + C + D + E done. Remaining: **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (loop · etl · identity · orgquery · goal · grounding · memory · admin · ia · 4 baseline) is the acceptance layer for F.
