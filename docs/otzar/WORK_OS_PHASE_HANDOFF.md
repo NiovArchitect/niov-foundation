@@ -312,7 +312,7 @@ The grounding is appended to the system prompt like **`L_ALIGNMENT`** — OUTSID
 ### Production flag state — **ON** (verified live)
 - **Deploy 1 (flag OFF)**: backend `cc08845` went live on otzar-api with `OTZAR_WORK_GROUNDING` unset → baseline 4-smoke suite GREEN (comms-governance · conversation-memory · response-reconciliation · response-roundtrip). Proves the shipped/off config is a zero-regression baseline.
 - **Deploy 2 (flag ON)**: set `OTZAR_WORK_GROUNDING=on` via Render env API (`PUT /v1/services/srv-d8t17sm7r5hc73ed5h6g/env-vars/OTZAR_WORK_GROUNDING`) → redeploy live at commit `cc088457`.
-  - On-mode grounding smoke GREEN (2/2): Otzar cited the caller's own freshly-ingested `orionflux…` telemetry-calibration ledger fact, and declined to fabricate a status for work it has no record of.
+  - On-mode grounding smoke GREEN (2/2): Otzar cited the caller's own freshly-ingested `orionflux…` telemetry-calibration ledger fact, and declined to fabricate a status for work it has no record of. **Verbatim live answer:** _"Based on your work record, you own the `orionflux…` telemetry **calibration**."_ — "calibration" and "Based on your work record" are grounded-only content (absent from the question), so this proves the injected block changed the answer, not a prompt echo. The smoke asserts a grounded-only token (`calibrat|before launch|will finish`), not a codeword/`telemetry` echo that the question already contains.
   - Baseline 4-smoke suite GREEN ×3 under the flag-ON config → no regression from the injected sidecar.
 - **Final state: OTZAR_WORK_GROUNDING=on remains enabled on otzar-api.** Grounding is self-scoped, bounded, and degrades to the prior prompt on any error, so leaving it ON is safe. To revert instantly: `PUT …/env-vars/OTZAR_WORK_GROUNDING {"value":"off"}` (or delete the key) → byte-identical old behavior on next deploy.
 - CT live smoke landed: `otzar-control-tower@f760322` (`otzar-live-workos-grounding.spec.ts` + `conversationMessage` helper + `test:e2e:live:workos:grounding` script).
@@ -322,6 +322,9 @@ The grounding is appended to the system prompt like **`L_ALIGNMENT`** — OUTSID
 - Unit (DB-backed) `otzar.test.ts` Slice-E block (2): OFF byte-identical (no "YOUR WORK RECORD"); ON injects the caller's OWN work self-scoped (cites it); ON with no matching work → NO block (honest).
 - Full conductSession unit suite unchanged (flag-off invariant).
 - Live: `otzar-live-workos-grounding.spec.ts` — ON-mode: Otzar answers from the caller's real work; does not fabricate work it has no record of. Skips cleanly unless `OTZAR_WORK_GROUNDING_LIVE=on`.
+
+### Self-scope no-leak — where it's enforced
+The call site is hardcoded `groundContextForAgent({ caller_entity_id: ownerEntityId, is_manager: false, … })` — it can only ever ground the *caller's own* rows. The org/manager visibility gating lives in `work-os/org-query.service.ts` (Slice B), which is already smoke-verified for no-leak (caller cannot see another entity's work). Slice E adds no new visibility path; it reuses that gate with the manager flag forced off, so the negative case (asking about another entity's work → empty block → no fabrication) is covered by Slice B's enforcement, not re-implemented here.
 
 ### DO-NOT-BREAK
 - No L8 displacement (grounding is outside the truncation bundle — never in it).
