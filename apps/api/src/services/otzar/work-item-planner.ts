@@ -87,11 +87,38 @@ const SUPPORT_ROLE_MAP: Partial<Record<ResponsibilityRole, SupportEdge["relation
   approver: "approver",
 };
 
+// Pronouns + first/second-person references are NOT owner names. The
+// responsibility graph's NAME regex requires a leading capital, but LLM-assisted
+// paths can surface a pronoun ("he'll follow up") or a lowercase token as the
+// "owner". Such a token must NEVER be displayed as an owner ("Follow-up owned by
+// his") nor seeded as a person — the work item still exists, but UNOWNED +
+// NEEDS_OWNER for a human to assign.
+const PRONOUN_TOKENS: ReadonlySet<string> = new Set([
+  "he", "she", "they", "him", "her", "them", "his", "hers", "their", "theirs",
+  "it", "its", "we", "us", "our", "ours", "i", "me", "my", "mine", "you", "your", "yours",
+  "someone", "somebody", "anyone", "everybody", "everyone", "himself", "herself", "themselves",
+]);
+
+/** True when `name` is a pronoun / indirect reference / non-name token that must
+ *  not be shown as an owner or seeded as a person. A real person-name token starts
+ *  with an uppercase letter and is not a pronoun. Exported for tests. */
+export function isPronounOrNonName(name: string): boolean {
+  const t = name.trim();
+  if (t.length === 0) return true;
+  if (PRONOUN_TOKENS.has(t.toLowerCase())) return true; // catches "His"/"THEY" too
+  if (!/^[A-Za-z][A-Za-z'.-]*$/.test(t.split(/\s+/)[0] ?? "")) return true; // first token must look like a name
+  if (!/^[A-Z]/.test(t)) return true; // a name starts capitalized
+  return false;
+}
+
 function titleFromWork(name: string, workItem: string | null): string {
   if (workItem && workItem.trim().length > 0) {
     const w = workItem.trim();
     return w.charAt(0).toUpperCase() + w.slice(1);
   }
+  // No concrete work phrase AND no real owner name → a neutral, honest title
+  // (never "Follow-up owned by his").
+  if (isPronounOrNonName(name)) return "Follow-up — owner needs confirmation";
   return `Follow-up owned by ${name}`;
 }
 
@@ -132,7 +159,10 @@ export function planWorkItems(
     if (!OWNER_ROLES.has(node.role)) continue; // lead/founder_authority → not an owned task here
 
     const r = resolve(node.name);
-    const proven = r.entityId !== null && !r.ambiguous;
+    // A pronoun / non-name token can never be a PROVEN owner, even if a lax
+    // resolver returned an id — force it to NEEDS_OWNER for human assignment.
+    const nameIsDisplayable = !isPronounOrNonName(node.name);
+    const proven = nameIsDisplayable && r.entityId !== null && !r.ambiguous;
     const evidence: WorkItemSourceEvidence = {
       quote: node.evidence,
       speaker: node.name,
@@ -157,13 +187,17 @@ export function planWorkItems(
       workItems.push({
         ledgerType,
         ownerEntityId: null,
-        ownerName: node.name,
+        // Never carry a pronoun/non-name forward as an "owner name" (it would
+        // otherwise seed a phantom person). Empty = no named owner to seed.
+        ownerName: nameIsDisplayable ? node.name : "",
         title: titleFromWork(node.name, node.workItem),
         status: "NEEDS_OWNER",
         needsReview: true,
-        reviewReason: r.ambiguous
-          ? `"${node.name}" matches more than one person (${r.alternatives.join(", ")}) — confirm the owner before assigning.`
-          : `"${node.name}" is not a confirmed member of this org roster — confirm or activate before assigning work.`,
+        reviewReason: !nameIsDisplayable
+          ? `The owner was referenced only indirectly (e.g. a pronoun) — no named person to assign. Confirm who owns this.`
+          : r.ambiguous
+            ? `"${node.name}" matches more than one person (${r.alternatives.join(", ")}) — confirm the owner before assigning.`
+            : `"${node.name}" is not a confirmed member of this org roster — confirm or activate before assigning work.`,
         confidence: "low",
         proofPath: "unproven_owner",
         sourceEvidence: evidence,

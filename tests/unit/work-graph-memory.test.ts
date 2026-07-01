@@ -96,3 +96,35 @@ describe("Phase 6 — governed work-graph/memory events + Dandelion seeds", () =
     for (const s of r.seeds) expect(s.sourceEvidence.length).toBeGreaterThan(0);
   });
 });
+
+describe("P0D — identity-activation seeds cluster by person, skip phantom owners", () => {
+  it("five NEEDS_OWNER items for the same 'David' produce ONE confirm_or_activate_person seed", () => {
+    const r = build({
+      workItems: [
+        item({ ownerName: "David", ownerEntityId: null, needsReview: true, title: "task 1" }),
+        item({ ownerName: "David", ownerEntityId: null, needsReview: true, title: "task 2" }),
+        item({ ownerName: "david", ownerEntityId: null, needsReview: true, title: "task 3" }),
+        item({ ownerName: "David", ownerEntityId: null, needsReview: true, title: "task 4" }),
+        item({ ownerName: "David", ownerEntityId: null, needsReview: true, title: "task 5" }),
+      ],
+    });
+    const personSeeds = r.seeds.filter((s) => s.seedType === "confirm_or_activate_person" && s.subjectName === "David");
+    expect(personSeeds).toHaveLength(1);
+  });
+
+  it("two distinct missing people each get their own seed (no over-merge)", () => {
+    const r = build({
+      workItems: [
+        item({ ownerName: "David", ownerEntityId: null, needsReview: true }),
+        item({ ownerName: "Dishant", ownerEntityId: null, needsReview: true }),
+      ],
+    });
+    const names = r.seeds.filter((s) => s.seedType === "confirm_or_activate_person").map((s) => s.subjectName);
+    expect(new Set(names)).toEqual(new Set(["David", "Dishant"]));
+  });
+
+  it("an owner with no named person (empty ownerName from a pronoun) seeds no phantom person", () => {
+    const r = build({ workItems: [item({ ownerName: "", ownerEntityId: null, needsReview: true })] });
+    expect(r.seeds.some((s) => s.seedType === "confirm_or_activate_person")).toBe(false);
+  });
+});

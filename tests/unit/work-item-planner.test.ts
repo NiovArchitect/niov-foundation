@@ -117,3 +117,47 @@ describe("commitments → per-owner work items, governed by proof", () => {
     expect(r.supportEdges).toHaveLength(0);
   });
 });
+
+// ── P0D identity truth: pronouns / non-name tokens must NOT become owners ──
+import { isPronounOrNonName } from "../../apps/api/src/services/otzar/work-item-planner.js";
+
+describe("identity truth — pronoun / non-name owners are never displayed or seeded", () => {
+  it('a pronoun owner with no work phrase → NEEDS_OWNER, neutral title (never "owned by his")', () => {
+    const r = planWorkItems(graph([node("his", "owner", null)]), resolve);
+    expect(r.workItems).toHaveLength(1);
+    const w = r.workItems[0]!;
+    expect(w.status).toBe("NEEDS_OWNER");
+    expect(w.ownerEntityId).toBeNull();
+    expect(w.title).not.toContain("his");
+    expect(w.title.toLowerCase()).toContain("owner needs confirmation");
+    // No named person carried forward → nothing to seed as a phantom person.
+    expect(w.ownerName).toBe("");
+    expect(w.reviewReason?.toLowerCase()).toContain("pronoun");
+  });
+
+  it("a pronoun owner WITH a real work phrase keeps the work, drops the pronoun owner", () => {
+    const r = planWorkItems(graph([node("they", "owner", "send the launch report")]), resolve);
+    const w = r.workItems[0]!;
+    expect(w.status).toBe("NEEDS_OWNER");
+    expect(w.title.toLowerCase()).toContain("send the launch report");
+    expect(w.ownerName).toBe("");
+    expect(w.title).not.toContain("they");
+  });
+
+  it("a real capitalized name off-roster is still NEEDS_OWNER but keeps the name (activatable)", () => {
+    const r = planWorkItems(graph([node("Dishant", "owner", "prepare the field report")]), resolve);
+    const w = r.workItems[0]!;
+    expect(w.status).toBe("NEEDS_OWNER");
+    expect(w.ownerName).toBe("Dishant"); // real name → can become a person seed
+    expect(w.reviewReason?.toLowerCase()).toContain("confirm or activate");
+  });
+
+  it("isPronounOrNonName classifies tokens", () => {
+    for (const p of ["his", "her", "they", "Them", "someone", "everyone", "", "  ", "david", "3pm"]) {
+      expect(isPronounOrNonName(p)).toBe(true);
+    }
+    for (const n of ["David", "Dishant", "Mary Jane", "O'Brien"]) {
+      expect(isPronounOrNonName(n)).toBe(false);
+    }
+  });
+});
