@@ -219,3 +219,37 @@ one query layer over the one ledger (no new model/memory/graph); scope enforced 
 
 ## Capability roadmap update
 Slice A (multi-source ETL) + Slice B (unified query + grounding) close gaps **A** and **B** of the "make Otzar whole" roadmap. Remaining: **C** cross-source identity reconciliation · **D** Goal layer · **E** wire grounding into conductSession (data-grounded answering) · **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (now loop + etl + orgquery + memory + admin + ia + 4 baseline) is the acceptance layer for each.
+
+---
+
+## Slice C — cross-source identity reconciliation (FND)
+The same person shows up differently per source (display name in a transcript, email in Gmail, handle in Slack). Slice C resolves any of those to ONE canonical org entity so their work UNIFIES under a single identity in the one WorkLedger instead of fragmenting. Closes the Slice-A boundary ("real Slack handle → NEEDS_OWNER").
+
+### Files
+- `apps/api/src/services/otzar/identity-reconciliation.service.ts` (NEW): `reconcileIdentity(orgEntityId, {name?,email?,handle?})` + `reconcileParticipants` (batch) + pure `reconcileAgainst(members, hint)` + `loadOrgMembers`. Deterministic precedence **email → username → name**; org-scoped (only ACTIVE members of THIS org); ambiguous name held (candidates, no auto-pick); unknown → none.
+- `source-event.ts`: `WorkSourceEvent` actor + participants now carry optional `email` / `handle`.
+- `comms-ingest.service.ts` (`ingestSourceEvent`): reconciles the event's actor + participants, and adds each resolved person's SOURCE-LOCAL name as a roster alias (only when it doesn't already resolve to that entity), so the content owner-resolver unifies the same person across sources. **Transcript path unchanged** (reconciliation is skipped for transcripts — no external identifiers).
+- `otzar.service.ts` + route: `/otzar/ingest/source-event` accepts participant/actor email+handle.
+- Barrel exports added.
+
+### Reuses (no new model, no migration)
+`Entity.email` (unique) · `EntityProfile.username` (unique, the handle) · `display_name` · `resolveTokenToEntities` (strict name rules) · `EntityMembership` (org roster / tenant boundary). No new table, no fuzzy matching.
+
+### Governance / honest behaviour
+Org-scoped (a member of another org never matches — cross-tenant blocked). Deterministic: exact email / exact username / strict display-name; **ambiguous is held, unknown resolves to nothing** (the caller keeps NEEDS_OWNER, never a wrong attribution).
+
+### Tests (all green)
+- Unit `identity-reconciliation.test.ts` (6): email/username/name precedence, ambiguous held, unknown none, email disambiguates an ambiguous name.
+- Integration `identity-reconciliation.test.ts` (4): resolve by email/handle/name org-scoped; NO cross-tenant match; **UNIFIES transcript "David" + Slack "Dave"+email → one owner (work from both sources under one entity)**; unknown participant → NEEDS_OWNER.
+- Parity preserved: comms-ingest 6/6 (transcript), source-event 5/5 (Slice A). Fixed a wiring bug where aliasing an already-matching name created a duplicate roster row → false ambiguous; now aliases only when the name doesn't already resolve to that entity.
+- Foundation typecheck 0; unit + integration suites green.
+- Live: new `otzar-live-workos-identity.spec.ts` (+ `test:e2e:live:workos:identity`, folded into `:full`).
+
+### Deploy + live verification
+FND `37a7994` (PR #506, merged, otzar-api live). Slice C enhances the existing `/otzar/ingest/source-event` (accepts participant/actor email+handle) — no new route. CT smoke `af5aa7a`. **Live: identity smoke 3/3** — (1) a source-local name "Davey" + a real member's email → reconciled to the canonical owner (owned work); (2) the same event WITHOUT the email → NEEDS_OWNER (email is what unified it); (3) a stranger email/name → no match. Full-suite parity (`test:e2e:live:workos:full`, now 33 checks incl. loop/etl/identity/orgquery/memory/admin/ia + 4 baseline) confirming; transcript path unchanged, local parity green (comms-ingest 6/6, source-event 5/5). Local gate: typecheck 0 · unit 2811 · integration 1861 · reconciliation unit 6/6 + integration 4/4.
+
+### DO NOT BREAK
+one canonical entity per person across sources; transcript path unchanged; deterministic (no fuzzy); ambiguous held / unknown NEEDS_OWNER (never wrong match); org-scoped (no cross-tenant identity match); alias added only when the source-local name doesn't already resolve.
+
+## Capability roadmap update
+Slices A (multi-source ETL) + B (unified query + grounding) + C (cross-source identity) close gaps A/B/C. Remaining: **D** Goal layer (user + org objectives, work↔goal, progress) · **E** wire org-query grounding into conductSession (data-grounded answering) · **F** governed connector/MCP write-back (Agentforce-parity execution). The deep smoke suite (loop · etl · identity · orgquery · memory · admin · ia · 4 baseline) is the acceptance layer for D–F.
