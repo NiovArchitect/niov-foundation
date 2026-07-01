@@ -427,8 +427,8 @@ export interface IngestSourceEventInput {
     sourceSystem: SourceSystem;
     sourceId: string;
     sourceUrl?: string | null;
-    actor?: { name?: string; handle?: string };
-    participants?: Array<{ name: string }>;
+    actor?: { name?: string; handle?: string; email?: string };
+    participants?: Array<{ name: string; email?: string; handle?: string }>;
     timestamp?: string;
     title?: string | null;
     content: string;
@@ -2115,8 +2115,18 @@ export class OtzarService {
       sourceSystem: s.sourceSystem,
       sourceId: s.sourceId,
       sourceUrl: s.sourceUrl ?? null,
-      actor: { name: s.actor?.name ?? "", ...(s.actor?.handle ? { handle: s.actor.handle } : {}) },
-      participants: Array.isArray(s.participants) ? s.participants.map((p) => ({ name: p.name })) : [],
+      actor: {
+        name: s.actor?.name ?? "",
+        ...(s.actor?.handle ? { handle: s.actor.handle } : {}),
+        ...(s.actor?.email ? { email: s.actor.email } : {}),
+      },
+      participants: Array.isArray(s.participants)
+        ? s.participants.map((p) => ({
+            name: p.name,
+            ...(p.email ? { email: p.email } : {}),
+            ...(p.handle ? { handle: p.handle } : {}),
+          }))
+        : [],
       timestamp: s.timestamp ?? new Date().toISOString(),
       callerEntityId: session.entity_id,
       title: s.title ?? null,
