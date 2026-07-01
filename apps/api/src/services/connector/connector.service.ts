@@ -50,7 +50,9 @@ export type ConnectorType =
   | "JIRA_CLOUD_READ"
   | "LINEAR_READ"
   | "GITHUB_READ"
-  | "MICROSOFT_365_READ";
+  | "MICROSOFT_365_READ"
+  | "SLACK_WRITE"
+  | "MCP_INVOKE";
 
 // WHAT: The shape of one connector-type definition in the registry.
 // INPUT: Used as a record type.
@@ -155,6 +157,24 @@ export const CONNECTOR_REGISTRY: Readonly<
     description:
       "Section 4 C5 sixth real vendor connector — closes the 6/6 connector matrix at RUNTIME_READY. OAuth-2.0 access-token (Azure Active Directory) read-only access to Microsoft 365 via calendar.events.list + drive.items.list + mail.messages.list (Microsoft Graph v1.0; $select query parameter restricts response field set so subject lines / body content / file names / attendee email PII cannot accidentally surface). Fixture-first: real Microsoft Graph API reached only when MS365_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set. No writes at C5 (events.create / files.upload / messages.send / etc. forward-substrate to ≥C6). No OAuth refresh-token rotation. No OneDrive content download. No Outlook mail body read. No Teams read at C5 (forward-substrate). No webhook / change-notification subscriptions. No SharePoint / OneNote / Planner / Bookings reads. tenant_id config field carries the Azure AD tenant identifier (analogous role to C3 workspace_domain or C4-A cloud_id). 401 + 403 both collapse to AUTH (token invalid OR token-missing-scope). Microsoft Graph throttling aware; 429 surfaces RATE_LIMIT.",
   }),
+  SLACK_WRITE: Object.freeze({
+    type: "SLACK_WRITE" as const,
+    display_name: "Slack (write)",
+    transport: "https-post-bearer-token",
+    default_config_keys: Object.freeze(["use_real", "default_channel"]),
+    secret_ref_required: true,
+    description:
+      "Work-OS Slice F first real WRITE connector. Bot-token (xoxb-*) chat.postMessage governed write-back to a Slack channel. Reached only from an approved INVOKE_CONNECTOR Action (never auto-send). Fixture-first: the real Slack Web API is reached only when SLACK_USE_REAL=1 + binding.config.use_real=true + secret_ref env var set, so no test posts to a real workspace. Returns a real receipt (channel + ts + best-effort permalink); the bot token never leaves the provider. missing_scope surfaces the needed scope (e.g. chat:write) for operator triage.",
+  }),
+  MCP_INVOKE: Object.freeze({
+    type: "MCP_INVOKE" as const,
+    display_name: "MCP Tool Invocation",
+    transport: "https-post-jsonrpc-2.0",
+    default_config_keys: Object.freeze(["server_url", "tool_name", "auth_mode", "policy_outcome"]),
+    secret_ref_required: false,
+    description:
+      "Work-OS Slice F real Model Context Protocol tool-invocation connector. JSON-RPC 2.0 tools/call over HTTP to a per-binding McpServerConnection.server_url. Reached only from an approved INVOKE_CONNECTOR Action (never auto-send); the per-tool McpToolPolicy is resolved upstream by the execution bridge and enforced as a defensive last-hop check. auth_mode NONE_FOR_LOCAL_MOCK is the tested/live-verified path (local mock server, http:// permitted); API_KEY / MCP_AUTH resolve a Bearer token from secret_ref and require https://. Production external-server live verification waits for a real server_url + credential.",
+  }),
 });
 
 // WHAT: Lookup helper — returns the catalog entry for a connector
@@ -176,7 +196,9 @@ export function getConnectorTypeDefinition(
     candidate === "JIRA_CLOUD_READ" ||
     candidate === "LINEAR_READ" ||
     candidate === "GITHUB_READ" ||
-    candidate === "MICROSOFT_365_READ"
+    candidate === "MICROSOFT_365_READ" ||
+    candidate === "SLACK_WRITE" ||
+    candidate === "MCP_INVOKE"
   ) {
     return CONNECTOR_REGISTRY[candidate];
   }
@@ -425,6 +447,19 @@ export async function getConnectorProviderAsync(
     // the other read-first providers.
     const mod = await import("./microsoft-365-read.provider.js");
     return new mod.Microsoft365ReadProvider();
+  }
+  if (type === "SLACK_WRITE") {
+    // Work-OS Slice F — first real WRITE connector. Same dynamic-
+    // import pattern as the read providers to avoid a static cycle.
+    const mod = await import("./slack-write.provider.js");
+    return new mod.SlackWriteProvider();
+  }
+  if (type === "MCP_INVOKE") {
+    // Work-OS Slice F — real MCP JSON-RPC tool invocation. Provider
+    // lives under connector-rails/ (the MCP subsystem) but implements
+    // the same ConnectorProvider interface.
+    const mod = await import("../connector-rails/mcp-invoke.provider.js");
+    return new mod.McpInvokeProvider();
   }
   return new FixtureBasedConnectorProvider();
 }
