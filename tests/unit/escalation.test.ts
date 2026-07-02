@@ -63,6 +63,7 @@ import {
   makeEntityInput,
   TEST_PREFIX,
 } from "../helpers.js";
+import { safeApproverReason } from "../../apps/api/src/services/governance/escalation.service.js";
 
 // WHAT: Delete every escalation_requests row that references a test
 //        entity (source / target / resolver). Query-based (not
@@ -754,5 +755,28 @@ describe("expireEscalation", () => {
     expect(audit!.details.system_principal).toBe(SYSTEM_PRINCIPALS.SCHEDULER);
     expect(audit!.details.action).toBe("ESCALATION_EXPIRED");
     expect(audit!.details.new_status).toBe("EXPIRED");
+  });
+});
+
+// ── [PROD-UX-APPROVAL-LOOP] safeApproverReason (pure) ────────────────────────
+describe("safeApproverReason — the approver's human reason as a safe bounded scalar", () => {
+  it("extracts a trimmed reason from resolution_metadata", () => {
+    expect(safeApproverReason({ reason: "  Not appropriate — rework it.  " })).toBe(
+      "Not appropriate — rework it.",
+    );
+  });
+
+  it("returns null for missing/blank/non-string/non-object shapes (never invents a reason)", () => {
+    expect(safeApproverReason(undefined)).toBeNull();
+    expect(safeApproverReason({})).toBeNull();
+    expect(safeApproverReason({ reason: "   " })).toBeNull();
+    expect(safeApproverReason({ reason: 42 })).toBeNull();
+    expect(safeApproverReason("just a string")).toBeNull();
+    expect(safeApproverReason(["reason"])).toBeNull();
+  });
+
+  it("clamps an unbounded reason to 500 chars (audit details stay bounded)", () => {
+    const out = safeApproverReason({ reason: "x".repeat(2000) });
+    expect(out?.length).toBe(500);
   });
 });

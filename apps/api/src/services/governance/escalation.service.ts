@@ -663,8 +663,7 @@ async function transitionPendingForCaller(
     //     (idempotent; a re-approval or a non-PROPOSED action is a no-op);
     //   - transition validity + ACTION_APPROVED audit come from the existing
     //     transitionActionStatus (assert PROPOSED → APPROVED + safe audit).
-    // Rejection (toStatus REJECTED) leaves the Action untouched — unchanged
-    // behavior. NO Slack/connector call happens here; execution stays with
+    // NO Slack/connector call happens here; execution stays with
     // the scheduler/executor after admission.
     if (toStatus === "APPROVED") {
       const pairedAction = await tx.action.findFirst({
@@ -703,8 +702,75 @@ async function transitionPendingForCaller(
       }
     }
 
+    // [PROD-UX-APPROVAL-LOOP] The REJECTED mirror of the block above. Before
+    // this, a rejected escalation left the paired Action PROPOSED forever —
+    // the sender's Action Center kept saying "pending" after the approver had
+    // already ruled (the P0-ARC-FINAL C2 finding). Same guarantees as approve:
+    // exact FK linkage (no paired Action → no-op, route-tier behavior
+    // unchanged); only a still-PROPOSED Action transitions (idempotent);
+    // the canonical state-machine guard validates the edge (PROPOSED →
+    // REJECTED is legal); ACTION_REJECTED audit mirrors the reject paths in
+    // action.service (outcome DENIED). The approver's human reason (a safe
+    // scalar off resolution_metadata.reason, clamped) rides in the audit
+    // details so the verdict is explainable — the escalation row keeps the
+    // full resolution_metadata as its own record.
+    if (toStatus === "REJECTED") {
+      const pairedAction = await tx.action.findFirst({
+        where: { escalation_id: escalationId, status: "PROPOSED", deleted_at: null },
+        select: { action_id: true, status: true },
+      });
+      if (pairedAction !== null) {
+        assertActionTransition(pairedAction.status, "REJECTED");
+        await tx.action.update({
+          where: { action_id: pairedAction.action_id },
+          data: { status: "REJECTED" },
+        });
+        const approverReason = safeApproverReason(resolutionMetadata);
+        await writeAuditEvent(
+          {
+            event_type: "ACTION_REJECTED",
+            outcome: "DENIED",
+            actor_entity_id: callerEntityId,
+            target_entity_id: existing.source_entity_id,
+            details: {
+              action_id: pairedAction.action_id,
+              escalation_id: escalationId,
+              resolved_by_entity_id: callerEntityId,
+              source_entity_id: existing.source_entity_id,
+              decision: "REQUIRE_DUAL_CONTROL",
+              decision_reason: "dual-control-escalation-rejected",
+              ...(approverReason !== null ? { approver_reason: approverReason } : {}),
+            },
+          },
+          tx,
+        );
+      }
+    }
+
     return updatedEscalation;
   });
+}
+
+// WHAT: Extract the approver's human rejection reason from the resolution
+//       metadata as a SAFE bounded scalar (audit details carry no unbounded
+//       or structured caller input).
+// INPUT: The resolution_metadata Json passed by the approve/reject routes.
+// OUTPUT: A trimmed ≤500-char string, or null when none was provided.
+export function safeApproverReason(
+  resolutionMetadata: Prisma.InputJsonValue | undefined,
+): string | null {
+  if (
+    typeof resolutionMetadata !== "object" ||
+    resolutionMetadata === null ||
+    Array.isArray(resolutionMetadata)
+  ) {
+    return null;
+  }
+  const raw = (resolutionMetadata as Record<string, unknown>).reason;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  return trimmed.slice(0, 500);
 }
 
 // WHAT: Transition a PENDING escalation to APPROVED.

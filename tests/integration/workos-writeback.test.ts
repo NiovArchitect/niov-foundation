@@ -39,6 +39,7 @@ import { ContentEncryption } from "@niov/auth";
 import { computeTARHash, createConnectorBinding, createEntity, prisma } from "@niov/database";
 import {
   approveEscalationForCaller,
+  rejectEscalationForCaller,
   createEscalationForCaller,
 } from "../../apps/api/src/services/governance/escalation.service.js";
 import {
@@ -437,5 +438,85 @@ describe("Slice F — dual-control escalation approval flips the paired Action (
     expect(after).toBe(before);
     const updated = await prisma.escalationRequest.findUnique({ where: { escalation_id: esc.escalation_id } });
     expect(updated?.status).toBe("APPROVED");
+  });
+
+  // ── [PROD-UX-APPROVAL-LOOP] the REJECTED mirror ────────────────────────────
+  it("rejecting the dual-control escalation flips the paired Action PROPOSED → REJECTED, audits it with the approver's reason, and it NEVER executes", async () => {
+    const orgId = await makeOrg(false);
+    const sourceId = await makeMember(orgId, false);
+    await makeAdminApprover(orgId);
+    await makeSlackBinding(orgId, sourceId);
+    const entryId = await makeSlackCommitment(orgId, sourceId, "Dual-control reject-leg post");
+
+    const result = await promoteCommitmentToAction({
+      ledger_entry_id: entryId, org_entity_id: orgId, caller_entity_id: sourceId, is_manager: false,
+    });
+    expect(result.action_status).toBe("PROPOSED");
+    const actionId = result.action_id!;
+    const escId = result.escalation_id!;
+    const esc = await prisma.escalationRequest.findUnique({ where: { escalation_id: escId } });
+    const approverId = esc!.target_entity_id;
+
+    // The approver rejects WITH a human reason (resolution_metadata.reason).
+    await rejectEscalationForCaller(approverId, escId, { reason: "Not appropriate for this channel — rework the message." });
+
+    // The escalation AND the paired Action tell the same truth.
+    const escAfter = await prisma.escalationRequest.findUnique({ where: { escalation_id: escId } });
+    expect(escAfter?.status).toBe("REJECTED");
+    expect((await prisma.action.findUnique({ where: { action_id: actionId } }))?.status).toBe("REJECTED");
+
+    // ACTION_REJECTED audit present, DENIED, carrying the safe reason scalars.
+    const rejectedAudit = await prisma.auditEvent.findMany({
+      where: { event_type: "ACTION_REJECTED", details: { path: ["action_id"], equals: actionId } },
+    });
+    expect(rejectedAudit.length).toBeGreaterThan(0);
+    const d = rejectedAudit[0]!.details as Record<string, unknown>;
+    expect(d.decision_reason).toBe("dual-control-escalation-rejected");
+    expect(d.approver_reason).toBe("Not appropriate for this channel — rework the message.");
+    expect(rejectedAudit[0]!.outcome).toBe("DENIED");
+
+    // A rejected action NEVER executes — scheduler/executor leave it REJECTED.
+    await tickActionScheduler({});
+    await tickActionExecutor({});
+    expect((await prisma.action.findUnique({ where: { action_id: actionId } }))?.status).toBe("REJECTED");
+  });
+
+  it("rejecting is a safe no-op when the paired Action is no longer PROPOSED (e.g. already CANCELLED)", async () => {
+    const orgId = await makeOrg(false);
+    const sourceId = await makeMember(orgId, false);
+    await makeAdminApprover(orgId);
+    await makeSlackBinding(orgId, sourceId);
+    const entryId = await makeSlackCommitment(orgId, sourceId, "Dual-control noop reject-leg");
+    const result = await promoteCommitmentToAction({
+      ledger_entry_id: entryId, org_entity_id: orgId, caller_entity_id: sourceId, is_manager: false,
+    });
+    const actionId = result.action_id!;
+    const escId = result.escalation_id!;
+    // The Action leaves PROPOSED through another legal edge first.
+    await prisma.action.update({ where: { action_id: actionId }, data: { status: "CANCELLED" } });
+
+    const esc = await prisma.escalationRequest.findUnique({ where: { escalation_id: escId } });
+    await rejectEscalationForCaller(esc!.target_entity_id, escId);
+
+    // The escalation resolves; the already-terminal Action is untouched.
+    expect((await prisma.escalationRequest.findUnique({ where: { escalation_id: escId } }))?.status).toBe("REJECTED");
+    expect((await prisma.action.findUnique({ where: { action_id: actionId } }))?.status).toBe("CANCELLED");
+  });
+
+  it("rejecting a NON-Action escalation leaves actions untouched (route-tier behavior unchanged)", async () => {
+    const orgId = await makeOrg(false);
+    const sourceId = await makeMember(orgId, false);
+    const approverId = await makeAdminApprover(orgId);
+    const esc = await createEscalationForCaller(sourceId, {
+      target_entity_id: approverId,
+      escalation_type: "COMPLIANCE_GATE",
+      severity: "HIGH",
+      description: "unit: non-action escalation reject",
+      expires_at: null,
+    });
+    const before = await prisma.action.count();
+    await rejectEscalationForCaller(approverId, esc.escalation_id, { reason: "not needed" });
+    expect(await prisma.action.count()).toBe(before);
+    expect((await prisma.escalationRequest.findUnique({ where: { escalation_id: esc.escalation_id } }))?.status).toBe("REJECTED");
   });
 });

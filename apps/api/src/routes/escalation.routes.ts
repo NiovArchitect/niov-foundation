@@ -149,24 +149,32 @@ export async function registerEscalationRoutes(
 
   // POST /api/v1/escalations/:id/reject -- transition PENDING ->
   // REJECTED. Same gate + error mapping as approve.
+  // [PROD-UX-APPROVAL-LOOP] Also accepts a plain `reason` string and folds it
+  // into resolution_metadata — existing clients (and the Review Center) were
+  // sending { reason } which this route silently dropped, so approver reasons
+  // never persisted. resolution_metadata wins when both are present.
   app.post<{
     Params: { id: string };
-    Body: { resolution_metadata?: Prisma.InputJsonValue };
+    Body: { resolution_metadata?: Prisma.InputJsonValue; reason?: string };
   }>(
     "/api/v1/escalations/:id/reject",
     { preHandler: requireAuth(authService, "write") },
     async (
       request: FastifyRequest<{
         Params: { id: string };
-        Body: { resolution_metadata?: Prisma.InputJsonValue };
+        Body: { resolution_metadata?: Prisma.InputJsonValue; reason?: string };
       }>,
       reply,
     ) => {
       try {
+        const reason =
+          typeof request.body?.reason === "string" && request.body.reason.trim().length > 0
+            ? request.body.reason.trim().slice(0, 500)
+            : undefined;
         const escalation = await rejectEscalationForCaller(
           request.auth!.entity_id,
           request.params.id,
-          request.body?.resolution_metadata,
+          request.body?.resolution_metadata ?? (reason !== undefined ? { reason } : undefined),
         );
         return reply.code(200).send({ ok: true, escalation });
       } catch (err) {
