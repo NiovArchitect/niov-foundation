@@ -183,6 +183,13 @@ export interface PendingFollowUp {
   /** The pre-governed send-card, stored verbatim at ingest so the CT re-renders
    *  the SAME ProposedActionCard (draft_text + recipient_governance + autonomy). */
   action: CommsSuggestedAction;
+  /** [PROD-UX-BUGC] Present ONLY on ambiguous cards: the selectable people,
+   *  resolved SERVER-SIDE (tenant-scoped, active org members) so the CT never
+   *  resolves identity from display names (data-flow contract rule 5 —
+   *  duplicate-name safe: two people with the same name appear as two distinct
+   *  entries). Feeds the "Choose recipient" affordance → resolve-recipient
+   *  select. Omitted when nothing resolves — never fabricated. */
+  select_candidates?: Array<{ entity_id: string; display_name: string }>;
 }
 
 // WHAT: read the caller's own drafted follow-ups back as durable send-cards.
@@ -221,6 +228,48 @@ export async function getPendingFollowUps(args: {
       updated_at: r.updated_at.toISOString(),
       action,
     });
+  }
+
+  // [PROD-UX-BUGC] Ambiguous cards get server-resolved select candidates (the
+  // alternative names + the current guess, matched to ACTIVE members of THIS
+  // org). Identity resolution stays server-side and id-based — the CT only
+  // renders labels and posts back an entity_id. One roster read for all rows.
+  const ambiguous = out.filter(
+    (f) => f.action.recipient_governance.recipientSafety === "ambiguous",
+  );
+  if (ambiguous.length > 0) {
+    const wantedNames = new Set<string>();
+    for (const f of ambiguous) {
+      for (const n of f.action.recipient_governance.evidence.alternativeCandidates) {
+        wantedNames.add(n.toLowerCase());
+      }
+      wantedNames.add(f.action.target.display_name.toLowerCase());
+    }
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberIds = memberships.map((m) => m.child_id);
+    const people =
+      memberIds.length === 0
+        ? []
+        : await prisma.entity.findMany({
+            where: { entity_id: { in: memberIds }, entity_type: "PERSON" },
+            select: { entity_id: true, display_name: true },
+          });
+    for (const f of ambiguous) {
+      const names = new Set<string>([
+        ...f.action.recipient_governance.evidence.alternativeCandidates.map((n) => n.toLowerCase()),
+        f.action.target.display_name.toLowerCase(),
+      ]);
+      const candidates = people.filter((p) => names.has(p.display_name.toLowerCase()));
+      if (candidates.length > 0) {
+        f.select_candidates = candidates.map((p) => ({
+          entity_id: p.entity_id,
+          display_name: p.display_name,
+        }));
+      }
+    }
   }
   return out;
 }
