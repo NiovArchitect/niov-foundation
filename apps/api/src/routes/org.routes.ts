@@ -49,6 +49,27 @@ import { assertEntitledForOrgSoftGate } from "../services/billing/entitlement-ch
 import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
 import type { AuthService } from "../services/auth.service.js";
 
+// [SEC — PROD-UX-APPROVAL-LOOP finding] The raw `Entity` row carries
+// `password_hash`. Both org-admin entity reads (list + detail) previously
+// returned the unselected row, exposing every member's bcrypt hash to any org
+// admin over the wire. This allowlist is the exact customer-facing Entity
+// contract (mirrors the CT `Entity` type) — the hash and nothing-typed stay
+// server-side. Every entity read in this file MUST use it.
+const SAFE_ENTITY_SELECT = {
+  entity_id: true,
+  entity_type: true,
+  display_name: true,
+  email: true,
+  status: true,
+  clearance_level: true,
+  public_key: true,
+  failed_auth_attempts: true,
+  suspended_at: true,
+  created_at: true,
+  updated_at: true,
+  deleted_at: true,
+} as const;
+
 // WHAT: Default + max page size for list endpoints. Audit-table reads
 //        cap separately at MAX_AUDIT_EVENTS_PAGE_SIZE (Section 1E).
 // INPUT: Used as constants.
@@ -581,6 +602,9 @@ export async function registerOrgRoutes(
           skip,
           take,
           orderBy: { created_at: "desc" },
+          // [SEC] Safe fields only — the raw row carries password_hash, which
+          // must NEVER cross the wire (see SAFE_ENTITY_SELECT).
+          select: SAFE_ENTITY_SELECT,
         }),
         prisma.entity.count({ where }),
       ]);
@@ -616,7 +640,11 @@ export async function registerOrgRoutes(
         });
       }
       const [entity, profile] = await Promise.all([
-        prisma.entity.findUnique({ where: { entity_id: request.params.id } }),
+        prisma.entity.findUnique({
+          where: { entity_id: request.params.id },
+          // [SEC] Safe fields only — the raw row carries password_hash.
+          select: SAFE_ENTITY_SELECT,
+        }),
         prisma.entityProfile.findUnique({
           where: { entity_id: request.params.id },
         }),

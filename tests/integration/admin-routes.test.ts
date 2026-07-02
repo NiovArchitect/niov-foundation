@@ -360,6 +360,37 @@ describe("GET /org/entities + /org/hierarchy", () => {
     expect(emails).not.toContain(orgBMemberEmail);
   });
 
+  // [SEC — PROD-UX-APPROVAL-LOOP finding] The raw Entity row carries
+  // password_hash; both org-admin entity reads previously returned the
+  // unselected row. Credential material must NEVER cross the wire.
+  it("entity list AND detail never expose password_hash (safe-field allowlist)", async () => {
+    const ctx = await createOrgAndAdmin();
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/entities",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.body).not.toContain("password_hash");
+    const first = (list.json() as { items: Array<{ entity_id: string; display_name: string }> }).items[0];
+    expect(first).toBeDefined();
+    // The customer-facing contract still holds (display fields present).
+    expect(first!.display_name.length).toBeGreaterThan(0);
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/api/v1/org/entities/${first!.entity_id}`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.body).not.toContain("password_hash");
+    const entity = (detail.json() as { entity: { display_name: string; entity_id: string } }).entity;
+    expect(entity.entity_id).toBe(first!.entity_id);
+    expect(entity.display_name.length).toBeGreaterThan(0);
+  });
+
   it("GET /org/hierarchy returns memberships for caller's org only", async () => {
     const ctx = await createOrgAndAdmin();
     const response = await app.inject({
