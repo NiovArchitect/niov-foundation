@@ -872,7 +872,7 @@ export async function buildApp(
   await registerOrgCollaborationPolicyRoutes(app, authService);
   await registerOtzarVoiceReadyRoutes(app, otzarService);
   await registerConnectorRailsRoutes(app, authService);
-  await registerConnectorDataRoutes(app, authService);
+  await registerConnectorDataRoutes(app, authService, otzarService);
   await registerCalendarEventRoutes(app, authService);
   await registerWorkOsAuthorityRoutes(app, authService);
   await registerSystemRuntimeRoutes(app, authService);

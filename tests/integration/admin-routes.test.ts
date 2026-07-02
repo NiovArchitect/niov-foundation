@@ -1429,3 +1429,53 @@ describe("POST /org/hierarchy/assign (PROD-UX-HIER)", () => {
     expect(managersOfB[0]!.parent_id).toBe(c.entity_id);
   });
 });
+
+// ── [CX-SLICE-3] POST /zoom/recordings/ingest — governed meeting ingestion
+//    (admin-triggered; transcript fetched server-side; fed to the EXISTING
+//    comms-ingest pipeline). CI has no Zoom OAuth: the honest refusal chain
+//    is what we prove here (gate → validation → NOT_CONFIGURED); the happy
+//    path needs a live org with Zoom connected (founder-run).
+describe("POST /zoom/recordings/ingest (CX-SLICE-3)", () => {
+  it("non-admins are refused by the capability gate (403)", async () => {
+    const ctx = await createOrgAndAdmin();
+    const email = `${TEST_PREFIX}zoomemp_${randomUUID()}@niov.test`;
+    await app.inject({
+      method: "POST", url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email, password: "correct-horse-battery", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const login = await app.inject({
+      method: "POST", url: "/api/v1/auth/login",
+      payload: { email, password: "correct-horse-battery", requested_operations: ["read", "write"] },
+      remoteAddress: "10.99.66.6",
+    });
+    const token = (login.json() as { token: string }).token;
+    const r = await app.inject({
+      method: "POST", url: "/api/v1/zoom/recordings/ingest",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { meeting_id: "123" },
+      remoteAddress: "10.99.66.6",
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("admin without meeting_id → 422; without Zoom connected → 409 NOT_CONFIGURED", async () => {
+    const ctx = await createOrgAndAdmin();
+    const bad = await app.inject({
+      method: "POST", url: "/api/v1/zoom/recordings/ingest",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: {},
+      remoteAddress: ctx.adminIp,
+    });
+    expect(bad.statusCode).toBe(422);
+    const noZoom = await app.inject({
+      method: "POST", url: "/api/v1/zoom/recordings/ingest",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { meeting_id: "123" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(noZoom.statusCode).toBe(409);
+    expect((noZoom.json() as { code: string }).code).toBe("NOT_CONFIGURED");
+  });
+});
