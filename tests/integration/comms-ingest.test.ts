@@ -12,6 +12,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@niov/database";
 import { ingestTranscript, buildResponsibilityGraph } from "@niov/api";
 import { createEntity } from "../../packages/database/src/queries/entity.js";
+import { getMyWork } from "../../apps/api/src/services/work-os/work-ledger.service.js";
+import { getPendingFollowUps } from "../../apps/api/src/services/work-os/comms-artifacts.service.js";
 import { ensureAuditTriggers, cleanupTestData } from "../helpers.js";
 
 const TEST_PREFIX = "__niov_test__comms_ingest__";
@@ -128,6 +130,49 @@ describe("comms-ingest — transcript becomes durable owned work (DB)", () => {
 
     // The API result agrees with the DB.
     expect(r.work_items.some((w) => w.owner_entity_id === davidId && !w.needs_review)).toBe(true);
+  });
+
+  it("[PROD-UX-BUGB] persists each drafted follow-up as a durable FOLLOW_UP row, resumable + excluded from My Work", async () => {
+    const r = await ingestTranscript({ callerEntityId: callerId, capturedText: TRANSCRIPT, llmProvider: null });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    // Persistence contract: exactly one durable FOLLOW_UP ledger row per drafted
+    // follow-up returned in the extraction — the cards can no longer live only
+    // in the CT's volatile response.
+    const followUpRows = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, ledger_type: "FOLLOW_UP", source_type: "TRANSCRIPT" },
+    });
+    expect(followUpRows.length).toBe(r.extraction.suggested_actions.length);
+
+    // Every stored row is keyed to the conversation, owned by the caller (the
+    // sender), carries a concrete next step (so it reads as actionable work, not
+    // a stuck blind spot), and carries the full send-card payload verbatim so
+    // the resume projection can rebuild the exact ProposedActionCard.
+    for (const row of followUpRows) {
+      expect(row.conversation_id).toBe(r.conversation.meeting_capture_id);
+      expect(row.owner_entity_id).toBe(callerId);
+      expect(row.status).toBe("DRAFT");
+      expect(row.next_action).toBeTruthy();
+      const details = row.details as Record<string, unknown>;
+      const card = details.follow_up as Record<string, unknown> | undefined;
+      expect(card).toBeDefined();
+      expect(typeof card!.draft_text).toBe("string");
+      expect(typeof card!.local_id).toBe("string");
+    }
+
+    // The resume projection returns them for the caller (survives navigation) —
+    // this is the rich send-card surface in Comms.
+    const pending = await getPendingFollowUps({ org_entity_id: orgId, caller_entity_id: callerId });
+    expect(pending.length).toBe(followUpRows.length);
+
+    // A drafted follow-up the caller owns IS the caller's pending work: it also
+    // appears in My Work (the single store surfaced on every relevant page).
+    // The mirrored COMMITMENT has a DIFFERENT owner (the doer), so there is no
+    // double-count.
+    const myWork = await getMyWork({ org_entity_id: orgId, caller_entity_id: callerId });
+    const myFollowUps = myWork.filter((w) => w.ledger_type === "FOLLOW_UP");
+    expect(myFollowUps.length).toBe(followUpRows.length);
   });
 
   it("an unproven owner (not on the roster) is held NEEDS_OWNER, never auto-assigned", async () => {
