@@ -738,3 +738,51 @@ describe("human-authority internal message — audit proof (LIVE-2A)", () => {
     expect(after).toBe(before);
   });
 });
+
+// ── [PROD-UX-SCALE] team-work server pagination — the fixed take:300
+//    truncated silently (observed at exactly 300 live). ──
+describe("GET /work-os/team-work pagination", () => {
+  it("pages with skip/take, reports has_more, keeps pages disjoint, and stays manager-gated", async () => {
+    const mgr = await member(ORG_ID, `${TEST_PREFIX}Mgr PAGE`);
+    await prisma.tokenAttributeRepository.updateMany({
+      where: { entity_id: mgr.id },
+      data: { can_admin_org: true },
+    });
+    for (let i = 0; i < 4; i++) {
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/work-os/ledger",
+        headers: { authorization: `Bearer ${mgr.token}` },
+        payload: { ledger_type: "FOLLOW_UP", title: `${TEST_PREFIX}team page ${i}` },
+      });
+    }
+    const p1 = await app.inject({
+      method: "GET", url: "/api/v1/work-os/team-work?take=2",
+      headers: { authorization: `Bearer ${mgr.token}` },
+    });
+    expect(p1.statusCode).toBe(200);
+    const b1 = p1.json() as { entries: Array<{ ledger_entry_id: string }>; has_more: boolean; skip: number };
+    expect(b1.entries).toHaveLength(2);
+    expect(b1.has_more).toBe(true);
+    const p2 = await app.inject({
+      method: "GET", url: "/api/v1/work-os/team-work?skip=2&take=2",
+      headers: { authorization: `Bearer ${mgr.token}` },
+    });
+    const b2 = p2.json() as { entries: Array<{ ledger_entry_id: string }> };
+    const ids1 = new Set(b1.entries.map((e) => e.ledger_entry_id));
+    expect(b2.entries.some((e) => ids1.has(e.ledger_entry_id))).toBe(false);
+    // Legacy no-param call keeps working and now carries has_more.
+    const legacy = await app.inject({
+      method: "GET", url: "/api/v1/work-os/team-work",
+      headers: { authorization: `Bearer ${mgr.token}` },
+    });
+    expect((legacy.json() as { has_more: boolean }).has_more).toBe(false);
+    // Pagination params never bypass the manager gate.
+    const emp = await member(ORG_ID, `${TEST_PREFIX}Emp PAGE`);
+    const denied = await app.inject({
+      method: "GET", url: "/api/v1/work-os/team-work?take=2",
+      headers: { authorization: `Bearer ${emp.token}` },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+});

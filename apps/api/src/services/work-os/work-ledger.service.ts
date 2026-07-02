@@ -631,6 +631,9 @@ export type TeamWorkResult =
 export async function getTeamWork(args: {
   org_entity_id: string;
   is_manager: boolean;
+  // [PROD-UX-SCALE] optional server pagination; absent → legacy first page.
+  skip?: number;
+  take?: number;
 }): Promise<TeamWorkResult> {
   if (!args.is_manager) {
     return {
@@ -647,8 +650,11 @@ export async function getTeamWork(args: {
       ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED", "VERIFIED"] } },
     },
-    orderBy: { created_at: "desc" },
-    take: 300,
+    // Stable pagination order: created_at DESC with the id tiebreaker so
+    // rows never duplicate or vanish across pages.
+    orderBy: [{ created_at: "desc" }, { ledger_entry_id: "desc" }],
+    skip: args.skip ?? 0,
+    take: args.take ?? 300,
   });
   // Phase 1285-G/H — enrich with participant display names via the SINGLE
   // shared resolver (canonical identity contract: a label always, never a raw
