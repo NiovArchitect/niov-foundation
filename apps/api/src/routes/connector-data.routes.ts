@@ -10,6 +10,9 @@
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
+import type { OtzarService } from "../services/otzar/otzar.service.js";
+import { requireAdminCapability } from "../middleware/admin.middleware.js";
+import { fetchZoomTranscriptForOrg } from "../services/connector/zoom-transcript.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 import {
   listZoomRecordingsForOrg,
@@ -61,6 +64,7 @@ function statusForCode(code: string): number {
 export async function registerConnectorDataRoutes(
   app: FastifyInstance,
   authService: AuthService,
+  otzarService: OtzarService,
 ): Promise<void> {
   // ── Zoom cloud recordings (read-only) ──
   app.get<{
@@ -90,6 +94,53 @@ export async function registerConnectorDataRoutes(
       return reply.code(statusForCode(result.code)).send(result);
     return reply.code(200).send(result);
   });
+
+
+  // ── [CX-SLICE-3] Governed meeting ingestion (admin-triggered) ──
+  // POST /api/v1/zoom/recordings/ingest — the safe first slice of meeting
+  // ingestion: an ADMIN picks a recording; the transcript is fetched
+  // server-side (org OAuth token; download URLs never exposed), parsed, and
+  // fed to the EXISTING comms-ingest pipeline (owners, seeds, evidence,
+  // audit — no second pipeline). The admin trigger IS the consent record
+  // (audited as CONNECTOR_DATA_READ + the ingest's own audit trail).
+  app.post<{ Body: { meeting_id?: unknown } }>(
+    "/api/v1/zoom/recordings/ingest",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const bearer = bearerFrom(request.headers.authorization);
+      if (bearer === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const meetingId =
+        typeof request.body?.meeting_id === "string" && request.body.meeting_id.length > 0
+          ? request.body.meeting_id
+          : null;
+      if (meetingId === null) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "meeting_id is required" });
+      }
+      const orgEntityId = await resolveOrgOrFail(request.auth!.entity_id, reply);
+      if (orgEntityId === null) return;
+      const fetched = await fetchZoomTranscriptForOrg({
+        actor_entity_id: request.auth!.entity_id,
+        org_entity_id: orgEntityId,
+        meeting_id: meetingId,
+      });
+      if (fetched.ok === false) {
+        const status =
+          fetched.code === "NOT_FOUND" || fetched.code === "NO_TRANSCRIPT" ? 404
+          : fetched.code === "NOT_CONFIGURED" ? 409
+          : fetched.code === "TRANSCRIPT_TOO_LARGE" ? 422
+          : 502;
+        return reply.code(status).send({ ok: false, code: fetched.code });
+      }
+      const result = await otzarService.ingestComms({
+        token: bearer,
+        captured_text: fetched.transcript,
+        title: `Zoom: ${fetched.topic}`,
+      });
+      if (!result.ok) return reply.code(502).send(result);
+      return reply.code(200).send(result);
+    },
+  );
 
   // ── Google Calendar free/busy (read-only) ──
   app.post<{
