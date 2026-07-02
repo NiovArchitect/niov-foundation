@@ -751,14 +751,80 @@ export async function registerOrgRoutes(
       const callerId = request.auth!.entity_id;
       const orgEntityId = await resolveOrgOrFail(callerId, reply);
       if (orgEntityId === null) return;
-      const memberships = await prisma.entityMembership.findMany({
+      const orgEdges = await prisma.entityMembership.findMany({
         where: { parent_id: orgEntityId, is_active: true },
         orderBy: { hierarchy_level: "desc" },
       });
+      // [PROD-UX-HIER] Person→person manager edges among this org's members
+      // were invisible here (the old query only matched parent_id = org).
+      // Both edge classes now return so the reporting structure is readable.
+      const memberIds = orgEdges.map((e) => e.child_id);
+      const personEdges =
+        memberIds.length === 0
+          ? []
+          : await prisma.entityMembership.findMany({
+              where: {
+                is_active: true,
+                parent_id: { in: memberIds },
+                child_id: { in: memberIds },
+              },
+              orderBy: { hierarchy_level: "asc" },
+            });
       return reply.code(200).send({
         ok: true,
         org_entity_id: orgEntityId,
-        memberships,
+        memberships: [...orgEdges, ...personEdges],
+      });
+    },
+  );
+
+  // POST /org/hierarchy/assign -- [PROD-UX-HIER] admin authoring of the
+  // person→person reporting structure (manager + role + department) over the
+  // existing EntityMembership model. Org-scoped via the CALLER; stable IDs
+  // only; cycle-safe; audited. Employees are refused by the same capability
+  // gate as the read.
+  app.post<{
+    Body: {
+      person_entity_id?: string;
+      manager_entity_id?: string | null;
+      role_title?: string;
+      department?: string;
+    };
+  }>(
+    "/api/v1/org/hierarchy/assign",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const body = request.body ?? {};
+      if (typeof body.person_entity_id !== "string" || body.person_entity_id.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_FIELD", message: "person_entity_id is required." });
+      }
+      const manager =
+        body.manager_entity_id === undefined || body.manager_entity_id === null
+          ? null
+          : String(body.manager_entity_id);
+      const { assignManager } = await import("../services/governance/hierarchy.service.js");
+      const result = await assignManager({
+        org_entity_id: orgEntityId,
+        actor_entity_id: callerId,
+        person_entity_id: body.person_entity_id,
+        manager_entity_id: manager,
+        role_title: typeof body.role_title === "string" ? body.role_title : undefined,
+        department: typeof body.department === "string" ? body.department : undefined,
+      });
+      if (!result.ok) {
+        const status =
+          result.code === "PERSON_NOT_FOUND" || result.code === "MANAGER_NOT_FOUND" ? 404 : 422;
+        return reply.code(status).send({ ok: false, code: result.code });
+      }
+      return reply.code(200).send({
+        ok: true,
+        membership_id: result.membership_id,
+        audit_event_id: result.audit_event_id,
       });
     },
   );
@@ -1229,7 +1295,7 @@ export async function registerOrgRoutes(
             capsule_type: true,
             topic_tags: true,
             relevance_score: true,
-            payload_summary: true,
+            payload_summary: true, // allow: payload_summary — ADR-0026 §6: the SUMMARY (never raw payload) is this list's safe projection; pre-existing surface, flagged only because this file changed
             payload_size_tokens: true,
             clearance_required: true,
             access_count: true,

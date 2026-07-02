@@ -357,15 +357,28 @@ export async function registerWorkOsLedgerRoutes(
   );
 
   // ── My Work ──
-  app.get("/api/v1/work-os/my-work", async (request, reply) => {
-    const ctx = await auth(request, reply, "read");
-    if (ctx === null) return;
-    const items = await getMyWork({
-      org_entity_id: ctx.org_entity_id,
-      caller_entity_id: ctx.entity_id,
-    });
-    return reply.code(200).send({ ok: true, items });
-  });
+  app.get<{ Querystring: { skip?: string; take?: string } }>(
+    "/api/v1/work-os/my-work",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      // [PROD-UX-SCALE] server pagination — the old fixed take:200 truncated
+      // silently once a caller crossed 200 items (observed in production).
+      // Additive: no params → identical first-page behavior + has_more.
+      const skip = Math.max(0, Number.parseInt(request.query.skip ?? "0", 10) || 0);
+      const take = Math.min(200, Math.max(1, Number.parseInt(request.query.take ?? "200", 10) || 200));
+      const items = await getMyWork({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        skip,
+        take: take + 1, // one extra row = the honest has_more signal
+      });
+      const has_more = items.length > take;
+      return reply
+        .code(200)
+        .send({ ok: true, items: items.slice(0, take), skip, take, has_more });
+    },
+  );
 
   // ── Team Work ──
   app.get("/api/v1/work-os/team-work", async (request, reply) => {
