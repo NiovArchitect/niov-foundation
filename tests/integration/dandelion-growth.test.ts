@@ -142,8 +142,18 @@ describe("Phase 1237 — Dandelion org growth", () => {
         data: { entity_id: id, job_title: title },
       });
     }
+    // [PROD-UX-BUGD] The newcomer has REAL org placement — a manager edge
+    // (reports to the colleague) and a department — so the growth copy must
+    // acknowledge it instead of calling them "not connected".
+    await prisma.entityMembership.create({
+      data: { parent_id: connectedId, child_id: lonelyId, is_active: true, hierarchy_level: 2 },
+    });
+    await prisma.entityMembership.updateMany({
+      where: { parent_id: orgId, child_id: lonelyId },
+      data: { department: "Engineering" },
+    });
     // Connect admin + colleague to a project so only the newcomer is
-    // disconnected.
+    // without one.
     const project = await prisma.workProject.create({
       data: {
         org_entity_id: orgId,
@@ -207,17 +217,42 @@ describe("Phase 1237 — Dandelion org growth", () => {
     const kinds = r.growth.recommendations.map((x) => x.kind);
     expect(kinds).toContain("ASSIGN_INTERNAL_OWNER");
     expect(kinds).toContain("REDUCE_OVERLOAD");
-    expect(kinds).toContain("CONNECT_TEAMMATE");
+    expect(kinds).toContain("NEEDS_PROJECT_OR_WORKSPACE");
     expect(kinds).toContain("PREPARE_ONBOARDING");
     expect(r.growth.headline).toContain("strengthen your organization");
     expect(r.growth.signals.unowned_external_count).toBe(1);
-    expect(r.growth.signals.disconnected_members_count).toBe(1);
+    expect(r.growth.signals.members_without_project_count).toBe(1);
 
-    // Safe view: display names only — no ids, no emails.
+    // [PROD-UX-BUGD] The recommendation states the person's TRUE org
+    // relationship (member, on their manager's team) and names the ONE
+    // missing object (a first project/workspace) — never "not connected".
+    const rec = r.growth.recommendations.find((x) => x.kind === "NEEDS_PROJECT_OR_WORKSPACE")!;
+    expect(rec.title).toContain("needs a first project or workspace");
+    expect(rec.why).toContain("already part of your organization");
+    expect(rec.why).toContain("'s team"); // the real manager edge is acknowledged
+    expect(`${rec.title} ${rec.why}`).not.toMatch(/isn't connected|not connected|disconnected/i);
+    // Structured source-of-truth metadata, read from the canonical stores.
+    expect(rec.context).toEqual({
+      person_entity_id: lonelyId, // stable id for keying/dismissal (duplicate-name safe)
+      org_member: true,
+      has_department: true,
+      has_manager: true,
+      has_project_or_workspace: false,
+      missing_connection_type: "PROJECT_OR_WORKSPACE",
+    });
+
+    // Safe view: no emails, no memory contents. (Entity ids are ALLOWED as
+    // stable references in context — a founder-ratified BUGD contract change;
+    // they resolve identity where display names must not.)
     const serialized = JSON.stringify(r.growth);
     expect(serialized).not.toContain("@niov-test.com");
-    expect(serialized).not.toContain(adminId);
-    expect(serialized).not.toContain(lonelyId);
+
+    // A person who is NOT an org member never appears as a teammate.
+    const outsider = await makeEntity("Outsider Person", "PERSON", 3);
+    const r2 = await getOrgGrowthForCaller(adminId);
+    if (r2.ok === false) throw new Error("expected ok");
+    expect(JSON.stringify(r2.growth)).not.toContain("Outsider Person");
+    expect(JSON.stringify(r2.growth)).not.toContain(outsider);
   });
 
   it("non-admin members cannot read the org-growth view", async () => {

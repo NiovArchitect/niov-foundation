@@ -85,6 +85,7 @@ import type {
   PrivilegedEndpoint,
 } from "../../security/privileged-endpoints.js";
 import { dualControlDescription } from "../../security/privileged-endpoints.js";
+import { getOrgEntityId } from "./org.js";
 import { logger } from "../../logger.js";
 // Work-OS Slice F — approving an Action-paired dual-control escalation must
 // approve the paired Action using the EXISTING Action state-machine guard
@@ -399,12 +400,18 @@ export async function resolveDualControlTarget(
   // candidate query joins through EntityMembership (the candidate must be
   // an active child of the same parent org as the caller).
   if (endpoint.authTier === "can_admin_org") {
-    const callerMembership = await prisma.entityMembership.findFirst({
-      where: { child_id: callerEntityId, is_active: true },
-      select: { parent_id: true },
-      orderBy: { hierarchy_level: "desc" },
-    });
-    if (callerMembership === null) {
+    // [PROD-UX-BUGD regression fix] Resolve the caller's ORG (the COMPANY
+    // entity) canonically. The previous resolution took the caller's
+    // membership with the HIGHEST hierarchy_level as "the org" — but once
+    // org-hierarchy manager edges exist (person→person memberships whose
+    // hierarchy_level exceeds the org edge's), that resolved "the org" to the
+    // caller's MANAGER. No admin is a child of a person, so EVERY dual-control
+    // action for anyone with a manager failed NO_ELIGIBLE_TARGET — rejecting
+    // sends that should have queued for approval.
+    let callerOrgId: string;
+    try {
+      callerOrgId = await getOrgEntityId(callerEntityId);
+    } catch {
       return { ok: false, reason: "NO_ELIGIBLE_TARGET" };
     }
     const orgCandidate = await prisma.entity.findFirst({
@@ -414,7 +421,7 @@ export async function resolveDualControlTarget(
         entity_id: { not: callerEntityId },
         tar: { status: "ACTIVE", can_admin_org: true },
         child_memberships: {
-          some: { parent_id: callerMembership.parent_id, is_active: true },
+          some: { parent_id: callerOrgId, is_active: true },
         },
       },
       select: { entity_id: true },

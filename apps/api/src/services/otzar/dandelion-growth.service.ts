@@ -6,7 +6,7 @@
 //             to strengthen your organization this week": governed
 //             recommendations computed from REAL substrate (external
 //             relationships lacking internal owners, overloaded
-//             commitment owners, disconnected teammates, onboarding
+//             commitment owners, members without a first project, onboarding
 //             gaps, safe introductions). Recommendations only — this
 //             service executes NOTHING; every suggested step routes
 //             through existing approval paths.
@@ -54,16 +54,42 @@ import {
 export type GrowthRecommendationKind =
   | "ASSIGN_INTERNAL_OWNER"
   | "REDUCE_OVERLOAD"
-  | "CONNECT_TEAMMATE"
+  // [PROD-UX-BUGD] Was CONNECT_TEAMMATE. Renamed because the old kind + copy
+  // ("isn't connected to any project or workspace yet") flattened every kind
+  // of connection into one word — an org member with a manager, team, and
+  // hierarchy read as "disconnected from the org". The recommendation names
+  // the ONE missing object precisely: a first project/workspace assignment.
+  // Future gap categories (NEEDS_MANAGER, NEEDS_DEPARTMENT, NEEDS_AI_TWIN,
+  // NEEDS_ROLE_TOOLS) follow this naming — never broad connected/disconnected
+  // language.
+  | "NEEDS_PROJECT_OR_WORKSPACE"
   | "PREPARE_ONBOARDING";
+
+// [PROD-UX-BUGD] Structured source-of-truth metadata so no consumer has to
+// GUESS what "connected" meant. Each fact is read from its canonical source:
+// org membership (EntityMembership org→person), manager (active person→person
+// EntityMembership), department (EntityMembership.department), project/
+// workspace (WorkProjectMember / CollaborationMembership).
+export interface GrowthRecommendationContext {
+  /** Stable reference for keying/dismissal (duplicate-name safe). Not PII —
+   *  emails/memory contents stay out of this view (RULE 0). */
+  person_entity_id: string;
+  org_member: boolean;
+  has_department: boolean;
+  has_manager: boolean;
+  has_project_or_workspace: boolean;
+  missing_connection_type: "PROJECT_OR_WORKSPACE";
+}
 
 export interface GrowthRecommendation {
   kind: GrowthRecommendationKind;
   title: string;
   why: string;
-  /** Display names only — never ids/emails in the admin view. */
+  /** Display names only — never emails/memory in the admin view. */
   people: string[];
   suggested_next_step: string;
+  /** [PROD-UX-BUGD] Present on NEEDS_PROJECT_OR_WORKSPACE. */
+  context?: GrowthRecommendationContext;
 }
 
 export interface OrgGrowthView {
@@ -73,7 +99,7 @@ export interface OrgGrowthView {
     members_count: number;
     external_collaborators_count: number;
     unowned_external_count: number;
-    disconnected_members_count: number;
+    members_without_project_count: number;
   };
   generated_at: string;
 }
@@ -101,6 +127,28 @@ export function growthHeadline(count: number): string {
     return "Your organization looks healthy this week. Otzar will keep watching for ways to help it grow.";
   }
   return `Otzar found ${count} ${count === 1 ? "way" : "ways"} to strengthen your organization this week.`;
+}
+
+// [PROD-UX-BUGD] The needs-a-first-project copy. PURE (unit-tested, no DB).
+// The hard rule: never imply someone is disconnected from the ORG when the
+// only missing object is a project/workspace assignment. The copy states the
+// true relationship first ("already part of your organization", with their
+// team/manager when known), then names the ONE missing piece.
+export function needsProjectOrWorkspaceCopy(input: {
+  display_name: string;
+  manager_name: string | null;
+  department: string | null;
+}): { title: string; why: string } {
+  const belongs =
+    input.manager_name !== null
+      ? ` on ${input.manager_name}'s team`
+      : input.department !== null
+        ? ` in ${input.department}`
+        : "";
+  return {
+    title: `${input.display_name} needs a first project or workspace`,
+    why: `${input.display_name} is already part of your organization${belongs}, but isn't assigned to a project or workspace yet. Adding them to one helps Otzar connect their work, tools, and context more accurately.`,
+  };
 }
 
 /** Open commitment statuses (mirrors Phase 1234). */
@@ -173,13 +221,18 @@ interface MemberRow {
   entity_id: string;
   display_name: string;
   job_title: string | null;
+  /** [PROD-UX-BUGD] department off the org→person membership (the canonical
+   *  home per the hierarchy service) — lets growth copy state the person's
+   *  true org placement instead of flattening it to "not connected". */
+  department: string | null;
 }
 
 async function orgMembers(orgEntityId: string): Promise<MemberRow[]> {
   const memberships = await prisma.entityMembership.findMany({
     where: { parent_id: orgEntityId, is_active: true },
-    select: { child_id: true },
+    select: { child_id: true, department: true },
   });
+  const departmentById = new Map(memberships.map((m) => [m.child_id, m.department]));
   const ids = memberships.map((m) => m.child_id);
   if (ids.length === 0) return [];
   const entities = await prisma.entity.findMany({
@@ -194,6 +247,7 @@ async function orgMembers(orgEntityId: string): Promise<MemberRow[]> {
     entity_id: e.entity_id,
     display_name: e.display_name,
     job_title: e.profile?.job_title ?? null,
+    department: departmentById.get(e.entity_id) ?? null,
   }));
 }
 
@@ -210,7 +264,7 @@ export async function getOrgGrowthForCaller(
   const memberIds = members.map((m) => m.entity_id);
   const byId = new Map(members.map((m) => [m.entity_id, m]));
 
-  const [unownedExternals, externalCount, openByOwner, projectMembers, wsMembers] =
+  const [unownedExternals, externalCount, openByOwner, projectMembers, wsMembers, managerEdges] =
     await Promise.all([
       prisma.externalCollaborator.findMany({
         where: {
@@ -246,13 +300,24 @@ export async function getOrgGrowthForCaller(
         },
         select: { member_entity_id: true },
       }),
+      // [PROD-UX-BUGD] Active person→person manager edges among this org's
+      // members (the same shape hierarchy.service writes) — so growth copy can
+      // state a person's true org placement.
+      prisma.entityMembership.findMany({
+        where: {
+          is_active: true,
+          parent_id: { in: memberIds },
+          child_id: { in: memberIds },
+        },
+        select: { parent_id: true, child_id: true },
+      }),
     ]);
 
   const connected = new Set<string>([
     ...projectMembers.map((p) => p.entity_id),
     ...wsMembers.map((w) => w.member_entity_id),
   ]);
-  const disconnected = members.filter((m) => !connected.has(m.entity_id));
+  const withoutProject = members.filter((m) => !connected.has(m.entity_id));
   const mostConnectedId = [...connected.values()][0] ?? null;
 
   const recommendations: GrowthRecommendation[] = [];
@@ -285,13 +350,26 @@ export async function getOrgGrowthForCaller(
     }
   }
 
-  for (const lonely of disconnected) {
+  // [PROD-UX-BUGD] "No project/workspace" is the ONLY thing this signal
+  // detects — say exactly that. These people are org members (this loop only
+  // ever sees the org roster), usually with a manager/team/hierarchy already;
+  // the old copy ("isn't connected to any project or workspace yet") read as
+  // "disconnected from the org" and broke trust.
+  const managerByPerson = new Map(managerEdges.map((e) => [e.child_id, e.parent_id]));
+  for (const lonely of withoutProject) {
     const buddy =
       mostConnectedId !== null ? byId.get(mostConnectedId) : undefined;
+    const managerId = managerByPerson.get(lonely.entity_id) ?? null;
+    const manager = managerId !== null ? byId.get(managerId) : undefined;
+    const copy = needsProjectOrWorkspaceCopy({
+      display_name: lonely.display_name,
+      manager_name: manager?.display_name ?? null,
+      department: lonely.department,
+    });
     recommendations.push({
-      kind: "CONNECT_TEAMMATE",
-      title: `${lonely.display_name} isn't connected to any project or workspace yet`,
-      why: "People without a project or workspace miss the context that makes Otzar useful — and the org misses what they know.",
+      kind: "NEEDS_PROJECT_OR_WORKSPACE",
+      title: copy.title,
+      why: copy.why,
       people:
         buddy !== undefined && buddy.entity_id !== lonely.entity_id
           ? [lonely.display_name, buddy.display_name]
@@ -299,7 +377,15 @@ export async function getOrgGrowthForCaller(
       suggested_next_step:
         buddy !== undefined && buddy.entity_id !== lonely.entity_id
           ? `Introduce ${lonely.display_name} to ${buddy.display_name} and add them to a workspace together.`
-          : `Add ${lonely.display_name} to their first workspace.`,
+          : `Assign ${lonely.display_name} to their first project or workspace.`,
+      context: {
+        person_entity_id: lonely.entity_id,
+        org_member: true,
+        has_department: lonely.department !== null,
+        has_manager: managerId !== null,
+        has_project_or_workspace: false,
+        missing_connection_type: "PROJECT_OR_WORKSPACE",
+      },
     });
   }
 
@@ -327,7 +413,7 @@ export async function getOrgGrowthForCaller(
         members_count: members.length,
         external_collaborators_count: externalCount,
         unowned_external_count: unownedExternals.length,
-        disconnected_members_count: disconnected.length,
+        members_without_project_count: withoutProject.length,
       },
       generated_at: new Date().toISOString(),
     },

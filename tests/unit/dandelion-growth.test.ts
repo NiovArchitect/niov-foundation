@@ -7,7 +7,53 @@ import { describe, expect, it } from "vitest";
 import {
   buildOnboardingMemoryContent,
   growthHeadline,
+  needsProjectOrWorkspaceCopy,
 } from "../../apps/api/src/services/otzar/dandelion-growth.service.js";
+
+// [PROD-UX-BUGD] The needs-a-first-project copy: states the person's TRUE org
+// relationship first, names the ONE missing object, and NEVER uses broad
+// connected/disconnected language for an org member.
+describe("PROD-UX-BUGD — needsProjectOrWorkspaceCopy", () => {
+  it("an org member with a manager is placed on their manager's team", () => {
+    const c = needsProjectOrWorkspaceCopy({
+      display_name: "Shweta",
+      manager_name: "David Odie",
+      department: "Marketing",
+    });
+    expect(c.title).toBe("Shweta needs a first project or workspace");
+    expect(c.why).toContain("Shweta is already part of your organization on David Odie's team");
+    expect(c.why).toContain("isn't assigned to a project or workspace yet");
+  });
+
+  it("with a department but no manager, the department places them", () => {
+    const c = needsProjectOrWorkspaceCopy({
+      display_name: "Annie",
+      manager_name: null,
+      department: "Compliance",
+    });
+    expect(c.why).toContain("Annie is already part of your organization in Compliance");
+  });
+
+  it("with neither, they are still 'already part of your organization' — never 'not connected'", () => {
+    const c = needsProjectOrWorkspaceCopy({
+      display_name: "Walter",
+      manager_name: null,
+      department: null,
+    });
+    expect(c.why).toContain("Walter is already part of your organization,");
+    for (const text of [c.title, c.why]) {
+      expect(text).not.toMatch(/isn't connected|not connected|disconnected/i);
+    }
+  });
+
+  it("names the missing object precisely and stays in customer vocabulary", () => {
+    const c = needsProjectOrWorkspaceCopy({ display_name: "Sam", manager_name: null, department: null });
+    expect(c.title).toContain("project or workspace");
+    for (const banned of ["entity", "membership", "edge", "hierarchy_level", "CONNECT_TEAMMATE"]) {
+      expect(`${c.title} ${c.why}`).not.toContain(banned);
+    }
+  });
+});
 
 describe("Phase 1237 — growthHeadline", () => {
   it("celebrates a healthy org and counts findings calmly", () => {
