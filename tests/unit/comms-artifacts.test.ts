@@ -20,7 +20,10 @@ vi.mock("@niov/database", async (importOriginal) => {
   return { ...actual, prisma: prismaMock };
 });
 
-import { getRecentCommsArtifacts } from "../../apps/api/src/services/work-os/comms-artifacts.service.js";
+import {
+  getRecentCommsArtifacts,
+  getPendingFollowUps,
+} from "../../apps/api/src/services/work-os/comms-artifacts.service.js";
 
 const ORG = "org-1";
 const CALLER = "ent-caller";
@@ -159,5 +162,76 @@ describe("getRecentCommsArtifacts (Phase 1285-T)", () => {
     expect(mtg.meeting_intelligence!.candidates.map((c) => c.candidate_type)).toEqual(["DECISION", "BLOCKER"]);
     // Absent on rows that do not carry it — never faked.
     expect(plain.meeting_intelligence).toBeUndefined();
+  });
+});
+
+// A stored FOLLOW_UP send-card (a CommsSuggestedAction persisted verbatim at
+// ingest under details.follow_up).
+function followUpAction(over: Record<string, unknown> = {}) {
+  return {
+    local_id: "fu-david-1",
+    action_type: "SEND_INTERNAL_NOTIFICATION",
+    target: { entity_id: "ent-other", display_name: "David Odie", email: null },
+    draft_text: "David — please confirm the launch timeline with each channel owner.",
+    reason: "Owner of the launch coordination.",
+    source_excerpt: "we agreed David owns the launch timeline",
+    confidence: "HIGH",
+    resolution_status: "RESOLVED",
+    recipient_governance: { recipientSafety: "confirmed", sensitivity: "internal" },
+    autonomy: { bucket: "READY" },
+    ...over,
+  };
+}
+
+describe("getPendingFollowUps (PROD-UX-BUGB — durable Comms send-cards)", () => {
+  it("scopes to the caller as owner, the org, FOLLOW_UP type, and excludes done statuses", async () => {
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([]);
+    await getPendingFollowUps({ org_entity_id: ORG, caller_entity_id: CALLER });
+    const where = prismaMock.workLedgerEntry.findMany.mock.calls[0]![0].where;
+    expect(where.org_entity_id).toBe(ORG);
+    expect(where.ledger_type).toBe("FOLLOW_UP");
+    expect(where.owner_entity_id).toBe(CALLER);
+    const doneJson = JSON.stringify(where.NOT);
+    expect(doneJson).toContain("EXECUTED");
+    expect(doneJson).toContain("CANCELLED");
+  });
+
+  it("returns the stored send-card verbatim so the CT re-renders the SAME card", async () => {
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([
+      row({
+        ledger_entry_id: "led-fu",
+        ledger_type: "FOLLOW_UP",
+        owner_entity_id: CALLER,
+        conversation_id: "cap-1",
+        title: "Follow-up to David Odie",
+        status: "DRAFT",
+        details: { source: "conversation", meeting_capture_id: "cap-1", follow_up: followUpAction() },
+      }),
+    ]);
+    const out = await getPendingFollowUps({ org_entity_id: ORG, caller_entity_id: CALLER });
+    expect(out).toHaveLength(1);
+    const fu = out[0]!;
+    expect(fu.ledger_entry_id).toBe("led-fu");
+    expect(fu.meeting_capture_id).toBe("cap-1");
+    expect(fu.status).toBe("DRAFT");
+    // The full pre-governed card is preserved — draft, recipient, governance.
+    expect(fu.action.draft_text).toContain("confirm the launch timeline");
+    expect(fu.action.local_id).toBe("fu-david-1");
+    expect(fu.action.recipient_governance.recipientSafety).toBe("confirmed");
+  });
+
+  it("skips a FOLLOW_UP row missing its details.follow_up payload — never fabricates a card", async () => {
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([
+      row({ ledger_entry_id: "no-payload", ledger_type: "FOLLOW_UP", owner_entity_id: CALLER, details: { source: "conversation" } }),
+      row({ ledger_entry_id: "ok", ledger_type: "FOLLOW_UP", owner_entity_id: CALLER, details: { follow_up: followUpAction({ local_id: "ok-1" }) } }),
+    ]);
+    const out = await getPendingFollowUps({ org_entity_id: ORG, caller_entity_id: CALLER });
+    expect(out.map((f) => f.ledger_entry_id)).toEqual(["ok"]);
+  });
+
+  it("returns an honest empty array when the caller has no pending follow-ups", async () => {
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([]);
+    const out = await getPendingFollowUps({ org_entity_id: ORG, caller_entity_id: CALLER });
+    expect(out).toEqual([]);
   });
 });

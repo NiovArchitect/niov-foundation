@@ -18,6 +18,7 @@ import {
   meetingIntelligenceFromDetails,
   type MeetingIntelligenceProjection,
 } from "./work-ledger.service.js";
+import type { CommsSuggestedAction } from "../otzar/comms-extract.service.js";
 
 export type CommsArtifactType =
   | "DIRECT_MESSAGE"
@@ -163,4 +164,73 @@ export async function getRecentCommsArtifacts(args: {
       ...(meetingIntelligence !== undefined ? { meeting_intelligence: meetingIntelligence } : {}),
     };
   });
+}
+
+// ── [PROD-UX-BUGB] Pending follow-up drafts (the resumable Comms send-cards) ──
+// Statuses that mean a follow-up is no longer pending action.
+const FOLLOWUP_DONE_STATUSES = ["EXECUTED", "VERIFIED", "CANCELLED", "EXPIRED"];
+
+export interface PendingFollowUp {
+  /** The durable ledger row backing this card (also the PATCH target on send/dismiss). */
+  ledger_entry_id: string;
+  /** The source conversation (MeetingCapture) this draft was derived from. */
+  meeting_capture_id: string | null;
+  /** The ledger title (e.g. "Follow-up to Shiney") — a human label, never a UUID. */
+  title: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  /** The pre-governed send-card, stored verbatim at ingest so the CT re-renders
+   *  the SAME ProposedActionCard (draft_text + recipient_governance + autonomy). */
+  action: CommsSuggestedAction;
+}
+
+// WHAT: read the caller's own drafted follow-ups back as durable send-cards.
+// WHY: the Comms follow-up cards previously lived only in the CT's volatile
+//      ingest response, so they vanished on navigation (BUG B). This projects
+//      the FOLLOW_UP ledger rows written at ingest — the single store — so the
+//      cards survive navigation/refresh. Scoped to the caller (they own +
+//      requested the row) and tenant-isolated. Never fabricates a card: a row
+//      missing its details.follow_up payload is skipped, not invented.
+export async function getPendingFollowUps(args: {
+  org_entity_id: string;
+  caller_entity_id: string;
+  limit?: number;
+}): Promise<PendingFollowUp[]> {
+  const limit = Math.min(Math.max(1, args.limit ?? DEFAULT_LIMIT), MAX_LIMIT);
+  const rows = await prisma.workLedgerEntry.findMany({
+    where: {
+      org_entity_id: args.org_entity_id,
+      ledger_type: "FOLLOW_UP",
+      owner_entity_id: args.caller_entity_id,
+      NOT: { status: { in: FOLLOWUP_DONE_STATUSES } },
+    },
+    orderBy: { created_at: "desc" },
+    take: limit,
+  });
+  const out: PendingFollowUp[] = [];
+  for (const r of rows) {
+    const action = followUpActionFromDetails(r.details);
+    if (action === null) continue; // never fabricate a card from a payload-less row
+    out.push({
+      ledger_entry_id: r.ledger_entry_id,
+      meeting_capture_id: r.conversation_id,
+      title: r.title,
+      status: r.status,
+      created_at: r.created_at.toISOString(),
+      updated_at: r.updated_at.toISOString(),
+      action,
+    });
+  }
+  return out;
+}
+
+function followUpActionFromDetails(details: unknown): CommsSuggestedAction | null {
+  if (typeof details !== "object" || details === null) return null;
+  const v = (details as Record<string, unknown>).follow_up;
+  if (typeof v !== "object" || v === null) return null;
+  // Minimal shape guard: the stored card must at least carry a draft + a target.
+  const c = v as Partial<CommsSuggestedAction>;
+  if (typeof c.draft_text !== "string" || typeof c.local_id !== "string") return null;
+  return v as CommsSuggestedAction;
 }

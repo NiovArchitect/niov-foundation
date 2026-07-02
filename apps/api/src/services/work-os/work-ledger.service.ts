@@ -592,7 +592,10 @@ export async function getMyWork(args: {
         { requester_entity_id: args.caller_entity_id },
       ],
       // Seeds are the admin queue; GOAL rows are objectives (their own surface) —
-      // neither is "work" in My Work.
+      // neither is "work" in My Work. A FOLLOW_UP row (a drafted send the caller
+      // owns) IS the caller's pending work and belongs here — it is also
+      // resumable as a rich send-card in Comms via getPendingFollowUps, but the
+      // ledger row is the single store, surfaced on every relevant page.
       ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
     },

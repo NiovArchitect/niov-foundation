@@ -42,7 +42,7 @@ import {
   getWatcherFeed,
   getWatcherFeedWithBeamAdvisory,
 } from "../services/work-os/watcher.service.js";
-import { getRecentCommsArtifacts } from "../services/work-os/comms-artifacts.service.js";
+import { getRecentCommsArtifacts, getPendingFollowUps } from "../services/work-os/comms-artifacts.service.js";
 import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.service.js";
 import {
   queryOrgWork,
@@ -656,6 +656,23 @@ export async function registerWorkOsLedgerRoutes(
       caller_entity_id: ctx.entity_id,
     });
     return reply.code(200).send({ ok: true, artifacts, next_cursor: null });
+  });
+
+  // ── [PROD-UX-BUGB] Pending follow-up drafts — the resumable Comms send-cards.
+  //    Durable projection over the caller's own FOLLOW_UP ledger rows (written
+  //    at ingest), returning each stored send-card verbatim so the CT
+  //    re-renders the SAME ProposedActionCard after navigation/refresh. Fixes
+  //    the volatile-card gap (the underlying work was always durable). Send
+  //    transitions the row to EXECUTED and Dismiss to CANCELLED via the
+  //    existing PATCH /work-os/ledger/:id. Self-scoped + tenant-isolated. ──
+  app.get("/api/v1/work-os/comms/follow-ups", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const follow_ups = await getPendingFollowUps({
+      org_entity_id: ctx.org_entity_id,
+      caller_entity_id: ctx.entity_id,
+    });
+    return reply.code(200).send({ ok: true, follow_ups });
   });
 
   // ── Ambient perception capture (Phase 1285-V) — capture a meeting transcript

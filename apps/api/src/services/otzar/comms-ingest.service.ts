@@ -412,6 +412,51 @@ export async function ingestSourceEvent(
     });
   }
 
+  // 5a-bis) [PROD-UX-BUGB] Persist each drafted follow-up as a durable
+  //   FOLLOW_UP ledger row so the Comms send-cards survive navigation/refresh
+  //   (they previously lived only in the CT's volatile extraction response).
+  //   The Work Ledger is the single store for conversation-derived artifacts
+  //   (data-flow contract rule 2) — no new table, no second follow-up system.
+  //   The row is keyed to the conversation (conversation_id = capture) and
+  //   owned by the caller (the drafter/sender); target_entity_id is the
+  //   resolved recipient when one is provably known. The FULL suggested action
+  //   (draft_text + recipient_governance + autonomy + resolution_status) is
+  //   stored under details.follow_up, so the caller-scoped projection can
+  //   rebuild the exact ProposedActionCard the user last saw. Status starts
+  //   DRAFT (pending); Send transitions it to EXECUTED and Dismiss to CANCELLED
+  //   via the existing PATCH /work-os/ledger/:id path. FOLLOW_UP rows are
+  //   excluded from My Work / Team Work / Blind Spots (the COMMITMENT row
+  //   already carries the obligation — this is the sender's private pending
+  //   send, not double-counted work).
+  for (const a of extraction.suggested_actions) {
+    await createLedgerEntry({
+      org_entity_id: orgEntityId,
+      ledger_type: "FOLLOW_UP",
+      source_type: srcType,
+      conversation_id: meetingCaptureId,
+      owner_entity_id: event.callerEntityId,
+      requester_entity_id: event.callerEntityId,
+      ...(a.target.entity_id !== null ? { target_entity_id: a.target.entity_id } : {}),
+      title: `Follow-up to ${a.target.display_name}`,
+      summary: a.draft_text,
+      status: "DRAFT",
+      priority: "ROUTINE",
+      // A concrete next step so the drafted follow-up reads as actionable work
+      // (in My Work) and is never mistaken for a stuck, no-next-action blind spot.
+      next_action: "Review and send this follow-up.",
+      extraction_source: "TYPESCRIPT_DETERMINISTIC",
+      ...(a.source_excerpt !== null ? { evidence: [{ quote: a.source_excerpt }] } : {}),
+      details: {
+        source: srcLabel,
+        ...provenance,
+        meeting_capture_id: meetingCaptureId,
+        // The complete pre-governed send-card. The projection returns this
+        // verbatim as a CommsSuggestedAction so the CT re-renders the same card.
+        follow_up: a,
+      },
+    });
+  }
+
   // 6) Phase 6 — governed Work-Graph / Organization-Memory events + Dandelion
   //    org-seeding suggestions from the TRUSTED work only (the noisy tail seeds
   //    nothing). Scoped to org members (no global memory); approval-gated seeds;
