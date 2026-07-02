@@ -42,7 +42,7 @@ import {
   getWatcherFeed,
   getWatcherFeedWithBeamAdvisory,
 } from "../services/work-os/watcher.service.js";
-import { getRecentCommsArtifacts, getPendingFollowUps } from "../services/work-os/comms-artifacts.service.js";
+import { getRecentCommsArtifacts, getPendingFollowUps, resolveFollowUpRecipient } from "../services/work-os/comms-artifacts.service.js";
 import { querySemanticRetrieval } from "../services/work-os/semantic-retrieval.service.js";
 import {
   queryOrgWork,
@@ -674,6 +674,48 @@ export async function registerWorkOsLedgerRoutes(
     });
     return reply.code(200).send({ ok: true, follow_ups });
   });
+
+  // ── [PROD-UX-BUGC] Complete a blocked recipient review on the caller's own
+  //    durable follow-up. confirm = vouch for the already-resolved person on a
+  //    knowledge-gap verdict (out_of_scope / likely); select = resolve an
+  //    ambiguous name to a specific org member. unauthorized and
+  //    cross_team_needs_approval are NEVER caller-overridable (honest 403s).
+  //    Every successful decision is audited (ADMIN_ACTION /
+  //    FOLLOW_UP_RECIPIENT_RESOLVED) and persisted on the WorkLedger row, so it
+  //    survives navigation/refresh. auth write. ──
+  app.post<{
+    Params: { ledger_entry_id: string };
+    Body: { decision?: string; recipient_entity_id?: string };
+  }>(
+    "/api/v1/work-os/comms/follow-ups/:ledger_entry_id/resolve-recipient",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      if (b.decision !== "confirm" && b.decision !== "select") {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "decision must be \"confirm\" or \"select\"." });
+      }
+      const result = await resolveFollowUpRecipient({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        ledger_entry_id: request.params.ledger_entry_id,
+        decision: b.decision,
+        ...(typeof b.recipient_entity_id === "string"
+          ? { recipient_entity_id: b.recipient_entity_id }
+          : {}),
+      });
+      if (result.ok === false) {
+        const status =
+          result.code === "NOT_FOUND"
+            ? 404
+            : result.code === "FORBIDDEN" || result.code === "POLICY_DENIES" || result.code === "APPROVAL_REQUIRED"
+              ? 403
+              : 422;
+        return reply.code(status).send({ ok: false, code: result.code, message: result.message });
+      }
+      return reply.code(200).send({ ok: true, follow_up: result.follow_up, audit_event_id: result.audit_event_id });
+    },
+  );
 
   // ── Ambient perception capture (Phase 1285-V) — capture a meeting transcript
   //    / conversation note / imported notes into a durable, governed record

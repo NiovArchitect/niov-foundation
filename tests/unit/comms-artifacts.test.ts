@@ -12,6 +12,7 @@ const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     workLedgerEntry: { findMany: vi.fn() },
     entity: { findMany: vi.fn().mockResolvedValue([]) },
+    entityMembership: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
@@ -66,6 +67,8 @@ beforeEach(() => {
   prismaMock.workLedgerEntry.findMany.mockReset();
   prismaMock.entity.findMany.mockReset();
   prismaMock.entity.findMany.mockResolvedValue([]);
+  prismaMock.entityMembership.findMany.mockReset();
+  prismaMock.entityMembership.findMany.mockResolvedValue([]);
 });
 
 describe("getRecentCommsArtifacts (Phase 1285-T)", () => {
@@ -233,5 +236,66 @@ describe("getPendingFollowUps (PROD-UX-BUGB — durable Comms send-cards)", () =
     prismaMock.workLedgerEntry.findMany.mockResolvedValue([]);
     const out = await getPendingFollowUps({ org_entity_id: ORG, caller_entity_id: CALLER });
     expect(out).toEqual([]);
+  });
+
+  // ── [PROD-UX-BUGC] select candidates for ambiguous cards ──────────────────
+  function ambiguousRow(id = "led-amb") {
+    return row({
+      ledger_entry_id: id,
+      ledger_type: "FOLLOW_UP",
+      owner_entity_id: CALLER,
+      details: {
+        follow_up: followUpAction({
+          local_id: `amb-${id}`,
+          target: { entity_id: "ent-shiney", display_name: "Shiney Thomas", email: null },
+          resolution_status: "AMBIGUOUS",
+          recipient_governance: {
+            recipientSafety: "ambiguous",
+            sensitivity: "internal",
+            evidence: { quote: null, source: "fuzzy_only", matchedToken: "shiney", alternativeCandidates: ["Shweta Rao"] },
+          },
+        }),
+      },
+    });
+  }
+
+  it("an AMBIGUOUS card carries server-resolved select_candidates (id-based, tenant-scoped)", async () => {
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([ambiguousRow()]);
+    prismaMock.entityMembership.findMany.mockResolvedValue([
+      { child_id: "ent-shiney" },
+      { child_id: "ent-shweta" },
+      { child_id: "ent-unrelated" },
+    ]);
+    prismaMock.entity.findMany.mockResolvedValue([
+      { entity_id: "ent-shiney", display_name: "Shiney Thomas" },
+      { entity_id: "ent-shweta", display_name: "Shweta Rao" },
+      { entity_id: "ent-unrelated", display_name: "Walter Fields" },
+    ]);
+    const out = await getPendingFollowUps({ org_entity_id: ORG, caller_entity_id: CALLER });
+    const cands = out[0]!.select_candidates!;
+    // Both the current guess and the alternative are offered, with entity ids;
+    // an unrelated member is NOT (candidates only, not the whole roster).
+    expect(cands.map((c) => c.entity_id).sort()).toEqual(["ent-shiney", "ent-shweta"]);
+    expect(cands.every((c) => c.display_name.length > 0)).toBe(true);
+    // Tenant scoping: the membership query is org-bound.
+    expect(prismaMock.entityMembership.findMany.mock.calls[0]![0].where.parent_id).toBe(ORG);
+  });
+
+  it("a NON-ambiguous card has no select_candidates, and unresolvable candidates are omitted (never fabricated)", async () => {
+    prismaMock.workLedgerEntry.findMany.mockResolvedValue([
+      row({
+        ledger_entry_id: "led-ok",
+        ledger_type: "FOLLOW_UP",
+        owner_entity_id: CALLER,
+        details: { follow_up: followUpAction({ local_id: "ok-2" }) },
+      }),
+      ambiguousRow("led-amb-2"),
+    ]);
+    // No org members resolve to the candidate names.
+    prismaMock.entityMembership.findMany.mockResolvedValue([{ child_id: "ent-x" }]);
+    prismaMock.entity.findMany.mockResolvedValue([{ entity_id: "ent-x", display_name: "Nobody Relevant" }]);
+    const out = await getPendingFollowUps({ org_entity_id: ORG, caller_entity_id: CALLER });
+    expect(out.find((f) => f.ledger_entry_id === "led-ok")!.select_candidates).toBeUndefined();
+    expect(out.find((f) => f.ledger_entry_id === "led-amb-2")!.select_candidates).toBeUndefined();
   });
 });

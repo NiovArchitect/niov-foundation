@@ -12,8 +12,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@niov/database";
 import { ingestTranscript, buildResponsibilityGraph } from "@niov/api";
 import { createEntity } from "../../packages/database/src/queries/entity.js";
-import { getMyWork } from "../../apps/api/src/services/work-os/work-ledger.service.js";
-import { getPendingFollowUps } from "../../apps/api/src/services/work-os/comms-artifacts.service.js";
+import { getMyWork, createLedgerEntry } from "../../apps/api/src/services/work-os/work-ledger.service.js";
+import { getPendingFollowUps, resolveFollowUpRecipient } from "../../apps/api/src/services/work-os/comms-artifacts.service.js";
 import { ensureAuditTriggers, cleanupTestData } from "../helpers.js";
 
 const TEST_PREFIX = "__niov_test__comms_ingest__";
@@ -173,6 +173,86 @@ describe("comms-ingest — transcript becomes durable owned work (DB)", () => {
     const myWork = await getMyWork({ org_entity_id: orgId, caller_entity_id: callerId });
     const myFollowUps = myWork.filter((w) => w.ledger_type === "FOLLOW_UP");
     expect(myFollowUps.length).toBe(followUpRows.length);
+  });
+
+  it("[PROD-UX-BUGC] a caller-confirmed recipient review persists on the row + writes a real audit event (DB)", async () => {
+    // A durable FOLLOW_UP whose recipient Otzar could NOT prove is connected to
+    // the work (out_of_scope) — the exact stuck state BUG C unblocks.
+    const created = await createLedgerEntry({
+      org_entity_id: orgId,
+      ledger_type: "FOLLOW_UP",
+      source_type: "TRANSCRIPT",
+      owner_entity_id: callerId,
+      requester_entity_id: callerId,
+      target_entity_id: davidId,
+      title: "Follow-up to David",
+      summary: "David — please confirm the repo access rollout.",
+      status: "DRAFT",
+      next_action: "Review and send this follow-up.",
+      details: {
+        follow_up: {
+          local_id: "fu-bugc-1",
+          action_type: "SEND_INTERNAL_NOTIFICATION",
+          target: { entity_id: davidId, display_name: "David", email: null },
+          draft_text: "David — please confirm the repo access rollout.",
+          reason: "Named in the conversation.",
+          source_excerpt: null,
+          confidence: "MEDIUM",
+          resolution_status: "RESTRICTED",
+          recipient_governance: {
+            entity_id: davidId,
+            display_name: "David",
+            email: null,
+            role: null,
+            participantStatus: "unknown",
+            mentionStatus: "explicitly_mentioned",
+            workConnectionType: "none",
+            evidence: { quote: null, source: "fuzzy_only", matchedToken: "david", alternativeCandidates: [] },
+            roleMatch: "unknown",
+            hierarchyConnection: "unknown",
+            projectConnection: "unknown",
+            policyStatus: "allowed",
+            sensitivity: "internal",
+            confidence: "low",
+            recipientSafety: "out_of_scope",
+            autonomyEligibility: "blocked",
+          },
+          autonomy: { bucket: "NEEDS_REVIEW" },
+        },
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const lid = created.entry.ledger_entry_id;
+
+    const r = await resolveFollowUpRecipient({
+      org_entity_id: orgId,
+      caller_entity_id: callerId,
+      ledger_entry_id: lid,
+      decision: "confirm",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    // The decision persisted on the DB row (survives navigation/refresh by
+    // construction) with the audit pointer set.
+    const dbRow = await prisma.workLedgerEntry.findUnique({ where: { ledger_entry_id: lid } });
+    const payload = (dbRow!.details as { follow_up: { recipient_governance: { recipientSafety: string; evidence: { source: string } } } }).follow_up;
+    expect(payload.recipient_governance.recipientSafety).toBe("confirmed");
+    expect(payload.recipient_governance.evidence.source).toBe("caller_confirmed");
+    expect(dbRow!.audit_event_id).toBe(r.audit_event_id);
+
+    // A REAL audit event exists recording the decision (immutable trail).
+    const audit = await prisma.auditEvent.findUnique({ where: { audit_id: r.audit_event_id } });
+    expect(audit).not.toBeNull();
+    expect(audit!.event_type).toBe("ADMIN_ACTION");
+    expect(audit!.actor_entity_id).toBe(callerId);
+    expect((audit!.details as { action: string }).action).toBe("FOLLOW_UP_RECIPIENT_RESOLVED");
+
+    // The resume projection now serves the CONFIRMED card (Send-ready in CT).
+    const pending = await getPendingFollowUps({ org_entity_id: orgId, caller_entity_id: callerId });
+    const mine = pending.find((f) => f.ledger_entry_id === lid);
+    expect(mine?.action.recipient_governance.recipientSafety).toBe("confirmed");
   });
 
   it("an unproven owner (not on the roster) is held NEEDS_OWNER, never auto-assigned", async () => {

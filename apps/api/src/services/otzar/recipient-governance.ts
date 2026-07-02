@@ -108,6 +108,12 @@ export type EvidenceSource =
   | "project_ownership"
   | "approval_policy"
   | "correction_memory"
+  // [PROD-UX-BUGC] The CALLER completed the recipient review (confirm/select).
+  // A distinct proof source by design: a human vouching is never presented as
+  // an Otzar-verified transcript/roster proof path. Only reachable through the
+  // governed resolve-recipient path (out_of_scope/likely confirm, ambiguous
+  // select) — never past unauthorized or cross_team_needs_approval.
+  | "caller_confirmed"
   | "fuzzy_only"
   | "none";
 

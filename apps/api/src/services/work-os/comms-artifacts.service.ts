@@ -11,7 +11,7 @@
 //          (canonical names); packages/database (prisma);
 //          tests/unit/comms-artifacts.test.ts.
 
-import { prisma } from "@niov/database";
+import { prisma, writeAuditEvent } from "@niov/database";
 import type { WorkLedgerEntry } from "@prisma/client";
 import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entities.js";
 import {
@@ -183,6 +183,13 @@ export interface PendingFollowUp {
   /** The pre-governed send-card, stored verbatim at ingest so the CT re-renders
    *  the SAME ProposedActionCard (draft_text + recipient_governance + autonomy). */
   action: CommsSuggestedAction;
+  /** [PROD-UX-BUGC] Present ONLY on ambiguous cards: the selectable people,
+   *  resolved SERVER-SIDE (tenant-scoped, active org members) so the CT never
+   *  resolves identity from display names (data-flow contract rule 5 —
+   *  duplicate-name safe: two people with the same name appear as two distinct
+   *  entries). Feeds the "Choose recipient" affordance → resolve-recipient
+   *  select. Omitted when nothing resolves — never fabricated. */
+  select_candidates?: Array<{ entity_id: string; display_name: string }>;
 }
 
 // WHAT: read the caller's own drafted follow-ups back as durable send-cards.
@@ -222,6 +229,48 @@ export async function getPendingFollowUps(args: {
       action,
     });
   }
+
+  // [PROD-UX-BUGC] Ambiguous cards get server-resolved select candidates (the
+  // alternative names + the current guess, matched to ACTIVE members of THIS
+  // org). Identity resolution stays server-side and id-based — the CT only
+  // renders labels and posts back an entity_id. One roster read for all rows.
+  const ambiguous = out.filter(
+    (f) => f.action.recipient_governance.recipientSafety === "ambiguous",
+  );
+  if (ambiguous.length > 0) {
+    const wantedNames = new Set<string>();
+    for (const f of ambiguous) {
+      for (const n of f.action.recipient_governance.evidence.alternativeCandidates) {
+        wantedNames.add(n.toLowerCase());
+      }
+      wantedNames.add(f.action.target.display_name.toLowerCase());
+    }
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: args.org_entity_id, is_active: true },
+      select: { child_id: true },
+    });
+    const memberIds = memberships.map((m) => m.child_id);
+    const people =
+      memberIds.length === 0
+        ? []
+        : await prisma.entity.findMany({
+            where: { entity_id: { in: memberIds }, entity_type: "PERSON" },
+            select: { entity_id: true, display_name: true },
+          });
+    for (const f of ambiguous) {
+      const names = new Set<string>([
+        ...f.action.recipient_governance.evidence.alternativeCandidates.map((n) => n.toLowerCase()),
+        f.action.target.display_name.toLowerCase(),
+      ]);
+      const candidates = people.filter((p) => names.has(p.display_name.toLowerCase()));
+      if (candidates.length > 0) {
+        f.select_candidates = candidates.map((p) => ({
+          entity_id: p.entity_id,
+          display_name: p.display_name,
+        }));
+      }
+    }
+  }
   return out;
 }
 
@@ -233,4 +282,195 @@ function followUpActionFromDetails(details: unknown): CommsSuggestedAction | nul
   const c = v as Partial<CommsSuggestedAction>;
   if (typeof c.draft_text !== "string" || typeof c.local_id !== "string") return null;
   return v as CommsSuggestedAction;
+}
+
+// ── [PROD-UX-BUGC] Outside-context recipient review completion ───────────────
+// The caller completes a blocked recipient review on their own durable
+// FOLLOW_UP row: CONFIRM a knowledge-gap verdict (out_of_scope / likely — Otzar
+// couldn't prove the connection, the human can vouch), or SELECT the correct
+// person when the name was ambiguous. Policy boundaries are NOT overridable:
+// unauthorized and cross_team_needs_approval reject with honest copy — a sender
+// can never self-approve past an authorization gate. The decision mutates
+// details.follow_up.recipient_governance on the SAME WorkLedger row (single
+// store, so it survives navigation/refresh) and is audited. The proof source
+// becomes "caller_confirmed" — a human vouching, never disguised as an
+// Otzar-verified path. NOTE: the advisory `autonomy` verdict is left as
+// computed at ingest (its decision-rights inputs are not stored); the Send
+// gate keys off recipient_governance, which IS updated.
+// Correction-memory (learn-loop): classifyRecipient accepts aliases/
+// excludeEntityIds but the comms-ingest path does not load corrections yet, so
+// no correction row is written here — TODO(learn-loop): when corrections are
+// wired into ingest, a confirm/select should also persist an
+// OrgRecipientCorrection so future extractions improve.
+
+export type ResolveRecipientFailureCode =
+  | "NOT_FOUND"
+  | "FORBIDDEN"
+  | "INVALID_REQUEST"
+  | "MISSING_PAYLOAD"
+  | "ALREADY_CONFIRMED"
+  | "POLICY_DENIES"
+  | "APPROVAL_REQUIRED";
+
+export type ResolveRecipientResult =
+  | { ok: true; follow_up: PendingFollowUp; audit_event_id: string }
+  | { ok: false; code: ResolveRecipientFailureCode; message: string };
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function resolveFollowUpRecipient(args: {
+  org_entity_id: string;
+  caller_entity_id: string;
+  ledger_entry_id: string;
+  decision: "confirm" | "select";
+  recipient_entity_id?: string;
+}): Promise<ResolveRecipientResult> {
+  // 1) The row: caller-owned, org-scoped, FOLLOW_UP, still pending.
+  const row = await prisma.workLedgerEntry.findFirst({
+    where: {
+      ledger_entry_id: args.ledger_entry_id,
+      org_entity_id: args.org_entity_id,
+      ledger_type: "FOLLOW_UP",
+    },
+  });
+  if (row === null) {
+    return { ok: false, code: "NOT_FOUND", message: "That follow-up doesn't exist." };
+  }
+  if (row.owner_entity_id !== args.caller_entity_id) {
+    return { ok: false, code: "FORBIDDEN", message: "Only the person who owns this follow-up can review its recipient." };
+  }
+  if (FOLLOWUP_DONE_STATUSES.includes(row.status)) {
+    return { ok: false, code: "INVALID_REQUEST", message: "This follow-up was already sent or dismissed." };
+  }
+  const action = followUpActionFromDetails(row.details);
+  if (action === null) {
+    return { ok: false, code: "MISSING_PAYLOAD", message: "This follow-up doesn't carry a reviewable draft." };
+  }
+
+  // 2) The governance verdict decides what the caller may complete.
+  const safety = action.recipient_governance.recipientSafety;
+  if (safety === "confirmed") {
+    return { ok: false, code: "ALREADY_CONFIRMED", message: "This recipient is already confirmed." };
+  }
+  if (safety === "unauthorized") {
+    // An authorization boundary — the sender can never vouch past policy.
+    return { ok: false, code: "POLICY_DENIES", message: "Your organization's policy doesn't permit sending this to that person. This isn't something you can override — ask an admin if you believe the policy is wrong." };
+  }
+  if (safety === "cross_team_needs_approval") {
+    // An approval boundary — completion belongs to an approver, not the sender.
+    return { ok: false, code: "APPROVAL_REQUIRED", message: "This route needs an approver's sign-off before it can send. If your organization hasn't configured an approver yet, ask an admin to set one up." };
+  }
+
+  let updatedTarget = action.target;
+  let auditTargetId: string | null = action.target.entity_id;
+
+  if (args.decision === "confirm") {
+    // Confirm = the caller vouches for the ALREADY-resolved person on a
+    // knowledge-gap verdict (out_of_scope / likely). An ambiguous name can't be
+    // "confirmed" — the ambiguity must be resolved by choosing a person.
+    if (safety === "ambiguous") {
+      return { ok: false, code: "INVALID_REQUEST", message: "More than one person matches this name — choose the right recipient instead of confirming." };
+    }
+    if (action.target.entity_id === null) {
+      return { ok: false, code: "INVALID_REQUEST", message: "There's no specific person on this draft yet — choose a recipient first." };
+    }
+  } else {
+    // Select = resolve an ambiguous name to a specific org member.
+    if (safety !== "ambiguous") {
+      return { ok: false, code: "INVALID_REQUEST", message: "This recipient isn't ambiguous — confirm them instead of choosing." };
+    }
+    const rid = args.recipient_entity_id;
+    if (rid === undefined || !UUID_RE.test(rid)) {
+      return { ok: false, code: "INVALID_REQUEST", message: "Choose which person this follow-up is for." };
+    }
+    // The selected person must be a real, active member of THIS org.
+    const membership = await prisma.entityMembership.findFirst({
+      where: { parent_id: args.org_entity_id, child_id: rid, is_active: true },
+    });
+    if (membership === null) {
+      return { ok: false, code: "INVALID_REQUEST", message: "That person isn't an active member of your organization." };
+    }
+    const person = await prisma.entity.findFirst({
+      where: { entity_id: rid, entity_type: "PERSON" },
+      select: { entity_id: true, display_name: true, email: true },
+    });
+    if (person === null) {
+      return { ok: false, code: "INVALID_REQUEST", message: "That person isn't an active member of your organization." };
+    }
+    updatedTarget = {
+      ...action.target,
+      entity_id: person.entity_id,
+      display_name: person.display_name,
+      email: person.email,
+    };
+    auditTargetId = person.entity_id;
+  }
+
+  // 3) The durable decision: caller_confirmed proof source on the SAME row.
+  //    alternativeCandidates are kept for provenance (what the options were).
+  const updatedAction: CommsSuggestedAction = {
+    ...action,
+    target: updatedTarget,
+    resolution_status: "RESOLVED",
+    recipient_governance: {
+      ...action.recipient_governance,
+      ...(args.decision === "select"
+        ? {
+            entity_id: updatedTarget.entity_id,
+            display_name: updatedTarget.display_name,
+            email: updatedTarget.email,
+          }
+        : {}),
+      recipientSafety: "confirmed",
+      // A human vouching earns a human review path, never auto-eligibility.
+      autonomyEligibility: "draft_only",
+      evidence: {
+        ...action.recipient_governance.evidence,
+        source: "caller_confirmed",
+      },
+    },
+  };
+
+  // 4) Audit FIRST (the proof of the decision), then persist with the pointer.
+  const audit = await writeAuditEvent({
+    event_type: "ADMIN_ACTION",
+    outcome: "SUCCESS",
+    actor_entity_id: args.caller_entity_id,
+    ...(auditTargetId !== null ? { target_entity_id: auditTargetId } : {}),
+    details: {
+      action: "FOLLOW_UP_RECIPIENT_RESOLVED",
+      decision: args.decision,
+      ledger_entry_id: row.ledger_entry_id,
+      org_entity_id: args.org_entity_id,
+      previous_safety: safety,
+      recipient_display_name: updatedTarget.display_name,
+    },
+  });
+
+  const details = { ...(row.details as Record<string, unknown>), follow_up: updatedAction };
+  const updated = await prisma.workLedgerEntry.update({
+    where: { ledger_entry_id: row.ledger_entry_id },
+    data: {
+      details: details as object,
+      audit_event_id: audit.audit_id,
+      ...(args.decision === "select" && updatedTarget.entity_id !== null
+        ? { target_entity_id: updatedTarget.entity_id }
+        : {}),
+    },
+  });
+
+  return {
+    ok: true,
+    audit_event_id: audit.audit_id,
+    follow_up: {
+      ledger_entry_id: updated.ledger_entry_id,
+      meeting_capture_id: updated.conversation_id,
+      title: updated.title,
+      status: updated.status,
+      created_at: updated.created_at.toISOString(),
+      updated_at: updated.updated_at.toISOString(),
+      action: updatedAction,
+    },
+  };
 }
