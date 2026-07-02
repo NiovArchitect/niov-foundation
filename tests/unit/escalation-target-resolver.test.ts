@@ -378,6 +378,46 @@ describe("resolveDualControlTarget Class B (org-admin)", () => {
       expect(result.reason).toBe("NO_ELIGIBLE_TARGET");
     }
   });
+
+  // [PROD-UX-BUGD regression] Once org-hierarchy manager edges exist
+  // (person→person EntityMembership with hierarchy_level above the org
+  // edge's), the old resolution — "the caller's membership with the highest
+  // hierarchy_level is the org" — resolved the caller's MANAGER as "the org".
+  // No admin is a child of a person, so every dual-control action for anyone
+  // with a manager failed NO_ELIGIBLE_TARGET (live: sends REJECTED instead of
+  // queueing for approval). The org must be the COMPANY entity, always.
+  it("resolves the ORG admin even when the caller has a manager edge with a higher hierarchy_level", async () => {
+    const caller = await makeEntityWithCapability({});
+    const manager = await makeEntityWithCapability({});
+    const orgAdmin = await makeEntityWithCapability({ can_admin_org: true });
+    const orgId = await makeOrgWithMembers([caller, manager, orgAdmin]);
+    // The org edges above default hierarchy_level; the manager edge sits
+    // DEEPER in the hierarchy (higher level) — the exact live shape after
+    // hierarchy authoring.
+    await prisma.entityMembership.updateMany({
+      where: { parent_id: orgId, child_id: caller },
+      data: { hierarchy_level: 1 },
+    });
+    await prisma.entityMembership.create({
+      data: {
+        parent_id: manager,
+        child_id: caller,
+        is_active: true,
+        hierarchy_level: 3,
+      },
+    });
+
+    const result = await resolveDualControlTarget(
+      caller,
+      fakeEndpoint({ authTier: "can_admin_org" }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.target_entity_id).toBe(orgAdmin);
+      expect(result.resolution_reason).toBe("org-admin-pool");
+    }
+  });
 });
 
 describe("resolveDualControlTarget Class A (explicit metadata)", () => {
