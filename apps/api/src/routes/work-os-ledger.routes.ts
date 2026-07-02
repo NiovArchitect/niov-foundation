@@ -381,16 +381,29 @@ export async function registerWorkOsLedgerRoutes(
   );
 
   // ── Team Work ──
-  app.get("/api/v1/work-os/team-work", async (request, reply) => {
-    const ctx = await auth(request, reply, "read");
-    if (ctx === null) return;
-    const result = await getTeamWork({
-      org_entity_id: ctx.org_entity_id,
-      is_manager: ctx.manager,
-    });
-    if (result.ok === false) return reply.code(403).send(result);
-    return reply.code(200).send({ ok: true, entries: result.entries });
-  });
+  app.get<{ Querystring: { skip?: string; take?: string } }>(
+    "/api/v1/work-os/team-work",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      // [PROD-UX-SCALE] server pagination — the fixed take:300 truncated
+      // silently (Team Work observed at exactly 300 live). Additive: no
+      // params → identical legacy first page + has_more.
+      const skip = Math.max(0, Number.parseInt(request.query.skip ?? "0", 10) || 0);
+      const take = Math.min(300, Math.max(1, Number.parseInt(request.query.take ?? "300", 10) || 300));
+      const result = await getTeamWork({
+        org_entity_id: ctx.org_entity_id,
+        is_manager: ctx.manager,
+        skip,
+        take: take + 1, // one extra row = the honest has_more signal
+      });
+      if (result.ok === false) return reply.code(403).send(result);
+      const has_more = result.entries.length > take;
+      return reply
+        .code(200)
+        .send({ ok: true, entries: result.entries.slice(0, take), skip, take, has_more });
+    },
+  );
 
   // ── Human-authority direct internal message (Phase 1284 Wave 2) ──
   // A human sends a LOW-risk internal Otzar-inbox note to an org member.
