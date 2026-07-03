@@ -101,6 +101,16 @@ export interface OrgGrowthView {
     unowned_external_count: number;
     members_without_project_count: number;
   };
+  /** [GAP-B] The FULL setup queue behind the capped recommendation list:
+   *  every member with no live project/workspace assignment (the uncapped
+   *  truth behind members_without_project_count), stable ids + safe display
+   *  fields only. Lets the admin surface say "showing X of Y" honestly and
+   *  work through the whole queue — the capped cards stay calm, the scale
+   *  stays true. Bounded by org membership (same query as members_count). */
+  needs_first_project_people: Array<{
+    person_entity_id: string;
+    display_name: string;
+  }>;
   generated_at: string;
 }
 
@@ -431,6 +441,12 @@ export async function getOrgGrowthForCaller(
         unowned_external_count: unownedExternals.length,
         members_without_project_count: withoutProject.length,
       },
+      needs_first_project_people: [...withoutProject]
+        .sort((a, b) => a.display_name.localeCompare(b.display_name))
+        .map((m) => ({
+          person_entity_id: m.entity_id,
+          display_name: m.display_name,
+        })),
       generated_at: new Date().toISOString(),
     },
   };
