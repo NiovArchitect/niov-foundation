@@ -309,6 +309,97 @@ describe("Phase 1237 — Dandelion org growth", () => {
     expect(after.growth.signals.members_without_project_count).toBe(0);
   });
 
+  it("archiving the person's only project brings the recommendation BACK (membership in an archived project is not 'connected')", async () => {
+    // [PROD-UX-ASSIGN-SMOKE] The reversible smoke loop: assign → truth
+    // changes → archive the project through the canonical OWNER path →
+    // truth restores. Growth must not count archived-project memberships.
+    const { createWorkProjectForCaller, addWorkProjectMemberForCaller, archiveWorkProjectForCaller } =
+      await import("../../apps/api/src/services/otzar/work-project.service.js");
+    const created = await createWorkProjectForCaller({
+      callerEntityId: adminId,
+      orgEntityId: orgId,
+      name: `${TEST_PREFIX} Smoke Assignment Project`,
+    });
+    const assigned = await addWorkProjectMemberForCaller({
+      callerEntityId: adminId,
+      projectId: created.project_id,
+      entityId: lonelyId,
+      actorIsOrgAdmin: true,
+      actorOrgEntityId: orgId,
+    });
+    expect(assigned.ok).toBe(true);
+
+    const during = await getOrgGrowthForCaller(adminId);
+    if (during.ok === false) throw new Error("expected ok");
+    expect(
+      during.growth.recommendations.some(
+        (r) => r.kind === "NEEDS_PROJECT_OR_WORKSPACE" && r.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(false);
+
+    // Cleanup through the canonical archive rail (caller is OWNER).
+    const archived = await archiveWorkProjectForCaller({
+      callerEntityId: adminId,
+      projectId: created.project_id,
+    });
+    expect(archived.ok).toBe(true);
+
+    // The person's only membership now points at an ARCHIVED project —
+    // the recommendation must RETURN because server truth changed back.
+    const restored = await getOrgGrowthForCaller(adminId);
+    if (restored.ok === false) throw new Error("expected ok");
+    expect(
+      restored.growth.recommendations.some(
+        (r) => r.kind === "NEEDS_PROJECT_OR_WORKSPACE" && r.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(true);
+    expect(restored.growth.signals.members_without_project_count).toBe(1);
+
+    // And an archived project is no longer joinable — the add-member rail
+    // refuses honestly, so no smoke target can silently come back to life.
+    const rejoin = await addWorkProjectMemberForCaller({
+      callerEntityId: adminId,
+      projectId: created.project_id,
+      entityId: lonelyId,
+      actorIsOrgAdmin: true,
+      actorOrgEntityId: orgId,
+    });
+    expect(rejoin.ok).toBe(false);
+    if (!rejoin.ok) expect(rejoin.code).toBe("PROJECT_ARCHIVED");
+  });
+
+  it("a revoked workspace membership does not count as 'connected'", async () => {
+    // A REVOKED membership row (or one in a non-ACTIVE workspace) must not
+    // silence the first-project recommendation.
+    const ws = await prisma.collaborationWorkspace.create({
+      data: {
+        org_entity_id: orgId,
+        title: `${TEST_PREFIX} Smoke Workspace`,
+        description: "Growth truth test",
+        status: "ACTIVE",
+        created_by_entity_id: adminId,
+      },
+    });
+    await prisma.collaborationMembership.create({
+      data: {
+        workspace_id: ws.workspace_id,
+        org_entity_id: orgId,
+        member_entity_id: lonelyId,
+        member_display_name: "Lonely Newcomer",
+        role_label: "Contributor",
+        status: "REVOKED",
+        revoked_at: new Date(),
+      },
+    });
+    const view = await getOrgGrowthForCaller(adminId);
+    if (view.ok === false) throw new Error("expected ok");
+    expect(
+      view.growth.recommendations.some(
+        (r) => r.kind === "NEEDS_PROJECT_OR_WORKSPACE" && r.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(true);
+  });
+
   it("a healthy org gets the calm headline and zero recommendations", async () => {
     // Give the newcomer a profile + project so nothing fires.
     await prisma.entityProfile.create({
