@@ -26,6 +26,7 @@ import {
 } from "@niov/database";
 import { createSystemPermission } from "./system-permission.js";
 import { resolveRoleTemplateSlug } from "./role-template-resolver.js";
+import { applyTwinAutonomyCeiling } from "./twin-autonomy.js";
 
 // WHAT: Inputs for createTwin.
 // INPUT: Used as a parameter type only.
@@ -231,7 +232,6 @@ async function createTwinInTx(
   const approverEntityId = isAdmin
     ? await findNextApprover(tx, input.owner_entity_id)
     : input.owner_entity_id;
-  const autonomyLevel = isAdmin ? "EXECUTIVE_OVERRIDE" : "APPROVAL_REQUIRED";
 
   // Resolve the matching role template so the twin is role-ready out of the box.
   // The Section 11 runtime path is live: AgentTemplate rows are seeded on boot
@@ -242,10 +242,11 @@ async function createTwinInTx(
   // (null-org) template or one owned by THIS org is ever applied.
   const roleTemplateSlug = resolveRoleTemplateSlug(roleTitle);
   let appliedRoleTemplate: string | null = null;
+  let templateAutonomyDefault: string | null = null;
   if (roleTemplateSlug !== null) {
     const template = await tx.agentTemplate.findUnique({
       where: { role_name: roleTemplateSlug },
-      select: { role_name: true, org_entity_id: true },
+      select: { role_name: true, org_entity_id: true, autonomy_default: true },
     });
     if (
       template !== null &&
@@ -253,8 +254,32 @@ async function createTwinInTx(
         template.org_entity_id === input.org_entity_id)
     ) {
       appliedRoleTemplate = template.role_name;
+      templateAutonomyDefault = template.autonomy_default;
     }
   }
+
+  // [GAP-G SLICE-1] Ceiling-capped autonomy default (Option A, founder-
+  // approved). The template RECOMMENDS autonomy; the org ceiling (default
+  // APPROVAL_REQUIRED — today's exact behavior) CAPS what is applied. Admin
+  // twins keep the existing explicit EXECUTIVE_OVERRIDE branch — that is an
+  // org decision at create time, not template authority, and is unchanged.
+  // Existing twins are never touched here: this runs at provisioning only.
+  const orgSettingsRow = await tx.orgSettings.findUnique({
+    where: { org_entity_id: input.org_entity_id },
+    select: { twin_autonomy_ceiling: true },
+  });
+  const cap = applyTwinAutonomyCeiling(
+    templateAutonomyDefault,
+    orgSettingsRow?.twin_autonomy_ceiling,
+  );
+  const autonomyLevel = isAdmin ? "EXECUTIVE_OVERRIDE" : cap.applied;
+  const autonomySource = isAdmin
+    ? "admin_twin"
+    : cap.recommended === null
+      ? "system_default"
+      : cap.capped
+        ? "org_ceiling_capped"
+        : "role_template_default";
 
   const twinConfig = await tx.twinConfig.create({
     data: {
@@ -264,6 +289,8 @@ async function createTwinInTx(
       role_template: appliedRoleTemplate,
       is_admin_twin: isAdmin,
       approver_entity_id: approverEntityId,
+      template_recommended_autonomy: cap.recommended,
+      autonomy_source: autonomySource,
     },
   });
 
@@ -380,6 +407,12 @@ async function createTwinInTx(
         role_template_applied: appliedRoleTemplate,
         is_admin_twin: isAdmin,
         autonomy_level: autonomyLevel,
+        // [GAP-G SLICE-1] Full authority provenance: what the template
+        // recommended, the ceiling used, whether it capped, and the source.
+        template_recommended_autonomy: cap.recommended,
+        org_twin_autonomy_ceiling: cap.ceiling,
+        autonomy_capped: !isAdmin && cap.capped,
+        autonomy_source: autonomySource,
         approver_entity_id: approverEntityId,
         owner_permission_bridge_id: ownerPerm.bridge_id,
         org_permission_bridge_id: orgPermissionBridgeId,

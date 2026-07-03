@@ -55,6 +55,9 @@ export const ORG_SETTINGS_DEFAULTS = Object.freeze({
   // substantively). Defaults to null so existing orgs without
   // operator-set jurisdiction observe no behavior change.
   default_jurisdiction: null as string | null,
+  // [GAP-G SLICE-1] Ceiling for template-recommended twin autonomy at
+  // provisioning. APPROVAL_REQUIRED preserves today's behavior exactly.
+  twin_autonomy_ceiling: "APPROVAL_REQUIRED",
 }) satisfies Omit<OrgSettings, "org_entity_id" | "updated_at">;
 
 // WHAT: The shape returned by getOrgSettingsOrDefaults -- the row
@@ -78,6 +81,7 @@ export interface MergedOrgSettings {
   audit_ai_actions: boolean;
   require_human_approval: boolean;
   federated_learning: boolean;
+  twin_autonomy_ceiling: string;
   track_external_entities: boolean;
   industry: string | null;
   // CAR Sub-box 2 sub-phase 2 [CAR-SUB-BOX-2-SCHEMA] per ADR-0037
@@ -177,6 +181,7 @@ export async function getOrgSettingsOrDefaults(
     audit_ai_actions: row.audit_ai_actions,
     require_human_approval: row.require_human_approval,
     federated_learning: row.federated_learning,
+    twin_autonomy_ceiling: row.twin_autonomy_ceiling,
     track_external_entities: row.track_external_entities,
     industry: row.industry,
     default_jurisdiction: row.default_jurisdiction,

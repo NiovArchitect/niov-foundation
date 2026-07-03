@@ -859,6 +859,12 @@ model OrgSettings {
   mfa_required            Boolean  @default(false)
   ip_whitelist            String[] @default([])
   auto_approve_low_risk   Boolean  @default(false)
+  // [GAP-G SLICE-1] Org authority ceiling for TEMPLATE-RECOMMENDED twin
+  // autonomy at provisioning. Templates recommend; this caps. Default
+  // APPROVAL_REQUIRED preserves today's behavior exactly — no template
+  // (incl. CEO/COO/CTO EXECUTIVE_OVERRIDE seeds) can silently mint
+  // higher-authority twins. Caps DEFAULTS only, never explicit admin edits.
+  twin_autonomy_ceiling   String   @default("APPROVAL_REQUIRED")
   cross_dept_collab       Boolean  @default(true)
   swarm_formation         Boolean  @default(true)
   dept_data_isolation     Boolean  @default(true)
@@ -889,6 +895,13 @@ model TwinConfig {
   role_template      String?
   is_admin_twin      Boolean  @default(false)
   approver_entity_id String?  @db.Uuid
+  // [GAP-G SLICE-1] Provenance for the applied autonomy default (additive).
+  // template_recommended_autonomy = what the role template suggested;
+  // autonomy_source = how autonomy_level was determined at provisioning
+  // ("role_template_default" | "org_ceiling_capped" | "system_default" |
+  //  "admin_twin"). Never authority themselves — display/audit provenance only.
+  template_recommended_autonomy String?
+  autonomy_source               String?
   updated_at         DateTime @updatedAt
 
   skills TwinSkill[]

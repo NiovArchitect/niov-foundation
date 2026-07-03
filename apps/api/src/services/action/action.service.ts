@@ -371,7 +371,11 @@ export async function buildPolicyEnvelope(
     org_audit_ai_actions: orgSettings?.audit_ai_actions ?? true,
     entity_profile_safe_view: {
       job_title: entityProfile?.job_title ?? undefined,
-      role_template: undefined,
+      // [GAP-G SLICE-1] Fill the evaluator's role slot with the twin's
+      // STORED template so future policy rungs can branch per-role. The
+      // evaluator has NO branch on it today — golden-case tests lock that
+      // outcomes are identical with the slot filled (zero behavior change).
+      role_template: twinConfig?.role_template ?? undefined,
     },
     tar_capability_bits: {
       can_admin_org: tar?.can_admin_org ?? false,

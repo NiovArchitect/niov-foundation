@@ -314,3 +314,141 @@ describe("createTwin -- Hive missing for standard branch", () => {
     ).rejects.toThrow(/DEFAULT_HIVE_MISSING/);
   });
 });
+
+// ── [GAP-G SLICE-1] Ceiling-capped template autonomy at provisioning ─────────
+// Templates RECOMMEND autonomy; OrgSettings.twin_autonomy_ceiling (default
+// APPROVAL_REQUIRED) CAPS what is applied. Admin twins keep the existing
+// explicit branch. Existing twins are never touched. Full provenance stored
+// + audited.
+
+describe("[GAP-G] createTwin — template-recommended autonomy under the org ceiling", () => {
+  async function seedCeoTemplate(orgEntityId: string | null): Promise<void> {
+    await prisma.agentTemplate.upsert({
+      where: { role_name: "chief-executive-officer" },
+      update: { autonomy_default: "EXECUTIVE_OVERRIDE", org_entity_id: orgEntityId },
+      create: {
+        role_name: "chief-executive-officer",
+        role_category: "EXECUTIVE",
+        template_content: "test CEO template",
+        skill_packages: [],
+        autonomy_default: "EXECUTIVE_OVERRIDE",
+        is_custom: false,
+        org_entity_id: orgEntityId,
+      },
+    });
+  }
+
+  it("a CEO-template twin is CAPPED to APPROVAL_REQUIRED by the default ceiling — with provenance + audit", async () => {
+    const { orgId, adminId } = await makeOrgWithAdminAndDefaultHive();
+    await seedCeoTemplate(null);
+    const result = await createTwin({
+      owner_entity_id: adminId,
+      org_entity_id: orgId,
+      role_title: "Chief Executive Officer",
+      is_admin_invite: false,
+    });
+    expect(result.twin_config.role_template).toBe("chief-executive-officer");
+    // The template recommended EXECUTIVE_OVERRIDE; the org ceiling said no.
+    expect(result.twin_config.autonomy_level).toBe("APPROVAL_REQUIRED");
+    expect(result.twin_config.template_recommended_autonomy).toBe("EXECUTIVE_OVERRIDE");
+    expect(result.twin_config.autonomy_source).toBe("org_ceiling_capped");
+    // The audit carries the full authority provenance.
+    const audit = await prisma.auditEvent.findUnique({
+      where: { audit_id: result.audit_event_id },
+    });
+    const d = audit?.details as Record<string, unknown>;
+    expect(d.autonomy_level).toBe("APPROVAL_REQUIRED");
+    expect(d.template_recommended_autonomy).toBe("EXECUTIVE_OVERRIDE");
+    expect(d.org_twin_autonomy_ceiling).toBe("APPROVAL_REQUIRED");
+    expect(d.autonomy_capped).toBe(true);
+    expect(d.autonomy_source).toBe("org_ceiling_capped");
+  });
+
+  it("a deliberately RAISED org ceiling lets the template recommendation through", async () => {
+    const { orgId, adminId } = await makeOrgWithAdminAndDefaultHive();
+    await seedCeoTemplate(null);
+    await prisma.orgSettings.upsert({
+      where: { org_entity_id: orgId },
+      update: { twin_autonomy_ceiling: "EXECUTIVE_OVERRIDE" },
+      create: { org_entity_id: orgId, twin_autonomy_ceiling: "EXECUTIVE_OVERRIDE" },
+    });
+    const result = await createTwin({
+      owner_entity_id: adminId,
+      org_entity_id: orgId,
+      role_title: "Chief Executive Officer",
+      is_admin_invite: false,
+    });
+    expect(result.twin_config.autonomy_level).toBe("EXECUTIVE_OVERRIDE");
+    expect(result.twin_config.autonomy_source).toBe("role_template_default");
+    expect(result.twin_config.template_recommended_autonomy).toBe("EXECUTIVE_OVERRIDE");
+  });
+
+  it("no template → system default with honest null recommendation", async () => {
+    const { orgId, adminId } = await makeOrgWithAdminAndDefaultHive();
+    const result = await createTwin({
+      owner_entity_id: adminId,
+      org_entity_id: orgId,
+      role_title: "Digital Twin",
+      is_admin_invite: false,
+    });
+    expect(result.twin_config.role_template).toBeNull();
+    expect(result.twin_config.autonomy_level).toBe("APPROVAL_REQUIRED");
+    expect(result.twin_config.template_recommended_autonomy).toBeNull();
+    expect(result.twin_config.autonomy_source).toBe("system_default");
+  });
+
+  it("admin twins keep the existing explicit branch (never a template grant)", async () => {
+    const { orgId, adminId } = await makeOrgWithAdminAndDefaultHive();
+    await seedCeoTemplate(null);
+    const result = await createTwin({
+      owner_entity_id: adminId,
+      org_entity_id: orgId,
+      role_title: "Chief Executive Officer",
+      is_admin_invite: true,
+    });
+    expect(result.twin_config.autonomy_level).toBe("EXECUTIVE_OVERRIDE");
+    expect(result.twin_config.autonomy_source).toBe("admin_twin");
+  });
+
+  it("another org's template never influences this org's twin (cross-org isolation)", async () => {
+    const { orgId, adminId } = await makeOrgWithAdminAndDefaultHive();
+    const other = await makeOrgWithAdminAndDefaultHive();
+    await seedCeoTemplate(other.orgId); // owned by the OTHER org
+    const result = await createTwin({
+      owner_entity_id: adminId,
+      org_entity_id: orgId,
+      role_title: "Chief Executive Officer",
+      is_admin_invite: false,
+    });
+    expect(result.twin_config.role_template).toBeNull();
+    expect(result.twin_config.template_recommended_autonomy).toBeNull();
+    expect(result.twin_config.autonomy_source).toBe("system_default");
+  });
+
+  it("EXISTING twins are never touched: a prior twin's manual autonomy survives new provisioning", async () => {
+    const { orgId, adminId } = await makeOrgWithAdminAndDefaultHive();
+    const first = await createTwin({
+      owner_entity_id: adminId,
+      org_entity_id: orgId,
+      role_title: "Digital Twin",
+      is_admin_invite: false,
+    });
+    // An admin explicitly set this twin's autonomy earlier (audited PATCH path).
+    await prisma.twinConfig.update({
+      where: { twin_id: first.entity_id },
+      data: { autonomy_level: "OBSERVE_ONLY" },
+    });
+    await seedCeoTemplate(null);
+    await createTwin({
+      owner_entity_id: adminId,
+      org_entity_id: orgId,
+      role_title: "Chief Executive Officer",
+      is_admin_invite: false,
+    });
+    const firstAfter = await prisma.twinConfig.findUnique({
+      where: { twin_id: first.entity_id },
+    });
+    expect(firstAfter?.autonomy_level).toBe("OBSERVE_ONLY");
+    expect(firstAfter?.autonomy_source).toBe("system_default"); // provenance untouched too
+  });
+});
