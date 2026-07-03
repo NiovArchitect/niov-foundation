@@ -667,11 +667,26 @@ export interface AddMemberInput {
   responsibilitySummary?: string;
   memberType?: CollaborationMembershipType;
   accessLevel?: CollaborationMembershipAccessLevel;
+  // [PROD-UX-ASSIGN] Org-admin assignment authority (the People &
+  // Collaboration "Assign" flow). ROUTE-COMPUTED ONLY — never taken from a
+  // client body. When true AND the workspace belongs to actorOrgEntityId's
+  // org, the caller may add members without being a workspace member
+  // themselves (mirrors the hierarchy-assign admin model). All other guards
+  // (external-visibility, idempotency, audit) apply unchanged.
+  actorIsOrgAdmin?: boolean;
+  actorOrgEntityId?: string;
 }
 
 export type AddMemberResult =
-  | { ok: true; httpStatus: 201; membership: MembershipSafeView }
-  | { ok: false; httpStatus: 403 | 404 | 409 | 422; code: string; message?: string };
+  | { ok: true; httpStatus: 201; membership: MembershipSafeView; audit_event_id: string }
+  | {
+      ok: false;
+      httpStatus: 403 | 404 | 409 | 422;
+      code: string;
+      message?: string;
+      /** Present on ALREADY_MEMBER — the existing row (idempotent reads). */
+      membership_id?: string;
+    };
 
 export async function addCollaborationMemberForCaller(
   input: AddMemberInput,
@@ -682,18 +697,28 @@ export async function addCollaborationMemberForCaller(
   if (workspace === null) {
     return { ok: false, httpStatus: 404, code: "WORKSPACE_NOT_FOUND" };
   }
-  const callerMembership = await getCallerMembership(
-    input.workspaceId,
-    input.callerEntityId,
-  );
-  if (callerMembership === null) {
-    return { ok: false, httpStatus: 403, code: "NOT_WORKSPACE_MEMBER" };
-  }
-  if (
-    callerMembership.access_level !== "APPROVE" &&
-    callerMembership.access_level !== "CONTRIBUTE"
-  ) {
-    return { ok: false, httpStatus: 403, code: "INSUFFICIENT_ACCESS_LEVEL" };
+  // [PROD-UX-ASSIGN] Org-admin authority: a route-verified org admin may add
+  // members to any workspace of THEIR OWN org (both flags route-computed; the
+  // org match is re-checked here so a mismatched override never bypasses the
+  // membership gate). Otherwise the existing peer rule holds.
+  const adminOverride =
+    input.actorIsOrgAdmin === true &&
+    typeof input.actorOrgEntityId === "string" &&
+    input.actorOrgEntityId === workspace.org_entity_id;
+  if (!adminOverride) {
+    const callerMembership = await getCallerMembership(
+      input.workspaceId,
+      input.callerEntityId,
+    );
+    if (callerMembership === null) {
+      return { ok: false, httpStatus: 403, code: "NOT_WORKSPACE_MEMBER" };
+    }
+    if (
+      callerMembership.access_level !== "APPROVE" &&
+      callerMembership.access_level !== "CONTRIBUTE"
+    ) {
+      return { ok: false, httpStatus: 403, code: "INSUFFICIENT_ACCESS_LEVEL" };
+    }
   }
   const entity = await prisma.entity.findUnique({
     where: { entity_id: input.memberEntityId },
@@ -742,7 +767,7 @@ export async function addCollaborationMemberForCaller(
     },
   });
   if (existing !== null && existing.deleted_at === null) {
-    return { ok: false, httpStatus: 409, code: "ALREADY_MEMBER" };
+    return { ok: false, httpStatus: 409, code: "ALREADY_MEMBER", membership_id: existing.membership_id };
   }
   const membership = await prisma.collaborationMembership.create({
     data: {
@@ -763,7 +788,7 @@ export async function addCollaborationMemberForCaller(
       accepted_at: new Date(),
     },
   });
-  await writeAuditEvent({
+  const audit = await writeAuditEvent({
     event_type: "WORKSPACE_MEMBER_ADDED",
     outcome: "SUCCESS",
     actor_entity_id: input.callerEntityId,
@@ -773,12 +798,16 @@ export async function addCollaborationMemberForCaller(
       role_label: bound(input.roleLabel, ROLE_LABEL_MAX_LENGTH),
       member_type: memberType,
       access_level: input.accessLevel ?? "CONTRIBUTE",
+      // [PROD-UX-ASSIGN] Provenance: this add came through org-admin
+      // assignment authority (People & Collaboration), not workspace peers.
+      ...(adminOverride ? { via_org_admin: true, org_entity_id: workspace.org_entity_id } : {}),
     },
   });
   return {
     ok: true,
     httpStatus: 201,
     membership: projectMembership(membership),
+    audit_event_id: audit.audit_id,
   };
 }
 

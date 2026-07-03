@@ -83,11 +83,19 @@ export interface AddWorkProjectMemberInput {
   projectId: string;
   entityId: string;
   role?: WorkProjectMemberRole;
+  // [PROD-UX-ASSIGN] Org-admin assignment authority (the People &
+  // Collaboration "Assign" flow). ROUTE-COMPUTED ONLY — never taken from a
+  // client body. When true, the caller may add members to any project in
+  // actorOrgEntityId's org without being project OWNER (mirrors the
+  // hierarchy-assign admin model). Both fields must be present together; the
+  // project must belong to actorOrgEntityId or the override is ignored.
+  actorIsOrgAdmin?: boolean;
+  actorOrgEntityId?: string;
 }
 
 // WHAT: Result shape for addMember.
 export type AddMemberResult =
-  | { ok: true; member: WorkProjectMemberSafeView }
+  | { ok: true; member: WorkProjectMemberSafeView; audit_event_id: string }
   | {
       ok: false;
       code:
@@ -96,6 +104,8 @@ export type AddMemberResult =
         | "NOT_PROJECT_OWNER"
         | "ALREADY_MEMBER"
         | "CROSS_ORG_DENIED";
+      /** Present on ALREADY_MEMBER — the existing row (idempotent reads). */
+      membership_id?: string;
     };
 
 // WHAT: Inputs for archiveWorkProjectForCaller.
@@ -231,17 +241,27 @@ export async function addWorkProjectMemberForCaller(
   if (project === null) return { ok: false, code: "PROJECT_NOT_FOUND" };
   if (project.state === "ARCHIVED")
     return { ok: false, code: "PROJECT_ARCHIVED" };
-  // Caller must be OWNER on this project.
-  const callerMembership = await prisma.workProjectMember.findUnique({
-    where: {
-      project_id_entity_id: {
-        project_id: input.projectId,
-        entity_id: input.callerEntityId,
+  // [PROD-UX-ASSIGN] Org-admin authority: a route-verified org admin may add
+  // members to any project of THEIR OWN org (both flags route-computed; the
+  // org match is re-checked here so a mismatched override never bypasses the
+  // owner gate). Otherwise the existing peer rule holds: caller must be
+  // OWNER on this project.
+  const adminOverride =
+    input.actorIsOrgAdmin === true &&
+    typeof input.actorOrgEntityId === "string" &&
+    input.actorOrgEntityId === project.org_entity_id;
+  if (!adminOverride) {
+    const callerMembership = await prisma.workProjectMember.findUnique({
+      where: {
+        project_id_entity_id: {
+          project_id: input.projectId,
+          entity_id: input.callerEntityId,
+        },
       },
-    },
-  });
-  if (callerMembership === null || callerMembership.role !== "OWNER")
-    return { ok: false, code: "NOT_PROJECT_OWNER" };
+    });
+    if (callerMembership === null || callerMembership.role !== "OWNER")
+      return { ok: false, code: "NOT_PROJECT_OWNER" };
+  }
   // Same-org guard for the candidate member.
   if (input.entityId !== project.org_entity_id) {
     const orgLink = await prisma.entityMembership.findFirst({
@@ -263,7 +283,8 @@ export async function addWorkProjectMemberForCaller(
       },
     },
   });
-  if (existing !== null) return { ok: false, code: "ALREADY_MEMBER" };
+  if (existing !== null)
+    return { ok: false, code: "ALREADY_MEMBER", membership_id: existing.project_member_id };
   const row = await prisma.workProjectMember.create({
     data: {
       project_id: input.projectId,
@@ -272,7 +293,7 @@ export async function addWorkProjectMemberForCaller(
       role: input.role ?? "MEMBER",
     },
   });
-  await writeAuditEvent({
+  const audit = await writeAuditEvent({
     event_type: "ADMIN_ACTION",
     outcome: "SUCCESS",
     actor_entity_id: input.callerEntityId,
@@ -281,9 +302,12 @@ export async function addWorkProjectMemberForCaller(
       action: "WORK_PROJECT_MEMBER_ADDED",
       project_id: input.projectId,
       role: row.role,
+      // [PROD-UX-ASSIGN] Provenance: this add came through org-admin
+      // assignment authority (People & Collaboration), not project ownership.
+      ...(adminOverride ? { via_org_admin: true, org_entity_id: project.org_entity_id } : {}),
     },
   });
-  return { ok: true, member: projectWorkProjectMemberSafeView(row) };
+  return { ok: true, member: projectWorkProjectMemberSafeView(row), audit_event_id: audit.audit_id };
 }
 
 // WHAT: List the members of a project the caller is a member of.
