@@ -12,6 +12,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import type { OtzarService } from "../services/otzar/otzar.service.js";
 import { requireAdminCapability } from "../middleware/admin.middleware.js";
+import { zoomRecordingToSourceEvent } from "../services/otzar/source-event.js";
 import { fetchZoomTranscriptForOrg } from "../services/connector/zoom-transcript.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 import {
@@ -132,12 +133,40 @@ export async function registerConnectorDataRoutes(
           : 502;
         return reply.code(status).send({ ok: false, code: fetched.code });
       }
-      const result = await otzarService.ingestComms({
-        token: bearer,
-        captured_text: fetched.transcript,
-        title: `Zoom: ${fetched.topic}`,
+      // [GAP-I ZOOM] Canonical provenance: this is a CONNECTOR source, not a
+      // pasted transcript. The spine's dedupe (org + "ZOOM:<meeting_id>")
+      // makes re-ingesting the same recording idempotent, and every ledger
+      // row carries source_system/source_id lineage.
+      const zoomEvent = zoomRecordingToSourceEvent({
+        meetingId,
+        topic: fetched.topic,
+        transcript: fetched.transcript,
+        callerEntityId: request.auth!.entity_id,
+        callerName: "Zoom recording import",
+        orgEntityId,
+        nowIso: new Date().toISOString(),
       });
-      if (!result.ok) return reply.code(502).send(result);
+      const result = await otzarService.ingestSourceEvent({
+        token: bearer,
+        source: {
+          sourceType: zoomEvent.sourceType,
+          sourceSystem: zoomEvent.sourceSystem,
+          sourceId: zoomEvent.sourceId,
+          sourceUrl: null,
+          actor: { name: zoomEvent.actor.name },
+          timestamp: zoomEvent.timestamp,
+          title: zoomEvent.title,
+          content: zoomEvent.content,
+        },
+      });
+      if (!result.ok) {
+        if (result.code === "ALREADY_INGESTED") {
+          // Honest idempotency: the same recording was ingested before —
+          // no duplicate work was created.
+          return reply.code(409).send(result);
+        }
+        return reply.code(502).send(result);
+      }
       return reply.code(200).send(result);
     },
   );

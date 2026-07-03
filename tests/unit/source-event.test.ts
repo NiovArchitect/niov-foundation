@@ -129,3 +129,37 @@ describe("source-event — Slack adapter (wire a real source)", () => {
     expect(sourceDedupeKey(e)).toBe("SLACK:C1:1699900000.123456");
   });
 });
+
+// ── [GAP-I ZOOM] Zoom recording adapter — canonical provenance, no secrets ──
+
+import { zoomRecordingToSourceEvent } from "@niov/api";
+
+describe("[GAP-I] zoomRecordingToSourceEvent", () => {
+  const event = zoomRecordingToSourceEvent({
+    meetingId: "8231 1234 555",
+    topic: "Launch sync",
+    transcript: "David: ship it Friday.",
+    callerEntityId: "e-admin",
+    callerName: "Zoom recording import",
+    orgEntityId: "e-org",
+    nowIso: "2026-07-03T12:00:00.000Z",
+  });
+
+  it("carries REAL Zoom provenance — connector source, stable meeting id", () => {
+    expect(event.sourceSystem).toBe("ZOOM");
+    expect(event.sourceType).toBe("CONNECTOR");
+    expect(event.sourceId).toBe("8231 1234 555");
+    expect(event.title).toBe("Zoom: Launch sync");
+    expect(event.timestamp).toBe("2026-07-03T12:00:00.000Z");
+  });
+
+  it("derives a stable dedupe key so re-ingesting the same recording is idempotent", () => {
+    expect(sourceDedupeKey(event)).toBe("ZOOM:8231 1234 555");
+  });
+
+  it("NEVER carries a download URL — tokenized Zoom URLs stay server-side", () => {
+    expect(event.sourceUrl).toBeNull();
+    expect(JSON.stringify(event)).not.toContain("download");
+    expect(JSON.stringify(event)).not.toContain("access_token");
+  });
+});
