@@ -1809,6 +1809,78 @@ describe("POST /zoom/recordings/ingest (CX-SLICE-3)", () => {
   });
 });
 
+// ── [SLACK-INGEST-1] POST /slack/messages/ingest — governed Slack message
+//    ingestion (admin-triggered; message fetched server-side via the org's
+//    sealed OAuth envelope; fed to the EXISTING spine via the canonical
+//    adapter). CI has no Slack OAuth: the honest refusal chain is what we
+//    prove here (capability gate → validation → DM park policy →
+//    NOT_CONFIGURED); the happy path is founder-run against a connected
+//    workspace.
+describe("POST /slack/messages/ingest (SLACK-INGEST-1)", () => {
+  it("non-admins are refused by the capability gate (403)", async () => {
+    const ctx = await createOrgAndAdmin();
+    const email = `${TEST_PREFIX}slackemp_${randomUUID()}@niov.test`;
+    await app.inject({
+      method: "POST", url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email, password: "correct-horse-battery", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const login = await app.inject({
+      method: "POST", url: "/api/v1/auth/login",
+      payload: { email, password: "correct-horse-battery", requested_operations: ["read", "write"] },
+      remoteAddress: "10.99.66.7",
+    });
+    const token = (login.json() as { token: string }).token;
+    const r = await app.inject({
+      method: "POST", url: "/api/v1/slack/messages/ingest",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { channel_id: "C0123ABCD", message_ts: "1699900000.123456" },
+      remoteAddress: "10.99.66.7",
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("admin: missing/malformed input → 422; DM channel → 422 policy park; public channel without Slack connected → 409 NOT_CONFIGURED", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Missing message_ts.
+    const missing = await app.inject({
+      method: "POST", url: "/api/v1/slack/messages/ingest",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { channel_id: "C0123ABCD" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(missing.statusCode).toBe(422);
+    expect((missing.json() as { code: string }).code).toBe("INVALID_REQUEST");
+    // Malformed ts (injection-shaped).
+    const badTs = await app.inject({
+      method: "POST", url: "/api/v1/slack/messages/ingest",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { channel_id: "C0123ABCD", message_ts: "1699900000.123456&limit=999" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(badTs.statusCode).toBe(422);
+    // DM ids are PARKED by policy before any provider call.
+    const dm = await app.inject({
+      method: "POST", url: "/api/v1/slack/messages/ingest",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { channel_id: "D0123ABCD", message_ts: "1699900000.123456" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(dm.statusCode).toBe(422);
+    expect((dm.json() as { code: string }).code).toBe("CHANNEL_NOT_ALLOWED");
+    // Valid public-channel request without a Slack envelope → honest 409.
+    const noSlack = await app.inject({
+      method: "POST", url: "/api/v1/slack/messages/ingest",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { channel_id: "C0123ABCD", message_ts: "1699900000.123456" },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(noSlack.statusCode).toBe(409);
+    expect((noSlack.json() as { code: string }).code).toBe("NOT_CONFIGURED");
+  });
+});
+
 // ── [PROD-UX-ASSIGN] org assignment targets + assignments ────────────────────
 // The People & Collaboration "Assign" flow: admin-gated org-wide picker feed +
 // admin assignment through the EXISTING membership write paths (org-admin

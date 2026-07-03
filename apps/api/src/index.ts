@@ -959,8 +959,15 @@ export {
   sourceEvidenceDetails,
   normalizeSourceContent,
   slackMessageToSourceEvent,
+  slackMessageDedupeKey,
   zoomRecordingToSourceEvent,
 } from "./services/otzar/source-event.js";
+export {
+  fetchSlackMessageForOrg,
+  isValidSlackMessageTs,
+  slackChannelIdAllowed,
+  MAX_SLACK_MESSAGE_CHARS,
+} from "./services/connector/slack-message.js";
 export type { WorkSourceEvent, SourceSystem, SourceEvidenceSpan } from "./services/otzar/source-event.js";
 export {
   reconcileIdentity,

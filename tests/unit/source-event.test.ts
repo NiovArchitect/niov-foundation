@@ -128,6 +128,65 @@ describe("source-event — Slack adapter (wire a real source)", () => {
     expect(e.dedupeKey).toBe("SLACK:C1:1699900000.123456");
     expect(sourceDedupeKey(e)).toBe("SLACK:C1:1699900000.123456");
   });
+
+  // [SLACK-INGEST-1] Workspace-scoped identity: org + team + channel + ts
+  // (+ thread ts for replies) per the connector doctrine.
+  it("includes the workspace (team) id in the dedupe key when known", () => {
+    const e = slackMessageToSourceEvent(
+      {
+        ts: "1699900000.123456",
+        text: "Ship it Friday.",
+        user: "U0123",
+        channel_id: "C1",
+        team_id: "T777",
+      },
+      "caller-1",
+    );
+    expect(e.dedupeKey).toBe("SLACK:T777:C1:1699900000.123456");
+  });
+
+  it("a thread reply gets its own key and can never overwrite its parent", () => {
+    const parent = slackMessageToSourceEvent(
+      { ts: "1699900000.100000", text: "Parent message.", channel_id: "C1", team_id: "T777" },
+      "caller-1",
+    );
+    const reply = slackMessageToSourceEvent(
+      {
+        ts: "1699900050.200000",
+        thread_ts: "1699900000.100000",
+        text: "Reply in thread.",
+        channel_id: "C1",
+        team_id: "T777",
+      },
+      "caller-1",
+    );
+    expect(parent.dedupeKey).toBe("SLACK:T777:C1:1699900000.100000");
+    expect(reply.dedupeKey).toBe("SLACK:T777:C1:1699900000.100000:1699900050.200000");
+    expect(reply.dedupeKey).not.toBe(parent.dedupeKey);
+    // A thread PARENT carries thread_ts === its own ts in Slack's payload —
+    // that must NOT change its key.
+    const parentWithSelfThread = slackMessageToSourceEvent(
+      {
+        ts: "1699900000.100000",
+        thread_ts: "1699900000.100000",
+        text: "Parent message.",
+        channel_id: "C1",
+        team_id: "T777",
+      },
+      "caller-1",
+    );
+    expect(parentWithSelfThread.dedupeKey).toBe(parent.dedupeKey);
+  });
+
+  it("never emits secret material — no token fields cross the adapter", () => {
+    const e = slackMessageToSourceEvent(
+      { ts: "1.1", text: "hello", channel_id: "C1", team_id: "T777" },
+      "caller-1",
+    );
+    const json = JSON.stringify(e);
+    expect(json).not.toMatch(/xoxb|xoxp|access_token|client_secret/i);
+    expect(e.sourceUrl).toBeNull();
+  });
 });
 
 // ── [GAP-I ZOOM] Zoom recording adapter — canonical provenance, no secrets ──
