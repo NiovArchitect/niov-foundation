@@ -400,6 +400,64 @@ describe("Phase 1237 — Dandelion org growth", () => {
     ).toBe(true);
   });
 
+  it("[GAP-B] the full setup queue is uncapped truth while the card list stays capped", async () => {
+    // Seven MORE members with no project/workspace: with the existing lonely
+    // newcomer that's 8 people needing a first assignment — more than the
+    // recommendation cap (5) can show.
+    for (let i = 1; i <= 7; i++) {
+      const id = await makeEntity(`Unassigned Member${i}`, "PERSON", 3);
+      await prisma.entityMembership.create({
+        data: { parent_id: orgId, child_id: id, is_active: true },
+      });
+    }
+    const view = await getOrgGrowthForCaller(adminId);
+    if (view.ok === false) throw new Error("expected ok");
+
+    // The card list stays calm (capped) …
+    expect(view.growth.recommendations.length).toBeLessThanOrEqual(5);
+    // … but the truth is uncapped and coherent between signal + queue.
+    expect(view.growth.signals.members_without_project_count).toBe(8);
+    expect(view.growth.needs_first_project_people).toHaveLength(8);
+    // Stable ids + safe display fields only, label-sorted.
+    for (const p of view.growth.needs_first_project_people) {
+      expect(typeof p.person_entity_id).toBe("string");
+      expect(p.person_entity_id.length).toBeGreaterThan(0);
+      expect(typeof p.display_name).toBe("string");
+      expect(Object.keys(p).sort()).toEqual(["display_name", "person_entity_id"]);
+    }
+    const labels = view.growth.needs_first_project_people.map((p) => p.display_name);
+    expect([...labels].sort((a, b) => a.localeCompare(b))).toEqual(labels);
+    // The queue includes the lonely newcomer by stable id.
+    expect(
+      view.growth.needs_first_project_people.some((p) => p.person_entity_id === lonelyId),
+    ).toBe(true);
+
+    // Assigning one person shrinks BOTH the signal and the queue (server truth).
+    const { createWorkProjectForCaller, addWorkProjectMemberForCaller } = await import(
+      "../../apps/api/src/services/otzar/work-project.service.js"
+    );
+    const project = await createWorkProjectForCaller({
+      callerEntityId: adminId,
+      orgEntityId: orgId,
+      name: `${TEST_PREFIX} Queue Project`,
+    });
+    const assigned = await addWorkProjectMemberForCaller({
+      callerEntityId: adminId,
+      projectId: project.project_id,
+      entityId: lonelyId,
+      actorIsOrgAdmin: true,
+      actorOrgEntityId: orgId,
+    });
+    expect(assigned.ok).toBe(true);
+    const after = await getOrgGrowthForCaller(adminId);
+    if (after.ok === false) throw new Error("expected ok");
+    expect(after.growth.signals.members_without_project_count).toBe(7);
+    expect(after.growth.needs_first_project_people).toHaveLength(7);
+    expect(
+      after.growth.needs_first_project_people.some((p) => p.person_entity_id === lonelyId),
+    ).toBe(false);
+  });
+
   it("a healthy org gets the calm headline and zero recommendations", async () => {
     // Give the newcomer a profile + project so nothing fires.
     await prisma.entityProfile.create({
