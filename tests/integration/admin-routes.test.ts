@@ -1118,7 +1118,7 @@ describe("GET /org/ai-teammates", () => {
     const twinA = await app.inject({
       method: "POST", url: "/api/v1/org/ai-teammates",
       headers: { authorization: `Bearer ${ctx.adminToken}` },
-      payload: { owner_entity_id: ownerA, role_title: "Ops Twin A" },
+      payload: { owner_entity_id: ownerA, role_title: "Digital Twin" },
       remoteAddress: ctx.adminIp,
     });
     const twinAId = (twinA.json() as { entity_id: string }).entity_id;
@@ -1137,7 +1137,7 @@ describe("GET /org/ai-teammates", () => {
     const twinB = await app.inject({
       method: "POST", url: "/api/v1/org/ai-teammates",
       headers: { authorization: `Bearer ${ctx.adminToken}` },
-      payload: { owner_entity_id: ownerB, role_title: "Ops Twin B" },
+      payload: { owner_entity_id: ownerB, role_title: "Assistant Twin" },
       remoteAddress: ctx.adminIp,
     });
     const twinBId = (twinB.json() as { entity_id: string }).entity_id;
@@ -1178,13 +1178,14 @@ describe("GET /org/ai-teammates", () => {
     const itemA = body.items.find((t) => t.entity_id === twinAId);
     const itemB = body.items.find((t) => t.entity_id === twinBId);
 
-    // Readiness: requirements are NOT modeled -> never "ready"; the count is
+    // Readiness: these twins resolve NO role template, so requirements are
+    // unmodeled -> not_configured (never "ready"). The connected count is
     // THIS org's enabled connectors only (cross-org binding excluded).
-    for (const it of body.items) {
-      expect(it.tool_readiness.status).toBe("not_configured");
-      expect(it.tool_readiness.status).not.toBe("ready");
-      expect(it.tool_readiness.connected_tools_count).toBe(1);
-      expect(it.tool_readiness.required_tools_count).toBe(0);
+    for (const it of [itemA, itemB]) {
+      expect(it?.tool_readiness.status).toBe("not_configured");
+      expect(it?.tool_readiness.status).not.toBe("ready");
+      expect(it?.tool_readiness.connected_tools_count).toBe(1);
+      expect(it?.tool_readiness.required_tools_count).toBe(0);
     }
     // Twin A: canonical twin activity (conversation).
     expect(itemA?.recent_activity.activity_source).toBe("twin");
@@ -1199,6 +1200,109 @@ describe("GET /org/ai-teammates", () => {
     for (const banned of ["password_hash", "secret_ref", "public_key", "oauth"]) {
       expect(raw).not.toContain(banned);
     }
+  });
+
+  it("[GAP-H TOOLS] readiness becomes REAL when the template models required tools", async () => {
+    const ctx = await createOrgAndAdmin();
+    // Template requiring SLACK + GITHUB (global seed shape).
+    await prisma.agentTemplate.upsert({
+      where: { role_name: "software-engineer" },
+      update: { required_tools: ["SLACK", "GITHUB"], org_entity_id: null },
+      create: {
+        role_name: "software-engineer",
+        role_category: "ENGINEERING",
+        template_content: "test engineer template",
+        skill_packages: [],
+        required_tools: ["SLACK", "GITHUB"],
+        autonomy_default: "APPROVAL_REQUIRED",
+        is_custom: false,
+        org_entity_id: null,
+      },
+    });
+    // Org has ONLY a Slack binding (a SLACK_WRITE variant must satisfy SLACK).
+    await prisma.connectorBinding.create({
+      data: {
+        org_entity_id: ctx.orgId,
+        type: "SLACK_WRITE",
+        display_name: `${TEST_PREFIX} Slack`,
+        created_by_entity_id: ctx.adminId,
+        enabled: true,
+      },
+    });
+    const empEmail = `${TEST_PREFIX}tools_${randomUUID()}@niov.test`;
+    const add = await app.inject({
+      method: "POST", url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email: empEmail, password: "x", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const empId = (add.json() as { entity_id: string }).entity_id;
+    const created = await app.inject({
+      method: "POST", url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { owner_entity_id: empId, role_title: "Software Engineer" },
+      remoteAddress: ctx.adminIp,
+    });
+    const twinId = (created.json() as { entity_id: string }).entity_id;
+
+    // 1) GitHub missing -> needs_setup with the HUMAN label.
+    const list1 = await app.inject({
+      method: "GET", url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    type Item = {
+      entity_id: string;
+      tool_readiness: {
+        status: string;
+        missing_tools: Array<{ tool_key: string; label: string }>;
+        required_tools_count: number;
+      };
+    };
+    const item1 = (list1.json() as { items: Item[] }).items.find(
+      (t) => t.entity_id === twinId,
+    );
+    expect(item1?.tool_readiness.status).toBe("needs_setup");
+    expect(item1?.tool_readiness.required_tools_count).toBe(2);
+    expect(item1?.tool_readiness.missing_tools).toEqual([
+      { tool_key: "GITHUB", label: "GitHub" },
+    ]);
+
+    // 2) Connect GitHub -> READY, proven by connected-state, never assumed.
+    await prisma.connectorBinding.create({
+      data: {
+        org_entity_id: ctx.orgId,
+        type: "github",
+        display_name: `${TEST_PREFIX} GitHub`,
+        created_by_entity_id: ctx.adminId,
+        enabled: true,
+      },
+    });
+    const list2 = await app.inject({
+      method: "GET", url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const item2 = (list2.json() as { items: Item[] }).items.find(
+      (t) => t.entity_id === twinId,
+    );
+    expect(item2?.tool_readiness.status).toBe("ready");
+    expect(item2?.tool_readiness.missing_tools).toHaveLength(0);
+
+    // 3) A DISABLED binding does not satisfy a requirement.
+    await prisma.connectorBinding.updateMany({
+      where: { org_entity_id: ctx.orgId, type: "github" },
+      data: { enabled: false },
+    });
+    const list3 = await app.inject({
+      method: "GET", url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const item3 = (list3.json() as { items: Item[] }).items.find(
+      (t) => t.entity_id === twinId,
+    );
+    expect(item3?.tool_readiness.status).toBe("needs_setup");
   });
 
   it("[GAP-H] another org's twins (and owners) never appear in this org's list", async () => {

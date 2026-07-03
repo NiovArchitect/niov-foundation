@@ -2,6 +2,7 @@
 role_name: chief-operating-officer
 role_category: EXECUTIVE
 skill_packages: ["operational_review", "cross_functional_unblock", "metric_governance"]
+required_tools: ["SLACK", "GOOGLE_WORKSPACE"]
 autonomy_default: EXECUTIVE_OVERRIDE
 ---
 

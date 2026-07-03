@@ -2072,6 +2072,10 @@ model AgentTemplate {
   role_name        String   @unique
   role_category    String
   template_content String
+  // [GAP-H TOOLS] Provider keys this role's twin needs connected before
+  // its readiness can honestly say ready (matched against the org's
+  // enabled ConnectorBindings). Empty = requirements not modeled.
+  required_tools String[] @default([])
   skill_packages   String[] @default([])
   autonomy_default String   @default("APPROVAL_REQUIRED")
   is_custom        Boolean  @default(false)

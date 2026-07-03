@@ -2,6 +2,7 @@
 role_name: customer-success-manager
 role_category: CUSTOMER_SUCCESS
 skill_packages: ["onboarding", "qbr_facilitation", "renewal_prep"]
+required_tools: ["SLACK", "GOOGLE_WORKSPACE"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 
