@@ -13,6 +13,12 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@niov/database";
 import { ingestSourceEvent, slackMessageToSourceEvent } from "@niov/api";
 import { rankClarifiers } from "../../apps/api/src/services/work-os/clarity.service.js";
+import { requestClarificationForCaller } from "../../apps/api/src/services/work-os/clarification-request.service.js";
+import {
+  approveEscalationForCaller,
+  listEscalationsPendingForCaller,
+} from "../../apps/api/src/services/governance/escalation.service.js";
+import { makeNotificationService } from "../../apps/api/src/services/notification/notification.service.js";
 import { createEntity } from "../../packages/database/src/queries/entity.js";
 import { ensureAuditTriggers, cleanupTestData } from "../helpers.js";
 
@@ -235,6 +241,62 @@ describe("[CE-1] clarity projection — read-only clarifier ranking (DB)", () =>
     if (!r.ok) expect(r.code).toBe("NOT_FOUND");
   });
 
+  // ── [CE-1.5] row target/recipient as a clarifier — durable row data only ──
+  it("[CE-1.5] the row's target ranks after requester with plain recipient copy; never duplicated over a stronger role", async () => {
+    const ledgerId = await ingestAndFindRow({
+      callerId, orgId, davidId, authorName: "U0EXTERNAL", ts: "1751500000.700007",
+    });
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: ledgerId },
+      data: { target_entity_id: eveId },
+    });
+    const r = await rankClarifiers({
+      org_entity_id: orgId, caller_entity_id: davidId,
+      ledger_entry_id: ledgerId, is_manager: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const target = r.clarity.candidates.find((c) => c.role === "target");
+    expect(target?.entity_id).toBe(eveId);
+    expect(target?.reason).toBe("This work is addressed to them.");
+    // Ranked after the requester (stronger roles first).
+    const roles = r.clarity.candidates.map((c) => c.role);
+    expect(roles.indexOf("target")).toBeGreaterThan(roles.indexOf("requester"));
+
+    // When the target IS the owner, the stronger role wins — no duplicate.
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: ledgerId },
+      data: { target_entity_id: davidId },
+    });
+    const asCaller = await rankClarifiers({
+      org_entity_id: orgId, caller_entity_id: callerId,
+      ledger_entry_id: ledgerId, is_manager: false,
+    });
+    expect(asCaller.ok).toBe(true);
+    if (!asCaller.ok) return;
+    const davidRoles = asCaller.clarity.candidates.filter((c) => c.entity_id === davidId);
+    expect(davidRoles.length).toBe(1);
+    expect(davidRoles[0]!.role).toBe("owner");
+  });
+
+  it("[CE-1.5] a FOLLOW_UP's target reads as the recipient", async () => {
+    const ledgerId = await ingestAndFindRow({
+      callerId, orgId, davidId, authorName: "U0EXTERNAL", ts: "1751500000.800008",
+    });
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: ledgerId },
+      data: { ledger_type: "FOLLOW_UP", target_entity_id: eveId },
+    });
+    const r = await rankClarifiers({
+      org_entity_id: orgId, caller_entity_id: davidId,
+      ledger_entry_id: ledgerId, is_manager: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const target = r.clarity.candidates.find((c) => c.role === "target");
+    expect(target?.reason).toBe("They are the recipient of this follow-up.");
+  });
+
   it("READ-ONLY proof: the projection creates no escalation, no notification, no ledger row", async () => {
     const ledgerId = await ingestAndFindRow({
       callerId, orgId, davidId, authorName: "Eve", ts: "1751500000.600006",
@@ -252,5 +314,166 @@ describe("[CE-1] clarity projection — read-only clarifier ranking (DB)", () =>
     expect(await prisma.workLedgerEntry.count()).toBe(ledgerBefore);
     expect(await prisma.escalationRequest.count()).toBe(escBefore);
     expect(await prisma.notification.count()).toBe(notifBefore);
+  });
+
+  // ── [CE-2] governed clarification request — the durable object ──────────
+  describe("[CE-2] requestClarificationForCaller", () => {
+    async function setupWithTarget(ts: string): Promise<string> {
+      const ledgerId = await ingestAndFindRow({
+        callerId, orgId, davidId, authorName: "U0EXTERNAL", ts,
+      });
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: ledgerId },
+        data: { target_entity_id: eveId },
+      });
+      return ledgerId;
+    }
+    const notificationService = makeNotificationService({});
+
+    it("creates a HUMAN_REVIEW_REQUIRED escalation to a LATERAL clarifier — audited, linked, pointed, duplicate-safe", async () => {
+      const ledgerId = await setupWithTarget("1751500001.100001");
+      const escBefore = await prisma.escalationRequest.count();
+      const notifBefore = await prisma.notification.count();
+
+      // David (owner) asks Eve (the row's target — lateral, NOT a manager).
+      const r = await requestClarificationForCaller({
+        org_entity_id: orgId, caller_entity_id: davidId, is_manager: false,
+        ledger_entry_id: ledgerId, clarifier_entity_id: eveId,
+        notificationService,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.already_requested).toBe(false);
+      expect(r.status).toBe("PENDING");
+      expect(r.pointer_delivered).toBe(true);
+
+      const esc = await prisma.escalationRequest.findUnique({
+        where: { escalation_id: r.escalation_id },
+      });
+      expect(esc!.escalation_type).toBe("HUMAN_REVIEW_REQUIRED");
+      expect(esc!.source_entity_id).toBe(davidId);
+      expect(esc!.target_entity_id).toBe(eveId);
+      expect(esc!.description).toContain("Clarification requested");
+      expect(esc!.expires_at).not.toBeNull();
+      const meta = esc!.resolution_metadata as Record<string, unknown>;
+      expect(meta.kind).toBe("clarification");
+      expect(meta.ledger_entry_id).toBe(ledgerId);
+
+      // Audit exists (ESCALATION_CREATED from the create tx).
+      const audits = await prisma.auditEvent.findMany({
+        where: { actor_entity_id: davidId },
+        orderBy: { timestamp: "desc" },
+        take: 5,
+      });
+      const created = audits.find(
+        (a) => (a.details as Record<string, unknown>)?.escalation_id === r.escalation_id,
+      );
+      expect(created).toBeDefined();
+
+      // The pointer landed in the clarifier's inbox — exactly one.
+      expect(await prisma.notification.count()).toBe(notifBefore + 1);
+
+      // The clarifier's Review Center pending queue gained EXACTLY 1.
+      const evePending = await listEscalationsPendingForCaller(eveId, eveId, 50);
+      expect(evePending.some((e) => e.escalation_id === r.escalation_id)).toBe(true);
+
+      // Duplicate request → idempotent, same escalation, no second row.
+      const dup = await requestClarificationForCaller({
+        org_entity_id: orgId, caller_entity_id: davidId, is_manager: false,
+        ledger_entry_id: ledgerId, clarifier_entity_id: eveId,
+        notificationService,
+      });
+      expect(dup.ok).toBe(true);
+      if (dup.ok) {
+        expect(dup.already_requested).toBe(true);
+        expect(dup.escalation_id).toBe(r.escalation_id);
+      }
+      expect(await prisma.escalationRequest.count()).toBe(escBefore + 1);
+
+      // The asker sees the pending state on the clarity projection.
+      const ranked = await rankClarifiers({
+        org_entity_id: orgId, caller_entity_id: davidId,
+        ledger_entry_id: ledgerId, is_manager: false,
+      });
+      expect(ranked.ok).toBe(true);
+      if (ranked.ok) {
+        expect(ranked.clarity.pending_clarification?.escalation_id).toBe(r.escalation_id);
+        expect(ranked.clarity.pending_clarification?.status).toBe("PENDING");
+        expect(ranked.clarity.pending_clarification?.clarifier_entity_id).toBe(eveId);
+      }
+    });
+
+    it("refuses a non-candidate, the caller themself, and a cross-org row", async () => {
+      const ledgerId = await setupWithTarget("1751500001.200002");
+      // A member who is NOT a candidate for this row.
+      const frankId = await makeEntity("Frank Random", "PERSON");
+      await prisma.entityMembership.create({
+        data: { parent_id: orgId, child_id: frankId, is_active: true },
+      });
+      const notCandidate = await requestClarificationForCaller({
+        org_entity_id: orgId, caller_entity_id: davidId, is_manager: false,
+        ledger_entry_id: ledgerId, clarifier_entity_id: frankId,
+        notificationService,
+      });
+      expect(notCandidate.ok).toBe(false);
+      if (!notCandidate.ok) expect(notCandidate.code).toBe("NOT_A_CANDIDATE");
+
+      // Self-clarifier impossible (the caller is never a candidate).
+      const self = await requestClarificationForCaller({
+        org_entity_id: orgId, caller_entity_id: davidId, is_manager: false,
+        ledger_entry_id: ledgerId, clarifier_entity_id: davidId,
+        notificationService,
+      });
+      expect(self.ok).toBe(false);
+
+      // Cross-org caller cannot even see the row.
+      const otherOrg = await makeEntity("Other CE2 Org", "COMPANY");
+      const otherCaller = await makeEntity("Other CE2 Caller", "PERSON");
+      await prisma.entityMembership.create({
+        data: { parent_id: otherOrg, child_id: otherCaller, is_active: true },
+      });
+      const crossOrg = await requestClarificationForCaller({
+        org_entity_id: otherOrg, caller_entity_id: otherCaller, is_manager: true,
+        ledger_entry_id: ledgerId, clarifier_entity_id: eveId,
+        notificationService,
+      });
+      expect(crossOrg.ok).toBe(false);
+      if (!crossOrg.ok) expect(crossOrg.code).toBe("NOT_FOUND");
+    });
+
+    it("resolution flows back: clarifier resolves (source cannot), linkage survives the merge, asker sees the outcome", async () => {
+      const ledgerId = await setupWithTarget("1751500001.300003");
+      const r = await requestClarificationForCaller({
+        org_entity_id: orgId, caller_entity_id: davidId, is_manager: false,
+        ledger_entry_id: ledgerId, clarifier_entity_id: eveId,
+        notificationService,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      // The asker (source) can NEVER resolve their own clarification.
+      await expect(
+        approveEscalationForCaller(davidId, r.escalation_id, { note: "self" }),
+      ).rejects.toThrow("ESCALATION_FORBIDDEN");
+
+      // The clarifier resolves with an answer; create-time linkage SURVIVES.
+      const resolved = await approveEscalationForCaller(eveId, r.escalation_id, {
+        answer: "It is assigned to you because you own repo access.",
+      });
+      expect(resolved.status).toBe("APPROVED");
+      const meta = resolved.resolution_metadata as Record<string, unknown>;
+      expect(meta.ledger_entry_id).toBe(ledgerId); // merge, not replace
+      expect(meta.answer).toContain("repo access");
+
+      // The asker's clarity projection now shows the resolved state.
+      const ranked = await rankClarifiers({
+        org_entity_id: orgId, caller_entity_id: davidId,
+        ledger_entry_id: ledgerId, is_manager: false,
+      });
+      expect(ranked.ok).toBe(true);
+      if (ranked.ok) {
+        expect(ranked.clarity.pending_clarification?.status).toBe("APPROVED");
+      }
+    });
   });
 });

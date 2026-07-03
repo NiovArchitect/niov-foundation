@@ -39,6 +39,7 @@ import {
 // [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
+import { requestClarificationForCaller } from "../services/work-os/clarification-request.service.js";
 import {
   getWatcherFeed,
   getWatcherFeedWithBeamAdvisory,
@@ -605,6 +606,47 @@ export async function registerWorkOsLedgerRoutes(
       });
       if (result.ok === false) return reply.code(404).send(result);
       return reply.code(200).send({ ok: true, clarity: result.clarity });
+    },
+  );
+
+  // ── [CE-2] Governed clarification request. Clarification is NOT approval:
+  //    it routes a question to the best human source of truth (a CE-1
+  //    candidate — lateral by design), as a tracked HUMAN_REVIEW_REQUIRED
+  //    escalation on the EXISTING Review Center rails, audited at create,
+  //    duplicate-safe, with a best-effort inbox pointer. ──
+  app.post<{ Params: { id: string }; Body: { clarifier_entity_id?: unknown } }>(
+    "/api/v1/work-os/ledger/:id/clarify",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const clarifierId =
+        typeof request.body?.clarifier_entity_id === "string" &&
+        request.body.clarifier_entity_id.length > 0
+          ? request.body.clarifier_entity_id
+          : null;
+      if (clarifierId === null) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "clarifier_entity_id is required",
+        });
+      }
+      const result = await requestClarificationForCaller({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        ledger_entry_id: request.params.id,
+        clarifier_entity_id: clarifierId,
+        notificationService: internalOnlyNotificationService,
+      });
+      if (result.ok === false) {
+        const status =
+          result.code === "NOT_FOUND" ? 404
+          : result.code === "NOT_A_CANDIDATE" ? 422
+          : 502;
+        return reply.code(status).send(result);
+      }
+      return reply.code(result.already_requested ? 200 : 201).send(result);
     },
   );
 

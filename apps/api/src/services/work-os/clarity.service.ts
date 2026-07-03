@@ -25,6 +25,7 @@ export type ClarifierRole =
   | "source_author"
   | "owner"
   | "requester"
+  | "target"
   | "project_owner"
   | "project_reviewer"
   | "approver"
@@ -50,6 +51,15 @@ export interface ClarityProjection {
   /** Ranked, deduped, capped at 3 — calm by design. Empty = honest
    *  "not enough context" state, never an invented candidate. */
   candidates: ClarityCandidate[];
+  /** [CE-2] The caller's own clarification on this row, when one exists —
+   *  so the asker sees "requested / clarified / declined" without a new
+   *  surface. Latest wins. */
+  pending_clarification?: {
+    escalation_id: string;
+    status: string;
+    clarifier_entity_id: string;
+    clarifier_display_name: string;
+  };
 }
 
 const AUTHORITY_STATUSES = new Set(["NEEDS_AUTHORITY", "NEEDS_APPROVAL"]);
@@ -121,6 +131,17 @@ export async function rankClarifiers(args: {
   // 2-3. Work owner, then requester (the people already on the row).
   push(entry.owner_entity_id, "owner", "They own this work.");
   push(entry.requester_entity_id, "requester", "They asked for this work.");
+
+  // 4. [CE-1.5] Row target/recipient — durable row data (target_entity_id,
+  //    never display-name guessing), only when the row itself is addressed
+  //    to them; dedupe keeps stronger roles first.
+  push(
+    entry.target_entity_id,
+    "target",
+    entry.ledger_type === "FOLLOW_UP"
+      ? "They are the recipient of this follow-up."
+      : "This work is addressed to them.",
+  );
 
   // 4. Project OWNER, then REVIEWER, of the item's project.
   if (entry.project_id !== null) {
@@ -198,6 +219,40 @@ export async function rankClarifiers(args: {
     });
   }
 
+  // [CE-2] The caller's own clarification on this row (latest), so the
+  // asker's Why can show requested/clarified/declined truthfully.
+  const myClarification = await prisma.escalationRequest.findFirst({
+    where: {
+      source_entity_id: args.caller_entity_id,
+      escalation_type: "HUMAN_REVIEW_REQUIRED",
+      resolution_metadata: {
+        path: ["ledger_entry_id"],
+        equals: args.ledger_entry_id,
+      },
+    },
+    orderBy: { created_at: "desc" },
+    select: { escalation_id: true, status: true, target_entity_id: true },
+  });
+  let pendingClarification: ClarityProjection["pending_clarification"];
+  if (myClarification !== null) {
+    const clarifierName =
+      nameById.get(myClarification.target_entity_id) ??
+      (
+        await prisma.entity.findUnique({
+          where: { entity_id: myClarification.target_entity_id },
+          select: { display_name: true },
+        })
+      )?.display_name;
+    if (clarifierName !== undefined) {
+      pendingClarification = {
+        escalation_id: myClarification.escalation_id,
+        status: myClarification.status,
+        clarifier_entity_id: myClarification.target_entity_id,
+        clarifier_display_name: clarifierName,
+      };
+    }
+  }
+
   return {
     ok: true,
     clarity: {
@@ -205,6 +260,9 @@ export async function rankClarifiers(args: {
       authority_question: authorityQuestion,
       source_author_state: sourceAuthorState,
       candidates,
+      ...(pendingClarification !== undefined
+        ? { pending_clarification: pendingClarification }
+        : {}),
     },
   };
 }
