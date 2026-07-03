@@ -140,3 +140,132 @@ describe("org-scoped correction memory (Shiney/Shweta)", () => {
     expect(g.autonomyEligibility).toBe("blocked");
   });
 });
+
+// ── [LEARN-LOOP] Deriving classifier inputs from resolved follow-ups ────────
+// The BUG C rows ARE the correction store: these tests lock the deterministic
+// parse (details -> decision) and aggregation (decisions -> classifier inputs).
+
+import {
+  derivePriorRecipientDecisions,
+  resolvedDecisionFromFollowUpDetails,
+} from "@niov/api";
+
+function followUpDetails(args: {
+  entityId: string | null;
+  displayName: string;
+  source: string;
+  safety: string;
+  alternatives?: string[];
+}): unknown {
+  return {
+    follow_up: {
+      local_id: "x",
+      draft_text: "d",
+      recipient_governance: {
+        entity_id: args.entityId,
+        display_name: args.displayName,
+        recipientSafety: args.safety,
+        evidence: {
+          quote: null,
+          source: args.source,
+          matchedToken: null,
+          alternativeCandidates: args.alternatives ?? [],
+        },
+      },
+    },
+  };
+}
+
+describe("[LEARN-LOOP] resolvedDecisionFromFollowUpDetails", () => {
+  it("parses a caller-resolved SELECT row (alternatives preserved)", () => {
+    const d = resolvedDecisionFromFollowUpDetails(
+      followUpDetails({
+        entityId: "e-priya-eng",
+        displayName: "Priya Nair",
+        source: "caller_confirmed",
+        safety: "confirmed",
+        alternatives: ["Priya Menon"],
+      }),
+    );
+    expect(d).toEqual({
+      entity_id: "e-priya-eng",
+      display_name: "Priya Nair",
+      alternative_names: ["Priya Menon"],
+      evidence_source: "caller_confirmed",
+      recipient_safety: "confirmed",
+    });
+  });
+
+  it("rejects rows that are NOT caller-resolved decisions", () => {
+    // Otzar-verified rows are not human corrections.
+    expect(
+      resolvedDecisionFromFollowUpDetails(
+        followUpDetails({ entityId: "e-a", displayName: "A B", source: "explicit_mention", safety: "confirmed" }),
+      ),
+    ).toBeNull();
+    // Unresolved reviews are not decisions.
+    expect(
+      resolvedDecisionFromFollowUpDetails(
+        followUpDetails({ entityId: "e-a", displayName: "A B", source: "caller_confirmed", safety: "ambiguous" }),
+      ),
+    ).toBeNull();
+    // Stable ids only — a decision without an entity_id is not usable.
+    expect(
+      resolvedDecisionFromFollowUpDetails(
+        followUpDetails({ entityId: null, displayName: "A B", source: "caller_confirmed", safety: "confirmed" }),
+      ),
+    ).toBeNull();
+  });
+
+  it("never throws on malformed payloads", () => {
+    for (const bad of [null, 7, "x", {}, { follow_up: null }, { follow_up: { recipient_governance: 3 } }]) {
+      expect(resolvedDecisionFromFollowUpDetails(bad)).toBeNull();
+    }
+  });
+});
+
+describe("[LEARN-LOOP] derivePriorRecipientDecisions", () => {
+  const select = (entityId: string, displayName: string, alternatives: string[]) => ({
+    entity_id: entityId,
+    display_name: displayName,
+    alternative_names: alternatives,
+    evidence_source: "caller_confirmed",
+    recipient_safety: "confirmed",
+  });
+  const confirm = (entityId: string) => ({
+    entity_id: entityId,
+    display_name: "Someone Vouched",
+    alternative_names: [],
+    evidence_source: "caller_confirmed",
+    recipient_safety: "confirmed",
+  });
+
+  it("selects map the COLLISION token (shared with every alternative) to the chosen stable entity", () => {
+    const p = derivePriorRecipientDecisions([select("e-priya-eng", "Priya Nair", ["Priya Menon"])]);
+    expect(p.selectionsByToken.get("priya")).toBe("e-priya-eng");
+    // The distinguishing surname is NOT a collision token.
+    expect(p.selectionsByToken.has("nair")).toBe(false);
+    // A select is NOT a scope vouch — choosing between same-named people says
+    // nothing about work-scope connection.
+    expect(p.confirmedEntityIds.size).toBe(0);
+  });
+
+  it("conflicting selections drop the token entirely — humans disagreed, ambiguity stays", () => {
+    const p = derivePriorRecipientDecisions([
+      select("e-priya-eng", "Priya Nair", ["Priya Menon"]),
+      select("e-priya-mkt", "Priya Menon", ["Priya Nair"]),
+    ]);
+    expect(p.selectionsByToken.has("priya")).toBe(false);
+  });
+
+  it("confirms populate the vouched-entity set", () => {
+    const p = derivePriorRecipientDecisions([confirm("e-shweta")]);
+    expect(p.confirmedEntityIds.has("e-shweta")).toBe(true);
+    expect(p.selectionsByToken.size).toBe(0);
+  });
+
+  it("single-character tokens are dropped (no one-letter aliases)", () => {
+    const p = derivePriorRecipientDecisions([select("e-x", "X A", ["X B"])]);
+    expect(p.selectionsByToken.size).toBe(0);
+  });
+});

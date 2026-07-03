@@ -257,6 +257,18 @@ export interface ClassifyRecipientInput {
    *  (e.g. a marketing member wrongly matched for engineering work). A match
    *  here is a HARD exclusion regardless of any other signal. */
   excludeEntityIds?: ReadonlySet<string>;
+  /** [LEARN-LOOP] Prior ambiguous-name resolutions from this org's caller-
+   *  resolved follow-ups (BUG C rows ARE the correction store): lowercased
+   *  first-name token -> the stable entity_id a human previously selected.
+   *  Applies ONLY when the current target IS that entity — a correction for
+   *  person A can never boost person B. Never bypasses policy boundaries. */
+  priorSelections?: ReadonlyMap<string, string>;
+  /** [LEARN-LOOP] Stable entity_ids a human in this org previously vouched
+   *  for via the governed confirm path (evidence.source caller_confirmed).
+   *  Effect is confidence-only: softens out_of_scope -> likely so the review
+   *  question is gentler. NEVER bypasses unauthorized, cross_team_needs_
+   *  approval, hard exclusions, or the no-auto-send ceiling. */
+  priorConfirmedEntityIds?: ReadonlySet<string>;
 }
 
 export type WorkDomain =
@@ -334,6 +346,45 @@ export function classifyRecipient(
   }
   const ambiguousName = altCandidates.length > 0;
 
+  // 2b. [LEARN-LOOP] Prior org correction: a human already resolved a name
+  //     token to THIS entity through the governed select path, and that token
+  //     actually appears in THIS transcript. The correction is an org-scoped
+  //     alias proof (same semantics as the aliases hook -> alias_mentioned,
+  //     evidence source correction_memory), so the same question is not asked
+  //     again. Transcript-grounded by construction — a correction for a token
+  //     the conversation never used proves nothing. A prior selection of a
+  //     DIFFERENT entity changes nothing — ambiguity stays, the human chooses.
+  const priorSelectionAlias = (() => {
+    if (target.entity_id === null || input.priorSelections === undefined) return null;
+    const hay = `${input.sourceExcerpt ?? ""} ${input.transcriptText}`.toLowerCase();
+    const targetTokens = new Set(
+      target.display_name.toLowerCase().split(/\s+/).filter((t) => t.length >= 2),
+    );
+    for (const t of targetTokens) {
+      if (
+        input.priorSelections.get(t) === target.entity_id &&
+        new RegExp(`\\b${escapeRegExp(t)}\\b`).test(hay)
+      ) {
+        return t;
+      }
+    }
+    return null;
+  })();
+  const priorSelected = priorSelectionAlias !== null;
+
+  // 2c. [LEARN-LOOP] Prior org vouch (confirm path). Confidence-only.
+  const priorConfirmed =
+    target.entity_id !== null &&
+    input.priorConfirmedEntityIds !== undefined &&
+    input.priorConfirmedEntityIds.has(target.entity_id);
+
+  // A prior selection is an org-correction alias proof for THIS entity: the
+  // resolved token becomes an alias mention exactly like the aliases hook.
+  const correctionAlias =
+    priorSelected && mentionStatus === "not_mentioned" ? priorSelectionAlias : null;
+  const effectiveMention: MentionStatus =
+    correctionAlias !== null ? "alias_mentioned" : mentionStatus;
+
   // 3. Participation.
   const participantStatus: ParticipantStatus =
     input.participantEntityIds === null
@@ -347,7 +398,7 @@ export function classifyRecipient(
   const projectConnection = input.projectConnection ?? "unknown";
   const workConnectionType: WorkConnectionType =
     input.workConnectionType ??
-    (mentionStatus === "explicitly_mentioned"
+    (effectiveMention === "explicitly_mentioned"
       ? "transcript_assignee"
       : projectConnection === "owner"
         ? "project_owner"
@@ -362,8 +413,8 @@ export function classifyRecipient(
 
   // 5. Proof presence — is there ANY valid proof path?
   const hasProof =
-    mentionStatus === "explicitly_mentioned" ||
-    mentionStatus === "alias_mentioned" ||
+    effectiveMention === "explicitly_mentioned" ||
+    effectiveMention === "alias_mentioned" ||
     participantStatus === "participant" ||
     (workConnectionType !== "none" && workConnectionType !== "fuzzy_match_only");
 
@@ -381,21 +432,30 @@ export function classifyRecipient(
   } else if (target.entity_id === null) {
     // Never resolved to a real entity — must clarify, never send.
     recipientSafety = "ambiguous";
-  } else if (ambiguousName && mentionStatus !== "explicitly_mentioned" && participantStatus !== "participant") {
+  } else if (
+    ambiguousName &&
+    !priorSelected &&
+    effectiveMention !== "explicitly_mentioned" &&
+    participantStatus !== "participant"
+  ) {
     // The name itself is ambiguous and nothing disambiguates it -> ask.
+    // (A prior org SELECT of this exact entity for this token counts as
+    // disambiguation — the human already answered this question.)
     recipientSafety = "ambiguous";
-  } else if (!hasProof) {
+  } else if (!hasProof && !priorConfirmed) {
     // THE SHWETA CASE: the LLM proposed someone with no proof path at all.
+    // (A prior org CONFIRM of this entity falls through — policy checks below
+    // still run, so a vouch can only ever soften toward "likely".)
     recipientSafety = "out_of_scope";
   } else if (policyStatus === "blocked") {
     recipientSafety = "unauthorized";
-  } else if (roleMatch === "mismatch" && mentionStatus !== "explicitly_mentioned") {
+  } else if (roleMatch === "mismatch" && effectiveMention !== "explicitly_mentioned" && !priorConfirmed) {
     // Role mismatch with no explicit assignment -> review, not send.
     recipientSafety = "out_of_scope";
   } else if (policyStatus === "approval_required" || hierarchyConnection === "cross_team") {
     recipientSafety = "cross_team_needs_approval";
   } else if (
-    (mentionStatus === "explicitly_mentioned" || participantStatus === "participant") &&
+    (effectiveMention === "explicitly_mentioned" || participantStatus === "participant") &&
     (policyStatus === "allowed" || policyStatus === "unknown") &&
     roleMatch !== "mismatch"
   ) {
@@ -440,9 +500,9 @@ export function classifyRecipient(
         : "low";
 
   const evidenceSource: EvidenceSource =
-    mentionStatus === "explicitly_mentioned"
+    effectiveMention === "explicitly_mentioned"
       ? "explicit_mention"
-      : mentionStatus === "alias_mentioned"
+      : effectiveMention === "alias_mentioned"
         ? "correction_memory"
         : participantStatus === "participant"
           ? "meeting"
@@ -452,7 +512,9 @@ export function classifyRecipient(
               ? "approval_policy"
               : hasProof
                 ? "transcript"
-                : "none";
+                : priorConfirmed
+                  ? "caller_confirmed"
+                  : "none";
 
   return {
     entity_id: target.entity_id,
@@ -460,12 +522,12 @@ export function classifyRecipient(
     email: target.email,
     role: target.role ?? null,
     participantStatus,
-    mentionStatus,
+    mentionStatus: effectiveMention,
     workConnectionType,
     evidence: {
       quote: input.sourceExcerpt,
       source: evidenceSource,
-      matchedToken: matchedToken ?? aliasHit,
+      matchedToken: matchedToken ?? aliasHit ?? correctionAlias,
       alternativeCandidates: altCandidates,
     },
     roleMatch,

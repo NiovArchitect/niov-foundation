@@ -73,6 +73,7 @@ import {
 import { computeAutonomyDecision, type AutonomyDecision } from "./autonomy.js";
 import { computeDecisionRights, type DecisionDomain } from "./decision-rights.js";
 import { buildDecisionInputFromTranscript } from "./decision-rights-extraction.js";
+import type { PriorRecipientDecisions } from "./work-graph-learning.js";
 
 export type CommsExtractionMode =
   | "DEMO_SCRIPTED"
@@ -428,6 +429,7 @@ export function governExtraction(
   pre: PreGovExtraction,
   capturedText: string,
   roster: ReadonlyArray<RosterEntry>,
+  priors?: PriorRecipientDecisions,
 ): CommsExtractionResult {
   const graph = buildResponsibilityGraph(capturedText);
   const ref = provablyReferenced(capturedText, null, roster);
@@ -446,13 +448,36 @@ export function governExtraction(
     const node = graph.nodes.find(
       (n) => n.name.toLowerCase() === firstName.toLowerCase(),
     );
+    // [LEARN-LOOP] Deterministic retarget from a prior org SELECT: when the
+    // proposed name token genuinely collides on the roster (same ambiguity a
+    // human already resolved) and the prior selection maps it to a DIFFERENT
+    // active roster member, propose THAT person instead of re-guessing. The
+    // classifier then treats it as an org-correction alias proof ("likely",
+    // evidence correction_memory) — still human-reviewed, never send-ready by
+    // correction alone. Stable entity ids only; conflicting prior selections
+    // were already dropped at derivation.
+    let target = a.target;
+    const tokenLc = firstName.toLowerCase();
+    const priorPick = priors?.selectionsByToken.get(tokenLc);
+    const tokenCollides = [...ref.ambiguous.keys()].some((k) => k.toLowerCase() === tokenLc);
+    if (priorPick !== undefined && priorPick !== target.entity_id && tokenCollides) {
+      const pick = roster.find((r) => r.entity_id === priorPick);
+      if (pick !== undefined) {
+        target = {
+          ...target,
+          entity_id: pick.entity_id,
+          display_name: pick.display_name,
+          email: pick.email,
+        };
+      }
+    }
     const governance: RecipientGovernance = classifyRecipient(
       {
         target: {
-          entity_id: a.target.entity_id,
-          display_name: a.target.display_name,
-          email: a.target.email,
-          role: rosterRole(roster, a.target.entity_id),
+          entity_id: target.entity_id,
+          display_name: target.display_name,
+          email: target.email,
+          role: rosterRole(roster, target.entity_id),
         },
         sourceExcerpt: a.source_excerpt,
         transcriptText: capturedText,
@@ -464,6 +489,14 @@ export function governExtraction(
         workDomain,
         policyStatus: "unknown",
         sensitivity: "internal",
+        // [LEARN-LOOP] Prior org corrections from caller-resolved follow-ups.
+        // Policy boundaries stay untouched inside classifyRecipient.
+        ...(priors !== undefined
+          ? {
+              priorSelections: priors.selectionsByToken,
+              priorConfirmedEntityIds: priors.confirmedEntityIds,
+            }
+          : {}),
       },
       ref,
     );
@@ -481,7 +514,7 @@ export function governExtraction(
     // Earned-autonomy verdict from the governance proof path + the meeting's
     // decision-rights (no auto-send is enabled; advisory only).
     const autonomy = computeAutonomyDecision({ governance, decision });
-    return { ...a, recipient_governance: governance, autonomy, resolution_status };
+    return { ...a, target, recipient_governance: governance, autonomy, resolution_status };
   });
 
   return {
@@ -525,6 +558,9 @@ export interface ExtractFromTextInput {
   captured_text: string;
   /** Optional override used by tests / future demo modes. */
   force_mode?: CommsExtractionMode;
+  /** [LEARN-LOOP] Prior org recipient decisions (derived from resolved
+   *  FOLLOW_UP rows by the ingest layer) fed into recipient governance. */
+  priors?: PriorRecipientDecisions;
 }
 
 /**
@@ -561,7 +597,7 @@ export async function extractFromCapturedText(
       : "AUTO");
 
   if (effectiveMode === "DEMO_SCRIPTED" && demoAllowed) {
-    return governExtraction(buildDemoExtraction(roster), input.captured_text, roster);
+    return governExtraction(buildDemoExtraction(roster), input.captured_text, roster, input.priors);
   }
 
   // LLM path.
@@ -577,7 +613,7 @@ export async function extractFromCapturedText(
       if (result.ok) {
         const parsed = parseLLMExtraction(result.text, roster);
         if (parsed !== null) {
-          return governExtraction(parsed, input.captured_text, roster);
+          return governExtraction(parsed, input.captured_text, roster, input.priors);
         }
       }
     } catch {
