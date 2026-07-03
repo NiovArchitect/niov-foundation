@@ -2193,9 +2193,73 @@ export async function registerOrgRoutes(
       const ownerNameById = new Map(
         ownerEntities.map((e) => [e.entity_id, e.display_name]),
       );
+      // [GAP-H OPS] Operational truth, canonical sources only:
+      // - tool_readiness: per-role REQUIRED tools are not modeled yet
+      //   (AgentTemplate.skill_packages is unwired), so status is honestly
+      //   "not_configured" — never a fake "ready". The connected count is the
+      //   org's enabled ConnectorBindings (org-owned; safe scalars only).
+      // - recent_activity: the ONLY provably twin-attributable source is
+      //   OtzarConversation (carries twin_id). Owner WorkLedger recency is
+      //   projected as "owner_work" — separate, never mislabeled as twin
+      //   activity. No conversations + no owner work => "none".
+      const pageTwinIds = twins.map((t) => t.entity_id);
+      const [orgBindings, twinConvs, ownerLedger] = await Promise.all([
+        prisma.connectorBinding.findMany({
+          where: { org_entity_id: orgEntityId, enabled: true, deleted_at: null },
+          select: { type: true },
+        }),
+        pageTwinIds.length === 0
+          ? Promise.resolve([])
+          : prisma.otzarConversation.groupBy({
+              by: ["twin_id"],
+              where: { twin_id: { in: pageTwinIds } },
+              _max: { started_at: true },
+              _count: { conversation_id: true },
+            }),
+        pageOwnerIds.length === 0
+          ? Promise.resolve([])
+          : prisma.workLedgerEntry.groupBy({
+              by: ["owner_entity_id"],
+              where: { owner_entity_id: { in: pageOwnerIds } },
+              _max: { updated_at: true },
+            }),
+      ]);
+      const connectedToolsCount = new Set(orgBindings.map((b) => b.type)).size;
+      const convByTwin = new Map(
+        twinConvs.map((c) => [
+          c.twin_id,
+          { last: c._max?.started_at ?? null, count: c._count?.conversation_id ?? 0 },
+        ]),
+      );
+      const ownerWorkAt = new Map(
+        ownerLedger.map((r) => [r.owner_entity_id, r._max?.updated_at ?? null]),
+      );
       const items = twins.map((t) => {
         const ownerId = ownerByTwin.get(t.entity_id) ?? null;
         const ownerName = ownerId !== null ? (ownerNameById.get(ownerId) ?? null) : null;
+        const conv = convByTwin.get(t.entity_id);
+        const ownerRecent = ownerId !== null ? (ownerWorkAt.get(ownerId) ?? null) : null;
+        const activity =
+          conv !== undefined && conv.last !== null
+            ? {
+                last_active_at: conv.last.toISOString(),
+                last_activity_label: "Conversation with owner",
+                recent_work_count: conv.count,
+                activity_source: "twin" as const,
+              }
+            : ownerRecent !== null
+              ? {
+                  last_active_at: null,
+                  last_activity_label: "Owner has recent work",
+                  recent_work_count: 0,
+                  activity_source: "owner_work" as const,
+                }
+              : {
+                  last_active_at: null,
+                  last_activity_label: null,
+                  recent_work_count: 0,
+                  activity_source: "none" as const,
+                };
         return {
           entity_id: t.entity_id,
           display_name: t.display_name,
@@ -2204,6 +2268,13 @@ export async function registerOrgRoutes(
           config: configByTwin.get(t.entity_id) ?? null,
           owner_entity_id: ownerName !== null ? ownerId : null,
           owner_display_name: ownerName,
+          tool_readiness: {
+            status: "not_configured" as const,
+            missing_tools: [],
+            connected_tools_count: connectedToolsCount,
+            required_tools_count: 0,
+          },
+          recent_activity: activity,
         };
       });
       // [GAP-G SLICE-1] The org's authority ceiling for template-recommended

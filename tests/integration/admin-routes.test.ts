@@ -1082,6 +1082,125 @@ describe("GET /org/ai-teammates", () => {
     }
   });
 
+  it("[GAP-H-OPS] projects honest tool-readiness + canonical activity — never fake ready, never owner work as twin work", async () => {
+    const ctx = await createOrgAndAdmin();
+    // One enabled org connector; one from ANOTHER org that must not count.
+    await prisma.connectorBinding.create({
+      data: {
+        org_entity_id: ctx.orgId,
+        type: "slack",
+        display_name: `${TEST_PREFIX} Slack`,
+        created_by_entity_id: ctx.adminId,
+        enabled: true,
+      },
+    });
+    const other = await createOrgAndAdmin();
+    await prisma.connectorBinding.create({
+      data: {
+        org_entity_id: other.orgId,
+        type: "github",
+        display_name: `${TEST_PREFIX} Other Org GitHub`,
+        created_by_entity_id: other.adminId,
+        enabled: true,
+      },
+    });
+
+    // Twin A: a REAL twin conversation (canonical twin activity).
+    // Twin B: owner ledger work only (must label as owner_work, never twin).
+    const empEmailA = `${TEST_PREFIX}opsa_${randomUUID()}@niov.test`;
+    const a = await app.inject({
+      method: "POST", url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email: empEmailA, password: "x", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const ownerA = (a.json() as { entity_id: string }).entity_id;
+    const twinA = await app.inject({
+      method: "POST", url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { owner_entity_id: ownerA, role_title: "Ops Twin A" },
+      remoteAddress: ctx.adminIp,
+    });
+    const twinAId = (twinA.json() as { entity_id: string }).entity_id;
+    await prisma.otzarConversation.create({
+      data: { entity_id: ownerA, twin_id: twinAId, message_count: 3 },
+    });
+
+    const empEmailB = `${TEST_PREFIX}opsb_${randomUUID()}@niov.test`;
+    const b = await app.inject({
+      method: "POST", url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email: empEmailB, password: "x", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const ownerB = (b.json() as { entity_id: string }).entity_id;
+    const twinB = await app.inject({
+      method: "POST", url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { owner_entity_id: ownerB, role_title: "Ops Twin B" },
+      remoteAddress: ctx.adminIp,
+    });
+    const twinBId = (twinB.json() as { entity_id: string }).entity_id;
+    await prisma.workLedgerEntry.create({
+      data: {
+        org_entity_id: ctx.orgId,
+        ledger_type: "TASK",
+        source_type: "CHAT",
+        owner_entity_id: ownerB,
+        requester_entity_id: ownerB,
+        title: `${TEST_PREFIX} owner work`,
+        status: "PROPOSED",
+      },
+    });
+
+    const list = await app.inject({
+      method: "GET", url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const body = list.json() as {
+      items: Array<{
+        entity_id: string;
+        tool_readiness: {
+          status: string;
+          missing_tools: unknown[];
+          connected_tools_count: number;
+          required_tools_count: number;
+        };
+        recent_activity: {
+          last_active_at: string | null;
+          last_activity_label: string | null;
+          recent_work_count: number;
+          activity_source: string;
+        };
+      }>;
+    };
+    const itemA = body.items.find((t) => t.entity_id === twinAId);
+    const itemB = body.items.find((t) => t.entity_id === twinBId);
+
+    // Readiness: requirements are NOT modeled -> never "ready"; the count is
+    // THIS org's enabled connectors only (cross-org binding excluded).
+    for (const it of body.items) {
+      expect(it.tool_readiness.status).toBe("not_configured");
+      expect(it.tool_readiness.status).not.toBe("ready");
+      expect(it.tool_readiness.connected_tools_count).toBe(1);
+      expect(it.tool_readiness.required_tools_count).toBe(0);
+    }
+    // Twin A: canonical twin activity (conversation).
+    expect(itemA?.recent_activity.activity_source).toBe("twin");
+    expect(itemA?.recent_activity.last_active_at).not.toBeNull();
+    expect(itemA?.recent_activity.recent_work_count).toBe(1);
+    // Twin B: owner work is labeled as OWNER work — never twin activity.
+    expect(itemB?.recent_activity.activity_source).toBe("owner_work");
+    expect(itemB?.recent_activity.last_active_at).toBeNull();
+    expect(itemB?.recent_activity.last_activity_label).toBe("Owner has recent work");
+    // Safe scalars only.
+    const raw = JSON.stringify(body);
+    for (const banned of ["password_hash", "secret_ref", "public_key", "oauth"]) {
+      expect(raw).not.toContain(banned);
+    }
+  });
+
   it("[GAP-H] another org's twins (and owners) never appear in this org's list", async () => {
     const orgA = await createOrgAndAdmin();
     const orgB = await createOrgAndAdmin();
