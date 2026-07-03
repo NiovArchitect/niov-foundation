@@ -2,6 +2,7 @@
 role_name: software-engineer
 role_category: ENGINEERING
 skill_packages: ["code_review", "debugging", "system_design"]
+required_tools: ["SLACK", "GITHUB"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 

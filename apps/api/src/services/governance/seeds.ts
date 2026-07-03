@@ -72,6 +72,7 @@ function parseTemplateFile(raw: string): {
     role_name: string;
     role_category: string;
     skill_packages: string[];
+    required_tools: string[];
     autonomy_default: string;
   };
   body: string;
@@ -109,6 +110,10 @@ function parseTemplateFile(raw: string): {
       role_category: String(fm.role_category ?? ""),
       skill_packages: Array.isArray(fm.skill_packages)
         ? (fm.skill_packages as string[])
+        : [],
+      // [GAP-H TOOLS] Provider keys this role's twin needs connected.
+      required_tools: Array.isArray(fm.required_tools)
+        ? (fm.required_tools as string[])
         : [],
       autonomy_default: String(fm.autonomy_default ?? "APPROVAL_REQUIRED"),
     },
@@ -155,6 +160,7 @@ export async function seedAgentTemplates(
         role_category: frontmatter.role_category,
         template_content: body,
         skill_packages: frontmatter.skill_packages,
+        required_tools: frontmatter.required_tools,
         autonomy_default: frontmatter.autonomy_default,
         is_custom: false,
         org_entity_id: null,
@@ -163,6 +169,7 @@ export async function seedAgentTemplates(
         role_category: frontmatter.role_category,
         template_content: body,
         skill_packages: frontmatter.skill_packages,
+        required_tools: frontmatter.required_tools,
         autonomy_default: frontmatter.autonomy_default,
       },
     });

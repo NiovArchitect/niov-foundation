@@ -2,6 +2,7 @@
 role_name: product-manager
 role_category: PRODUCT
 skill_packages: ["roadmap_planning", "spec_writing", "user_research_synthesis"]
+required_tools: ["SLACK", "JIRA"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 

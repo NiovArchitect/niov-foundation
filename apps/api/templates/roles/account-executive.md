@@ -2,6 +2,7 @@
 role_name: account-executive
 role_category: SALES
 skill_packages: ["enterprise_negotiation", "contract_review", "champion_building"]
+required_tools: ["SLACK", "GOOGLE_WORKSPACE"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 

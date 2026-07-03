@@ -2,6 +2,7 @@
 role_name: finance-analyst
 role_category: FINANCE
 skill_packages: ["forecasting", "variance_analysis", "model_building"]
+required_tools: ["SLACK", "GOOGLE_WORKSPACE"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 

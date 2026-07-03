@@ -2,6 +2,7 @@
 role_name: sales-manager
 role_category: SALES
 skill_packages: ["pipeline_review", "forecasting", "deal_coaching"]
+required_tools: ["SLACK", "GOOGLE_WORKSPACE"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 

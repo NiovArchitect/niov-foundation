@@ -2,6 +2,7 @@
 role_name: chief-technology-officer
 role_category: EXECUTIVE
 skill_packages: ["architecture_review", "tech_strategy", "engineering_org_design"]
+required_tools: ["SLACK", "GITHUB"]
 autonomy_default: EXECUTIVE_OVERRIDE
 ---
 

@@ -2,6 +2,7 @@
 role_name: marketing-manager
 role_category: MARKETING
 skill_packages: ["campaign_planning", "content_brief", "channel_strategy"]
+required_tools: ["SLACK", "GOOGLE_WORKSPACE"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 

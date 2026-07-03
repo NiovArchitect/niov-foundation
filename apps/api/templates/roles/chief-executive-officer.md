@@ -2,6 +2,7 @@
 role_name: chief-executive-officer
 role_category: EXECUTIVE
 skill_packages: ["strategic_planning", "board_communication", "talent_calibration"]
+required_tools: ["SLACK", "GOOGLE_WORKSPACE"]
 autonomy_default: EXECUTIVE_OVERRIDE
 ---
 

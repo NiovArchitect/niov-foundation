@@ -2,6 +2,7 @@
 role_name: operations-manager
 role_category: OPERATIONS
 skill_packages: ["process_design", "vendor_management", "incident_response"]
+required_tools: ["SLACK", "JIRA"]
 autonomy_default: APPROVAL_REQUIRED
 ---
 

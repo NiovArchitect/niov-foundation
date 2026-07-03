@@ -48,6 +48,7 @@ import { countEscalationsPending } from "../services/governance/escalation.servi
 import { assertEntitledForOrgSoftGate } from "../services/billing/entitlement-check.service.js";
 import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
 import { normalizeTwinAutonomy } from "../services/governance/twin-autonomy.js";
+import { computeTwinToolReadiness } from "../services/otzar/twin-tool-readiness.js";
 import type { AuthService } from "../services/auth.service.js";
 
 // [SEC — PROD-UX-APPROVAL-LOOP finding] The raw `Entity` row carries
@@ -2203,7 +2204,14 @@ export async function registerOrgRoutes(
       //   projected as "owner_work" — separate, never mislabeled as twin
       //   activity. No conversations + no owner work => "none".
       const pageTwinIds = twins.map((t) => t.entity_id);
-      const [orgBindings, twinConvs, ownerLedger] = await Promise.all([
+      const pageTemplateSlugs = Array.from(
+        new Set(
+          configs
+            .map((c) => c.role_template)
+            .filter((r): r is string => typeof r === "string" && r.length > 0),
+        ),
+      );
+      const [orgBindings, twinConvs, ownerLedger, pageTemplates] = await Promise.all([
         prisma.connectorBinding.findMany({
           where: { org_entity_id: orgEntityId, enabled: true, deleted_at: null },
           select: { type: true },
@@ -2223,8 +2231,21 @@ export async function registerOrgRoutes(
               where: { owner_entity_id: { in: pageOwnerIds } },
               _max: { updated_at: true },
             }),
+        pageTemplateSlugs.length === 0
+          ? Promise.resolve([])
+          : prisma.agentTemplate.findMany({
+              where: {
+                role_name: { in: pageTemplateSlugs },
+                OR: [{ org_entity_id: null }, { org_entity_id: orgEntityId }],
+              },
+              select: { role_name: true, required_tools: true },
+            }),
       ]);
       const connectedToolsCount = new Set(orgBindings.map((b) => b.type)).size;
+      const orgBindingTypes = orgBindings.map((b) => b.type);
+      const requiredByTemplate = new Map(
+        pageTemplates.map((t) => [t.role_name, t.required_tools]),
+      );
       const convByTwin = new Map(
         twinConvs.map((c) => [
           c.twin_id,
@@ -2268,12 +2289,14 @@ export async function registerOrgRoutes(
           config: configByTwin.get(t.entity_id) ?? null,
           owner_entity_id: ownerName !== null ? ownerId : null,
           owner_display_name: ownerName,
-          tool_readiness: {
-            status: "not_configured" as const,
-            missing_tools: [],
-            connected_tools_count: connectedToolsCount,
-            required_tools_count: 0,
-          },
+          // [GAP-H TOOLS] Real readiness: the role template's required_tools
+          // vs THIS org's enabled bindings. No template / no requirements =>
+          // not_configured (never fake ready).
+          tool_readiness: computeTwinToolReadiness(
+            requiredByTemplate.get(configByTwin.get(t.entity_id)?.role_template ?? "") ?? [],
+            orgBindingTypes,
+            connectedToolsCount,
+          ),
           recent_activity: activity,
         };
       });
