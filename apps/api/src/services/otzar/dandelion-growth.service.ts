@@ -264,6 +264,16 @@ export async function getOrgGrowthForCaller(
   const memberIds = members.map((m) => m.entity_id);
   const byId = new Map(members.map((m) => [m.entity_id, m]));
 
+  // [PROD-UX-ASSIGN-SMOKE] "Connected" means a LIVE assignment: memberships
+  // in ARCHIVED projects must not count (mirrors isActiveProjectMember).
+  // WorkProjectMember has no Prisma relation to WorkProject, so resolve the
+  // org's ACTIVE project ids first and filter memberships against them.
+  const activeProjects = await prisma.workProject.findMany({
+    where: { org_entity_id: orgEntityId, state: "ACTIVE" },
+    select: { project_id: true },
+  });
+  const activeProjectIds = activeProjects.map((p) => p.project_id);
+
   const [unownedExternals, externalCount, openByOwner, projectMembers, wsMembers, managerEdges] =
     await Promise.all([
       prisma.externalCollaborator.findMany({
@@ -289,14 +299,20 @@ export async function getOrgGrowthForCaller(
         _count: true,
       }),
       prisma.workProjectMember.findMany({
-        where: { org_entity_id: orgEntityId, entity_id: { in: memberIds } },
+        where: {
+          org_entity_id: orgEntityId,
+          entity_id: { in: memberIds },
+          project_id: { in: activeProjectIds },
+        },
         select: { entity_id: true },
       }),
       prisma.collaborationMembership.findMany({
         where: {
           org_entity_id: orgEntityId,
           member_entity_id: { in: memberIds },
+          status: "ACTIVE",
           deleted_at: null,
+          workspace: { status: "ACTIVE", deleted_at: null },
         },
         select: { member_entity_id: true },
       }),
