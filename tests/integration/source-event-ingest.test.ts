@@ -416,6 +416,48 @@ describe("source-event ingest — non-transcript intake, one ledger (DB)", () =>
     expect(replyCap).not.toBeNull();
   });
 
+  // ── [GAP-J] source-lineage projection: the ingested row's provenance
+  //    becomes a SAFE lineage block on the read path (getMyWork), with the
+  //    raw ids staying backend-only. ──
+  it("[GAP-J] a Slack-ingested row projects source_lineage on My Work — raw ids never cross", async () => {
+    const { slackMessageToSourceEvent } = await import("@niov/api");
+    const { getMyWork } = await import(
+      "../../apps/api/src/services/work-os/work-ledger.service.js"
+    );
+    const ts = `${Math.floor(Date.now() / 1000)}.600006`;
+    const event = slackMessageToSourceEvent(
+      {
+        ts,
+        text: "David owns the repo access work and will grant write access today.",
+        user: "U0AUTHOR",
+        user_name: "Sadeil",
+        channel_id: "C0LINEAGE",
+        channel_name: "launch",
+        team_id: "T0LINEAGE",
+      },
+      callerId,
+    );
+    const r = await ingestSourceEvent(event, { llmProvider: null });
+    expect(r.ok).toBe(true);
+
+    const myWork = await getMyWork({ org_entity_id: orgId, caller_entity_id: davidId });
+    const withLineage = myWork.filter(
+      (e) => e.source_lineage?.source_system === "SLACK",
+    );
+    expect(withLineage.length).toBeGreaterThan(0);
+    const lineage = withLineage[0]!.source_lineage!;
+    expect(lineage.source_id_present).toBe(true);
+    expect(lineage.source_actor).toBe("Sadeil");
+
+    // The projected views NEVER leak the raw source id, dedupe key, channel
+    // id, or workspace id — those stay backend-only proof material.
+    const raw = JSON.stringify(myWork);
+    expect(raw).not.toContain(ts);
+    expect(raw).not.toContain("dedupe_key");
+    expect(raw).not.toContain("T0LINEAGE");
+    expect(raw).not.toContain("C0LINEAGE");
+  });
+
   it("no cross-tenant leak: another org's caller ingesting does not write into this org", async () => {
     const otherOrg = await makeEntity("Other Org", "COMPANY");
     const otherCaller = await makeEntity("Other Caller", "PERSON");
