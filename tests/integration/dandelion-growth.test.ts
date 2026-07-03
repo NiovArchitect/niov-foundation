@@ -368,6 +368,50 @@ describe("Phase 1237 — Dandelion org growth", () => {
     if (!rejoin.ok) expect(rejoin.code).toBe("PROJECT_ARCHIVED");
   });
 
+  it("[GAP-C] archiving the person's only workspace brings the recommendation BACK (canonical archive rail)", async () => {
+    const { createCollaborationWorkspaceForCaller, archiveCollaborationWorkspaceForCaller } =
+      await import("../../apps/api/src/services/otzar/collaboration-workspace.service.js");
+    const created = await createCollaborationWorkspaceForCaller({
+      callerEntityId: adminId,
+      title: `${TEST_PREFIX} Archive Truth Workspace`,
+      visibility: "INTERNAL_ONLY",
+      sourceType: "MANUAL",
+      initialMembers: [
+        { member_entity_id: lonelyId, role_label: "Member", access_level: "CONTRIBUTE" },
+      ],
+    });
+    expect(created.ok).toBe(true);
+    if (created.ok === false) throw new Error("create failed");
+
+    // Connected via the ACTIVE workspace — the recommendation is gone.
+    const during = await getOrgGrowthForCaller(adminId);
+    if (during.ok === false) throw new Error("expected ok");
+    expect(
+      during.growth.recommendations.some(
+        (r) => r.kind === "NEEDS_PROJECT_OR_WORKSPACE" && r.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(false);
+
+    // Archive through the canonical APPROVE-gated rail (creator).
+    const archived = await archiveCollaborationWorkspaceForCaller({
+      callerEntityId: adminId,
+      workspaceId: created.workspace.workspace_id,
+    });
+    expect(archived.ok).toBe(true);
+
+    // Truth restored: membership in an ARCHIVED workspace is not "connected".
+    const restored = await getOrgGrowthForCaller(adminId);
+    if (restored.ok === false) throw new Error("expected ok");
+    expect(
+      restored.growth.recommendations.some(
+        (r) => r.kind === "NEEDS_PROJECT_OR_WORKSPACE" && r.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(true);
+    expect(
+      restored.growth.needs_first_project_people.some((p) => p.person_entity_id === lonelyId),
+    ).toBe(true);
+  });
+
   it("a revoked workspace membership does not count as 'connected'", async () => {
     // A REVOKED membership row (or one in a non-ACTIVE workspace) must not
     // silence the first-project recommendation.

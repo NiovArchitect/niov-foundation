@@ -1653,6 +1653,54 @@ describe("[PROD-UX-ASSIGN] GET /org/assignment-targets + POST /org/assignments",
     expect((audit!.details as Record<string, unknown>).via_org_admin).toBe(true);
   });
 
+  it("[GAP-C] an archived workspace leaves the targets list and refuses assignment via the ARCHIVE RAIL", async () => {
+    const ctx = await createOrgAndAdmin();
+    const { workspaceId } = await seedTargets(ctx.orgId, ctx.adminId);
+    const emp = await addEmployee(ctx);
+    // The rail is APPROVE-gated: give the admin the creator-style membership,
+    // then archive through the canonical HTTP route.
+    await prisma.collaborationMembership.create({
+      data: {
+        workspace_id: workspaceId,
+        org_entity_id: ctx.orgId,
+        member_entity_id: ctx.adminId,
+        member_display_name: `${TEST_PREFIX} Admin`,
+        role_label: "Workspace creator",
+        access_level: "APPROVE",
+        status: "ACTIVE",
+      },
+    });
+    const archived = await app.inject({
+      method: "POST",
+      url: `/api/v1/otzar/collaboration/workspaces/${workspaceId}/archive`,
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(archived.statusCode).toBe(200);
+    expect((archived.json() as { audit_event_id: string }).audit_event_id.length).toBeGreaterThan(0);
+
+    // Gone from assignment targets…
+    const targets = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/assignment-targets",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const rows = (targets.json() as { targets: Array<{ target_id: string }> }).targets;
+    expect(rows.some((t) => t.target_id === workspaceId)).toBe(false);
+
+    // …and honestly refuses new assignments.
+    const assign = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { person_entity_id: emp.entityId, target_kind: "workspace", target_id: workspaceId },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(assign.statusCode).toBe(422);
+    expect((assign.json() as { code: string }).code).toBe("TARGET_NOT_ACTIVE");
+  });
+
   it("employees cannot use the assignment route", async () => {
     const ctx = await createOrgAndAdmin();
     const { projectId } = await seedTargets(ctx.orgId, ctx.adminId);

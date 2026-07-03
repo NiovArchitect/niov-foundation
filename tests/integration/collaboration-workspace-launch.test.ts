@@ -18,6 +18,7 @@ import {
   confirmCommitmentForCaller,
   getCollaborationWorkspaceDetailForCaller,
   addCollaborationMemberForCaller,
+  archiveCollaborationWorkspaceForCaller,
 } from "../../apps/api/src/services/otzar/collaboration-workspace.service.js";
 
 const TEST_PREFIX = "__niov_test__phase1221__";
@@ -403,5 +404,61 @@ describe("Phase 1221 — Launch Collaboration acceptance", () => {
     if (add.ok === false) {
       expect(add.code).toBe("EXTERNAL_NOT_PERMITTED");
     }
+  });
+
+  // ── [GAP-C] the workspace archive rail: reversibility parity with projects ──
+
+  it("the creator (APPROVE) archives the workspace: audited, idempotent, never hard-deleted", async () => {
+    const created = await createCollaborationWorkspaceForCaller({
+      callerEntityId: sadeilId,
+      title: "Archive Rail Workspace",
+      visibility: "INTERNAL_ONLY",
+      sourceType: "MANUAL",
+      initialMembers: [
+        { member_entity_id: davidId, role_label: "Tech Lead", access_level: "CONTRIBUTE" },
+      ],
+    });
+    expect(created.ok).toBe(true);
+    if (created.ok === false) throw new Error("create failed");
+    const wsId = created.workspace.workspace_id;
+
+    // A CONTRIBUTE member cannot archive (authority boundary).
+    const denied = await archiveCollaborationWorkspaceForCaller({
+      callerEntityId: davidId,
+      workspaceId: wsId,
+    });
+    expect(denied.ok).toBe(false);
+    if (denied.ok === false) expect(denied.code).toBe("NOT_WORKSPACE_APPROVER");
+
+    // A non-member cannot archive either.
+    const outsider = await archiveCollaborationWorkspaceForCaller({
+      callerEntityId: annieId,
+      workspaceId: wsId,
+    });
+    expect(outsider.ok).toBe(false);
+
+    // The creator (APPROVE) archives it — audited, status flip only.
+    const archived = await archiveCollaborationWorkspaceForCaller({
+      callerEntityId: sadeilId,
+      workspaceId: wsId,
+    });
+    expect(archived.ok).toBe(true);
+    if (archived.ok === false) throw new Error("archive failed");
+    expect(archived.workspace.status).toBe("ARCHIVED");
+    expect(archived.audit_event_id.length).toBeGreaterThan(0);
+    const row = await prisma.collaborationWorkspace.findUnique({
+      where: { workspace_id: wsId },
+    });
+    expect(row?.status).toBe("ARCHIVED");
+    expect(row?.archived_at).not.toBeNull();
+    expect(row?.deleted_at).toBeNull(); // RULE 10 — never hard-deleted
+
+    // Idempotent: archiving again refuses honestly.
+    const again = await archiveCollaborationWorkspaceForCaller({
+      callerEntityId: sadeilId,
+      workspaceId: wsId,
+    });
+    expect(again.ok).toBe(false);
+    if (again.ok === false) expect(again.code).toBe("ALREADY_ARCHIVED");
   });
 });

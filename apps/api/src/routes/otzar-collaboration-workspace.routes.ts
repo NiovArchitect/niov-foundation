@@ -24,6 +24,7 @@ import type { FastifyInstance } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import {
   addCollaborationMemberForCaller,
+  archiveCollaborationWorkspaceForCaller,
   confirmCommitmentForCaller,
   createCollaborationWorkspaceForCaller,
   getCollaborationWorkspaceDetailForCaller,
@@ -281,6 +282,38 @@ export async function registerOtzarCollaborationWorkspaceRoutes(
         });
       }
       return reply.code(201).send({ ok: true, membership: result.membership });
+    },
+  );
+
+  // POST archive — [GAP-C] the reversibility rail. APPROVE-gated in-service,
+  // idempotent ALREADY_ARCHIVED, audited. Mirrors the project archive route.
+  app.post<{ Params: { workspace_id: string } }>(
+    "/api/v1/otzar/collaboration/workspaces/:workspace_id/archive",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      }
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid) {
+        return reply.code(401).send({ ok: false, code: session.code });
+      }
+      const result = await archiveCollaborationWorkspaceForCaller({
+        workspaceId: request.params.workspace_id,
+        callerEntityId: session.entity_id,
+      });
+      if (result.ok === false) {
+        return reply.code(result.httpStatus).send({
+          ok: false,
+          code: result.code,
+          ...(result.message === undefined ? {} : { message: result.message }),
+        });
+      }
+      return reply.code(200).send({
+        ok: true,
+        workspace: result.workspace,
+        audit_event_id: result.audit_event_id,
+      });
     },
   );
 
