@@ -38,6 +38,7 @@ import {
 } from "../services/work-os/work-ledger.service.js";
 // [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
+import { rankClarifiers } from "../services/work-os/clarity.service.js";
 import {
   getWatcherFeed,
   getWatcherFeedWithBeamAdvisory,
@@ -582,6 +583,28 @@ export async function registerWorkOsLedgerRoutes(
       return reply
         .code(200)
         .send({ ok: true, routing: projectRoutingDecision(result.entry) });
+    },
+  );
+
+  // ── [CE-1] Lineage-aware clarity projection — READ-ONLY. "Who can
+  //    clarify this work?" ranked from source lineage + org truth (doctrine:
+  //    manager only when authority is the question). Never creates an
+  //    escalation, never notifies, never mutates, no audit write (matching
+  //    the other :id read routes). Tenant + participant scope enforced by
+  //    getLedgerEntry inside the service (404 pattern preserved). ──
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id/clarity",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await rankClarifiers({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      if (result.ok === false) return reply.code(404).send(result);
+      return reply.code(200).send({ ok: true, clarity: result.clarity });
     },
   );
 
