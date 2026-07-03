@@ -881,11 +881,15 @@ export {
   buildLearningEvent,
   buildDisambiguationCorrection,
   correctionsForContext,
+  derivePriorRecipientDecisions,
+  resolvedDecisionFromFollowUpDetails,
 } from "./services/otzar/work-graph-learning.js";
 export type {
   LearningEvent,
   LearningOutcome,
   OrgRecipientCorrection,
+  PriorRecipientDecisions,
+  ResolvedRecipientDecision,
 } from "./services/otzar/work-graph-learning.js";
 export {
   reconcileEvidence,

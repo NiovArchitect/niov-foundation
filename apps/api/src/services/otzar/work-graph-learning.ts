@@ -204,3 +204,119 @@ export function correctionsForContext(
   }
   return { aliases: Array.from(aliases), excludeEntityIds: exclude };
 }
+
+// ── [LEARN-LOOP] Prior recipient decisions from resolved follow-ups ────────
+// The BUG C resolve-recipient path already writes a durable, org-scoped,
+// audited correction record onto the WorkLedger FOLLOW_UP row itself
+// (recipientSafety "confirmed" + evidence.source "caller_confirmed"). Those
+// rows ARE the correction store — no second store, no duplicate writes. The
+// functions below deterministically derive the two classifier inputs from
+// them at ingest time.
+
+/** The minimal, stable-id projection of one caller-resolved recipient
+ *  decision. Parsed from a FOLLOW_UP row's details — never display-name
+ *  identity (display_name is used ONLY to recover the alias token the
+ *  transcript collided on, never to identify the person). */
+export interface ResolvedRecipientDecision {
+  entity_id: string | null;
+  display_name: string;
+  /** Non-empty alternativeCandidates marks a SELECT-resolved (previously
+   *  ambiguous) decision; empty marks a CONFIRM (vouch) decision. The names
+   *  are needed to recover the COLLISION token (the token shared between the
+   *  chosen person and every alternative — the token the human disambiguated). */
+  alternative_names: string[];
+  evidence_source: string;
+  recipient_safety: string;
+}
+
+/** Parse one WorkLedger FOLLOW_UP `details` payload into a decision, or null
+ *  when the row is not a caller-resolved recipient decision. Pure; tolerant
+ *  of unknown shapes (never throws on malformed details). */
+export function resolvedDecisionFromFollowUpDetails(
+  details: unknown,
+): ResolvedRecipientDecision | null {
+  if (typeof details !== "object" || details === null) return null;
+  const fu = (details as Record<string, unknown>).follow_up;
+  if (typeof fu !== "object" || fu === null) return null;
+  const gov = (fu as Record<string, unknown>).recipient_governance;
+  if (typeof gov !== "object" || gov === null) return null;
+  const g = gov as Record<string, unknown>;
+  const ev = g.evidence;
+  if (typeof ev !== "object" || ev === null) return null;
+  const e = ev as Record<string, unknown>;
+  if (g.recipientSafety !== "confirmed" || e.source !== "caller_confirmed") return null;
+  const entityId = typeof g.entity_id === "string" ? g.entity_id : null;
+  const displayName = typeof g.display_name === "string" ? g.display_name : "";
+  const alts = Array.isArray(e.alternativeCandidates)
+    ? e.alternativeCandidates.filter((x): x is string => typeof x === "string")
+    : [];
+  if (entityId === null || displayName.length === 0) return null;
+  return {
+    entity_id: entityId,
+    display_name: displayName,
+    alternative_names: alts,
+    evidence_source: "caller_confirmed",
+    recipient_safety: "confirmed",
+  };
+}
+
+/** The two classifier inputs the learn-loop feeds into classifyRecipient. */
+export interface PriorRecipientDecisions {
+  /** Lowercased first-name token -> the entity a human SELECTED for it.
+   *  Conflicting selections (same token, different entities) are dropped
+   *  entirely — humans disagreed, so the ambiguity question must stay. */
+  selectionsByToken: Map<string, string>;
+  /** Entities a human vouched for through the CONFIRM path. Select decisions
+   *  are deliberately NOT vouches — choosing between same-named people says
+   *  nothing about work-scope connection. */
+  confirmedEntityIds: Set<string>;
+}
+
+function nameTokens(name: string): Set<string> {
+  return new Set(
+    name
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length >= 2),
+  );
+}
+
+/** The collision tokens of a SELECT decision: tokens the chosen person's name
+ *  shares with EVERY alternative — exactly the token(s) the transcript used
+ *  and the human disambiguated ("samiksha" for Samiksha Sharma vs Verma). */
+function collisionTokens(d: ResolvedRecipientDecision): string[] {
+  let shared = nameTokens(d.display_name);
+  for (const alt of d.alternative_names) {
+    const altTokens = nameTokens(alt);
+    shared = new Set([...shared].filter((t) => altTokens.has(t)));
+    if (shared.size === 0) return [];
+  }
+  return [...shared];
+}
+
+/** Aggregate resolved decisions into classifier inputs. Deterministic. */
+export function derivePriorRecipientDecisions(
+  decisions: ReadonlyArray<ResolvedRecipientDecision>,
+): PriorRecipientDecisions {
+  const selectionsByToken = new Map<string, string>();
+  const conflicted = new Set<string>();
+  const confirmedEntityIds = new Set<string>();
+  for (const d of decisions) {
+    if (d.entity_id === null) continue;
+    if (d.evidence_source !== "caller_confirmed" || d.recipient_safety !== "confirmed") continue;
+    if (d.alternative_names.length > 0) {
+      for (const token of collisionTokens(d)) {
+        const existing = selectionsByToken.get(token);
+        if (existing !== undefined && existing !== d.entity_id) {
+          conflicted.add(token);
+          continue;
+        }
+        selectionsByToken.set(token, d.entity_id);
+      }
+    } else {
+      confirmedEntityIds.add(d.entity_id);
+    }
+  }
+  for (const t of conflicted) selectionsByToken.delete(t);
+  return { selectionsByToken, confirmedEntityIds };
+}

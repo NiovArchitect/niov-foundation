@@ -34,6 +34,12 @@ import type { ExecutionPlan } from "./execution-planner.js";
 import { resolveConnectorCapability } from "./connector-capability.js";
 import type { ConnectorCapabilityState } from "./connector-capability.js";
 import { buildWorkGraphMemory } from "./work-graph-memory.js";
+import { prisma } from "@niov/database";
+import {
+  derivePriorRecipientDecisions,
+  resolvedDecisionFromFollowUpDetails,
+} from "./work-graph-learning.js";
+import type { ResolvedRecipientDecision } from "./work-graph-learning.js";
 import type { DandelionSeed, WorkGraphWorkItem } from "./work-graph-memory.js";
 import { resolveTokenToEntities } from "./recipient-governance.js";
 import type { RosterEntry, RecipientConfidence } from "./recipient-governance.js";
@@ -261,11 +267,31 @@ export async function ingestSourceEvent(
       })();
 
   // 2) Governed extraction on the TRUSTED text only (noise cannot create commitments).
+  //    [LEARN-LOOP] Prior recipient decisions from THIS org's caller-resolved
+  //    follow-ups (BUG C rows ARE the correction store) are derived
+  //    deterministically and fed into recipient governance, so a question a
+  //    human already answered (ambiguous select / out-of-scope vouch) is not
+  //    asked identically again. Org-scoped by the WHERE clause — a correction
+  //    can never cross tenants. Policy boundaries are enforced inside
+  //    classifyRecipient regardless of any correction.
+  const priorRows = await prisma.workLedgerEntry.findMany({
+    where: { org_entity_id: orgEntityId, ledger_type: "FOLLOW_UP" },
+    orderBy: { updated_at: "desc" },
+    take: 200,
+    select: { details: true },
+  });
+  const priors = derivePriorRecipientDecisions(
+    priorRows
+      .map((r: { details: unknown }) => resolvedDecisionFromFollowUpDetails(r.details))
+      .filter((d: ResolvedRecipientDecision | null): d is ResolvedRecipientDecision => d !== null),
+  );
+
   const extractionText = quality.stats.trusted > 0 ? quality.trustedText : event.content;
   const extraction = await extractFromCapturedText(
     {
       viewerEntityId: event.callerEntityId,
       captured_text: extractionText,
+      priors,
       ...(deps.forceMode !== undefined ? { force_mode: deps.forceMode } : {}),
     },
     deps.llmProvider,

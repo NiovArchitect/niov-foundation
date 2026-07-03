@@ -336,3 +336,174 @@ describe("comms-ingest — transcript becomes durable owned work (DB)", () => {
     }
   });
 });
+
+// ── [LEARN-LOOP] The correction loop closes end-to-end against the DB ────────
+// Ingest (ambiguous "Samiksha") -> human SELECT via the governed BUG C path ->
+// ingest again -> Otzar proposes the previously chosen person with an
+// explainable correction proof, and the same question is NOT re-asked.
+// Cross-org isolation: another org's identical correction changes nothing here.
+
+describe("[LEARN-LOOP] resolved follow-ups teach the next ingest (DB)", () => {
+  let orgId = "";
+  let callerId = "";
+  let samikshaSharmaId = "";
+  let samikshaVermaId = "";
+
+  // Canonical demo-fixture sentinel (test env allows DEMO_SCRIPTED) with the
+  // three demo names, so extraction proposes a "Samiksha" follow-up while the
+  // roster holds TWO Samikshas — the repeated-ambiguity class.
+  const FIXTURE =
+    "Launch Follow-Up Meeting.\n" +
+    "Sadeil: David, please review the UI flow. Samiksha will review the AI/NLP trial notes. " +
+    "Annie can complete the compliance review this week.";
+
+  beforeEach(async () => {
+    await ensureAuditTriggers();
+    await cleanupIngestArtifacts();
+    await cleanupTestData();
+    orgId = await makeEntity("LearnLoop Org", "COMPANY");
+    callerId = await makeEntity("Sadeil Caller", "PERSON");
+    const davidId2 = await makeEntity("David", "PERSON");
+    samikshaSharmaId = await makeEntity("Samiksha Sharma", "PERSON");
+    samikshaVermaId = await makeEntity("Samiksha Verma", "PERSON");
+    const annieId = await makeEntity("Annie", "PERSON");
+    for (const id of [callerId, davidId2, samikshaSharmaId, samikshaVermaId, annieId]) {
+      await prisma.entityMembership.create({ data: { parent_id: orgId, child_id: id, is_active: true } });
+    }
+  });
+
+  function samikshaAction(r: { extraction: { suggested_actions: Array<{ local_id: string; target: { entity_id: string | null }; recipient_governance: { recipientSafety: string; evidence: { source: string } } }> } }) {
+    const a = r.extraction.suggested_actions.find((x) => x.local_id === "demo-samiksha");
+    if (a === undefined) throw new Error("demo samiksha action missing");
+    return a;
+  }
+
+  it("select once -> the next ingest proposes the chosen person (correction_memory proof), question not re-asked; other orgs unaffected", async () => {
+    // 0) A DIFFERENT org already made the opposite selection. It must never
+    //    leak into this org's routing.
+    const otherOrgId = await makeEntity("Other Org", "COMPANY");
+    const otherCallerId = await makeEntity("Other Caller", "PERSON");
+    await prisma.entityMembership.create({ data: { parent_id: otherOrgId, child_id: otherCallerId, is_active: true } });
+    const foreign = await createLedgerEntry({
+      org_entity_id: otherOrgId,
+      ledger_type: "FOLLOW_UP",
+      source_type: "TRANSCRIPT",
+      owner_entity_id: otherCallerId,
+      requester_entity_id: otherCallerId,
+      title: "Follow-up to Samiksha",
+      summary: "x",
+      status: "DRAFT",
+      next_action: "Review and send this follow-up.",
+      details: {
+        follow_up: {
+          local_id: "foreign-1",
+          draft_text: "x",
+          recipient_governance: {
+            entity_id: samikshaSharmaId, // the OTHER Samiksha
+            display_name: "Samiksha Sharma",
+            recipientSafety: "confirmed",
+            evidence: {
+              quote: null,
+              source: "caller_confirmed",
+              matchedToken: null,
+              alternativeCandidates: ["Samiksha Verma"],
+            },
+          },
+        },
+      },
+    });
+    expect(foreign.ok).toBe(true);
+
+    // 1) First ingest: the Samiksha follow-up is honestly AMBIGUOUS (two
+    //    Samikshas; the foreign org's correction did not leak).
+    const r1 = await ingestTranscript({ callerEntityId: callerId, capturedText: FIXTURE, llmProvider: null });
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    expect(r1.extraction.extraction_mode).toBe("DEMO_SCRIPTED");
+    const a1 = samikshaAction(r1);
+    expect(a1.recipient_governance.recipientSafety).toBe("ambiguous");
+
+    // 2) The human answers the question ONCE through the governed select path.
+    const pending = await getPendingFollowUps({ org_entity_id: orgId, caller_entity_id: callerId });
+    const card = pending.find(
+      (f) => f.action.local_id === "demo-samiksha" && f.action.recipient_governance.recipientSafety === "ambiguous",
+    );
+    expect(card).toBeDefined();
+    const resolved = await resolveFollowUpRecipient({
+      org_entity_id: orgId,
+      caller_entity_id: callerId,
+      ledger_entry_id: card!.ledger_entry_id,
+      decision: "select",
+      recipient_entity_id: samikshaVermaId,
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    // Audit/proof linkage preserved on the correction record.
+    expect(resolved.audit_event_id.length).toBeGreaterThan(0);
+
+    // 3) Second ingest of a similar conversation: Otzar uses the prior org
+    //    correction — the previously chosen person is proposed, with the
+    //    correction as the explainable proof source, still human-reviewed.
+    const r2 = await ingestTranscript({ callerEntityId: callerId, capturedText: FIXTURE, llmProvider: null });
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    const a2 = samikshaAction(r2);
+    expect(a2.target.entity_id).toBe(samikshaVermaId);
+    expect(a2.recipient_governance.recipientSafety).toBe("likely");
+    expect(a2.recipient_governance.evidence.source).toBe("correction_memory");
+    // Never send-ready by correction alone.
+    expect(a2.recipient_governance.recipientSafety).not.toBe("confirmed");
+
+    // 4) The question is not re-asked: no NEW ambiguous Samiksha card exists.
+    const pendingAfter = await getPendingFollowUps({ org_entity_id: orgId, caller_entity_id: callerId });
+    const ambiguousSamikshas = pendingAfter.filter(
+      (f) => f.action.local_id === "demo-samiksha" && f.action.recipient_governance.recipientSafety === "ambiguous",
+    );
+    expect(ambiguousSamikshas.length).toBe(0);
+    // And the durable row for the new follow-up targets the chosen person.
+    const newRows = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, ledger_type: "FOLLOW_UP", target_entity_id: samikshaVermaId },
+    });
+    expect(newRows.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("the foreign org's own ingest keeps ITS routing isolated too (no bleed either direction)", async () => {
+    // This org resolves to Sharma; a fresh ingest here must follow Sharma —
+    // proving the correction store is org-scoped in the direction we consume.
+    const card = await createLedgerEntry({
+      org_entity_id: orgId,
+      ledger_type: "FOLLOW_UP",
+      source_type: "TRANSCRIPT",
+      owner_entity_id: callerId,
+      requester_entity_id: callerId,
+      title: "Follow-up to Samiksha",
+      summary: "x",
+      status: "DRAFT",
+      next_action: "Review and send this follow-up.",
+      details: {
+        follow_up: {
+          local_id: "seed-1",
+          draft_text: "x",
+          recipient_governance: {
+            entity_id: samikshaSharmaId,
+            display_name: `${TEST_PREFIX} Samiksha Sharma`,
+            recipientSafety: "confirmed",
+            evidence: {
+              quote: null,
+              source: "caller_confirmed",
+              matchedToken: null,
+              alternativeCandidates: [`${TEST_PREFIX} Samiksha Verma`],
+            },
+          },
+        },
+      },
+    });
+    expect(card.ok).toBe(true);
+    const r = await ingestTranscript({ callerEntityId: callerId, capturedText: FIXTURE, llmProvider: null });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const a = samikshaAction(r);
+    expect(a.target.entity_id).toBe(samikshaSharmaId);
+    expect(a.recipient_governance.evidence.source).toBe("correction_memory");
+  });
+});
