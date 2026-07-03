@@ -168,6 +168,50 @@ describe("source-event ingest — non-transcript intake, one ledger (DB)", () =>
     }
   });
 
+  it("[GAP-I ZOOM] a Zoom-shaped event lands with ZOOM lineage and is idempotent on re-ingest", async () => {
+    const { zoomRecordingToSourceEvent } = await import("@niov/api");
+    const zoomEvent: WorkSourceEvent = zoomRecordingToSourceEvent({
+      meetingId: `zm-${Date.now()}`,
+      topic: "Launch sync",
+      transcript: "Sadeil: David owns the repo access work and will grant write access today.",
+      callerEntityId: callerId,
+      callerName: "Zoom recording import",
+      orgEntityId: orgId,
+      nowIso: new Date().toISOString(),
+    });
+    const first = await ingestSourceEvent(zoomEvent, { llmProvider: null });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    // Ledger rows carry the ZOOM source lineage (source_system + source_id).
+    const rows = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, source_type: "CONNECTOR" },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    const withLineage = rows.filter((r) => {
+      const d = r.details as Record<string, unknown>;
+      return d.source_system === "ZOOM" && d.source_id === zoomEvent.sourceId;
+    });
+    expect(withLineage.length).toBeGreaterThan(0);
+    const countAfterFirst = rows.length;
+
+    // Re-ingesting the SAME recording: honest refusal, zero duplicate work.
+    const dup = await ingestSourceEvent(zoomEvent, { llmProvider: null });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.code).toBe("ALREADY_INGESTED");
+    const rowsAfter = await prisma.workLedgerEntry.count({
+      where: { org_entity_id: orgId, source_type: "CONNECTOR" },
+    });
+    expect(rowsAfter).toBe(countAfterFirst);
+
+    // No tokenized URLs / secrets anywhere in the stored details.
+    for (const r of rows) {
+      const raw = JSON.stringify(r.details);
+      expect(raw).not.toContain("access_token");
+      expect(raw).not.toContain("download_url");
+    }
+  });
+
   it("no cross-tenant leak: another org's caller ingesting does not write into this org", async () => {
     const otherOrg = await makeEntity("Other Org", "COMPANY");
     const otherCaller = await makeEntity("Other Caller", "PERSON");

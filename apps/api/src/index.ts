@@ -959,6 +959,7 @@ export {
   sourceEvidenceDetails,
   normalizeSourceContent,
   slackMessageToSourceEvent,
+  zoomRecordingToSourceEvent,
 } from "./services/otzar/source-event.js";
 export type { WorkSourceEvent, SourceSystem, SourceEvidenceSpan } from "./services/otzar/source-event.js";
 export {

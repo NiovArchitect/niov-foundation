@@ -16,6 +16,7 @@
 export type SourceSystem =
   | "TRANSCRIPT"
   | "MEETING"
+  | "ZOOM"
   | "SLACK"
   | "GMAIL"
   | "DRIVE"
@@ -182,5 +183,37 @@ export function normalizeSourceContent(content: string): SourceContentQuality {
       quarantined,
       noisy_tail_start_index: null,
     },
+  };
+}
+
+// ── [GAP-I ZOOM] Canonical adapter: Zoom recording → WorkSourceEvent ────────
+// The ~50-line adapter contract in practice: real provenance
+// (sourceSystem ZOOM + the stable Zoom meeting id as sourceId → default
+// dedupe key "ZOOM:<meeting_id>", org-scoped by the capture lookup), no
+// tokenized URLs (sourceUrl stays null — download URLs carry credentials and
+// never leave the server), the ingesting ADMIN as the audited actor. The
+// spine's existing connector dedupe makes re-ingesting the same recording a
+// clean ALREADY_INGESTED instead of duplicate work.
+export function zoomRecordingToSourceEvent(args: {
+  meetingId: string;
+  topic: string;
+  transcript: string;
+  callerEntityId: string;
+  callerName: string;
+  orgEntityId: string;
+  nowIso: string;
+}): WorkSourceEvent {
+  return {
+    sourceType: "CONNECTOR",
+    sourceSystem: "ZOOM",
+    sourceId: args.meetingId,
+    sourceUrl: null,
+    actor: { name: args.callerName, entityId: args.callerEntityId },
+    participants: [],
+    timestamp: args.nowIso,
+    orgEntityId: args.orgEntityId,
+    callerEntityId: args.callerEntityId,
+    title: `Zoom: ${args.topic}`,
+    content: args.transcript,
   };
 }
