@@ -47,6 +47,7 @@ import { getOrgEntityId } from "../services/governance/org.js";
 import { countEscalationsPending } from "../services/governance/escalation.service.js";
 import { assertEntitledForOrgSoftGate } from "../services/billing/entitlement-check.service.js";
 import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
+import { normalizeTwinAutonomy } from "../services/governance/twin-autonomy.js";
 import type { AuthService } from "../services/auth.service.js";
 
 // [SEC — PROD-UX-APPROVAL-LOOP finding] The raw `Entity` row carries
@@ -2167,8 +2168,18 @@ export async function registerOrgRoutes(
         created_at: t.created_at,
         config: configByTwin.get(t.entity_id) ?? null,
       }));
+      // [GAP-G SLICE-1] The org's authority ceiling for template-recommended
+      // twin autonomy, so the truth surface can show recommended vs applied
+      // vs ceiling. Normalized fail-closed; missing row = APPROVAL_REQUIRED.
+      const settingsRow = await prisma.orgSettings.findUnique({
+        where: { org_entity_id: orgEntityId },
+        select: { twin_autonomy_ceiling: true },
+      });
       return reply.code(200).send({
         ok: true,
+        twin_autonomy_ceiling: normalizeTwinAutonomy(
+          settingsRow?.twin_autonomy_ceiling,
+        ),
         ...paginatedResponse(items, total, skip, take),
       });
     },

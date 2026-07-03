@@ -534,3 +534,56 @@ describe("ADR-0057 §3 + §4 — evaluateActionPolicy pure deterministic evaluat
     });
   });
 });
+
+// ── [GAP-G SLICE-1] role_template slot-fill: ZERO behavior change ────────────
+// The envelope's entity_profile_safe_view.role_template is now populated by
+// action.service. The evaluator has NO branch on it — these golden cases lock
+// that outcomes are byte-identical with and without the slot filled, across
+// every autonomy level and risk tier. Any future evaluator rung that branches
+// on role must consciously update these.
+
+describe("[GAP-G] role_template presence never changes evaluator outcomes (golden cases)", () => {
+  const AUTONOMY = ["OBSERVE_ONLY", "APPROVAL_REQUIRED", "EXECUTIVE_OVERRIDE"] as const;
+  const RISK = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+
+  it("outcomes are byte-identical with the slot empty vs filled, across the full matrix", () => {
+    for (const twin_autonomy_level of AUTONOMY) {
+      for (const risk of RISK) {
+        const without = evaluateActionPolicy(
+          input(risk, { twin_autonomy_level, entity_profile_safe_view: {} }),
+        );
+        const withRole = evaluateActionPolicy(
+          input(risk, {
+            twin_autonomy_level,
+            entity_profile_safe_view: { role_template: "chief-executive-officer" },
+          }),
+        );
+        expect(withRole).toEqual(without);
+      }
+    }
+  });
+
+  it("an explicit AUTO_APPROVE policy row behaves identically with the slot filled", () => {
+    const row = policy("RECORD_CAPSULE", "LOW", "AUTO_APPROVE");
+    const without = evaluateActionPolicy(
+      input("LOW", { action_policy_row: row, entity_profile_safe_view: {} }),
+    );
+    const withRole = evaluateActionPolicy(
+      input("LOW", {
+        action_policy_row: row,
+        entity_profile_safe_view: { role_template: "account-executive" },
+      }),
+    );
+    expect(withRole).toEqual(without);
+  });
+
+  it("a role template NEVER unblocks OBSERVE_ONLY (no silent authority)", () => {
+    const verdict = evaluateActionPolicy(
+      input("LOW", {
+        twin_autonomy_level: "OBSERVE_ONLY",
+        entity_profile_safe_view: { role_template: "chief-executive-officer" },
+      }),
+    );
+    expect(verdict).toMatchObject({ ok: true, decision: "FORBIDDEN" });
+  });
+});
