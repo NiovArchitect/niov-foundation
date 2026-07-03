@@ -819,6 +819,10 @@ export interface WorkLedgerView {
   // (pure read over persisted decider outputs; see routing-decision.ts).
   // Attached by getMyWork and the :id/routing-decision route. Additive.
   routing?: RoutingDecisionView;
+  // [GAP-J] — quiet source-lineage truth (safe scalars only; see
+  // sourceLineageFromDetails). Present only when the row's source was
+  // recorded by the ingest spine. Additive + optional.
+  source_lineage?: SourceLineageProjection;
   // Phase 1281 — coordination runtime, attached by the route after the
   // governed BEAM dispatch (not persisted this phase; reflects the real
   // dispatch result, never faked).
@@ -994,6 +998,76 @@ function watchersFromDetails(details: unknown): WorkLedgerView["watchers"] | und
   return out.length > 0 ? out : undefined;
 }
 
+// ── [GAP-J] SAFE source-lineage projection ──────────────────────────────────
+// The provenance block sourceEvidenceDetails() writes into details (one
+// builder, one writer — comms-ingest) becomes a small closed-vocab scalar
+// block so every surface can answer "where did this come from?" WITHOUT the
+// backend ever shipping raw identifiers. Deliberately NEVER projected:
+// source_id, dedupe_key, source_url, connector_identity, ingestion_run_id —
+// raw ids/URLs are proof-tier material (audit surfaces), not row copy.
+// NOTE (overlap, documented): org-query.service.ts sourceSystemOf() keeps its
+// own lowercase+fallback pluck — it feeds lexical retrieval scoring, a
+// different semantic; consolidating it here would change Ask-Otzar behavior.
+export interface SourceLineageProjection {
+  /** UPPER_SNAKE source system (SLACK / ZOOM / TRANSCRIPT / …) — closed-vocab
+   *  shape-guarded; junk never becomes customer copy. */
+  source_system: string;
+  /** The stable external id EXISTS (provable provenance) — the id itself
+   *  never crosses. */
+  source_id_present: boolean;
+  /** A safe excerpt exists (row.evidence quote) for the Why panel. */
+  has_source_excerpt: boolean;
+  /** Display name of the source actor (adapter's actor.name — a human name,
+   *  never an entity id or handle-only token). */
+  source_actor: string | null;
+  /** When the source event happened (ISO). */
+  source_timestamp: string | null;
+}
+
+const SOURCE_SYSTEM_SHAPE = /^[A-Z][A-Z0-9_]{1,31}$/;
+
+// WHAT: pull the ingest provenance out of details + evidence into the SAFE
+//        lineage block. Rows with no recorded source project undefined — the
+//        UI renders an honest "Source not recorded yet", never an invented
+//        origin.
+export function sourceLineageFromDetails(
+  details: unknown,
+  evidence: unknown,
+): SourceLineageProjection | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const d = details as Record<string, unknown>;
+  let rawSystem = typeof d.source_system === "string" ? d.source_system.toUpperCase() : null;
+  if (rawSystem === null) {
+    // Transcript-era rows carry no provenance block, but the ingest tag
+    // ("transcript_ingest") IS recorded truth — derive the system from it.
+    // Anything without a recorded tag stays undefined: never invent lineage.
+    const tag = typeof d.source === "string" ? /^([a-z0-9_]+)_ingest$/.exec(d.source) : null;
+    rawSystem = tag !== null ? (tag[1] ?? "").toUpperCase() : null;
+  }
+  if (rawSystem === null || !SOURCE_SYSTEM_SHAPE.test(rawSystem)) return undefined;
+  const actor =
+    typeof d.source_actor === "string" && d.source_actor.trim().length > 0
+      ? d.source_actor.slice(0, 120)
+      : null;
+  const ts = typeof d.source_timestamp === "string" ? d.source_timestamp : null;
+  const hasExcerpt =
+    (Array.isArray(evidence) &&
+      evidence.some(
+        (e) =>
+          typeof e === "object" && e !== null &&
+          (typeof (e as Record<string, unknown>).quote === "string" ||
+            typeof (e as Record<string, unknown>).excerpt === "string"),
+      )) ||
+    typeof d.source_excerpt === "string";
+  return {
+    source_system: rawSystem,
+    source_id_present: typeof d.source_id === "string" && d.source_id.length > 0,
+    has_source_excerpt: hasExcerpt,
+    source_actor: actor,
+    source_timestamp: ts,
+  };
+}
+
 // The SAFE meeting-intelligence projection shape (Phase 1285-V). Reused by the
 // Comms recent-artifacts projection (Phase 1286-C) so both surfaces share one
 // shape + one safe extractor.
@@ -1034,6 +1108,7 @@ export function meetingIntelligenceFromDetails(
 function projectLedger(row: LedgerRow): WorkLedgerView {
   const enrichment = enrichmentFromDetails(row.details);
   const meetingIntelligence = meetingIntelligenceFromDetails(row.details);
+  const sourceLineage = sourceLineageFromDetails(row.details, row.evidence);
   const coordination = coordinationFromDetails(row.details);
   const watchers = watchersFromDetails(row.details);
   const detailsObj =
@@ -1083,5 +1158,8 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
     ...(meetingIntelligence !== undefined ? { meeting_intelligence: meetingIntelligence } : {}),
     ...(coordination !== undefined ? { coordination } : {}),
     ...(watchers !== undefined ? { watchers } : {}),
+    // [GAP-J] quiet lineage truth: present only when the row's source was
+    // actually recorded — the UI never invents an origin.
+    ...(sourceLineage !== undefined ? { source_lineage: sourceLineage } : {}),
   };
 }
