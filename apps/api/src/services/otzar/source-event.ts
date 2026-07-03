@@ -129,6 +129,31 @@ export interface SlackMessageLike {
   channel_name?: string | null;
   permalink?: string | null;
   participants?: string[];
+  /** Slack workspace (team) id — scopes the dedupe key so the same
+   *  channel-id + ts from two different workspaces can never collide. */
+  team_id?: string | null;
+  /** Parent message ts when this message is a thread reply. Replies carry
+   *  their OWN unique ts, so a reply can never overwrite its parent; the
+   *  thread ts is included in the key to make thread lineage explicit. */
+  thread_ts?: string | null;
+}
+
+/** Slack dedupe identity: SLACK:<team>:<channel>:[<thread_ts>:]<ts>.
+ *  team/thread segments appear only when known, so the pre-existing
+ *  `SLACK:<channel>:<ts>` keys remain stable for events without them. */
+export function slackMessageDedupeKey(msg: SlackMessageLike): string {
+  const parts: string[] = ["SLACK"];
+  if (typeof msg.team_id === "string" && msg.team_id.length > 0) parts.push(msg.team_id);
+  parts.push(msg.channel_id ?? "dm");
+  if (
+    typeof msg.thread_ts === "string" &&
+    msg.thread_ts.length > 0 &&
+    msg.thread_ts !== msg.ts
+  ) {
+    parts.push(msg.thread_ts);
+  }
+  parts.push(msg.ts);
+  return parts.join(":");
 }
 
 /**
@@ -157,7 +182,7 @@ export function slackMessageToSourceEvent(
     ...(msg.channel_name ? { title: `Slack · #${msg.channel_name}` } : {}),
     content: msg.text,
     connectorIdentity: msg.channel_id ?? null,
-    dedupeKey: `SLACK:${msg.channel_id ?? "dm"}:${msg.ts}`,
+    dedupeKey: slackMessageDedupeKey(msg),
   };
 }
 

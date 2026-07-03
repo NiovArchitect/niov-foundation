@@ -12,8 +12,16 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import type { OtzarService } from "../services/otzar/otzar.service.js";
 import { requireAdminCapability } from "../middleware/admin.middleware.js";
-import { zoomRecordingToSourceEvent } from "../services/otzar/source-event.js";
+import {
+  slackMessageToSourceEvent,
+  zoomRecordingToSourceEvent,
+} from "../services/otzar/source-event.js";
 import { fetchZoomTranscriptForOrg } from "../services/connector/zoom-transcript.js";
+import {
+  fetchSlackMessageForOrg,
+  isValidSlackMessageTs,
+  slackChannelIdAllowed,
+} from "../services/connector/slack-message.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 import {
   listZoomRecordingsForOrg,
@@ -162,6 +170,112 @@ export async function registerConnectorDataRoutes(
       if (!result.ok) {
         if (result.code === "ALREADY_INGESTED") {
           // Honest idempotency: the same recording was ingested before —
+          // no duplicate work was created.
+          return reply.code(409).send(result);
+        }
+        return reply.code(502).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // ── [SLACK-INGEST-1] Governed Slack message ingestion (admin-triggered) ──
+  // POST /api/v1/slack/messages/ingest — the flagship ambient-source safe
+  // first slice: an ADMIN picks one message from a PUBLIC channel; it is
+  // fetched server-side via the org's sealed Slack OAuth envelope (tokens
+  // never exposed) and fed to the EXISTING spine via the canonical adapter
+  // (slackMessageToSourceEvent → ingestSourceEvent — no second pipeline).
+  // Dedupe identity: org (spine capture lookup) + SLACK:<team>:<channel>:
+  // [<thread_ts>:]<ts>. DMs / group DMs / private channels are refused
+  // before any content is read. The admin trigger IS the consent record
+  // (CONNECTOR_DATA_READ audit + the ingest's own audit trail).
+  app.post<{ Body: { channel_id?: unknown; message_ts?: unknown } }>(
+    "/api/v1/slack/messages/ingest",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const bearer = bearerFrom(request.headers.authorization);
+      if (bearer === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const channelId =
+        typeof request.body?.channel_id === "string" && request.body.channel_id.length > 0
+          ? request.body.channel_id
+          : null;
+      const messageTs =
+        typeof request.body?.message_ts === "string" && isValidSlackMessageTs(request.body.message_ts)
+          ? request.body.message_ts
+          : null;
+      if (channelId === null || messageTs === null) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "channel_id and message_ts (Slack ts format) are required",
+        });
+      }
+      // Policy fence BEFORE any provider call: DMs and group DMs are parked
+      // in this slice (the definitive public-only check runs server-side in
+      // fetchSlackMessageForOrg via conversations.info).
+      if (!slackChannelIdAllowed(channelId)) {
+        return reply.code(422).send({
+          ok: false,
+          code: "CHANNEL_NOT_ALLOWED",
+          message: "Only public channels are supported. Direct messages are not ingested.",
+        });
+      }
+      const orgEntityId = await resolveOrgOrFail(request.auth!.entity_id, reply);
+      if (orgEntityId === null) return;
+      const fetched = await fetchSlackMessageForOrg({
+        actor_entity_id: request.auth!.entity_id,
+        org_entity_id: orgEntityId,
+        channel_id: channelId,
+        message_ts: messageTs,
+      });
+      if (fetched.ok === false) {
+        const status =
+          fetched.code === "NOT_FOUND" ? 404
+          : fetched.code === "NOT_CONFIGURED" || fetched.code === "AUTH"
+            || fetched.code === "SCOPE_REAUTH_REQUIRED" || fetched.code === "NOT_IN_CHANNEL" ? 409
+          : fetched.code === "CHANNEL_NOT_ALLOWED" || fetched.code === "MESSAGE_TOO_LARGE" ? 422
+          : 502;
+        return reply.code(status).send({ ok: false, code: fetched.code });
+      }
+      // Canonical provenance: a CONNECTOR source with the real Slack author
+      // as actor (handle→entity resolution is the spine's NEEDS_OWNER path)
+      // and the workspace-scoped dedupe key so the same message can never
+      // double-ingest within the org while two orgs' workspaces never collide.
+      const slackEvent = slackMessageToSourceEvent(
+        {
+          ts: fetched.message.ts,
+          text: fetched.message.text,
+          user: fetched.message.author_handle,
+          user_name: fetched.message.author_name,
+          channel_id: channelId,
+          channel_name: fetched.channel_name,
+          team_id: fetched.team_id,
+          thread_ts: fetched.message.thread_ts,
+        },
+        request.auth!.entity_id,
+      );
+      const result = await otzarService.ingestSourceEvent({
+        token: bearer,
+        source: {
+          sourceType: slackEvent.sourceType,
+          sourceSystem: slackEvent.sourceSystem,
+          sourceId: slackEvent.sourceId,
+          sourceUrl: null,
+          actor: {
+            name: slackEvent.actor.name,
+            ...(slackEvent.actor.handle ? { handle: slackEvent.actor.handle } : {}),
+          },
+          timestamp: slackEvent.timestamp,
+          title: slackEvent.title ?? null,
+          content: slackEvent.content,
+          connectorIdentity: slackEvent.connectorIdentity ?? null,
+          dedupeKey: slackEvent.dedupeKey ?? null,
+        },
+      });
+      if (!result.ok) {
+        if (result.code === "ALREADY_INGESTED") {
+          // Honest idempotency: the same Slack message was ingested before —
           // no duplicate work was created.
           return reply.code(409).send(result);
         }

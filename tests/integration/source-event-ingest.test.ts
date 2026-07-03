@@ -264,6 +264,158 @@ describe("source-event ingest — non-transcript intake, one ledger (DB)", () =>
     expect(lineage2.length).toBeGreaterThan(0);
   });
 
+  // ── [SLACK-INGEST-1] Slack read → canonical ingest: workspace-scoped
+  //    dedupe identity (org + team + channel + ts [+ thread ts]) through the
+  //    REAL adapter, on the SAME spine. ──
+  it("[SLACK-INGEST-1] adapter-built Slack message lands with SLACK lineage and the workspace-scoped dedupe key", async () => {
+    const { slackMessageToSourceEvent } = await import("@niov/api");
+    const ts = `${Math.floor(Date.now() / 1000)}.100001`;
+    const event = {
+      ...slackMessageToSourceEvent(
+        {
+          ts,
+          text: "David owns the repo access work and will grant write access today.",
+          user: "U0AUTHOR",
+          user_name: "Sadeil",
+          channel_id: "C0LAUNCH",
+          channel_name: "launch",
+          team_id: "T0WORKSPACE",
+        },
+        callerId,
+      ),
+    };
+    const r = await ingestSourceEvent(event, { llmProvider: null });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    // The capture anchors on the FULL workspace-scoped key, org-partitioned.
+    const cap = await prisma.meetingCapture.findUnique({
+      where: { meeting_capture_id: r.conversation.meeting_capture_id },
+    });
+    expect(cap!.org_entity_id).toBe(orgId);
+    expect(cap!.provider_meeting_id).toBe(`SLACK:T0WORKSPACE:C0LAUNCH:${ts}`);
+
+    // Ledger rows carry SLACK lineage.
+    const rows = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, source_type: "CONNECTOR" },
+    });
+    const lineage = rows.filter((row) => {
+      const d = row.details as Record<string, unknown>;
+      return d.source_system === "SLACK" && d.source_id === ts;
+    });
+    expect(lineage.length).toBeGreaterThan(0);
+
+    // Re-ingesting the SAME message: honest refusal, no duplicate work.
+    const dup = await ingestSourceEvent(event, { llmProvider: null });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.code).toBe("ALREADY_INGESTED");
+
+    // No secret material in stored details.
+    for (const row of rows) {
+      const raw = JSON.stringify(row.details);
+      expect(raw).not.toMatch(/xoxb|xoxp|access_token/i);
+    }
+  });
+
+  it("[SLACK-INGEST-1] the SAME channel + ts from TWO workspaces never collides (team id scopes the key)", async () => {
+    const { slackMessageToSourceEvent } = await import("@niov/api");
+    const ts = `${Math.floor(Date.now() / 1000)}.200002`;
+    const build = (teamId: string) =>
+      slackMessageToSourceEvent(
+        {
+          ts,
+          text: "David owns the repo access work and will grant write access today.",
+          channel_id: "C0SAMEID",
+          team_id: teamId,
+        },
+        callerId,
+      );
+    const first = await ingestSourceEvent(build("T0ALPHA"), { llmProvider: null });
+    expect(first.ok).toBe(true);
+    // Different workspace, identical channel id + ts → distinct identity.
+    const second = await ingestSourceEvent(build("T0BRAVO"), { llmProvider: null });
+    expect(second.ok).toBe(true);
+    // Same workspace again → idempotent.
+    const dup = await ingestSourceEvent(build("T0ALPHA"), { llmProvider: null });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.code).toBe("ALREADY_INGESTED");
+  });
+
+  it("[SLACK-INGEST-1] cross-org isolation: the SAME Slack message ingests independently per org", async () => {
+    const { slackMessageToSourceEvent } = await import("@niov/api");
+    const ts = `${Math.floor(Date.now() / 1000)}.300003`;
+    const build = (caller: string) =>
+      slackMessageToSourceEvent(
+        {
+          ts,
+          text: "David owns the repo access work and will grant write access today.",
+          channel_id: "C0SHARED",
+          team_id: "T0SHARED",
+        },
+        caller,
+      );
+    const first = await ingestSourceEvent(build(callerId), { llmProvider: null });
+    expect(first.ok).toBe(true);
+
+    const otherOrgId = await makeEntity("Other Slack Org", "COMPANY");
+    const otherCallerId = await makeEntity("Other Slack Caller", "PERSON");
+    await prisma.entityMembership.create({
+      data: { parent_id: otherOrgId, child_id: otherCallerId, is_active: true },
+    });
+    // A different org ingesting the identical workspace-scoped key SUCCEEDS —
+    // dedupe is org-scoped (Slack for Org A is not Slack for Org B).
+    const second = await ingestSourceEvent(build(otherCallerId), { llmProvider: null });
+    expect(second.ok).toBe(true);
+    // …while the SAME org still refuses the duplicate.
+    const dup = await ingestSourceEvent(build(callerId), { llmProvider: null });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.code).toBe("ALREADY_INGESTED");
+  });
+
+  it("[SLACK-INGEST-1] a thread reply ingests as its own event and never overwrites the parent", async () => {
+    const { slackMessageToSourceEvent } = await import("@niov/api");
+    const parentTs = `${Math.floor(Date.now() / 1000)}.400004`;
+    const replyTs = `${Math.floor(Date.now() / 1000)}.500005`;
+    const parent = slackMessageToSourceEvent(
+      {
+        ts: parentTs,
+        thread_ts: parentTs, // Slack marks thread parents with their own ts
+        text: "David owns the repo access work and will grant write access today.",
+        channel_id: "C0THREAD",
+        team_id: "T0THREAD",
+      },
+      callerId,
+    );
+    const reply = slackMessageToSourceEvent(
+      {
+        ts: replyTs,
+        thread_ts: parentTs,
+        text: "David confirmed: repo write access lands today.",
+        channel_id: "C0THREAD",
+        team_id: "T0THREAD",
+      },
+      callerId,
+    );
+    const first = await ingestSourceEvent(parent, { llmProvider: null });
+    expect(first.ok).toBe(true);
+    const second = await ingestSourceEvent(reply, { llmProvider: null });
+    expect(second.ok).toBe(true);
+
+    // BOTH captures exist — the reply did not replace or dedupe-collide with
+    // its parent; each carries its own thread-explicit identity.
+    const parentCap = await prisma.meetingCapture.findFirst({
+      where: { org_entity_id: orgId, provider_meeting_id: `SLACK:T0THREAD:C0THREAD:${parentTs}` },
+    });
+    const replyCap = await prisma.meetingCapture.findFirst({
+      where: {
+        org_entity_id: orgId,
+        provider_meeting_id: `SLACK:T0THREAD:C0THREAD:${parentTs}:${replyTs}`,
+      },
+    });
+    expect(parentCap).not.toBeNull();
+    expect(replyCap).not.toBeNull();
+  });
+
   it("no cross-tenant leak: another org's caller ingesting does not write into this org", async () => {
     const otherOrg = await makeEntity("Other Org", "COMPANY");
     const otherCaller = await makeEntity("Other Caller", "PERSON");
