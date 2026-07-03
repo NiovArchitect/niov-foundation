@@ -61,6 +61,13 @@ export interface SafeActionView {
   // create-time projection — which does not resolve names — omits them.
   target_label?: string | null;
   requester_label?: string | null;
+  // ── [GAP-E] Sender-visible rejection reason ──
+  // The approver's human reason (already bounded to a SAFE ≤500-char scalar
+  // by safeApproverReason at resolution time). Present ONLY on REJECTED
+  // actions whose paired escalation carries a reason — the escalation row
+  // stays the canonical record; this is a read-side projection so the sender
+  // sees WHY without visiting an admin surface. Never an ID, never metadata.
+  not_approved_reason?: string | null;
 }
 
 // WHAT: SAFE display-name labels passed into the projection by the service
@@ -70,6 +77,8 @@ export interface SafeActionView {
 export interface SafeActionLabels {
   target_label?: string | null;
   requester_label?: string | null;
+  /** [GAP-E] Service-resolved approver reason for REJECTED actions. */
+  not_approved_reason?: string | null;
 }
 
 // WHAT: Map a full Action row + an optional decision_reason marker
@@ -114,6 +123,15 @@ export function projectActionView(
   }
   if (labels?.requester_label !== undefined) {
     safe.requester_label = labels.requester_label;
+  }
+  // [GAP-E] Only a real reason on a REJECTED action is projected — no empty
+  // fields, no reasons leaking onto non-rejected states.
+  if (
+    action.status === "REJECTED" &&
+    labels?.not_approved_reason !== undefined &&
+    labels.not_approved_reason !== null
+  ) {
+    safe.not_approved_reason = labels.not_approved_reason;
   }
   return safe;
 }

@@ -51,6 +51,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { projectActionView, type SafeActionView } from "./views.js";
+import { safeApproverReason } from "../governance/escalation.service.js";
 import { getOrgEntityId } from "../governance/org.js";
 import { resolveEntityNames, type ResolvedName } from "../identity/resolve-entities.js";
 
@@ -423,6 +424,28 @@ export async function listActionsForCaller(
     ]),
   );
 
+  // [GAP-E] Sender-visible rejection reason: for this page's REJECTED actions
+  // with a paired escalation, batch-read the escalations' resolution metadata
+  // and extract the approver's human reason as the same SAFE bounded scalar
+  // the audit trail records (safeApproverReason). The escalation row stays
+  // the canonical record — this is read-side projection only.
+  const rejectedEscalationIds = rows
+    .filter((r) => r.status === "REJECTED" && r.escalation_id !== null)
+    .map((r) => r.escalation_id as string);
+  const reasonByEscalationId = new Map<string, string | null>();
+  if (rejectedEscalationIds.length > 0) {
+    const escalations = await prisma.escalationRequest.findMany({
+      where: { escalation_id: { in: rejectedEscalationIds } },
+      select: { escalation_id: true, resolution_metadata: true },
+    });
+    for (const e of escalations) {
+      reasonByEscalationId.set(
+        e.escalation_id,
+        safeApproverReason(e.resolution_metadata as Prisma.InputJsonValue),
+      );
+    }
+  }
+
   return {
     ok: true,
     httpStatus: 200,
@@ -431,11 +454,16 @@ export async function listActionsForCaller(
         projectActionView(
           r,
           undefined,
-          labelsFor(
-            names,
-            effectiveTargetId(r.target_entity_id, r.payload_redacted),
-            r.source_entity_id,
-          ),
+          {
+            ...labelsFor(
+              names,
+              effectiveTargetId(r.target_entity_id, r.payload_redacted),
+              r.source_entity_id,
+            ),
+            ...(r.status === "REJECTED" && r.escalation_id !== null
+              ? { not_approved_reason: reasonByEscalationId.get(r.escalation_id) ?? null }
+              : {}),
+          },
         ),
       ),
       page: filters.page,

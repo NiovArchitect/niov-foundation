@@ -479,6 +479,35 @@ describe("Slice F — dual-control escalation approval flips the paired Action (
     await tickActionScheduler({});
     await tickActionExecutor({});
     expect((await prisma.action.findUnique({ where: { action_id: actionId } }))?.status).toBe("REJECTED");
+
+    // [GAP-E] The SENDER's own list projects the approver's human reason as a
+    // safe scalar — no escalation ID hunting, no admin surface required.
+    const { listActionsForCaller } = await import(
+      "../../apps/api/src/services/action/list.service.js"
+    );
+    const listed = await listActionsForCaller(sourceId, {
+      org_scope: false,
+      page: 1,
+      page_size: 50,
+    });
+    expect(listed.ok).toBe(true);
+    if (listed.ok !== true) return;
+    const mine = listed.view.items.find((i) => i.action_id === actionId);
+    expect(mine?.status).toBe("REJECTED");
+    expect(mine?.not_approved_reason).toBe(
+      "Not appropriate for this channel — rework the message.",
+    );
+    // The reason NEVER leaks onto non-rejected items, and forbidden fields
+    // stay absent from every item.
+    for (const item of listed.view.items) {
+      if (item.status !== "REJECTED") {
+        expect(item).not.toHaveProperty("not_approved_reason");
+      }
+      const raw = JSON.stringify(item);
+      for (const banned of ["payload_redacted", "policy_envelope", "source_entity_id", "target_entity_id"]) {
+        expect(raw).not.toContain(banned);
+      }
+    }
   });
 
   it("rejecting is a safe no-op when the paired Action is no longer PROPOSED (e.g. already CANCELLED)", async () => {
