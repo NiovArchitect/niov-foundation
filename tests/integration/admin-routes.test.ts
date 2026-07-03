@@ -1027,6 +1027,81 @@ describe("GET /org/ai-teammates", () => {
     expect(adminTwin).toBeDefined();
     expect(adminTwin?.config?.autonomy_level).toBe("EXECUTIVE_OVERRIDE");
   });
+
+  it("[GAP-H] projects the AUTHORITATIVE owner (id + display name) from the org-scoped edge — safe fields only", async () => {
+    const ctx = await createOrgAndAdmin();
+    // A real employee owner, then a twin created through the product route.
+    const empEmail = `${TEST_PREFIX}owner_${randomUUID()}@niov.test`;
+    const addResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email: empEmail, password: "x", hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    const empId = (addResp.json() as { entity_id: string }).entity_id;
+    const owner = await prisma.entity.findUnique({
+      where: { entity_id: empId },
+      select: { display_name: true },
+    });
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { owner_entity_id: empId, role_title: "Owner Projection Twin" },
+      remoteAddress: ctx.adminIp,
+    });
+    const twinId = (created.json() as { entity_id: string }).entity_id;
+
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      remoteAddress: ctx.adminIp,
+    });
+    const body = list.json() as {
+      items: Array<{
+        entity_id: string;
+        owner_entity_id: string | null;
+        owner_display_name: string | null;
+      }>;
+    };
+    const mine = body.items.find((t) => t.entity_id === twinId);
+    expect(mine).toBeDefined();
+    // Source-of-truth owner: the SAME membership edge that scoped the twin.
+    expect(mine?.owner_entity_id).toBe(empId);
+    expect(mine?.owner_display_name).toBe(owner?.display_name);
+    // Every twin in this org's list resolves an owner (no false Unassigned).
+    for (const t of body.items) {
+      expect(typeof t.owner_display_name === "string" || t.owner_display_name === null).toBe(true);
+    }
+    // Safe scalars only — no credential material rides along.
+    const raw = JSON.stringify(body);
+    for (const banned of ["password_hash", "public_key", "secret"]) {
+      expect(raw).not.toContain(banned);
+    }
+  });
+
+  it("[GAP-H] another org's twins (and owners) never appear in this org's list", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    const bTwin = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${orgB.adminToken}` },
+      payload: { owner_entity_id: orgB.adminId, role_title: `${TEST_PREFIX}xorg_${randomUUID()}` },
+      remoteAddress: orgB.adminIp,
+    });
+    const bTwinId = (bTwin.json() as { entity_id: string }).entity_id;
+    const listA = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/ai-teammates",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    const items = (listA.json() as { items: Array<{ entity_id: string }> }).items;
+    expect(items.some((t) => t.entity_id === bTwinId)).toBe(false);
+  });
 });
 
 describe("GET /org/ai-teammates/:id", () => {

@@ -2137,12 +2137,19 @@ export async function registerOrgRoutes(
         select: { child_id: true },
       });
       const memberIds = orgMemberships.map((m) => m.child_id);
-      // Twins are AI_AGENT children of those members.
+      // Twins are AI_AGENT children of those members. The parent on this
+      // edge IS the human owner — keep it so the projection can carry the
+      // authoritative owner instead of making the UI guess ([GAP-H]).
       const twinMemberships = await prisma.entityMembership.findMany({
         where: { parent_id: { in: memberIds }, is_active: true },
-        select: { child_id: true },
+        select: { child_id: true, parent_id: true },
       });
       const twinIds = twinMemberships.map((tm) => tm.child_id);
+      // Owner mapping is org-scoped by construction: every parent above came
+      // from THIS org's membership tree, so no cross-org owner can appear.
+      const ownerByTwin = new Map(
+        twinMemberships.map((tm) => [tm.child_id, tm.parent_id]),
+      );
       const where: Prisma.EntityWhereInput = {
         entity_id: { in: twinIds },
         entity_type: "AI_AGENT",
@@ -2161,13 +2168,44 @@ export async function registerOrgRoutes(
         }),
       ]);
       const configByTwin = new Map(configs.map((c) => [c.twin_id, c]));
-      const items = twins.map((t) => ({
-        entity_id: t.entity_id,
-        display_name: t.display_name,
-        status: t.status,
-        created_at: t.created_at,
-        config: configByTwin.get(t.entity_id) ?? null,
-      }));
+      // [GAP-H] Safe owner projection: display name of the human this twin
+      // represents, from the SAME org-scoped edge that defined the twin set.
+      // Only safe scalars (id + display name); null when the owner entity is
+      // missing/deleted — the UI renders that honestly, never a guess.
+      const pageOwnerIds = Array.from(
+        new Set(
+          twins
+            .map((t) => ownerByTwin.get(t.entity_id))
+            .filter((id): id is string => typeof id === "string"),
+        ),
+      );
+      const ownerEntities =
+        pageOwnerIds.length === 0
+          ? []
+          : await prisma.entity.findMany({
+              where: {
+                entity_id: { in: pageOwnerIds },
+                entity_type: "PERSON",
+                deleted_at: null,
+              },
+              select: { entity_id: true, display_name: true },
+            });
+      const ownerNameById = new Map(
+        ownerEntities.map((e) => [e.entity_id, e.display_name]),
+      );
+      const items = twins.map((t) => {
+        const ownerId = ownerByTwin.get(t.entity_id) ?? null;
+        const ownerName = ownerId !== null ? (ownerNameById.get(ownerId) ?? null) : null;
+        return {
+          entity_id: t.entity_id,
+          display_name: t.display_name,
+          status: t.status,
+          created_at: t.created_at,
+          config: configByTwin.get(t.entity_id) ?? null,
+          owner_entity_id: ownerName !== null ? ownerId : null,
+          owner_display_name: ownerName,
+        };
+      });
       // [GAP-G SLICE-1] The org's authority ceiling for template-recommended
       // twin autonomy, so the truth surface can show recommended vs applied
       // vs ceiling. Normalized fail-closed; missing row = APPROVAL_REQUIRED.
