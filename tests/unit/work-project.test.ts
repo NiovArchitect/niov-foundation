@@ -88,6 +88,7 @@ beforeEach(() => {
   prismaMock.workProjectMember.findMany.mockReset();
   prismaMock.entityMembership.findFirst.mockReset();
   auditMock.mockReset();
+  auditMock.mockResolvedValue({ audit_id: "audit-test-1" });
 });
 
 describe("projectWorkProjectSafeView", () => {
@@ -240,7 +241,7 @@ describe("addWorkProjectMemberForCaller", () => {
       projectId: PROJECT_ID,
       entityId: OTHER_ID,
     });
-    expect(r).toEqual({ ok: false, code: "ALREADY_MEMBER" });
+    expect(r).toEqual({ ok: false, code: "ALREADY_MEMBER", membership_id: expect.any(String) });
   });
 
   it("happy path adds MEMBER + emits WORK_PROJECT_MEMBER_ADDED audit", async () => {

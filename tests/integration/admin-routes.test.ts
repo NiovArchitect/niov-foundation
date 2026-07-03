@@ -1510,3 +1510,239 @@ describe("POST /zoom/recordings/ingest (CX-SLICE-3)", () => {
     expect((noZoom.json() as { code: string }).code).toBe("NOT_CONFIGURED");
   });
 });
+
+// ── [PROD-UX-ASSIGN] org assignment targets + assignments ────────────────────
+// The People & Collaboration "Assign" flow: admin-gated org-wide picker feed +
+// admin assignment through the EXISTING membership write paths (org-admin
+// override — one write path, one audit vocabulary, via_org_admin provenance).
+describe("[PROD-UX-ASSIGN] GET /org/assignment-targets + POST /org/assignments", () => {
+  async function seedTargets(orgId: string, creatorId: string) {
+    const project = await prisma.workProject.create({
+      data: {
+        org_entity_id: orgId,
+        name: `${TEST_PREFIX} Assign Project`,
+        state: "ACTIVE",
+        created_by_entity_id: creatorId,
+      },
+    });
+    const workspace = await prisma.collaborationWorkspace.create({
+      data: {
+        org_entity_id: orgId,
+        title: `${TEST_PREFIX} Assign Workspace`,
+        created_by_entity_id: creatorId,
+      },
+    });
+    return { projectId: project.project_id, workspaceId: workspace.workspace_id };
+  }
+
+  async function addEmployee(ctx: { orgId: string; adminToken: string; adminIp: string }) {
+    const email = `${TEST_PREFIX}assignee_${randomUUID()}@niov.test`;
+    const password = "correct-horse-battery";
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/members",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { email, password, hierarchy_level: 1 },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(created.statusCode).toBeLessThan(300);
+    const entity = await prisma.entity.findFirst({ where: { email }, select: { entity_id: true } });
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email, password, requested_operations: ["read", "write"] },
+      remoteAddress: "10.97.1.1",
+    });
+    return { entityId: entity!.entity_id, token: (login.json() as { token: string }).token };
+  }
+
+  it("admin lists org-wide ACTIVE targets — both kinds, safe scalars, no cross-org leakage", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    const a = await seedTargets(orgA.orgId, orgA.adminId);
+    await seedTargets(orgB.orgId, orgB.adminId);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/assignment-targets",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { ok: boolean; targets: Array<{ kind: string; target_id: string; label: string; status: string }> };
+    const ids = body.targets.map((t) => t.target_id);
+    expect(ids).toContain(a.projectId);
+    expect(ids).toContain(a.workspaceId);
+    expect(body.targets.find((t) => t.target_id === a.projectId)?.kind).toBe("project");
+    expect(body.targets.find((t) => t.target_id === a.workspaceId)?.kind).toBe("workspace");
+    // Cross-org isolation: none of orgB's targets appear.
+    for (const t of body.targets) {
+      const inA = ids.includes(t.target_id);
+      expect(inA).toBe(true);
+    }
+    expect(res.body).not.toContain(orgB.orgId);
+    // Safe scalars only.
+    for (const banned of ["password_hash", "secret", "payload_redacted", "public_key"]) {
+      expect(res.body).not.toContain(banned);
+    }
+  });
+
+  it("employees (non-admin) cannot list assignment targets; unauth is refused", async () => {
+    const ctx = await createOrgAndAdmin();
+    const emp = await addEmployee(ctx);
+    const asEmployee = await app.inject({
+      method: "GET",
+      url: "/api/v1/org/assignment-targets",
+      headers: { authorization: `Bearer ${emp.token}` },
+      remoteAddress: "10.97.1.1",
+    });
+    expect(asEmployee.statusCode).toBe(403);
+    const unauth = await app.inject({ method: "GET", url: "/api/v1/org/assignment-targets" });
+    expect(unauth.statusCode).toBe(401);
+  });
+
+  it("admin assigns a person to a PROJECT through the existing write path — audited with via_org_admin", async () => {
+    const ctx = await createOrgAndAdmin();
+    const { projectId } = await seedTargets(ctx.orgId, ctx.adminId);
+    const emp = await addEmployee(ctx);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { person_entity_id: emp.entityId, target_kind: "project", target_id: projectId },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { ok: boolean; membership_id: string; audit_event_id: string };
+    expect(body.ok).toBe(true);
+    expect(body.membership_id.length).toBeGreaterThan(0);
+    // Canonical membership written (ONE write path — WorkProjectMember).
+    const member = await prisma.workProjectMember.findFirst({
+      where: { project_id: projectId, entity_id: emp.entityId },
+    });
+    expect(member).not.toBeNull();
+    // Audit: existing vocabulary + org-admin provenance.
+    const audit = await prisma.auditEvent.findUnique({ where: { audit_id: body.audit_event_id } });
+    expect(audit).not.toBeNull();
+    const d = audit!.details as Record<string, unknown>;
+    expect(d.action).toBe("WORK_PROJECT_MEMBER_ADDED");
+    expect(d.via_org_admin).toBe(true);
+    expect(audit!.actor_entity_id).toBe(ctx.adminId);
+    expect(audit!.target_entity_id).toBe(emp.entityId);
+  });
+
+  it("admin assigns a person to a WORKSPACE through the existing write path — audited with via_org_admin", async () => {
+    const ctx = await createOrgAndAdmin();
+    const { workspaceId } = await seedTargets(ctx.orgId, ctx.adminId);
+    const emp = await addEmployee(ctx);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${ctx.adminToken}` },
+      payload: { person_entity_id: emp.entityId, target_kind: "workspace", target_id: workspaceId },
+      remoteAddress: ctx.adminIp,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { ok: boolean; membership_id: string; audit_event_id: string };
+    const membership = await prisma.collaborationMembership.findFirst({
+      where: { workspace_id: workspaceId, member_entity_id: emp.entityId, deleted_at: null },
+    });
+    expect(membership).not.toBeNull();
+    expect(membership!.membership_id).toBe(body.membership_id);
+    const audit = await prisma.auditEvent.findUnique({ where: { audit_id: body.audit_event_id } });
+    expect(audit!.event_type).toBe("WORKSPACE_MEMBER_ADDED");
+    expect((audit!.details as Record<string, unknown>).via_org_admin).toBe(true);
+  });
+
+  it("employees cannot use the assignment route", async () => {
+    const ctx = await createOrgAndAdmin();
+    const { projectId } = await seedTargets(ctx.orgId, ctx.adminId);
+    const emp = await addEmployee(ctx);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${emp.token}` },
+      payload: { person_entity_id: emp.entityId, target_kind: "project", target_id: projectId },
+      remoteAddress: "10.97.1.1",
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("cross-org person and cross-org target are honest 404s; unknown ids too", async () => {
+    const orgA = await createOrgAndAdmin();
+    const orgB = await createOrgAndAdmin();
+    const aTargets = await seedTargets(orgA.orgId, orgA.adminId);
+    const bTargets = await seedTargets(orgB.orgId, orgB.adminId);
+    const bEmp = await addEmployee(orgB);
+    // Cross-org person.
+    const p = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      payload: { person_entity_id: bEmp.entityId, target_kind: "project", target_id: aTargets.projectId },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(p.statusCode).toBe(404);
+    expect((p.json() as { code: string }).code).toBe("PERSON_NOT_IN_ORG");
+    // Cross-org target (orgB's project via orgA admin) — 404, no existence leak.
+    const aEmp = await addEmployee(orgA);
+    const t = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      payload: { person_entity_id: aEmp.entityId, target_kind: "project", target_id: bTargets.projectId },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(t.statusCode).toBe(404);
+    expect((t.json() as { code: string }).code).toBe("TARGET_NOT_FOUND");
+    // Unknown ids.
+    const u1 = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      payload: { person_entity_id: randomUUID(), target_kind: "project", target_id: aTargets.projectId },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(u1.statusCode).toBe(404);
+    const u2 = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      payload: { person_entity_id: aEmp.entityId, target_kind: "workspace", target_id: randomUUID() },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(u2.statusCode).toBe(404);
+    // Bad kind is a 422.
+    const u3 = await app.inject({
+      method: "POST",
+      url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${orgA.adminToken}` },
+      payload: { person_entity_id: aEmp.entityId, target_kind: "team", target_id: aTargets.projectId },
+      remoteAddress: orgA.adminIp,
+    });
+    expect(u3.statusCode).toBe(422);
+  });
+
+  it("assigning twice is idempotent — already_member, no duplicate rows", async () => {
+    const ctx = await createOrgAndAdmin();
+    const { projectId } = await seedTargets(ctx.orgId, ctx.adminId);
+    const emp = await addEmployee(ctx);
+    const payload = { person_entity_id: emp.entityId, target_kind: "project", target_id: projectId };
+    const first = await app.inject({
+      method: "POST", url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${ctx.adminToken}` }, payload, remoteAddress: ctx.adminIp,
+    });
+    expect(first.statusCode).toBe(200);
+    const second = await app.inject({
+      method: "POST", url: "/api/v1/org/assignments",
+      headers: { authorization: `Bearer ${ctx.adminToken}` }, payload, remoteAddress: ctx.adminIp,
+    });
+    expect(second.statusCode).toBe(200);
+    const sb = second.json() as { ok: boolean; already_member?: boolean };
+    expect(sb.ok).toBe(true);
+    expect(sb.already_member).toBe(true);
+    const count = await prisma.workProjectMember.count({
+      where: { project_id: projectId, entity_id: emp.entityId },
+    });
+    expect(count).toBe(1);
+  });
+});

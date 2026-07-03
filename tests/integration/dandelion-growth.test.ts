@@ -260,6 +260,55 @@ describe("Phase 1237 — Dandelion org growth", () => {
     expect(r).toEqual({ ok: false, code: "ADMIN_REQUIRED" });
   });
 
+  // [PROD-UX-ASSIGN] THE TRUTH-CHANGED PROOF: after the admin assigns the
+  // newcomer to a project (org-admin override on the EXISTING membership
+  // write path), the NEEDS_PROJECT_OR_WORKSPACE recommendation disappears
+  // because the org graph changed — not because any UI hid it.
+  it("assigning the person a first project makes NEEDS_PROJECT_OR_WORKSPACE disappear (data change, not UI hiding)", async () => {
+    // Before: the newcomer is recommended (no project/workspace).
+    const before = await getOrgGrowthForCaller(adminId);
+    if (before.ok === false) throw new Error("expected ok");
+    expect(
+      before.growth.recommendations.some(
+        (r) => r.kind === "NEEDS_PROJECT_OR_WORKSPACE" && r.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(true);
+
+    // The admin assigns them through the existing write path with the
+    // org-admin override (the /org/assignments route's exact call).
+    const project = await prisma.workProject.create({
+      data: {
+        org_entity_id: orgId,
+        name: `${TEST_PREFIX} First Assignment Project`,
+        state: "ACTIVE",
+        created_by_entity_id: adminId,
+      },
+    });
+    const { addWorkProjectMemberForCaller } = await import(
+      "../../apps/api/src/services/otzar/work-project.service.js"
+    );
+    const assigned = await addWorkProjectMemberForCaller({
+      callerEntityId: adminId,
+      projectId: project.project_id,
+      entityId: lonelyId,
+      actorIsOrgAdmin: true,
+      actorOrgEntityId: orgId,
+    });
+    expect(assigned.ok).toBe(true);
+    if (!assigned.ok) return;
+    expect(assigned.audit_event_id.length).toBeGreaterThan(0);
+
+    // After: the recommendation is GONE for this person — the truth changed.
+    const after = await getOrgGrowthForCaller(adminId);
+    if (after.ok === false) throw new Error("expected ok");
+    expect(
+      after.growth.recommendations.some(
+        (r) => r.kind === "NEEDS_PROJECT_OR_WORKSPACE" && r.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(false);
+    expect(after.growth.signals.members_without_project_count).toBe(0);
+  });
+
   it("a healthy org gets the calm headline and zero recommendations", async () => {
     // Give the newcomer a profile + project so nothing fires.
     await prisma.entityProfile.create({

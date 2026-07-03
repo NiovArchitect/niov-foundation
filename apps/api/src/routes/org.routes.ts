@@ -857,6 +857,210 @@ export async function registerOrgRoutes(
     },
   );
 
+  // GET /org/assignment-targets -- [PROD-UX-ASSIGN] the org-wide picker feed
+  // for the People & Collaboration "Assign" flow: ACTIVE projects + ACTIVE
+  // workspaces of the CALLER's org. Admin-gated (employees keep their
+  // caller-scoped lists — this route exists because those lists only show
+  // what the caller is a member of, which is useless to an org admin doing
+  // org structuring). Safe scalars only; stable IDs; predictable label sort.
+  app.get(
+    "/api/v1/org/assignment-targets",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const [projects, workspaces] = await Promise.all([
+        prisma.workProject.findMany({
+          where: { org_entity_id: orgEntityId, state: "ACTIVE" },
+          select: { project_id: true, name: true, state: true, created_at: true },
+          orderBy: { name: "asc" },
+          take: 200,
+        }),
+        prisma.collaborationWorkspace.findMany({
+          where: { org_entity_id: orgEntityId, status: "ACTIVE", deleted_at: null },
+          select: { workspace_id: true, title: true, status: true, created_at: true },
+          orderBy: { title: "asc" },
+          take: 200,
+        }),
+      ]);
+      return reply.code(200).send({
+        ok: true,
+        targets: [
+          ...projects.map((p) => ({
+            kind: "project" as const,
+            target_id: p.project_id,
+            label: p.name,
+            status: p.state,
+            created_at: p.created_at.toISOString(),
+          })),
+          ...workspaces.map((w) => ({
+            kind: "workspace" as const,
+            target_id: w.workspace_id,
+            label: w.title,
+            status: w.status,
+            created_at: w.created_at.toISOString(),
+          })),
+        ],
+      });
+    },
+  );
+
+  // POST /org/assignments -- [PROD-UX-ASSIGN] admin assigns a person to a
+  // project or workspace, closing the NEEDS_PROJECT_OR_WORKSPACE loop from
+  // People & Collaboration. Stable IDs only; the admin authority flag is
+  // ROUTE-COMPUTED here (the capability gate ran) and re-verified against the
+  // target's org inside the existing services — ONE membership write path,
+  // one audit vocabulary (WORK_PROJECT_MEMBER_ADDED / WORKSPACE_MEMBER_ADDED
+  // + via_org_admin provenance). Idempotent: an existing membership returns
+  // ok with already_member.
+  app.post<{
+    Body: {
+      person_entity_id?: string;
+      target_kind?: string;
+      target_id?: string;
+    };
+  }>(
+    "/api/v1/org/assignments",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const body = request.body ?? {};
+      const personId = typeof body.person_entity_id === "string" ? body.person_entity_id : "";
+      const targetId = typeof body.target_id === "string" ? body.target_id : "";
+      const targetKind = body.target_kind;
+      if (personId.length === 0 || targetId.length === 0 || (targetKind !== "project" && targetKind !== "workspace")) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_FIELD",
+          message: "person_entity_id, target_id and target_kind (\"project\" | \"workspace\") are required.",
+        });
+      }
+      // The person must be an ACTIVE member of the CALLER's org (stable id;
+      // cross-org people are refused before any target is touched).
+      const orgLink = await prisma.entityMembership.findFirst({
+        where: { parent_id: orgEntityId, child_id: personId, is_active: true },
+        select: { child_id: true },
+      });
+      if (orgLink === null) {
+        return reply.code(404).send({
+          ok: false,
+          code: "PERSON_NOT_IN_ORG",
+          message: "That person isn't an active member of your organization.",
+        });
+      }
+      // The target must belong to the CALLER's org — checked here (org-scoped
+      // query) so a cross-org id reads as an honest 404 rather than leaking
+      // existence through a downstream authority code.
+      if (targetKind === "project") {
+        const target = await prisma.workProject.findFirst({
+          where: { project_id: targetId, org_entity_id: orgEntityId },
+          select: { project_id: true },
+        });
+        if (target === null) {
+          return reply.code(404).send({
+            ok: false,
+            code: "TARGET_NOT_FOUND",
+            message: "That project doesn't exist in your organization.",
+          });
+        }
+      } else {
+        const target = await prisma.collaborationWorkspace.findFirst({
+          where: { workspace_id: targetId, org_entity_id: orgEntityId, deleted_at: null },
+          select: { workspace_id: true, status: true },
+        });
+        if (target === null) {
+          return reply.code(404).send({
+            ok: false,
+            code: "TARGET_NOT_FOUND",
+            message: "That workspace doesn't exist in your organization.",
+          });
+        }
+        if (target.status !== "ACTIVE") {
+          return reply.code(422).send({
+            ok: false,
+            code: "TARGET_NOT_ACTIVE",
+            message: "That workspace isn't active.",
+          });
+        }
+      }
+      if (targetKind === "project") {
+        const { addWorkProjectMemberForCaller } = await import(
+          "../services/otzar/work-project.service.js"
+        );
+        const result = await addWorkProjectMemberForCaller({
+          callerEntityId: callerId,
+          projectId: targetId,
+          entityId: personId,
+          actorIsOrgAdmin: true,
+          actorOrgEntityId: orgEntityId,
+        });
+        if (!result.ok) {
+          if (result.code === "ALREADY_MEMBER") {
+            return reply.code(200).send({
+              ok: true,
+              already_member: true,
+              target_kind: "project",
+              target_id: targetId,
+              person_entity_id: personId,
+              membership_id: result.membership_id ?? null,
+            });
+          }
+          const status = result.code === "PROJECT_NOT_FOUND" ? 404 : 422;
+          return reply.code(status).send({ ok: false, code: result.code });
+        }
+        return reply.code(200).send({
+          ok: true,
+          target_kind: "project",
+          target_id: targetId,
+          person_entity_id: personId,
+          membership_id: result.member.project_member_id,
+          audit_event_id: result.audit_event_id,
+        });
+      }
+      const { addCollaborationMemberForCaller } = await import(
+        "../services/otzar/collaboration-workspace.service.js"
+      );
+      const result = await addCollaborationMemberForCaller({
+        workspaceId: targetId,
+        callerEntityId: callerId,
+        memberEntityId: personId,
+        roleLabel: "Member",
+        memberType: "INTERNAL",
+        accessLevel: "CONTRIBUTE",
+        actorIsOrgAdmin: true,
+        actorOrgEntityId: orgEntityId,
+      });
+      if (!result.ok) {
+        if (result.code === "ALREADY_MEMBER") {
+          return reply.code(200).send({
+            ok: true,
+            already_member: true,
+            target_kind: "workspace",
+            target_id: targetId,
+            person_entity_id: personId,
+            membership_id: result.membership_id ?? null,
+          });
+        }
+        return reply.code(result.httpStatus).send({ ok: false, code: result.code });
+      }
+      return reply.code(200).send({
+        ok: true,
+        target_kind: "workspace",
+        target_id: targetId,
+        person_entity_id: personId,
+        membership_id: result.membership.membership_id,
+        audit_event_id: result.audit_event_id,
+      });
+    },
+  );
+
   // GET /org/settings -- live row or spec defaults.
   app.get(
     "/api/v1/org/settings",
