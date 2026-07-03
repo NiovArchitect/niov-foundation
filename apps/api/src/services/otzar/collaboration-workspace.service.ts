@@ -688,6 +688,71 @@ export type AddMemberResult =
       membership_id?: string;
     };
 
+// WHAT: Archive a workspace the caller can approve in.
+// WHY: [GAP-C] Reversibility parity with the project rail
+//      (archiveWorkProjectForCaller): APPROVE-gated, idempotent
+//      ALREADY_ARCHIVED, audited, never hard-deleted (RULE 10 — status
+//      moves to ARCHIVED). Growth/assignment-targets already treat
+//      non-ACTIVE workspaces as not-live, so archiving restores truth.
+export interface ArchiveWorkspaceInput {
+  callerEntityId: string;
+  workspaceId: string;
+}
+
+export type ArchiveWorkspaceResult =
+  | { ok: true; workspace: WorkspaceSafeView; audit_event_id: string }
+  | {
+      ok: false;
+      httpStatus: 403 | 404 | 409;
+      code: "WORKSPACE_NOT_FOUND" | "NOT_WORKSPACE_APPROVER" | "ALREADY_ARCHIVED";
+      message?: string;
+    };
+
+export async function archiveCollaborationWorkspaceForCaller(
+  input: ArchiveWorkspaceInput,
+): Promise<ArchiveWorkspaceResult> {
+  const workspace = await prisma.collaborationWorkspace.findFirst({
+    where: { workspace_id: input.workspaceId, deleted_at: null },
+  });
+  if (workspace === null) {
+    return { ok: false, httpStatus: 404, code: "WORKSPACE_NOT_FOUND" };
+  }
+  const callerMembership = await getCallerMembership(
+    input.workspaceId,
+    input.callerEntityId,
+  );
+  if (callerMembership === null || callerMembership.access_level !== "APPROVE") {
+    return {
+      ok: false,
+      httpStatus: 403,
+      code: "NOT_WORKSPACE_APPROVER",
+      message: "Only someone with approve access in this workspace can archive it.",
+    };
+  }
+  if (workspace.status === "ARCHIVED") {
+    return { ok: false, httpStatus: 409, code: "ALREADY_ARCHIVED" };
+  }
+  const updated = await prisma.collaborationWorkspace.update({
+    where: { workspace_id: input.workspaceId },
+    data: { status: "ARCHIVED", archived_at: new Date() },
+  });
+  const audit = await writeAuditEvent({
+    event_type: "ADMIN_ACTION",
+    outcome: "SUCCESS",
+    actor_entity_id: input.callerEntityId,
+    target_entity_id: input.callerEntityId,
+    details: {
+      action: "COLLABORATION_WORKSPACE_ARCHIVED",
+      workspace_id: input.workspaceId,
+    },
+  });
+  return {
+    ok: true,
+    workspace: projectWorkspace(updated),
+    audit_event_id: audit.audit_id,
+  };
+}
+
 export async function addCollaborationMemberForCaller(
   input: AddMemberInput,
 ): Promise<AddMemberResult> {
