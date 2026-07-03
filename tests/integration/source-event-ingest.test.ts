@@ -212,6 +212,58 @@ describe("source-event ingest — non-transcript intake, one ledger (DB)", () =>
     }
   });
 
+  it("[GAP-I ZOOM] cross-org isolation: the SAME Zoom meeting id ingests independently per org — dedupe never collides across orgs", async () => {
+    const { zoomRecordingToSourceEvent } = await import("@niov/api");
+    const meetingId = `zm-shared-${Date.now()}`;
+    const build = (caller: string, org: string) =>
+      zoomRecordingToSourceEvent({
+        meetingId,
+        topic: "Shared-id sync",
+        transcript: "Sadeil: David owns the repo access work and will grant write access today.",
+        callerEntityId: caller,
+        callerName: "Zoom recording import",
+        orgEntityId: org,
+        nowIso: new Date().toISOString(),
+      });
+
+    // Org 1 ingests the recording.
+    const first = await ingestSourceEvent(build(callerId, orgId), { llmProvider: null });
+    expect(first.ok).toBe(true);
+
+    // A DIFFERENT org ingesting the same provider meeting id must SUCCEED —
+    // dedupe is org-scoped (Zoom for Org A is not Zoom for Org B).
+    const otherOrgId = await makeEntity("Other Zoom Org", "COMPANY");
+    const otherCallerId = await makeEntity("Other Zoom Caller", "PERSON");
+    await prisma.entityMembership.create({
+      data: { parent_id: otherOrgId, child_id: otherCallerId, is_active: true },
+    });
+    const second = await ingestSourceEvent(build(otherCallerId, otherOrgId), {
+      llmProvider: null,
+    });
+    expect(second.ok).toBe(true);
+
+    // …while re-ingesting within the SAME org still refuses.
+    const dup = await ingestSourceEvent(build(callerId, orgId), { llmProvider: null });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.code).toBe("ALREADY_INGESTED");
+
+    // Rows stay inside their own orgs.
+    const org1Rows = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, source_type: "CONNECTOR" },
+    });
+    const org2Rows = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: otherOrgId, source_type: "CONNECTOR" },
+    });
+    const lineage1 = org1Rows.filter(
+      (r) => (r.details as Record<string, unknown>).source_id === meetingId,
+    );
+    const lineage2 = org2Rows.filter(
+      (r) => (r.details as Record<string, unknown>).source_id === meetingId,
+    );
+    expect(lineage1.length).toBeGreaterThan(0);
+    expect(lineage2.length).toBeGreaterThan(0);
+  });
+
   it("no cross-tenant leak: another org's caller ingesting does not write into this org", async () => {
     const otherOrg = await makeEntity("Other Org", "COMPANY");
     const otherCaller = await makeEntity("Other Caller", "PERSON");
