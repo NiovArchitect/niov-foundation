@@ -40,6 +40,7 @@ import {
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
 import { requestClarificationForCaller } from "../services/work-os/clarification-request.service.js";
+import { answerClarityQuestion } from "../services/work-os/clarity-answer.service.js";
 import {
   getWatcherFeed,
   getWatcherFeedWithBeamAdvisory,
@@ -606,6 +607,36 @@ export async function registerWorkOsLedgerRoutes(
       });
       if (result.ok === false) return reply.code(404).send(result);
       return reply.code(200).send({ ok: true, clarity: result.clarity });
+    },
+  );
+
+  // ── [CE-3] Clarity ANSWER — read-only, deterministic, structured. Answers
+  //    one clarity question about one row from canonical truth (ledger +
+  //    lineage + clarifier ranking + clarification lifecycle + routing
+  //    reason). Never mutates, never notifies, never escalates; the
+  //    suggested action is a suggestion the human clicks through CE-2. ──
+  app.get<{ Params: { id: string }; Querystring: { question?: string } }>(
+    "/api/v1/work-os/ledger/:id/clarity-answer",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const question = (request.query.question ?? "").trim();
+      if (question.length === 0 || question.length > 300) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "question is required (1-300 chars)",
+        });
+      }
+      const result = await answerClarityQuestion({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        ledger_entry_id: request.params.id,
+        question,
+      });
+      if (result.ok === false) return reply.code(404).send(result);
+      return reply.code(200).send({ ok: true, ...result.answer });
     },
   );
 
