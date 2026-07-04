@@ -137,6 +137,89 @@ export async function findExistingCollaboratorMatch(args: {
   return { matched: true, collaborator: only, matched_by: "name_governed" };
 }
 
+// ── [T-3C] Possible-match PROJECTION (the chooser's data) ───────────────────
+// Lists candidates for a human to decide on — it NEVER decides. Org-scoped,
+// active records only, cap 3, safe labels only (emails/domains/identifier
+// values never project; the machine id is for the decision call, never copy).
+export interface PossibleCollaboratorMatch {
+  external_collaborator_id: string;
+  display_label: string;
+  company_label?: string;
+  relationship_label?: string;
+  reason: "Verified alias" | "Same company" | "Similar name in this account";
+  confidence: "high" | "medium" | "low";
+}
+
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  CLIENT: "Client", VENDOR: "Vendor", CONTRACTOR: "Contractor",
+  PARTNER: "Partner", INVESTOR: "Investor", ADVISOR: "Advisor",
+  AGENCY: "Agency", REGULATOR: "Regulator", PROSPECT: "Prospect",
+  CANDIDATE: "Candidate", OTHER: "External",
+};
+
+export async function listPossibleCollaboratorMatches(args: {
+  org_entity_id: string;
+  display_name: string;
+  company_label?: string | null;
+}): Promise<PossibleCollaboratorMatch[]> {
+  const out = new Map<string, PossibleCollaboratorMatch>();
+  const push = (
+    c: { external_collaborator_id: string; display_name: string; company_name: string | null; relationship_type: string },
+    reason: PossibleCollaboratorMatch["reason"],
+    confidence: PossibleCollaboratorMatch["confidence"],
+  ) => {
+    if (out.has(c.external_collaborator_id)) return;
+    out.set(c.external_collaborator_id, {
+      external_collaborator_id: c.external_collaborator_id,
+      display_label: c.display_name,
+      ...(c.company_name !== null ? { company_label: c.company_name } : {}),
+      relationship_label: RELATIONSHIP_LABELS[c.relationship_type] ?? "External",
+      reason,
+      confidence,
+    });
+  };
+
+  // Verified alias — the strongest listed evidence.
+  const aliasKey = normalizeIdentifierValue("MANUAL_ALIAS", args.display_name);
+  if (aliasKey.length > 0) {
+    const viaAlias = await prisma.externalCollaboratorIdentifier.findMany({
+      where: {
+        org_entity_id: args.org_entity_id,
+        identifier_type: "MANUAL_ALIAS",
+        identifier_value_normalized: aliasKey,
+        deleted_at: null,
+        verified_by_entity_id: { not: null },
+        external_collaborator: { deleted_at: null },
+      },
+      include: { external_collaborator: true },
+      take: 3,
+    });
+    for (const a of viaAlias) push(a.external_collaborator, "Verified alias", "high");
+  }
+
+  // Exact-name matches (the ambiguity T-3B refuses to decide).
+  const byName = await prisma.externalCollaborator.findMany({
+    where: {
+      org_entity_id: args.org_entity_id,
+      display_name: { equals: args.display_name.trim(), mode: "insensitive" },
+      deleted_at: null,
+    },
+    take: 5,
+  });
+  const candidateCompany =
+    typeof args.company_label === "string" && args.company_label.trim().length > 0
+      ? normalizeOrgName(args.company_label)
+      : null;
+  for (const c of byName) {
+    const sameCompany =
+      candidateCompany !== null &&
+      c.company_name !== null &&
+      normalizeOrgName(c.company_name) === candidateCompany;
+    push(c, sameCompany ? "Same company" : "Similar name in this account", sameCompany ? "medium" : "low");
+  }
+  return [...out.values()].slice(0, 3);
+}
+
 // WHAT: record identifier evidence (idempotent on the org-scoped unique).
 export async function recordCollaboratorIdentifier(args: {
   org_entity_id: string;
