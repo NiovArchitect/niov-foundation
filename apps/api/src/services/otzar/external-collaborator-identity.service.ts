@@ -150,7 +150,9 @@ export interface PossibleCollaboratorMatch {
   confidence: "high" | "medium" | "low";
 }
 
-const RELATIONSHIP_LABELS: Record<string, string> = {
+// Exported for [T-4]: the manager exception summary reuses the same closed
+// vocabulary (never a backend enum in customer copy).
+export const RELATIONSHIP_LABELS: Record<string, string> = {
   CLIENT: "Client", VENDOR: "Vendor", CONTRACTOR: "Contractor",
   PARTNER: "Partner", INVESTOR: "Investor", ADVISOR: "Advisor",
   AGENCY: "Agency", REGULATOR: "Regulator", PROSPECT: "Prospect",
