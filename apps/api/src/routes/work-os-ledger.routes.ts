@@ -41,6 +41,7 @@ import { projectRoutingDecision } from "../services/work-os/routing-decision.js"
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
 import { requestClarificationForCaller } from "../services/work-os/clarification-request.service.js";
 import { answerClarityQuestion } from "../services/work-os/clarity-answer.service.js";
+import { getTeamClarityHealth } from "../services/work-os/team-clarity-health.service.js";
 import {
   getWatcherFeed,
   getWatcherFeedWithBeamAdvisory,
@@ -407,6 +408,20 @@ export async function registerWorkOsLedgerRoutes(
         .send({ ok: true, entries: result.entries.slice(0, take), skip, take, has_more });
     },
   );
+
+  // ── [CE-4B] Team clarity health — manager EXCEPTION summary (read-only,
+  //    counts + org-internal labels only; never answer text, excerpts, or
+  //    private activity). Gate mirrors Team Work (honest 403 blocker). ──
+  app.get("/api/v1/work-os/team-clarity-health", async (request, reply) => {
+    const ctx = await auth(request, reply, "read");
+    if (ctx === null) return;
+    const result = await getTeamClarityHealth({
+      org_entity_id: ctx.org_entity_id,
+      is_manager: ctx.manager,
+    });
+    if (result.ok === false) return reply.code(403).send(result);
+    return reply.code(200).send({ ok: true, ...result.health });
+  });
 
   // ── Human-authority direct internal message (Phase 1284 Wave 2) ──
   // A human sends a LOW-risk internal Otzar-inbox note to an org member.

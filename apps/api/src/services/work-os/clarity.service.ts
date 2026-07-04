@@ -17,7 +17,7 @@
 //          tests/integration/clarity-projection.test.ts.
 
 import { prisma } from "@niov/database";
-import { getLedgerEntry } from "./work-ledger.service.js";
+import { getLedgerEntry, sourceLineageFromDetails } from "./work-ledger.service.js";
 import { resolveTokenToEntities } from "../otzar/recipient-governance.js";
 import { loadOrgMembers } from "../otzar/identity-reconciliation.service.js";
 
@@ -38,6 +38,11 @@ export interface ClarityCandidate {
   /** Human reason copy (routing-decision precedent: server-composed prose). */
   reason: string;
   rank: number;
+  /** [CE-4A] READ-ONLY learn signal: how many RESOLVED clarifications this
+   *  person answered on similar work (same project, else same source
+   *  system+author) in this org. Names and counts only — never answer text,
+   *  never excerpts, never written to any memory store. */
+  prior_clarifications?: number;
 }
 
 export interface ClarityProjection {
@@ -217,6 +222,81 @@ export async function rankClarifiers(args: {
       reason: p.reason,
       rank: candidates.length + 1,
     });
+  }
+
+  // [CE-4A] READ-ONLY clarity learn signal: annotate candidates who resolved
+  // clarifications on SIMILAR work before (same project when this row has
+  // one; else same source system + author). Deterministic, org-scoped via
+  // the candidates themselves (roster-derived) + the linked rows' org.
+  // NOTHING is written — the write-loop is CE-4.5 (needs the portability
+  // doctrine's derivation rail).
+  if (candidates.length > 0) {
+    const priorResolved = await prisma.escalationRequest.findMany({
+      where: {
+        escalation_type: "HUMAN_REVIEW_REQUIRED",
+        status: "APPROVED",
+        target_entity_id: { in: candidates.map((c) => c.entity_id) },
+        resolution_metadata: { path: ["kind"], equals: "clarification" },
+      },
+      orderBy: { resolved_at: "desc" },
+      take: 100,
+      select: { target_entity_id: true, resolution_metadata: true },
+    });
+    const priorLedgerIds = priorResolved
+      .map((e) => {
+        const m =
+          typeof e.resolution_metadata === "object" &&
+          e.resolution_metadata !== null &&
+          !Array.isArray(e.resolution_metadata)
+            ? (e.resolution_metadata as Record<string, unknown>)
+            : {};
+        return typeof m.ledger_entry_id === "string" ? m.ledger_entry_id : null;
+      })
+      .filter((v): v is string => v !== null);
+    if (priorLedgerIds.length > 0) {
+      const priorRows = await prisma.workLedgerEntry.findMany({
+        where: {
+          ledger_entry_id: { in: priorLedgerIds, not: args.ledger_entry_id },
+          org_entity_id: args.org_entity_id,
+        },
+        select: { ledger_entry_id: true, project_id: true, details: true },
+      });
+      const similar = new Set<string>();
+      for (const row of priorRows) {
+        if (entry.project_id !== null && row.project_id === entry.project_id) {
+          similar.add(row.ledger_entry_id);
+          continue;
+        }
+        if (lineage !== undefined) {
+          const priorLineage = sourceLineageFromDetails(row.details, null);
+          if (
+            priorLineage !== undefined &&
+            priorLineage.source_system === lineage.source_system &&
+            priorLineage.source_actor !== null &&
+            priorLineage.source_actor === lineage.source_actor
+          ) {
+            similar.add(row.ledger_entry_id);
+          }
+        }
+      }
+      const countByClarifier = new Map<string, number>();
+      for (const e of priorResolved) {
+        const m = e.resolution_metadata as Record<string, unknown>;
+        const lid = typeof m.ledger_entry_id === "string" ? m.ledger_entry_id : "";
+        if (!similar.has(lid)) continue;
+        countByClarifier.set(
+          e.target_entity_id,
+          (countByClarifier.get(e.target_entity_id) ?? 0) + 1,
+        );
+      }
+      for (const c of candidates) {
+        const n = countByClarifier.get(c.entity_id) ?? 0;
+        if (n > 0) {
+          c.prior_clarifications = n;
+          c.reason = `${c.reason} They clarified similar work here before.`;
+        }
+      }
+    }
   }
 
   // [CE-2] The caller's own clarification on this row (latest), so the
