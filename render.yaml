@@ -25,7 +25,10 @@ services:
     # approved work runs continuously). Change to `free` for a cheaper instance
     # that sleeps on idle (cold starts; scheduler pauses while asleep).
     plan: starter
-    autoDeploy: true
+    # [P0-OPS] autoDeploy is OFF — the binding rail is manual verified
+    # deploys (merge on green CI -> API deploy with commitId -> poll
+    # "live <sha>" -> smoke). See CT docs/otzar/OTZAR_PILOT_OPS_RUNBOOK.md.
+    autoDeploy: false
     envVars:
       # --- non-secret config ---
       - key: NODE_ENV
