@@ -42,6 +42,7 @@ import type {
 import { prisma } from "@niov/database";
 import { getOrgEntityId } from "../governance/org.js";
 import { createActionForCaller } from "../action/action.service.js";
+import { recordExternalCommitmentForCaller } from "./external-collaborator.service.js";
 import {
   projectActionView,
   type SafeActionView,
@@ -980,6 +981,41 @@ export async function importCommsOutputForWorkspaceForCaller(
     });
   }
 
+  // [T-2B] Governed external-commitment wire (the designed-but-dead path:
+  // recordExternalCommitmentForCaller's docstring names THIS caller). When a
+  // commitment's resolved owner name uniquely matches a GOVERNED external
+  // collaborator LINKED TO THIS WORKSPACE (human-tracked, workspace-gated —
+  // never a mention), ALSO record the ExternalCommitment with the source
+  // conversation preserved, so T-1's external_context lights up on related
+  // work rows ("Waiting on {name}"). External owner ⇒ EXTERNAL_OWES_INTERNAL.
+  const externalLinks =
+    workspace.visibility === "EXTERNAL_ALLOWED"
+      ? await prisma.workspaceExternalMembership.findMany({
+          where: { workspace_id: input.workspaceId },
+          select: {
+            external_collaborator: {
+              select: {
+                external_collaborator_id: true,
+                display_name: true,
+                deleted_at: true,
+              },
+            },
+          },
+        })
+      : [];
+  const governedExternalByName = new Map<string, string | null>();
+  for (const link of externalLinks) {
+    const c = link.external_collaborator;
+    if (c.deleted_at !== null) continue;
+    const key = c.display_name.trim().toLowerCase();
+    // Ambiguous names (two linked externals sharing a name) map to null —
+    // ambiguity never records an obligation.
+    governedExternalByName.set(
+      key,
+      governedExternalByName.has(key) ? null : c.external_collaborator_id,
+    );
+  }
+
   // Persist commitments with resolver assignment.
   const commitmentRows: CommitmentSafeView[] = [];
   for (const c of input.commitments) {
@@ -1025,6 +1061,27 @@ export async function importCommsOutputForWorkspaceForCaller(
         assignment_source: decision.assignment_source,
       },
     });
+
+    // [T-2B] the external-commitment record for a governed, workspace-linked
+    // external owner (unique name match only; ambiguity records nothing).
+    const externalId =
+      decision.owner_display_name !== null
+        ? governedExternalByName.get(decision.owner_display_name.trim().toLowerCase())
+        : undefined;
+    if (typeof externalId === "string") {
+      await recordExternalCommitmentForCaller({
+        workspaceId: input.workspaceId,
+        externalCollaboratorId: externalId,
+        orgEntityId: workspace.org_entity_id,
+        callerEntityId: input.callerEntityId,
+        text: trimmedText,
+        direction: "EXTERNAL_OWES_INTERNAL",
+        sourceConversationId: input.sourceConversationId ?? null,
+        sourceExcerpt: c.source_excerpt,
+        internalOwnerEntityId: null,
+        confidence: decision.confidence,
+      });
+    }
   }
 
   // Persist a single COMMS_SUMMARY shared-context row when summary

@@ -179,6 +179,66 @@ export async function approveSeed(args: {
   const d = (row.details ?? {}) as SeedDetails;
 
   let resultingAction = "approved for the next governed step";
+  // [T-2A] External-party promotion: approval of a review_external_party
+  // seed creates (or reuses) the org-scoped GOVERNED ExternalCollaborator.
+  // The admin's explicit approval IS the review boundary — a mention never
+  // auto-promotes, and access is NOT granted (TRACKED_EXTERNAL, level NONE,
+  // exactly like manual tracking). Idempotent per (org, name).
+  if (d.seed_type === "review_external_party") {
+    const subjectName =
+      typeof (d as Record<string, unknown>).subject_name === "string"
+        ? ((d as Record<string, unknown>).subject_name as string).trim()
+        : "";
+    if (subjectName.length === 0) {
+      return { ok: false, code: "INVALID_REQUEST", message: "external review seed has no subject" };
+    }
+    const relationshipGuess =
+      typeof (d as Record<string, unknown>).relationship_guess === "string"
+        ? ((d as Record<string, unknown>).relationship_guess as string)
+        : "";
+    const VALID_RELATIONSHIPS = new Set([
+      "CLIENT", "VENDOR", "CONTRACTOR", "PARTNER", "INVESTOR",
+      "ADVISOR", "AGENCY", "REGULATOR", "PROSPECT", "CANDIDATE", "OTHER",
+    ]);
+    const relationship = VALID_RELATIONSHIPS.has(relationshipGuess)
+      ? relationshipGuess
+      : "OTHER";
+    const existing = await prisma.externalCollaborator.findFirst({
+      where: {
+        org_entity_id: args.orgEntityId,
+        display_name: { equals: subjectName, mode: "insensitive" },
+        deleted_at: null,
+      },
+      select: { external_collaborator_id: true },
+    });
+    if (existing !== null) {
+      resultingAction = "already tracked as an external collaborator — no duplicate created";
+    } else {
+      const created = await prisma.externalCollaborator.create({
+        data: {
+          org_entity_id: args.orgEntityId,
+          display_name: subjectName,
+          relationship_type: relationship as never,
+          created_by_entity_id: args.adminEntityId,
+        },
+      });
+      await writeAuditEvent({
+        event_type: "EXTERNAL_COLLABORATOR_TRACKED",
+        outcome: "SUCCESS",
+        actor_entity_id: args.adminEntityId,
+        target_entity_id: args.adminEntityId,
+        details: {
+          source: "dandelion_seed_approval",
+          from_seed_id: args.seedId,
+          external_collaborator_id: created.external_collaborator_id,
+          relationship_type: relationship,
+          org_entity_id: args.orgEntityId,
+        },
+      });
+      resultingAction =
+        "tracked as a governed external collaborator — access is NOT granted automatically";
+    }
+  }
   if (TOOL_SEED_TYPES.has(d.seed_type ?? "")) {
     // Approval creates a setup-required admin action — it does NOT grant access.
     const setup = await createLedgerEntry({
