@@ -57,6 +57,9 @@ export function classifyClarityQuestion(question: string): Intent {
     return "WHERE_FROM";
   }
   if (/(why).*(here|assigned|me|mine|have this|this work)/.test(q)) return "WHY_HERE";
+  // "who asked for / requested / owns this" are ownership questions —
+  // answered by the WHY_HERE composition (owner + requester in human names).
+  if (/(who).*(asked for|requested|owns?)\s+(this|it)/.test(q)) return "WHY_HERE";
   if (/(what).*(next|do now|should i do)|next step/.test(q)) return "NEXT_STEP";
   return "UNKNOWN";
 }
