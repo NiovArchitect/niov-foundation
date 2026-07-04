@@ -90,16 +90,31 @@ export async function getOrCreateExternalOrganizationForCaller(args: {
       ? args.domain_evidence.trim().toLowerCase()
       : null;
 
-  const created = await prisma.externalOrganization.create({
-    data: {
-      org_entity_id: args.org_entity_id,
-      display_name: args.company_label.trim().slice(0, 120),
-      normalized_name: normalized,
-      relationship_type: relationship as never,
-      primary_domain: domain,
-      created_by_entity_id: args.caller_entity_id,
-    },
-  });
+  let created;
+  try {
+    created = await prisma.externalOrganization.create({
+      data: {
+        org_entity_id: args.org_entity_id,
+        display_name: args.company_label.trim().slice(0, 120),
+        normalized_name: normalized,
+        relationship_type: relationship as never,
+        primary_domain: domain,
+        created_by_entity_id: args.caller_entity_id,
+      },
+    });
+  } catch (err) {
+    // unique(org, normalized_name) still holds for a SOFT-DELETED account —
+    // creation refuses honestly (null link, "needs review" later) rather
+    // than silently resurrecting or matching a deleted record. Restore is
+    // an explicit future admin action.
+    if (
+      typeof err === "object" && err !== null &&
+      (err as { code?: string }).code === "P2002"
+    ) {
+      return null;
+    }
+    throw err;
+  }
   if (domain !== null) {
     await prisma.externalOrganizationIdentifier.create({
       data: {
