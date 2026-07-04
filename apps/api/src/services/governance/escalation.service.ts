@@ -112,6 +112,10 @@ export interface CreateEscalationInput {
   description: string;
   resolver_entity_id?: string | null;
   expires_at?: Date | null;
+  /** [CE-2] Optional request-context payload written at CREATE time (e.g. a
+   *  clarification's {kind, ledger_entry_id} linkage). The resolution path
+   *  merges over it rather than replacing, so linkage survives resolution. */
+  resolution_metadata?: Prisma.InputJsonValue;
 }
 
 // WHAT: Create a new PENDING escalation; the caller is the source.
@@ -163,6 +167,9 @@ async function doCreateEscalationInTx(
       description: input.description,
       resolved_by_entity_id: input.resolver_entity_id ?? null,
       expires_at: input.expires_at ?? null,
+      ...(input.resolution_metadata !== undefined
+        ? { resolution_metadata: input.resolution_metadata }
+        : {}),
     },
   });
   await writeAuditEvent(
@@ -635,14 +642,37 @@ async function transitionPendingForCaller(
       },
       tx,
     );
+    // [CE-2] Resolution metadata MERGES over any create-time request context
+    // (e.g. a clarification's ledger linkage) instead of replacing it —
+    // identical behavior to before when no create-time metadata exists.
+    const priorMeta =
+      typeof existing.resolution_metadata === "object" &&
+      existing.resolution_metadata !== null &&
+      !Array.isArray(existing.resolution_metadata)
+        ? (existing.resolution_metadata as Record<string, unknown>)
+        : {};
+    const incomingMeta =
+      resolutionMetadata !== undefined &&
+      typeof resolutionMetadata === "object" &&
+      resolutionMetadata !== null &&
+      !Array.isArray(resolutionMetadata)
+        ? (resolutionMetadata as Record<string, unknown>)
+        : resolutionMetadata !== undefined
+          ? { resolution: resolutionMetadata }
+          : undefined;
     const updatedEscalation = await tx.escalationRequest.update({
       where: { escalation_id: escalationId },
       data: {
         status: toStatus,
         resolved_at: new Date(),
         resolved_by_entity_id: callerEntityId,
-        ...(resolutionMetadata !== undefined
-          ? { resolution_metadata: resolutionMetadata }
+        ...(incomingMeta !== undefined
+          ? {
+              resolution_metadata: {
+                ...priorMeta,
+                ...incomingMeta,
+              } as Prisma.InputJsonValue,
+            }
           : {}),
       },
     });
