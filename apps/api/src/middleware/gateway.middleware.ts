@@ -37,6 +37,9 @@ export const DEFAULT_LIMITS: Record<string, RateLimitPolicy> = {
   // high-risk trigger path (ADR-0049 GOVSEC.3B/3D-C notes record it as a stub)
   // -> very restrictive.
   refresh: { perMinute: 20, scope: "entity" },
+  // [P0-ONBOARD] public one-time token redemption (activation / reset).
+  // Unauthenticated by design -> ip-scoped, login-posture limit.
+  activate: { perMinute: 10, scope: "ip" },
   admin_reset: { perMinute: 5, scope: "entity" },
   // GOVSEC.5 G4-C / GAP-B4: the 4 dual-control PRIVILEGED_ENDPOINTS routes
   // (platform monetization-config, platform org-creation, regulator access
@@ -139,6 +142,11 @@ const OPERATION_RULES: OperationRule[] = [
   { method: "POST", pattern: /^\/api\/v1\/auth\/login$/, operation: "login" },
   // GOVSEC.4 G4-A / GAP-B1: previously-unmapped auth-sensitive endpoints.
   { method: "POST", pattern: /^\/api\/v1\/auth\/refresh$/, operation: "refresh" },
+  {
+    method: "POST",
+    pattern: /^\/api\/v1\/auth\/activate$/,
+    operation: "activate",
+  },
   {
     method: "POST",
     pattern: /^\/api\/v1\/auth\/admin-reset$/,

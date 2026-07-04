@@ -401,6 +401,17 @@ export type AuditEventType =
   // private contract text / external NDA contents / private internal
   // notes / cross-tenant identifiers / OAuth tokens / external
   // person PII beyond display_name + company_name.
+  // [P0-ONBOARD] Activation-token onboarding lifecycle. USER_INVITED
+  // fires at Phase-3 invite (details carry token_id + expires_at, NEVER
+  // the plaintext token / token_hash / any password material — same
+  // FORBIDDEN rule as every event here). *_LINK_CREATED fire on the
+  // admin-gated mint endpoints; USER_ACTIVATED / PASSWORD_RESET_COMPLETED
+  // fire on public redemption (actor = the activating entity).
+  | "USER_INVITED"
+  | "ACTIVATION_LINK_CREATED"
+  | "USER_ACTIVATED"
+  | "PASSWORD_RESET_LINK_CREATED"
+  | "PASSWORD_RESET_COMPLETED"
   | "EXTERNAL_COLLABORATOR_TRACKED"
   | "EXTERNAL_COLLABORATOR_INVITED"
   | "EXTERNAL_COLLABORATOR_APPROVED"
@@ -882,6 +893,12 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "WORKSPACE_PERMISSION_BLOCKED",
   "WORKSPACE_ARCHIVED",
   // Phase 1221 ADDENDUM — External Collaborator lifecycle.
+  // [P0-ONBOARD] activation-token onboarding lifecycle.
+  "USER_INVITED",
+  "ACTIVATION_LINK_CREATED",
+  "USER_ACTIVATED",
+  "PASSWORD_RESET_LINK_CREATED",
+  "PASSWORD_RESET_COMPLETED",
   "EXTERNAL_COLLABORATOR_TRACKED",
   "EXTERNAL_COLLABORATOR_INVITED",
   "EXTERNAL_COLLABORATOR_APPROVED",

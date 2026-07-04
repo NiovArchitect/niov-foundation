@@ -9,6 +9,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import type { AuthService } from "../services/auth.service.js";
+import { redeemSetupToken } from "../services/auth-setup-token.service.js";
 
 // WHAT: Register the three auth routes on a Fastify instance.
 // INPUT: The Fastify instance and the AuthService (with its config
@@ -64,6 +65,31 @@ export async function registerAuthRoutes(
       clearance_ceiling: result.clearance_ceiling,
     });
   });
+
+  // ── [P0-ONBOARD] POST /auth/activate — PUBLIC one-time token redemption.
+  // Redeems either an ACTIVATION or PASSWORD_RESET token and sets the
+  // entity's own password. Unauthenticated by design (the invitee has no
+  // session yet); safety comes from the token itself: 256-bit, sha256 at
+  // rest, expiring, one-time, org-bound, minted only by an authenticated
+  // org admin. Grants NOTHING beyond the password — TAR/membership/twin
+  // come from the existing invite gates. Errors are honest and human.
+  app.post<{ Body: { token?: unknown; password?: unknown } }>(
+    "/api/v1/auth/activate",
+    async (request, reply) => {
+      const body = request.body ?? {};
+      const token = typeof body.token === "string" ? body.token : "";
+      const password = typeof body.password === "string" ? body.password : "";
+      const result = await redeemSetupToken({ token, password });
+      if (result.ok === false) {
+        const status =
+          result.code === "WEAK_PASSWORD" ? 422
+          : result.code === "TOKEN_INVALID" ? 404
+          : 410; // TOKEN_EXPIRED | TOKEN_USED
+        return reply.code(status).send({ ok: false, code: result.code, message: result.message });
+      }
+      return reply.code(200).send({ ok: true, purpose: result.purpose });
+    },
+  );
 
   app.post(
     "/api/v1/auth/logout",
