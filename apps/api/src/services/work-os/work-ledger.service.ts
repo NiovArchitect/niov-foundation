@@ -31,6 +31,10 @@ import {
   getFailedAttemptDigests,
 } from "./execution-verification.service.js";
 import { resolveEntityNames, nameFrom } from "../identity/resolve-entities.js";
+import {
+  enrichExternalContext,
+  type ExternalContextProjection,
+} from "./external-context.service.js";
 // [PROD-UX-P0R] — pure routing/autonomy decision projection over persisted
 // decider outputs (never recomputes policy; never mutates).
 import {
@@ -503,7 +507,10 @@ export async function getLedgerEntry(args: {
   ) {
     return { ok: false, code: "NOT_FOUND", message: "ledger entry not found" };
   }
-  return { ok: true, entry: projectLedger(row) };
+  const entry = projectLedger(row);
+  // [T-1] single-row external context (same deterministic links as lists).
+  await enrichExternalContext([row], [entry], row.org_entity_id);
+  return { ok: true, entry };
 }
 
 export async function patchLedgerEntry(args: {
@@ -673,13 +680,20 @@ async function enrichParticipantNames(rows: LedgerRow[]): Promise<WorkLedgerView
   const names = await resolveEntityNames(
     rows.flatMap((r) => [r.owner_entity_id, r.requester_entity_id, r.target_entity_id]),
   );
-  return rows.map((row) => {
+  const views = rows.map((row) => {
     const view = projectLedger(row);
     if (row.owner_entity_id !== null) view.owner_display_name = nameFrom(names, row.owner_entity_id);
     if (row.requester_entity_id !== null) view.requester_display_name = nameFrom(names, row.requester_entity_id);
     if (row.target_entity_id !== null) view.target_display_name = nameFrom(names, row.target_entity_id);
     return view;
   });
+  // [T-1] external-party context — read-only, deterministic links only
+  // (details block / conversation-matched governed commitment /
+  // roster-first governed-name match). Silent when unprovable.
+  if (rows.length > 0) {
+    await enrichExternalContext(rows, views, rows[0]!.org_entity_id);
+  }
+  return views;
 }
 
 // Blind spots — ledger-derived (no AI guessing): attention-needing
@@ -823,6 +837,9 @@ export interface WorkLedgerView {
   // sourceLineageFromDetails). Present only when the row's source was
   // recorded by the ingest spine. Additive + optional.
   source_lineage?: SourceLineageProjection;
+  // [T-1] — external-party context (context, not CRM): safe labels only,
+  // present only when a deterministic org-scoped link proves it. Additive.
+  external_context?: ExternalContextProjection;
   // Phase 1281 — coordination runtime, attached by the route after the
   // governed BEAM dispatch (not persisted this phase; reflects the real
   // dispatch result, never faked).
