@@ -37,6 +37,10 @@ import {
   type PropagationEntry,
 } from "../services/governance/dandelion.service.js";
 import {
+  mintSetupToken,
+  activationStatusForEntities,
+} from "../services/auth-setup-token.service.js";
+import {
   executeStarterPilotActivationForCaller,
   executeTeamActivationForCaller,
   executeBusinessActivationForCaller,
@@ -229,10 +233,14 @@ async function addOneMember(
       ? member.hierarchy_level
       : 0;
   const isAdmin = member.is_admin === true;
-  if (email === null || password === null) {
+  if (email === null) {
     throw new Error("INVALID_MEMBER_INPUT");
   }
-  const passwordHash = await hashPassword(password);
+  // [P0-ONBOARD] password is now OPTIONAL: an invited member is created
+  // WITHOUT a credential (password_hash null → login fails closed) and sets
+  // their own password through the one-time activation link. A provided
+  // password (e.g. auth/admin-register parity callers) still works.
+  const passwordHash = password !== null ? await hashPassword(password) : null;
 
   return prisma.$transaction(async (tx) => {
     const entityId = randomUUID();
@@ -384,7 +392,7 @@ export async function registerOrgRoutes(
           return reply.code(422).send({
             ok: false,
             code: "INVALID_REQUEST",
-            message: "email + password are required",
+            message: "email is required",
           });
         }
         if (message.includes("Unique constraint")) {
@@ -402,6 +410,83 @@ export async function registerOrgRoutes(
       }
     },
   );
+
+  // ── [P0-ONBOARD] Admin-gated one-time link minting ──────────────────────
+  // The sanctioned controlled-pilot delivery channel until email exists:
+  // an authenticated org admin mints a link for an org member and sees the
+  // plaintext EXACTLY ONCE (stored hashed, expiring, one-time, org-scoped,
+  // audited). Never from an unauthenticated endpoint; never logged; never
+  // in list projections; never re-displayable.
+  for (const [verb, purpose, eventType] of [
+    ["activation-link", "ACTIVATION", "ACTIVATION_LINK_CREATED"],
+    ["password-reset-link", "PASSWORD_RESET", "PASSWORD_RESET_LINK_CREATED"],
+  ] as const) {
+    app.post<{ Params: { id: string } }>(
+      `/api/v1/org/members/:id/${verb}`,
+      {
+        preHandler: requireAdminCapability(authService, "can_admin_org"),
+      },
+      async (request, reply) => {
+        const callerId = request.auth!.entity_id;
+        const orgEntityId = await resolveOrgOrFail(callerId, reply);
+        if (orgEntityId === null) return;
+        const targetId = request.params.id;
+        const membership = await prisma.entityMembership.findFirst({
+          where: { parent_id: orgEntityId, child_id: targetId, is_active: true },
+          select: { membership_id: true },
+        });
+        const target =
+          membership !== null
+            ? await prisma.entity.findUnique({
+                where: { entity_id: targetId },
+                select: { status: true, password_hash: true },
+              })
+            : null;
+        if (target === null || target.status === "DELETED") {
+          return reply.code(404).send({
+            ok: false,
+            code: "ENTITY_NOT_IN_ORG",
+            message: "Entity is not in your org",
+          });
+        }
+        // An already-active member gets a RESET link, not a second
+        // activation — the two purposes stay honest.
+        if (
+          purpose === "ACTIVATION" &&
+          typeof target.password_hash === "string" &&
+          target.password_hash.length > 0
+        ) {
+          return reply.code(409).send({
+            ok: false,
+            code: "ALREADY_ACTIVE",
+            message: "This member already set a password. Use a password reset link instead.",
+          });
+        }
+        const minted = await mintSetupToken({
+          entity_id: targetId,
+          org_entity_id: orgEntityId,
+          purpose,
+          created_by: callerId,
+        });
+        await writeAuditEvent({
+          event_type: eventType,
+          outcome: "SUCCESS",
+          actor_entity_id: callerId,
+          target_entity_id: targetId,
+          details: {
+            org_entity_id: orgEntityId,
+            token_id: minted.token_id,
+            expires_at: minted.expires_at.toISOString(),
+          },
+        });
+        return reply.code(200).send({
+          ok: true,
+          token: minted.token,
+          expires_at: minted.expires_at.toISOString(),
+        });
+      },
+    );
+  }
 
   // POST /org/members/bulk -- batch add.
   app.post<{ Body: { members?: MemberInput[] } }>(
@@ -498,7 +583,38 @@ export async function registerOrgRoutes(
           targetId,
           callerId,
         );
-        return reply.code(200).send({ ok: true, ...result });
+        // [P0-ONBOARD] the REAL activation path: a persisted, hashed,
+        // expiring, one-time token replaces the legacy unpersisted
+        // activation_credential (stripped from the response — it could
+        // never redeem anything). Plaintext is returned ONCE, here, to the
+        // authenticated org admin — the sanctioned controlled-pilot
+        // delivery channel until email exists.
+        const minted = await mintSetupToken({
+          entity_id: targetId,
+          org_entity_id: orgEntityId,
+          purpose: "ACTIVATION",
+          created_by: callerId,
+        });
+        await writeAuditEvent({
+          event_type: "USER_INVITED",
+          outcome: "SUCCESS",
+          actor_entity_id: callerId,
+          target_entity_id: targetId,
+          details: {
+            org_entity_id: orgEntityId,
+            token_id: minted.token_id,
+            expires_at: minted.expires_at.toISOString(),
+            twin_id: result.twin_id,
+          },
+        });
+        const { activation_credential: _legacy, ...safeResult } = result;
+        void _legacy;
+        return reply.code(200).send({
+          ok: true,
+          ...safeResult,
+          activation_token: minted.token,
+          activation_expires_at: minted.expires_at.toISOString(),
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown";
         if (message === "PENDING_MEMBER_NOT_FOUND") {
@@ -610,9 +726,19 @@ export async function registerOrgRoutes(
         }),
         prisma.entity.count({ where }),
       ]);
+      // [P0-ONBOARD] safe server-derived activation state per member —
+      // active / activation_pending / expired / invited. Never exposes
+      // password_hash or any token material.
+      const statusById = await activationStatusForEntities(
+        items.map((e) => e.entity_id),
+      );
+      const withStatus = items.map((e) => ({
+        ...e,
+        activation_status: statusById.get(e.entity_id) ?? "invited",
+      }));
       return reply.code(200).send({
         ok: true,
-        ...paginatedResponse(items, total, skip, take),
+        ...paginatedResponse(withStatus, total, skip, take),
       });
     },
   );
@@ -658,7 +784,16 @@ export async function registerOrgRoutes(
           message: "Entity not found",
         });
       }
-      return reply.code(200).send({ ok: true, entity, profile, membership });
+      const statusById = await activationStatusForEntities([entity.entity_id]);
+      return reply.code(200).send({
+        ok: true,
+        entity: {
+          ...entity,
+          activation_status: statusById.get(entity.entity_id) ?? "invited",
+        },
+        profile,
+        membership,
+      });
     },
   );
 

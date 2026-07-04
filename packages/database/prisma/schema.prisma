@@ -4404,3 +4404,35 @@ model ExecutionAttempt {
   @@index([ledger_entry_id])
   @@map("execution_attempts")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// [P0-ONBOARD] AuthSetupToken — the one-time activation / password-
+// reset token store. The plaintext token is returned ONCE at mint
+// time to an authenticated org admin (the sanctioned controlled-
+// pilot delivery channel until email exists) and never stored: only
+// its sha256 lands here. Expiring, one-time, org-scoped. Redeemed by
+// the public POST /auth/activate, which sets the entity's password.
+// ─────────────────────────────────────────────────────────────────
+
+enum AuthSetupTokenPurpose {
+  ACTIVATION
+  PASSWORD_RESET
+}
+
+model AuthSetupToken {
+  token_id      String                @id @default(uuid()) @db.Uuid
+  entity_id     String                @db.Uuid
+  org_entity_id String                @db.Uuid
+  purpose       AuthSetupTokenPurpose
+  // sha256 hex of the plaintext token. Plaintext is never persisted,
+  // never logged, never re-displayable.
+  token_hash    String                @unique
+  expires_at    DateTime
+  used_at       DateTime?
+  created_by    String                @db.Uuid
+  created_at    DateTime              @default(now())
+
+  @@index([entity_id, purpose])
+  @@index([org_entity_id])
+  @@map("auth_setup_tokens")
+}

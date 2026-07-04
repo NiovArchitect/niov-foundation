@@ -238,71 +238,12 @@ export async function registerAuthAdminRoutes(
     },
   );
 
-  // ────────────────────────────────────────────────────────────────
-  // POST /auth/admin-reset
-  //
-  // STUB: returns a one-time reset_token (uuid) but does not send
-  // an email or persist the token to a reset-tokens table. The full
-  // reset flow lands when the email infrastructure ships
-  // (Section 14+).
-  // ────────────────────────────────────────────────────────────────
-  app.post<{ Body: { entity_id?: unknown } }>(
-    "/api/v1/auth/admin-reset",
-    {
-      preHandler: requireAdminCapability(authService, "can_admin_org"),
-    },
-    async (request, reply) => {
-      const callerId = request.auth!.entity_id;
-      const orgEntityId = await resolveOrgOrFail(callerId, reply);
-      if (orgEntityId === null) return;
-      const targetId =
-        typeof request.body?.entity_id === "string" &&
-        request.body.entity_id.trim().length > 0
-          ? request.body.entity_id.trim()
-          : null;
-      if (targetId === null) {
-        return reply.code(422).send({
-          ok: false,
-          code: "INVALID_REQUEST",
-          message: "entity_id is required",
-        });
-      }
-      // Verify target is in the caller's org.
-      const membership = await prisma.entityMembership.findFirst({
-        where: {
-          parent_id: orgEntityId,
-          child_id: targetId,
-          is_active: true,
-        },
-      });
-      if (membership === null) {
-        return reply.code(404).send({
-          ok: false,
-          code: "ENTITY_NOT_IN_ORG",
-          message: "Entity is not in your org",
-        });
-      }
-      const resetToken = randomUUID();
-      await writeAuditEvent({
-        event_type: "ADMIN_ACTION",
-        outcome: "SUCCESS",
-        actor_entity_id: callerId,
-        target_entity_id: targetId,
-        details: {
-          action: "PASSWORD_RESET_TRIGGERED",
-          // TODO(future-email-infra): send reset email with this token
-          // and persist a hashed copy in a reset_tokens table.
-          reset_token_issued: true,
-        },
-      });
-      return reply.code(200).send({
-        ok: true,
-        reset_token: resetToken,
-        message:
-          "Reset token issued. Email delivery not yet wired -- token returned in response for now.",
-      });
-    },
-  );
+  // [P0-ONBOARD] The old POST /auth/admin-reset stub (returned an
+  // UNPERSISTED uuid "reset token" in the response body) is REMOVED.
+  // Password resets now go through the real one-time token rail:
+  // POST /org/members/:id/password-reset-link (admin-gated mint, hashed
+  // at rest, expiring, one-time) redeemed by the public
+  // POST /auth/activate. See auth-setup-token.service.ts.
 
   // ────────────────────────────────────────────────────────────────
   // POST /auth/refresh
