@@ -188,15 +188,13 @@ describe("[T-2] governed external promotion (DB)", () => {
     expect(audit).not.toBeNull();
     expect((audit!.details as Record<string, unknown>).source).toBe("dandelion_seed_approval");
 
-    // Idempotent re-promotion: a fresh seed for the same name approves
-    // without creating a duplicate collaborator.
+    // [T-2.5] No redundant re-review: the contact is GOVERNED now, so a new
+    // sighting names them governed_external and mints NO fresh seed (the
+    // pre-T-2.5 rail re-asked the admin about a person they already decided).
+    // No duplicate collaborator either.
     await ingestFrom("Morgan Reeve", "1751900001.200002");
     const seeds2 = await openExternalSeeds(orgId);
-    expect(seeds2.length).toBe(1);
-    const approved2 = await approveSeed({
-      seedId: seeds2[0]!.ledger_entry_id, orgEntityId: orgId, adminEntityId: adminId,
-    });
-    expect(approved2.ok).toBe(true);
+    expect(seeds2.length).toBe(0);
     expect(
       await prisma.externalCollaborator.count({
         where: { org_entity_id: orgId, display_name: "Morgan Reeve", deleted_at: null },
@@ -204,13 +202,14 @@ describe("[T-2] governed external promotion (DB)", () => {
     ).toBe(1);
 
     // T-1 lights up: a NEW ingest from the promoted contact now projects
-    // external_context on David's work via the lineage governed-name link.
+    // external_context on David's work — [T-2.5] written at ingest time
+    // (source "external_collaborator"), no longer read-time lineage inference.
     await ingestFrom("Morgan Reeve", "1751900001.300003");
     const myWork = await getMyWork({ org_entity_id: orgId, caller_entity_id: davidId });
     const withCtx = myWork.filter((v) => v.external_context !== undefined);
     expect(withCtx.length).toBeGreaterThan(0);
     expect(withCtx[0]!.external_context!.external_party_type).toBe("prospect");
-    expect(withCtx[0]!.external_context!.source).toBe("source_lineage");
+    expect(withCtx[0]!.external_context!.source).toBe("external_collaborator");
 
     // Nothing entered personal memory across seed + promotion + projection.
     expect(await prisma.memoryCapsule.count()).toBe(capsulesBefore);

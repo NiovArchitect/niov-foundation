@@ -180,9 +180,26 @@ describe("[T-1] external-context projection — context, not CRM (DB)", () => {
     expect(ec.external_party_type).toBe("prospect");
     expect(ec.external_org_label).toBe("Globex");
     expect(ec.safe_context_label).toBe("For Globex");
-    expect(ec.source).toBe("source_lineage");
+    // [T-2.5] ingest now NAMES the governed actor at write time, so the row
+    // carries details.external_context (source "external_collaborator") and
+    // no longer depends on the read-time lineage fallback — same calm labels,
+    // stronger provenance.
+    expect(ec.source).toBe("external_collaborator");
     // Gap J lineage still present alongside (both projections coexist).
     expect(withCtx[0]!.source_lineage?.source_system).toBe("SLACK");
+
+    // The read-time lineage fallback stays locked for rows written BEFORE
+    // T-2.5: strip the write-time context and the same row still projects
+    // 'For Globex' from its lineage author.
+    const rowId = withCtx[0]!.ledger_entry_id;
+    const row = await prisma.workLedgerEntry.findUnique({ where: { ledger_entry_id: rowId } });
+    const d = { ...(row!.details as Record<string, unknown>) };
+    delete d.external_context;
+    await prisma.workLedgerEntry.update({ where: { ledger_entry_id: rowId }, data: { details: d as never } });
+    const again = await getMyWork({ org_entity_id: orgId, caller_entity_id: davidId });
+    const legacy = again.find((v) => v.ledger_entry_id === rowId)!;
+    expect(legacy.external_context?.safe_context_label).toBe("For Globex");
+    expect(legacy.external_context?.source).toBe("source_lineage");
   });
 
   it("an INTERNAL author never becomes external context, and unprovable rows stay SILENT", async () => {
