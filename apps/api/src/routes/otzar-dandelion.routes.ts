@@ -98,13 +98,33 @@ export async function registerOtzarDandelionRoutes(
     ["reject", rejectSeed],
     ["hold", holdSeed],
   ] as const) {
-    app.post<{ Params: { id: string }; Body: { reason?: unknown } }>(
+    app.post<{
+      Params: { id: string };
+      Body: { reason?: unknown; decision?: unknown; link_external_collaborator_id?: unknown };
+    }>(
       `/api/v1/org/dandelion/seeds/:id/${verb}`,
       async (request, reply) => {
         const ctx = await adminOrg(request, reply);
         if (ctx === null) return;
-        const reason = isStr((request.body ?? {}).reason) ? ((request.body as { reason: string }).reason) : undefined;
-        const result = await fn({ seedId: request.params.id, orgEntityId: ctx.orgId, adminEntityId: ctx.adminId, ...(reason !== undefined ? { reason } : {}) });
+        const b = request.body ?? {};
+        const reason = isStr(b.reason) ? (b.reason as string) : undefined;
+        // [T-3C] admin decision for external review seeds (approve only).
+        const decision =
+          verb === "approve" && (b.decision === "link_existing" || b.decision === "track_new")
+            ? b.decision
+            : undefined;
+        const linkId =
+          verb === "approve" && isStr(b.link_external_collaborator_id)
+            ? (b.link_external_collaborator_id as string)
+            : undefined;
+        const result = await fn({
+          seedId: request.params.id,
+          orgEntityId: ctx.orgId,
+          adminEntityId: ctx.adminId,
+          ...(reason !== undefined ? { reason } : {}),
+          ...(decision !== undefined ? { decision } : {}),
+          ...(linkId !== undefined ? { linkExternalCollaboratorId: linkId } : {}),
+        });
         if (result.ok === false) {
           return reply.code(result.code === "NOT_FOUND" ? 404 : 422).send(result);
         }

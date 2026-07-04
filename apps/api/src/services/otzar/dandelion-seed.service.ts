@@ -20,7 +20,12 @@
 import { prisma, writeAuditEvent } from "@niov/database";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 import { getOrCreateExternalOrganizationForCaller } from "./external-organization.service.js";
-import { findExistingCollaboratorMatch } from "./external-collaborator-identity.service.js";
+import {
+  findExistingCollaboratorMatch,
+  listPossibleCollaboratorMatches,
+  recordCollaboratorIdentifier,
+  type PossibleCollaboratorMatch,
+} from "./external-collaborator-identity.service.js";
 
 export interface OrgSeedView {
   seed_id: string;
@@ -47,6 +52,11 @@ export interface OrgSeedView {
   hold_reason: string | null;
   reviewed: boolean;
   created_at: string;
+  /** [T-3C] review_external_party seeds only, and only when candidates
+   *  exist: safe labels + a machine id for the decision call. Computed at
+   *  projection time (never stored — matches must be fresh). Otzar lists;
+   *  the admin decides. */
+  possible_matches?: PossibleCollaboratorMatch[];
 }
 
 type SeedDetails = {
@@ -123,7 +133,22 @@ export async function listOrgSeeds(orgEntityId: string): Promise<OrgSeedView[]> 
     orderBy: { created_at: "desc" },
     take: 200,
   });
-  return rows.map((r) => projectSeed(r as SeedRow));
+  const seeds = rows.map((r) => projectSeed(r as SeedRow));
+  // [T-3C] fresh possible-match projection for OPEN external review seeds —
+  // Otzar lists candidates; the admin decides. Bounded: external seeds are
+  // rare and the lister caps at 3 candidates each.
+  for (const seed of seeds) {
+    if (seed.seed_type !== "review_external_party" || seed.reviewed) continue;
+    if (seed.subject_name === null || seed.subject_name.trim().length === 0) continue;
+    const d = (rows.find((r) => r.ledger_entry_id === seed.seed_id)?.details ?? {}) as Record<string, unknown>;
+    const matches = await listPossibleCollaboratorMatches({
+      org_entity_id: orgEntityId,
+      display_name: seed.subject_name,
+      company_label: typeof d.company_label === "string" ? d.company_label : null,
+    });
+    if (matches.length > 0) seed.possible_matches = matches;
+  }
+  return seeds;
 }
 
 async function loadSeed(seedId: string, orgEntityId: string): Promise<SeedRow | null> {
@@ -175,6 +200,14 @@ export async function approveSeed(args: {
   seedId: string;
   orgEntityId: string;
   adminEntityId: string;
+  /** [T-3C] admin decision for review_external_party seeds:
+   *  "link_existing" (requires linkExternalCollaboratorId — a candidate
+   *  from possible_matches) or "track_new" (force a fresh governed record).
+   *  Absent = the T-3B safe default (evidence match or create). Ambiguity
+   *  is never decided silently — that is exactly what these decisions are
+   *  for. Dismiss = the existing reject verb. */
+  decision?: "link_existing" | "track_new";
+  linkExternalCollaboratorId?: string;
 }): Promise<SeedActionSuccess | SeedActionFailure> {
   const row = await loadSeed(args.seedId, args.orgEntityId);
   if (row === null) return { ok: false, code: "NOT_FOUND", message: "seed not found" };
@@ -205,18 +238,70 @@ export async function approveSeed(args: {
     const relationship = VALID_RELATIONSHIPS.has(relationshipGuess)
       ? relationshipGuess
       : "OTHER";
+    // [T-3C] explicit admin decision: LINK to a chosen existing candidate.
+    if (args.decision === "link_existing") {
+      if (typeof args.linkExternalCollaboratorId !== "string" || args.linkExternalCollaboratorId.length === 0) {
+        return { ok: false, code: "INVALID_REQUEST", message: "link_existing requires link_external_collaborator_id" };
+      }
+      const candidate = await prisma.externalCollaborator.findFirst({
+        where: {
+          external_collaborator_id: args.linkExternalCollaboratorId,
+          org_entity_id: args.orgEntityId, // cross-org candidates impossible
+          deleted_at: null, // revoked/deleted candidates refused
+        },
+      });
+      if (candidate === null) {
+        return { ok: false, code: "INVALID_REQUEST", message: "candidate is not an active external collaborator in this organization" };
+      }
+      // Record the subject name as an ADMIN-VERIFIED alias when it differs —
+      // the same ambiguity self-resolves next time (audited evidence).
+      let aliasAdded = false;
+      if (candidate.display_name.trim().toLowerCase() !== subjectName.toLowerCase()) {
+        const rec = await recordCollaboratorIdentifier({
+          org_entity_id: args.orgEntityId,
+          external_collaborator_id: candidate.external_collaborator_id,
+          identifier_type: "MANUAL_ALIAS",
+          identifier_value: subjectName,
+          confidence: "high",
+          source_system: "seed_link_decision",
+          verified_by_entity_id: args.adminEntityId,
+        });
+        aliasAdded = rec.ok;
+      }
+      await writeAuditEvent({
+        event_type: "EXTERNAL_COLLABORATOR_TRACKED",
+        outcome: "SUCCESS",
+        actor_entity_id: args.adminEntityId,
+        target_entity_id: args.adminEntityId,
+        details: {
+          decision: "link_existing",
+          from_seed_id: args.seedId,
+          external_collaborator_id: candidate.external_collaborator_id,
+          alias_added: aliasAdded,
+          org_entity_id: args.orgEntityId,
+        },
+      });
+      resultingAction = "linked to the existing external collaborator — no duplicate created";
+      return transition(args.seedId, args.orgEntityId, args.adminEntityId, "SEED_APPROVED", { resulting_action: resultingAction }, "DANDELION_SEED_APPROVED");
+    }
+
     // [T-3B] the SAME governed matcher as manual tracking: email/alias
     // evidence and unique consistent-account name matches reuse; ambiguity
-    // or a different account creates new (never merges).
+    // or a different account creates new (never merges). An explicit
+    // "track_new" decision skips the matcher — the admin has decided this
+    // is a distinct person.
     const companyLabelForMatch =
       typeof (d as Record<string, unknown>).company_label === "string"
         ? ((d as Record<string, unknown>).company_label as string)
         : null;
-    const existingMatch = await findExistingCollaboratorMatch({
-      org_entity_id: args.orgEntityId,
-      display_name: subjectName,
-      company_label: companyLabelForMatch,
-    });
+    const existingMatch =
+      args.decision === "track_new"
+        ? ({ matched: false, ambiguous: false } as const)
+        : await findExistingCollaboratorMatch({
+            org_entity_id: args.orgEntityId,
+            display_name: subjectName,
+            company_label: companyLabelForMatch,
+          });
     if (existingMatch.matched) {
       resultingAction = "already tracked as an external collaborator — no duplicate created";
     } else {
