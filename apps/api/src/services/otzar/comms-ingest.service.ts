@@ -53,6 +53,7 @@ import {
 } from "./source-event.js";
 import { randomUUID } from "node:crypto";
 import { reconcileParticipants } from "./identity-reconciliation.service.js";
+import { classifyExternalActor, type ExternalResolution } from "./external-collaborator-identity.service.js";
 
 type LLMProvider = Parameters<typeof extractFromCapturedText>[1];
 
@@ -249,6 +250,47 @@ export async function ingestSourceEvent(
     }
   }
 
+  // [T-2.5] NAME the source actor's external state once, read-only, BEFORE
+  // any rows are written — an unknown coworker and an external party are not
+  // the same thing. The internal roster (including the aliases just
+  // reconciled above) always wins; the classifier is consulted only for a
+  // non-roster actor. The named state drives two behaviors below:
+  //   governed_external              → the created work rows carry the safe
+  //                                    T-1 external_context shape (calm work
+  //                                    context — the admin already decided);
+  //   observed_external_needs_review → the T-2A review seed (unchanged bar);
+  //   possible_external_match/unknown → silence: no seed, no card certainty.
+  const actorName = (event.actor.name ?? "").trim();
+  let actorResolution: ExternalResolution | null = null;
+  if (
+    !isTranscript &&
+    actorName.length > 0 &&
+    resolveTokenToEntities(actorName, roster).length === 0
+  ) {
+    actorResolution = await classifyExternalActor({
+      org_entity_id: orgEntityId,
+      name: actorName,
+      email: event.actor.email ?? null,
+    });
+  }
+  const actorExternalContext =
+    actorResolution !== null && actorResolution.state === "governed_external"
+      ? {
+          ...(actorResolution.party_type !== undefined
+            ? { external_party_type: actorResolution.party_type }
+            : {}),
+          ...(actorResolution.external_org_label !== undefined
+            ? { external_org_label: actorResolution.external_org_label }
+            : {}),
+          ...(actorResolution.label !== undefined
+            ? { external_person_label: actorResolution.label }
+            : {}),
+          ...(actorResolution.relationship_label !== undefined
+            ? { relationship_label: actorResolution.relationship_label }
+            : {}),
+        }
+      : null;
+
   // Source-descriptor fields threaded into every ledger row so the canonical
   // record can always prove where work came from. For transcript these are
   // exactly the historical values (source:"transcript_ingest", no provenance).
@@ -399,6 +441,9 @@ export async function ingestSourceEvent(
         needs_review: w.needsReview,
         ...(w.reviewReason ? { review_reason: w.reviewReason } : {}),
         execution_plan: execPlan,
+        // [T-2.5] governed external actor → calm work context via the T-1
+        // validated read-through (labels only; context, not CRM).
+        ...(actorExternalContext !== null ? { external_context: actorExternalContext } : {}),
       },
       ...(w.needsReview
         ? { next_action: "Confirm the owner before assigning this work." }
@@ -479,6 +524,9 @@ export async function ingestSourceEvent(
         // The complete pre-governed send-card. The projection returns this
         // verbatim as a CommsSuggestedAction so the CT re-renders the same card.
         follow_up: a,
+        // [T-2.5] every row derived from a governed-external conversation
+        // carries the same calm context.
+        ...(actorExternalContext !== null ? { external_context: actorExternalContext } : {}),
       },
     });
   }
@@ -568,12 +616,18 @@ export async function ingestSourceEvent(
   // already knows the name. The seed asks an admin to decide — approval
   // (dandelion-seed.service) tracks a GOVERNED ExternalCollaborator; a
   // mention never auto-promotes. Idempotent: one open seed per subject.
-  const actorName = (event.actor.name ?? "").trim();
+  // [T-2.5] The trigger is now the NAMED state from classifyExternalActor:
+  //   - governed_external creates NO redundant seed (the admin already
+  //     decided; those conversations became calm external_context above);
+  //   - observed_external_needs_review keeps the exact T-2A seed
+  //     (review_seed_id !== undefined means an open seed exists — reuse it);
+  //   - possible_external_match / unknown create nothing.
   if (
-    !isTranscript &&
-    actorName.length > 0 &&
-    resolveTokenToEntities(actorName, roster).length === 0
+    actorResolution !== null &&
+    actorResolution.state === "observed_external_needs_review" &&
+    actorResolution.review_seed_id === undefined
   ) {
+    // relationship_guess parity with the pre-T-2.5 seed shape.
     const observed = await prisma.externalEntity.findFirst({
       where: {
         org_entity_id: orgEntityId,
@@ -582,48 +636,34 @@ export async function ingestSourceEvent(
       select: { entity_type: true },
     });
     if (observed !== null) {
-      const openSeed = await prisma.workLedgerEntry.findFirst({
-        where: {
-          org_entity_id: orgEntityId,
-          ledger_type: "ORG_SEEDING",
-          status: { in: ["SEED_NEEDS_REVIEW", "SEED_PROPOSED"] },
-          AND: [
-            { details: { path: ["seed_type"], equals: "review_external_party" } },
-            { details: { path: ["subject_name"], equals: actorName } },
-          ],
+      await createLedgerEntry({
+        org_entity_id: orgEntityId,
+        ledger_type: "ORG_SEEDING",
+        source_type: srcType,
+        title: `Review external contact "${actorName}" — track as a governed external collaborator?`,
+        status: "SEED_NEEDS_REVIEW",
+        priority: "ROUTINE",
+        extraction_source: "TYPESCRIPT_DETERMINISTIC",
+        evidence: [{ quote: quality.trustedText.slice(0, 300) }],
+        details: {
+          source: srcLabel,
+          ...provenance,
+          seed_type: "review_external_party",
+          subject_name: actorName,
+          subject_entity_id: null,
+          relationship_guess: observed.entity_type,
+          source_conversation_id: meetingCaptureId,
+          meeting_capture_id: meetingCaptureId,
+          confidence: "low",
+          approval_required: true,
+          policy_status: "needs_review",
+          scope: "org",
+          sensitivity: "internal",
+          risk_if_ignored:
+            "External asks from this contact stay unlabeled and client context is lost.",
+          recommended_action: `Review external contact "${actorName}" — track as a governed external collaborator?`,
         },
-        select: { ledger_entry_id: true },
       });
-      if (openSeed === null) {
-        await createLedgerEntry({
-          org_entity_id: orgEntityId,
-          ledger_type: "ORG_SEEDING",
-          source_type: srcType,
-          title: `Review external contact "${actorName}" — track as a governed external collaborator?`,
-          status: "SEED_NEEDS_REVIEW",
-          priority: "ROUTINE",
-          extraction_source: "TYPESCRIPT_DETERMINISTIC",
-          evidence: [{ quote: quality.trustedText.slice(0, 300) }],
-          details: {
-            source: srcLabel,
-            ...provenance,
-            seed_type: "review_external_party",
-            subject_name: actorName,
-            subject_entity_id: null,
-            relationship_guess: observed.entity_type,
-            source_conversation_id: meetingCaptureId,
-            meeting_capture_id: meetingCaptureId,
-            confidence: "low",
-            approval_required: true,
-            policy_status: "needs_review",
-            scope: "org",
-            sensitivity: "internal",
-            risk_if_ignored:
-              "External asks from this contact stay unlabeled and client context is lost.",
-            recommended_action: `Review external contact "${actorName}" — track as a governed external collaborator?`,
-          },
-        });
-      }
     }
   }
 

@@ -26,6 +26,7 @@
 import { prisma } from "@niov/database";
 import type { ExternalCollaborator } from "@prisma/client";
 import { normalizeOrgName } from "./external-organization.service.js";
+import { reconcileIdentity } from "./identity-reconciliation.service.js";
 
 const IDENTIFIER_TYPES = new Set([
   "EMAIL", "SLACK_USER", "ZOOM_PARTICIPANT", "CALENDAR_ATTENDEE",
@@ -220,6 +221,178 @@ export async function listPossibleCollaboratorMatches(args: {
     push(c, sameCompany ? "Same company" : "Similar name in this account", sameCompany ? "medium" : "low");
   }
   return [...out.values()].slice(0, 3);
+}
+
+// ── [T-2.5] NAME the external state ─────────────────────────────────────────
+// Identity reconciliation can say who an internal member is; this says WHICH
+// KIND of non-member a source actor is — a governed external collaborator, an
+// observed external party needing review, an ambiguous possible match, or
+// simply unknown. READ-ONLY (never records identifiers, never creates
+// anything), org-scoped, deterministic. It reduces confusion without creating
+// false certainty: an unknown coworker and an external party are not the same
+// thing, and neither becomes "the same person" without proof.
+export interface ExternalResolution {
+  state:
+    | "internal_member"
+    | "governed_external"
+    | "observed_external_needs_review"
+    | "possible_external_match"
+    | "unknown";
+  /** Display-name copy only — never an email, domain, or machine id. */
+  label?: string;
+  external_org_label?: string;
+  relationship_label?: string;
+  /** T-1 projection party vocab (lowercase, customer-safe) for the
+   *  details.external_context write target. Parity with the
+   *  external-context RELATIONSHIP_MAP semantics. */
+  party_type?: string;
+  confidence: "high" | "medium" | "low";
+  /** The open review seed for an observed party, when one exists — a
+   *  machine id for the admin queue, never card copy. */
+  review_seed_id?: string;
+}
+
+function partyTypeFromRelationship(rel: string): string {
+  if (["CLIENT", "PROSPECT", "VENDOR", "PARTNER", "CONTRACTOR", "REGULATOR"].includes(rel)) {
+    return rel.toLowerCase();
+  }
+  return rel === "AGENCY" ? "partner" : "unknown";
+}
+
+type GovernedRow = ExternalCollaborator & {
+  external_organization?: { display_name: string } | null;
+};
+
+function governedResolution(collab: GovernedRow, confidence: "high" | "medium"): ExternalResolution {
+  const orgLabel = collab.external_organization?.display_name ?? collab.company_name;
+  return {
+    state: "governed_external",
+    label: collab.display_name,
+    ...(orgLabel !== null && orgLabel !== undefined ? { external_org_label: orgLabel } : {}),
+    relationship_label: RELATIONSHIP_LABELS[collab.relationship_type] ?? "External",
+    party_type: partyTypeFromRelationship(collab.relationship_type),
+    confidence,
+  };
+}
+
+export async function classifyExternalActor(args: {
+  org_entity_id: string;
+  name?: string | null;
+  email?: string | null;
+}): Promise<ExternalResolution> {
+  const org = args.org_entity_id;
+  const name = (args.name ?? "").trim();
+  const email =
+    typeof args.email === "string" && args.email.includes("@")
+      ? args.email.trim().toLowerCase()
+      : null;
+  if (name.length === 0 && email === null) return { state: "unknown", confidence: "low" };
+
+  // 1. Internal roster wins — a member is never reclassified external, and an
+  //    INTERNAL ambiguity (two Davids on the roster) stays internal: unknown,
+  //    with the external tables never consulted.
+  const internal = await reconcileIdentity(org, {
+    name: name.length > 0 ? name : null,
+    email,
+    handle: null,
+  });
+  if (internal.entity_id !== null) {
+    return { state: "internal_member", ...(name.length > 0 ? { label: name } : {}), confidence: "high" };
+  }
+  if (internal.method === "ambiguous") return { state: "unknown", confidence: "low" };
+
+  // 2. Governed collaborator — the T-3B evidence order, READ-ONLY (the
+  //    legacy-email path does NOT backfill an identifier here).
+  if (email !== null) {
+    const viaIdentifier = await prisma.externalCollaboratorIdentifier.findFirst({
+      where: {
+        org_entity_id: org,
+        identifier_type: "EMAIL",
+        identifier_value_normalized: email,
+        deleted_at: null,
+        external_collaborator: { deleted_at: null },
+      },
+      include: {
+        external_collaborator: {
+          include: { external_organization: { select: { display_name: true } } },
+        },
+      },
+    });
+    if (viaIdentifier !== null) {
+      return governedResolution(viaIdentifier.external_collaborator, "high");
+    }
+    const viaColumn = await prisma.externalCollaborator.findFirst({
+      where: { org_entity_id: org, email: { equals: email, mode: "insensitive" }, deleted_at: null },
+      include: { external_organization: { select: { display_name: true } } },
+    });
+    if (viaColumn !== null) return governedResolution(viaColumn, "high");
+  }
+  if (name.length > 0) {
+    const aliasKey = normalizeIdentifierValue("MANUAL_ALIAS", name);
+    if (aliasKey.length > 0) {
+      const viaAlias = await prisma.externalCollaboratorIdentifier.findFirst({
+        where: {
+          org_entity_id: org,
+          identifier_type: "MANUAL_ALIAS",
+          identifier_value_normalized: aliasKey,
+          deleted_at: null,
+          verified_by_entity_id: { not: null },
+          external_collaborator: { deleted_at: null },
+        },
+        include: {
+          external_collaborator: {
+            include: { external_organization: { select: { display_name: true } } },
+          },
+        },
+      });
+      if (viaAlias !== null) return governedResolution(viaAlias.external_collaborator, "high");
+    }
+    const byName = await prisma.externalCollaborator.findMany({
+      where: {
+        org_entity_id: org,
+        display_name: { equals: name, mode: "insensitive" },
+        deleted_at: null,
+      },
+      include: { external_organization: { select: { display_name: true } } },
+      take: 2,
+    });
+    if (byName.length === 1) return governedResolution(byName[0]!, "medium");
+
+    // 3. Observed external party — review state, never trusted identity. The
+    //    T-2A deterministic bar (the org's opt-in observed index knows the
+    //    name) is what keeps the review queue evidence-based.
+    const observed = await prisma.externalEntity.findFirst({
+      where: { org_entity_id: org, name: { equals: name, mode: "insensitive" } },
+      select: { external_id: true },
+    });
+    if (observed !== null) {
+      const openSeed = await prisma.workLedgerEntry.findFirst({
+        where: {
+          org_entity_id: org,
+          ledger_type: "ORG_SEEDING",
+          status: { in: ["SEED_NEEDS_REVIEW", "SEED_PROPOSED"] },
+          AND: [
+            { details: { path: ["seed_type"], equals: "review_external_party" } },
+            { details: { path: ["subject_name"], equals: name } },
+          ],
+        },
+        select: { ledger_entry_id: true },
+      });
+      return {
+        state: "observed_external_needs_review",
+        label: name,
+        confidence: "low",
+        ...(openSeed !== null ? { review_seed_id: openSeed.ledger_entry_id } : {}),
+      };
+    }
+
+    // 4. Ambiguous governed evidence (same-name collaborators) — admin review
+    //    only, never card certainty: no org/relationship labels project.
+    if (byName.length > 1) return { state: "possible_external_match", label: name, confidence: "low" };
+  }
+
+  // 5. Unknown stays unknown.
+  return { state: "unknown", ...(name.length > 0 ? { label: name } : {}), confidence: "low" };
 }
 
 // WHAT: record identifier evidence (idempotent on the org-scoped unique).
