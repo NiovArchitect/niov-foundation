@@ -63,7 +63,13 @@ export type DandelionSeedType =
   | "grant_tool_access"
   | "connector_setup"
   | "confirm_support_role"
-  | "add_work_owner_edge";
+  | "add_work_owner_edge"
+  // [T-2A] an observed external party (source actor not in the org roster,
+  // already present in the org's opt-in ExternalEntity mention index) —
+  // approval tracks them as a GOVERNED external collaborator; a mention
+  // never auto-promotes. Minted by comms-ingest (needs a DB read, so not
+  // built in this pure module).
+  | "review_external_party";
 
 export interface DandelionSeed {
   seedType: DandelionSeedType;

@@ -562,6 +562,71 @@ export async function ingestSourceEvent(
     });
   }
 
+  // [T-2A] Observed-external review seed. Deterministic trigger, no
+  // name-pattern guessing: the SOURCE ACTOR is not resolvable to any org
+  // member AND this org's opt-in observed mention index (ExternalEntity)
+  // already knows the name. The seed asks an admin to decide — approval
+  // (dandelion-seed.service) tracks a GOVERNED ExternalCollaborator; a
+  // mention never auto-promotes. Idempotent: one open seed per subject.
+  const actorName = (event.actor.name ?? "").trim();
+  if (
+    !isTranscript &&
+    actorName.length > 0 &&
+    resolveTokenToEntities(actorName, roster).length === 0
+  ) {
+    const observed = await prisma.externalEntity.findFirst({
+      where: {
+        org_entity_id: orgEntityId,
+        name: { equals: actorName, mode: "insensitive" },
+      },
+      select: { entity_type: true },
+    });
+    if (observed !== null) {
+      const openSeed = await prisma.workLedgerEntry.findFirst({
+        where: {
+          org_entity_id: orgEntityId,
+          ledger_type: "ORG_SEEDING",
+          status: { in: ["SEED_NEEDS_REVIEW", "SEED_PROPOSED"] },
+          AND: [
+            { details: { path: ["seed_type"], equals: "review_external_party" } },
+            { details: { path: ["subject_name"], equals: actorName } },
+          ],
+        },
+        select: { ledger_entry_id: true },
+      });
+      if (openSeed === null) {
+        await createLedgerEntry({
+          org_entity_id: orgEntityId,
+          ledger_type: "ORG_SEEDING",
+          source_type: srcType,
+          title: `Review external contact "${actorName}" — track as a governed external collaborator?`,
+          status: "SEED_NEEDS_REVIEW",
+          priority: "ROUTINE",
+          extraction_source: "TYPESCRIPT_DETERMINISTIC",
+          evidence: [{ quote: quality.trustedText.slice(0, 300) }],
+          details: {
+            source: srcLabel,
+            ...provenance,
+            seed_type: "review_external_party",
+            subject_name: actorName,
+            subject_entity_id: null,
+            relationship_guess: observed.entity_type,
+            source_conversation_id: meetingCaptureId,
+            meeting_capture_id: meetingCaptureId,
+            confidence: "low",
+            approval_required: true,
+            policy_status: "needs_review",
+            scope: "org",
+            sensitivity: "internal",
+            risk_if_ignored:
+              "External asks from this contact stay unlabeled and client context is lost.",
+            recommended_action: `Review external contact "${actorName}" — track as a governed external collaborator?`,
+          },
+        });
+      }
+    }
+  }
+
   return {
     ok: true,
     conversation: {
