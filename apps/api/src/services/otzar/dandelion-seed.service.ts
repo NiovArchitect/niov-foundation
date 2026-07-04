@@ -19,6 +19,7 @@
 
 import { prisma, writeAuditEvent } from "@niov/database";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
+import { getOrCreateExternalOrganizationForCaller } from "./external-organization.service.js";
 
 export interface OrgSeedView {
   seed_id: string;
@@ -214,12 +215,30 @@ export async function approveSeed(args: {
     if (existing !== null) {
       resultingAction = "already tracked as an external collaborator — no duplicate created";
     } else {
+      // [T-3] link the governed external ORGANIZATION when the seed carries
+      // a company label (governed path: the admin's approval confirms it).
+      const companyLabel =
+        typeof (d as Record<string, unknown>).company_label === "string"
+          ? ((d as Record<string, unknown>).company_label as string).trim()
+          : "";
+      const externalOrg =
+        companyLabel.length > 0
+          ? await getOrCreateExternalOrganizationForCaller({
+              org_entity_id: args.orgEntityId,
+              caller_entity_id: args.adminEntityId,
+              company_label: companyLabel,
+              relationship_type: relationship,
+              source: "dandelion_seed_approval",
+            })
+          : null;
       const created = await prisma.externalCollaborator.create({
         data: {
           org_entity_id: args.orgEntityId,
           display_name: subjectName,
           relationship_type: relationship as never,
           created_by_entity_id: args.adminEntityId,
+          ...(companyLabel.length > 0 ? { company_name: companyLabel.slice(0, 120) } : {}),
+          external_org_id: externalOrg?.external_org_id ?? null,
         },
       });
       await writeAuditEvent({

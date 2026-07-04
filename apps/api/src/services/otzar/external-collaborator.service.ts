@@ -32,6 +32,7 @@
 
 import { writeAuditEvent } from "@niov/database";
 import { prisma } from "@niov/database";
+import { getOrCreateExternalOrganizationForCaller } from "./external-organization.service.js";
 import type {
   ExternalCollaboratorStatus,
   ExternalCommitmentDirection,
@@ -225,6 +226,31 @@ export async function trackExternalCollaboratorForCaller(
       };
     }
   }
+  // [T-3] the governed external-organization key: a manual track WITH a
+  // company name creates/reuses the org-scoped ExternalOrganization
+  // (governed path — exact normalized-name reuse only; corporate-domain
+  // evidence from a work email; personal domains never identify an org).
+  const companyLabel =
+    input.companyName === undefined || input.companyName.trim().length === 0
+      ? null
+      : input.companyName.trim();
+  const emailDomain =
+    input.email !== undefined && input.email.includes("@")
+      ? (input.email.split("@")[1] ?? "").trim().toLowerCase()
+      : null;
+  const externalOrg =
+    companyLabel !== null
+      ? await getOrCreateExternalOrganizationForCaller({
+          org_entity_id: access.orgEntityId,
+          caller_entity_id: input.callerEntityId,
+          company_label: companyLabel,
+          ...(input.relationshipType !== undefined
+            ? { relationship_type: input.relationshipType }
+            : {}),
+          domain_evidence: emailDomain,
+          source: "manual_track",
+        })
+      : null;
   const external = await prisma.externalCollaborator.create({
     data: {
       org_entity_id: access.orgEntityId,
@@ -233,10 +259,8 @@ export async function trackExternalCollaboratorForCaller(
         input.email === undefined || input.email.trim().length === 0
           ? null
           : bound(input.email.trim(), EMAIL_MAX_LENGTH),
-      company_name:
-        input.companyName === undefined || input.companyName.trim().length === 0
-          ? null
-          : bound(input.companyName.trim(), NAME_MAX_LENGTH),
+      company_name: companyLabel === null ? null : bound(companyLabel, NAME_MAX_LENGTH),
+      external_org_id: externalOrg?.external_org_id ?? null,
       relationship_type: input.relationshipType ?? "OTHER",
       status: "TRACKED_EXTERNAL",
       internal_owner_entity_id: input.internalOwnerEntityId ?? null,

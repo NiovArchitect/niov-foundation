@@ -127,9 +127,13 @@ function fromCollaborator(collab: {
   display_name: string;
   company_name: string | null;
   relationship_type: string;
+  /** [T-3] the governed external-organization link — its display name wins
+   *  over the denormalized company_name fallback when present. */
+  external_organization?: { display_name: string } | null;
 }, direction?: "we_owe_them" | "they_owe_us", source: ExternalContextProjection["source"] = "external_commitment"): ExternalContextProjection {
   const rel = RELATIONSHIP_MAP[collab.relationship_type] ?? RELATIONSHIP_MAP.OTHER!;
-  const orgLabel = cap(collab.company_name, 80);
+  const orgLabel =
+    cap(collab.external_organization?.display_name, 80) ?? cap(collab.company_name, 80);
   const personLabel = cap(collab.display_name, 80);
   return {
     external_party_type: rel.party,
@@ -184,7 +188,12 @@ export async function enrichExternalContext(
         source_conversation_id: true,
         direction: true,
         external_collaborator: {
-          select: { display_name: true, company_name: true, relationship_type: true },
+          select: {
+            display_name: true,
+            company_name: true,
+            relationship_type: true,
+            external_organization: { select: { display_name: true } },
+          },
         },
       },
     });
@@ -221,7 +230,12 @@ export async function enrichExternalContext(
       loadOrgMembers(orgEntityId),
       prisma.externalCollaborator.findMany({
         where: { org_entity_id: orgEntityId, deleted_at: null },
-        select: { display_name: true, company_name: true, relationship_type: true },
+        select: {
+          display_name: true,
+          company_name: true,
+          relationship_type: true,
+          external_organization: { select: { display_name: true } },
+        },
       }),
     ]);
     const roster = members.map((m) => ({
