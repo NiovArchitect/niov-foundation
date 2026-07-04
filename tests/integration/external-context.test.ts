@@ -41,6 +41,7 @@ async function cleanup(): Promise<void> {
   const ids = ents.map((e) => e.entity_id);
   if (ids.length === 0) return;
   await prisma.externalCommitment.deleteMany({ where: { org_entity_id: { in: ids } } });
+  await prisma.externalCollaboratorIdentifier.deleteMany({ where: { org_entity_id: { in: ids } } });
   await prisma.externalCollaborator.deleteMany({ where: { org_entity_id: { in: ids } } });
   await prisma.collaborationWorkspace.deleteMany({ where: { org_entity_id: { in: ids } } });
   await prisma.workLedgerEntry.deleteMany({ where: { org_entity_id: { in: ids } } });
