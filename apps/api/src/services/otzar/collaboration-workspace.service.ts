@@ -1069,18 +1069,33 @@ export async function importCommsOutputForWorkspaceForCaller(
         ? governedExternalByName.get(decision.owner_display_name.trim().toLowerCase())
         : undefined;
     if (typeof externalId === "string") {
-      await recordExternalCommitmentForCaller({
-        workspaceId: input.workspaceId,
-        externalCollaboratorId: externalId,
-        orgEntityId: workspace.org_entity_id,
-        callerEntityId: input.callerEntityId,
-        text: trimmedText,
-        direction: "EXTERNAL_OWES_INTERNAL",
-        sourceConversationId: input.sourceConversationId ?? null,
-        sourceExcerpt: c.source_excerpt,
-        internalOwnerEntityId: null,
-        confidence: decision.confidence,
+      // Duplicate-safe: re-importing the same conversation must not mint a
+      // second obligation for the same party + text (source_conversation_id
+      // is the dedupe anchor, matching the spine's dedupe doctrine).
+      const dupe = await prisma.externalCommitment.findFirst({
+        where: {
+          org_entity_id: workspace.org_entity_id,
+          external_collaborator_id: externalId,
+          source_conversation_id: input.sourceConversationId ?? null,
+          text: bound(trimmedText, 2000),
+          deleted_at: null,
+        },
+        select: { external_commitment_id: true },
       });
+      if (dupe === null) {
+        await recordExternalCommitmentForCaller({
+          workspaceId: input.workspaceId,
+          externalCollaboratorId: externalId,
+          orgEntityId: workspace.org_entity_id,
+          callerEntityId: input.callerEntityId,
+          text: trimmedText,
+          direction: "EXTERNAL_OWES_INTERNAL",
+          sourceConversationId: input.sourceConversationId ?? null,
+          sourceExcerpt: c.source_excerpt,
+          internalOwnerEntityId: null,
+          confidence: decision.confidence,
+        });
+      }
     }
   }
 
