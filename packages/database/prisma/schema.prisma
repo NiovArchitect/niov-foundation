@@ -3618,12 +3618,74 @@ enum ExternalRiskLevel {
   HIGH
 }
 
+// [T-3] The governed external ORGANIZATION/account key — the beginning of
+// external identity resolution, NOT a CRM. Names are labels, identifiers are
+// evidence, and identity is layered (person / org membership / twin /
+// external collaborator / external organization / future pairwise refs).
+// Uniqueness is ORG-SCOPED by construction: the same "Acme" in two Otzar
+// customer orgs is two rows, forever. Company-owned (Category B) — never
+// portable, never globally merged. Future-safe: pairwise_identity_ref /
+// counterpart_org_ref / platform_person_ref can be added as nullable
+// columns without breaking this shape.
+model ExternalOrganization {
+  external_org_id      String                   @id @default(uuid()) @db.Uuid
+  org_entity_id        String                   @db.Uuid
+  display_name         String
+  // Lowercased/collapsed matching key — reuse happens ONLY on an exact
+  // org-scoped normalized match from a governed/manual path (matching
+  // policy lives in external-organization.service.ts).
+  normalized_name      String
+  relationship_type    ExternalRelationshipType @default(OTHER)
+  // Optional corporate domain evidence. NEVER a personal email domain
+  // (service-enforced denylist); never unique globally.
+  primary_domain       String?
+  created_by_entity_id String                   @db.Uuid
+  created_at           DateTime                 @default(now())
+  updated_at           DateTime                 @updatedAt
+  deleted_at           DateTime?
+
+  collaborators ExternalCollaborator[]
+  identifiers   ExternalOrganizationIdentifier[]
+
+  @@unique([org_entity_id, normalized_name])
+  @@index([org_entity_id])
+  @@map("external_organizations")
+}
+
+// [T-3] Evidence identifiers for an external organization — org-scoped,
+// typed, confidence-carrying, provenance-audited. identifier_type is a
+// String validated in TS (repo convention): DOMAIN | EMAIL_DOMAIN |
+// SLACK_TEAM | ZOOM_ACCOUNT | CRM_ACCOUNT_ID | MANUAL_ALIAS | WEBSITE |
+// OTHER. Evidence SUGGESTS a match; it never auto-merges.
+model ExternalOrganizationIdentifier {
+  identifier_id               String    @id @default(uuid()) @db.Uuid
+  org_entity_id               String    @db.Uuid
+  external_org_id             String    @db.Uuid
+  identifier_type             String
+  identifier_value_normalized String
+  confidence                  String    @default("low")
+  source_system               String?
+  verified_by_entity_id       String?   @db.Uuid
+  verified_at                 DateTime?
+  created_at                  DateTime  @default(now())
+  deleted_at                  DateTime?
+
+  external_organization ExternalOrganization @relation(fields: [external_org_id], references: [external_org_id])
+
+  @@unique([org_entity_id, identifier_type, identifier_value_normalized])
+  @@index([external_org_id])
+  @@map("external_organization_identifiers")
+}
+
 model ExternalCollaborator {
   external_collaborator_id String                     @id @default(uuid()) @db.Uuid
   org_entity_id            String                     @db.Uuid
   display_name             String
   email                    String?
   company_name             String?
+  // [T-3] nullable link to the governed external organization; null when
+  // org identity is unresolved (company_name stays the display fallback).
+  external_org_id          String?                    @db.Uuid
   relationship_type        ExternalRelationshipType   @default(OTHER)
   status                   ExternalCollaboratorStatus @default(TRACKED_EXTERNAL)
   internal_owner_entity_id String?                    @db.Uuid
@@ -3640,11 +3702,13 @@ model ExternalCollaborator {
 
   workspace_memberships WorkspaceExternalMembership[]
   external_commitments  ExternalCommitment[]
+  external_organization ExternalOrganization? @relation(fields: [external_org_id], references: [external_org_id])
 
   @@index([org_entity_id])
   @@index([org_entity_id, status])
   @@index([org_entity_id, relationship_type])
   @@index([internal_owner_entity_id])
+  @@index([external_org_id])
   @@map("external_collaborators")
 }
 
