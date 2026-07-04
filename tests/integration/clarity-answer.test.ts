@@ -112,6 +112,10 @@ describe("[CE-3] clarity answer — truth-composed, honest, read-only (DB)", () 
     expect(classifyClarityQuestion("Why does this need approval?")).toBe("WHY_APPROVAL");
     expect(classifyClarityQuestion("What should I do next?")).toBe("NEXT_STEP");
     expect(classifyClarityQuestion("What is the weather?")).toBe("UNKNOWN");
+    // Ownership phrasings route to the WHY_HERE composition (owner+requester).
+    expect(classifyClarityQuestion("Who asked for this?")).toBe("WHY_HERE");
+    expect(classifyClarityQuestion("Who owns this?")).toBe("WHY_HERE");
+    expect(classifyClarityQuestion("Who requested this?")).toBe("WHY_HERE");
   });
 
   it("WHERE_FROM answers with the human source phrase + author; WHO_CLARIFIES names real candidates; no ids/enums leak", async () => {
