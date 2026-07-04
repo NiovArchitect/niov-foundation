@@ -3677,6 +3677,34 @@ model ExternalOrganizationIdentifier {
   @@map("external_organization_identifiers")
 }
 
+// [T-3B] Evidence identifiers for an external COLLABORATOR — org-scoped,
+// typed, confidence-carrying, provenance-audited. identifier_type is a
+// String validated in TS (repo convention): EMAIL | SLACK_USER |
+// ZOOM_PARTICIPANT | CALENDAR_ATTENDEE | MANUAL_ALIAS | PHONE | OTHER.
+// Governed-dedupe rules live in external-collaborator-identity.service.ts:
+// exact EMAIL evidence can reuse; a MANUAL_ALIAS reuses only when
+// admin-verified; display names alone never merge across different
+// accounts; ambiguity refuses to decide (create-new, review later).
+model ExternalCollaboratorIdentifier {
+  identifier_id               String    @id @default(uuid()) @db.Uuid
+  org_entity_id               String    @db.Uuid
+  external_collaborator_id    String    @db.Uuid
+  identifier_type             String
+  identifier_value_normalized String
+  confidence                  String    @default("low")
+  source_system               String?
+  verified_by_entity_id       String?   @db.Uuid
+  verified_at                 DateTime?
+  created_at                  DateTime  @default(now())
+  deleted_at                  DateTime?
+
+  external_collaborator ExternalCollaborator @relation(fields: [external_collaborator_id], references: [external_collaborator_id])
+
+  @@unique([org_entity_id, identifier_type, identifier_value_normalized])
+  @@index([external_collaborator_id])
+  @@map("external_collaborator_identifiers")
+}
+
 model ExternalCollaborator {
   external_collaborator_id String                     @id @default(uuid()) @db.Uuid
   org_entity_id            String                     @db.Uuid
@@ -3703,6 +3731,7 @@ model ExternalCollaborator {
   workspace_memberships WorkspaceExternalMembership[]
   external_commitments  ExternalCommitment[]
   external_organization ExternalOrganization? @relation(fields: [external_org_id], references: [external_org_id])
+  identifiers           ExternalCollaboratorIdentifier[]
 
   @@index([org_entity_id])
   @@index([org_entity_id, status])

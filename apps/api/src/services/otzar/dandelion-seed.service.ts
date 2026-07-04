@@ -20,6 +20,7 @@
 import { prisma, writeAuditEvent } from "@niov/database";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 import { getOrCreateExternalOrganizationForCaller } from "./external-organization.service.js";
+import { findExistingCollaboratorMatch } from "./external-collaborator-identity.service.js";
 
 export interface OrgSeedView {
   seed_id: string;
@@ -204,15 +205,19 @@ export async function approveSeed(args: {
     const relationship = VALID_RELATIONSHIPS.has(relationshipGuess)
       ? relationshipGuess
       : "OTHER";
-    const existing = await prisma.externalCollaborator.findFirst({
-      where: {
-        org_entity_id: args.orgEntityId,
-        display_name: { equals: subjectName, mode: "insensitive" },
-        deleted_at: null,
-      },
-      select: { external_collaborator_id: true },
+    // [T-3B] the SAME governed matcher as manual tracking: email/alias
+    // evidence and unique consistent-account name matches reuse; ambiguity
+    // or a different account creates new (never merges).
+    const companyLabelForMatch =
+      typeof (d as Record<string, unknown>).company_label === "string"
+        ? ((d as Record<string, unknown>).company_label as string)
+        : null;
+    const existingMatch = await findExistingCollaboratorMatch({
+      org_entity_id: args.orgEntityId,
+      display_name: subjectName,
+      company_label: companyLabelForMatch,
     });
-    if (existing !== null) {
+    if (existingMatch.matched) {
       resultingAction = "already tracked as an external collaborator — no duplicate created";
     } else {
       // [T-3] link the governed external ORGANIZATION when the seed carries

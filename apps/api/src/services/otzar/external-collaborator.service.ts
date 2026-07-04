@@ -33,6 +33,10 @@
 import { writeAuditEvent } from "@niov/database";
 import { prisma } from "@niov/database";
 import { getOrCreateExternalOrganizationForCaller } from "./external-organization.service.js";
+import {
+  findExistingCollaboratorMatch,
+  recordCollaboratorIdentifier,
+} from "./external-collaborator-identity.service.js";
 import type {
   ExternalCollaboratorStatus,
   ExternalCommitmentDirection,
@@ -251,16 +255,49 @@ export async function trackExternalCollaboratorForCaller(
           source: "manual_track",
         })
       : null;
-  const external = await prisma.externalCollaborator.create({
-    data: {
-      org_entity_id: access.orgEntityId,
-      display_name: bound(input.displayName.trim(), NAME_MAX_LENGTH),
-      email:
-        input.email === undefined || input.email.trim().length === 0
-          ? null
-          : bound(input.email.trim(), EMAIL_MAX_LENGTH),
-      company_name: companyLabel === null ? null : bound(companyLabel, NAME_MAX_LENGTH),
-      external_org_id: externalOrg?.external_org_id ?? null,
+  // [T-3B] governed dedupe — reuse the existing record when safe evidence
+  // says it's the same person (email identifier / verified alias / unique
+  // consistent-account name match). Ambiguity or a DIFFERENT account never
+  // merges — create-new, review later (Option B).
+  const match = await findExistingCollaboratorMatch({
+    org_entity_id: access.orgEntityId,
+    display_name: input.displayName,
+    email: input.email ?? null,
+    company_label: companyLabel,
+  });
+  let external;
+  let reused = false;
+  if (match.matched) {
+    reused = true;
+    external = match.collaborator;
+    // Backfill the account link/company when this track adds new knowledge.
+    if (
+      (externalOrg !== null && external.external_org_id === null) ||
+      (companyLabel !== null && external.company_name === null)
+    ) {
+      external = await prisma.externalCollaborator.update({
+        where: { external_collaborator_id: external.external_collaborator_id },
+        data: {
+          ...(externalOrg !== null && external.external_org_id === null
+            ? { external_org_id: externalOrg.external_org_id }
+            : {}),
+          ...(companyLabel !== null && external.company_name === null
+            ? { company_name: bound(companyLabel, NAME_MAX_LENGTH) }
+            : {}),
+        },
+      });
+    }
+  } else {
+    external = await prisma.externalCollaborator.create({
+      data: {
+        org_entity_id: access.orgEntityId,
+        display_name: bound(input.displayName.trim(), NAME_MAX_LENGTH),
+        email:
+          input.email === undefined || input.email.trim().length === 0
+            ? null
+            : bound(input.email.trim(), EMAIL_MAX_LENGTH),
+        company_name: companyLabel === null ? null : bound(companyLabel, NAME_MAX_LENGTH),
+        external_org_id: externalOrg?.external_org_id ?? null,
       relationship_type: input.relationshipType ?? "OTHER",
       status: "TRACKED_EXTERNAL",
       internal_owner_entity_id: input.internalOwnerEntityId ?? null,
@@ -280,25 +317,50 @@ export async function trackExternalCollaboratorForCaller(
         input.weNeedFromThem === undefined
           ? null
           : bound(input.weNeedFromThem, SUMMARY_MAX_LENGTH),
-      risk_level: input.riskLevel ?? "LOW",
-      created_by_entity_id: input.callerEntityId,
-    },
-  });
-  const wsem = await prisma.workspaceExternalMembership.create({
-    data: {
-      workspace_id: input.workspaceId,
-      external_collaborator_id: external.external_collaborator_id,
+        risk_level: input.riskLevel ?? "LOW",
+        created_by_entity_id: input.callerEntityId,
+      },
+    });
+  }
+  // Email evidence recorded on BOTH paths (idempotent) — the strongest
+  // future dedupe signal, human-provided at track time.
+  if (input.email !== undefined && input.email.includes("@")) {
+    await recordCollaboratorIdentifier({
       org_entity_id: access.orgEntityId,
-      access_level: input.accessLevel ?? "NONE",
-      status: "TRACKED_EXTERNAL",
-      project_role:
-        input.projectRole === undefined
-          ? null
-          : bound(input.projectRole, NAME_MAX_LENGTH),
-      internal_owner_entity_id: input.internalOwnerEntityId ?? null,
-      invited_by_entity_id: input.callerEntityId,
-    },
-  });
+      external_collaborator_id: external.external_collaborator_id,
+      identifier_type: "EMAIL",
+      identifier_value: input.email,
+      confidence: "high",
+      source_system: "manual_track",
+      verified_by_entity_id: input.callerEntityId,
+    });
+  }
+  // A reused collaborator may already be a member of THIS workspace.
+  let wsem = reused
+    ? await prisma.workspaceExternalMembership.findFirst({
+        where: {
+          workspace_id: input.workspaceId,
+          external_collaborator_id: external.external_collaborator_id,
+        },
+      })
+    : null;
+  if (wsem === null) {
+    wsem = await prisma.workspaceExternalMembership.create({
+      data: {
+        workspace_id: input.workspaceId,
+        external_collaborator_id: external.external_collaborator_id,
+        org_entity_id: access.orgEntityId,
+        access_level: input.accessLevel ?? "NONE",
+        status: "TRACKED_EXTERNAL",
+        project_role:
+          input.projectRole === undefined
+            ? null
+            : bound(input.projectRole, NAME_MAX_LENGTH),
+        internal_owner_entity_id: input.internalOwnerEntityId ?? null,
+        invited_by_entity_id: input.callerEntityId,
+      },
+    });
+  }
   await writeAuditEvent({
     event_type: "EXTERNAL_COLLABORATOR_TRACKED",
     outcome: "SUCCESS",
@@ -308,6 +370,8 @@ export async function trackExternalCollaboratorForCaller(
       workspace_id: input.workspaceId,
       relationship_type: external.relationship_type,
       company_name: external.company_name,
+      reused,
+      ...(match.matched ? { matched_by: match.matched_by } : {}),
     },
   });
   return {
