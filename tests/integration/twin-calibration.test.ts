@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { computeTARHash, prisma } from "@niov/database";
 import {
   buildTwinCalibrationContent,
+  findRiskyCalibrationToken,
   proposeTwinCalibrationForCaller,
 } from "../../apps/api/src/services/otzar/dandelion-growth.service.js";
 import { createEntity } from "../../packages/database/src/queries/entity.js";
@@ -162,6 +163,20 @@ describe("[CS-3] twin calibration — preference-only, consent-gated (DB)", () =
       where: { source_entity_id: callerId, action_type: "RECORD_CAPSULE" },
     });
     expect(actions.length).toBe(1);
+  });
+
+  it("[CS-4] risky/credential-like content is refused server-side — nothing is proposed", async () => {
+    const actionsBefore = await prisma.action.count({ where: { source_entity_id: callerId } });
+    const r = await proposeTwinCalibrationForCaller({
+      callerEntityId: callerId,
+      writing_style_text: "My style: warm. Also our API key is sk-12345 and this doc is CONFIDENTIAL.",
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok === false) expect(r.code).toBe("CALIBRATION_CONTENT_RISKY");
+    expect(await prisma.action.count({ where: { source_entity_id: callerId } })).toBe(actionsBefore);
+    // The detector is deterministic and conservative.
+    expect(findRiskyCalibrationToken("I like short, warm sentences.")).toBeNull();
+    expect(findRiskyCalibrationToken("Here is my PASSWORD: hunter2")).toBe("password");
   });
 
   it("caps and emptiness: fields clip at 600 chars; nothing-provided refuses honestly", async () => {
