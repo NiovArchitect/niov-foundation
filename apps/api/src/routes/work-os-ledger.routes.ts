@@ -40,6 +40,8 @@ import {
 import { validateSeededContextRelevance } from "../services/work-os/context-relevance.service.js";
 // [AIX-3] — derived-only deterministic candidate relevance (zero writes).
 import { getContextCandidatesForLedgerEntry } from "../services/work-os/context-candidates.service.js";
+// [AIX-6] — org-scoped named-subject background answers (read-only).
+import { answerNamedSubjectBackground } from "../services/work-os/background-answer.service.js";
 // [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
@@ -424,6 +426,26 @@ export async function registerWorkOsLedgerRoutes(
       });
       if (result.ok === false) return reply.code(404).send(result);
       return reply.code(200).send({ ok: true, candidates: result.candidates });
+    },
+  );
+
+  // ── [AIX-6] Named-subject background answer — read-only, deterministic ──
+  // "What do we know about Project Phoenix?" with no selected item. Live
+  // work (caller-visible) answers first; seeded background follows under
+  // the AIX-4 contract labels; unresolvable subjects refuse honestly.
+  app.get<{ Querystring: { question?: string } }>(
+    "/api/v1/work-os/context/background-answer",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await answerNamedSubjectBackground({
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        question: typeof request.query.question === "string" ? request.query.question : "",
+      });
+      if (result.ok === false) return reply.code(422).send(result);
+      return reply.code(200).send({ ok: true, ...result.answer });
     },
   );
 
