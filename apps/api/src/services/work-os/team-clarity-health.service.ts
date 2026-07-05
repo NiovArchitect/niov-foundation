@@ -267,7 +267,7 @@ export async function getTeamClarityHealth(args: {
     where: {
       org_entity_id: args.org_entity_id,
       owner_entity_id: null,
-      ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT"] },
       NOT: { status: { in: TERMINAL } },
     },
   });

@@ -69,9 +69,15 @@ export const LEDGER_TYPES = [
   // rolled up from the linked work. Like ORG_SEEDING, GOAL rows are their own
   // surface (the goals API) and are excluded from the work views/queries.
   "GOAL",
+  // [CS-5] Org-owned reference context seeded from a document (Gap V lane 1).
+  // VERIFIED + ownerless by contract; like ORG_SEEDING/GOAL it is excluded
+  // from every personal/team work view — context, never a to-do.
+  "DOCUMENT_CONTEXT",
 ] as const;
 export const SOURCE_TYPES = [
   "VOICE_COMMAND", "CHAT", "MEETING", "TRANSCRIPT", "CONNECTOR", "SYSTEM", "MANUAL",
+  // [CS-5] a seeded organization document (reference context).
+  "DOCUMENT",
 ] as const;
 export const PRIORITIES = [
   "COMPANY_CRITICAL", "FOUNDER_CRITICAL", "PROJECT_CRITICAL", "BLOCKER",
@@ -603,7 +609,7 @@ export async function getMyWork(args: {
       // owns) IS the caller's pending work and belongs here — it is also
       // resumable as a rich send-card in Comms via getPendingFollowUps, but the
       // ledger row is the single store, surfaced on every relevant page.
-      ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
     },
     // Stable pagination order: created_at DESC with the id as a tiebreaker so
@@ -657,7 +663,7 @@ export async function getTeamWork(args: {
       org_entity_id: args.org_entity_id,
       // ORG_SEEDING entries are admin org-seeding suggestions, GOAL rows are
       // objectives (their own surface) — neither is Team Work.
-      ledger_type: { notIn: ["ORG_SEEDING", "GOAL"] },
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED", "VERIFIED"] } },
     },
     // Stable pagination order: created_at DESC with the id tiebreaker so
