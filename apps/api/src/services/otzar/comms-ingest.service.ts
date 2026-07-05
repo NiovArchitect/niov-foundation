@@ -165,6 +165,16 @@ export async function ingestTranscript(
 export interface IngestSourceEventDeps {
   llmProvider: LLMProvider;
   forceMode?: CommsExtractionMode;
+  /** [CS-1] Seeded-context mode: this event is HISTORICAL context the org
+   *  chose to seed — not live work. Every created row carries the seeded
+   *  lineage label, work items land as VERIFIED context records (never
+   *  open to-dos), and NO follow-up send cards or action nudges are
+   *  minted (the stale-transcript rule). External names still flow
+   *  through the observed→review rail — seeding never creates trust. */
+  seededContext?: {
+    provided_by: string;
+    covering_period?: string | null;
+  };
 }
 
 /**
@@ -297,6 +307,20 @@ export async function ingestSourceEvent(
   const srcType = event.sourceType;
   const srcLabel = isTranscript ? "transcript_ingest" : `${event.sourceSystem.toLowerCase()}_ingest`;
   const provenance: Record<string, unknown> = isTranscript ? {} : sourceEvidenceDetails(event);
+  // [CS-1] seeded-context lineage — stamped into EVERY row this ingest
+  // creates so projections can always say "seeded history, provided by X,
+  // covering Y" instead of presenting old truth as current.
+  const seeded = deps.seededContext ?? null;
+  const seededDetails: Record<string, unknown> =
+    seeded !== null
+      ? {
+          seeded_context: {
+            provided_by: seeded.provided_by,
+            ...(seeded.covering_period != null ? { covering_period: seeded.covering_period } : {}),
+            seeded_at: new Date().toISOString(),
+          },
+        }
+      : {};
 
   // 1) Quality gate — only trusted segments may seed work; noise is quarantined.
   //    Transcript uses the transcript segmenter; other sources use the generic
@@ -422,7 +446,9 @@ export async function ingestSourceEvent(
       requester_entity_id: event.callerEntityId,
       title: w.title,
       ...(w.sourceEvidence.workItem ? { summary: w.sourceEvidence.workItem } : {}),
-      status: w.status,
+      // [CS-1] seeded history is CONTEXT, never an open to-do: rows land
+      // terminal (VERIFIED) so no work queue treats them as actionable.
+      status: seeded !== null ? "VERIFIED" : w.status,
       extraction_source: "TYPESCRIPT_DETERMINISTIC",
       confidence_score: confidenceToScore(w.confidence),
       evidence: [
@@ -444,12 +470,16 @@ export async function ingestSourceEvent(
         // [T-2.5] governed external actor → calm work context via the T-1
         // validated read-through (labels only; context, not CRM).
         ...(actorExternalContext !== null ? { external_context: actorExternalContext } : {}),
+        ...seededDetails,
       },
-      ...(w.needsReview
-        ? { next_action: "Confirm the owner before assigning this work." }
-        : execPlan.blockerReason !== null
-          ? { next_action: execPlan.blockerReason }
-          : {}),
+      // [CS-1] no action nudges on seeded context rows.
+      ...(seeded !== null
+        ? {}
+        : w.needsReview
+          ? { next_action: "Confirm the owner before assigning this work." }
+          : execPlan.blockerReason !== null
+            ? { next_action: execPlan.blockerReason }
+            : {}),
     });
     workItems.push({
       ledger_entry_id: created.ok ? created.entry.ledger_entry_id : null,
@@ -499,7 +529,9 @@ export async function ingestSourceEvent(
   //   excluded from My Work / Team Work / Blind Spots (the COMMITMENT row
   //   already carries the obligation — this is the sender's private pending
   //   send, not double-counted work).
-  for (const a of extraction.suggested_actions) {
+  // [CS-1] the stale-transcript rule: seeded history NEVER drafts
+  // follow-ups — a commitment from months ago is context, not a send card.
+  for (const a of seeded !== null ? [] : extraction.suggested_actions) {
     await createLedgerEntry({
       org_entity_id: orgEntityId,
       ledger_type: "FOLLOW_UP",
@@ -557,6 +589,7 @@ export async function ingestSourceEvent(
     details: {
       source: srcLabel,
       ...provenance,
+      ...seededDetails,
       meeting_capture_id: meetingCaptureId,
       participant_count: capture.meeting_capture.participant_count,
       quality: {
@@ -594,6 +627,7 @@ export async function ingestSourceEvent(
       details: {
         source: srcLabel,
         ...provenance,
+        ...seededDetails,
         seed_type: seed.seedType,
         subject_name: seed.subjectName,
         subject_entity_id: seed.subjectEntityId,
@@ -648,6 +682,7 @@ export async function ingestSourceEvent(
         details: {
           source: srcLabel,
           ...provenance,
+          ...seededDetails,
           seed_type: "review_external_party",
           subject_name: actorName,
           subject_entity_id: null,
