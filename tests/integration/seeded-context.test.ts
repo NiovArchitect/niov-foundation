@@ -11,10 +11,11 @@
 //          docs/otzar OTZAR_ORG_CONTEXT_SEEDING_AND_TWIN_CALIBRATION_MODEL
 //          (CT repo), Gap V.
 
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { prisma } from "@niov/database";
-import { ingestSourceEvent, slackMessageToSourceEvent } from "@niov/api";
+import { computeTARHash, prisma } from "@niov/database";
+import { buildApp, MemoryNonceStore, ingestSourceEvent, slackMessageToSourceEvent } from "@niov/api";
+import type { FastifyInstance } from "fastify";
 import { getMyWork } from "../../apps/api/src/services/work-os/work-ledger.service.js";
 import { createEntity } from "../../packages/database/src/queries/entity.js";
 import { cleanupTestData, ensureAuditTriggers, TEST_PREFIX } from "../helpers.js";
@@ -56,6 +57,123 @@ async function cleanup(): Promise<void> {
     await prisma.meetingCapture.deleteMany({ where: { meeting_capture_id: { in: capIds } } });
   }
 }
+
+// ── [CS-2] the admin-gated route exposure ───────────────────────────────
+describe("[CS-2] POST /otzar/comms/ingest seeded_context (HTTP)", () => {
+  let app: FastifyInstance;
+  let orgId = "";
+
+  beforeAll(async () => {
+    await ensureAuditTriggers();
+    app = await buildApp({
+      jwtSecret: "cs2-seeded-test-secret",
+      sessionNonceStore: new MemoryNonceStore(),
+      declarationStore: new MemoryNonceStore(),
+    });
+  });
+  afterAll(async () => {
+    await app.close();
+  });
+
+  async function login(email: string, password: string): Promise<string> {
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email, password, requested_operations: ["read", "write", "admin_org"] },
+      remoteAddress: `10.93.${Math.floor(Math.random() * 200) + 1}.${Math.floor(Math.random() * 254) + 1}`,
+    });
+    return (r.json() as { token: string }).token;
+  }
+
+  async function makeMember(name: string, admin: boolean): Promise<{ email: string; password: string }> {
+    const password = "correct-horse-battery";
+    const entityId = await makeEntity(name, "PERSON");
+    const { hashPassword } = await import("@niov/auth");
+    await prisma.entity.update({
+      where: { entity_id: entityId },
+      data: { password_hash: await hashPassword(password) },
+    });
+    await prisma.entityMembership.create({
+      data: { parent_id: orgId, child_id: entityId, is_active: true, is_admin: admin },
+    });
+    if (admin) {
+      await prisma.tokenAttributeRepository.update({
+        where: { entity_id: entityId },
+        data: { can_admin_org: true },
+      });
+      const fresh = await prisma.tokenAttributeRepository.findUnique({ where: { entity_id: entityId } });
+      await prisma.tokenAttributeRepository.update({
+        where: { entity_id: entityId },
+        data: {
+          tar_hash: computeTARHash({
+            can_login: fresh!.can_login,
+            can_read_capsules: fresh!.can_read_capsules,
+            can_write_capsules: fresh!.can_write_capsules,
+            can_share_capsules: fresh!.can_share_capsules,
+            can_create_hives: fresh!.can_create_hives,
+            can_access_external_api: fresh!.can_access_external_api,
+            can_admin_niov: fresh!.can_admin_niov,
+            can_admin_org: fresh!.can_admin_org,
+            clearance_ceiling: fresh!.clearance_ceiling,
+            monetization_role: fresh!.monetization_role,
+            compliance_frameworks: fresh!.compliance_frameworks,
+            status: fresh!.status,
+          }),
+        },
+      });
+    }
+    const email = (await prisma.entity.findUnique({ where: { entity_id: entityId }, select: { email: true } }))!.email!;
+    return { email, password };
+  }
+
+  it("non-admins cannot seed (403); admins can — rows land as lineaged VERIFIED context", async () => {
+    await cleanup();
+    await cleanupTestData();
+    orgId = await makeEntity("CS2 Org", "COMPANY");
+    const employee = await makeMember("CS2 Employee", false);
+    const admin = await makeMember("CS2 Admin", true);
+
+    const employeeToken = await login(employee.email, employee.password);
+    const denied = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/comms/ingest",
+      headers: { authorization: `Bearer ${employeeToken}` },
+      payload: {
+        captured_text: "David owns the repo access work and will grant write access today.",
+        seeded_context: { covering_period: "2025-H2" },
+      },
+    });
+    expect(denied.statusCode).toBe(403);
+    // Nothing was created by the denied attempt.
+    expect(
+      await prisma.workLedgerEntry.count({ where: { org_entity_id: orgId } }),
+    ).toBe(0);
+
+    const adminToken = await login(admin.email, admin.password);
+    const seededResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/otzar/comms/ingest",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        captured_text: "David owns the repo access work and will grant write access today.",
+        title: "Q3 planning (historical)",
+        seeded_context: { covering_period: "2025-H2" },
+      },
+    });
+    expect(seededResp.statusCode).toBe(200);
+    const rows = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, ledger_type: { notIn: ["ORG_SEEDING"] } },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      const sc = (row.details as Record<string, unknown>).seeded_context as Record<string, unknown>;
+      expect(sc.covering_period).toBe("2025-H2");
+      expect(typeof sc.provided_by).toBe("string");
+      if (row.ledger_type !== "MEETING") expect(row.status).toBe("VERIFIED");
+    }
+    expect(rows.filter((x) => x.ledger_type === "FOLLOW_UP").length).toBe(0);
+  });
+});
 
 describe("[CS-1] seeded-context mode (DB)", () => {
   let orgId = "";

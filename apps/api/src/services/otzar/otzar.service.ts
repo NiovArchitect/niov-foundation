@@ -413,6 +413,9 @@ export interface IngestCommsInput {
   captured_text: string;
   title?: string;
   force_mode?: CommsExtractionMode;
+  /** [CS-2] org-history seeding: ADMIN-GATED at the route; provided_by is
+   *  always the authenticated caller (never client-supplied). */
+  seeded?: { covering_period?: string | null };
 }
 
 export interface IngestCommsSuccess {
@@ -2093,18 +2096,35 @@ export class OtzarService {
   async ingestComms(
     input: IngestCommsInput,
   ): Promise<IngestCommsSuccess | IngestCommsFailure> {
-    const session = await this.authService.validateSession(input.token, "read");
+    // [CS-2] seeding org history is a privileged mode: the session must
+    // carry admin_org; normal live ingestion stays on the employee tier.
+    const session = await this.authService.validateSession(
+      input.token,
+      input.seeded !== undefined ? "admin_org" : "read",
+    );
     if (!session.valid) {
       return { ok: false, code: session.code, message: "Comms ingest denied" };
     }
     if (typeof input.captured_text !== "string" || input.captured_text.trim().length === 0) {
       return { ok: false, code: "INVALID_HISTORY", message: "captured_text is required (non-empty string)" };
     }
+    // [CS-2] seeding is a privileged mode — the route enforces admin_org;
+    // this service re-derives provided_by from the SESSION, never the body.
     const result = await ingestTranscript({
       callerEntityId: session.entity_id,
       capturedText: input.captured_text,
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.force_mode !== undefined ? { forceMode: input.force_mode } : {}),
+      ...(input.seeded !== undefined
+        ? {
+            seededContext: {
+              provided_by: session.entity_id,
+              ...(input.seeded.covering_period != null
+                ? { covering_period: input.seeded.covering_period }
+                : {}),
+            },
+          }
+        : {}),
       llmProvider: this.llmProvider,
     });
     if (!result.ok) {

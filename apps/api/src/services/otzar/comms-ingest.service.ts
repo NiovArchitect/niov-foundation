@@ -63,6 +63,8 @@ export interface IngestTranscriptInput {
   title?: string;
   forceMode?: CommsExtractionMode;
   llmProvider: LLMProvider;
+  /** [CS-2] seeded-context mode (see IngestSourceEventDeps.seededContext). */
+  seededContext?: { provided_by: string; covering_period?: string | null };
 }
 
 export interface IngestedWorkItem {
@@ -158,7 +160,11 @@ export async function ingestTranscript(
       ...(input.title !== undefined ? { title: input.title } : {}),
       content: input.capturedText,
     },
-    { llmProvider: input.llmProvider, ...(input.forceMode !== undefined ? { forceMode: input.forceMode } : {}) },
+    {
+      llmProvider: input.llmProvider,
+      ...(input.forceMode !== undefined ? { forceMode: input.forceMode } : {}),
+      ...(input.seededContext !== undefined ? { seededContext: input.seededContext } : {}),
+    },
   );
 }
 
