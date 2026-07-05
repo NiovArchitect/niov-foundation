@@ -412,6 +412,10 @@ export type AuditEventType =
   | "USER_ACTIVATED"
   | "PASSWORD_RESET_LINK_CREATED"
   | "PASSWORD_RESET_COMPLETED"
+  // [AIX-2] a human validated seeded background context in-context
+  // ("Is this still current?"). Details carry the ledger_entry_id and the
+  // internal relevance state — never the validator's free-text note.
+  | "SEEDED_CONTEXT_VALIDATED"
   | "EXTERNAL_COLLABORATOR_TRACKED"
   | "EXTERNAL_COLLABORATOR_INVITED"
   | "EXTERNAL_COLLABORATOR_APPROVED"
@@ -899,6 +903,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "USER_ACTIVATED",
   "PASSWORD_RESET_LINK_CREATED",
   "PASSWORD_RESET_COMPLETED",
+  // [AIX-2] seeded-context human validation.
+  "SEEDED_CONTEXT_VALIDATED",
   "EXTERNAL_COLLABORATOR_TRACKED",
   "EXTERNAL_COLLABORATOR_INVITED",
   "EXTERNAL_COLLABORATOR_APPROVED",

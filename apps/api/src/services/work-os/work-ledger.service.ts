@@ -1075,7 +1075,39 @@ export interface SeededOriginProjection {
   covering_period_label?: string;
   boundary_label: string;
   confidence_note: string;
+  // [AIX-2] human validation read-through — present only after someone
+  // validated the row in-context. Labels only: the internal state enum,
+  // the validator's entity id, and the timestamp never cross the wire.
+  /** e.g. "Confirmed current" | "Marked outdated" — only when validated. */
+  validation_state_label?: string;
+  /** One sentence on how Otzar should treat it now. */
+  validation_guidance?: string;
 }
+
+// [AIX-2] internal relevance state → customer-safe labels. Raw states
+// (confirmed/stale/wrong_scope/contradicted/needs_clarifier) stay server-side.
+const CONTEXT_VALIDATION_LABELS: Record<string, { state_label: string; guidance: string }> = {
+  confirmed: {
+    state_label: "Confirmed current",
+    guidance: "Confirmed as current by your team.",
+  },
+  stale: {
+    state_label: "Marked outdated",
+    guidance: "Otzar should use newer or live work instead.",
+  },
+  wrong_scope: {
+    state_label: "Marked as wrong context",
+    guidance: "It does not apply to this work.",
+  },
+  contradicted: {
+    state_label: "Marked as conflicting with newer work",
+    guidance: "Otzar should ask before acting on it.",
+  },
+  needs_clarifier: {
+    state_label: "Waiting on the right person",
+    guidance: "Otzar needs the right person to confirm this.",
+  },
+};
 
 export function seededOriginFromDetails(details: unknown): SeededOriginProjection | undefined {
   if (typeof details !== "object" || details === null) return undefined;
@@ -1102,6 +1134,14 @@ export function seededOriginFromDetails(details: unknown): SeededOriginProjectio
     typeof scObj.covering_period === "string" && scObj.covering_period.trim().length > 0
       ? scObj.covering_period.trim().slice(0, 80)
       : undefined;
+  // [AIX-2] read the human validation, if one exists, as labels only.
+  const cr = d.context_relevance;
+  const crState =
+    typeof cr === "object" && cr !== null && !Array.isArray(cr) &&
+    typeof (cr as Record<string, unknown>).state === "string"
+      ? ((cr as Record<string, unknown>).state as string)
+      : null;
+  const validation = crState !== null ? CONTEXT_VALIDATION_LABELS[crState] : undefined;
   return {
     origin: isDocument ? "seeded_document" : "seeded_history",
     origin_label: isDocument
@@ -1112,6 +1152,12 @@ export function seededOriginFromDetails(details: unknown): SeededOriginProjectio
     boundary_label: "Company-owned background context — not personal Twin memory.",
     confidence_note:
       "Use as background unless live work or the right person confirms it is current.",
+    ...(validation !== undefined
+      ? {
+          validation_state_label: validation.state_label,
+          validation_guidance: validation.guidance,
+        }
+      : {}),
   };
 }
 
