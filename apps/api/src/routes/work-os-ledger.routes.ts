@@ -38,6 +38,8 @@ import {
 } from "../services/work-os/work-ledger.service.js";
 // [AIX-2] — the first relevance write path (seeded-context validation).
 import { validateSeededContextRelevance } from "../services/work-os/context-relevance.service.js";
+// [AIX-3] — derived-only deterministic candidate relevance (zero writes).
+import { getContextCandidatesForLedgerEntry } from "../services/work-os/context-candidates.service.js";
 // [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
@@ -402,6 +404,26 @@ export async function registerWorkOsLedgerRoutes(
         });
       }
       return reply.code(200).send({ ok: true, entry: result.entry });
+    },
+  );
+
+  // ── [AIX-3] Derived candidate relevance — read-only, deterministic ──
+  // "This seeded source MAY relate to this work" — computed on demand from
+  // deterministic signals, never persisted, never acted on. Validation
+  // rides the AIX-2 route above; retrieval stays off (AIX-4).
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/work-os/ledger/:id/context-candidates",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      const result = await getContextCandidatesForLedgerEntry({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+      });
+      if (result.ok === false) return reply.code(404).send(result);
+      return reply.code(200).send({ ok: true, candidates: result.candidates });
     },
   );
 
