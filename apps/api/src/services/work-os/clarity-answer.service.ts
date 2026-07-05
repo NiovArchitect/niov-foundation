@@ -20,6 +20,9 @@ import { prisma } from "@niov/database";
 import { getLedgerEntry } from "./work-ledger.service.js";
 import { rankClarifiers, type ClarityProjection } from "./clarity.service.js";
 import { projectRoutingDecision } from "./routing-decision.js";
+// [AIX-4] confidence-aware seeded-background retrieval (read-only; the
+// ranking law lives there). Explanatory only — never an action input.
+import { retrieveSeededBackgroundForLedgerEntry } from "./context-retrieval.service.js";
 
 export type ClarityAnswerConfidence = "high" | "medium" | "low";
 
@@ -41,6 +44,7 @@ type Intent =
   | "CLARIFICATION_STATUS"
   | "WHY_APPROVAL"
   | "NEXT_STEP"
+  | "WHAT_BACKGROUND"
   | "UNKNOWN";
 
 // Deterministic intent classification — order matters (most specific first).
@@ -55,6 +59,14 @@ export function classifyClarityQuestion(question: string): Intent {
   if (/(why).*(approv|sign.?off|review)/.test(q)) return "WHY_APPROVAL";
   if (/(where|what source|who sent).*(come from|came from|from\??$|source)/.test(q) || /where.*from/.test(q)) {
     return "WHERE_FROM";
+  }
+  // [AIX-4] "what do we know / any background / is there context" —
+  // the confidence-aware seeded-background retrieval intent.
+  if (
+    /what do we know/.test(q) ||
+    /(any|what|is there).*(background|context)/.test(q)
+  ) {
+    return "WHAT_BACKGROUND";
   }
   if (/(why).*(here|assigned|me|mine|have this|this work)/.test(q)) return "WHY_HERE";
   // "who asked for / requested / owns this" are ownership questions —
@@ -289,6 +301,59 @@ export async function answerClarityQuestion(args: {
               : `The clarification request to ${p.clarifier_display_name} expired.`,
           confidence: "high",
           used_sources: ["clarity_projection", "escalation_resolution"],
+        },
+      };
+    }
+
+    case "WHAT_BACKGROUND": {
+      // [AIX-4] the first surface where seeded context informs answers.
+      // Composition order IS the ranking law: live work truth leads
+      // (rank 1); retrieved seeded background follows (ranks 4–5) with
+      // mandatory attribution + confidence + how-to-treat language.
+      // Explanatory only: this intent never suggests or takes an action.
+      if (seeded !== undefined) {
+        // The row itself is seeded background — say exactly that.
+        return {
+          ok: true,
+          answer: {
+            answer: `This item is itself seeded background context (${seeded.origin_label.toLowerCase()}${seeded.covering_period_label !== undefined ? `, ${seeded.covering_period_label.toLowerCase()}` : ""}) — background until live work or the right person confirms it. You can confirm or correct it in View/Why.`,
+            confidence: "medium",
+            used_sources: ["seeded_background"],
+          },
+        };
+      }
+      const retrieved = await retrieveSeededBackgroundForLedgerEntry({
+        org_entity_id: args.org_entity_id,
+        caller_entity_id: args.caller_entity_id,
+        is_manager: args.is_manager,
+        ledger_entry_id: args.ledger_entry_id,
+      });
+      const results = retrieved.ok ? retrieved.results : [];
+      // Rank 1 always leads — live work is the source of truth here.
+      const ownerName = nameOf(entry.owner_entity_id);
+      const liveLine = `Live work is the source of truth here: "${entry.title}"${ownerName !== null ? (ownerName === "you" ? ", owned by you" : `, owned by ${ownerName}`) : ""}.`;
+      if (results.length === 0) {
+        return {
+          ok: true,
+          answer: {
+            answer: `${liveLine} No seeded background context is linked to this work yet.`,
+            confidence: "low",
+            used_sources: ["work_ledger"],
+          },
+        };
+      }
+      const backgroundLines = results.map((r) => {
+        const period = r.covering_period_label !== undefined ? ` (${r.covering_period_label.toLowerCase()})` : "";
+        return `${r.source_label} — "${r.title_label}"${period}: ${r.how_to_treat} ${r.confidence_label}.`;
+      });
+      return {
+        ok: true,
+        answer: {
+          answer: `${liveLine} ${backgroundLines.join(" ")}`,
+          // Never high from seeded context: medium when something is
+          // team-confirmed, low when everything is unvalidated background.
+          confidence: results.some((r) => !r.requires_confirmation) ? "medium" : "low",
+          used_sources: ["work_ledger", "seeded_background_retrieval"],
         },
       };
     }
