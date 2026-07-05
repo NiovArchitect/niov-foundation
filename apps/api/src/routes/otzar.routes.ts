@@ -333,7 +333,12 @@ export async function registerOtzarRoutes(
   // for review (never auto-assigned). Gated on the authenticated-employee tier
   // ("read", like correction-memory); the write governance is enforced in-service.
   app.post<{
-    Body: { captured_text?: unknown; title?: unknown; force_mode?: unknown };
+    Body: {
+      captured_text?: unknown;
+      title?: unknown;
+      force_mode?: unknown;
+      seeded_context?: unknown;
+    };
   }>("/api/v1/otzar/comms/ingest", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
     if (token === null) {
@@ -366,11 +371,23 @@ export async function registerOtzarRoutes(
       });
     }
     const title = typeof body.title === "string" ? body.title : undefined;
+    // [CS-2] org-history seeding: privileged — the SERVICE validates the
+    // session with admin_org when seeding (provided_by = session caller).
+    let seeded: { covering_period?: string | null } | undefined;
+    if (body.seeded_context !== undefined && body.seeded_context !== null) {
+      const sc = body.seeded_context as Record<string, unknown>;
+      seeded = {
+        ...(typeof sc.covering_period === "string" && sc.covering_period.trim().length > 0
+          ? { covering_period: sc.covering_period.trim().slice(0, 80) }
+          : {}),
+      };
+    }
     const result = await otzarService.ingestComms({
       token,
       captured_text: body.captured_text,
       ...(title !== undefined ? { title } : {}),
       ...(force_mode !== undefined ? { force_mode } : {}),
+      ...(seeded !== undefined ? { seeded } : {}),
     });
     if (!result.ok) {
       return reply.code(statusForCode(result.code)).send(result);
