@@ -132,6 +132,9 @@ export async function answerClarityQuestion(args: {
 
   const intent = classifyClarityQuestion(args.question);
   const lineage = entry.source_lineage;
+  // [AIX-1] a seeded row always answers with the background framing —
+  // never presented as current truth.
+  const seeded = entry.seeded_origin;
   const suggest = (): ClarityAnswer["suggested_next_action"] => {
     const first = clarity.candidates[0];
     if (first === undefined || clarity.pending_clarification !== undefined) return undefined;
@@ -157,12 +160,18 @@ export async function answerClarityQuestion(args: {
         };
       }
       const who = lineage.source_actor !== null ? ` ${lineage.source_actor} shared it.` : "";
+      // [AIX-1] seeded rows carry the background framing in the answer
+      // itself — a seeded source is never presented as current truth.
+      const seededNote =
+        seeded !== undefined
+          ? ` It was provided during setup as ${seeded.origin === "seeded_document" ? "seeded document context" : "seeded history"}${seeded.covering_period_label !== undefined ? ` (${seeded.covering_period_label.toLowerCase()})` : ""} — background context, not confirmed current truth.`
+          : "";
       return {
         ok: true,
         answer: {
-          answer: `This came from ${sourcePhrase(lineage.source_system)}.${who}`,
-          confidence: "high",
-          used_sources: ["source_lineage"],
+          answer: `This came from ${sourcePhrase(lineage.source_system)}.${who}${seededNote}`,
+          confidence: seeded !== undefined ? "medium" : "high",
+          used_sources: seeded !== undefined ? ["source_lineage", "seeded_background"] : ["source_lineage"],
         },
       };
     }
