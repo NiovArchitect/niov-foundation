@@ -250,6 +250,23 @@ export function buildTwinCalibrationContent(
   return lines.length === 0 ? null : lines.join("\n");
 }
 
+// [CS-4] Server-side defense in depth: calibration text must be style
+// SHAPE, never secrets or obviously confidential material. Conservative,
+// deterministic token list — no classifier pretense; the client carries the
+// broader guardrails and repair copy.
+const RISKY_CALIBRATION_TOKENS = [
+  "password", "api key", "api_key", "apikey", "secret key", "access token",
+  "bearer ", "nda", "confidential", "social security", "ssn",
+] as const;
+
+export function findRiskyCalibrationToken(content: string): string | null {
+  const lower = content.toLowerCase();
+  for (const t of RISKY_CALIBRATION_TOKENS) {
+    if (lower.includes(t)) return t;
+  }
+  return null;
+}
+
 export async function proposeTwinCalibrationForCaller(
   input: TwinCalibrationInput,
 ): Promise<CreateActionResult | Failure> {
@@ -259,6 +276,14 @@ export async function proposeTwinCalibrationForCaller(
       ok: false,
       code: "NOTHING_TO_REMEMBER",
       message: "Share at least one preference for your AI Teammate to learn.",
+    };
+  }
+  if (findRiskyCalibrationToken(content) !== null) {
+    return {
+      ok: false,
+      code: "CALIBRATION_CONTENT_RISKY",
+      message:
+        "This looks like it includes confidential or credential-like content. Describe your style in general terms instead — nothing was saved.",
     };
   }
   const idempotencyKey = `twin-calibration-${input.callerEntityId}-${createHash("sha256")
