@@ -14,6 +14,10 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import {
+  normalizeDocumentContextSeed,
+  seedDocumentContextForCaller,
+} from "./document-context.service.js";
+import {
   prisma,
   writeAuditEvent,
   type CapsuleType,
@@ -2098,6 +2102,27 @@ export class OtzarService {
   // write governance — ownership proof, no-auto-send, no-leak, audit —
   // is enforced in-service, not by the capability tier.
   // ──────────────────────────────────────────────────────────────
+  // ── [CS-5] seedDocumentContext — Gap V lane 1 corpus entry. ADMIN-GATED
+  // (admin_org); provided_by is always the session caller; extraction OFF
+  // by v1 contract (see document-context.service.ts).
+  async seedDocumentContext(input: {
+    token: string;
+    raw: Record<string, unknown>;
+  }): Promise<
+    | Awaited<ReturnType<typeof seedDocumentContextForCaller>>
+    | { ok: false; code: string; message: string }
+  > {
+    const session = await this.authService.validateSession(input.token, "admin_org");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Seeding organization context requires admin authority." };
+    }
+    const normalized = normalizeDocumentContextSeed(input.raw);
+    if ("error" in normalized) {
+      return { ok: false, code: "INVALID_REQUEST", message: normalized.error };
+    }
+    return seedDocumentContextForCaller(session.entity_id, normalized);
+  }
+
   async ingestComms(
     input: IngestCommsInput,
   ): Promise<IngestCommsSuccess | IngestCommsFailure> {

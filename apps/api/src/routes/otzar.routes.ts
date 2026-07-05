@@ -325,6 +325,35 @@ export async function registerOtzarRoutes(
     return reply.code(200).send(result);
   });
 
+  // ── [CS-5] POST /otzar/context/seed-document — org corpus seeding (ADMIN
+  // gated in-service): one document becomes org-owned reference context —
+  // durable capture + ONE VERIFIED DOCUMENT_CONTEXT row, extraction OFF.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/context/seed-document",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      }
+      const result = await otzarService.seedDocumentContext({
+        token,
+        raw: request.body ?? {},
+      });
+      if (result.ok === false) {
+        const status =
+          result.code === "OPERATION_NOT_PERMITTED" || result.code === "SESSION_INVALID"
+            ? statusForCode(result.code)
+            : result.code === "INVALID_REQUEST"
+              ? 422
+              : result.code === "NO_ORG_FOR_CALLER"
+                ? 404
+                : 500;
+        return reply.code(status).send(result);
+      }
+      return reply.code(201).send(result);
+    },
+  );
+
   // POST /api/v1/otzar/comms/ingest -- the governed transcript → owned-work
   // pass. Unlike /comms/extract (ephemeral, read-only), this PERSISTS the
   // captured conversation as a durable source-of-truth record and creates
