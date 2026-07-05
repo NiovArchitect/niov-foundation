@@ -206,6 +206,81 @@ export function buildOnboardingMemoryContent(input: {
   return lines.length === 0 ? null : lines.join("\n");
 }
 
+// ── [CS-3] Twin calibration — preference-only, consent-gated ───────────────
+// The employee teaches their OWN twin the SHAPE of how they work: summaries,
+// tone, reminders, decision support, style (their own words), current focus,
+// and do-not-dos. Plain text and enumerated preferences only — no files, no
+// company documents, no authority, no tools, no data scopes. Rides the SAME
+// consent gate as onboarding memory: Action(PROPOSED, RECORD_CAPSULE), saved
+// only after the user approves, into their PERSONAL wallet as a PREFERENCE
+// capsule (sha256-hashed since CS-P1, revocable, self-scoped by
+// construction — there is no target parameter to calibrate anyone else).
+const CALIBRATION_FIELD_CAP = 600;
+
+export interface TwinCalibrationInput {
+  callerEntityId: string;
+  summary_preference?: string;
+  tone_preference?: string;
+  reminder_preference?: string;
+  decision_support_preference?: string;
+  writing_style_text?: string;
+  current_focus_text?: string;
+  do_not_do_text?: string;
+}
+
+export function buildTwinCalibrationContent(
+  input: Omit<TwinCalibrationInput, "callerEntityId">,
+): string | null {
+  const clip = (v: string | undefined): string | null => {
+    const t = (v ?? "").trim();
+    return t.length === 0 ? null : t.slice(0, CALIBRATION_FIELD_CAP);
+  };
+  const lines: string[] = [];
+  const push = (label: string, v: string | undefined) => {
+    const c = clip(v);
+    if (c !== null) lines.push(`${label}: ${c}`);
+  };
+  push("Summary preference", input.summary_preference);
+  push("Communication tone", input.tone_preference);
+  push("Reminder preference", input.reminder_preference);
+  push("Decision support preference", input.decision_support_preference);
+  push("Writing style (in their own words)", input.writing_style_text);
+  push("Current focus and responsibilities", input.current_focus_text);
+  push("Do not do", input.do_not_do_text);
+  return lines.length === 0 ? null : lines.join("\n");
+}
+
+export async function proposeTwinCalibrationForCaller(
+  input: TwinCalibrationInput,
+): Promise<CreateActionResult | Failure> {
+  const content = buildTwinCalibrationContent(input);
+  if (content === null) {
+    return {
+      ok: false,
+      code: "NOTHING_TO_REMEMBER",
+      message: "Share at least one preference for your AI Teammate to learn.",
+    };
+  }
+  const idempotencyKey = `twin-calibration-${input.callerEntityId}-${createHash("sha256")
+    .update(content)
+    .digest("hex")
+    .slice(0, 16)}`;
+  return createActionForCaller(input.callerEntityId, {
+    action_type: "RECORD_CAPSULE",
+    idempotency_key: idempotencyKey,
+    payload_summary:
+      "Save your AI Teammate calibration preferences (needs your approval).",
+    payload_redacted: {
+      capsule_type: "PREFERENCE",
+      topic_tags: ["calibration", "preference", "twin"],
+      payload_summary: "Working-style calibration shared from My AI Twin.",
+      content,
+      write_reason:
+        "Twin calibration — user-consented working-style preferences (shape of how they work; never company work).",
+    },
+  });
+}
+
 // ─── shared gates ────────────────────────────────────────────
 
 async function requireOrgAdmin(
