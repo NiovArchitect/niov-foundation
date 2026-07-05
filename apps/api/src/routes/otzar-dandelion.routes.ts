@@ -14,6 +14,7 @@ import {
   getOnboardingIntrosForCaller,
   getOrgGrowthForCaller,
   proposeOnboardingMemoryForCaller,
+  proposeTwinCalibrationForCaller,
 } from "../services/otzar/dandelion-growth.service.js";
 import { listOrgSeeds, approveSeed, rejectSeed, holdSeed } from "../services/otzar/dandelion-seed.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
@@ -145,6 +146,42 @@ export async function registerOtzarDandelionRoutes(
       return reply.code(404).send({ ok: false, code: result.code });
     return reply.code(200).send({ ok: true, onboarding: result.onboarding });
   });
+
+  // ── [CS-3] POST /otzar/twin/calibration — the employee calibrates their
+  // OWN twin (self-scoped: the caller IS the subject; no target param
+  // exists). Same consent gate as onboarding memory: nothing is saved
+  // until the user approves the proposed action.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/twin/calibration",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const b = request.body ?? {};
+      const result = await proposeTwinCalibrationForCaller({
+        callerEntityId: session.entity_id,
+        ...(isStr(b.summary_preference) ? { summary_preference: b.summary_preference } : {}),
+        ...(isStr(b.tone_preference) ? { tone_preference: b.tone_preference } : {}),
+        ...(isStr(b.reminder_preference) ? { reminder_preference: b.reminder_preference } : {}),
+        ...(isStr(b.decision_support_preference)
+          ? { decision_support_preference: b.decision_support_preference }
+          : {}),
+        ...(isStr(b.writing_style_text) ? { writing_style_text: b.writing_style_text } : {}),
+        ...(isStr(b.current_focus_text) ? { current_focus_text: b.current_focus_text } : {}),
+        ...(isStr(b.do_not_do_text) ? { do_not_do_text: b.do_not_do_text } : {}),
+      });
+      if (result.ok === false) {
+        if ("httpStatus" in result) {
+          return reply.code(result.httpStatus).send({ ok: false, code: result.code });
+        }
+        return reply.code(422).send({ ok: false, code: result.code, message: (result as { message?: string }).message });
+      }
+      return reply.code(201).send({ ok: true, action: result.view });
+    },
+  );
 
   app.post<{ Body: MemoryBody }>(
     "/api/v1/otzar/dandelion/onboarding/memory-candidates",
