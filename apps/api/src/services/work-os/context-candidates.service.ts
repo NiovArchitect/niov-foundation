@@ -75,7 +75,7 @@ const STOPWORDS = new Set([
   "notes", "note", "summary", "meeting", "update", "updates", "plan",
 ]);
 
-function significantTokens(text: string): Set<string> {
+export function significantTokens(text: string): Set<string> {
   return new Set(
     text
       .toLowerCase()
@@ -188,6 +188,60 @@ export function deriveContextRelevanceCandidates(
     .sort((a, b) => b.strong - a.strong || b.total - a.total)
     .slice(0, CONTEXT_CANDIDATES_MAX)
     .map((s) => s.candidate);
+}
+
+// ── [AIX-6] Subject-mode derivation ─────────────────────────────────────────
+// For NAMED-SUBJECT questions ("What do we know about Project Phoenix?")
+// there is no target row — the subject phrase itself is the query. The
+// fidelity rule is stricter than row-mode: EVERY significant subject token
+// must appear in the seeded text (subset match). A partial match would be
+// an answer about the wrong thing — the zero-error rule forbids it. Same
+// pool, same suppression, same labels, same cap as row-mode; one matcher
+// family, no second retrieval system.
+export function deriveSubjectBackgroundCandidates(
+  subject: string,
+  pool: SeededPoolRow[],
+): ContextCandidateProjection[] {
+  const subjectTokens = [...significantTokens(subject)];
+  if (subjectTokens.length === 0) return [];
+  const matched: ContextCandidateProjection[] = [];
+  for (const row of pool) {
+    const seeded = seededOriginFromDetails(row.details);
+    if (seeded === undefined) continue;
+    const d =
+      typeof row.details === "object" && row.details !== null && !Array.isArray(row.details)
+        ? (row.details as Record<string, unknown>)
+        : {};
+    const cr =
+      typeof d.context_relevance === "object" && d.context_relevance !== null && !Array.isArray(d.context_relevance)
+        ? (d.context_relevance as Record<string, unknown>)
+        : null;
+    if (cr !== null && typeof cr.state === "string" && SUPPRESSED_STATES.has(cr.state)) continue;
+    const seedTokens = significantTokens(`${row.title} ${row.summary ?? ""}`);
+    if (!subjectTokens.every((t) => seedTokens.has(t))) continue;
+    matched.push({
+      ledger_entry_id: row.ledger_entry_id,
+      title_label: row.title,
+      origin_label: seeded.origin_label,
+      ...(seeded.covering_period_label !== undefined
+        ? { covering_period_label: seeded.covering_period_label }
+        : {}),
+      status_label:
+        seeded.validation_state_label !== undefined
+          ? seeded.validation_state_label
+          : "May relate to this work — needs confirmation",
+      reason_label: `Possible context: it mentions ${subject.trim()}. Background until confirmed.`,
+      signal_labels: [`It mentions ${subject.trim()}`],
+      ...(seeded.validation_state_label !== undefined
+        ? { validation_state_label: seeded.validation_state_label }
+        : {}),
+      ...(seeded.validation_guidance !== undefined
+        ? { validation_guidance: seeded.validation_guidance }
+        : {}),
+    });
+    if (matched.length >= CONTEXT_CANDIDATES_MAX) break;
+  }
+  return matched;
 }
 
 export type ContextCandidatesResult =
