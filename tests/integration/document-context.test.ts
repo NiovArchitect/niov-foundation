@@ -19,7 +19,7 @@ import {
   normalizeDocumentContextSeed,
   seedDocumentContextForCaller,
 } from "../../apps/api/src/services/otzar/document-context.service.js";
-import { getMyWork } from "../../apps/api/src/services/work-os/work-ledger.service.js";
+import { getLedgerEntry, getMyWork, seededOriginFromDetails } from "../../apps/api/src/services/work-os/work-ledger.service.js";
 import { createEntity } from "../../packages/database/src/queries/entity.js";
 import { cleanupTestData, ensureAuditTriggers, TEST_PREFIX } from "../helpers.js";
 import type { FastifyInstance } from "fastify";
@@ -164,6 +164,29 @@ describe("[CS-5] document-context adapter (DB + HTTP)", () => {
       where: { meeting_capture_id: r.meeting_capture_id },
     });
     expect(capture).not.toBeNull();
+
+    // [AIX-1] the projection renders the seeded origin as calm labels —
+    // background, dated, company-owned — and leaks no raw metadata.
+    // Ownerless org context detail is a manager/admin read (the party
+    // check correctly refuses non-party employees).
+    const view = await getLedgerEntry({
+      ledger_entry_id: r.ledger_entry_id, org_entity_id: orgId,
+      caller_entity_id: adminId, is_manager: true,
+    });
+    expect(view.ok).toBe(true);
+    if (view.ok) {
+      const so = view.entry.seeded_origin!;
+      expect(so.origin).toBe("seeded_document");
+      expect(so.origin_label).toBe("Seeded document context · Process / SOP");
+      expect(so.currentness_label).toBe("Historical");
+      expect(so.covering_period_label).toBe("Covers 2025");
+      expect(so.boundary_label).toContain("Company-owned background context");
+      expect(so.confidence_note).toContain("Use as background");
+      const raw = JSON.stringify(so);
+      expect(raw).not.toMatch(/seeded_context|DOCUMENT_CONTEXT|VERIFIED|provided_by|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/);
+    }
+    // Pure helper contract: silence for non-seeded details.
+    expect(seededOriginFromDetails({ source: "slack_ingest" })).toBeUndefined();
 
     // Boundaries: nothing personal, nothing external-trusted, nothing open.
     expect(await prisma.memoryCapsule.count()).toBe(capsulesBefore);

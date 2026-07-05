@@ -843,6 +843,12 @@ export interface WorkLedgerView {
   // sourceLineageFromDetails). Present only when the row's source was
   // recorded by the ingest spine. Additive + optional.
   source_lineage?: SourceLineageProjection;
+  // [AIX-1] — seeded-origin lineage (Gap W): calm, customer-safe labels for
+  // rows born from setup seeding (CS-1 history / CS-5 documents). Present
+  // only when details carry the seeded_context write-time lineage. Renders
+  // "background context, not current truth unless confirmed" — never raw
+  // metadata, never a current-truth claim. Additive + optional.
+  seeded_origin?: SeededOriginProjection;
   // [T-1] — external-party context (context, not CRM): safe labels only,
   // present only when a deterministic org-scoped link proves it. Additive.
   external_context?: ExternalContextProjection;
@@ -1053,6 +1059,62 @@ const SOURCE_SYSTEM_SHAPE = /^[A-Z][A-Z0-9_]{1,31}$/;
 //        lineage block. Rows with no recorded source project undefined — the
 //        UI renders an honest "Source not recorded yet", never an invented
 //        origin.
+// ── [AIX-1] Seeded-origin projection ────────────────────────────────────────
+// Customer-safe read-through of the CS-1/CS-5 write-time lineage. The AI
+// experience rule this serves: before retrieval exists, every seeded object
+// a human can see must already be legible as BACKGROUND — dated, owned, and
+// never presented as current truth. Raw metadata (provided_by ids, enums)
+// never crosses the wire.
+export interface SeededOriginProjection {
+  origin: "seeded_history" | "seeded_document";
+  /** "Seeded history" | "Seeded document context" (+ kind label). */
+  origin_label: string;
+  /** "Current" | "Historical" | "Unconfirmed" — only when recorded. */
+  currentness_label?: string;
+  /** e.g. "Covers 2025" — only when recorded. */
+  covering_period_label?: string;
+  boundary_label: string;
+  confidence_note: string;
+}
+
+export function seededOriginFromDetails(details: unknown): SeededOriginProjection | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const d = details as Record<string, unknown>;
+  const sc = d.seeded_context;
+  if (typeof sc !== "object" || sc === null || Array.isArray(sc)) return undefined;
+  const scObj = sc as Record<string, unknown>;
+  const doc =
+    typeof d.document === "object" && d.document !== null && !Array.isArray(d.document)
+      ? (d.document as Record<string, unknown>)
+      : null;
+  const isDocument = doc !== null;
+  const kindLabel =
+    isDocument && typeof doc.kind_label === "string" && doc.kind_label.trim().length > 0
+      ? doc.kind_label.trim().slice(0, 40)
+      : null;
+  const currentnessRaw = isDocument && typeof doc.currentness === "string" ? doc.currentness : null;
+  const currentnessLabel =
+    currentnessRaw === "current" ? "Current"
+    : currentnessRaw === "historical" ? "Historical"
+    : currentnessRaw === "unknown" ? "Unconfirmed"
+    : undefined;
+  const period =
+    typeof scObj.covering_period === "string" && scObj.covering_period.trim().length > 0
+      ? scObj.covering_period.trim().slice(0, 80)
+      : undefined;
+  return {
+    origin: isDocument ? "seeded_document" : "seeded_history",
+    origin_label: isDocument
+      ? `Seeded document context${kindLabel !== null ? ` · ${kindLabel}` : ""}`
+      : "Seeded history",
+    ...(currentnessLabel !== undefined ? { currentness_label: currentnessLabel } : {}),
+    ...(period !== undefined ? { covering_period_label: `Covers ${period}` } : {}),
+    boundary_label: "Company-owned background context — not personal Twin memory.",
+    confidence_note:
+      "Use as background unless live work or the right person confirms it is current.",
+  };
+}
+
 export function sourceLineageFromDetails(
   details: unknown,
   evidence: unknown,
@@ -1132,6 +1194,7 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
   const enrichment = enrichmentFromDetails(row.details);
   const meetingIntelligence = meetingIntelligenceFromDetails(row.details);
   const sourceLineage = sourceLineageFromDetails(row.details, row.evidence);
+  const seededOrigin = seededOriginFromDetails(row.details);
   const coordination = coordinationFromDetails(row.details);
   const watchers = watchersFromDetails(row.details);
   const detailsObj =
@@ -1184,5 +1247,6 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
     // [GAP-J] quiet lineage truth: present only when the row's source was
     // actually recorded — the UI never invents an origin.
     ...(sourceLineage !== undefined ? { source_lineage: sourceLineage } : {}),
+    ...(seededOrigin !== undefined ? { seeded_origin: seededOrigin } : {}),
   };
 }

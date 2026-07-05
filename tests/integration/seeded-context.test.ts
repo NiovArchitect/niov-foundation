@@ -244,6 +244,24 @@ describe("[CS-1] seeded-context mode (DB)", () => {
     }
     // The stale-transcript rule: ZERO follow-up send cards.
     expect(rows.filter((x) => x.ledger_type === "FOLLOW_UP").length).toBe(0);
+    // [AIX-1] every seeded row projects the calm seeded-history origin.
+    const { getLedgerEntry: getEntry } = await import(
+      "../../apps/api/src/services/work-os/work-ledger.service.js"
+    );
+    const anyRow = rows.find((x) => x.ledger_type !== "MEETING")!;
+    const projected = await getEntry({
+      ledger_entry_id: anyRow.ledger_entry_id, org_entity_id: orgId,
+      caller_entity_id: callerId, is_manager: false,
+    });
+    expect(projected.ok).toBe(true);
+    if (projected.ok) {
+      const so = projected.entry.seeded_origin!;
+      expect(so.origin).toBe("seeded_history");
+      expect(so.origin_label).toBe("Seeded history");
+      expect(so.covering_period_label).toBe("Covers 2026-Q1");
+      expect(so.confidence_note).toContain("Use as background");
+    }
+
     // Seeded rows never appear as David's open work.
     const myWork = await getMyWork({ org_entity_id: orgId, caller_entity_id: davidId });
     expect(myWork.filter((v) => v.status !== "VERIFIED").length).toBe(0);
