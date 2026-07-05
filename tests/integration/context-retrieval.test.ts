@@ -285,6 +285,49 @@ describe("[AIX-4] confidence-aware retrieval + the ranking law (DB)", () => {
     }
   });
 
+  // [AIX-5] the ambient action boundary: action-like requests that reach
+  // the clarity-answer route (the retrieval-backed surface the ambient
+  // bar now uses for background questions) NEVER classify into the
+  // retrieval intent, NEVER surface seeded content as evidence, NEVER
+  // act, and NEVER write — even when strongly overlapping seeded
+  // documents exist in the org.
+  it("action-like requests never trigger retrieval, never surface seeded content, never write", async () => {
+    await seedDoc("Phoenix escalation runbook", "Phoenix escalation steps.", "2025");
+    const workId = await makeWorkRow("Handle the Phoenix escalation backlog", adminId);
+    const auditsBefore = await prisma.auditEvent.count();
+    const rowsBefore = await prisma.workLedgerEntry.count({ where: { org_entity_id: orgId } });
+    const notificationsBefore = await prisma.notification.count();
+    const actionRequests = [
+      "Send this to the customer",
+      "Assign this to Sarah",
+      "Approve this",
+      "Create tasks from this doc",
+      "Update the CRM with this",
+      "Tell the client we committed to Friday",
+      "Move this project to done",
+    ];
+    for (const q of actionRequests) {
+      expect(classifyClarityQuestion(q), q).not.toBe("WHAT_BACKGROUND");
+      const r = await answerClarityQuestion({
+        org_entity_id: orgId, caller_entity_id: adminId, is_manager: true,
+        ledger_entry_id: workId, question: q,
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        // No seeded content as action evidence — not even as a mention.
+        expect(r.answer.answer, q).not.toContain("Phoenix escalation runbook");
+        expect(r.answer.answer, q).not.toMatch(/seeded|Confirmed seeded context|Possible background/i);
+        expect(r.answer.used_sources, q).not.toContain("seeded_background_retrieval");
+        // Explanatory rail: nothing executed, nothing promised.
+        expect(r.answer.answer, q).not.toMatch(/I will proceed|I sent|I created|I approved|I assigned/i);
+      }
+    }
+    // Nothing anywhere changed across all seven refusals.
+    expect(await prisma.auditEvent.count()).toBe(auditsBefore);
+    expect(await prisma.workLedgerEntry.count({ where: { org_entity_id: orgId } })).toBe(rowsBefore);
+    expect(await prisma.notification.count()).toBe(notificationsBefore);
+  });
+
   it("permission scope: a non-manager gets live truth + honest 'no seeded background' (no titles); cross-org refused; a seeded row explains itself", async () => {
     await seedDoc("Phoenix escalation runbook", "Phoenix escalation steps.");
     const employeeId = await makeEntity("Ret Employee", "PERSON");
