@@ -36,6 +36,8 @@ import {
   recordCoordinationOnLedger,
   type LedgerFilters,
 } from "../services/work-os/work-ledger.service.js";
+// [AIX-2] — the first relevance write path (seeded-context validation).
+import { validateSeededContextRelevance } from "../services/work-os/context-relevance.service.js";
 // [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
@@ -356,6 +358,49 @@ export async function registerWorkOsLedgerRoutes(
                 : 404,
           )
           .send(result);
+      return reply.code(200).send({ ok: true, entry: result.entry });
+    },
+  );
+
+  // ── [AIX-2] In-context validation of seeded background context ──
+  // The first relevance write path: an authorized human answers "Is this
+  // still current?" on a seeded row. Seeded-rows-only, party/manager-
+  // scoped, idempotent, additive details JSON — no status change, no
+  // follow-ups, no notifications, no retrieval enablement (that is AIX-4).
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/work-os/ledger/:id/context-validation",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      const b = request.body ?? {};
+      const result = await validateSeededContextRelevance({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        is_manager: ctx.manager,
+        state: typeof b.state === "string" ? b.state : "",
+        ...(typeof b.note === "string" ? { note: b.note } : {}),
+      });
+      if (result.ok === false)
+        return reply
+          .code(result.code === "INVALID_REQUEST" || result.code === "NOT_SEEDED_CONTEXT" ? 422 : 404)
+          .send(result);
+      // Audit only real changes — an idempotent repeat writes nothing and
+      // must not spam the audit trail. The free-text note stays on the row,
+      // never in audit details.
+      if (result.changed) {
+        await writeAuditEvent({
+          event_type: "SEEDED_CONTEXT_VALIDATED",
+          outcome: "SUCCESS",
+          actor_entity_id: ctx.entity_id,
+          target_entity_id: ctx.org_entity_id,
+          details: {
+            action: "seeded_context_validated",
+            ledger_entry_id: request.params.id,
+            state: result.state,
+          },
+        });
+      }
       return reply.code(200).send({ ok: true, entry: result.entry });
     },
   );
