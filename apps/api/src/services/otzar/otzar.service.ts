@@ -12,7 +12,7 @@
 //              (priming + last_active + first-convo-today flag),
 //              prisma (capsule + conversation + metrics rows).
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   prisma,
   writeAuditEvent,
@@ -1499,7 +1499,12 @@ export class OtzarService {
         tokens: countTokens(summary),
         tokens_tokenizer: "anthropic",
         storage_location: `niov://otzar/conv/${input.conversation_id}/${newCapsuleId}`,
-        content_hash: `sha256:placeholder-${newCapsuleId}`,
+        // [CS-P1] REAL tamper-evidence: the hash is the sha256 of the
+        // capsule's summary content (previously a placeholder — the twin
+        // audit's named integrity gap). Pre-existing rows keep their
+        // historical placeholder values; verification treats them as
+        // legacy, never as tampered.
+        content_hash: `sha256:${createHash("sha256").update(summary, "utf8").digest("hex")}`,
         created_by: ownerEntityId,
       },
     });
