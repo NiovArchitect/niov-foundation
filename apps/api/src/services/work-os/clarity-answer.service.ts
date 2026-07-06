@@ -23,6 +23,11 @@ import { projectRoutingDecision } from "./routing-decision.js";
 // [AIX-4] confidence-aware seeded-background retrieval (read-only; the
 // ranking law lives there). Explanatory only — never an action input.
 import { retrieveSeededBackgroundForLedgerEntry } from "./context-retrieval.service.js";
+import {
+  composeSupersededCorrection,
+  computeTruthWeight,
+  lineageFromDetails,
+} from "../otzar/truth-weight.service.js";
 
 export type ClarityAnswerConfidence = "high" | "medium" | "low";
 
@@ -329,9 +334,50 @@ export async function answerClarityQuestion(args: {
         ledger_entry_id: args.ledger_entry_id,
       });
       const results = retrieved.ok ? retrieved.results : [];
+      // [BLOCK-3C] Truth-weight the row's OWN stamped lineage: if this row
+      // was superseded, the answer LEADS with a brief calm correction and
+      // the current source — never a source dump, never raw mechanics.
+      // Honest flags (exceeds-authority / recommend-only / recollection)
+      // follow as ONE quiet sentence. Permission first: the superseding
+      // row's title is named only when the caller could see that row
+      // through the same party-or-manager gate.
+      let truthLead = "";
+      let truthFlag = "";
+      const rawRow = await prisma.workLedgerEntry.findUnique({
+        where: { ledger_entry_id: args.ledger_entry_id },
+        select: { details: true },
+      });
+      const rowLineage = lineageFromDetails(rawRow?.details ?? null);
+      if (rowLineage !== null) {
+        const weight = computeTruthWeight(rowLineage);
+        if (rowLineage.superseded_by !== null) {
+          const successor = await prisma.workLedgerEntry.findUnique({
+            where: { ledger_entry_id: rowLineage.superseded_by },
+            select: {
+              title: true,
+              org_entity_id: true,
+              owner_entity_id: true,
+              requester_entity_id: true,
+              target_entity_id: true,
+            },
+          });
+          const callerMaySee =
+            successor !== null &&
+            successor.org_entity_id === args.org_entity_id &&
+            (args.is_manager ||
+              successor.owner_entity_id === args.caller_entity_id ||
+              successor.requester_entity_id === args.caller_entity_id ||
+              successor.target_entity_id === args.caller_entity_id);
+          truthLead = callerMaySee
+            ? `${composeSupersededCorrection({ staleTitle: entry.title, currentTitle: successor.title })} `
+            : `You may be looking at an older plan — this was superseded by a newer approved decision. `;
+        } else if (weight.flags.length > 0) {
+          truthFlag = ` ${weight.flags[0]}`;
+        }
+      }
       // Rank 1 always leads — live work is the source of truth here.
       const ownerName = nameOf(entry.owner_entity_id);
-      const liveLine = `Live work is the source of truth here: "${entry.title}"${ownerName !== null ? (ownerName === "you" ? ", owned by you" : `, owned by ${ownerName}`) : ""}.`;
+      const liveLine = `${truthLead}Live work is the source of truth here: "${entry.title}"${ownerName !== null ? (ownerName === "you" ? ", owned by you" : `, owned by ${ownerName}`) : ""}.${truthFlag}`;
       if (results.length === 0) {
         return {
           ok: true,

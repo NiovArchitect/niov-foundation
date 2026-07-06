@@ -35,6 +35,7 @@ import {
   buildArtifactLineage,
   buildCommunicationLineage,
 } from "./communication-lineage.service.js";
+import { linkSupersessionDeterministically } from "./supersession-linking.service.js";
 import { segmentTranscriptQuality } from "./transcript-quality.js";
 import { planWorkItems } from "./work-item-planner.js";
 import type { NameResolution, ResolveName, WorkItemPlan } from "./work-item-planner.js";
@@ -483,6 +484,20 @@ export async function ingestSourceEvent(
       forceType: execType,
     });
 
+    // [BLOCK-3B] statement-level speech-act + authority lineage (3C
+    // substrate; follows the row's existing visibility).
+    const rowLineage = buildCommunicationLineage({
+      quote: w.sourceEvidence.quote,
+      speaker: w.sourceEvidence.speaker,
+      speakerEntityId: speakerIdFor(w.sourceEvidence.speaker),
+      speakerRoleAtTime: speakerRoleFor(w.sourceEvidence.speaker),
+      fallbackAct: w.ledgerType === "FOLLOW_UP" ? "action_item" : "commitment",
+      decisionDomain: lineageDomain,
+      structuredRights: lineageRights,
+      artifact: lineageArtifact,
+      confidence: w.confidence,
+    });
+
     const created = await createLedgerEntry({
       org_entity_id: orgEntityId,
       ledger_type: w.ledgerType,
@@ -515,19 +530,7 @@ export async function ingestSourceEvent(
         // [T-2.5] governed external actor → calm work context via the T-1
         // validated read-through (labels only; context, not CRM).
         ...(actorExternalContext !== null ? { external_context: actorExternalContext } : {}),
-        // [BLOCK-3B] statement-level speech-act + authority lineage (3C
-        // substrate; follows the row's existing visibility).
-        communication_lineage: buildCommunicationLineage({
-          quote: w.sourceEvidence.quote,
-          speaker: w.sourceEvidence.speaker,
-          speakerEntityId: speakerIdFor(w.sourceEvidence.speaker),
-          speakerRoleAtTime: speakerRoleFor(w.sourceEvidence.speaker),
-          fallbackAct: w.ledgerType === "FOLLOW_UP" ? "action_item" : "commitment",
-          decisionDomain: lineageDomain,
-          structuredRights: lineageRights,
-          artifact: lineageArtifact,
-          confidence: w.confidence,
-        }),
+        communication_lineage: rowLineage,
         ...seededDetails,
       },
       // [CS-1] no action nudges on seeded context rows.
@@ -539,6 +542,20 @@ export async function ingestSourceEvent(
             ? { next_action: execPlan.blockerReason }
             : {}),
     });
+    // [BLOCK-3C] deterministic supersession linking: explicit language +
+    // same domain + unique older match ONLY; ambiguity links nothing;
+    // fail-open (a linking failure never blocks ingest). Seeded history
+    // never supersedes live work.
+    if (created.ok && seeded === null) {
+      await linkSupersessionDeterministically({
+        orgEntityId,
+        newLedgerEntryId: created.entry.ledger_entry_id,
+        newTitle: w.title,
+        quote: w.sourceEvidence.quote,
+        lineage: rowLineage,
+      });
+    }
+
     workItems.push({
       ledger_entry_id: created.ok ? created.entry.ledger_entry_id : null,
       ledger_type: w.ledgerType,
