@@ -17,6 +17,8 @@ import {
   normalizeDocumentContextSeed,
   seedDocumentContextForCaller,
 } from "./document-context.service.js";
+// [DOC-EXTRACT] review-first extraction preview (read-only).
+import { extractDocumentWorkPreview } from "./document-extraction.service.js";
 import {
   prisma,
   writeAuditEvent,
@@ -2121,6 +2123,43 @@ export class OtzarService {
       return { ok: false, code: "INVALID_REQUEST", message: normalized.error };
     }
     return seedDocumentContextForCaller(session.entity_id, normalized);
+  }
+
+  // ── [DOC-EXTRACT] extractDocumentWorkPreview — review-first extraction
+  // over ONE seeded document. ADMIN-GATED (admin_org), explicit request
+  // only, READ-ONLY (preview candidates are never persisted; a human
+  // creates approved items through the existing work rail).
+  async extractDocumentWorkPreview(input: {
+    token: string;
+    ledger_entry_id: string;
+  }): Promise<
+    | Awaited<ReturnType<typeof extractDocumentWorkPreview>>
+    | { ok: false; code: string; message: string }
+  > {
+    const session = await this.authService.validateSession(input.token, "admin_org");
+    if (!session.valid) {
+      return {
+        ok: false,
+        code: session.code,
+        message: "Scanning seeded documents for possible work requires admin authority.",
+      };
+    }
+    if (typeof input.ledger_entry_id !== "string" || input.ledger_entry_id.length === 0) {
+      return { ok: false, code: "INVALID_REQUEST", message: "ledger_entry_id is required" };
+    }
+    const { getOrgEntityId } = await import("../governance/org.js");
+    let orgEntityId: string;
+    try {
+      orgEntityId = await getOrgEntityId(session.entity_id);
+    } catch {
+      return { ok: false, code: "NO_ORG_FOR_CALLER", message: "Caller is not in an organization" };
+    }
+    return extractDocumentWorkPreview(
+      session.entity_id,
+      orgEntityId,
+      input.ledger_entry_id,
+      this.llmProvider,
+    );
   }
 
   async ingestComms(
