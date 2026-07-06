@@ -232,3 +232,127 @@ function provider_is_not_configured(p: ActivationEmailProvider): boolean {
 }
 
 export const ACTIVATION_EMAIL_BATCH_MAX = 20;
+
+// ── [PASSWORD-LIFECYCLE] password-reset email — the reset sibling ──────────
+// Same provider abstraction, same token rail (purpose PASSWORD_RESET, 1h
+// TTL, one-time, supersedes priors), DISTINCT template. Guard is the
+// mirror of activation: only members who HAVE a password get a reset
+// email (pending members get the activation path — the two purposes
+// never blur). The token exists only inside the emailed link.
+
+/** Compose the minimal safe password-reset email. */
+export function composePasswordResetEmail(args: {
+  to: string;
+  orgDisplayName: string | null;
+  resetUrl: string;
+}): ActivationEmailMessage {
+  const orgLine =
+    args.orgDisplayName !== null
+      ? `A password reset was requested for your Otzar account at ${args.orgDisplayName}.`
+      : "A password reset was requested for your Otzar account.";
+  return {
+    to: args.to,
+    subject: "Reset your Otzar password",
+    text: [
+      orgLine,
+      "",
+      "Choose a new password with this one-time link:",
+      args.resetUrl,
+      "",
+      "This link can be used once and expires in about 1 hour.",
+      "Admins never see or set your password.",
+      "",
+      "If you did not request this, you can ignore this email — your password stays unchanged.",
+    ].join("\n"),
+  };
+}
+
+export type SendPasswordResetEmailResult =
+  | { ok: true; status: "sent"; expires_at: string }
+  | {
+      ok: false;
+      code:
+        | "EMAIL_NOT_CONFIGURED"
+        | "ENTITY_NOT_IN_ORG"
+        | "NO_PASSWORD_YET"
+        | "NO_EMAIL_ON_RECORD"
+        | "PROVIDER_FAILED";
+      message: string;
+    };
+
+/** Send ONE password-reset email to an ACTIVE (password-holding) member. */
+export async function sendPasswordResetEmailForMember(args: {
+  caller_entity_id: string;
+  org_entity_id: string;
+  target_entity_id: string;
+  provider: ActivationEmailProvider;
+}): Promise<SendPasswordResetEmailResult> {
+  const membership = await prisma.entityMembership.findFirst({
+    where: { parent_id: args.org_entity_id, child_id: args.target_entity_id, is_active: true },
+    select: { membership_id: true },
+  });
+  const target =
+    membership !== null
+      ? await prisma.entity.findUnique({
+          where: { entity_id: args.target_entity_id },
+          select: { status: true, password_hash: true, email: true },
+        })
+      : null;
+  if (target === null || target.status === "DELETED") {
+    return { ok: false, code: "ENTITY_NOT_IN_ORG", message: "Entity is not in your org" };
+  }
+  if (typeof target.password_hash !== "string" || target.password_hash.length === 0) {
+    return {
+      ok: false,
+      code: "NO_PASSWORD_YET",
+      message: "This member hasn't activated yet — send an activation email instead.",
+    };
+  }
+  if (typeof target.email !== "string" || target.email.length === 0) {
+    return { ok: false, code: "NO_EMAIL_ON_RECORD", message: "This member has no email address on record." };
+  }
+  if (provider_is_not_configured(args.provider)) {
+    return {
+      ok: false,
+      code: "EMAIL_NOT_CONFIGURED",
+      message: "Email delivery isn't configured yet — copy the reset link instead.",
+    };
+  }
+  const org = await prisma.entity.findUnique({
+    where: { entity_id: args.org_entity_id },
+    select: { display_name: true },
+  });
+  const minted = await mintSetupToken({
+    entity_id: args.target_entity_id,
+    org_entity_id: args.org_entity_id,
+    purpose: "PASSWORD_RESET",
+    created_by: args.caller_entity_id,
+  });
+  const message = composePasswordResetEmail({
+    to: target.email,
+    orgDisplayName: org?.display_name ?? null,
+    resetUrl: `${appBaseUrl()}/activate?token=${minted.token}`,
+  });
+  const sent = await args.provider.send(message);
+  await writeAuditEvent({
+    event_type: sent.ok ? "PASSWORD_RESET_EMAIL_SENT" : "PASSWORD_RESET_EMAIL_FAILED",
+    outcome: sent.ok ? "SUCCESS" : "ERROR",
+    actor_entity_id: args.caller_entity_id,
+    target_entity_id: args.target_entity_id,
+    details: {
+      org_entity_id: args.org_entity_id,
+      token_id: minted.token_id,
+      provider: args.provider.name,
+      provider_category: sent.ok ? "accepted" : sent.category,
+      // NEVER the token, the URL, or the body.
+    },
+  });
+  if (!sent.ok) {
+    return {
+      ok: false,
+      code: "PROVIDER_FAILED",
+      message: "The email provider didn't accept the message. Nothing was delivered — copy the reset link instead.",
+    };
+  }
+  return { ok: true, status: "sent", expires_at: minted.expires_at.toISOString() };
+}

@@ -47,6 +47,7 @@ import {
   envActivationEmailProvider,
   isActivationEmailConfigured,
   sendActivationEmailForMember,
+  sendPasswordResetEmailForMember,
 } from "../services/activation-email.service.js";
 import {
   executeStarterPilotActivationForCaller,
@@ -556,6 +557,36 @@ export async function registerOrgRoutes(
           : result.code === "EMAIL_NOT_CONFIGURED" ? 422
           : result.code === "NO_EMAIL_ON_RECORD" ? 422
           : 502;
+        return reply.code(status).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // ── [PASSWORD-LIFECYCLE] POST /org/members/:id/password-reset-email —
+  // the admin helps WITHOUT ever seeing or choosing the password: a
+  // one-time reset link (1h) is emailed to the member's recorded
+  // address. Pending members refuse (activation is the right action);
+  // honest not-configured; audited SENT/FAILED without token/URL.
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/org/members/:id/password-reset-email",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const result = await sendPasswordResetEmailForMember({
+        caller_entity_id: callerId,
+        org_entity_id: orgEntityId,
+        target_entity_id: request.params.id,
+        provider: envActivationEmailProvider(),
+      });
+      if (result.ok === false) {
+        const status =
+          result.code === "ENTITY_NOT_IN_ORG" ? 404
+          : result.code === "NO_PASSWORD_YET" ? 409
+          : result.code === "PROVIDER_FAILED" ? 502
+          : 422;
         return reply.code(status).send(result);
       }
       return reply.code(200).send(result);

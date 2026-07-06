@@ -428,6 +428,11 @@ export type AuditEventType =
   // (activation-time or admin repair) — the shell only: no tools, no
   // authority, no role template.
   | "STARTER_TWIN_PROVISIONED"
+  // [PASSWORD-LIFECYCLE] password lifecycle events. Details NEVER carry
+  // passwords, tokens, URLs, or email bodies.
+  | "PASSWORD_CHANGED"
+  | "PASSWORD_RESET_EMAIL_SENT"
+  | "PASSWORD_RESET_EMAIL_FAILED"
   | "EXTERNAL_COLLABORATOR_TRACKED"
   | "EXTERNAL_COLLABORATOR_INVITED"
   | "EXTERNAL_COLLABORATOR_APPROVED"
@@ -925,6 +930,10 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "ACTIVATION_EMAIL_FAILED",
   // [TWIN-BOOTSTRAP] starter-twin guarantee.
   "STARTER_TWIN_PROVISIONED",
+  // [PASSWORD-LIFECYCLE] password lifecycle.
+  "PASSWORD_CHANGED",
+  "PASSWORD_RESET_EMAIL_SENT",
+  "PASSWORD_RESET_EMAIL_FAILED",
   "EXTERNAL_COLLABORATOR_TRACKED",
   "EXTERNAL_COLLABORATOR_INVITED",
   "EXTERNAL_COLLABORATOR_APPROVED",
