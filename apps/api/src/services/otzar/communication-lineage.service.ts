@@ -156,20 +156,29 @@ export function classifyCommunicationAct(text: string, fallback: CommunicationAc
   return fallback;
 }
 
+function nameTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2);
+}
+
+/** Resolve a transcript speaker token ("Elena", "Torres", "Elena Torres")
+ *  to the ONE rights holder whose name contains every speaker token.
+ *  Ambiguity (two Torreses) resolves to undefined — honest unknown, never
+ *  a guessed authority. */
 function rightsFor(
   speaker: string | null,
   rights: ReadonlyArray<PartyDomainRights>,
 ): PartyDomainRights | undefined {
   if (speaker === null) return undefined;
-  const sig = speaker.trim().toLowerCase();
+  const sig = nameTokens(speaker);
   if (sig.length === 0) return undefined;
-  return rights.find((r) => {
-    const full = r.party.trim().toLowerCase();
-    if (full === sig) return true;
-    const first = full.split(/\s+/)[0];
-    const sigFirst = sig.split(/\s+/)[0];
-    return first !== undefined && (sig === first || sigFirst === first);
+  const matches = rights.filter((r) => {
+    const party = nameTokens(r.party);
+    return sig.every((t) => party.includes(t));
   });
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function domainHolders(
@@ -218,13 +227,13 @@ export function buildCommunicationLineage(input: LineageInput): CommunicationLin
   const rights = input.structuredRights;
   const speakerRights = rightsFor(input.speaker, rights);
   const holders = domainHolders(domain, rights);
-  const holdersPresent = holders.filter((h) =>
-    input.artifact.participants.some((p) => {
-      const pl = p.trim().toLowerCase();
-      const hl = h.party.trim().toLowerCase();
-      return pl === hl || pl === hl.split(/\s+/)[0] || pl.split(/\s+/)[0] === hl.split(/\s+/)[0];
-    }),
-  );
+  const holdersPresent = holders.filter((h) => {
+    const party = nameTokens(h.party);
+    return input.artifact.participants.some((p) => {
+      const toks = nameTokens(p);
+      return toks.length > 0 && toks.every((t) => party.includes(t));
+    });
+  });
 
   const isFinal = FINAL_ACTS.has(act);
   const nonAuthorityAct = act === "memory_reference" || act === "unresolved_question" || act === "clarification";

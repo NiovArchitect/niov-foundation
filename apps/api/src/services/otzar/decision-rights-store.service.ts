@@ -225,13 +225,19 @@ export async function loadStructuredRightsForRoster(
 }
 
 function matchesParty(signalParty: string, rights: PartyDomainRights): boolean {
-  const sig = signalParty.trim().toLowerCase();
-  const full = rights.party.trim().toLowerCase();
-  if (sig.length === 0 || full.length === 0) return false;
-  if (sig === full) return true;
-  // Transcript signals often carry first names only ("Elena will lead").
-  const first = full.split(/\s+/)[0];
-  return first !== undefined && sig === first;
+  // Transcript signals carry name fragments ("Elena will lead", "Torres
+  // owns this") — match when every signal token appears in the party's
+  // name tokens. Callers treat non-unique situations conservatively.
+  const sig = signalParty
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2);
+  if (sig.length === 0) return false;
+  const party = rights.party
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2);
+  return sig.every((t) => party.includes(t));
 }
 
 /**
