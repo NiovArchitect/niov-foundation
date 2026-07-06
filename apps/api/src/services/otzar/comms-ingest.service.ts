@@ -24,8 +24,17 @@
 
 import { getOrgEntityId } from "../governance/org.js";
 import { buildIdentityContext } from "./identity-context.js";
-import { extractFromCapturedText } from "./comms-extract.service.js";
+import {
+  extractFromCapturedText,
+  classifyWorkDomain,
+  workDomainToDecisionDomain,
+} from "./comms-extract.service.js";
 import type { CommsExtractionMode, CommsExtractionResult } from "./comms-extract.service.js";
+import { loadStructuredRightsForRoster } from "./decision-rights-store.service.js";
+import {
+  buildArtifactLineage,
+  buildCommunicationLineage,
+} from "./communication-lineage.service.js";
 import { segmentTranscriptQuality } from "./transcript-quality.js";
 import { planWorkItems } from "./work-item-planner.js";
 import type { NameResolution, ResolveName, WorkItemPlan } from "./work-item-planner.js";
@@ -413,6 +422,36 @@ export async function ingestSourceEvent(
   }
   const meetingCaptureId = capture.meeting_capture.meeting_capture_id;
 
+  // [BLOCK-3B] Communication-lineage stamping context, computed ONCE per
+  // capture: the conversation's decision domain (same classifier the
+  // extraction engine uses) + the org's Block 3A structured rights (empty
+  // → authority resolves to honest "unknown"; the loader fails open, so
+  // lineage can never block ingestion). Statement-level stamps go on each
+  // derived row below; the metadata is 3C substrate only — it changes no
+  // customer-facing behavior, no execution authority, no permissions.
+  const lineageDomain = workDomainToDecisionDomain(
+    classifyWorkDomain(`${extraction.summary} ${extractionText}`),
+  );
+  const lineageRights = await loadStructuredRightsForRoster(orgEntityId, roster);
+  const lineageParticipants = [...participantNames];
+  const lineageArtifact = {
+    communicationType: srcLabel,
+    sourceArtifactId: meetingCaptureId,
+    sourceTitle: title,
+    sourceDate: new Date().toISOString(),
+    participants: lineageParticipants,
+  };
+  const speakerIdFor = (name: string | null): string | null => {
+    if (name === null) return null;
+    const ids = resolveTokenToEntities(name, roster);
+    return ids.length === 1 ? ids[0]! : null;
+  };
+  const speakerRoleFor = (name: string | null): string | null => {
+    const id = speakerIdFor(name);
+    if (id === null) return null;
+    return roster.find((r) => r.entity_id === id)?.title ?? null;
+  };
+
   // 5a) One owned Work Ledger row per planned work item (proven → owned; else NEEDS_OWNER).
   const workItems: IngestedWorkItem[] = [];
   const wgItems: WorkGraphWorkItem[] = [];
@@ -476,6 +515,19 @@ export async function ingestSourceEvent(
         // [T-2.5] governed external actor → calm work context via the T-1
         // validated read-through (labels only; context, not CRM).
         ...(actorExternalContext !== null ? { external_context: actorExternalContext } : {}),
+        // [BLOCK-3B] statement-level speech-act + authority lineage (3C
+        // substrate; follows the row's existing visibility).
+        communication_lineage: buildCommunicationLineage({
+          quote: w.sourceEvidence.quote,
+          speaker: w.sourceEvidence.speaker,
+          speakerEntityId: speakerIdFor(w.sourceEvidence.speaker),
+          speakerRoleAtTime: speakerRoleFor(w.sourceEvidence.speaker),
+          fallbackAct: w.ledgerType === "FOLLOW_UP" ? "action_item" : "commitment",
+          decisionDomain: lineageDomain,
+          structuredRights: lineageRights,
+          artifact: lineageArtifact,
+          confidence: w.confidence,
+        }),
         ...seededDetails,
       },
       // [CS-1] no action nudges on seeded context rows.
@@ -565,6 +617,18 @@ export async function ingestSourceEvent(
         // [T-2.5] every row derived from a governed-external conversation
         // carries the same calm context.
         ...(actorExternalContext !== null ? { external_context: actorExternalContext } : {}),
+        // [BLOCK-3B] the drafted follow-up is the CALLER's action item.
+        communication_lineage: buildCommunicationLineage({
+          quote: a.source_excerpt ?? a.draft_text,
+          speaker: identity.viewer.display_name,
+          speakerEntityId: event.callerEntityId,
+          speakerRoleAtTime: identity.viewer.title || null,
+          fallbackAct: "action_item",
+          decisionDomain: lineageDomain,
+          structuredRights: lineageRights,
+          artifact: lineageArtifact,
+          confidence: null,
+        }),
       },
     });
   }
@@ -596,6 +660,12 @@ export async function ingestSourceEvent(
       source: srcLabel,
       ...provenance,
       ...seededDetails,
+      // [BLOCK-3B] artifact-level lineage — the conversation itself (no
+      // single speaker/act; statements on derived rows carry those).
+      communication_lineage: buildArtifactLineage({
+        ...lineageArtifact,
+        decisionDomain: lineageDomain,
+      }),
       meeting_capture_id: meetingCaptureId,
       participant_count: capture.meeting_capture.participant_count,
       quality: {

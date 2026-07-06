@@ -375,7 +375,8 @@ function parseLLMExtraction(
 
 // Free-text work-domain classifier (heuristic over the transcript) used only as
 // a soft role-match signal — there is no typed Department model yet.
-function classifyWorkDomain(text: string): WorkDomain {
+// [BLOCK-3B] exported so ingest lineage stamping classifies the SAME way.
+export function classifyWorkDomain(text: string): WorkDomain {
   const t = text.toLowerCase();
   if (/integration|deploy|backend|frontend|\bapi\b|auth|token|endpoint|engineer|\bcode\b|repo|openclaw|\bui\b/.test(t)) return "engineering";
   if (/campaign|\bbrand\b|marketing|social media|launch announcement/.test(t)) return "marketing";
@@ -386,7 +387,8 @@ function classifyWorkDomain(text: string): WorkDomain {
   return "general";
 }
 
-function workDomainToDecisionDomain(d: WorkDomain): DecisionDomain {
+// [BLOCK-3B] exported so ingest lineage stamping maps the SAME way.
+export function workDomainToDecisionDomain(d: WorkDomain): DecisionDomain {
   switch (d) {
     case "engineering": return "technical";
     case "product": return "product";
