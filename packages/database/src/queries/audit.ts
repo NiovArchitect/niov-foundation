@@ -416,6 +416,10 @@ export type AuditEventType =
   // ("Is this still current?"). Details carry the ledger_entry_id and the
   // internal relevance state — never the validator's free-text note.
   | "SEEDED_CONTEXT_VALIDATED"
+  // [RETENTION] an admin retired seeded context from active use, or
+  // restored it. NOT deletion: the row/capture/audit/lineage survive.
+  | "SEEDED_CONTEXT_RETIRED"
+  | "SEEDED_CONTEXT_RESTORED"
   | "EXTERNAL_COLLABORATOR_TRACKED"
   | "EXTERNAL_COLLABORATOR_INVITED"
   | "EXTERNAL_COLLABORATOR_APPROVED"
@@ -905,6 +909,9 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "PASSWORD_RESET_COMPLETED",
   // [AIX-2] seeded-context human validation.
   "SEEDED_CONTEXT_VALIDATED",
+  // [RETENTION] seeded-context lifecycle (retire/restore — never delete).
+  "SEEDED_CONTEXT_RETIRED",
+  "SEEDED_CONTEXT_RESTORED",
   "EXTERNAL_COLLABORATOR_TRACKED",
   "EXTERNAL_COLLABORATOR_INVITED",
   "EXTERNAL_COLLABORATOR_APPROVED",

@@ -1082,6 +1082,10 @@ export interface SeededOriginProjection {
   validation_state_label?: string;
   /** One sentence on how Otzar should treat it now. */
   validation_guidance?: string;
+  // [RETENTION] present only when an admin retired this context from
+  // active use. Labels only — the actor id and timestamp never cross.
+  /** "Retired from active context" — only when retired. */
+  lifecycle_state_label?: string;
 }
 
 // [AIX-2] internal relevance state → customer-safe labels. Raw states
@@ -1158,6 +1162,14 @@ export function seededOriginFromDetails(details: unknown): SeededOriginProjectio
           validation_guidance: validation.guidance,
         }
       : {}),
+    // [RETENTION] the retired label — read from context_lifecycle.
+    ...((): { lifecycle_state_label?: string } => {
+      const lc = d.context_lifecycle;
+      const retired =
+        typeof lc === "object" && lc !== null && !Array.isArray(lc) &&
+        (lc as Record<string, unknown>).state === "retired";
+      return retired ? { lifecycle_state_label: "Retired from active context" } : {};
+    })(),
   };
 }
 
