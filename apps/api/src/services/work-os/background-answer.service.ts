@@ -32,6 +32,12 @@ import {
   deriveSubjectBackgroundCandidates,
   significantTokens,
 } from "./context-candidates.service.js";
+import {
+  compareTruthWeight,
+  composeSupersededCorrection,
+  computeTruthWeight,
+  lineageFromDetails,
+} from "../otzar/truth-weight.service.js";
 
 // Tight subject extraction — mirrors the CT recognizer. The trailing
 // capture is the subject; deictic subjects (this/it/that…) refuse here
@@ -117,15 +123,83 @@ export async function answerNamedSubjectBackground(args: {
     },
     orderBy: [{ created_at: "desc" }, { ledger_entry_id: "desc" }],
     take: 200,
-    select: { ledger_entry_id: true, title: true, owner_entity_id: true },
+    select: {
+      ledger_entry_id: true,
+      title: true,
+      owner_entity_id: true,
+      details: true,
+      created_at: true,
+    },
   });
   // Subject fidelity: EVERY significant subject token must be in the title.
-  const liveMatches = liveRows
-    .filter((r) => {
-      const t = significantTokens(r.title);
-      return subjectTokens.every((tok) => t.has(tok));
+  const subjectMatched = liveRows.filter((r) => {
+    const t = significantTokens(r.title);
+    return subjectTokens.every((tok) => t.has(tok));
+  });
+  // [BLOCK-3C on AIX-6] Truth-weight the matches through their stamped
+  // lineage: superseded rows are NOT presented as live truth — they are
+  // replaced by ONE calm correction naming the current source (only when
+  // the caller could see that row through the same visibility model);
+  // the rest order by weight class (an authorized decision beats a newer
+  // proposal — recency breaks ties only within a class); rows carrying
+  // honest flags (exceeds-authority / recommend-only / recollection)
+  // keep ONE quiet flag on their line. Rows with no lineage stamp weigh
+  // neutrally, exactly as before.
+  const weighed = subjectMatched.map((r) => {
+    const lineage = lineageFromDetails(r.details);
+    const weight = lineage !== null ? computeTruthWeight(lineage) : null;
+    return { row: r, lineage, weight };
+  });
+  const supersededMatches = weighed.filter((w) => w.weight?.weight_class === "superseded");
+  let supersededCorrection: string | null = null;
+  const successorId = supersededMatches
+    .map((w) => w.lineage?.superseded_by ?? null)
+    .find((id): id is string => id !== null);
+  if (successorId !== undefined) {
+    const successor = await prisma.workLedgerEntry.findUnique({
+      where: { ledger_entry_id: successorId },
+      select: {
+        title: true,
+        org_entity_id: true,
+        owner_entity_id: true,
+        requester_entity_id: true,
+        target_entity_id: true,
+      },
+    });
+    const callerMaySee =
+      successor !== null &&
+      successor.org_entity_id === args.org_entity_id &&
+      (args.is_manager ||
+        successor.owner_entity_id === args.caller_entity_id ||
+        successor.requester_entity_id === args.caller_entity_id ||
+        successor.target_entity_id === args.caller_entity_id);
+    supersededCorrection = callerMaySee
+      ? composeSupersededCorrection({
+          staleTitle: supersededMatches[0]!.row.title,
+          currentTitle: successor.title,
+        })
+      : "One older plan matching this was superseded by a newer approved decision.";
+  } else if (supersededMatches.length > 0) {
+    supersededCorrection = "One older plan matching this was superseded by a newer approved decision.";
+  }
+  const liveMatches = weighed
+    .filter((w) => w.weight?.weight_class !== "superseded")
+    .sort((a, b) => {
+      if (a.weight === null && b.weight === null) return 0;
+      if (a.weight === null) return 1;
+      if (b.weight === null) return -1;
+      return compareTruthWeight(
+        { weight: a.weight, source_date: a.lineage?.source_date ?? a.row.created_at.toISOString() },
+        { weight: b.weight, source_date: b.lineage?.source_date ?? b.row.created_at.toISOString() },
+      );
     })
-    .slice(0, 3);
+    .slice(0, 3)
+    .map((w) => ({
+      ledger_entry_id: w.row.ledger_entry_id,
+      title: w.row.title,
+      owner_entity_id: w.row.owner_entity_id,
+      flag: w.weight !== null && w.weight.flags.length > 0 ? w.weight.flags[0]! : null,
+    }));
   const ownerIds = liveMatches
     .map((r) => r.owner_entity_id)
     .filter((v): v is string => typeof v === "string");
@@ -161,7 +235,7 @@ export async function answerNamedSubjectBackground(args: {
     return ra - rb;
   });
 
-  if (liveMatches.length === 0 && seededSorted.length === 0) {
+  if (liveMatches.length === 0 && seededSorted.length === 0 && supersededCorrection === null) {
     return {
       ok: true,
       answer: {
@@ -174,13 +248,15 @@ export async function answerNamedSubjectBackground(args: {
 
   const parts: string[] = [];
   const sources: string[] = ["work_ledger"];
+  // The calm correction LEADS when an older matching plan was superseded.
+  if (supersededCorrection !== null) parts.push(supersededCorrection);
   if (liveMatches.length > 0) {
     const lines = liveMatches.map((r) => {
       const o = ownerName(r.owner_entity_id);
-      return `"${r.title}"${o !== null ? (o === "you" ? ", owned by you" : `, owned by ${o}`) : ""}`;
+      return `"${r.title}"${o !== null ? (o === "you" ? ", owned by you" : `, owned by ${o}`) : ""}${r.flag !== null ? ` — ${r.flag}` : ""}`;
     });
     parts.push(`Live work is the source of truth here — it mentions ${subject}: ${lines.join("; ")}.`);
-  } else {
+  } else if (supersededCorrection === null) {
     parts.push(`No live work mentions ${subject} — only seeded background below, which needs confirmation.`);
   }
   if (seededSorted.length > 0) {

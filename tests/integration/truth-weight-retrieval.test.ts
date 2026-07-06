@@ -40,6 +40,8 @@ import {
 import { linkSupersessionDeterministically } from "../../apps/api/src/services/otzar/supersession-linking.service.js";
 import { loadStructuredRightsForRoster, type PartyDomainRights } from "../../apps/api/src/services/otzar/decision-rights-store.service.js";
 import { answerClarityQuestion } from "../../apps/api/src/services/work-os/clarity-answer.service.js";
+import { answerNamedSubjectBackground } from "../../apps/api/src/services/work-os/background-answer.service.js";
+import { createLedgerEntry } from "../../apps/api/src/services/work-os/work-ledger.service.js";
 import { createEntity } from "../../packages/database/src/queries/entity.js";
 import { ensureAuditTriggers, cleanupTestData } from "../helpers.js";
 
@@ -348,5 +350,109 @@ describe("[BLOCK-3C] truth-weight retrieval + supersession + boundaries", () => 
     // into finality: the pure invariant holds regardless of who asks.
     const recLineage = mkLineage("Maybe we should rebuild the pipeline.", "Maya Chen", "technical", "2026-07-06T00:00:00Z");
     expect(computeTruthWeight(recLineage).can_finalize).toBe(false);
+  });
+
+  it("AIX-6 NAMED-SUBJECT + AIX-5 AMBIENT: superseded rows never present as live truth; flags ride quietly; every ambient phrasing corrects calmly", async () => {
+    const orgId = await makeEntity("Surface Org", "COMPANY");
+    const callerId = await makeEntity("Elena Torres", "PERSON");
+    await prisma.entityMembership.create({ data: { parent_id: orgId, child_id: callerId, is_active: true } });
+
+    const noMechanics = (text: string): void => {
+      expect(text).not.toMatch(
+        /\b(recommend_only|exceeds_authority|within_authority|superseding_decision|weight_class)\b/,
+      );
+      expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    };
+
+    const mk = async (title: string, lineage: CommunicationLineage): Promise<string> => {
+      const created = await createLedgerEntry({
+        org_entity_id: orgId,
+        ledger_type: "COMMITMENT",
+        source_type: "VOICE_COMMAND",
+        owner_entity_id: callerId,
+        requester_entity_id: callerId,
+        title,
+        status: "VERIFIED",
+        extraction_source: "TYPESCRIPT_DETERMINISTIC",
+        details: { communication_lineage: lineage },
+      });
+      expect(created.ok).toBe(true);
+      return created.ok ? created.entry.ledger_entry_id : "";
+    };
+
+    // The old plan (will be superseded), the current decision, and an
+    // out-of-authority promise — all matching "Northstar pilot".
+    const oldId = await mk(
+      "Northstar pilot kickoff planning",
+      mkLineage("We agreed to target July 24 for the Northstar pilot kickoff.", "Elena Torres", "technical", "2026-06-20T00:00:00Z"),
+    );
+    const newId = await mk(
+      "Northstar pilot kickoff replan",
+      { ...mkLineage("We agreed to move the Northstar pilot kickoff to August 7.", "Elena Torres", "technical", "2026-07-01T00:00:00Z"), supersedes: oldId },
+    );
+    await mk(
+      "Northstar pilot automation promise",
+      mkLineage("We will deliver full automation for the Northstar pilot by launch.", "Maya Chen", "technical", "2026-07-05T00:00:00Z"),
+    );
+    // Mark the old plan superseded (what the 3C linker does at ingest).
+    const oldRow = await prisma.workLedgerEntry.findUnique({ where: { ledger_entry_id: oldId }, select: { details: true } });
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: oldId },
+      data: {
+        details: {
+          ...(oldRow!.details as Record<string, unknown>),
+          communication_lineage: {
+            ...((oldRow!.details as { communication_lineage: Record<string, unknown> }).communication_lineage),
+            superseded_by: newId,
+            currentness: "superseded",
+          },
+        },
+      },
+    });
+
+    // AIX-6 named subject, as the row owner (employee scope).
+    const result = await answerNamedSubjectBackground({
+      org_entity_id: orgId,
+      caller_entity_id: callerId,
+      is_manager: false,
+      question: "What do we know about the Northstar pilot?",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const text = result.answer.answer;
+    // The calm correction LEADS and names the current source.
+    expect(text).toContain("was superseded");
+    expect(text).toContain('The current decision is "Northstar pilot kickoff replan"');
+    // The superseded title never appears in the live-truth list.
+    const liveSection = text.slice(text.indexOf("Live work is the source of truth"));
+    expect(liveSection).toContain("Northstar pilot kickoff replan");
+    expect(liveSection).not.toContain("Northstar pilot kickoff planning");
+    // The over-authority promise is listed WITH its quiet flag, and the
+    // authorized decision outranks it in presentation order.
+    expect(liveSection).toContain("Northstar pilot automation promise");
+    expect(liveSection).toContain("beyond the speaker's decision rights");
+    expect(liveSection.indexOf("kickoff replan")).toBeLessThan(liveSection.indexOf("automation promise"));
+    noMechanics(text);
+
+    // AIX-5 AMBIENT LOCK: every ambient recognizer phrasing rides the
+    // clarity rail, so each one corrects calmly on the superseded row.
+    for (const phrasing of [
+      "What do we know about this?",
+      "Any background on this?",
+      "Is there historical context for this?",
+    ]) {
+      const ambient = await answerClarityQuestion({
+        org_entity_id: orgId,
+        caller_entity_id: callerId,
+        is_manager: false,
+        ledger_entry_id: oldId,
+        question: phrasing,
+      });
+      expect(ambient.ok).toBe(true);
+      if (!ambient.ok) continue;
+      expect(ambient.answer.answer).toContain("You may be looking at an older plan");
+      expect(ambient.answer.answer).toContain("Northstar pilot kickoff replan");
+      noMechanics(ambient.answer.answer);
+    }
   });
 });
