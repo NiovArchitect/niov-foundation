@@ -36,7 +36,7 @@ import {
 } from "./comms-extract.service.js";
 import type { LLMProvider } from "../llm/llm.service.js";
 import { seededOriginFromDetails } from "../work-os/work-ledger.service.js";
-import { significantTokens } from "../work-os/context-candidates.service.js";
+import { isContextRetired, significantTokens } from "../work-os/context-candidates.service.js";
 
 export const EXTRACT_PREVIEW_MAX = 8;
 // Per-kind cap so one noisy category can never starve the others —
@@ -71,7 +71,11 @@ export type ExtractPreviewResult =
       /** The review promise — repeated server-side so no client can drop it. */
       review_note: string;
     }
-  | { ok: false; code: "NOT_FOUND" | "NOT_A_SEEDED_DOCUMENT" | "EXTRACTION_UNAVAILABLE"; message: string };
+  | {
+      ok: false;
+      code: "NOT_FOUND" | "NOT_A_SEEDED_DOCUMENT" | "SOURCE_RETIRED" | "EXTRACTION_UNAVAILABLE";
+      message: string;
+    };
 
 // Anchor a candidate to the source line sharing the most significant
 // tokens — an honest pointer, never a fabricated quote. Omitted when no
@@ -173,6 +177,15 @@ export async function extractDocumentWorkPreview(
       ok: false,
       code: "NOT_A_SEEDED_DOCUMENT",
       message: "Only seeded document context can be scanned for possible work.",
+    };
+  }
+  // [RETENTION] a retired source is out of active use — restore it first.
+  if (isContextRetired(row.details)) {
+    return {
+      ok: false,
+      code: "SOURCE_RETIRED",
+      message:
+        "This document was retired from active context. Restore it before scanning — nothing was scanned.",
     };
   }
   const details =

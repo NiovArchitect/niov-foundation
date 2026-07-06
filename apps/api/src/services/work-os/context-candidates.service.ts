@@ -68,6 +68,16 @@ export const CONTEXT_CANDIDATES_MAX = 3;
 // globally — the validation record carries no scope, so conservative.)
 const SUPPRESSED_STATES = new Set(["stale", "wrong_scope", "contradicted"]);
 
+// [RETENTION] retired context is out of ACTIVE USE everywhere the AIX
+// gate feeds (candidates, clarity retrieval, ambient + named-subject
+// answers) — while the row, capture, audit, and lineage stay preserved.
+export function isContextRetired(details: unknown): boolean {
+  if (typeof details !== "object" || details === null || Array.isArray(details)) return false;
+  const lc = (details as Record<string, unknown>).context_lifecycle;
+  if (typeof lc !== "object" || lc === null || Array.isArray(lc)) return false;
+  return (lc as Record<string, unknown>).state === "retired";
+}
+
 const STOPWORDS = new Set([
   "this", "that", "with", "from", "have", "will", "your", "ours", "their",
   "about", "into", "over", "under", "when", "what", "which", "where",
@@ -117,6 +127,7 @@ export function deriveContextRelevanceCandidates(
 
   const scored: Array<{ candidate: ContextCandidateProjection; strong: number; total: number }> = [];
   for (const row of pool) {
+    if (isContextRetired(row.details)) continue; // [RETENTION] retired = out of active use
     const seeded: SeededOriginProjection | undefined = seededOriginFromDetails(row.details);
     if (seeded === undefined) continue; // not seeded context — never suggested
     // Human suppression (AIX-2 feedback loop) — read from raw details so
@@ -206,6 +217,7 @@ export function deriveSubjectBackgroundCandidates(
   if (subjectTokens.length === 0) return [];
   const matched: ContextCandidateProjection[] = [];
   for (const row of pool) {
+    if (isContextRetired(row.details)) continue; // [RETENTION] retired = out of active use
     const seeded = seededOriginFromDetails(row.details);
     if (seeded === undefined) continue;
     const d =

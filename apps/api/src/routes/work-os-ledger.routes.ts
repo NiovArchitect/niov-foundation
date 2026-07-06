@@ -43,7 +43,12 @@ import { getContextCandidatesForLedgerEntry } from "../services/work-os/context-
 // [AIX-6] — org-scoped named-subject background answers (read-only).
 import { answerNamedSubjectBackground } from "../services/work-os/background-answer.service.js";
 // [CTX-BOUNDARY] — the admin context-boundary projection (read-only).
-import { getContextBoundaries } from "../services/work-os/context-boundaries.service.js";
+import {
+  getContextBoundaries,
+  listSeededDocumentLifecycle,
+} from "../services/work-os/context-boundaries.service.js";
+// [RETENTION] — governed lifecycle (retire/restore, never delete).
+import { setSeededContextLifecycle } from "../services/work-os/context-lifecycle.service.js";
 // [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
@@ -468,6 +473,71 @@ export async function registerWorkOsLedgerRoutes(
       }
       const boundaries = await getContextBoundaries(ctx.org_entity_id);
       return reply.code(200).send({ ok: true, boundaries });
+    },
+  );
+
+  // ── [RETENTION] Seeded-document lifecycle list — admin, read-only ──
+  app.get(
+    "/api/v1/work-os/context/documents",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      if (!ctx.manager) {
+        return reply.code(403).send({
+          ok: false,
+          code: "OPERATION_NOT_PERMITTED",
+          message: "Context lifecycle is an admin view.",
+        });
+      }
+      const documents = await listSeededDocumentLifecycle(ctx.org_entity_id);
+      return reply.code(200).send({ ok: true, documents });
+    },
+  );
+
+  // ── [RETENTION] Retire/restore seeded context — governed lifecycle ──
+  // NOT deletion: additive details JSON only; the row, capture, audit,
+  // lineage, and any extracted reviewed work survive untouched. Retired
+  // context is suppressed at the AIX gate and refused by extraction.
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/work-os/ledger/:id/context-lifecycle",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "write");
+      if (ctx === null) return;
+      if (!ctx.manager) {
+        return reply.code(403).send({
+          ok: false,
+          code: "OPERATION_NOT_PERMITTED",
+          message: "Context lifecycle is governed by org admins.",
+        });
+      }
+      const b = request.body ?? {};
+      const result = await setSeededContextLifecycle({
+        ledger_entry_id: request.params.id,
+        org_entity_id: ctx.org_entity_id,
+        caller_entity_id: ctx.entity_id,
+        state: typeof b.state === "string" ? b.state : "",
+        ...(typeof b.reason === "string" ? { reason: b.reason } : {}),
+      });
+      if (result.ok === false)
+        return reply
+          .code(result.code === "NOT_FOUND" ? 404 : 422)
+          .send(result);
+      // Audit real changes only (idempotent repeats stay silent). The
+      // free-text reason stays on the row, never in audit details.
+      if (result.changed) {
+        await writeAuditEvent({
+          event_type: result.state === "retired" ? "SEEDED_CONTEXT_RETIRED" : "SEEDED_CONTEXT_RESTORED",
+          outcome: "SUCCESS",
+          actor_entity_id: ctx.entity_id,
+          target_entity_id: ctx.org_entity_id,
+          details: {
+            action: "seeded_context_lifecycle",
+            ledger_entry_id: request.params.id,
+            state: result.state,
+          },
+        });
+      }
+      return reply.code(200).send({ ok: true, entry: result.entry });
     },
   );
 
