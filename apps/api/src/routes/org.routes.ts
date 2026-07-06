@@ -27,6 +27,12 @@ import {
   type Prisma,
 } from "@niov/database";
 import { requireAdminCapability } from "../middleware/admin.middleware.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
+// [ORG-SUBSTRATE] deterministic working-time policy (proposal-only).
+import {
+  DEFAULT_WORKING_POLICY,
+  SCHEDULING_PROPOSAL_NOTE,
+} from "../services/work-os/scheduling-policy.service.js";
 import { requireDualControl } from "../middleware/dual-control.middleware.js";
 import { PRIVILEGED_ENDPOINTS } from "../security/privileged-endpoints.js";
 import {
@@ -496,6 +502,139 @@ export async function registerOrgRoutes(
       },
     );
   }
+
+  // ── [ORG-SUBSTRATE] Org operating profile + self-service work profile ──
+  // The time half of the org substrate, with ZERO schema: timezones live
+  // on EntityProfile (the org COMPANY entity carries the org timezone;
+  // each person carries their own). Working hours/lunch are policy
+  // DEFAULTS from the deterministic scheduling engine — per-person hours
+  // storage is deliberately future (schema). Calendar truth is stated
+  // honestly: proposal-only until a connector exists.
+
+  const validTimezone = (tz: unknown): tz is string => {
+    if (typeof tz !== "string" || tz.length === 0 || tz.length > 64) return false;
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // GET /org/operating-profile — any org member (read tier).
+  app.get(
+    "/api/v1/org/operating-profile",
+    { preHandler: requireAuth(authService, "read") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const [org, profile] = await Promise.all([
+        prisma.entity.findUnique({
+          where: { entity_id: orgEntityId },
+          select: { display_name: true },
+        }),
+        prisma.entityProfile.findUnique({ where: { entity_id: orgEntityId } }),
+      ]);
+      return reply.code(200).send({
+        ok: true,
+        org_display_name: org?.display_name ?? null,
+        org_timezone: profile?.timezone ?? null,
+        working_policy: DEFAULT_WORKING_POLICY,
+        // Honest connector truth: creation requires a connected calendar.
+        calendar_connected: false,
+        scheduling_note: SCHEDULING_PROPOSAL_NOTE,
+      });
+    },
+  );
+
+  // PATCH /org/operating-profile — admin sets the org timezone.
+  app.patch<{ Body: { org_timezone?: unknown } }>(
+    "/api/v1/org/operating-profile",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const tz = request.body?.org_timezone;
+      if (!validTimezone(tz)) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_TIMEZONE",
+          message: "Provide a valid IANA time zone, like America/Los_Angeles.",
+        });
+      }
+      await prisma.entityProfile.upsert({
+        where: { entity_id: orgEntityId },
+        create: { profile_id: randomUUID(), entity_id: orgEntityId, timezone: tz },
+        update: { timezone: tz },
+      });
+      await writeAuditEvent({
+        event_type: "ADMIN_ACTION",
+        outcome: "SUCCESS",
+        actor_entity_id: callerId,
+        target_entity_id: orgEntityId,
+        details: { action: "org_operating_profile_updated", org_timezone: tz },
+      });
+      return reply.code(200).send({ ok: true, org_timezone: tz });
+    },
+  );
+
+  // GET /org/me/work-profile — the caller's own operating context.
+  app.get(
+    "/api/v1/org/me/work-profile",
+    { preHandler: requireAuth(authService, "read") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const [mine, orgProfile] = await Promise.all([
+        prisma.entityProfile.findUnique({ where: { entity_id: callerId } }),
+        prisma.entityProfile.findUnique({ where: { entity_id: orgEntityId } }),
+      ]);
+      return reply.code(200).send({
+        ok: true,
+        timezone: mine?.timezone ?? null,
+        org_timezone: orgProfile?.timezone ?? null,
+        working_policy: DEFAULT_WORKING_POLICY,
+        scheduling_note: SCHEDULING_PROPOSAL_NOTE,
+      });
+    },
+  );
+
+  // PATCH /org/me/work-profile — SELF-scoped: a person sets their own
+  // timezone (the admin rail is not required for personal operating
+  // context). Audited WORK_PROFILE_UPDATED.
+  app.patch<{ Body: { timezone?: unknown } }>(
+    "/api/v1/org/me/work-profile",
+    { preHandler: requireAuth(authService, "read") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const tz = request.body?.timezone;
+      if (!validTimezone(tz)) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_TIMEZONE",
+          message: "Provide a valid IANA time zone, like America/Los_Angeles.",
+        });
+      }
+      await prisma.entityProfile.upsert({
+        where: { entity_id: callerId },
+        create: { profile_id: randomUUID(), entity_id: callerId, timezone: tz },
+        update: { timezone: tz },
+      });
+      await writeAuditEvent({
+        event_type: "WORK_PROFILE_UPDATED",
+        outcome: "SUCCESS",
+        actor_entity_id: callerId,
+        target_entity_id: callerId,
+        details: { timezone: tz },
+      });
+      return reply.code(200).send({ ok: true, timezone: tz });
+    },
+  );
 
   // ── [TWIN-BOOTSTRAP] POST /org/members/:id/ensure-twin — admin repair ──
   // Idempotent starter-twin guarantee for active members created by rails
