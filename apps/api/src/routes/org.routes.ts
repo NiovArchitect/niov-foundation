@@ -40,6 +40,13 @@ import {
   mintSetupToken,
   activationStatusForEntities,
 } from "../services/auth-setup-token.service.js";
+// [ACT-EMAIL] activation-email delivery on the same rail.
+import {
+  ACTIVATION_EMAIL_BATCH_MAX,
+  envActivationEmailProvider,
+  isActivationEmailConfigured,
+  sendActivationEmailForMember,
+} from "../services/activation-email.service.js";
 import {
   executeStarterPilotActivationForCaller,
   executeTeamActivationForCaller,
@@ -487,6 +494,86 @@ export async function registerOrgRoutes(
       },
     );
   }
+
+  // ── [ACT-EMAIL] activation-email delivery on the SAME activation rail ──
+  // Delivery only: sending mints a fresh one-time token (superseding
+  // priors) and emails the link. The token is never returned, logged, or
+  // audited from these endpoints; "sent" means the provider ACCEPTED the
+  // message. Honest not-configured result when env is absent.
+
+  // GET /org/activation-email/status — is delivery configured? (admin)
+  app.get(
+    "/api/v1/org/activation-email/status",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (_request, reply) => {
+      return reply.code(200).send({ ok: true, configured: isActivationEmailConfigured() });
+    },
+  );
+
+  // POST /org/members/:id/activation-email — send ONE activation email.
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/org/members/:id/activation-email",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const result = await sendActivationEmailForMember({
+        caller_entity_id: callerId,
+        org_entity_id: orgEntityId,
+        target_entity_id: request.params.id,
+        provider: envActivationEmailProvider(),
+      });
+      if (result.ok === false) {
+        const status =
+          result.code === "ENTITY_NOT_IN_ORG" ? 404
+          : result.code === "ALREADY_ACTIVE" ? 409
+          : result.code === "EMAIL_NOT_CONFIGURED" ? 422
+          : result.code === "NO_EMAIL_ON_RECORD" ? 422
+          : 502;
+        return reply.code(status).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /org/members/activation-emails — batch send (cap 20, per-row results).
+  app.post<{ Body: { entity_ids?: string[] } }>(
+    "/api/v1/org/members/activation-emails",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const ids = Array.isArray(request.body?.entity_ids)
+        ? request.body.entity_ids.filter((v): v is string => typeof v === "string")
+        : [];
+      if (ids.length === 0 || ids.length > ACTIVATION_EMAIL_BATCH_MAX) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: `Send between 1 and ${ACTIVATION_EMAIL_BATCH_MAX} activation emails per batch.`,
+        });
+      }
+      const provider = envActivationEmailProvider();
+      const results: Array<{ entity_id: string; ok: boolean; code?: string }> = [];
+      for (const id of ids) {
+        const r = await sendActivationEmailForMember({
+          caller_entity_id: callerId,
+          org_entity_id: orgEntityId,
+          target_entity_id: id,
+          provider,
+        });
+        results.push({ entity_id: id, ok: r.ok, ...(r.ok === false ? { code: r.code } : {}) });
+      }
+      return reply.code(200).send({
+        ok: true,
+        sent: results.filter((r) => r.ok).length,
+        failed: results.filter((r) => !r.ok).length,
+        results,
+      });
+    },
+  );
 
   // POST /org/members/bulk -- batch add.
   app.post<{ Body: { members?: MemberInput[] } }>(

@@ -420,6 +420,10 @@ export type AuditEventType =
   // restored it. NOT deletion: the row/capture/audit/lineage survive.
   | "SEEDED_CONTEXT_RETIRED"
   | "SEEDED_CONTEXT_RESTORED"
+  // [ACT-EMAIL] activation-email delivery attempts. Details carry the
+  // token_id and provider category — NEVER the token, URL, or body.
+  | "ACTIVATION_EMAIL_SENT"
+  | "ACTIVATION_EMAIL_FAILED"
   | "EXTERNAL_COLLABORATOR_TRACKED"
   | "EXTERNAL_COLLABORATOR_INVITED"
   | "EXTERNAL_COLLABORATOR_APPROVED"
@@ -912,6 +916,9 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   // [RETENTION] seeded-context lifecycle (retire/restore — never delete).
   "SEEDED_CONTEXT_RETIRED",
   "SEEDED_CONTEXT_RESTORED",
+  // [ACT-EMAIL] activation-email delivery.
+  "ACTIVATION_EMAIL_SENT",
+  "ACTIVATION_EMAIL_FAILED",
   "EXTERNAL_COLLABORATOR_TRACKED",
   "EXTERNAL_COLLABORATOR_INVITED",
   "EXTERNAL_COLLABORATOR_APPROVED",
