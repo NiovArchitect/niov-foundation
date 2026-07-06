@@ -1,0 +1,3168 @@
+{
+  "org": "Redwood Atlas Studio, Inc.",
+  "org_timezone": "America/Los_Angeles",
+  "timespan": {
+    "start": "2026-04-06",
+    "end": "2026-05-29",
+    "weeks": 8
+  },
+  "doctrine": "Communication performs organizational work. Truth weight = decision rights + communication act + source lineage + currentness + permissions, context-aware. Never newest-document-wins. Never hierarchy-always-wins.",
+  "act_vocabulary": [
+    "proposal",
+    "request",
+    "decision",
+    "approval",
+    "rejection",
+    "assignment",
+    "commitment",
+    "correction",
+    "escalation",
+    "objection",
+    "clarification",
+    "memory_reference",
+    "unresolved_question",
+    "superseding_decision",
+    "policy_constraint",
+    "action_item"
+  ],
+  "artifacts": [
+    {
+      "id": "w1-kickoff",
+      "week": 1,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-06",
+      "title": "Q2 kickoff all-hands",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Aisha Khan",
+          "role": "Finance / Admin",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen",
+        "Jordan Ellis",
+        "Priya Shah"
+      ],
+      "decision_rights_basis": "company strategy is Maya's owned domain; delivery sequencing is Jordan's",
+      "statements": [
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-04-06T17:00:00.000Z",
+          "text": "Q2 priority is the three client programs: Northstar pilot, Harborlight implementation, Bluebird Phase 1. Depth over new logos this quarter.",
+          "act": "decision"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-06T17:06:00.000Z",
+          "text": "I'll sequence delivery so Northstar pilot prep and Harborlight onboarding don't collide in week 4.",
+          "act": "commitment"
+        },
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-04-06T17:11:00.000Z",
+          "text": "Bluebird Phase 1 scope is transcript summarization plus routing — I'll circulate the scope brief this week.",
+          "act": "action_item"
+        },
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-04-06T17:15:00.000Z",
+          "text": "Heads up: the shared ingestion pipeline is a dependency for both Harborlight and Bluebird. I'll publish a feasibility note.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-04-06T17:20:00.000Z",
+          "text": "Marcus owns weekly client check-ins and executive follow-ups for now; we'll revisit load in a few weeks.",
+          "act": "assignment"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Q2 = depth on Northstar, Harborlight, Bluebird; no new-logo pushes",
+          "by": "Maya Chen",
+          "at": "2026-04-06T17:00:00.000Z",
+          "domain": "strategic",
+          "authority_basis": "company strategy"
+        }
+      ],
+      "approvals": [],
+      "assignments": [
+        {
+          "text": "Marcus owns weekly client check-ins and executive follow-ups",
+          "by": "Maya Chen",
+          "to": "Marcus Reed",
+          "at": "2026-04-06T17:20:00.000Z",
+          "domain": "execution",
+          "authority_basis": "company strategy"
+        }
+      ],
+      "commitments": [
+        {
+          "text": "Jordan sequences delivery to avoid week-4 collision",
+          "by": "Jordan Ellis",
+          "at": "2026-04-06T17:06:00.000Z",
+          "domain": "execution",
+          "authority_basis": "delivery timelines",
+          "exceeds_authority": false
+        }
+      ],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; decisions made live by owners",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w1-northstar-brief",
+      "week": 1,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-04-07",
+      "title": "Northstar Health pilot brief (v1)",
+      "classification": "client",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "drafted by CSM; pilot date not yet an approved exec commitment",
+      "body": "Northstar Health Group pilot brief. Target pilot start: July 24. Scope: operations-workflow assistant for the COO's team. Compliance review pending on their side. Success criteria: 3 workflows live, weekly usage by 10 staff.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Northstar compliance review timing may move the pilot date",
+          "raised_by": "Marcus Reed",
+          "at": "2026-04-07T18:00:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": "w7-northstar-decision",
+      "authority_level": "informal",
+      "confidence": "medium",
+      "currentness": "superseded",
+      "source_lineage": "seeded_google_doc_simulation; drafted W1 by Marcus; superseded W7 by the approved August 7 decision",
+      "conflict_patterns": [
+        1
+      ]
+    },
+    {
+      "id": "w1-bluebird-scope",
+      "week": 1,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-04-08",
+      "title": "Bluebird Learning Phase 1 scope brief (approved)",
+      "classification": "client",
+      "client": "Bluebird Learning Co.",
+      "project": "bluebird-phase1",
+      "participants": [
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Priya Shah"
+      ],
+      "decision_rights_basis": "Phase scope boundaries are Priya's approval right",
+      "body": "Bluebird Learning Co. Phase 1 approved scope: transcript summarization and routing ONLY. Explicitly out of scope for Phase 1: full pipeline automation, auto-responses, grading. Phase 2 candidates require a new scope decision.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [
+        {
+          "text": "Phase 1 scope = transcript summarization + routing only",
+          "by": "Priya Shah",
+          "at": "2026-04-08T20:00:00.000Z",
+          "domain": "product",
+          "authority_basis": "Phase scope boundaries"
+        }
+      ],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "approved",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; approved scope of record for Bluebird Phase 1",
+      "conflict_patterns": [
+        2
+      ]
+    },
+    {
+      "id": "w1-harborlight-kickoff",
+      "week": 1,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-09",
+      "title": "Harborlight Logistics kickoff",
+      "classification": "client",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "delivery timelines are Jordan's owned domain; client requests are requests until decided",
+      "statements": [
+        {
+          "speaker": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "at": "2026-04-09T16:00:00.000Z",
+          "text": "Our timeline is aggressive — we want the first workflow live inside six weeks.",
+          "act": "request"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-09T16:08:00.000Z",
+          "text": "We'll build the sequencing plan against engineering feasibility and confirm a date once the ingestion dependency is sized.",
+          "act": "commitment"
+        },
+        {
+          "speaker": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "at": "2026-04-09T16:12:00.000Z",
+          "text": "I'll hand off deal context and open items to the delivery team this week.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [
+        {
+          "text": "Sequencing plan confirmed only after feasibility sizing",
+          "by": "Jordan Ellis",
+          "at": "2026-04-09T16:08:00.000Z",
+          "domain": "execution",
+          "authority_basis": "delivery timelines",
+          "exceeds_authority": false
+        }
+      ],
+      "unresolved_questions": [
+        {
+          "text": "Can the six-week ask be met given the ingestion dependency?",
+          "raised_by": "Jordan Ellis",
+          "at": "2026-04-09T16:08:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary client transcript",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w1-ownership-matrix-v1",
+      "week": 1,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-04-10",
+      "title": "Client ownership matrix (v1)",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "assignment routing is Jordan's approval right",
+      "body": "Client ownership (v1): Marcus Reed owns weekly check-ins AND executive client follow-ups for Northstar, Harborlight, Bluebird. Escalation path: Marcus -> Jordan -> Maya.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [
+        {
+          "text": "Marcus = weekly check-ins + executive follow-ups (all clients)",
+          "by": "Jordan Ellis",
+          "to": "Marcus Reed",
+          "at": "2026-04-10T19:00:00.000Z",
+          "domain": "execution",
+          "authority_basis": "assignment routing"
+        }
+      ],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": "w6-reassignment",
+      "authority_level": "approved",
+      "confidence": "high",
+      "currentness": "superseded",
+      "source_lineage": "seeded_google_doc_simulation; ownership of record W1-W5; superseded by the W6 reassignment decision",
+      "conflict_patterns": [
+        6
+      ]
+    },
+    {
+      "id": "w1-chat-eng-capacity",
+      "week": 1,
+      "communication_type": "chat_thread",
+      "date": "2026-04-10",
+      "title": "#delivery — engineering capacity note",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Elena Torres"
+      ],
+      "decision_rights_basis": "technical feasibility is Elena's owned domain",
+      "statements": [
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-04-10T21:00:00.000Z",
+          "text": "Capacity note: two engineers on the ingestion pipeline through April. Anything that depends on it can't land before the pipeline clears.",
+          "act": "policy_constraint"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-10T21:05:00.000Z",
+          "text": "Understood — I'll plan client dates around that constraint.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary chat thread; engineering constraint from the domain owner",
+      "conflict_patterns": [
+        4
+      ]
+    },
+    {
+      "id": "w2-bluebird-sales-call",
+      "week": 2,
+      "communication_type": "call_notes",
+      "date": "2026-04-14",
+      "title": "Bluebird expansion call — Theo x Camille",
+      "classification": "client",
+      "client": "Bluebird Learning Co.",
+      "project": "bluebird-phase1",
+      "participants": [
+        {
+          "name": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Camille Wright",
+          "role": "Director of Programs (Bluebird)",
+          "timezone": "America/Chicago"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "scope promises are Priya's approval right — Theo can only recommend",
+      "statements": [
+        {
+          "speaker": "Camille Wright",
+          "role": "Director of Programs (Bluebird)",
+          "at": "2026-04-14T18:00:00.000Z",
+          "text": "Our team is drowning in manual review. How far can this go?",
+          "act": "request"
+        },
+        {
+          "speaker": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "at": "2026-04-14T18:05:00.000Z",
+          "text": "Honestly, we can get you to full automation of the review pipeline — summaries, routing, responses, the whole thing.",
+          "act": "commitment"
+        },
+        {
+          "speaker": "Camille Wright",
+          "role": "Director of Programs (Bluebird)",
+          "at": "2026-04-14T18:07:00.000Z",
+          "text": "Full automation would be a game changer. When?",
+          "act": "unresolved_question"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [
+        {
+          "text": "\"Full automation of the review pipeline\" — exceeds the approved Phase 1 scope (summarization + routing only)",
+          "by": "Theo Williams",
+          "at": "2026-04-14T18:05:00.000Z",
+          "domain": "product",
+          "authority_basis": "scope promises (Phase boundaries are Priya's)",
+          "exceeds_authority": true
+        }
+      ],
+      "unresolved_questions": [
+        {
+          "text": "Client now expects full automation — timing unanswered",
+          "raised_by": "Camille Wright",
+          "at": "2026-04-14T18:07:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "medium",
+      "currentness": "contradicted",
+      "source_lineage": "call notes; sales language contradicts the approved w1-bluebird-scope brief",
+      "conflict_patterns": [
+        2
+      ]
+    },
+    {
+      "id": "w2-design-review",
+      "week": 2,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-15",
+      "title": "Design review — client dashboard flows",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Naomi Brooks",
+        "Priya Shah"
+      ],
+      "decision_rights_basis": "design system changes are Naomi's approval right",
+      "statements": [
+        {
+          "speaker": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "at": "2026-04-15T20:00:00.000Z",
+          "text": "I'm consolidating the status chips into one component set across client dashboards — approved as a design-system change.",
+          "act": "decision"
+        },
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-04-15T20:06:00.000Z",
+          "text": "Works for product — it keeps the Bluebird Phase 1 screens inside the approved scope.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Status chips consolidate into one design-system component set",
+          "by": "Naomi Brooks",
+          "at": "2026-04-15T20:00:00.000Z",
+          "domain": "design",
+          "authority_basis": "design system changes"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; design owner decision",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w2-northstar-compliance-email",
+      "week": 2,
+      "communication_type": "email_thread",
+      "date": "2026-04-16",
+      "title": "RE: Northstar pilot — compliance review",
+      "classification": "client",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "timezone": "America/Chicago"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "compliance timing is the client's constraint; pilot date changes need Maya's approval",
+      "statements": [
+        {
+          "speaker": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "at": "2026-04-16T15:30:00.000Z",
+          "text": "Our compliance team has started the data review. I can't yet confirm July 24 holds until they finish.",
+          "act": "unresolved_question"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-04-16T17:00:00.000Z",
+          "text": "Understood — we'll keep July 24 as the working target and revisit when the review lands.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Does July 24 survive the Northstar compliance review?",
+          "raised_by": "Dr. Lena Morris",
+          "at": "2026-04-16T15:30:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": "w7-northstar-decision",
+      "authority_level": "informal",
+      "confidence": "medium",
+      "currentness": "superseded",
+      "source_lineage": "primary email thread; the open July 24 question, resolved by the W7 approved decision",
+      "conflict_patterns": [
+        1
+      ]
+    },
+    {
+      "id": "w2-feasibility-note",
+      "week": 2,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-04-16",
+      "title": "Engineering feasibility note — ingestion pipeline",
+      "classification": "internal",
+      "client": null,
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        }
+      ],
+      "decision_makers_present": [
+        "Elena Torres"
+      ],
+      "decision_rights_basis": "technical feasibility and feasibility gates are Elena's",
+      "body": "Feasibility: the shared ingestion pipeline needs ~2 more weeks of hardening. The Harborlight connector and Bluebird summarization both depend on it. No client-facing ship date should be committed before the pipeline clears the feasibility gate.",
+      "statements": [],
+      "decisions": [
+        {
+          "text": "No dependent ship date commits before the ingestion pipeline clears the feasibility gate",
+          "by": "Elena Torres",
+          "at": "2026-04-16T22:00:00.000Z",
+          "domain": "technical",
+          "authority_basis": "feasibility gates"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; engineering constraint of record",
+      "conflict_patterns": [
+        4
+      ]
+    },
+    {
+      "id": "w2-standup",
+      "week": 2,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-17",
+      "title": "Delivery standup W2",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "internal schedule changes are Jordan's approval right",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-17T16:30:00.000Z",
+          "text": "Harborlight sequencing moves data-mapping ahead of connector work while the pipeline hardens.",
+          "act": "decision"
+        },
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-04-17T16:34:00.000Z",
+          "text": "Pipeline hardening is on track for the two-week estimate.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-04-17T16:38:00.000Z",
+          "text": "I'll brief Rafael on the resequencing in this week's check-in.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Data-mapping moves ahead of connector work in the Harborlight sequence",
+          "by": "Jordan Ellis",
+          "at": "2026-04-17T16:30:00.000Z",
+          "domain": "execution",
+          "authority_basis": "internal schedule changes"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w2-chat-lunch",
+      "week": 2,
+      "communication_type": "chat_thread",
+      "date": "2026-04-17",
+      "title": "#random — lunch meetings",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "a casual chat remark is not a policy change; protected lunch stays the org default",
+      "statements": [
+        {
+          "speaker": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "at": "2026-04-17T19:10:00.000Z",
+          "text": "btw lunch meetings are fine by me if we ever need the slot",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-17T19:14:00.000Z",
+          "text": "Noted — but the protected lunch block stays the default unless someone explicitly overrides for a specific meeting.",
+          "act": "policy_constraint"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "low",
+      "currentness": "current",
+      "source_lineage": "casual chat; explicitly NOT a policy change",
+      "conflict_patterns": [
+        8
+      ]
+    },
+    {
+      "id": "w3-harborlight-sync-request",
+      "week": 3,
+      "communication_type": "email_thread",
+      "date": "2026-04-20",
+      "title": "RE: Harborlight — sync cadence",
+      "classification": "client",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "a client request stays a request until the internal owner decides",
+      "statements": [
+        {
+          "speaker": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "at": "2026-04-20T14:00:00.000Z",
+          "text": "Given the timeline, can we move to daily syncs with your team?",
+          "act": "request"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-04-20T16:30:00.000Z",
+          "text": "Let me take that to our delivery lead and come back with a cadence that keeps us fast without burning the team.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Sync cadence for Harborlight — daily requested, undecided",
+          "raised_by": "Rafael Ortiz",
+          "at": "2026-04-20T14:00:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": "w6-harborlight-cadence-decision",
+      "authority_level": "exploratory",
+      "confidence": "medium",
+      "currentness": "superseded",
+      "source_lineage": "client request email; resolved by the W6 cadence decision",
+      "conflict_patterns": [
+        3
+      ]
+    },
+    {
+      "id": "w3-meeting-load-objection",
+      "week": 3,
+      "communication_type": "chat_thread",
+      "date": "2026-04-21",
+      "title": "#delivery — daily syncs?",
+      "classification": "internal",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "internal schedule changes are Jordan's; meeting-load objections are expertise signals",
+      "statements": [
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-04-21T17:00:00.000Z",
+          "text": "Rafael asked for daily syncs.",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-04-21T17:04:00.000Z",
+          "text": "Daily syncs would cost engineering a focus block every day — I object while the pipeline is in hardening.",
+          "act": "objection"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-21T17:09:00.000Z",
+          "text": "Proposal: twice-weekly syncs, with a written async update on the off days. I'll take it to Rafael.",
+          "act": "proposal"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [
+        {
+          "text": "Daily syncs would cost engineering a daily focus block during hardening",
+          "by": "Elena Torres",
+          "at": "2026-04-21T17:04:00.000Z",
+          "domain": "technical"
+        }
+      ],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary chat thread; objection + proposal preceding the W6 decision",
+      "conflict_patterns": [
+        3
+      ]
+    },
+    {
+      "id": "w3-budget-chat",
+      "week": 3,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-22",
+      "title": "Tooling budget — annotation tool",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Aisha Khan",
+          "role": "Finance / Admin",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen",
+        "Aisha Khan"
+      ],
+      "decision_rights_basis": "spend above the finance threshold needs Maya WITH Aisha — CEO enthusiasm alone is not an approval",
+      "statements": [
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-04-22T18:00:00.000Z",
+          "text": "The annotation tool would cut Bluebird labeling time roughly in half. It's $18k a year.",
+          "act": "proposal"
+        },
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-04-22T18:04:00.000Z",
+          "text": "Love it. Let's do it.",
+          "act": "proposal"
+        },
+        {
+          "speaker": "Aisha Khan",
+          "role": "Finance / Admin",
+          "at": "2026-04-22T18:06:00.000Z",
+          "text": "$18k is above the $15k threshold — policy needs a joint sign-off from Maya and me before purchase. I'll run the vendor check first.",
+          "act": "policy_constraint"
+        },
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-04-22T18:08:00.000Z",
+          "text": "Right — run the check and we'll sign it together.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Annotation tool purchase pending joint Maya+Aisha sign-off after vendor check",
+          "raised_by": "Aisha Khan",
+          "at": "2026-04-22T18:06:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": "w4-annotation-tool-approval",
+      "authority_level": "exploratory",
+      "confidence": "medium",
+      "currentness": "superseded",
+      "source_lineage": "primary transcript; CEO 'let's do it' held by finance policy until the W4 joint approval",
+      "conflict_patterns": [
+        5
+      ]
+    },
+    {
+      "id": "w3-client-health-doc",
+      "week": 3,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-04-23",
+      "title": "Client health notes — W3",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "CSM-owned relationship health notes; informational",
+      "body": "Northstar: engaged, compliance review in flight. Harborlight: pushing hard on pace, cadence question open. Bluebird: excited — expectation risk after the expansion call; scope conversation needed.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "medium",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; CSM notes flagging the Bluebird expectation risk",
+      "conflict_patterns": [
+        2
+      ]
+    },
+    {
+      "id": "w3-northstar-checkin",
+      "week": 3,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-23",
+      "title": "Northstar weekly check-in W3",
+      "classification": "client",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "timezone": "America/Chicago"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "working target only — July 24 was never an approved decision",
+      "statements": [
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-04-23T17:00:00.000Z",
+          "text": "We're still tracking to the July 24 working target from the pilot brief.",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "at": "2026-04-23T17:05:00.000Z",
+          "text": "Compliance is mid-review; I'll have a firm read in a few weeks.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "medium",
+      "currentness": "stale",
+      "source_lineage": "primary transcript; references the July 24 target later superseded in W7",
+      "conflict_patterns": [
+        1
+      ]
+    },
+    {
+      "id": "w3-standup",
+      "week": 3,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-24",
+      "title": "Delivery standup W3",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "standup status; no new decisions",
+      "statements": [
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-04-24T16:30:00.000Z",
+          "text": "Pipeline hardening is one week out from the feasibility gate.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "at": "2026-04-24T16:33:00.000Z",
+          "text": "Bluebird Phase 1 screens are in review against the approved scope.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-24T16:36:00.000Z",
+          "text": "I'll draft the Harborlight connector milestone once Elena's gate clears.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w4-ship-friday",
+      "week": 4,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-28",
+      "title": "Harborlight planning — connector date",
+      "classification": "internal",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis",
+        "Elena Torres"
+      ],
+      "decision_rights_basis": "Jordan owns timelines, but feasibility gates are Elena's — a manager date is aspirational until the gate clears",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-28T17:00:00.000Z",
+          "text": "I want the Harborlight connector shipped this Friday — Rafael needs a win.",
+          "act": "proposal"
+        },
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-04-28T17:03:00.000Z",
+          "text": "The connector depends on the ingestion pipeline and the feasibility gate hasn't cleared. Friday isn't shippable; the gate clears next week at the earliest.",
+          "act": "objection"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-04-28T17:07:00.000Z",
+          "text": "Okay — Friday stays aspirational. We commit the date the day your gate clears.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Connector ship date — pending the feasibility gate",
+          "raised_by": "Elena Torres",
+          "at": "2026-04-28T17:03:00.000Z"
+        }
+      ],
+      "objections": [
+        {
+          "text": "Friday isn't shippable — ingestion dependency; gate not cleared",
+          "by": "Elena Torres",
+          "at": "2026-04-28T17:03:00.000Z",
+          "domain": "technical"
+        }
+      ],
+      "supersedes": null,
+      "superseded_by": "w5-eng-feasibility-clear",
+      "authority_level": "exploratory",
+      "confidence": "medium",
+      "currentness": "superseded",
+      "source_lineage": "primary transcript; the manager date held by the engineering constraint until the W5 gate cleared",
+      "conflict_patterns": [
+        4
+      ]
+    },
+    {
+      "id": "w4-annotation-tool-approval",
+      "week": 4,
+      "communication_type": "email_thread",
+      "date": "2026-04-29",
+      "title": "APPROVED: annotation tool purchase",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Aisha Khan",
+          "role": "Finance / Admin",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen",
+        "Aisha Khan"
+      ],
+      "decision_rights_basis": "joint approval satisfies the above-threshold finance policy",
+      "statements": [
+        {
+          "speaker": "Aisha Khan",
+          "role": "Finance / Admin",
+          "at": "2026-04-29T17:00:00.000Z",
+          "text": "Vendor check clean. Approving the $18k annotation tool under the joint-approval policy.",
+          "act": "approval"
+        },
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-04-29T17:20:00.000Z",
+          "text": "Co-signed. Approved.",
+          "act": "approval"
+        }
+      ],
+      "decisions": [],
+      "approvals": [
+        {
+          "text": "$18k annotation tool purchase — joint sign-off",
+          "by": "Aisha Khan",
+          "at": "2026-04-29T17:00:00.000Z",
+          "domain": "finance",
+          "authority_basis": "spend within policy thresholds"
+        },
+        {
+          "text": "$18k annotation tool purchase — joint sign-off",
+          "by": "Maya Chen",
+          "at": "2026-04-29T17:20:00.000Z",
+          "domain": "finance",
+          "authority_basis": "budget above finance threshold WITH Aisha"
+        }
+      ],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": "w3-budget-chat",
+      "superseded_by": null,
+      "authority_level": "approved",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary email thread; the joint approval that resolves the W3 threshold hold",
+      "conflict_patterns": [
+        5
+      ]
+    },
+    {
+      "id": "w4-bluebird-checkin",
+      "week": 4,
+      "communication_type": "meeting_transcript",
+      "date": "2026-04-30",
+      "title": "Bluebird Phase 1 check-in",
+      "classification": "client",
+      "client": "Bluebird Learning Co.",
+      "project": "bluebird-phase1",
+      "participants": [
+        {
+          "name": "Camille Wright",
+          "role": "Director of Programs (Bluebird)",
+          "timezone": "America/Chicago"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Priya Shah"
+      ],
+      "decision_rights_basis": "Priya's scope correction is the authorized product boundary",
+      "statements": [
+        {
+          "speaker": "Camille Wright",
+          "role": "Director of Programs (Bluebird)",
+          "at": "2026-04-30T17:00:00.000Z",
+          "text": "When does the full automation Theo mentioned land?",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-04-30T17:03:00.000Z",
+          "text": "To keep us honest: Phase 1 is transcript summarization and routing — that's the approved scope. Full automation would be a Phase 2 decision we'd scope together.",
+          "act": "correction"
+        },
+        {
+          "speaker": "Camille Wright",
+          "role": "Director of Programs (Bluebird)",
+          "at": "2026-04-30T17:06:00.000Z",
+          "text": "Understood — summarization alone already saves my team hours.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-04-30T17:09:00.000Z",
+          "text": "I'll send a recap so the scope is in writing.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; the scope correction that resolves the W2 sales overreach",
+      "conflict_patterns": [
+        2
+      ]
+    },
+    {
+      "id": "w4-design-tokens-doc",
+      "week": 4,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-05-01",
+      "title": "Design tokens — client dashboards",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Naomi Brooks"
+      ],
+      "decision_rights_basis": "design system is Naomi's domain",
+      "body": "Design tokens for client dashboards: one status-chip component set, spacing scale, color roles. Documents the W2 design-review decision.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "approved",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; documentation catching up to the W2 design decision",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w4-chat-calendar",
+      "week": 4,
+      "communication_type": "chat_thread",
+      "date": "2026-05-01",
+      "title": "#ops — is calendar live?",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "connector truth is a system fact, not an opinion",
+      "statements": [
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-01T18:00:00.000Z",
+          "text": "I thought Google Calendar was live in Otzar — can it book the Rafael sync for me?",
+          "act": "unresolved_question"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-01T18:04:00.000Z",
+          "text": "No calendar is connected yet. Otzar drafts and proposes times — it never claims it created an event. Book it by hand for now.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary chat; connector-truth correction",
+      "conflict_patterns": [
+        7
+      ]
+    },
+    {
+      "id": "w4-standup",
+      "week": 4,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-01",
+      "title": "Delivery standup W4",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "standup status; no new decisions",
+      "statements": [
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-05-01T16:30:00.000Z",
+          "text": "Feasibility gate review is Monday.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-05-01T16:33:00.000Z",
+          "text": "Bluebird scope recap went out in writing after the check-in.",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-01T16:36:00.000Z",
+          "text": "Once the gate clears I'll commit the Harborlight connector date same-day.",
+          "act": "commitment"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [
+        {
+          "text": "Connector date commits same-day once the feasibility gate clears",
+          "by": "Jordan Ellis",
+          "at": "2026-05-01T16:36:00.000Z",
+          "domain": "execution",
+          "authority_basis": "delivery timelines",
+          "exceeds_authority": false
+        }
+      ],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w5-harborlight-escalation",
+      "week": 5,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-05",
+      "title": "Harborlight escalation — timeline pressure",
+      "classification": "client",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "Jordan can commit sequencing within the feasibility constraint; not past it",
+      "statements": [
+        {
+          "speaker": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "at": "2026-05-05T16:00:00.000Z",
+          "text": "I need a firm connector date this week or I have to escalate internally.",
+          "act": "escalation"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-05T16:05:00.000Z",
+          "text": "Our engineering gate reviews Monday. I'll give you a committed date within 24 hours of that review — a date we won't miss.",
+          "act": "commitment"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-05T16:10:00.000Z",
+          "text": "I'll send the interim data-mapping progress today so your team sees movement.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [
+        {
+          "text": "Committed connector date within 24h of the Monday feasibility review",
+          "by": "Jordan Ellis",
+          "at": "2026-05-05T16:05:00.000Z",
+          "domain": "execution",
+          "authority_basis": "delivery timelines",
+          "exceeds_authority": false
+        }
+      ],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary client transcript; bounded commitment honoring the feasibility gate",
+      "conflict_patterns": [
+        4
+      ]
+    },
+    {
+      "id": "w5-eng-feasibility-clear",
+      "week": 5,
+      "communication_type": "chat_thread",
+      "date": "2026-05-06",
+      "title": "#delivery — feasibility gate CLEARED",
+      "classification": "internal",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Elena Torres",
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "Elena clears her own feasibility gate; Jordan then commits the date",
+      "statements": [
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-05-06T16:00:00.000Z",
+          "text": "Ingestion pipeline cleared the feasibility gate. The Harborlight connector is unblocked.",
+          "act": "decision"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-06T16:10:00.000Z",
+          "text": "Committing the connector ship date: Friday May 15. Telling Rafael now.",
+          "act": "decision"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Feasibility gate cleared — connector unblocked",
+          "by": "Elena Torres",
+          "at": "2026-05-06T16:00:00.000Z",
+          "domain": "technical",
+          "authority_basis": "feasibility gates"
+        },
+        {
+          "text": "Connector ship date committed: Friday May 15",
+          "by": "Jordan Ellis",
+          "at": "2026-05-06T16:10:00.000Z",
+          "domain": "execution",
+          "authority_basis": "delivery timelines"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": "w4-ship-friday",
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary chat; gate cleared by the gate owner, date committed by the timeline owner",
+      "conflict_patterns": [
+        4
+      ]
+    },
+    {
+      "id": "w5-northstar-compliance-meeting",
+      "week": 5,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-07",
+      "title": "Northstar compliance review readout",
+      "classification": "client",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "timezone": "America/Chicago"
+        },
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen"
+      ],
+      "decision_rights_basis": "pilot date changes are exec-level client commitments — Maya's approval right",
+      "statements": [
+        {
+          "speaker": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "at": "2026-05-07T16:00:00.000Z",
+          "text": "Compliance needs two more weeks on the data-handling review. July 24 is at risk on our side.",
+          "act": "policy_constraint"
+        },
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-05-07T16:06:00.000Z",
+          "text": "Then let's plan to move the pilot rather than rush your review. I'd propose early August; we'll confirm a date once your team signs off.",
+          "act": "proposal"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-07T16:10:00.000Z",
+          "text": "I'll keep the prep workstreams warm so the slip stays small.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "New pilot date pending Northstar compliance sign-off — early August proposed",
+          "raised_by": "Maya Chen",
+          "at": "2026-05-07T16:06:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": "w7-northstar-decision",
+      "authority_level": "exploratory",
+      "confidence": "medium",
+      "currentness": "superseded",
+      "source_lineage": "primary transcript; the proposal stage of the date change, finalized W7",
+      "conflict_patterns": [
+        1
+      ]
+    },
+    {
+      "id": "w5-ownership-friction-chat",
+      "week": 5,
+      "communication_type": "chat_thread",
+      "date": "2026-05-07",
+      "title": "#ops — follow-up load",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "an escalation raises the question; the W6 decision answers it",
+      "statements": [
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-07T22:00:00.000Z",
+          "text": "Flagging: executive follow-ups for three clients plus weekly check-ins is too much — exec items are slipping.",
+          "act": "escalation"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-07T22:08:00.000Z",
+          "text": "Heard. I'll bring an ownership proposal to Monday's ops sync.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Who should own executive client follow-ups going forward?",
+          "raised_by": "Marcus Reed",
+          "at": "2026-05-07T22:00:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": "w6-reassignment",
+      "authority_level": "informal",
+      "confidence": "high",
+      "currentness": "superseded",
+      "source_lineage": "primary chat; the escalation that triggered the W6 reassignment",
+      "conflict_patterns": [
+        6
+      ]
+    },
+    {
+      "id": "w5-sop-client-comms",
+      "week": 5,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-05-08",
+      "title": "SOP — client communications",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen",
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "org policy; approved by exec + ops owners",
+      "body": "Client communications SOP: commitments to clients follow decision rights — scope commitments need the Product Lead, dates need Ops after the engineering feasibility gate, spend follows finance thresholds. Client-facing messages during the protected lunch block are scheduled, not sent live. Exec-level commitments need Maya.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [
+        {
+          "text": "Client communications SOP adopted as policy",
+          "by": "Maya Chen",
+          "at": "2026-05-08T19:00:00.000Z",
+          "domain": "strategic",
+          "authority_basis": "company strategy"
+        }
+      ],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "approved",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; policy of record",
+      "conflict_patterns": [
+        2,
+        5,
+        8
+      ]
+    },
+    {
+      "id": "w5-standup",
+      "week": 5,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-08",
+      "title": "Delivery standup W5",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "standup status; no new decisions",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-08T16:30:00.000Z",
+          "text": "Connector date May 15 is committed and communicated to Rafael.",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-05-08T16:33:00.000Z",
+          "text": "Connector build is on track for the 15th.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-08T16:36:00.000Z",
+          "text": "Northstar prep stays warm while we wait on their compliance sign-off.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w6-reassignment",
+      "week": 6,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-11",
+      "title": "Ops sync — client ownership reassignment",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis",
+        "Maya Chen"
+      ],
+      "decision_rights_basis": "assignment routing is Jordan's approval right; Maya present and aligned",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-11T17:00:00.000Z",
+          "text": "Decision: I take executive client follow-ups across all three accounts. Marcus keeps weekly check-ins and relationship health. Effective today.",
+          "act": "decision"
+        },
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-05-11T17:04:00.000Z",
+          "text": "Agreed — exec follow-ups sit better with ops right now.",
+          "act": "approval"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-11T17:06:00.000Z",
+          "text": "Works for me. I'll hand over the open exec threads today.",
+          "act": "commitment"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Jordan owns executive client follow-ups; Marcus keeps weekly check-ins — effective 2026-05-11",
+          "by": "Jordan Ellis",
+          "at": "2026-05-11T17:00:00.000Z",
+          "domain": "execution",
+          "authority_basis": "assignment routing"
+        }
+      ],
+      "approvals": [
+        {
+          "text": "Reassignment endorsed",
+          "by": "Maya Chen",
+          "at": "2026-05-11T17:04:00.000Z",
+          "domain": "strategic",
+          "authority_basis": "company strategy"
+        }
+      ],
+      "assignments": [
+        {
+          "text": "Executive client follow-ups (all clients)",
+          "by": "Jordan Ellis",
+          "to": "Jordan Ellis",
+          "at": "2026-05-11T17:00:00.000Z",
+          "domain": "execution",
+          "authority_basis": "assignment routing"
+        },
+        {
+          "text": "Weekly check-ins + relationship health (all clients)",
+          "by": "Jordan Ellis",
+          "to": "Marcus Reed",
+          "at": "2026-05-11T17:00:00.000Z",
+          "domain": "execution",
+          "authority_basis": "assignment routing"
+        }
+      ],
+      "commitments": [
+        {
+          "text": "Marcus hands over open exec threads today",
+          "by": "Marcus Reed",
+          "at": "2026-05-11T17:06:00.000Z",
+          "domain": "execution",
+          "authority_basis": "routine client communications",
+          "exceeds_authority": false
+        }
+      ],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": "w1-ownership-matrix-v1",
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; the reassignment decision of record — routing must follow THIS, not the v1 matrix",
+      "conflict_patterns": [
+        6
+      ]
+    },
+    {
+      "id": "w6-harborlight-cadence-decision",
+      "week": 6,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-12",
+      "title": "Harborlight sync cadence — decided",
+      "classification": "client",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "internal schedule changes are Jordan's; agreed live with the client",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-12T15:58:00.000Z",
+          "text": "On the daily-sync ask specifically: that's a no from delivery — a daily meeting would slow the build you're pressing us to speed up.",
+          "act": "rejection"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-12T16:00:00.000Z",
+          "text": "Proposal instead: twice-weekly live syncs — Tuesday and Thursday — with written async updates the other days.",
+          "act": "proposal"
+        },
+        {
+          "speaker": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "at": "2026-05-12T16:05:00.000Z",
+          "text": "Agreed — twice-weekly works if the async updates are real.",
+          "act": "approval"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-12T16:07:00.000Z",
+          "text": "Decision: twice-weekly syncs, async updates Monday, Wednesday, Friday. Locked.",
+          "act": "decision"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Harborlight cadence: twice-weekly live syncs + async updates M/W/F — daily was requested, not adopted",
+          "by": "Jordan Ellis",
+          "at": "2026-05-12T16:07:00.000Z",
+          "domain": "execution",
+          "authority_basis": "internal schedule changes"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": "w3-harborlight-sync-request",
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary client transcript; the cadence decision — the W3 daily request never became policy",
+      "conflict_patterns": [
+        3
+      ]
+    },
+    {
+      "id": "w6-ownership-matrix-v2",
+      "week": 6,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-05-13",
+      "title": "Client ownership matrix (v2)",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "documents the W6 reassignment decision",
+      "body": "Client ownership (v2, effective 2026-05-11): Jordan Ellis owns executive client follow-ups for Northstar, Harborlight, Bluebird. Marcus Reed owns weekly check-ins and relationship health. Documentation catching up to the ops-sync decision.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "approved",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; documentation catching up to w6-reassignment — the decision came first, the doc second",
+      "conflict_patterns": [
+        6
+      ]
+    },
+    {
+      "id": "w6-bluebird-phase2-note",
+      "week": 6,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-05-14",
+      "title": "Bluebird Phase 2 exploration note (NOT approved)",
+      "classification": "client",
+      "client": "Bluebird Learning Co.",
+      "project": "bluebird-phase1",
+      "participants": [
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "exploration only — a Phase 2 scope would need Priya's formal approval",
+      "body": "Phase 2 exploration (NOT approved scope): candidate directions include auto-drafted responses and workflow automation. This note is thinking, not a commitment. Phase 1 approved scope remains summarization + routing only.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Whether any Phase 2 direction gets scoped — undecided",
+          "raised_by": "Priya Shah",
+          "at": "2026-05-14T20:00:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "exploratory",
+      "confidence": "low",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; exploration explicitly below decision grade",
+      "conflict_patterns": [
+        2
+      ]
+    },
+    {
+      "id": "w6-chat-theo-handoff",
+      "week": 6,
+      "communication_type": "chat_thread",
+      "date": "2026-05-14",
+      "title": "#sales — exec-thread handoff",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "handoff under the new W6 ownership",
+      "statements": [
+        {
+          "speaker": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "at": "2026-05-14T15:00:00.000Z",
+          "text": "Sending you the open exec threads for Harborlight and Northstar per the new ownership. Flag: Camille at Bluebird may still reference my automation comment — Priya already corrected scope in writing.",
+          "act": "action_item"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-14T15:06:00.000Z",
+          "text": "Got them. Scope stays as Priya set it.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary chat; handoff consistent with w6-reassignment",
+      "conflict_patterns": [
+        2,
+        6
+      ]
+    },
+    {
+      "id": "w6-standup",
+      "week": 6,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-15",
+      "title": "Delivery standup W6 — connector ships",
+      "classification": "internal",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis",
+        "Elena Torres"
+      ],
+      "decision_rights_basis": "status confirmation by the owning leads",
+      "statements": [
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-05-15T16:30:00.000Z",
+          "text": "Harborlight connector shipped this morning, on the committed date.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-15T16:33:00.000Z",
+          "text": "Confirmed with Rafael. The commitment made after the gate cleared held exactly.",
+          "act": "memory_reference"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; delivery followed the feasibility-gated commitment",
+      "conflict_patterns": [
+        4
+      ]
+    },
+    {
+      "id": "w7-northstar-decision",
+      "week": 7,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-19",
+      "title": "Northstar pilot date — APPROVED: August 7",
+      "classification": "client",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "timezone": "America/Chicago"
+        },
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen",
+        "Dr. Lena Morris",
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "exec-level client commitment — Maya's approval right, with the client COO agreeing live and ops present",
+      "statements": [
+        {
+          "speaker": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "at": "2026-05-19T16:00:00.000Z",
+          "text": "Compliance signed off this morning. We're clear to schedule.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-05-19T16:04:00.000Z",
+          "text": "Approved. Move the pilot to August 7. That replaces the July 24 target everywhere.",
+          "act": "superseding_decision"
+        },
+        {
+          "speaker": "Dr. Lena Morris",
+          "role": "COO (Northstar)",
+          "at": "2026-05-19T16:06:00.000Z",
+          "text": "August 7 confirmed on our side.",
+          "act": "approval"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-19T16:08:00.000Z",
+          "text": "I'll resequence prep to the new date and notify the team today.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Northstar pilot moves July 24 → August 7 after compliance sign-off",
+          "by": "Maya Chen",
+          "at": "2026-05-19T16:04:00.000Z",
+          "domain": "customer",
+          "authority_basis": "exec-level client commitments"
+        }
+      ],
+      "approvals": [
+        {
+          "text": "August 7 confirmed by the client COO",
+          "by": "Dr. Lena Morris",
+          "at": "2026-05-19T16:06:00.000Z",
+          "domain": "customer",
+          "authority_basis": "client counterparty approval"
+        }
+      ],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": "w1-northstar-brief",
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; THE superseding decision — August 7 outranks every July 24 reference regardless of document recency",
+      "conflict_patterns": [
+        1
+      ]
+    },
+    {
+      "id": "w7-northstar-decision-log",
+      "week": 7,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-05-19",
+      "title": "Decision log — Northstar pilot date",
+      "classification": "client",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen",
+        "Dr. Lena Morris"
+      ],
+      "decision_rights_basis": "records the W7 approved decision",
+      "body": "DECISION (2026-05-19): Northstar pilot start moves from July 24 to August 7. Decided by Maya Chen (exec-level client commitment) with Dr. Lena Morris (Northstar COO) agreeing live after compliance sign-off. Supersedes the v1 pilot brief target.",
+      "statements": [],
+      "decisions": [
+        {
+          "text": "Pilot start: August 7 (recorded)",
+          "by": "Maya Chen",
+          "at": "2026-05-19T21:00:00.000Z",
+          "domain": "customer",
+          "authority_basis": "exec-level client commitments"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "approved",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; decision log documenting w7-northstar-decision",
+      "conflict_patterns": [
+        1
+      ]
+    },
+    {
+      "id": "w7-team-update",
+      "week": 7,
+      "communication_type": "email_thread",
+      "date": "2026-05-20",
+      "title": "Team update — Northstar date + ownership recap",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "communication of decisions already made by their owners",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-20T15:00:00.000Z",
+          "text": "Recap: Northstar pilot is now August 7 (approved by Maya with Dr. Morris — the July 24 brief is superseded). Ownership: I hold exec follow-ups, Marcus holds weekly check-ins. Harborlight cadence stays twice-weekly.",
+          "act": "memory_reference"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary email; propagation of the W6/W7 decisions",
+      "conflict_patterns": [
+        1,
+        3,
+        6
+      ]
+    },
+    {
+      "id": "w7-roadmap-doc",
+      "week": 7,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-05-21",
+      "title": "Product roadmap tradeoffs — Q3 draft",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Priya Shah"
+      ],
+      "decision_rights_basis": "roadmap tradeoffs are Priya's owned domain; Q3 commitments still draft",
+      "body": "Q3 roadmap draft: deepen transcript intelligence, evaluate the Bluebird Phase 2 candidates against capacity. Draft — Q3 commitments finalize at the quarter planning session.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [
+        {
+          "text": "Q3 commitments — draft until quarter planning",
+          "raised_by": "Priya Shah",
+          "at": "2026-05-21T18:00:00.000Z"
+        }
+      ],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "exploratory",
+      "confidence": "medium",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; draft roadmap by the domain owner",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w7-scheduling-chat",
+      "week": 7,
+      "communication_type": "chat_thread",
+      "date": "2026-05-21",
+      "title": "#ops — pilot prep meeting time",
+      "classification": "internal",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "scheduling follows working-hours policy across time zones",
+      "statements": [
+        {
+          "speaker": "Theo Williams",
+          "role": "Sales / Partnerships",
+          "at": "2026-05-21T15:00:00.000Z",
+          "text": "Can we do pilot prep at 11 my time tomorrow? That's 8 AM Pacific.",
+          "act": "proposal"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-21T15:05:00.000Z",
+          "text": "8 AM Pacific is before West-coast working hours — let's take a slot inside everyone's day instead.",
+          "act": "objection"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [
+        {
+          "text": "8 AM Pacific is outside West-coast working hours",
+          "by": "Jordan Ellis",
+          "at": "2026-05-21T15:05:00.000Z",
+          "domain": "execution"
+        }
+      ],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary chat; cross-timezone scheduling honoring working hours",
+      "conflict_patterns": [
+        7
+      ]
+    },
+    {
+      "id": "w7-standup",
+      "week": 7,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-22",
+      "title": "Delivery standup W7",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "standup status; no new decisions",
+      "statements": [
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-22T16:30:00.000Z",
+          "text": "All client check-ins now reference August 7 for Northstar — no July 24 stragglers.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-05-22T16:33:00.000Z",
+          "text": "Bluebird Phase 1 acceptance review is scheduled for next week.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-22T16:36:00.000Z",
+          "text": "Harborlight post-ship stabilization is clean so far.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript",
+      "conflict_patterns": []
+    },
+    {
+      "id": "w8-allhands",
+      "week": 8,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-26",
+      "title": "Quarter wrap all-hands",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Maya Chen",
+          "role": "CEO / Founder",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Aisha Khan",
+          "role": "Finance / Admin",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Maya Chen",
+        "Jordan Ellis",
+        "Priya Shah"
+      ],
+      "decision_rights_basis": "strategy is Maya's; Q3 detail decisions stay with their domain owners",
+      "statements": [
+        {
+          "speaker": "Maya Chen",
+          "role": "CEO / Founder",
+          "at": "2026-05-26T17:00:00.000Z",
+          "text": "Decision for Q3 framing: we stay at three clients and deepen — expansion conversations resume only after Northstar's pilot ships.",
+          "act": "decision"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-26T17:06:00.000Z",
+          "text": "Delivery honored every committed date this quarter because commitments followed the feasibility gate.",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Aisha Khan",
+          "role": "Finance / Admin",
+          "at": "2026-05-26T17:10:00.000Z",
+          "text": "Reminder: Q3 tooling requests follow the same threshold policy — above $15k needs the joint sign-off.",
+          "act": "policy_constraint"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Q3: stay at three clients and deepen; expansion resumes after the Northstar pilot ships",
+          "by": "Maya Chen",
+          "at": "2026-05-26T17:00:00.000Z",
+          "domain": "strategic",
+          "authority_basis": "company strategy"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; Q3 strategic frame",
+      "conflict_patterns": [
+        5
+      ]
+    },
+    {
+      "id": "w8-northstar-prep",
+      "week": 8,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-27",
+      "title": "Northstar pilot prep — against August 7",
+      "classification": "client",
+      "client": "Northstar Health Group",
+      "project": "northstar-pilot",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "prep executes the W7 approved decision",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-27T17:00:00.000Z",
+          "text": "All prep milestones now key off August 7 — the approved date from the Maya/Dr. Morris decision.",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-05-27T17:04:00.000Z",
+          "text": "Environment provisioning lands two weeks before the pilot — no dependency risk at this date.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-27T17:08:00.000Z",
+          "text": "I'll confirm the onboarding roster with Dr. Morris's team this week.",
+          "act": "action_item"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; execution against the superseding decision",
+      "conflict_patterns": [
+        1
+      ]
+    },
+    {
+      "id": "w8-lunch-scheduling-chat",
+      "week": 8,
+      "communication_type": "chat_thread",
+      "date": "2026-05-27",
+      "title": "#ops — working lunch?",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis"
+      ],
+      "decision_rights_basis": "protected lunch is the default; only an explicit per-meeting override moves it",
+      "statements": [
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-05-27T19:00:00.000Z",
+          "text": "Only slot everyone shares tomorrow is 12:15 — working lunch for the Bluebird acceptance review?",
+          "act": "proposal"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-27T19:04:00.000Z",
+          "text": "Lunch is protected by default — Theo's old 'lunch is fine' chat comment doesn't change policy. If all three of you explicitly opt in for THIS meeting, it can go ahead as an override.",
+          "act": "policy_constraint"
+        },
+        {
+          "speaker": "Naomi Brooks",
+          "role": "Designer / UX Lead",
+          "at": "2026-05-27T19:06:00.000Z",
+          "text": "I explicitly opt in for tomorrow only.",
+          "act": "approval"
+        },
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-05-27T19:07:00.000Z",
+          "text": "Same — one-time override, and we keep it to 45 minutes.",
+          "act": "approval"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "One-time explicit lunch override for the 2026-05-28 Bluebird acceptance review",
+          "by": "Jordan Ellis",
+          "at": "2026-05-27T19:04:00.000Z",
+          "domain": "execution",
+          "authority_basis": "internal schedule changes"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary chat; the explicit-override path — casual comments never move policy",
+      "conflict_patterns": [
+        8
+      ]
+    },
+    {
+      "id": "w8-retro-doc",
+      "week": 8,
+      "communication_type": "seeded_google_doc_simulation",
+      "date": "2026-05-28",
+      "title": "Q2 retro — what held",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "retro observations; no new decisions",
+      "body": "Q2 retro: commitments held when they followed decision rights — dates after the feasibility gate, scope from the Product Lead, spend through the threshold policy. The one client-expectation wobble (Bluebird automation comment) came from a commitment made outside authority and was fixed by an authorized correction.",
+      "statements": [],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "informal",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "seeded_google_doc_simulation; retro synthesis of the quarter's decision discipline",
+      "conflict_patterns": [
+        2,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "w8-harborlight-status",
+      "week": 8,
+      "communication_type": "email_thread",
+      "date": "2026-05-28",
+      "title": "Harborlight — cadence + stabilization status",
+      "classification": "client",
+      "client": "Harborlight Logistics",
+      "project": "harborlight-implementation",
+      "participants": [
+        {
+          "name": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "timezone": "America/New_York"
+        },
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [],
+      "decision_rights_basis": "status under the decided cadence",
+      "statements": [
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-28T15:00:00.000Z",
+          "text": "Twice-weekly cadence plus async updates is holding — connector stable since the May 15 ship.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Rafael Ortiz",
+          "role": "VP Operations (Harborlight)",
+          "at": "2026-05-28T17:30:00.000Z",
+          "text": "Agreed, the async updates are doing the job. Keep the cadence as decided.",
+          "act": "approval"
+        }
+      ],
+      "decisions": [],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "agreed",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary email; the W6 cadence decision holding in practice",
+      "conflict_patterns": [
+        3
+      ]
+    },
+    {
+      "id": "w8-final-standup",
+      "week": 8,
+      "communication_type": "meeting_transcript",
+      "date": "2026-05-29",
+      "title": "Delivery standup W8 — quarter close",
+      "classification": "internal",
+      "client": null,
+      "project": "company",
+      "participants": [
+        {
+          "name": "Jordan Ellis",
+          "role": "Head of Operations",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Elena Torres",
+          "role": "Engineering Lead",
+          "timezone": "America/Denver"
+        },
+        {
+          "name": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "timezone": "America/Los_Angeles"
+        },
+        {
+          "name": "Priya Shah",
+          "role": "Product Lead",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "decision_makers_present": [
+        "Jordan Ellis",
+        "Priya Shah"
+      ],
+      "decision_rights_basis": "quarter close status; Bluebird acceptance is Priya's scope right",
+      "statements": [
+        {
+          "speaker": "Priya Shah",
+          "role": "Product Lead",
+          "at": "2026-05-29T16:30:00.000Z",
+          "text": "Bluebird Phase 1 accepted at yesterday's review — inside the approved scope, on the approved boundaries.",
+          "act": "decision"
+        },
+        {
+          "speaker": "Elena Torres",
+          "role": "Engineering Lead",
+          "at": "2026-05-29T16:33:00.000Z",
+          "text": "No open technical blockers into June.",
+          "act": "clarification"
+        },
+        {
+          "speaker": "Marcus Reed",
+          "role": "Customer Success Manager",
+          "at": "2026-05-29T16:36:00.000Z",
+          "text": "Camille signed the acceptance note — expectations landed where Priya set them.",
+          "act": "memory_reference"
+        },
+        {
+          "speaker": "Jordan Ellis",
+          "role": "Head of Operations",
+          "at": "2026-05-29T16:39:00.000Z",
+          "text": "Quarter closes with Northstar on August 7, Harborlight stable, Bluebird accepted.",
+          "act": "clarification"
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Bluebird Phase 1 accepted within the approved scope",
+          "by": "Priya Shah",
+          "at": "2026-05-29T16:30:00.000Z",
+          "domain": "product",
+          "authority_basis": "Phase scope boundaries"
+        }
+      ],
+      "approvals": [],
+      "assignments": [],
+      "commitments": [],
+      "unresolved_questions": [],
+      "objections": [],
+      "supersedes": null,
+      "superseded_by": null,
+      "authority_level": "owner_decision",
+      "confidence": "high",
+      "currentness": "current",
+      "source_lineage": "primary transcript; quarter close",
+      "conflict_patterns": [
+        2
+      ]
+    }
+  ]
+}

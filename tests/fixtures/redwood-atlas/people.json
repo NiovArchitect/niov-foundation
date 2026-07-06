@@ -1,0 +1,83 @@
+{
+  "org": {
+    "name": "Redwood Atlas Studio, Inc.",
+    "location": "San Francisco, CA",
+    "timezone": "America/Los_Angeles",
+    "working_hours": "Mon-Fri 09:00-17:30 local",
+    "lunch_protected": "12:00-13:00 local"
+  },
+  "people": [
+    {
+      "name": "Maya Chen",
+      "role": "CEO / Founder",
+      "timezone": "America/Los_Angeles",
+      "owns": ["company strategy", "final client approvals", "executive messaging"],
+      "can_approve": ["strategy shifts", "exec-level client commitments", "budget above finance threshold WITH Aisha"],
+      "recommend_only": ["technical feasibility", "product scope detail"],
+      "twin_behavior": "concise executive summaries, risk flags, approval-needed items; no low-level task spam"
+    },
+    {
+      "name": "Jordan Ellis",
+      "role": "Head of Operations",
+      "timezone": "America/Los_Angeles",
+      "owns": ["delivery timelines", "capacity", "executive client follow-ups (since W6 reassignment)"],
+      "can_approve": ["internal schedule changes", "assignment routing"],
+      "recommend_only": ["scope", "budget"],
+      "twin_behavior": "timeline coherence, blockers, assignments, meeting follow-ups, cross-functional routing"
+    },
+    {
+      "name": "Priya Shah",
+      "role": "Product Lead",
+      "timezone": "America/Los_Angeles",
+      "owns": ["product scope", "requirements", "roadmap tradeoffs"],
+      "can_approve": ["Phase scope boundaries"],
+      "recommend_only": ["timelines", "budget"],
+      "twin_behavior": "requirements memory, decision diffs, scope-conflict detection, product risk"
+    },
+    {
+      "name": "Marcus Reed",
+      "role": "Customer Success Manager",
+      "timezone": "America/Los_Angeles",
+      "owns": ["weekly client check-ins (since W6 reassignment)", "client relationship health", "promised follow-ups"],
+      "can_approve": ["routine client communications"],
+      "recommend_only": ["scope", "pricing"],
+      "twin_behavior": "client sentiment, next best response, open loops, promised follow-ups"
+    },
+    {
+      "name": "Elena Torres",
+      "role": "Engineering Lead",
+      "timezone": "America/Denver",
+      "owns": ["technical feasibility", "implementation sequencing", "incident risk"],
+      "can_approve": ["technical approach", "feasibility gates"],
+      "recommend_only": ["client dates"],
+      "twin_behavior": "technical blockers, dependencies, feasibility boundaries, engineering capacity"
+    },
+    {
+      "name": "Naomi Brooks",
+      "role": "Designer / UX Lead",
+      "timezone": "America/Los_Angeles",
+      "owns": ["design assets", "UX decisions", "customer-facing flows"],
+      "can_approve": ["design system changes"],
+      "recommend_only": ["scope", "timeline"],
+      "twin_behavior": "design rationale, UI decisions, consistency, customer-experience notes"
+    },
+    {
+      "name": "Theo Williams",
+      "role": "Sales / Partnerships",
+      "timezone": "America/New_York",
+      "owns": ["partner pipeline", "deal context", "handoffs to success"],
+      "can_approve": ["deal terms within standard bounds"],
+      "recommend_only": ["scope promises (Phase boundaries are Priya's)", "delivery dates (Jordan/Elena)"],
+      "twin_behavior": "deal context, commitments, handoff risks, meeting prep"
+    },
+    {
+      "name": "Aisha Khan",
+      "role": "Finance / Admin",
+      "timezone": "America/Los_Angeles",
+      "owns": ["contracts", "invoices", "budget thresholds", "vendor approvals"],
+      "can_approve": ["spend within policy thresholds"],
+      "recommend_only": ["scope", "timeline"],
+      "twin_behavior": "approval thresholds, contract status, payment follow-ups, budget flags"
+    }
+  ]
+}
