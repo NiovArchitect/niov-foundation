@@ -435,6 +435,10 @@ export type AuditEventType =
   | "PASSWORD_RESET_EMAIL_FAILED"
   // [ORG-SUBSTRATE] a person updated their own work profile (timezone).
   | "WORK_PROFILE_UPDATED"
+  // [BLOCK-3A] an admin set a member's domain decision rights. Details
+  // carry ids + domain lists ONLY — never free text, never credentials;
+  // rights grant no tools/TAR/role authority.
+  | "DECISION_RIGHTS_UPDATED"
   | "EXTERNAL_COLLABORATOR_TRACKED"
   | "EXTERNAL_COLLABORATOR_INVITED"
   | "EXTERNAL_COLLABORATOR_APPROVED"
@@ -938,6 +942,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "PASSWORD_RESET_EMAIL_FAILED",
   // [ORG-SUBSTRATE] self work-profile update.
   "WORK_PROFILE_UPDATED",
+  // [BLOCK-3A] admin set a member's domain decision rights.
+  "DECISION_RIGHTS_UPDATED",
   "EXTERNAL_COLLABORATOR_TRACKED",
   "EXTERNAL_COLLABORATOR_INVITED",
   "EXTERNAL_COLLABORATOR_APPROVED",

@@ -849,6 +849,33 @@ model EntityProfile {
   @@map("entity_profiles")
 }
 
+// [BLOCK-3A] EntityDecisionRights — per (org, person) DOMAIN decision
+// rights: what this person owns / can approve / can only recommend,
+// by DecisionDomain (service-validated String[]; the enum lives in
+// decision-rights.ts — "unknown" is a classifier bucket, never stored).
+// This is plane 3 of the org operating substrate and deliberately its
+// OWN store: reporting hierarchy stays on EntityMembership, approval
+// authority stays on the dual-control/policy rails, and NOTHING here
+// grants tools, TAR capabilities, or admin authority — rights inform
+// decision/truth/routing logic only. Keyed to the HUMAN entity_id;
+// AI Twins resolve through their human and never carry rights rows.
+// Absence of a row = no structured rights (heuristics continue).
+model EntityDecisionRights {
+  rights_id      String   @id @default(uuid()) @db.Uuid
+  org_entity_id  String   @db.Uuid
+  entity_id      String   @db.Uuid
+  owns           String[] @default([])
+  can_approve    String[] @default([])
+  recommend_only String[] @default([])
+  updated_by     String   @db.Uuid
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@unique([org_entity_id, entity_id])
+  @@index([org_entity_id])
+  @@map("entity_decision_rights")
+}
+
 // OrgSettings is the per-org configuration sheet read by login,
 // the gateway (ip_whitelist), Dandelion (industry), and most
 // /org/* endpoints.

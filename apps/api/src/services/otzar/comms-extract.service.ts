@@ -73,6 +73,11 @@ import {
 import { computeAutonomyDecision, type AutonomyDecision } from "./autonomy.js";
 import { computeDecisionRights, type DecisionDomain } from "./decision-rights.js";
 import { buildDecisionInputFromTranscript } from "./decision-rights-extraction.js";
+import {
+  applyStructuredRightsToDecisionInput,
+  loadStructuredRightsForRoster,
+  type PartyDomainRights,
+} from "./decision-rights-store.service.js";
 import type { PriorRecipientDecisions } from "./work-graph-learning.js";
 
 export type CommsExtractionMode =
@@ -430,6 +435,7 @@ export function governExtraction(
   capturedText: string,
   roster: ReadonlyArray<RosterEntry>,
   priors?: PriorRecipientDecisions,
+  structuredRights?: ReadonlyArray<PartyDomainRights>,
 ): CommsExtractionResult {
   const graph = buildResponsibilityGraph(capturedText);
   const ref = provablyReferenced(capturedText, null, roster);
@@ -439,8 +445,16 @@ export function governExtraction(
   // verdict decision-aware: unresolved disagreement or authority<->expertise
   // conflict blocks autonomy; alignment raises confidence. Backend-internal —
   // does not change the suggested-action contract shape.
+  // [BLOCK-3A] When the org carries STRUCTURED domain rights, they overlay
+  // the transcript heuristics before the engine runs: the domain owner is
+  // the authority; approvers seat when no owner; a recommend-only party is
+  // demoted out of the authority seat. No rights rows → the heuristic
+  // input is byte-identical (pure fallback).
   const decision = computeDecisionRights(
-    buildDecisionInputFromTranscript(capturedText, workDomainToDecisionDomain(workDomain)),
+    applyStructuredRightsToDecisionInput(
+      buildDecisionInputFromTranscript(capturedText, workDomainToDecisionDomain(workDomain)),
+      structuredRights ?? [],
+    ),
   );
 
   const suggested_actions: CommsSuggestedAction[] = pre.suggested_actions.map((a) => {
@@ -580,6 +594,9 @@ export async function extractFromCapturedText(
     title: p.title,
     shared_project_count: p.shared_project_count,
   }));
+  // [BLOCK-3A] Structured domain rights for the HUMAN roster (empty when
+  // none are set — the heuristic path then runs unchanged).
+  const structuredRights = await loadStructuredRightsForRoster(identity.org.org_id, roster);
 
   // [OTZAR-V1-LIVE-1A-FOUNDATION] Demo intake is canned, not real extraction.
   // It must never silently run in staging/production: a canonical-fixture text
@@ -597,7 +614,7 @@ export async function extractFromCapturedText(
       : "AUTO");
 
   if (effectiveMode === "DEMO_SCRIPTED" && demoAllowed) {
-    return governExtraction(buildDemoExtraction(roster), input.captured_text, roster, input.priors);
+    return governExtraction(buildDemoExtraction(roster), input.captured_text, roster, input.priors, structuredRights);
   }
 
   // LLM path.
@@ -613,7 +630,7 @@ export async function extractFromCapturedText(
       if (result.ok) {
         const parsed = parseLLMExtraction(result.text, roster);
         if (parsed !== null) {
-          return governExtraction(parsed, input.captured_text, roster, input.priors);
+          return governExtraction(parsed, input.captured_text, roster, input.priors, structuredRights);
         }
       }
     } catch {
@@ -634,5 +651,7 @@ export async function extractFromCapturedText(
     },
     input.captured_text,
     roster,
+    undefined,
+    structuredRights,
   );
 }

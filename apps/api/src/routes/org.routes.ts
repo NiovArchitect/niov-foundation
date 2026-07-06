@@ -28,6 +28,13 @@ import {
 } from "@niov/database";
 import { requireAdminCapability } from "../middleware/admin.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import {
+  getDecisionRights,
+  listOrgDecisionRights,
+  SETTABLE_DECISION_DOMAINS,
+  upsertDecisionRights,
+  validateDomainRights,
+} from "../services/otzar/decision-rights-store.service.js";
 // [ORG-SUBSTRATE] deterministic working-time policy (proposal-only).
 import {
   DEFAULT_WORKING_POLICY,
@@ -633,6 +640,98 @@ export async function registerOrgRoutes(
         details: { timezone: tz },
       });
       return reply.code(200).send({ ok: true, timezone: tz });
+    },
+  );
+
+  // ── [BLOCK-3A] Domain decision rights — plane 3 of the org substrate. ──
+  // Distinct from reporting hierarchy (EntityMembership) and approval
+  // authority (dual-control/policy rails). Rights grant NO tools, NO TAR
+  // capabilities, NO admin authority — they inform decision/truth/routing
+  // logic only. Keyed to the HUMAN; Twins resolve through their human.
+
+  // GET /org/me/decision-rights — the caller's own posture (read tier).
+  app.get(
+    "/api/v1/org/me/decision-rights",
+    { preHandler: requireAuth(authService, "read") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const rights = await getDecisionRights(orgEntityId, callerId);
+      return reply.code(200).send({
+        ok: true,
+        rights,
+        note:
+          rights === null
+            ? "No structured decision rights are set for you yet. Otzar reads decision signals from conversations until your admin sets them."
+            : "Decision rights help Otzar route decisions and avoid overstepping. They do not grant tool access.",
+      });
+    },
+  );
+
+  // GET /org/decision-rights — safe org summary (read tier, any member):
+  // names + domains only, so decisions route to the right owner. No
+  // emails, no hierarchy internals, no TAR data.
+  app.get(
+    "/api/v1/org/decision-rights",
+    { preHandler: requireAuth(authService, "read") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const members = await listOrgDecisionRights(orgEntityId);
+      return reply.code(200).send({
+        ok: true,
+        members,
+        settable_domains: SETTABLE_DECISION_DOMAINS,
+      });
+    },
+  );
+
+  // PATCH /org/members/:id/decision-rights — admin sets a member's domain
+  // rights. Cross-org and unknown targets 404; domains validate against
+  // the DecisionDomain vocabulary; audited DECISION_RIGHTS_UPDATED with
+  // ids + domain lists only.
+  app.patch<{
+    Params: { id: string };
+    Body: { owns?: unknown; can_approve?: unknown; recommend_only?: unknown };
+  }>(
+    "/api/v1/org/members/:id/decision-rights",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const targetId = request.params.id;
+      const membership = await prisma.entityMembership.findFirst({
+        where: { parent_id: orgEntityId, child_id: targetId, is_active: true },
+        select: { child: { select: { entity_type: true } } },
+      });
+      if (membership === null || membership.child.entity_type !== "PERSON") {
+        return reply.code(404).send({
+          ok: false,
+          code: "MEMBER_NOT_FOUND",
+          message: "That person is not an active member of your organization.",
+        });
+      }
+      const validated = validateDomainRights(request.body ?? {});
+      if (validated.ok === false) {
+        return reply.code(422).send({ ok: false, code: validated.code, message: validated.message });
+      }
+      const saved = await upsertDecisionRights(orgEntityId, targetId, callerId, validated.rights);
+      await writeAuditEvent({
+        event_type: "DECISION_RIGHTS_UPDATED",
+        outcome: "SUCCESS",
+        actor_entity_id: callerId,
+        target_entity_id: targetId,
+        details: {
+          org_entity_id: orgEntityId,
+          owns: validated.rights.owns,
+          can_approve: validated.rights.can_approve,
+          recommend_only: validated.rights.recommend_only,
+        },
+      });
+      return reply.code(200).send({ ok: true, rights: saved });
     },
   );
 
