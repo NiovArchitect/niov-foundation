@@ -424,6 +424,10 @@ export type AuditEventType =
   // token_id and provider category — NEVER the token, URL, or body.
   | "ACTIVATION_EMAIL_SENT"
   | "ACTIVATION_EMAIL_FAILED"
+  // [TWIN-BOOTSTRAP] a starter Twin was ensured for an active member
+  // (activation-time or admin repair) — the shell only: no tools, no
+  // authority, no role template.
+  | "STARTER_TWIN_PROVISIONED"
   | "EXTERNAL_COLLABORATOR_TRACKED"
   | "EXTERNAL_COLLABORATOR_INVITED"
   | "EXTERNAL_COLLABORATOR_APPROVED"
@@ -919,6 +923,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   // [ACT-EMAIL] activation-email delivery.
   "ACTIVATION_EMAIL_SENT",
   "ACTIVATION_EMAIL_FAILED",
+  // [TWIN-BOOTSTRAP] starter-twin guarantee.
+  "STARTER_TWIN_PROVISIONED",
   "EXTERNAL_COLLABORATOR_TRACKED",
   "EXTERNAL_COLLABORATOR_INVITED",
   "EXTERNAL_COLLABORATOR_APPROVED",

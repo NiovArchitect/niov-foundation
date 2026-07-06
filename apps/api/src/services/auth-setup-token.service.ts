@@ -150,6 +150,19 @@ export async function redeemSetupToken(args: {
       ...(row.purpose === "PASSWORD_RESET" ? { sessions_invalidated: true } : {}),
     },
   });
+  // [TWIN-BOOTSTRAP] activation is not complete until the member has a
+  // starter Twin. Best-effort and NON-FATAL: the password is already set
+  // and audited — a twin-ensure failure must never undo a successful
+  // activation (the admin repair route + honest UI state cover it).
+  if (row.purpose === "ACTIVATION") {
+    try {
+      const { ensureStarterTwinForMember } = await import("./governance/dandelion.service.js");
+      await ensureStarterTwinForMember(row.org_entity_id, row.entity_id, null);
+    } catch {
+      // Honest degradation: activation succeeded; the twin can be
+      // repaired via POST /org/members/:id/ensure-twin.
+    }
+  }
   return { ok: true, entity_id: row.entity_id, purpose: row.purpose };
 }
 

@@ -31,6 +31,7 @@ import { requireDualControl } from "../middleware/dual-control.middleware.js";
 import { PRIVILEGED_ENDPOINTS } from "../security/privileged-endpoints.js";
 import {
   analyzePhase2,
+  ensureStarterTwinForMember,
   executePhase3Invite,
   getPhase4Status,
   reorderPhase4,
@@ -494,6 +495,30 @@ export async function registerOrgRoutes(
       },
     );
   }
+
+  // ── [TWIN-BOOTSTRAP] POST /org/members/:id/ensure-twin — admin repair ──
+  // Idempotent starter-twin guarantee for active members created by rails
+  // that skipped Phase-3 invite (the `twin_not_found` gap). Creates the
+  // shell only — no tools, no authority, no role template; audited as
+  // STARTER_TWIN_PROVISIONED when it actually creates.
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/org/members/:id/ensure-twin",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const result = await ensureStarterTwinForMember(
+        orgEntityId,
+        request.params.id,
+        callerId,
+      );
+      if (result.ok === false) {
+        return reply.code(404).send(result);
+      }
+      return reply.code(200).send({ ok: true, created: result.created, twin_id: result.twin_id });
+    },
+  );
 
   // ── [ACT-EMAIL] activation-email delivery on the SAME activation rail ──
   // Delivery only: sending mints a fresh one-time token (superseding

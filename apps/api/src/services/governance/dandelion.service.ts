@@ -597,6 +597,77 @@ export async function analyzePhase2(
 }
 
 // WHAT: Phase 3 -- atomic invite-accept for one entity.
+// ── [TWIN-BOOTSTRAP] ensureStarterTwinForMember ────────────────────────────
+// WHAT: the idempotent "an active member always has a Twin" guarantee.
+//       Members created by rails that skip Phase-3 invite (bulk create +
+//       activation EMAIL — the exact path the live smoke exposed as
+//       `twin_not_found`) get their STARTER twin here: the SAME
+//       executePhase3Invite rail (twin + personal wallet/TAR + default
+//       Hive + consent stub — never a second twin system), with
+//       TWIN_ALREADY_EXISTS treated as success. A starter twin grants
+//       NOTHING beyond the shell: no tools, no authority, no role
+//       template — role/tool readiness stays honestly incomplete until
+//       an admin configures it. Called best-effort after activation
+//       redemption and by the admin repair route; safe to call any
+//       number of times.
+export type EnsureStarterTwinResult =
+  | { ok: true; created: boolean; twin_id: string | null }
+  | { ok: false; code: "MEMBER_NOT_IN_ORG"; message: string };
+
+export async function ensureStarterTwinForMember(
+  orgEntityId: string,
+  entityId: string,
+  actorEntityId: string | null = null,
+): Promise<EnsureStarterTwinResult> {
+  const membership = await prisma.entityMembership.findFirst({
+    where: { parent_id: orgEntityId, child_id: entityId, is_active: true },
+    select: { membership_id: true },
+  });
+  if (membership === null) {
+    return { ok: false, code: "MEMBER_NOT_IN_ORG", message: "No such member in your org" };
+  }
+  // The same existence rule createTwin enforces: an active AI_AGENT
+  // child under the standard twin role title.
+  const findExistingTwin = async (): Promise<string | null> => {
+    const child = await prisma.entityMembership.findFirst({
+      where: { parent_id: entityId, role_title: "Digital Twin", is_active: true },
+      select: { child_id: true },
+    });
+    if (child === null) return null;
+    const agent = await prisma.entity.findUnique({
+      where: { entity_id: child.child_id },
+      select: { entity_type: true, deleted_at: true },
+    });
+    return agent?.entity_type === "AI_AGENT" && agent.deleted_at === null ? child.child_id : null;
+  };
+  const existing = await findExistingTwin();
+  if (existing !== null) {
+    return { ok: true, created: false, twin_id: existing };
+  }
+  try {
+    const result = await executePhase3Invite(orgEntityId, entityId, actorEntityId);
+    await writeAuditEvent({
+      event_type: "STARTER_TWIN_PROVISIONED",
+      outcome: "SUCCESS",
+      actor_entity_id: actorEntityId ?? entityId,
+      target_entity_id: entityId,
+      details: {
+        org_entity_id: orgEntityId,
+        twin_id: result.twin_id,
+        trigger: actorEntityId === null || actorEntityId === entityId ? "activation" : "admin_repair",
+      },
+    });
+    return { ok: true, created: true, twin_id: result.twin_id };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "unknown";
+    if (message === "TWIN_ALREADY_EXISTS") {
+      // Race with a concurrent invite — the guarantee holds either way.
+      return { ok: true, created: false, twin_id: await findExistingTwin() };
+    }
+    throw err;
+  }
+}
+
 // INPUT: The org's entity_id and the target entity's entity_id.
 // OUTPUT: A Phase3Result on success. Throws on any failure (atomic
 //         rollback).
