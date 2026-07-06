@@ -42,6 +42,8 @@ import { validateSeededContextRelevance } from "../services/work-os/context-rele
 import { getContextCandidatesForLedgerEntry } from "../services/work-os/context-candidates.service.js";
 // [AIX-6] — org-scoped named-subject background answers (read-only).
 import { answerNamedSubjectBackground } from "../services/work-os/background-answer.service.js";
+// [CTX-BOUNDARY] — the admin context-boundary projection (read-only).
+import { getContextBoundaries } from "../services/work-os/context-boundaries.service.js";
 // [PROD-UX-P0R] — pure routing/autonomy decision projection (read-only).
 import { projectRoutingDecision } from "../services/work-os/routing-decision.js";
 import { rankClarifiers } from "../services/work-os/clarity.service.js";
@@ -446,6 +448,26 @@ export async function registerWorkOsLedgerRoutes(
       });
       if (result.ok === false) return reply.code(422).send(result);
       return reply.code(200).send({ ok: true, ...result.answer });
+    },
+  );
+
+  // ── [CTX-BOUNDARY] Context boundaries — admin boundary view, read-only ──
+  // Grouped counts + recent seeded-document labels. A boundary view, not
+  // a relevance queue: nothing here classifies, retires, or curates.
+  app.get(
+    "/api/v1/work-os/context/boundaries",
+    async (request, reply) => {
+      const ctx = await auth(request, reply, "read");
+      if (ctx === null) return;
+      if (!ctx.manager) {
+        return reply.code(403).send({
+          ok: false,
+          code: "OPERATION_NOT_PERMITTED",
+          message: "Context boundaries are an admin view.",
+        });
+      }
+      const boundaries = await getContextBoundaries(ctx.org_entity_id);
+      return reply.code(200).send({ ok: true, boundaries });
     },
   );
 
