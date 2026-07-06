@@ -1,0 +1,23 @@
+{
+  "clients": [
+    {
+      "name": "Northstar Health Group",
+      "domain": "healthcare operations",
+      "constraints": ["compliance-sensitive", "cautious about data", "pilot target moved July 24 → August 7 after compliance review (approved W7)"],
+      "key_contact": { "name": "Dr. Lena Morris", "title": "COO", "timezone": "America/Chicago" },
+      "ownership": { "executive_followups": "Jordan Ellis", "weekly_checkins": "Marcus Reed", "since": "week 6 reassignment" }
+    },
+    {
+      "name": "Harborlight Logistics",
+      "domain": "logistics / supply chain",
+      "constraints": ["aggressive timeline", "high operational complexity", "sync cadence: requested daily, AGREED twice-weekly (W6 decision, meeting-load objection)"],
+      "key_contact": { "name": "Rafael Ortiz", "title": "VP Operations", "timezone": "America/New_York" }
+    },
+    {
+      "name": "Bluebird Learning Co.",
+      "domain": "education / training",
+      "constraints": ["transcript-heavy", "overwhelmed by manual review", "Phase 1 = transcript summarization + routing ONLY (sales said 'full automation' — exceeds approved scope)"],
+      "key_contact": { "name": "Camille Wright", "title": "Director of Programs", "timezone": "America/Chicago" }
+    }
+  ]
+}
