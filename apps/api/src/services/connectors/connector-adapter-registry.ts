@@ -103,6 +103,11 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/drive.metadata.readonly",
+      // [GOOGLE-DOCS] drive.readonly: content read for the SELECTED-DOC
+      // import rail (one admin-chosen doc at a time; never an auto-sync).
+      "https://www.googleapis.com/auth/drive.readonly",
+      // [GOOGLE-MEET] post-meeting conference records + transcripts.
+      "https://www.googleapis.com/auth/meetings.space.readonly",
     ],
     setup_docs_url:
       "https://console.cloud.google.com/apis/credentials (create OAuth 2.0 client + verified consent screen)",

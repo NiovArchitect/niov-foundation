@@ -219,6 +219,37 @@ export function normalizeSourceContent(content: string): SourceContentQuality {
 // never leave the server), the ingesting ADMIN as the audited actor. The
 // spine's existing connector dedupe makes re-ingesting the same recording a
 // clean ALREADY_INGESTED instead of duplicate work.
+// [GOOGLE-MEET] The Meet-API transcript adapter — the same CONNECTOR
+// discipline as Zoom: post-meeting only, server-side fetch, no URLs, the
+// ingesting ADMIN as the audited actor. sourceId "GOOGLE_MEET:<record_id>"
+// makes re-ingest idempotent AND keeps this lineage distinct by
+// construction from a Google-Docs transcript file (Drive export) and a
+// manually pasted transcript (MANUAL rail).
+export function googleMeetTranscriptToSourceEvent(args: {
+  recordId: string;
+  meetingLabel: string;
+  transcript: string;
+  callerEntityId: string;
+  callerName: string;
+  orgEntityId: string;
+  startTimeIso: string;
+  nowIso: string;
+}): WorkSourceEvent {
+  return {
+    sourceType: "CONNECTOR",
+    sourceSystem: "MEETING",
+    sourceId: `GOOGLE_MEET:${args.recordId}`,
+    sourceUrl: null,
+    actor: { name: args.callerName, entityId: args.callerEntityId },
+    participants: [],
+    timestamp: args.startTimeIso.length > 0 ? args.startTimeIso : args.nowIso,
+    orgEntityId: args.orgEntityId,
+    callerEntityId: args.callerEntityId,
+    title: `Google Meet: ${args.meetingLabel}`,
+    content: args.transcript,
+  };
+}
+
 export function zoomRecordingToSourceEvent(args: {
   meetingId: string;
   topic: string;

@@ -19,6 +19,7 @@
 //          canonical writers), Gap V doctrine, tests/integration/
 //          document-context.test.ts.
 
+import { prisma } from "@niov/database";
 import { receiveMeetingCaptureForCaller } from "./meeting-capture.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 import { getOrgEntityId } from "../governance/org.js";
@@ -48,6 +49,16 @@ export interface DocumentContextSeedInput {
   body: string;
   currentness: DocumentCurrentness;
   covering_period?: string | null;
+  /** [GOOGLE-DOCS] Present ONLY for connector imports: the durable source
+   *  lineage (system + file id + modified time + view link + content
+   *  hash). Never set by the manual paste rail. */
+  external_source?: {
+    system: "GOOGLE_DRIVE";
+    file_id: string;
+    modified_time: string;
+    web_view_link: string | null;
+    content_sha256: string;
+  };
 }
 
 export type SeedDocumentResult =
@@ -163,6 +174,9 @@ export async function seedDocumentContextForCaller(
         kind_label: KIND_LABEL[input.source_kind],
         currentness: input.currentness,
         extract_work: false, // the v1 contract, recorded on the row itself
+        ...(input.external_source !== undefined
+          ? { external_source: input.external_source }
+          : {}),
       },
     },
   });
@@ -176,4 +190,74 @@ export async function seedDocumentContextForCaller(
     source_kind: input.source_kind,
     currentness: input.currentness,
   };
+}
+
+
+// [GOOGLE-DOCS] Import ONE selected Google Doc as org reference context.
+// WHAT: Dedupe-aware wrapper over seedDocumentContextForCaller: the same
+//        file at the same content hash refuses ALREADY_IMPORTED; the same
+//        file with NEW content imports as a fresh dated row (an updated
+//        doc is a supersession candidate, not a duplicate).
+// INPUT: caller + the SAFE export bundle from fetchGoogleDocTextForOrg
+//        (+ the admin-chosen kind/currentness).
+// OUTPUT: SeedDocumentResult or { ok:false, code:"ALREADY_IMPORTED" }.
+// WHY: SELECTED-DOC DISCIPLINE — one explicit admin choice per import,
+//      full lineage on the row (file id / modified time / view link /
+//      content hash), never an auto-sync.
+export async function importGoogleDocForCaller(
+  callerEntityId: string,
+  input: {
+    file_id: string;
+    name: string;
+    text: string;
+    modified_time: string;
+    web_view_link: string | null;
+    content_sha256: string;
+    source_kind?: DocumentSourceKind;
+    currentness?: DocumentCurrentness;
+  },
+): Promise<SeedDocumentResult | { ok: false; code: "ALREADY_IMPORTED"; message: string }> {
+  let orgEntityId: string;
+  try {
+    orgEntityId = await getOrgEntityId(callerEntityId);
+  } catch {
+    return { ok: false, code: "NO_ORG_FOR_CALLER", message: "No organization found for the caller." };
+  }
+  const existing = await prisma.workLedgerEntry.findFirst({
+    where: {
+      org_entity_id: orgEntityId,
+      ledger_type: "DOCUMENT_CONTEXT",
+      details: {
+        path: ["document", "external_source", "file_id"],
+        equals: input.file_id,
+      },
+    },
+    orderBy: { created_at: "desc" },
+    select: { details: true },
+  });
+  if (existing !== null) {
+    const doc = (existing.details as {
+      document?: { external_source?: { content_sha256?: string } };
+    })?.document;
+    if (doc?.external_source?.content_sha256 === input.content_sha256) {
+      return {
+        ok: false,
+        code: "ALREADY_IMPORTED",
+        message: "This Google Doc was already imported at this exact content. Nothing was duplicated.",
+      };
+    }
+  }
+  return seedDocumentContextForCaller(callerEntityId, {
+    source_kind: input.source_kind ?? "OTHER",
+    title: input.name.slice(0, DOCUMENT_TITLE_MAX),
+    body: input.text.slice(0, DOCUMENT_BODY_MAX),
+    currentness: input.currentness ?? "unknown",
+    external_source: {
+      system: "GOOGLE_DRIVE",
+      file_id: input.file_id,
+      modified_time: input.modified_time,
+      web_view_link: input.web_view_link,
+      content_sha256: input.content_sha256,
+    },
+  });
 }
