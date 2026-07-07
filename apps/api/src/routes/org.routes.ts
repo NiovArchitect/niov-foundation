@@ -18,6 +18,7 @@ import {
   isKnownAuditEventType,
   MAX_AUDIT_EVENTS_PAGE_SIZE,
   prisma,
+  updateEntityStatus,
   writeAudit,
   writeAuditEvent,
   writeTARCreateAudit,
@@ -3117,6 +3118,120 @@ export async function registerOrgRoutes(
       });
     },
   );
+
+  // [TWIN-DEACTIVATION] POST /org/ai-teammates/:id/deactivate +
+  // /reactivate -- the canonical twin lifecycle rail (closes the known
+  // P1 from the residue-sweep: a suspended member's twin lingered with
+  // no rail to retire it; PATCH /org/entities/:id can't reach twins
+  // because they are children of MEMBERS, not the org). Org-admin tier,
+  // same owner-membership walk as PATCH above (enumeration-safe 404s),
+  // mandatory human reason, canonical updateEntityStatus (RULE 10 soft
+  // rail: SUSPENDED/ACTIVE + suspended_at, never a delete), audited
+  // ADMIN_ACTION with twin/owner/reason/prior-status. TwinConfig,
+  // grants, and memories are untouched -- reactivation restores the
+  // twin exactly as it was.
+  for (const direction of ["deactivate", "reactivate"] as const) {
+    app.post<{ Params: { id: string }; Body: { reason?: unknown } }>(
+      `/api/v1/org/ai-teammates/:id/${direction}`,
+      {
+        preHandler: requireAdminCapability(authService, "can_admin_org"),
+      },
+      async (request, reply) => {
+        const callerId = request.auth!.entity_id;
+        const orgEntityId = await resolveOrgOrFail(callerId, reply);
+        if (orgEntityId === null) return;
+        const body = request.body ?? {};
+        const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+        if (reason.length === 0) {
+          return reply.code(400).send({
+            ok: false,
+            code: "REASON_REQUIRED",
+            message: "A human reason is required.",
+          });
+        }
+        const twin = await prisma.entity.findUnique({
+          where: { entity_id: request.params.id },
+        });
+        if (
+          twin === null ||
+          twin.deleted_at !== null ||
+          twin.entity_type !== "AI_AGENT"
+        ) {
+          return reply.code(404).send({
+            ok: false,
+            code: "TWIN_NOT_FOUND",
+            message: "Twin not found",
+          });
+        }
+        // Same org-scope walk as PATCH: twin -> owner -> caller's org.
+        const ownerMembership = await prisma.entityMembership.findFirst({
+          where: { child_id: request.params.id, is_active: true },
+        });
+        if (ownerMembership === null) {
+          return reply.code(404).send({
+            ok: false,
+            code: "TWIN_NOT_FOUND",
+            message: "Twin has no owner",
+          });
+        }
+        const ownerInOrg = ownerMembership.parent_id === orgEntityId
+          ? true
+          : (await prisma.entityMembership.findFirst({
+              where: {
+                parent_id: orgEntityId,
+                child_id: ownerMembership.parent_id,
+                is_active: true,
+              },
+            })) !== null;
+        if (!ownerInOrg) {
+          return reply.code(404).send({
+            ok: false,
+            code: "TWIN_NOT_IN_ORG",
+            message: "Twin not in your org",
+          });
+        }
+        const wantStatus = direction === "deactivate" ? "SUSPENDED" : "ACTIVE";
+        if (twin.status === wantStatus) {
+          return reply.code(409).send({
+            ok: false,
+            code:
+              direction === "deactivate"
+                ? "TWIN_ALREADY_DEACTIVATED"
+                : "TWIN_ALREADY_ACTIVE",
+            message:
+              direction === "deactivate"
+                ? "This AI Teammate is already deactivated."
+                : "This AI Teammate is already active.",
+          });
+        }
+        const priorStatus = twin.status;
+        await updateEntityStatus(twin.entity_id, wantStatus, callerId);
+        const audit = await writeAuditEvent({
+          event_type:
+            direction === "deactivate" ? "ENTITY_SUSPENDED" : "ENTITY_REACTIVATED",
+          outcome: "SUCCESS",
+          actor_entity_id: callerId,
+          target_entity_id: twin.entity_id,
+          details: {
+            action:
+              direction === "deactivate"
+                ? "AI_TEAMMATE_DEACTIVATED"
+                : "AI_TEAMMATE_REACTIVATED",
+            twin_id: twin.entity_id,
+            owner_entity_id: ownerMembership.parent_id,
+            reason,
+            prior_status: priorStatus,
+          },
+        });
+        return reply.code(200).send({
+          ok: true,
+          entity_id: twin.entity_id,
+          status: wantStatus,
+          audit_event_id: audit.audit_id,
+        });
+      },
+    );
+  }
 
   // GET /org/ai-teammates/:id/stats -- stub.
   app.get<{ Params: { id: string } }>(
