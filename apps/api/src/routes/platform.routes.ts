@@ -32,6 +32,7 @@ import {
   executePhase0,
   type Phase0Input,
 } from "../services/governance/dandelion.service.js";
+import { clearLockoutSuspension } from "../services/governance/lockout-recovery.service.js";
 import type { AuthService } from "../services/auth.service.js";
 
 // WHAT: Body shape for POST /platform/orgs.
@@ -397,6 +398,75 @@ export async function registerPlatformRoutes(
         total: items.length,
         has_more: false,
       });
+    },
+  );
+
+  // POST /api/v1/platform/entities/:entityId/clear-lockout --
+  // [LOCKOUT-RECOVERY] platform-operator recovery for the sole-admin
+  // lockout trap. can_admin_niov only. :entityId accepts the UUID or the
+  // account EMAIL (operators know victims by email; there is deliberately
+  // no cross-org entity-lookup rail). The service refuses anything that
+  // is not PROVABLY the auth layer's failed-login lockout (SUSPENDED +
+  // counter at threshold + the actorless "5 failed attempts"
+  // ENTITY_SUSPENDED audit row of record) -- this is not a general
+  // unsuspend rail. Touches ONLY entity status + failed counter; writes
+  // ENTITY_REACTIVATED with actor/target/reason/prior-state metadata.
+  // The mandatory reason is stored in audit, never echoed back.
+  app.post<{
+    Params: { entityId: string };
+    Body: { reason?: unknown };
+  }>(
+    "/api/v1/platform/entities/:entityId/clear-lockout",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_niov"),
+    },
+    async (request, reply) => {
+      const body = request.body ?? {};
+      try {
+        const result = await clearLockoutSuspension(request.auth!.entity_id, {
+          entity_id: request.params.entityId,
+          reason: typeof body.reason === "string" ? body.reason : "",
+        });
+        return reply.code(200).send({
+          ok: true,
+          entity_id: result.entity_id,
+          status: result.status,
+          prior_failed_attempts: result.prior_failed_attempts,
+          audit_event_id: result.audit_event_id,
+        });
+      } catch (err) {
+        const code = err instanceof Error ? err.message : "";
+        if (code === "LOCKOUT_REASON_REQUIRED") {
+          return reply.code(400).send({
+            ok: false,
+            code,
+            message: "A human reason is required to clear a lockout.",
+          });
+        }
+        if (code === "LOCKOUT_ENTITY_NOT_FOUND") {
+          return reply.code(404).send({
+            ok: false,
+            code,
+            message: "Entity not found.",
+          });
+        }
+        if (code === "LOCKOUT_NOT_SUSPENDED") {
+          return reply.code(409).send({
+            ok: false,
+            code,
+            message: "Entity is not suspended — nothing to clear.",
+          });
+        }
+        if (code === "LOCKOUT_NOT_LOCKOUT_CAUSED") {
+          return reply.code(409).send({
+            ok: false,
+            code,
+            message:
+              "This suspension is not the failed-login lockout — it stays in place. Use the org's own reactivation rail.",
+          });
+        }
+        throw err;
+      }
     },
   );
 }
