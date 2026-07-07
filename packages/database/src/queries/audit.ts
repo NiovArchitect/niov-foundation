@@ -560,6 +560,7 @@ export type AuditEventType =
   // has_selected_time booleans only. FORBIDDEN: tokens, attendee
   // identities/emails, event titles, raw provider bodies.
   | "CALENDAR_EVENT_CREATE"
+  | "CALENDAR_EVENT_DELETE"
   // Phase 1288-B — Foundation generalized Entity & Authority Envelope.
   // Emitted whenever the Foundation authority evaluator computes an
   // AuthorityEnvelope for an entity (self via /foundation/authority/me,
@@ -996,6 +997,7 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONNECTOR_DATA_READ",
   // Phase 1272 gated calendar event creation.
   "CALENDAR_EVENT_CREATE",
+  "CALENDAR_EVENT_DELETE",
   // Phase 1288-B Foundation Entity & Authority Envelope evaluation.
   "AUTHORITY_ENVELOPE_EVALUATED",
   // Phase 1290-A Foundation economic substrate quote (mock-only).

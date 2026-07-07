@@ -92,6 +92,7 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
       "Configure the OAuth consent screen and submit Google's app verification (restricted scopes take ~6 weeks).",
       "Create OAuth credentials and provide the client ID and secret to your deployment.",
       "Grant per-employee scopes in Otzar — nothing is read or sent without them.",
+      "Calendar event creation is approval-gated: it needs the calendar.events write scope (a re-consent) AND an explicit approval — Otzar never creates an event silently.",
     ],
     demo_mode_available: true,
     category: "PRODUCTIVITY",
@@ -108,11 +109,13 @@ const ADAPTERS: ReadonlyArray<ConnectorAdapterDescriptor> = [
       "https://www.googleapis.com/auth/drive.readonly",
       // [GOOGLE-MEET] post-meeting conference records + transcripts.
       "https://www.googleapis.com/auth/meetings.space.readonly",
+      // [CALENDAR-WRITE] approval-gated event create/update/delete.
+      "https://www.googleapis.com/auth/calendar.events",
     ],
     setup_docs_url:
       "https://console.cloud.google.com/apis/credentials (create OAuth 2.0 client + verified consent screen)",
     app_review_required: true,
-    can_write: false,
+    can_write: true,
     phase: 1224,
   },
   {
