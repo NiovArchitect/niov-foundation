@@ -133,6 +133,26 @@ import type {
   EscalationActionDescriptor,
   PrivilegedEndpoint,
 } from "../security/privileged-endpoints.js";
+// [G1-DUAL-CONTROL] Canonical payload binding for payload-bound endpoints
+// (PrivilegedEndpoint.payloadBinding): the middleware hashes the redacted
+// request body and matches/creates escalations per-payload; the guarded
+// handler consumes the approval via request.dualControl.
+import { canonicalDualControlPayload } from "../security/privileged-endpoints.js";
+
+// [G1-DUAL-CONTROL] The approved-path handoff to the guarded handler: the
+// escalation the middleware verified, plus whether the endpoint is
+// single-use (payload-bound) -- a single-use handler MUST consume the
+// escalation atomically inside its own transaction
+// (consumeApprovedDualControlInTx) so approval spend and privileged effect
+// commit or roll back together.
+declare module "fastify" {
+  interface FastifyRequest {
+    dualControl?: {
+      escalation_id: string;
+      single_use: boolean;
+    };
+  }
+}
 import {
   findApprovedDualControlForCaller,
   getOrCreatePendingDualControlForCaller,
@@ -345,6 +365,15 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
       return;
     }
 
+    // [G1-DUAL-CONTROL] Payload binding: for payload-bound endpoints the
+    // approval must match THIS request's canonical body hash. Secrets in
+    // the endpoint's redact list are excluded from the hash and from the
+    // stored summary -- they never reach escalation metadata or audit.
+    const bound =
+      endpoint.payloadBinding !== undefined
+        ? canonicalDualControlPayload(request.body, endpoint.payloadBinding.redact)
+        : null;
+
     try {
       // EVENT 1 -- DUAL_CONTROL_VERIFICATION_PRE: the preHandler intercepted
       // the request. (Pattern 4: event-sourced; independent causation.)
@@ -357,6 +386,8 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
           action_descriptor_type: actionDescriptor.type,
           route: endpoint.route,
           method: endpoint.method,
+          payload_bound: bound !== null,
+          payload_hash: bound?.payload_hash ?? null,
         },
       });
 
@@ -365,6 +396,7 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
       const found = await findApprovedDualControlForCaller(
         callerEntityId,
         actionDescriptor,
+        bound?.payload_hash,
       );
 
       // EVENT 2 -- DUAL_CONTROL_ESCALATION_LOOKUP: the lookup completed. The
@@ -380,6 +412,8 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
           escalation_id: found?.escalation_id ?? null,
           escalation_found: found !== null,
           escalation_status: found?.status ?? "NONE",
+          payload_bound: bound !== null,
+          payload_hash: bound?.payload_hash ?? null,
         },
       });
 
@@ -413,6 +447,13 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
             escalation_id: outcome.escalation_id,
           },
         });
+        // [G1-DUAL-CONTROL] Hand the verified escalation to the guarded
+        // handler. On single-use (payload-bound) endpoints the handler
+        // consumes it atomically inside its own transaction.
+        request.dualControl = {
+          escalation_id: outcome.escalation_id,
+          single_use: bound !== null,
+        };
         // Resolve without sending a reply -- Fastify proceeds to the next
         // hook / the route handler. The handler executes the privileged
         // operation.
@@ -550,6 +591,7 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
           callerEntityId,
           actionDescriptor,
           resolution.target_entity_id,
+          bound ?? undefined,
         );
         escalationId = pending.escalation_id;
       }
@@ -568,6 +610,8 @@ export function requireDualControl(endpoint: PrivilegedEndpoint) {
           denial_reason: failure.reason,
           route: endpoint.route,
           method: endpoint.method,
+          payload_bound: bound !== null,
+          payload_hash: bound?.payload_hash ?? null,
         },
       });
 

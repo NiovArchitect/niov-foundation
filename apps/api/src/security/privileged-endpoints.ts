@@ -41,6 +41,8 @@
 // §5; the other BEAM-compatibility patterns land at the sub-phase E
 // middleware (this file is data, not coordination).
 
+import { createHash } from "node:crypto";
+
 /**
  * WHAT: The action that triggers dual-control verification for a
  *       privileged endpoint -- a type literal identifying the operation
@@ -114,7 +116,91 @@ export type PrivilegedEndpoint = {
   route: string;
   authTier: "can_admin_niov" | "can_admin_org";
   actionDescriptor: EscalationActionDescriptor;
+  // [G1-DUAL-CONTROL] Opt-in payload binding: when present, a dual-control
+  // approval for this endpoint is (a) PAYLOAD-BOUND -- the approval matches
+  // only a request whose canonical body hash equals the hash stamped on the
+  // escalation at create time -- and (b) SINGLE-USE -- the guarded handler
+  // consumes the approval atomically (APPROVED -> EXPIRED) inside its own
+  // transaction on success, so a repeat of the identical request requires a
+  // fresh approval. `redact` lists top-level body fields excluded from BOTH
+  // the hash and the stored payload summary (secrets: e.g. admin_password);
+  // exclusion means the approval does not bind those fields, and they never
+  // reach EscalationRequest.resolution_metadata or any audit row. Endpoints
+  // WITHOUT this field keep the original Pattern-5 standing-approval
+  // semantics (canonical record §5) unchanged.
+  payloadBinding?: {
+    redact: readonly string[];
+  };
 };
+
+/**
+ * WHAT: Canonical payload binding for a dual-control request body --
+ *       a deterministic sha256 over the redacted, key-sorted JSON body,
+ *       plus the redacted-field NAMES (never values).
+ * INPUT: body (the raw request body; non-object values bind as {}) +
+ *        redact (top-level field names excluded from the hash --
+ *        the PrivilegedEndpoint.payloadBinding.redact list).
+ * OUTPUT: { payload_hash, redacted_fields } -- hash is "sha256:<hex>"
+ *         over the canonical (recursively key-sorted) JSON of the
+ *         redacted body. Deliberately NO body echo: ADR-0057 §10 +
+ *         ADR-0026 §6 forbid raw request bodies in escalation metadata
+ *         and audit surfaces (the CI no-leak guard enforces this), so
+ *         the approver verifies the payload out-of-band against the
+ *         hash the requester's escalation carries.
+ * WHY: [G1-DUAL-CONTROL] An approval must authorize ONE exact operation
+ *      payload, never the operation type in general; secrets must be
+ *      excluded so they never land in escalation metadata or audit. Key
+ *      sorting makes the hash independent of JSON field order.
+ */
+export function canonicalDualControlPayload(
+  body: unknown,
+  redact: readonly string[],
+): {
+  payload_hash: string;
+  redacted_fields: string[];
+} {
+  const source =
+    typeof body === "object" && body !== null && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const redacted: Record<string, unknown> = {};
+  const redactedFields: string[] = [];
+  for (const [key, value] of Object.entries(source)) {
+    if (redact.includes(key)) {
+      redactedFields.push(key);
+      continue;
+    }
+    redacted[key] = value;
+  }
+  const canonical = canonicalJson(redacted);
+  const hash = createHash("sha256").update(canonical).digest("hex");
+  return {
+    payload_hash: `sha256:${hash}`,
+    redacted_fields: redactedFields,
+  };
+}
+
+// WHAT: Deterministic JSON serialization -- objects serialize with keys
+//       sorted recursively; arrays keep order; primitives use JSON rules
+//       (undefined values inside objects are dropped, matching
+//       JSON.stringify).
+// INPUT: Any JSON-serializable value.
+// OUTPUT: The canonical JSON string.
+// WHY: The payload hash must not depend on the field order a client
+//      happened to send.
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? "null";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => canonicalJson(v)).join(",")}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`);
+  return `{${entries.join(",")}}`;
+}
 
 /**
  * WHAT: The runtime registry of LIVE privileged endpoints requiring
@@ -146,6 +232,12 @@ export const PRIVILEGED_ENDPOINTS: readonly PrivilegedEndpoint[] = [
     route: "/api/v1/platform/orgs",
     authTier: "can_admin_niov",
     actionDescriptor: { type: "PLATFORM_ORG_CREATION" },
+    // [G1-DUAL-CONTROL] Org creation is payload-bound + single-use: the
+    // approval authorizes ONE exact org payload (company/admin identity)
+    // and is consumed atomically inside executePhase0's transaction.
+    // admin_password is redacted -- it never participates in the hash and
+    // never reaches escalation metadata or audit rows.
+    payloadBinding: { redact: ["admin_password"] },
   },
   {
     // CAR Sub-box 3 sub-phase 5 [SUB-BOX-3-ROUTES] per ADR-0036

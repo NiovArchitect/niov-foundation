@@ -299,8 +299,25 @@ export async function getEscalationForCaller(
 export async function findApprovedDualControlForCaller(
   callerEntityId: string,
   actionDescriptor: EscalationActionDescriptor,
+  // [G1-DUAL-CONTROL] When provided (payload-bound endpoints), only an
+  // APPROVED escalation stamped with this exact canonical payload hash
+  // matches -- an approval never authorizes a different payload. Consumed
+  // approvals are structurally excluded already (consume flips APPROVED ->
+  // EXPIRED); the consumed_at check below is defence in depth.
+  payloadHash?: string,
 ): Promise<EscalationRequest | null> {
-  return prisma.escalationRequest.findFirst({
+  if (payloadHash === undefined) {
+    return prisma.escalationRequest.findFirst({
+      where: {
+        source_entity_id: callerEntityId,
+        escalation_type: "DUAL_CONTROL_REQUIRED",
+        status: "APPROVED",
+        description: dualControlDescription(actionDescriptor.type),
+      },
+      orderBy: { resolved_at: "desc" },
+    });
+  }
+  const candidates = await prisma.escalationRequest.findMany({
     where: {
       source_entity_id: callerEntityId,
       escalation_type: "DUAL_CONTROL_REQUIRED",
@@ -308,7 +325,54 @@ export async function findApprovedDualControlForCaller(
       description: dualControlDescription(actionDescriptor.type),
     },
     orderBy: { resolved_at: "desc" },
+    take: 25,
   });
+  return (
+    candidates.find((row) => {
+      const binding = dualControlMetadata(row.resolution_metadata);
+      return (
+        binding !== null &&
+        binding.payload_hash === payloadHash &&
+        binding.consumed_at === undefined
+      );
+    }) ?? null
+  );
+}
+
+// WHAT: Narrow an EscalationRequest.resolution_metadata JSON value to its
+//       [G1-DUAL-CONTROL] `dual_control` binding record, or null.
+// INPUT: The raw Prisma Json value.
+// OUTPUT: { payload_hash?, consumed_at?, ... } when a dual_control object
+//         is present; null otherwise.
+// WHY: The payload hash and the consume marker live in resolution_metadata
+//      (no schema change); every reader must narrow the same way.
+function dualControlMetadata(
+  metadata: unknown,
+): { payload_hash?: string; consumed_at?: string } | null {
+  if (
+    typeof metadata !== "object" ||
+    metadata === null ||
+    Array.isArray(metadata)
+  ) {
+    return null;
+  }
+  const dualControl = (metadata as Record<string, unknown>)["dual_control"];
+  if (
+    typeof dualControl !== "object" ||
+    dualControl === null ||
+    Array.isArray(dualControl)
+  ) {
+    return null;
+  }
+  const record = dualControl as Record<string, unknown>;
+  return {
+    ...(typeof record["payload_hash"] === "string"
+      ? { payload_hash: record["payload_hash"] }
+      : {}),
+    ...(typeof record["consumed_at"] === "string"
+      ? { consumed_at: record["consumed_at"] }
+      : {}),
+  };
 }
 
 // WHAT: Discriminated-union result of resolveDualControlTarget below. ok=true
@@ -504,6 +568,18 @@ export async function getOrCreatePendingDualControlForCaller(
   callerEntityId: string,
   actionDescriptor: EscalationActionDescriptor,
   targetEntityId: string,
+  // [G1-DUAL-CONTROL] Payload binding for payload-bound endpoints: the
+  // canonical hash is stamped into resolution_metadata at CREATE time (the
+  // CE-2 merge in transitionPendingForCaller preserves it through
+  // approval). Dedup is then per-payload: an existing PENDING row is
+  // reused only when its stamped hash matches -- a different payload gets
+  // its OWN pending escalation, so an approver always decides one exact
+  // payload. redacted_fields never carry values, only names; the body
+  // itself is NEVER stored (ADR-0057 §10 / no-leak guard).
+  binding?: {
+    payload_hash: string;
+    redacted_fields: string[];
+  },
 ): Promise<EscalationRequest> {
   if (targetEntityId === callerEntityId) {
     // Structural Phase E Invariant 2 guard: callers MUST resolve a distinct
@@ -511,7 +587,27 @@ export async function getOrCreatePendingDualControlForCaller(
     // same-identity target here is a bug at the call site -- fail fast.
     throw new Error("ESCALATION_TARGET_INVALID");
   }
-  const existing = await prisma.escalationRequest.findFirst({
+  if (binding === undefined) {
+    const existing = await prisma.escalationRequest.findFirst({
+      where: {
+        source_entity_id: callerEntityId,
+        escalation_type: "DUAL_CONTROL_REQUIRED",
+        status: "PENDING",
+        description: dualControlDescription(actionDescriptor.type),
+      },
+      orderBy: { created_at: "desc" },
+    });
+    if (existing !== null) {
+      return existing;
+    }
+    return createEscalationForCaller(callerEntityId, {
+      target_entity_id: targetEntityId,
+      escalation_type: "DUAL_CONTROL_REQUIRED",
+      severity: "HIGH",
+      description: dualControlDescription(actionDescriptor.type),
+    });
+  }
+  const candidates = await prisma.escalationRequest.findMany({
     where: {
       source_entity_id: callerEntityId,
       escalation_type: "DUAL_CONTROL_REQUIRED",
@@ -519,8 +615,14 @@ export async function getOrCreatePendingDualControlForCaller(
       description: dualControlDescription(actionDescriptor.type),
     },
     orderBy: { created_at: "desc" },
+    take: 25,
   });
-  if (existing !== null) {
+  const existing = candidates.find(
+    (row) =>
+      dualControlMetadata(row.resolution_metadata)?.payload_hash ===
+      binding.payload_hash,
+  );
+  if (existing !== undefined) {
     return existing;
   }
   return createEscalationForCaller(callerEntityId, {
@@ -528,7 +630,93 @@ export async function getOrCreatePendingDualControlForCaller(
     escalation_type: "DUAL_CONTROL_REQUIRED",
     severity: "HIGH",
     description: dualControlDescription(actionDescriptor.type),
+    resolution_metadata: {
+      dual_control: {
+        algo: "sha256-canonical-json-v1",
+        payload_hash: binding.payload_hash,
+        redacted_fields: binding.redacted_fields,
+      },
+    } as Prisma.InputJsonValue,
   });
+}
+
+// WHAT: [G1-DUAL-CONTROL] Atomically consume an APPROVED dual-control
+//       escalation inside the guarded handler's OWN transaction --
+//       APPROVED -> EXPIRED compare-and-swap (the break-glass
+//       markBreakGlassUsed pattern), consumed_at/consumed_by stamped into
+//       resolution_metadata.dual_control, and the
+//       DUAL_CONTROL_APPROVAL_CONSUMED Zone U1 marker written in-tx.
+// INPUT: tx (the guarded operation's transaction client -- consumption and
+//        the privileged effect commit or roll back TOGETHER) +
+//        escalationId + actorEntityId (the caller whose request consumed
+//        the approval).
+// OUTPUT: Resolves when consumed; throws DUAL_CONTROL_ALREADY_CONSUMED if
+//         the row is no longer APPROVED (a concurrent identical request
+//         won the race, or the approval was already used) -- the caller's
+//         transaction rolls back and the privileged effect never lands.
+// WHY: Single-use is only real if consumption is atomic with the guarded
+//      effect: the status-conditioned updateMany is the TOCTOU guard
+//      (two concurrent requests both passing the middleware read cannot
+//      both consume), and EXPIRED structurally drops the row out of
+//      findApprovedDualControlForCaller's APPROVED filter forever. No new
+//      status value, no schema change; EXPIRED here means "no longer
+//      spendable", with the honest consumed_at marker in metadata + audit.
+export async function consumeApprovedDualControlInTx(
+  tx: Prisma.TransactionClient,
+  escalationId: string,
+  actorEntityId: string | null,
+): Promise<void> {
+  const existing = await tx.escalationRequest.findUnique({
+    where: { escalation_id: escalationId },
+  });
+  if (existing === null) {
+    throw new Error("ESCALATION_NOT_FOUND");
+  }
+  const priorMeta =
+    typeof existing.resolution_metadata === "object" &&
+    existing.resolution_metadata !== null &&
+    !Array.isArray(existing.resolution_metadata)
+      ? (existing.resolution_metadata as Record<string, unknown>)
+      : {};
+  const priorDualControl =
+    typeof priorMeta["dual_control"] === "object" &&
+    priorMeta["dual_control"] !== null &&
+    !Array.isArray(priorMeta["dual_control"])
+      ? (priorMeta["dual_control"] as Record<string, unknown>)
+      : {};
+  const consumed = await tx.escalationRequest.updateMany({
+    where: { escalation_id: escalationId, status: "APPROVED" },
+    data: {
+      status: "EXPIRED",
+      resolution_metadata: {
+        ...priorMeta,
+        dual_control: {
+          ...priorDualControl,
+          consumed_at: new Date().toISOString(),
+          consumed_by_entity_id: actorEntityId,
+        },
+      } as Prisma.InputJsonValue,
+    },
+  });
+  if (consumed.count !== 1) {
+    throw new Error("DUAL_CONTROL_ALREADY_CONSUMED");
+  }
+  await writeAuditEvent(
+    {
+      event_type: "ADMIN_ACTION",
+      outcome: "SUCCESS",
+      actor_entity_id: actorEntityId,
+      target_entity_id: existing.target_entity_id,
+      details: {
+        action: "DUAL_CONTROL_APPROVAL_CONSUMED",
+        escalation_id: escalationId,
+        description: existing.description,
+        previous_status: "APPROVED",
+        new_status: "EXPIRED",
+      },
+    },
+    tx,
+  );
 }
 
 // WHAT: List the caller's own pending escalations (caller == target).

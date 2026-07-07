@@ -135,6 +135,13 @@ export async function registerPlatformRoutes(
         admin_first_name: firstName,
         admin_last_name: lastName,
         actor_entity_id: request.auth?.entity_id ?? null,
+        // [G1-DUAL-CONTROL] Spend the approval the middleware verified,
+        // atomically inside executePhase0's transaction (single_use is
+        // true for this endpoint -- payloadBinding is set on Operation B).
+        consume_escalation_id:
+          request.dualControl?.single_use === true
+            ? request.dualControl.escalation_id
+            : null,
       };
 
       try {
@@ -142,6 +149,20 @@ export async function registerPlatformRoutes(
         return reply.code(201).send({ ok: true, ...result });
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown";
+        if (message.includes("DUAL_CONTROL_ALREADY_CONSUMED")) {
+          // [G1-DUAL-CONTROL] The approval was already spent (a concurrent
+          // identical request won the race, or this is a replay after a
+          // successful create). Nothing was created; a fresh dual-control
+          // approval is required to run this operation again.
+          return reply.code(409).send({
+            ok: false,
+            code: "DUAL_CONTROL_APPROVAL_CONSUMED",
+            message:
+              "The dual-control approval for this operation has already " +
+              "been used. Re-issue the request to open a new escalation " +
+              "and obtain a fresh second-approver approval.",
+          });
+        }
         if (
           message.includes("Unique constraint") ||
           message.includes("DEFAULT_HIVE_ALREADY_EXISTS")
