@@ -25,6 +25,7 @@
 //     or a provider error returns an honest failure code — never an
 //     empty-but-green list standing in for real data.
 
+import { createHash } from "node:crypto";
 import { writeAuditEvent } from "@niov/database";
 import { getProviderAccessTokenForOrg } from "./connector-oauth.service.js";
 
@@ -335,7 +336,7 @@ function isRfc3339(value: unknown): value is string {
 async function emitDataRead(
   args: { actor_entity_id: string; org_entity_id: string },
   provider: "zoom" | "google",
-  resource: "recordings" | "freebusy",
+  resource: "recordings" | "freebusy" | "drive_docs" | "drive_doc_export" | "meet_records" | "meet_transcript",
   resultCount: number,
   reason: string,
 ): Promise<void> {
@@ -346,4 +347,461 @@ async function emitDataRead(
     target_entity_id: args.org_entity_id,
     details: { provider, resource, result_count: resultCount, reason },
   });
+}
+
+// ── Google Drive documents (read-only, selected-doc discipline) ──
+
+// WHAT: One Google Doc, SAFE-projected for selection.
+// WHY: Enough for an admin to recognize and SELECT one document
+//      (name + modified + owner + view link); never content, never
+//      export/download URLs (exports happen server-side only).
+export interface GoogleDocView {
+  file_id: string;
+  name: string;
+  modified_time: string;
+  owner: string | null;
+  web_view_link: string | null;
+}
+
+export interface GoogleDocsListResult {
+  ok: true;
+  provider: "google";
+  docs: GoogleDocView[];
+}
+
+interface DriveFileRaw {
+  id?: unknown;
+  name?: unknown;
+  modifiedTime?: unknown;
+  owners?: unknown;
+  webViewLink?: unknown;
+}
+
+function projectDriveFile(raw: DriveFileRaw): GoogleDocView | null {
+  if (typeof raw.id !== "string") return null;
+  const owners = Array.isArray(raw.owners) ? raw.owners : [];
+  const firstOwner =
+    owners.length > 0 &&
+    typeof (owners[0] as { displayName?: unknown }).displayName === "string"
+      ? ((owners[0] as { displayName: string }).displayName)
+      : null;
+  return {
+    file_id: raw.id,
+    name: typeof raw.name === "string" ? raw.name : "(untitled)",
+    modified_time: typeof raw.modifiedTime === "string" ? raw.modifiedTime : "",
+    owner: firstOwner,
+    web_view_link: typeof raw.webViewLink === "string" ? raw.webViewLink : null,
+  };
+}
+
+// WHAT: List Google Docs visible to the org's granted drive.readonly
+//        scope (native Docs only — the export path below is text/plain).
+// INPUT: actor + org + optional page_size + optional name_query.
+// OUTPUT: SAFE doc projections, or an honest failure code.
+// WHY: SELECTED-DOC DISCIPLINE — this list exists so an admin picks ONE
+//      document to import; nothing here reads content and nothing ever
+//      auto-syncs a Drive. Audited as CONNECTOR_DATA_READ either way.
+export async function listGoogleDocsForOrg(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  page_size?: number;
+  name_query?: string;
+}): Promise<GoogleDocsListResult | ConnectorDataReadFailure> {
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await emitDataRead(args, "google", "drive_docs", 0, token.code);
+    return { ok: false, code: token.code };
+  }
+  const pageSize = clampPageSize(args.page_size, 25, 100);
+  let q = "mimeType='application/vnd.google-apps.document' and trashed=false";
+  if (typeof args.name_query === "string" && args.name_query.trim().length > 0) {
+    // Drive q-syntax: escape single quotes inside the contains term.
+    const safe = args.name_query.trim().slice(0, 80).replace(/'/g, "\\'");
+    q += ` and name contains '${safe}'`;
+  }
+  const params = new URLSearchParams({
+    q,
+    pageSize: String(pageSize),
+    fields: "files(id,name,modifiedTime,owners(displayName),webViewLink)",
+    orderBy: "modifiedTime desc",
+  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+      { method: "GET", headers: { Authorization: `Bearer ${token.access_token}` } },
+    );
+  } catch {
+    await emitDataRead(args, "google", "drive_docs", 0, "fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (!res.ok) {
+    await emitDataRead(args, "google", "drive_docs", 0, `http_${res.status}`);
+    return { ok: false, code: codeForProviderStatus(res.status) };
+  }
+  let json: { files?: unknown };
+  try {
+    json = (await res.json()) as { files?: unknown };
+  } catch {
+    await emitDataRead(args, "google", "drive_docs", 0, "bad_json");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  const files = Array.isArray(json.files) ? (json.files as DriveFileRaw[]) : [];
+  const docs = files
+    .map(projectDriveFile)
+    .filter((d): d is GoogleDocView => d !== null);
+  await emitDataRead(args, "google", "drive_docs", docs.length, "ok");
+  return { ok: true, provider: "google", docs };
+}
+
+export const GOOGLE_DOC_EXPORT_MAX_CHARS = 20_000;
+
+export interface GoogleDocExportResult {
+  ok: true;
+  provider: "google";
+  file_id: string;
+  name: string;
+  modified_time: string;
+  web_view_link: string | null;
+  content_sha256: string;
+  text: string;
+}
+
+export type GoogleDocExportFailure =
+  | ConnectorDataReadFailure
+  | { ok: false; code: "NOT_FOUND" | "DOC_TOO_LARGE" };
+
+// WHAT: Export ONE selected Google Doc as plain text, with its SAFE
+//        metadata and a content hash for lineage.
+// INPUT: actor + org + file_id (the admin's explicit selection).
+// OUTPUT: { name, modified_time, web_view_link, content_sha256, text }
+//         or an honest failure (NOT_FOUND / DOC_TOO_LARGE / token codes).
+// WHY: The export happens server-side over the org's sealed OAuth
+//      envelope — content and export URLs never reach the client raw;
+//      the caller routes the text into the DOCUMENT_CONTEXT rail with
+//      full source lineage. Oversized docs refuse honestly rather than
+//      silently truncating someone's source of truth.
+export async function fetchGoogleDocTextForOrg(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  file_id: string;
+}): Promise<GoogleDocExportResult | GoogleDocExportFailure> {
+  if (typeof args.file_id !== "string" || args.file_id.length === 0) {
+    return { ok: false, code: "INVALID_REQUEST" };
+  }
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await emitDataRead(args, "google", "drive_doc_export", 0, token.code);
+    return { ok: false, code: token.code };
+  }
+  const headers = { Authorization: `Bearer ${token.access_token}` };
+  const fileId = encodeURIComponent(args.file_id);
+
+  let metaRes: Response;
+  try {
+    metaRes = await fetchWithTimeout(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,modifiedTime,webViewLink`,
+      { method: "GET", headers },
+    );
+  } catch {
+    await emitDataRead(args, "google", "drive_doc_export", 0, "fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (metaRes.status === 404) {
+    await emitDataRead(args, "google", "drive_doc_export", 0, "http_404");
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  if (!metaRes.ok) {
+    await emitDataRead(args, "google", "drive_doc_export", 0, `http_${metaRes.status}`);
+    return { ok: false, code: codeForProviderStatus(metaRes.status) };
+  }
+  let meta: DriveFileRaw;
+  try {
+    meta = (await metaRes.json()) as DriveFileRaw;
+  } catch {
+    await emitDataRead(args, "google", "drive_doc_export", 0, "bad_json");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+
+  let exportRes: Response;
+  try {
+    exportRes = await fetchWithTimeout(
+      `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text%2Fplain`,
+      { method: "GET", headers },
+    );
+  } catch {
+    await emitDataRead(args, "google", "drive_doc_export", 0, "fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (!exportRes.ok) {
+    await emitDataRead(args, "google", "drive_doc_export", 0, `http_${exportRes.status}`);
+    return { ok: false, code: codeForProviderStatus(exportRes.status) };
+  }
+  const text = await exportRes.text();
+  if (text.length > GOOGLE_DOC_EXPORT_MAX_CHARS) {
+    await emitDataRead(args, "google", "drive_doc_export", 0, "doc_too_large");
+    return { ok: false, code: "DOC_TOO_LARGE" };
+  }
+  const contentSha = createHash("sha256").update(text, "utf8").digest("hex");
+  await emitDataRead(args, "google", "drive_doc_export", 1, "ok");
+  return {
+    ok: true,
+    provider: "google",
+    file_id: typeof meta.id === "string" ? meta.id : args.file_id,
+    name: typeof meta.name === "string" ? meta.name : "(untitled)",
+    modified_time: typeof meta.modifiedTime === "string" ? meta.modifiedTime : "",
+    web_view_link: typeof meta.webViewLink === "string" ? meta.webViewLink : null,
+    content_sha256: `sha256:${contentSha}`,
+    text,
+  };
+}
+
+// ── Google Meet conference records + transcripts (post-meeting) ──
+
+// WHAT: One Meet conference record, SAFE-projected for selection.
+// WHY: Post-meeting selection surface — the Meet API exposes records
+//      AFTER a meeting ends; nothing here is (or claims to be)
+//      real-time.
+export interface MeetConferenceRecordView {
+  record_id: string;
+  meeting_code: string | null;
+  start_time: string;
+  end_time: string | null;
+}
+
+export interface MeetConferenceRecordsResult {
+  ok: true;
+  provider: "google";
+  records: MeetConferenceRecordView[];
+}
+
+interface MeetRecordRaw {
+  name?: unknown;
+  space?: unknown;
+  startTime?: unknown;
+  endTime?: unknown;
+}
+
+// WHAT: List the org's Meet conference records (read-only, post-meeting).
+// OUTPUT: SAFE record projections or an honest failure.
+// WHY: Selection surface for transcript import; requires the
+//      meetings.space.readonly consent — absent that scope the provider
+//      answers 403 and this surfaces SCOPE_REAUTH_REQUIRED honestly.
+export async function listMeetConferenceRecordsForOrg(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  page_size?: number;
+}): Promise<MeetConferenceRecordsResult | ConnectorDataReadFailure> {
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await emitDataRead(args, "google", "meet_records", 0, token.code);
+    return { ok: false, code: token.code };
+  }
+  const pageSize = clampPageSize(args.page_size, 25, 100);
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      `https://meet.googleapis.com/v2/conferenceRecords?pageSize=${pageSize}`,
+      { method: "GET", headers: { Authorization: `Bearer ${token.access_token}` } },
+    );
+  } catch {
+    await emitDataRead(args, "google", "meet_records", 0, "fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (!res.ok) {
+    await emitDataRead(args, "google", "meet_records", 0, `http_${res.status}`);
+    return { ok: false, code: codeForProviderStatus(res.status) };
+  }
+  let json: { conferenceRecords?: unknown };
+  try {
+    json = (await res.json()) as { conferenceRecords?: unknown };
+  } catch {
+    await emitDataRead(args, "google", "meet_records", 0, "bad_json");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  const raws = Array.isArray(json.conferenceRecords)
+    ? (json.conferenceRecords as MeetRecordRaw[])
+    : [];
+  const records = raws
+    .map((r): MeetConferenceRecordView | null => {
+      if (typeof r.name !== "string") return null;
+      return {
+        record_id: r.name.replace(/^conferenceRecords\//, ""),
+        meeting_code:
+          typeof r.space === "string" ? r.space.replace(/^spaces\//, "") : null,
+        start_time: typeof r.startTime === "string" ? r.startTime : "",
+        end_time: typeof r.endTime === "string" ? r.endTime : null,
+      };
+    })
+    .filter((r): r is MeetConferenceRecordView => r !== null);
+  await emitDataRead(args, "google", "meet_records", records.length, "ok");
+  return { ok: true, provider: "google", records };
+}
+
+export const MEET_TRANSCRIPT_MAX_CHARS = 200_000;
+const MEET_TRANSCRIPT_MAX_PAGES = 10;
+
+export interface MeetTranscriptResult {
+  ok: true;
+  provider: "google";
+  record_id: string;
+  start_time: string;
+  /** Speaker-attributed lines, "Name: text" — the comms-spine shape. */
+  transcript: string;
+  entry_count: number;
+}
+
+export type MeetTranscriptFailure =
+  | ConnectorDataReadFailure
+  | { ok: false; code: "NOT_FOUND" | "NO_TRANSCRIPT" | "TRANSCRIPT_TOO_LARGE" };
+
+// WHAT: Fetch ONE conference record's transcript entries (post-meeting)
+//        and flatten to speaker-attributed text for the comms spine.
+// INPUT: actor + org + record_id (the admin's explicit selection).
+// OUTPUT: transcript text + entry count, or an honest failure —
+//         NO_TRANSCRIPT when the meeting has no Meet-generated
+//         transcript (the API is post-meeting and permission-dependent;
+//         we never fabricate one from anything else).
+// WHY: This is the MEET-API transcript path, distinct by construction
+//      from a Google-Docs transcript file (Drive export above) and a
+//      manually pasted transcript (the manual rail) — lineage keeps
+//      the three apart.
+export async function fetchMeetTranscriptForOrg(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  record_id: string;
+}): Promise<MeetTranscriptResult | MeetTranscriptFailure> {
+  if (typeof args.record_id !== "string" || args.record_id.length === 0) {
+    return { ok: false, code: "INVALID_REQUEST" };
+  }
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await emitDataRead(args, "google", "meet_transcript", 0, token.code);
+    return { ok: false, code: token.code };
+  }
+  const headers = { Authorization: `Bearer ${token.access_token}` };
+  const recordId = encodeURIComponent(args.record_id);
+
+  // Record metadata (start time + existence).
+  let recRes: Response;
+  try {
+    recRes = await fetchWithTimeout(
+      `https://meet.googleapis.com/v2/conferenceRecords/${recordId}`,
+      { method: "GET", headers },
+    );
+  } catch {
+    await emitDataRead(args, "google", "meet_transcript", 0, "fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (recRes.status === 404) {
+    await emitDataRead(args, "google", "meet_transcript", 0, "http_404");
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  if (!recRes.ok) {
+    await emitDataRead(args, "google", "meet_transcript", 0, `http_${recRes.status}`);
+    return { ok: false, code: codeForProviderStatus(recRes.status) };
+  }
+  const recJson = (await recRes.json().catch(() => ({}))) as MeetRecordRaw;
+  const startTime =
+    typeof recJson.startTime === "string" ? recJson.startTime : "";
+
+  // Transcript resource (post-meeting; may honestly not exist).
+  let listRes: Response;
+  try {
+    listRes = await fetchWithTimeout(
+      `https://meet.googleapis.com/v2/conferenceRecords/${recordId}/transcripts`,
+      { method: "GET", headers },
+    );
+  } catch {
+    await emitDataRead(args, "google", "meet_transcript", 0, "fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (!listRes.ok) {
+    await emitDataRead(args, "google", "meet_transcript", 0, `http_${listRes.status}`);
+    return { ok: false, code: codeForProviderStatus(listRes.status) };
+  }
+  const listJson = (await listRes.json().catch(() => ({}))) as {
+    transcripts?: Array<{ name?: unknown }>;
+  };
+  const transcriptName =
+    Array.isArray(listJson.transcripts) &&
+    typeof listJson.transcripts[0]?.name === "string"
+      ? (listJson.transcripts[0].name)
+      : null;
+  if (transcriptName === null) {
+    await emitDataRead(args, "google", "meet_transcript", 0, "no_transcript");
+    return { ok: false, code: "NO_TRANSCRIPT" };
+  }
+
+  // Entries (paginated, bounded).
+  const lines: string[] = [];
+  let entryCount = 0;
+  let pageToken: string | null = null;
+  for (let page = 0; page < MEET_TRANSCRIPT_MAX_PAGES; page++) {
+    const params = new URLSearchParams({ pageSize: "1000" });
+    if (pageToken !== null) params.set("pageToken", pageToken);
+    let entriesRes: Response;
+    try {
+      entriesRes = await fetchWithTimeout(
+        `https://meet.googleapis.com/v2/${transcriptName}/entries?${params.toString()}`,
+        { method: "GET", headers },
+      );
+    } catch {
+      await emitDataRead(args, "google", "meet_transcript", 0, "fetch_failed");
+      return { ok: false, code: "PROVIDER_ERROR" };
+    }
+    if (!entriesRes.ok) {
+      await emitDataRead(args, "google", "meet_transcript", 0, `http_${entriesRes.status}`);
+      return { ok: false, code: codeForProviderStatus(entriesRes.status) };
+    }
+    const entriesJson = (await entriesRes.json().catch(() => ({}))) as {
+      transcriptEntries?: Array<{ participant?: unknown; text?: unknown }>;
+      nextPageToken?: unknown;
+    };
+    for (const e of entriesJson.transcriptEntries ?? []) {
+      if (typeof e.text !== "string" || e.text.length === 0) continue;
+      const speaker =
+        typeof e.participant === "string"
+          ? e.participant.split("/").pop() ?? "Speaker"
+          : "Speaker";
+      lines.push(`${speaker}: ${e.text}`);
+      entryCount += 1;
+    }
+    pageToken =
+      typeof entriesJson.nextPageToken === "string" &&
+      entriesJson.nextPageToken.length > 0
+        ? entriesJson.nextPageToken
+        : null;
+    if (pageToken === null) break;
+  }
+  const transcript = lines.join("\n");
+  if (transcript.length > MEET_TRANSCRIPT_MAX_CHARS) {
+    await emitDataRead(args, "google", "meet_transcript", 0, "transcript_too_large");
+    return { ok: false, code: "TRANSCRIPT_TOO_LARGE" };
+  }
+  if (transcript.length === 0) {
+    await emitDataRead(args, "google", "meet_transcript", 0, "no_transcript");
+    return { ok: false, code: "NO_TRANSCRIPT" };
+  }
+  await emitDataRead(args, "google", "meet_transcript", entryCount, "ok");
+  return {
+    ok: true,
+    provider: "google",
+    record_id: args.record_id,
+    start_time: startTime,
+    transcript,
+    entry_count: entryCount,
+  };
 }

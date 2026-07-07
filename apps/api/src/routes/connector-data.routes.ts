@@ -15,6 +15,7 @@ import { requireAdminCapability } from "../middleware/admin.middleware.js";
 import {
   slackMessageToSourceEvent,
   zoomRecordingToSourceEvent,
+  googleMeetTranscriptToSourceEvent,
 } from "../services/otzar/source-event.js";
 import { fetchZoomTranscriptForOrg } from "../services/connector/zoom-transcript.js";
 import {
@@ -26,7 +27,18 @@ import { getOrgEntityId } from "../services/governance/org.js";
 import {
   listZoomRecordingsForOrg,
   getCalendarFreeBusyForOrg,
+  listGoogleDocsForOrg,
+  fetchGoogleDocTextForOrg,
+  listMeetConferenceRecordsForOrg,
+  fetchMeetTranscriptForOrg,
 } from "../services/connector/connector-data-read.service.js";
+import {
+  importGoogleDocForCaller,
+  DOCUMENT_SOURCE_KINDS,
+  DOCUMENT_CURRENTNESS,
+  type DocumentSourceKind,
+  type DocumentCurrentness,
+} from "../services/otzar/document-context.service.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -321,4 +333,203 @@ export async function registerConnectorDataRoutes(
       return reply.code(statusForCode(result.code)).send(result);
     return reply.code(200).send(result);
   });
+
+  // ── [GOOGLE-DOCS] Selected-doc discovery + import (read-only Drive) ──
+  // GET /api/v1/drive/docs — SAFE metadata list so an admin can pick ONE
+  // document. Never content, never export URLs, never an auto-sync.
+  app.get<{ Querystring: { page_size?: string; name_query?: string } }>(
+    "/api/v1/drive/docs",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const orgEntityId = await resolveOrgOrFail(session.entity_id, reply);
+      if (orgEntityId === null) return;
+      const q = request.query ?? {};
+      const pageSize =
+        typeof q.page_size === "string" ? Number.parseInt(q.page_size, 10) : NaN;
+      const result = await listGoogleDocsForOrg({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        ...(Number.isFinite(pageSize) ? { page_size: pageSize } : {}),
+        ...(typeof q.name_query === "string" ? { name_query: q.name_query } : {}),
+      });
+      if (result.ok === false)
+        return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /api/v1/drive/docs/ingest — an ADMIN picks ONE Google Doc; the
+  // text is exported server-side (org OAuth envelope; nothing tokenized
+  // reaches the client) and lands on the DOCUMENT_CONTEXT reference rail
+  // with full lineage (file id / modified time / view link / content
+  // hash). Same-content re-import refuses ALREADY_IMPORTED; changed
+  // content imports as a fresh dated row (supersession candidate). The
+  // admin trigger IS the consent record. No work extraction runs — the
+  // v1 document contract is preserved.
+  app.post<{
+    Body: {
+      file_id?: unknown;
+      source_kind?: unknown;
+      currentness?: unknown;
+    };
+  }>(
+    "/api/v1/drive/docs/ingest",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const fileId =
+        typeof request.body?.file_id === "string" && request.body.file_id.length > 0
+          ? request.body.file_id
+          : null;
+      if (fileId === null) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "file_id is required" });
+      }
+      const kindRaw = request.body?.source_kind;
+      const kind =
+        typeof kindRaw === "string" &&
+        (DOCUMENT_SOURCE_KINDS as readonly string[]).includes(kindRaw)
+          ? (kindRaw as DocumentSourceKind)
+          : undefined;
+      const curRaw = request.body?.currentness;
+      const currentness =
+        typeof curRaw === "string" &&
+        (DOCUMENT_CURRENTNESS as readonly string[]).includes(curRaw)
+          ? (curRaw as DocumentCurrentness)
+          : undefined;
+      const orgEntityId = await resolveOrgOrFail(request.auth!.entity_id, reply);
+      if (orgEntityId === null) return;
+      const fetched = await fetchGoogleDocTextForOrg({
+        actor_entity_id: request.auth!.entity_id,
+        org_entity_id: orgEntityId,
+        file_id: fileId,
+      });
+      if (fetched.ok === false) {
+        const status =
+          fetched.code === "NOT_FOUND" ? 404
+          : fetched.code === "DOC_TOO_LARGE" ? 422
+          : fetched.code === "INVALID_REQUEST" ? 422
+          : statusForCode(fetched.code);
+        return reply.code(status).send({ ok: false, code: fetched.code });
+      }
+      const result = await importGoogleDocForCaller(request.auth!.entity_id, {
+        file_id: fetched.file_id,
+        name: fetched.name,
+        text: fetched.text,
+        modified_time: fetched.modified_time,
+        web_view_link: fetched.web_view_link,
+        content_sha256: fetched.content_sha256,
+        ...(kind !== undefined ? { source_kind: kind } : {}),
+        ...(currentness !== undefined ? { currentness } : {}),
+      });
+      if (result.ok === false) {
+        const status = result.code === "ALREADY_IMPORTED" ? 409 : 422;
+        return reply.code(status).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // ── [GOOGLE-MEET] Post-meeting records + transcript import ──
+  // GET /api/v1/meet/conference-records — post-meeting selection surface.
+  // The Meet API is post-meeting and permission-dependent; this never is
+  // (or claims to be) real-time.
+  app.get<{ Querystring: { page_size?: string } }>(
+    "/api/v1/meet/conference-records",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const orgEntityId = await resolveOrgOrFail(session.entity_id, reply);
+      if (orgEntityId === null) return;
+      const q = request.query ?? {};
+      const pageSize =
+        typeof q.page_size === "string" ? Number.parseInt(q.page_size, 10) : NaN;
+      const result = await listMeetConferenceRecordsForOrg({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        ...(Number.isFinite(pageSize) ? { page_size: pageSize } : {}),
+      });
+      if (result.ok === false)
+        return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /api/v1/meet/transcripts/ingest — an ADMIN picks ONE conference
+  // record; the Meet-API transcript entries are fetched server-side,
+  // flattened to speaker-attributed lines, and fed to the EXISTING comms
+  // spine via the canonical adapter (sourceId GOOGLE_MEET:<record_id> —
+  // idempotent, and lineage-distinct from a Docs transcript file or a
+  // manual paste). NO_TRANSCRIPT is an honest answer, never fabricated.
+  app.post<{ Body: { record_id?: unknown } }>(
+    "/api/v1/meet/transcripts/ingest",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const bearer = bearerFrom(request.headers.authorization);
+      if (bearer === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const recordId =
+        typeof request.body?.record_id === "string" && request.body.record_id.length > 0
+          ? request.body.record_id
+          : null;
+      if (recordId === null) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "record_id is required" });
+      }
+      const orgEntityId = await resolveOrgOrFail(request.auth!.entity_id, reply);
+      if (orgEntityId === null) return;
+      const fetched = await fetchMeetTranscriptForOrg({
+        actor_entity_id: request.auth!.entity_id,
+        org_entity_id: orgEntityId,
+        record_id: recordId,
+      });
+      if (fetched.ok === false) {
+        const status =
+          fetched.code === "NOT_FOUND" || fetched.code === "NO_TRANSCRIPT" ? 404
+          : fetched.code === "TRANSCRIPT_TOO_LARGE" ? 422
+          : fetched.code === "INVALID_REQUEST" ? 422
+          : statusForCode(fetched.code);
+        return reply.code(status).send({ ok: false, code: fetched.code });
+      }
+      const meetEvent = googleMeetTranscriptToSourceEvent({
+        recordId,
+        meetingLabel:
+          fetched.start_time.length > 0
+            ? `meeting of ${fetched.start_time.slice(0, 10)}`
+            : recordId,
+        transcript: fetched.transcript,
+        callerEntityId: request.auth!.entity_id,
+        callerName: "Google Meet transcript import",
+        orgEntityId,
+        startTimeIso: fetched.start_time,
+        nowIso: new Date().toISOString(),
+      });
+      const result = await otzarService.ingestSourceEvent({
+        token: bearer,
+        source: {
+          sourceType: meetEvent.sourceType,
+          sourceSystem: meetEvent.sourceSystem,
+          sourceId: meetEvent.sourceId,
+          sourceUrl: null,
+          actor: { name: meetEvent.actor.name },
+          timestamp: meetEvent.timestamp,
+          title: meetEvent.title,
+          content: meetEvent.content,
+        },
+      });
+      if (!result.ok) {
+        if (result.code === "ALREADY_INGESTED") {
+          return reply.code(409).send(result);
+        }
+        return reply.code(502).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
 }

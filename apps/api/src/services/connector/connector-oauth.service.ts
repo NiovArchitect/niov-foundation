@@ -133,6 +133,13 @@ function providerConfig(provider: OAuthProviderKey): OAuthProviderConfig {
           "https://www.googleapis.com/auth/calendar.settings.readonly",
           "https://www.googleapis.com/auth/gmail.readonly",
           "https://www.googleapis.com/auth/drive.metadata.readonly",
+          // [GOOGLE-DOCS + GOOGLE-MEET] Read-only content scopes for the
+          // selected-doc import rail (drive.readonly — export ONE
+          // admin-chosen doc, never an auto-sync) and post-meeting Meet
+          // transcript import (meetings.space.readonly). Still ZERO
+          // write scopes: no event-write, no Gmail-send, no Drive write.
+          "https://www.googleapis.com/auth/drive.readonly",
+          "https://www.googleapis.com/auth/meetings.space.readonly",
         ],
         client_id_env: "GOOGLE_OAUTH_CLIENT_ID",
         client_secret_env: "GOOGLE_OAUTH_CLIENT_SECRET",
