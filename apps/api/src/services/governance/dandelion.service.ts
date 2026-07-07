@@ -39,6 +39,10 @@ import {
 } from "@niov/database";
 import { createTwin } from "./twin.service.js";
 import { seedIndustryDomainTemplates } from "./seeds.js";
+// [G1-DUAL-CONTROL] One-directional import (escalation.service does not
+// import this module -- no cycle): the approval consume runs as STEP 0
+// inside executePhase0's transaction.
+import { consumeApprovedDualControlInTx } from "./escalation.service.js";
 
 // WHAT: Inputs to executePhase0 (the createOrg flow).
 // INPUT: Used as a parameter type only.
@@ -58,6 +62,17 @@ export interface Phase0Input {
    * bootstrap path (Section 14 admin tooling will close this gap).
    */
   actor_entity_id?: string | null;
+  /**
+   * [G1-DUAL-CONTROL] The APPROVED dual-control escalation this
+   * createOrg spends. When set, executePhase0 consumes it FIRST,
+   * inside the same transaction (APPROVED -> EXPIRED compare-and-swap
+   * via consumeApprovedDualControlInTx), so approval spend and org
+   * creation commit or roll back together: a raced/already-spent
+   * approval throws DUAL_CONTROL_ALREADY_CONSUMED and no org rows
+   * land. Null/absent preserves the direct-service path used by
+   * seeds and tests that construct orgs below the HTTP tier.
+   */
+  consume_escalation_id?: string | null;
 }
 
 // WHAT: Successful Phase 0 return shape.
@@ -185,6 +200,22 @@ export async function executePhase0(input: Phase0Input): Promise<Phase0Result> {
   return prisma.$transaction(
     async (tx) => {
       const actorId = input.actor_entity_id ?? null;
+
+      // STEP 0 -- [G1-DUAL-CONTROL] spend the approval before touching
+      // anything else. Atomic with every row below: if the approval is
+      // already consumed (or a concurrent identical request won the
+      // compare-and-swap), this throws and the whole transaction rolls
+      // back -- no duplicate org, ever.
+      if (
+        input.consume_escalation_id !== undefined &&
+        input.consume_escalation_id !== null
+      ) {
+        await consumeApprovedDualControlInTx(
+          tx,
+          input.consume_escalation_id,
+          actorId,
+        );
+      }
 
       // STEP 1 -- COMPANY entity (org root). Manually inline what
       // createEntity does so wallet + TAR + audit all land inside

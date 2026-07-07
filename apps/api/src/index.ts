@@ -1108,6 +1108,9 @@ export {
   findApprovedDualControlForCaller,
   getOrCreatePendingDualControlForCaller,
   resolveDualControlTarget,
+  // [G1-DUAL-CONTROL] single-use consume -- spent atomically inside the
+  // guarded handler's transaction (executePhase0 STEP 0).
+  consumeApprovedDualControlInTx,
 } from "./services/governance/escalation.service.js";
 export type {
   CreateEscalationInput,
@@ -1140,6 +1143,9 @@ export {
   PRIVILEGED_ENDPOINTS,
   isPrivilegedEndpoint,
   dualControlDescription,
+  // [G1-DUAL-CONTROL] canonical payload hashing for payload-bound
+  // dual-control endpoints (redacted, key-sorted sha256).
+  canonicalDualControlPayload,
 } from "./security/privileged-endpoints.js";
 export type {
   PrivilegedEndpoint,

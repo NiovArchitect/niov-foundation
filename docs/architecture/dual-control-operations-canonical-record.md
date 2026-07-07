@@ -148,7 +148,7 @@ The `requireDualControl` Fastify preHandler (sub-phase E) is implemented in Type
 2. **Supervisor-friendly failure modes.** Middleware failures (DB unreachable, audit-write fails, `EscalationRequest` lookup throws) throw typed errors via a discriminated union `type DualControlFailure = TransientFailure | PermanentFailure` — `TransientFailure` (a future supervisor retries) vs `PermanentFailure` (escalate to the parent). Maps to Elixir's `{:error, :transient}` / `{:error, :permanent}`.
 3. **State reconstructible from durable storage.** The middleware does NOT cache `EscalationRequest` state in memory between requests — every verification reads the current state from Postgres. A future Elixir worker process can be spawned, crashed, and restarted with state hydrated from durable storage at any moment.
 4. **Event-sourced audit semantics.** The Zone U1 audit events (§4) are immutable events (the existing `writeAuditEvent` pattern per ADR-0002 already enforces this — append-only, BEFORE DELETE trigger). The dual-control verification writes its events as a sequence; each event has independent causation context. Maps to Elixir's event-sourced supervision pattern.
-5. **Idempotent verification keys.** Each verification accepts an idempotency key — the `EscalationRequest.escalation_id` serves this purpose. Replaying the same verification with the same key produces the same outcome. Maps to Elixir's idempotent message handling under at-least-once delivery.
+5. **Idempotent verification keys.** Each verification accepts an idempotency key — the `EscalationRequest.escalation_id` serves this purpose. Replaying the same verification with the same key produces the same outcome. Maps to Elixir's idempotent message handling under at-least-once delivery. **[G1-DUAL-CONTROL amendment (2026-07-06, §9):** for payload-bound endpoints (`PrivilegedEndpoint.payloadBinding` — today `PLATFORM_ORG_CREATION` only) the approval is SINGLE-USE: replaying the verification after the guarded operation succeeded finds the approval consumed (APPROVED → EXPIRED) and yields a fresh PENDING escalation, not a second delegation. Idempotency of the *verification read* is preserved; idempotency of the *spend* is deliberately one-shot, like break-glass.**]**
 6. **Pure transformation over imperative control.** The authorization logic is expressible as a pure function `(callerEntity, actionDescriptor, escalationRequestState) → outcome`. Side effects (audit writes, DB queries) are explicit and at the edges, not mixed throughout the verification logic. Maps to Elixir's pure-function-first idiom.
 
 These patterns land as comments + type definitions + structural choices in the sub-phase E middleware code and are canonicalized in ADR-0028 at sub-phase J. BEAM is an optimization, not a requirement — the Foundation can ship its full Phase 1-9 substrate without BEAM; the substrate is built BEAM-compatible today to preserve the future architectural choice.
@@ -191,3 +191,58 @@ These patterns land as comments + type definitions + structural choices in the s
 - `docs/COMPLIANCE_ARCHITECTURE_REVIEW.md` Tension 3 — the "Category cross-references" paragraph back-cites this canonical record as the implementation-facing per-operation companion (landed at sub-phase C `[SEC-DUAL-CONTROL-CANONICAL-RECORD]`)
 - `docs/architecture/raa-12-8-substrate-dynamics.md` §5.2 — back-cites this canonical record as the implementation-facing companion that builds on the §5.2 `EscalationRequest` substrate (landed at sub-phase C `[SEC-DUAL-CONTROL-CANONICAL-RECORD]`)
 - `docs/architecture/decisions/0026-dual-control-middleware-pattern.md` (ADR-0026; landed at sub-phase H `[SEC-DUAL-CONTROL-ADR]`) — cites this canonical record as the implementation-facing operational companion to the decision record; bundles the full dual-control pattern (the runtime registry + the `requireDualControl` preHandler + the per-route binding discipline + the 6 BEAM-compatibility patterns); reconciled this §4 (added the 6th `DUAL_CONTROL_TRANSIENT_FAILURE` marker; rewrote the standalone-per-event paragraph) and backfilled the §6 arc-list (C–G commit hashes; H ✅). `docs/architecture/dynamic-flow-architecture.md` RAA 12.7 §2.5 is referenced here as a foundational-canonicalization citation (the Zone U1-U4 trust-root layer) — no reciprocal back-cite at sub-phase C (RAA 12.7 §2.5 is referenced by-citation across the codebase without reciprocity; the RULE-14 foundational-vs-novel-citation distinction is forward-queued for a CLAUDE.md amendment, likely at sub-phase I alongside RULE 20).
+
+## 9. Amendment 2 — [G1-DUAL-CONTROL] payload-bound single-use approvals (2026-07-06)
+
+**Root cause (found in the Phase-0 pre-flight for `NIOV Smoke Org`):** a
+dual-control approval was standing authority — `expires_at: null`, no
+consume marker, and the match key was (source, `DUAL_CONTROL_REQUIRED`,
+APPROVED, `DUAL_CONTROL:<TYPE>`) — so an approved `PLATFORM_ORG_CREATION`
+could be replayed by the same source with ANY body to create further orgs
+without a second approval. Unacceptable for the highest-trust platform
+operation.
+
+**The repair (no schema change):**
+
+- **Payload binding (opt-in per endpoint).** `PrivilegedEndpoint.payloadBinding
+  = { redact: [...] }` marks an operation payload-bound. The middleware
+  computes `canonicalDualControlPayload(request.body, redact)` — sha256 over
+  the recursively key-sorted JSON of the body minus the redacted fields —
+  and (a) matches APPROVED escalations per-hash, (b) stamps the hash into
+  `resolution_metadata.dual_control` on the auto-created PENDING row (dedup
+  is per-payload). The approval therefore authorizes ONE exact payload.
+  A different payload opens its own PENDING escalation.
+- **Secret redaction.** Redacted fields (org creation: `admin_password`)
+  never affect the hash and never leave the hash function; only their
+  NAMES are recorded. The body itself is NEVER stored — ADR-0057 §10 +
+  the CI no-leak guard forbid body echo in escalation metadata/audit; the
+  approver verifies the payload out-of-band against the hash.
+- **Single-use consume, atomic with the effect.** The middleware hands the
+  verified escalation to the handler via `request.dualControl`; the guarded
+  service spends it INSIDE its own transaction
+  (`consumeApprovedDualControlInTx` — `executePhase0` STEP 0): a
+  status-conditioned `updateMany` APPROVED → EXPIRED is the compare-and-swap
+  (the break-glass `markBreakGlassUsed` pattern), `consumed_at` /
+  `consumed_by_entity_id` land in `resolution_metadata.dual_control`, and
+  the `DUAL_CONTROL_APPROVAL_CONSUMED` Zone U1 marker (existing
+  ADMIN_ACTION event_type — no new audit literal) is written in-tx. A
+  raced or replayed spend throws `DUAL_CONTROL_ALREADY_CONSUMED`, the
+  transaction rolls back, and NO duplicate effect lands (the route maps the
+  race to 409 `DUAL_CONTROL_APPROVAL_CONSUMED`). A failed guarded operation
+  (e.g. 422) leaves the approval spendable — consume-on-success only.
+- **Scope.** LIVE on `PLATFORM_ORG_CREATION` only. The other 6 registry
+  entries keep the §5 Pattern-5 standing-approval semantics unchanged;
+  extending `payloadBinding` to them is a per-operation decision (forward
+  path: `PLATFORM_MONETIZATION_CONFIG_UPDATE` is the natural next
+  candidate).
+
+**Audit surface additions (safe fields only):** `payload_bound` +
+`payload_hash` on `DUAL_CONTROL_VERIFICATION_PRE` /
+`DUAL_CONTROL_ESCALATION_LOOKUP` / `DUAL_CONTROL_HANDLER_DENIED`;
+the `DUAL_CONTROL_APPROVAL_CONSUMED` marker on the success path.
+
+**Status note:** `EXPIRED` on a consumed row means "no longer spendable";
+the honest distinction from time-expiry lives in
+`resolution_metadata.dual_control.consumed_at` + the CONSUMED audit
+marker. A dedicated `USED` EscalationStatus value would need a schema
+migration and is deliberately NOT taken here.

@@ -17,6 +17,7 @@
 import { describe, it, expect } from "vitest";
 import {
   PRIVILEGED_ENDPOINTS,
+  canonicalDualControlPayload,
   isPrivilegedEndpoint,
   type PrivilegedEndpoint,
 } from "@niov/api";
@@ -141,6 +142,18 @@ describe("isPrivilegedEndpoint type guard", () => {
     const entry = isPrivilegedEndpoint("POST", "/api/v1/platform/orgs");
     expect(entry).toBeDefined();
     expect(entry?.actionDescriptor.type).toBe("PLATFORM_ORG_CREATION");
+    // [G1-DUAL-CONTROL] org creation is payload-bound + single-use with
+    // admin_password redacted from hash, metadata, and audit.
+    expect(entry?.payloadBinding).toEqual({ redact: ["admin_password"] });
+  });
+
+  it("[G1-DUAL-CONTROL] org creation is the ONLY payload-bound entry (all other operations keep Pattern-5 standing-approval semantics)", () => {
+    const bound = PRIVILEGED_ENDPOINTS.filter(
+      (e) => e.payloadBinding !== undefined,
+    );
+    expect(bound.map((e) => e.actionDescriptor.type)).toEqual([
+      "PLATFORM_ORG_CREATION",
+    ]);
   });
 
   it("returns the matching entry for POST /api/v1/regulator/access-grants (Operation C)", () => {
@@ -244,5 +257,74 @@ describe("isPrivilegedEndpoint type guard", () => {
 
   it("returns undefined for a matching method but an unregistered route", () => {
     expect(isPrivilegedEndpoint("PATCH", "/api/v1/platform/unknown")).toBeUndefined();
+  });
+});
+
+// [G1-DUAL-CONTROL] The canonical payload hash that binds a dual-control
+// approval to one exact operation payload (secrets redacted).
+describe("canonicalDualControlPayload", () => {
+  it("is independent of JSON field order (canonical key-sorted serialization)", () => {
+    const a = canonicalDualControlPayload(
+      { company_name: "Acme", admin_email: "a@b.c", industry: "TECH" },
+      [],
+    );
+    const b = canonicalDualControlPayload(
+      { industry: "TECH", admin_email: "a@b.c", company_name: "Acme" },
+      [],
+    );
+    expect(a.payload_hash).toBe(b.payload_hash);
+    expect(a.payload_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it("changes when any bound field changes", () => {
+    const a = canonicalDualControlPayload({ company_name: "Acme" }, []);
+    const b = canonicalDualControlPayload({ company_name: "Acme2" }, []);
+    expect(a.payload_hash).not.toBe(b.payload_hash);
+  });
+
+  it("redacted fields never affect the hash; their NAMES are reported, values never leave the function (no body echo -- ADR-0057 §10)", () => {
+    const a = canonicalDualControlPayload(
+      { company_name: "Acme", admin_password: "secret-one" },
+      ["admin_password"],
+    );
+    const b = canonicalDualControlPayload(
+      { company_name: "Acme", admin_password: "totally-different" },
+      ["admin_password"],
+    );
+    expect(a.payload_hash).toBe(b.payload_hash);
+    expect(a.redacted_fields).toEqual(["admin_password"]);
+    expect(JSON.stringify(a)).not.toContain("secret-one");
+    // The return shape carries hash + field names ONLY -- never the body.
+    expect(Object.keys(a).sort()).toEqual(["payload_hash", "redacted_fields"]);
+  });
+
+  it("non-object bodies bind as the empty payload", () => {
+    const empty = canonicalDualControlPayload({}, []);
+    expect(canonicalDualControlPayload(undefined, []).payload_hash).toBe(
+      empty.payload_hash,
+    );
+    expect(canonicalDualControlPayload("a-string", []).payload_hash).toBe(
+      empty.payload_hash,
+    );
+    expect(canonicalDualControlPayload([1, 2], []).payload_hash).toBe(
+      empty.payload_hash,
+    );
+  });
+
+  it("nested objects are canonicalized recursively; arrays keep order", () => {
+    const a = canonicalDualControlPayload(
+      { nested: { x: 1, y: [2, 3] }, top: "v" },
+      [],
+    );
+    const b = canonicalDualControlPayload(
+      { top: "v", nested: { y: [2, 3], x: 1 } },
+      [],
+    );
+    const c = canonicalDualControlPayload(
+      { top: "v", nested: { y: [3, 2], x: 1 } },
+      [],
+    );
+    expect(a.payload_hash).toBe(b.payload_hash);
+    expect(a.payload_hash).not.toBe(c.payload_hash);
   });
 });

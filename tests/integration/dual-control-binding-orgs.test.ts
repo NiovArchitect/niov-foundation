@@ -43,6 +43,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   approveEscalationForCaller,
   buildApp,
+  canonicalDualControlPayload,
+  consumeApprovedDualControlInTx,
   createEscalationForCaller,
   dualControlDescription,
   MemoryContentStore,
@@ -51,6 +53,7 @@ import {
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
 import { computeTARHash, createEntity, prisma } from "@niov/database";
+import type { Prisma } from "@niov/database";
 import {
   cleanupTestData,
   ensureAuditTriggers,
@@ -199,19 +202,32 @@ async function seedDistinctPlatformAdmin(): Promise<string> {
 //        caller remains the source, so findApprovedDualControlForCaller(caller, …)
 //        — scoped by source_entity_id — still discovers the row. A genuine
 //        two-person approval.
+//        [G1-DUAL-CONTROL] Org creation is payload-bound: the approval is
+//        stamped with the canonical hash of the EXACT body it authorizes
+//        (admin_password redacted), mirroring what the middleware stamps on
+//        the auto-created PENDING row.
 async function grantApproval(
   callerEntityId: string,
+  payload: Record<string, unknown>,
   expiresAt: Date | null = null,
 ): Promise<string> {
   const distinctApprover = await createEntity(
     makeEntityInput({ entity_type: "PERSON" }),
   );
+  const bound = canonicalDualControlPayload(payload, ["admin_password"]);
   const created = await createEscalationForCaller(callerEntityId, {
     target_entity_id: distinctApprover.entity_id,
     escalation_type: "DUAL_CONTROL_REQUIRED",
     severity: "HIGH",
     description: dualControlDescription(ORG_ACTION_TYPE),
     expires_at: expiresAt,
+    resolution_metadata: {
+      dual_control: {
+        algo: "sha256-canonical-json-v1",
+        payload_hash: bound.payload_hash,
+        redacted_fields: bound.redacted_fields,
+      },
+    } as Prisma.InputJsonValue,
   });
   await approveEscalationForCaller(
     distinctApprover.entity_id,
@@ -350,13 +366,14 @@ describe("POST /platform/orgs + dual-control binding", () => {
 
   it("APPROVED escalation -> 201, org + admin Entity rows created, writes PRE+LOOKUP+VERIFIED+DELEGATED + executePhase0's DANDELION_PHASE_0_COMPLETE", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
-    await grantApproval(admin.entityId);
+    const payload = orgPayload();
+    await grantApproval(admin.entityId, payload);
 
     const res = await app.inject({
       method: "POST",
       url: ROUTE_URL,
       headers: { authorization: `Bearer ${admin.token}` },
-      payload: orgPayload(),
+      payload,
       remoteAddress: admin.ip,
     });
 
@@ -379,11 +396,14 @@ describe("POST /platform/orgs + dual-control binding", () => {
       await prisma.entity.findUnique({ where: { entity_id: body.admin_entity_id } }),
     ).not.toBeNull();
 
+    // [G1-DUAL-CONTROL] the success path ends with the approval being
+    // spent inside executePhase0's transaction.
     expect(await dualControlActionsFor(admin.entityId)).toEqual([
       "DUAL_CONTROL_VERIFICATION_PRE",
       "DUAL_CONTROL_ESCALATION_LOOKUP",
       "DUAL_CONTROL_APPROVAL_VERIFIED",
       "DUAL_CONTROL_HANDLER_DELEGATED",
+      "DUAL_CONTROL_APPROVAL_CONSUMED",
     ]);
     const events = await adminAuditEventsFor(admin.entityId);
     const phase0 = events.find((e) => e.details.action === "DANDELION_PHASE_0_COMPLETE");
@@ -397,21 +417,32 @@ describe("POST /platform/orgs + dual-control binding", () => {
     const preSeededApprover = await seedDistinctPlatformAdmin();
     // Pre-seed a PENDING dual-control row with a real distinct approver
     // (Phase E target shape -- target_entity_id !== source_entity_id is the
-    // structural Invariant 2). The dedup query keys on
-    // (source, escalation_type, status, description); the auto-create path
-    // still finds and returns this row without writing a duplicate.
+    // structural Invariant 2). [G1-DUAL-CONTROL] org creation is
+    // payload-bound, so the dedup keys on (source, escalation_type, status,
+    // description, payload_hash) -- the pre-seeded row carries the hash of
+    // the exact body the POST will send; the auto-create path finds and
+    // returns this row without writing a duplicate.
+    const payload = orgPayload();
+    const bound = canonicalDualControlPayload(payload, ["admin_password"]);
     const original = await createEscalationForCaller(admin.entityId, {
       target_entity_id: preSeededApprover,
       escalation_type: "DUAL_CONTROL_REQUIRED",
       severity: "HIGH",
       description: dualControlDescription(ORG_ACTION_TYPE),
+      resolution_metadata: {
+        dual_control: {
+          algo: "sha256-canonical-json-v1",
+          payload_hash: bound.payload_hash,
+          redacted_fields: bound.redacted_fields,
+        },
+      },
     });
 
     const res = await app.inject({
       method: "POST",
       url: ROUTE_URL,
       headers: { authorization: `Bearer ${admin.token}` },
-      payload: orgPayload(),
+      payload,
       remoteAddress: admin.ip,
     });
 
@@ -432,13 +463,18 @@ describe("POST /platform/orgs + dual-control binding", () => {
 
   it("an APPROVED but past-expiry escalation -> 403 with denial_reason ESCALATION_EXPIRED", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
-    const escId = await grantApproval(admin.entityId, new Date(Date.now() - 60_000));
+    const payload = orgPayload();
+    const escId = await grantApproval(
+      admin.entityId,
+      payload,
+      new Date(Date.now() - 60_000),
+    );
 
     const res = await app.inject({
       method: "POST",
       url: ROUTE_URL,
       headers: { authorization: `Bearer ${admin.token}` },
-      payload: orgPayload(),
+      payload,
       remoteAddress: admin.ip,
     });
 
@@ -480,56 +516,187 @@ describe("POST /platform/orgs + dual-control binding", () => {
     ).toHaveLength(0);
   });
 
-  it("idempotent verification (Pattern 5): an APPROVED escalation replayed -> 201 both times, both DELEGATED events reference the same escalation_id, two distinct org rows", async () => {
+  it("[G1-DUAL-CONTROL] single-use: after a successful 201 the approval is CONSUMED (APPROVED -> EXPIRED + consumed_at + CONSUMED audit); replaying the identical payload -> 403 with a NEW pending escalation, exactly one org row", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
-    const escId = await grantApproval(admin.entityId);
+    // A second platform admin must exist so the replay's denied path can
+    // resolve a Class C approver for the fresh PENDING escalation.
+    await seedDistinctPlatformAdmin();
+    const payload = orgPayload();
+    const escId = await grantApproval(admin.entityId, payload);
 
     const res1 = await app.inject({
       method: "POST",
       url: ROUTE_URL,
       headers: { authorization: `Bearer ${admin.token}` },
-      payload: orgPayload(),
+      payload,
       remoteAddress: admin.ip,
     });
     expect(res1.statusCode).toBe(201);
+
+    // The approval is spent: APPROVED -> EXPIRED, consumed_at stamped,
+    // DUAL_CONTROL_APPROVAL_CONSUMED written in the same transaction.
+    const spent = await prisma.escalationRequest.findUnique({
+      where: { escalation_id: escId },
+    });
+    expect(spent!.status).toBe("EXPIRED");
+    const spentMeta = spent!.resolution_metadata as {
+      dual_control: { consumed_at?: string; consumed_by_entity_id?: string };
+    };
+    expect(spentMeta.dual_control.consumed_at).toBeDefined();
+    expect(spentMeta.dual_control.consumed_by_entity_id).toBe(admin.entityId);
 
     const res2 = await app.inject({
       method: "POST",
       url: ROUTE_URL,
       headers: { authorization: `Bearer ${admin.token}` },
-      payload: orgPayload(),
+      payload,
       remoteAddress: admin.ip,
     });
-    expect(res2.statusCode).toBe(201);
+    expect(res2.statusCode).toBe(403);
+    const denied = res2.json() as { error: string; escalation_id: string };
+    expect(denied.error).toBe("ESCALATION_PENDING");
+    expect(denied.escalation_id).not.toBe(escId);
 
+    // Exactly ONE org landed; the replay created nothing.
     const org1 = (res1.json() as { org_entity_id: string }).org_entity_id;
-    const org2 = (res2.json() as { org_entity_id: string }).org_entity_id;
-    expect(org1).not.toBe(org2);
+    const orgRows = await prisma.entity.findMany({
+      where: { entity_type: "COMPANY", display_name: payload.company_name },
+    });
+    expect(orgRows).toHaveLength(1);
+    expect(orgRows[0]!.entity_id).toBe(org1);
 
     const events = await adminAuditEventsFor(admin.entityId);
-    const delegated = events.filter((e) => e.details.action === "DUAL_CONTROL_HANDLER_DELEGATED");
-    expect(delegated).toHaveLength(2);
-    expect(delegated.every((e) => e.details.escalation_id === escId)).toBe(true);
+    const consumed = events.filter(
+      (e) => e.details.action === "DUAL_CONTROL_APPROVAL_CONSUMED",
+    );
+    expect(consumed).toHaveLength(1);
+    expect(consumed[0]!.details.escalation_id).toBe(escId);
+    const delegated = events.filter(
+      (e) => e.details.action === "DUAL_CONTROL_HANDLER_DELEGATED",
+    );
+    expect(delegated).toHaveLength(1);
   });
 
-  it("re-homed end-to-end create: APPROVED escalation -> 201 and the created org admin can log in afterward", async () => {
+  it("[G1-DUAL-CONTROL] payload-bound: an approval for payload A does NOT authorize payload B -> 403 + a new PENDING carrying B's hash; A's approval stays unspent; no org rows", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
-    await grantApproval(admin.entityId);
-    const orgAdminEmail = `${TEST_PREFIX}orgsbinde2eadmin_${randomUUID()}@niov.test`;
-    const orgAdminPassword = "correct-horse-battery";
+    await seedDistinctPlatformAdmin();
+    const payloadA = orgPayload();
+    const payloadB = orgPayload();
+    const escId = await grantApproval(admin.entityId, payloadA);
 
     const res = await app.inject({
       method: "POST",
       url: ROUTE_URL,
       headers: { authorization: `Bearer ${admin.token}` },
-      payload: {
-        company_name: `${TEST_PREFIX}orgsbinde2eco_${randomUUID()}`,
-        admin_email: orgAdminEmail,
-        admin_password: orgAdminPassword,
-        industry: "TECH",
-        admin_first_name: "Org",
-        admin_last_name: "Admin",
-      },
+      payload: payloadB,
+      remoteAddress: admin.ip,
+    });
+
+    expect(res.statusCode).toBe(403);
+    const body = res.json() as { error: string; escalation_id: string };
+    expect(body.error).toBe("ESCALATION_PENDING");
+    expect(body.escalation_id).not.toBe(escId);
+
+    // The new PENDING escalation is stamped with B's hash, so the approver
+    // decides that exact payload.
+    const pending = await prisma.escalationRequest.findUnique({
+      where: { escalation_id: body.escalation_id },
+    });
+    expect(pending!.status).toBe("PENDING");
+    const boundB = canonicalDualControlPayload(payloadB, ["admin_password"]);
+    const pendingMeta = pending!.resolution_metadata as {
+      dual_control: { payload_hash: string };
+    };
+    expect(pendingMeta.dual_control.payload_hash).toBe(boundB.payload_hash);
+
+    // A's approval was neither matched nor spent.
+    const approvalA = await prisma.escalationRequest.findUnique({
+      where: { escalation_id: escId },
+    });
+    expect(approvalA!.status).toBe("APPROVED");
+
+    // No org was created for either payload.
+    expect(
+      await prisma.entity.findMany({
+        where: {
+          entity_type: "COMPANY",
+          display_name: { in: [payloadA.company_name, payloadB.company_name] },
+        },
+      }),
+    ).toHaveLength(0);
+  });
+
+  it("[G1-DUAL-CONTROL] admin_password is redacted from the binding: the same payload with a DIFFERENT password still matches the approval -> 201; no plaintext password in escalation metadata or dual-control audit details", async () => {
+    const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    const approvedPassword = "approved-password-9-horse";
+    const sentPassword = "different-password-7-staple";
+    const payload = { ...orgPayload(), admin_password: approvedPassword };
+    const escId = await grantApproval(admin.entityId, payload);
+
+    const res = await app.inject({
+      method: "POST",
+      url: ROUTE_URL,
+      headers: { authorization: `Bearer ${admin.token}` },
+      payload: { ...payload, admin_password: sentPassword },
+      remoteAddress: admin.ip,
+    });
+    // Password differences never change the hash -- the approval binds the
+    // org/admin identity fields, never the secret.
+    expect(res.statusCode).toBe(201);
+
+    // Neither password appears in the escalation row or any dual-control
+    // audit detail.
+    const escRow = await prisma.escalationRequest.findUnique({
+      where: { escalation_id: escId },
+    });
+    const escJson = JSON.stringify(escRow);
+    expect(escJson).not.toContain(approvedPassword);
+    expect(escJson).not.toContain(sentPassword);
+    const events = await adminAuditEventsFor(admin.entityId);
+    const eventsJson = JSON.stringify(events);
+    expect(eventsJson).not.toContain(approvedPassword);
+    expect(eventsJson).not.toContain(sentPassword);
+  });
+
+  it("[G1-DUAL-CONTROL] atomic consume: a second consumeApprovedDualControlInTx on the same approval throws DUAL_CONTROL_ALREADY_CONSUMED (the concurrent-replay compare-and-swap guard)", async () => {
+    const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    const payload = orgPayload();
+    const escId = await grantApproval(admin.entityId, payload);
+
+    await prisma.$transaction(async (tx) => {
+      await consumeApprovedDualControlInTx(tx, escId, admin.entityId);
+    });
+    await expect(
+      prisma.$transaction(async (tx) => {
+        await consumeApprovedDualControlInTx(tx, escId, admin.entityId);
+      }),
+    ).rejects.toThrow("DUAL_CONTROL_ALREADY_CONSUMED");
+
+    const row = await prisma.escalationRequest.findUnique({
+      where: { escalation_id: escId },
+    });
+    expect(row!.status).toBe("EXPIRED");
+  });
+
+  it("re-homed end-to-end create: APPROVED escalation -> 201 and the created org admin can log in afterward", async () => {
+    const admin = await makeAdminAndLogin({ can_admin_niov: true });
+    const orgAdminEmail = `${TEST_PREFIX}orgsbinde2eadmin_${randomUUID()}@niov.test`;
+    const orgAdminPassword = "correct-horse-battery";
+    const payload = {
+      company_name: `${TEST_PREFIX}orgsbinde2eco_${randomUUID()}`,
+      admin_email: orgAdminEmail,
+      admin_password: orgAdminPassword,
+      industry: "TECH",
+      admin_first_name: "Org",
+      admin_last_name: "Admin",
+    };
+    await grantApproval(admin.entityId, payload);
+
+    const res = await app.inject({
+      method: "POST",
+      url: ROUTE_URL,
+      headers: { authorization: `Bearer ${admin.token}` },
+      payload,
       remoteAddress: admin.ip,
     });
     expect(res.statusCode).toBe(201);
@@ -548,19 +715,20 @@ describe("POST /platform/orgs + dual-control binding", () => {
     expect(adminLogin.statusCode).toBe(200);
   });
 
-  it("re-homed body-validation: missing company_name + APPROVED escalation -> 422 INVALID_REQUEST; dual-control still passes (4 events) but executePhase0 never runs (no DANDELION_PHASE_0_COMPLETE)", async () => {
+  it("re-homed body-validation: missing company_name + APPROVED escalation -> 422 INVALID_REQUEST; dual-control still passes (4 events) but executePhase0 never runs (no DANDELION_PHASE_0_COMPLETE); the approval is NOT consumed", async () => {
     const admin = await makeAdminAndLogin({ can_admin_niov: true });
-    await grantApproval(admin.entityId);
+    const payload = {
+      admin_email: `${TEST_PREFIX}orgsbind422_${randomUUID()}@niov.test`,
+      admin_password: "x",
+      industry: "TECH",
+    };
+    const escId = await grantApproval(admin.entityId, payload);
 
     const res = await app.inject({
       method: "POST",
       url: ROUTE_URL,
       headers: { authorization: `Bearer ${admin.token}` },
-      payload: {
-        admin_email: `${TEST_PREFIX}orgsbind422_${randomUUID()}@niov.test`,
-        admin_password: "x",
-        industry: "TECH",
-      },
+      payload,
       remoteAddress: admin.ip,
     });
 
@@ -575,5 +743,11 @@ describe("POST /platform/orgs + dual-control binding", () => {
     ]);
     const events = await adminAuditEventsFor(admin.entityId);
     expect(events.filter((e) => e.details.action === "DANDELION_PHASE_0_COMPLETE")).toHaveLength(0);
+    // [G1-DUAL-CONTROL] consume happens only when the guarded operation
+    // succeeds -- a 422 leaves the approval spendable.
+    const row = await prisma.escalationRequest.findUnique({
+      where: { escalation_id: escId },
+    });
+    expect(row!.status).toBe("APPROVED");
   });
 });
