@@ -128,7 +128,7 @@ describe("Phase 1261 — provider vocabulary + registry coherence", () => {
     }
   });
 
-  it("Phase 1271 — Google requests the scheduling-read scopes and NOT broad calendar/Gmail-send/Drive scopes", async () => {
+  it("Google requests the scheduling reads + the ONE gated event-write scope, and NOT broad calendar/Gmail-send/Drive scopes", async () => {
     setGoogleEnvs();
     const start = await startOAuthForOrg({
       provider_slug: "google",
@@ -149,14 +149,16 @@ describe("Phase 1261 — provider vocabulary + registry coherence", () => {
       "https://www.googleapis.com/auth/calendar.events.freebusy",
       "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
       "https://www.googleapis.com/auth/calendar.settings.readonly",
+      // [CALENDAR-WRITE] the single event-write scope for the
+      // approval-gated create/delete rail (calendar-event.service.ts).
+      "https://www.googleapis.com/auth/calendar.events",
     ]) {
       expect(requested.has(s)).toBe(true);
     }
 
     // Group 2/3 (deferred / gated): MUST NOT be requested by default.
     for (const forbidden of [
-      "https://www.googleapis.com/auth/calendar", // full calendar (see/edit/share/delete)
-      "https://www.googleapis.com/auth/calendar.events", // event write
+      "https://www.googleapis.com/auth/calendar", // full calendar (see/edit/share/delete-ALL) stays forbidden
       "https://www.googleapis.com/auth/calendar.acls",
       "https://www.googleapis.com/auth/calendar.calendars",
       "https://www.googleapis.com/auth/calendar.app.created",
