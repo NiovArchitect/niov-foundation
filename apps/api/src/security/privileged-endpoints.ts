@@ -97,7 +97,15 @@ export type EscalationActionDescriptor = {
     // route is NOT in this registry; the service decides per the
     // catalog's `governance_gates.dual_control_required` flag and
     // 409s when the wrapped route is required.
-    | "PROPOSED_ACTION_DUAL_CONTROL_PROMOTION";
+    | "PROPOSED_ACTION_DUAL_CONTROL_PROMOTION"
+    // [PLATFORM-AUTHORITY] Governed can_admin_niov grant/revoke (the
+    // routine successor to the founder bootstrap script, which remains
+    // ONLY for zero-root bootstrap). Both are can_admin_niov-tier and
+    // payload-bound + single-use: an approval authorizes ONE exact
+    // (target_email, reason) body, once. Bound at platform.routes.ts;
+    // service at services/governance/platform-authority.service.ts.
+    | "PLATFORM_ADMIN_NIOV_GRANT"
+    | "PLATFORM_ADMIN_NIOV_REVOKE";
   metadata?: Record<string, unknown>;
 };
 
@@ -356,6 +364,31 @@ export const PRIVILEGED_ENDPOINTS: readonly PrivilegedEndpoint[] = [
     route: "/api/v1/proposed-actions/:catalog_id/promote-dual-control",
     authTier: "can_admin_org",
     actionDescriptor: { type: "PROPOSED_ACTION_DUAL_CONTROL_PROMOTION" },
+  },
+  {
+    // [PLATFORM-AUTHORITY] Governed can_admin_niov GRANT — the routine
+    // successor to the founder bootstrap script (which stays zero-root
+    // only). The target lives in the BODY (target_email), never a route
+    // param: payload binding hashes the body, so the approval binds the
+    // EXACT target + reason and can never be replayed against a
+    // different person. Nothing in the body is secret — redact nothing,
+    // bind everything.
+    method: "POST",
+    route: "/api/v1/platform/admin-niov-grants",
+    authTier: "can_admin_niov",
+    actionDescriptor: { type: "PLATFORM_ADMIN_NIOV_GRANT" },
+    payloadBinding: { redact: [] },
+  },
+  {
+    // [PLATFORM-AUTHORITY] Governed can_admin_niov REVOKE — same
+    // payload-bound + single-use shape as the grant; the service
+    // additionally enforces the two-operator floor so revocation can
+    // never strand the platform below recoverable authority.
+    method: "POST",
+    route: "/api/v1/platform/admin-niov-revocations",
+    authTier: "can_admin_niov",
+    actionDescriptor: { type: "PLATFORM_ADMIN_NIOV_REVOKE" },
+    payloadBinding: { redact: [] },
   },
 ] as const;
 
