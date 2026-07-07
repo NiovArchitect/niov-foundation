@@ -288,6 +288,71 @@ describe("[BLOCK-3C] truth-weight retrieval + supersession + boundaries", () => 
     }
   });
 
+  it("SUPERSESSION: CANCELLED/EXPIRED rows are settled history — cancelling the extra contenders turns ambiguous into a unique live match", async () => {
+    const orgId = await makeEntity("Settled Org", "COMPANY");
+    const callerId = await makeEntity("Priya", "PERSON");
+    await prisma.entityMembership.create({ data: { parent_id: orgId, child_id: callerId, is_active: true } });
+
+    // Two captures matching the same tokens → 2 COMMITMENT + 2 MEETING
+    // rows, all stamped in the same domain (the ambiguity-test setup).
+    for (const [title, text] of [
+      ["Northstar kickoff A", `${TEST_PREFIX} Priya owns the Northstar pilot kickoff scheduling work and will confirm dates.`],
+      ["Northstar kickoff B", `${TEST_PREFIX} Priya owns the Northstar pilot kickoff logistics work and will book the room.`],
+    ] as const) {
+      const r = await ingestTranscript({ callerEntityId: callerId, capturedText: text, title, llmProvider: null });
+      expect(r.ok).toBe(true);
+    }
+    const commitments = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, ledger_type: "COMMITMENT" },
+      orderBy: { created_at: "asc" },
+    });
+    expect(commitments.length).toBe(2);
+    const meetings = await prisma.workLedgerEntry.findMany({
+      where: { org_entity_id: orgId, ledger_type: "MEETING" },
+    });
+
+    // Cancel/expire every contender EXCEPT commitment B — withdrawn work
+    // is settled history and must drop out of candidacy (the smoke-org
+    // live probe's cleanup rail relies on exactly this).
+    for (const m of meetings) {
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: m.ledger_entry_id },
+        data: { status: "CANCELLED" },
+      });
+    }
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: commitments[0]!.ledger_entry_id },
+      data: { status: "EXPIRED" },
+    });
+
+    const newLineage = mkLineage(
+      "This replaces the old Northstar pilot kickoff plan entirely.",
+      "Priya",
+      "execution",
+      "2026-07-06T00:00:00Z",
+    );
+    const result = await linkSupersessionDeterministically({
+      orgEntityId: orgId,
+      newLedgerEntryId: commitments[0]!.ledger_entry_id, // ≠ the live target
+      newTitle: "Northstar pilot kickoff replacement",
+      quote: "This replaces the old Northstar pilot kickoff plan entirely.",
+      lineage: newLineage,
+    });
+    expect(result.linked).toBe(true);
+    expect(result.superseded_ledger_entry_id).toBe(commitments[1]!.ledger_entry_id);
+    const target = await prisma.workLedgerEntry.findUnique({
+      where: { ledger_entry_id: commitments[1]!.ledger_entry_id },
+    });
+    expect(lineageFromDetails(target!.details)?.currentness).toBe("superseded");
+    // The settled rows stayed untouched.
+    for (const m of meetings) {
+      const row = await prisma.workLedgerEntry.findUnique({ where: { ledger_entry_id: m.ledger_entry_id } });
+      expect(row!.status).toBe("CANCELLED");
+      const l = lineageFromDetails(row!.details);
+      expect(l?.superseded_by ?? null).toBeNull();
+    }
+  });
+
   it("PERMISSIONS + TWIN BOUNDARY: inaccessible rows are excluded before ranking; a twin retrieves nothing beyond its human and inherits no authority", async () => {
     const orgId = await makeEntity("Boundary Org", "COMPANY");
     const managerId = await makeEntity("Manager", "PERSON");
