@@ -265,6 +265,22 @@ describe("[LOCKOUT-RECOVERY] platform clear-lockout rail", () => {
     expect(badAfter.statusCode).toBe(401);
   });
 
+  it("clears a lockout addressed by EMAIL (the identifier operators actually have)", async () => {
+    const operator = await makePersonAndLogin({ can_admin_niov: true });
+    const victim = await makeLockedOutVictim();
+    const res = await app.inject({
+      method: "POST",
+      url: ROUTE(encodeURIComponent(victim.email)),
+      headers: { authorization: `Bearer ${operator.token}` },
+      payload: { reason: REASON },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { entity_id: string }).entity_id).toBe(victim.entityId);
+    const after = await prisma.entity.findUnique({ where: { entity_id: victim.entityId } });
+    expect(after?.status).toBe("ACTIVE");
+    expect(after?.failed_auth_attempts).toBe(0);
+  });
+
   it("refuses a suspension that is NOT lockout-caused (no general unsuspend backdoor)", async () => {
     const operator = await makePersonAndLogin({ can_admin_niov: true });
     // Admin-authored suspension: status flipped deliberately, counter clean,

@@ -403,7 +403,9 @@ export async function registerPlatformRoutes(
 
   // POST /api/v1/platform/entities/:entityId/clear-lockout --
   // [LOCKOUT-RECOVERY] platform-operator recovery for the sole-admin
-  // lockout trap. can_admin_niov only. The service refuses anything that
+  // lockout trap. can_admin_niov only. :entityId accepts the UUID or the
+  // account EMAIL (operators know victims by email; there is deliberately
+  // no cross-org entity-lookup rail). The service refuses anything that
   // is not PROVABLY the auth layer's failed-login lockout (SUSPENDED +
   // counter at threshold + the actorless "5 failed attempts"
   // ENTITY_SUSPENDED audit row of record) -- this is not a general

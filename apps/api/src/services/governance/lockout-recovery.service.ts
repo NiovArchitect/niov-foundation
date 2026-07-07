@@ -27,6 +27,7 @@
 //              writeAuditEvent), tests/integration/platform-lockout.test.ts.
 
 import {
+  getEntityByEmail,
   getEntityById,
   queryAuditEvents,
   resetFailedAuth,
@@ -46,6 +47,9 @@ import { FAILED_AUTH_LOCKOUT } from "../auth.service.js";
 export const LOCKOUT_AUDIT_REASON = "5 failed attempts";
 
 export interface ClearLockoutInput {
+  /** Target entity: a UUID, or the account EMAIL (the identifier a
+   *  platform operator actually has for a locked-out sole admin — there
+   *  is deliberately no cross-org entity-lookup rail). */
   entity_id: string;
   reason: string;
 }
@@ -79,7 +83,9 @@ export async function clearLockoutSuspension(
   const reason = typeof input.reason === "string" ? input.reason.trim() : "";
   if (reason.length === 0) throw new Error("LOCKOUT_REASON_REQUIRED");
 
-  const entity = await getEntityById(input.entity_id);
+  const entity = input.entity_id.includes("@")
+    ? await getEntityByEmail(input.entity_id)
+    : await getEntityById(input.entity_id);
   if (entity === null || entity.deleted_at !== null) {
     throw new Error("LOCKOUT_ENTITY_NOT_FOUND");
   }
