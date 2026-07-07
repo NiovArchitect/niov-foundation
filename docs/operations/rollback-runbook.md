@@ -182,7 +182,7 @@ If any check fails, decision-tree per §3 again — secondary rollback may be re
 
 | Date | From SHA | To SHA | Reason | Founder approval? | Build-log |
 |------|----------|--------|--------|-------------------|-----------|
-| n/a  | n/a      | n/a    | n/a    | n/a               | n/a       |
+| 2026-07-07 | `b564da8` | `b26b397` (rolled forward to `b564da8` same session) | REHEARSAL (not an incident): first live exercise of this runbook on the production `otzar-api` service, scoped to the NIOV Smoke Org. Pre-rollback verify-chain snapshot taken (§2.3); window verified code-only/zero-migrations (§4.1 class); both deploys via the Render API rail (`commitId`), ~4 min each to live; §5 checks green on BOTH SHAs (health/db, admin sign-in, verify-chain `verified:true`, CT loads); Redwood 2-persona probe green on the restored SHA. No git revert needed — deploy-rail rollback redeploys an existing build; revert commits are for real incidents. | Yes (explicit GO) | CT `OTZAR_PILOT_OPS_RUNBOOK.md` §6 + CT CONTEXT.md ROLLBACK-REHEARSAL entry |
 
 Append a row per rollback event. Cross-link to the `docs/build-log/` entry for the forensic detail.
 
