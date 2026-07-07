@@ -346,7 +346,16 @@ async function orgMembers(orgEntityId: string): Promise<MemberRow[]> {
   const ids = memberships.map((m) => m.child_id);
   if (ids.length === 0) return [];
   const entities = await prisma.entity.findMany({
-    where: { entity_id: { in: ids }, entity_type: "PERSON" },
+    // [SMOKE-TENANCY] ACTIVE people only: a SUSPENDED (or soft-deleted)
+    // member still has an is_active org membership row (suspension is
+    // entity-level, RULE 10 soft rail), but they must never surface in
+    // growth counts or "needs a first project" recommendations.
+    where: {
+      entity_id: { in: ids },
+      entity_type: "PERSON",
+      status: "ACTIVE",
+      deleted_at: null,
+    },
     select: {
       entity_id: true,
       display_name: true,
