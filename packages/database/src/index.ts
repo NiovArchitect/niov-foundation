@@ -109,6 +109,7 @@ export {
   getTARByEntityId,
   checkCapability,
   updateTARPermissions,
+  updateTARPermissionsInTx,
   invalidateEntitySessions,
   computeTARHash,
   defaultCeilingFor,

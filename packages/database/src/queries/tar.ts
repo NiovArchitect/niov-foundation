@@ -359,13 +359,36 @@ export async function updateTARPermissions(
   permissions: TARPermissionsUpdate,
   options: { actor_entity_id?: string | null } = {},
 ): Promise<TokenAttributeRepository> {
+  return prisma.$transaction((tx) =>
+    updateTARPermissionsInTx(tx, tarId, permissions, options),
+  );
+}
+
+// WHAT: The transactional core of updateTARPermissions -- same policy
+//        snapshot / hash recompute / version bump / session invalidation /
+//        audit, but running inside a CALLER-OWNED transaction client.
+// INPUT: tx (the caller's transaction -- the TAR change commits or rolls
+//        back together with whatever else the caller does in it, e.g. a
+//        single-use dual-control approval consumption), then the same
+//        arguments as updateTARPermissions.
+// OUTPUT: The updated TAR record.
+// WHY: Callers that must couple a TAR change atomically with another
+//      write (dual-control consumption in the platform-authority rail)
+//      cannot nest prisma.$transaction; this keeps the ONE safe TAR
+//      mutation path shared instead of duplicated.
+export async function updateTARPermissionsInTx(
+  tx: Prisma.TransactionClient,
+  tarId: string,
+  permissions: TARPermissionsUpdate,
+  options: { actor_entity_id?: string | null } = {},
+): Promise<TokenAttributeRepository> {
   if (
     permissions.clearance_ceiling !== undefined
   ) {
     assertCeiling(permissions.clearance_ceiling);
   }
 
-  return prisma.$transaction(async (tx) => {
+  {
     const current = await tx.tokenAttributeRepository.findUnique({
       where: { tar_id: tarId },
     });
@@ -460,7 +483,7 @@ export async function updateTARPermissions(
     });
 
     return updated;
-  });
+  }
 }
 
 // WHAT: Mark every still-active session for this entity as INVALIDATED.

@@ -17,7 +17,7 @@
 //              requireDualControl),
 //              auth.service.ts (session validation upstream).
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { hashPassword as _hashPassword } from "@niov/auth";
 import {
   MAX_AUDIT_EVENTS_PAGE_SIZE,
@@ -33,7 +33,80 @@ import {
   type Phase0Input,
 } from "../services/governance/dandelion.service.js";
 import { clearLockoutSuspension } from "../services/governance/lockout-recovery.service.js";
+import {
+  grantAdminNiov,
+  revokeAdminNiov,
+  type PlatformAuthorityInput,
+} from "../services/governance/platform-authority.service.js";
 import type { AuthService } from "../services/auth.service.js";
+
+// WHAT: Map a platform-authority service domain-string throw to an HTTP
+//        reply; returns false when the error is not ours (caller rethrows).
+// INPUT: The caught error + the Fastify reply.
+// OUTPUT: true when a reply was sent.
+// WHY: The grant + revoke routes share one refusal vocabulary; a single
+//      mapping keeps their envelopes identical.
+async function mapAuthorityError(
+  err: unknown,
+  reply: FastifyReply,
+): Promise<boolean> {
+  if (!(err instanceof Error)) return false;
+  const code = err.message;
+  const map: Record<string, { status: number; message: string }> = {
+    AUTHORITY_REASON_REQUIRED: {
+      status: 400,
+      message: "A human reason is required.",
+    },
+    AUTHORITY_TARGET_EMAIL_REQUIRED: {
+      status: 400,
+      message: "target_email is required.",
+    },
+    AUTHORITY_TARGET_NOT_FOUND: { status: 404, message: "Target not found." },
+    AUTHORITY_SELF_TARGET_FORBIDDEN: {
+      status: 403,
+      message: "You cannot change your own platform authority.",
+    },
+    AUTHORITY_TARGET_NOT_PERSON: {
+      status: 409,
+      message: "Platform authority is granted to PERSON identities only.",
+    },
+    AUTHORITY_TARGET_NOT_ACTIVE: {
+      status: 409,
+      message: "Target must be an ACTIVE account.",
+    },
+    AUTHORITY_TARGET_TAR_INVALID: {
+      status: 409,
+      message: "Target has no ACTIVE permission record.",
+    },
+    AUTHORITY_TARGET_IS_ORG_ADMIN: {
+      status: 409,
+      message:
+        "Platform operators are dedicated identities — an org admin account cannot hold platform authority.",
+    },
+    AUTHORITY_ALREADY_OPERATOR: {
+      status: 409,
+      message: "Target already holds platform authority — nothing to grant.",
+    },
+    AUTHORITY_NOT_OPERATOR: {
+      status: 409,
+      message: "Target does not hold platform authority — nothing to revoke.",
+    },
+    AUTHORITY_OPERATOR_FLOOR: {
+      status: 409,
+      message:
+        "Refused: this revocation would leave fewer than two active platform operators. Grant a replacement first.",
+    },
+    DUAL_CONTROL_ALREADY_CONSUMED: {
+      status: 409,
+      message:
+        "The dual-control approval for this operation has already been used. Re-issue the request to obtain a fresh approval.",
+    },
+  };
+  const hit = map[code];
+  if (hit === undefined) return false;
+  await reply.code(hit.status).send({ ok: false, code, message: hit.message });
+  return true;
+}
 
 // WHAT: Body shape for POST /platform/orgs.
 // INPUT: Used as a parameter type only.
@@ -90,6 +163,22 @@ export async function registerPlatformRoutes(
   if (!orgCreationEndpoint) {
     throw new Error(
       "PRIVILEGED_ENDPOINTS registry missing required entry for PLATFORM_ORG_CREATION",
+    );
+  }
+  const adminNiovGrantEndpoint = PRIVILEGED_ENDPOINTS.find(
+    (e) => e.actionDescriptor.type === "PLATFORM_ADMIN_NIOV_GRANT",
+  );
+  if (!adminNiovGrantEndpoint) {
+    throw new Error(
+      "PRIVILEGED_ENDPOINTS registry missing required entry for PLATFORM_ADMIN_NIOV_GRANT",
+    );
+  }
+  const adminNiovRevokeEndpoint = PRIVILEGED_ENDPOINTS.find(
+    (e) => e.actionDescriptor.type === "PLATFORM_ADMIN_NIOV_REVOKE",
+  );
+  if (!adminNiovRevokeEndpoint) {
+    throw new Error(
+      "PRIVILEGED_ENDPOINTS registry missing required entry for PLATFORM_ADMIN_NIOV_REVOKE",
     );
   }
 
@@ -398,6 +487,70 @@ export async function registerPlatformRoutes(
         total: items.length,
         has_more: false,
       });
+    },
+  );
+
+  // POST /api/v1/platform/admin-niov-grants -- [PLATFORM-AUTHORITY] the
+  // governed can_admin_niov GRANT. can_admin_niov + dual control
+  // (payload-bound + single-use: the approval authorizes ONE exact
+  // {target_email, reason} body, consumed atomically with the TAR write).
+  // The founder bootstrap script remains ONLY for zero-root bootstrap.
+  app.post<{ Body: { target_email?: unknown; reason?: unknown } }>(
+    "/api/v1/platform/admin-niov-grants",
+    {
+      preHandler: [
+        requireAdminCapability(authService, "can_admin_niov"),
+        requireDualControl(adminNiovGrantEndpoint),
+      ],
+    },
+    async (request, reply) => {
+      const body = request.body ?? {};
+      const input: PlatformAuthorityInput = {
+        target_email: typeof body.target_email === "string" ? body.target_email : "",
+        reason: typeof body.reason === "string" ? body.reason : "",
+        consume_escalation_id:
+          request.dualControl?.single_use === true
+            ? request.dualControl.escalation_id
+            : null,
+      };
+      try {
+        const result = await grantAdminNiov(request.auth!.entity_id, input);
+        return reply.code(200).send({ ok: true, ...result });
+      } catch (err) {
+        if (await mapAuthorityError(err, reply)) return;
+        throw err;
+      }
+    },
+  );
+
+  // POST /api/v1/platform/admin-niov-revocations -- [PLATFORM-AUTHORITY]
+  // the governed can_admin_niov REVOKE (same dual-control shape; the
+  // service enforces the two-operator floor).
+  app.post<{ Body: { target_email?: unknown; reason?: unknown } }>(
+    "/api/v1/platform/admin-niov-revocations",
+    {
+      preHandler: [
+        requireAdminCapability(authService, "can_admin_niov"),
+        requireDualControl(adminNiovRevokeEndpoint),
+      ],
+    },
+    async (request, reply) => {
+      const body = request.body ?? {};
+      const input: PlatformAuthorityInput = {
+        target_email: typeof body.target_email === "string" ? body.target_email : "",
+        reason: typeof body.reason === "string" ? body.reason : "",
+        consume_escalation_id:
+          request.dualControl?.single_use === true
+            ? request.dualControl.escalation_id
+            : null,
+      };
+      try {
+        const result = await revokeAdminNiov(request.auth!.entity_id, input);
+        return reply.code(200).send({ ok: true, ...result });
+      } catch (err) {
+        if (await mapAuthorityError(err, reply)) return;
+        throw err;
+      }
     },
   );
 
