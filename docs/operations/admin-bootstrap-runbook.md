@@ -343,7 +343,16 @@ Capture the recovery rationale in `docs/operations/admin-bootstrap-runbook.md` �
 
 | Date | Deployment | First admin email (redacted) | Operator (Founder authorization) | Audit event |
 |------|------------|------------------------------|----------------------------------|-------------|
-| n/a  | n/a        | n/a                          | n/a                              | n/a         |
+| 2026-07-06 | production (Supabase, srv-d8t17sm7r5hc73ed5h6g env) | niov-operator-1@niovlabs.com → `1b9e4c2f-d6c8-4f5d-8fa0-182602a3f04c` | Founder (explicit chat GO; §5A script at FND `03018da`) | `BOOTSTRAP_NIOV_OPERATOR` |
+| 2026-07-06 | production (same) | niov-operator-2@niovlabs.com → `9cc65426-704e-40f2-8abe-583177626ba9` | Founder (same session; census 1→2) | `BOOTSTRAP_NIOV_OPERATOR` |
+
+Post-bootstrap verification 2026-07-06: `--verify` census = 2 (dual
+control possible); both operators' login probes echoed `admin_niov`;
+first governed use immediately followed — Dandelion Phase-0 created
+`NIOV Smoke Org` (`ad9515e2-7a9a-4cbc-a6b9-ff1ec2ba4e54`) under
+payload-bound single-use dual control (escalation `c5981a96…`:
+operator-1 source, operator-2 approver, self-approval 403'd, approval
+consumed APPROVED→EXPIRED in-tx).
 
 Append a row per bootstrap. Real values may be redacted to `<entity_id>` / `<email_domain>` — the audit-event ID is the unambiguous reference.
 
