@@ -23,7 +23,7 @@ import {
 } from "@niov/api";
 
 describe("PRIVILEGED_ENDPOINTS registry", () => {
-  it("contains exactly 7 LIVE entries (Operations A + B + C + D + E + F + G)", () => {
+  it("contains exactly 9 LIVE entries (Operations A + B + C + D + E + F + G + H + I)", () => {
     // Substrate-state verification: the runtime registry consumes ONLY
     // the LIVE entries per the three-artifact substrate split. Future
     // LIVE entries land here when their target sub-phase ships.
@@ -55,7 +55,14 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     //     POST /api/v1/proposed-actions/:catalog_id/promote route is
     //     NOT in the registry — its service path returns
     //     409 DUAL_CONTROL_REQUIRED when the catalog flags it.
-    expect(PRIVILEGED_ENDPOINTS).toHaveLength(7);
+    //   7 -> 9 at [PLATFORM-AUTHORITY] — Operations H + I
+    //     PLATFORM_ADMIN_NIOV_GRANT / PLATFORM_ADMIN_NIOV_REVOKE
+    //     (POST /api/v1/platform/admin-niov-grants /
+    //     /admin-niov-revocations); both can_admin_niov-tier, both
+    //     payload-bound + single-use (redact: [] — nothing in the body
+    //     is secret, everything binds). The governed successor to the
+    //     founder bootstrap script (which stays zero-root only).
+    expect(PRIVILEGED_ENDPOINTS).toHaveLength(9);
   });
 
   it("has no duplicate (method, route) entries", () => {
@@ -118,11 +125,11 @@ describe("PRIVILEGED_ENDPOINTS registry", () => {
     );
   });
 
-  it("Class C (can_admin_niov) entries remain the platform-admin-tier surfaces (currently exactly 4)", () => {
+  it("Class C (can_admin_niov) entries remain the platform-admin-tier surfaces (currently exactly 6)", () => {
     const classC = PRIVILEGED_ENDPOINTS.filter(
       (e: PrivilegedEndpoint) => e.authTier === "can_admin_niov",
     );
-    expect(classC).toHaveLength(4);
+    expect(classC).toHaveLength(6);
   });
 });
 
@@ -147,13 +154,22 @@ describe("isPrivilegedEndpoint type guard", () => {
     expect(entry?.payloadBinding).toEqual({ redact: ["admin_password"] });
   });
 
-  it("[G1-DUAL-CONTROL] org creation is the ONLY payload-bound entry (all other operations keep Pattern-5 standing-approval semantics)", () => {
+  it("[G1-DUAL-CONTROL] the payload-bound set is exactly org creation + the platform-authority pair (everything else keeps Pattern-5 standing-approval semantics)", () => {
     const bound = PRIVILEGED_ENDPOINTS.filter(
       (e) => e.payloadBinding !== undefined,
     );
     expect(bound.map((e) => e.actionDescriptor.type)).toEqual([
       "PLATFORM_ORG_CREATION",
+      "PLATFORM_ADMIN_NIOV_GRANT",
+      "PLATFORM_ADMIN_NIOV_REVOKE",
     ]);
+    // The authority pair binds EVERYTHING (no secrets in the body): an
+    // approval can never be replayed against a different target/reason.
+    for (const e of bound) {
+      if (e.actionDescriptor.type !== "PLATFORM_ORG_CREATION") {
+        expect(e.payloadBinding).toEqual({ redact: [] });
+      }
+    }
   });
 
   it("returns the matching entry for POST /api/v1/regulator/access-grants (Operation C)", () => {
