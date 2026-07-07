@@ -70,7 +70,89 @@ Before running the bootstrap:
 - [ ] Out-of-band channel for the first admin's credentials confirmed with the Founder.
 - [ ] BCRYPT_ROUNDS = 12 (verify via env in production runtime — `boot-validation.ts` rejects < 12 in production).
 
-## 5. Bootstrap Procedure (Manual)
+## 5. Bootstrap Procedure (Manual) — ⚠️ STALE, DO NOT EXECUTE
+
+> **[2026-07-06 — BOOTSTRAP-NIOV-OPERATOR]** The §8.1 forward-substrate
+> script now exists: **`scripts/bootstrap-niov-operator.ts`** — use §5A
+> below. The manual SQL in §5.4 has DRIFTED from the live schema and
+> will fail (and must not be "fixed" by hand): it targets
+> `trust_assertion_records` (real table: `token_attribute_repositories`)
+> and `entity_credentials` (does not exist — `password_hash` lives on
+> `entities`), uses `primary_email` (real column: `email`), references
+> TAR columns that do not exist (`can_invoke_connectors`,
+> `can_admin_hive`, `can_admin_billing`), and omits required fields
+> (`public_key`; `tar_hash`, which only `computeTARHash` can produce).
+> §§5.1–5.7 are preserved for procedure-shape lineage only.
+
+## 5A. Bootstrap Procedure (Script — CANONICAL)
+
+`scripts/bootstrap-niov-operator.ts` mints the dedicated NIOV platform
+operator accounts through the canonical helpers (`createEntity` =
+entity + wallet + TAR + audits in one transaction; then the
+executePhase0 STEP-10 TAR-grant discipline: `can_admin_niov: true` +
+`computeTARHash` recompute + `tar_version` increment +
+`TAR_PERMISSIONS_UPDATE` audit + a `BOOTSTRAP_NIOV_OPERATOR`
+ADMIN_ACTION summary event).
+
+**Why not the daily Otzar login:** the founder's app account
+(`can_admin_org` via `scripts/founder-bootstrap.ts`) is an org-tier
+credential used for daily work; boundary §3.5 forbids reusing operator
+credentials for non-administrative purposes, and platform-root must be
+a separate blast-radius. The allowlist therefore accepts ONLY:
+
+- `niov-operator-1@niovlabs.com` — allowed when the ACTIVE
+  `can_admin_niov` census is **0**
+- `niov-operator-2@niovlabs.com` — allowed when the census is
+  **exactly 1**
+- census ≥ 2 → bootstrap always refuses (dual control already possible)
+
+**Operator #2 reality (2026-07-06):** §5.7's "standard admin grant
+path (dual-control per ADR-0026)" has NOT shipped — no HTTP route may
+grant `can_admin_niov` (boundary §3.1), and the account-creation
+registry entry is forward-substrate. Until that governed route exists,
+operator #2 is ALSO created through this founder-authorized script
+(hence the census-1 rule). Building the governed grant route is a P1
+follow-up.
+
+Safety gates, all in code: production refuses without
+`ALLOW_FOUNDER_BOOTSTRAP=true` set inline; dry-run unless `--apply`;
+apply additionally requires `FOUNDER_BOOTSTRAP_CONFIRM` set to the
+exact phrase `I AUTHORIZE NIOV OPERATOR BOOTSTRAP`; duplicate email
+refuses (recovery = §6 rail); the one-time password prints exactly
+once (or comes from `NIOV_OPERATOR_PASSWORD`), is bcrypt-hashed via
+the canonical rail, and never reaches audit details, disk, or the
+repo. Rotate it within 24 hours of first sign-in (§5.7 step 1 still
+applies).
+
+### 5A.1 Commands (run from the repo root, founder-authorized)
+
+```sh
+# 0) Read-only census (any time):
+set -a; . ./.env; set +a; npx tsx scripts/bootstrap-niov-operator.ts --verify
+
+# 1) Operator #1 — dry-run, then apply:
+npx tsx scripts/bootstrap-niov-operator.ts --email niov-operator-1@niovlabs.com
+ALLOW_FOUNDER_BOOTSTRAP=true \
+FOUNDER_BOOTSTRAP_CONFIRM="I AUTHORIZE NIOV OPERATOR BOOTSTRAP" \
+npx tsx scripts/bootstrap-niov-operator.ts --email niov-operator-1@niovlabs.com --apply
+
+# 2) Operator #2 — same shape (census must now be exactly 1):
+ALLOW_FOUNDER_BOOTSTRAP=true \
+FOUNDER_BOOTSTRAP_CONFIRM="I AUTHORIZE NIOV OPERATOR BOOTSTRAP" \
+npx tsx scripts/bootstrap-niov-operator.ts --email niov-operator-2@niovlabs.com --apply
+
+# 3) Verify: census shows 2; then a first-login probe per §5.6 with
+#    requested_operations ["read","write","admin_niov"] must echo
+#    admin_niov back.
+```
+
+Environment sourcing determines the target database — source the
+PRODUCTION env only for the founder-authorized run, in a shell you
+close afterward; `ALLOW_FOUNDER_BOOTSTRAP` and the confirm phrase are
+set inline per command and never persisted. Append a §7 history row
+after each apply.
+
+## 5-legacy. Original Manual Procedure (stale — see banner above)
 
 Until `scripts/bootstrap-first-admin.ts` exists, follow this manual procedure.
 
@@ -269,6 +351,6 @@ Append a row per bootstrap. Real values may be redacted to `<entity_id>` / `<ema
 
 Forward-substrate (not implemented at this runbook):
 
-1. **`scripts/bootstrap-first-admin.ts`** — encode §5 as a single CLI command that takes the email, prompts for the password securely, executes the SQL block in one transaction, and prints the verification queries. Requires bypass of ADR-0025 db-push guard via explicit one-time flag.
+1. **`scripts/bootstrap-first-admin.ts`** — ✅ SHIPPED 2026-07-06 as `scripts/bootstrap-niov-operator.ts` (§5A): canonical-helper implementation (no raw SQL, no db-push involvement), allowlisted two-operator support with census gating, dry-run default, inline founder-authorization env switches, unit suite `tests/unit/bootstrap-niov-operator.test.ts`.
 2. **GOVSEC.5 break-glass parity** — extend break-glass (ADR-0050) to cover "lost first admin" without requiring a fresh bootstrap. Currently break-glass requires an existing admin to grant.
 3. **Post-bootstrap healthcheck** — automated smoke (per `smoke-test-checklist.md` §4) called from `bootstrap-first-admin.ts`.
