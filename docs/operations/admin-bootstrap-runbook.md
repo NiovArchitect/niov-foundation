@@ -84,7 +84,20 @@ Before running the bootstrap:
 > (`public_key`; `tar_hash`, which only `computeTARHash` can produce).
 > §§5.1–5.7 are preserved for procedure-shape lineage only.
 
-## 5A. Bootstrap Procedure (Script — CANONICAL)
+## 5A. Bootstrap Procedure (Script — CANONICAL, ZERO-ROOT ONLY)
+
+> **SCOPE NARROWED 2026-07-07 ([PLATFORM-AUTHORITY]):** this script is
+> now ONLY for the zero-root condition — no ACTIVE `can_admin_niov`
+> operator exists (first bootstrap, or recovery below the two-operator
+> floor). **Routine operator grants/revocations go through the governed
+> HTTP rail instead:** `POST /api/v1/platform/admin-niov-grants` /
+> `/admin-niov-revocations` — `can_admin_niov`-tier, dual-controlled
+> (payload-bound + single-use approval by a second operator), self-grant
+> refused, org-admin accounts structurally ungrantable, revoke
+> floor-protected (≥2 active operators must remain), fully audited
+> (`ADMIN_ACTION` `PLATFORM_ADMIN_NIOV_GRANTED`/`_REVOKED`). See
+> `apps/api/src/services/governance/platform-authority.service.ts` +
+> `tests/integration/platform-authority.test.ts`.
 
 `scripts/bootstrap-niov-operator.ts` mints the dedicated NIOV platform
 operator accounts through the canonical helpers (`createEntity` =
