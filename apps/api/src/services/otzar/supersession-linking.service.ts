@@ -92,11 +92,18 @@ export async function linkSupersessionDeterministically(args: {
     };
     const newTokens = contentTokens(`${args.newTitle} ${args.quote}`);
     // Older stamped statement rows in the SAME org, different capture.
+    // [REDWOOD-LIVE] CANCELLED / EXPIRED rows are SETTLED HISTORY — a
+    // withdrawn or lapsed plan can never contend as "the one older plan"
+    // a new decision replaces, exactly like already-superseded rows below.
+    // This is also what makes the smoke-org live probe repeat-safe: its
+    // cleanup rail cancels probe rows, so residue never turns a future
+    // run's unique match into ambiguous_candidates.
     const candidates = await prisma.workLedgerEntry.findMany({
       where: {
         org_entity_id: args.orgEntityId,
         ledger_entry_id: { not: args.newLedgerEntryId },
         ledger_type: { in: ["COMMITMENT", "MEETING"] },
+        status: { notIn: ["CANCELLED", "EXPIRED"] },
       },
       orderBy: { created_at: "desc" },
       take: 200,
