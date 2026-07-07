@@ -525,6 +525,44 @@ describe("Phase 1237 — Dandelion org growth", () => {
     expect(r.growth.headline).toContain("looks healthy");
   });
 
+  it("[SMOKE-TENANCY] a SUSPENDED member vanishes from growth counts and recommendations (soft rail leaves the membership row)", async () => {
+    // The newcomer starts as the org's only person without a project.
+    const before = await getOrgGrowthForCaller(adminId);
+    if (before.ok === false) throw new Error("expected ok");
+    expect(before.growth.signals.members_without_project_count).toBe(1);
+    expect(
+      before.growth.recommendations.some(
+        (x) =>
+          x.kind === "NEEDS_PROJECT_OR_WORKSPACE" &&
+          x.context?.person_entity_id === lonelyId,
+      ),
+    ).toBe(true);
+
+    // Suspend them (entity-level soft rail — the org membership row stays
+    // is_active, exactly as the live PATCH /org/entities/:id rail leaves it).
+    await prisma.entity.update({
+      where: { entity_id: lonelyId },
+      data: { status: "SUSPENDED" },
+    });
+
+    const after = await getOrgGrowthForCaller(adminId);
+    if (after.ok === false) throw new Error("expected ok");
+    expect(after.growth.signals.members_without_project_count).toBe(0);
+    expect(after.growth.signals.members_count).toBe(
+      before.growth.signals.members_count - 1,
+    );
+    expect(
+      after.growth.recommendations.some((x) =>
+        (x.people ?? []).some((p) => p.includes("Lonely Newcomer")),
+      ),
+    ).toBe(false);
+    expect(
+      after.growth.needs_first_project_people.some(
+        (p) => p.person_entity_id === lonelyId,
+      ),
+    ).toBe(false);
+  });
+
   it("employee onboarding view is scoped, warm, and consent-honest", async () => {
     const r = await getOnboardingIntrosForCaller(lonelyId);
     expect(r.ok).toBe(true);
