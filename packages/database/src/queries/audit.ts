@@ -786,7 +786,23 @@ export type AuditEventType =
   // ADR-0002 amendment (ADR-0042 §Q-γ.1 clean-transition).
   | "AVP2_QUOTE_CREATED"
   | "AVP2_QUOTE_ACCEPTED"
-  | "AVP2_ACCESS_RECORDED";
+  | "AVP2_ACCESS_RECORDED"
+  // [SOURCE-INTEGRITY] imported DOCUMENT_CONTEXT source-lifecycle literals.
+  // SOURCE_VERIFIED (revalidation confirmed the snapshot still matches
+  // upstream) / SOURCE_CHANGED_UPSTREAM (upstream hash diverged — the row is
+  // demoted, snapshot preserved) / SOURCE_ACCESS_REVOKED (re-consent needed) /
+  // SOURCE_DELETED (upstream gone) / IMPORT_QUARANTINED (an import or
+  // revalidation refused empty/binary/corrupt content — no trusted row, or the
+  // existing row demoted CORRUPT_OR_INVALID) / IMPORT_FAILED (a non-quarantine
+  // import error). SAFE details: file_id + state + scrubbed reason ONLY.
+  // FORBIDDEN: document body, export URLs, OAuth tokens, provider bodies.
+  // Additive — no ADR-0002 amendment (append-only per ADR-0042 §Q-γ.1).
+  | "SOURCE_VERIFIED"
+  | "SOURCE_CHANGED_UPSTREAM"
+  | "SOURCE_ACCESS_REVOKED"
+  | "SOURCE_DELETED"
+  | "IMPORT_QUARANTINED"
+  | "IMPORT_FAILED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -1065,6 +1081,13 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "AVP2_QUOTE_CREATED",
   "AVP2_QUOTE_ACCEPTED",
   "AVP2_ACCESS_RECORDED",
+  // [SOURCE-INTEGRITY] imported DOCUMENT_CONTEXT source-lifecycle literals.
+  "SOURCE_VERIFIED",
+  "SOURCE_CHANGED_UPSTREAM",
+  "SOURCE_ACCESS_REVOKED",
+  "SOURCE_DELETED",
+  "IMPORT_QUARANTINED",
+  "IMPORT_FAILED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

@@ -34,6 +34,7 @@ import {
 } from "../services/connector/connector-data-read.service.js";
 import {
   importGoogleDocForCaller,
+  revalidateImportedDocForCaller,
   DOCUMENT_SOURCE_KINDS,
   DOCUMENT_CURRENTNESS,
   type DocumentSourceKind,
@@ -412,6 +413,8 @@ export async function registerConnectorDataRoutes(
           fetched.code === "NOT_FOUND" ? 404
           : fetched.code === "DOC_TOO_LARGE" ? 422
           : fetched.code === "INVALID_REQUEST" ? 422
+          // [SOURCE-INTEGRITY] quarantined content — honest 422, no row created.
+          : fetched.code === "SOURCE_EMPTY" || fetched.code === "SOURCE_UNREADABLE" ? 422
           : statusForCode(fetched.code);
         return reply.code(status).send({ ok: false, code: fetched.code });
       }
@@ -427,6 +430,33 @@ export async function registerConnectorDataRoutes(
       });
       if (result.ok === false) {
         const status = result.code === "ALREADY_IMPORTED" ? 409 : 422;
+        return reply.code(status).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /api/v1/drive/docs/:ledger_entry_id/revalidate — an ADMIN
+  // re-checks ONE imported Google-Doc DOCUMENT_CONTEXT row against its upstream.
+  // SNAPSHOT-PRESERVING: the stored body + import hash are never overwritten; a
+  // changed/revoked/deleted/corrupt upstream DEMOTES the row out of active
+  // retrieval via details.source_integrity.state (never via ledger status). The
+  // admin trigger IS the consent record. Same admin gate as the import route.
+  app.post<{ Params: { ledger_entry_id: string } }>(
+    "/api/v1/drive/docs/:ledger_entry_id/revalidate",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const ledgerEntryId = request.params.ledger_entry_id;
+      if (typeof ledgerEntryId !== "string" || ledgerEntryId.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "ledger_entry_id is required" });
+      }
+      const result = await revalidateImportedDocForCaller(request.auth!.entity_id, ledgerEntryId);
+      if (result.ok === false) {
+        const status =
+          result.code === "NO_ORG_FOR_CALLER" ? 404
+          : result.code === "NOT_FOUND" ? 404
+          : result.code === "NOT_A_SOURCE_DOC" ? 422
+          : 502; // REVALIDATION_UNAVAILABLE — upstream could not be reached
         return reply.code(status).send(result);
       }
       return reply.code(200).send(result);

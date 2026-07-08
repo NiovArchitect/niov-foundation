@@ -19,10 +19,17 @@
 //          canonical writers), Gap V doctrine, tests/integration/
 //          document-context.test.ts.
 
-import { prisma } from "@niov/database";
+import { prisma, writeAuditEvent } from "@niov/database";
+import type { Prisma } from "@prisma/client";
 import { receiveMeetingCaptureForCaller } from "./meeting-capture.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 import { getOrgEntityId } from "../governance/org.js";
+import type { SourceIntegrity, SourceIntegrityState } from "./source-integrity.js";
+import {
+  fetchGoogleDocTextForOrg,
+  type GoogleDocExportResult,
+  type GoogleDocExportFailure,
+} from "../connector/connector-data-read.service.js";
 
 export const DOCUMENT_SOURCE_KINDS = [
   "PROJECT_BRIEF",
@@ -178,6 +185,25 @@ export async function seedDocumentContextForCaller(
           ? { external_source: input.external_source }
           : {}),
       },
+      // [SOURCE-INTEGRITY] Additive source lifecycle — IMPORTED rows only (an
+      // external_source means a Google snapshot; manual seeds carry NONE and
+      // are ACTIVE by absence). On import success the snapshot is AVAILABLE and
+      // import_hash PRESERVES the content hash so revalidation can compare
+      // upstream drift without overwriting the snapshot. Lifecycle mapping:
+      // CANCELLED = ledger status (not here); RETIRED = context_lifecycle (not
+      // here); QUARANTINED = rejected import (no row at all); AVAILABLE /
+      // SNAPSHOTTED / CHANGED_UPSTREAM / ACCESS_REVOKED / SOURCE_DELETED /
+      // CORRUPT_OR_INVALID / UNREADABLE all live in source_integrity.state.
+      ...(input.external_source !== undefined
+        ? {
+            source_integrity: {
+              state: "AVAILABLE",
+              import_hash: input.external_source.content_sha256,
+              import_modified_time: input.external_source.modified_time,
+              last_verified_at: new Date().toISOString(),
+            } satisfies SourceIntegrity,
+          }
+        : {}),
     },
   });
   if (!created.ok) {
@@ -265,4 +291,188 @@ export async function importGoogleDocForCaller(
       content_sha256: input.content_sha256,
     },
   });
+}
+
+// ── [SOURCE-INTEGRITY] Manual, admin-gated, snapshot-preserving revalidation ──
+
+/** The upstream fetch is injectable so integration tests can drive the
+ *  404 / 403 / changed / corrupt branches WITHOUT corrupting or deleting real
+ *  Google docs. Defaults to the real export path in production. */
+export type FetchDocText = (args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  file_id: string;
+}) => Promise<GoogleDocExportResult | GoogleDocExportFailure>;
+
+export interface RevalidateOptions {
+  fetchDocText?: FetchDocText;
+}
+
+export type RevalidateResult =
+  | { ok: true; ledger_entry_id: string; state: SourceIntegrityState; changed: boolean }
+  | {
+      ok: false;
+      code:
+        | "NO_ORG_FOR_CALLER"
+        | "NOT_FOUND"
+        | "NOT_A_SOURCE_DOC"
+        | "REVALIDATION_UNAVAILABLE";
+      message: string;
+    };
+
+// WHAT: Re-check ONE imported Google-Doc DOCUMENT_CONTEXT row against upstream
+//        and record the outcome on details.source_integrity — SNAPSHOT-
+//        PRESERVING (the stored body, external_source.content_sha256, and
+//        import_hash are NEVER overwritten; a divergence is recorded as
+//        upstream_hash on the SAME row).
+// INPUT: caller + the row id (+ an injectable fetch for tests).
+// OUTPUT: { ok, state, changed } or an honest failure.
+// WHY: SOURCE INTEGRITY — a trusted snapshot can silently rot when its upstream
+//      changes, loses access, is deleted, or turns corrupt. This is the manual,
+//      admin-gated probe that DEMOTES a rotted snapshot out of active retrieval
+//      (via source_integrity.state, NOT ledger status) while preserving the row
+//      for lineage. Transient/infra fetch errors NEVER demote a good snapshot.
+export async function revalidateImportedDocForCaller(
+  callerEntityId: string,
+  ledgerEntryId: string,
+  opts?: RevalidateOptions,
+): Promise<RevalidateResult> {
+  let orgEntityId: string;
+  try {
+    orgEntityId = await getOrgEntityId(callerEntityId);
+  } catch {
+    return { ok: false, code: "NO_ORG_FOR_CALLER", message: "No organization found for the caller." };
+  }
+  const row = await prisma.workLedgerEntry.findUnique({
+    where: { ledger_entry_id: ledgerEntryId },
+  });
+  if (row === null || row.org_entity_id !== orgEntityId || row.ledger_type !== "DOCUMENT_CONTEXT") {
+    return { ok: false, code: "NOT_FOUND", message: "Document not found in your organization." };
+  }
+  const details =
+    typeof row.details === "object" && row.details !== null && !Array.isArray(row.details)
+      ? (row.details as Record<string, unknown>)
+      : {};
+  const document =
+    typeof details.document === "object" && details.document !== null && !Array.isArray(details.document)
+      ? (details.document as Record<string, unknown>)
+      : {};
+  const external =
+    typeof document.external_source === "object" &&
+    document.external_source !== null &&
+    !Array.isArray(document.external_source)
+      ? (document.external_source as { file_id?: unknown; content_sha256?: unknown; modified_time?: unknown })
+      : null;
+  if (external === null || typeof external.file_id !== "string") {
+    return {
+      ok: false,
+      code: "NOT_A_SOURCE_DOC",
+      message: "Only connector-imported documents can be revalidated against their source.",
+    };
+  }
+  const fileId = external.file_id;
+
+  // The PRESERVED snapshot hash: prefer the recorded source_integrity.import_hash
+  // (the import-time snapshot) and fall back to external_source.content_sha256
+  // for rows imported before source_integrity existed. This value is NEVER
+  // overwritten by a revalidation, so drift is detectable forever.
+  const priorIntegrity =
+    typeof details.source_integrity === "object" &&
+    details.source_integrity !== null &&
+    !Array.isArray(details.source_integrity)
+      ? (details.source_integrity as Record<string, unknown>)
+      : null;
+  const importHash =
+    priorIntegrity !== null && typeof priorIntegrity.import_hash === "string"
+      ? priorIntegrity.import_hash
+      : typeof external.content_sha256 === "string"
+        ? external.content_sha256
+        : "";
+  const importModifiedTime =
+    priorIntegrity !== null && typeof priorIntegrity.import_modified_time === "string"
+      ? priorIntegrity.import_modified_time
+      : typeof external.modified_time === "string"
+        ? external.modified_time
+        : "";
+
+  const fetchDocText = opts?.fetchDocText ?? fetchGoogleDocTextForOrg;
+  const fetched = await fetchDocText({
+    actor_entity_id: callerEntityId,
+    org_entity_id: orgEntityId,
+    file_id: fileId,
+  });
+
+  const now = new Date().toISOString();
+  const base: SourceIntegrity = {
+    state: "AVAILABLE",
+    import_hash: importHash,
+    import_modified_time: importModifiedTime,
+    last_verified_at: now,
+  };
+
+  let next: SourceIntegrity;
+  let auditType:
+    | "SOURCE_VERIFIED"
+    | "SOURCE_CHANGED_UPSTREAM"
+    | "SOURCE_ACCESS_REVOKED"
+    | "SOURCE_DELETED"
+    | "IMPORT_QUARANTINED";
+
+  if (fetched.ok === true) {
+    if (fetched.content_sha256 === importHash) {
+      next = { ...base, state: "AVAILABLE" };
+      auditType = "SOURCE_VERIFIED";
+    } else {
+      // Divergence — DEMOTE, but PRESERVE import_hash + snapshot + external_source.
+      next = {
+        ...base,
+        state: "CHANGED_UPSTREAM",
+        upstream_hash: fetched.content_sha256,
+        upstream_checked_at: now,
+      };
+      auditType = "SOURCE_CHANGED_UPSTREAM";
+    }
+  } else if (fetched.code === "NOT_FOUND") {
+    next = { ...base, state: "SOURCE_DELETED" };
+    auditType = "SOURCE_DELETED";
+  } else if (fetched.code === "SCOPE_REAUTH_REQUIRED") {
+    next = { ...base, state: "ACCESS_REVOKED" };
+    auditType = "SOURCE_ACCESS_REVOKED";
+  } else if (fetched.code === "SOURCE_EMPTY" || fetched.code === "SOURCE_UNREADABLE") {
+    next = { ...base, state: "CORRUPT_OR_INVALID", last_state_reason: fetched.code };
+    auditType = "IMPORT_QUARANTINED";
+  } else {
+    // Transient / infrastructure error (NOT_CONNECTED / TOKEN_REFRESH_FAILED /
+    // PROVIDER_ERROR / DOC_TOO_LARGE / INVALID_REQUEST): a network blip must
+    // NEVER silently demote a good snapshot — leave state untouched, answer
+    // honestly, and let the admin retry.
+    return {
+      ok: false,
+      code: "REVALIDATION_UNAVAILABLE",
+      message: "Could not reach the source to revalidate. The document was left unchanged — try again.",
+    };
+  }
+
+  // Persist by MERGING into details — never clobber document or seeded_context.
+  await prisma.workLedgerEntry.update({
+    where: { ledger_entry_id: row.ledger_entry_id },
+    // Additive merge — document + seeded_context + every other key survive
+    // verbatim; only source_integrity is (re)written.
+    data: {
+      details: { ...details, source_integrity: next } as unknown as Prisma.InputJsonObject,
+    },
+  });
+  await writeAuditEvent({
+    event_type: auditType,
+    outcome: auditType === "SOURCE_VERIFIED" ? "SUCCESS" : "DENIED",
+    actor_entity_id: callerEntityId,
+    target_entity_id: orgEntityId,
+    details: { provider: "google", file_id: fileId, state: next.state },
+  });
+  return {
+    ok: true,
+    ledger_entry_id: row.ledger_entry_id,
+    state: next.state,
+    changed: next.state !== "AVAILABLE",
+  };
 }

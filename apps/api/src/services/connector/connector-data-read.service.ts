@@ -28,6 +28,7 @@
 import { createHash } from "node:crypto";
 import { writeAuditEvent } from "@niov/database";
 import { getProviderAccessTokenForOrg } from "./connector-oauth.service.js";
+import { validateImportedText } from "../otzar/source-integrity.js";
 
 // ── Shared outbound-fetch timeout (provider calls must not hang a
 //    request indefinitely; mirrors the oauth service's posture). ──
@@ -472,7 +473,11 @@ export interface GoogleDocExportResult {
 
 export type GoogleDocExportFailure =
   | ConnectorDataReadFailure
-  | { ok: false; code: "NOT_FOUND" | "DOC_TOO_LARGE" };
+  // [SOURCE-INTEGRITY] SOURCE_EMPTY / SOURCE_UNREADABLE are content-integrity
+  // refusals raised AFTER a successful export but BEFORE any trusted row: an
+  // empty/whitespace-only or binary/corrupt export is quarantined, never
+  // imported. The admin sees the honest code; no DOCUMENT_CONTEXT row exists.
+  | { ok: false; code: "NOT_FOUND" | "DOC_TOO_LARGE" | "SOURCE_EMPTY" | "SOURCE_UNREADABLE" };
 
 // WHAT: Export ONE selected Google Doc as plain text, with its SAFE
 //        metadata and a content hash for lineage.
@@ -547,6 +552,26 @@ export async function fetchGoogleDocTextForOrg(args: {
   if (text.length > GOOGLE_DOC_EXPORT_MAX_CHARS) {
     await emitDataRead(args, "google", "drive_doc_export", 0, "doc_too_large");
     return { ok: false, code: "DOC_TOO_LARGE" };
+  }
+  // [SOURCE-INTEGRITY] HASH-BEFORE-COMMIT + NO-PARTIAL-ROW invariant: validate
+  // the exported text HERE — before the content hash is computed and before the
+  // caller ever creates a DOCUMENT_CONTEXT row. An empty/whitespace-only or
+  // binary/corrupt export is QUARANTINED: the honest code returns to the admin,
+  // the reject is audited (IMPORT_QUARANTINED, SAFE file_id + reason — never the
+  // body), and NO trusted row is created on any reject path. The size gate
+  // above still refuses oversized docs with NO truncation.
+  const integrity = validateImportedText(text);
+  if (integrity.ok === false) {
+    const reason = integrity.code === "SOURCE_EMPTY" ? "source_empty" : "source_unreadable";
+    await emitDataRead(args, "google", "drive_doc_export", 0, reason);
+    await writeAuditEvent({
+      event_type: "IMPORT_QUARANTINED",
+      outcome: "DENIED",
+      actor_entity_id: args.actor_entity_id,
+      target_entity_id: args.org_entity_id,
+      details: { provider: "google", file_id: args.file_id, reason, code: integrity.code },
+    });
+    return { ok: false, code: integrity.code };
   }
   const contentSha = createHash("sha256").update(text, "utf8").digest("hex");
   await emitDataRead(args, "google", "drive_doc_export", 1, "ok");

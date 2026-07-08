@@ -24,6 +24,7 @@
 import { prisma } from "@niov/database";
 import { seededOriginFromDetails } from "./work-ledger.service.js";
 import { isContextRetired } from "./context-candidates.service.js";
+import { isSourceIntegrityDemoted } from "../otzar/source-integrity.js";
 
 export interface ContextBoundariesProjection {
   /** CS-1 seeded history rows (seeded lineage on non-document rows). */
@@ -77,9 +78,12 @@ export async function getContextBoundaries(
         },
       }),
       prisma.workLedgerEntry.findMany({
-        where: { org_entity_id: orgEntityId, ledger_type: "DOCUMENT_CONTEXT" },
+        // [SOURCE-INTEGRITY] ALLOWLIST to VERIFIED (withdrawn/terminal rows
+        // never surface as "recent documents"). Take a small buffer so the
+        // source_integrity demotion JS post-filter below can still yield 3.
+        where: { org_entity_id: orgEntityId, ledger_type: "DOCUMENT_CONTEXT", status: "VERIFIED" },
         orderBy: { created_at: "desc" },
-        take: 3,
+        take: 12,
         select: { title: true, details: true, created_at: true },
       }),
     ]);
@@ -88,7 +92,12 @@ export async function getContextBoundaries(
     seeded_document_count: seededDocumentCount,
     extracted_reviewed_count: extractedReviewedCount,
     retired_context_count: retiredCount,
-    recent_documents: recentDocs.map((row) => {
+    recent_documents: recentDocs
+      // [SOURCE-INTEGRITY] drop demoted snapshots (changed/revoked/deleted/
+      // corrupt), then take the top 3 active ones.
+      .filter((row) => !isSourceIntegrityDemoted(row.details))
+      .slice(0, 3)
+      .map((row) => {
       const seeded = seededOriginFromDetails(row.details);
       return {
         title_label: row.title,

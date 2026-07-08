@@ -221,7 +221,10 @@ export async function answerNamedSubjectBackground(args: {
     ? deriveSubjectBackgroundCandidates(
         subject,
         await prisma.workLedgerEntry.findMany({
-          where: { org_entity_id: args.org_entity_id, ledger_type: "DOCUMENT_CONTEXT" },
+          // [SOURCE-INTEGRITY] ALLOWLIST to VERIFIED (withdrawn/terminal rows
+          // never answer). deriveSubjectBackgroundCandidates applies the
+          // source_integrity demotion JS post-filter over this pool.
+          where: { org_entity_id: args.org_entity_id, ledger_type: "DOCUMENT_CONTEXT", status: "VERIFIED" },
           orderBy: { created_at: "desc" },
           take: 200,
           select: { ledger_entry_id: true, title: true, summary: true, details: true },
