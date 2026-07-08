@@ -1,19 +1,21 @@
 // FILE: calendar-event.service.ts
-// PURPOSE: Phase 1272 — GATED calendar event proposal/create lifecycle.
+// PURPOSE: Phase 1272 — GATED calendar event proposal/create/delete lifecycle.
 //          The product path is:
 //            availability → candidate slots → selected slot → proposal
 //            → confirmation/approval → create ONLY when every gate passes.
-//          This module owns the gate evaluation. It DOES NOT auto-create
-//          events: the event-write scope gate is terminal today (Otzar's
-//          Google token is calendar-read-only), so createCalendarEvent
-//          always returns a precise blocker and NEVER calls the provider.
+//          This module owns the gate evaluation AND the real provider write:
+//          once every human + capability gate passes, createCalendarEvent
+//          calls the live Google Calendar events.insert (approval-gated) and
+//          deleteCalendarEvent calls events.delete. It is NOT terminal/read-
+//          only — a real event is created/removed, then a permission-scoped
+//          internal fan-out + a mirror WorkLedger MEETING row follow.
 // CONNECTS TO: connector-oauth.service.ts (getProviderGrantedScopes —
 //          reasons about GRANTED scopes, never fakes readiness),
 //          calendar-event.routes.ts, packages/database audit chain
-//          (CALENDAR_EVENT_CREATE on every create attempt).
+//          (CALENDAR_EVENT_CREATE / CALENDAR_EVENT_DELETE on every attempt).
 //
-// SAFETY (RULE 0 / RULE 4): no event is ever created here; no invite is
-// sent; the create attempt is audited with a scrubbed gate code only
+// SAFETY (RULE 0 / RULE 4): a create/delete happens ONLY behind a passed gate
+// ladder; the attempt is audited with a scrubbed gate/outcome code only
 // (no attendee identities, no titles, no tokens).
 
 import { writeAuditEvent, prisma } from "@niov/database";
@@ -135,6 +137,22 @@ export interface SelectedTime {
   end: string;
 }
 
+// [PARTICIPANT-COORDINATION] The coordination role a participant plays on a
+// proposed meeting. Additive, loosely-typed (open string on the wire) — NO
+// schema migration. required_* roles + organizer/requester block scheduling
+// when unresolved; optional_attendee/informed_only never block. external_*
+// roles are labels only here (no email, not invited — no provider change).
+export type ParticipantRole =
+  | "requester"
+  | "organizer"
+  | "required_decision_owner"
+  | "required_executor"
+  | "required_attendee"
+  | "optional_attendee"
+  | "informed_only"
+  | "external_customer"
+  | "external_guest";
+
 export interface ProposedParticipant {
   /** Display label only — NEVER an email/identity in audit details. */
   label: string;
@@ -145,6 +163,30 @@ export interface ProposedParticipant {
   // successful create — never an email/identity, never surfaced in audit
   // details. Absent → this participant simply isn't notified.
   entity_id?: string;
+  // [PARTICIPANT-COORDINATION] Additive: the coordination role, when known.
+  // Absent → the participant is treated as REQUIRED (today's behavior).
+  role?: string;
+  // [PARTICIPANT-COORDINATION] Additive: an explicit required override. When
+  // false, the participant is optional regardless of role; when absent, the
+  // role (or role-less default = required) decides.
+  required?: boolean;
+}
+
+// WHAT: Pure predicate — is this participant REQUIRED for scheduling?
+// RULE: false when role is "optional_attendee"/"informed_only" OR
+//       required === false; true otherwise. A role-less participant with no
+//       explicit required flag stays REQUIRED — backward-compatible with the
+//       pre-role behavior, where every participant blocked when unresolved.
+// WHY:  A missing OPTIONAL attendee must never stop a meeting from being
+//       scheduled; a missing REQUIRED party still must. This is the single
+//       source of truth for both the gate ladder and the persisted details.
+export function isRequiredParticipant(p: {
+  role?: string;
+  required?: boolean;
+}): boolean {
+  if (p.role === "optional_attendee" || p.role === "informed_only") return false;
+  if (p.required === false) return false;
+  return true;
 }
 
 export interface CalendarEventProposalInput {
@@ -192,9 +234,14 @@ export function firstUnmetGate(
   if (sel === undefined || sel === null || sel.start.length === 0) {
     return "NEEDS_SELECTED_TIME";
   }
+  // [PARTICIPANT-COORDINATION] A meeting still needs SOMEONE, and any REQUIRED
+  // participant that is unresolved still blocks. An OPTIONAL participant
+  // (optional_attendee/informed_only or required===false) that is unresolved
+  // does NOT block — the core coordination win. Role-less participants are
+  // required, preserving today's behavior exactly.
   if (
     input.participants.length === 0 ||
-    input.participants.some((p) => p.resolved === false)
+    input.participants.some((p) => isRequiredParticipant(p) && p.resolved !== true)
   ) {
     return "PARTICIPANT_UNRESOLVED";
   }
@@ -436,6 +483,17 @@ export async function createCalendarEvent(args: {
         // Persist the CLOSED recipient set + title so a later delete can fan the
         // cancellation to the same humans without re-deriving from an input.
         recipient_entity_ids: recipients,
+        // [PARTICIPANT-COORDINATION] Additive: labels + coordination roles +
+        // resolved/required flags + entity ids so the CT Scheduled lane can
+        // show who plays what role. NO email, NO tokens/secrets — labels,
+        // roles, and entity ids only.
+        participants: args.input.participants.map((p) => ({
+          label: p.label,
+          role: p.role ?? null,
+          required: isRequiredParticipant(p),
+          resolved: p.resolved,
+          entity_id: p.entity_id ?? null,
+        })),
       },
     });
   } catch {
