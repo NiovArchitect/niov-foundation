@@ -70,6 +70,11 @@ function parseProposal(body: Record<string, unknown>): CalendarEventProposalInpu
     return {
       label: typeof o.label === "string" ? o.label : "",
       resolved: o.resolved === true,
+      // [ORG-AUTONOMY-SPINE] Additive: pass through the resolved entity id when
+      // supplied; it only drives the CLOSED notification set on a real create.
+      ...(typeof o.entity_id === "string" && o.entity_id.length > 0
+        ? { entity_id: o.entity_id }
+        : {}),
     };
   });
   let selected_time: SelectedTime | null = null;
@@ -101,6 +106,10 @@ function parseProposal(body: Record<string, unknown>): CalendarEventProposalInpu
     approved: body.approved === true,
     caller_confirmed: body.caller_confirmed === true,
     policy_blocked: body.policy_blocked === true,
+    // [ORG-AUTONOMY-SPINE] Additive: the meeting owner's resolved entity id.
+    ...(typeof body.owner_entity_id === "string" && body.owner_entity_id.length > 0
+      ? { owner_entity_id: body.owner_entity_id }
+      : {}),
   };
 }
 
@@ -170,7 +179,15 @@ export async function registerCalendarEventRoutes(
 
   // ── Delete/cancel a created event (the cleanup + "cancel meeting"
   //    rail). Event-write scope only; idempotent (already-gone = ok). ──
-  app.post<{ Body: { event_id?: unknown; calendar_id?: unknown } }>(
+  app.post<{
+    Body: {
+      event_id?: unknown;
+      calendar_id?: unknown;
+      title?: unknown;
+      owner_entity_id?: unknown;
+      participants?: unknown;
+    };
+  }>(
     "/api/v1/calendar/events/delete",
     async (request, reply) => {
       const token = bearerFrom(request.headers.authorization);
@@ -188,11 +205,30 @@ export async function registerCalendarEventRoutes(
       if (eventId === null) {
         return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "event_id is required" });
       }
+      // [ORG-AUTONOMY-SPINE] Additive fallback context for the no-ledger-row
+      // case — only used when no MEETING mirror row is found (the persisted
+      // create-time set wins otherwise). Participant entity ids are derived
+      // here, never trusted as an open recipient list downstream.
+      const participantEntityIds = Array.isArray(request.body?.participants)
+        ? (request.body.participants as unknown[]).flatMap((p) => {
+            const o = (p ?? {}) as Record<string, unknown>;
+            return typeof o.entity_id === "string" && o.entity_id.length > 0
+              ? [o.entity_id]
+              : [];
+          })
+        : [];
       const result = await deleteCalendarEvent({
         actor_entity_id: session.entity_id,
         org_entity_id: orgEntityId,
         event_id: eventId,
         ...(typeof request.body?.calendar_id === "string" ? { calendar_id: request.body.calendar_id } : {}),
+        ...(typeof request.body?.title === "string" && request.body.title.length > 0
+          ? { title: request.body.title }
+          : {}),
+        ...(typeof request.body?.owner_entity_id === "string" && request.body.owner_entity_id.length > 0
+          ? { owner_entity_id: request.body.owner_entity_id }
+          : {}),
+        ...(participantEntityIds.length > 0 ? { participant_entity_ids: participantEntityIds } : {}),
       });
       if (result.ok === false) {
         const status =
