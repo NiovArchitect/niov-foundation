@@ -256,7 +256,7 @@ export function rankNextActionsFixture(
     candidates.push({
       rank: 0,
       reason: "TEACH_YOUR_TWIN_PREFERENCES",
-      safe_title: "Teach your Twin your preferences and sensitivity boundaries",
+      safe_title: "Teach your AI Teammate your preferences and sensitivity boundaries",
       confidence: "LOW",
       risk: "NONE",
       score: 20,
