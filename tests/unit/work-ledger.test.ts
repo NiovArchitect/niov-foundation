@@ -45,10 +45,48 @@ import {
   getTeamWork,
   getBlindSpots,
   getBlindSpotFeed,
+  scheduledMeetingFromDetails,
 } from "../../apps/api/src/services/work-os/work-ledger.service.js";
 
 const ORG = "org-1";
 const CALLER = "ent-caller";
+
+describe("[ORGX] scheduledMeetingFromDetails — safe roster projection", () => {
+  it("projects provider + participant labels/roles/required, and NEVER ids", () => {
+    const out = scheduledMeetingFromDetails({
+      source: "calendar_event",
+      event_id: "evt-SECRET-123",
+      calendar_id: "primary",
+      recipient_entity_ids: ["ent-a", "ent-b"],
+      provider: "google_calendar_event",
+      participants: [
+        { label: "Elena", role: "required_attendee", required: true, entity_id: "ent-a" },
+        { label: "Aisha", role: "optional_attendee", required: false, entity_id: "ent-b" },
+      ],
+    });
+    expect(out).toEqual({
+      provider: "google_calendar_event",
+      participants: [
+        { label: "Elena", role: "required_attendee", required: true },
+        { label: "Aisha", role: "optional_attendee", required: false },
+      ],
+    });
+    const serialized = JSON.stringify(out);
+    expect(serialized).not.toContain("evt-SECRET-123");
+    expect(serialized).not.toContain("primary");
+    expect(serialized).not.toContain("ent-a");
+  });
+
+  it("returns undefined for non-calendar rows and drops label-less participants", () => {
+    expect(scheduledMeetingFromDetails({ source: "document_context_seed" })).toBeUndefined();
+    expect(scheduledMeetingFromDetails(null)).toBeUndefined();
+    const out = scheduledMeetingFromDetails({
+      source: "calendar_event",
+      participants: [{ role: "informed_only" }, { label: "Omar", required: true }],
+    });
+    expect(out?.participants).toEqual([{ label: "Omar", role: null, required: true }]);
+  });
+});
 
 function row(over: Record<string, unknown> = {}) {
   const now = new Date("2026-06-13T18:00:00.000Z");
