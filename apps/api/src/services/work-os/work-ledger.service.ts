@@ -878,6 +878,14 @@ export interface WorkLedgerView {
     summary: string | null;
     candidates: Array<{ candidate_type: string; text: string; confidence: string }>;
   };
+  // [ORGX] Safe roster projection for a scheduled calendar MEETING row, read
+  // back from details (calendar_event source). SAFE SUBSET ONLY — provider +
+  // participant labels/roles/required flags. NEVER event_id / calendar_id /
+  // recipient_entity_ids / entity_ids (those stay in details, off the wire).
+  scheduled_meeting?: {
+    provider: string | null;
+    participants: Array<{ label: string; role: string | null; required: boolean }>;
+  };
   // Phase 1283 — persisted coordination summary (PART E) read back from
   // details.coordination, so My Work / Team Work / Blind Spots show the BEAM
   // outcome without the original create response.
@@ -1248,9 +1256,39 @@ export function meetingIntelligenceFromDetails(
   };
 }
 
+// [ORGX] Safe roster projection for a scheduled calendar MEETING row. Reads
+// details.provider + details.participants and returns ONLY provider +
+// label/role/required per participant — never event_id / calendar_id /
+// recipient_entity_ids / entity_ids.
+export function scheduledMeetingFromDetails(
+  details: unknown,
+): WorkLedgerView["scheduled_meeting"] | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const d = details as Record<string, unknown>;
+  if (d.source !== "calendar_event") return undefined;
+  const rawParticipants = Array.isArray(d.participants) ? d.participants : [];
+  const participants = rawParticipants.flatMap((p) => {
+    if (typeof p !== "object" || p === null) return [];
+    const pr = p as Record<string, unknown>;
+    if (typeof pr.label !== "string" || pr.label.length === 0) return [];
+    return [
+      {
+        label: pr.label,
+        role: typeof pr.role === "string" ? pr.role : null,
+        required: pr.required === true,
+      },
+    ];
+  });
+  return {
+    provider: typeof d.provider === "string" ? d.provider : null,
+    participants,
+  };
+}
+
 function projectLedger(row: LedgerRow): WorkLedgerView {
   const enrichment = enrichmentFromDetails(row.details);
   const meetingIntelligence = meetingIntelligenceFromDetails(row.details);
+  const scheduledMeeting = scheduledMeetingFromDetails(row.details);
   const sourceLineage = sourceLineageFromDetails(row.details, row.evidence);
   const seededOrigin = seededOriginFromDetails(row.details);
   const coordination = coordinationFromDetails(row.details);
@@ -1300,6 +1338,7 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
     verified_at: row.verified_at !== null ? row.verified_at.toISOString() : null,
     ...(enrichment !== undefined ? { python_enrichment: enrichment } : {}),
     ...(meetingIntelligence !== undefined ? { meeting_intelligence: meetingIntelligence } : {}),
+    ...(scheduledMeeting !== undefined ? { scheduled_meeting: scheduledMeeting } : {}),
     ...(coordination !== undefined ? { coordination } : {}),
     ...(watchers !== undefined ? { watchers } : {}),
     // [GAP-J] quiet lineage truth: present only when the row's source was

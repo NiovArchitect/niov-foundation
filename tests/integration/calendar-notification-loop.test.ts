@@ -355,6 +355,137 @@ describe("[ORG-AUTONOMY-SPINE] calendar create → permission-scoped fan-out", (
   });
 });
 
+describe("[PARTICIPANT-COORDINATION] required vs optional gate + persisted roles", () => {
+  it("a REQUIRED participant unresolved → PARTICIPANT_UNRESOLVED, no event, no MEETING row", async () => {
+    const orgId = await makeTestOrg();
+    const actor = await makeOrgMember(orgId);
+    stubProviderFetch(`evt-${randomUUID()}`);
+
+    const r = await createCalendarEvent({
+      actor_entity_id: actor.entityId,
+      org_entity_id: orgId,
+      input: readyProposal({
+        participants: [
+          { label: "Decision owner", resolved: false, role: "required_decision_owner" },
+        ],
+      }),
+    });
+    vi.unstubAllGlobals();
+
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("expected blocked");
+    expect(r.code).toBe("PARTICIPANT_UNRESOLVED");
+    const rowCount = await prisma.workLedgerEntry.count({
+      where: { org_entity_id: orgId, ledger_type: "MEETING" },
+    });
+    expect(rowCount).toBe(0);
+    expect(await notificationsFor(actor.entityId, "CALENDAR_EVENT_CREATED")).toBe(0);
+  });
+
+  it("a role-less unresolved participant still blocks (backward compat)", async () => {
+    const orgId = await makeTestOrg();
+    const actor = await makeOrgMember(orgId);
+    stubProviderFetch(`evt-${randomUUID()}`);
+
+    const r = await createCalendarEvent({
+      actor_entity_id: actor.entityId,
+      org_entity_id: orgId,
+      input: readyProposal({
+        participants: [{ label: "Someone", resolved: false }], // no role → required
+      }),
+    });
+    vi.unstubAllGlobals();
+
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("expected blocked");
+    expect(r.code).toBe("PARTICIPANT_UNRESOLVED");
+  });
+
+  it("an OPTIONAL participant unresolved (+ required resolved) → succeeds; details.participants records optional role + required:false", async () => {
+    const orgId = await makeTestOrg();
+    const actor = await makeOrgMember(orgId);
+    const required = await makeOrgMember(orgId);
+    const eventId = `evt-${randomUUID()}`;
+    stubProviderFetch(eventId);
+
+    const r = await createCalendarEvent({
+      actor_entity_id: actor.entityId,
+      org_entity_id: orgId,
+      input: readyProposal({
+        participants: [
+          { label: "Executor", resolved: true, role: "required_executor", entity_id: required.entityId },
+          { label: "Nice to have", resolved: false, role: "optional_attendee" },
+        ],
+      }),
+    });
+    vi.unstubAllGlobals();
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected created");
+
+    const row = await prisma.workLedgerEntry.findFirst({
+      where: { org_entity_id: orgId, ledger_type: "MEETING", details: { path: ["event_id"], equals: eventId } },
+    });
+    const participants =
+      (row?.details as { participants?: Array<Record<string, unknown>> }).participants ?? [];
+    const optional = participants.find((p) => p.role === "optional_attendee");
+    expect(optional).toBeDefined();
+    expect(optional?.required).toBe(false);
+    expect(optional?.resolved).toBe(false);
+    const req = participants.find((p) => p.role === "required_executor");
+    expect(req?.required).toBe(true);
+  });
+
+  it("success persists details.participants with roles/required flags; fanout unchanged; no token/secret", async () => {
+    const orgId = await makeTestOrg();
+    const actor = await makeOrgMember(orgId);
+    const attendee = await makeOrgMember(orgId);
+    const informed = await makeOrgMember(orgId);
+    const nonParty = await makeOrgMember(orgId);
+    const eventId = `evt-${randomUUID()}`;
+    stubProviderFetch(eventId);
+
+    const r = await createCalendarEvent({
+      actor_entity_id: actor.entityId,
+      org_entity_id: orgId,
+      input: readyProposal({
+        participants: [
+          { label: "Attendee", resolved: true, role: "required_attendee", entity_id: attendee.entityId },
+          { label: "Informed", resolved: true, role: "informed_only", entity_id: informed.entityId },
+        ],
+      }),
+    });
+    vi.unstubAllGlobals();
+    expect(r.ok).toBe(true);
+
+    // Fanout unchanged: actor + every participant carrying an entity_id
+    // (informed_only WITH an entity_id is still notified — they're informed).
+    expect(await notificationsFor(actor.entityId, "CALENDAR_EVENT_CREATED")).toBe(1);
+    expect(await notificationsFor(attendee.entityId, "CALENDAR_EVENT_CREATED")).toBe(1);
+    expect(await notificationsFor(informed.entityId, "CALENDAR_EVENT_CREATED")).toBe(1);
+    expect(await notificationsFor(nonParty.entityId, "CALENDAR_EVENT_CREATED")).toBe(0);
+
+    const row = await prisma.workLedgerEntry.findFirst({
+      where: { org_entity_id: orgId, ledger_type: "MEETING", details: { path: ["event_id"], equals: eventId } },
+    });
+    const participants =
+      (row?.details as { participants?: Array<Record<string, unknown>> }).participants ?? [];
+    expect(participants).toHaveLength(2);
+    const attRow = participants.find((p) => p.entity_id === attendee.entityId);
+    expect(attRow?.role).toBe("required_attendee");
+    expect(attRow?.required).toBe(true);
+    const infRow = participants.find((p) => p.entity_id === informed.entityId);
+    expect(infRow?.role).toBe("informed_only");
+    expect(infRow?.required).toBe(false);
+
+    // NO token/secret in the persisted participant details — labels/roles/ids only.
+    const serialized = JSON.stringify(participants);
+    expect(serialized).not.toContain("tok-int");
+    expect(serialized).not.toContain(EVENT_WRITE_SCOPE);
+    expect(serialized).not.toContain("@niov.test");
+  });
+});
+
 describe("[ORG-AUTONOMY-SPINE] calendar delete → CANCELLED fan-out + ledger patch", () => {
   it("patches the MEETING row CANCELLED + notifies the create-time set", async () => {
     const orgId = await makeTestOrg();

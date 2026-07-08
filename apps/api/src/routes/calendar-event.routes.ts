@@ -75,6 +75,11 @@ function parseProposal(body: Record<string, unknown>): CalendarEventProposalInpu
       ...(typeof o.entity_id === "string" && o.entity_id.length > 0
         ? { entity_id: o.entity_id }
         : {}),
+      // [PARTICIPANT-COORDINATION] Additive: the coordination role + explicit
+      // required override when supplied. Optional/informed roles (or
+      // required:false) let an unresolved participant NOT block scheduling.
+      ...(typeof o.role === "string" && o.role.length > 0 ? { role: o.role } : {}),
+      ...(typeof o.required === "boolean" ? { required: o.required } : {}),
     };
   });
   let selected_time: SelectedTime | null = null;
