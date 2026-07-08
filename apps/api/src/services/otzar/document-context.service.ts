@@ -227,6 +227,11 @@ export async function importGoogleDocForCaller(
     where: {
       org_entity_id: orgEntityId,
       ledger_type: "DOCUMENT_CONTEXT",
+      // [GOOGLE-DOCS] CANCELLED rows are SETTLED HISTORY — a withdrawn
+      // import must never block a fresh one (same doctrine the
+      // supersession linker uses). Without this, importing → cancelling →
+      // re-importing the same doc wrongly 409s forever.
+      status: { not: "CANCELLED" },
       details: {
         path: ["document", "external_source", "file_id"],
         equals: input.file_id,

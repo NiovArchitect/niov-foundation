@@ -17,7 +17,10 @@
 // (no attendee identities, no titles, no tokens).
 
 import { writeAuditEvent } from "@niov/database";
-import { getProviderGrantedScopes } from "./connector-oauth.service.js";
+import {
+  getProviderGrantedScopes,
+  getProviderAccessTokenForOrg,
+} from "./connector-oauth.service.js";
 
 // Scopes that would permit creating/managing calendar events. Preferred
 // future path is the narrowest that works: calendar.app.created (events
@@ -191,8 +194,18 @@ export async function proposeCalendarEvent(args: {
 }
 
 export type CalendarEventCreateResult =
-  | { ok: true; status: "CREATED" }
-  | { ok: false; code: CalendarEventGateCode };
+  | {
+      ok: true;
+      status: "CREATED";
+      // [CALENDAR-WRITE] Real Google event lineage — never a fabrication;
+      // populated only when the provider returned 200 with an event id.
+      event_id: string;
+      calendar_id: string;
+      html_link: string | null;
+      start: string;
+      end: string;
+    }
+  | { ok: false; code: CalendarEventGateCode | "PROVIDER_ERROR" };
 
 // WHAT: Attempt to create the event — HARD gate enforcement.
 // INPUT: proposal + caller/org identity (+ idempotency handled by route).
@@ -242,9 +255,128 @@ export async function createCalendarEvent(args: {
     return { ok: false, code: gate };
   }
 
-  // All human + scope gates passed. The actual provider create runtime
-  // is intentionally NOT implemented in Phase 1272 — we never fabricate
-  // a creation. Block honestly so nothing is faked as executed.
-  await audit("DENIED", "CALENDAR_PROVIDER_UNAVAILABLE");
-  return { ok: false, code: "CALENDAR_PROVIDER_UNAVAILABLE" };
+  // [CALENDAR-WRITE] Every human + capability gate passed (approval
+  // present, caller confirmed, connected, event-write scope granted).
+  // NOW — and only now — call the real Google Calendar events.insert.
+  // A create is NEVER claimed unless the provider returns an event id.
+  const sel = args.input.selected_time!;
+  const calendarId =
+    typeof args.input.source_command === "string" ? "primary" : "primary";
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await audit("DENIED", "GOOGLE_RECONNECT_REQUIRED");
+    return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
+  }
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          summary: args.input.title,
+          start: { dateTime: sel.start },
+          end: { dateTime: sel.end },
+        }),
+      },
+    );
+  } catch {
+    await audit("DENIED", "provider_fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (res.status === 401 || res.status === 403) {
+    await audit("DENIED", "EVENT_WRITE_SCOPE_MISSING");
+    return { ok: false, code: "EVENT_WRITE_SCOPE_MISSING" };
+  }
+  if (!res.ok) {
+    await audit("DENIED", `http_${res.status}`);
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  const body = (await res.json().catch(() => ({}))) as {
+    id?: unknown;
+    htmlLink?: unknown;
+    start?: { dateTime?: unknown };
+    end?: { dateTime?: unknown };
+  };
+  const eventId = typeof body.id === "string" ? body.id : "";
+  if (eventId.length === 0) {
+    await audit("DENIED", "no_event_id");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  await audit("SUCCESS", "created");
+  return {
+    ok: true,
+    status: "CREATED",
+    event_id: eventId,
+    calendar_id: calendarId,
+    html_link: typeof body.htmlLink === "string" ? body.htmlLink : null,
+    start:
+      typeof body.start?.dateTime === "string" ? body.start.dateTime : sel.start,
+    end: typeof body.end?.dateTime === "string" ? body.end.dateTime : sel.end,
+  };
+}
+
+// [CALENDAR-WRITE] Delete a previously-created event — the cleanup rail
+// (and the honest "cancel the meeting" path). Reached only with the
+// event-write scope; audited CALENDAR_EVENT_DELETE. Idempotent: a 404/410
+// (already gone) counts as success so cleanup is safe to retry.
+export type CalendarEventDeleteResult =
+  | { ok: true }
+  | { ok: false; code: "GOOGLE_RECONNECT_REQUIRED" | "EVENT_WRITE_SCOPE_MISSING" | "PROVIDER_ERROR" };
+
+export async function deleteCalendarEvent(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  event_id: string;
+  calendar_id?: string;
+}): Promise<CalendarEventDeleteResult> {
+  const calendarId =
+    typeof args.calendar_id === "string" && args.calendar_id.length > 0
+      ? args.calendar_id
+      : "primary";
+  const audit = async (outcome: "SUCCESS" | "DENIED", reason: string): Promise<void> => {
+    await writeAuditEvent({
+      event_type: "CALENDAR_EVENT_DELETE",
+      outcome,
+      actor_entity_id: args.actor_entity_id,
+      target_entity_id: args.org_entity_id,
+      details: { reason },
+    });
+  };
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await audit("DENIED", "not_connected");
+    return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
+  }
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.event_id)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token.access_token}` } },
+    );
+  } catch {
+    await audit("DENIED", "provider_fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (res.status === 401 || res.status === 403) {
+    await audit("DENIED", "EVENT_WRITE_SCOPE_MISSING");
+    return { ok: false, code: "EVENT_WRITE_SCOPE_MISSING" };
+  }
+  // 204 = deleted; 404/410 = already gone (idempotent cleanup success).
+  if (res.ok || res.status === 404 || res.status === 410) {
+    await audit("SUCCESS", res.ok ? "deleted" : "already_gone");
+    return { ok: true };
+  }
+  await audit("DENIED", `http_${res.status}`);
+  return { ok: false, code: "PROVIDER_ERROR" };
 }

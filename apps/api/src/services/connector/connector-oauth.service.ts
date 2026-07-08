@@ -140,6 +140,13 @@ function providerConfig(provider: OAuthProviderKey): OAuthProviderConfig {
           // write scopes: no event-write, no Gmail-send, no Drive write.
           "https://www.googleapis.com/auth/drive.readonly",
           "https://www.googleapis.com/auth/meetings.space.readonly",
+          // [CALENDAR-WRITE] The ONLY write scope Otzar requests —
+          // create/update/delete events on the connected calendar,
+          // reached exclusively through the approval-gated create rail.
+          // No calendar-share, no delete-all, no Gmail-send, no Drive
+          // write. A re-consent is required to grant it; until then the
+          // create rail answers EVENT_WRITE_SCOPE_MISSING honestly.
+          "https://www.googleapis.com/auth/calendar.events",
         ],
         client_id_env: "GOOGLE_OAUTH_CLIENT_ID",
         client_secret_env: "GOOGLE_OAUTH_CLIENT_SECRET",

@@ -19,11 +19,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { grantedScopesMock, writeAuditEventMock } = vi.hoisted(() => ({
+const { grantedScopesMock, writeAuditEventMock, tokenMock } = vi.hoisted(() => ({
   grantedScopesMock: vi.fn(),
   writeAuditEventMock: vi
     .fn()
     .mockResolvedValue({ audit_id: "00000000-0000-0000-0000-000000000000" }),
+  tokenMock: vi.fn(),
 }));
 
 vi.mock("@niov/database", async (importOriginal) => {
@@ -33,12 +34,16 @@ vi.mock("@niov/database", async (importOriginal) => {
 
 vi.mock(
   "../../apps/api/src/services/connector/connector-oauth.service.js",
-  () => ({ getProviderGrantedScopes: grantedScopesMock }),
+  () => ({
+    getProviderGrantedScopes: grantedScopesMock,
+    getProviderAccessTokenForOrg: tokenMock,
+  }),
 );
 
 import {
   firstUnmetGate,
   createCalendarEvent,
+  deleteCalendarEvent,
   type CalendarEventProposalInput,
 } from "../../apps/api/src/services/connector/calendar-event.service.js";
 
@@ -149,20 +154,65 @@ describe("createCalendarEvent (hard enforcement, never auto-creates)", () => {
     expect(r.code).toBe("GOOGLE_RECONNECT_REQUIRED");
   });
 
-  it("does NOT fabricate a creation even with event-write scope present", async () => {
-    // Even if a future re-consent grants calendar.events, Phase 1272 has
-    // no create runtime — it must block, never fake "CREATED".
+  it("[CALENDAR-WRITE] creates the real event ONLY with event-write scope + every gate passed", async () => {
     grantedScopesMock.mockResolvedValue([
       "https://www.googleapis.com/auth/calendar.events",
     ]);
-    const r = await createCalendarEvent({
-      actor_entity_id: "actor-1",
-      org_entity_id: "org-1",
-      input: readyProposal(),
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-abc" });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ id: "evt-1", htmlLink: "https://calendar.google.com/e/evt-1", start: { dateTime: SLOT.start }, end: { dateTime: SLOT.end } }),
     });
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await createCalendarEvent({
+      actor_entity_id: "actor-1", org_entity_id: "org-1", input: readyProposal(),
+    });
+    vi.unstubAllGlobals();
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected created");
+    expect(r.event_id).toBe("evt-1");
+    expect(r.calendar_id).toBe("primary");
+    expect(r.html_link).toBe("https://calendar.google.com/e/evt-1");
+    // The provider was actually called (not fabricated).
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Audit is SUCCESS + scrubbed (no title/attendee).
+    const audit = writeAuditEventMock.mock.calls.at(-1)?.[0] as { outcome: string; details: Record<string, unknown> };
+    expect(audit.outcome).toBe("SUCCESS");
+    expect(JSON.stringify(audit.details)).not.toContain("tok-abc");
+  });
+
+  it("[CALENDAR-WRITE] a provider 403 on create → EVENT_WRITE_SCOPE_MISSING (never fake CREATED)", async () => {
+    grantedScopesMock.mockResolvedValue(["https://www.googleapis.com/auth/calendar.events"]);
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-abc" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await createCalendarEvent({ actor_entity_id: "a", org_entity_id: "o", input: readyProposal() });
+    vi.unstubAllGlobals();
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("expected blocked");
-    expect(r.code).toBe("CALENDAR_PROVIDER_UNAVAILABLE");
+    expect(r.code).toBe("EVENT_WRITE_SCOPE_MISSING");
+  });
+
+  it("[CALENDAR-WRITE] delete is idempotent (204 deleted AND 404 already-gone both succeed)", async () => {
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-abc" });
+    for (const status of [204, 404, 410]) {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: status === 204, status, json: async () => ({}) });
+      vi.stubGlobal("fetch", fetchMock);
+      const r = await deleteCalendarEvent({ actor_entity_id: "a", org_entity_id: "o", event_id: "evt-1" });
+      vi.unstubAllGlobals();
+      expect(r.ok, `status ${status}`).toBe(true);
+    }
+  });
+
+  it("[CALENDAR-WRITE] delete without event-write scope → EVENT_WRITE_SCOPE_MISSING", async () => {
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-abc" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await deleteCalendarEvent({ actor_entity_id: "a", org_entity_id: "o", event_id: "evt-1" });
+    vi.unstubAllGlobals();
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("expected blocked");
+    expect(r.code).toBe("EVENT_WRITE_SCOPE_MISSING");
   });
 
   it("blocks a free/busy-only proposal (no selected time) before any scope check", async () => {

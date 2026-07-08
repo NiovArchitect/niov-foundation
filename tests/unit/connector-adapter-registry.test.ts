@@ -90,9 +90,14 @@ describe("connector adapter registry", () => {
     ).toBe(true);
   });
 
-  it("every adapter declares can_write=false until the send path is wired", () => {
+  it("write-capable adapters are exactly the ones with a wired, gated write path (today: GOOGLE_WORKSPACE calendar)", () => {
+    // [CALENDAR-WRITE] GOOGLE_WORKSPACE is now can_write=true — the
+    // approval-gated + re-consent-gated calendar.events create/delete
+    // path is wired (calendar-event.service.ts). Every OTHER adapter
+    // stays can_write=false until its own send path ships.
     const rows = listConnectorAdapters();
-    expect(rows.every((r) => r.can_write === false)).toBe(true);
+    const writeCapable = rows.filter((r) => r.can_write === true).map((r) => r.provider_name).sort();
+    expect(writeCapable).toEqual(["GOOGLE_WORKSPACE"]);
   });
 });
 

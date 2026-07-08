@@ -15,6 +15,7 @@ import { getOrgEntityId } from "../services/governance/org.js";
 import {
   proposeCalendarEvent,
   createCalendarEvent,
+  deleteCalendarEvent,
   type CalendarEventProposalInput,
   type ProposedParticipant,
   type SelectedTime,
@@ -150,9 +151,57 @@ export async function registerCalendarEventRoutes(
       });
       if (result.ok === false)
         return reply
-          .code(statusForGate(result.code))
+          .code(result.code === "PROVIDER_ERROR" ? 502 : statusForGate(result.code))
           .send({ ok: false, code: result.code });
-      return reply.code(200).send({ ok: true, status: result.status });
+      // [CALENDAR-WRITE] Real event lineage on the SUCCESS envelope —
+      // google_calendar_event id + calendar + start/end + view link.
+      return reply.code(200).send({
+        ok: true,
+        status: result.status,
+        source_kind: "google_calendar_event",
+        event_id: result.event_id,
+        calendar_id: result.calendar_id,
+        html_link: result.html_link,
+        start: result.start,
+        end: result.end,
+      });
+    },
+  );
+
+  // ── Delete/cancel a created event (the cleanup + "cancel meeting"
+  //    rail). Event-write scope only; idempotent (already-gone = ok). ──
+  app.post<{ Body: { event_id?: unknown; calendar_id?: unknown } }>(
+    "/api/v1/calendar/events/delete",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const orgEntityId = await resolveOrgOrFail(session.entity_id, reply);
+      if (orgEntityId === null) return;
+      const eventId =
+        typeof request.body?.event_id === "string" && request.body.event_id.length > 0
+          ? request.body.event_id
+          : null;
+      if (eventId === null) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "event_id is required" });
+      }
+      const result = await deleteCalendarEvent({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        event_id: eventId,
+        ...(typeof request.body?.calendar_id === "string" ? { calendar_id: request.body.calendar_id } : {}),
+      });
+      if (result.ok === false) {
+        const status =
+          result.code === "PROVIDER_ERROR" ? 502
+          : result.code === "EVENT_WRITE_SCOPE_MISSING" ? 409
+          : 409;
+        return reply.code(status).send({ ok: false, code: result.code });
+      }
+      return reply.code(200).send({ ok: true });
     },
   );
 }
