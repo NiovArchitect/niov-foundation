@@ -436,14 +436,14 @@ export async function registerConnectorDataRoutes(
     },
   );
 
-  // POST /api/v1/connectors/google/docs/:ledger_entry_id/revalidate — an ADMIN
+  // POST /api/v1/drive/docs/:ledger_entry_id/revalidate — an ADMIN
   // re-checks ONE imported Google-Doc DOCUMENT_CONTEXT row against its upstream.
   // SNAPSHOT-PRESERVING: the stored body + import hash are never overwritten; a
   // changed/revoked/deleted/corrupt upstream DEMOTES the row out of active
   // retrieval via details.source_integrity.state (never via ledger status). The
   // admin trigger IS the consent record. Same admin gate as the import route.
   app.post<{ Params: { ledger_entry_id: string } }>(
-    "/api/v1/connectors/google/docs/:ledger_entry_id/revalidate",
+    "/api/v1/drive/docs/:ledger_entry_id/revalidate",
     { preHandler: requireAdminCapability(authService, "can_admin_org") },
     async (request, reply) => {
       const ledgerEntryId = request.params.ledger_entry_id;
