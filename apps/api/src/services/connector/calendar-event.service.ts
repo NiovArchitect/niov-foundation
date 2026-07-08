@@ -16,11 +16,85 @@
 // sent; the create attempt is audited with a scrubbed gate code only
 // (no attendee identities, no titles, no tokens).
 
-import { writeAuditEvent } from "@niov/database";
+import { writeAuditEvent, prisma } from "@niov/database";
 import {
   getProviderGrantedScopes,
   getProviderAccessTokenForOrg,
 } from "./connector-oauth.service.js";
+import { makeNotificationService } from "../notification/notification.service.js";
+import {
+  createLedgerEntry,
+  patchLedgerEntry,
+} from "../work-os/work-ledger.service.js";
+
+// [ORG-AUTONOMY-SPINE] Internal-only notification substrate for the calendar
+// fan-out. Same construction other work-os handlers use (makeNotificationService
+// with no connector fan-out) — a real create/delete notifies the derived,
+// permission-scoped human set inside Otzar's inbox ONLY. No external delivery;
+// createInternalNotification enforces same-org active-membership + recipient
+// TAR ACTIVE, so ineligible recipients are skipped, never delivered to.
+const notificationService = makeNotificationService({});
+
+// [ORG-AUTONOMY-SPINE] The two internal notification classes the calendar
+// spine fans out. Kept as named constants so the create/delete paths + tests
+// reference one source of truth (Notification.notification_class is an open
+// String column — no migration).
+const CALENDAR_EVENT_CREATED_CLASS = "CALENDAR_EVENT_CREATED";
+const CALENDAR_EVENT_CANCELLED_CLASS = "CALENDAR_EVENT_CANCELLED";
+
+// WHAT: Build the CLOSED, proposal-DERIVED recipient set for a calendar
+//        fan-out — [actor, ...participants-with-entity_id, owner], deduped,
+//        undefined dropped. NEVER a caller-supplied open recipient list: every
+//        id here comes from the authenticated actor + the proposal the gates
+//        already vetted. The notification service re-checks each id for same-org
+//        active membership, so a stray/ineligible id is skipped, not delivered.
+function closedRecipientSet(args: {
+  actor_entity_id: string;
+  participant_entity_ids: ReadonlyArray<string | undefined>;
+  owner_entity_id?: string | undefined;
+}): string[] {
+  const set = new Set<string>();
+  set.add(args.actor_entity_id);
+  for (const id of args.participant_entity_ids) {
+    if (typeof id === "string" && id.length > 0) set.add(id);
+  }
+  if (typeof args.owner_entity_id === "string" && args.owner_entity_id.length > 0) {
+    set.add(args.owner_entity_id);
+  }
+  return [...set];
+}
+
+// WHAT: Fan a single body out to a closed recipient set, best-effort.
+// WHY: A per-recipient ineligibility ({ok:false} — CROSS_ORG_DENIED / inactive)
+//      is skipped, never fatal; the caller's real Google event already happened.
+async function fanOutInternalNotifications(args: {
+  org_entity_id: string;
+  actor_entity_id: string;
+  recipients: string[];
+  notification_class: string;
+  body_summary: string;
+}): Promise<void> {
+  for (const recipient of args.recipients) {
+    await notificationService.createInternalNotification({
+      org_entity_id: args.org_entity_id,
+      recipient_entity_id: recipient,
+      // The authenticated caller — NEVER a caller-supplied source.
+      source_entity_id: args.actor_entity_id,
+      notification_class: args.notification_class,
+      body_summary: args.body_summary,
+      action_id: null,
+    });
+  }
+}
+
+// WHAT: A calm, secret-free one-line human time for notification copy.
+// WHY: body_summary must carry NO token / raw identity — just the title + a
+//      readable start. Date-only is deliberate: enough to orient, nothing to leak.
+function humanReadableStart(startIso: string): string {
+  const d = new Date(startIso);
+  if (Number.isNaN(d.getTime())) return startIso;
+  return d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+}
 
 // Scopes that would permit creating/managing calendar events. Preferred
 // future path is the narrowest that works: calendar.app.created (events
@@ -66,6 +140,11 @@ export interface ProposedParticipant {
   label: string;
   /** Whether the participant resolved to a known entity. */
   resolved: boolean;
+  // [ORG-AUTONOMY-SPINE] Additive: the resolved Otzar entity id for this
+  // participant, when known. Drives the CLOSED notification recipient set on a
+  // successful create — never an email/identity, never surfaced in audit
+  // details. Absent → this participant simply isn't notified.
+  entity_id?: string;
 }
 
 export interface CalendarEventProposalInput {
@@ -81,6 +160,10 @@ export interface CalendarEventProposalInput {
   approved?: boolean;
   caller_confirmed?: boolean;
   policy_blocked?: boolean;
+  // [ORG-AUTONOMY-SPINE] Additive: the resolved Otzar entity id of the meeting
+  // owner (the person accountable for it). Defaults to the actor when absent.
+  // Feeds the WorkLedger owner + the CLOSED notification recipient set.
+  owner_entity_id?: string;
 }
 
 export interface CalendarEventProposalView {
@@ -234,8 +317,8 @@ export async function createCalendarEvent(args: {
   const audit = async (
     outcome: "SUCCESS" | "DENIED",
     reason: string,
-  ): Promise<void> => {
-    await writeAuditEvent({
+  ): Promise<string> => {
+    const event = await writeAuditEvent({
       event_type: "CALENDAR_EVENT_CREATE",
       outcome,
       actor_entity_id: args.actor_entity_id,
@@ -248,6 +331,7 @@ export async function createCalendarEvent(args: {
           args.input.selected_time !== null,
       },
     });
+    return event.audit_id;
   };
 
   if (gate !== null) {
@@ -310,16 +394,75 @@ export async function createCalendarEvent(args: {
     await audit("DENIED", "no_event_id");
     return { ok: false, code: "PROVIDER_ERROR" };
   }
-  await audit("SUCCESS", "created");
+  const auditEventId = await audit("SUCCESS", "created");
+  const startOut =
+    typeof body.start?.dateTime === "string" ? body.start.dateTime : sel.start;
+  const endOut =
+    typeof body.end?.dateTime === "string" ? body.end.dateTime : sel.end;
+
+  // [ORG-AUTONOMY-SPINE] BEST-EFFORT side-effects. The real Google event now
+  // exists and is audited SUCCESS; NOTHING below may turn that into a failure
+  // response. Each block is wrapped swallow-and-continue. Order: ledger row
+  // first (so its id can anchor context), then the REQUIRED notification
+  // fan-out — a ledger failure must not skip the notify.
+  const ownerEntityId = args.input.owner_entity_id ?? args.actor_entity_id;
+  const recipients = closedRecipientSet({
+    actor_entity_id: args.actor_entity_id,
+    participant_entity_ids: args.input.participants.map((p) => p.entity_id),
+    owner_entity_id: ownerEntityId,
+  });
+
+  // (a) Terminal WorkLedger MEETING row — reads as COMPLETED (EXECUTED is
+  // terminal, excluded from blind spots, and getMyWork marks it not-completable
+  // so it never surfaces as needs-action work). Best-effort enhancement.
+  try {
+    await createLedgerEntry({
+      org_entity_id: args.org_entity_id,
+      ledger_type: "MEETING",
+      source_type: "CONNECTOR",
+      title: args.input.title,
+      summary: "Meeting scheduled on Calendar after approval + availability were confirmed.",
+      status: "EXECUTED",
+      priority: "ROUTINE",
+      owner_entity_id: ownerEntityId,
+      details: {
+        source: "calendar_event",
+        event_id: eventId,
+        calendar_id: calendarId,
+        start: startOut,
+        end: endOut,
+        provider: "google_calendar_event",
+        audit_event_id: auditEventId,
+        // Persist the CLOSED recipient set + title so a later delete can fan the
+        // cancellation to the same humans without re-deriving from an input.
+        recipient_entity_ids: recipients,
+      },
+    });
+  } catch {
+    // Ledger is the enhancement, notification is the required surface — swallow.
+  }
+
+  // (b) REQUIRED notification fan-out to the CLOSED, proposal-derived set.
+  try {
+    await fanOutInternalNotifications({
+      org_entity_id: args.org_entity_id,
+      actor_entity_id: args.actor_entity_id,
+      recipients,
+      notification_class: CALENDAR_EVENT_CREATED_CLASS,
+      body_summary: `Scheduled after approval and calendar availability were confirmed — no action needed. "${args.input.title}" · ${humanReadableStart(startOut)}.`,
+    });
+  } catch {
+    // A real event was created + audited; a notify failure never unwinds it.
+  }
+
   return {
     ok: true,
     status: "CREATED",
     event_id: eventId,
     calendar_id: calendarId,
     html_link: typeof body.htmlLink === "string" ? body.htmlLink : null,
-    start:
-      typeof body.start?.dateTime === "string" ? body.start.dateTime : sel.start,
-    end: typeof body.end?.dateTime === "string" ? body.end.dateTime : sel.end,
+    start: startOut,
+    end: endOut,
   };
 }
 
@@ -336,6 +479,14 @@ export async function deleteCalendarEvent(args: {
   org_entity_id: string;
   event_id: string;
   calendar_id?: string;
+  // [ORG-AUTONOMY-SPINE] Additive fallback context for the no-ledger-row case
+  // (e.g. an event created before the spine, or outside this service). When a
+  // MEETING ledger row IS found, its persisted recipient set + title win; these
+  // only seed the fan-out when no row exists. Never a caller-supplied OPEN list —
+  // the notification service re-checks every id for same-org active membership.
+  title?: string;
+  participant_entity_ids?: string[];
+  owner_entity_id?: string;
 }): Promise<CalendarEventDeleteResult> {
   const calendarId =
     typeof args.calendar_id === "string" && args.calendar_id.length > 0
@@ -375,8 +526,87 @@ export async function deleteCalendarEvent(args: {
   // 204 = deleted; 404/410 = already gone (idempotent cleanup success).
   if (res.ok || res.status === 404 || res.status === 410) {
     await audit("SUCCESS", res.ok ? "deleted" : "already_gone");
+    await cancelMeetingSideEffects(args);
     return { ok: true };
   }
   await audit("DENIED", `http_${res.status}`);
   return { ok: false, code: "PROVIDER_ERROR" };
+}
+
+// WHAT: BEST-EFFORT cancellation side-effects after a real Calendar delete.
+//        Finds the mirror MEETING ledger row by details.event_id (org-scoped),
+//        flips it to CANCELLED, and fans a "cancelled" notification to the SAME
+//        closed recipient set the create recorded. No row → notify only the
+//        actor (plus any additive fallback context).
+// WHY:   The delete already succeeded + is audited; NOTHING here may fail the
+//        response. The cancellation NOTIFICATION is the required surface; the
+//        ledger status flip is best-effort (a non-owner deleter may be blocked
+//        by patchLedgerEntry's completion authority — that is fine, the run's
+//        cleanup sweep still reconciles the row).
+async function cancelMeetingSideEffects(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  event_id: string;
+  title?: string;
+  participant_entity_ids?: string[];
+  owner_entity_id?: string;
+}): Promise<void> {
+  let title = args.title ?? "Meeting";
+  let recipients = closedRecipientSet({
+    actor_entity_id: args.actor_entity_id,
+    participant_entity_ids: args.participant_entity_ids ?? [],
+    owner_entity_id: args.owner_entity_id,
+  });
+
+  try {
+    const row = await prisma.workLedgerEntry.findFirst({
+      where: {
+        org_entity_id: args.org_entity_id,
+        ledger_type: "MEETING",
+        details: { path: ["event_id"], equals: args.event_id },
+      },
+      select: { ledger_entry_id: true, title: true, owner_entity_id: true, details: true },
+    });
+    if (row !== null) {
+      title = row.title;
+      const details =
+        typeof row.details === "object" && row.details !== null
+          ? (row.details as Record<string, unknown>)
+          : {};
+      const stored = Array.isArray(details.recipient_entity_ids)
+        ? (details.recipient_entity_ids as unknown[]).filter(
+            (v): v is string => typeof v === "string" && v.length > 0,
+          )
+        : [];
+      // The persisted set (create-time) is authoritative; still fold in the
+      // actor + owner so the deleter is always informed.
+      recipients = closedRecipientSet({
+        actor_entity_id: args.actor_entity_id,
+        participant_entity_ids: stored,
+        owner_entity_id: row.owner_entity_id ?? undefined,
+      });
+      // Best-effort status flip — swallow a completion-authority block.
+      await patchLedgerEntry({
+        ledger_entry_id: row.ledger_entry_id,
+        org_entity_id: args.org_entity_id,
+        caller_entity_id: args.actor_entity_id,
+        is_manager: false,
+        patch: { status: "CANCELLED" },
+      });
+    }
+  } catch {
+    // Row lookup / patch is best-effort; the notification below still fires.
+  }
+
+  try {
+    await fanOutInternalNotifications({
+      org_entity_id: args.org_entity_id,
+      actor_entity_id: args.actor_entity_id,
+      recipients,
+      notification_class: CALENDAR_EVENT_CANCELLED_CLASS,
+      body_summary: `"${title}" was cancelled and removed from Calendar.`,
+    });
+  } catch {
+    // The delete already succeeded + is audited; a notify failure never fails it.
+  }
 }
