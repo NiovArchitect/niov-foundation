@@ -40,6 +40,7 @@ import {
   type DocumentSourceKind,
   type DocumentCurrentness,
 } from "../services/otzar/document-context.service.js";
+import { sourceHealthSweepForCaller } from "../services/otzar/source-health.service.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -460,6 +461,26 @@ export async function registerConnectorDataRoutes(
         return reply.code(status).send(result);
       }
       return reply.code(200).send(result);
+    },
+  );
+
+  // POST /api/v1/drive/docs/health-sweep — an ADMIN triggers ONE bounded
+  // re-verification pass over the org's most-recent ALREADY-IMPORTED Google-Doc
+  // rows (cap 50). Each row is re-checked with the SAME snapshot-preserving
+  // probe as the single-doc revalidate route; a demoted source (changed /
+  // revoked / deleted / corrupt) emits ONE calm SOURCE_HEALTH_CHANGED
+  // notification to the triggering admin. NEVER lists or syncs Drive — it only
+  // re-probes rows already imported. Same admin gate as the revalidate route.
+  app.post(
+    "/api/v1/drive/docs/health-sweep",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const result = await sourceHealthSweepForCaller(request.auth!.entity_id);
+      if (result.ok === false) {
+        // NO_ORG_FOR_CALLER — the caller is not in an organization.
+        return reply.code(404).send(result);
+      }
+      return reply.code(200).send({ ok: true, ...result.summary });
     },
   );
 
