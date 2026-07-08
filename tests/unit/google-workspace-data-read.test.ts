@@ -46,6 +46,7 @@ import {
   fetchMeetTranscriptForOrg,
   GOOGLE_DOC_EXPORT_MAX_CHARS,
 } from "../../apps/api/src/services/connector/connector-data-read.service.js";
+import { validateImportedText } from "../../apps/api/src/services/otzar/source-integrity.js";
 import { googleMeetTranscriptToSourceEvent } from "../../apps/api/src/services/otzar/source-event.js";
 
 const ACTOR = "actor-1";
@@ -175,6 +176,67 @@ describe("[GOOGLE-DOCS] fetchGoogleDocTextForOrg", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(404, {}));
     const res = await fetchGoogleDocTextForOrg({ ...ARGS, file_id: "ghost" });
     expect(res).toEqual({ ok: false, code: "NOT_FOUND" });
+  });
+
+  // [SOURCE-INTEGRITY] no partial trusted row: a bad export is quarantined
+  // BEFORE the hash is computed and BEFORE any DOCUMENT_CONTEXT row exists.
+  it("empty export → SOURCE_EMPTY, quarantined, NO row (no hash computed)", async () => {
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-abc" });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { id: "f-empty", name: "Empty doc" }))
+      .mockResolvedValueOnce(textResponse(200, ""));
+    const res = await fetchGoogleDocTextForOrg({ ...ARGS, file_id: "f-empty" });
+    expect(res).toEqual({ ok: false, code: "SOURCE_EMPTY" });
+    const quarantined = writeAuditEventMock.mock.calls.some(
+      (c) => (c[0] as { event_type: string }).event_type === "IMPORT_QUARANTINED",
+    );
+    expect(quarantined).toBe(true);
+    // SAFE audit: file_id + reason present, no export/body leakage.
+    const q = writeAuditEventMock.mock.calls.find(
+      (c) => (c[0] as { event_type: string }).event_type === "IMPORT_QUARANTINED",
+    )![0] as { details: Record<string, unknown> };
+    expect(q.details.file_id).toBe("f-empty");
+    expect(q.details.code).toBe("SOURCE_EMPTY");
+  });
+
+  it("whitespace-only export → SOURCE_EMPTY", async () => {
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-abc" });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { id: "f-ws", name: "Blank doc" }))
+      .mockResolvedValueOnce(textResponse(200, "   \n\t  \n "));
+    const res = await fetchGoogleDocTextForOrg({ ...ARGS, file_id: "f-ws" });
+    expect(res).toEqual({ ok: false, code: "SOURCE_EMPTY" });
+  });
+
+  it("binary/null-byte export -> SOURCE_UNREADABLE, quarantined, NO row", async () => {
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-abc" });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { id: "f-bin", name: "Binary blob" }))
+      .mockResolvedValueOnce(textResponse(200, "PK\u0000\u0000\u0001binary payload"));
+    const res = await fetchGoogleDocTextForOrg({ ...ARGS, file_id: "f-bin" });
+    expect(res).toEqual({ ok: false, code: "SOURCE_UNREADABLE" });
+    const quarantined = writeAuditEventMock.mock.calls.some(
+      (c) => (c[0] as { event_type: string }).event_type === "IMPORT_QUARANTINED",
+    );
+    expect(quarantined).toBe(true);
+  });
+});
+
+// [SOURCE-INTEGRITY] the pure import-text validator, tested in isolation.
+describe("[SOURCE-INTEGRITY] validateImportedText", () => {
+  it("accepts real prose; rejects empty/whitespace, null bytes, and control-char binary", () => {
+    expect(validateImportedText("Scope: install 40 units.")).toEqual({ ok: true });
+    expect(validateImportedText("")).toEqual({ ok: false, code: "SOURCE_EMPTY" });
+    expect(validateImportedText("   \n\t ")).toEqual({ ok: false, code: "SOURCE_EMPTY" });
+    // A single null byte is an unambiguous binary signal on its own.
+    expect(validateImportedText("ok\u0000here")).toEqual({ ok: false, code: "SOURCE_UNREADABLE" });
+    // >10% control chars (excluding tab/newline/carriage-return) -> unreadable.
+    expect(validateImportedText("a\u0001\u0002\u0003\u0004\u0005")).toEqual({
+      ok: false,
+      code: "SOURCE_UNREADABLE",
+    });
+    // Tabs / newlines / carriage returns are normal in real documents.
+    expect(validateImportedText("line 1\nline 2\tcol\r\nline 3")).toEqual({ ok: true });
   });
 });
 

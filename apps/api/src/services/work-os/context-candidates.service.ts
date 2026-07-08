@@ -38,6 +38,7 @@ import {
   seededOriginFromDetails,
   type SeededOriginProjection,
 } from "./work-ledger.service.js";
+import { isSourceIntegrityDemoted } from "../otzar/source-integrity.js";
 
 /** Customer-safe candidate projection. The ledger_entry_id rides along so
  *  the UI can route validation to the EXISTING AIX-2 endpoint — it is
@@ -128,6 +129,7 @@ export function deriveContextRelevanceCandidates(
   const scored: Array<{ candidate: ContextCandidateProjection; strong: number; total: number }> = [];
   for (const row of pool) {
     if (isContextRetired(row.details)) continue; // [RETENTION] retired = out of active use
+    if (isSourceIntegrityDemoted(row.details)) continue; // [SOURCE-INTEGRITY] demoted snapshot = out of active use
     const seeded: SeededOriginProjection | undefined = seededOriginFromDetails(row.details);
     if (seeded === undefined) continue; // not seeded context — never suggested
     // Human suppression (AIX-2 feedback loop) — read from raw details so
@@ -218,6 +220,7 @@ export function deriveSubjectBackgroundCandidates(
   const matched: ContextCandidateProjection[] = [];
   for (const row of pool) {
     if (isContextRetired(row.details)) continue; // [RETENTION] retired = out of active use
+    if (isSourceIntegrityDemoted(row.details)) continue; // [SOURCE-INTEGRITY] demoted snapshot = out of active use
     const seeded = seededOriginFromDetails(row.details);
     if (seeded === undefined) continue;
     const d =
@@ -280,7 +283,13 @@ export async function getContextCandidatesForLedgerEntry(args: {
   if (!args.is_manager) return { ok: true, candidates: [] };
 
   const pool = await prisma.workLedgerEntry.findMany({
-    where: { org_entity_id: args.org_entity_id, ledger_type: "DOCUMENT_CONTEXT" },
+    // [SOURCE-INTEGRITY] ALLOWLIST to VERIFIED — the sole creator of these rows
+    // seeds them VERIFIED, so a non-VERIFIED DOCUMENT_CONTEXT row is a withdrawn
+    // (CANCELLED) or otherwise terminal source and must NEVER surface in an
+    // answer. An allowlist (not a CANCELLED/EXPIRED blocklist) keeps future
+    // terminal statuses out of this trust-critical path by construction. The
+    // integrity demotion (source_integrity.state) is a JS post-filter below.
+    where: { org_entity_id: args.org_entity_id, ledger_type: "DOCUMENT_CONTEXT", status: "VERIFIED" },
     orderBy: { created_at: "desc" },
     take: 200,
     select: { ledger_entry_id: true, title: true, summary: true, details: true },
