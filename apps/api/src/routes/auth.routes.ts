@@ -21,6 +21,32 @@ import {
 
 const MIN_PASSWORD_LENGTH = 10;
 
+// [SECTION-16] The HttpOnly session-restore cookie. It carries the existing
+// (already HS256-signed) session JWT and is read by GET /auth/me ONLY — never by
+// requireAuth, so mutation/read routes stay Bearer-authenticated (app.otzar.ai
+// and api.otzar.ai are same-site, so SameSite=Lax gives no CSRF cover on the API;
+// only the in-memory Bearer token, unreadable cross-origin, may authorize writes).
+const SESSION_COOKIE = "otzar_session";
+
+// Host-only (no Domain), SameSite=Lax (same-site app<->api), HttpOnly, Secure in
+// production. `secure` is set EXPLICITLY (never @fastify/cookie's 'auto', which
+// would read the internal HTTP hop behind Render's TLS edge — no trustProxy — and
+// wrongly drop Secure). In dev/test (NODE_ENV!=='production') Secure is off so the
+// cookie works over http://localhost.
+function sessionCookieOptions(): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: "lax";
+  path: string;
+} {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  };
+}
+
 // WHAT: Register the three auth routes on a Fastify instance.
 // INPUT: The Fastify instance and the AuthService (with its config
 //        already injected).
@@ -66,6 +92,14 @@ export async function registerAuthRoutes(
       const status = result.code === "SUSPENDED" ? 403 : 401;
       return reply.code(status).send(result);
     }
+    // [SECTION-16] Also set the HttpOnly restore cookie carrying this session's
+    // JWT. Read ONLY by GET /auth/me; the response body is unchanged so the
+    // existing Bearer flow is untouched. Cookie expires with the session so a
+    // stale cookie can never outlive its server-side session.
+    reply.setCookie(SESSION_COOKIE, result.token, {
+      ...sessionCookieOptions(),
+      expires: result.expires_at,
+    });
     return reply.code(200).send({
       ok: true,
       token: result.token,
@@ -245,9 +279,58 @@ export async function registerAuthRoutes(
       await authService.logout(auth.session_id, auth.entity_id, {
         ip_address: request.ip ?? null,
       });
+      // [SECTION-16] Clear the restore cookie so the browser stops presenting it.
+      reply.clearCookie(SESSION_COOKIE, { path: "/" });
       return reply.code(200).send({ ok: true });
     },
   );
+
+  // ── [SECTION-16] GET /auth/me — the ONLY cookie-authenticated route.
+  // Restores a session on CT boot from the HttpOnly `otzar_session` cookie with
+  // NO Bearer header. It runs the SAME validateSession revocation chain as every
+  // Bearer route (JWT verify + expiry + DB session status + idle-timeout + live
+  // TAR-hash re-check + Redis nonce), then additionally rejects a suspended/
+  // inactive entity, and returns a fresh capability snapshot + the still-valid
+  // access token for CT's in-memory store. It NEVER mints a new session (no row
+  // proliferation on reload). `no-store` because the body carries a token. A
+  // cross-site fetch cannot reach this usefully: SameSite=Lax withholds the
+  // cookie cross-site, and CORS exact-origin withholds the body.
+  app.get("/api/v1/auth/me", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    const cookieToken = request.cookies?.[SESSION_COOKIE];
+    if (typeof cookieToken !== "string" || cookieToken.length === 0) {
+      return reply.code(401).send({ ok: false, code: "NO_SESSION" });
+    }
+    // "read" is the restore gate: any entity that can use the app holds it; a
+    // session lacking it can perform nothing in the UI and is treated as no
+    // restorable session. This reuses the full per-request revocation chain.
+    const result = await authService.validateSession(cookieToken, "read", {
+      ip_address: request.ip ?? null,
+      user_agent: request.headers["user-agent"] ?? null,
+    });
+    if (!result.valid) {
+      reply.clearCookie(SESSION_COOKIE, { path: "/" });
+      return reply.code(401).send({ ok: false, code: result.code });
+    }
+    // Belt-and-suspenders on top of B1 (invalidate-sessions-on-suspend): reject
+    // any entity that is not ACTIVE, even if some suspend path failed to
+    // invalidate its sessions. A suspended/deleted user can never restore.
+    const entity = await prisma.entity.findUnique({
+      where: { entity_id: result.entity_id },
+      select: { email: true, status: true },
+    });
+    if (entity === null || entity.status !== "ACTIVE") {
+      reply.clearCookie(SESSION_COOKIE, { path: "/" });
+      return reply.code(401).send({ ok: false, code: "ENTITY_INACTIVE" });
+    }
+    return reply.code(200).send({
+      ok: true,
+      token: cookieToken,
+      entity: { email: entity.email },
+      allowed_operations: result.allowed_operations,
+      clearance_ceiling: result.clearance_ceiling,
+    });
+  });
 
   app.get(
     "/api/v1/auth/validate",
