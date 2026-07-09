@@ -23,6 +23,68 @@ in flight.
 1224/1225/1226/1227 connector substrate LANDED 2026-06-10** —
 bounded Founder queue 1215–1232 substantially complete.
 
+## ✅ Section 16 — Enterprise session continuity SHIPPED + LIVE (2026-07-09) — READ FIRST
+
+**Live SHAs:** FND `main` = `95cf937` (LIVE on api.otzar.ai) · CT `main` = `95ca323`
+(LIVE on app.otzar.ai). Delivered across PRs **#597** (cookie + `/auth/me`) and
+**#598** (auto-lockout hardening), Foundation-first, all CI green.
+
+**What shipped (fully live-verified).** A logged-in user can now **hard-reload or
+open a protected deep link without a login bounce**, with **no client-side token
+custody**:
+- Login also sets an `HttpOnly · Secure · SameSite=Lax` host-only cookie carrying
+  the existing session JWT. New cookie-scoped `GET /auth/me` re-runs the existing
+  per-request revocation chain (`validateSession`: DB session status + Redis nonce
+  + live TAR-hash) + rejects non-ACTIVE entities, returns fresh caps + token +
+  `Cache-Control: no-store`; reuses the session (no new row).
+- CT `<SessionBootstrap>` restores on boot (bounded 8s timeout — never hangs);
+  guards capture `/login?returnTo=<path>` with open-redirect safety.
+- **Access token stays MEMORY-ONLY; no localStorage/sessionStorage auth.** The
+  cookie is HttpOnly (not JS-readable).
+
+**Security invariants (proven on the live API).**
+- The cookie authenticates `GET /auth/me` **only**; `requireAuth` (every mutation
+  and read route) stays **Bearer-only** — app.otzar.ai↔api.otzar.ai are same-site,
+  so SameSite=Lax gives no CSRF cover; only the in-memory Bearer authorizes writes.
+  Live-probe: a Bearer route with cookie-only → 401.
+- **All three suspension paths invalidate live sessions immediately** — admin
+  suspend (`PATCH /org/entities/:id`), AI-Teammate deactivate, AND the
+  5-failed-attempt **auto-lockout** (PR #598) — via `invalidateEntitySessions`, so
+  an existing Bearer on another device fails on the next request, not just restore.
+  Password change also invalidates other sessions.
+
+**No known auth/session gaps remain.** The prior auto-lockout residual gap is
+CLOSED.
+
+**Tests / verification.** FND: `session-restore-cookie.test.ts` 12/12 (cookie
+flags, restore, no-store, no-cookie/garbage 401, logout/TAR-change/password-change/
+suspension/auto-lockout block restore, cookie-only-mutation → 401) + auth
+regression (integration 8, unit 34); all 5 CI checks green on both PRs. Live-probe
+of deployed FND green; CT live E2E `otzar-live-session-continuity.spec.ts` green
+(hard-reload + deep-link restore, storage sweep 0/0, logout→bounce). Auto-lockout
+NOT live-probed by design (would lock a real account) — integration test + deploy
+health (`/health` 200, `/auth/me` no-cookie 401, meridian-admin login 200).
+
+**Demo / customer readiness.** Demo org untouched; Meridian sim (69c07a00…) zero
+residue; no account locked. Section 16 removes the "don't hard-refresh mid-demo"
+caveat — a presenter can now reload or open a deep link and stay signed in. Plan +
+evidence: CT `docs/otzar/OTZAR_SECTION_16_SESSION_CONTINUITY_PLAN.md`.
+
+**Remaining non-auth watch-items** (unchanged by this arc; tracked in CT
+`docs/otzar/OTZAR_OPERATIONAL_GAP_LEDGER.md`): Meet REST transcript path
+unavailable for the account (honest NO_TRANSCRIPT/SCOPE_REAUTH); Google inbound
+webhooks / ambient event ingestion (every connector is outbound-only today);
+Action-Center calendar lifecycle vs the ADR-0057 execution queue; native/push/email
+notification channels; `DEMO_SHARED_PASSWORD` rotation at pilot start.
+
+**Exact next recommended focus.** No auth/session work remains. Highest-leverage
+next product focus is the **inbound event / ambient ingestion rail** (the
+structural "no connector can receive events" gap) so Otzar can surface work
+ambiently rather than only on manual pull — the prerequisite for the always-on
+Work-OS experience. Second: Google Meet transcript path (external/account gate).
+
+---
+
 ## ⚠️ Overnight Arc Recoverability Report (2026-06-18) — READ FIRST
 
 Autonomous overnight arc (1300-B → 1301-A → 1302-A → 1303-A) complete. **All four
