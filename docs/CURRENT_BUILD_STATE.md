@@ -77,11 +77,22 @@ webhooks / ambient event ingestion (every connector is outbound-only today);
 Action-Center calendar lifecycle vs the ADR-0057 execution queue; native/push/email
 notification channels; `DEMO_SHARED_PASSWORD` rotation at pilot start.
 
-**Exact next recommended focus.** No auth/session work remains. Highest-leverage
-next product focus is the **inbound event / ambient ingestion rail** (the
-structural "no connector can receive events" gap) so Otzar can surface work
-ambiently rather than only on manual pull — the prerequisite for the always-on
-Work-OS experience. Second: Google Meet transcript path (external/account gate).
+**Exact next recommended focus.** No auth/session work remains. The **inbound
+event / ambient ingestion rail** (structural "no connector can receive events" gap)
+is now **PREFLIGHTED — design ready, awaiting GO** (full plan in CT
+`docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md`, 2026-07-09). Finding: the
+outcome side is schema-free + reusable (source revalidation + calendar fan-out
+sinks exist; audit/notification vocab are open Strings), but the entire inbound
+half is greenfield. Real Google Drive/Calendar webhooks = STOP (Cloud-console
+callback + Pub/Sub + a `WatchChannel` schema + renewal; OAuth scopes already
+granted). Meet transcript events = BLOCKED (post-meeting pull only). **Recommended
+first slice on GO: a cron-driven bounded per-org source recheck** — reuses the
+existing `sourceHealthSweepForCaller`/`revalidateImportedDocForCaller` sink on a
+`node-cron` tick, schema-free, zero new attack surface, shipping the source-change
+detection the UI lacks today. Crux GO-gate decisions: the governed per-org non-human
+actor, atomic Redis-SETNX dedupe/replay, per-org quota bounding, and whether to add
+a durable `InboundEvent` forensic table. Second focus: Google Meet transcript path
+(external/account gate).
 
 ---
 
