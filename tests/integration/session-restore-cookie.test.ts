@@ -123,12 +123,15 @@ describe("[SECTION-16] GET /auth/me restores from the cookie ONLY", () => {
     const body = me.json() as {
       ok: boolean;
       token: string;
+      session_id: string;
       entity: { email: string };
       allowed_operations: string[];
       clearance_ceiling: number;
     };
     expect(body.ok).toBe(true);
     expect(body.token).toBe(cookie.value); // reuses the existing token, no new session
+    expect(typeof body.session_id).toBe("string"); // lets CT rebind the same session scope
+    expect(body.session_id.length).toBeGreaterThan(0);
     expect(body.entity.email).toBe(email);
     expect(body.allowed_operations).toEqual(expect.arrayContaining(["read"]));
     expect(typeof body.clearance_ceiling).toBe("number");

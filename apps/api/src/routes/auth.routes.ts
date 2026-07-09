@@ -326,6 +326,10 @@ export async function registerAuthRoutes(
     return reply.code(200).send({
       ok: true,
       token: cookieToken,
+      // session_id lets CT rebind the SAME per-session scope on restore that it
+      // bound at login (e.g. the personal chat transcript), so a reload keeps
+      // continuity instead of appearing to start a fresh session.
+      session_id: result.session_id,
       entity: { email: entity.email },
       allowed_operations: result.allowed_operations,
       clearance_ceiling: result.clearance_ceiling,
