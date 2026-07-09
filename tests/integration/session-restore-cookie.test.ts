@@ -256,6 +256,77 @@ describe("[SECTION-16] restore is blocked after logout / TAR change / password c
   });
 });
 
+describe("[SECTION-16 · B1] auto-lockout (5 failed attempts) invalidates live sessions", () => {
+  async function failedLogin(email: string, n: number) {
+    return app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email, password: `definitely-wrong-${n}` },
+      // distinct IP per attempt so the gateway per-IP limit never blocks an
+      // attempt before it reaches the handler (each must increment failed_auth).
+      remoteAddress: `10.20.0.${n + 1}`,
+    });
+  }
+
+  it("suspends the entity AND kills an existing Bearer + restore cookie immediately", async () => {
+    const { entity, email, password } = await makeLoginableEntity();
+    // Hold a valid session: Bearer token + restore cookie.
+    const res = await login(email, password, ["read"]);
+    const token = (res.json() as { token: string }).token;
+    const cookie = restoreCookie(res)!;
+    // Sanity: the Bearer works on a protected route before lockout.
+    expect(
+      (
+        await app.inject({
+          method: "GET",
+          url: "/api/v1/auth/validate",
+          headers: { authorization: `Bearer ${token}` },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    // Trigger the 5-failed-attempt auto-lockout for the same user.
+    let lastFailed;
+    for (let i = 0; i < 5; i++) lastFailed = await failedLogin(email, i);
+
+    // (3) entity becomes SUSPENDED.
+    const row = await prisma.entity.findUnique({
+      where: { entity_id: entity.entity_id },
+      select: { status: true },
+    });
+    expect(row?.status).toBe("SUSPENDED");
+
+    // (4) the previously valid Bearer now FAILS on a protected route (the new
+    // invalidation — validateSession sees the session INVALIDATED).
+    const validate = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/validate",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(validate.statusCode).toBe(401);
+
+    // (5) restore with the old cookie fails.
+    const me = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      cookies: { [COOKIE]: cookie.value },
+    });
+    expect(me.statusCode).toBe(401);
+
+    // (6) login with the CORRECT password now returns 403 SUSPENDED.
+    const relogin = await login(email, password);
+    expect(relogin.statusCode).toBe(403);
+    expect((relogin.json() as { code: string }).code).toBe("SUSPENDED");
+
+    // (7) the lockout-triggering 5th failed attempt stays enumeration-safe: a
+    // generic invalid-credentials body — it must NOT reveal the lockout, nor leak
+    // any token/password.
+    const body = lastFailed!.json() as Record<string, unknown>;
+    expect(lastFailed!.statusCode).toBe(401);
+    expect(JSON.stringify(body)).not.toMatch(/suspend|lockout|token|password/i);
+  });
+});
+
 describe("[SECTION-16 · SECURITY INVARIANT] the cookie NEVER authenticates a Bearer route", () => {
   it("a Bearer-protected mutation route rejects a request carrying ONLY the cookie", async () => {
     const { email, password } = await makeLoginableEntity();

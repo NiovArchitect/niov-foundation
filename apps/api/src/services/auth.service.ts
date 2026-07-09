@@ -18,6 +18,7 @@ import {
   getSessionById,
   getTARByEntityId,
   incrementFailedAuth,
+  invalidateEntitySessions,
   markSessionIdleExpired,
   resetFailedAuth,
   terminateSession,
@@ -248,6 +249,16 @@ export class AuthService {
       const incremented = await incrementFailedAuth(entity.entity_id);
       if (incremented.failed_auth_attempts >= FAILED_AUTH_LOCKOUT) {
         await updateEntityStatus(entity.entity_id, "SUSPENDED");
+        // [SECTION-16 · B1 completion] Auto-lockout is a suspension too — kill any
+        // live sessions (e.g. an already-authenticated Bearer on another device)
+        // so EVERY suspension path invalidates sessions immediately, not just
+        // admin suspend / AI-teammate deactivate. Restore is already blocked by
+        // the /auth/me ACTIVE check; this closes the residual hot-path Bearer gap.
+        // actor is null (system action, no human actor) — same as the audit below.
+        await invalidateEntitySessions(
+          entity.entity_id,
+          "auto_lockout_failed_attempts",
+        );
         await writeAuditEvent({
           event_type: "ENTITY_SUSPENDED",
           outcome: "SUCCESS",
