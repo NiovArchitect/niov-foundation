@@ -64,6 +64,7 @@ import { registerDeveloperRoutes } from "./routes/developer.routes.js";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import {
   seedMonetizationConfig,
@@ -746,6 +747,16 @@ export async function buildApp(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
   });
+
+  // [SECTION-16] Cookie parsing for the session-restore transport. Registered
+  // UNSIGNED on purpose: the ONLY cookie we read (otzar_session) carries the
+  // already-HS256-signed session JWT, which validateSession verifies -- so no
+  // COOKIE_SECRET / cookie signing is needed. This plugin only populates
+  // request.cookies so GET /auth/me can read the restore cookie. The cookie
+  // authenticates /auth/me ONLY; requireAuth stays Bearer-only (mutations must
+  // never be cookie-authable -- app.otzar.ai and api.otzar.ai are same-site, so
+  // SameSite=Lax provides no CSRF cover on api.otzar.ai).
+  await app.register(cookie);
 
   // Gateway hook -- IP whitelist + rate limits run before any
   // route handler.

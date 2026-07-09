@@ -15,6 +15,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createTARInTx,
   createWalletInTx,
+  invalidateEntitySessions,
   isKnownAuditEventType,
   MAX_AUDIT_EVENTS_PAGE_SIZE,
   prisma,
@@ -1248,6 +1249,12 @@ export async function registerOrgRoutes(
           where: { entity_id: request.params.id },
           data: entityData,
         });
+        // [SECTION-16 · B1] Suspending an entity kills its live sessions so it
+        // cannot restore (or keep acting) on an existing token — the per-request
+        // revocation chain then rejects every future use, including GET /auth/me.
+        if (body.status === "SUSPENDED") {
+          await invalidateEntitySessions(request.params.id, "entity_suspended", callerId);
+        }
       }
       if (Object.keys(profileData).length > 0) {
         await prisma.entityProfile.upsert({
@@ -3206,6 +3213,11 @@ export async function registerOrgRoutes(
         }
         const priorStatus = twin.status;
         await updateEntityStatus(twin.entity_id, wantStatus, callerId);
+        // [SECTION-16 · B1] Deactivating an AI Teammate also kills its live
+        // sessions so a delegated token cannot keep acting or restore.
+        if (wantStatus === "SUSPENDED") {
+          await invalidateEntitySessions(twin.entity_id, "entity_suspended", callerId);
+        }
         const audit = await writeAuditEvent({
           event_type:
             direction === "deactivate" ? "ENTITY_SUSPENDED" : "ENTITY_REACTIVATED",
