@@ -3,7 +3,7 @@
 //          tests) can pull the public surface from one path.
 // CONNECTS TO: every other file under apps/api/src.
 
-export { buildApp } from "./server.js";
+export { buildApp, startApiServer } from "./server.js";
 export type { BuildAppConfig } from "./server.js";
 
 // 12C.0 Item 8: shared structured logger for service-class +
