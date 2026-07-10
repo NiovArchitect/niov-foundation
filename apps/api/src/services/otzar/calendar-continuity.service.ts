@@ -529,6 +529,228 @@ export interface CalendarContinuityResult {
   conversation_id?: string;
 }
 
+// Resolve a confirm/reject against ONE specific pending proposal: reject →
+// CANCELLED; confirm → atomic-claim → gated createCalendarEvent → honest state.
+// Shared by the single-pending "yes"/"no" path and the ordinal-selection path.
+async function resolvePendingConfirmation(args: {
+  kind: "confirm" | "reject";
+  target: PendingProposalRow;
+  client_conversation_id: string | undefined;
+  actor_entity_id: string;
+  org_entity_id: string;
+}): Promise<CalendarContinuityResult | null> {
+  const { target } = args;
+  // Restore the proposal's own bound thread so the client re-anchors (esp. the
+  // ambient path, where the request carried no conversation_id).
+  const restoredThread = target.conversation_id ?? args.client_conversation_id;
+  const threadEcho = restoredThread != null ? { conversation_id: restoredThread } : {};
+  const proposal = (target.details.proposal ?? {}) as {
+    title?: string; start_iso?: string; end_iso?: string; timezone?: string; resolved_label?: string;
+  };
+
+  if (args.kind === "reject") {
+    await finalizeProposal(target.ledger_entry_id, "CANCELLED", { cancelled_at: new Date().toISOString() });
+    return {
+      handled: true,
+      state: "CANCELLED",
+      response: `Okay — I won't add "${proposal.title ?? target.title}". Cancelled.`,
+      ledger_entry_id: target.ledger_entry_id,
+      ...threadEcho,
+    };
+  }
+
+  // CONFIRM → INVARIANT 2: atomic claim before the provider call.
+  const claimed = await claimProposalForExecution(target.ledger_entry_id);
+  if (!claimed) {
+    // A concurrent confirm/retry already claimed it — return the existing result.
+    const fresh = await prisma.workLedgerEntry.findUnique({
+      where: { ledger_entry_id: target.ledger_entry_id },
+      select: { status: true, details: true },
+    });
+    const d = (fresh?.details ?? {}) as Record<string, unknown>;
+    const eid = typeof d.event_id === "string" ? d.event_id : undefined;
+    return {
+      handled: true,
+      state: fresh?.status === "EXECUTED" ? "CREATED" : "AWAITING_CONFIRMATION",
+      response:
+        fresh?.status === "EXECUTED"
+          ? `That's already done — "${proposal.title ?? target.title}" is on your calendar.`
+          : `I'm already working on "${proposal.title ?? target.title}".`,
+      ledger_entry_id: target.ledger_entry_id,
+      ...(eid !== undefined ? { event_id: eid } : {}),
+      ...threadEcho,
+    };
+  }
+
+  // Revalidate time if the proposal is materially stale, then execute.
+  const startIso = typeof proposal.start_iso === "string" ? proposal.start_iso : undefined;
+  const endIso = typeof proposal.end_iso === "string" ? proposal.end_iso : undefined;
+  if (startIso === undefined || endIso === undefined) {
+    await finalizeProposal(target.ledger_entry_id, "NEEDS_CALLER_CONFIRMATION", {});
+    return null;
+  }
+
+  const input: CalendarEventProposalInput = {
+    title: proposal.title ?? target.title,
+    participants: [{ label: "You", resolved: true, entity_id: args.actor_entity_id }],
+    selected_time: { start: startIso, end: endIso },
+    participant_confirmations_satisfied: true,
+    requires_approval: false,
+    caller_confirmed: true,
+    policy_blocked: false,
+    owner_entity_id: args.actor_entity_id,
+  };
+  const result = await createCalendarEvent({
+    actor_entity_id: args.actor_entity_id,
+    org_entity_id: args.org_entity_id,
+    input,
+  });
+
+  if (result.ok === true) {
+    await finalizeProposal(target.ledger_entry_id, "EXECUTED", {
+      event_id: result.event_id,
+      calendar_id: result.calendar_id,
+      executed_at: new Date().toISOString(),
+    });
+    return {
+      handled: true,
+      state: "CREATED",
+      response: `Done — "${proposal.title ?? target.title}" was added to your calendar for ${proposal.resolved_label ?? "the proposed time"}.`,
+      ledger_entry_id: target.ledger_entry_id,
+      event_id: result.event_id,
+      ...threadEcho,
+    };
+  }
+
+  // Honest provider state — the approved intent is preserved (back to pending),
+  // never a false "added".
+  await finalizeProposal(target.ledger_entry_id, "NEEDS_CALLER_CONFIRMATION", {
+    last_provider_code: result.code,
+    last_attempt_at: new Date().toISOString(),
+  });
+  return {
+    handled: true,
+    state: "PROVIDER_BLOCKED",
+    response: providerBlockedMessage(result.code, proposal.title ?? target.title),
+    ledger_entry_id: target.ledger_entry_id,
+    provider_code: result.code,
+    ...threadEcho,
+  };
+}
+
+// ── P4: ordinal selection + time revision (supersession) ────────────────────
+
+// "the first one" / "first" / "number 2" / "the second" / "the last one".
+// Returns a 0-based index into the ASC-ordered pending list, or null.
+const ORDINAL_WORDS: Record<string, number> = {
+  first: 0, second: 1, third: 2, fourth: 3, fifth: 4,
+  one: 0, two: 1, three: 2, four: 3, five: 4,
+};
+export function parseOrdinalSelection(message: string, count: number): number | null {
+  const m = message.toLowerCase().trim();
+  if (/\b(the )?last one\b/.test(m) || /\blast\b/.test(m)) return count - 1;
+  const word = m.match(/\b(first|second|third|fourth|fifth|one|two|three|four|five)\b/);
+  if (word && word[1] !== undefined && ORDINAL_WORDS[word[1]] !== undefined) {
+    const idx = ORDINAL_WORDS[word[1]]!;
+    return idx < count ? idx : null;
+  }
+  const num = m.match(/\b(?:number|option|#)\s*(\d+)\b/) ?? m.match(/^\s*\(?(\d+)\)?\s*$/);
+  if (num && num[1] !== undefined) {
+    const idx = Number(num[1]) - 1;
+    return idx >= 0 && idx < count ? idx : null;
+  }
+  return null;
+}
+
+// Whether an ordinal selection is a cancel ("cancel the first one", "drop #2").
+function ordinalIsReject(message: string): boolean {
+  return /\b(cancel|drop|remove|delete|not|no)\b/i.test(message);
+}
+
+// Deterministic oldest→newest ordering shared by the disambiguation prompt and
+// parseOrdinalSelection, so "(1)"/"the first one" always mean the same proposal.
+function orderForSelection(rows: PendingProposalRow[]): PendingProposalRow[] {
+  return [...rows].sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
+}
+
+// A bare time-change against a pending proposal: "make it 2pm", "change it to 3",
+// "actually 4pm", "2pm instead", "no, 2 pm". Returns the new time, or null.
+export function parseTimeRevision(message: string): { hour24: number; minute: number } | null {
+  const m = message.toLowerCase();
+  // Must look like a revision, not a fresh calendar request (which CALENDAR_INTENT
+  // catches first) — a change verb, "instead", or a leading "no/actually" + a time.
+  const revisionCue =
+    /\b(make it|change it to|move it to|instead|actually|rather|let'?s do|how about)\b/.test(m) ||
+    /^\s*(no,?\s+)?\d/.test(m);
+  if (!revisionCue) return null;
+  const t = parseTimePhrase(message);
+  if (t === null) return null;
+  return { hour24: t.hour24, minute: t.minute };
+}
+
+// Supersede a single pending proposal's time IN PLACE (same row → thread binding,
+// idempotency claim, and ledger identity all preserved). A following "yes"
+// confirms the revised time. Never revises into the past (→ truthful clarify).
+async function supersedePendingProposal(args: {
+  target: PendingProposalRow;
+  revision: { hour24: number; minute: number };
+  temporal: TemporalContext;
+  client_conversation_id: string | undefined;
+}): Promise<CalendarContinuityResult> {
+  const { target } = args;
+  const prior = (target.details.proposal ?? {}) as {
+    title?: string; start_iso?: string; timezone?: string;
+  };
+  const tz = prior.timezone ?? args.temporal.timezone;
+  const base = typeof prior.start_iso === "string" ? new Date(prior.start_iso) : new Date(args.temporal.now_ms);
+  const { year, month, day } = localPartsInTz(tz, base);
+  const newStartIso = localWallClockToUtcIso(tz, year, month, day, args.revision.hour24, args.revision.minute);
+  const restoredThread = target.conversation_id ?? args.client_conversation_id;
+  const threadEcho = restoredThread != null ? { conversation_id: restoredThread } : {};
+
+  // Correction #2 discipline — a revised time that is already in the past asks,
+  // never silently rolls forward.
+  if (new Date(newStartIso).getTime() < args.temporal.now_ms - 5 * 60 * 1000) {
+    const timeLabel = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    }).format(new Date(newStartIso));
+    return {
+      handled: true,
+      state: "NEEDS_TIME_CLARIFICATION",
+      response:
+        `${timeLabel} has already passed in your timezone (${tz}). ` +
+        `Did you mean tomorrow at ${timeLabel}, or another time today?`,
+      ...threadEcho,
+    };
+  }
+
+  const newEndIso = new Date(new Date(newStartIso).getTime() + DEFAULT_DURATION_MIN * 60 * 1000).toISOString();
+  const resolvedLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, weekday: "short", month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  }).format(new Date(newStartIso));
+
+  await finalizeProposal(target.ledger_entry_id, "NEEDS_CALLER_CONFIRMATION", {
+    proposal: {
+      ...(target.details.proposal as Record<string, unknown> | undefined ?? {}),
+      start_iso: newStartIso,
+      end_iso: newEndIso,
+      resolved_label: resolvedLabel,
+    },
+    revised_at: new Date().toISOString(),
+  });
+
+  return {
+    handled: true,
+    state: "REVISED",
+    response:
+      `Updated — "${prior.title ?? target.title}" is now ${resolvedLabel}. ` +
+      `Want me to create it? (Say "yes" to confirm, or give another time.)`,
+    ledger_entry_id: target.ledger_entry_id,
+    ...threadEcho,
+  };
+}
+
 /**
  * Runs BEFORE the LLM in conductSession. Deterministically resolves a
  * confirmation against the caller's pending proposal, or persists a new
@@ -557,112 +779,72 @@ export async function handleCalendarContinuity(args: {
     // INVARIANT 1: no side-effect on ambiguity.
     if (pending.length === 0) return null; // nothing to confirm → normal handling
     if (pending.length > 1) {
+      // Order oldest→newest so "(1)"/"the first one" is stable and shared with
+      // parseOrdinalSelection (which indexes the same ASC ordering).
+      const ordered = orderForSelection(pending);
       return {
         handled: true,
         state: "DISAMBIGUATE",
         response:
           `I have ${pending.length} things waiting for your confirmation: ` +
-          pending.map((p, i) => `(${i + 1}) ${p.title}`).join(", ") +
+          ordered.map((p, i) => `(${i + 1}) ${p.title}`).join(", ") +
           `. Which one — for example, "the first one"?`,
       };
     }
-    const target = pending[0]!;
-    // Restore the proposal's own bound thread so the client re-anchors (esp. the
-    // ambient path, where the request carried no conversation_id).
-    const restoredThread = target.conversation_id ?? args.conversation_id;
-    const threadEcho = restoredThread != null ? { conversation_id: restoredThread } : {};
-    const proposal = (target.details.proposal ?? {}) as {
-      title?: string; start_iso?: string; end_iso?: string; timezone?: string; resolved_label?: string;
-    };
-
-    if (kind === "reject") {
-      await finalizeProposal(target.ledger_entry_id, "CANCELLED", { cancelled_at: new Date().toISOString() });
-      return {
-        handled: true,
-        state: "CANCELLED",
-        response: `Okay — I won't add "${proposal.title ?? target.title}". Cancelled.`,
-        ledger_entry_id: target.ledger_entry_id,
-        ...threadEcho,
-      };
-    }
-
-    // CONFIRM → INVARIANT 2: atomic claim before the provider call.
-    const claimed = await claimProposalForExecution(target.ledger_entry_id);
-    if (!claimed) {
-      // A concurrent confirm/retry already claimed it — return the existing result.
-      const fresh = await prisma.workLedgerEntry.findUnique({
-        where: { ledger_entry_id: target.ledger_entry_id },
-        select: { status: true, details: true },
-      });
-      const d = (fresh?.details ?? {}) as Record<string, unknown>;
-      const eid = typeof d.event_id === "string" ? d.event_id : undefined;
-      return {
-        handled: true,
-        state: fresh?.status === "EXECUTED" ? "CREATED" : "AWAITING_CONFIRMATION",
-        response:
-          fresh?.status === "EXECUTED"
-            ? `That's already done — "${proposal.title ?? target.title}" is on your calendar.`
-            : `I'm already working on "${proposal.title ?? target.title}".`,
-        ledger_entry_id: target.ledger_entry_id,
-        ...(eid !== undefined ? { event_id: eid } : {}),
-        ...threadEcho,
-      };
-    }
-
-    // Revalidate time if the proposal is materially stale, then execute.
-    const startIso = typeof proposal.start_iso === "string" ? proposal.start_iso : undefined;
-    const endIso = typeof proposal.end_iso === "string" ? proposal.end_iso : undefined;
-    if (startIso === undefined || endIso === undefined) {
-      await finalizeProposal(target.ledger_entry_id, "NEEDS_CALLER_CONFIRMATION", {});
-      return null;
-    }
-
-    const input: CalendarEventProposalInput = {
-      title: proposal.title ?? target.title,
-      participants: [{ label: "You", resolved: true, entity_id: args.actor_entity_id }],
-      selected_time: { start: startIso, end: endIso },
-      participant_confirmations_satisfied: true,
-      requires_approval: false,
-      caller_confirmed: true,
-      policy_blocked: false,
-      owner_entity_id: args.actor_entity_id,
-    };
-    const result = await createCalendarEvent({
+    return resolvePendingConfirmation({
+      kind,
+      target: pending[0]!,
+      client_conversation_id: args.conversation_id,
       actor_entity_id: args.actor_entity_id,
       org_entity_id: orgId,
-      input,
     });
+  }
 
-    if (result.ok === true) {
-      await finalizeProposal(target.ledger_entry_id, "EXECUTED", {
-        event_id: result.event_id,
-        calendar_id: result.calendar_id,
-        executed_at: new Date().toISOString(),
-      });
-      return {
-        handled: true,
-        state: "CREATED",
-        response: `Done — "${proposal.title ?? target.title}" was added to your calendar for ${proposal.resolved_label ?? "the proposed time"}.`,
-        ledger_entry_id: target.ledger_entry_id,
-        event_id: result.event_id,
-        ...threadEcho,
-      };
+  // P4: ordinal selection ("the first one") / time revision ("make it 2pm").
+  // Only look up pending state when the message plausibly is one of these — keeps
+  // the common non-calendar chat turn on a cheap regex-only path (no DB hit).
+  const ordinalLike =
+    /\b(first|second|third|fourth|fifth|last|number|option)\b/i.test(args.message) ||
+    /^\s*\(?\d\)?\s*$/.test(args.message);
+  const revisionLike =
+    /\b(make it|change it to|move it to|instead|actually|rather|let'?s do|how about)\b/i.test(args.message) ||
+    /^\s*(no,?\s+)?\d/.test(args.message);
+  if (ordinalLike || revisionLike) {
+    const pending = await findActorPendingProposals({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: orgId,
+      now_ms: args.temporal.now_ms,
+      conversation_id: args.conversation_id,
+    });
+    if (pending.length > 0) {
+      const ordered = orderForSelection(pending);
+      // Ordinal selection resolves a specific pending proposal (confirm, or cancel
+      // if the phrase is a rejection like "cancel the first one").
+      if (ordinalLike) {
+        const idx = parseOrdinalSelection(args.message, ordered.length);
+        if (idx !== null) {
+          return resolvePendingConfirmation({
+            kind: ordinalIsReject(args.message) ? "reject" : "confirm",
+            target: ordered[idx]!,
+            client_conversation_id: args.conversation_id,
+            actor_entity_id: args.actor_entity_id,
+            org_entity_id: orgId,
+          });
+        }
+      }
+      // Time revision (supersession) — only unambiguous with EXACTLY one pending.
+      if (pending.length === 1) {
+        const rev = parseTimeRevision(args.message);
+        if (rev !== null) {
+          return supersedePendingProposal({
+            target: pending[0]!,
+            revision: rev,
+            temporal: args.temporal,
+            client_conversation_id: args.conversation_id,
+          });
+        }
+      }
     }
-
-    // Honest provider state — the approved intent is preserved (back to pending),
-    // never a false "added".
-    await finalizeProposal(target.ledger_entry_id, "NEEDS_CALLER_CONFIRMATION", {
-      last_provider_code: result.code,
-      last_attempt_at: new Date().toISOString(),
-    });
-    return {
-      handled: true,
-      state: "PROVIDER_BLOCKED",
-      response: providerBlockedMessage(result.code, proposal.title ?? target.title),
-      ledger_entry_id: target.ledger_entry_id,
-      provider_code: result.code,
-      ...threadEcho,
-    };
   }
 
   // Not a confirmation → is this a NEW calendar-create request?

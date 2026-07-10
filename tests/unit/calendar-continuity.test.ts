@@ -15,6 +15,8 @@ import {
   detectCalendarProposal,
   resolveTemporalContext,
   temporalPromptLine,
+  parseOrdinalSelection,
+  parseTimeRevision,
   type TemporalContext,
 } from "../../apps/api/src/services/otzar/calendar-continuity.service.js";
 import { extractProposedAction } from "../../apps/api/src/services/otzar/proposed-action-extractor.js";
@@ -126,6 +128,36 @@ describe("detectCalendarProposal — server-side date resolution", () => {
     expect(line).toMatch(/2026/);
     expect(line).toMatch(/America\/New_York/);
     expect(line).toMatch(/do not guess or invent a date/i);
+  });
+});
+
+describe("P4 — ordinal selection (disambiguation resolution)", () => {
+  it("maps ordinal words/numbers to a 0-based index in the ASC-ordered list", () => {
+    expect(parseOrdinalSelection("the first one", 3)).toBe(0);
+    expect(parseOrdinalSelection("second", 3)).toBe(1);
+    expect(parseOrdinalSelection("the last one", 3)).toBe(2);
+    expect(parseOrdinalSelection("number 2", 3)).toBe(1);
+    expect(parseOrdinalSelection("option 3", 3)).toBe(2);
+    expect(parseOrdinalSelection("2", 3)).toBe(1);
+  });
+  it("out-of-range and non-ordinal → null (never a wrong pick)", () => {
+    expect(parseOrdinalSelection("the fourth one", 3)).toBeNull();
+    expect(parseOrdinalSelection("yes please", 3)).toBeNull();
+    expect(parseOrdinalSelection("how are you", 3)).toBeNull();
+  });
+});
+
+describe("P4 — time revision (supersession) parsing", () => {
+  it("recognizes a bare time-change against a pending proposal", () => {
+    expect(parseTimeRevision("make it 2pm")).toMatchObject({ hour24: 14, minute: 0 });
+    expect(parseTimeRevision("change it to 3:30pm")).toMatchObject({ hour24: 15, minute: 30 });
+    expect(parseTimeRevision("no, 2pm")).toMatchObject({ hour24: 14, minute: 0 });
+    expect(parseTimeRevision("2pm instead")).toMatchObject({ hour24: 14, minute: 0 });
+  });
+  it("does NOT fire on a fresh calendar request or plain chat (no revision cue)", () => {
+    expect(parseTimeRevision("schedule a meeting at 2pm")).toBeNull();
+    expect(parseTimeRevision("what's on my calendar")).toBeNull();
+    expect(parseTimeRevision("make it happen")).toBeNull(); // cue but no time
   });
 });
 
