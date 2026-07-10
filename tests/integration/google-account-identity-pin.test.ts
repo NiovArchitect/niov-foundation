@@ -198,9 +198,16 @@ async function readCredential(orgId: string): Promise<{
 }
 
 const createdOrgIds: string[] = [];
+// Preserve + restore the Google OAuth env so this file NEVER leaks a "configured"
+// Google connection into sibling test files (e.g. calendar-context expects a
+// MOCK_CALENDAR when no real creds are set).
+let origClientId: string | undefined;
+let origClientSecret: string | undefined;
 
 beforeAll(async () => {
   await ensureAuditTriggers();
+  origClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  origClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   process.env.GOOGLE_OAUTH_CLIENT_ID = CLIENT_ID;
   process.env.GOOGLE_OAUTH_CLIENT_SECRET = "test-google-secret";
 });
@@ -224,6 +231,11 @@ afterAll(async () => {
     });
   }
   await cleanupTestData();
+  // Restore the env exactly as we found it (no cross-file leakage).
+  if (origClientId === undefined) delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+  else process.env.GOOGLE_OAUTH_CLIENT_ID = origClientId;
+  if (origClientSecret === undefined) delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  else process.env.GOOGLE_OAUTH_CLIENT_SECRET = origClientSecret;
 });
 
 describe("Google account-identity pin", () => {
