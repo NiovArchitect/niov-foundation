@@ -114,14 +114,19 @@ untouched); CRON/MAX at defaults; re-read via same-SHA redeploy; verified
 recheck-run 200 + quiet + zero residue.
 
 **Remaining slice — Slice 3 — real Google Drive/Calendar webhooks = 🛑 STOP-blocked**
-(hard stop conditions: Cloud-console domain-verified callback + Pub/Sub +
-an additive `WatchChannel` schema migration + channel renewal; OAuth scopes already
-granted). The processing model is already proven (Slices 1–2); what remains is
-external-provider + schema work only a human/founder can do. Exact 10-point unblock
-checklist: CT `docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md` § "Slice 3
-preflight". Human action to unblock: (a) verify `api.otzar.ai` as a Google
-Cloud/Search-Console domain; (b) create the Drive Pub/Sub topic + push subscription
-(and/or decide Calendar HTTPS callback); (c) approve the `WatchChannel` migration.
+(hard stop conditions: a domain-verified HTTPS callback + an additive `WatchChannel`
+schema migration + channel renewal; OAuth scopes already granted). ⚠️ **Corrected
+vs Google docs: NO Pub/Sub** — Drive `changes.watch`/`files.watch` AND Calendar
+`events.watch` both use `type:"web_hook"` channels that POST directly to the
+verified HTTPS callback (Cloud Pub/Sub is a Gmail-API requirement, not
+Drive/Calendar). The processing model is already proven (Slices 1–2); what remains
+is external-provider + schema work only a human/founder can do. Exact (corrected)
+10-point unblock checklist: CT `docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md`
+§ "Slice 3 preflight". Human action to unblock: (a) verify `api.otzar.ai` as a
+Google Search-Console/Cloud-Console domain (valid SSL); (b) approve the
+`WatchChannel` migration (with a Drive page-token + Calendar syncToken cursor); then
+engineering registers the `web_hook` watch channels + builds the bearer-less
+callback route. **No Pub/Sub topic/subscription to create.**
 The GO-gate decisions the earlier slices deferred are now resolved: atomic
 Redis-SETNX dedupe/replay is LIVE (Slice 2); the channel→org resolver is designed as
 the `WatchChannel` row (Slice 3 schema); a durable `InboundEvent` forensic table was
