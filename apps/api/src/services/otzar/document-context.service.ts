@@ -306,10 +306,22 @@ export type FetchDocText = (args: {
 
 export interface RevalidateOptions {
   fetchDocText?: FetchDocText;
+  // [INBOUND-RECHECK] Audit-noise control for the SCHEDULED per-org recheck.
+  // Default "always" preserves the manual per-doc + admin-sweep behavior (every
+  // probe records its outcome, incl. SOURCE_VERIFIED). "on_transition" records an
+  // audit ONLY when the integrity state actually CHANGES (prior !== new), so a
+  // daily cron over unchanged sources emits no SOURCE_VERIFIED spam and a
+  // persistently-CHANGED source is not re-audited every run — only meaningful
+  // state changes are recorded. The row's last-checked metadata still updates.
+  auditMode?: "always" | "on_transition";
 }
 
 export type RevalidateResult =
-  | { ok: true; ledger_entry_id: string; state: SourceIntegrityState; changed: boolean }
+  // `transitioned` is true when the integrity state changed vs the prior stored
+  // state (AVAILABLE→CHANGED, CHANGED→DELETED escalation, or CHANGED→AVAILABLE
+  // recovery) — the scheduled sweep gates notifications on this so a persistently
+  // demoted source is not re-notified every run.
+  | { ok: true; ledger_entry_id: string; state: SourceIntegrityState; changed: boolean; transitioned: boolean }
   | {
       ok: false;
       code:
@@ -453,6 +465,16 @@ export async function revalidateImportedDocForCaller(
     };
   }
 
+  // [INBOUND-RECHECK] The integrity state stored BEFORE this probe (defaults to
+  // AVAILABLE for rows imported before source_integrity existed). A transition is
+  // any change vs this prior — used to gate audit + notification noise on the
+  // scheduled sweep, while the manual routes (auditMode "always") are unchanged.
+  const priorState: SourceIntegrityState =
+    priorIntegrity !== null && typeof priorIntegrity.state === "string"
+      ? (priorIntegrity.state as SourceIntegrityState)
+      : "AVAILABLE";
+  const transitioned = next.state !== priorState;
+
   // Persist by MERGING into details — never clobber document or seeded_context.
   await prisma.workLedgerEntry.update({
     where: { ledger_entry_id: row.ledger_entry_id },
@@ -462,17 +484,24 @@ export async function revalidateImportedDocForCaller(
       details: { ...details, source_integrity: next } as unknown as Prisma.InputJsonObject,
     },
   });
-  await writeAuditEvent({
-    event_type: auditType,
-    outcome: auditType === "SOURCE_VERIFIED" ? "SUCCESS" : "DENIED",
-    actor_entity_id: callerEntityId,
-    target_entity_id: orgEntityId,
-    details: { provider: "google", file_id: fileId, state: next.state },
-  });
+  // Audit every meaningful outcome. On a scheduled recheck (auditMode
+  // "on_transition") record ONLY when the state actually changed — so unchanged
+  // rechecks emit no SOURCE_VERIFIED spam and a persistently-demoted source is
+  // not re-audited every run. The manual routes default to "always".
+  if (opts?.auditMode !== "on_transition" || transitioned) {
+    await writeAuditEvent({
+      event_type: auditType,
+      outcome: auditType === "SOURCE_VERIFIED" ? "SUCCESS" : "DENIED",
+      actor_entity_id: callerEntityId,
+      target_entity_id: orgEntityId,
+      details: { provider: "google", file_id: fileId, state: next.state },
+    });
+  }
   return {
     ok: true,
     ledger_entry_id: row.ledger_entry_id,
     state: next.state,
     changed: next.state !== "AVAILABLE",
+    transitioned,
   };
 }

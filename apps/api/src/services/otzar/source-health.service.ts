@@ -91,6 +91,13 @@ const NOTIFY_LINE: Record<
 export async function sourceHealthSweepForCaller(
   callerEntityId: string,
   opts?: RevalidateOptions,
+  // [INBOUND-RECHECK] notifyMode "always" (default) preserves the admin-triggered
+  // route: every demoted source emits one calm notification. "on_transition" (used
+  // by the scheduled per-org recheck) notifies ONLY when the state actually changed
+  // vs its prior stored state — so a source that stays CHANGED/DELETED/REVOKED
+  // across daily runs is not re-notified every day. Same-state repeats stay quiet;
+  // an escalation (CHANGED→DELETED) is a transition and DOES notify.
+  sweepOpts?: { notifyMode?: "always" | "on_transition" },
 ): Promise<SourceHealthSweepResult> {
   let orgEntityId: string;
   try {
@@ -175,6 +182,15 @@ export async function sourceHealthSweepForCaller(
         break;
     }
     if (line === null) continue;
+
+    // [INBOUND-RECHECK] Noise gate: on the scheduled recheck, notify ONLY on a
+    // real state transition (result.transitioned) so a persistently-demoted
+    // source isn't re-notified every run. The manual sweep ("always") notifies
+    // on every demoted result as before.
+    const notifyMode = sweepOpts?.notifyMode ?? "always";
+    if (notifyMode === "on_transition" && result.transitioned !== true) {
+      continue;
+    }
 
     // Best-effort: a notification failure must never abort the sweep or roll
     // back the demotion the probe already committed.
