@@ -259,24 +259,32 @@ export function parseTimePhrase(text: string): ParsedTime | null {
 const CALENDAR_INTENT =
   /\b(calendar|schedule|remind me|set (?:up )?(?:a )?(?:meeting|event|reminder)|book (?:a )?(?:meeting|event)|put .* on my|add .* to my (?:calendar|schedule))\b/i;
 
-/**
- * Extract a calendar-create proposal from a user message, resolving the concrete
- * date/time SERVER-SIDE from the temporal context (never the model). Returns null
- * when the message is not a calendar-create request or has no parseable time.
- */
-export function detectCalendarProposal(
-  message: string,
-  temporal: TemporalContext,
-): {
+export interface CalendarProposalDraft {
   title: string;
   start_iso: string;
   end_iso: string;
   timezone: string;
   resolved_label: string;
   original_phrase: string;
-  inferred_tomorrow: boolean;
   meridiem_defaulted: boolean;
-} | null {
+}
+
+export type CalendarDetection =
+  | { kind: "proposal"; proposal: CalendarProposalDraft }
+  // The requested time has already passed today (and the user did not say
+  // "tomorrow"). We do NOT silently schedule tomorrow — "today at 1 PM" may be
+  // impossible — so we ask a truthful clarifying question and persist nothing.
+  | { kind: "clarify_past_time"; time_label: string; timezone: string }
+  | null;
+
+/**
+ * Detect a calendar-create request and resolve the concrete date/time SERVER-SIDE
+ * (never the model). Returns a proposal, a clarification (past time), or null.
+ */
+export function detectCalendarProposal(
+  message: string,
+  temporal: TemporalContext,
+): CalendarDetection {
   if (!CALENDAR_INTENT.test(message)) return null;
   const time = parseTimePhrase(message);
   if (time === null) return null;
@@ -286,47 +294,40 @@ export function detectCalendarProposal(
 
   // Resolve against TODAY first.
   let startIso = localWallClockToUtcIso(tz, year, month, day, time.hour24, time.minute);
-  let inferredTomorrow = false;
-  const toTomorrow = (): void => {
+  const todayPassed = new Date(startIso).getTime() <= temporal.now_ms;
+
+  if (time.day_hint === "tomorrow") {
     const t = new Date(temporal.now_ms + 24 * 60 * 60 * 1000);
     const tp = localPartsInTz(tz, t);
     startIso = localWallClockToUtcIso(tz, tp.year, tp.month, tp.day, time.hour24, time.minute);
-  };
-  // Documented rules: explicit "tomorrow" → tomorrow (not an inference). A
-  // no-hint time already past today → propose tomorrow AND flag it inferred so
-  // the reply invites a "no, today" correction. Explicit "today" → stay today.
-  if (time.day_hint === "tomorrow") {
-    toTomorrow();
-  } else if (time.day_hint === null && new Date(startIso).getTime() <= temporal.now_ms) {
-    toTomorrow();
-    inferredTomorrow = true;
+  } else if (todayPassed) {
+    // Correction #2: never silently schedule tomorrow. Ask, and persist nothing.
+    const timeLabel = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    }).format(new Date(startIso));
+    return { kind: "clarify_past_time", time_label: timeLabel, timezone: tz };
   }
   const endIso = new Date(new Date(startIso).getTime() + DEFAULT_DURATION_MIN * 60 * 1000).toISOString();
 
-  // Temporal sanity guard: never propose a date materially in the past.
+  // Temporal sanity guard: never propose a materially-past instant.
   if (new Date(startIso).getTime() < temporal.now_ms - 5 * 60 * 1000) return null;
 
-  const title = extractEventTitle(message);
   const resolvedLabel = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
+    timeZone: tz, weekday: "short", month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
   }).format(new Date(startIso));
 
   return {
-    title,
-    start_iso: startIso,
-    end_iso: endIso,
-    timezone: tz,
-    resolved_label: resolvedLabel,
-    original_phrase: message.trim().slice(0, 300),
-    inferred_tomorrow: inferredTomorrow,
-    meridiem_defaulted: !time.meridiem_explicit,
+    kind: "proposal",
+    proposal: {
+      title: extractEventTitle(message),
+      start_iso: startIso,
+      end_iso: endIso,
+      timezone: tz,
+      resolved_label: resolvedLabel,
+      original_phrase: message.trim().slice(0, 300),
+      meridiem_defaulted: !time.meridiem_explicit,
+    },
   };
 }
 
@@ -423,7 +424,7 @@ export async function persistPendingCalendarProposal(args: {
   actor_entity_id: string;
   org_entity_id: string;
   conversation_id?: string | undefined;
-  proposal: NonNullable<ReturnType<typeof detectCalendarProposal>>;
+  proposal: CalendarProposalDraft;
   now_ms: number;
 }): Promise<{ ledger_entry_id: string } | null> {
   const idempotencyKey = `otzarcal:${args.actor_entity_id}:${args.proposal.title}:${args.proposal.start_iso}`;
@@ -498,6 +499,8 @@ export interface CalendarContinuityResult {
     | "PROVIDER_BLOCKED"
     | "CANCELLED"
     | "DISAMBIGUATE"
+    | "NEEDS_TIME_CLARIFICATION"
+    | "REVISED"
     | "EXPIRED_OFFER_RECREATE";
   response: string;
   ledger_entry_id?: string;
@@ -632,9 +635,23 @@ export async function handleCalendarContinuity(args: {
   }
 
   // Not a confirmation → is this a NEW calendar-create request?
-  const proposal = detectCalendarProposal(args.message, args.temporal);
-  if (proposal === null) return null; // normal LLM path
+  const detection = detectCalendarProposal(args.message, args.temporal);
+  if (detection === null) return null; // normal LLM path
 
+  // Correction #2: a past-today time is a clarification, NOT a confirmable
+  // proposal — persist nothing, ask truthfully. The user's "tomorrow at 1" (or
+  // "another time today") then forms the real proposal.
+  if (detection.kind === "clarify_past_time") {
+    return {
+      handled: true,
+      state: "NEEDS_TIME_CLARIFICATION",
+      response:
+        `${detection.time_label} has already passed in your timezone (${detection.timezone}). ` +
+        `Did you mean tomorrow at ${detection.time_label}, or another time today?`,
+    };
+  }
+
+  const proposal = detection.proposal;
   const persisted = await persistPendingCalendarProposal({
     actor_entity_id: args.actor_entity_id,
     org_entity_id: orgId,
@@ -652,12 +669,11 @@ export async function handleCalendarContinuity(args: {
     details: { title: proposal.title, timezone_source: args.temporal.timezone_source },
   }).catch(() => undefined);
 
-  const dayNote = proposal.inferred_tomorrow ? " (tomorrow — say \"no, today\" if you meant today)" : "";
   return {
     handled: true,
     state: "AWAITING_CONFIRMATION",
     response:
-      `I'll add "${proposal.title}" to your calendar for ${proposal.resolved_label}${dayNote}. ` +
+      `I'll add "${proposal.title}" to your calendar for ${proposal.resolved_label}. ` +
       `Want me to create it? (Say "yes" to confirm, or tell me a different time.)`,
     ledger_entry_id: persisted.ledger_entry_id,
   };

@@ -88,14 +88,16 @@ describe("Otzar calendar continuity (P0)", () => {
   it("P1 temporal: resolves the date SERVER-SIDE from the real clock — current year, 1 PM local, never Jan 2025", async () => {
     const { userId } = await makeOrgAndUser();
     const t = await temporalFor(userId);
-    const p = detectCalendarProposal(OLIVIA, t);
-    expect(p).not.toBeNull();
-    const start = new Date(p!.start_iso);
+    const d = detectCalendarProposal(OLIVIA, t);
+    expect(d?.kind).toBe("proposal");
+    if (d?.kind !== "proposal") throw new Error("expected proposal");
+    const p = d.proposal;
+    const start = new Date(p.start_iso);
     expect(start.getUTCFullYear()).toBe(2026); // NOT 2025
     // 1 PM EDT == 17:00 UTC on 2026-07-10
-    expect(p!.start_iso).toBe("2026-07-10T17:00:00.000Z");
-    expect(p!.timezone).toBe(TZ);
-    expect(p!.title).toMatch(/Olivia/i);
+    expect(p.start_iso).toBe("2026-07-10T17:00:00.000Z");
+    expect(p.timezone).toBe(TZ);
+    expect(p.title).toMatch(/Olivia/i);
   });
 
   it("exact flow: propose persists a pending proposal (honest AWAITING, not 'added'); a bare 'yes' resolves it deterministically", async () => {
@@ -202,5 +204,32 @@ describe("Otzar calendar continuity (P0)", () => {
     const { orgId, userId } = await makeOrgAndUser();
     const r = await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: "yes", temporal: await temporalFor(userId) });
     expect(r).toBeNull(); // nothing pending → resolver must NOT side-effect
+  });
+
+  it("Correction #2 — past-today time asks a truthful clarification and persists NOTHING (never silently tomorrow)", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    // 2026-07-10 20:00Z = 16:00 EDT → "at one o'clock" (1 PM) already passed.
+    const pastNow = Date.UTC(2026, 6, 10, 20, 0, 0);
+    const tPast = await resolveTemporalContext({ actor_entity_id: userId, client_timezone: TZ, now_ms: pastNow });
+
+    const clarify = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, message: OLIVIA, temporal: tPast,
+    });
+    expect(clarify?.state).toBe("NEEDS_TIME_CLARIFICATION");
+    expect(clarify?.response).toMatch(/already passed/i);
+    expect(clarify?.response).toMatch(/tomorrow|another time today/i);
+    expect(clarify?.ledger_entry_id).toBeUndefined();
+    // Crucially: NOTHING confirmable was persisted — a stray "yes" must be inert.
+    const persisted = await prisma.workLedgerEntry.findMany({
+      where: { owner_entity_id: userId, status: "NEEDS_CALLER_CONFIRMATION", ledger_type: "MEETING" },
+    });
+    expect(persisted).toHaveLength(0);
+
+    // The user resolves it explicitly — "tomorrow at 1pm" → a real proposal.
+    const proposed = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, message: "put Olivia's event on my calendar tomorrow at 1pm", temporal: tPast,
+    });
+    expect(proposed?.state).toBe("AWAITING_CONFIRMATION");
+    expect(proposed?.response).toMatch(/Jul 11, 2026/); // tomorrow, now explicit
   });
 });

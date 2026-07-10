@@ -65,46 +65,53 @@ describe("classifyConfirmation", () => {
 describe("detectCalendarProposal — server-side date resolution", () => {
   const OLIVIA = "Put on my calendar that at one o'clock I'll be at Olivia's event.";
 
+  // Narrow the CalendarDetection union to the confirmable proposal draft.
+  const asProposal = (d: ReturnType<typeof detectCalendarProposal>) => {
+    if (d?.kind !== "proposal") throw new Error(`expected proposal, got ${JSON.stringify(d)}`);
+    return d.proposal;
+  };
+
   it("resolves to the CURRENT year at 1 PM local — never January 2025", async () => {
     // 2026-07-10 15:00Z = 11:00 EDT → 1 PM today is future → today 17:00Z.
     const t = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0));
-    const p = detectCalendarProposal(OLIVIA, t);
-    expect(p?.start_iso).toBe("2026-07-10T17:00:00.000Z");
-    expect(new Date(p!.start_iso).getUTCFullYear()).toBe(2026);
+    const p = asProposal(detectCalendarProposal(OLIVIA, t));
+    expect(p.start_iso).toBe("2026-07-10T17:00:00.000Z");
+    expect(new Date(p.start_iso).getUTCFullYear()).toBe(2026);
     // Clean title — leading filler ("be at") stripped.
-    expect(p?.title).toBe("Olivia's Event");
+    expect(p.title).toBe("Olivia's Event");
   });
 
   it("title extraction strips leading fillers/prepositions", async () => {
     const t = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0));
-    expect(detectCalendarProposal("schedule the budget review at 3pm", t)?.title).toBe("Budget Review");
-    expect(detectCalendarProposal("put a dentist appointment on my calendar at 2pm", t)?.title).toBe("Dentist Appointment");
+    expect(asProposal(detectCalendarProposal("schedule the budget review at 3pm", t)).title).toBe("Budget Review");
+    expect(asProposal(detectCalendarProposal("put a dentist appointment on my calendar at 2pm", t)).title).toBe("Dentist Appointment");
   });
 
   it("DST-correct: same wall-clock 1 PM resolves to a DIFFERENT UTC offset in winter (EST) vs summer (EDT)", async () => {
     const summer = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0)); // EDT (-4)
     const winter = await temporalAt(Date.UTC(2026, 0, 10, 15, 0, 0)); // EST (-5)
-    const ps = detectCalendarProposal(OLIVIA, summer);
-    const pw = detectCalendarProposal(OLIVIA, winter);
-    expect(ps?.start_iso).toBe("2026-07-10T17:00:00.000Z"); // 13:00 EDT
-    expect(pw?.start_iso).toBe("2026-01-10T18:00:00.000Z"); // 13:00 EST
+    const ps = asProposal(detectCalendarProposal(OLIVIA, summer));
+    const pw = asProposal(detectCalendarProposal(OLIVIA, winter));
+    expect(ps.start_iso).toBe("2026-07-10T17:00:00.000Z"); // 13:00 EDT
+    expect(pw.start_iso).toBe("2026-01-10T18:00:00.000Z"); // 13:00 EST
   });
 
-  it("past time today → inferred tomorrow (flagged for correction), never in the past", async () => {
-    // 2026-07-10 20:00Z = 16:00 EDT → 1 PM already passed → tomorrow.
+  it("past time today → truthful clarification (Correction #2), persists nothing, never silently tomorrow", async () => {
+    // 2026-07-10 20:00Z = 16:00 EDT → 1 PM already passed → ask, don't guess tomorrow.
     const t = await temporalAt(Date.UTC(2026, 6, 10, 20, 0, 0));
-    const p = detectCalendarProposal(OLIVIA, t);
-    expect(p?.inferred_tomorrow).toBe(true);
-    expect(p?.start_iso).toBe("2026-07-11T17:00:00.000Z");
-    expect(new Date(p!.start_iso).getTime()).toBeGreaterThan(t.now_ms);
+    const d = detectCalendarProposal(OLIVIA, t);
+    expect(d?.kind).toBe("clarify_past_time");
+    if (d?.kind !== "clarify_past_time") throw new Error("expected clarify_past_time");
+    expect(d.time_label).toMatch(/1(:00)?\s*PM/i);
+    expect(d.timezone).toBe("America/New_York");
   });
 
   it("respects the traveling user's live timezone (client tz overrides)", async () => {
     const la = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0), "America/Los_Angeles"); // 08:00 PDT
     expect(la.timezone_source).toBe("client");
-    const p = detectCalendarProposal(OLIVIA, la);
+    const p = asProposal(detectCalendarProposal(OLIVIA, la));
     // 1 PM PDT (-7) today = 20:00Z
-    expect(p?.start_iso).toBe("2026-07-10T20:00:00.000Z");
+    expect(p.start_iso).toBe("2026-07-10T20:00:00.000Z");
   });
 
   it("non-calendar message → null (no false proposal)", async () => {
