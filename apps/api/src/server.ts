@@ -84,6 +84,10 @@ import {
   type ActionSchedulerHandle,
 } from "./services/action/scheduler.js";
 import {
+  startSourceRecheckScheduler,
+  type SourceRecheckSchedulerHandle,
+} from "./services/otzar/source-recheck-scheduler.js";
+import {
   makeActionHandlerRegistry,
   setDefaultActionHandlerRegistry,
 } from "./services/action/handlers.js";
@@ -955,6 +959,15 @@ export async function buildApp(
     app as unknown as { actionScheduler: ActionSchedulerHandle }
   ).actionScheduler = actionScheduler;
 
+  // [INBOUND-RECHECK · Slice 1] -- start the scheduled per-org source recheck.
+  // NO-OP under NODE_ENV=test; fail-closed (no-op unless SOURCE_RECHECK_TARGETS
+  // names explicit org:actor pairs). tests call tickSourceRecheck directly.
+  const sourceRecheckScheduler: SourceRecheckSchedulerHandle =
+    startSourceRecheckScheduler();
+  (
+    app as unknown as { sourceRecheckScheduler: SourceRecheckSchedulerHandle }
+  ).sourceRecheckScheduler = sourceRecheckScheduler;
+
   return app;
 }
 
@@ -976,11 +989,15 @@ async function main(): Promise<void> {
   const actionScheduler = (
     app as unknown as { actionScheduler?: ActionSchedulerHandle }
   ).actionScheduler;
+  const sourceRecheckScheduler = (
+    app as unknown as { sourceRecheckScheduler?: SourceRecheckSchedulerHandle }
+  ).sourceRecheckScheduler;
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, "[server] received shutdown signal");
     try {
       scheduler?.stop();
       actionScheduler?.stop();
+      sourceRecheckScheduler?.stop();
       await app.close();
     } finally {
       process.exit(0);

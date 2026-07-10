@@ -41,6 +41,7 @@ import {
   type DocumentCurrentness,
 } from "../services/otzar/document-context.service.js";
 import { sourceHealthSweepForCaller } from "../services/otzar/source-health.service.js";
+import { tickSourceRecheck } from "../services/otzar/source-recheck.service.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -481,6 +482,34 @@ export async function registerConnectorDataRoutes(
         return reply.code(404).send(result);
       }
       return reply.code(200).send({ ok: true, ...result.summary });
+    },
+  );
+
+  // ── [INBOUND-RECHECK · Slice 1] POST /drive/docs/recheck-run — ops "run now"
+  // trigger for the scheduled per-org source recheck, scoped to the caller's OWN
+  // org (the admin acts as the actor for their own org only — it can NEVER target
+  // another org). Runs the SAME tick the daily cron runs (transition-gated audit
+  // + notification), so unchanged sources are quiet (no SOURCE_VERIFIED audit).
+  // Admin-gated; lets an operator verify config/behavior without waiting a day.
+  app.post(
+    "/api/v1/drive/docs/recheck-run",
+    { preHandler: requireAdminCapability(authService, "can_admin_org") },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      let orgEntityId: string;
+      try {
+        orgEntityId = await getOrgEntityId(callerId);
+      } catch {
+        return reply.code(404).send({
+          ok: false,
+          code: "NO_ORG_FOR_CALLER",
+          message: "No organization found for the caller.",
+        });
+      }
+      const result = await tickSourceRecheck([
+        { orgEntityId, actorEntityId: callerId },
+      ]);
+      return reply.code(200).send({ ok: true, ...result });
     },
   );
 
