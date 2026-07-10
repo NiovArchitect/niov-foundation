@@ -2106,16 +2106,26 @@ model OtzarConversation {
   // closeConversation / degradedClose; read by getConversationDetail.
   summary_capsule_id String?   @db.Uuid
 
-  // [OTZAR-CONTINUITY P5A/P5B] Additive thread fields (all nullable / defaulted,
-  // no backfill — pre-existing rows read as null/default). org scoping enables
-  // exact-org restoration + isolation (P5B); last_active_at drives most-recent
-  // restoration; timezone snapshots the resolved tz at thread start; summary_version
-  // versions the structured summary (P5G); retention_class classifies retention (P5J).
-  org_entity_id      String?   @db.Uuid
-  last_active_at     DateTime?
-  timezone           String?
-  summary_version    Int       @default(0)
-  retention_class    String    @default("STANDARD")
+  // [OTZAR-CONTINUITY P5] Additive thread-lifecycle fields (nullable/defaulted, no
+  // backfill — legacy rows read as null/default; new threads set org + subject
+  // (entity_id) + twin + timezone + retention + last_active). Doctrine: entity_id
+  // is the SUBJECT/owner human user; twin_id the participating Twin; org_entity_id
+  // the tenant. status ∈ ACTIVE|ARCHIVED|CLOSED|DELETED (typed lifecycle service).
+  // See docs/otzar/OTZAR_CONTINUITY_SCHEMA_CONTRACT.md.
+  org_entity_id        String?   @db.Uuid
+  last_active_at       DateTime?
+  timezone             String?
+  summary_version      Int       @default(0)
+  retention_class      String    @default("STANDARD")
+  archived_at          DateTime?
+  deleted_at           DateTime? // delete-eligible tombstone (content redacted; row kept for lineage)
+  retention_expires_at DateTime?
+  last_summary_at      DateTime?
+  // Atomic per-thread turn sequence allocator (contract §5, Option B): allocated via
+  // UPDATE ... SET turn_seq = turn_seq + 1 RETURNING turn_seq, which is collision-free
+  // and requires the thread row to exist (unifying sequence allocation with the
+  // ownership check). Supersedes the v0 advisory-lock approach.
+  turn_seq             Int       @default(0)
 
   @@index([entity_id])
   @@index([org_entity_id, entity_id, last_active_at])
@@ -2132,11 +2142,19 @@ model OtzarConversation {
 model OtzarConversationTurn {
   turn_id            String    @id @default(uuid()) @db.Uuid
   conversation_id    String    @db.Uuid
-  org_entity_id      String?   @db.Uuid
-  actor_entity_id    String    @db.Uuid
+  // Identity doctrine (contract §Identity): tenant + subject (the human user whose
+  // private thread this is) + author (who wrote the turn: subject / twin / system) +
+  // the participating Twin where applicable. NON-NULL org/subject/author on every
+  // new turn (this table has no legacy rows). No ambiguous single actor_entity_id;
+  // no visibility=ORG switch (org promotion is a governed lineage, contract §8).
+  org_entity_id      String    @db.Uuid
+  subject_entity_id  String    @db.Uuid
+  author_entity_id   String    @db.Uuid
+  twin_entity_id     String?   @db.Uuid
   role               String    // USER | ASSISTANT | SYSTEM
-  content            String    // safe natural-language text only
-  sequence           Int       // monotonic per thread (1,2,3,…)
+  content            String    // safe natural-language text only (ADR-0057 §16)
+  content_hash       String    // sha-256(content) — idempotency same/different-content check
+  sequence           Int       // monotonic per thread, allocated from OtzarConversation.turn_seq
   request_id         String?   // client idempotency key (dedupes retries)
   reply_to_turn_id   String?   @db.Uuid
   action_ref         String?   @db.Uuid // WorkLedgerEntry (proposal/action) this turn concerns
@@ -2144,17 +2162,15 @@ model OtzarConversationTurn {
   source_channel     String    @default("CHAT") // CHAT | VOICE | AMBIENT
   model_provider     String?   // safe model/provider label (no keys)
   retention_class    String    @default("STANDARD")
-  visibility         String    @default("PRIVATE") // PRIVATE | ORG
   created_at         DateTime  @default(now())
 
-  // Monotonic ordering + duplicate-sequence protection: two racing writes for the
-  // same (thread, sequence) → one wins, the other is rejected (idempotency).
+  // Correctness backstop for the atomic allocator: no two turns share a sequence.
   @@unique([conversation_id, sequence])
   // Retry idempotency: a repeated (thread, request_id) resolves to the same turn.
   // request_id NULL rows are exempt (Postgres treats NULLs as distinct).
   @@unique([conversation_id, request_id])
   @@index([conversation_id, created_at])
-  @@index([actor_entity_id])
+  @@index([org_entity_id, subject_entity_id])
   @@map("otzar_conversation_turns")
 }
 
