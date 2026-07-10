@@ -543,6 +543,10 @@ export type AuditEventType =
   | "CONNECTOR_OAUTH_FAILED"
   | "CONNECTOR_OAUTH_VERIFIED"
   | "CONNECTOR_OAUTH_REVOKED"
+  // [SLICE3-PREREQ] Google account-identity pin (OIDC `sub` authority).
+  // Leak-safe: details carry NO subject/email/token — only the reason class.
+  | "CONNECTOR_GOOGLE_ACCOUNT_PINNED"
+  | "CONNECTOR_GOOGLE_ACCOUNT_MISMATCH_BLOCKED"
   // Phase 1270 read-only connector data bridges (Zoom cloud
   // recordings list, Google Calendar free/busy). Emitted on every
   // external read egress made with an org's stored OAuth token.
@@ -1018,6 +1022,9 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONNECTOR_OAUTH_FAILED",
   "CONNECTOR_OAUTH_VERIFIED",
   "CONNECTOR_OAUTH_REVOKED",
+  // [SLICE3-PREREQ] Google account-identity pin (OIDC `sub` authority).
+  "CONNECTOR_GOOGLE_ACCOUNT_PINNED",
+  "CONNECTOR_GOOGLE_ACCOUNT_MISMATCH_BLOCKED",
   // Phase 1270 read-only connector data bridges.
   "CONNECTOR_DATA_READ",
   // Phase 1272 gated calendar event creation.

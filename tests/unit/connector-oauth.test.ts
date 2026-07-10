@@ -23,9 +23,13 @@ const { prismaMock, writeAuditEventMock } = vi.hoisted(() => ({
     integrationCredential: {
       upsert: vi.fn(),
       update: vi.fn(),
+      create: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    // [SLICE3-PREREQ] Google now persists via a create-then-compare-and-set
+    // guard using a raw UPDATE; the raw executor lives on the prisma root.
+    $executeRaw: vi.fn(),
   },
   writeAuditEventMock: vi
     .fn()
@@ -90,8 +94,10 @@ beforeEach(() => {
   vi.restoreAllMocks();
   prismaMock.integrationCredential.upsert.mockReset();
   prismaMock.integrationCredential.update.mockReset();
+  prismaMock.integrationCredential.create.mockReset();
   prismaMock.integrationCredential.findUnique.mockReset();
   prismaMock.integrationCredential.findMany.mockReset();
+  prismaMock.$executeRaw.mockReset();
   writeAuditEventMock.mockClear();
   process.env.JWT_SECRET = process.env.JWT_SECRET ?? "unit-test-jwt-secret";
   clearGoogleEnvs();
@@ -272,20 +278,25 @@ describe("Phase 1261 — callback flow", () => {
         }),
       }),
     );
-    prismaMock.integrationCredential.upsert.mockResolvedValue({});
+    // [SLICE3-PREREQ] Google persists via create-then-CAS. This token response
+    // carries NO id_token (openid not granted), so it is a first connection with
+    // no verified identity: the guarded UPDATE matches 0 rows and the row is
+    // created (unpinned) with the sealed envelope.
+    prismaMock.$executeRaw.mockResolvedValue(0);
+    prismaMock.integrationCredential.create.mockResolvedValue({});
     const result = await handleOAuthCallback({
       provider_slug: "google",
       code: "auth-code",
       state: validState(),
     });
     expect(result).toMatchObject({ ok: true, provider: "GOOGLE_WORKSPACE" });
-    const upsert = prismaMock.integrationCredential.upsert.mock.calls[0]![0];
-    const stored = JSON.stringify(upsert);
+    const create = prismaMock.integrationCredential.create.mock.calls[0]![0];
+    const stored = JSON.stringify(create);
     // The raw token must never appear in the persisted payload…
     expect(stored).not.toContain(RAW_TOKEN);
     expect(stored).not.toContain("1//test-refresh-token");
     // …and the envelope must decrypt back to it (3-part GCM shape).
-    const sealed = upsert.create.webhook_secret as string;
+    const sealed = create.data.webhook_secret as string;
     expect(sealed.split(".").length).toBe(3);
     const enc = makeContentEncryption();
     const envelope = JSON.parse(enc.decrypt(sealed)) as {
@@ -293,7 +304,9 @@ describe("Phase 1261 — callback flow", () => {
     };
     expect(envelope.access_token).toBe(RAW_TOKEN);
     // Redacted metadata is honest: CONNECTED_UNVERIFIED, not VERIFIED.
-    expect(upsert.create.config.status).toBe("CONNECTED_UNVERIFIED");
+    expect(create.data.config.status).toBe("CONNECTED_UNVERIFIED");
+    // No identity was pinned (no id_token in this response).
+    expect(create.data.external_account_subject).toBeUndefined();
     // Audit fired with safe details only.
     const audit = writeAuditEventMock.mock.calls.find(
       (c) => c[0].event_type === "CONNECTOR_OAUTH_CONNECTED",

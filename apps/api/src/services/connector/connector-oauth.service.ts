@@ -29,6 +29,18 @@
 import jwt from "jsonwebtoken";
 import { makeContentEncryption } from "@niov/auth";
 import { prisma, writeAuditEvent } from "@niov/database";
+import { verifyGoogleIdToken } from "./google-identity.js";
+
+// [SLICE3-PREREQ] Prisma is re-exported as a type-only symbol, so we detect a
+// unique-constraint violation (P2002) structurally rather than via instanceof.
+function isUniqueConstraintViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  );
+}
 
 // WHAT: Closed vocabulary of OAuth-capable Priority C providers.
 // INPUT: Used as a string-literal union.
@@ -283,6 +295,10 @@ export interface ConnectorOAuthFailure {
     | "NOT_CONNECTED"
     | "VERIFY_FAILED"
     | "REVOKE_FAILED"
+    // [SLICE3-PREREQ] Google account-identity pin outcomes.
+    | "IDENTITY_VERIFY_FAILED"
+    | "GOOGLE_ACCOUNT_MISMATCH"
+    | "GOOGLE_IDENTITY_REQUIRED"
     | "INTERNAL_ERROR";
   message?: string;
 }
@@ -380,6 +396,30 @@ interface SafeOAuthMetadata {
   last_verified_at: string | null;
 }
 
+// [SLICE3-PREREQ] The OIDC identity scopes (openid + email) are appended to the
+// Google authorize request ONLY when GOOGLE_OIDC_IDENTITY=on. Default off keeps
+// the production consent screen unchanged. Capture + verify + pin of any returned
+// id_token is ALWAYS ON regardless of this flag — so enabling identity needs no
+// code change, only the env flip. Adding these non-sensitive scopes changes what
+// users consent to and forces existing users to re-consent, so the flip is a
+// founder/consent decision (documented as the Slice-3 external hard stop).
+const GOOGLE_OIDC_IDENTITY_SCOPES = ["openid", "email"] as const;
+function googleOidcIdentityScopeEnabled(): boolean {
+  return process.env.GOOGLE_OIDC_IDENTITY === "on";
+}
+function effectiveAuthorizeScopes(
+  provider: OAuthProviderKey,
+  cfg: OAuthProviderConfig,
+): string[] {
+  const base = [...cfg.scopes];
+  if (provider === "GOOGLE_WORKSPACE" && googleOidcIdentityScopeEnabled()) {
+    for (const s of GOOGLE_OIDC_IDENTITY_SCOPES) {
+      if (!base.includes(s)) base.push(s);
+    }
+  }
+  return base;
+}
+
 // WHAT: Start the OAuth consent flow for one provider.
 // INPUT: provider slug + org + actor (admin, route-gated).
 // OUTPUT: { ok: true; authorize_url } | ConnectorOAuthFailure.
@@ -413,12 +453,13 @@ export async function startOAuthForOrg(args: {
   url.searchParams.set("redirect_uri", redirectUriFor(provider));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
-  if (cfg.scopes.length > 0) {
+  const authorizeScopes = effectiveAuthorizeScopes(provider, cfg);
+  if (authorizeScopes.length > 0) {
     // Slack uses `scope` for bot scopes; Google/Microsoft use the
     // space-joined `scope` param as well.
     url.searchParams.set(
       "scope",
-      cfg.scopes.join(provider === "SLACK" ? "," : " "),
+      authorizeScopes.join(provider === "SLACK" ? "," : " "),
     );
   }
   for (const [k, v] of Object.entries(cfg.extra_authorize_params)) {
@@ -429,7 +470,7 @@ export async function startOAuthForOrg(args: {
     outcome: "SUCCESS",
     actor_entity_id: args.actor_entity_id,
     target_entity_id: args.org_entity_id,
-    details: { provider, scopes: [...cfg.scopes] },
+    details: { provider, scopes: authorizeScopes },
   });
   return { ok: true, authorize_url: url.toString() };
 }
@@ -468,6 +509,13 @@ async function exchangeCode(
       envelope: TokenEnvelope;
       scopes: string[];
       account_label: string | null;
+      /**
+       * [SLICE3-PREREQ] The raw OIDC id_token, present ONLY when `openid` was in
+       * the granted scopes. Captured here (the sole scope where the raw token
+       * response exists) and consumed immediately by the caller for identity
+       * verification; it is NEVER persisted or logged.
+       */
+      id_token?: string;
     }
   | { ok: false; reason: string }
 > {
@@ -535,7 +583,17 @@ async function exchangeCode(
   ) {
     account_label = (team as Record<string, unknown>).name as string;
   }
-  return { ok: true, envelope, scopes, account_label };
+  const result: {
+    ok: true;
+    envelope: TokenEnvelope;
+    scopes: string[];
+    account_label: string | null;
+    id_token?: string;
+  } = { ok: true, envelope, scopes, account_label };
+  if (typeof json.id_token === "string" && json.id_token.length > 0) {
+    result.id_token = json.id_token;
+  }
+  return result;
 }
 
 // WHAT: Handle the provider redirect: validate state, exchange the
@@ -577,6 +635,38 @@ export async function handleOAuthCallback(args: {
     });
     return { ok: false, code: "EXCHANGE_FAILED", message: exchange.reason };
   }
+  // [SLICE3-PREREQ] Verify the Google account identity when an id_token is
+  // present (openid scope granted). An id_token that FAILS verification fails
+  // the whole connection closed — we never persist an unverified identity.
+  let verified: GoogleVerifiedIdentity | null = null;
+  if (provider === "GOOGLE_WORKSPACE" && exchange.id_token !== undefined) {
+    const idv = await verifyGoogleIdToken(exchange.id_token, {
+      clientId: process.env[cfg.client_id_env] ?? "",
+    });
+    if (!idv.ok) {
+      await writeAuditEvent({
+        event_type: "CONNECTOR_OAUTH_FAILED",
+        outcome: "DENIED",
+        actor_entity_id: state.actor_entity_id,
+        target_entity_id: state.org_entity_id,
+        details: { provider, stage: "identity_verify", reason: idv.reason },
+      });
+      return {
+        ok: false,
+        code: "IDENTITY_VERIFY_FAILED",
+        message: `Google account identity could not be verified (${idv.reason})`,
+      };
+    }
+    verified = {
+      subject: idv.subject,
+      issuer: idv.issuer,
+      ...(idv.email !== undefined ? { email: idv.email } : {}),
+      ...(idv.email_verified !== undefined
+        ? { email_verified: idv.email_verified }
+        : {}),
+    };
+  }
+
   const enc = makeContentEncryption();
   const sealed = enc.encrypt(JSON.stringify(exchange.envelope));
   const metadata: SafeOAuthMetadata = {
@@ -587,31 +677,93 @@ export async function handleOAuthCallback(args: {
     connected_at: new Date().toISOString(),
     last_verified_at: null,
   };
-  try {
-    await prisma.integrationCredential.upsert({
-      where: {
-        org_entity_id_tool: {
+
+  if (provider === "GOOGLE_WORKSPACE") {
+    // Concurrency-safe, swap-guarded persistence (compare-and-set at the DB).
+    const outcome = await persistGoogleCredentialWithIdentity({
+      org_entity_id: state.org_entity_id,
+      sealed,
+      metadata,
+      verified,
+    });
+    if (outcome === "ACCOUNT_MISMATCH" || outcome === "IDENTITY_REQUIRED") {
+      await writeAuditEvent({
+        event_type: "CONNECTOR_GOOGLE_ACCOUNT_MISMATCH_BLOCKED",
+        outcome: "DENIED",
+        actor_entity_id: state.actor_entity_id,
+        target_entity_id: state.org_entity_id,
+        // Leak-safe: NO subject, NO email, NO token — only the reason class.
+        details: {
+          provider,
+          reason:
+            outcome === "ACCOUNT_MISMATCH"
+              ? "different_google_account"
+              : "identity_verification_required",
+        },
+      });
+      return outcome === "ACCOUNT_MISMATCH"
+        ? {
+            ok: false,
+            code: "GOOGLE_ACCOUNT_MISMATCH",
+            message:
+              "This organization is already connected to a different Google account. Reconnecting a different account requires a governed account-replacement workflow.",
+          }
+        : {
+            ok: false,
+            code: "GOOGLE_IDENTITY_REQUIRED",
+            message:
+              "This organization's Google connection is identity-pinned; reconnecting requires verified Google identity (OIDC) to be enabled.",
+          };
+    }
+    if (outcome === "ERROR") {
+      return {
+        ok: false,
+        code: "INTERNAL_ERROR",
+        message: "credential persistence failed",
+      };
+    }
+    if (outcome === "PINNED") {
+      await writeAuditEvent({
+        event_type: "CONNECTOR_GOOGLE_ACCOUNT_PINNED",
+        outcome: "SUCCESS",
+        actor_entity_id: state.actor_entity_id,
+        target_entity_id: state.org_entity_id,
+        // Leak-safe: identity presence + verified flag only; NO subject/email.
+        details: {
+          provider,
+          identity_pinned: true,
+          email_verified: verified?.email_verified ?? null,
+        },
+      });
+    }
+  } else {
+    try {
+      await prisma.integrationCredential.upsert({
+        where: {
+          org_entity_id_tool: {
+            org_entity_id: state.org_entity_id,
+            tool: toolFor(provider),
+          },
+        },
+        create: {
           org_entity_id: state.org_entity_id,
           tool: toolFor(provider),
+          webhook_secret: sealed,
+          config: metadata as object,
+          enabled: true,
         },
-      },
-      create: {
-        org_entity_id: state.org_entity_id,
-        tool: toolFor(provider),
-        webhook_secret: sealed,
-        config: metadata as object,
-        enabled: true,
-      },
-      update: {
-        webhook_secret: sealed,
-        config: metadata as object,
-        enabled: true,
-      },
-    });
-  } catch (err) {
-    const m = err instanceof Error ? err.message : "unknown";
-    return { ok: false, code: "INTERNAL_ERROR", message: scrub(m) };
+        update: {
+          webhook_secret: sealed,
+          config: metadata as object,
+          enabled: true,
+        },
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message : "unknown";
+      return { ok: false, code: "INTERNAL_ERROR", message: scrub(m) };
+    }
   }
+
   await writeAuditEvent({
     event_type: "CONNECTOR_OAUTH_CONNECTED",
     outcome: "SUCCESS",
@@ -621,9 +773,124 @@ export async function handleOAuthCallback(args: {
       provider,
       scopes: exchange.scopes,
       account_label: exchange.account_label,
+      identity_pinned: verified !== null,
     },
   });
   return { ok: true, provider, display_name: cfg.display_name };
+}
+
+// [SLICE3-PREREQ] A cryptographically verified Google account identity — the
+// immutable OIDC `sub` is the authority; email is display/audit only.
+interface GoogleVerifiedIdentity {
+  subject: string;
+  issuer: string;
+  email?: string;
+  email_verified?: boolean;
+}
+
+type GooglePersistOutcome =
+  | "PINNED" // token stored AND identity verified+pinned (first pin or same-account)
+  | "CONNECTED" // token stored, no identity (legacy/flag-off; row was unpinned)
+  | "ACCOUNT_MISMATCH" // a DIFFERENT verified account — refused, token untouched
+  | "IDENTITY_REQUIRED" // pinned row, no verified id_token this exchange — refused
+  | "ERROR";
+
+// WHAT: Persist a Google credential with swap-guarded identity pinning.
+// INPUT: org + sealed envelope + safe metadata + optional verified identity.
+// OUTPUT: a discriminated outcome (never throws for the mismatch cases).
+// WHY: The sealed token (`webhook_secret`) may be overwritten for an already-
+//      PINNED row ONLY by a reconnect whose verified `sub` matches. Enforced by
+//      an atomic compare-and-set UPDATE (no read-then-write race), so two
+//      concurrent first-connections for different accounts cannot both win —
+//      one pins, the other is refused. Independent of the scope flag: a pinned
+//      row with no matching verified `sub` (flag off, or no id_token) is refused
+//      WITHOUT touching the token.
+async function persistGoogleCredentialWithIdentity(args: {
+  org_entity_id: string;
+  sealed: string;
+  metadata: SafeOAuthMetadata;
+  verified: GoogleVerifiedIdentity | null;
+}): Promise<GooglePersistOutcome> {
+  const tool = toolFor("GOOGLE_WORKSPACE");
+  const configJson = JSON.stringify(args.metadata);
+  const v = args.verified;
+
+  // The atomic compare-and-set guard. With a verified identity: overwrite the
+  // token ONLY when the row is unpinned (subject IS NULL) or its pinned subject
+  // equals the verified one (COALESCE preserves the original pinned_at across a
+  // same-account reconnect). Without a verified identity: a plain refresh is
+  // allowed ONLY on an unpinned row — a pinned row is left untouched. Either way
+  // 0 rows affected means "no matching row to safely write".
+  const casUpdate = async (): Promise<number> => {
+    if (v !== null) {
+      return prisma.$executeRaw`
+        UPDATE integration_credentials
+           SET webhook_secret = ${args.sealed},
+               config = ${configJson}::jsonb,
+               enabled = true,
+               external_account_subject = ${v.subject},
+               external_account_email = ${v.email ?? null},
+               external_account_email_verified = ${v.email_verified ?? null},
+               external_account_issuer = ${v.issuer},
+               external_account_pinned_at = COALESCE(external_account_pinned_at, now()),
+               external_account_last_verified_at = now()
+         WHERE org_entity_id = ${args.org_entity_id}::uuid
+           AND tool = ${tool}
+           AND (external_account_subject IS NULL
+                OR external_account_subject = ${v.subject})`;
+    }
+    return prisma.$executeRaw`
+      UPDATE integration_credentials
+         SET webhook_secret = ${args.sealed},
+             config = ${configJson}::jsonb,
+             enabled = true
+       WHERE org_entity_id = ${args.org_entity_id}::uuid
+         AND tool = ${tool}
+         AND external_account_subject IS NULL`;
+  };
+
+  try {
+    // 1) Guarded UPDATE first — covers every reconnect with no exception noise.
+    const updated = await casUpdate();
+    if (updated > 0) return v !== null ? "PINNED" : "CONNECTED";
+
+    // 2) 0 rows: either the row does not exist yet, or the guard blocked it.
+    //    Distinguish by attempting a create. The @@unique([org,tool]) constraint
+    //    serializes two concurrent first-connections — exactly one create wins.
+    try {
+      await prisma.integrationCredential.create({
+        data: {
+          org_entity_id: args.org_entity_id,
+          tool,
+          webhook_secret: args.sealed,
+          config: args.metadata as object,
+          enabled: true,
+          ...(v !== null
+            ? {
+                external_account_subject: v.subject,
+                external_account_email: v.email ?? null,
+                external_account_email_verified: v.email_verified ?? null,
+                external_account_issuer: v.issuer,
+                external_account_pinned_at: new Date(),
+                external_account_last_verified_at: new Date(),
+              }
+            : {}),
+        },
+      });
+      return v !== null ? "PINNED" : "CONNECTED";
+    } catch (err) {
+      if (!isUniqueConstraintViolation(err)) return "ERROR";
+      // 3) A row now exists (it was there and the guard blocked it, or a
+      //    concurrent first-connection just created it). Re-run the guard: a
+      //    match means same-account (idempotent success); 0 rows means a
+      //    different account / an identity-required refusal — token untouched.
+      const retry = await casUpdate();
+      if (retry > 0) return v !== null ? "PINNED" : "CONNECTED";
+      return v !== null ? "ACCOUNT_MISMATCH" : "IDENTITY_REQUIRED";
+    }
+  } catch {
+    return "ERROR";
+  }
 }
 
 function metadataFrom(config: unknown): SafeOAuthMetadata | null {
@@ -1032,4 +1299,134 @@ export async function getProviderAccessTokenForOrg(args: {
     }
   }
   return { ok: true, access_token: refreshed.access_token };
+}
+
+// WHAT: [SLICE3-PREREQ] Resolve a live access token for ONE EXACT credential row
+//        by credential_id — never by (provider, org) fallback.
+// INPUT: credential_id + the expected org + expected provider (both asserted) +
+//        optional require_identity_pinned.
+// OUTPUT: { ok:true, access_token, external_account_subject } | { ok:false, code }.
+// WHY: The future WatchSubscription rail binds to a specific IntegrationCredential
+//      and must pull with THAT sealed credential — never "any Google token in the
+//      org". This fetches the exact row, verifies it belongs to the expected org
+//      and provider and is active, refreshes+reseals that same row, preserves the
+//      pinned identity, and fails closed if identity is required but absent. It
+//      NEVER selects another credential.
+export async function getProviderAccessTokenForCredential(args: {
+  credential_id: string;
+  expected_org_entity_id: string;
+  expected_provider: OAuthProviderKey;
+  require_identity_pinned?: boolean;
+}): Promise<
+  | { ok: true; access_token: string; external_account_subject: string | null }
+  | {
+      ok: false;
+      code:
+        | "CREDENTIAL_NOT_FOUND"
+        | "ORG_MISMATCH"
+        | "PROVIDER_MISMATCH"
+        | "REVOKED"
+        | "TOKEN_REFRESH_FAILED"
+        | "IDENTITY_NOT_PINNED";
+    }
+> {
+  const row = await prisma.integrationCredential.findUnique({
+    where: { credential_id: args.credential_id },
+  });
+  if (row === null) return { ok: false, code: "CREDENTIAL_NOT_FOUND" };
+  // Exactness assertions — a mismatched org or provider NEVER falls back.
+  if (row.org_entity_id !== args.expected_org_entity_id) {
+    return { ok: false, code: "ORG_MISMATCH" };
+  }
+  if (row.tool !== toolFor(args.expected_provider)) {
+    return { ok: false, code: "PROVIDER_MISMATCH" };
+  }
+  if (row.enabled === false || row.webhook_secret.length === 0) {
+    return { ok: false, code: "REVOKED" };
+  }
+  const meta = metadataFrom(row.config);
+  if (meta !== null && meta.status === "REVOKED") {
+    return { ok: false, code: "REVOKED" };
+  }
+  const subject = row.external_account_subject;
+  if (
+    args.require_identity_pinned === true &&
+    (subject === null || subject.length === 0)
+  ) {
+    return { ok: false, code: "IDENTITY_NOT_PINNED" };
+  }
+  let envelope: TokenEnvelope;
+  try {
+    const enc = makeContentEncryption();
+    envelope = JSON.parse(enc.decrypt(row.webhook_secret)) as TokenEnvelope;
+  } catch {
+    return { ok: false, code: "REVOKED" };
+  }
+  const cfg = providerConfig(args.expected_provider);
+  const refreshed = await refreshIfExpired(cfg, envelope);
+  if (refreshed === null) return { ok: false, code: "TOKEN_REFRESH_FAILED" };
+  if (refreshed.access_token !== envelope.access_token) {
+    try {
+      const enc = makeContentEncryption();
+      // Re-seal THIS EXACT row by credential_id — never another.
+      await prisma.integrationCredential.update({
+        where: { credential_id: args.credential_id },
+        data: { webhook_secret: enc.encrypt(JSON.stringify(refreshed)) },
+      });
+    } catch {
+      // Non-fatal: the in-memory token is valid for this request.
+    }
+  }
+  return {
+    ok: true,
+    access_token: refreshed.access_token,
+    external_account_subject: subject,
+  };
+}
+
+// [SLICE3-PREREQ] Read-model of an org's pinned Google account identity.
+// Internal (server-side gating) — the raw subject is never returned to a route.
+export interface GoogleCredentialIdentity {
+  credential_id: string;
+  pinned: boolean;
+  external_account_subject: string | null;
+  external_account_email: string | null;
+  pinned_at: string | null;
+  last_verified_at: string | null;
+}
+
+// WHAT: The org's Google credential identity read-model (null if not connected).
+// WHY: The future WatchSubscription registration gate reads this to require a
+//      pinned identity before a real Google watch may be created.
+export async function getGoogleCredentialIdentity(args: {
+  org_entity_id: string;
+}): Promise<GoogleCredentialIdentity | null> {
+  const row = await prisma.integrationCredential.findUnique({
+    where: {
+      org_entity_id_tool: {
+        org_entity_id: args.org_entity_id,
+        tool: toolFor("GOOGLE_WORKSPACE"),
+      },
+    },
+  });
+  if (row === null) return null;
+  const subject = row.external_account_subject;
+  return {
+    credential_id: row.credential_id,
+    pinned: typeof subject === "string" && subject.length > 0,
+    external_account_subject: subject,
+    external_account_email: row.external_account_email,
+    pinned_at: row.external_account_pinned_at?.toISOString() ?? null,
+    last_verified_at: row.external_account_last_verified_at?.toISOString() ?? null,
+  };
+}
+
+// WHAT: Predicate — is the org's Google connection identity-pinned?
+// WHY: A future WatchSubscription registration MUST require: credential exists,
+//      Google identity subject non-null (verified + pinned), and not revoked.
+export async function isGoogleCredentialIdentityPinned(args: {
+  org_entity_id: string;
+}): Promise<boolean> {
+  const identity = await getGoogleCredentialIdentity(args);
+  return identity !== null && identity.pinned;
 }

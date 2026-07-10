@@ -134,6 +134,38 @@ judged unnecessary for Slices 1–2 (audit rows suffice) and stays deferred to S
 if wanted. Meet transcript events = BLOCKED (post-meeting pull only). Second focus:
 Google Meet transcript path (external/account gate).
 
+**Slice-3 PREREQUISITE — Google account-identity pin — 🟢 BUILT + tested (merge-ready);
+DEPLOY GATED.** The Slice-3 contract's load-bearing blocker (a silent Google-account swap
+is undetectable → could mass-demote sources) is now closed at the code level, per founder
+decision: **exactly ONE pinned Google account per org; the immutable OIDC `sub` is the
+authority; email is display/audit only; a DIFFERENT-account reconnect fails closed with no
+silent credential replacement; multi-account + Shared-Drive deferred.** Shipped additively:
+(1) `IntegrationCredential` gains 6 nullable identity columns (`external_account_subject`
+= `sub`, + email/email_verified/issuer/pinned_at/last_verified_at) — additive migration,
+proven `ADD COLUMN … NULL` ×6, no data loss; (2) `google-identity.ts` verifies an id_token
+cryptographically (RS256 vs Google's v3 JWKS via Node `createPublicKey`, issuer + audience
++ expiry + non-empty `sub`; alg:none / HS256 / wrong-key rejected — never decode-trust);
+(3) `handleOAuthCallback` verifies + pins via an **atomic compare-and-set** (the sealed
+token is overwritten for a pinned row ONLY by a reconnect whose verified `sub` matches;
+concurrent first-connections for different accounts → one pins, the other refused — no
+last-write-wins); (4) `getProviderAccessTokenForCredential` resolves the EXACT credential
+by id (asserts org + provider + not-revoked, never falls back) + `isGoogleCredentialIdentity
+Pinned`; (5) new Google imports stamp `external_source.integration_credential_id` + `sub`
+(additive; old rows readable). Audit: `CONNECTOR_GOOGLE_ACCOUNT_PINNED` /
+`_MISMATCH_BLOCKED` (leak-safe — no subject/email/token). Tests: `google-identity.test.ts`
+(13) + `google-account-identity-pin.test.ts` (10, real-DB incl. concurrency + byte-unchanged
+swap guard); full unit tier green. **Two founder gates before this activates end-to-end:**
+(a) **OIDC scope/consent** — the Google authorize request must add `openid email` (behind
+the default-OFF `GOOGLE_OIDC_IDENTITY` flag; capture+verify+pin is always-on, so only the
+env flip is needed). Adding non-sensitive scopes changes the consent screen + requires
+existing users to re-consent → **founder/consent decision, not applied silently.** (b)
+**Production schema apply** — ADR-0025 routes prod schema through the deploy pipeline, and
+the `db push` guard is fail-closed to localhost, so the additive migration + the code deploy
+are **founder-gated** (exact SQL in the PR). Until both gates clear, the rail is inert
+(no id_token ⇒ identity stays null ⇒ WatchSubscription registration stays blocked).
+**RECOMMENDED next (small):** thread a `tx` through `revalidateImportedDocForCaller` to make
+its ledger-update + audit atomic (closes the Slice-3 audit-completeness residual).
+
 ---
 
 ## ⚠️ Overnight Arc Recoverability Report (2026-06-18) — READ FIRST
