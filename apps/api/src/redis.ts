@@ -19,6 +19,15 @@ export interface NonceStore {
   set(sessionId: string, ttlSeconds: number): Promise<void>;
   has(sessionId: string): Promise<boolean>;
   delete(sessionId: string): Promise<void>;
+  // [INBOUND-SIGNAL] Atomically claim a key ONCE: returns true if this call set
+  // it (was absent), false if it already existed. Backed by Redis SET NX EX so a
+  // concurrent replay/duplicate can never both win. Used for single-use nonce
+  // (anti-replay) and per-resource debounce/dedupe of inbound signals.
+  claimOnce(key: string, ttlSeconds: number): Promise<boolean>;
+  // [INBOUND-SIGNAL] Increment a counter (creating it with the TTL on first
+  // bump); returns the new count. Used for per-org, per-minute quota bounding so
+  // a burst of signed events can't exhaust an org's downstream (Google) quota.
+  incr(key: string, ttlSeconds: number): Promise<number>;
 }
 
 // WHAT: An in-memory NonceStore that respects TTL via setTimeout.
@@ -50,6 +59,25 @@ export class MemoryNonceStore implements NonceStore {
     if (existing !== undefined) clearTimeout(existing);
     this.entries.delete(sessionId);
   }
+
+  // Synchronous check-then-set (single-threaded event loop ⇒ atomic here) so
+  // tests exercise the same claim-once semantics as the Redis SET NX.
+  async claimOnce(key: string, ttlSeconds: number): Promise<boolean> {
+    if (this.entries.has(key)) return false;
+    await this.set(key, ttlSeconds);
+    return true;
+  }
+
+  private readonly counters = new Map<string, number>();
+  async incr(key: string, ttlSeconds: number): Promise<number> {
+    const next = (this.counters.get(key) ?? 0) + 1;
+    this.counters.set(key, next);
+    if (next === 1) {
+      const handle = setTimeout(() => this.counters.delete(key), ttlSeconds * 1000);
+      handle.unref?.();
+    }
+    return next;
+  }
 }
 
 // WHAT: A NonceStore backed by a real ioredis client.
@@ -80,6 +108,20 @@ export class RedisNonceStore implements NonceStore {
 
   async delete(key: string): Promise<void> {
     await this.client.del(this.keyPrefix + key);
+  }
+
+  // Atomic set-if-absent with TTL: SET key "1" EX ttl NX → "OK" (claimed) | null
+  // (already present). The entire inbound replay/dedupe defense rests on this
+  // arg order + NX flag.
+  async claimOnce(key: string, ttlSeconds: number): Promise<boolean> {
+    const r = await this.client.set(this.keyPrefix + key, "1", "EX", ttlSeconds, "NX");
+    return r === "OK";
+  }
+
+  async incr(key: string, ttlSeconds: number): Promise<number> {
+    const n = await this.client.incr(this.keyPrefix + key);
+    if (n === 1) await this.client.expire(this.keyPrefix + key, ttlSeconds);
+    return n;
   }
 }
 
