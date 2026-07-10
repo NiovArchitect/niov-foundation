@@ -15,6 +15,8 @@ import {
   detectCalendarProposal,
   resolveTemporalContext,
   temporalPromptLine,
+  parseOrdinalSelection,
+  parseTimeRevision,
   type TemporalContext,
 } from "../../apps/api/src/services/otzar/calendar-continuity.service.js";
 import { extractProposedAction } from "../../apps/api/src/services/otzar/proposed-action-extractor.js";
@@ -65,46 +67,53 @@ describe("classifyConfirmation", () => {
 describe("detectCalendarProposal — server-side date resolution", () => {
   const OLIVIA = "Put on my calendar that at one o'clock I'll be at Olivia's event.";
 
+  // Narrow the CalendarDetection union to the confirmable proposal draft.
+  const asProposal = (d: ReturnType<typeof detectCalendarProposal>) => {
+    if (d?.kind !== "proposal") throw new Error(`expected proposal, got ${JSON.stringify(d)}`);
+    return d.proposal;
+  };
+
   it("resolves to the CURRENT year at 1 PM local — never January 2025", async () => {
     // 2026-07-10 15:00Z = 11:00 EDT → 1 PM today is future → today 17:00Z.
     const t = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0));
-    const p = detectCalendarProposal(OLIVIA, t);
-    expect(p?.start_iso).toBe("2026-07-10T17:00:00.000Z");
-    expect(new Date(p!.start_iso).getUTCFullYear()).toBe(2026);
+    const p = asProposal(detectCalendarProposal(OLIVIA, t));
+    expect(p.start_iso).toBe("2026-07-10T17:00:00.000Z");
+    expect(new Date(p.start_iso).getUTCFullYear()).toBe(2026);
     // Clean title — leading filler ("be at") stripped.
-    expect(p?.title).toBe("Olivia's Event");
+    expect(p.title).toBe("Olivia's Event");
   });
 
   it("title extraction strips leading fillers/prepositions", async () => {
     const t = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0));
-    expect(detectCalendarProposal("schedule the budget review at 3pm", t)?.title).toBe("Budget Review");
-    expect(detectCalendarProposal("put a dentist appointment on my calendar at 2pm", t)?.title).toBe("Dentist Appointment");
+    expect(asProposal(detectCalendarProposal("schedule the budget review at 3pm", t)).title).toBe("Budget Review");
+    expect(asProposal(detectCalendarProposal("put a dentist appointment on my calendar at 2pm", t)).title).toBe("Dentist Appointment");
   });
 
   it("DST-correct: same wall-clock 1 PM resolves to a DIFFERENT UTC offset in winter (EST) vs summer (EDT)", async () => {
     const summer = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0)); // EDT (-4)
     const winter = await temporalAt(Date.UTC(2026, 0, 10, 15, 0, 0)); // EST (-5)
-    const ps = detectCalendarProposal(OLIVIA, summer);
-    const pw = detectCalendarProposal(OLIVIA, winter);
-    expect(ps?.start_iso).toBe("2026-07-10T17:00:00.000Z"); // 13:00 EDT
-    expect(pw?.start_iso).toBe("2026-01-10T18:00:00.000Z"); // 13:00 EST
+    const ps = asProposal(detectCalendarProposal(OLIVIA, summer));
+    const pw = asProposal(detectCalendarProposal(OLIVIA, winter));
+    expect(ps.start_iso).toBe("2026-07-10T17:00:00.000Z"); // 13:00 EDT
+    expect(pw.start_iso).toBe("2026-01-10T18:00:00.000Z"); // 13:00 EST
   });
 
-  it("past time today → inferred tomorrow (flagged for correction), never in the past", async () => {
-    // 2026-07-10 20:00Z = 16:00 EDT → 1 PM already passed → tomorrow.
+  it("past time today → truthful clarification (Correction #2), persists nothing, never silently tomorrow", async () => {
+    // 2026-07-10 20:00Z = 16:00 EDT → 1 PM already passed → ask, don't guess tomorrow.
     const t = await temporalAt(Date.UTC(2026, 6, 10, 20, 0, 0));
-    const p = detectCalendarProposal(OLIVIA, t);
-    expect(p?.inferred_tomorrow).toBe(true);
-    expect(p?.start_iso).toBe("2026-07-11T17:00:00.000Z");
-    expect(new Date(p!.start_iso).getTime()).toBeGreaterThan(t.now_ms);
+    const d = detectCalendarProposal(OLIVIA, t);
+    expect(d?.kind).toBe("clarify_past_time");
+    if (d?.kind !== "clarify_past_time") throw new Error("expected clarify_past_time");
+    expect(d.time_label).toMatch(/1(:00)?\s*PM/i);
+    expect(d.timezone).toBe("America/New_York");
   });
 
   it("respects the traveling user's live timezone (client tz overrides)", async () => {
     const la = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0), "America/Los_Angeles"); // 08:00 PDT
     expect(la.timezone_source).toBe("client");
-    const p = detectCalendarProposal(OLIVIA, la);
+    const p = asProposal(detectCalendarProposal(OLIVIA, la));
     // 1 PM PDT (-7) today = 20:00Z
-    expect(p?.start_iso).toBe("2026-07-10T20:00:00.000Z");
+    expect(p.start_iso).toBe("2026-07-10T20:00:00.000Z");
   });
 
   it("non-calendar message → null (no false proposal)", async () => {
@@ -119,6 +128,40 @@ describe("detectCalendarProposal — server-side date resolution", () => {
     expect(line).toMatch(/2026/);
     expect(line).toMatch(/America\/New_York/);
     expect(line).toMatch(/do not guess or invent a date/i);
+  });
+});
+
+describe("P4 — ordinal selection (disambiguation resolution)", () => {
+  it("maps ordinal words/numbers to a 0-based index in the ASC-ordered list", () => {
+    expect(parseOrdinalSelection("the first one", 3)).toBe(0);
+    expect(parseOrdinalSelection("second", 3)).toBe(1);
+    expect(parseOrdinalSelection("the last one", 3)).toBe(2);
+    expect(parseOrdinalSelection("number 2", 3)).toBe(1);
+    expect(parseOrdinalSelection("option 3", 3)).toBe(2);
+    expect(parseOrdinalSelection("2", 3)).toBe(1);
+  });
+  it("out-of-range and non-ordinal → null (never a wrong pick)", () => {
+    expect(parseOrdinalSelection("the fourth one", 3)).toBeNull();
+    expect(parseOrdinalSelection("yes please", 3)).toBeNull();
+    expect(parseOrdinalSelection("how are you", 3)).toBeNull();
+  });
+});
+
+describe("P4 — time revision (supersession) parsing", () => {
+  it("recognizes a bare time-change against a pending proposal", () => {
+    expect(parseTimeRevision("make it 2pm")).toMatchObject({ hour24: 14, minute: 0 });
+    expect(parseTimeRevision("change it to 3:30pm")).toMatchObject({ hour24: 15, minute: 30 });
+    expect(parseTimeRevision("no, 2pm")).toMatchObject({ hour24: 14, minute: 0 });
+    expect(parseTimeRevision("2pm instead")).toMatchObject({ hour24: 14, minute: 0 });
+  });
+  it("does NOT fire on a fresh calendar request or plain chat (no revision cue)", () => {
+    expect(parseTimeRevision("schedule a meeting at 2pm")).toBeNull();
+    expect(parseTimeRevision("what's on my calendar")).toBeNull();
+    expect(parseTimeRevision("make it happen")).toBeNull(); // cue but no time
+  });
+  it("does NOT misread a bare year/number as a clock time", () => {
+    expect(parseTimeRevision("2024 was a great year")).toBeNull(); // no clock token
+    expect(parseTimeRevision("3 apples please")).toBeNull();
   });
 });
 

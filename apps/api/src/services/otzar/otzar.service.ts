@@ -928,8 +928,11 @@ export class OtzarService {
       temporal: temporalCtx,
     });
     if (continuity !== null) {
+      // Correction #1: prefer the server-authoritative thread the continuity layer
+      // bound the proposal to (propose) or restored (ambient confirm) over the raw
+      // client id, so the client re-anchors to the exact conversation.
       const convId = await this.resolveContinuityConversationId(
-        input.conversation_id,
+        continuity.conversation_id ?? input.conversation_id,
         ownerEntityId,
         twin.entity_id,
       );
@@ -1527,7 +1530,11 @@ export class OtzarService {
     conversationId: string,
     continuity: { state: string; response: string; event_id?: string },
   ): ConductSessionSuccess {
-    const awaiting = continuity.state === "AWAITING_CONFIRMATION";
+    const awaiting =
+      continuity.state === "AWAITING_CONFIRMATION" || continuity.state === "REVISED";
+    const clarify =
+      continuity.state === "DISAMBIGUATE" ||
+      continuity.state === "NEEDS_TIME_CLARIFICATION";
     return {
       ok: true,
       response: continuity.response,
@@ -1538,7 +1545,7 @@ export class OtzarService {
       correction_capture_available: true,
       speech_ready_text: continuity.response,
       voice_output_supported: false,
-      clarification_needed: continuity.state === "DISAMBIGUATE",
+      clarification_needed: clarify,
       action_proposed: awaiting,
       approval_required: awaiting,
       policy_blocked: false,

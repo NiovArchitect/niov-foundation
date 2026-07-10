@@ -88,14 +88,16 @@ describe("Otzar calendar continuity (P0)", () => {
   it("P1 temporal: resolves the date SERVER-SIDE from the real clock — current year, 1 PM local, never Jan 2025", async () => {
     const { userId } = await makeOrgAndUser();
     const t = await temporalFor(userId);
-    const p = detectCalendarProposal(OLIVIA, t);
-    expect(p).not.toBeNull();
-    const start = new Date(p!.start_iso);
+    const d = detectCalendarProposal(OLIVIA, t);
+    expect(d?.kind).toBe("proposal");
+    if (d?.kind !== "proposal") throw new Error("expected proposal");
+    const p = d.proposal;
+    const start = new Date(p.start_iso);
     expect(start.getUTCFullYear()).toBe(2026); // NOT 2025
     // 1 PM EDT == 17:00 UTC on 2026-07-10
-    expect(p!.start_iso).toBe("2026-07-10T17:00:00.000Z");
-    expect(p!.timezone).toBe(TZ);
-    expect(p!.title).toMatch(/Olivia/i);
+    expect(p.start_iso).toBe("2026-07-10T17:00:00.000Z");
+    expect(p.timezone).toBe(TZ);
+    expect(p.title).toMatch(/Olivia/i);
   });
 
   it("exact flow: propose persists a pending proposal (honest AWAITING, not 'added'); a bare 'yes' resolves it deterministically", async () => {
@@ -202,5 +204,151 @@ describe("Otzar calendar continuity (P0)", () => {
     const { orgId, userId } = await makeOrgAndUser();
     const r = await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: "yes", temporal: await temporalFor(userId) });
     expect(r).toBeNull(); // nothing pending → resolver must NOT side-effect
+  });
+
+  // ── Correction #1: exact server-authoritative thread binding ───────────────
+  const THREAD_X = "11111111-1111-4111-8111-111111111111";
+  const THREAD_Y = "22222222-2222-4222-8222-222222222222";
+
+  it("Correction #1 — a 'yes' from a DIFFERENT thread cannot silently approve another thread's proposal", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    // Propose in thread X (client supplied the thread id).
+    const proposed = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_X, message: OLIVIA, temporal: await temporalFor(userId),
+    });
+    expect(proposed?.state).toBe("AWAITING_CONFIRMATION");
+    expect(proposed?.conversation_id).toBe(THREAD_X); // bound to the exact thread
+    const bound = await prisma.workLedgerEntry.findFirst({
+      where: { owner_entity_id: userId, status: "NEEDS_CALLER_CONFIRMATION", ledger_type: "MEETING" },
+      select: { conversation_id: true },
+    });
+    expect(bound?.conversation_id).toBe(THREAD_X);
+
+    // "yes" arriving inside thread Y must NOT resolve thread X's proposal.
+    const wrongThread = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_Y, message: "yes", temporal: await temporalFor(userId),
+    });
+    expect(wrongThread).toBeNull(); // falls through — no silent cross-thread approval
+    const still = await prisma.workLedgerEntry.findFirst({
+      where: { owner_entity_id: userId, ledger_type: "MEETING" }, orderBy: { created_at: "desc" }, select: { status: true },
+    });
+    expect(still?.status).toBe("NEEDS_CALLER_CONFIRMATION"); // untouched
+
+    // "yes" inside the correct thread X resolves it.
+    const rightThread = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_X, message: "yes", temporal: await temporalFor(userId),
+    });
+    expect(rightThread?.state).toBe("PROVIDER_BLOCKED"); // no Google → honest, but it DID resolve
+    expect(rightThread?.conversation_id).toBe(THREAD_X);
+  });
+
+  it("Correction #1 — ambient 'yes' (no conversation_id) STILL resolves and restores the proposal's bound thread (P0 live invariant)", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    const proposed = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_X, message: OLIVIA, temporal: await temporalFor(userId),
+    });
+    expect(proposed?.conversation_id).toBe(THREAD_X);
+    // The live CT sends NO conversation_id on the confirm turn — must still resolve,
+    // and hand back the restored thread so the client re-anchors.
+    const ambient = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, message: "yes", temporal: await temporalFor(userId),
+    });
+    expect(ambient?.state).toBe("PROVIDER_BLOCKED"); // resolved (no Google connected)
+    expect(ambient?.conversation_id).toBe(THREAD_X); // restored bound thread
+  });
+
+  it("Correction #2 — past-today time asks a truthful clarification and persists NOTHING (never silently tomorrow)", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    // 2026-07-10 20:00Z = 16:00 EDT → "at one o'clock" (1 PM) already passed.
+    const pastNow = Date.UTC(2026, 6, 10, 20, 0, 0);
+    const tPast = await resolveTemporalContext({ actor_entity_id: userId, client_timezone: TZ, now_ms: pastNow });
+
+    const clarify = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, message: OLIVIA, temporal: tPast,
+    });
+    expect(clarify?.state).toBe("NEEDS_TIME_CLARIFICATION");
+    expect(clarify?.response).toMatch(/already passed/i);
+    expect(clarify?.response).toMatch(/tomorrow|another time today/i);
+    expect(clarify?.ledger_entry_id).toBeUndefined();
+    // Crucially: NOTHING confirmable was persisted — a stray "yes" must be inert.
+    const persisted = await prisma.workLedgerEntry.findMany({
+      where: { owner_entity_id: userId, status: "NEEDS_CALLER_CONFIRMATION", ledger_type: "MEETING" },
+    });
+    expect(persisted).toHaveLength(0);
+
+    // The user resolves it explicitly — "tomorrow at 1pm" → a real proposal.
+    const proposed = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, message: "put Olivia's event on my calendar tomorrow at 1pm", temporal: tPast,
+    });
+    expect(proposed?.state).toBe("AWAITING_CONFIRMATION");
+    expect(proposed?.response).toMatch(/Jul 11, 2026/); // tomorrow, now explicit
+  });
+
+  const SECOND = "schedule the budget review at 3pm";
+
+  it("P4 ordinal — 'yes' with two pending asks WHICH; 'the first one' resolves the oldest (defined order)", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    await connectGoogleWithWrite(orgId);
+    const created: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: { method?: string }) => {
+      const u = String(url);
+      if (u.includes("/calendar/v3/calendars/") && init?.method === "POST") {
+        const id = `evt_${created.length + 1}`;
+        created.push(id);
+        return { ok: true, status: 200, json: async () => ({ id, htmlLink: "x", start: {}, end: {} }) } as unknown as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+    }));
+
+    // Two distinct pending proposals (Olivia @1pm created first, Budget @3pm second).
+    await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: OLIVIA, temporal: await temporalFor(userId) });
+    await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: SECOND, temporal: await temporalFor(userId) });
+
+    // A bare "yes" is AMBIGUOUS → must NOT act; it asks which.
+    const ambiguous = await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: "yes", temporal: await temporalFor(userId) });
+    expect(ambiguous?.state).toBe("DISAMBIGUATE");
+    expect(created).toHaveLength(0); // INVARIANT 1: no side-effect on ambiguity
+
+    // "the first one" → the OLDEST (Olivia) resolves; the other stays pending.
+    const pick = await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: "the first one", temporal: await temporalFor(userId) });
+    expect(pick?.state).toBe("CREATED");
+    expect(pick?.response).toMatch(/Olivia/i);
+    expect(created).toHaveLength(1);
+    const olivia = await prisma.workLedgerEntry.findFirst({ where: { owner_entity_id: userId, title: { contains: "Olivia" } }, select: { status: true } });
+    const budget = await prisma.workLedgerEntry.findFirst({ where: { owner_entity_id: userId, title: { contains: "Budget" } }, select: { status: true } });
+    expect(olivia?.status).toBe("EXECUTED");
+    expect(budget?.status).toBe("NEEDS_CALLER_CONFIRMATION"); // untouched
+  });
+
+  it("P4 supersession — 'make it 3pm' revises the single pending proposal IN PLACE; a later 'yes' books the revised time", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    await connectGoogleWithWrite(orgId);
+    let bookedStart: string | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: { method?: string; body?: string }) => {
+      const u = String(url);
+      if (u.includes("/calendar/v3/calendars/") && init?.method === "POST") {
+        const body = JSON.parse(init.body ?? "{}") as { start?: { dateTime?: string } };
+        bookedStart = body.start?.dateTime;
+        return { ok: true, status: 200, json: async () => ({ id: "evt_rev", htmlLink: "x", start: {}, end: {} }) } as unknown as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+    }));
+
+    // Propose Olivia @ 1pm EDT (17:00Z), then supersede to 3pm EDT (19:00Z).
+    await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: OLIVIA, temporal: await temporalFor(userId) });
+    const revised = await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: "make it 3pm", temporal: await temporalFor(userId) });
+    expect(revised?.state).toBe("REVISED");
+    expect(revised?.response).toMatch(/3:00\s*PM/i);
+
+    // Same row, still pending, now carrying the revised start.
+    const rows = await prisma.workLedgerEntry.findMany({ where: { owner_entity_id: userId, ledger_type: "MEETING" } });
+    expect(rows).toHaveLength(1); // superseded in place — not a new proposal
+    const details = (rows[0]!.details ?? {}) as { proposal?: { start_iso?: string } };
+    expect(details.proposal?.start_iso).toBe("2026-07-10T19:00:00.000Z"); // 3pm EDT
+
+    // "yes" books the REVISED time.
+    const done = await handleCalendarContinuity({ actor_entity_id: userId, org_entity_id: orgId, message: "yes", temporal: await temporalFor(userId) });
+    expect(done?.state).toBe("CREATED");
+    expect(bookedStart).toBe("2026-07-10T19:00:00.000Z");
   });
 });
