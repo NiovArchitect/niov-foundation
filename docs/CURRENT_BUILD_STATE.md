@@ -87,7 +87,11 @@ of `org:actor` pairs — demo-org safety structural), governed ACTIVE actor +
 actor→org guard, bounded, QUIET (transition-gated audit + notification — no
 SOURCE_VERIFIED spam). No schema. Ops run-now: `POST /drive/docs/recheck-run`
 (admin, own-org). Tests: `source-recheck.test.ts` (9) + regression (6); PR #601.
-Full plan: CT `docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md`.
+Full plan: CT `docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md`. **ENABLED for
+Meridian only (2026-07-09):** `SOURCE_RECHECK_TARGETS` = Meridian sim org : ACTIVE
+admin actor on the FND Render env (single target; demo org NOT listed ⇒ fail-closed
+untouched); CRON/MAX at defaults; re-read via same-SHA redeploy; verified
+recheck-run 200 + quiet + zero residue.
 
 **Next slices (each needs its own GO):** Slice 2 — internal HMAC-signed inbound
 event rail (proves the webhook processing model; ships no real behavior until
