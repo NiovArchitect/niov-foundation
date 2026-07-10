@@ -88,6 +88,7 @@ export async function registerOtzarRoutes(
       conversation_id?: unknown;
       conversation_history?: unknown;
       token_budget?: unknown;
+      client_timezone?: unknown;
     };
   }>("/api/v1/otzar/conversation/message", async (request, reply) => {
     const token = bearerFrom(request.headers.authorization);
@@ -144,6 +145,10 @@ export async function registerOtzarRoutes(
         conversation_id: conversationId,
         conversation_history: history,
         token_budget: tokenBudget,
+        // [OTZAR-CONTINUITY P1] live device timezone (travel-correct), when sent.
+        ...(typeof body.client_timezone === "string" && body.client_timezone.length > 0
+          ? { client_timezone: body.client_timezone }
+          : {}),
       });
     } catch (err) {
       request.log.error({ err }, "conductSession threw");

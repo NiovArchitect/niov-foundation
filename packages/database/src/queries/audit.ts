@@ -565,6 +565,9 @@ export type AuditEventType =
   // identities/emails, event titles, raw provider bodies.
   | "CALENDAR_EVENT_CREATE"
   | "CALENDAR_EVENT_DELETE"
+  // [OTZAR-CONTINUITY] a chat-turn calendar proposal was drafted + persisted
+  // (pending caller confirmation). Additive; no migration.
+  | "CALENDAR_PROPOSAL_DRAFTED"
   // Phase 1288-B — Foundation generalized Entity & Authority Envelope.
   // Emitted whenever the Foundation authority evaluator computes an
   // AuthorityEnvelope for an entity (self via /foundation/authority/me,
@@ -1030,6 +1033,7 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   // Phase 1272 gated calendar event creation.
   "CALENDAR_EVENT_CREATE",
   "CALENDAR_EVENT_DELETE",
+  "CALENDAR_PROPOSAL_DRAFTED",
   // Phase 1288-B Foundation Entity & Authority Envelope evaluation.
   "AUTHORITY_ENVELOPE_EVALUATED",
   // Phase 1290-A Foundation economic substrate quote (mock-only).
