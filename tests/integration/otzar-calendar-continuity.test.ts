@@ -206,6 +206,57 @@ describe("Otzar calendar continuity (P0)", () => {
     expect(r).toBeNull(); // nothing pending → resolver must NOT side-effect
   });
 
+  // ── Correction #1: exact server-authoritative thread binding ───────────────
+  const THREAD_X = "11111111-1111-4111-8111-111111111111";
+  const THREAD_Y = "22222222-2222-4222-8222-222222222222";
+
+  it("Correction #1 — a 'yes' from a DIFFERENT thread cannot silently approve another thread's proposal", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    // Propose in thread X (client supplied the thread id).
+    const proposed = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_X, message: OLIVIA, temporal: await temporalFor(userId),
+    });
+    expect(proposed?.state).toBe("AWAITING_CONFIRMATION");
+    expect(proposed?.conversation_id).toBe(THREAD_X); // bound to the exact thread
+    const bound = await prisma.workLedgerEntry.findFirst({
+      where: { owner_entity_id: userId, status: "NEEDS_CALLER_CONFIRMATION", ledger_type: "MEETING" },
+      select: { conversation_id: true },
+    });
+    expect(bound?.conversation_id).toBe(THREAD_X);
+
+    // "yes" arriving inside thread Y must NOT resolve thread X's proposal.
+    const wrongThread = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_Y, message: "yes", temporal: await temporalFor(userId),
+    });
+    expect(wrongThread).toBeNull(); // falls through — no silent cross-thread approval
+    const still = await prisma.workLedgerEntry.findFirst({
+      where: { owner_entity_id: userId, ledger_type: "MEETING" }, orderBy: { created_at: "desc" }, select: { status: true },
+    });
+    expect(still?.status).toBe("NEEDS_CALLER_CONFIRMATION"); // untouched
+
+    // "yes" inside the correct thread X resolves it.
+    const rightThread = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_X, message: "yes", temporal: await temporalFor(userId),
+    });
+    expect(rightThread?.state).toBe("PROVIDER_BLOCKED"); // no Google → honest, but it DID resolve
+    expect(rightThread?.conversation_id).toBe(THREAD_X);
+  });
+
+  it("Correction #1 — ambient 'yes' (no conversation_id) STILL resolves and restores the proposal's bound thread (P0 live invariant)", async () => {
+    const { orgId, userId } = await makeOrgAndUser();
+    const proposed = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, conversation_id: THREAD_X, message: OLIVIA, temporal: await temporalFor(userId),
+    });
+    expect(proposed?.conversation_id).toBe(THREAD_X);
+    // The live CT sends NO conversation_id on the confirm turn — must still resolve,
+    // and hand back the restored thread so the client re-anchors.
+    const ambient = await handleCalendarContinuity({
+      actor_entity_id: userId, org_entity_id: orgId, message: "yes", temporal: await temporalFor(userId),
+    });
+    expect(ambient?.state).toBe("PROVIDER_BLOCKED"); // resolved (no Google connected)
+    expect(ambient?.conversation_id).toBe(THREAD_X); // restored bound thread
+  });
+
   it("Correction #2 — past-today time asks a truthful clarification and persists NOTHING (never silently tomorrow)", async () => {
     const { orgId, userId } = await makeOrgAndUser();
     // 2026-07-10 20:00Z = 16:00 EDT → "at one o'clock" (1 PM) already passed.

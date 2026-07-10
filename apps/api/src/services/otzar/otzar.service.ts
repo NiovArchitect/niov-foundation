@@ -928,8 +928,11 @@ export class OtzarService {
       temporal: temporalCtx,
     });
     if (continuity !== null) {
+      // Correction #1: prefer the server-authoritative thread the continuity layer
+      // bound the proposal to (propose) or restored (ambient confirm) over the raw
+      // client id, so the client re-anchors to the exact conversation.
       const convId = await this.resolveContinuityConversationId(
-        input.conversation_id,
+        continuity.conversation_id ?? input.conversation_id,
         ownerEntityId,
         twin.entity_id,
       );

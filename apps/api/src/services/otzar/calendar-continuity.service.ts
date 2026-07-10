@@ -29,6 +29,7 @@
 //              work-os/work-ledger.service.ts (createLedgerEntry),
 //              personalization EntityProfile.timezone.
 
+import { randomUUID } from "node:crypto";
 import { prisma, writeAuditEvent } from "@niov/database";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 import {
@@ -385,18 +386,26 @@ interface PendingProposalRow {
   title: string;
   details: Record<string, unknown>;
   created_at: Date;
+  /** The exact thread this proposal was bound to at persist time (Correction #1). */
+  conversation_id: string | null;
 }
 
 async function findActorPendingProposals(args: {
   actor_entity_id: string;
   org_entity_id: string;
   now_ms: number;
+  /**
+   * Correction #1 — exact thread binding. When the caller demonstrably supplied a
+   * thread (client sent a conversation_id), we scope to proposals bound to THAT
+   * thread, so a confirmation in thread Y can never silently approve a proposal
+   * made in thread X. When absent (the ambient surface sends no id — the live P0
+   * case), we fall back to ACTOR + ORG recency and let the resolved proposal's own
+   * bound thread be restored to the client.
+   */
+  conversation_id?: string | undefined;
 }): Promise<PendingProposalRow[]> {
-  // Isolation is ACTOR + ORG scoped (the advisor's invariant) — NOT conversation
-  // scoped. The ambient surface generates a fresh conversation_id per turn and
-  // the first-turn proposal is stored before an id is assigned, so a strict
-  // conversation_id match would miss the caller's own pending proposal. The
-  // "exactly one unexpired" rule (below, at the call site) handles multiplicity.
+  const threadScoped =
+    typeof args.conversation_id === "string" && args.conversation_id.length > 0;
   const rows = await prisma.workLedgerEntry.findMany({
     where: {
       org_entity_id: args.org_entity_id,
@@ -404,9 +413,13 @@ async function findActorPendingProposals(args: {
       ledger_type: "MEETING",
       status: "NEEDS_CALLER_CONFIRMATION",
       details: { path: ["source"], equals: PROPOSAL_LEDGER_SOURCE },
+      ...(threadScoped ? { conversation_id: args.conversation_id } : {}),
     },
     orderBy: { created_at: "desc" },
-    select: { ledger_entry_id: true, title: true, details: true, created_at: true, expires_at: true },
+    select: {
+      ledger_entry_id: true, title: true, details: true, created_at: true,
+      expires_at: true, conversation_id: true,
+    },
     take: 10,
   });
   // Drop expired (defensive — the sweep may not have run yet).
@@ -417,6 +430,7 @@ async function findActorPendingProposals(args: {
       title: r.title,
       details: (r.details ?? {}) as Record<string, unknown>,
       created_at: r.created_at,
+      conversation_id: r.conversation_id,
     }));
 }
 
@@ -506,6 +520,13 @@ export interface CalendarContinuityResult {
   ledger_entry_id?: string;
   event_id?: string;
   provider_code?: string;
+  /**
+   * Correction #1 — the server-authoritative thread this turn resolved within.
+   * On propose: the thread the new proposal was bound to (client should echo it).
+   * On ambient confirm: the RESTORED thread of the resolved proposal, so the
+   * client re-anchors to the real conversation instead of a fresh id.
+   */
+  conversation_id?: string;
 }
 
 /**
@@ -530,6 +551,8 @@ export async function handleCalendarContinuity(args: {
       actor_entity_id: args.actor_entity_id,
       org_entity_id: orgId,
       now_ms: args.temporal.now_ms,
+      // Correction #1: exact thread binding when the client supplied a thread.
+      conversation_id: args.conversation_id,
     });
     // INVARIANT 1: no side-effect on ambiguity.
     if (pending.length === 0) return null; // nothing to confirm → normal handling
@@ -544,6 +567,10 @@ export async function handleCalendarContinuity(args: {
       };
     }
     const target = pending[0]!;
+    // Restore the proposal's own bound thread so the client re-anchors (esp. the
+    // ambient path, where the request carried no conversation_id).
+    const restoredThread = target.conversation_id ?? args.conversation_id;
+    const threadEcho = restoredThread != null ? { conversation_id: restoredThread } : {};
     const proposal = (target.details.proposal ?? {}) as {
       title?: string; start_iso?: string; end_iso?: string; timezone?: string; resolved_label?: string;
     };
@@ -555,6 +582,7 @@ export async function handleCalendarContinuity(args: {
         state: "CANCELLED",
         response: `Okay — I won't add "${proposal.title ?? target.title}". Cancelled.`,
         ledger_entry_id: target.ledger_entry_id,
+        ...threadEcho,
       };
     }
 
@@ -577,6 +605,7 @@ export async function handleCalendarContinuity(args: {
             : `I'm already working on "${proposal.title ?? target.title}".`,
         ledger_entry_id: target.ledger_entry_id,
         ...(eid !== undefined ? { event_id: eid } : {}),
+        ...threadEcho,
       };
     }
 
@@ -616,6 +645,7 @@ export async function handleCalendarContinuity(args: {
         response: `Done — "${proposal.title ?? target.title}" was added to your calendar for ${proposal.resolved_label ?? "the proposed time"}.`,
         ledger_entry_id: target.ledger_entry_id,
         event_id: result.event_id,
+        ...threadEcho,
       };
     }
 
@@ -631,6 +661,7 @@ export async function handleCalendarContinuity(args: {
       response: providerBlockedMessage(result.code, proposal.title ?? target.title),
       ledger_entry_id: target.ledger_entry_id,
       provider_code: result.code,
+      ...threadEcho,
     };
   }
 
@@ -652,10 +683,15 @@ export async function handleCalendarContinuity(args: {
   }
 
   const proposal = detection.proposal;
+  // Correction #1: resolve the server-authoritative thread BEFORE persistence and
+  // bind the proposal to it. Reuse the client's thread when it supplied a UUID one;
+  // otherwise mint a stable id and hand it back so the client re-anchors. The bound
+  // thread (not a later fresh id) is what a subsequent "yes" resolves against.
+  const boundThread = isUuid(args.conversation_id) ? args.conversation_id : randomUUID();
   const persisted = await persistPendingCalendarProposal({
     actor_entity_id: args.actor_entity_id,
     org_entity_id: orgId,
-    conversation_id: args.conversation_id,
+    conversation_id: boundThread,
     proposal,
     now_ms: args.temporal.now_ms,
   });
@@ -676,7 +712,13 @@ export async function handleCalendarContinuity(args: {
       `I'll add "${proposal.title}" to your calendar for ${proposal.resolved_label}. ` +
       `Want me to create it? (Say "yes" to confirm, or tell me a different time.)`,
     ledger_entry_id: persisted.ledger_entry_id,
+    conversation_id: boundThread,
   };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v: string | undefined): v is string {
+  return typeof v === "string" && UUID_RE.test(v);
 }
 
 function providerBlockedMessage(code: string, title: string): string {
