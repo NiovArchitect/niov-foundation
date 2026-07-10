@@ -134,11 +134,25 @@ export {
 
 export type { CreateSessionInput } from "./queries/session.js";
 
-// [OTZAR-CONTINUITY P5A] Durable conversation-turn transcript.
+// [OTZAR-CONTINUITY P5 Stage 1] Thread lifecycle service + durable turn transcript.
+export {
+  createThread,
+  getThread,
+  assertThreadScope,
+  touchThread,
+  archiveThread,
+  reopenThread,
+  closeThread,
+  markThreadDeleted,
+  allocateTurnSequence,
+  ThreadScopeError,
+} from "./queries/otzar-threads.js";
+export type { ThreadScope, ThreadStatus, CreateThreadInput } from "./queries/otzar-threads.js";
 export {
   appendConversationTurn,
   listConversationTurns,
   latestConversationTurn,
+  IdempotencyConflictError,
   MAX_TURN_CONTENT_CHARS,
 } from "./queries/otzar-conversation-turns.js";
 export type {
@@ -147,7 +161,6 @@ export type {
   ListConversationTurnsOptions,
   ConversationTurnRole,
   ConversationTurnChannel,
-  ConversationTurnVisibility,
 } from "./queries/otzar-conversation-turns.js";
 
 export type {

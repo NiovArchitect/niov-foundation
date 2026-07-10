@@ -1,47 +1,60 @@
 // FILE: queries/otzar-conversation-turns.ts
-// PURPOSE: [OTZAR-CONTINUITY P5A] Durable server-side conversation-turn transcript
-//          API. Appends user/assistant turns idempotently with a monotonic
-//          per-thread sequence, and lists them for reference resolution
-//          ("what did we decide?", "the one David mentioned") and cross-device
-//          restoration. The OtzarConversation shell holds counters/lifecycle;
-//          these rows hold turn CONTENT.
-// SAFETY: SAFE natural-language content ONLY — callers must never pass tokens,
-//         secrets, authorization codes, raw provider bodies, or uncontrolled tool
-//         payloads (ADR-0057 §16). Content is length-capped here as a backstop
-//         against an unbounded transcript warehouse.
-// CONNECTS TO: otzar_conversation_turns table (schema.prisma),
-//              OtzarConversation (thread shell), otzar.service.ts (conductSession
-//              persistence — P5A wiring lands next), calendar-continuity.service.ts
-//              (action_ref → WorkLedgerEntry proposals).
+// PURPOSE: [OTZAR-CONTINUITY P5 Stage 1] Durable server-side conversation-turn
+//          transcript API. Appends user/assistant turns idempotently with an
+//          atomically-allocated, ownership-gated monotonic sequence, and lists them
+//          for reference resolution ("what did we decide?", "the one David
+//          mentioned", "send that") and cross-device restoration.
+// IDENTITY (contract §Identity): every turn is tenant-scoped (org NON-NULL) and
+//          separates subject (the human user whose private thread) from author (who
+//          wrote the turn). No ambiguous actor; no visibility=ORG switch.
+// SAFETY: SAFE natural-language content ONLY — never tokens, secrets, authorization
+//          codes, raw provider bodies, or uncontrolled tool payloads (ADR-0057 §16).
+//          Content is length-capped as a warehouse backstop.
+// CONNECTS TO: otzar_conversation_turns table, otzar-threads.ts (scope gate + atomic
+//          sequence), otzar.service.ts (conductSession persistence — later stage).
 
+import { createHash } from "node:crypto";
 import type { OtzarConversationTurn, Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
+import {
+  allocateTurnSequence,
+  assertThreadScope,
+  ThreadScopeError,
+  type ThreadScope,
+} from "./otzar-threads.js";
 
 /** Max stored characters per turn — a backstop against a runaway warehouse. */
 export const MAX_TURN_CONTENT_CHARS = 8000;
 
 export type ConversationTurnRole = "USER" | "ASSISTANT" | "SYSTEM";
 export type ConversationTurnChannel = "CHAT" | "VOICE" | "AMBIENT";
-export type ConversationTurnVisibility = "PRIVATE" | "ORG";
+
+/** Same thread + same request_id but DIFFERENT content — a client bug or collision. */
+export class IdempotencyConflictError extends Error {
+  constructor() {
+    super("otzar_turn_idempotency_conflict: request_id reused with different content");
+    this.name = "IdempotencyConflictError";
+  }
+}
 
 export interface AppendConversationTurnInput {
   conversation_id: string;
-  actor_entity_id: string;
+  /** Tenant — NON-NULL. */
+  org_entity_id: string;
+  /** The human user whose private thread this is. */
+  subject_entity_id: string;
+  /** Who authored: the subject (USER), the Twin (ASSISTANT), or a system entity. */
+  author_entity_id: string;
+  twin_entity_id?: string | null;
   role: ConversationTurnRole;
   content: string;
-  /** Exact org for isolation (P5B). Null only for orgless/legacy callers. */
-  org_entity_id?: string | null;
-  /** Client idempotency key — a repeated (thread, request_id) returns the same turn. */
   request_id?: string | null;
   reply_to_turn_id?: string | null;
-  /** WorkLedgerEntry (proposal/action) this turn concerns. */
   action_ref?: string | null;
-  /** Correction/supersession lineage. */
   supersedes_turn_id?: string | null;
   source_channel?: ConversationTurnChannel;
   model_provider?: string | null;
   retention_class?: string;
-  visibility?: ConversationTurnVisibility;
 }
 
 export interface AppendConversationTurnResult {
@@ -51,12 +64,20 @@ export interface AppendConversationTurnResult {
   deduped: boolean;
 }
 
+function sha256(s: string): string {
+  return createHash("sha256").update(s).digest("hex");
+}
+
 function isUniqueViolation(e: unknown): boolean {
-  return (
-    typeof e === "object" &&
-    e !== null &&
-    (e as { code?: unknown }).code === "P2002"
-  );
+  return typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2002";
+}
+
+function scopeOf(input: AppendConversationTurnInput): ThreadScope {
+  return {
+    org_entity_id: input.org_entity_id,
+    subject_entity_id: input.subject_entity_id,
+    ...(input.twin_entity_id != null ? { twin_entity_id: input.twin_entity_id } : {}),
+  };
 }
 
 async function findByRequestId(
@@ -69,40 +90,50 @@ async function findByRequestId(
 }
 
 /**
- * Append a turn durably. Idempotent on `request_id` (a retried request resolves
- * to the same row) and safe under concurrency: the monotonic `sequence` is
- * guarded by a unique index, so two racing appends never collide — the loser
- * recomputes and retries. Returns the persisted turn's id + sequence.
+ * Append a turn durably (contract §2–§5). Ownership-gated (the thread must exist and
+ * belong to the caller's org+subject), idempotent on `request_id` (same content →
+ * same row; different content → IdempotencyConflictError), and race-safe: the
+ * monotonic `sequence` is allocated atomically from `OtzarConversation.turn_seq`, so
+ * concurrent appends (two tabs/devices) get distinct gapless sequences with no retry.
  *
- * Persist the USER turn BEFORE model invocation; persist the ASSISTANT turn
- * BEFORE the response is considered durable. A duplicate request, a retry, a
- * lost-delivery re-send, or two tabs/devices all converge on one stored turn.
+ * Persist the USER turn BEFORE model invocation; the ASSISTANT turn BEFORE the
+ * response is considered durable. A response-lost retry with the same request_id
+ * returns the persisted result rather than re-invoking the model.
  */
 export async function appendConversationTurn(
   input: AppendConversationTurnInput,
 ): Promise<AppendConversationTurnResult> {
   const requestId = input.request_id ?? null;
-
-  // Fast path: a prior identical request already landed.
-  if (requestId !== null) {
-    const existing = await findByRequestId(input.conversation_id, requestId);
-    if (existing !== null) {
-      return { turn_id: existing.turn_id, sequence: existing.sequence, deduped: true };
-    }
-  }
-
   const content =
     input.content.length > MAX_TURN_CONTENT_CHARS
       ? input.content.slice(0, MAX_TURN_CONTENT_CHARS)
       : input.content;
+  const contentHash = sha256(content);
 
-  const base: Prisma.OtzarConversationTurnUncheckedCreateInput = {
+  // Idempotency fast path: a prior identical request already landed.
+  if (requestId !== null) {
+    const existing = await findByRequestId(input.conversation_id, requestId);
+    if (existing !== null) {
+      if (existing.content_hash !== contentHash) throw new IdempotencyConflictError();
+      return { turn_id: existing.turn_id, sequence: existing.sequence, deduped: true };
+    }
+  }
+
+  // Atomically allocate the sequence AND enforce ownership: a missing/foreign/deleted
+  // thread updates 0 rows → null → reject (no orphan turn by arbitrary UUID).
+  const sequence = await allocateTurnSequence(input.conversation_id, scopeOf(input));
+  if (sequence === null) throw new ThreadScopeError("thread_not_appendable");
+
+  const data: Prisma.OtzarConversationTurnUncheckedCreateInput = {
     conversation_id: input.conversation_id,
-    org_entity_id: input.org_entity_id ?? null,
-    actor_entity_id: input.actor_entity_id,
+    org_entity_id: input.org_entity_id,
+    subject_entity_id: input.subject_entity_id,
+    author_entity_id: input.author_entity_id,
+    twin_entity_id: input.twin_entity_id ?? null,
     role: input.role,
     content,
-    sequence: 0, // set per attempt below
+    content_hash: contentHash,
+    sequence,
     request_id: requestId,
     reply_to_turn_id: input.reply_to_turn_id ?? null,
     action_ref: input.action_ref ?? null,
@@ -110,31 +141,17 @@ export async function appendConversationTurn(
     source_channel: input.source_channel ?? "CHAT",
     model_provider: input.model_provider ?? null,
     retention_class: input.retention_class ?? "STANDARD",
-    visibility: input.visibility ?? "PRIVATE",
   };
 
-  // Allocate the monotonic sequence under a per-thread transaction advisory lock,
-  // so concurrent appends (two tabs, two devices) serialize per thread with zero
-  // sequence collisions and no read-max/retry storm. The lock is keyed on the
-  // thread uuid and auto-releases at transaction end. Turns within one thread are
-  // inherently sequential, so per-thread serialization is the correct granularity.
   try {
-    return await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.conversation_id}))`;
-      const agg = await tx.otzarConversationTurn.aggregate({
-        _max: { sequence: true },
-        where: { conversation_id: input.conversation_id },
-      });
-      const sequence = (agg._max.sequence ?? 0) + 1;
-      const row = await tx.otzarConversationTurn.create({ data: { ...base, sequence } });
-      return { turn_id: row.turn_id, sequence, deduped: false };
-    });
+    const row = await prisma.otzarConversationTurn.create({ data });
+    return { turn_id: row.turn_id, sequence, deduped: false };
   } catch (e) {
-    // The only expected clash under the lock is a concurrent duplicate request_id
-    // (checked pre-lock above but two identical requests can race the fast path).
+    // A concurrent duplicate request_id raced the fast path → return the winner.
     if (isUniqueViolation(e) && requestId !== null) {
       const existing = await findByRequestId(input.conversation_id, requestId);
       if (existing !== null) {
+        if (existing.content_hash !== contentHash) throw new IdempotencyConflictError();
         return { turn_id: existing.turn_id, sequence: existing.sequence, deduped: true };
       }
     }
@@ -143,27 +160,24 @@ export async function appendConversationTurn(
 }
 
 export interface ListConversationTurnsOptions {
-  /** Scope to an exact org (P5B isolation). */
-  org_entity_id?: string | null;
-  /** Most recent N turns (returned in ascending sequence order). Default 50. */
+  /** Most recent N turns (returned ascending). Default 50. */
   limit?: number;
-  /** Exclude SYSTEM turns from the reference window. */
   roles?: ConversationTurnRole[];
 }
 
 /**
- * List a thread's turns in ascending sequence order (oldest→newest). When
- * `limit` is set, returns the most recent N (still ascending). Org-scoped when
- * `org_entity_id` is provided — a cross-org read returns nothing.
+ * List a thread's turns in ascending sequence order (oldest→newest), after validating
+ * the caller's scope (contract §3) — a cross-org/cross-user/deleted thread throws
+ * ThreadScopeError rather than leaking another tenant's turns.
  */
 export async function listConversationTurns(
   conversationId: string,
+  scope: ThreadScope,
   options: ListConversationTurnsOptions = {},
 ): Promise<OtzarConversationTurn[]> {
+  await assertThreadScope(conversationId, scope);
   const where: Prisma.OtzarConversationTurnWhereInput = { conversation_id: conversationId };
-  if (options.org_entity_id != null) where.org_entity_id = options.org_entity_id;
   if (options.roles && options.roles.length > 0) where.role = { in: options.roles };
-
   if (options.limit != null) {
     const recent = await prisma.otzarConversationTurn.findMany({
       where,
@@ -175,12 +189,14 @@ export async function listConversationTurns(
   return prisma.otzarConversationTurn.findMany({ where, orderBy: { sequence: "asc" } });
 }
 
-/** The most recent turn for a thread, or null. */
+/** The most recent turn for a thread (scope-validated), or null. */
 export async function latestConversationTurn(
   conversationId: string,
-  options: { org_entity_id?: string | null } = {},
+  scope: ThreadScope,
 ): Promise<OtzarConversationTurn | null> {
-  const where: Prisma.OtzarConversationTurnWhereInput = { conversation_id: conversationId };
-  if (options.org_entity_id != null) where.org_entity_id = options.org_entity_id;
-  return prisma.otzarConversationTurn.findFirst({ where, orderBy: { sequence: "desc" } });
+  await assertThreadScope(conversationId, scope);
+  return prisma.otzarConversationTurn.findFirst({
+    where: { conversation_id: conversationId },
+    orderBy: { sequence: "desc" },
+  });
 }
