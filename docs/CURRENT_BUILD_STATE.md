@@ -181,23 +181,29 @@ applied to prod before the next Foundation deploy. There is no production flag t
 guard (fail-closed; test-only injection seam). Guard query later scoped to
 `current_schema()` (PR #609) so a same-named table in another schema can't false-pass.
 
-**Prod schema apply + FND deploy — ATTEMPTED → STOPPED; PRODUCTION UNCHANGED (2026-07-09).**
-Nothing applied, nothing deployed (read-only `--dry-run` + `prisma migrate diff` only). Two
-hard stops fired: (1) the prod↔schema diff is **not** exactly the six identity columns — it
-also carries unrelated un-applied drift `memory_capsules.voice_note_id` (+idx, `615b6b1`, an
-**ancestor** of the identity commits ⇒ it rides the same deploy SHA) + an index rename; prod
-lacks `voice_note_id` and `memory_capsules` is read via default all-scalar selects on live
-paths, so deploying `main` would break those reads (the identity guard covers only
-`integration_credentials`). (2) The `RENDER_API_KEY` in `.env` is `Unauthorized` ⇒ the live
-SHA can't be read and no deploy can be triggered via the sanctioned rail. Applying only the
-six columns now would flip the identity guard green while `memory_capsules` stays unguarded
-(a false-green ADR-0025 forbids), so nothing was applied. Dry-run DID verify the target is
-safe (prod `integration_credentials` exists, all 6 identity columns absent, `rowCount=1`, no
-type conflicts). **Coordinated operator packet** (confirm live SHA + valid Render key ·
-decide `memory_capsules.voice_note_id` · apply the 6 columns via the ADR-0025 raw-DDL rail
-with exact SQL + lock/statement timeouts + pre/post checks · then deploy) is in CT
-`OTZAR_PILOT_OPS_RUNBOOK.md`. `GOOGLE_OIDC_IDENTITY` remains OFF; no account pinned; Meridian
-+ demo untouched.
+**Prod schema apply + guarded FND deploy — ✅ RESOLVED via incident recovery (2026-07-10);
+LIVE = `12eb568` (guard-bearing).** Sequence: an operator deployed the identity code, so
+`371542f` (deployed 05:11, **before** the guard existed) went live; the later guard-bearing
+SHAs (`2c2faaa`, `12eb568`) correctly **failed at the boot guard** and never went live (guard
+working as designed). But `371542f`'s client selected columns prod lacked, so live was
+**actively failing** `memoryCapsule.create()` (`column memory_capsules.voice_note_id does not
+exist`; prod `memory_capsules` rowCount=0 — every create failed) and would fail connector reads
+on the six identity columns. Root cause: `voice_note_id` (FND `615b6b1`, 2026-06-22) shipped in
+the client for weeks but its schema was never applied to prod. Rollback was NOT viable (every
+recent SHA's client needs `voice_note_id`). **Fix (founder-approved, ADR-0025 raw-DDL rail):** a
+**coordinated additive apply** — the 6 nullable `integration_credentials` identity columns +
+nullable `memory_capsules.voice_note_id` + its index (the cosmetic external-collaborator index
+rename deliberately excluded). Applied idempotently in a transaction (`lock_timeout=5s`,
+`statement_timeout=30s`); verified all present + nullable + correct types, row counts unchanged
+(no data touched). Then redeployed the latest guard-bearing main `12eb568` by commit id — it went
+**live** (the identical SHA that failed the guard at 13:51 **passed** at 14:23 post-apply,
+proving the guard). Post-verify: `/health` 200; live logs show **0** `voice_note_id`/capsule/
+column errors; connector OAuth status read (smoke org, read-only) HTTP 200; prod↔main diff now
+only the cosmetic index rename. `GOOGLE_OIDC_IDENTITY` remains **OFF**; no account pinned; no
+Google re-consent; Meridian + demo untouched. Apply rail: `scripts/activate-prod-schema-reconcile-371542f.ts`.
+**Follow-up:** the boot guard checks only the 6 identity columns — a `voice_note_id`-class column
+added before/outside the guard would slip through; a generalized declarative startup schema
+manifest (all runtime-required columns) is recommended (design in the incident PR).
 
 **RECOMMENDED next (small):** thread a `tx` through `revalidateImportedDocForCaller` to make
 its ledger-update + audit atomic (closes the Slice-3 audit-completeness residual).
