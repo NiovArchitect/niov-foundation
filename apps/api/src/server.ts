@@ -170,6 +170,7 @@ import { registerSystemRuntimeRoutes } from "./routes/system-runtime.routes.js";
 import { registerWorkOsLedgerRoutes } from "./routes/work-os-ledger.routes.js";
 import { registerAdminLlmStatusRoutes } from "./routes/admin-llm-status.routes.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
+import { registerInboundSignalRoutes } from "./routes/inbound-signal.routes.js";
 import { registerCosmpRoutes } from "./routes/cosmp.routes.js";
 import { registerVoiceRoutes } from "./routes/voice.routes.js";
 import { registerPlatformRoutes } from "./routes/platform.routes.js";
@@ -213,6 +214,9 @@ export interface BuildAppConfig {
   jwtSecret?: string;
   sessionNonceStore?: NonceStore;
   declarationStore?: NonceStore;
+  // [INBOUND-SIGNAL] the store backing inbound-signal nonce/dedupe/debounce/quota.
+  // Tests inject a MemoryNonceStore for determinism; production defaults to Redis.
+  inboundNonceStore?: NonceStore;
   contentStore?: ContentStore;
   contentEncryption?: ContentEncryption;
   rateLimitStore?: RateLimitStore;
@@ -790,6 +794,11 @@ export async function buildApp(
 
   await registerHealthRoutes(app);
   await registerAuthRoutes(app, authService);
+  // [INBOUND-SIGNAL · Slice 2] the bearer-less HMAC-signed inbound event rail.
+  await registerInboundSignalRoutes(
+    app,
+    config.inboundNonceStore ?? makeDefaultNonceStore("niov:inbound:"),
+  );
   await registerVoiceRoutes(app, authService);
   await registerCosmpRoutes(
     app,

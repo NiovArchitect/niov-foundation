@@ -41,6 +41,11 @@ export const DEFAULT_LIMITS: Record<string, RateLimitPolicy> = {
   // Unauthenticated by design -> ip-scoped, login-posture limit.
   activate: { perMinute: 10, scope: "ip" },
   admin_reset: { perMinute: 5, scope: "entity" },
+  // [INBOUND-SIGNAL · Slice 2] the bearer-less HMAC-signed inbound signal rail is
+  // unauthenticated (HMAC is the sole auth) -> IP-scoped, moderate cap. Bounds a
+  // signed-event burst from a single source per minute; per-org quota + per-
+  // resource debounce bound downstream (Google) amplification inside the handler.
+  inbound_signal: { perMinute: 60, scope: "ip" },
   // GOVSEC.5 G4-C / GAP-B4: the 4 dual-control PRIVILEGED_ENDPOINTS routes
   // (platform monetization-config, platform org-creation, regulator access
   // grant/revoke -- see apps/api/src/security/privileged-endpoints.ts). These were
@@ -251,6 +256,8 @@ const OPERATION_RULES: OperationRule[] = [
   // any legitimate emergency cadence -- bounds abuse without impeding emergencies.
   // BG.2 behavior (the dual-control seam + service) is unchanged.
   { method: "POST", pattern: /^\/api\/v1\/break-glass(\/|$)/, operation: "admin" },
+  // [INBOUND-SIGNAL · Slice 2] IP-scoped rate-limit for the HMAC-signed rail.
+  { method: "POST", pattern: /^\/api\/v1\/otzar\/inbound\/signal$/, operation: "inbound_signal" },
 ];
 
 // WHAT: Pull the operation type out of an incoming request.

@@ -802,7 +802,16 @@ export type AuditEventType =
   | "SOURCE_ACCESS_REVOKED"
   | "SOURCE_DELETED"
   | "IMPORT_QUARANTINED"
-  | "IMPORT_FAILED";
+  | "IMPORT_FAILED"
+  // [INBOUND-SIGNAL · Slice 2] the internal HMAC-signed event rail's outcomes.
+  // Additive (append-only) — event_type is a validated String, no migration.
+  // FORBIDDEN in details: raw payload, secret, tokens, signatures.
+  | "INBOUND_SIGNAL_PROCESSED"
+  | "INBOUND_SIGNAL_REPLAY_REJECTED"
+  | "INBOUND_SIGNAL_DEDUPED"
+  | "INBOUND_SIGNAL_QUARANTINED"
+  | "INBOUND_SIGNAL_FAILED"
+  | "SOURCE_REVALIDATION_TRIGGERED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -1088,6 +1097,13 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "SOURCE_DELETED",
   "IMPORT_QUARANTINED",
   "IMPORT_FAILED",
+  // [INBOUND-SIGNAL · Slice 2] internal HMAC-signed event rail outcomes.
+  "INBOUND_SIGNAL_PROCESSED",
+  "INBOUND_SIGNAL_REPLAY_REJECTED",
+  "INBOUND_SIGNAL_DEDUPED",
+  "INBOUND_SIGNAL_QUARANTINED",
+  "INBOUND_SIGNAL_FAILED",
+  "SOURCE_REVALIDATION_TRIGGERED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(
