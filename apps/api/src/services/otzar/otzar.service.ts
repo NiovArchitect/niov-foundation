@@ -184,6 +184,11 @@ export interface ConductSessionInput {
   conversation_id?: string;
   conversation_history?: string[];
   token_budget?: number;
+  // [OTZAR-CONTINUITY P1] The caller's LIVE device timezone (IANA, e.g.
+  // "America/Los_Angeles"), sent per-request so a traveling user's calendar
+  // times resolve to where they actually are. Falls back to the stored per-user
+  // EntityProfile.timezone, then a documented org fallback.
+  client_timezone?: string;
 }
 
 // WHAT: Closed-vocab next-step label per the
@@ -903,6 +908,34 @@ export class OtzarService {
         : "individual";
     const tokenBudget = input.token_budget ?? 8000;
 
+    // [OTZAR-CONTINUITY P0/P1/P2/P3] Deterministic, server-authoritative calendar
+    // continuity runs BEFORE the LLM: resolve the real current date+timezone,
+    // resolve a "yes"/"no" against the caller's single pending prior-turn
+    // proposal (idempotent, gated execution), or persist a new proposal. When it
+    // handles the turn we short-circuit with a deterministic answer — the LLM is
+    // never asked whether "yes" means approval, and never invents a date.
+    const { handleCalendarContinuity, resolveTemporalContext, temporalPromptLine } =
+      await import("./calendar-continuity.service.js");
+    const temporalCtx = await resolveTemporalContext({
+      actor_entity_id: ownerEntityId,
+      client_timezone: input.client_timezone,
+    });
+    const continuity = await handleCalendarContinuity({
+      actor_entity_id: ownerEntityId,
+      org_entity_id: orgEntityId,
+      conversation_id: input.conversation_id,
+      message: input.message,
+      temporal: temporalCtx,
+    });
+    if (continuity !== null) {
+      const convId = await this.resolveContinuityConversationId(
+        input.conversation_id,
+        ownerEntityId,
+        twin.entity_id,
+      );
+      return this.buildContinuitySuccess(convId, continuity);
+    }
+
     // Validate L8 history length up front.
     const history = input.conversation_history ?? [];
     if (history.length > L8_MAX_MESSAGES) {
@@ -1187,6 +1220,9 @@ export class OtzarService {
 
     const systemPrompt = [
       identityPreamble,
+      // [OTZAR-CONTINUITY P1] Server-grounded current date/time/timezone so the
+      // model never invents a date (the "January 2025" failure). Authoritative.
+      temporalPromptLine(temporalCtx),
       truncated.final.priming,
       L_ALIGNMENT,
       // Slice E — grounded work context (outside the truncation budget; "" unless
@@ -1430,6 +1466,92 @@ export class OtzarService {
       ...(collaborationTargetType !== undefined
         ? { collaboration_target_type: collaborationTargetType }
         : {}),
+    };
+  }
+
+  // [OTZAR-CONTINUITY] Resolve (or tolerantly restore/create) the conversation
+  // row for a deterministic continuity turn, mirroring the main path's counter
+  // semantics so the client always gets a stable conversation_id back.
+  private async resolveContinuityConversationId(
+    clientId: string | undefined,
+    ownerEntityId: string,
+    twinEntityId: string,
+  ): Promise<string> {
+    if (typeof clientId === "string" && clientId.length > 0) {
+      try {
+        await prisma.otzarConversation.update({
+          where: { conversation_id: clientId },
+          data: { message_count: { increment: 1 } },
+        });
+        return clientId;
+      } catch {
+        try {
+          await prisma.otzarConversation.create({
+            data: {
+              conversation_id: clientId,
+              entity_id: ownerEntityId,
+              twin_id: twinEntityId,
+              source_type: "CHAT",
+              participants: [ownerEntityId, twinEntityId],
+              message_count: 1,
+              status: "ACTIVE",
+            },
+          });
+          return clientId;
+        } catch {
+          /* fall through to a fresh id */
+        }
+      }
+    }
+    const id = randomUUID();
+    await prisma.otzarConversation
+      .create({
+        data: {
+          conversation_id: id,
+          entity_id: ownerEntityId,
+          twin_id: twinEntityId,
+          source_type: "CHAT",
+          participants: [ownerEntityId, twinEntityId],
+          message_count: 1,
+          status: "ACTIVE",
+        },
+      })
+      .catch(() => undefined);
+    return id;
+  }
+
+  // [OTZAR-CONTINUITY] Wrap a deterministic continuity result in a valid
+  // ConductSessionSuccess. Honest state flags: a pending proposal sets
+  // action_proposed + approval_required; nothing else is fabricated.
+  private buildContinuitySuccess(
+    conversationId: string,
+    continuity: { state: string; response: string; event_id?: string },
+  ): ConductSessionSuccess {
+    const awaiting = continuity.state === "AWAITING_CONFIRMATION";
+    return {
+      ok: true,
+      response: continuity.response,
+      context_used: 0,
+      tokens_consumed: 0,
+      conversation_id: conversationId,
+      next_step: awaiting ? "ACTION_PROPOSED" : "ANSWERED",
+      correction_capture_available: true,
+      speech_ready_text: continuity.response,
+      voice_output_supported: false,
+      clarification_needed: continuity.state === "DISAMBIGUATE",
+      action_proposed: awaiting,
+      approval_required: awaiting,
+      policy_blocked: false,
+      dmw_scope_blocked: false,
+      collaboration_suggested: false,
+      memory_used_summary: {
+        layer_1_corrections: 0,
+        layer_3_work_profile: 0,
+        layer_4_foundational: 0,
+        layer_5_relevant_context: 0,
+        layer_8_history_messages: 0,
+        total_capsules: 0,
+      },
     };
   }
 
