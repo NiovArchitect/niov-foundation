@@ -24,6 +24,7 @@ import type { Prisma } from "@prisma/client";
 import { receiveMeetingCaptureForCaller } from "./meeting-capture.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 import { getOrgEntityId } from "../governance/org.js";
+import { getGoogleCredentialIdentity } from "../connector/connector-oauth.service.js";
 import type { SourceIntegrity, SourceIntegrityState } from "./source-integrity.js";
 import {
   fetchGoogleDocTextForOrg,
@@ -65,6 +66,14 @@ export interface DocumentContextSeedInput {
     modified_time: string;
     web_view_link: string | null;
     content_sha256: string;
+    // [SLICE3-PREREQ] Additive, optional account lineage: the exact Google
+    // credential + pinned OIDC `sub` this source was imported through. Enables a
+    // future changes-feed to bind a revalidation to the SAME Google account
+    // (never cross-account). Absent on legacy rows and when identity is not yet
+    // pinned — old rows stay readable; future registration re-verifies via
+    // bounded reconciliation before enabling a real watch.
+    integration_credential_id?: string;
+    external_account_subject?: string;
   };
 }
 
@@ -278,6 +287,13 @@ export async function importGoogleDocForCaller(
       };
     }
   }
+  // [SLICE3-PREREQ] Stamp the pinned Google credential lineage (additive) so a
+  // future changes-feed can bind a revalidation to the EXACT account that
+  // imported the source. Absent identity (pre-pin) leaves the fields unset.
+  const googleIdentity = await getGoogleCredentialIdentity({
+    org_entity_id: orgEntityId,
+  });
+  const subject = googleIdentity?.external_account_subject ?? null;
   return seedDocumentContextForCaller(callerEntityId, {
     source_kind: input.source_kind ?? "OTHER",
     title: input.name.slice(0, DOCUMENT_TITLE_MAX),
@@ -289,6 +305,12 @@ export async function importGoogleDocForCaller(
       modified_time: input.modified_time,
       web_view_link: input.web_view_link,
       content_sha256: input.content_sha256,
+      ...(googleIdentity !== null
+        ? { integration_credential_id: googleIdentity.credential_id }
+        : {}),
+      ...(subject !== null && subject.length > 0
+        ? { external_account_subject: subject }
+        : {}),
     },
   });
 }

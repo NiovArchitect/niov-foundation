@@ -1835,6 +1835,22 @@ model IntegrationCredential {
   enabled        Boolean  @default(true)
   created_at     DateTime @default(now())
 
+  // [SLICE3-PREREQ · Google account identity pin] Additive, nullable identity
+  // lineage for the org's pinned Google Workspace account. The immutable OIDC
+  // `sub` (external_account_subject) is the AUTHORITY key; email is display/
+  // audit only and NEVER replaces `sub`. Populated only from a cryptographically
+  // verified id_token (issuer + audience + signature + exp + non-empty sub).
+  // NEVER stores an id_token, refresh/access token, or raw claims. Existing rows
+  // start null (lazy-pinned on the next verified interactive reauthorization).
+  // A pinned (non-null) subject makes the sealed token immutable except on a
+  // reconnect whose verified `sub` matches — the different-account swap guard.
+  external_account_subject          String?
+  external_account_email            String?
+  external_account_email_verified   Boolean?
+  external_account_issuer           String?
+  external_account_pinned_at        DateTime?
+  external_account_last_verified_at DateTime?
+
   @@unique([org_entity_id, tool])
   @@map("integration_credentials")
 }

@@ -71,7 +71,13 @@ function statusFor(failure: ConnectorOAuthFailure): number {
     case "EXCHANGE_FAILED":
     case "VERIFY_FAILED":
     case "REVOKE_FAILED":
+    case "IDENTITY_VERIFY_FAILED":
       return 502;
+    // [SLICE3-PREREQ] A pinned org rejecting a different / unverifiable Google
+    // account is a conflict, not a server error.
+    case "GOOGLE_ACCOUNT_MISMATCH":
+    case "GOOGLE_IDENTITY_REQUIRED":
+      return 409;
     case "INTERNAL_ERROR":
       return 500;
   }
