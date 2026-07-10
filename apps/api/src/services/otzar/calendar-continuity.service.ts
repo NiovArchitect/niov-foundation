@@ -678,11 +678,16 @@ function orderForSelection(rows: PendingProposalRow[]): PendingProposalRow[] {
 export function parseTimeRevision(message: string): { hour24: number; minute: number } | null {
   const m = message.toLowerCase();
   // Must look like a revision, not a fresh calendar request (which CALENDAR_INTENT
-  // catches first) — a change verb, "instead", or a leading "no/actually" + a time.
-  const revisionCue =
-    /\b(make it|change it to|move it to|instead|actually|rather|let'?s do|how about)\b/.test(m) ||
-    /^\s*(no,?\s+)?\d/.test(m);
-  if (!revisionCue) return null;
+  // catches first) or a stray number. Two safe cues:
+  //  - a change verb ("make it 2", "change it to 3", "instead", "actually"), or
+  //  - a leading time that is explicitly clock-shaped (am/pm, o'clock, or :mm) so a
+  //    bare year like "2024 was a great year" is NOT read as 8 PM.
+  const verbCue =
+    /\b(make it|change it to|move it to|instead|actually|rather|let'?s do|how about)\b/.test(m);
+  const bareTimeCue =
+    /^\s*(no,?\s+)?\d{1,2}\s*(a\.?m\.?|p\.?m\.?|o'?clock)\b/.test(m) ||
+    /^\s*(no,?\s+)?\d{1,2}:\d{2}\b/.test(m);
+  if (!verbCue && !bareTimeCue) return null;
   const t = parseTimePhrase(message);
   if (t === null) return null;
   return { hour24: t.hour24, minute: t.minute };
@@ -808,7 +813,7 @@ export async function handleCalendarContinuity(args: {
     /^\s*\(?\d\)?\s*$/.test(args.message);
   const revisionLike =
     /\b(make it|change it to|move it to|instead|actually|rather|let'?s do|how about)\b/i.test(args.message) ||
-    /^\s*(no,?\s+)?\d/.test(args.message);
+    /^\s*(no,?\s+)?\d{1,2}\s*(a\.?m\.?|p\.?m\.?|o'?clock|:\d{2})/i.test(args.message);
   if (ordinalLike || revisionLike) {
     const pending = await findActorPendingProposals({
       actor_entity_id: args.actor_entity_id,

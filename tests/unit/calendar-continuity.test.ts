@@ -159,6 +159,10 @@ describe("P4 — time revision (supersession) parsing", () => {
     expect(parseTimeRevision("what's on my calendar")).toBeNull();
     expect(parseTimeRevision("make it happen")).toBeNull(); // cue but no time
   });
+  it("does NOT misread a bare year/number as a clock time", () => {
+    expect(parseTimeRevision("2024 was a great year")).toBeNull(); // no clock token
+    expect(parseTimeRevision("3 apples please")).toBeNull();
+  });
 });
 
 describe("PRE-FIX reproduction (the proven loss point)", () => {
