@@ -29,6 +29,7 @@ import {
 } from "./services/personalization/session-context-resolver.js";
 import { registerWorkingSetRoutes } from "./routes/working-set.routes.js";
 import { prisma } from "@niov/database";
+import { assertIntegrationCredentialIdentitySchemaCompatible } from "./startup/integration-credential-schema-guard.js";
 import { HiveService } from "./services/hive/hive.service.js";
 import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
@@ -985,11 +986,40 @@ export async function buildApp(
 // OUTPUT: A long-lived Fastify process listening on PORT.
 // WHY: Production entry point. Tests never call this -- they call
 //      buildApp() and use inject() instead.
-async function main(): Promise<void> {
-  const app = await buildApp();
+// WHAT: Production startup orchestrator — runs the boot-time schema-compatibility
+//        guard BEFORE building the app or listening, then builds + listens.
+// INPUT: injectable seams (test-only) for the guard and the app builder; both
+//        default to the real production implementations.
+// OUTPUT: the listening FastifyInstance.
+// WHY: [SLICE3-PREREQ] The deployed code SELECTs the six IntegrationCredential
+//      identity columns; running it against a database that lacks them would break
+//      every credential read at request time. The guard fails startup fast (exits
+//      non-zero via main's catch) so no traffic — not even health — is ever
+//      accepted by an incompatible deployment. Tests inject a passing/failing guard
+//      and a spy builder to prove the ordering WITHOUT a real DB or a bound port;
+//      there is deliberately NO production env flag to bypass the guard.
+export async function startApiServer(
+  deps: {
+    schemaGuard?: () => Promise<void>;
+    build?: () => Promise<FastifyInstance>;
+  } = {},
+): Promise<FastifyInstance> {
+  const guard =
+    deps.schemaGuard ??
+    (() => assertIntegrationCredentialIdentitySchemaCompatible(prisma));
+  const build = deps.build ?? buildApp;
+  // Fail fast BEFORE any app construction or listen if the prod schema is behind
+  // the code. A rejection here propagates to main()'s catch → process.exit(1).
+  await guard();
+  const app = await build();
   const port = Number.parseInt(process.env.PORT ?? "3000", 10);
   await app.listen({ port, host: "0.0.0.0" });
   app.log.info({ port }, "NIOV API listening");
+  return app;
+}
+
+async function main(): Promise<void> {
+  const app = await startApiServer();
 
   // Graceful shutdown: stop the cron scheduler BEFORE Fastify
   // closes so an in-flight loop fire doesn't outlive the server.

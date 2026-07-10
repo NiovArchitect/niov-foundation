@@ -163,6 +163,23 @@ existing users to re-consent → **founder/consent decision, not applied silentl
 the `db push` guard is fail-closed to localhost, so the additive migration + the code deploy
 are **founder-gated** (exact SQL in the PR). Until both gates clear, the rail is inert
 (no id_token ⇒ identity stays null ⇒ WatchSubscription registration stays blocked).
+
+**Boot-time schema-compatibility guard — 🟢 ADDED (follow-up PR).** Because the merged
+code's default Prisma reads SELECT the six identity columns, running it against a database
+that lacks them would break every `IntegrationCredential` read at request time. A boot-time
+guard (`apps/api/src/startup/integration-credential-schema-guard.ts`, run by `startApiServer`
+**before** `buildApp`/`app.listen`) reads `information_schema.columns` and, if the table or
+any of the six columns is missing, **fails startup with a non-zero exit** and the stable code
+`INTEGRATION_CREDENTIAL_SCHEMA_INCOMPATIBLE` (message names the missing columns + remediation;
+never a connection string/secret). A DB-unreachable/query failure is classified separately
+(`…_PROBE_UNAVAILABLE`), never as "columns missing". No traffic — not even `/health` — is
+accepted by an incompatible deployment (the guard precedes `listen`). **This guard converts a
+potentially partial runtime failure into an immediate, explicit startup failure; it does NOT
+make an incompatible deployment safe or available, is NOT a migration mechanism, and is NOT a
+bypass.** The deploy-ordering blocker is **not** closed — the additive schema must still be
+applied to prod before the next Foundation deploy. There is no production flag to skip the
+guard (fail-closed; test-only injection seam).
+
 **RECOMMENDED next (small):** thread a `tx` through `revalidateImportedDocForCaller` to make
 its ledger-update + audit atomic (closes the Slice-3 audit-completeness residual).
 
