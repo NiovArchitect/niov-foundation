@@ -134,6 +134,22 @@ export {
 
 export type { CreateSessionInput } from "./queries/session.js";
 
+// [OTZAR-CONTINUITY P5A] Durable conversation-turn transcript.
+export {
+  appendConversationTurn,
+  listConversationTurns,
+  latestConversationTurn,
+  MAX_TURN_CONTENT_CHARS,
+} from "./queries/otzar-conversation-turns.js";
+export type {
+  AppendConversationTurnInput,
+  AppendConversationTurnResult,
+  ListConversationTurnsOptions,
+  ConversationTurnRole,
+  ConversationTurnChannel,
+  ConversationTurnVisibility,
+} from "./queries/otzar-conversation-turns.js";
+
 export type {
   Entity,
   AuditLog,
