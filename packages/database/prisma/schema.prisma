@@ -2106,8 +2106,56 @@ model OtzarConversation {
   // closeConversation / degradedClose; read by getConversationDetail.
   summary_capsule_id String?   @db.Uuid
 
+  // [OTZAR-CONTINUITY P5A/P5B] Additive thread fields (all nullable / defaulted,
+  // no backfill — pre-existing rows read as null/default). org scoping enables
+  // exact-org restoration + isolation (P5B); last_active_at drives most-recent
+  // restoration; timezone snapshots the resolved tz at thread start; summary_version
+  // versions the structured summary (P5G); retention_class classifies retention (P5J).
+  org_entity_id      String?   @db.Uuid
+  last_active_at     DateTime?
+  timezone           String?
+  summary_version    Int       @default(0)
+  retention_class    String    @default("STANDARD")
+
   @@index([entity_id])
+  @@index([org_entity_id, entity_id, last_active_at])
   @@map("otzar_conversations")
+}
+
+// [OTZAR-CONTINUITY P5A] Durable server-side conversation turn transcript — the
+// canonical record of what was said, enabling reference resolution ("what did we
+// decide?", "the one David mentioned", "send that") and cross-device restoration.
+// The OtzarConversation shell holds counters/lifecycle; this holds turn CONTENT.
+// SAFE CONTENT ONLY: never tokens, secrets, authorization codes, raw provider
+// bodies, or uncontrolled tool payloads (ADR-0057 §16). Additive; no FK (matches
+// the OtzarConversation uuid-ref convention). One row per user/assistant turn.
+model OtzarConversationTurn {
+  turn_id            String    @id @default(uuid()) @db.Uuid
+  conversation_id    String    @db.Uuid
+  org_entity_id      String?   @db.Uuid
+  actor_entity_id    String    @db.Uuid
+  role               String    // USER | ASSISTANT | SYSTEM
+  content            String    // safe natural-language text only
+  sequence           Int       // monotonic per thread (1,2,3,…)
+  request_id         String?   // client idempotency key (dedupes retries)
+  reply_to_turn_id   String?   @db.Uuid
+  action_ref         String?   @db.Uuid // WorkLedgerEntry (proposal/action) this turn concerns
+  supersedes_turn_id String?   @db.Uuid // correction/supersession lineage
+  source_channel     String    @default("CHAT") // CHAT | VOICE | AMBIENT
+  model_provider     String?   // safe model/provider label (no keys)
+  retention_class    String    @default("STANDARD")
+  visibility         String    @default("PRIVATE") // PRIVATE | ORG
+  created_at         DateTime  @default(now())
+
+  // Monotonic ordering + duplicate-sequence protection: two racing writes for the
+  // same (thread, sequence) → one wins, the other is rejected (idempotency).
+  @@unique([conversation_id, sequence])
+  // Retry idempotency: a repeated (thread, request_id) resolves to the same turn.
+  // request_id NULL rows are exempt (Postgres treats NULLs as distinct).
+  @@unique([conversation_id, request_id])
+  @@index([conversation_id, created_at])
+  @@index([actor_entity_id])
+  @@map("otzar_conversation_turns")
 }
 
 model AgentTemplate {
