@@ -1258,19 +1258,32 @@ export class OtzarService {
       };
     }
 
-    // Persist conversation row (create or update).
+    // Persist conversation row (create or update). Check existence first: a
+    // client may send a conversation_id whose row does not exist (a stale/fresh
+    // id, or a cross-thread probe). A blind update would both log a spurious
+    // `prisma:error: No record was found for an update` AND throw uncaught — so
+    // resolve existence, then update-or-create. A supplied-but-unknown id is
+    // treated as a NEW conversation (create + CONVERSATION_STARTED audit).
+    const suppliedId =
+      typeof input.conversation_id === "string" && input.conversation_id.length > 0
+        ? input.conversation_id
+        : null;
+    const existing =
+      suppliedId !== null
+        ? await prisma.otzarConversation.findUnique({
+            where: { conversation_id: suppliedId },
+            select: { conversation_id: true },
+          })
+        : null;
     let conversationId: string;
-    if (
-      typeof input.conversation_id === "string" &&
-      input.conversation_id.length > 0
-    ) {
-      conversationId = input.conversation_id;
+    if (suppliedId !== null && existing !== null) {
+      conversationId = suppliedId;
       await prisma.otzarConversation.update({
         where: { conversation_id: conversationId },
         data: { message_count: { increment: 1 } },
       });
     } else {
-      conversationId = randomUUID();
+      conversationId = suppliedId ?? randomUUID();
       await prisma.otzarConversation.create({
         data: {
           conversation_id: conversationId,
@@ -1480,36 +1493,16 @@ export class OtzarService {
     ownerEntityId: string,
     twinEntityId: string,
   ): Promise<string> {
-    if (typeof clientId === "string" && clientId.length > 0) {
-      try {
-        await prisma.otzarConversation.update({
-          where: { conversation_id: clientId },
-          data: { message_count: { increment: 1 } },
-        });
-        return clientId;
-      } catch {
-        try {
-          await prisma.otzarConversation.create({
-            data: {
-              conversation_id: clientId,
-              entity_id: ownerEntityId,
-              twin_id: twinEntityId,
-              source_type: "CHAT",
-              participants: [ownerEntityId, twinEntityId],
-              message_count: 1,
-              status: "ACTIVE",
-            },
-          });
-          return clientId;
-        } catch {
-          /* fall through to a fresh id */
-        }
-      }
-    }
-    const id = randomUUID();
+    // Correction #1 makes the continuity layer pass a server-minted bound thread on
+    // every propose, so the id usually has no row yet. Use upsert (not
+    // update-then-catch-create) so a first-touch never logs a spurious
+    // `prisma:error: No record was found for an update`.
+    const id = typeof clientId === "string" && clientId.length > 0 ? clientId : randomUUID();
     await prisma.otzarConversation
-      .create({
-        data: {
+      .upsert({
+        where: { conversation_id: id },
+        update: { message_count: { increment: 1 } },
+        create: {
           conversation_id: id,
           entity_id: ownerEntityId,
           twin_id: twinEntityId,
