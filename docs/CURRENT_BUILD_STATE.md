@@ -78,8 +78,28 @@ Action-Center calendar lifecycle vs the ADR-0057 execution queue; native/push/em
 notification channels; `DEMO_SHARED_PASSWORD` rotation at pilot start.
 
 **Exact next recommended focus.** No auth/session work remains. The **inbound
-event / ambient ingestion rail** is underway. **Slice 1 — cron-driven bounded
-per-org source recheck — is SHIPPED + LIVE** (this SHA; the first safe inbound/
+event / ambient ingestion rail** is underway; Slices 1 + 2 are SHIPPED + LIVE and
+the only remaining slice (3, real Google webhooks) is STOP-blocked on external +
+schema work. **Slice 2 — internal HMAC-signed inbound event rail — is SHIPPED +
+LIVE (`2c8b8de`, PR #604):** a bearer-less `POST /api/v1/otzar/inbound/signal` that
+proves the provider-webhook *processing* model with **zero real external events**.
+An HMAC over the raw body (`verifyInboundHmac`; `X-Otzar-Signature: sha256=<hex>` +
+`X-Otzar-Timestamp`; ±5min; timing-safe) is the sole auth (no bearer/cookie).
+Route-scoped raw body via content-type `application/otzar-signal` (global JSON
+untouched; 415 otherwise). Redis-atomic defenses: single-use nonce (`SET NX EX`,
+replay) + per-resource debounce that persists only on a definitive result (transient
+sink releases it) + per-org quota (`INCR`+`EXPIRE`). Org/actor from the fail-closed
+`SOURCE_RECHECK_TARGETS` allowlist + actor ACTIVE + `getOrgEntityId(actor)===org`
+(payload org ignored ⇒ demo/unlisted org untargetable even with a valid signature).
+`source_*` → `revalidateImportedDocForCaller` (re-fetch, never imports from the
+body); `calendar_*`/unknown → quarantine. Additive audit vocab (`INBOUND_SIGNAL_*`,
+`SOURCE_REVALIDATION_TRIGGERED` — no migration); minimal responses (no token/raw
+leak); `INBOUND_SIGNAL_SECRET` optional at boot, fail-closed at route. Tests:
+`inbound-signal.test.ts` (18) + regression (38); 5 CI green. Live synthetic proof on
+Meridian: valid→202, bad-sig→401, replay→409, no-source→202-quarantine,
+unlisted-org→403 — no demo touch, no leak, zero residue. `INBOUND_SIGNAL_SECRET` is
+SET on the FND Render service. **Slice 1 — cron-driven bounded
+per-org source recheck — is SHIPPED + LIVE** (`1d63b66`; the first safe inbound/
 ambient capability): a daily bounded re-verification of already-imported Google-Doc
 sources, reusing `sourceHealthSweepForCaller`/`revalidateImportedDocForCaller` on a
 `node-cron` tick. FAIL-CLOSED and OFF by default (`SOURCE_RECHECK_TARGETS` allowlist
@@ -93,14 +113,21 @@ admin actor on the FND Render env (single target; demo org NOT listed ⇒ fail-c
 untouched); CRON/MAX at defaults; re-read via same-SHA redeploy; verified
 recheck-run 200 + quiet + zero residue.
 
-**Next slices (each needs its own GO):** Slice 2 — internal HMAC-signed inbound
-event rail (proves the webhook processing model; ships no real behavior until
-Slice 3). Slice 3 — real Google Drive/Calendar webhooks = STOP (Cloud-console
-domain-verified callback + Pub/Sub + a `WatchChannel` schema + renewal; OAuth
-scopes already granted). Meet transcript events = BLOCKED (post-meeting pull only).
-Open GO-gate decisions for later slices: atomic Redis-SETNX dedupe/replay, a
-signature→binding→org resolver, and whether to add a durable `InboundEvent`
-forensic table. Second focus: Google Meet transcript path (external/account gate).
+**Remaining slice — Slice 3 — real Google Drive/Calendar webhooks = 🛑 STOP-blocked**
+(hard stop conditions: Cloud-console domain-verified callback + Pub/Sub +
+an additive `WatchChannel` schema migration + channel renewal; OAuth scopes already
+granted). The processing model is already proven (Slices 1–2); what remains is
+external-provider + schema work only a human/founder can do. Exact 10-point unblock
+checklist: CT `docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md` § "Slice 3
+preflight". Human action to unblock: (a) verify `api.otzar.ai` as a Google
+Cloud/Search-Console domain; (b) create the Drive Pub/Sub topic + push subscription
+(and/or decide Calendar HTTPS callback); (c) approve the `WatchChannel` migration.
+The GO-gate decisions the earlier slices deferred are now resolved: atomic
+Redis-SETNX dedupe/replay is LIVE (Slice 2); the channel→org resolver is designed as
+the `WatchChannel` row (Slice 3 schema); a durable `InboundEvent` forensic table was
+judged unnecessary for Slices 1–2 (audit rows suffice) and stays deferred to Slice 3
+if wanted. Meet transcript events = BLOCKED (post-meeting pull only). Second focus:
+Google Meet transcript path (external/account gate).
 
 ---
 
