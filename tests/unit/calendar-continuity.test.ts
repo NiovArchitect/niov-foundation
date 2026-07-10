@@ -71,6 +71,14 @@ describe("detectCalendarProposal — server-side date resolution", () => {
     const p = detectCalendarProposal(OLIVIA, t);
     expect(p?.start_iso).toBe("2026-07-10T17:00:00.000Z");
     expect(new Date(p!.start_iso).getUTCFullYear()).toBe(2026);
+    // Clean title — leading filler ("be at") stripped.
+    expect(p?.title).toBe("Olivia's Event");
+  });
+
+  it("title extraction strips leading fillers/prepositions", async () => {
+    const t = await temporalAt(Date.UTC(2026, 6, 10, 15, 0, 0));
+    expect(detectCalendarProposal("schedule the budget review at 3pm", t)?.title).toBe("Budget Review");
+    expect(detectCalendarProposal("put a dentist appointment on my calendar at 2pm", t)?.title).toBe("Dentist Appointment");
   });
 
   it("DST-correct: same wall-clock 1 PM resolves to a DIFFERENT UTC offset in winter (EST) vs summer (EDT)", async () => {

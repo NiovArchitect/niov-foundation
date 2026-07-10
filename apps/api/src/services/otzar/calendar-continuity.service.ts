@@ -343,7 +343,18 @@ function extractEventTitle(message: string): string {
   );
   const m = message.match(re);
   if (m !== null && m[1] !== undefined && m[2] !== undefined) {
-    const phrase = `${m[1].trim()} ${m[2]}`.replace(/\s+/g, " ");
+    // Strip leading filler/preposition words the greedy-enough match may include
+    // ("be at Olivia's" → "Olivia's"), then re-attach the event noun.
+    const STOP = new Set([
+      "be", "at", "the", "a", "an", "my", "to", "i'll", "i", "on", "that", "for",
+      "will", "in", "of", "with", "am", "is", "going", "go",
+      // calendar verbs a leading window may absorb
+      "schedule", "book", "put", "add", "set", "create", "meet", "remind", "have", "get", "make",
+    ]);
+    const words = m[1].trim().split(/\s+/);
+    while (words.length > 0 && STOP.has(words[0]!.toLowerCase())) words.shift();
+    const lead = words.join(" ").trim();
+    const phrase = (lead.length > 0 ? `${lead} ${m[2]}` : m[2]).replace(/\s+/g, " ");
     return titleCase(phrase);
   }
   return "Event";
