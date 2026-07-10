@@ -103,12 +103,15 @@ describe("IntegrationCredential identity schema guard", () => {
     expect(String(err.message)).not.toContain("db.internal");
   });
 
-  it("6. performs no writes — only a read-only information_schema SELECT", async () => {
+  it("6. performs no writes — only a read-only, schema-qualified information_schema SELECT", async () => {
     const db = probeReturning([...OTHER, ...ALL]);
     await assertIntegrationCredentialIdentitySchemaCompatible(db);
     expect(db.queries).toHaveLength(1);
     expect(db.queries[0]).toMatch(/^SELECT\s+column_name\s+FROM\s+information_schema\.columns/i);
     expect(db.queries[0]).not.toMatch(/INSERT|UPDATE|DELETE|ALTER|CREATE|DROP/i);
+    // Schema-qualified to current_schema() so a same-named table in another
+    // schema cannot produce a false-compatible result.
+    expect(db.queries[0]).toMatch(/table_schema\s*=\s*current_schema\(\)/i);
   });
 
   it("7. incompatible-error output contains no DB URL / credentials / tokens / sealed values", async () => {

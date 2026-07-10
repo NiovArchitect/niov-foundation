@@ -86,9 +86,13 @@ export async function checkIntegrationCredentialIdentitySchema(
   db: SchemaProbe,
 ): Promise<SchemaCheckResult> {
   // Static, read-only catalog query — no parameters, no row/user data.
+  // Scoped to `current_schema()` — the schema the app's OWN unqualified Prisma
+  // reads resolve to on this same connection — so a same-named table in a
+  // different schema can never produce a false "compatible" result.
   const rows = await db.$queryRawUnsafe<Array<{ column_name: string }>>(
     "SELECT column_name FROM information_schema.columns " +
-      "WHERE table_name = 'integration_credentials'",
+      "WHERE table_schema = current_schema() " +
+      "AND table_name = 'integration_credentials'",
   );
   if (!Array.isArray(rows) || rows.length === 0) {
     // A table always has columns, so an empty catalog result = table absent.
