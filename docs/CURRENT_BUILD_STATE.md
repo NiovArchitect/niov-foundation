@@ -78,21 +78,25 @@ Action-Center calendar lifecycle vs the ADR-0057 execution queue; native/push/em
 notification channels; `DEMO_SHARED_PASSWORD` rotation at pilot start.
 
 **Exact next recommended focus.** No auth/session work remains. The **inbound
-event / ambient ingestion rail** (structural "no connector can receive events" gap)
-is now **PREFLIGHTED — design ready, awaiting GO** (full plan in CT
-`docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md`, 2026-07-09). Finding: the
-outcome side is schema-free + reusable (source revalidation + calendar fan-out
-sinks exist; audit/notification vocab are open Strings), but the entire inbound
-half is greenfield. Real Google Drive/Calendar webhooks = STOP (Cloud-console
-callback + Pub/Sub + a `WatchChannel` schema + renewal; OAuth scopes already
-granted). Meet transcript events = BLOCKED (post-meeting pull only). **Recommended
-first slice on GO: a cron-driven bounded per-org source recheck** — reuses the
-existing `sourceHealthSweepForCaller`/`revalidateImportedDocForCaller` sink on a
-`node-cron` tick, schema-free, zero new attack surface, shipping the source-change
-detection the UI lacks today. Crux GO-gate decisions: the governed per-org non-human
-actor, atomic Redis-SETNX dedupe/replay, per-org quota bounding, and whether to add
-a durable `InboundEvent` forensic table. Second focus: Google Meet transcript path
-(external/account gate).
+event / ambient ingestion rail** is underway. **Slice 1 — cron-driven bounded
+per-org source recheck — is SHIPPED + LIVE** (this SHA; the first safe inbound/
+ambient capability): a daily bounded re-verification of already-imported Google-Doc
+sources, reusing `sourceHealthSweepForCaller`/`revalidateImportedDocForCaller` on a
+`node-cron` tick. FAIL-CLOSED and OFF by default (`SOURCE_RECHECK_TARGETS` allowlist
+of `org:actor` pairs — demo-org safety structural), governed ACTIVE actor +
+actor→org guard, bounded, QUIET (transition-gated audit + notification — no
+SOURCE_VERIFIED spam). No schema. Ops run-now: `POST /drive/docs/recheck-run`
+(admin, own-org). Tests: `source-recheck.test.ts` (9) + regression (6); PR #601.
+Full plan: CT `docs/otzar/OTZAR_INBOUND_AMBIENT_INGESTION_PLAN.md`.
+
+**Next slices (each needs its own GO):** Slice 2 — internal HMAC-signed inbound
+event rail (proves the webhook processing model; ships no real behavior until
+Slice 3). Slice 3 — real Google Drive/Calendar webhooks = STOP (Cloud-console
+domain-verified callback + Pub/Sub + a `WatchChannel` schema + renewal; OAuth
+scopes already granted). Meet transcript events = BLOCKED (post-meeting pull only).
+Open GO-gate decisions for later slices: atomic Redis-SETNX dedupe/replay, a
+signature→binding→org resolver, and whether to add a durable `InboundEvent`
+forensic table. Second focus: Google Meet transcript path (external/account gate).
 
 ---
 
