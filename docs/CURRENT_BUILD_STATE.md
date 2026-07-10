@@ -178,7 +178,26 @@ potentially partial runtime failure into an immediate, explicit startup failure;
 make an incompatible deployment safe or available, is NOT a migration mechanism, and is NOT a
 bypass.** The deploy-ordering blocker is **not** closed — the additive schema must still be
 applied to prod before the next Foundation deploy. There is no production flag to skip the
-guard (fail-closed; test-only injection seam).
+guard (fail-closed; test-only injection seam). Guard query later scoped to
+`current_schema()` (PR #609) so a same-named table in another schema can't false-pass.
+
+**Prod schema apply + FND deploy — ATTEMPTED → STOPPED; PRODUCTION UNCHANGED (2026-07-09).**
+Nothing applied, nothing deployed (read-only `--dry-run` + `prisma migrate diff` only). Two
+hard stops fired: (1) the prod↔schema diff is **not** exactly the six identity columns — it
+also carries unrelated un-applied drift `memory_capsules.voice_note_id` (+idx, `615b6b1`, an
+**ancestor** of the identity commits ⇒ it rides the same deploy SHA) + an index rename; prod
+lacks `voice_note_id` and `memory_capsules` is read via default all-scalar selects on live
+paths, so deploying `main` would break those reads (the identity guard covers only
+`integration_credentials`). (2) The `RENDER_API_KEY` in `.env` is `Unauthorized` ⇒ the live
+SHA can't be read and no deploy can be triggered via the sanctioned rail. Applying only the
+six columns now would flip the identity guard green while `memory_capsules` stays unguarded
+(a false-green ADR-0025 forbids), so nothing was applied. Dry-run DID verify the target is
+safe (prod `integration_credentials` exists, all 6 identity columns absent, `rowCount=1`, no
+type conflicts). **Coordinated operator packet** (confirm live SHA + valid Render key ·
+decide `memory_capsules.voice_note_id` · apply the 6 columns via the ADR-0025 raw-DDL rail
+with exact SQL + lock/statement timeouts + pre/post checks · then deploy) is in CT
+`OTZAR_PILOT_OPS_RUNBOOK.md`. `GOOGLE_OIDC_IDENTITY` remains OFF; no account pinned; Meridian
++ demo untouched.
 
 **RECOMMENDED next (small):** thread a `tx` through `revalidateImportedDocForCaller` to make
 its ledger-update + audit atomic (closes the Slice-3 audit-completeness residual).
