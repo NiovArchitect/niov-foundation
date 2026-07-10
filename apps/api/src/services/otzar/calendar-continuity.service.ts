@@ -330,16 +330,27 @@ export function detectCalendarProposal(
   };
 }
 
-// Best-effort deterministic title extraction ("... at Olivia's event" → "Olivia's Event").
+const EVENT_NOUNS =
+  "event|meeting|call|appointment|party|dinner|lunch|breakfast|review|birthday|game|practice|class|standup|sync|interview|ceremony|graduation|recital|concert|show";
+
+// Best-effort deterministic title extraction: the noun phrase immediately before
+// an event word ("... Olivia's event" → "Olivia's Event", "... budget review" →
+// "Budget Review"). Title-cases only at word boundaries (preserves "Olivia's").
 function extractEventTitle(message: string): string {
-  const m =
-    message.match(/(?:at|for|about|:)\s+([A-Z][^.,;]*?(?:'s)?\s+(?:event|meeting|call|appointment|party|dinner|lunch|review))/i) ??
-    message.match(/(?:that|i'?ll be at|i will be at)\s+([A-Za-z][^.,;]{2,60})/i);
-  if (m !== null && m[1] !== undefined) {
-    const t = m[1].trim().replace(/\s+/g, " ");
-    return t.length > 0 ? t.replace(/\b\w/g, (c) => c.toUpperCase()) : "Event";
+  const re = new RegExp(
+    `([A-Za-z][A-Za-z0-9'’]*(?:\\s+[A-Za-z0-9'’]+){0,2}?)\\s+(${EVENT_NOUNS})\\b`,
+    "i",
+  );
+  const m = message.match(re);
+  if (m !== null && m[1] !== undefined && m[2] !== undefined) {
+    const phrase = `${m[1].trim()} ${m[2]}`.replace(/\s+/g, " ");
+    return titleCase(phrase);
   }
   return "Event";
+}
+
+function titleCase(s: string): string {
+  return s.replace(/(^|\s)([a-z])/g, (_m, sp: string, c: string) => sp + c.toUpperCase());
 }
 
 // ── Confirmation phrase resolution (deterministic, LLM-free) ────────────────
@@ -367,9 +378,13 @@ interface PendingProposalRow {
 async function findActorPendingProposals(args: {
   actor_entity_id: string;
   org_entity_id: string;
-  conversation_id?: string | undefined;
   now_ms: number;
 }): Promise<PendingProposalRow[]> {
+  // Isolation is ACTOR + ORG scoped (the advisor's invariant) — NOT conversation
+  // scoped. The ambient surface generates a fresh conversation_id per turn and
+  // the first-turn proposal is stored before an id is assigned, so a strict
+  // conversation_id match would miss the caller's own pending proposal. The
+  // "exactly one unexpired" rule (below, at the call site) handles multiplicity.
   const rows = await prisma.workLedgerEntry.findMany({
     where: {
       org_entity_id: args.org_entity_id,
@@ -377,9 +392,6 @@ async function findActorPendingProposals(args: {
       ledger_type: "MEETING",
       status: "NEEDS_CALLER_CONFIRMATION",
       details: { path: ["source"], equals: PROPOSAL_LEDGER_SOURCE },
-      ...(args.conversation_id !== undefined
-        ? { conversation_id: args.conversation_id }
-        : {}),
     },
     orderBy: { created_at: "desc" },
     select: { ledger_entry_id: true, title: true, details: true, created_at: true, expires_at: true },
@@ -503,7 +515,6 @@ export async function handleCalendarContinuity(args: {
     const pending = await findActorPendingProposals({
       actor_entity_id: args.actor_entity_id,
       org_entity_id: orgId,
-      conversation_id: args.conversation_id,
       now_ms: args.temporal.now_ms,
     });
     // INVARIANT 1: no side-effect on ambiguity.
