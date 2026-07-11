@@ -23,6 +23,7 @@ import {
   prisma,
   writeAuditEvent,
   appendConversationTurn,
+  createThread,
   IdempotencyConflictError,
   ThreadScopeError,
   type CapsuleType,
@@ -931,7 +932,7 @@ export class OtzarService {
     // proposal (idempotent, gated execution), or persist a new proposal. When it
     // handles the turn we short-circuit with a deterministic answer — the LLM is
     // never asked whether "yes" means approval, and never invents a date.
-    const { handleCalendarContinuity, resolveTemporalContext, temporalPromptLine } =
+    const { handleCalendarContinuity, resolveTemporalContext, temporalPromptLine, resolveContinuityThread } =
       await import("./calendar-continuity.service.js");
     const temporalCtx = await resolveTemporalContext({
       actor_entity_id: ownerEntityId,
@@ -953,28 +954,64 @@ export class OtzarService {
     if (turnCtx.failure !== null) return turnCtx.failure;
     if (turnCtx.replay !== null) return turnCtx.replay;
 
+    // [OTZAR-CONTINUITY P5 Stage 1A] Phase A (read-only) + Phase B for the AMBIENT path:
+    // when the ambient act WILL mutate (propose/confirm/reject/revise/ordinal), resolve
+    // the target thread read-only and persist the USER turn to it BEFORE any mutation.
+    // Non-mutating ambient acts (disambiguation/clarification/none) defer as before.
+    let ambientUserTurnId: string | null = null;
+    let ambientContinuityConvId: string | undefined = undefined;
+    if (turnCtx.deferred && orgEntityId !== null) {
+      const resolution = await resolveContinuityThread({
+        actor_entity_id: ownerEntityId,
+        org_entity_id: orgEntityId,
+        message: input.message,
+        temporal: temporalCtx,
+      });
+      if (resolution.will_mutate && resolution.thread_id !== null) {
+        // Ensure the thread row exists (idempotent) then persist the USER turn — this
+        // precedes the Phase-C mutation below.
+        await createThread({
+          conversation_id: resolution.thread_id,
+          org_entity_id: orgEntityId,
+          subject_entity_id: ownerEntityId,
+          twin_entity_id: twin.entity_id,
+          timezone: temporalCtx.timezone,
+        }).catch(() => undefined);
+        ambientUserTurnId = await this.persistDeferredUserTurn({
+          conversationId: resolution.thread_id,
+          orgEntityId,
+          subjectEntityId: ownerEntityId,
+          twinId: twin.entity_id,
+          requestId: input.request_id,
+          content: input.message,
+          sourceChannel: input.source_channel ?? "CHAT",
+        });
+        ambientContinuityConvId = resolution.continuity_conversation_id;
+      }
+    }
+
     const continuity = await handleCalendarContinuity({
       actor_entity_id: ownerEntityId,
       org_entity_id: orgEntityId,
-      // Supplied thread (normal CT path) → the validated authoritative id, so proposals
-      // bind to it and confirmations resolve within it. Ambient (deferred/no-id) →
-      // undefined, so the continuity layer's shipped recency behaviour is UNCHANGED.
-      conversation_id: turnCtx.conversationId ?? input.conversation_id,
+      // Supplied thread (normal CT path) → the validated authoritative id. Ambient
+      // mutating (Phase A resolved) → the target thread (or undefined for ordinal, which
+      // must see all pending). Ambient non-mutating → undefined (shipped recency).
+      conversation_id: turnCtx.conversationId ?? ambientContinuityConvId ?? input.conversation_id,
       message: input.message,
       temporal: temporalCtx,
     });
     if (continuity !== null) {
       const convId = await this.resolveContinuityConversationId(
-        continuity.conversation_id ?? turnCtx.conversationId ?? input.conversation_id,
+        continuity.conversation_id ?? turnCtx.conversationId ?? ambientContinuityConvId ?? input.conversation_id,
         ownerEntityId,
         twin.entity_id,
       );
       if (orgEntityId !== null) {
-        // For the deferred (ambient) path the user turn was not yet persisted — do it
-        // now against continuity's own resolved thread (continuity is model-free, so
-        // this still precedes any tool execution). Then the ASSISTANT turn (Twin).
+        // Ambient mutating → the USER turn was already persisted (Phase B, before the
+        // mutation). Ambient non-mutating → persist it now (no mutation occurred).
+        // Supplied path → already persisted before the model.
         const userTurnId = turnCtx.deferred
-          ? await this.persistDeferredUserTurn({
+          ? (ambientUserTurnId ?? await this.persistDeferredUserTurn({
               conversationId: convId,
               orgEntityId,
               subjectEntityId: ownerEntityId,
@@ -982,7 +1019,7 @@ export class OtzarService {
               requestId: input.request_id,
               content: input.message,
               sourceChannel: input.source_channel ?? "CHAT",
-            })
+            }))
           : turnCtx.userTurnId;
         await this.persistAssistantTurn({
           conversationId: convId,
@@ -1521,10 +1558,12 @@ export class OtzarService {
     // [OTZAR-CONTINUITY P5 Stage 1] Persist the ASSISTANT turn (author = Twin)
     // before the HTTP response is considered durable, linked to its user turn.
     if (orgEntityId !== null) {
-      // Deferred (ambient) → persist the user turn now to the resolved thread; the
-      // supplied-id path already recorded it before the model.
+      // Deferred (ambient) → persist the user turn now to the resolved thread (unless
+      // Phase B already did, which only happens on a mutating act that continuity
+      // handled — reuse it defensively to avoid a duplicate). Supplied path → already
+      // recorded before the model.
       const llmUserTurnId = turnCtx.deferred
-        ? await this.persistDeferredUserTurn({
+        ? (ambientUserTurnId ?? await this.persistDeferredUserTurn({
             conversationId,
             orgEntityId,
             subjectEntityId: ownerEntityId,
@@ -1532,7 +1571,7 @@ export class OtzarService {
             requestId: input.request_id,
             content: input.message,
             sourceChannel: input.source_channel ?? "CHAT",
-          })
+          }))
         : turnCtx.userTurnId;
       await this.persistAssistantTurn({
         conversationId,
