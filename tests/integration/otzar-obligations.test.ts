@@ -185,6 +185,32 @@ describe("Otzar obligations (Stage-2)", () => {
     }
   });
 
+  it("complete via a validated in-scope completion turn (non-action obligation): success path", async () => {
+    // The turn-path completion branch: a bare QUESTION_RESPONSE/FOLLOW_UP obligation is closed by
+    // a real completion turn in the SAME conversation + scope (evidence read through the turn).
+    const { auth, otzar } = makeServices();
+    const u = await orgUserWithTwin(auth);
+    const convId = randomUUID();
+    const o = await otzar.createObligation({ token: u.token, obligation_type: "QUESTION_RESPONSE", title: "Which vendor?", conversation_id: convId, initial_state: "AWAITING_RESPONSE" });
+    if (!o.ok) throw new Error();
+    // A completion turn out of scope (foreign conversation) must NOT satisfy.
+    const foreignTurn = await seedUserTurn(u, randomUUID(), "Acme");
+    const wrongConv = await otzar.completeObligation({ token: u.token, obligation_id: o.obligation.obligation_id, expected_version: o.obligation.version, completion_turn_id: foreignTurn });
+    expect(wrongConv.ok).toBe(false);
+    if (!wrongConv.ok) expect(wrongConv.code).toBe("OTZAR_OBLIGATION_EVIDENCE_REQUIRED");
+    // A real in-scope, in-conversation completion turn closes it.
+    const answerTurn = await seedUserTurn(u, convId, "Acme");
+    const done = await otzar.completeObligation({ token: u.token, obligation_id: o.obligation.obligation_id, expected_version: o.obligation.version, completion_turn_id: answerTurn });
+    expect(done.ok).toBe(true);
+    if (done.ok) {
+      expect(done.obligation.state).toBe("COMPLETED");
+      expect(done.obligation.completed_at).not.toBeNull();
+      expect(done.obligation.has_completion_evidence).toBe(true);
+    }
+    const row = await prisma.obligation.findUnique({ where: { obligation_id: o.obligation.obligation_id } });
+    expect(row!.completion_turn_id).toBe(answerTurn);
+  });
+
   it("duplicate completion: a COMPLETED obligation cannot be completed again (terminal)", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUserWithTwin(auth);
