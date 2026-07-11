@@ -2162,6 +2162,11 @@ model OtzarConversationTurn {
   source_channel     String    @default("CHAT") // CHAT | VOICE | AMBIENT
   model_provider     String?   // safe model/provider label (no keys)
   retention_class    String    @default("STANDARD")
+  // [OTZAR-CONTINUITY P5 Stage 1 §3/§5] When set, THIS assistant turn is the ONE
+  // canonical response to the referenced USER turn (a logical request). @unique →
+  // two concurrent retries can never both append a canonical reply. Follow-up /
+  // status-update / correction / compensation turns leave it null.
+  response_to_turn_id String?  @unique @db.Uuid
   created_at         DateTime  @default(now())
 
   // Correctness backstop for the atomic allocator: no two turns share a sequence.
@@ -2172,6 +2177,47 @@ model OtzarConversationTurn {
   @@index([conversation_id, created_at])
   @@index([org_entity_id, subject_entity_id])
   @@map("otzar_conversation_turns")
+}
+
+// [OTZAR-CONTINUITY P5 Stage 1 §2] Durable logical-request processing state — the
+// atomic ownership + idempotency record for ONE user submission. Guarantees exactly-
+// once model/tool/provider work under concurrent duplicate submissions via an atomic
+// RECEIVED→PROCESSING lease, and links the one canonical assistant result. Ownership
+// fields are NON-NULL (this table has no legacy rows). No unrestricted response JSON —
+// only a typed response_class + linked action/turn refs.
+model OtzarConversationRequest {
+  request_record_id           String    @id @default(uuid()) @db.Uuid
+  conversation_id             String    @db.Uuid
+  user_turn_id                String    @unique @db.Uuid // 1:1 with its USER turn
+  org_entity_id               String    @db.Uuid
+  subject_entity_id           String    @db.Uuid
+  twin_entity_id              String    @db.Uuid
+  client_request_id           String?   // the client idempotency key (when supplied)
+  content_hash                String
+  // RECEIVED | PROCESSING | COMPLETED | FAILED_RETRYABLE | FAILED_FINAL
+  state                       String    @default("RECEIVED")
+  processing_version          Int       @default(0)
+  lease_token                 String?
+  lease_acquired_at           DateTime?
+  lease_expires_at            DateTime?
+  attempt_count               Int       @default(0)
+  canonical_assistant_turn_id String?   @unique @db.Uuid // one canonical result per request
+  action_ref                  String?   @db.Uuid
+  provider_attempt_ref        String?   @db.Uuid
+  // ANSWERED | CLARIFICATION | ACTION_PROPOSED | AWAITING_CONFIRMATION | REJECTED |
+  // CANCELLED | REVISED | EXECUTING | BLOCKED | SUCCEEDED | FAILED
+  response_class              String?
+  failure_code                String?
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @updatedAt
+  completed_at                DateTime?
+
+  // One request per (thread, client_request_id) — the idempotency key. NULLs exempt.
+  @@unique([conversation_id, client_request_id])
+  @@index([conversation_id])
+  @@index([org_entity_id, subject_entity_id])
+  @@index([state, lease_expires_at])
+  @@map("otzar_conversation_requests")
 }
 
 model AgentTemplate {
