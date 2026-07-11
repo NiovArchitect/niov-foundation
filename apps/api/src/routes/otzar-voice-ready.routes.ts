@@ -100,6 +100,7 @@ export async function registerOtzarVoiceReadyRoutes(
       conversation_history?: unknown;
       token_budget?: unknown;
       client_timezone?: unknown;
+      request_id?: unknown;
     };
   }>(
     "/api/v1/otzar/my-twin/voice-intents",
@@ -163,6 +164,10 @@ export async function registerOtzarVoiceReadyRoutes(
           // [OTZAR-CONTINUITY P1] live device timezone (travel-correct), when sent.
           ...(typeof body.client_timezone === "string" && body.client_timezone.length > 0
             ? { client_timezone: body.client_timezone }
+            : {}),
+          // [OTZAR-CONTINUITY P5 Stage 1] client idempotency key (validated server-side).
+          ...(typeof body.request_id === "string" && body.request_id.length > 0
+            ? { request_id: body.request_id }
             : {}),
         });
       } catch (err) {

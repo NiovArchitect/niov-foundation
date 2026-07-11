@@ -22,8 +22,12 @@ import { extractDocumentWorkPreview } from "./document-extraction.service.js";
 import {
   prisma,
   writeAuditEvent,
+  appendConversationTurn,
+  IdempotencyConflictError,
   type CapsuleType,
 } from "@niov/database";
+import type { OtzarConversationTurn } from "@prisma/client";
+import { resolveAuthoritativeThread } from "./thread-resolution.service.js";
 import { logger } from "../../logger.js";
 import type { AuthService } from "../auth.service.js";
 import type { COEService } from "../coe/coe.service.js";
@@ -189,6 +193,10 @@ export interface ConductSessionInput {
   // times resolve to where they actually are. Falls back to the stored per-user
   // EntityProfile.timezone, then a documented org fallback.
   client_timezone?: string;
+  // [OTZAR-CONTINUITY P5 Stage 1] Stable client idempotency key for ONE logical user
+  // submission. Retained across retries so a response-lost retry replays the stored
+  // result instead of re-invoking the model/tool. Bounded, safe charset; validated.
+  request_id?: string;
 }
 
 // WHAT: Closed-vocab next-step label per the
@@ -373,7 +381,11 @@ export interface OtzarFailure {
     | "TOKEN_BUDGET_EXCEEDED"
     | "LLM_UNAVAILABLE"
     | "CONVERSATION_NOT_FOUND"
-    | "NOT_CONVERSATION_OWNER";
+    | "NOT_CONVERSATION_OWNER"
+    // [OTZAR-CONTINUITY P5 Stage 1] durable-turn / idempotency failures.
+    | "INVALID_REQUEST_ID"
+    | "OTZAR_REQUEST_ID_CONFLICT"
+    | "OTZAR_TURN_PERSIST_FAILED";
   message: string;
   detail?: unknown;
 }
@@ -920,22 +932,48 @@ export class OtzarService {
       actor_entity_id: ownerEntityId,
       client_timezone: input.client_timezone,
     });
+
+    // [OTZAR-CONTINUITY P5 Stage 1] Resolve the ONE server-authoritative thread and
+    // persist the USER turn BEFORE continuity / references / model / tools. A
+    // response-lost retry (same request_id) replays the durable result here without
+    // re-invoking anything. Fail closed if the user turn cannot be recorded.
+    const turnCtx = await this.beginTurnPersistence({
+      input,
+      subjectEntityId: ownerEntityId,
+      orgEntityId,
+      twinId: twin.entity_id,
+      timezone: temporalCtx.timezone,
+      nowMs: temporalCtx.now_ms,
+    });
+    if (turnCtx.failure !== null) return turnCtx.failure;
+    if (turnCtx.replay !== null) return turnCtx.replay;
+
     const continuity = await handleCalendarContinuity({
       actor_entity_id: ownerEntityId,
       org_entity_id: orgEntityId,
-      conversation_id: input.conversation_id,
+      // Pass the authoritative thread so proposals bind to it and confirmations
+      // resolve within it (the resolver already restored the right thread for a
+      // bare "yes"). Orgless callers fall back to the raw client id.
+      conversation_id: turnCtx.conversationId ?? input.conversation_id,
       message: input.message,
       temporal: temporalCtx,
     });
     if (continuity !== null) {
-      // Correction #1: prefer the server-authoritative thread the continuity layer
-      // bound the proposal to (propose) or restored (ambient confirm) over the raw
-      // client id, so the client re-anchors to the exact conversation.
       const convId = await this.resolveContinuityConversationId(
-        continuity.conversation_id ?? input.conversation_id,
+        continuity.conversation_id ?? turnCtx.conversationId ?? input.conversation_id,
         ownerEntityId,
         twin.entity_id,
       );
+      // Persist the ASSISTANT turn (author = Twin) before the response is durable.
+      await this.persistAssistantTurn({
+        conversationId: turnCtx.conversationId !== null ? convId : null,
+        orgEntityId,
+        subjectEntityId: ownerEntityId,
+        twinId: twin.entity_id,
+        userTurnId: turnCtx.userTurnId,
+        content: continuity.response,
+        actionRef: continuity.ledger_entry_id ?? null,
+      });
       return this.buildContinuitySuccess(convId, continuity);
     }
 
@@ -1264,51 +1302,57 @@ export class OtzarService {
     // `prisma:error: No record was found for an update` AND throw uncaught — so
     // resolve existence, then update-or-create. A supplied-but-unknown id is
     // treated as a NEW conversation (create + CONVERSATION_STARTED audit).
-    const suppliedId =
-      typeof input.conversation_id === "string" && input.conversation_id.length > 0
-        ? input.conversation_id
-        : null;
-    const existing =
-      suppliedId !== null
-        ? await prisma.otzarConversation.findUnique({
-            where: { conversation_id: suppliedId },
-            select: { conversation_id: true },
-          })
-        : null;
     let conversationId: string;
-    if (suppliedId !== null && existing !== null) {
-      conversationId = suppliedId;
-      await prisma.otzarConversation.update({
-        where: { conversation_id: conversationId },
-        data: { message_count: { increment: 1 } },
-      });
+    if (turnCtx.conversationId !== null) {
+      // [OTZAR-CONTINUITY P5 Stage 1] The ONE authoritative thread was resolved up
+      // front and its row already exists (the user turn was persisted to it). Just
+      // count the message — no re-resolution, no recency guessing.
+      conversationId = turnCtx.conversationId;
+      await prisma.otzarConversation
+        .update({ where: { conversation_id: conversationId }, data: { message_count: { increment: 1 } } })
+        .catch(() => undefined);
     } else {
-      conversationId = suppliedId ?? randomUUID();
-      await prisma.otzarConversation.create({
-        data: {
-          conversation_id: conversationId,
-          entity_id: ownerEntityId,
-          twin_id: twin.entity_id,
-          source_type: "CHAT",
-          participants: [ownerEntityId, twin.entity_id],
-          message_count: 1,
-          status: "ACTIVE",
-        },
-      });
-      // Section 11D TP9 -- emit CONVERSATION_STARTED audit ONLY on
-      // new-conversation creation. Continued messages of an existing
-      // conversation rely on the COE-internal CAPSULE_CONTENT_READ
-      // audits already wired by readService for per-read traceability.
-      await writeAuditEvent({
-        event_type: "CONVERSATION_STARTED",
-        outcome: "SUCCESS",
-        actor_entity_id: ownerEntityId,
-        target_entity_id: ownerEntityId,
-        details: {
-          conversation_id: conversationId,
-          twin_id: twin.entity_id,
-        },
-      });
+      // Orgless legacy path (no durable turns): resolve/create the conversation row.
+      // Check existence first: a client may send a conversation_id whose row does
+      // not exist — a blind update would log a spurious prisma:error and throw.
+      const suppliedId =
+        typeof input.conversation_id === "string" && input.conversation_id.length > 0
+          ? input.conversation_id
+          : null;
+      const existing =
+        suppliedId !== null
+          ? await prisma.otzarConversation.findUnique({
+              where: { conversation_id: suppliedId },
+              select: { conversation_id: true },
+            })
+          : null;
+      if (suppliedId !== null && existing !== null) {
+        conversationId = suppliedId;
+        await prisma.otzarConversation.update({
+          where: { conversation_id: conversationId },
+          data: { message_count: { increment: 1 } },
+        });
+      } else {
+        conversationId = suppliedId ?? randomUUID();
+        await prisma.otzarConversation.create({
+          data: {
+            conversation_id: conversationId,
+            entity_id: ownerEntityId,
+            twin_id: twin.entity_id,
+            source_type: "CHAT",
+            participants: [ownerEntityId, twin.entity_id],
+            message_count: 1,
+            status: "ACTIVE",
+          },
+        });
+        await writeAuditEvent({
+          event_type: "CONVERSATION_STARTED",
+          outcome: "SUCCESS",
+          actor_entity_id: ownerEntityId,
+          target_entity_id: ownerEntityId,
+          details: { conversation_id: conversationId, twin_id: twin.entity_id },
+        });
+      }
     }
     // Refresh last_active so the auto-close sweep keeps this
     // conversation marked as ACTIVE for another 30 minutes.
@@ -1453,6 +1497,17 @@ export class OtzarService {
       total_capsules: contextUsed,
     };
 
+    // [OTZAR-CONTINUITY P5 Stage 1] Persist the ASSISTANT turn (author = Twin)
+    // before the HTTP response is considered durable, linked to its user turn.
+    await this.persistAssistantTurn({
+      conversationId: turnCtx.conversationId,
+      orgEntityId,
+      subjectEntityId: ownerEntityId,
+      twinId: twin.entity_id,
+      userTurnId: turnCtx.userTurnId,
+      content: llmResult.text,
+    });
+
     return {
       ok: true,
       response: llmResult.text,
@@ -1551,6 +1606,168 @@ export class OtzarService {
         layer_5_relevant_context: 0,
         layer_8_history_messages: 0,
         total_capsules: 0,
+      },
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // [OTZAR-CONTINUITY P5 Stage 1] Durable turn persistence + idempotency.
+  // ──────────────────────────────────────────────────────────────
+
+  private static readonly REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
+
+  // WHAT: resolve the authoritative thread, persist the USER turn BEFORE any
+  // continuity/model/tool work, and short-circuit a response-lost retry with the
+  // stored assistant result. Orgless sessions keep legacy behaviour (no durable
+  // turns). Returns a failure (fail-closed) when the user turn cannot be recorded.
+  private async beginTurnPersistence(args: {
+    input: ConductSessionInput;
+    subjectEntityId: string;
+    orgEntityId: string | null;
+    twinId: string;
+    timezone: string;
+    nowMs: number;
+  }): Promise<{
+    conversationId: string | null;
+    userTurnId: string | null;
+    replay: ConductSessionSuccess | null;
+    failure: OtzarFailure | null;
+  }> {
+    if (args.orgEntityId === null) {
+      return {
+        conversationId: args.input.conversation_id ?? null,
+        userTurnId: null, replay: null, failure: null,
+      };
+    }
+    const rid = args.input.request_id;
+    if (rid !== undefined && !OtzarService.REQUEST_ID_RE.test(rid)) {
+      return {
+        conversationId: null, userTurnId: null, replay: null,
+        failure: { ok: false, code: "INVALID_REQUEST_ID", message: "request_id must be 1-200 safe characters ([A-Za-z0-9._:-])." },
+      };
+    }
+    const resolved = await resolveAuthoritativeThread({
+      conversation_id: args.input.conversation_id,
+      org_entity_id: args.orgEntityId,
+      subject_entity_id: args.subjectEntityId,
+      twin_entity_id: args.twinId,
+      timezone: args.timezone,
+      now_ms: args.nowMs,
+    });
+    const conversationId = resolved.conversation_id;
+
+    let userTurn: { turn_id: string; deduped: boolean };
+    try {
+      userTurn = await appendConversationTurn({
+        conversation_id: conversationId,
+        org_entity_id: args.orgEntityId,
+        subject_entity_id: args.subjectEntityId,
+        author_entity_id: args.subjectEntityId, // the human authored their own turn
+        twin_entity_id: args.twinId,
+        role: "USER",
+        content: args.input.message,
+        ...(rid !== undefined ? { request_id: rid } : {}),
+        source_channel: "CHAT",
+      });
+    } catch (e) {
+      if (e instanceof IdempotencyConflictError) {
+        return {
+          conversationId, userTurnId: null, replay: null,
+          failure: { ok: false, code: "OTZAR_REQUEST_ID_CONFLICT", message: "This request_id was already used with different content." },
+        };
+      }
+      // Fail closed — never invoke the model/tool if the user turn is not durable.
+      logger.error({ err: e, conversationId }, "otzar user-turn persistence failed");
+      return {
+        conversationId, userTurnId: null, replay: null,
+        failure: { ok: false, code: "OTZAR_TURN_PERSIST_FAILED", message: "Could not durably record your message; it was not processed. Please retry." },
+      };
+    }
+
+    if (userTurn.deduped) {
+      // A prior identical submission — replay its durable assistant result without
+      // re-invoking the model/tool. If the assistant turn is missing (interrupted
+      // request), fall through and regenerate (no second user turn is appended).
+      const asst = await prisma.otzarConversationTurn.findFirst({
+        where: { conversation_id: conversationId, role: "ASSISTANT", reply_to_turn_id: userTurn.turn_id },
+        orderBy: { sequence: "desc" },
+      });
+      if (asst !== null) {
+        const replay = await this.reconstructFromAssistantTurn(asst, conversationId);
+        return { conversationId, userTurnId: userTurn.turn_id, replay, failure: null };
+      }
+    }
+    return { conversationId, userTurnId: userTurn.turn_id, replay: null, failure: null };
+  }
+
+  // WHAT: persist the ASSISTANT turn (author = Twin) linked to its user turn +
+  // action. Availability-preserving: a transcript-write failure is logged but does
+  // not fail the already-generated response (it degrades retry-replay to a safe
+  // re-generate, never a wrong answer).
+  private async persistAssistantTurn(args: {
+    conversationId: string | null;
+    orgEntityId: string | null;
+    subjectEntityId: string;
+    twinId: string;
+    userTurnId: string | null;
+    content: string;
+    actionRef?: string | null;
+    modelProvider?: string | null;
+  }): Promise<void> {
+    if (args.conversationId === null || args.orgEntityId === null) return;
+    try {
+      await appendConversationTurn({
+        conversation_id: args.conversationId,
+        org_entity_id: args.orgEntityId,
+        subject_entity_id: args.subjectEntityId,
+        author_entity_id: args.twinId, // the Twin authored the assistant turn
+        twin_entity_id: args.twinId,
+        role: "ASSISTANT",
+        content: args.content,
+        ...(args.userTurnId ? { reply_to_turn_id: args.userTurnId } : {}),
+        ...(args.actionRef ? { action_ref: args.actionRef } : {}),
+        ...(args.modelProvider ? { model_provider: args.modelProvider } : {}),
+        source_channel: "CHAT",
+      });
+    } catch (e) {
+      logger.warn({ err: e, conversationId: args.conversationId }, "otzar assistant-turn persistence failed (response already generated)");
+    }
+  }
+
+  // WHAT: rebuild a faithful ConductSessionSuccess for a retry replay from the stored
+  // assistant turn + its linked action state (never inferred from prose): a pending
+  // action → ACTION_PROPOSED/awaiting; otherwise ANSWERED.
+  private async reconstructFromAssistantTurn(
+    asst: OtzarConversationTurn,
+    conversationId: string,
+  ): Promise<ConductSessionSuccess> {
+    let awaiting = false;
+    if (asst.action_ref !== null) {
+      const led = await prisma.workLedgerEntry.findUnique({
+        where: { ledger_entry_id: asst.action_ref },
+        select: { status: true },
+      });
+      awaiting = led?.status === "NEEDS_CALLER_CONFIRMATION" || led?.status === "EXECUTING";
+    }
+    return {
+      ok: true,
+      response: asst.content,
+      context_used: 0,
+      tokens_consumed: 0,
+      conversation_id: conversationId,
+      next_step: awaiting ? "ACTION_PROPOSED" : "ANSWERED",
+      correction_capture_available: true,
+      speech_ready_text: asst.content,
+      voice_output_supported: false,
+      clarification_needed: false,
+      action_proposed: awaiting,
+      approval_required: awaiting,
+      policy_blocked: false,
+      dmw_scope_blocked: false,
+      collaboration_suggested: false,
+      memory_used_summary: {
+        layer_1_corrections: 0, layer_3_work_profile: 0, layer_4_foundational: 0,
+        layer_5_relevant_context: 0, layer_8_history_messages: 0, total_capsules: 0,
       },
     };
   }
