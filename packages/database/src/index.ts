@@ -168,6 +168,7 @@ export {
   claimRequestProcessing,
   completeRequest,
   failRequest,
+  linkRequestAction,
   getRequestByUserTurn,
 } from "./queries/otzar-conversation-requests.js";
 export type {
@@ -175,6 +176,7 @@ export type {
   ClaimResult,
   RequestState,
   ResponseClass,
+  LinkActionOutcome,
 } from "./queries/otzar-conversation-requests.js";
 
 export type {

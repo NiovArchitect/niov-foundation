@@ -71,11 +71,14 @@ function statusForCode(code: string): number {
     case "ALREADY_INGESTED":
     case "OTZAR_REQUEST_ID_CONFLICT":
     case "OTZAR_THREAD_CLOSED":
+    case "OTZAR_REQUEST_IN_PROGRESS":
+    case "OTZAR_CONTINUITY_STATE_CHANGED":
       return 409;
     case "TOKEN_BUDGET_EXCEEDED":
       return 413;
     case "LLM_UNAVAILABLE":
     case "OTZAR_TURN_PERSIST_FAILED":
+    case "OTZAR_ASSISTANT_TURN_PERSIST_FAILED":
       return 503;
     default:
       return 400;

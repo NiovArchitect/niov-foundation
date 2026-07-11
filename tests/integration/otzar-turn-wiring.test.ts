@@ -8,7 +8,7 @@
 //              persistAssistantTurn / reconstructFromAssistantTurn).
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   AuthService, COEService, HiveService, FixtureBasedEmbeddingProvider,
   MemoryContentStore, MemoryKVCache, MemoryNonceStore, MockLLMProvider,
@@ -86,6 +86,24 @@ async function waitUntil(fn: () => boolean, timeoutMs = 4000): Promise<void> {
   while (!fn()) {
     if (Date.now() - start > timeoutMs) throw new Error("waitUntil timed out");
     await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
+// [C2/C5 failure injection] Force the ASSISTANT-turn insert to fail for exactly ONE
+// conductSession call, then restore synchronously in `finally` — BEFORE any other test or
+// file runs. Directly swaps the method (no vi.spyOn global state) so it can never leak
+// across files in the shared `forks` pool (a spy on the shared prisma singleton did).
+async function withAssistantPersistFailing<T>(fn: () => Promise<T>): Promise<T> {
+  const model = prisma.otzarConversationTurn as unknown as { create: (a: unknown) => Promise<unknown> };
+  const original = model.create.bind(prisma.otzarConversationTurn);
+  model.create = (a: unknown) =>
+    (a as { data?: { role?: string } })?.data?.role === "ASSISTANT"
+      ? Promise.reject(new Error("injected assistant-persist failure"))
+      : original(a);
+  try {
+    return await fn();
+  } finally {
+    model.create = original; // ALWAYS restore, even on throw
   }
 }
 
@@ -310,6 +328,76 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     expect(asstTurn!.reply_to_turn_id).toBe(userTurn!.turn_id);
     // The USER turn was durable BEFORE the assistant/model (sequence ordering).
     expect(userTurn!.sequence).toBeLessThan(asstTurn!.sequence);
+  });
+
+  it("C5: assistant persist fails AFTER a proposal is created → FAILED_RETRYABLE with the action linked; retry RECONSTRUCTS the same proposal (no 2nd proposal, no model)", async () => {
+    const { auth, otzar, llm } = makeServices();
+    const { token, userId } = await orgUserWithTwin(auth);
+    const convId = randomUUID();
+    const llmBefore = llm.getCalls().length;
+    const msg = "put a budget review on my calendar tomorrow at 3pm";
+    const first = await withAssistantPersistFailing(() =>
+      otzar.conductSession({ token, message: msg, request_id: "c5-1", conversation_id: convId }),
+    );
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.code).toBe("OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
+
+    // The proposal WAS created + linked to the request; the request is FAILED_RETRYABLE.
+    const proposalsAfterFail = await prisma.workLedgerEntry.count({ where: { owner_entity_id: userId, ledger_type: "MEETING" } });
+    expect(proposalsAfterFail).toBe(1);
+    const userTurn = (await turnsOf(convId)).find((t) => t.role === "USER");
+    expect(userTurn).toBeDefined();
+    const reqFail = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(reqFail!.state).toBe("FAILED_RETRYABLE");
+    expect(reqFail!.action_ref).not.toBeNull();
+    // No ASSISTANT turn was durably written.
+    expect((await turnsOf(convId)).filter((t) => t.role === "ASSISTANT")).toHaveLength(0);
+
+    // Retry with the SAME request_id (persistence restored) → reconstruct from the action.
+    const retry = await otzar.conductSession({ token, message: msg, request_id: "c5-1", conversation_id: convId });
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.action_proposed).toBe(true);
+    expect(retry.response.toLowerCase()).toContain("budget review");
+    // NO second proposal; request COMPLETED; the model was NEVER used (pure continuity).
+    expect(await prisma.workLedgerEntry.count({ where: { owner_entity_id: userId, ledger_type: "MEETING" } })).toBe(1);
+    const reqOk = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(reqOk!.state).toBe("COMPLETED");
+    expect(reqOk!.canonical_assistant_turn_id).not.toBeNull();
+    expect((await turnsOf(convId)).filter((t) => t.role === "ASSISTANT")).toHaveLength(1);
+    expect(llm.getCalls().length).toBe(llmBefore);
+  });
+
+  it("C2: pure-LLM assistant persist failure → FAILED_RETRYABLE (no action); retry regenerates under exclusive lease — one USER turn, one canonical ASSISTANT", async () => {
+    const llm = new MockLLMProvider([
+      { ok: true, text: "first answer", provider: "mock", model: "m" },
+      { ok: true, text: "regenerated answer", provider: "mock", model: "m" },
+    ]);
+    const wired = makeServicesWithLLM(llm as unknown as LLMProvider);
+    const { token } = await orgUserWithTwin(wired.auth);
+    const convId = randomUUID();
+    const first = await withAssistantPersistFailing(() =>
+      wired.otzar.conductSession({ token, message: "give me a quick planning tip", request_id: "c2-1", conversation_id: convId }),
+    );
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.code).toBe("OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
+    const userTurn = (await turnsOf(convId)).find((t) => t.role === "USER");
+    const reqFail = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(reqFail!.state).toBe("FAILED_RETRYABLE");
+    expect(reqFail!.action_ref).toBeNull(); // pure LLM → no action to reconstruct from
+
+    const retry = await wired.otzar.conductSession({ token, message: "give me a quick planning tip", request_id: "c2-1", conversation_id: convId });
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    // Exactly one USER turn (deduped) + one canonical ASSISTANT; request COMPLETED.
+    const turns = await turnsOf(convId);
+    expect(turns.filter((t) => t.role === "USER")).toHaveLength(1);
+    expect(turns.filter((t) => t.role === "ASSISTANT")).toHaveLength(1);
+    const reqOk = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(reqOk!.state).toBe("COMPLETED");
+    expect(reqOk!.canonical_assistant_turn_id).toBe(turns.find((t) => t.role === "ASSISTANT")!.turn_id);
   });
 
   it("§8: source_channel is carried into durable turn lineage (VOICE / AMBIENT / CHAT)", async () => {

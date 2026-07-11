@@ -28,6 +28,7 @@ import {
   claimRequestProcessing,
   completeRequest,
   failRequest,
+  linkRequestAction,
   IdempotencyConflictError,
   ThreadScopeError,
   type CapsuleType,
@@ -397,7 +398,9 @@ export interface OtzarFailure {
     | "OTZAR_TURN_PERSIST_FAILED"
     | "OTZAR_THREAD_FORBIDDEN"
     | "OTZAR_THREAD_CLOSED"
-    | "OTZAR_REQUEST_IN_PROGRESS";
+    | "OTZAR_REQUEST_IN_PROGRESS"
+    | "OTZAR_ASSISTANT_TURN_PERSIST_FAILED"
+    | "OTZAR_CONTINUITY_STATE_CHANGED";
   message: string;
   detail?: unknown;
 }
@@ -1139,6 +1142,21 @@ export class OtzarService {
               sourceChannel: input.source_channel ?? "CHAT",
             }))
           : turnCtx.userTurnId;
+        // [OTZAR-CONTINUITY C5] Link the EXACT durable action to the request BEFORE the
+        // assistant turn — so an assistant-persist failure is recoverable by
+        // reconstructing from the action (not by re-running continuity / the provider).
+        if (requestLease !== null && continuity.ledger_entry_id != null) {
+          const outcome = await linkRequestAction({
+            request_record_id: requestLease.id,
+            leaseToken: requestLease.token,
+            action_ref: continuity.ledger_entry_id,
+          });
+          if (outcome === "conflict") {
+            // A DIFFERENT action is already linked → fail closed; never silently switch.
+            await this.abortRequest(requestLease, false, "OTZAR_CONTINUITY_STATE_CHANGED");
+            return { ok: false, code: "OTZAR_CONTINUITY_STATE_CHANGED", message: "This request changed state before it finished; please retry." };
+          }
+        }
         const asstId = await this.persistAssistantTurn({
           conversationId: convId,
           orgEntityId,
@@ -1149,6 +1167,14 @@ export class OtzarService {
           actionRef: continuity.ledger_entry_id ?? null,
           sourceChannel: input.source_channel ?? "CHAT",
         });
+        // [OTZAR-CONTINUITY C2] STRICT: the canonical assistant result MUST be durable.
+        // If it isn't, do NOT return the response as success — transition FAILED_RETRYABLE
+        // (the action_ref is already linked) so a retry reconstructs from the durable
+        // action. Never provider replay, never a second action.
+        if (requestLease !== null && asstId === null) {
+          await this.abortRequest(requestLease, false, "OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
+          return { ok: false, code: "OTZAR_ASSISTANT_TURN_PERSIST_FAILED", message: "I couldn't durably record my reply; your request is saved — please retry." };
+        }
         // §6: durability-gated canonical result + COMPLETED transition (lease owner).
         await this.finalizeRequest(requestLease, userTurnId, asstId, OtzarService.continuityResponseClass(continuity.state));
       }
@@ -1716,6 +1742,14 @@ export class OtzarService {
         modelProvider: llmResult.provider ?? null,
         sourceChannel: input.source_channel ?? "CHAT",
       });
+      // [OTZAR-CONTINUITY C2] STRICT: a pure-LLM answer has no durable action to
+      // reconstruct from, so if the canonical assistant turn is not durable we must NOT
+      // return it as success. FAILED_RETRYABLE → a retry, under exclusive lease ownership,
+      // regenerates the answer (one USER turn, no duplicate action/provider work).
+      if (requestLease !== null && asstId === null) {
+        await this.abortRequest(requestLease, false, "OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
+        return { ok: false, code: "OTZAR_ASSISTANT_TURN_PERSIST_FAILED", message: "I couldn't durably record my reply; your message is saved — please retry." };
+      }
       // §6: durability-gated canonical result + COMPLETED transition (lease owner).
       const llmClass: ResponseClass = actionProposed || approvalRequired
         ? "ACTION_PROPOSED"
@@ -2046,11 +2080,43 @@ export class OtzarService {
     });
     const token = randomUUID();
     const claim = await claimRequestProcessing(request.request_record_id, token, args.nowMs);
-    if (claim.claimed) return { lease: { id: request.request_record_id, token }, replay: null, inProgress: null };
+    if (claim.claimed) {
+      // [OTZAR-CONTINUITY C5] Action-aware recovery. If a PRIOR attempt already linked a
+      // durable action (created/executed/blocked a proposal) but did not finish — the
+      // assistant turn or finalization failed — DO NOT reprocess (re-entering continuity
+      // would find no pending proposal for an executed action and misroute to the LLM, or
+      // re-execute). Reconstruct the response from the durable action state, repair the
+      // canonical assistant turn + complete the request, and replay. No provider replay.
+      if (claim.request.action_ref !== null) {
+        const recovered = await this.reconstructFromAction(claim.request.action_ref, args.conversationId, { subjectEntityId: args.subjectEntityId });
+        if (recovered !== null) {
+          const lease = { id: request.request_record_id, token };
+          const asstId = await this.persistAssistantTurn({
+            conversationId: args.conversationId, orgEntityId: args.orgEntityId,
+            subjectEntityId: args.subjectEntityId, twinId: args.twinId,
+            userTurnId: args.userTurnId, content: recovered.response,
+            actionRef: claim.request.action_ref, sourceChannel: "CHAT",
+          });
+          const cls: ResponseClass = recovered.approval_required ? "AWAITING_CONFIRMATION" : "ANSWERED";
+          await this.finalizeRequest(lease, args.userTurnId, asstId, cls);
+          return { lease: null, replay: recovered, inProgress: null };
+        }
+        // Action exists but is not reconstructable (unknown status) → fall through to
+        // reprocess under the freshly claimed lease. Safe: the proposal-level CAS
+        // (claimProposalForExecution) still prevents any double execution.
+      }
+      return { lease: { id: request.request_record_id, token }, replay: null, inProgress: null };
+    }
     // A concurrent owner holds the lease. Replay if it already COMPLETED.
     if (claim.request.state === "COMPLETED" && claim.request.canonical_assistant_turn_id !== null) {
       const asst = await prisma.otzarConversationTurn.findUnique({ where: { turn_id: claim.request.canonical_assistant_turn_id } });
       if (asst !== null) return { lease: null, replay: await this.reconstructFromAssistantTurn(asst, args.conversationId), inProgress: null };
+    }
+    // [OTZAR-CONTINUITY C5] Concurrent owner still PROCESSING but a durable action is
+    // already linked → surface the durable action state rather than a bare in-progress.
+    if (claim.request.action_ref !== null) {
+      const recovered = await this.reconstructFromAction(claim.request.action_ref, args.conversationId, { subjectEntityId: args.subjectEntityId });
+      if (recovered !== null) return { lease: null, replay: recovered, inProgress: null };
     }
     return {
       lease: null, replay: null,
@@ -2073,12 +2139,18 @@ export class OtzarService {
           .update({ where: { turn_id: assistantTurnId }, data: { response_to_turn_id: userTurnId } })
           .catch(() => undefined); // @unique backstop; ignore a benign clash
       }
-      await completeRequest({
+      const completed = await completeRequest({
         request_record_id: lease.id,
         leaseToken: lease.token,
         canonical_assistant_turn_id: assistantTurnId,
         response_class: responseClass,
       });
+      if (!completed) {
+        // The strict CAS refused: the lease was lost/expired, or a DIFFERENT canonical
+        // turn already owns the request. This is a consistency event, not a benign miss —
+        // surface it. The durable action/canonical state governs; a retry reconciles.
+        logger.warn({ requestRecordId: lease.id, assistantTurnId }, "otzar request finalize CAS refused (lease lost or canonical already owned) — retry reconciles");
+      }
     } catch (e) {
       logger.warn({ err: e, requestRecordId: lease.id }, "otzar request finalize failed (lease will expire → retry reclaims)");
     }
@@ -2138,6 +2210,58 @@ export class OtzarService {
         layer_5_relevant_context: 0, layer_8_history_messages: 0, total_capsules: 0,
       },
     };
+  }
+
+  // [OTZAR-CONTINUITY C5] Reconstruct the response for a request whose action already
+  // reached a durable state but whose assistant turn / finalization did not land. Built
+  // ONLY from durable ledger state (status + details.proposal + event_id) — never from
+  // model memory, never by re-running continuity (which for an executed action would find
+  // no pending proposal and misroute to the LLM). Ownership is verified (the action must
+  // belong to the subject); a foreign/absent action fails closed (null → caller decides).
+  private async reconstructFromAction(
+    actionRef: string,
+    conversationId: string,
+    scope: { subjectEntityId: string },
+  ): Promise<ConductSessionSuccess | null> {
+    const led = await prisma.workLedgerEntry.findUnique({
+      where: { ledger_entry_id: actionRef },
+      select: { status: true, details: true, title: true, owner_entity_id: true },
+    });
+    if (led === null || led.owner_entity_id !== scope.subjectEntityId) return null; // fail closed
+    const details = (led.details ?? {}) as Record<string, unknown>;
+    const proposal = (details.proposal ?? {}) as { title?: string; resolved_label?: string };
+    const title = proposal.title ?? led.title ?? "that";
+    const label = typeof proposal.resolved_label === "string" ? proposal.resolved_label : undefined;
+    const eventId = typeof details.event_id === "string" ? details.event_id : undefined;
+    let state: string;
+    let response: string;
+    switch (led.status) {
+      case "NEEDS_CALLER_CONFIRMATION":
+        state = "AWAITING_CONFIRMATION";
+        response = label ? `I've got "${title}" for ${label}. Want me to add it?` : `I've got "${title}" ready. Want me to add it?`;
+        break;
+      case "EXECUTING":
+        state = "AWAITING_CONFIRMATION";
+        response = `I'm already working on "${title}".`;
+        break;
+      case "EXECUTED":
+        state = "CREATED";
+        response = `That's already done — "${title}" is on your calendar.`;
+        break;
+      case "CANCELLED":
+        state = "CANCELLED";
+        response = `Okay — I won't add "${title}". Cancelled.`;
+        break;
+      case "BLOCKED":
+        state = "PROVIDER_BLOCKED";
+        response = typeof details.blocked_reason === "string"
+          ? details.blocked_reason
+          : `I couldn't finish adding "${title}" — the calendar provider is unavailable. Your request is saved; try again shortly.`;
+        break;
+      default:
+        return null; // unknown status → let the caller decide (never fabricate)
+    }
+    return this.buildContinuitySuccess(conversationId, { state, response, ...(eventId !== undefined ? { event_id: eventId } : {}) });
   }
 
   // ──────────────────────────────────────────────────────────────
