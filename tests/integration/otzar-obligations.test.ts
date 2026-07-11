@@ -340,4 +340,62 @@ describe("Otzar obligations (Stage-2)", () => {
       expect(superseded.replacement.title).toBe("Book 3pm instead");
     }
   });
+
+  it("§8 projection — awaiting-confirmation action: derives an obligation from an EXISTING NEEDS_CALLER_CONFIRMATION ledger; idempotent + links the ledger", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUserWithTwin(auth);
+    // A pre-existing awaiting-confirmation action (as the calendar flow persists it).
+    const ledger = await seedPendingLedger(u);
+    const first = await otzar.projectAwaitingConfirmationObligation({ token: u.token, ledger_entry_id: ledger });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.created).toBe(true);
+    expect(first.obligation.obligation_type).toBe("ACTION_CONFIRMATION");
+    expect(first.obligation.has_action).toBe(true); // links the ledger (execution truth stays there)
+    // The obligation links the exact ledger (verified at the row level, not exposed in the projection).
+    const row = await prisma.obligation.findUnique({ where: { obligation_id: first.obligation.obligation_id } });
+    expect(row!.action_ref).toBe(ledger);
+    // Re-projection is idempotent: the SAME obligation, no duplicate.
+    const again = await otzar.projectAwaitingConfirmationObligation({ token: u.token, ledger_entry_id: ledger });
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+    expect(again.created).toBe(false);
+    expect(again.obligation.obligation_id).toBe(first.obligation.obligation_id);
+    const count = await prisma.obligation.count({ where: { org_entity_id: u.orgId, action_ref: ledger } });
+    expect(count).toBe(1);
+    // A FOREIGN caller cannot project another subject's ledger (scope-gated → not projectable).
+    const other = await orgUserWithTwin(auth);
+    const foreign = await otzar.projectAwaitingConfirmationObligation({ token: other.token, ledger_entry_id: ledger });
+    expect(foreign.ok).toBe(false);
+  });
+
+  it("§8 projection — unresolved assistant question: derives a QUESTION_RESPONSE obligation from a COMPLETED CLARIFICATION request; idempotent", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUserWithTwin(auth);
+    const convId = randomUUID();
+    // Seed an unresolved assistant question in the durable spine: USER turn + ASSISTANT question
+    // turn + a COMPLETED CLARIFICATION request linking them.
+    const userTurnId = await seedUserTurn(u, convId, "what should I do?");
+    const asstTurn = await prisma.otzarConversationTurn.create({
+      data: { conversation_id: convId, org_entity_id: u.orgId, subject_entity_id: u.userId, author_entity_id: u.twinId, twin_entity_id: u.twinId, role: "ASSISTANT", content: "Which vendor did you mean — Acme or Globex?", content_hash: "qh", sequence: 950002, source_channel: "CHAT", response_to_turn_id: userTurnId },
+      select: { turn_id: true },
+    });
+    const req = await prisma.otzarConversationRequest.create({
+      data: { conversation_id: convId, user_turn_id: userTurnId, org_entity_id: u.orgId, subject_entity_id: u.userId, twin_entity_id: u.twinId, content_hash: "ch", state: "COMPLETED", response_class: "CLARIFICATION", canonical_assistant_turn_id: asstTurn.turn_id },
+      select: { request_record_id: true },
+    });
+    const first = await otzar.projectUnresolvedQuestionObligation({ token: u.token, request_record_id: req.request_record_id });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.created).toBe(true);
+    expect(first.obligation.obligation_type).toBe("QUESTION_RESPONSE");
+    expect(first.obligation.source_turn_id).toBe(asstTurn.turn_id); // links the question turn
+    expect(first.obligation.title).toContain("Which vendor");
+    // Idempotent re-projection → same obligation.
+    const again = await otzar.projectUnresolvedQuestionObligation({ token: u.token, request_record_id: req.request_record_id });
+    expect(again.ok).toBe(true);
+    if (again.ok) expect(again.obligation.obligation_id).toBe(first.obligation.obligation_id);
+    const count = await prisma.obligation.count({ where: { org_entity_id: u.orgId, request_record_id: req.request_record_id } });
+    expect(count).toBe(1);
+  });
 });

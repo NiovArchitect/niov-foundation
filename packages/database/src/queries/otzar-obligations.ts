@@ -652,3 +652,106 @@ class ObligationCasConflict extends Error {
     this.name = "ObligationCasConflict";
   }
 }
+
+// ── Projection from existing spine state (§8: derive obligations from what already exists —
+//    an awaiting-confirmation action, an unresolved assistant question — NOT hand-fed refs).
+//    Each projection is IDEMPOTENT via a deterministic origin_key: re-projecting the same
+//    spine row create-or-gets the SAME obligation, never a duplicate. Proves link-not-duplicate
+//    against real pre-existing rows. ──────────────────────────────────────────────────────────
+
+/** Result of a projection: the obligation (created or existing), or a reason it did not project. */
+export type ProjectionResult =
+  | { kind: "projected"; obligation: SafeObligation; created: boolean }
+  | { kind: "not_projectable" }; // the spine row is absent, out of scope, or not in a projectable state
+
+/**
+ * Project an obligation from an awaiting-confirmation WorkLedgerEntry (e.g. a calendar proposal
+ * in NEEDS_CALLER_CONFIRMATION). The obligation LINKS the ledger (action_ref) — execution truth
+ * stays on the ledger. origin_key = "awaiting_confirmation:<ledger_entry_id>" → idempotent.
+ */
+export async function projectObligationFromAwaitingConfirmation(
+  scope: ObligationScope,
+  ledgerEntryId: string,
+  options: { creator_entity_id?: string } = {},
+): Promise<ProjectionResult> {
+  const led = await prisma.workLedgerEntry.findUnique({
+    where: { ledger_entry_id: ledgerEntryId },
+    select: { org_entity_id: true, owner_entity_id: true, conversation_id: true, title: true, status: true },
+  });
+  if (
+    led === null ||
+    led.org_entity_id !== scope.org_entity_id ||
+    (led.owner_entity_id !== null && led.owner_entity_id !== scope.subject_entity_id) ||
+    led.status !== "NEEDS_CALLER_CONFIRMATION"
+  ) {
+    return { kind: "not_projectable" };
+  }
+  const { obligation, created } = await createOrGetObligation(scope, {
+    obligation_type: "ACTION_CONFIRMATION",
+    title: led.title,
+    creator_entity_id: options.creator_entity_id ?? scope.twin_entity_id,
+    responsible_entity_id: scope.subject_entity_id,
+    origin_key: `awaiting_confirmation:${ledgerEntryId}`,
+    initial_state: "AWAITING_RESPONSE",
+    required_response_class: "CONFIRMATION",
+    provenance_class: "CONVERSATION",
+    action_ref: ledgerEntryId,
+    conversation_id: led.conversation_id,
+  });
+  return { kind: "projected", obligation, created };
+}
+
+/**
+ * Project an obligation from an unresolved assistant question — an OtzarConversationRequest that
+ * COMPLETED asking the user something (response_class CLARIFICATION) and whose canonical
+ * assistant turn is the question. The obligation LINKS the request + question turn.
+ * origin_key = "question:<request_record_id>" → idempotent.
+ */
+export async function projectObligationFromUnresolvedQuestion(
+  scope: ObligationScope,
+  requestRecordId: string,
+  options: { creator_entity_id?: string } = {},
+): Promise<ProjectionResult> {
+  const req = await prisma.otzarConversationRequest.findUnique({
+    where: { request_record_id: requestRecordId },
+    select: {
+      org_entity_id: true, subject_entity_id: true, twin_entity_id: true, conversation_id: true,
+      state: true, response_class: true, canonical_assistant_turn_id: true,
+    },
+  });
+  if (
+    req === null ||
+    req.org_entity_id !== scope.org_entity_id ||
+    req.subject_entity_id !== scope.subject_entity_id ||
+    req.twin_entity_id !== scope.twin_entity_id ||
+    req.state !== "COMPLETED" ||
+    req.response_class !== "CLARIFICATION"
+  ) {
+    return { kind: "not_projectable" };
+  }
+  // A bounded, safe title from the question turn (safe natural-language content only).
+  let title = "Answer the assistant's question";
+  if (req.canonical_assistant_turn_id !== null) {
+    const turn = await prisma.otzarConversationTurn.findUnique({
+      where: { turn_id: req.canonical_assistant_turn_id },
+      select: { content: true, role: true },
+    });
+    if (turn !== null && turn.role === "ASSISTANT" && turn.content.length > 0) {
+      title = turn.content.length > 120 ? `${turn.content.slice(0, 117)}...` : turn.content;
+    }
+  }
+  const { obligation, created } = await createOrGetObligation(scope, {
+    obligation_type: "QUESTION_RESPONSE",
+    title,
+    creator_entity_id: options.creator_entity_id ?? scope.twin_entity_id,
+    responsible_entity_id: scope.subject_entity_id,
+    origin_key: `question:${requestRecordId}`,
+    initial_state: "AWAITING_RESPONSE",
+    required_response_class: "ANSWER",
+    provenance_class: "CONVERSATION",
+    request_record_id: requestRecordId,
+    ...(req.canonical_assistant_turn_id !== null ? { source_turn_id: req.canonical_assistant_turn_id } : {}),
+    conversation_id: req.conversation_id,
+  });
+  return { kind: "projected", obligation, created };
+}

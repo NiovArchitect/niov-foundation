@@ -216,6 +216,8 @@ export {
   completeObligation,
   reassignObligation,
   supersedeObligation,
+  projectObligationFromAwaitingConfirmation,
+  projectObligationFromUnresolvedQuestion,
   TERMINAL_OBLIGATION_STATES,
   OPEN_OBLIGATION_STATES,
 } from "./queries/otzar-obligations.js";
@@ -231,6 +233,7 @@ export type {
   ReassignArgs,
   ReassignResult,
   SupersedeResult,
+  ProjectionResult,
 } from "./queries/otzar-obligations.js";
 
 export type {

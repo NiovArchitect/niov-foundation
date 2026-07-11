@@ -1003,4 +1003,38 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // POST /obligations/project/awaiting-confirmation — derive (idempotently) an obligation from
+  // an existing NEEDS_CALLER_CONFIRMATION action the caller owns.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/project/awaiting-confirmation",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.ledger_entry_id !== "string" || body.ledger_entry_id.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "ledger_entry_id is required" });
+      }
+      const result = await otzarService.projectAwaitingConfirmationObligation({ token, ledger_entry_id: body.ledger_entry_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /obligations/project/question — derive (idempotently) an obligation from an unresolved
+  // assistant question (a COMPLETED CLARIFICATION request the caller owns).
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/project/question",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.request_record_id !== "string" || body.request_record_id.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "request_record_id is required" });
+      }
+      const result = await otzarService.projectUnresolvedQuestionObligation({ token, request_record_id: body.request_record_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
 }

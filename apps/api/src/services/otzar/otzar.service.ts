@@ -55,6 +55,8 @@ import {
   completeObligation,
   reassignObligation,
   supersedeObligation,
+  projectObligationFromAwaitingConfirmation,
+  projectObligationFromUnresolvedQuestion,
   type SafeObligation,
   type ObligationScope,
   type CreateObligationInput,
@@ -3640,6 +3642,37 @@ export class OtzarService {
       obligation_id: input.obligation_id, replacement_obligation_id: replacement.obligation_id,
     });
     return { ok: true, obligation: outcome.obligation, replacement };
+  }
+
+  /** Project an obligation from an existing awaiting-confirmation action (a NEEDS_CALLER_
+   *  CONFIRMATION WorkLedgerEntry). Idempotent — re-projecting yields the same obligation. The
+   *  obligation LINKS the ledger; execution truth stays on the ledger. */
+  async projectAwaitingConfirmationObligation(input: { token: string; ledger_entry_id: string }): Promise<{ ok: true; obligation: SafeObligation; created: boolean } | OtzarFailure> {
+    const resolved = await this.obligationScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const res = await projectObligationFromAwaitingConfirmation(resolved.scope, input.ledger_entry_id);
+    if (res.kind !== "projected") return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "Nothing awaiting confirmation to project here." };
+    if (res.created) {
+      await this.emitObligationAudit("OBLIGATION_CREATED", resolved.entity_id, resolved.scope.org_entity_id, {
+        obligation_id: res.obligation.obligation_id, obligation_type: res.obligation.obligation_type, state: res.obligation.state, projected_from: "awaiting_confirmation",
+      });
+    }
+    return { ok: true, obligation: res.obligation, created: res.created };
+  }
+
+  /** Project an obligation from an unresolved assistant question (a COMPLETED CLARIFICATION
+   *  request). Idempotent — re-projecting yields the same obligation. */
+  async projectUnresolvedQuestionObligation(input: { token: string; request_record_id: string }): Promise<{ ok: true; obligation: SafeObligation; created: boolean } | OtzarFailure> {
+    const resolved = await this.obligationScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const res = await projectObligationFromUnresolvedQuestion(resolved.scope, input.request_record_id);
+    if (res.kind !== "projected") return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "No unresolved question to project here." };
+    if (res.created) {
+      await this.emitObligationAudit("OBLIGATION_CREATED", resolved.entity_id, resolved.scope.org_entity_id, {
+        obligation_id: res.obligation.obligation_id, obligation_type: res.obligation.obligation_type, state: res.obligation.state, projected_from: "unresolved_question",
+      });
+    }
+    return { ok: true, obligation: res.obligation, created: res.created };
   }
 
   // ──────────────────────────────────────────────────────────────
