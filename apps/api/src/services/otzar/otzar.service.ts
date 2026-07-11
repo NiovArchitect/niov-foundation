@@ -24,9 +24,14 @@ import {
   writeAuditEvent,
   appendConversationTurn,
   createThread,
+  createOrGetRequest,
+  claimRequestProcessing,
+  completeRequest,
+  failRequest,
   IdempotencyConflictError,
   ThreadScopeError,
   type CapsuleType,
+  type ResponseClass,
 } from "@niov/database";
 import type { OtzarConversationTurn } from "@prisma/client";
 import { resolveAuthoritativeThread } from "./thread-resolution.service.js";
@@ -391,7 +396,8 @@ export interface OtzarFailure {
     | "OTZAR_REQUEST_ID_CONFLICT"
     | "OTZAR_TURN_PERSIST_FAILED"
     | "OTZAR_THREAD_FORBIDDEN"
-    | "OTZAR_THREAD_CLOSED";
+    | "OTZAR_THREAD_CLOSED"
+    | "OTZAR_REQUEST_IN_PROGRESS";
   message: string;
   detail?: unknown;
 }
@@ -954,6 +960,29 @@ export class OtzarService {
     if (turnCtx.failure !== null) return turnCtx.failure;
     if (turnCtx.replay !== null) return turnCtx.replay;
 
+    // [OTZAR-CONTINUITY P5 Stage 1 §1-§3] Request-processing spine. Every accepted
+    // org-scoped turn materializes exactly one OtzarConversationRequest (1:1 with its
+    // durable USER turn) and is claimed with an atomic lease BEFORE any continuity
+    // mutation / LLM / tool / provider call. Only the lease winner processes; a
+    // concurrent duplicate replays a COMPLETED result or is refused as in-progress.
+    // The lease is finalized (canonical assistant link + COMPLETED) at the response.
+    let requestLease: { id: string; token: string } | null = null;
+    if (orgEntityId !== null && !turnCtx.deferred && turnCtx.conversationId !== null && turnCtx.userTurnId !== null) {
+      const gate = await this.openRequestGate({
+        conversationId: turnCtx.conversationId,
+        userTurnId: turnCtx.userTurnId,
+        orgEntityId,
+        subjectEntityId: ownerEntityId,
+        twinId: twin.entity_id,
+        clientRequestId: input.request_id,
+        content: input.message,
+        nowMs: temporalCtx.now_ms,
+      });
+      if (gate.replay !== null) return gate.replay;
+      if (gate.inProgress !== null) return gate.inProgress;
+      requestLease = gate.lease;
+    }
+
     // [OTZAR-CONTINUITY P5 Stage 1A] Phase A (read-only) + Phase B for the AMBIENT path:
     // when the ambient act WILL mutate (propose/confirm/reject/revise/ordinal), resolve
     // the target thread read-only and persist the USER turn to it BEFORE any mutation.
@@ -998,6 +1027,22 @@ export class OtzarService {
           return { ok: false, code: "OTZAR_TURN_PERSIST_FAILED", message: "Could not durably record your message; it was not processed. Please retry." };
         }
         ambientContinuityConvId = resolution.continuity_conversation_id;
+        // §1-§3: claim the request BEFORE the Phase-C continuity mutation below. Same
+        // spine as the supplied path; a duplicate ambient turn deduped onto the same
+        // USER turn resolves to the same request → one winner, loser replays/refused.
+        const gate = await this.openRequestGate({
+          conversationId: resolution.thread_id,
+          userTurnId: ambientUserTurnId,
+          orgEntityId,
+          subjectEntityId: ownerEntityId,
+          twinId: twin.entity_id,
+          clientRequestId: input.request_id,
+          content: input.message,
+          nowMs: temporalCtx.now_ms,
+        });
+        if (gate.replay !== null) return gate.replay;
+        if (gate.inProgress !== null) return gate.inProgress;
+        requestLease = gate.lease;
       }
     }
 
@@ -1032,7 +1077,7 @@ export class OtzarService {
               sourceChannel: input.source_channel ?? "CHAT",
             }))
           : turnCtx.userTurnId;
-        await this.persistAssistantTurn({
+        const asstId = await this.persistAssistantTurn({
           conversationId: convId,
           orgEntityId,
           subjectEntityId: ownerEntityId,
@@ -1042,6 +1087,8 @@ export class OtzarService {
           actionRef: continuity.ledger_entry_id ?? null,
           sourceChannel: input.source_channel ?? "CHAT",
         });
+        // §6: durability-gated canonical result + COMPLETED transition (lease owner).
+        await this.finalizeRequest(requestLease, userTurnId, asstId, OtzarService.continuityResponseClass(continuity.state));
       }
       return this.buildContinuitySuccess(convId, continuity);
     }
@@ -1049,6 +1096,7 @@ export class OtzarService {
     // Validate L8 history length up front.
     const history = input.conversation_history ?? [];
     if (history.length > L8_MAX_MESSAGES) {
+      await this.abortRequest(requestLease, true, "INVALID_HISTORY"); // deterministic → FINAL
       return {
         ok: false,
         code: "INVALID_HISTORY",
@@ -1285,6 +1333,7 @@ export class OtzarService {
       });
     } catch (err) {
       if (err instanceof TokenBudgetExceededError) {
+        await this.abortRequest(requestLease, true, "TOKEN_BUDGET_EXCEEDED"); // deterministic → FINAL
         return {
           ok: false,
           code: "TOKEN_BUDGET_EXCEEDED",
@@ -1358,6 +1407,9 @@ export class OtzarService {
       user: userPrompt,
     });
     if (!llmResult.ok) {
+      // Provider failed AFTER the claim → FAILED_RETRYABLE so a retry reclaims the
+      // request immediately (never refuse a legitimate retry as still-in-progress).
+      await this.abortRequest(requestLease, false, "LLM_UNAVAILABLE");
       return {
         ok: false,
         code: "LLM_UNAVAILABLE",
@@ -1584,7 +1636,7 @@ export class OtzarService {
             sourceChannel: input.source_channel ?? "CHAT",
           }))
         : turnCtx.userTurnId;
-      await this.persistAssistantTurn({
+      const asstId = await this.persistAssistantTurn({
         conversationId,
         orgEntityId,
         subjectEntityId: ownerEntityId,
@@ -1594,6 +1646,11 @@ export class OtzarService {
         modelProvider: llmResult.provider ?? null,
         sourceChannel: input.source_channel ?? "CHAT",
       });
+      // §6: durability-gated canonical result + COMPLETED transition (lease owner).
+      const llmClass: ResponseClass = actionProposed || approvalRequired
+        ? "ACTION_PROPOSED"
+        : clarificationNeeded ? "CLARIFICATION" : "ANSWERED";
+      await this.finalizeRequest(requestLease, llmUserTurnId, asstId, llmClass);
     }
 
     return {
@@ -1662,6 +1719,21 @@ export class OtzarService {
   // [OTZAR-CONTINUITY] Wrap a deterministic continuity result in a valid
   // ConductSessionSuccess. Honest state flags: a pending proposal sets
   // action_proposed + approval_required; nothing else is fabricated.
+  // Map a deterministic continuity state to the request record's canonical
+  // response_class (used for action-aware recovery + audit clarity).
+  private static continuityResponseClass(state: string): ResponseClass {
+    switch (state) {
+      case "AWAITING_CONFIRMATION": return "AWAITING_CONFIRMATION";
+      case "REVISED": return "REVISED";
+      case "CREATED": return "SUCCEEDED";
+      case "CANCELLED": return "CANCELLED";
+      case "PROVIDER_BLOCKED": return "BLOCKED";
+      case "DISAMBIGUATE":
+      case "NEEDS_TIME_CLARIFICATION": return "CLARIFICATION";
+      default: return "ANSWERED";
+    }
+  }
+
   private buildContinuitySuccess(
     conversationId: string,
     continuity: { state: string; response: string; event_id?: string },
@@ -1859,10 +1931,10 @@ export class OtzarService {
     actionRef?: string | null;
     modelProvider?: string | null;
     sourceChannel: "CHAT" | "VOICE" | "AMBIENT";
-  }): Promise<void> {
-    if (args.conversationId === null || args.orgEntityId === null) return;
+  }): Promise<string | null> {
+    if (args.conversationId === null || args.orgEntityId === null) return null;
     try {
-      await appendConversationTurn({
+      const t = await appendConversationTurn({
         conversation_id: args.conversationId,
         org_entity_id: args.orgEntityId,
         subject_entity_id: args.subjectEntityId,
@@ -1875,8 +1947,88 @@ export class OtzarService {
         ...(args.modelProvider ? { model_provider: args.modelProvider } : {}),
         source_channel: args.sourceChannel,
       });
+      return t.turn_id;
     } catch (e) {
       logger.warn({ err: e, conversationId: args.conversationId }, "otzar assistant-turn persistence failed (response already generated)");
+      return null;
+    }
+  }
+
+  // [OTZAR-CONTINUITY P5 Stage 1 §1-§3] Request-processing gate for the SUPPLIED-ID
+  // path (the normal CT contract): after the durable USER turn, materialize the
+  // OtzarConversationRequest and atomically claim it. Only the lease winner processes;
+  // a concurrent duplicate replays a COMPLETED result or returns OTZAR_REQUEST_IN_
+  // PROGRESS. A missed completion self-heals: the lease expires and a retry reclaims.
+  private async openRequestGate(args: {
+    conversationId: string; userTurnId: string; orgEntityId: string;
+    subjectEntityId: string; twinId: string; clientRequestId: string | undefined;
+    content: string; nowMs: number;
+  }): Promise<{ lease: { id: string; token: string } | null; replay: ConductSessionSuccess | null; inProgress: OtzarFailure | null }> {
+    const contentHash = createHash("sha256").update(args.content).digest("hex");
+    const { request } = await createOrGetRequest({
+      conversation_id: args.conversationId,
+      user_turn_id: args.userTurnId,
+      org_entity_id: args.orgEntityId,
+      subject_entity_id: args.subjectEntityId,
+      twin_entity_id: args.twinId,
+      client_request_id: args.clientRequestId ?? null,
+      content_hash: contentHash,
+    });
+    const token = randomUUID();
+    const claim = await claimRequestProcessing(request.request_record_id, token, args.nowMs);
+    if (claim.claimed) return { lease: { id: request.request_record_id, token }, replay: null, inProgress: null };
+    // A concurrent owner holds the lease. Replay if it already COMPLETED.
+    if (claim.request.state === "COMPLETED" && claim.request.canonical_assistant_turn_id !== null) {
+      const asst = await prisma.otzarConversationTurn.findUnique({ where: { turn_id: claim.request.canonical_assistant_turn_id } });
+      if (asst !== null) return { lease: null, replay: await this.reconstructFromAssistantTurn(asst, args.conversationId), inProgress: null };
+    }
+    return {
+      lease: null, replay: null,
+      inProgress: { ok: false, code: "OTZAR_REQUEST_IN_PROGRESS", message: "This request is already being processed. Please retry shortly." },
+    };
+  }
+
+  // Link the ONE canonical assistant result + mark the request COMPLETED (lease-owner).
+  // Best-effort: a miss leaves the lease to expire → a retry reclaims + reprocesses.
+  private async finalizeRequest(
+    lease: { id: string; token: string } | null,
+    userTurnId: string | null,
+    assistantTurnId: string | null,
+    responseClass: ResponseClass,
+  ): Promise<void> {
+    if (lease === null || assistantTurnId === null) return;
+    try {
+      if (userTurnId !== null) {
+        await prisma.otzarConversationTurn
+          .update({ where: { turn_id: assistantTurnId }, data: { response_to_turn_id: userTurnId } })
+          .catch(() => undefined); // @unique backstop; ignore a benign clash
+      }
+      await completeRequest({
+        request_record_id: lease.id,
+        leaseToken: lease.token,
+        canonical_assistant_turn_id: assistantTurnId,
+        response_class: responseClass,
+      });
+    } catch (e) {
+      logger.warn({ err: e, requestRecordId: lease.id }, "otzar request finalize failed (lease will expire → retry reclaims)");
+    }
+  }
+
+  // §6: an accepted turn that returns a failure AFTER the claim but BEFORE the
+  // canonical result must transition the request out of PROCESSING explicitly —
+  // never leave it PROCESSING for the lease to decay (which would wrongly refuse a
+  // legitimate retry as in-progress). `final=false` (FAILED_RETRYABLE) lets a retry
+  // reclaim immediately; `final=true` (FAILED_FINAL) for deterministic rejections.
+  private async abortRequest(
+    lease: { id: string; token: string } | null,
+    final: boolean,
+    failureCode: string,
+  ): Promise<void> {
+    if (lease === null) return;
+    try {
+      await failRequest({ request_record_id: lease.id, leaseToken: lease.token, final, failure_code: failureCode });
+    } catch (e) {
+      logger.warn({ err: e, requestRecordId: lease.id }, "otzar request abort failed (lease will expire → retry reclaims)");
     }
   }
 
