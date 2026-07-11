@@ -60,17 +60,22 @@ function statusForCode(code: string): number {
       return 401;
     case "OPERATION_NOT_PERMITTED":
     case "NOT_CONVERSATION_OWNER":
+    case "OTZAR_THREAD_FORBIDDEN":
       return 403;
     case "TWIN_NOT_FOUND":
     case "CONVERSATION_NOT_FOUND":
       return 404;
     case "INVALID_HISTORY":
+    case "INVALID_REQUEST_ID":
       return 422;
     case "ALREADY_INGESTED":
+    case "OTZAR_REQUEST_ID_CONFLICT":
+    case "OTZAR_THREAD_CLOSED":
       return 409;
     case "TOKEN_BUDGET_EXCEEDED":
       return 413;
     case "LLM_UNAVAILABLE":
+    case "OTZAR_TURN_PERSIST_FAILED":
       return 503;
     default:
       return 400;

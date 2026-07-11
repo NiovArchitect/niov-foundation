@@ -24,6 +24,7 @@ import {
   writeAuditEvent,
   appendConversationTurn,
   IdempotencyConflictError,
+  ThreadScopeError,
   type CapsuleType,
 } from "@niov/database";
 import type { OtzarConversationTurn } from "@prisma/client";
@@ -197,6 +198,8 @@ export interface ConductSessionInput {
   // submission. Retained across retries so a response-lost retry replays the stored
   // result instead of re-invoking the model/tool. Bounded, safe charset; validated.
   request_id?: string;
+  // [OTZAR-CONTINUITY P5 Stage 1 §8] Accurate source channel for durable turn lineage.
+  source_channel?: "CHAT" | "VOICE" | "AMBIENT";
 }
 
 // WHAT: Closed-vocab next-step label per the
@@ -382,10 +385,12 @@ export interface OtzarFailure {
     | "LLM_UNAVAILABLE"
     | "CONVERSATION_NOT_FOUND"
     | "NOT_CONVERSATION_OWNER"
-    // [OTZAR-CONTINUITY P5 Stage 1] durable-turn / idempotency failures.
+    // [OTZAR-CONTINUITY P5 Stage 1] durable-turn / idempotency / thread failures.
     | "INVALID_REQUEST_ID"
     | "OTZAR_REQUEST_ID_CONFLICT"
-    | "OTZAR_TURN_PERSIST_FAILED";
+    | "OTZAR_TURN_PERSIST_FAILED"
+    | "OTZAR_THREAD_FORBIDDEN"
+    | "OTZAR_THREAD_CLOSED";
   message: string;
   detail?: unknown;
 }
@@ -976,6 +981,7 @@ export class OtzarService {
               twinId: twin.entity_id,
               requestId: input.request_id,
               content: input.message,
+              sourceChannel: input.source_channel ?? "CHAT",
             })
           : turnCtx.userTurnId;
         await this.persistAssistantTurn({
@@ -986,6 +992,7 @@ export class OtzarService {
           userTurnId,
           content: continuity.response,
           actionRef: continuity.ledger_entry_id ?? null,
+          sourceChannel: input.source_channel ?? "CHAT",
         });
       }
       return this.buildContinuitySuccess(convId, continuity);
@@ -1524,6 +1531,7 @@ export class OtzarService {
             twinId: twin.entity_id,
             requestId: input.request_id,
             content: input.message,
+            sourceChannel: input.source_channel ?? "CHAT",
           })
         : turnCtx.userTurnId;
       await this.persistAssistantTurn({
@@ -1534,6 +1542,7 @@ export class OtzarService {
         userTurnId: llmUserTurnId,
         content: llmResult.text,
         modelProvider: llmResult.provider ?? null,
+        sourceChannel: input.source_channel ?? "CHAT",
       });
     }
 
@@ -1691,15 +1700,29 @@ export class OtzarService {
     // Supplied thread id (the normal CT contract): resolve authoritatively (validate
     // exact scope / create-if-missing) and persist the USER turn BEFORE the model, so
     // this path is fully thread-first + idempotent + retry-replayable.
-    const resolved = await resolveAuthoritativeThread({
-      conversation_id: args.input.conversation_id,
-      org_entity_id: args.orgEntityId,
-      subject_entity_id: args.subjectEntityId,
-      twin_entity_id: args.twinId,
-      timezone: args.timezone,
-      now_ms: args.nowMs,
-    });
-    const conversationId = resolved.conversation_id;
+    let conversationId: string;
+    try {
+      const resolved = await resolveAuthoritativeThread({
+        conversation_id: args.input.conversation_id,
+        org_entity_id: args.orgEntityId,
+        subject_entity_id: args.subjectEntityId,
+        twin_entity_id: args.twinId,
+        timezone: args.timezone,
+        now_ms: args.nowMs,
+      });
+      conversationId = resolved.conversation_id;
+    } catch (e) {
+      // §7: a supplied thread that exists but is foreign / deleted fails explicitly,
+      // never silently minted over. Safe error doctrine — no existence disclosure.
+      if (e instanceof ThreadScopeError) {
+        const code = e.reason === "thread_deleted" ? "OTZAR_THREAD_CLOSED" : "OTZAR_THREAD_FORBIDDEN";
+        return {
+          conversationId: null, userTurnId: null, replay: null, deferred: false,
+          failure: { ok: false, code, message: code === "OTZAR_THREAD_CLOSED" ? "This conversation is no longer active." : "This conversation is not available to you." },
+        };
+      }
+      throw e;
+    }
 
     let userTurn: { turn_id: string; deduped: boolean };
     try {
@@ -1712,7 +1735,7 @@ export class OtzarService {
         role: "USER",
         content: args.input.message,
         ...(rid !== undefined ? { request_id: rid } : {}),
-        source_channel: "CHAT",
+        source_channel: args.input.source_channel ?? "CHAT",
       });
     } catch (e) {
       if (e instanceof IdempotencyConflictError) {
@@ -1751,6 +1774,7 @@ export class OtzarService {
     twinId: string;
     requestId?: string | undefined;
     content: string;
+    sourceChannel: "CHAT" | "VOICE" | "AMBIENT";
   }): Promise<string | null> {
     try {
       const u = await appendConversationTurn({
@@ -1762,7 +1786,7 @@ export class OtzarService {
         role: "USER",
         content: args.content,
         ...(args.requestId !== undefined ? { request_id: args.requestId } : {}),
-        source_channel: "CHAT",
+        source_channel: args.sourceChannel,
       });
       return u.turn_id;
     } catch (e) {
@@ -1784,6 +1808,7 @@ export class OtzarService {
     content: string;
     actionRef?: string | null;
     modelProvider?: string | null;
+    sourceChannel: "CHAT" | "VOICE" | "AMBIENT";
   }): Promise<void> {
     if (args.conversationId === null || args.orgEntityId === null) return;
     try {
@@ -1798,7 +1823,7 @@ export class OtzarService {
         ...(args.userTurnId ? { reply_to_turn_id: args.userTurnId } : {}),
         ...(args.actionRef ? { action_ref: args.actionRef } : {}),
         ...(args.modelProvider ? { model_provider: args.modelProvider } : {}),
-        source_channel: "CHAT",
+        source_channel: args.sourceChannel,
       });
     } catch (e) {
       logger.warn({ err: e, conversationId: args.conversationId }, "otzar assistant-turn persistence failed (response already generated)");

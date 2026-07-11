@@ -64,7 +64,7 @@ describe("resolveAuthoritativeThread (P5 Stage 1)", () => {
     expect(r).toEqual({ conversation_id: t.conversation_id, origin: "supplied" });
   });
 
-  it("supplied id owned by ANOTHER subject → never attached; a fresh own thread is minted", async () => {
+  it("§7: supplied id owned by ANOTHER subject → fails EXPLICITLY (ThreadScopeError), never minted over", async () => {
     const a = args();
     orgIds.push(a.org_entity_id);
     const foreign = await createThread({
@@ -72,10 +72,9 @@ describe("resolveAuthoritativeThread (P5 Stage 1)", () => {
       subject_entity_id: randomUUID(), twin_entity_id: randomUUID(),
     });
     created.push(foreign.conversation_id);
-    const r = await resolveAuthoritativeThread({ ...a, conversation_id: foreign.conversation_id });
-    expect(r.origin).toBe("created");
-    expect(r.conversation_id).not.toBe(foreign.conversation_id);
-    created.push(r.conversation_id);
+    await expect(
+      resolveAuthoritativeThread({ ...a, conversation_id: foreign.conversation_id }),
+    ).rejects.toMatchObject({ name: "ThreadScopeError" });
   });
 
   it("supplied id that does not exist yet → created under the caller's scope", async () => {

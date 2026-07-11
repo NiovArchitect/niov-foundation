@@ -118,4 +118,35 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     if (r.ok) return;
     expect(r.code).toBe("INVALID_REQUEST_ID");
   });
+
+  it("§7: a supplied thread owned by ANOTHER user → OTZAR_THREAD_FORBIDDEN (never attached)", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgUserWithTwin(auth);
+    const b = await orgUserWithTwin(auth);
+    // User B starts a conversation; capture B's server thread id.
+    const bConv = await otzar.conductSession({ token: b.token, message: "hello from B" });
+    expect(bConv.ok).toBe(true);
+    if (!bConv.ok) return;
+    // User A tries to use B's thread → explicit forbidden, no attach, no leak.
+    const forbidden = await otzar.conductSession({ token: a.token, message: "sneaking in", conversation_id: bConv.conversation_id });
+    expect(forbidden.ok).toBe(false);
+    if (forbidden.ok) return;
+    expect(forbidden.code).toBe("OTZAR_THREAD_FORBIDDEN");
+  });
+
+  it("§8: source_channel is carried into durable turn lineage (VOICE / AMBIENT / CHAT)", async () => {
+    const { auth, otzar } = makeServices();
+    const { token } = await orgUserWithTwin(auth);
+    const voice = await otzar.conductSession({ token, message: "voice turn", source_channel: "VOICE" });
+    expect(voice.ok).toBe(true);
+    if (!voice.ok) return;
+    const turns = await turnsOf(voice.conversation_id);
+    expect(turns.length).toBeGreaterThanOrEqual(2);
+    expect(turns.every((t) => t.source_channel === "VOICE")).toBe(true);
+    // Default channel is CHAT.
+    const chat = await otzar.conductSession({ token, message: "chat turn" });
+    if (!chat.ok) return;
+    const chatTurns = await turnsOf(chat.conversation_id);
+    expect(chatTurns.every((t) => t.source_channel === "CHAT")).toBe(true);
+  });
 });
