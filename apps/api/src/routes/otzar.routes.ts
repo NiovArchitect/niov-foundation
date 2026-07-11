@@ -638,18 +638,20 @@ export async function registerOtzarRoutes(
   // [OTZAR-CONTINUITY cross-tab] The caller's unresolved requests (in-flight / awaiting
   // confirmation), optionally scoped to one conversation via ?conversation_id=. How a second
   // tab/device discovers the first's obligations from SERVER authority. Bearer + read.
-  app.get<{ Querystring: { conversation_id?: string; limit?: string } }>(
+  app.get<{ Querystring: { conversation_id?: string; limit?: string; recent_completed_ms?: string } }>(
     "/api/v1/otzar/requests/unresolved",
     async (request, reply) => {
       const token = bearerFrom(request.headers.authorization);
       if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
       const rawLimit = Number(request.query.limit);
+      const rawWindow = Number(request.query.recent_completed_ms);
       const result = await otzarService.listUnresolved({
         token,
         ...(typeof request.query.conversation_id === "string" && request.query.conversation_id.length > 0
           ? { conversation_id: request.query.conversation_id }
           : {}),
         ...(Number.isFinite(rawLimit) && rawLimit > 0 ? { limit: Math.floor(rawLimit) } : {}),
+        ...(Number.isFinite(rawWindow) && rawWindow > 0 ? { recent_completed_ms: Math.floor(rawWindow) } : {}),
       });
       if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
       return reply.code(200).send(result);

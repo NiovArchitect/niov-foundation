@@ -3366,7 +3366,7 @@ export class OtzarService {
   // confirmation) — so a second tab/device discovers the first's obligations from SERVER
   // authority, not tab-local storage. Scope-gated; optionally narrowed to one conversation.
   async listUnresolved(
-    input: { token: string; conversation_id?: string; limit?: number },
+    input: { token: string; conversation_id?: string; limit?: number; recent_completed_ms?: number },
   ): Promise<{ ok: true; unresolved: SafeRequestStatus[] } | OtzarFailure> {
     const session = await this.authService.validateSession(input.token, "read");
     if (!session.valid) return { ok: false, code: session.code, message: "Restore denied" };
@@ -3375,6 +3375,7 @@ export class OtzarService {
     const unresolved = await listUnresolvedRequests(scope, {
       ...(input.conversation_id !== undefined ? { conversation_id: input.conversation_id } : {}),
       ...(input.limit !== undefined ? { limit: input.limit } : {}),
+      ...(input.recent_completed_ms !== undefined ? { recent_completed_ms: input.recent_completed_ms } : {}),
     });
     return { ok: true, unresolved };
   }
