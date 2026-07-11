@@ -262,6 +262,11 @@ export async function completeRequestWithCanonicalResponse(
       ) {
         return { outcome: "scope_mismatch" };
       }
+      // [OTZAR-CONTINUITY B] The completion MUST be for the request's OWN durable USER turn —
+      // not merely another valid USER turn in the same conversation/scope. Fail closed.
+      if (req.user_turn_id !== input.user_turn_id) {
+        return { outcome: "invalid_turn" };
+      }
       // A canonical result already won (idempotent / concurrent finalizer). Do NOT treat
       // a non-null id alone as proof — validate the winner is internally coherent.
       if (req.canonical_assistant_turn_id !== null) {

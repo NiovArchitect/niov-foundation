@@ -183,6 +183,46 @@ describe("C6 server thread restoration", () => {
     expect(detail.ok).toBe(false);
   });
 
+  it("C6/C canonical-text projection: an INCONSISTENT canonical (wrong role/relationship) is NOT exposed as text or a valid result", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgUserWithTwin(auth);
+    const turn = await otzar.conductSession({ token: a.token, message: "hello there", request_id: "cproj-1" });
+    if (!turn.ok) return;
+    const userTurn = await prisma.otzarConversationTurn.findFirst({ where: { conversation_id: turn.conversation_id, role: "USER" } });
+    const req = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    // Corrupt the request's canonical to point at the USER turn (wrong role/relationship).
+    await prisma.otzarConversationRequest.update({
+      where: { request_record_id: req!.request_record_id },
+      data: { canonical_assistant_turn_id: userTurn!.turn_id },
+    });
+    const status = await otzar.getRequestStatusByClient({ token: a.token, conversation_id: turn.conversation_id, client_request_id: "cproj-1" });
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    // Inconsistent canonical → NOT exposed as text, NOT reported as a valid result.
+    expect(status.status.canonical_text).toBeNull();
+    expect(status.status.has_canonical_result).toBe(false);
+    expect(status.status.canonical_assistant_turn_id).toBeNull();
+  });
+
+  it("C6/D restoration resolves the SAME deterministic primary Twin conductSession uses, even with multiple eligible Twins", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUserWithTwin(auth); // creates the primary (oldest) Twin
+    // Add a SECOND, newer eligible AI_AGENT Twin for the same subject.
+    const twin2 = await createEntity(makeEntityInput({ entity_type: "AI_AGENT" }));
+    await prisma.entityMembership.create({ data: { parent_id: u.userId, child_id: twin2.entity_id, role_title: "Digital Twin", is_active: true } });
+    const turn = await otzar.conductSession({ token: u.token, message: "which twin am I talking to?", request_id: "twin-d-1" });
+    if (!turn.ok) return;
+    const convRow = await prisma.otzarConversation.findUnique({ where: { conversation_id: turn.conversation_id }, select: { twin_id: true } });
+    // Restoration MUST resolve the same primary Twin → restore the thread bound to it, and
+    // NOT the newer Twin (no cross-Twin blend; conductSession + restoration agree).
+    const restored = await otzar.restoreThreads({ token: u.token });
+    if (!restored.ok) return;
+    expect(restored.active).not.toBeNull();
+    expect(restored.active!.conversation_id).toBe(turn.conversation_id);
+    expect(restored.active!.twin_entity_id).toBe(convRow!.twin_id);
+    expect(restored.active!.twin_entity_id).not.toBe(twin2.entity_id);
+  });
+
   it("restoreActiveThread never returns an ARCHIVED or DELETED thread", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUserWithTwin(auth);
