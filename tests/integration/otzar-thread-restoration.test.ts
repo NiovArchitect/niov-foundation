@@ -223,6 +223,28 @@ describe("C6 server thread restoration", () => {
     expect(restored.active!.twin_entity_id).not.toBe(twin2.entity_id);
   });
 
+  it("cross-tab: listUnresolved surfaces the caller's awaiting-confirmation obligation from SERVER state; cross-user isolated", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgUserWithTwin(auth);
+    const b = await orgUserWithTwin(auth);
+    // A proposes → the request carries response_class AWAITING_CONFIRMATION (an unresolved
+    // obligation a SECOND tab must discover from the server, not tab-local storage).
+    const prop = await otzar.conductSession({ token: a.token, message: "put a budget review on my calendar tomorrow at 3pm", request_id: "u-1" });
+    expect(prop.ok).toBe(true);
+    if (!prop.ok) return;
+    expect(prop.action_proposed).toBe(true);
+    const unresolvedA = await otzar.listUnresolved({ token: a.token });
+    expect(unresolvedA.ok).toBe(true);
+    if (!unresolvedA.ok) return;
+    expect(unresolvedA.unresolved.some((r) => r.response_class === "AWAITING_CONFIRMATION" || r.in_progress)).toBe(true);
+    // Safe projection — no lease/provider token leaks in the cross-tab payload.
+    expect(JSON.stringify(unresolvedA.unresolved)).not.toMatch(/lease|provider_attempt/i);
+    // A DIFFERENT user discovers NONE of A's obligations (scope-gated).
+    const unresolvedB = await otzar.listUnresolved({ token: b.token });
+    if (!unresolvedB.ok) return;
+    expect(unresolvedB.unresolved).toEqual([]);
+  });
+
   it("restoreActiveThread never returns an ARCHIVED or DELETED thread", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUserWithTwin(auth);

@@ -246,6 +246,35 @@ export async function getThreadForRestore(
   return { thread: toSummary(row, await unresolvedCount(conversationId, scope)), turns: safeTurns };
 }
 
+/**
+ * [OTZAR-CONTINUITY cross-tab] The caller's UNRESOLVED requests — those still in-flight
+ * (RECEIVED/PROCESSING/FAILED_RETRYABLE) or a pending action awaiting confirmation. This is
+ * how a SECOND tab/device discovers the FIRST's obligations from SERVER authority (tab-local
+ * sessionStorage is insufficient). Scope-gated (org/subject/twin); optionally narrowed to one
+ * conversation. Safe projections only. Bounded. Newest first.
+ */
+export async function listUnresolvedRequests(
+  scope: RestoreScope,
+  options: { conversation_id?: string; limit?: number } = {},
+): Promise<SafeRequestStatus[]> {
+  const take = Math.min(Math.max(options.limit ?? 20, 1), 50);
+  const rows = await prisma.otzarConversationRequest.findMany({
+    where: {
+      org_entity_id: scope.org_entity_id,
+      subject_entity_id: scope.subject_entity_id,
+      twin_entity_id: scope.twin_entity_id,
+      ...(options.conversation_id !== undefined ? { conversation_id: options.conversation_id } : {}),
+      OR: [{ state: { in: NON_TERMINAL_STATES } }, { response_class: "AWAITING_CONFIRMATION" }],
+    },
+    orderBy: [{ created_at: "desc" }],
+    take,
+    select: REQUEST_STATUS_SELECT,
+  });
+  const out: SafeRequestStatus[] = [];
+  for (const req of rows) out.push(await toRequestStatus(req));
+  return out;
+}
+
 /** Safe status of the caller's own request by SERVER record id, or null (foreign → not
  *  found). Twin-scoped — a request never crosses a Twin boundary. */
 export async function getRequestStatusForUser(

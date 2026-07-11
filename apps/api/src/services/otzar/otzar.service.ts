@@ -34,6 +34,7 @@ import {
   getThreadForRestore,
   getRequestStatusForUser,
   getRequestByClient,
+  listUnresolvedRequests,
   type ThreadSummary,
   type SafeTurn,
   type SafeRequestStatus,
@@ -3359,6 +3360,23 @@ export class OtzarService {
     const status = await getRequestByClient(scope, input.conversation_id, input.client_request_id);
     if (status === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This request is not available to you." };
     return { ok: true, status };
+  }
+
+  // [OTZAR-CONTINUITY cross-tab] The caller's UNRESOLVED requests (in-flight or awaiting
+  // confirmation) — so a second tab/device discovers the first's obligations from SERVER
+  // authority, not tab-local storage. Scope-gated; optionally narrowed to one conversation.
+  async listUnresolved(
+    input: { token: string; conversation_id?: string; limit?: number },
+  ): Promise<{ ok: true; unresolved: SafeRequestStatus[] } | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) return { ok: false, code: session.code, message: "Restore denied" };
+    const scope = await this.restoreScope(session.entity_id);
+    if (scope === null) return { ok: true, unresolved: [] };
+    const unresolved = await listUnresolvedRequests(scope, {
+      ...(input.conversation_id !== undefined ? { conversation_id: input.conversation_id } : {}),
+      ...(input.limit !== undefined ? { limit: input.limit } : {}),
+    });
+    return { ok: true, unresolved };
   }
 
   // ──────────────────────────────────────────────────────────────
