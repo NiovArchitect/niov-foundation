@@ -968,15 +968,21 @@ export class OtzarService {
         temporal: temporalCtx,
       });
       if (resolution.will_mutate && resolution.thread_id !== null) {
-        // Ensure the thread row exists (idempotent) then persist the USER turn — this
-        // precedes the Phase-C mutation below.
-        await createThread({
-          conversation_id: resolution.thread_id,
-          org_entity_id: orgEntityId,
-          subject_entity_id: ownerEntityId,
-          twin_entity_id: twin.entity_id,
-          timezone: temporalCtx.timezone,
-        }).catch(() => undefined);
+        // §1 FAIL-CLOSED: the thread must be created AND the USER turn persisted BEFORE
+        // any Phase-C mutation. If either fails, return a stable failure and perform NO
+        // WorkLedger create/update, no proposal, no confirmation claim, no provider call.
+        try {
+          await createThread({
+            conversation_id: resolution.thread_id,
+            org_entity_id: orgEntityId,
+            subject_entity_id: ownerEntityId,
+            twin_entity_id: twin.entity_id,
+            timezone: temporalCtx.timezone,
+          });
+        } catch (e) {
+          logger.error({ err: e, conversationId: resolution.thread_id }, "otzar ambient thread create failed (fail-closed)");
+          return { ok: false, code: "OTZAR_TURN_PERSIST_FAILED", message: "Could not durably start this conversation; it was not processed. Please retry." };
+        }
         ambientUserTurnId = await this.persistDeferredUserTurn({
           conversationId: resolution.thread_id,
           orgEntityId,
@@ -986,6 +992,11 @@ export class OtzarService {
           content: input.message,
           sourceChannel: input.source_channel ?? "CHAT",
         });
+        if (ambientUserTurnId === null) {
+          // The USER turn is NOT durable → never mutate. (persistDeferredUserTurn
+          // returns null only on a persistence error; a dedup returns the existing id.)
+          return { ok: false, code: "OTZAR_TURN_PERSIST_FAILED", message: "Could not durably record your message; it was not processed. Please retry." };
+        }
         ambientContinuityConvId = resolution.continuity_conversation_id;
       }
     }
