@@ -191,6 +191,7 @@ export {
   getThreadForRestore,
   getRequestStatusForUser,
   getRequestByClient,
+  listUnresolvedRequests,
 } from "./queries/otzar-thread-restoration.js";
 export type {
   RestoreScope,

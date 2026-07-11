@@ -635,6 +635,27 @@ export async function registerOtzarRoutes(
     },
   );
 
+  // [OTZAR-CONTINUITY cross-tab] The caller's unresolved requests (in-flight / awaiting
+  // confirmation), optionally scoped to one conversation via ?conversation_id=. How a second
+  // tab/device discovers the first's obligations from SERVER authority. Bearer + read.
+  app.get<{ Querystring: { conversation_id?: string; limit?: string } }>(
+    "/api/v1/otzar/requests/unresolved",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const rawLimit = Number(request.query.limit);
+      const result = await otzarService.listUnresolved({
+        token,
+        ...(typeof request.query.conversation_id === "string" && request.query.conversation_id.length > 0
+          ? { conversation_id: request.query.conversation_id }
+          : {}),
+        ...(Number.isFinite(rawLimit) && rawLimit > 0 ? { limit: Math.floor(rawLimit) } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
   // [OTZAR-CONTINUITY C6/E] Response-loss reconciliation by the CLIENT-known identity (the
   // stable request_id CT owns, which it may keep even when the server request-record id was
   // never received). Scoped by conversation + client_request_id + (org/subject/twin).
