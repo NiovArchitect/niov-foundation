@@ -16,7 +16,7 @@ import {
   type LLMProvider, type LoginResult,
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
-import { createEntity, prisma } from "@niov/database";
+import { createEntity, prisma, __otzarCompletionTestHooks } from "@niov/database";
 import { cleanupTestData, ensureAuditTriggers, makeEntityInput } from "../helpers.js";
 
 const TEST_JWT_SECRET = "otzar-wiring-test-secret";
@@ -89,21 +89,16 @@ async function waitUntil(fn: () => boolean, timeoutMs = 4000): Promise<void> {
   }
 }
 
-// [C2/C5 failure injection] Force the ASSISTANT-turn insert to fail for exactly ONE
-// conductSession call, then restore synchronously in `finally` — BEFORE any other test or
-// file runs. Directly swaps the method (no vi.spyOn global state) so it can never leak
-// across files in the shared `forks` pool (a spy on the shared prisma singleton did).
-async function withAssistantPersistFailing<T>(fn: () => Promise<T>): Promise<T> {
-  const model = prisma.otzarConversationTurn as unknown as { create: (a: unknown) => Promise<unknown> };
-  const original = model.create.bind(prisma.otzarConversationTurn);
-  model.create = (a: unknown) =>
-    (a as { data?: { role?: string } })?.data?.role === "ASSISTANT"
-      ? Promise.reject(new Error("injected assistant-persist failure"))
-      : original(a);
+// [C2/C3/C5 failure injection] Force the canonical ASSISTANT-turn insert to fail INSIDE
+// the atomic completion transaction for exactly ONE conductSession call, then reset in
+// `finally`. Uses the DB package's in-tx test hook (a Prisma spy on the base client can't
+// reach the transaction client) — a plain module flag, reset synchronously, no leak.
+async function withCanonicalCompletionFailing<T>(fn: () => Promise<T>): Promise<T> {
+  __otzarCompletionTestHooks.failCanonicalInsert = true;
   try {
     return await fn();
   } finally {
-    model.create = original; // ALWAYS restore, even on throw
+    __otzarCompletionTestHooks.failCanonicalInsert = false;
   }
 }
 
@@ -336,7 +331,7 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     const convId = randomUUID();
     const llmBefore = llm.getCalls().length;
     const msg = "put a budget review on my calendar tomorrow at 3pm";
-    const first = await withAssistantPersistFailing(() =>
+    const first = await withCanonicalCompletionFailing(() =>
       otzar.conductSession({ token, message: msg, request_id: "c5-1", conversation_id: convId }),
     );
     expect(first.ok).toBe(false);
@@ -377,7 +372,7 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     const wired = makeServicesWithLLM(llm as unknown as LLMProvider);
     const { token } = await orgUserWithTwin(wired.auth);
     const convId = randomUUID();
-    const first = await withAssistantPersistFailing(() =>
+    const first = await withCanonicalCompletionFailing(() =>
       wired.otzar.conductSession({ token, message: "give me a quick planning tip", request_id: "c2-1", conversation_id: convId }),
     );
     expect(first.ok).toBe(false);

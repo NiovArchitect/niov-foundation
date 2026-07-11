@@ -26,7 +26,7 @@ import {
   createThread,
   createOrGetRequest,
   claimRequestProcessing,
-  completeRequest,
+  completeRequestWithCanonicalResponse,
   failRequest,
   linkRequestAction,
   IdempotencyConflictError,
@@ -1157,26 +1157,27 @@ export class OtzarService {
             return { ok: false, code: "OTZAR_CONTINUITY_STATE_CHANGED", message: "This request changed state before it finished; please retry." };
           }
         }
-        const asstId = await this.persistAssistantTurn({
-          conversationId: convId,
-          orgEntityId,
-          subjectEntityId: ownerEntityId,
-          twinId: twin.entity_id,
-          userTurnId,
-          content: continuity.response,
-          actionRef: continuity.ledger_entry_id ?? null,
-          sourceChannel: input.source_channel ?? "CHAT",
-        });
-        // [OTZAR-CONTINUITY C2] STRICT: the canonical assistant result MUST be durable.
-        // If it isn't, do NOT return the response as success — transition FAILED_RETRYABLE
-        // (the action_ref is already linked) so a retry reconstructs from the durable
-        // action. Never provider replay, never a second action.
-        if (requestLease !== null && asstId === null) {
-          await this.abortRequest(requestLease, false, "OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
-          return { ok: false, code: "OTZAR_ASSISTANT_TURN_PERSIST_FAILED", message: "I couldn't durably record my reply; your request is saved — please retry." };
+        // [OTZAR-CONTINUITY C3] Atomic canonical completion: insert the ONE canonical
+        // assistant turn AND complete the request in a single transaction. A non-durable
+        // outcome NEVER returns as success — it transitions FAILED_RETRYABLE (action_ref
+        // preserved) so a retry reconstructs from the durable action.
+        if (requestLease !== null && userTurnId !== null) {
+          const done = await this.completeCanonical({
+            lease: requestLease, userTurnId, orgEntityId, subjectEntityId: ownerEntityId,
+            twinId: twin.entity_id, conversationId: convId, content: continuity.response,
+            responseClass: OtzarService.continuityResponseClass(continuity.state),
+            actionRef: continuity.ledger_entry_id ?? null,
+            sourceChannel: input.source_channel ?? "CHAT",
+          });
+          if (!done.ok) return done.failure;
+        } else {
+          // No lease (orgless-legacy defensive): best-effort persist, no request record.
+          await this.persistAssistantTurn({
+            conversationId: convId, orgEntityId, subjectEntityId: ownerEntityId,
+            twinId: twin.entity_id, userTurnId, content: continuity.response,
+            actionRef: continuity.ledger_entry_id ?? null, sourceChannel: input.source_channel ?? "CHAT",
+          });
         }
-        // §6: durability-gated canonical result + COMPLETED transition (lease owner).
-        await this.finalizeRequest(requestLease, userTurnId, asstId, OtzarService.continuityResponseClass(continuity.state));
       }
       return this.buildContinuitySuccess(convId, continuity);
     }
@@ -1732,29 +1733,26 @@ export class OtzarService {
             sourceChannel: input.source_channel ?? "CHAT",
           }))
         : turnCtx.userTurnId;
-      const asstId = await this.persistAssistantTurn({
-        conversationId,
-        orgEntityId,
-        subjectEntityId: ownerEntityId,
-        twinId: twin.entity_id,
-        userTurnId: llmUserTurnId,
-        content: llmResult.text,
-        modelProvider: llmResult.provider ?? null,
-        sourceChannel: input.source_channel ?? "CHAT",
-      });
-      // [OTZAR-CONTINUITY C2] STRICT: a pure-LLM answer has no durable action to
-      // reconstruct from, so if the canonical assistant turn is not durable we must NOT
-      // return it as success. FAILED_RETRYABLE → a retry, under exclusive lease ownership,
-      // regenerates the answer (one USER turn, no duplicate action/provider work).
-      if (requestLease !== null && asstId === null) {
-        await this.abortRequest(requestLease, false, "OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
-        return { ok: false, code: "OTZAR_ASSISTANT_TURN_PERSIST_FAILED", message: "I couldn't durably record my reply; your message is saved — please retry." };
-      }
-      // §6: durability-gated canonical result + COMPLETED transition (lease owner).
       const llmClass: ResponseClass = actionProposed || approvalRequired
         ? "ACTION_PROPOSED"
         : clarificationNeeded ? "CLARIFICATION" : "ANSWERED";
-      await this.finalizeRequest(requestLease, llmUserTurnId, asstId, llmClass);
+      // [OTZAR-CONTINUITY C3] Atomic canonical completion (insert + complete in one tx).
+      // A pure-LLM answer has no durable action; a non-durable outcome → FAILED_RETRYABLE
+      // and a retry regenerates under exclusive lease ownership (one USER turn, no dup).
+      if (requestLease !== null && llmUserTurnId !== null) {
+        const done = await this.completeCanonical({
+          lease: requestLease, userTurnId: llmUserTurnId, orgEntityId, subjectEntityId: ownerEntityId,
+          twinId: twin.entity_id, conversationId, content: llmResult.text, responseClass: llmClass,
+          modelProvider: llmResult.provider ?? null, sourceChannel: input.source_channel ?? "CHAT",
+        });
+        if (!done.ok) return done.failure;
+      } else {
+        await this.persistAssistantTurn({
+          conversationId, orgEntityId, subjectEntityId: ownerEntityId, twinId: twin.entity_id,
+          userTurnId: llmUserTurnId, content: llmResult.text, modelProvider: llmResult.provider ?? null,
+          sourceChannel: input.source_channel ?? "CHAT",
+        });
+      }
     }
 
     return {
@@ -2091,14 +2089,17 @@ export class OtzarService {
         const recovered = await this.reconstructFromAction(claim.request.action_ref, args.conversationId, { subjectEntityId: args.subjectEntityId });
         if (recovered !== null) {
           const lease = { id: request.request_record_id, token };
-          const asstId = await this.persistAssistantTurn({
-            conversationId: args.conversationId, orgEntityId: args.orgEntityId,
-            subjectEntityId: args.subjectEntityId, twinId: args.twinId,
-            userTurnId: args.userTurnId, content: recovered.response,
-            actionRef: claim.request.action_ref, sourceChannel: "CHAT",
-          });
+          // [OTZAR-CONTINUITY C3] Repair the canonical result atomically (insert + complete
+          // in one tx). If it can't be made durable, leave the lease to expire → the next
+          // retry reconstructs again (idempotent, never re-executes). Still replay the
+          // reconstructed response to the caller.
           const cls: ResponseClass = recovered.approval_required ? "AWAITING_CONFIRMATION" : "ANSWERED";
-          await this.finalizeRequest(lease, args.userTurnId, asstId, cls);
+          await this.completeCanonical({
+            lease, userTurnId: args.userTurnId, orgEntityId: args.orgEntityId,
+            subjectEntityId: args.subjectEntityId, twinId: args.twinId,
+            conversationId: args.conversationId, content: recovered.response, responseClass: cls,
+            actionRef: claim.request.action_ref, sourceChannel: "CHAT", suppressAbortOnFailure: true,
+          });
           return { lease: null, replay: recovered, inProgress: null };
         }
         // Action exists but is not reconstructable (unknown status) → fall through to
@@ -2124,36 +2125,44 @@ export class OtzarService {
     };
   }
 
-  // Link the ONE canonical assistant result + mark the request COMPLETED (lease-owner).
-  // Best-effort: a miss leaves the lease to expire → a retry reclaims + reprocesses.
-  private async finalizeRequest(
-    lease: { id: string; token: string } | null,
-    userTurnId: string | null,
-    assistantTurnId: string | null,
-    responseClass: ResponseClass,
-  ): Promise<void> {
-    if (lease === null || assistantTurnId === null) return;
-    try {
-      if (userTurnId !== null) {
-        await prisma.otzarConversationTurn
-          .update({ where: { turn_id: assistantTurnId }, data: { response_to_turn_id: userTurnId } })
-          .catch(() => undefined); // @unique backstop; ignore a benign clash
-      }
-      const completed = await completeRequest({
-        request_record_id: lease.id,
-        leaseToken: lease.token,
-        canonical_assistant_turn_id: assistantTurnId,
-        response_class: responseClass,
-      });
-      if (!completed) {
-        // The strict CAS refused: the lease was lost/expired, or a DIFFERENT canonical
-        // turn already owns the request. This is a consistency event, not a benign miss —
-        // surface it. The durable action/canonical state governs; a retry reconciles.
-        logger.warn({ requestRecordId: lease.id, assistantTurnId }, "otzar request finalize CAS refused (lease lost or canonical already owned) — retry reconciles");
-      }
-    } catch (e) {
-      logger.warn({ err: e, requestRecordId: lease.id }, "otzar request finalize failed (lease will expire → retry reclaims)");
+  // [OTZAR-CONTINUITY C3] Insert the ONE canonical assistant turn AND complete the request
+  // in a single transaction (no orphan turn, no completed-without-canonical, no swallowed
+  // failure). A durable `completed`/`already_completed` → ok. Any non-durable outcome →
+  // NEVER success: FAILED_RETRYABLE (action_ref preserved) so a retry reconstructs or
+  // regenerates. In the recovery-repair path, `suppressAbortOnFailure` leaves the lease to
+  // expire (a later retry reconstructs again) while still replaying the reconstructed text.
+  private async completeCanonical(args: {
+    lease: { id: string; token: string };
+    userTurnId: string;
+    orgEntityId: string; subjectEntityId: string; twinId: string;
+    conversationId: string; content: string; responseClass: ResponseClass;
+    actionRef?: string | null; modelProvider?: string | null;
+    sourceChannel: "CHAT" | "VOICE" | "AMBIENT";
+    suppressAbortOnFailure?: boolean;
+  }): Promise<{ ok: true } | { ok: false; failure: OtzarFailure }> {
+    const res = await completeRequestWithCanonicalResponse({
+      request_record_id: args.lease.id,
+      leaseToken: args.lease.token,
+      user_turn_id: args.userTurnId,
+      org_entity_id: args.orgEntityId,
+      subject_entity_id: args.subjectEntityId,
+      twin_entity_id: args.twinId,
+      conversation_id: args.conversationId,
+      content: args.content,
+      response_class: args.responseClass,
+      action_ref: args.actionRef ?? null,
+      model_provider: args.modelProvider ?? null,
+      source_channel: args.sourceChannel,
+    });
+    if (res.outcome === "completed" || res.outcome === "already_completed") return { ok: true };
+    logger.warn({ requestRecordId: args.lease.id, outcome: res.outcome }, "otzar canonical completion not durable → FAILED_RETRYABLE");
+    if (args.suppressAbortOnFailure !== true) {
+      await this.abortRequest(args.lease, false, "OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
     }
+    return {
+      ok: false,
+      failure: { ok: false, code: "OTZAR_ASSISTANT_TURN_PERSIST_FAILED", message: "I couldn't durably record my reply; your request is saved — please retry." },
+    };
   }
 
   // §6: an accepted turn that returns a failure AFTER the claim but BEFORE the
