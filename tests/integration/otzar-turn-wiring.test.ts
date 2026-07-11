@@ -134,6 +134,36 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     expect(forbidden.code).toBe("OTZAR_THREAD_FORBIDDEN");
   });
 
+  it("§1A: resolveContinuityThread is READ-ONLY (Phase A performs no WorkLedger write)", async () => {
+    const { auth } = makeServices();
+    const { userId, orgId } = await orgUserWithTwin(auth);
+    const { resolveContinuityThread, resolveTemporalContext } = await import(
+      "../../apps/api/src/services/otzar/calendar-continuity.service.js"
+    );
+    const temporal = await resolveTemporalContext({ actor_entity_id: userId });
+    const before = await prisma.workLedgerEntry.count({ where: { owner_entity_id: userId } });
+    const res = await resolveContinuityThread({ actor_entity_id: userId, org_entity_id: orgId, message: "put a strategy review on my calendar tomorrow at 2pm", temporal });
+    const after = await prisma.workLedgerEntry.count({ where: { owner_entity_id: userId } });
+    expect(after).toBe(before); // no proposal created by the read-only resolve
+    expect(res.will_mutate).toBe(true);
+    expect(res.kind).toBe("propose");
+    expect(typeof res.thread_id).toBe("string");
+  });
+
+  it("§1A: ambient propose persists the USER turn BEFORE the proposal (mutation never precedes the turn)", async () => {
+    const { auth, otzar } = makeServices();
+    const { token, userId } = await orgUserWithTwin(auth);
+    const r = await otzar.conductSession({ token, message: "put a budget review on my calendar tomorrow at 3pm" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.action_proposed).toBe(true);
+    const turns = await turnsOf(r.conversation_id);
+    expect(turns[0]!.role).toBe("USER");
+    const proposal = await prisma.workLedgerEntry.findFirst({ where: { owner_entity_id: userId, ledger_type: "MEETING", conversation_id: r.conversation_id } });
+    expect(proposal).not.toBeNull();
+    expect(turns[0]!.created_at.getTime()).toBeLessThanOrEqual(proposal!.created_at.getTime());
+  });
+
   it("§8: source_channel is carried into durable turn lineage (VOICE / AMBIENT / CHAT)", async () => {
     const { auth, otzar } = makeServices();
     const { token } = await orgUserWithTwin(auth);

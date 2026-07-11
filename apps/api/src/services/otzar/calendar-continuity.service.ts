@@ -756,6 +756,80 @@ async function supersedePendingProposal(args: {
   };
 }
 
+// [OTZAR-CONTINUITY P5 Stage 1A] READ-ONLY continuity resolution — Phase A. Classifies
+// the conversational act and resolves the thread the mutation WILL operate on, WITHOUT
+// any write: no WorkLedger create/update, no status change, no execution claim, no
+// provider call. conductSession uses this to persist the ambient USER turn BEFORE any
+// mutation (Phase B), then runs handleCalendarContinuity (Phase C).
+export interface ContinuityResolution {
+  /** true when Phase C will create/mutate a proposal, cancel, revise, or execute. */
+  will_mutate: boolean;
+  /**
+   * The thread Phase C will operate on. For a NEW proposal a fresh uuid is minted here
+   * (not written) so the USER turn + the proposal share it. For confirm/reject/revise/
+   * ordinal it is the resolved pending proposal's bound thread. null → defer (a
+   * non-mutating act: disambiguation, clarification, or non-calendar).
+   */
+  thread_id: string | null;
+  /** What handleCalendarContinuity should receive as conversation_id in Phase C. */
+  continuity_conversation_id: string | undefined;
+  kind:
+    | "propose" | "confirm_single" | "reject_single" | "revise_single"
+    | "ordinal_pick" | "disambiguate" | "clarify_past" | "none";
+}
+
+export async function resolveContinuityThread(args: {
+  actor_entity_id: string;
+  org_entity_id: string | null;
+  message: string;
+  temporal: TemporalContext;
+}): Promise<ContinuityResolution> {
+  const none: ContinuityResolution = { will_mutate: false, thread_id: null, continuity_conversation_id: undefined, kind: "none" };
+  if (args.org_entity_id === null) return none;
+  const orgId = args.org_entity_id;
+  const kind = classifyConfirmation(args.message);
+
+  if (kind === "confirm" || kind === "reject") {
+    const pending = await findActorPendingProposals({ actor_entity_id: args.actor_entity_id, org_entity_id: orgId, now_ms: args.temporal.now_ms });
+    if (pending.length === 0) return none;
+    if (pending.length > 1) return { will_mutate: false, thread_id: null, continuity_conversation_id: undefined, kind: "disambiguate" };
+    const t = pending[0]!.conversation_id;
+    // Single target → Phase C can be thread-scoped to it (exactly one pending there).
+    return { will_mutate: true, thread_id: t, continuity_conversation_id: t ?? undefined, kind: kind === "reject" ? "reject_single" : "confirm_single" };
+  }
+
+  const ordinalLike = /\b(first|second|third|fourth|fifth|last|number|option)\b/i.test(args.message) || /^\s*\(?\d\)?\s*$/.test(args.message);
+  const revisionLike = /\b(make it|change it to|move it to|instead|actually|rather|let'?s do|how about)\b/i.test(args.message) || /^\s*(no,?\s+)?\d{1,2}\s*(a\.?m\.?|p\.?m\.?|o'?clock|:\d{2})/i.test(args.message);
+  if (ordinalLike || revisionLike) {
+    const pending = await findActorPendingProposals({ actor_entity_id: args.actor_entity_id, org_entity_id: orgId, now_ms: args.temporal.now_ms });
+    if (pending.length > 0) {
+      const ordered = orderForSelection(pending);
+      if (ordinalLike) {
+        const idx = parseOrdinalSelection(args.message, ordered.length);
+        if (idx !== null) {
+          // Multi-candidate pick → Phase C must see ALL pending (ambient), so the
+          // ordinal index maps correctly; the USER turn is persisted to the pick's thread.
+          return { will_mutate: true, thread_id: ordered[idx]!.conversation_id, continuity_conversation_id: undefined, kind: "ordinal_pick" };
+        }
+      }
+      if (pending.length === 1) {
+        const rev = parseTimeRevision(args.message);
+        if (rev !== null) {
+          const t = pending[0]!.conversation_id;
+          return { will_mutate: true, thread_id: t, continuity_conversation_id: undefined, kind: "revise_single" };
+        }
+      }
+    }
+  }
+
+  const detection = detectCalendarProposal(args.message, args.temporal);
+  if (detection === null) return none;
+  if (detection.kind === "clarify_past_time") return { will_mutate: false, thread_id: null, continuity_conversation_id: undefined, kind: "clarify_past" };
+  // New proposal → mint the thread here so the USER turn + the proposal bind to it.
+  const fresh = randomUUID();
+  return { will_mutate: true, thread_id: fresh, continuity_conversation_id: fresh, kind: "propose" };
+}
+
 /**
  * Runs BEFORE the LLM in conductSession. Deterministically resolves a
  * confirmation against the caller's pending proposal, or persists a new
