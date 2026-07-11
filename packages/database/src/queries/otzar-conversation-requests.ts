@@ -169,7 +169,8 @@ export async function getRequestByUserTurn(userTurnId: string): Promise<OtzarCon
 /** [OTZAR-CONTINUITY C3] Typed outcome of atomic canonical completion. */
 export type CompleteCanonicalOutcome =
   | "completed"
-  | "already_completed" // a canonical result already exists for this request → replay it
+  | "already_completed" // a VALIDATED canonical winner exists for this request → replay it
+  | "canonical_inconsistent" // a canonical id is set but the turn/request is not coherent
   | "lease_lost"
   | "state_conflict"
   | "scope_mismatch"
@@ -209,6 +210,30 @@ const MAX_TURN_CONTENT_CHARS = 8000;
  */
 export const __otzarCompletionTestHooks = { failCanonicalInsert: false };
 
+/** [OTZAR-CONTINUITY C3 hardening] Prove an existing canonical assistant turn is
+ *  internally consistent with the request + expected scope. A non-null canonical id is
+ *  NOT sufficient proof on its own. */
+async function canonicalIsConsistent(
+  client: { otzarConversationTurn: { findUnique: (a: { where: { turn_id: string } }) => Promise<{ role: string; conversation_id: string; org_entity_id: string; subject_entity_id: string; twin_entity_id: string | null; response_to_turn_id: string | null } | null> } },
+  req: { state: string; canonical_assistant_turn_id: string | null; response_class: string | null },
+  canonicalTurnId: string,
+  input: CompleteCanonicalInput,
+): Promise<boolean> {
+  const t = await client.otzarConversationTurn.findUnique({ where: { turn_id: canonicalTurnId } });
+  return (
+    t !== null &&
+    t.role === "ASSISTANT" &&
+    t.conversation_id === input.conversation_id &&
+    t.org_entity_id === input.org_entity_id &&
+    t.subject_entity_id === input.subject_entity_id &&
+    t.twin_entity_id === input.twin_entity_id &&
+    t.response_to_turn_id === input.user_turn_id &&
+    req.canonical_assistant_turn_id === canonicalTurnId &&
+    req.state === "COMPLETED" &&
+    req.response_class !== null
+  );
+}
+
 /**
  * [OTZAR-CONTINUITY C3] Insert the canonical ASSISTANT turn AND complete the request in
  * ONE transaction — no orphan turn, no completed-request-without-canonical, no swallowed
@@ -237,9 +262,13 @@ export async function completeRequestWithCanonicalResponse(
       ) {
         return { outcome: "scope_mismatch" };
       }
-      // A canonical result already won (idempotent / concurrent finalizer) → replay it.
+      // A canonical result already won (idempotent / concurrent finalizer). Do NOT treat
+      // a non-null id alone as proof — validate the winner is internally coherent.
       if (req.canonical_assistant_turn_id !== null) {
-        return { outcome: "already_completed", canonical_assistant_turn_id: req.canonical_assistant_turn_id };
+        const ok = await canonicalIsConsistent(tx, req, req.canonical_assistant_turn_id, input);
+        return ok
+          ? { outcome: "already_completed", canonical_assistant_turn_id: req.canonical_assistant_turn_id }
+          : { outcome: "canonical_inconsistent", canonical_assistant_turn_id: req.canonical_assistant_turn_id };
       }
       if (req.lease_token !== input.leaseToken) return { outcome: "lease_lost" };
       if (input.expected_version != null && req.processing_version !== input.expected_version) return { outcome: "state_conflict" };
@@ -305,11 +334,27 @@ export async function completeRequestWithCanonicalResponse(
     });
   } catch (e) {
     if (isUniqueViolation(e)) {
-      // A concurrent finalizer won the response_to_turn_id (one-canonical). Load + replay.
+      // A concurrent finalizer won the response_to_turn_id (one-canonical). The whole tx
+      // rolled back (no orphan). Load the winner by FULL expected scope + re-load the
+      // request, then validate the winner/request relationship — only a coherent winner
+      // is `already_completed`; anything else is a typed consistency failure.
       const existing = await prisma.otzarConversationTurn.findFirst({
-        where: { response_to_turn_id: input.user_turn_id, role: "ASSISTANT" },
+        where: {
+          response_to_turn_id: input.user_turn_id,
+          role: "ASSISTANT",
+          conversation_id: input.conversation_id,
+          org_entity_id: input.org_entity_id,
+          subject_entity_id: input.subject_entity_id,
+          twin_entity_id: input.twin_entity_id,
+        },
       });
-      if (existing !== null) return { outcome: "already_completed", canonical_assistant_turn_id: existing.turn_id };
+      if (existing !== null) {
+        const req = await prisma.otzarConversationRequest.findUnique({ where: { request_record_id: input.request_record_id } });
+        if (req !== null && (await canonicalIsConsistent(prisma, req, existing.turn_id, input))) {
+          return { outcome: "already_completed", canonical_assistant_turn_id: existing.turn_id };
+        }
+        return { outcome: "canonical_inconsistent", canonical_assistant_turn_id: existing.turn_id };
+      }
     }
     // Any other transaction failure: the whole tx rolled back (no orphan turn, request
     // NOT completed). Never surface as success — a typed consistency error → the caller

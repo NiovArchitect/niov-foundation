@@ -364,6 +364,44 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     expect(llm.getCalls().length).toBe(llmBefore);
   });
 
+  it("C3 (B-fix): action recovery whose canonical completion ALSO fails does NOT return reconstructed text as success — never a locally-fabricated success", async () => {
+    const { auth, otzar, llm } = makeServices();
+    const { token, userId } = await orgUserWithTwin(auth);
+    const convId = randomUUID();
+    const msg = "put a strategy review on my calendar tomorrow at 4pm";
+    const llmBefore = llm.getCalls().length;
+    // First attempt: the proposal is created, but the canonical completion fails.
+    const first = await withCanonicalCompletionFailing(() =>
+      otzar.conductSession({ token, message: msg, request_id: "c3b-1", conversation_id: convId }),
+    );
+    expect(first.ok).toBe(false);
+    // Retry WHILE completion STILL fails → recovery reconstructs from the durable action,
+    // but completion fails again → it must NOT return the reconstructed proposal as success.
+    const retryFail = await withCanonicalCompletionFailing(() =>
+      otzar.conductSession({ token, message: msg, request_id: "c3b-1", conversation_id: convId }),
+    );
+    expect(retryFail.ok).toBe(false);
+    if (retryFail.ok) return;
+    expect(["OTZAR_ASSISTANT_TURN_PERSIST_FAILED", "OTZAR_CONTINUITY_STATE_CHANGED", "OTZAR_REQUEST_IN_PROGRESS"]).toContain(retryFail.code);
+    // Durable truth held: one proposal, no ASSISTANT turn, request NOT COMPLETED, no model.
+    expect(await prisma.workLedgerEntry.count({ where: { owner_entity_id: userId, ledger_type: "MEETING" } })).toBe(1);
+    const userTurn = (await turnsOf(convId)).find((t) => t.role === "USER");
+    expect((await turnsOf(convId)).filter((t) => t.role === "ASSISTANT")).toHaveLength(0);
+    const midReq = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(midReq!.state).not.toBe("COMPLETED");
+    expect(llm.getCalls().length).toBe(llmBefore); // pure continuity; the model was never used
+    // Final attempt (completion restored) → reconstructs + completes ONCE → success.
+    const ok = await otzar.conductSession({ token, message: msg, request_id: "c3b-1", conversation_id: convId });
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) return;
+    expect(ok.action_proposed).toBe(true);
+    expect(ok.response.toLowerCase()).toContain("strategy review");
+    expect(await prisma.workLedgerEntry.count({ where: { owner_entity_id: userId, ledger_type: "MEETING" } })).toBe(1);
+    const okReq = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(okReq!.state).toBe("COMPLETED");
+    expect((await turnsOf(convId)).filter((t) => t.role === "ASSISTANT")).toHaveLength(1);
+  });
+
   it("C2: pure-LLM assistant persist failure → FAILED_RETRYABLE (no action); retry regenerates under exclusive lease — one USER turn, one canonical ASSISTANT", async () => {
     const llm = new MockLLMProvider([
       { ok: true, text: "first answer", provider: "mock", model: "m" },

@@ -412,6 +412,15 @@ export interface OtzarFailure {
   detail?: unknown;
 }
 
+// [OTZAR-CONTINUITY C3] The only three safe conclusions of an atomic completion attempt:
+// WE completed it (caller returns its own success), an existing validated canonical winner
+// must be replayed instead, or a typed safe failure. Reconstructed/generated text is NEVER
+// returned as success unless it was durably committed.
+type FinishResult =
+  | { kind: "durable" }
+  | { kind: "replay"; success: ConductSessionSuccess }
+  | { kind: "failure"; failure: OtzarFailure };
+
 // WHAT: Inputs for closeConversation.
 export interface CloseConversationInput {
   token: string;
@@ -1176,7 +1185,9 @@ export class OtzarService {
             actionRef: continuity.ledger_entry_id ?? null,
             sourceChannel: input.source_channel ?? "CHAT",
           });
-          if (!done.ok) return done.failure;
+          if (done.kind === "replay") return done.success;
+          if (done.kind === "failure") return done.failure;
+          // done.kind === "durable" → fall through to build the continuity success.
         } else {
           // No lease (orgless-legacy defensive): best-effort persist, no request record.
           await this.persistAssistantTurn({
@@ -1752,7 +1763,9 @@ export class OtzarService {
           twinId: twin.entity_id, conversationId, content: llmResult.text, responseClass: llmClass,
           modelProvider: llmResult.provider ?? null, sourceChannel: input.source_channel ?? "CHAT",
         });
-        if (!done.ok) return done.failure;
+        if (done.kind === "replay") return done.success;
+        if (done.kind === "failure") return done.failure;
+        // done.kind === "durable" → fall through to the full success response below.
       } else {
         await this.persistAssistantTurn({
           conversationId, orgEntityId, subjectEntityId: ownerEntityId, twinId: twin.entity_id,
@@ -2096,18 +2109,21 @@ export class OtzarService {
         const recovered = await this.reconstructFromAction(claim.request.action_ref, args.conversationId, { subjectEntityId: args.subjectEntityId });
         if (recovered !== null) {
           const lease = { id: request.request_record_id, token };
-          // [OTZAR-CONTINUITY C3] Repair the canonical result atomically (insert + complete
-          // in one tx). If it can't be made durable, leave the lease to expire → the next
-          // retry reconstructs again (idempotent, never re-executes). Still replay the
-          // reconstructed response to the caller.
+          // [OTZAR-CONTINUITY C3 fix] Repair the canonical result atomically. Return the
+          // reconstructed text as a normal replay ONLY when it was durably committed. If
+          // completion is non-durable, DO NOT return reconstructed text as success —
+          // reconcile: replay a validated existing winner, surface deterministic
+          // in-progress, or a typed retryable failure. Never a locally-fabricated success.
           const cls: ResponseClass = recovered.approval_required ? "AWAITING_CONFIRMATION" : "ANSWERED";
-          await this.completeCanonical({
+          const done = await this.completeCanonical({
             lease, userTurnId: args.userTurnId, orgEntityId: args.orgEntityId,
             subjectEntityId: args.subjectEntityId, twinId: args.twinId,
             conversationId: args.conversationId, content: recovered.response, responseClass: cls,
-            actionRef: claim.request.action_ref, sourceChannel: "CHAT", suppressAbortOnFailure: true,
+            actionRef: claim.request.action_ref, sourceChannel: "CHAT",
           });
-          return { lease: null, replay: recovered, inProgress: null };
+          if (done.kind === "durable") return { lease: null, replay: recovered, inProgress: null };
+          if (done.kind === "replay") return { lease: null, replay: done.success, inProgress: null };
+          return { lease: null, replay: null, inProgress: done.failure };
         }
         // Action exists but is not reconstructable (unknown status) → fall through to
         // reprocess under the freshly claimed lease. Safe: the proposal-level CAS
@@ -2133,11 +2149,10 @@ export class OtzarService {
   }
 
   // [OTZAR-CONTINUITY C3] Insert the ONE canonical assistant turn AND complete the request
-  // in a single transaction (no orphan turn, no completed-without-canonical, no swallowed
-  // failure). A durable `completed`/`already_completed` → ok. Any non-durable outcome →
-  // NEVER success: FAILED_RETRYABLE (action_ref preserved) so a retry reconstructs or
-  // regenerates. In the recovery-repair path, `suppressAbortOnFailure` leaves the lease to
-  // expire (a later retry reconstructs again) while still replaying the reconstructed text.
+  // in a single transaction, then decide the ONLY safe outcome. `durable` → caller returns
+  // its freshly-built success. `replay` → a validated existing canonical winner to return
+  // instead. `failure` → a typed, safe failure. It NEVER reports success for locally
+  // reconstructed/generated text that was not durably completed.
   private async completeCanonical(args: {
     lease: { id: string; token: string };
     userTurnId: string;
@@ -2145,8 +2160,7 @@ export class OtzarService {
     conversationId: string; content: string; responseClass: ResponseClass;
     actionRef?: string | null; modelProvider?: string | null;
     sourceChannel: "CHAT" | "VOICE" | "AMBIENT";
-    suppressAbortOnFailure?: boolean;
-  }): Promise<{ ok: true } | { ok: false; failure: OtzarFailure }> {
+  }): Promise<FinishResult> {
     const res = await completeRequestWithCanonicalResponse({
       request_record_id: args.lease.id,
       leaseToken: args.lease.token,
@@ -2161,15 +2175,76 @@ export class OtzarService {
       model_provider: args.modelProvider ?? null,
       source_channel: args.sourceChannel,
     });
-    if (res.outcome === "completed" || res.outcome === "already_completed") return { ok: true };
-    logger.warn({ requestRecordId: args.lease.id, outcome: res.outcome }, "otzar canonical completion not durable → FAILED_RETRYABLE");
-    if (args.suppressAbortOnFailure !== true) {
+    // WE durably completed it → the caller returns its freshly-built success.
+    if (res.outcome === "completed") return { kind: "durable" };
+    // A canonical winner already exists → load + replay the EXACT validated winner (never
+    // the locally reconstructed/generated text).
+    if (res.outcome === "already_completed" && res.canonical_assistant_turn_id != null) {
+      const canon = await this.loadScopedCanonical(res.canonical_assistant_turn_id, args);
+      if (canon !== null) return { kind: "replay", success: await this.reconstructFromAssistantTurn(canon, args.conversationId) };
+    }
+    // Every other outcome (lease_lost / state_conflict / scope_mismatch / invalid_turn /
+    // canonical_inconsistent / consistency_error) is NON-DURABLE → NEVER return the local
+    // text as success. Reconcile against the durable, scoped request state.
+    logger.warn({ requestRecordId: args.lease.id, outcome: res.outcome }, "otzar canonical completion not durable → reconcile");
+    return this.reconcileNonDurable(args);
+  }
+
+  // Load a canonical ASSISTANT turn only when it fully matches the expected scope + the
+  // reply relationship — never trust a bare turn id.
+  private async loadScopedCanonical(
+    turnId: string,
+    scope: { orgEntityId: string; subjectEntityId: string; twinId: string; conversationId: string; userTurnId: string },
+  ): Promise<OtzarConversationTurn | null> {
+    return prisma.otzarConversationTurn.findFirst({
+      where: {
+        turn_id: turnId, role: "ASSISTANT",
+        conversation_id: scope.conversationId,
+        org_entity_id: scope.orgEntityId,
+        subject_entity_id: scope.subjectEntityId,
+        twin_entity_id: scope.twinId,
+        response_to_turn_id: scope.userTurnId,
+      },
+    });
+  }
+
+  // [OTZAR-CONTINUITY C3 hardening] After a non-durable completion, decide the ONLY safe
+  // outcomes — never return reconstructed/generated text as normal success:
+  //  • a valid canonical winner now exists → replay it;
+  //  • still PROCESSING under ANOTHER owner → deterministic in-progress;
+  //  • we still validly own the lease → FAILED_RETRYABLE + retryable failure (no overwrite);
+  //  • otherwise → a typed state-changed failure.
+  private async reconcileNonDurable(args: {
+    lease: { id: string; token: string };
+    userTurnId: string; orgEntityId: string; subjectEntityId: string; twinId: string; conversationId: string;
+  }): Promise<FinishResult> {
+    const req = await prisma.otzarConversationRequest.findFirst({
+      where: {
+        request_record_id: args.lease.id,
+        org_entity_id: args.orgEntityId,
+        subject_entity_id: args.subjectEntityId,
+        twin_entity_id: args.twinId,
+        conversation_id: args.conversationId,
+      },
+    });
+    if (req === null) {
+      return { kind: "failure", failure: { ok: false, code: "OTZAR_CONTINUITY_STATE_CHANGED", message: "This request changed state before it finished; please retry." } };
+    }
+    if (req.state === "COMPLETED" && req.canonical_assistant_turn_id !== null) {
+      const canon = await this.loadScopedCanonical(req.canonical_assistant_turn_id, args);
+      if (canon !== null) return { kind: "replay", success: await this.reconstructFromAssistantTurn(canon, args.conversationId) };
+      // COMPLETED but the canonical turn is not coherent → do not fabricate success.
+      return { kind: "failure", failure: { ok: false, code: "OTZAR_CONTINUITY_STATE_CHANGED", message: "This request changed state before it finished; please retry." } };
+    }
+    if (req.state === "PROCESSING" && req.lease_token !== args.lease.token) {
+      return { kind: "failure", failure: { ok: false, code: "OTZAR_REQUEST_IN_PROGRESS", message: "This request is already being processed. Please retry shortly." } };
+    }
+    // We still own the lease (or it is FAILED_RETRYABLE ours) → mark retryable. abortRequest
+    // is lease-gated, so it can NEVER overwrite a winner or another owner's live lease.
+    if (req.lease_token === args.lease.token) {
       await this.abortRequest(args.lease, false, "OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
     }
-    return {
-      ok: false,
-      failure: { ok: false, code: "OTZAR_ASSISTANT_TURN_PERSIST_FAILED", message: "I couldn't durably record my reply; your request is saved — please retry." },
-    };
+    return { kind: "failure", failure: { ok: false, code: "OTZAR_ASSISTANT_TURN_PERSIST_FAILED", message: "I couldn't durably record my reply; your request is saved — please retry." } };
   }
 
   // §6: an accepted turn that returns a failure AFTER the claim but BEFORE the
