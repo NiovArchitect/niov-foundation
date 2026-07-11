@@ -68,11 +68,18 @@ function statusForCode(code: string): number {
     case "INVALID_HISTORY":
     case "INVALID_REQUEST_ID":
       return 422;
+    case "OTZAR_OBLIGATION_NOT_FOUND":
+      return 404;
+    case "OTZAR_OBLIGATION_EVIDENCE_REQUIRED":
+    case "OTZAR_OBLIGATION_NOT_ACKNOWLEDGEABLE":
+      return 422;
     case "ALREADY_INGESTED":
     case "OTZAR_REQUEST_ID_CONFLICT":
     case "OTZAR_THREAD_CLOSED":
     case "OTZAR_REQUEST_IN_PROGRESS":
     case "OTZAR_CONTINUITY_STATE_CHANGED":
+    case "OTZAR_OBLIGATION_STATE_CHANGED":
+    case "OTZAR_OBLIGATION_ILLEGAL_TRANSITION":
       return 409;
     case "TOKEN_BUDGET_EXCEEDED":
       return 413;
@@ -803,6 +810,230 @@ export async function registerOtzarRoutes(
       if (!result.ok) {
         return reply.code(statusForCode(result.code)).send(result);
       }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // ──────────────────────────────────────────────────────────────
+  // [OTZAR STAGE-2 §5] Durable organizational obligations. Bearer-gated; every read/transition
+  // is (org, subject, twin) scope-gated at the service tier; completion requires validated
+  // durable evidence; terminal states are append-only. Responses are safe projections only.
+
+  // POST /obligations — create (or idempotently return) an obligation.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.obligation_type !== "string" || typeof body.title !== "string" || body.title.trim().length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "obligation_type and title are required" });
+      }
+      const result = await otzarService.createObligation({
+        token,
+        obligation_type: body.obligation_type as never,
+        title: body.title,
+        ...(typeof body.responsible_entity_id === "string" ? { responsible_entity_id: body.responsible_entity_id } : {}),
+        ...(typeof body.origin_key === "string" ? { origin_key: body.origin_key } : {}),
+        ...(typeof body.initial_state === "string" ? { initial_state: body.initial_state as never } : {}),
+        ...(typeof body.priority === "string" ? { priority: body.priority } : {}),
+        ...(typeof body.required_response_class === "string" ? { required_response_class: body.required_response_class } : {}),
+        ...(typeof body.source_channel === "string" ? { source_channel: body.source_channel } : {}),
+        ...(typeof body.provenance_class === "string" ? { provenance_class: body.provenance_class } : {}),
+        ...(typeof body.details === "object" && body.details !== null ? { details: body.details as Record<string, unknown> } : {}),
+        ...(typeof body.conversation_id === "string" ? { conversation_id: body.conversation_id } : {}),
+        ...(typeof body.source_turn_id === "string" ? { source_turn_id: body.source_turn_id } : {}),
+        ...(typeof body.request_record_id === "string" ? { request_record_id: body.request_record_id } : {}),
+        ...(typeof body.action_ref === "string" ? { action_ref: body.action_ref } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // GET /obligations — the caller's obligations (restoration read; survives thread close).
+  app.get<{ Querystring: { state?: string; obligation_type?: string; conversation_id?: string; open_only?: string; limit?: string } }>(
+    "/api/v1/otzar/obligations",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const rawLimit = Number(request.query.limit);
+      const states = typeof request.query.state === "string" && request.query.state.length > 0
+        ? request.query.state.split(",").filter((s) => s.length > 0)
+        : undefined;
+      const result = await otzarService.listObligations({
+        token,
+        ...(states !== undefined ? { states: states as never } : {}),
+        ...(typeof request.query.obligation_type === "string" && request.query.obligation_type.length > 0 ? { obligation_type: request.query.obligation_type as never } : {}),
+        ...(typeof request.query.conversation_id === "string" && request.query.conversation_id.length > 0 ? { conversation_id: request.query.conversation_id } : {}),
+        ...(request.query.open_only === "true" ? { open_only: true } : {}),
+        ...(Number.isFinite(rawLimit) && rawLimit > 0 ? { limit: Math.floor(rawLimit) } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // GET /obligations/:obligation_id — a single obligation (scope-gated).
+  app.get<{ Params: { obligation_id: string } }>(
+    "/api/v1/otzar/obligations/:obligation_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getObligation({ token, obligation_id: request.params.obligation_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // Shared body validation for a versioned transition (optimistic-concurrency).
+  function requireVersion(body: Record<string, unknown>): number | null {
+    const v = Number(body.expected_version);
+    return Number.isInteger(v) && v >= 0 ? v : null;
+  }
+
+  // POST /obligations/:obligation_id/acknowledge — responsible actor + USER turn only.
+  app.post<{ Params: { obligation_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/:obligation_id/acknowledge",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const version = requireVersion(body);
+      if (version === null || typeof body.acknowledged_turn_id !== "string") {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version and acknowledged_turn_id are required" });
+      }
+      const result = await otzarService.acknowledgeObligation({ token, obligation_id: request.params.obligation_id, expected_version: version, acknowledged_turn_id: body.acknowledged_turn_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /obligations/:obligation_id/complete — requires validated durable evidence.
+  app.post<{ Params: { obligation_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/:obligation_id/complete",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const version = requireVersion(body);
+      if (version === null) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version is required" });
+      const result = await otzarService.completeObligation({
+        token, obligation_id: request.params.obligation_id, expected_version: version,
+        ...(typeof body.completion_turn_id === "string" ? { completion_turn_id: body.completion_turn_id } : {}),
+        ...(typeof body.completion_action_ref === "string" ? { completion_action_ref: body.completion_action_ref } : {}),
+        ...(typeof body.completion_evidence === "object" && body.completion_evidence !== null ? { completion_evidence: body.completion_evidence as Record<string, unknown> } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /obligations/:obligation_id/transition — cancel | block | start | escalate | expire.
+  app.post<{ Params: { obligation_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/:obligation_id/transition",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const version = requireVersion(body);
+      const transition = body.transition;
+      const ALLOWED = ["cancel", "block", "start", "escalate", "expire"];
+      if (version === null || typeof transition !== "string" || !ALLOWED.includes(transition)) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version and a valid transition are required" });
+      }
+      const result = await otzarService.transitionObligation({
+        token, obligation_id: request.params.obligation_id, expected_version: version,
+        transition: transition as "cancel" | "block" | "start" | "escalate" | "expire",
+        ...(typeof body.escalation_id === "string" ? { escalation_id: body.escalation_id } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /obligations/:obligation_id/reassign — new responsible party (resets ack; audit lineage).
+  app.post<{ Params: { obligation_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/:obligation_id/reassign",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const version = requireVersion(body);
+      if (version === null || typeof body.new_responsible_entity_id !== "string" || typeof body.reason !== "string" || body.reason.trim().length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version, new_responsible_entity_id and reason are required" });
+      }
+      const result = await otzarService.reassignObligation({ token, obligation_id: request.params.obligation_id, expected_version: version, new_responsible_entity_id: body.new_responsible_entity_id, reason: body.reason });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /obligations/:obligation_id/supersede — linked replacement; original SUPERSEDED.
+  app.post<{ Params: { obligation_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/:obligation_id/supersede",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const version = requireVersion(body);
+      const replacement = body.replacement;
+      if (version === null || typeof replacement !== "object" || replacement === null) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version and replacement are required" });
+      }
+      const r = replacement as Record<string, unknown>;
+      if (typeof r.obligation_type !== "string" || typeof r.title !== "string" || r.title.trim().length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "replacement.obligation_type and replacement.title are required" });
+      }
+      const result = await otzarService.supersedeObligation({
+        token, obligation_id: request.params.obligation_id, expected_version: version,
+        replacement: {
+          obligation_type: r.obligation_type as never,
+          title: r.title,
+          ...(typeof r.responsible_entity_id === "string" ? { responsible_entity_id: r.responsible_entity_id } : {}),
+          ...(typeof r.priority === "string" ? { priority: r.priority } : {}),
+          ...(typeof r.required_response_class === "string" ? { required_response_class: r.required_response_class } : {}),
+          ...(typeof r.details === "object" && r.details !== null ? { details: r.details as Record<string, unknown> } : {}),
+          ...(typeof r.conversation_id === "string" ? { conversation_id: r.conversation_id } : {}),
+          ...(typeof r.source_turn_id === "string" ? { source_turn_id: r.source_turn_id } : {}),
+          ...(typeof r.action_ref === "string" ? { action_ref: r.action_ref } : {}),
+        },
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /obligations/project/awaiting-confirmation — derive (idempotently) an obligation from
+  // an existing NEEDS_CALLER_CONFIRMATION action the caller owns.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/project/awaiting-confirmation",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.ledger_entry_id !== "string" || body.ledger_entry_id.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "ledger_entry_id is required" });
+      }
+      const result = await otzarService.projectAwaitingConfirmationObligation({ token, ledger_entry_id: body.ledger_entry_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /obligations/project/question — derive (idempotently) an obligation from an unresolved
+  // assistant question (a COMPLETED CLARIFICATION request the caller owns).
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/obligations/project/question",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.request_record_id !== "string" || body.request_record_id.length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "request_record_id is required" });
+      }
+      const result = await otzarService.projectUnresolvedQuestionObligation({ token, request_record_id: body.request_record_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
       return reply.code(200).send(result);
     },
   );

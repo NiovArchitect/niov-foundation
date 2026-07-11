@@ -108,6 +108,38 @@ export const SCHEMA_MANIFEST: TableRequirement[] = [
       { columns: ["conversation_id", "client_request_id"] },
     ],
   },
+  {
+    // OTZAR STAGE-2 §5 — durable organizational obligations. Only runtime-critical columns are
+    // asserted; notNull only where the query/service layer relies on it. The correctness-
+    // critical UNIQUE is the create-or-get idempotency key (org_entity_id, origin_key).
+    table: "obligations",
+    columns: [
+      { name: "obligation_id", dataType: "uuid", notNull: true },
+      { name: "org_entity_id", dataType: "uuid", notNull: true },
+      { name: "subject_entity_id", dataType: "uuid", notNull: true },
+      { name: "creator_entity_id", dataType: "uuid", notNull: true },
+      { name: "responsible_entity_id", dataType: "uuid", notNull: true },
+      { name: "obligation_type", dataType: "text", notNull: true },
+      { name: "title", dataType: "text", notNull: true },
+      { name: "details", dataType: "jsonb", notNull: true },
+      { name: "priority", dataType: "text", notNull: true },
+      { name: "source_channel", dataType: "text", notNull: true },
+      { name: "provenance_class", dataType: "text", notNull: true },
+      { name: "state", dataType: "text", notNull: true },
+      { name: "version", dataType: "integer", notNull: true },
+      { name: "visibility_scope", dataType: "text", notNull: true },
+      { name: "retention_class", dataType: "text", notNull: true },
+      { name: "origin_key", dataType: "text" },
+      { name: "action_ref", dataType: "uuid" },
+      { name: "completion_turn_id", dataType: "uuid" },
+      { name: "completion_action_ref", dataType: "uuid" },
+      { name: "acknowledged_turn_id", dataType: "uuid" },
+      { name: "created_at", dataType: "timestamp without time zone", notNull: true },
+      { name: "updated_at", dataType: "timestamp without time zone", notNull: true },
+      { name: "completed_at", dataType: "timestamp without time zone" },
+    ],
+    uniques: [{ columns: ["org_entity_id", "origin_key"] }],
+  },
 ];
 
 // Minimal read-only probe seam (prisma satisfies this).
