@@ -125,11 +125,17 @@ export async function completeRequest(args: {
        SET state = 'COMPLETED',
            canonical_assistant_turn_id = ${args.canonical_assistant_turn_id}::uuid,
            response_class = ${args.response_class},
-           action_ref = ${args.action_ref ?? null}::uuid,
-           provider_attempt_ref = ${args.provider_attempt_ref ?? null}::uuid,
+           -- Preserve a previously linked action (C5): never null it out on completion.
+           action_ref = COALESCE(action_ref, ${args.action_ref ?? null}::uuid),
+           provider_attempt_ref = COALESCE(provider_attempt_ref, ${args.provider_attempt_ref ?? null}::uuid),
            completed_at = now(), updated_at = now()
      WHERE request_record_id = ${args.request_record_id}::uuid
-       AND lease_token = ${args.leaseToken}`;
+       AND lease_token = ${args.leaseToken}
+       -- Strict: only the lease owner completing from an in-flight/reclaimable state;
+       -- idempotent when the SAME canonical turn is already linked.
+       AND state IN ('PROCESSING', 'FAILED_RETRYABLE')
+       AND (canonical_assistant_turn_id IS NULL
+            OR canonical_assistant_turn_id = ${args.canonical_assistant_turn_id}::uuid)`;
   return n === 1;
 }
 
@@ -157,4 +163,46 @@ export async function failRequest(args: {
 
 export async function getRequestByUserTurn(userTurnId: string): Promise<OtzarConversationRequest | null> {
   return prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurnId } });
+}
+
+/** Outcome of a compare-and-set action linkage. */
+export type LinkActionOutcome = "linked" | "already_same" | "conflict" | "not_owner";
+
+/**
+ * [OTZAR-CONTINUITY C5] Durably link the EXACT action this request produced to the
+ * request record, BEFORE the assistant turn is persisted — so an assistant-persist
+ * failure is recoverable by reconstructing from the action instead of re-executing.
+ *
+ * Compare-and-set: the lease owner may set action_ref only when it is currently NULL
+ * (first link) or already equals the same action (idempotent). A DIFFERENT existing
+ * action_ref is a consistency violation → `conflict`, never a silent overwrite. Lease
+ * ownership is enforced (lease_token match) so a stolen/expired lease cannot relink.
+ */
+export async function linkRequestAction(args: {
+  request_record_id: string;
+  leaseToken: string;
+  action_ref: string;
+}): Promise<LinkActionOutcome> {
+  const n = await prisma.$executeRaw`
+    UPDATE otzar_conversation_requests
+       SET action_ref = ${args.action_ref}::uuid, updated_at = now()
+     WHERE request_record_id = ${args.request_record_id}::uuid
+       AND lease_token = ${args.leaseToken}
+       AND (action_ref IS NULL OR action_ref = ${args.action_ref}::uuid)`;
+  if (n === 1) {
+    // Distinguish a fresh link from an idempotent no-op-equivalent write.
+    const row = await prisma.otzarConversationRequest.findUnique({
+      where: { request_record_id: args.request_record_id },
+      select: { action_ref: true },
+    });
+    return row?.action_ref === args.action_ref ? "linked" : "already_same";
+  }
+  // 0 rows: either not the lease owner, or a DIFFERENT action is already linked.
+  const row = await prisma.otzarConversationRequest.findUnique({
+    where: { request_record_id: args.request_record_id },
+    select: { action_ref: true, lease_token: true },
+  });
+  if (row === null || row.lease_token !== args.leaseToken) return "not_owner";
+  if (row.action_ref !== null && row.action_ref === args.action_ref) return "already_same";
+  return "conflict";
 }
