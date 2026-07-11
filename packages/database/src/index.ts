@@ -162,6 +162,20 @@ export type {
   ConversationTurnRole,
   ConversationTurnChannel,
 } from "./queries/otzar-conversation-turns.js";
+// [OTZAR-CONTINUITY P5 Stage 1 §2] Durable logical-request processing state.
+export {
+  createOrGetRequest,
+  claimRequestProcessing,
+  completeRequest,
+  failRequest,
+  getRequestByUserTurn,
+} from "./queries/otzar-conversation-requests.js";
+export type {
+  CreateRequestInput,
+  ClaimResult,
+  RequestState,
+  ResponseClass,
+} from "./queries/otzar-conversation-requests.js";
 
 export type {
   Entity,

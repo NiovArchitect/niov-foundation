@@ -31,10 +31,14 @@ function compatibleSpec(): Spec {
       data_type: c.dataType,
       is_nullable: c.notNull === true ? "NO" : "YES",
     }));
-    // request_id is referenced by a unique but not a column requirement — add it so
-    // the unique's column set can be satisfied by the fake.
+    // Columns referenced only by a unique constraint (not a column requirement) — add
+    // them so the unique's column set can be satisfied by the fake.
     if (req.table === "otzar_conversation_turns") {
       columns[req.table]!.push({ column_name: "request_id", data_type: "text", is_nullable: "YES" });
+    }
+    if (req.table === "otzar_conversation_requests") {
+      columns[req.table]!.push({ column_name: "canonical_assistant_turn_id", data_type: "uuid", is_nullable: "YES" });
+      columns[req.table]!.push({ column_name: "client_request_id", data_type: "text", is_nullable: "YES" });
     }
     uniques[req.table] = (req.uniques ?? []).map((u) => u.columns);
   }

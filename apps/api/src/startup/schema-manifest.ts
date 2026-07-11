@@ -87,6 +87,27 @@ export const SCHEMA_MANIFEST: TableRequirement[] = [
       { columns: ["conversation_id", "request_id"] },
     ],
   },
+  {
+    // OTZAR-CONTINUITY P5 Stage 1 §2 — durable logical-request processing state.
+    table: "otzar_conversation_requests",
+    columns: [
+      { name: "request_record_id", dataType: "uuid", notNull: true },
+      { name: "conversation_id", dataType: "uuid", notNull: true },
+      { name: "user_turn_id", dataType: "uuid", notNull: true },
+      { name: "org_entity_id", dataType: "uuid", notNull: true },
+      { name: "subject_entity_id", dataType: "uuid", notNull: true },
+      { name: "twin_entity_id", dataType: "uuid", notNull: true },
+      { name: "content_hash", dataType: "text", notNull: true },
+      { name: "state", dataType: "text", notNull: true },
+      { name: "processing_version", dataType: "integer", notNull: true },
+      { name: "attempt_count", dataType: "integer", notNull: true },
+    ],
+    uniques: [
+      { columns: ["user_turn_id"] },
+      { columns: ["canonical_assistant_turn_id"] },
+      { columns: ["conversation_id", "client_request_id"] },
+    ],
+  },
 ];
 
 // Minimal read-only probe seam (prisma satisfies this).
