@@ -635,6 +635,25 @@ export async function registerOtzarRoutes(
     },
   );
 
+  // [OTZAR-CONTINUITY C6/E] Response-loss reconciliation by the CLIENT-known identity (the
+  // stable request_id CT owns, which it may keep even when the server request-record id was
+  // never received). Scoped by conversation + client_request_id + (org/subject/twin).
+  // NEVER a global client_request_id lookup. OTZAR_THREAD_FORBIDDEN (403) for foreign.
+  app.get<{ Params: { conversation_id: string; client_request_id: string } }>(
+    "/api/v1/otzar/threads/:conversation_id/requests/by-client/:client_request_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getRequestStatusByClient({
+        token,
+        conversation_id: request.params.conversation_id,
+        client_request_id: request.params.client_request_id,
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
   // GET /api/v1/otzar/conversations/:id/corrections -- safe, self-scoped
   // per-conversation correction-signal projection (ADR-0055 Wave 2C).
   // Bearer + "read" only (no admin gate). Returns counts + last-seen +

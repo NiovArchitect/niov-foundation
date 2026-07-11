@@ -11,15 +11,18 @@
 import { prisma } from "../client.js";
 import { listConversationTurns } from "./otzar-conversation-turns.js";
 
-/** Caller scope for every restoration read. Twin is not required for read visibility. */
+/** Caller scope for every restoration read. [C6/F] Twin is REQUIRED — distinct human–Twin
+ *  relationship threads must never blend into one restoration. */
 export interface RestoreScope {
   org_entity_id: string;
   subject_entity_id: string;
+  twin_entity_id: string;
 }
 
 /** Safe, bounded thread summary. No transcript bodies, no internal refs. */
 export interface ThreadSummary {
   conversation_id: string;
+  twin_entity_id: string;
   status: string;
   timezone: string | null;
   source_type: string;
@@ -45,13 +48,60 @@ export interface SafeTurn {
 /** Safe request-status projection. NEVER lease/provider tokens or raw action internals. */
 export interface SafeRequestStatus {
   request_record_id: string;
+  conversation_id: string;
+  client_request_id: string | null;
   state: string;
   response_class: string | null;
   has_canonical_result: boolean;
   has_action: boolean;
   in_progress: boolean;
   retryable: boolean;
+  /** The failure code when FAILED_RETRYABLE/FAILED_FINAL, for a safe CT retry affordance. */
+  failure_code: string | null;
+  canonical_assistant_turn_id: string | null;
+  /** The canonical assistant reply text when COMPLETED (safe natural language only). */
+  canonical_text: string | null;
   created_at: Date;
+  completed_at: Date | null;
+}
+
+const REQUEST_STATUS_SELECT = {
+  request_record_id: true, conversation_id: true, client_request_id: true, state: true,
+  response_class: true, canonical_assistant_turn_id: true, action_ref: true,
+  failure_code: true, created_at: true, completed_at: true,
+} as const;
+
+type RequestStatusRow = {
+  request_record_id: string; conversation_id: string; client_request_id: string | null;
+  state: string; response_class: string | null; canonical_assistant_turn_id: string | null;
+  action_ref: string | null; failure_code: string | null; created_at: Date; completed_at: Date | null;
+};
+
+async function toRequestStatus(req: RequestStatusRow): Promise<SafeRequestStatus> {
+  let canonicalText: string | null = null;
+  if (req.canonical_assistant_turn_id !== null) {
+    const t = await prisma.otzarConversationTurn.findUnique({
+      where: { turn_id: req.canonical_assistant_turn_id },
+      select: { content: true, role: true },
+    });
+    if (t !== null && t.role === "ASSISTANT") canonicalText = t.content;
+  }
+  return {
+    request_record_id: req.request_record_id,
+    conversation_id: req.conversation_id,
+    client_request_id: req.client_request_id,
+    state: req.state,
+    response_class: req.response_class,
+    has_canonical_result: req.canonical_assistant_turn_id !== null,
+    has_action: req.action_ref !== null,
+    in_progress: req.state === "PROCESSING" || req.state === "RECEIVED",
+    retryable: req.state === "FAILED_RETRYABLE",
+    failure_code: req.state === "FAILED_RETRYABLE" || req.state === "FAILED_FINAL" ? req.failure_code : null,
+    canonical_assistant_turn_id: req.canonical_assistant_turn_id,
+    canonical_text: canonicalText,
+    created_at: req.created_at,
+    completed_at: req.completed_at,
+  };
 }
 
 const NON_TERMINAL_STATES = ["RECEIVED", "PROCESSING", "FAILED_RETRYABLE"];
@@ -68,11 +118,12 @@ async function unresolvedCount(conversationId: string, scope: RestoreScope): Pro
 }
 
 function toSummary(row: {
-  conversation_id: string; status: string; timezone: string | null; source_type: string;
+  conversation_id: string; twin_id: string; status: string; timezone: string | null; source_type: string;
   started_at: Date; last_active_at: Date | null; message_count: number; archived_at: Date | null;
 }, unresolved: number): ThreadSummary {
   return {
     conversation_id: row.conversation_id,
+    twin_entity_id: row.twin_id,
     status: row.status,
     timezone: row.timezone,
     source_type: row.source_type,
@@ -85,7 +136,7 @@ function toSummary(row: {
 }
 
 const SUMMARY_SELECT = {
-  conversation_id: true, status: true, timezone: true, source_type: true,
+  conversation_id: true, twin_id: true, status: true, timezone: true, source_type: true,
   started_at: true, last_active_at: true, message_count: true, archived_at: true,
 } as const;
 
@@ -99,6 +150,7 @@ export async function restoreActiveThread(scope: RestoreScope): Promise<ThreadSu
     where: {
       org_entity_id: scope.org_entity_id,
       entity_id: scope.subject_entity_id,
+      twin_id: scope.twin_entity_id,
       status: "ACTIVE",
       archived_at: null,
       deleted_at: null,
@@ -121,6 +173,7 @@ export async function listRecentThreads(
     where: {
       org_entity_id: scope.org_entity_id,
       entity_id: scope.subject_entity_id,
+      twin_id: scope.twin_entity_id,
       deleted_at: null,
       status: { not: "DELETED" },
       ...(options.includeArchived === true ? {} : { archived_at: null }),
@@ -148,6 +201,7 @@ export async function getThreadForRestore(
       conversation_id: conversationId,
       org_entity_id: scope.org_entity_id,
       entity_id: scope.subject_entity_id,
+      twin_id: scope.twin_entity_id,
       deleted_at: null,
     },
     select: SUMMARY_SELECT,
@@ -170,7 +224,8 @@ export async function getThreadForRestore(
   return { thread: toSummary(row, await unresolvedCount(conversationId, scope)), turns: safeTurns };
 }
 
-/** Safe status of the caller's own request, or null (foreign → not found). */
+/** Safe status of the caller's own request by SERVER record id, or null (foreign → not
+ *  found). Twin-scoped — a request never crosses a Twin boundary. */
 export async function getRequestStatusForUser(
   scope: RestoreScope,
   requestRecordId: string,
@@ -180,21 +235,35 @@ export async function getRequestStatusForUser(
       request_record_id: requestRecordId,
       org_entity_id: scope.org_entity_id,
       subject_entity_id: scope.subject_entity_id,
+      twin_entity_id: scope.twin_entity_id,
     },
-    select: {
-      request_record_id: true, state: true, response_class: true,
-      canonical_assistant_turn_id: true, action_ref: true, created_at: true,
-    },
+    select: REQUEST_STATUS_SELECT,
   });
   if (req === null) return null;
-  return {
-    request_record_id: req.request_record_id,
-    state: req.state,
-    response_class: req.response_class,
-    has_canonical_result: req.canonical_assistant_turn_id !== null,
-    has_action: req.action_ref !== null,
-    in_progress: req.state === "PROCESSING",
-    retryable: req.state === "FAILED_RETRYABLE",
-    created_at: req.created_at,
-  };
+  return toRequestStatus(req);
+}
+
+/**
+ * [OTZAR-CONTINUITY C6/E] Safe status of the caller's request by the CLIENT-KNOWN identity
+ * (conversation + client_request_id) — the identifier CT actually owns when a response is
+ * lost. REQUIRES exact (org, subject, twin, conversation, client_request_id); NEVER a global
+ * lookup by client_request_id. Foreign/absent → null (no existence disclosure).
+ */
+export async function getRequestByClient(
+  scope: RestoreScope,
+  conversationId: string,
+  clientRequestId: string,
+): Promise<SafeRequestStatus | null> {
+  const req = await prisma.otzarConversationRequest.findFirst({
+    where: {
+      conversation_id: conversationId,
+      client_request_id: clientRequestId,
+      org_entity_id: scope.org_entity_id,
+      subject_entity_id: scope.subject_entity_id,
+      twin_entity_id: scope.twin_entity_id,
+    },
+    select: REQUEST_STATUS_SELECT,
+  });
+  if (req === null) return null;
+  return toRequestStatus(req);
 }
