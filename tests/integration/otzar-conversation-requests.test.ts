@@ -11,6 +11,7 @@ import {
   createOrGetRequest,
   claimRequestProcessing,
   completeRequest,
+  completeRequestWithCanonicalResponse,
   failRequest,
   getRequestByUserTurn,
 } from "@niov/database";
@@ -83,6 +84,29 @@ describe("OtzarConversationRequest (P5 Stage 1)", () => {
     expect(row!.state).toBe("COMPLETED");
     expect(row!.canonical_assistant_turn_id).toBe(canon);
     expect(row!.response_class).toBe("ACTION_PROPOSED");
+  });
+
+  it("C3 completeRequestWithCanonicalResponse guards fail CLOSED (scope / lease / version) without completing", async () => {
+    const input = baseInput();
+    const { request } = await createOrGetRequest(input);
+    const token = "c3-lease";
+    await claimRequestProcessing(request.request_record_id, token, Date.now());
+    const common = {
+      request_record_id: request.request_record_id,
+      user_turn_id: input.user_turn_id,
+      org_entity_id: ORG, subject_entity_id: SUBJECT, twin_entity_id: TWIN,
+      conversation_id: input.conversation_id, content: "reply", response_class: "ANSWERED" as const,
+    };
+    // Wrong org → scope mismatch (fails closed, before touching turns).
+    expect((await completeRequestWithCanonicalResponse({ ...common, leaseToken: token, org_entity_id: randomUUID() })).outcome).toBe("scope_mismatch");
+    // Wrong lease token → lease lost.
+    expect((await completeRequestWithCanonicalResponse({ ...common, leaseToken: "not-the-owner" })).outcome).toBe("lease_lost");
+    // Wrong expected processing version → state conflict.
+    expect((await completeRequestWithCanonicalResponse({ ...common, leaseToken: token, expected_version: 999 })).outcome).toBe("state_conflict");
+    // None of the refusals completed the request or linked a canonical turn.
+    const row = await getRequestByUserTurn(input.user_turn_id);
+    expect(row!.state).toBe("PROCESSING");
+    expect(row!.canonical_assistant_turn_id).toBeNull();
   });
 
   it("a stale (expired) lease can be reclaimed with a bumped version; a live lease cannot", async () => {

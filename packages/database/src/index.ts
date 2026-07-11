@@ -167,9 +167,11 @@ export {
   createOrGetRequest,
   claimRequestProcessing,
   completeRequest,
+  completeRequestWithCanonicalResponse,
   failRequest,
   linkRequestAction,
   getRequestByUserTurn,
+  __otzarCompletionTestHooks,
 } from "./queries/otzar-conversation-requests.js";
 export type {
   CreateRequestInput,
@@ -177,6 +179,9 @@ export type {
   RequestState,
   ResponseClass,
   LinkActionOutcome,
+  CompleteCanonicalOutcome,
+  CompleteCanonicalResult,
+  CompleteCanonicalInput,
 } from "./queries/otzar-conversation-requests.js";
 
 export type {
