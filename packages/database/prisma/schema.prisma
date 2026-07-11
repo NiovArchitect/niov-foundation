@@ -916,12 +916,12 @@ model OrgSettings {
 // flips the autonomy_level default to EXECUTIVE_OVERRIDE and
 // triggers the wallet-scope-permission branch in createTwin.
 model TwinConfig {
-  twin_id            String   @id @db.Uuid
-  autonomy_level     String   @default("APPROVAL_REQUIRED")
-  swarm_enabled      Boolean  @default(false)
-  role_template      String?
-  is_admin_twin      Boolean  @default(false)
-  approver_entity_id String?  @db.Uuid
+  twin_id                       String   @id @db.Uuid
+  autonomy_level                String   @default("APPROVAL_REQUIRED")
+  swarm_enabled                 Boolean  @default(false)
+  role_template                 String?
+  is_admin_twin                 Boolean  @default(false)
+  approver_entity_id            String?  @db.Uuid
   // [GAP-G SLICE-1] Provenance for the applied autonomy default (additive).
   // template_recommended_autonomy = what the role template suggested;
   // autonomy_source = how autonomy_level was determined at provisioning
@@ -929,7 +929,7 @@ model TwinConfig {
   //  "admin_twin"). Never authority themselves — display/audit provenance only.
   template_recommended_autonomy String?
   autonomy_source               String?
-  updated_at         DateTime @updatedAt
+  updated_at                    DateTime @updatedAt
 
   skills TwinSkill[]
 
@@ -975,21 +975,21 @@ model TwinSkill {
 // are tenant-scoped (provider_org_entity_id) and access is governed by the
 // Foundation authority envelope. Prisma-owned (no Elixir mirror per ADR-0033).
 model MarketplaceListing {
-  listing_id            String                   @id @default(uuid()) @db.Uuid
-  listing_type          MarketplaceListingType
-  provider_entity_id    String                   @db.Uuid
-  provider_org_entity_id String?                 @db.Uuid
-  title                 String
-  description           String
-  version               String                   @default("1.0.0")
+  listing_id             String                    @id @default(uuid()) @db.Uuid
+  listing_type           MarketplaceListingType
+  provider_entity_id     String                    @db.Uuid
+  provider_org_entity_id String?                   @db.Uuid
+  title                  String
+  description            String
+  version                String                    @default("1.0.0")
   // Advisory pricing only — no real settlement. e.g. {"model":"PER_USE","amount_usd":0.01}
-  pricing_model         Json                     @default("{}")
+  pricing_model          Json                      @default("{}")
   // Authority/scope a consumer needs (closed-vocab labels; not raw RBAC).
-  required_authority    String[]                 @default([])
-  required_memory_scope String[]                 @default([])
+  required_authority     String[]                  @default([])
+  required_memory_scope  String[]                  @default([])
   // Trust/proof metadata (advisory; e.g. provider attestation, audit refs).
-  trust_metadata        Json                     @default("{}")
-  status                MarketplaceListingStatus @default(DRAFT)
+  trust_metadata         Json                      @default("{}")
+  status                 MarketplaceListingStatus  @default(DRAFT)
   // Phase 1301-A — cross-org discovery REACH (orthogonal to `status`, which is
   // lifecycle). PRIVATE (default) = visible only to the provider + same-org
   // PUBLISHED viewers (the pre-1301-A behavior; existing rows keep it). CROSS_ORG
@@ -997,10 +997,10 @@ model MarketplaceListing {
   // discovery catalog. PUBLIC (open, no org) is forward-substrate and deliberately
   // NOT a value this phase — no default public exposure. High-sensitivity data
   // packages can NEVER be CROSS_ORG (enforced at set-time AND read-time).
-  discovery_scope       MarketplaceDiscoveryScope @default(PRIVATE)
-  created_at            DateTime                 @default(now())
-  updated_at            DateTime                 @updatedAt
-  deleted_at            DateTime?
+  discovery_scope        MarketplaceDiscoveryScope @default(PRIVATE)
+  created_at             DateTime                  @default(now())
+  updated_at             DateTime                  @updatedAt
+  deleted_at             DateTime?
 
   @@index([provider_entity_id])
   @@index([provider_org_entity_id])
@@ -1074,29 +1074,29 @@ enum DataAccessMode {
 // always governed at runtime by COSMP + ProofOfAccess + the authority envelope;
 // this row is the listing policy, not a grant. Prisma-owned (no Elixir mirror).
 model MarketplaceDataPackage {
-  data_package_id          String         @id @default(uuid()) @db.Uuid
-  listing_id               String         @unique @db.Uuid
-  provider_entity_id       String         @db.Uuid
-  provider_org_entity_id   String?        @db.Uuid
-  access_mode              DataAccessMode @default(SAFE_PROJECTION)
+  data_package_id           String               @id @default(uuid()) @db.Uuid
+  listing_id                String               @unique @db.Uuid
+  provider_entity_id        String               @db.Uuid
+  provider_org_entity_id    String?              @db.Uuid
+  access_mode               DataAccessMode       @default(SAFE_PROJECTION)
   // Capsule TYPE labels offered (e.g. PREFERENCE, DOMAIN_KNOWLEDGE). Safe by
   // construction — never raw capsule IDs (those would leak specific capsules).
-  capsule_type_allowlist  String[]       @default([])
+  capsule_type_allowlist    String[]             @default([])
   // Closed-vocab allowed-use rights (validated service-tier). Defaults exclude
   // training / model-improvement / redistribution / commercial use.
-  allowed_use             String[]       @default([])
-  consent_required        Boolean        @default(true)
-  user_opt_in_required    Boolean        @default(true)
-  revocation_supported    Boolean        @default(true)
-  retention_policy        String?
-  redistribution_allowed  Boolean        @default(false)
-  training_allowed        Boolean        @default(false)
-  model_improvement_allowed Boolean      @default(false)
-  commercial_use_allowed  Boolean        @default(false)
-  depersonalized_only     Boolean        @default(false)
-  aggregate_only          Boolean        @default(false)
-  minimum_aggregation_size Int?
-  proof_required          Boolean        @default(true)
+  allowed_use               String[]             @default([])
+  consent_required          Boolean              @default(true)
+  user_opt_in_required      Boolean              @default(true)
+  revocation_supported      Boolean              @default(true)
+  retention_policy          String?
+  redistribution_allowed    Boolean              @default(false)
+  training_allowed          Boolean              @default(false)
+  model_improvement_allowed Boolean              @default(false)
+  commercial_use_allowed    Boolean              @default(false)
+  depersonalized_only       Boolean              @default(false)
+  aggregate_only            Boolean              @default(false)
+  minimum_aggregation_size  Int?
+  proof_required            Boolean              @default(true)
   // Phase 1294-A — sensitivity classification (extensible, future-proof). A
   // personal DMW can hold categories that do not exist yet; HIGH_SENSITIVITY
   // (and any policy-gated category — health/medical/biometric/children) is
@@ -1104,12 +1104,12 @@ model MarketplaceDataPackage {
   // is an open label list (HEALTH / MEDICAL / BIOMETRIC / CHILDREN / LOCATION /
   // BYSTANDER / ...) so new high-sensitivity kinds are governable without a
   // schema change.
-  sensitivity_class       DataSensitivityClass @default(STANDARD)
-  sensitive_categories    String[]       @default([])
-  pricing_model           Json           @default("{}")
-  created_at              DateTime       @default(now())
-  updated_at              DateTime       @updatedAt
-  deleted_at             DateTime?
+  sensitivity_class         DataSensitivityClass @default(STANDARD)
+  sensitive_categories      String[]             @default([])
+  pricing_model             Json                 @default("{}")
+  created_at                DateTime             @default(now())
+  updated_at                DateTime             @updatedAt
+  deleted_at                DateTime?
 
   @@index([provider_entity_id])
   @@index([provider_org_entity_id])
@@ -1132,22 +1132,22 @@ enum DataSensitivityClass {
 // for their OWN data with no org. Consent is permissioned access, never a
 // transfer of ownership.
 model MarketplaceDataConsent {
-  consent_id              String    @id @default(uuid()) @db.Uuid
-  listing_id             String    @db.Uuid
-  data_package_id        String    @db.Uuid
-  provider_entity_id     String    @db.Uuid
-  provider_org_entity_id String?   @db.Uuid
-  consenting_entity_id   String    @db.Uuid
-  allowed_use            String[]  @default([])
-  access_mode            DataAccessMode
-  training_allowed       Boolean   @default(false)
-  model_improvement_allowed Boolean @default(false)
-  redistribution_allowed Boolean   @default(false)
-  commercial_use_allowed Boolean   @default(false)
-  retention_policy       String?
-  expires_at             DateTime?
-  revoked_at             DateTime?
-  created_at             DateTime  @default(now())
+  consent_id                String         @id @default(uuid()) @db.Uuid
+  listing_id                String         @db.Uuid
+  data_package_id           String         @db.Uuid
+  provider_entity_id        String         @db.Uuid
+  provider_org_entity_id    String?        @db.Uuid
+  consenting_entity_id      String         @db.Uuid
+  allowed_use               String[]       @default([])
+  access_mode               DataAccessMode
+  training_allowed          Boolean        @default(false)
+  model_improvement_allowed Boolean        @default(false)
+  redistribution_allowed    Boolean        @default(false)
+  commercial_use_allowed    Boolean        @default(false)
+  retention_policy          String?
+  expires_at                DateTime?
+  revoked_at                DateTime?
+  created_at                DateTime       @default(now())
 
   @@index([listing_id])
   @@index([provider_entity_id])
@@ -1163,28 +1163,28 @@ model MarketplaceDataConsent {
 // agent / device buyer are first-class. Proof is delivered per-capsule at read
 // time (proof_delivery) — never faked at grant creation.
 model MarketplaceDataGrant {
-  grant_id               String                   @id @default(uuid()) @db.Uuid
-  listing_id             String                   @db.Uuid
-  data_package_id        String                   @db.Uuid
-  provider_entity_id     String                   @db.Uuid
-  provider_org_entity_id String?                  @db.Uuid
-  buyer_entity_id        String                   @db.Uuid
-  buyer_org_entity_id    String?                  @db.Uuid
-  granted_by_entity_id   String                   @db.Uuid
+  grant_id               String                     @id @default(uuid()) @db.Uuid
+  listing_id             String                     @db.Uuid
+  data_package_id        String                     @db.Uuid
+  provider_entity_id     String                     @db.Uuid
+  provider_org_entity_id String?                    @db.Uuid
+  buyer_entity_id        String                     @db.Uuid
+  buyer_org_entity_id    String?                    @db.Uuid
+  granted_by_entity_id   String                     @db.Uuid
   intended_use           String
   access_mode            DataAccessMode
   status                 MarketplaceDataGrantStatus @default(ACTIVE)
-  consent_record_id      String?                  @db.Uuid
-  proof_required         Boolean                  @default(true)
+  consent_record_id      String?                    @db.Uuid
+  proof_required         Boolean                    @default(true)
   // PER_CAPSULE_AT_READ_TIME — proof is generated by COSMP + ProofOfAccess when
   // a specific capsule is actually read; never a faked package-level proof.
-  proof_delivery         String                   @default("PER_CAPSULE_AT_READ_TIME")
+  proof_delivery         String                     @default("PER_CAPSULE_AT_READ_TIME")
   economic_decision      String?
   expires_at             DateTime?
   revoked_at             DateTime?
   revocation_reason      String?
-  created_at             DateTime                 @default(now())
-  updated_at             DateTime                 @updatedAt
+  created_at             DateTime                   @default(now())
+  updated_at             DateTime                   @updatedAt
 
   @@index([listing_id])
   @@index([provider_entity_id])
@@ -1220,52 +1220,52 @@ enum MarketplaceDataGrantStatus {
 // default false (deny-by-default). HIGH_SENSITIVITY cohorts are denied or
 // review-required and never cross-org discoverable; CHILDREN is denied.
 model CohortDataProduct {
-  cohort_product_id        String                @id @default(uuid()) @db.Uuid
+  cohort_product_id         String                    @id @default(uuid()) @db.Uuid
   // Optional parent listing; null = standalone cohort product (1305-A default).
-  listing_id               String?               @db.Uuid
-  provider_entity_id       String                @db.Uuid
-  provider_org_entity_id   String?               @db.Uuid
-  title                    String
-  description              String
+  listing_id                String?                   @db.Uuid
+  provider_entity_id        String                    @db.Uuid
+  provider_org_entity_id    String?                   @db.Uuid
+  title                     String
+  description               String
   // Evolving category vocabulary — String + service-tier closed validation (not a
   // Prisma enum) so new cohort kinds are governable without a schema change
   // (CONSUMER_BEHAVIOR / PERSONAL_AI / WEARABLE_AMBIENT / ENTERPRISE_WORKFLOW /
   // AGENT_DEVICE_TRANSACTION / GAME_WORLD_APP / LLM_TOOL_EVALUATION /
   // HEALTH_WELLNESS_AGGREGATE / CUSTOM).
-  cohort_type              String
+  cohort_type               String
   // Capsule TYPE labels in scope (never raw capsule IDs).
-  capsule_type_allowlist   String[]              @default([])
+  capsule_type_allowlist    String[]                  @default([])
   // Cohort access modes offered (closed-vocab, service-validated). 1305-A
   // delivers NO real signal — these are registry/evaluation metadata only.
-  access_modes             String[]              @default([])
+  access_modes              String[]                  @default([])
   // Closed-vocab allowed uses (training / model-improvement excluded by default).
-  allowed_uses             String[]              @default([])
-  sensitivity_class        DataSensitivityClass  @default(STANDARD)
-  sensitive_categories     String[]              @default([])
+  allowed_uses              String[]                  @default([])
+  sensitivity_class         DataSensitivityClass      @default(STANDARD)
+  sensitive_categories      String[]                  @default([])
   // Stored minimum group size. NOT enforced against real contributors in 1305-A
   // (no CohortContribution) — decisions report threshold_enforced=false.
-  minimum_cohort_size      Int                   @default(50)
-  consent_required         Boolean               @default(true)
-  opt_in_required          Boolean               @default(true)
-  revocation_supported     Boolean               @default(true)
-  proof_required           Boolean               @default(true)
-  raw_body_excluded        Boolean               @default(true)
-  training_allowed         Boolean               @default(false)
-  model_improvement_allowed Boolean              @default(false)
-  redistribution_allowed   Boolean               @default(false)
-  commercial_use_allowed   Boolean               @default(false)
-  retention_policy         String?
-  pricing_model            Json                  @default("{}")
-  metering_unit            String?
+  minimum_cohort_size       Int                       @default(50)
+  consent_required          Boolean                   @default(true)
+  opt_in_required           Boolean                   @default(true)
+  revocation_supported      Boolean                   @default(true)
+  proof_required            Boolean                   @default(true)
+  raw_body_excluded         Boolean                   @default(true)
+  training_allowed          Boolean                   @default(false)
+  model_improvement_allowed Boolean                   @default(false)
+  redistribution_allowed    Boolean                   @default(false)
+  commercial_use_allowed    Boolean                   @default(false)
+  retention_policy          String?
+  pricing_model             Json                      @default("{}")
+  metering_unit             String?
   // Reserved for future contribution-weighted revenue share (mock-only later).
-  revenue_share_policy     Json?
-  status                   CohortProductStatus   @default(DRAFT)
+  revenue_share_policy      Json?
+  status                    CohortProductStatus       @default(DRAFT)
   // Self-contained discovery (no parent listing to inherit from). CROSS_ORG only
   // for STANDARD-sensitivity products that a provider has opted in.
-  discovery_scope          MarketplaceDiscoveryScope @default(PRIVATE)
-  created_at               DateTime              @default(now())
-  updated_at               DateTime              @updatedAt
-  deleted_at               DateTime?
+  discovery_scope           MarketplaceDiscoveryScope @default(PRIVATE)
+  created_at                DateTime                  @default(now())
+  updated_at                DateTime                  @updatedAt
+  deleted_at                DateTime?
 
   @@index([provider_entity_id])
   @@index([provider_org_entity_id])
@@ -1344,35 +1344,35 @@ enum CohortContributionStatus {
 // and a buyer can never approve their own request (RULE 0). No data is delivered
 // by an approval in 1307-A; an approved request is permission-to-proceed only.
 model CohortAccessRequest {
-  request_id              String                     @id @default(uuid()) @db.Uuid
-  cohort_product_id       String                     @db.Uuid
+  request_id             String                    @id @default(uuid()) @db.Uuid
+  cohort_product_id      String                    @db.Uuid
   // The requesting buyer (the caller at create time).
-  buyer_entity_id         String                     @db.Uuid
-  buyer_org_entity_id     String?                    @db.Uuid
+  buyer_entity_id        String                    @db.Uuid
+  buyer_org_entity_id    String?                   @db.Uuid
   // Denormalized cohort owner at request time (who decides). INTERNAL routing.
-  provider_entity_id      String                     @db.Uuid
-  provider_org_entity_id  String?                    @db.Uuid
+  provider_entity_id     String                    @db.Uuid
+  provider_org_entity_id String?                   @db.Uuid
   // The requested (use, access_mode) — validated against the cohort's offered
   // closed-vocab sets at create time.
-  intended_use            String
-  requested_access_mode   String
-  status                  CohortAccessRequestStatus  @default(PENDING)
+  intended_use           String
+  requested_access_mode  String
+  status                 CohortAccessRequestStatus @default(PENDING)
   // Mirrors the cohort's high-sensitivity gate at request time (a human must
   // review before approving). proof_required mirrors the cohort's proof flag.
-  requires_review         Boolean                    @default(false)
-  proof_required          Boolean                    @default(false)
-  retention_policy        String?
+  requires_review        Boolean                   @default(false)
+  proof_required         Boolean                   @default(false)
+  retention_policy       String?
   // Free-text reason a human recorded on the decision (decided/denied/revoked).
-  decision_reason         String?
+  decision_reason        String?
   // INTERNAL — which human entity decided/revoked (audit-side, never projected).
-  decided_by_entity_id    String?                    @db.Uuid
-  requested_at            DateTime                   @default(now())
-  decided_at              DateTime?
+  decided_by_entity_id   String?                   @db.Uuid
+  requested_at           DateTime                  @default(now())
+  decided_at             DateTime?
   // Optional access window end for an APPROVED request (no perpetual access).
-  expires_at              DateTime?
-  created_at              DateTime                   @default(now())
-  updated_at              DateTime                   @updatedAt
-  deleted_at              DateTime?
+  expires_at             DateTime?
+  created_at             DateTime                  @default(now())
+  updated_at             DateTime                  @updatedAt
+  deleted_at             DateTime?
 
   @@index([cohort_product_id])
   @@index([buyer_entity_id])
@@ -1411,47 +1411,47 @@ enum CohortAccessRequestStatus {
 // DENIED). Both org id columns are NULLABLE so personal DMWs are first-class.
 // Prisma-owned (no Elixir mirror), like all marketplace models.
 model HighSensitivityReview {
-  review_id               String                      @id @default(uuid()) @db.Uuid
-  listing_id              String                      @db.Uuid
-  data_package_id         String                      @db.Uuid
+  review_id                 String                      @id @default(uuid()) @db.Uuid
+  listing_id                String                      @db.Uuid
+  data_package_id           String                      @db.Uuid
   // Optional link to a grant when the review is requested against an existing
   // grant; null when a review precedes grant creation (the common flow).
-  grant_id                String?                     @db.Uuid
-  provider_entity_id      String                      @db.Uuid
-  provider_org_entity_id  String?                     @db.Uuid
-  buyer_entity_id         String                      @db.Uuid
-  buyer_org_entity_id     String?                     @db.Uuid
+  grant_id                  String?                     @db.Uuid
+  provider_entity_id        String                      @db.Uuid
+  provider_org_entity_id    String?                     @db.Uuid
+  buyer_entity_id           String                      @db.Uuid
+  buyer_org_entity_id       String?                     @db.Uuid
   // The entity that requested the review (always the buyer in this phase).
-  requester_entity_id     String                      @db.Uuid
+  requester_entity_id       String                      @db.Uuid
   // The human reviewer who approved/denied/revoked; null while PENDING_REVIEW.
-  reviewer_entity_id      String?                     @db.Uuid
-  intended_use            String
-  access_mode             DataAccessMode
-  sensitivity_class       DataSensitivityClass
-  sensitive_categories    String[]                    @default([])
+  reviewer_entity_id        String?                     @db.Uuid
+  intended_use              String
+  access_mode               DataAccessMode
+  sensitivity_class         DataSensitivityClass
+  sensitive_categories      String[]                    @default([])
   // The 1296-A evaluator decision + reason codes captured at creation — the
   // policy evidence (never lost to a generic JSON blob).
-  policy_decision         String
-  policy_reason_codes     String[]                    @default([])
+  policy_decision           String
+  policy_reason_codes       String[]                    @default([])
   // The safe access modes the reviewer authorized (subset of the category's
   // review-approvable set; raw is never a member). Empty until APPROVED.
-  approved_access_modes   String[]                    @default([])
-  status                  HighSensitivityReviewStatus @default(PENDING_REVIEW)
+  approved_access_modes     String[]                    @default([])
+  status                    HighSensitivityReviewStatus @default(PENDING_REVIEW)
   // Invariant columns — an approval can NEVER relax these.
-  raw_body_allowed        Boolean                     @default(false)
-  proof_required          Boolean                     @default(true)
-  training_allowed        Boolean                     @default(false)
-  model_improvement_allowed Boolean                   @default(false)
-  redistribution_allowed  Boolean                     @default(false)
-  commercial_use_allowed  Boolean                     @default(false)
+  raw_body_allowed          Boolean                     @default(false)
+  proof_required            Boolean                     @default(true)
+  training_allowed          Boolean                     @default(false)
+  model_improvement_allowed Boolean                     @default(false)
+  redistribution_allowed    Boolean                     @default(false)
+  commercial_use_allowed    Boolean                     @default(false)
   // Mandatory expiry for an approval (no perpetual high-sensitivity access);
   // null while PENDING_REVIEW / DENIED.
-  expires_at              DateTime?
-  reviewed_at             DateTime?
-  revoked_at              DateTime?
-  denial_reason           String?
-  created_at              DateTime                    @default(now())
-  updated_at              DateTime                    @updatedAt
+  expires_at                DateTime?
+  reviewed_at               DateTime?
+  revoked_at                DateTime?
+  denial_reason             String?
+  created_at                DateTime                    @default(now())
+  updated_at                DateTime                    @updatedAt
 
   @@index([data_package_id])
   @@index([provider_entity_id])
@@ -2140,34 +2140,34 @@ model OtzarConversation {
 // bodies, or uncontrolled tool payloads (ADR-0057 §16). Additive; no FK (matches
 // the OtzarConversation uuid-ref convention). One row per user/assistant turn.
 model OtzarConversationTurn {
-  turn_id            String    @id @default(uuid()) @db.Uuid
-  conversation_id    String    @db.Uuid
+  turn_id             String   @id @default(uuid()) @db.Uuid
+  conversation_id     String   @db.Uuid
   // Identity doctrine (contract §Identity): tenant + subject (the human user whose
   // private thread this is) + author (who wrote the turn: subject / twin / system) +
   // the participating Twin where applicable. NON-NULL org/subject/author on every
   // new turn (this table has no legacy rows). No ambiguous single actor_entity_id;
   // no visibility=ORG switch (org promotion is a governed lineage, contract §8).
-  org_entity_id      String    @db.Uuid
-  subject_entity_id  String    @db.Uuid
-  author_entity_id   String    @db.Uuid
-  twin_entity_id     String?   @db.Uuid
-  role               String    // USER | ASSISTANT | SYSTEM
-  content            String    // safe natural-language text only (ADR-0057 §16)
-  content_hash       String    // sha-256(content) — idempotency same/different-content check
-  sequence           Int       // monotonic per thread, allocated from OtzarConversation.turn_seq
-  request_id         String?   // client idempotency key (dedupes retries)
-  reply_to_turn_id   String?   @db.Uuid
-  action_ref         String?   @db.Uuid // WorkLedgerEntry (proposal/action) this turn concerns
-  supersedes_turn_id String?   @db.Uuid // correction/supersession lineage
-  source_channel     String    @default("CHAT") // CHAT | VOICE | AMBIENT
-  model_provider     String?   // safe model/provider label (no keys)
-  retention_class    String    @default("STANDARD")
+  org_entity_id       String   @db.Uuid
+  subject_entity_id   String   @db.Uuid
+  author_entity_id    String   @db.Uuid
+  twin_entity_id      String?  @db.Uuid
+  role                String // USER | ASSISTANT | SYSTEM
+  content             String // safe natural-language text only (ADR-0057 §16)
+  content_hash        String // sha-256(content) — idempotency same/different-content check
+  sequence            Int // monotonic per thread, allocated from OtzarConversation.turn_seq
+  request_id          String? // client idempotency key (dedupes retries)
+  reply_to_turn_id    String?  @db.Uuid
+  action_ref          String?  @db.Uuid // WorkLedgerEntry (proposal/action) this turn concerns
+  supersedes_turn_id  String?  @db.Uuid // correction/supersession lineage
+  source_channel      String   @default("CHAT") // CHAT | VOICE | AMBIENT
+  model_provider      String? // safe model/provider label (no keys)
+  retention_class     String   @default("STANDARD")
   // [OTZAR-CONTINUITY P5 Stage 1 §3/§5] When set, THIS assistant turn is the ONE
   // canonical response to the referenced USER turn (a logical request). @unique →
   // two concurrent retries can never both append a canonical reply. Follow-up /
   // status-update / correction / compensation turns leave it null.
   response_to_turn_id String?  @unique @db.Uuid
-  created_at         DateTime  @default(now())
+  created_at          DateTime @default(now())
 
   // Correctness backstop for the atomic allocator: no two turns share a sequence.
   @@unique([conversation_id, sequence])
@@ -2192,7 +2192,7 @@ model OtzarConversationRequest {
   org_entity_id               String    @db.Uuid
   subject_entity_id           String    @db.Uuid
   twin_entity_id              String    @db.Uuid
-  client_request_id           String?   // the client idempotency key (when supplied)
+  client_request_id           String? // the client idempotency key (when supplied)
   content_hash                String
   // RECEIVED | PROCESSING | COMPLETED | FAILED_RETRYABLE | FAILED_FINAL
   state                       String    @default("RECEIVED")
@@ -2220,6 +2220,98 @@ model OtzarConversationRequest {
   @@map("otzar_conversation_requests")
 }
 
+// [OTZAR STAGE-2 §5] Typed durable ORGANIZATIONAL OBLIGATION — a first-class unresolved
+// responsibility (a question awaiting an answer, a proposed action awaiting confirmation, a
+// promised follow-up, a blocked task, a requested clarification, an unresolved safety concern,
+// a handoff item, an escalation awaiting acknowledgement, a provider/tool result awaiting
+// review). An obligation LINKS the request/action/conversation spine — it is NOT an alias for a
+// request record and does NOT copy execution state. Execution truth (a calendar proposal's
+// NEEDS_CALLER_CONFIRMATION→EXECUTED) stays on the linked WorkLedgerEntry (action_ref); only
+// RESPONSIBILITY state (who owes what, is it acknowledged/resolved) lives here. Why a NEW table
+// and not WorkLedgerEntry fields: an obligation can exist with NO work item (a bare unanswered
+// question) and underlies/outlives work items. Additive, plain UUID refs (Otzar house style),
+// org+subject NON-NULL. SAFE content only — never lease/provider tokens, secrets, or raw payloads
+// (ADR-0057 §16). Lifecycle is a typed String state (TS-union enforced at the service tier, like
+// otzar_conversation_requests.state) to stay additive without enum-migration fragility.
+// Terminal states (COMPLETED | CANCELLED | SUPERSEDED | EXPIRED) are append-only; EXPIRED is NOT
+// success (never sets completed_at). Completion requires a VALIDATED durable evidence ref, read
+// THROUGH the linked turn/action's terminal state — never asserted on this row. See
+// docs/otzar/OTZAR_OBLIGATION_MODEL.md.
+model Obligation {
+  obligation_id            String    @id @default(uuid()) @db.Uuid
+  // Identity + scope (org + subject NON-NULL; this table has no legacy rows).
+  org_entity_id            String    @db.Uuid
+  subject_entity_id        String    @db.Uuid // the human user whose responsibility context this is
+  twin_entity_id           String?   @db.Uuid // participating Twin where material
+  // Optional governed extension points so the model can never become user/conversation-only
+  // (future: patient/client/case/encounter). Generic ref + typed class; unused in this increment.
+  subject_ref              String?   @db.Uuid
+  subject_ref_class        String? // PATIENT | CLIENT | CASE | ENCOUNTER (optional, governed later)
+  // Spine linkage (refs, not copies).
+  conversation_id          String?   @db.Uuid
+  source_turn_id           String?   @db.Uuid // the turn that raised the obligation
+  request_record_id        String?   @db.Uuid // links OtzarConversationRequest (NOT an alias)
+  action_ref               String?   @db.Uuid // links WorkLedgerEntry.ledger_entry_id — execution truth
+  escalation_id            String?   @db.Uuid // links EscalationRequest when escalated
+  parent_obligation_id     String?   @db.Uuid
+  superseded_obligation_id String?   @db.Uuid // this obligation supersedes that one (correction lineage)
+  // Responsibility.
+  creator_entity_id        String    @db.Uuid // who raised the obligation
+  responsible_entity_id    String    @db.Uuid // who currently owes it (subject / twin / human / team principal)
+  assigned_workspace_id    String?   @db.Uuid // team/workspace assignment
+  delegated_principal_id   String?   @db.Uuid // delegated-to principal
+  authority_scope          String? // safe permission/authority scope label
+  // Meaning.
+  obligation_type          String // QUESTION_RESPONSE | ACTION_CONFIRMATION | FOLLOW_UP | BLOCKED_TASK | CLARIFICATION | SAFETY_CONCERN | HANDOFF | ESCALATION_ACK | PROVIDER_REVIEW
+  title                    String // safe short title (no secrets/raw payload)
+  details                  Json      @default("{}") // safe structured details (allowlisted, no forbidden tokens)
+  priority                 String    @default("ROUTINE") // ROUTINE | ELEVATED | URGENT | CRITICAL
+  required_response_class  String? // CONFIRMATION | ANSWER | ACK | COMPLETION | REVIEW — what closes it
+  source_channel           String    @default("CHAT") // CHAT | VOICE | AMBIENT | SYSTEM
+  provenance_class         String    @default("CONVERSATION") // CONVERSATION | PROVIDER | INBOUND_SIGNAL | SYSTEM
+  // Lifecycle (typed String state + optimistic-concurrency version for CAS transitions).
+  state                    String    @default("OPEN") // OPEN | AWAITING_RESPONSE | ACKNOWLEDGED | IN_PROGRESS | BLOCKED | ESCALATED | COMPLETED | CANCELLED | SUPERSEDED | EXPIRED
+  version                  Int       @default(0)
+  // Time.
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @updatedAt
+  acknowledged_at          DateTime?
+  due_at                   DateTime?
+  escalate_at              DateTime?
+  completed_at             DateTime?
+  cancelled_at             DateTime?
+  superseded_at            DateTime?
+  expired_at               DateTime?
+  source_timezone          String?
+  effective_at             DateTime? // when the obligation's subject-time applies (e.g. due time in subject tz)
+  // Evidence (completion requires a validated durable ref — a Json blob alone never satisfies).
+  acknowledged_turn_id     String?   @db.Uuid
+  completion_turn_id       String?   @db.Uuid
+  completion_action_ref    String?   @db.Uuid // action/provider result that evidences completion
+  completion_evidence      Json? // safe structured evidence (never raw payload/tokens)
+  audit_event_id           String?   @db.Uuid
+  // Safety.
+  visibility_scope         String    @default("SUBJECT") // SUBJECT | TEAM | ORG (permission projection)
+  retention_class          String    @default("STANDARD")
+
+  // Create-or-get idempotency: a caller-computed deterministic origin key (e.g.
+  // "awaiting_confirmation:<ledger_entry_id>", "question:<source_turn_id>") is UNIQUE per org.
+  // NULLs are exempt (Postgres treats NULLs as distinct) — ad-hoc obligations without a natural
+  // origin are allowed. Intake is create-then-catch-P2002-and-fetch-existing.
+  origin_key String?
+
+  @@unique([org_entity_id, origin_key])
+  @@index([org_entity_id, subject_entity_id, state])
+  @@index([org_entity_id, state, created_at])
+  @@index([responsible_entity_id, state])
+  @@index([conversation_id])
+  @@index([request_record_id])
+  @@index([action_ref])
+  @@index([parent_obligation_id])
+  @@index([state, escalate_at])
+  @@map("obligations")
+}
+
 model AgentTemplate {
   template_id      String   @id @default(uuid()) @db.Uuid
   role_name        String   @unique
@@ -2228,7 +2320,7 @@ model AgentTemplate {
   // [GAP-H TOOLS] Provider keys this role's twin needs connected before
   // its readiness can honestly say ready (matched against the org's
   // enabled ConnectorBindings). Empty = requirements not modeled.
-  required_tools String[] @default([])
+  required_tools   String[] @default([])
   skill_packages   String[] @default([])
   autonomy_default String   @default("APPROVAL_REQUIRED")
   is_custom        Boolean  @default(false)
@@ -3883,7 +3975,7 @@ model ExternalCollaborator {
 
   workspace_memberships WorkspaceExternalMembership[]
   external_commitments  ExternalCommitment[]
-  external_organization ExternalOrganization? @relation(fields: [external_org_id], references: [external_org_id])
+  external_organization ExternalOrganization?            @relation(fields: [external_org_id], references: [external_org_id])
   identifiers           ExternalCollaboratorIdentifier[]
 
   @@index([org_entity_id])
