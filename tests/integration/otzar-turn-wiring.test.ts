@@ -7,7 +7,7 @@
 // CONNECTS TO: apps/api/src/services/otzar/otzar.service.ts (beginTurnPersistence /
 //              persistAssistantTurn / reconstructFromAssistantTurn).
 
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   AuthService, COEService, HiveService, FixtureBasedEmbeddingProvider,
@@ -89,22 +89,26 @@ async function waitUntil(fn: () => boolean, timeoutMs = 4000): Promise<void> {
   }
 }
 
-// [C2/C5 failure injection] ONE stable spy on the turn-insert, gated by a flag, so we can
-// force ASSISTANT-turn persistence to fail for a single test without fragile per-test
-// spy/restore churn (which corrupted the mock and leaked across tests).
-const realTurnCreate = prisma.otzarConversationTurn.create.bind(prisma.otzarConversationTurn);
-let failAssistantPersist = false;
+// [C2/C5 failure injection] Force the ASSISTANT-turn insert to fail for exactly ONE
+// conductSession call, then restore synchronously in `finally` — BEFORE any other test or
+// file runs. Directly swaps the method (no vi.spyOn global state) so it can never leak
+// across files in the shared `forks` pool (a spy on the shared prisma singleton did).
+async function withAssistantPersistFailing<T>(fn: () => Promise<T>): Promise<T> {
+  const model = prisma.otzarConversationTurn as unknown as { create: (a: unknown) => Promise<unknown> };
+  const original = model.create.bind(prisma.otzarConversationTurn);
+  model.create = (a: unknown) =>
+    (a as { data?: { role?: string } })?.data?.role === "ASSISTANT"
+      ? Promise.reject(new Error("injected assistant-persist failure"))
+      : original(a);
+  try {
+    return await fn();
+  } finally {
+    model.create = original; // ALWAYS restore, even on throw
+  }
+}
 
-beforeAll(async () => {
-  await ensureAuditTriggers();
-  vi.spyOn(prisma.otzarConversationTurn, "create").mockImplementation((a: Parameters<typeof realTurnCreate>[0]) =>
-    failAssistantPersist && (a as { data?: { role?: string } })?.data?.role === "ASSISTANT"
-      ? (Promise.reject(new Error("injected assistant-persist failure")) as ReturnType<typeof realTurnCreate>)
-      : realTurnCreate(a),
-  );
-});
-afterEach(() => { failAssistantPersist = false; }); // default OFF between tests
-afterAll(async () => { vi.restoreAllMocks(); await cleanupTestData(); await prisma.$disconnect(); });
+beforeAll(async () => { await ensureAuditTriggers(); });
+afterAll(async () => { await cleanupTestData(); await prisma.$disconnect(); });
 
 describe("conductSession durable turn wiring (P5 Stage 1)", () => {
   it("persists a USER turn then an ASSISTANT (Twin-authored) turn, ordered 1/2, with correct identity", async () => {
@@ -330,10 +334,11 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     const { auth, otzar, llm } = makeServices();
     const { token, userId } = await orgUserWithTwin(auth);
     const convId = randomUUID();
-    failAssistantPersist = true; // ASSISTANT-turn insert fails this attempt only
     const llmBefore = llm.getCalls().length;
     const msg = "put a budget review on my calendar tomorrow at 3pm";
-    const first = await otzar.conductSession({ token, message: msg, request_id: "c5-1", conversation_id: convId });
+    const first = await withAssistantPersistFailing(() =>
+      otzar.conductSession({ token, message: msg, request_id: "c5-1", conversation_id: convId }),
+    );
     expect(first.ok).toBe(false);
     if (first.ok) return;
     expect(first.code).toBe("OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
@@ -349,8 +354,7 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     // No ASSISTANT turn was durably written.
     expect((await turnsOf(convId)).filter((t) => t.role === "ASSISTANT")).toHaveLength(0);
 
-    // Un-inject; retry with the SAME request_id → reconstruct from the durable action.
-    failAssistantPersist = false;
+    // Retry with the SAME request_id (persistence restored) → reconstruct from the action.
     const retry = await otzar.conductSession({ token, message: msg, request_id: "c5-1", conversation_id: convId });
     expect(retry.ok).toBe(true);
     if (!retry.ok) return;
@@ -373,8 +377,9 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     const wired = makeServicesWithLLM(llm as unknown as LLMProvider);
     const { token } = await orgUserWithTwin(wired.auth);
     const convId = randomUUID();
-    failAssistantPersist = true;
-    const first = await wired.otzar.conductSession({ token, message: "give me a quick planning tip", request_id: "c2-1", conversation_id: convId });
+    const first = await withAssistantPersistFailing(() =>
+      wired.otzar.conductSession({ token, message: "give me a quick planning tip", request_id: "c2-1", conversation_id: convId }),
+    );
     expect(first.ok).toBe(false);
     if (first.ok) return;
     expect(first.code).toBe("OTZAR_ASSISTANT_TURN_PERSIST_FAILED");
@@ -383,7 +388,6 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     expect(reqFail!.state).toBe("FAILED_RETRYABLE");
     expect(reqFail!.action_ref).toBeNull(); // pure LLM → no action to reconstruct from
 
-    failAssistantPersist = false;
     const retry = await wired.otzar.conductSession({ token, message: "give me a quick planning tip", request_id: "c2-1", conversation_id: convId });
     expect(retry.ok).toBe(true);
     if (!retry.ok) return;
