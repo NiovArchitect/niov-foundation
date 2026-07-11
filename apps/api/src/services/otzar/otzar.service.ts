@@ -989,6 +989,16 @@ export class OtzarService {
     // Non-mutating ambient acts (disambiguation/clarification/none) defer as before.
     let ambientUserTurnId: string | null = null;
     let ambientContinuityConvId: string | undefined = undefined;
+    // [OTZAR-CONTINUITY C1] The durable thread a DEFERRED (ambient) turn's USER +
+    // ASSISTANT turns are persisted to. For a mutating act it is the resolved
+    // obligation/proposal thread; for a non-mutating act (disambiguate / clarify_past /
+    // generic) it is a freshly minted per-turn thread (same as the legacy late mint,
+    // only earlier so the USER turn is durable + the request is claimed BEFORE the model
+    // or any continuity work). It is KEPT SEPARATE from the conversation_id passed to
+    // handleCalendarContinuity — that must stay org-wide (undefined) for non-mutating
+    // acts, or findActorPendingProposals would scope pending lookup to the empty new
+    // thread and break ambient confirm/ordinal/revise (the #620 hazard).
+    let ambientThreadId: string | null = null;
     if (turnCtx.deferred && orgEntityId !== null) {
       const resolution = await resolveContinuityThread({
         actor_entity_id: ownerEntityId,
@@ -997,6 +1007,7 @@ export class OtzarService {
         temporal: temporalCtx,
       });
       if (resolution.will_mutate && resolution.thread_id !== null) {
+        ambientThreadId = resolution.thread_id;
         // §1 FAIL-CLOSED: the thread must be created AND the USER turn persisted BEFORE
         // any Phase-C mutation. If either fails, return a stable failure and perform NO
         // WorkLedger create/update, no proposal, no confirmation claim, no provider call.
@@ -1043,6 +1054,52 @@ export class OtzarService {
         if (gate.replay !== null) return gate.replay;
         if (gate.inProgress !== null) return gate.inProgress;
         requestLease = gate.lease;
+      } else {
+        // [OTZAR-CONTINUITY C1] Non-mutating DEFERRED act (disambiguate / clarify_past /
+        // generic-LLM): still an accepted org-scoped turn → it MUST have a durable USER
+        // turn + request record + processing claim BEFORE handleCalendarContinuity or the
+        // model. Mint a per-turn thread (fail-closed), persist the USER turn, claim the
+        // request. ambientContinuityConvId stays undefined so continuity's pending lookup
+        // remains org-wide by recency (see the #620 note above).
+        const minted = randomUUID();
+        try {
+          await createThread({
+            conversation_id: minted,
+            org_entity_id: orgEntityId,
+            subject_entity_id: ownerEntityId,
+            twin_entity_id: twin.entity_id,
+            timezone: temporalCtx.timezone,
+          });
+        } catch (e) {
+          logger.error({ err: e, conversationId: minted }, "otzar ambient (non-mutating) thread create failed (fail-closed)");
+          return { ok: false, code: "OTZAR_TURN_PERSIST_FAILED", message: "Could not durably start this conversation; it was not processed. Please retry." };
+        }
+        ambientUserTurnId = await this.persistDeferredUserTurn({
+          conversationId: minted,
+          orgEntityId,
+          subjectEntityId: ownerEntityId,
+          twinId: twin.entity_id,
+          requestId: input.request_id,
+          content: input.message,
+          sourceChannel: input.source_channel ?? "CHAT",
+        });
+        if (ambientUserTurnId === null) {
+          return { ok: false, code: "OTZAR_TURN_PERSIST_FAILED", message: "Could not durably record your message; it was not processed. Please retry." };
+        }
+        ambientThreadId = minted;
+        const gate = await this.openRequestGate({
+          conversationId: minted,
+          userTurnId: ambientUserTurnId,
+          orgEntityId,
+          subjectEntityId: ownerEntityId,
+          twinId: twin.entity_id,
+          clientRequestId: input.request_id,
+          content: input.message,
+          nowMs: temporalCtx.now_ms,
+        });
+        if (gate.replay !== null) return gate.replay;
+        if (gate.inProgress !== null) return gate.inProgress;
+        requestLease = gate.lease;
       }
     }
 
@@ -1057,11 +1114,16 @@ export class OtzarService {
       temporal: temporalCtx,
     });
     if (continuity !== null) {
-      const convId = await this.resolveContinuityConversationId(
-        continuity.conversation_id ?? turnCtx.conversationId ?? ambientContinuityConvId ?? input.conversation_id,
-        ownerEntityId,
-        twin.entity_id,
-      );
+      // [OTZAR-CONTINUITY C1] For a deferred turn the USER turn + request were persisted
+      // to ambientThreadId in Phase B; the ASSISTANT turn + finalize MUST use that same
+      // thread (for every mutating act it already equals the continuity response thread).
+      const convId = turnCtx.deferred && ambientThreadId !== null
+        ? ambientThreadId
+        : await this.resolveContinuityConversationId(
+            continuity.conversation_id ?? turnCtx.conversationId ?? ambientContinuityConvId ?? input.conversation_id,
+            ownerEntityId,
+            twin.entity_id,
+          );
       if (orgEntityId !== null) {
         // Ambient mutating → the USER turn was already persisted (Phase B, before the
         // mutation). Ambient non-mutating → persist it now (no mutation occurred).
@@ -1429,6 +1491,14 @@ export class OtzarService {
       // front and its row already exists (the user turn was persisted to it). Just
       // count the message — no re-resolution, no recency guessing.
       conversationId = turnCtx.conversationId;
+      await prisma.otzarConversation
+        .update({ where: { conversation_id: conversationId }, data: { message_count: { increment: 1 } } })
+        .catch(() => undefined);
+    } else if (turnCtx.deferred && ambientThreadId !== null) {
+      // [OTZAR-CONTINUITY C1] Deferred (ambient) org turn: the thread was minted + the
+      // USER turn persisted + the request claimed in Phase B, BEFORE the model ran. Reuse
+      // it — never mint a second thread here (which would orphan the USER turn + request).
+      conversationId = ambientThreadId;
       await prisma.otzarConversation
         .update({ where: { conversation_id: conversationId }, data: { message_count: { increment: 1 } } })
         .catch(() => undefined);
