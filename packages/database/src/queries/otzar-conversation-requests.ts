@@ -140,10 +140,15 @@ export async function failRequest(args: {
   final: boolean;
   failure_code: string;
 }): Promise<boolean> {
+  // A FAILED_RETRYABLE transition RELEASES the lease immediately (expire it now) so a
+  // legitimate retry can reclaim without waiting out the full lease TTL — otherwise the
+  // caller would be wrongly refused as still-in-progress for up to DEFAULT_LEASE_MS.
+  // FAILED_FINAL is terminal and never reclaimed, so its lease state is immaterial.
   const n = await prisma.$executeRaw`
     UPDATE otzar_conversation_requests
        SET state = ${args.final ? "FAILED_FINAL" : "FAILED_RETRYABLE"},
            failure_code = ${args.failure_code},
+           lease_expires_at = now() - interval '1 second',
            updated_at = now()
      WHERE request_record_id = ${args.request_record_id}::uuid
        AND lease_token = ${args.leaseToken}`;

@@ -22,7 +22,7 @@ import { cleanupTestData, ensureAuditTriggers, makeEntityInput } from "../helper
 const TEST_JWT_SECRET = "otzar-wiring-test-secret";
 const TEST_KEY = randomBytes(32);
 
-function makeServices() {
+function makeServicesWithLLM(llm: LLMProvider) {
   const auth = new AuthService({ jwtSecret: TEST_JWT_SECRET, nonceStore: new MemoryNonceStore() });
   const declarationStore = new MemoryNonceStore();
   const contentStore = new MemoryContentStore();
@@ -30,16 +30,20 @@ function makeServices() {
   const compliance = new ComplianceService(auth);
   const negotiate = new NegotiateService(auth, declarationStore, TEST_JWT_SECRET, compliance);
   const read = new ReadService(auth, declarationStore, contentStore, TEST_JWT_SECRET);
-  const write = new WriteService(auth, declarationStore, contentStore, encryption, TEST_JWT_SECRET, new FixtureBasedEmbeddingProvider());
+  void new WriteService(auth, declarationStore, contentStore, encryption, TEST_JWT_SECRET, new FixtureBasedEmbeddingProvider());
   const coe = new COEService(auth, negotiate, read, encryption);
   void new HiveService(auth, encryption, contentStore);
+  const otzar = new OtzarService(auth, coe, llm, new MemoryKVCache());
+  return { auth, otzar };
+}
+
+function makeServices() {
   const llm = new MockLLMProvider([
     { ok: true, text: "Here is what I can help with.", provider: "mock", model: "mock-1" },
     { ok: true, text: "Second distinct response.", provider: "mock", model: "mock-1" },
     { ok: true, text: "Third response.", provider: "mock", model: "mock-1" },
   ]);
-  const otzar = new OtzarService(auth, coe, llm as LLMProvider, new MemoryKVCache());
-  return { auth, otzar, llm };
+  return { ...makeServicesWithLLM(llm as unknown as LLMProvider), llm };
 }
 
 async function orgUserWithTwin(auth: AuthService): Promise<{ token: string; userId: string; twinId: string; orgId: string }> {
@@ -58,6 +62,32 @@ async function orgUserWithTwin(auth: AuthService): Promise<{ token: string; user
 
 const turnsOf = (conversationId: string) =>
   prisma.otzarConversationTurn.findMany({ where: { conversation_id: conversationId }, orderBy: { sequence: "asc" } });
+
+// A provider whose response can be parked mid-flight so a concurrent duplicate is
+// forced to observe the winner's in-flight PROCESSING state (real barrier, not luck).
+class GatedLLM implements LLMProvider {
+  readonly name = "gated";
+  private count = 0;
+  private blocking = false;
+  private gate: Promise<void> | null = null;
+  private opener: (() => void) | null = null;
+  arm(): void { this.gate = new Promise<void>((r) => { this.opener = r; }); this.blocking = true; }
+  release(): void { this.blocking = false; this.opener?.(); this.opener = null; }
+  getCalls(): number { return this.count; }
+  async generateResponse(): Promise<{ ok: true; text: string; provider: string; model: string }> {
+    this.count += 1;
+    if (this.blocking && this.gate !== null) await this.gate;
+    return { ok: true, text: "gated answer", provider: "gated", model: "g-1" };
+  }
+}
+
+async function waitUntil(fn: () => boolean, timeoutMs = 4000): Promise<void> {
+  const start = Date.now();
+  while (!fn()) {
+    if (Date.now() - start > timeoutMs) throw new Error("waitUntil timed out");
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
 
 beforeAll(async () => { await ensureAuditTriggers(); });
 afterAll(async () => { await cleanupTestData(); await prisma.$disconnect(); });
@@ -162,6 +192,99 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     const proposal = await prisma.workLedgerEntry.findFirst({ where: { owner_entity_id: userId, ledger_type: "MEETING", conversation_id: r.conversation_id } });
     expect(proposal).not.toBeNull();
     expect(turns[0]!.created_at.getTime()).toBeLessThanOrEqual(proposal!.created_at.getTime());
+  });
+
+  it("§9 REAL BARRIER: two concurrent duplicates (same request_id) → exactly ONE processes, ONE canonical result", async () => {
+    // Build services with a gated provider so the winner is provably still processing
+    // when the loser attempts its claim (not a timing accident).
+    const gated = new GatedLLM();
+    const wired = makeServicesWithLLM(gated as unknown as LLMProvider);
+    const { token } = await orgUserWithTwin(wired.auth);
+
+    // Warm-up establishes the server thread id (gate not armed → returns immediately).
+    const warm = await wired.otzar.conductSession({ token, message: "warmup" });
+    expect(warm.ok).toBe(true);
+    if (!warm.ok) return;
+    const convId = warm.conversation_id;
+    const callsAfterWarm = gated.getCalls();
+
+    // Arm the gate, then fire two identical requests concurrently.
+    gated.arm();
+    const p1 = wired.otzar.conductSession({ token, message: "do the thing", request_id: "race-9", conversation_id: convId });
+    const p2 = wired.otzar.conductSession({ token, message: "do the thing", request_id: "race-9", conversation_id: convId });
+
+    // Wait until the winner is parked inside the provider (its claim succeeded and it
+    // reached the LLM). The loser, meanwhile, must have hit PROCESSING and bailed.
+    await waitUntil(() => gated.getCalls() === callsAfterWarm + 1);
+    gated.release();
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    // Exactly ONE provider call for the raced request (warm + 1). No duplicate provider.
+    expect(gated.getCalls()).toBe(callsAfterWarm + 1);
+
+    // Exactly one USER turn and one ASSISTANT turn for the raced content.
+    const turns = await turnsOf(convId);
+    const racedUser = turns.filter((t) => t.role === "USER" && t.content === "do the thing");
+    expect(racedUser).toHaveLength(1);
+    const racedAsst = turns.filter((t) => t.role === "ASSISTANT" && t.reply_to_turn_id === racedUser[0]!.turn_id);
+    expect(racedAsst).toHaveLength(1);
+
+    // Exactly one request record for the raced turn, COMPLETED, canonical link set.
+    const reqs = await prisma.otzarConversationRequest.findMany({ where: { user_turn_id: racedUser[0]!.turn_id } });
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]!.state).toBe("COMPLETED");
+    expect(reqs[0]!.canonical_assistant_turn_id).toBe(racedAsst[0]!.turn_id);
+
+    // One caller got the real answer; the other either replayed it or was refused
+    // as in-progress. Never two distinct answers, never a duplicate side effect.
+    const outcomes = [r1, r2];
+    const answered = outcomes.filter((r) => r.ok && r.response === "gated answer");
+    const inProgress = outcomes.filter((r) => !r.ok && r.code === "OTZAR_REQUEST_IN_PROGRESS");
+    expect(answered.length + inProgress.length).toBe(2);
+    expect(answered.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("§10 FAILURE INJECTION: provider fails after the claim → FAILED_RETRYABLE, then a same-request_id retry reclaims and succeeds", async () => {
+    const llm = new MockLLMProvider([
+      { ok: true, text: "warmup ok", provider: "mock", model: "m" }, // warm-up
+      { ok: false, code: "DOWN", fallback_message: "temporarily unavailable", provider: "mock" }, // first real attempt
+      { ok: true, text: "recovered answer", provider: "mock", model: "m" }, // retry
+    ]);
+    const wired = makeServicesWithLLM(llm as unknown as LLMProvider);
+    const { token } = await orgUserWithTwin(wired.auth);
+
+    const warm = await wired.otzar.conductSession({ token, message: "warmup" });
+    expect(warm.ok).toBe(true);
+    if (!warm.ok) return;
+    const convId = warm.conversation_id;
+
+    // First real attempt: provider fails AFTER the request was claimed.
+    const fail = await wired.otzar.conductSession({ token, message: "do it", request_id: "retry-10", conversation_id: convId });
+    expect(fail.ok).toBe(false);
+    if (fail.ok) return;
+    expect(fail.code).toBe("LLM_UNAVAILABLE");
+
+    const userTurn = (await turnsOf(convId)).find((t) => t.role === "USER" && t.content === "do it");
+    expect(userTurn).toBeDefined();
+    const afterFail = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    // The claim was released as retryable — NOT left PROCESSING for the lease to decay.
+    expect(afterFail!.state).toBe("FAILED_RETRYABLE");
+    expect(afterFail!.canonical_assistant_turn_id).toBeNull();
+    // No ASSISTANT turn was persisted for the failed attempt.
+    expect((await turnsOf(convId)).filter((t) => t.role === "ASSISTANT" && t.reply_to_turn_id === userTurn!.turn_id)).toHaveLength(0);
+
+    // Retry with the SAME request_id reclaims the request and completes.
+    const ok = await wired.otzar.conductSession({ token, message: "do it", request_id: "retry-10", conversation_id: convId });
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) return;
+    expect(ok.response).toBe("recovered answer");
+    const asst = (await turnsOf(convId)).filter((t) => t.role === "ASSISTANT" && t.reply_to_turn_id === userTurn!.turn_id);
+    expect(asst).toHaveLength(1);
+    const afterOk = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(afterOk!.state).toBe("COMPLETED");
+    expect(afterOk!.canonical_assistant_turn_id).toBe(asst[0]!.turn_id);
+    // Still exactly ONE USER turn for the raced request_id (idempotent).
+    expect((await turnsOf(convId)).filter((t) => t.role === "USER" && t.content === "do it")).toHaveLength(1);
   });
 
   it("§8: source_channel is carried into durable turn lineage (VOICE / AMBIENT / CHAT)", async () => {
