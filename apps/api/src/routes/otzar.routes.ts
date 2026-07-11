@@ -584,6 +584,57 @@ export async function registerOtzarRoutes(
     },
   );
 
+  // [OTZAR-CONTINUITY C6] Server thread restoration (durable-model). Bearer + "read".
+  // GET /api/v1/otzar/threads/restore -- the caller's most-recent ACTIVE thread (or null,
+  // never invented) + a bounded recent list. CT restores from THIS on login/refresh.
+  app.get<{ Querystring: { limit?: string; include_archived?: string } }>(
+    "/api/v1/otzar/threads/restore",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const rawLimit = Number(request.query.limit);
+      const result = await otzarService.restoreThreads({
+        token,
+        ...(Number.isFinite(rawLimit) && rawLimit > 0 ? { limit: Math.floor(rawLimit) } : {}),
+        includeArchived: request.query.include_archived === "true",
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // GET /api/v1/otzar/threads/:id -- a specific thread + bounded recent turns + unresolved
+  // summary (scope-gated). OTZAR_THREAD_FORBIDDEN (403) for foreign/deleted (no disclosure).
+  app.get<{ Params: { id: string }; Querystring: { turn_limit?: string } }>(
+    "/api/v1/otzar/threads/:id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const rawTurnLimit = Number(request.query.turn_limit);
+      const result = await otzarService.getThreadDetail({
+        token,
+        conversation_id: request.params.id,
+        ...(Number.isFinite(rawTurnLimit) && rawTurnLimit > 0 ? { turn_limit: Math.floor(rawTurnLimit) } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // GET /api/v1/otzar/requests/:id/status -- safe status of the caller's OWN request (for
+  // CT reconcile of a locally-pending submission). OTZAR_THREAD_FORBIDDEN (403) if foreign.
+  // Never returns lease/provider tokens or raw action internals.
+  app.get<{ Params: { id: string } }>(
+    "/api/v1/otzar/requests/:id/status",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getRequestStatus({ token, request_record_id: request.params.id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
   // GET /api/v1/otzar/conversations/:id/corrections -- safe, self-scoped
   // per-conversation correction-signal projection (ADR-0055 Wave 2C).
   // Bearer + "read" only (no admin gate). Returns counts + last-seen +
