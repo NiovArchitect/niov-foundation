@@ -433,6 +433,68 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     expect(reqOk!.canonical_assistant_turn_id).toBe(turns.find((t) => t.role === "ASSISTANT")!.turn_id);
   });
 
+  it("first-turn contract: a client-supplied NEW conversation_id is created under exact scope + attaches the USER turn + request; foreign caller refused; duplicate replays", async () => {
+    const { auth, otzar, llm } = makeServices();
+    const a = await orgUserWithTwin(auth);
+    const b = await orgUserWithTwin(auth);
+    const cid = randomUUID(); // client-minted; does not exist yet
+    const first = await otzar.conductSession({ token: a.token, message: "the very first turn", request_id: "ft-1", conversation_id: cid });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.conversation_id).toBe(cid); // server used the client's id (create-if-missing)
+    // The thread exists under A's exact scope; the USER turn + request are attached to it.
+    const conv = await prisma.otzarConversation.findUnique({ where: { conversation_id: cid } });
+    expect(conv!.entity_id).toBe(a.userId);
+    const userTurn = (await turnsOf(cid)).find((t) => t.role === "USER");
+    expect(userTurn).toBeDefined();
+    const req = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(req!.conversation_id).toBe(cid);
+    expect(req!.subject_entity_id).toBe(a.userId);
+    // A FOREIGN caller cannot claim A's UUID (assertThreadScope refuses before any create).
+    const foreign = await otzar.conductSession({ token: b.token, message: "claim it", request_id: "ft-x", conversation_id: cid });
+    expect(foreign.ok).toBe(false);
+    if (foreign.ok) return;
+    expect(foreign.code).toBe("OTZAR_THREAD_FORBIDDEN");
+    // A DUPLICATE first submission (same cid + request_id + content) replays — no 2nd USER
+    // turn, no 2nd request, no 2nd model call.
+    const llmBefore = llm.getCalls().length;
+    const dup = await otzar.conductSession({ token: a.token, message: "the very first turn", request_id: "ft-1", conversation_id: cid });
+    expect(dup.ok).toBe(true);
+    expect(llm.getCalls().length).toBe(llmBefore);
+    expect((await turnsOf(cid)).filter((t) => t.role === "USER")).toHaveLength(1);
+    const reqCount = await prisma.otzarConversationRequest.count({ where: { conversation_id: cid } });
+    expect(reqCount).toBe(1);
+  });
+
+  it("first-turn concurrency: two SIMULTANEOUS first submissions (same client cid + request_id) → ONE thread, ONE USER turn, ONE request, ONE canonical (no divergent ownership)", async () => {
+    const gated = new GatedLLM();
+    const wired = makeServicesWithLLM(gated as unknown as LLMProvider);
+    const { token, userId } = await (async () => {
+      const u = await orgUserWithTwin(wired.auth);
+      return { token: u.token, userId: u.userId };
+    })();
+    const cid = randomUUID();
+    gated.arm();
+    const p1 = wired.otzar.conductSession({ token, message: "concurrent first", request_id: "ftc-1", conversation_id: cid });
+    const p2 = wired.otzar.conductSession({ token, message: "concurrent first", request_id: "ftc-1", conversation_id: cid });
+    await waitUntil(() => gated.getCalls() >= 1);
+    gated.release();
+    const [r1, r2] = await Promise.all([p1, p2]);
+    // Exactly one processing call; one thread; one USER turn; one request; one canonical.
+    expect(gated.getCalls()).toBe(1);
+    expect(await prisma.otzarConversation.count({ where: { conversation_id: cid } })).toBe(1);
+    const userTurns = (await turnsOf(cid)).filter((t) => t.role === "USER");
+    expect(userTurns).toHaveLength(1);
+    const reqs = await prisma.otzarConversationRequest.findMany({ where: { conversation_id: cid } });
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]!.subject_entity_id).toBe(userId);
+    expect((await turnsOf(cid)).filter((t) => t.role === "ASSISTANT")).toHaveLength(1);
+    const answered = [r1, r2].filter((r) => r.ok);
+    const refused = [r1, r2].filter((r) => !r.ok && (r.code === "OTZAR_REQUEST_IN_PROGRESS"));
+    expect(answered.length + refused.length).toBe(2);
+    expect(answered.length).toBeGreaterThanOrEqual(1);
+  });
+
   it("§8: source_channel is carried into durable turn lineage (VOICE / AMBIENT / CHAT)", async () => {
     const { auth, otzar } = makeServices();
     const { token } = await orgUserWithTwin(auth);

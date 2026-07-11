@@ -255,16 +255,29 @@ export async function getThreadForRestore(
  */
 export async function listUnresolvedRequests(
   scope: RestoreScope,
-  options: { conversation_id?: string; limit?: number } = {},
+  options: { conversation_id?: string; limit?: number; recent_completed_ms?: number } = {},
 ): Promise<SafeRequestStatus[]> {
   const take = Math.min(Math.max(options.limit ?? 20, 1), 50);
+  // [OTZAR-CONTINUITY response-loss] A BOUNDED recent-completed recovery window lets a
+  // second tab recover an ordinary request that COMPLETED before it opened (its response was
+  // lost). Only within a scoped conversation + a conservative window (clamped ≤ 10 min) —
+  // this is recovery, NOT an unbounded history dump.
+  const windowMs = options.recent_completed_ms !== undefined && options.conversation_id !== undefined
+    ? Math.min(Math.max(options.recent_completed_ms, 0), 10 * 60_000)
+    : 0;
+  const recentCutoff = windowMs > 0 ? new Date(Date.now() - windowMs) : null;
+  const or: Array<Record<string, unknown>> = [
+    { state: { in: NON_TERMINAL_STATES } },
+    { response_class: "AWAITING_CONFIRMATION" },
+  ];
+  if (recentCutoff !== null) or.push({ state: "COMPLETED", completed_at: { gte: recentCutoff } });
   const rows = await prisma.otzarConversationRequest.findMany({
     where: {
       org_entity_id: scope.org_entity_id,
       subject_entity_id: scope.subject_entity_id,
       twin_entity_id: scope.twin_entity_id,
       ...(options.conversation_id !== undefined ? { conversation_id: options.conversation_id } : {}),
-      OR: [{ state: { in: NON_TERMINAL_STATES } }, { response_class: "AWAITING_CONFIRMATION" }],
+      OR: or,
     },
     orderBy: [{ created_at: "desc" }],
     take,

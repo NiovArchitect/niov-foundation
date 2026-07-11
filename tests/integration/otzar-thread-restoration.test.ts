@@ -245,6 +245,31 @@ describe("C6 server thread restoration", () => {
     expect(unresolvedB.unresolved).toEqual([]);
   });
 
+  it("response-loss: a recently-COMPLETED ordinary request is recoverable within the bounded window (with canonical text), excluded without it", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgUserWithTwin(auth);
+    // An ordinary answered turn → the request COMPLETES (state COMPLETED, class ANSWERED).
+    const turn = await otzar.conductSession({ token: a.token, message: "a normal question", request_id: "rc-1" });
+    expect(turn.ok).toBe(true);
+    if (!turn.ok) return;
+    // Without the recovery window, a COMPLETED/ANSWERED request is NOT "unresolved".
+    const withoutWindow = await otzar.listUnresolved({ token: a.token, conversation_id: turn.conversation_id });
+    expect(withoutWindow.ok).toBe(true);
+    if (!withoutWindow.ok) return;
+    expect(withoutWindow.unresolved.some((r) => r.state === "COMPLETED")).toBe(false);
+    // WITH the bounded recovery window, the just-completed request IS returned so a second
+    // tab that lost the response can render the exact canonical result.
+    const withWindow = await otzar.listUnresolved({ token: a.token, conversation_id: turn.conversation_id, recent_completed_ms: 5 * 60_000 });
+    if (!withWindow.ok) return;
+    const completed = withWindow.unresolved.find((r) => r.state === "COMPLETED");
+    expect(completed).toBeDefined();
+    expect(completed!.has_canonical_result).toBe(true);
+    expect(typeof completed!.canonical_text).toBe("string");
+    expect((completed!.canonical_text ?? "").length).toBeGreaterThan(0);
+    // Still no sensitive-field leak.
+    expect(JSON.stringify(withWindow.unresolved)).not.toMatch(/lease|provider_attempt/i);
+  });
+
   it("restoreActiveThread never returns an ARCHIVED or DELETED thread", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUserWithTwin(auth);
