@@ -951,9 +951,9 @@ export class OtzarService {
     const continuity = await handleCalendarContinuity({
       actor_entity_id: ownerEntityId,
       org_entity_id: orgEntityId,
-      // Pass the authoritative thread so proposals bind to it and confirmations
-      // resolve within it (the resolver already restored the right thread for a
-      // bare "yes"). Orgless callers fall back to the raw client id.
+      // Supplied thread (normal CT path) → the validated authoritative id, so proposals
+      // bind to it and confirmations resolve within it. Ambient (deferred/no-id) →
+      // undefined, so the continuity layer's shipped recency behaviour is UNCHANGED.
       conversation_id: turnCtx.conversationId ?? input.conversation_id,
       message: input.message,
       temporal: temporalCtx,
@@ -964,16 +964,30 @@ export class OtzarService {
         ownerEntityId,
         twin.entity_id,
       );
-      // Persist the ASSISTANT turn (author = Twin) before the response is durable.
-      await this.persistAssistantTurn({
-        conversationId: turnCtx.conversationId !== null ? convId : null,
-        orgEntityId,
-        subjectEntityId: ownerEntityId,
-        twinId: twin.entity_id,
-        userTurnId: turnCtx.userTurnId,
-        content: continuity.response,
-        actionRef: continuity.ledger_entry_id ?? null,
-      });
+      if (orgEntityId !== null) {
+        // For the deferred (ambient) path the user turn was not yet persisted — do it
+        // now against continuity's own resolved thread (continuity is model-free, so
+        // this still precedes any tool execution). Then the ASSISTANT turn (Twin).
+        const userTurnId = turnCtx.deferred
+          ? await this.persistDeferredUserTurn({
+              conversationId: convId,
+              orgEntityId,
+              subjectEntityId: ownerEntityId,
+              twinId: twin.entity_id,
+              requestId: input.request_id,
+              content: input.message,
+            })
+          : turnCtx.userTurnId;
+        await this.persistAssistantTurn({
+          conversationId: convId,
+          orgEntityId,
+          subjectEntityId: ownerEntityId,
+          twinId: twin.entity_id,
+          userTurnId,
+          content: continuity.response,
+          actionRef: continuity.ledger_entry_id ?? null,
+        });
+      }
       return this.buildContinuitySuccess(convId, continuity);
     }
 
@@ -1499,14 +1513,29 @@ export class OtzarService {
 
     // [OTZAR-CONTINUITY P5 Stage 1] Persist the ASSISTANT turn (author = Twin)
     // before the HTTP response is considered durable, linked to its user turn.
-    await this.persistAssistantTurn({
-      conversationId: turnCtx.conversationId,
-      orgEntityId,
-      subjectEntityId: ownerEntityId,
-      twinId: twin.entity_id,
-      userTurnId: turnCtx.userTurnId,
-      content: llmResult.text,
-    });
+    if (orgEntityId !== null) {
+      // Deferred (ambient) → persist the user turn now to the resolved thread; the
+      // supplied-id path already recorded it before the model.
+      const llmUserTurnId = turnCtx.deferred
+        ? await this.persistDeferredUserTurn({
+            conversationId,
+            orgEntityId,
+            subjectEntityId: ownerEntityId,
+            twinId: twin.entity_id,
+            requestId: input.request_id,
+            content: input.message,
+          })
+        : turnCtx.userTurnId;
+      await this.persistAssistantTurn({
+        conversationId,
+        orgEntityId,
+        subjectEntityId: ownerEntityId,
+        twinId: twin.entity_id,
+        userTurnId: llmUserTurnId,
+        content: llmResult.text,
+        modelProvider: llmResult.provider ?? null,
+      });
+    }
 
     return {
       ok: true,
@@ -1632,20 +1661,36 @@ export class OtzarService {
     userTurnId: string | null;
     replay: ConductSessionSuccess | null;
     failure: OtzarFailure | null;
+    /** true when a no-id (ambient) turn defers persistence until continuity resolves
+     * its own thread — so continuity's shipped ambient behaviour is left UNCHANGED. */
+    deferred: boolean;
   }> {
     if (args.orgEntityId === null) {
-      return {
-        conversationId: args.input.conversation_id ?? null,
-        userTurnId: null, replay: null, failure: null,
-      };
+      // Orgless: legacy path, no durable turns. Return null so the LLM path runs the
+      // legacy create-or-update (+ CONVERSATION_STARTED) block, and continuity still
+      // receives the raw client id via the `?? input.conversation_id` fallback.
+      return { conversationId: null, userTurnId: null, replay: null, failure: null, deferred: false };
     }
     const rid = args.input.request_id;
     if (rid !== undefined && !OtzarService.REQUEST_ID_RE.test(rid)) {
       return {
-        conversationId: null, userTurnId: null, replay: null,
+        conversationId: null, userTurnId: null, replay: null, deferred: false,
         failure: { ok: false, code: "INVALID_REQUEST_ID", message: "request_id must be 1-200 safe characters ([A-Za-z0-9._:-])." },
       };
     }
+
+    // Ambient (no client thread id): DEFER. We must not force a thread onto the
+    // calendar-continuity layer — its ambient path resolves the caller's pending
+    // obligation/thread by recency (multi-pending disambiguation included). Passing a
+    // freshly-resolved thread here would pull unrelated new proposals into one thread.
+    // The user + assistant turns are persisted to continuity's own resolved thread.
+    if (args.input.conversation_id === undefined || args.input.conversation_id.length === 0) {
+      return { conversationId: null, userTurnId: null, replay: null, failure: null, deferred: true };
+    }
+
+    // Supplied thread id (the normal CT contract): resolve authoritatively (validate
+    // exact scope / create-if-missing) and persist the USER turn BEFORE the model, so
+    // this path is fully thread-first + idempotent + retry-replayable.
     const resolved = await resolveAuthoritativeThread({
       conversation_id: args.input.conversation_id,
       org_entity_id: args.orgEntityId,
@@ -1662,7 +1707,7 @@ export class OtzarService {
         conversation_id: conversationId,
         org_entity_id: args.orgEntityId,
         subject_entity_id: args.subjectEntityId,
-        author_entity_id: args.subjectEntityId, // the human authored their own turn
+        author_entity_id: args.subjectEntityId,
         twin_entity_id: args.twinId,
         role: "USER",
         content: args.input.message,
@@ -1672,32 +1717,58 @@ export class OtzarService {
     } catch (e) {
       if (e instanceof IdempotencyConflictError) {
         return {
-          conversationId, userTurnId: null, replay: null,
+          conversationId, userTurnId: null, replay: null, deferred: false,
           failure: { ok: false, code: "OTZAR_REQUEST_ID_CONFLICT", message: "This request_id was already used with different content." },
         };
       }
-      // Fail closed — never invoke the model/tool if the user turn is not durable.
       logger.error({ err: e, conversationId }, "otzar user-turn persistence failed");
       return {
-        conversationId, userTurnId: null, replay: null,
+        conversationId, userTurnId: null, replay: null, deferred: false,
         failure: { ok: false, code: "OTZAR_TURN_PERSIST_FAILED", message: "Could not durably record your message; it was not processed. Please retry." },
       };
     }
 
     if (userTurn.deduped) {
-      // A prior identical submission — replay its durable assistant result without
-      // re-invoking the model/tool. If the assistant turn is missing (interrupted
-      // request), fall through and regenerate (no second user turn is appended).
       const asst = await prisma.otzarConversationTurn.findFirst({
         where: { conversation_id: conversationId, role: "ASSISTANT", reply_to_turn_id: userTurn.turn_id },
         orderBy: { sequence: "desc" },
       });
       if (asst !== null) {
         const replay = await this.reconstructFromAssistantTurn(asst, conversationId);
-        return { conversationId, userTurnId: userTurn.turn_id, replay, failure: null };
+        return { conversationId, userTurnId: userTurn.turn_id, replay, failure: null, deferred: false };
       }
     }
-    return { conversationId, userTurnId: userTurn.turn_id, replay: null, failure: null };
+    return { conversationId, userTurnId: userTurn.turn_id, replay: null, failure: null, deferred: false };
+  }
+
+  // Persist a deferred (ambient) USER turn to continuity's own resolved thread.
+  // Best-effort + returns the turn id for assistant linkage. Model-free continuity
+  // path, so this still precedes any tool execution within the turn.
+  private async persistDeferredUserTurn(args: {
+    conversationId: string;
+    orgEntityId: string;
+    subjectEntityId: string;
+    twinId: string;
+    requestId?: string | undefined;
+    content: string;
+  }): Promise<string | null> {
+    try {
+      const u = await appendConversationTurn({
+        conversation_id: args.conversationId,
+        org_entity_id: args.orgEntityId,
+        subject_entity_id: args.subjectEntityId,
+        author_entity_id: args.subjectEntityId,
+        twin_entity_id: args.twinId,
+        role: "USER",
+        content: args.content,
+        ...(args.requestId !== undefined ? { request_id: args.requestId } : {}),
+        source_channel: "CHAT",
+      });
+      return u.turn_id;
+    } catch (e) {
+      logger.warn({ err: e, conversationId: args.conversationId }, "otzar deferred user-turn persistence failed");
+      return null;
+    }
   }
 
   // WHAT: persist the ASSISTANT turn (author = Twin) linked to its user turn +
