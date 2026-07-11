@@ -901,26 +901,18 @@ export class OtzarService {
     }
     const ownerEntityId = session.entity_id;
 
-    // Resolve owner's twin (AI_AGENT child via EntityMembership).
+    // Membership set (kept for callerRole below). Twin selection itself is delegated to
+    // the ONE shared resolver so conductSession, getMyTwin, and C6 restoration all agree.
     const memberships = await prisma.entityMembership.findMany({
       where: { parent_id: ownerEntityId, is_active: true },
       select: { child_id: true },
     });
-    const childIds = memberships.map((m) => m.child_id);
-    // Deterministic primary-twin selection: oldest active twin by
-    // created_at ASC, entity_id ASC tie-break. getMyTwin uses the
-    // IDENTICAL orderBy so the twin a user SEES (/otzar/my-twin) is the
-    // same twin they TALK TO here (QLOCK D-OTZ-2 alignment). Behavior is
-    // otherwise unchanged -- we still take twins[0].
-    const twins = await prisma.entity.findMany({
-      where: {
-        entity_id: { in: childIds },
-        entity_type: "AI_AGENT",
-        deleted_at: null,
-      },
-      orderBy: [{ created_at: "asc" }, { entity_id: "asc" }],
-    });
-    const twin = twins[0];
+    // [OTZAR-CONTINUITY D] Deterministic primary-twin selection via the shared resolver
+    // (oldest active AI_AGENT; created_at ASC, entity_id ASC) — the IDENTICAL twin the user
+    // SEES (/otzar/my-twin) and the server RESTORES (C6). No duplicated selection logic.
+    const { resolvePrimaryTwin } = await import("./twin-resolution.js");
+    const resolvedTwin = await resolvePrimaryTwin(ownerEntityId);
+    const twin = resolvedTwin?.twin;
     if (twin === undefined) {
       return {
         ok: false,
@@ -3299,18 +3291,12 @@ export class OtzarService {
     let orgEntityId: string | null;
     try { orgEntityId = await getOrgEntityId(ownerEntityId); } catch { orgEntityId = null; }
     if (orgEntityId === null) return null;
-    const memberships = await prisma.entityMembership.findMany({
-      where: { parent_id: ownerEntityId, is_active: true },
-      select: { child_id: true },
-    });
-    const twins = await prisma.entity.findMany({
-      where: { entity_id: { in: memberships.map((m) => m.child_id) }, entity_type: "AI_AGENT", deleted_at: null },
-      orderBy: [{ created_at: "asc" }, { entity_id: "asc" }],
-      select: { entity_id: true },
-    });
-    const twin = twins[0];
-    if (twin === undefined) return null;
-    return { org_entity_id: orgEntityId, subject_entity_id: ownerEntityId, twin_entity_id: twin.entity_id };
+    // [OTZAR-CONTINUITY D] Same shared resolver conductSession uses → restoration reads the
+    // exact human–Twin relationship the user talks to (never a different/blended Twin).
+    const { resolvePrimaryTwin } = await import("./twin-resolution.js");
+    const resolved = await resolvePrimaryTwin(ownerEntityId);
+    if (resolved === null) return null;
+    return { org_entity_id: orgEntityId, subject_entity_id: ownerEntityId, twin_entity_id: resolved.twin.entity_id };
   }
 
   // [OTZAR-CONTINUITY C6] Server thread restoration: the caller's most-recent ACTIVE thread

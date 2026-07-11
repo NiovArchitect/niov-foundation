@@ -69,22 +69,42 @@ const REQUEST_STATUS_SELECT = {
   request_record_id: true, conversation_id: true, client_request_id: true, state: true,
   response_class: true, canonical_assistant_turn_id: true, action_ref: true,
   failure_code: true, created_at: true, completed_at: true,
+  // [C] the request scope + its durable USER turn — needed to VALIDATE the canonical turn
+  // relationship before exposing any text (never a second unscoped lookup).
+  user_turn_id: true, org_entity_id: true, subject_entity_id: true, twin_entity_id: true,
 } as const;
 
 type RequestStatusRow = {
   request_record_id: string; conversation_id: string; client_request_id: string | null;
   state: string; response_class: string | null; canonical_assistant_turn_id: string | null;
   action_ref: string | null; failure_code: string | null; created_at: Date; completed_at: Date | null;
+  user_turn_id: string; org_entity_id: string; subject_entity_id: string; twin_entity_id: string;
 };
 
 async function toRequestStatus(req: RequestStatusRow): Promise<SafeRequestStatus> {
+  // [OTZAR-CONTINUITY C] Expose canonical text ONLY when the whole relationship is coherent:
+  // request COMPLETED, canonical id matches, turn is ASSISTANT in the exact conversation/
+  // org/subject/twin, and its response_to_turn_id is the request's OWN user_turn_id.
   let canonicalText: string | null = null;
-  if (req.canonical_assistant_turn_id !== null) {
+  if (req.state === "COMPLETED" && req.canonical_assistant_turn_id !== null) {
     const t = await prisma.otzarConversationTurn.findUnique({
       where: { turn_id: req.canonical_assistant_turn_id },
-      select: { content: true, role: true },
+      select: {
+        content: true, role: true, conversation_id: true,
+        org_entity_id: true, subject_entity_id: true, twin_entity_id: true, response_to_turn_id: true,
+      },
     });
-    if (t !== null && t.role === "ASSISTANT") canonicalText = t.content;
+    if (
+      t !== null && t.role === "ASSISTANT" &&
+      t.conversation_id === req.conversation_id &&
+      t.org_entity_id === req.org_entity_id &&
+      t.subject_entity_id === req.subject_entity_id &&
+      t.twin_entity_id === req.twin_entity_id &&
+      t.response_to_turn_id === req.user_turn_id
+    ) {
+      canonicalText = t.content;
+    }
+    // else: inconsistent canonical — do NOT expose text; leave canonicalText null.
   }
   return {
     request_record_id: req.request_record_id,
@@ -92,12 +112,14 @@ async function toRequestStatus(req: RequestStatusRow): Promise<SafeRequestStatus
     client_request_id: req.client_request_id,
     state: req.state,
     response_class: req.response_class,
-    has_canonical_result: req.canonical_assistant_turn_id !== null,
+    // A canonical result is "valid" only when its relationship is coherent (canonicalText
+    // set). An inconsistent canonical is NOT reported as a valid result.
+    has_canonical_result: canonicalText !== null,
     has_action: req.action_ref !== null,
     in_progress: req.state === "PROCESSING" || req.state === "RECEIVED",
     retryable: req.state === "FAILED_RETRYABLE",
     failure_code: req.state === "FAILED_RETRYABLE" || req.state === "FAILED_FINAL" ? req.failure_code : null,
-    canonical_assistant_turn_id: req.canonical_assistant_turn_id,
+    canonical_assistant_turn_id: canonicalText !== null ? req.canonical_assistant_turn_id : null,
     canonical_text: canonicalText,
     created_at: req.created_at,
     completed_at: req.completed_at,

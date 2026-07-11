@@ -109,6 +109,23 @@ describe("OtzarConversationRequest (P5 Stage 1)", () => {
     expect(row!.canonical_assistant_turn_id).toBeNull();
   });
 
+  it("C3/B completion rejects a DIFFERENT user_turn_id in the same scope (invalid_turn) — must be the request's OWN turn", async () => {
+    const input = baseInput();
+    const { request } = await createOrGetRequest(input);
+    await claimRequestProcessing(request.request_record_id, "b-lease", Date.now());
+    // Same org/subject/twin/conversation, but a DIFFERENT user turn than the request owns.
+    const res = await completeRequestWithCanonicalResponse({
+      request_record_id: request.request_record_id, leaseToken: "b-lease",
+      user_turn_id: randomUUID(),
+      org_entity_id: ORG, subject_entity_id: SUBJECT, twin_entity_id: TWIN,
+      conversation_id: input.conversation_id, content: "reply", response_class: "ANSWERED",
+    });
+    expect(res.outcome).toBe("invalid_turn");
+    const row = await getRequestByUserTurn(input.user_turn_id);
+    expect(row!.state).toBe("PROCESSING"); // not completed
+    expect(row!.canonical_assistant_turn_id).toBeNull();
+  });
+
   it("a stale (expired) lease can be reclaimed with a bumped version; a live lease cannot", async () => {
     const { request } = await createOrGetRequest(baseInput());
     const past = Date.now() - 10 * 60 * 1000; // acquire a lease that is already expired
