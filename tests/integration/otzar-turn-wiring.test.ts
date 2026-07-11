@@ -287,6 +287,31 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     expect((await turnsOf(convId)).filter((t) => t.role === "USER" && t.content === "do it")).toHaveLength(1);
   });
 
+  it("C1: an ambient GENERIC (no client thread) org turn is request-gated — thread + USER turn + request record claimed before the model, canonical link on completion", async () => {
+    const llm = new MockLLMProvider([{ ok: true, text: "Here is a general answer.", provider: "mock", model: "m" }]);
+    const wired = makeServicesWithLLM(llm as unknown as LLMProvider);
+    const { token } = await orgUserWithTwin(wired.auth);
+    // No conversation_id → deferred/ambient path. A non-calendar message → generic LLM.
+    const r = await wired.otzar.conductSession({ token, message: "what should I keep in mind while planning this quarter?", request_id: "amb-gen-1" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const turns = await turnsOf(r.conversation_id);
+    const userTurn = turns.find((t) => t.role === "USER");
+    const asstTurn = turns.find((t) => t.role === "ASSISTANT");
+    expect(userTurn).toBeDefined();
+    expect(asstTurn).toBeDefined();
+    // The invariant: a request record exists 1:1 with the durable USER turn (gated before
+    // the model), COMPLETED, with the ONE canonical assistant turn linked.
+    const req = await prisma.otzarConversationRequest.findUnique({ where: { user_turn_id: userTurn!.turn_id } });
+    expect(req).not.toBeNull();
+    expect(req!.state).toBe("COMPLETED");
+    expect(req!.canonical_assistant_turn_id).toBe(asstTurn!.turn_id);
+    expect(req!.response_class).toBe("ANSWERED");
+    expect(asstTurn!.reply_to_turn_id).toBe(userTurn!.turn_id);
+    // The USER turn was durable BEFORE the assistant/model (sequence ordering).
+    expect(userTurn!.sequence).toBeLessThan(asstTurn!.sequence);
+  });
+
   it("§8: source_channel is carried into durable turn lineage (VOICE / AMBIENT / CHAT)", async () => {
     const { auth, otzar } = makeServices();
     const { token } = await orgUserWithTwin(auth);
