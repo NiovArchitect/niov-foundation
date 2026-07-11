@@ -29,7 +29,7 @@ import {
 } from "./services/personalization/session-context-resolver.js";
 import { registerWorkingSetRoutes } from "./routes/working-set.routes.js";
 import { prisma } from "@niov/database";
-import { assertIntegrationCredentialIdentitySchemaCompatible } from "./startup/integration-credential-schema-guard.js";
+import { assertSchemaManifestCompatible } from "./startup/schema-manifest.js";
 import { HiveService } from "./services/hive/hive.service.js";
 import { registerHiveRoutes } from "./routes/hive.routes.js";
 import { registerHiveAdminRoutes } from "./routes/hive-admin.routes.js";
@@ -1006,7 +1006,7 @@ export async function startApiServer(
 ): Promise<FastifyInstance> {
   const guard =
     deps.schemaGuard ??
-    (() => assertIntegrationCredentialIdentitySchemaCompatible(prisma));
+    (() => assertSchemaManifestCompatible(prisma));
   const build = deps.build ?? buildApp;
   // Fail fast BEFORE any app construction or listen if the prod schema is behind
   // the code. A rejection here propagates to main()'s catch → process.exit(1).
