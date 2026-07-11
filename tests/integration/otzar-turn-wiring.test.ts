@@ -16,7 +16,7 @@ import {
   type LLMProvider, type LoginResult,
 } from "@niov/api";
 import { ContentEncryption } from "@niov/auth";
-import { createEntity, prisma, __otzarCompletionTestHooks } from "@niov/database";
+import { createEntity, prisma, markThreadDeleted, __otzarCompletionTestHooks } from "@niov/database";
 import { cleanupTestData, ensureAuditTriggers, makeEntityInput } from "../helpers.js";
 
 const TEST_JWT_SECRET = "otzar-wiring-test-secret";
@@ -493,6 +493,36 @@ describe("conductSession durable turn wiring (P5 Stage 1)", () => {
     const refused = [r1, r2].filter((r) => !r.ok && (r.code === "OTZAR_REQUEST_IN_PROGRESS"));
     expect(answered.length + refused.length).toBe(2);
     expect(answered.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("first-turn contract: a client-supplied conversation_id for a DELETED thread is REFUSED (OTZAR_THREAD_CLOSED) — never recreated, no new turn or request attached", async () => {
+    // Step 4's explicitly-enumerated case: closed/deleted can't be recreated. A client that
+    // supplies an id whose thread was tombstoned must be refused, not silently minted over —
+    // otherwise a deleted conversation could be resurrected under a stale client-held id.
+    const { auth, otzar } = makeServices();
+    const { token, userId, twinId, orgId } = await orgUserWithTwin(auth);
+    const created = await otzar.conductSession({ token, message: "start a thread we will delete" });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const convId = created.conversation_id;
+    // Governed tombstone (redacts turns, marks DELETED) — the same delete path the product uses.
+    await markThreadDeleted(convId, { org_entity_id: orgId, subject_entity_id: userId, twin_entity_id: twinId });
+    const turnsBefore = (await turnsOf(convId)).length;
+    const requestsBefore = await prisma.otzarConversationRequest.count({ where: { conversation_id: convId } });
+
+    // Re-supply the SAME (now-deleted) id on a fresh first submission with a NEW request_id.
+    const refused = await otzar.conductSession({ token, message: "resurrect the dead thread", conversation_id: convId, request_id: randomUUID() });
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.code).toBe("OTZAR_THREAD_CLOSED"); // assertThreadScope(thread_deleted) → refuse, before any create
+
+    // Proof it was NOT recreated or mutated: still DELETED, and NO new turn / request landed
+    // (resolution fails closed BEFORE the USER turn or request is attached).
+    const row = await prisma.otzarConversation.findUnique({ where: { conversation_id: convId } });
+    expect(row!.status).toBe("DELETED");
+    expect(row!.deleted_at).not.toBeNull();
+    expect((await turnsOf(convId)).length).toBe(turnsBefore);
+    expect(await prisma.otzarConversationRequest.count({ where: { conversation_id: convId } })).toBe(requestsBefore);
   });
 
   it("§8: source_channel is carried into durable turn lineage (VOICE / AMBIENT / CHAT)", async () => {
