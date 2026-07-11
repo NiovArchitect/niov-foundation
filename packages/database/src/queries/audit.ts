@@ -818,7 +818,18 @@ export type AuditEventType =
   | "INBOUND_SIGNAL_DEDUPED"
   | "INBOUND_SIGNAL_QUARANTINED"
   | "INBOUND_SIGNAL_FAILED"
-  | "SOURCE_REVALIDATION_TRIGGERED";
+  | "SOURCE_REVALIDATION_TRIGGERED"
+  // [OTZAR STAGE-2 §5/§8] Durable organizational-obligation lifecycle. Leak-safe details only
+  // (obligation_id, type, state transition, safe title) — never raw payload/tokens.
+  | "OBLIGATION_CREATED"
+  | "OBLIGATION_ACKNOWLEDGED"
+  | "OBLIGATION_COMPLETED"
+  | "OBLIGATION_CANCELLED"
+  | "OBLIGATION_ESCALATED"
+  | "OBLIGATION_BLOCKED"
+  | "OBLIGATION_REASSIGNED"
+  | "OBLIGATION_SUPERSEDED"
+  | "OBLIGATION_EXPIRED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -1115,6 +1126,16 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "INBOUND_SIGNAL_QUARANTINED",
   "INBOUND_SIGNAL_FAILED",
   "SOURCE_REVALIDATION_TRIGGERED",
+  // [OTZAR STAGE-2 §5/§8] Obligation lifecycle (kept in sync with the union above).
+  "OBLIGATION_CREATED",
+  "OBLIGATION_ACKNOWLEDGED",
+  "OBLIGATION_COMPLETED",
+  "OBLIGATION_CANCELLED",
+  "OBLIGATION_ESCALATED",
+  "OBLIGATION_BLOCKED",
+  "OBLIGATION_REASSIGNED",
+  "OBLIGATION_SUPERSEDED",
+  "OBLIGATION_EXPIRED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

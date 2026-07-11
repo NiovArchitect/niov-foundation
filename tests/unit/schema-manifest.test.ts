@@ -132,6 +132,21 @@ describe("startup schema manifest (P6)", () => {
     expect(r.status).toBe("incompatible");
   });
 
+  it("asserts the obligations table (Stage-2): missing table + its idempotency unique are caught", async () => {
+    // table_missing when the obligations table is absent.
+    const s = clone(compatibleSpec());
+    delete s.columns["obligations"];
+    const r = await checkSchemaManifest(fakeDb(s));
+    if (r.status !== "incompatible") throw new Error();
+    expect(r.issues).toContainEqual({ table: "obligations", kind: "table_missing" });
+    // unique_missing when the (org_entity_id, origin_key) idempotency index is dropped.
+    const s2 = clone(compatibleSpec());
+    s2.uniques["obligations"] = [];
+    const r2 = await checkSchemaManifest(fakeDb(s2));
+    if (r2.status !== "incompatible") throw new Error();
+    expect(r2.issues).toContainEqual({ table: "obligations", kind: "unique_missing", columns: ["org_entity_id", "origin_key"] });
+  });
+
   it("classifies a probe/DB outage as PROBE_UNAVAILABLE, never as a schema gap", async () => {
     const outage: SchemaProbe = { async $queryRawUnsafe() { throw new Error("connection refused: postgres://secret@host"); } };
     await expect(assertSchemaManifestCompatible(outage)).rejects.toBeInstanceOf(StartupSchemaProbeUnavailableError);

@@ -200,6 +200,39 @@ export type {
   SafeRequestStatus,
 } from "./queries/otzar-thread-restoration.js";
 
+// [OTZAR STAGE-2 §5] Durable organizational-obligation layer (scope-gated reads + CAS
+// lifecycle transitions; links the request/action/conversation spine, never copies execution
+// state). Terminal states append-only; completion requires validated durable evidence.
+export {
+  createOrGetObligation,
+  listObligations,
+  getObligationForScope,
+  acknowledgeObligation,
+  startObligation,
+  blockObligation,
+  escalateObligation,
+  cancelObligation,
+  expireObligation,
+  completeObligation,
+  reassignObligation,
+  supersedeObligation,
+  TERMINAL_OBLIGATION_STATES,
+  OPEN_OBLIGATION_STATES,
+} from "./queries/otzar-obligations.js";
+export type {
+  ObligationScope,
+  ObligationState,
+  ObligationType,
+  SafeObligation,
+  CreateObligationInput,
+  ListObligationsOptions,
+  TransitionOutcome,
+  CompleteObligationArgs,
+  ReassignArgs,
+  ReassignResult,
+  SupersedeResult,
+} from "./queries/otzar-obligations.js";
+
 export type {
   Entity,
   AuditLog,
