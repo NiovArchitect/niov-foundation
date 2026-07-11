@@ -54,3 +54,6 @@ services/python-intelligence/**/__pycache__/
 services/python-intelligence/.pytest_cache/
 services/python-intelligence/.ruff_cache/
 services/python-intelligence/*.egg-info/
+# OTZAR working scratch (untracked, never committed)
+docs/*.tmp.md
+scripts/repair-live-demo-twins.ts
