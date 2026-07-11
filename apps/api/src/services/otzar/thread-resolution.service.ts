@@ -20,7 +20,6 @@ import {
   createThread,
   getThread,
   assertThreadScope,
-  ThreadScopeError,
 } from "@niov/database";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -114,20 +113,14 @@ export async function resolveAuthoritativeThread(
       });
       return { conversation_id: t.conversation_id, origin: "supplied" };
     }
-    try {
-      await assertThreadScope(args.conversation_id, scope);
-      return { conversation_id: args.conversation_id, origin: "supplied" };
-    } catch (e) {
-      if (!(e instanceof ThreadScopeError)) throw e;
-      // Foreign / deleted → do NOT expose it; mint a fresh own thread.
-      const t = await createThread({
-        org_entity_id: args.org_entity_id,
-        subject_entity_id: args.subject_entity_id,
-        twin_entity_id: args.twin_entity_id,
-        timezone: args.timezone ?? null,
-      });
-      return { conversation_id: t.conversation_id, origin: "created" };
-    }
+    // §7: a thread that EXISTS but is foreign / deleted must fail EXPLICITLY — never
+    // silently minted over (that hides an invalid request). assertThreadScope throws a
+    // typed ThreadScopeError (reason: cross_org|cross_subject|cross_twin|thread_deleted)
+    // that the caller maps to a stable OTZAR_THREAD_* failure. A genuinely NEW client id
+    // (getThread === null, above) still creates a new owned thread — distinguishable
+    // from a foreign one by existence.
+    await assertThreadScope(args.conversation_id, scope);
+    return { conversation_id: args.conversation_id, origin: "supplied" };
   }
 
   // B. No id → restore ONLY when unambiguous.

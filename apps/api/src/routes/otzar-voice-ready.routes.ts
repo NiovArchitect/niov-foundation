@@ -169,6 +169,8 @@ export async function registerOtzarVoiceReadyRoutes(
           ...(typeof body.request_id === "string" && body.request_id.length > 0
             ? { request_id: body.request_id }
             : {}),
+          // [OTZAR-CONTINUITY P5 Stage 1 §8] this surface is the voice-intent channel.
+          source_channel: "VOICE",
         });
       } catch (err) {
         request.log.error({ err }, "voice-intent conductSession threw");
