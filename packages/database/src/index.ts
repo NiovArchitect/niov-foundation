@@ -184,6 +184,20 @@ export type {
   CompleteCanonicalInput,
 } from "./queries/otzar-conversation-requests.js";
 
+// [OTZAR-CONTINUITY C6] Scope-gated server thread-restoration read layer.
+export {
+  restoreActiveThread,
+  listRecentThreads,
+  getThreadForRestore,
+  getRequestStatusForUser,
+} from "./queries/otzar-thread-restoration.js";
+export type {
+  RestoreScope,
+  ThreadSummary,
+  SafeTurn,
+  SafeRequestStatus,
+} from "./queries/otzar-thread-restoration.js";
+
 export type {
   Entity,
   AuditLog,

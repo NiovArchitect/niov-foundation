@@ -29,6 +29,13 @@ import {
   completeRequestWithCanonicalResponse,
   failRequest,
   linkRequestAction,
+  restoreActiveThread,
+  listRecentThreads,
+  getThreadForRestore,
+  getRequestStatusForUser,
+  type ThreadSummary,
+  type SafeTurn,
+  type SafeRequestStatus,
   IdempotencyConflictError,
   ThreadScopeError,
   type CapsuleType,
@@ -3204,6 +3211,62 @@ export class OtzarService {
       total,
       has_more: input.skip + input.take < total,
     };
+  }
+
+  // [OTZAR-CONTINUITY C6] Resolve the caller's (org, subject) restoration scope. Orgless
+  // callers have no durable server threads to restore → null.
+  private async restoreScope(ownerEntityId: string): Promise<{ org_entity_id: string; subject_entity_id: string } | null> {
+    const { getOrgEntityId } = await import("../governance/org.js");
+    let orgEntityId: string | null;
+    try { orgEntityId = await getOrgEntityId(ownerEntityId); } catch { orgEntityId = null; }
+    if (orgEntityId === null) return null;
+    return { org_entity_id: orgEntityId, subject_entity_id: ownerEntityId };
+  }
+
+  // [OTZAR-CONTINUITY C6] Server thread restoration: the caller's most-recent ACTIVE thread
+  // (or null — never invented) + a bounded recent list. Scope-gated; the SERVER is the
+  // authority CT restores from on login/refresh (not localStorage).
+  async restoreThreads(
+    input: { token: string; limit?: number; includeArchived?: boolean },
+  ): Promise<{ ok: true; active: ThreadSummary | null; recent: ThreadSummary[] } | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) return { ok: false, code: session.code, message: "Restore denied" };
+    const scope = await this.restoreScope(session.entity_id);
+    if (scope === null) return { ok: true, active: null, recent: [] };
+    const [active, recent] = await Promise.all([
+      restoreActiveThread(scope),
+      listRecentThreads(scope, { ...(input.limit !== undefined ? { limit: input.limit } : {}), includeArchived: input.includeArchived === true }),
+    ]);
+    return { ok: true, active, recent };
+  }
+
+  // [OTZAR-CONTINUITY C6] A specific thread + bounded recent turns + unresolved summary.
+  // Foreign/deleted → OTZAR_THREAD_FORBIDDEN (no existence disclosure).
+  async getThreadDetail(
+    input: { token: string; conversation_id: string; turn_limit?: number },
+  ): Promise<{ ok: true; thread: ThreadSummary; turns: SafeTurn[] } | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) return { ok: false, code: session.code, message: "Restore denied" };
+    const scope = await this.restoreScope(session.entity_id);
+    if (scope === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This conversation is not available to you." };
+    const res = await getThreadForRestore(input.conversation_id, scope, input.turn_limit !== undefined ? { turnLimit: input.turn_limit } : {});
+    if (res === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This conversation is not available to you." };
+    return { ok: true, thread: res.thread, turns: res.turns };
+  }
+
+  // [OTZAR-CONTINUITY C6] Safe status of the caller's own request (for CT reconcile of a
+  // locally-pending submission). Foreign → OTZAR_THREAD_FORBIDDEN. Never leaks lease/
+  // provider tokens or raw action internals.
+  async getRequestStatus(
+    input: { token: string; request_record_id: string },
+  ): Promise<{ ok: true; status: SafeRequestStatus } | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) return { ok: false, code: session.code, message: "Restore denied" };
+    const scope = await this.restoreScope(session.entity_id);
+    if (scope === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This request is not available to you." };
+    const status = await getRequestStatusForUser(scope, input.request_record_id);
+    if (status === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This request is not available to you." };
+    return { ok: true, status };
   }
 
   // ──────────────────────────────────────────────────────────────
