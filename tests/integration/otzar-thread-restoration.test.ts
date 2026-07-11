@@ -122,6 +122,67 @@ describe("C6 server thread restoration", () => {
     expect(foreign.code).toBe("OTZAR_THREAD_FORBIDDEN");
   });
 
+  it("C6/E getRequestStatusByClient reconciles by (conversation, client_request_id) with safe canonical text; same client id in another conversation isolated; foreign → forbidden", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgUserWithTwin(auth);
+    const b = await orgUserWithTwin(auth);
+    const turn = await otzar.conductSession({ token: a.token, message: "please reconcile this", request_id: "cli-X" });
+    if (!turn.ok) return;
+    const byClient = await otzar.getRequestStatusByClient({ token: a.token, conversation_id: turn.conversation_id, client_request_id: "cli-X" });
+    expect(byClient.ok).toBe(true);
+    if (!byClient.ok) return;
+    expect(byClient.status.client_request_id).toBe("cli-X");
+    expect(byClient.status.conversation_id).toBe(turn.conversation_id);
+    expect(byClient.status.state).toBe("COMPLETED");
+    expect(byClient.status.has_canonical_result).toBe(true);
+    expect(typeof byClient.status.canonical_text).toBe("string"); // safe canonical reply text
+    expect((byClient.status.canonical_text ?? "").length).toBeGreaterThan(0);
+    // No sensitive fields leak.
+    expect(JSON.stringify(byClient.status)).not.toMatch(/lease|provider_attempt/i);
+    // Same client id but a DIFFERENT conversation → not found (never a global lookup).
+    const wrongConv = await otzar.getRequestStatusByClient({ token: a.token, conversation_id: randomUUID(), client_request_id: "cli-X" });
+    expect(wrongConv.ok).toBe(false);
+    // Cross-user → forbidden, no disclosure.
+    const foreign = await otzar.getRequestStatusByClient({ token: b.token, conversation_id: turn.conversation_id, client_request_id: "cli-X" });
+    expect(foreign.ok).toBe(false);
+    if (foreign.ok) return;
+    expect(foreign.code).toBe("OTZAR_THREAD_FORBIDDEN");
+  });
+
+  it("C6/F Twin-scope: a thread bound to a DIFFERENT Twin is never restored/read for this caller (no cross-Twin blending)", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUserWithTwin(auth);
+    const mine = await otzar.conductSession({ token: u.token, message: "my own thread", request_id: "f-1" });
+    if (!mine.ok) return;
+    const row = await prisma.otzarConversation.findUnique({
+      where: { conversation_id: mine.conversation_id },
+      select: { org_entity_id: true, entity_id: true },
+    });
+    // Fabricate a NEWER thread for the same (org, subject) but a DIFFERENT Twin.
+    const otherTwin = randomUUID();
+    const foreignTwinConv = randomUUID();
+    await prisma.otzarConversation.create({
+      data: {
+        conversation_id: foreignTwinConv,
+        entity_id: row!.entity_id,
+        twin_id: otherTwin,
+        org_entity_id: row!.org_entity_id,
+        status: "ACTIVE",
+        last_active_at: new Date(Date.now() + 60_000), // NEWER than mine
+        participants: [row!.entity_id, otherTwin],
+      },
+    });
+    const restored = await otzar.restoreThreads({ token: u.token });
+    if (!restored.ok) return;
+    // Despite being newer, the other-Twin thread is NOT the active thread (Twin-scoped).
+    expect(restored.active).not.toBeNull();
+    expect(restored.active!.conversation_id).toBe(mine.conversation_id);
+    expect(restored.recent.every((t) => t.conversation_id !== foreignTwinConv)).toBe(true);
+    // Detail on the other-Twin thread → forbidden (no cross-Twin read).
+    const detail = await otzar.getThreadDetail({ token: u.token, conversation_id: foreignTwinConv });
+    expect(detail.ok).toBe(false);
+  });
+
   it("restoreActiveThread never returns an ARCHIVED or DELETED thread", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUserWithTwin(auth);

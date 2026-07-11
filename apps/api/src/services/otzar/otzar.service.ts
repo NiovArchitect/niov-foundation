@@ -33,6 +33,7 @@ import {
   listRecentThreads,
   getThreadForRestore,
   getRequestStatusForUser,
+  getRequestByClient,
   type ThreadSummary,
   type SafeTurn,
   type SafeRequestStatus,
@@ -3288,14 +3289,28 @@ export class OtzarService {
     };
   }
 
-  // [OTZAR-CONTINUITY C6] Resolve the caller's (org, subject) restoration scope. Orgless
+  // [OTZAR-CONTINUITY C6/F] Resolve the caller's (org, subject, twin) restoration scope.
+  // The Twin is the caller's deterministic primary Twin — the IDENTICAL oldest-active
+  // selection conductSession + getMyTwin use, so restoration reads the same human–Twin
+  // relationship the user talks to (never blends across Twins). Orgless or twin-less
   // callers have no durable server threads to restore → null.
-  private async restoreScope(ownerEntityId: string): Promise<{ org_entity_id: string; subject_entity_id: string } | null> {
+  private async restoreScope(ownerEntityId: string): Promise<{ org_entity_id: string; subject_entity_id: string; twin_entity_id: string } | null> {
     const { getOrgEntityId } = await import("../governance/org.js");
     let orgEntityId: string | null;
     try { orgEntityId = await getOrgEntityId(ownerEntityId); } catch { orgEntityId = null; }
     if (orgEntityId === null) return null;
-    return { org_entity_id: orgEntityId, subject_entity_id: ownerEntityId };
+    const memberships = await prisma.entityMembership.findMany({
+      where: { parent_id: ownerEntityId, is_active: true },
+      select: { child_id: true },
+    });
+    const twins = await prisma.entity.findMany({
+      where: { entity_id: { in: memberships.map((m) => m.child_id) }, entity_type: "AI_AGENT", deleted_at: null },
+      orderBy: [{ created_at: "asc" }, { entity_id: "asc" }],
+      select: { entity_id: true },
+    });
+    const twin = twins[0];
+    if (twin === undefined) return null;
+    return { org_entity_id: orgEntityId, subject_entity_id: ownerEntityId, twin_entity_id: twin.entity_id };
   }
 
   // [OTZAR-CONTINUITY C6] Server thread restoration: the caller's most-recent ACTIVE thread
@@ -3340,6 +3355,22 @@ export class OtzarService {
     const scope = await this.restoreScope(session.entity_id);
     if (scope === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This request is not available to you." };
     const status = await getRequestStatusForUser(scope, input.request_record_id);
+    if (status === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This request is not available to you." };
+    return { ok: true, status };
+  }
+
+  // [OTZAR-CONTINUITY C6/E] Reconcile a locally-pending submission by the CLIENT-known
+  // identity (conversation + client_request_id) — the identifier CT owns after a lost
+  // response. Scope-gated (org/subject/twin/conversation/client_request_id); foreign →
+  // OTZAR_THREAD_FORBIDDEN (no disclosure).
+  async getRequestStatusByClient(
+    input: { token: string; conversation_id: string; client_request_id: string },
+  ): Promise<{ ok: true; status: SafeRequestStatus } | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) return { ok: false, code: session.code, message: "Restore denied" };
+    const scope = await this.restoreScope(session.entity_id);
+    if (scope === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This request is not available to you." };
+    const status = await getRequestByClient(scope, input.conversation_id, input.client_request_id);
     if (status === null) return { ok: false, code: "OTZAR_THREAD_FORBIDDEN", message: "This request is not available to you." };
     return { ok: true, status };
   }

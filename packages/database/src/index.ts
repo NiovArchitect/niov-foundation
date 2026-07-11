@@ -190,6 +190,7 @@ export {
   listRecentThreads,
   getThreadForRestore,
   getRequestStatusForUser,
+  getRequestByClient,
 } from "./queries/otzar-thread-restoration.js";
 export type {
   RestoreScope,
