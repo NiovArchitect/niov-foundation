@@ -2471,6 +2471,122 @@ model TruthEvidenceSnapshot {
   @@map("truth_evidence_snapshots")
 }
 
+// [SECTION-10 ORG-TRUTH] The durable "current organizational answer" for one governed question
+// within one exact scope. A governed MATERIALIZATION of a resolved answer that POINTS at the winning
+// source (WorkLedgerEntry/lineage) + preserves the promotion lifecycle — NOT a parallel fact store,
+// NOT a replacement for WorkLedger/source docs/lineage/evidence. Only state=PROMOTED is a current
+// answer. Exactly one PROMOTED per (org_entity_id, truth_key) via a PARTIAL UNIQUE INDEX created in
+// the activation script (Prisma can't express partial uniques). Additive; activation-gated.
+model OrgTruthRecord {
+  truth_record_id                String    @id @default(uuid()) @db.Uuid
+  org_entity_id                  String    @db.Uuid
+  decision_domain                String
+  subject_ref                    String?   @db.Uuid // project/customer/case/policy/product extension
+  subject_ref_class              String?
+  workspace_id                   String?   @db.Uuid
+  twin_entity_id                 String?   @db.Uuid
+  truth_key                      String // deterministic (org+domain+subject+topic); never derived from prose
+  state                          String    @default("CANDIDATE") // CANDIDATE | PROMOTED | DISPUTED | SUPERSEDED | RETRACTED
+  version                        Int       @default(1)
+  created_at                     DateTime  @default(now())
+  updated_at                     DateTime  @updatedAt
+  // Winner linkage (the promoted source + resolved classifications, snapshotted not recomputed).
+  winning_source_record_type     String?
+  winning_source_record_id       String?   @db.Uuid
+  winning_source_version         Int?
+  winning_source_hash            String?
+  promotion_evidence_snapshot_id String?   @db.Uuid // → truth_evidence_snapshots (ORG_TRUTH_PROMOTION)
+  communication_lineage_ref      String?
+  truth_class                    String?
+  truth_weight_rank              Int?
+  authority_ref                  String? // safe ref/label into decision-rights authority
+  promoter_entity_id             String?   @db.Uuid
+  promoted_at                    DateTime?
+  // Lifecycle lineage (never mutate a promoted record to a different answer — supersede instead).
+  supersedes_truth_record_id     String?   @db.Uuid
+  superseded_by_truth_record_id  String?   @db.Uuid
+  retraction_reason              String?
+  correction_ref                 String?   @db.Uuid
+  conflict_set_ref               String?   @db.Uuid
+  // Safe, bounded value (safe-JSON validated in the runtime; never raw docs/transcripts/secrets).
+  title                          String?
+  value                          Json      @default("{}")
+  value_type                     String?
+  value_unit                     String?
+  effective_start                DateTime?
+  effective_end                  DateTime?
+  metadata                       Json      @default("{}")
+  visibility_scope               String    @default("SUBJECT") // ORG/TEAM fan-out is a later increment
+  retention_class                String    @default("STANDARD")
+  origin_key                     String? // idempotency per governed promotion (NULLs exempt)
+
+  @@unique([org_entity_id, origin_key])
+  @@index([org_entity_id, truth_key])
+  @@index([org_entity_id, decision_domain])
+  @@index([conflict_set_ref])
+  @@index([winning_source_record_id])
+  @@map("org_truth_records")
+}
+
+// [SECTION-10 ORG-TRUTH] A durable MATERIALIZED conflict set: the competing candidate sources
+// considered for one truth_key. Losing candidates are NEVER discarded — the set explains which
+// candidates were considered and which source won. Populates the previously-dead
+// TruthEvidenceSnapshot.conflict_set_ref. Additive; activation-gated.
+model OrgTruthConflictSet {
+  conflict_set_id           String    @id @default(uuid()) @db.Uuid
+  org_entity_id             String    @db.Uuid
+  truth_key                 String
+  decision_domain           String
+  subject_ref               String?   @db.Uuid
+  subject_ref_class         String?
+  state                     String    @default("OPEN") // OPEN | UNDER_REVIEW | RESOLVED | SUPERSEDED | CANCELLED
+  created_at                DateTime  @default(now())
+  updated_at                DateTime  @updatedAt
+  resolved_at               DateTime?
+  resolver_entity_id        String?   @db.Uuid
+  resolution_reason         String?
+  winning_source_record_id  String?   @db.Uuid
+  resulting_truth_record_id String?   @db.Uuid
+  review_obligation_id      String?   @db.Uuid // the one idempotent unresolved-conflict obligation
+  candidate_set_fingerprint String? // deterministic hash of the eligible candidate set (review generation)
+  version                   Int       @default(1)
+  origin_key                String?
+
+  @@unique([org_entity_id, origin_key])
+  @@index([org_entity_id, truth_key])
+  @@index([org_entity_id, state])
+  @@map("org_truth_conflict_sets")
+}
+
+// [SECTION-10 ORG-TRUTH] A preserved competing candidate within a conflict set — safe classifications
+// only (never raw source content). Additive; activation-gated.
+model OrgTruthConflictCandidate {
+  candidate_id           String   @id @default(uuid()) @db.Uuid
+  conflict_set_id        String   @db.Uuid
+  org_entity_id          String   @db.Uuid
+  source_record_type     String
+  source_record_id       String   @db.Uuid
+  source_version         Int?
+  source_hash            String?
+  communication_act      String?
+  truth_class            String?
+  truth_weight_rank      Int?
+  authority_status       String?
+  currentness            String?
+  source_integrity_state String?
+  permission_eligible    Boolean  @default(true)
+  superseded             Boolean  @default(false)
+  retracted              Boolean  @default(false)
+  is_winner              Boolean  @default(false)
+  metadata               Json     @default("{}")
+  created_at             DateTime @default(now())
+
+  @@unique([conflict_set_id, source_record_type, source_record_id])
+  @@index([conflict_set_id])
+  @@index([org_entity_id])
+  @@map("org_truth_conflict_candidates")
+}
+
 model AgentTemplate {
   template_id      String   @id @default(uuid()) @db.Uuid
   role_name        String   @unique
