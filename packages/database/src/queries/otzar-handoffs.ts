@@ -15,6 +15,7 @@ import { prisma } from "../client.js";
 import { writeAuditEvent, type AuditEventType } from "./audit.js";
 import { validateSafeJson } from "./otzar-obligation-validation.js";
 import { reassignObligation, validateResponsibleEntity } from "./otzar-obligations.js";
+import { captureEvidenceSnapshot } from "./otzar-truth-evidence.js";
 
 export type HandoffState =
   | "DRAFTED" | "READY_FOR_REVIEW" | "SENT" | "RECEIVED" | "ACKNOWLEDGED"
@@ -263,6 +264,8 @@ async function classifyFailure(scope: HandoffScope, args: HandoffCas, legalFrom:
 async function casHandoff(
   scope: HandoffScope, args: HandoffCas, legalFrom: readonly HandoffState[], toState: HandoffState,
   timestampColumn: string | null, audit: HandoffAudit, extra: Record<string, string | null> = {},
+  // [TRUTH-EVIDENCE] optional in-tx hook for atomic point-in-time evidence capture.
+  inTxHook?: (tx: Prisma.TransactionClient) => Promise<void>,
 ): Promise<HandoffOutcome> {
   const sets: string[] = [`state = '${toState}'`, `version = version + 1`, `updated_at = now()`];
   if (timestampColumn !== null) sets.push(`${timestampColumn} = now()`);
@@ -276,6 +279,7 @@ async function casHandoff(
       const n = await tx.$executeRawUnsafe(sql, ...params, args.handoff_id, args.expected_version, scope.org_entity_id);
       if (n !== 1) return { hit: false as const };
       await writeHandoffAuditInTx(tx, scope.org_entity_id, { event_type: audit.event_type, actor_entity_id: audit.actor_entity_id, details: { handoff_id: args.handoff_id, state: toState, ...audit.details } });
+      if (inTxHook !== undefined) await inTxHook(tx); // atomic point-in-time evidence capture
       const row = await tx.handoff.findFirst({ where: { handoff_id: args.handoff_id, ...partyWhere(scope) }, select: HANDOFF_SELECT });
       return { hit: true as const, row };
     });
@@ -304,9 +308,21 @@ export async function sendHandoff(scope: HandoffScope, args: HandoffCas & { inco
   if (incoming == null) return { kind: "precondition", reason: "no_incoming_party" };
   const memberErr = await validateOrgMember(scope.org_entity_id, incoming);
   if (memberErr !== null) return { kind: "precondition", reason: `incoming_${memberErr}` };
+  // [TRUTH-EVIDENCE §11] Snapshot the exact sent handoff + its linked-obligation set (fingerprint
+  // pins the version relied upon) atomically with the send.
+  const linked = await prisma.handoffObligation.findMany({ where: { handoff_id: args.handoff_id }, select: { obligation_id: true, disposition: true } });
+  const sendCapture = async (tx: Prisma.TransactionClient): Promise<void> => {
+    const res = await captureEvidenceSnapshot({
+      org_entity_id: scope.org_entity_id, decision_point: "HANDOFF_SEND", source_record_type: "HANDOFF",
+      source_record_id: args.handoff_id, source_version: args.expected_version + 1, actor_entity_id: scope.caller_entity_id,
+      handoff_id: args.handoff_id, ...(row.conversation_id !== null ? { conversation_id: row.conversation_id } : {}),
+      metadata: { linked_obligation_count: linked.length, obligation_ids: linked.map((l) => l.obligation_id) },
+    }, tx);
+    if (res.kind !== "ok") throw new Error("evidence_capture_failed");
+  };
   return casHandoff(scope, args, ["DRAFTED", "READY_FOR_REVIEW"], "SENT", "sent_at",
     { event_type: "HANDOFF_SENT", actor_entity_id: scope.caller_entity_id, details: {} },
-    { incoming_responsible_entity_id: incoming });
+    { incoming_responsible_entity_id: incoming }, sendCapture);
 }
 
 /** RECEIVE — incoming party only (marks they got it). Not acknowledgement. */
@@ -447,9 +463,20 @@ export async function completeHandoff(scope: HandoffScope, args: HandoffCas): Pr
   if (row === null) return { kind: "not_found" };
   if (row.incoming_responsible_entity_id !== scope.caller_entity_id) return { kind: "not_authorized" };
   if (row.state !== "ACKNOWLEDGED") return { kind: "illegal_transition", current: toSafeHandoff(row as unknown as HandoffRow, scope.caller_entity_id) };
-  const pending = await prisma.handoffObligation.count({ where: { handoff_id: args.handoff_id, disposition: "PENDING" } });
+  const linked = await prisma.handoffObligation.findMany({ where: { handoff_id: args.handoff_id }, select: { obligation_id: true, disposition: true } });
+  const pending = linked.filter((l) => l.disposition === "PENDING").length;
   if (pending > 0) return { kind: "precondition", reason: `${pending}_obligations_pending_disposition` };
-  return casHandoff(scope, args, ["ACKNOWLEDGED"], "COMPLETED", "completed_at", { event_type: "HANDOFF_COMPLETED", actor_entity_id: scope.caller_entity_id, details: {} });
+  // [TRUTH-EVIDENCE §11] Snapshot the completed handoff + final disposition set atomically.
+  const completeCapture = async (tx: Prisma.TransactionClient): Promise<void> => {
+    const res = await captureEvidenceSnapshot({
+      org_entity_id: scope.org_entity_id, decision_point: "HANDOFF_COMPLETION", source_record_type: "HANDOFF",
+      source_record_id: args.handoff_id, source_version: args.expected_version + 1, actor_entity_id: scope.caller_entity_id,
+      handoff_id: args.handoff_id, ...(row.conversation_id !== null ? { conversation_id: row.conversation_id } : {}),
+      metadata: { dispositions: linked.map((l) => ({ obligation_id: l.obligation_id, disposition: l.disposition })) },
+    }, tx);
+    if (res.kind !== "ok") throw new Error("evidence_capture_failed");
+  };
+  return casHandoff(scope, args, ["ACKNOWLEDGED"], "COMPLETED", "completed_at", { event_type: "HANDOFF_COMPLETED", actor_entity_id: scope.caller_entity_id, details: {} }, {}, completeCapture);
 }
 
 /** SUPERSEDE — outgoing party; create a linked replacement, mark the original SUPERSEDED, in one tx. */

@@ -1222,4 +1222,28 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // [OTZAR STAGE-2 TRUTH-EVIDENCE] Read the evidence snapshots (safe projection + current source
+  // status) a governed record's decisions relied upon. Access gated through the parent record.
+  app.get<{ Params: { obligation_id: string } }>(
+    "/api/v1/otzar/obligations/:obligation_id/evidence",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getObligationEvidence({ token, obligation_id: request.params.obligation_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.get<{ Params: { handoff_id: string } }>(
+    "/api/v1/otzar/handoffs/:handoff_id/evidence",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getHandoffEvidence({ token, handoff_id: request.params.handoff_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
 }

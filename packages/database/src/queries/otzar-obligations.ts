@@ -22,6 +22,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 import { writeAuditEvent, type AuditEventType } from "./audit.js";
 import { validateSafeJson, isTerminalState } from "./otzar-obligation-validation.js";
+import { captureEvidenceSnapshot } from "./otzar-truth-evidence.js";
 
 // ── Typed vocabularies (service-tier enforced; String columns stay additive) ──────────────
 
@@ -468,6 +469,10 @@ async function casTransition(
   audit: ObligationAudit | null,
   extra: Record<string, string | null> = {},
   auditExtraDetails: Record<string, unknown> = {},
+  // [TRUTH-EVIDENCE] Optional in-tx hook run AFTER the CAS succeeds and BEFORE the transition
+  // commits — used to capture the point-in-time evidence snapshot ATOMICALLY with the decision. A
+  // throw here rolls the whole transition back (fail-closed → audit_consistency_failure).
+  inTxHook?: (tx: Prisma.TransactionClient) => Promise<void>,
 ): Promise<TransitionOutcome> {
   const sets: string[] = [`state = '${toState}'`, `version = version + 1`, `updated_at = now()`];
   if (timestampColumn !== null) sets.push(`${timestampColumn} = now()`);
@@ -498,6 +503,7 @@ async function casTransition(
           details: { obligation_id: args.obligation_id, state: toState, ...auditExtraDetails },
         });
       }
+      if (inTxHook !== undefined) await inTxHook(tx); // atomic point-in-time evidence capture
       const row = await tx.obligation.findFirst({
         where: { obligation_id: args.obligation_id, org_entity_id: scope.org_entity_id, subject_entity_id: scope.subject_entity_id, twin_entity_id: scope.twin_entity_id },
         select: OBLIGATION_SELECT,
@@ -649,7 +655,26 @@ export async function completeObligation(scope: ObligationScope, args: CompleteO
   // Persist the safe evidence blob inside the same tx via a follow-up write is not needed — the
   // evidence refs (turn/action) are the durable proof; the blob is secondary. If supplied, store
   // it alongside in a second guarded update after the atomic transition+audit commits.
-  const outcome = await casTransition(scope, args, COMPLETE_FROM, "COMPLETED", "completed_at", { event_type: "OBLIGATION_COMPLETED", actor_entity_id: args.actor_entity_id, details: {} }, extra);
+  // [TRUTH-EVIDENCE] Capture the point-in-time completion evidence ATOMICALLY inside the
+  // completion transaction: which obligation version + completion turn/action was relied upon. If
+  // the snapshot (or its audit) fails, the whole completion rolls back (never complete without a
+  // durable evidentiary record).
+  const captureHook = async (tx: Prisma.TransactionClient): Promise<void> => {
+    const res = await captureEvidenceSnapshot({
+      org_entity_id: scope.org_entity_id, decision_point: "OBLIGATION_COMPLETION",
+      // The version the completion PRODUCES (the CAS bumped expected→expected+1); recheck compares
+      // the current row to this so a later change reads as "changed", not the decision itself.
+      source_record_type: "OBLIGATION", source_record_id: args.obligation_id, source_version: args.expected_version + 1,
+      actor_entity_id: args.actor_entity_id, subject_entity_id: scope.subject_entity_id, twin_entity_id: scope.twin_entity_id,
+      obligation_id: args.obligation_id,
+      ...(args.completion_turn_id != null ? { source_turn_id: args.completion_turn_id } : {}),
+      ...(actionRef != null ? { action_ref: actionRef } : {}),
+      ...(row.conversation_id !== null ? { conversation_id: row.conversation_id } : {}),
+      metadata: { evidence: args.completion_turn_id != null ? "turn" : "action" },
+    }, tx);
+    if (res.kind !== "ok") throw new Error("evidence_capture_failed");
+  };
+  const outcome = await casTransition(scope, args, COMPLETE_FROM, "COMPLETED", "completed_at", { event_type: "OBLIGATION_COMPLETED", actor_entity_id: args.actor_entity_id, details: {} }, extra, {}, captureHook);
   if (outcome.kind === "ok" && args.completion_evidence != null) {
     await prisma.obligation.update({ where: { obligation_id: args.obligation_id }, data: { completion_evidence: args.completion_evidence as Prisma.InputJsonValue } });
   }

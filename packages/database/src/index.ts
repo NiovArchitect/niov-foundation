@@ -295,6 +295,24 @@ export type {
   HandoffOutcome,
 } from "./queries/otzar-handoffs.js";
 
+// [OTZAR STAGE-2 TRUTH-EVIDENCE] Point-in-time evidence-snapshot layer (capture + fingerprint +
+// current-status recheck; reuses the truth substrate as resolver, never re-implements it).
+export {
+  captureEvidenceSnapshot,
+  computeEvidenceFingerprint,
+  listSnapshotsForObligation,
+  listSnapshotsForHandoff,
+  resolveCurrentSourceStatus,
+  RESOLVER_VERSION,
+  __otzarTruthEvidenceTestHooks,
+} from "./queries/otzar-truth-evidence.js";
+export type {
+  SafeEvidenceSnapshot,
+  CaptureEvidenceInput,
+  CaptureResult,
+  CurrentSourceStatus,
+} from "./queries/otzar-truth-evidence.js";
+
 export type {
   Entity,
   AuditLog,
