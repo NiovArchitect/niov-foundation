@@ -2312,6 +2312,96 @@ model Obligation {
   @@map("obligations")
 }
 
+// [OTZAR STAGE-2 §L] Typed durable HANDOFF — a governed transfer of RESPONSIBILITY for a set of
+// obligations from an outgoing party to an incoming party. It LINKS obligations (via
+// HandoffObligation) and never duplicates them; responsibility/execution truth stays on the
+// obligations. A generated or SENT handoff is NOT acknowledged — only the authorized INCOMING
+// party acknowledges (acknowledged_by must equal incoming_responsible_entity_id). A handoff is not
+// COMPLETED until the receiver acknowledges AND every linked unresolved obligation has an explicit
+// disposition (accepted / reassigned / superseded / retained). Additive, plain UUID refs (Otzar
+// house style), org NON-NULL. SAFE content only — never lease/provider tokens, secrets, or raw
+// payloads (ADR-0057 §16). Lifecycle is a typed String state (service-tier TS-union, additive like
+// obligations.state); terminal states (SUPERSEDED | COMPLETED) are append-only. Create-or-get
+// idempotency via nullable origin_key UNIQUE per org. See docs/otzar/OTZAR_HANDOFF_MODEL.md.
+model Handoff {
+  handoff_id                     String    @id @default(uuid()) @db.Uuid
+  org_entity_id                  String    @db.Uuid
+  twin_entity_id                 String?   @db.Uuid // participating Twin where material
+  // Optional governed subject/case extension (patient/client/case/encounter) — typed later.
+  subject_ref                    String?   @db.Uuid
+  subject_ref_class              String?
+  // Responsibility transfer.
+  creator_entity_id              String    @db.Uuid
+  outgoing_responsible_entity_id String    @db.Uuid
+  incoming_responsible_entity_id String?   @db.Uuid // set at draft/send; ack requires THIS exact party
+  workspace_id                   String?   @db.Uuid // care team / CollaborationWorkspace
+  // Provenance / linkage (refs, not copies).
+  conversation_id                String?   @db.Uuid
+  source_turn_id                 String?   @db.Uuid
+  escalation_id                  String?   @db.Uuid
+  parent_handoff_id              String?   @db.Uuid
+  superseded_handoff_id          String?   @db.Uuid // this handoff supersedes that one (correction lineage)
+  // Meaning (safe).
+  title                          String
+  summary                        String?
+  // Safe structured payload: recent material changes, pending results, source-evidence refs.
+  details                        Json      @default("{}")
+  priority                       String    @default("ROUTINE")
+  // Lifecycle.
+  state                          String    @default("DRAFTED") // DRAFTED | READY_FOR_REVIEW | SENT | RECEIVED | ACKNOWLEDGED | CLARIFICATION_REQUIRED | SUPERSEDED | COMPLETED | ESCALATED
+  version                        Int       @default(0)
+  // Time.
+  created_at                     DateTime  @default(now())
+  updated_at                     DateTime  @updatedAt
+  ready_at                       DateTime?
+  sent_at                        DateTime?
+  received_at                    DateTime?
+  acknowledged_at                DateTime?
+  clarification_requested_at     DateTime?
+  superseded_at                  DateTime?
+  completed_at                   DateTime?
+  escalated_at                   DateTime?
+  due_at                         DateTime?
+  // Evidence (acknowledgement requires the authorized incoming party via a real turn).
+  acknowledged_turn_id           String?   @db.Uuid
+  acknowledged_by_entity_id      String?   @db.Uuid // must equal incoming_responsible_entity_id
+  audit_event_id                 String?   @db.Uuid
+  // Safety.
+  visibility_scope               String    @default("TEAM") // SUBJECT | TEAM | ORG
+  retention_class                String    @default("STANDARD")
+  origin_key                     String? // create-or-get idempotency (per org; NULLs exempt)
+
+  @@unique([org_entity_id, origin_key])
+  @@index([org_entity_id, state, created_at])
+  @@index([outgoing_responsible_entity_id, state])
+  @@index([incoming_responsible_entity_id, state])
+  @@index([workspace_id, state])
+  @@index([conversation_id])
+  @@index([parent_handoff_id])
+  @@index([state, due_at])
+  @@map("handoffs")
+}
+
+// [OTZAR STAGE-2 §L] The link between a Handoff and ONE of its obligations (LINK, not duplicate),
+// carrying the receiver's per-obligation disposition. A handoff cannot COMPLETE until every linked
+// obligation has an explicit non-PENDING disposition. Additive; plain UUID refs; org NON-NULL.
+model HandoffObligation {
+  handoff_obligation_id    String    @id @default(uuid()) @db.Uuid
+  handoff_id               String    @db.Uuid
+  obligation_id            String    @db.Uuid
+  org_entity_id            String    @db.Uuid
+  disposition              String    @default("PENDING") // PENDING | ACCEPTED | REASSIGNED | SUPERSEDED | RETAINED
+  disposition_at           DateTime?
+  disposition_by_entity_id String?   @db.Uuid
+  created_at               DateTime  @default(now())
+
+  @@unique([handoff_id, obligation_id])
+  @@index([handoff_id])
+  @@index([obligation_id])
+  @@index([org_entity_id])
+  @@map("handoff_obligations")
+}
+
 model AgentTemplate {
   template_id      String   @id @default(uuid()) @db.Uuid
   role_name        String   @unique
