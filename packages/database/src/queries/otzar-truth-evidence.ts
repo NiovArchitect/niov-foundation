@@ -268,6 +268,16 @@ export async function resolveCurrentSourceStatus(orgEntityId: string, snapshot: 
  *  we never raise a false remediation on it). */
 export const EVIDENCE_STALE_STATUSES: readonly CurrentSourceStatus[] = ["changed", "superseded", "retracted", "unavailable"];
 
+/**
+ * Decision points whose snapshot is a DURABLE FINAL basis — the recorded decision is terminal and
+ * its evidence is expected to remain current, so a later drift IS a governed remediation. Point-in-
+ * time-by-design snapshots (e.g. HANDOFF_SEND, which pins the send-time version and is EXPECTED to
+ * diverge as the handoff progresses through receive/ack/complete) are deliberately EXCLUDED — they
+ * must never raise a false remediation on normal lifecycle progression. Only final-decision
+ * snapshots gate remediation.
+ */
+export const REMEDIABLE_DECISION_POINTS: readonly string[] = ["OBLIGATION_COMPLETION", "HANDOFF_COMPLETION"];
+
 export type EvidenceRecheckEvent = "TRUTH_EVIDENCE_RECHECK_REQUIRED" | "TRUTH_EVIDENCE_RECHECKED";
 
 /**
