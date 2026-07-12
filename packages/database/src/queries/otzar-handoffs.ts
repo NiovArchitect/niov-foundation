@@ -15,7 +15,7 @@ import { prisma } from "../client.js";
 import { writeAuditEvent, type AuditEventType } from "./audit.js";
 import { validateSafeJson } from "./otzar-obligation-validation.js";
 import { reassignObligation, validateResponsibleEntity } from "./otzar-obligations.js";
-import { captureEvidenceSnapshot } from "./otzar-truth-evidence.js";
+import { captureEvidenceSnapshot, type EvidenceEnrichment } from "./otzar-truth-evidence.js";
 
 export type HandoffState =
   | "DRAFTED" | "READY_FOR_REVIEW" | "SENT" | "RECEIVED" | "ACKNOWLEDGED"
@@ -244,7 +244,7 @@ export type HandoffOutcome =
   | { kind: "precondition"; reason: string } // e.g. complete before all obligations disposed
   | { kind: "audit_consistency_failure" };
 
-interface HandoffCas { handoff_id: string; expected_version: number }
+interface HandoffCas { handoff_id: string; expected_version: number; evidence_enrichment?: EvidenceEnrichment }
 
 async function readParty(scope: HandoffScope, handoffId: string) {
   return prisma.handoff.findFirst({ where: { handoff_id: handoffId, ...partyWhere(scope) } });
@@ -316,6 +316,8 @@ export async function sendHandoff(scope: HandoffScope, args: HandoffCas & { inco
       org_entity_id: scope.org_entity_id, decision_point: "HANDOFF_SEND", source_record_type: "HANDOFF",
       source_record_id: args.handoff_id, source_version: args.expected_version + 1, actor_entity_id: scope.caller_entity_id,
       handoff_id: args.handoff_id, ...(row.conversation_id !== null ? { conversation_id: row.conversation_id } : {}),
+      // Resolved substrate values pinned point-in-time (absent when no stamped lineage exists).
+      ...(args.evidence_enrichment ?? {}),
       metadata: { linked_obligation_count: linked.length, obligation_ids: linked.map((l) => l.obligation_id) },
     }, tx);
     if (res.kind !== "ok") throw new Error("evidence_capture_failed");
@@ -472,6 +474,8 @@ export async function completeHandoff(scope: HandoffScope, args: HandoffCas): Pr
       org_entity_id: scope.org_entity_id, decision_point: "HANDOFF_COMPLETION", source_record_type: "HANDOFF",
       source_record_id: args.handoff_id, source_version: args.expected_version + 1, actor_entity_id: scope.caller_entity_id,
       handoff_id: args.handoff_id, ...(row.conversation_id !== null ? { conversation_id: row.conversation_id } : {}),
+      // Resolved substrate values pinned point-in-time (absent when no stamped lineage exists).
+      ...(args.evidence_enrichment ?? {}),
       metadata: { dispositions: linked.map((l) => ({ obligation_id: l.obligation_id, disposition: l.disposition })) },
     }, tx);
     if (res.kind !== "ok") throw new Error("evidence_capture_failed");
