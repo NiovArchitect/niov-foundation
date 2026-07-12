@@ -294,6 +294,41 @@ export const EVIDENCE_STALE_STATUSES: readonly CurrentSourceStatus[] = ["changed
  */
 export const REMEDIABLE_DECISION_POINTS: readonly string[] = ["OBLIGATION_COMPLETION", "HANDOFF_COMPLETION"];
 
+// [SECTION-10 ORG-TRUTH] The decision point for a governed organizational-truth promotion. Exported
+// for the (later) promotion runtime to capture a point-in-time ORG_TRUTH_PROMOTION snapshot. NOT yet
+// added to REMEDIABLE_DECISION_POINTS — whether a stale promotion basis should auto-remediate via the
+// sweep is a deliberate runtime-increment decision (§12), made only after promotion selection/
+// recipient resolution are proven.
+export const ORG_TRUTH_PROMOTION_DECISION_POINT = "ORG_TRUTH_PROMOTION" as const;
+
+/**
+ * [SECTION-10 ORG-TRUTH] Deterministic org-truth key for ONE governed question within ONE exact
+ * scope. Derived ONLY from governed identifiers (org, domain, subject class/ref, workspace, and a
+ * caller-normalized topic) — NEVER from generated prose. Lowercased, whitespace-collapsed, and
+ * ":"-joined so equal scopes converge and the DB unique/partial-unique constraints are meaningful.
+ * Pure + stable (no hashing here — the key is human-inspectable; a fingerprint of the candidate set
+ * is a separate concern).
+ */
+export function computeOrgTruthKey(parts: {
+  org_entity_id: string;
+  decision_domain: string;
+  subject_ref_class?: string | null;
+  subject_ref?: string | null;
+  workspace_id?: string | null;
+  topic: string;
+}): string {
+  const norm = (v: string | null | undefined): string =>
+    (v ?? "").toString().trim().toLowerCase().replace(/\s+/g, " ");
+  return [
+    norm(parts.org_entity_id),
+    norm(parts.decision_domain),
+    norm(parts.subject_ref_class) || "-",
+    norm(parts.subject_ref) || "-",
+    norm(parts.workspace_id) || "-",
+    norm(parts.topic),
+  ].join(":");
+}
+
 export type EvidenceRecheckEvent = "TRUTH_EVIDENCE_RECHECK_REQUIRED" | "TRUTH_EVIDENCE_RECHECKED";
 
 /**

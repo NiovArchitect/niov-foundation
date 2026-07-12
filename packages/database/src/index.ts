@@ -306,6 +306,8 @@ export {
   writeEvidenceRecheckAudit,
   EVIDENCE_STALE_STATUSES,
   REMEDIABLE_DECISION_POINTS,
+  ORG_TRUTH_PROMOTION_DECISION_POINT,
+  computeOrgTruthKey,
   RESOLVER_VERSION,
   __otzarTruthEvidenceTestHooks,
 } from "./queries/otzar-truth-evidence.js";
