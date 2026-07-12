@@ -179,6 +179,30 @@ export const SCHEMA_MANIFEST: TableRequirement[] = [
     ],
     uniques: [{ columns: ["handoff_id", "obligation_id"] }],
   },
+  {
+    // OTZAR STAGE-2 TRUTH-EVIDENCE — point-in-time evidence snapshots.
+    table: "truth_evidence_snapshots",
+    columns: [
+      { name: "snapshot_id", dataType: "uuid", notNull: true },
+      { name: "org_entity_id", dataType: "uuid", notNull: true },
+      { name: "decision_point", dataType: "text", notNull: true },
+      { name: "source_record_type", dataType: "text", notNull: true },
+      { name: "source_record_id", dataType: "uuid", notNull: true },
+      { name: "source_version", dataType: "integer" },
+      { name: "source_hash", dataType: "text" },
+      { name: "resolver_version", dataType: "text", notNull: true },
+      { name: "evidence_fingerprint", dataType: "text", notNull: true },
+      { name: "metadata", dataType: "jsonb", notNull: true },
+      { name: "conflict_indicator", dataType: "boolean", notNull: true },
+      { name: "superseded_at_capture", dataType: "boolean", notNull: true },
+      { name: "origin_key", dataType: "text" },
+      { name: "obligation_id", dataType: "uuid" },
+      { name: "handoff_id", dataType: "uuid" },
+      { name: "captured_at", dataType: "timestamp without time zone", notNull: true },
+      { name: "created_at", dataType: "timestamp without time zone", notNull: true },
+    ],
+    uniques: [{ columns: ["org_entity_id", "origin_key"] }],
+  },
 ];
 
 // Minimal read-only probe seam (prisma satisfies this).

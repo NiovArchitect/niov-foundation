@@ -73,6 +73,11 @@ import {
   disposeHandoffObligation,
   completeHandoff,
   supersedeHandoff,
+  // [OTZAR STAGE-2 TRUTH-EVIDENCE] evidence-snapshot reads.
+  listSnapshotsForObligation,
+  listSnapshotsForHandoff,
+  resolveCurrentSourceStatus,
+  type SafeEvidenceSnapshot,
   type SafeHandoff,
   type HandoffScope,
   type HandoffState,
@@ -3850,6 +3855,35 @@ export class OtzarService {
     }
     this.hoffLog("superseded", resolved.scope, { handoff_id: input.handoff_id, replacement_handoff_id: repl.handoff_id });
     return { ok: true, handoff: outcome.handoff, replacement: repl };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // [OTZAR STAGE-2 TRUTH-EVIDENCE] Read the point-in-time evidence snapshots a governed record's
+  // decisions relied upon. Access is gated THROUGH the parent record (obligation/handoff), and
+  // each snapshot additionally reports current_source_status (captured vs now) WITHOUT mutating
+  // the immutable captured basis.
+
+  /** Evidence snapshots for one of the caller's obligations (safe projection + live source status). */
+  async getObligationEvidence(input: { token: string; obligation_id: string }): Promise<{ ok: true; evidence: Array<SafeEvidenceSnapshot & { current_source_status: string }> } | OtzarFailure> {
+    const resolved = await this.obligationScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const obligation = await getObligationForScope(resolved.scope, input.obligation_id);
+    if (obligation === null) return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "This obligation is not available to you." };
+    const snapshots = await listSnapshotsForObligation(resolved.scope.org_entity_id, input.obligation_id);
+    const evidence = await Promise.all(snapshots.map(async (s) => ({ ...s, current_source_status: await resolveCurrentSourceStatus(resolved.scope.org_entity_id, s) })));
+    return { ok: true, evidence };
+  }
+
+  /** Evidence snapshots for a handoff the caller is a party to. The receiver can see that evidence
+   *  changed after acknowledgement (current_source_status). */
+  async getHandoffEvidence(input: { token: string; handoff_id: string }): Promise<{ ok: true; evidence: Array<SafeEvidenceSnapshot & { current_source_status: string }> } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const handoff = await getHandoffForScope(resolved.scope, input.handoff_id);
+    if (handoff === null) return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
+    const snapshots = await listSnapshotsForHandoff(resolved.scope.org_entity_id, input.handoff_id);
+    const evidence = await Promise.all(snapshots.map(async (s) => ({ ...s, current_source_status: await resolveCurrentSourceStatus(resolved.scope.org_entity_id, s) })));
+    return { ok: true, evidence };
   }
 
   // ──────────────────────────────────────────────────────────────

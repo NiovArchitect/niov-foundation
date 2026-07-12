@@ -2402,6 +2402,75 @@ model HandoffObligation {
   @@map("handoff_obligations")
 }
 
+// [OTZAR STAGE-2 TRUTH-EVIDENCE] A point-in-time EVIDENCE SNAPSHOT — the durable record of
+// EXACTLY which source, version, authority, lineage, currentness, permission, truth class and
+// truth weight a governed responsibility decision relied upon, at the moment it was made. It does
+// NOT re-implement the truth substrate (communication-lineage / truth-weight / source-integrity):
+// those RESOLVE the values; this PERSISTS the resolved result + a deterministic evidence
+// fingerprint + the governed target (obligation / handoff / etc.) that used it. A later
+// correction, retraction, upstream change, authority change, or truth-weight recalculation must
+// NEVER rewrite a captured snapshot — the captured basis is immutable; current source status is a
+// separate, re-resolvable projection. Additive, plain UUID refs, org NON-NULL. SAFE content only:
+// identifiers, hashes, safe classifications, versions, bounded metadata — never raw source
+// content, tokens, or unrestricted policy internals (ADR-0057 §16). Idempotent per decision via
+// origin_key. See docs/otzar/OTZAR_TRUTH_EVIDENCE_MODEL.md.
+model TruthEvidenceSnapshot {
+  snapshot_id            String    @id @default(uuid()) @db.Uuid
+  org_entity_id          String    @db.Uuid
+  subject_entity_id      String?   @db.Uuid
+  twin_entity_id         String?   @db.Uuid
+  subject_ref            String?   @db.Uuid // patient/client/case/encounter extension
+  subject_ref_class      String?
+  // The decision point this snapshot supports (OBLIGATION_COMPLETION | HANDOFF_SEND | ...).
+  decision_point         String
+  // Source identity + POINT-IN-TIME version/hash (what was relied upon).
+  source_record_type     String // OTZAR_CONVERSATION_TURN | OTZAR_CONVERSATION_REQUEST | WORK_LEDGER_ENTRY | MEMORY_CAPSULE | DOCUMENT_CONTEXT | OBLIGATION | HANDOFF
+  source_record_id       String    @db.Uuid
+  source_version         Int? // the version relied upon (obligation/handoff version, etc.)
+  source_hash            String? // immutable source hash (content_hash / import_hash) where available
+  source_timestamp       DateTime?
+  source_system          String? // GOOGLE_DRIVE | INTERNAL | PROVIDER | ...
+  source_integrity_state String? // AVAILABLE | CHANGED_UPSTREAM | ACCESS_REVOKED | SOURCE_DELETED | ...
+  // Resolved lineage / truth classifications (from the existing rail; snapshotted, not recomputed).
+  communication_act      String?
+  truth_class            String? // TruthWeightClass (policy_constraint … superseded)
+  truth_weight_rank      Int? // resolved rank (1 = strongest)
+  authority_class        String? // authority_status / class at time
+  authority_lineage_ref  String? // safe ref/label into authority lineage
+  agreement_lineage_ref  String?
+  decision_rights_ref    String?
+  currentness            String? // current | historical | unknown
+  permission_snapshot    Json? // bounded permission/purpose snapshot (NOT an access token)
+  conflict_indicator     Boolean   @default(false)
+  conflict_set_ref       String?
+  superseded_at_capture  Boolean   @default(false) // was the source superseded/retracted at capture time
+  // Capture metadata.
+  captured_at            DateTime  @default(now())
+  resolver_version       String
+  evidence_fingerprint   String // deterministic hash of the decision-relevant evidence
+  metadata               Json      @default("{}") // safe structured only
+  origin_key             String? // idempotency per decision (NULLs exempt)
+  // Linkage to the governed target(s) that used this evidence (refs, not copies).
+  obligation_id          String?   @db.Uuid
+  handoff_id             String?   @db.Uuid
+  handoff_obligation_id  String?   @db.Uuid
+  request_record_id      String?   @db.Uuid
+  action_ref             String?   @db.Uuid
+  source_turn_id         String?   @db.Uuid
+  conversation_id        String?   @db.Uuid
+  audit_event_id         String?   @db.Uuid
+  created_at             DateTime  @default(now())
+
+  @@unique([org_entity_id, origin_key])
+  @@index([org_entity_id, source_record_type, source_record_id])
+  @@index([obligation_id])
+  @@index([handoff_id])
+  @@index([evidence_fingerprint])
+  @@index([source_record_id])
+  @@index([conversation_id])
+  @@map("truth_evidence_snapshots")
+}
+
 model AgentTemplate {
   template_id      String   @id @default(uuid()) @db.Uuid
   role_name        String   @unique
