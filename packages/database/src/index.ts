@@ -218,8 +218,10 @@ export {
   supersedeObligation,
   projectObligationFromAwaitingConfirmation,
   projectObligationFromUnresolvedQuestion,
+  validateResponsibleEntity,
   TERMINAL_OBLIGATION_STATES,
   OPEN_OBLIGATION_STATES,
+  __otzarObligationTestHooks,
 } from "./queries/otzar-obligations.js";
 export type {
   ObligationScope,
@@ -227,6 +229,7 @@ export type {
   ObligationType,
   SafeObligation,
   CreateObligationInput,
+  CreateObligationResult,
   ListObligationsOptions,
   TransitionOutcome,
   CompleteObligationArgs,
@@ -235,6 +238,25 @@ export type {
   SupersedeResult,
   ProjectionResult,
 } from "./queries/otzar-obligations.js";
+// [OTZAR STAGE-2 HARDENING D+H] Canonical enum allowlists/guards + safe-JSON validator.
+export {
+  OBLIGATION_TYPES,
+  OBLIGATION_PRIORITIES,
+  REQUIRED_RESPONSE_CLASSES,
+  SOURCE_CHANNELS,
+  PROVENANCE_CLASSES,
+  VISIBILITY_SCOPES,
+  isObligationType,
+  isObligationState,
+  isObligationPriority,
+  isRequiredResponseClass,
+  isSourceChannel,
+  isProvenanceClass,
+  isVisibilityScope,
+  validateSafeJson,
+  DEFAULT_SAFE_JSON_LIMITS,
+} from "./queries/otzar-obligation-validation.js";
+export type { SafeJsonResult, SafeJsonLimits } from "./queries/otzar-obligation-validation.js";
 
 export type {
   Entity,

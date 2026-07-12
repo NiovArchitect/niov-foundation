@@ -1339,3 +1339,51 @@ describe("GET /otzar/conversations/:id/drift-signals (ADR-0058)", () => {
     expect(response.payload).not.toContain("capability_flags");
   });
 });
+
+// [OTZAR STAGE-2 HARDENING D] Obligation routes reject unknown enum-like inputs with 422 at the
+// route layer, BEFORE the service is reached. (Happy-path create/read behavior is proven in the
+// obligation integration suite.)
+describe("obligation routes — enum validation + auth gate", () => {
+  const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+
+  it("401 without a bearer token", async () => {
+    expect((await app.inject({ method: "POST", url: "/api/v1/otzar/obligations", payload: { obligation_type: "FOLLOW_UP", title: "x" } })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/v1/otzar/obligations" })).statusCode).toBe(401);
+  });
+
+  it("422 on an unknown obligation_type / missing title", async () => {
+    const { token } = await loginAndAttachTwin();
+    expect((await app.inject({ method: "POST", url: "/api/v1/otzar/obligations", headers: auth(token), payload: { obligation_type: "NOT_A_TYPE", title: "x" } })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: "/api/v1/otzar/obligations", headers: auth(token), payload: { obligation_type: "FOLLOW_UP", title: "  " } })).statusCode).toBe(422);
+  });
+
+  it("422 on unknown initial_state / priority / required_response_class / source_channel / provenance_class", async () => {
+    const { token } = await loginAndAttachTwin();
+    const base = { obligation_type: "FOLLOW_UP", title: "x" };
+    const bads: Array<Record<string, unknown>> = [
+      { ...base, initial_state: "NOPE" },
+      { ...base, priority: "NOPE" },
+      { ...base, required_response_class: "NOPE" },
+      { ...base, source_channel: "NOPE" },
+      { ...base, provenance_class: "NOPE" },
+    ];
+    for (const payload of bads) {
+      expect((await app.inject({ method: "POST", url: "/api/v1/otzar/obligations", headers: auth(token), payload })).statusCode).toBe(422);
+    }
+  });
+
+  it("422 on unknown list state / obligation_type filters", async () => {
+    const { token } = await loginAndAttachTwin();
+    expect((await app.inject({ method: "GET", url: "/api/v1/otzar/obligations?state=NOPE", headers: auth(token) })).statusCode).toBe(422);
+    expect((await app.inject({ method: "GET", url: "/api/v1/otzar/obligations?obligation_type=NOPE", headers: auth(token) })).statusCode).toBe(422);
+  });
+
+  it("422 on an unknown transition verb / missing expected_version", async () => {
+    const { token } = await loginAndAttachTwin();
+    const id = "00000000-0000-4000-8000-000000000000";
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/obligations/${id}/transition`, headers: auth(token), payload: { expected_version: 0, transition: "explode" } })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/obligations/${id}/transition`, headers: auth(token), payload: { transition: "cancel" } })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/obligations/${id}/complete`, headers: auth(token), payload: {} })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/obligations/${id}/acknowledge`, headers: auth(token), payload: { expected_version: 0 } })).statusCode).toBe(422);
+  });
+});

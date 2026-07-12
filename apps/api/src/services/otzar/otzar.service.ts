@@ -57,6 +57,7 @@ import {
   supersedeObligation,
   projectObligationFromAwaitingConfirmation,
   projectObligationFromUnresolvedQuestion,
+  validateResponsibleEntity,
   type SafeObligation,
   type ObligationScope,
   type CreateObligationInput,
@@ -437,7 +438,11 @@ export interface OtzarFailure {
     | "OTZAR_OBLIGATION_STATE_CHANGED"
     | "OTZAR_OBLIGATION_ILLEGAL_TRANSITION"
     | "OTZAR_OBLIGATION_EVIDENCE_REQUIRED"
-    | "OTZAR_OBLIGATION_NOT_ACKNOWLEDGEABLE";
+    | "OTZAR_OBLIGATION_NOT_ACKNOWLEDGEABLE"
+    // [HARDENING] validation + audit-consistency failures.
+    | "OTZAR_OBLIGATION_INVALID_INPUT"
+    | "OTZAR_OBLIGATION_INVALID_REFERENCE"
+    | "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED";
   message: string;
   detail?: unknown;
 }
@@ -3428,6 +3433,10 @@ export class OtzarService {
         return { ok: false, code: "OTZAR_OBLIGATION_EVIDENCE_REQUIRED", message: "Completion requires durable evidence — silence is not completion." };
       case "not_acknowledgeable":
         return { ok: false, code: "OTZAR_OBLIGATION_NOT_ACKNOWLEDGEABLE", message: "This obligation can't be acknowledged by you here." };
+      case "audit_consistency_failure":
+        // The transition rolled back because its audit evidence could not be persisted. Never a
+        // governed success without durable audit.
+        return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The change could not be recorded and was rolled back. Please retry." };
     }
   }
 
@@ -3439,18 +3448,23 @@ export class OtzarService {
     return { scope, entity_id: session.entity_id };
   }
 
-  private async emitObligationAudit(
-    eventType: "OBLIGATION_CREATED" | "OBLIGATION_ACKNOWLEDGED" | "OBLIGATION_COMPLETED" | "OBLIGATION_CANCELLED" | "OBLIGATION_ESCALATED" | "OBLIGATION_BLOCKED" | "OBLIGATION_REASSIGNED" | "OBLIGATION_SUPERSEDED" | "OBLIGATION_EXPIRED",
-    actorEntityId: string,
-    orgEntityId: string,
-    details: Record<string, unknown>,
-  ): Promise<void> {
-    // Leak-safe details only (obligation_id, type, state, safe lineage) — never raw payload/tokens.
-    await writeAuditEvent({ event_type: eventType, outcome: "SUCCESS", actor_entity_id: actorEntityId, target_entity_id: orgEntityId, details }).catch(() => undefined);
+  // [HARDENING J] Leak-safe obligation monitoring — ids + event/state/reason ONLY. NEVER titles,
+  // details, patient content, or source text. Counters are derived downstream from these events.
+  private oblLog(event: string, scope: ObligationScope, extra: Record<string, unknown> = {}, level: "info" | "warn" = "info"): void {
+    logger[level]({ event: `obligation.${event}`, org: scope.org_entity_id, subject: scope.subject_entity_id, ...extra }, `obligation ${event}`);
+  }
+
+  // Map a transition outcome to a monitoring event on the failure paths (§J).
+  private oblLogOutcome(scope: ObligationScope, obligationId: string, outcome: Exclude<TransitionOutcome, { kind: "ok" }>): void {
+    const map: Record<string, string> = {
+      not_found: "cross_scope_denied", stale_version: "stale_conflict", illegal_transition: "illegal_transition",
+      evidence_required: "evidence_refused", not_acknowledgeable: "ack_denied", audit_consistency_failure: "audit_uncommitted",
+    };
+    this.oblLog(map[outcome.kind] ?? outcome.kind, scope, { obligation_id: obligationId }, "warn");
   }
 
   /** Create (or idempotently return) an obligation. The caller is the creator; the responsible
-   *  party defaults to the caller unless specified. */
+   *  party defaults to the caller unless specified. Audit is written atomically in the query tx. */
   async createObligation(input: {
     token: string;
     obligation_type: ObligationType;
@@ -3490,13 +3504,21 @@ export class OtzarService {
       ...(input.action_ref !== undefined ? { action_ref: input.action_ref } : {}),
       ...(input.due_at !== undefined ? { due_at: input.due_at } : {}),
     };
-    const { obligation, created } = await createOrGetObligation(scope, createInput);
-    if (created) {
-      await this.emitObligationAudit("OBLIGATION_CREATED", entity_id, scope.org_entity_id, {
-        obligation_id: obligation.obligation_id, obligation_type: obligation.obligation_type, state: obligation.state,
-      });
+    const res = await createOrGetObligation(scope, createInput, { actor_entity_id: entity_id });
+    if (res.kind === "invalid_content" || res.kind === "invalid_state") {
+      this.oblLog("invalid_input", scope, { reason: res.kind }, "warn");
+      return { ok: false, code: "OTZAR_OBLIGATION_INVALID_INPUT", message: "The obligation input was rejected." };
     }
-    return { ok: true, obligation, created };
+    if (res.kind === "invalid_reference") {
+      this.oblLog("invalid_reference", scope, { reason: res.reason }, "warn");
+      return { ok: false, code: "OTZAR_OBLIGATION_INVALID_REFERENCE", message: "A linked reference is invalid or not available to you." };
+    }
+    if (res.kind === "audit_consistency_failure") {
+      this.oblLog("audit_uncommitted", scope, {}, "warn");
+      return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The obligation could not be recorded and was rolled back. Please retry." };
+    }
+    if (res.created) this.oblLog("created", scope, { obligation_id: res.obligation.obligation_id, obligation_type: res.obligation.obligation_type });
+    return { ok: true, obligation: res.obligation, created: res.created };
   }
 
   /** List the caller's obligations (restoration read — survives thread close/archive/staff
@@ -3529,7 +3551,7 @@ export class OtzarService {
     return { ok: true, obligation };
   }
 
-  /** Acknowledge — only the responsible actor (or delegate) via a USER turn. */
+  /** Acknowledge — only the responsible actor (or delegate) via a USER turn. Audit is atomic. */
   async acknowledgeObligation(input: { token: string; obligation_id: string; expected_version: number; acknowledged_turn_id: string }): Promise<{ ok: true; obligation: SafeObligation } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) return resolved;
@@ -3537,77 +3559,64 @@ export class OtzarService {
       obligation_id: input.obligation_id, expected_version: input.expected_version,
       acknowledged_turn_id: input.acknowledged_turn_id, actor_entity_id: resolved.entity_id,
     });
-    if (outcome.kind !== "ok") return this.mapObligationFailure(outcome);
-    await this.emitObligationAudit("OBLIGATION_ACKNOWLEDGED", resolved.entity_id, resolved.scope.org_entity_id, {
-      obligation_id: input.obligation_id, state: outcome.obligation.state,
-    });
+    if (outcome.kind !== "ok") { this.oblLogOutcome(resolved.scope, input.obligation_id, outcome); return this.mapObligationFailure(outcome); }
+    this.oblLog("acknowledged", resolved.scope, { obligation_id: input.obligation_id });
     return { ok: true, obligation: outcome.obligation };
   }
 
   /** Complete — requires validated durable evidence (ACTION_CONFIRMATION: linked ledger
-   *  EXECUTED; else a real completion turn / executed action). */
+   *  EXECUTED; else a real in-scope USER completion turn). Audit is atomic. */
   async completeObligation(input: { token: string; obligation_id: string; expected_version: number; completion_turn_id?: string | null; completion_action_ref?: string | null; completion_evidence?: Record<string, unknown> | null }): Promise<{ ok: true; obligation: SafeObligation } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) return resolved;
     const outcome = await completeObligation(resolved.scope, {
-      obligation_id: input.obligation_id, expected_version: input.expected_version,
+      obligation_id: input.obligation_id, expected_version: input.expected_version, actor_entity_id: resolved.entity_id,
       ...(input.completion_turn_id !== undefined ? { completion_turn_id: input.completion_turn_id } : {}),
       ...(input.completion_action_ref !== undefined ? { completion_action_ref: input.completion_action_ref } : {}),
       ...(input.completion_evidence !== undefined ? { completion_evidence: input.completion_evidence } : {}),
     });
-    if (outcome.kind !== "ok") return this.mapObligationFailure(outcome);
-    await this.emitObligationAudit("OBLIGATION_COMPLETED", resolved.entity_id, resolved.scope.org_entity_id, {
-      obligation_id: input.obligation_id, state: outcome.obligation.state,
-    });
+    if (outcome.kind !== "ok") { this.oblLogOutcome(resolved.scope, input.obligation_id, outcome); return this.mapObligationFailure(outcome); }
+    this.oblLog("completed", resolved.scope, { obligation_id: input.obligation_id });
     return { ok: true, obligation: outcome.obligation };
   }
 
-  /** A simple state transition (cancel / block / start / escalate / expire). */
+  /** A simple state transition (cancel / block / start / escalate / expire). Audit is atomic. */
   async transitionObligation(input: { token: string; obligation_id: string; expected_version: number; transition: "cancel" | "block" | "start" | "escalate" | "expire"; escalation_id?: string | null }): Promise<{ ok: true; obligation: SafeObligation } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) return resolved;
+    const actor = resolved.entity_id;
     const args = { obligation_id: input.obligation_id, expected_version: input.expected_version };
     let outcome: TransitionOutcome;
-    let auditType: "OBLIGATION_CANCELLED" | "OBLIGATION_BLOCKED" | "OBLIGATION_ESCALATED" | "OBLIGATION_EXPIRED" | null = null;
     switch (input.transition) {
-      case "cancel": outcome = await cancelObligation(resolved.scope, args); auditType = "OBLIGATION_CANCELLED"; break;
-      case "block": outcome = await blockObligation(resolved.scope, args); auditType = "OBLIGATION_BLOCKED"; break;
+      case "cancel": outcome = await cancelObligation(resolved.scope, { ...args, actor_entity_id: actor }); break;
+      case "block": outcome = await blockObligation(resolved.scope, { ...args, actor_entity_id: actor }); break;
       case "start": outcome = await startObligation(resolved.scope, args); break;
-      case "expire": outcome = await expireObligation(resolved.scope, args); auditType = "OBLIGATION_EXPIRED"; break;
+      case "expire": outcome = await expireObligation(resolved.scope, { ...args, actor_entity_id: actor }); break;
       case "escalate":
-        outcome = await escalateObligation(resolved.scope, { ...args, ...(input.escalation_id != null ? { escalation_id: input.escalation_id } : {}) });
-        auditType = "OBLIGATION_ESCALATED";
+        outcome = await escalateObligation(resolved.scope, { ...args, actor_entity_id: actor, ...(input.escalation_id != null ? { escalation_id: input.escalation_id } : {}) });
         break;
     }
-    if (outcome.kind !== "ok") return this.mapObligationFailure(outcome);
-    if (auditType !== null) {
-      await this.emitObligationAudit(auditType, resolved.entity_id, resolved.scope.org_entity_id, {
-        obligation_id: input.obligation_id, state: outcome.obligation.state,
-      });
-    }
+    if (outcome.kind !== "ok") { this.oblLogOutcome(resolved.scope, input.obligation_id, outcome); return this.mapObligationFailure(outcome); }
+    this.oblLog(input.transition, resolved.scope, { obligation_id: input.obligation_id });
     return { ok: true, obligation: outcome.obligation };
   }
 
-  /** Reassign — new responsible party; resets ack; records full prior lineage in the audit. */
+  /** Reassign — new responsible party; resets ack; full prior lineage in the atomic audit.
+   *  [HARDENING F] the new responsible party must be a real, active, in-scope entity. */
   async reassignObligation(input: { token: string; obligation_id: string; expected_version: number; new_responsible_entity_id: string; reason: string }): Promise<{ ok: true; obligation: SafeObligation } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) return resolved;
-    const { outcome, prior } = await reassignObligation(resolved.scope, {
+    const respErr = await validateResponsibleEntity(resolved.scope, input.new_responsible_entity_id);
+    if (respErr !== null) {
+      this.oblLog("invalid_reference", resolved.scope, { reason: respErr }, "warn");
+      return { ok: false, code: "OTZAR_OBLIGATION_INVALID_REFERENCE", message: "The new responsible party is not a valid, active member of this organization." };
+    }
+    const { outcome } = await reassignObligation(resolved.scope, {
       obligation_id: input.obligation_id, expected_version: input.expected_version,
       new_responsible_entity_id: input.new_responsible_entity_id, assigning_actor_entity_id: resolved.entity_id, reason: input.reason,
     });
-    if (outcome.kind !== "ok") return this.mapObligationFailure(outcome);
-    await this.emitObligationAudit("OBLIGATION_REASSIGNED", resolved.entity_id, resolved.scope.org_entity_id, {
-      obligation_id: input.obligation_id,
-      new_responsible_entity_id: input.new_responsible_entity_id,
-      assigning_actor_entity_id: resolved.entity_id,
-      reason: input.reason,
-      ...(prior !== undefined ? {
-        previous_responsible_entity_id: prior.previous_responsible_entity_id,
-        previous_state: prior.previous_state,
-        previous_acknowledged: prior.previous_acknowledged_at !== null,
-      } : {}),
-    });
+    if (outcome.kind !== "ok") { this.oblLogOutcome(resolved.scope, input.obligation_id, outcome); return this.mapObligationFailure(outcome); }
+    this.oblLog("reassigned", resolved.scope, { obligation_id: input.obligation_id });
     return { ok: true, obligation: outcome.obligation };
   }
 
@@ -3633,45 +3642,38 @@ export class OtzarService {
       ...(input.replacement.due_at !== undefined ? { due_at: input.replacement.due_at } : {}),
     };
     const { outcome, replacement } = await supersedeObligation(resolved.scope, {
-      obligation_id: input.obligation_id, expected_version: input.expected_version, replacement: replacementInput,
+      obligation_id: input.obligation_id, expected_version: input.expected_version, replacement: replacementInput, actor_entity_id: resolved.entity_id,
     });
     if (outcome.kind !== "ok" || replacement === undefined) {
+      if (outcome.kind !== "ok") this.oblLogOutcome(resolved.scope, input.obligation_id, outcome);
       return outcome.kind === "ok" ? { ok: false, code: "OTZAR_OBLIGATION_STATE_CHANGED", message: "Supersession did not complete." } : this.mapObligationFailure(outcome);
     }
-    await this.emitObligationAudit("OBLIGATION_SUPERSEDED", resolved.entity_id, resolved.scope.org_entity_id, {
-      obligation_id: input.obligation_id, replacement_obligation_id: replacement.obligation_id,
-    });
+    this.oblLog("superseded", resolved.scope, { obligation_id: input.obligation_id, replacement_obligation_id: replacement.obligation_id });
     return { ok: true, obligation: outcome.obligation, replacement };
   }
 
   /** Project an obligation from an existing awaiting-confirmation action (a NEEDS_CALLER_
    *  CONFIRMATION WorkLedgerEntry). Idempotent — re-projecting yields the same obligation. The
-   *  obligation LINKS the ledger; execution truth stays on the ledger. */
+   *  obligation LINKS the ledger; execution truth stays on the ledger. Audit is atomic. */
   async projectAwaitingConfirmationObligation(input: { token: string; ledger_entry_id: string }): Promise<{ ok: true; obligation: SafeObligation; created: boolean } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) return resolved;
-    const res = await projectObligationFromAwaitingConfirmation(resolved.scope, input.ledger_entry_id);
-    if (res.kind !== "projected") return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "Nothing awaiting confirmation to project here." };
-    if (res.created) {
-      await this.emitObligationAudit("OBLIGATION_CREATED", resolved.entity_id, resolved.scope.org_entity_id, {
-        obligation_id: res.obligation.obligation_id, obligation_type: res.obligation.obligation_type, state: res.obligation.state, projected_from: "awaiting_confirmation",
-      });
-    }
+    const res = await projectObligationFromAwaitingConfirmation(resolved.scope, input.ledger_entry_id, { actor_entity_id: resolved.entity_id });
+    if (res.kind === "audit_consistency_failure") { this.oblLog("audit_uncommitted", resolved.scope, {}, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The obligation could not be recorded and was rolled back. Please retry." }; }
+    if (res.kind !== "projected") { this.oblLog("projection_inconsistent", resolved.scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "Nothing awaiting confirmation to project here." }; }
+    if (res.created) this.oblLog("created", resolved.scope, { obligation_id: res.obligation.obligation_id, projected_from: "awaiting_confirmation" });
     return { ok: true, obligation: res.obligation, created: res.created };
   }
 
   /** Project an obligation from an unresolved assistant question (a COMPLETED CLARIFICATION
-   *  request). Idempotent — re-projecting yields the same obligation. */
+   *  request with a coherent canonical). Idempotent. Audit is atomic. */
   async projectUnresolvedQuestionObligation(input: { token: string; request_record_id: string }): Promise<{ ok: true; obligation: SafeObligation; created: boolean } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) return resolved;
-    const res = await projectObligationFromUnresolvedQuestion(resolved.scope, input.request_record_id);
-    if (res.kind !== "projected") return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "No unresolved question to project here." };
-    if (res.created) {
-      await this.emitObligationAudit("OBLIGATION_CREATED", resolved.entity_id, resolved.scope.org_entity_id, {
-        obligation_id: res.obligation.obligation_id, obligation_type: res.obligation.obligation_type, state: res.obligation.state, projected_from: "unresolved_question",
-      });
-    }
+    const res = await projectObligationFromUnresolvedQuestion(resolved.scope, input.request_record_id, { actor_entity_id: resolved.entity_id });
+    if (res.kind === "audit_consistency_failure") { this.oblLog("audit_uncommitted", resolved.scope, {}, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The obligation could not be recorded and was rolled back. Please retry." }; }
+    if (res.kind !== "projected") { this.oblLog("projection_inconsistent", resolved.scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "No unresolved question to project here." }; }
+    if (res.created) this.oblLog("created", resolved.scope, { obligation_id: res.obligation.obligation_id, projected_from: "unresolved_question" });
     return { ok: true, obligation: res.obligation, created: res.created };
   }
 

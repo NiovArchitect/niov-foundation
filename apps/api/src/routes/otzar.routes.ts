@@ -12,6 +12,15 @@ import {
   isDemoModeAllowed,
   DEMO_MODE_NOT_ALLOWED,
 } from "../services/otzar/demo-mode.js";
+// [HARDENING D] Canonical runtime allowlists — reject unknown enum-like inputs with 422.
+import {
+  isObligationType,
+  isObligationState,
+  isObligationPriority,
+  isRequiredResponseClass,
+  isSourceChannel,
+  isProvenanceClass,
+} from "@niov/database";
 
 // WHAT: Hard ceiling on caller-supplied token_budget. Above this,
 //        reject with BUDGET_TOO_LARGE 422 -- protects the LLM
@@ -72,7 +81,11 @@ function statusForCode(code: string): number {
       return 404;
     case "OTZAR_OBLIGATION_EVIDENCE_REQUIRED":
     case "OTZAR_OBLIGATION_NOT_ACKNOWLEDGEABLE":
+    case "OTZAR_OBLIGATION_INVALID_INPUT":
+    case "OTZAR_OBLIGATION_INVALID_REFERENCE":
       return 422;
+    case "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED":
+      return 503;
     case "ALREADY_INGESTED":
     case "OTZAR_REQUEST_ID_CONFLICT":
     case "OTZAR_THREAD_CLOSED":
@@ -826,16 +839,22 @@ export async function registerOtzarRoutes(
       const token = bearerFrom(request.headers.authorization);
       if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
       const body = request.body ?? {};
-      if (typeof body.obligation_type !== "string" || typeof body.title !== "string" || body.title.trim().length === 0) {
-        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "obligation_type and title are required" });
+      if (!isObligationType(body.obligation_type) || typeof body.title !== "string" || body.title.trim().length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "a valid obligation_type and a non-empty title are required" });
       }
+      // [HARDENING D] every supplied enum-like field must be a known value (else 422).
+      if (body.initial_state !== undefined && !isObligationState(body.initial_state)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown initial_state" });
+      if (body.priority !== undefined && !isObligationPriority(body.priority)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown priority" });
+      if (body.required_response_class !== undefined && !isRequiredResponseClass(body.required_response_class)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown required_response_class" });
+      if (body.source_channel !== undefined && !isSourceChannel(body.source_channel)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown source_channel" });
+      if (body.provenance_class !== undefined && !isProvenanceClass(body.provenance_class)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown provenance_class" });
       const result = await otzarService.createObligation({
         token,
-        obligation_type: body.obligation_type as never,
+        obligation_type: body.obligation_type,
         title: body.title,
         ...(typeof body.responsible_entity_id === "string" ? { responsible_entity_id: body.responsible_entity_id } : {}),
         ...(typeof body.origin_key === "string" ? { origin_key: body.origin_key } : {}),
-        ...(typeof body.initial_state === "string" ? { initial_state: body.initial_state as never } : {}),
+        ...(isObligationState(body.initial_state) ? { initial_state: body.initial_state } : {}),
         ...(typeof body.priority === "string" ? { priority: body.priority } : {}),
         ...(typeof body.required_response_class === "string" ? { required_response_class: body.required_response_class } : {}),
         ...(typeof body.source_channel === "string" ? { source_channel: body.source_channel } : {}),
@@ -858,13 +877,18 @@ export async function registerOtzarRoutes(
       const token = bearerFrom(request.headers.authorization);
       if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
       const rawLimit = Number(request.query.limit);
-      const states = typeof request.query.state === "string" && request.query.state.length > 0
+      // [HARDENING D] filter enums must be known values (else 422).
+      const rawStates = typeof request.query.state === "string" && request.query.state.length > 0
         ? request.query.state.split(",").filter((s) => s.length > 0)
         : undefined;
+      if (rawStates !== undefined && !rawStates.every(isObligationState)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown state filter" });
+      if (request.query.obligation_type !== undefined && request.query.obligation_type.length > 0 && !isObligationType(request.query.obligation_type)) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown obligation_type filter" });
+      }
       const result = await otzarService.listObligations({
         token,
-        ...(states !== undefined ? { states: states as never } : {}),
-        ...(typeof request.query.obligation_type === "string" && request.query.obligation_type.length > 0 ? { obligation_type: request.query.obligation_type as never } : {}),
+        ...(rawStates !== undefined && rawStates.every(isObligationState) ? { states: rawStates } : {}),
+        ...(isObligationType(request.query.obligation_type) ? { obligation_type: request.query.obligation_type } : {}),
         ...(typeof request.query.conversation_id === "string" && request.query.conversation_id.length > 0 ? { conversation_id: request.query.conversation_id } : {}),
         ...(request.query.open_only === "true" ? { open_only: true } : {}),
         ...(Number.isFinite(rawLimit) && rawLimit > 0 ? { limit: Math.floor(rawLimit) } : {}),
@@ -982,13 +1006,15 @@ export async function registerOtzarRoutes(
         return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version and replacement are required" });
       }
       const r = replacement as Record<string, unknown>;
-      if (typeof r.obligation_type !== "string" || typeof r.title !== "string" || r.title.trim().length === 0) {
-        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "replacement.obligation_type and replacement.title are required" });
+      if (!isObligationType(r.obligation_type) || typeof r.title !== "string" || r.title.trim().length === 0) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "a valid replacement.obligation_type and a non-empty replacement.title are required" });
       }
+      if (r.initial_state !== undefined && !isObligationState(r.initial_state)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown replacement.initial_state" });
+      if (r.priority !== undefined && !isObligationPriority(r.priority)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown replacement.priority" });
       const result = await otzarService.supersedeObligation({
         token, obligation_id: request.params.obligation_id, expected_version: version,
         replacement: {
-          obligation_type: r.obligation_type as never,
+          obligation_type: r.obligation_type,
           title: r.title,
           ...(typeof r.responsible_entity_id === "string" ? { responsible_entity_id: r.responsible_entity_id } : {}),
           ...(typeof r.priority === "string" ? { priority: r.priority } : {}),
@@ -997,6 +1023,7 @@ export async function registerOtzarRoutes(
           ...(typeof r.conversation_id === "string" ? { conversation_id: r.conversation_id } : {}),
           ...(typeof r.source_turn_id === "string" ? { source_turn_id: r.source_turn_id } : {}),
           ...(typeof r.action_ref === "string" ? { action_ref: r.action_ref } : {}),
+          ...(isObligationState(r.initial_state) ? { initial_state: r.initial_state } : {}),
         },
       });
       if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
