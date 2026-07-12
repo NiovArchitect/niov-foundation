@@ -83,6 +83,19 @@ import {
   REMEDIABLE_DECISION_POINTS,
   recheckRecordAndRemediate,
   type RecheckRemediateOutcome,
+  // [SECTION-10 ORG-TRUTH] governed promotion + conflict runtime.
+  promoteOrgTruth,
+  resolveConflict as resolveOrgTruthConflictQuery,
+  retractOrgTruth,
+  resolveDomainOwner,
+  getCurrentPromotedTruth,
+  getTruthRecord,
+  listConflictSetsForOrg,
+  getConflictSet,
+  type OrgTruthScope,
+  type SourceCandidate,
+  type PromoteResult,
+  type SafeOrgTruthRecord,
   type EvidenceEnrichment,
   type SafeEvidenceSnapshot,
   type SafeHandoff,
@@ -488,7 +501,16 @@ export interface OtzarFailure {
     | "OTZAR_HANDOFF_PRECONDITION"
     | "OTZAR_HANDOFF_INVALID_INPUT"
     | "OTZAR_HANDOFF_INVALID_REFERENCE"
-    | "OTZAR_HANDOFF_AUDIT_UNCOMMITTED";
+    | "OTZAR_HANDOFF_AUDIT_UNCOMMITTED"
+    | "OTZAR_ORG_TRUTH_NO_ORG"
+    | "OTZAR_ORG_TRUTH_UNAUTHORIZED"
+    | "OTZAR_ORG_TRUTH_RECOMMEND_ONLY"
+    | "OTZAR_ORG_TRUTH_INELIGIBLE_SOURCE"
+    | "OTZAR_ORG_TRUTH_INVALID_INPUT"
+    | "OTZAR_ORG_TRUTH_STATE_CHANGED"
+    | "OTZAR_ORG_TRUTH_AUDIT_UNCOMMITTED"
+    | "OTZAR_ORG_TRUTH_CONFLICT_NOT_FOUND"
+    | "OTZAR_ORG_TRUTH_NOT_FOUND";
   message: string;
   detail?: unknown;
 }
@@ -4076,6 +4098,121 @@ export class OtzarService {
       actor_entity_id: entity_id, audit_current: true,
     });
     return this.mapRecheckOutcome(outcome, "HANDOFF", scope, input.handoff_id);
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // [SECTION-10 ORG-TRUTH] Governed organizational-truth promotion + conflict. Decision-rights
+  // authority is enforced in the query layer; the service resolves the caller + the domain-owner
+  // obligation scope (for conflict review) and maps to typed failures.
+
+  /** Resolve the caller's (org, entity) for an org-truth operation. */
+  private async orgTruthContext(token: string): Promise<{ org_entity_id: string; entity_id: string } | OtzarFailure> {
+    const session = await this.authService.validateSession(token, "read");
+    if (!session.valid) return { ok: false, code: session.code, message: "Org-truth access denied" };
+    const { getOrgEntityId } = await import("../governance/org.js");
+    let org: string | null;
+    try { org = await getOrgEntityId(session.entity_id); } catch { org = null; }
+    if (org === null) return { ok: false, code: "OTZAR_ORG_TRUTH_NO_ORG", message: "No organization context for this caller." };
+    return { org_entity_id: org, entity_id: session.entity_id };
+  }
+
+  private mapPromote(result: PromoteResult): { ok: true; result: PromoteResult } | OtzarFailure {
+    switch (result.kind) {
+      case "unauthorized": return { ok: false, code: "OTZAR_ORG_TRUTH_UNAUTHORIZED", message: "You do not hold decision rights to promote this domain." };
+      case "recommend_only": return { ok: false, code: "OTZAR_ORG_TRUTH_RECOMMEND_ONLY", message: "A recommend-only party may submit a candidate but cannot finalize a promotion." };
+      case "ineligible_source": return { ok: false, code: "OTZAR_ORG_TRUTH_INELIGIBLE_SOURCE", message: "The selected source is not currently eligible for promotion." };
+      case "invalid_content": return { ok: false, code: "OTZAR_ORG_TRUTH_INVALID_INPUT", message: "The promoted value was rejected." };
+      case "state_changed": return { ok: false, code: "OTZAR_ORG_TRUTH_STATE_CHANGED", message: "The current truth or source changed since you read it. Re-review and retry." };
+      case "audit_consistency_failure": return { ok: false, code: "OTZAR_ORG_TRUTH_AUDIT_UNCOMMITTED", message: "The promotion could not be recorded and was rolled back. Please retry." };
+      case "promoted": case "conflict_open": return { ok: true, result };
+    }
+  }
+
+  /** Promote a selected winning source into the org's current answer (or open a conflict). */
+  async promoteOrgTruth(input: { token: string; scope: Omit<OrgTruthScope, "org_entity_id">; winner: SourceCandidate; competing?: SourceCandidate[]; title?: string | null; value?: Record<string, unknown> | null; value_type?: string | null; reason?: string | null; expected_current_version?: number | null }): Promise<{ ok: true; result: PromoteResult } | OtzarFailure> {
+    const ctx = await this.orgTruthContext(input.token);
+    if ("ok" in ctx) return ctx;
+    const scope: OrgTruthScope = { ...input.scope, org_entity_id: ctx.org_entity_id };
+    const result = await promoteOrgTruth({
+      scope, actor_entity_id: ctx.entity_id, winner: input.winner,
+      ...(input.competing !== undefined ? { competing: input.competing } : {}),
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.value !== undefined ? { value: input.value } : {}),
+      ...(input.value_type !== undefined ? { value_type: input.value_type } : {}),
+      ...(input.reason !== undefined ? { reason: input.reason } : {}),
+      ...(input.expected_current_version !== undefined ? { expected_current_version: input.expected_current_version } : {}),
+      // Conflict review obligation → the domain owner's obligation scope (resolved lazily).
+      resolveOwnerScope: async () => {
+        const owner = await resolveDomainOwner(scope.org_entity_id, scope.decision_domain);
+        return owner === null ? null : this.restoreScope(owner);
+      },
+    });
+    return this.mapPromote(result);
+  }
+
+  /** Resolve an open conflict by promoting the selected winner with a recorded reason. */
+  async resolveOrgTruthConflict(input: { token: string; scope: Omit<OrgTruthScope, "org_entity_id">; conflict_set_id: string; winner: SourceCandidate; reason: string; expected_conflict_version: number; title?: string | null; value?: Record<string, unknown> | null; value_type?: string | null; expected_current_version?: number | null }): Promise<{ ok: true; result: PromoteResult } | OtzarFailure> {
+    const ctx = await this.orgTruthContext(input.token);
+    if ("ok" in ctx) return ctx;
+    const scope: OrgTruthScope = { ...input.scope, org_entity_id: ctx.org_entity_id };
+    const res = await resolveOrgTruthConflictQuery(scope, {
+      conflict_set_id: input.conflict_set_id, actor_entity_id: ctx.entity_id, winner: input.winner, reason: input.reason, expected_conflict_version: input.expected_conflict_version,
+      ...(input.title !== undefined ? { title: input.title } : {}), ...(input.value !== undefined ? { value: input.value } : {}),
+      ...(input.value_type !== undefined ? { value_type: input.value_type } : {}), ...(input.expected_current_version !== undefined ? { expected_current_version: input.expected_current_version } : {}),
+    });
+    if (res.kind === "conflict_not_found") return { ok: false, code: "OTZAR_ORG_TRUTH_CONFLICT_NOT_FOUND", message: "This conflict is not available to you." };
+    if (res.kind === "conflict_stale") return { ok: false, code: "OTZAR_ORG_TRUTH_STATE_CHANGED", message: "The conflict changed since you read it. Re-review and retry." };
+    return this.mapPromote(res);
+  }
+
+  /** Retract a promoted answer (authorized domain actor). */
+  async retractOrgTruth(input: { token: string; truth_record_id: string; reason: string; expected_version: number }): Promise<{ ok: true } | OtzarFailure> {
+    const ctx = await this.orgTruthContext(input.token);
+    if ("ok" in ctx) return ctx;
+    const res = await retractOrgTruth(ctx.org_entity_id, ctx.entity_id, input.truth_record_id, input.reason, input.expected_version);
+    if (res.kind === "retracted") return { ok: true };
+    if (res.kind === "not_found") return { ok: false, code: "OTZAR_ORG_TRUTH_NOT_FOUND", message: "This record is not available to you." };
+    if (res.kind === "unauthorized") return { ok: false, code: "OTZAR_ORG_TRUTH_UNAUTHORIZED", message: "You do not hold decision rights to retract this domain." };
+    if (res.kind === "recommend_only") return { ok: false, code: "OTZAR_ORG_TRUTH_RECOMMEND_ONLY", message: "A recommend-only party cannot retract." };
+    if (res.kind === "state_changed") return { ok: false, code: "OTZAR_ORG_TRUTH_STATE_CHANGED", message: "This record changed since you read it." };
+    return { ok: false, code: "OTZAR_ORG_TRUTH_AUDIT_UNCOMMITTED", message: "The retraction could not be recorded. Please retry." };
+  }
+
+  /** Read the current promoted truth for a scope (authority gated: the domain owner/approver). */
+  async getCurrentOrgTruth(input: { token: string; scope: Omit<OrgTruthScope, "org_entity_id"> }): Promise<{ ok: true; record: SafeOrgTruthRecord | null } | OtzarFailure> {
+    const ctx = await this.orgTruthContext(input.token);
+    if ("ok" in ctx) return ctx;
+    const scope: OrgTruthScope = { ...input.scope, org_entity_id: ctx.org_entity_id };
+    const { computeOrgTruthKey } = await import("@niov/database");
+    const key = computeOrgTruthKey({ org_entity_id: scope.org_entity_id, decision_domain: scope.decision_domain, subject_ref_class: scope.subject_ref_class ?? null, subject_ref: scope.subject_ref ?? null, workspace_id: scope.workspace_id ?? null, topic: scope.topic });
+    const record = await getCurrentPromotedTruth(scope.org_entity_id, key);
+    return { ok: true, record };
+  }
+
+  /** List conflict sets in the caller's org that require review. */
+  async listOrgTruthConflicts(input: { token: string }): Promise<{ ok: true; conflicts: Awaited<ReturnType<typeof listConflictSetsForOrg>> } | OtzarFailure> {
+    const ctx = await this.orgTruthContext(input.token);
+    if ("ok" in ctx) return ctx;
+    const conflicts = await listConflictSetsForOrg(ctx.org_entity_id, ["OPEN", "UNDER_REVIEW"]);
+    return { ok: true, conflicts };
+  }
+
+  /** One conflict set + its safe candidate classifications. */
+  async getOrgTruthConflict(input: { token: string; conflict_set_id: string }): Promise<{ ok: true; conflict: NonNullable<Awaited<ReturnType<typeof getConflictSet>>> } | OtzarFailure> {
+    const ctx = await this.orgTruthContext(input.token);
+    if ("ok" in ctx) return ctx;
+    const conflict = await getConflictSet(ctx.org_entity_id, input.conflict_set_id);
+    if (conflict === null) return { ok: false, code: "OTZAR_ORG_TRUTH_CONFLICT_NOT_FOUND", message: "This conflict is not available to you." };
+    return { ok: true, conflict };
+  }
+
+  /** One truth record by id (scoped). */
+  async getOrgTruthRecord(input: { token: string; truth_record_id: string }): Promise<{ ok: true; record: SafeOrgTruthRecord } | OtzarFailure> {
+    const ctx = await this.orgTruthContext(input.token);
+    if ("ok" in ctx) return ctx;
+    const record = await getTruthRecord(ctx.org_entity_id, input.truth_record_id);
+    if (record === null) return { ok: false, code: "OTZAR_ORG_TRUTH_NOT_FOUND", message: "This record is not available to you." };
+    return { ok: true, record };
   }
 
   // ──────────────────────────────────────────────────────────────

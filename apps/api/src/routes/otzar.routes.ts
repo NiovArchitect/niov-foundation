@@ -101,7 +101,20 @@ function statusForCode(code: string): number {
       return 403;
     case "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED":
     case "OTZAR_HANDOFF_AUDIT_UNCOMMITTED":
+    case "OTZAR_ORG_TRUTH_AUDIT_UNCOMMITTED":
       return 503;
+    case "OTZAR_ORG_TRUTH_UNAUTHORIZED":
+    case "OTZAR_ORG_TRUTH_RECOMMEND_ONLY":
+      return 403;
+    case "OTZAR_ORG_TRUTH_NOT_FOUND":
+    case "OTZAR_ORG_TRUTH_CONFLICT_NOT_FOUND":
+    case "OTZAR_ORG_TRUTH_NO_ORG":
+      return 404;
+    case "OTZAR_ORG_TRUTH_INELIGIBLE_SOURCE":
+    case "OTZAR_ORG_TRUTH_INVALID_INPUT":
+      return 422;
+    case "OTZAR_ORG_TRUTH_STATE_CHANGED":
+      return 409;
     case "OTZAR_HANDOFF_STATE_CHANGED":
     case "OTZAR_HANDOFF_ILLEGAL_TRANSITION":
       return 409;
@@ -1299,4 +1312,79 @@ export async function registerOtzarRoutes(
       },
     );
   }
+
+  // [SECTION-10 ORG-TRUTH] Governed promotion + conflict APIs. Bearer + decision-rights gated (the
+  // authority check is in the service/query layer). No broad org browsing.
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/org-truth/promote",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const b = request.body ?? {};
+      const result = await otzarService.promoteOrgTruth(b as unknown as Parameters<typeof otzarService.promoteOrgTruth>[0] & { token: string });
+      if (!("ok" in result) || result.ok === false) return reply.code(statusForCode((result as { code: string }).code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+  app.post<{ Params: { conflict_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/org-truth/conflicts/:conflict_id/resolve",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.resolveOrgTruthConflict({ ...(request.body ?? {}), token, conflict_set_id: request.params.conflict_id } as unknown as Parameters<typeof otzarService.resolveOrgTruthConflict>[0]);
+      if (result.ok === false) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+  app.post<{ Params: { truth_record_id: string }; Body: { reason?: string; expected_version?: number } }>(
+    "/api/v1/otzar/org-truth/:truth_record_id/retract",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.retractOrgTruth({ token, truth_record_id: request.params.truth_record_id, reason: String(request.body?.reason ?? ""), expected_version: Number(request.body?.expected_version) });
+      if (result.ok === false) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+  app.get<{ Querystring: { decision_domain?: string; topic?: string; subject_ref?: string; subject_ref_class?: string; workspace_id?: string } }>(
+    "/api/v1/otzar/org-truth/current",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const q = request.query;
+      const result = await otzarService.getCurrentOrgTruth({ token, scope: { decision_domain: String(q.decision_domain ?? ""), topic: String(q.topic ?? ""), subject_ref: q.subject_ref ?? null, subject_ref_class: q.subject_ref_class ?? null, workspace_id: q.workspace_id ?? null } });
+      if (result.ok === false) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+  app.get<{ Params: { truth_record_id: string } }>(
+    "/api/v1/otzar/org-truth/:truth_record_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getOrgTruthRecord({ token, truth_record_id: request.params.truth_record_id });
+      if (result.ok === false) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+  app.get(
+    "/api/v1/otzar/org-truth/conflicts",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.listOrgTruthConflicts({ token });
+      if (result.ok === false) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+  app.get<{ Params: { conflict_id: string } }>(
+    "/api/v1/otzar/org-truth/conflicts/:conflict_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getOrgTruthConflict({ token, conflict_set_id: request.params.conflict_id });
+      if (result.ok === false) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
 }
