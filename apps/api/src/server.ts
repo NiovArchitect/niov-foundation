@@ -89,6 +89,10 @@ import {
   type SourceRecheckSchedulerHandle,
 } from "./services/otzar/source-recheck-scheduler.js";
 import {
+  startTruthEvidenceRecheckScheduler,
+  type TruthEvidenceRecheckSchedulerHandle,
+} from "./services/otzar/truth-evidence-recheck-scheduler.js";
+import {
   makeActionHandlerRegistry,
   setDefaultActionHandlerRegistry,
 } from "./services/action/handlers.js";
@@ -867,7 +871,7 @@ export async function buildApp(
   await registerConsoleRoutes(app, authService);
   await registerAuthAdminRoutes(app, authService, jwtSecret);
   await registerRegulatorRoutes(app, authService);
-  await registerOtzarRoutes(app, otzarService);
+  await registerOtzarRoutes(app, otzarService, authService);
   await registerOtzarProposedPatternRoutes(app, otzarProposedPatternService);
   await registerOtzarObservationRoutes(app, observationService, authService);
   // [OTZAR-RETURN-11-FOUNDATION] read-only voice-note revoke PLAN endpoint.
@@ -978,6 +982,16 @@ export async function buildApp(
     app as unknown as { sourceRecheckScheduler: SourceRecheckSchedulerHandle }
   ).sourceRecheckScheduler = sourceRecheckScheduler;
 
+  // [OTZAR STAGE-2 TRUTH-EVIDENCE §7 — SWEEP] -- start the auto-remediation sweep scheduler.
+  // NO-OP under NODE_ENV=test; DISABLED BY DEFAULT (each fire no-ops unless
+  // OTZAR_TRUTH_EVIDENCE_RECHECK_ENABLED === "true" AND OTZAR_TRUTH_EVIDENCE_RECHECK_TARGETS names
+  // explicit org:actor pairs). tests call tickTruthEvidenceRecheck directly.
+  const truthEvidenceRecheckScheduler: TruthEvidenceRecheckSchedulerHandle =
+    startTruthEvidenceRecheckScheduler();
+  (
+    app as unknown as { truthEvidenceRecheckScheduler: TruthEvidenceRecheckSchedulerHandle }
+  ).truthEvidenceRecheckScheduler = truthEvidenceRecheckScheduler;
+
   return app;
 }
 
@@ -1031,12 +1045,16 @@ async function main(): Promise<void> {
   const sourceRecheckScheduler = (
     app as unknown as { sourceRecheckScheduler?: SourceRecheckSchedulerHandle }
   ).sourceRecheckScheduler;
+  const truthEvidenceRecheckScheduler = (
+    app as unknown as { truthEvidenceRecheckScheduler?: TruthEvidenceRecheckSchedulerHandle }
+  ).truthEvidenceRecheckScheduler;
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, "[server] received shutdown signal");
     try {
       scheduler?.stop();
       actionScheduler?.stop();
       sourceRecheckScheduler?.stop();
+      truthEvidenceRecheckScheduler?.stop();
       await app.close();
     } finally {
       process.exit(0);
