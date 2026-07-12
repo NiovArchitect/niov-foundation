@@ -73,10 +73,13 @@ import {
   disposeHandoffObligation,
   completeHandoff,
   supersedeHandoff,
-  // [OTZAR STAGE-2 TRUTH-EVIDENCE] evidence-snapshot reads.
+  // [OTZAR STAGE-2 TRUTH-EVIDENCE] evidence-snapshot reads + recheck→remediation.
   listSnapshotsForObligation,
   listSnapshotsForHandoff,
   resolveCurrentSourceStatus,
+  writeEvidenceRecheckAudit,
+  computeEvidenceFingerprint,
+  EVIDENCE_STALE_STATUSES,
   type SafeEvidenceSnapshot,
   type SafeHandoff,
   type HandoffScope,
@@ -3872,6 +3875,74 @@ export class OtzarService {
     const snapshots = await listSnapshotsForObligation(resolved.scope.org_entity_id, input.obligation_id);
     const evidence = await Promise.all(snapshots.map(async (s) => ({ ...s, current_source_status: await resolveCurrentSourceStatus(resolved.scope.org_entity_id, s) })));
     return { ok: true, evidence };
+  }
+
+  /**
+   * [OTZAR STAGE-2 TRUTH-EVIDENCE §7] Recheck an obligation's captured evidence against the current
+   * source and, when the basis is NO LONGER current (changed/superseded/retracted/unavailable),
+   * raise an idempotent SAFETY_CONCERN remediation obligation for the responsible party — a stale
+   * basis must be SURFACED as governed work, never silently kept. The captured snapshots are never
+   * mutated (the immutable point-in-time basis is preserved). Idempotent per (record, stale-set):
+   * the same drift never raises a duplicate alert; a NEW drift raises a fresh one.
+   */
+  async recheckObligationEvidence(input: { token: string; obligation_id: string }): Promise<
+    | { ok: true; status: "current" | "remediation_open"; stale: Array<{ snapshot_id: string; decision_point: string; current_source_status: string }>; remediation_obligation_id: string | null; remediation_created: boolean }
+    | OtzarFailure
+  > {
+    const resolved = await this.obligationScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const { scope, entity_id } = resolved;
+    const obligation = await getObligationForScope(scope, input.obligation_id);
+    if (obligation === null) return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "This obligation is not available to you." };
+
+    const snapshots = await listSnapshotsForObligation(scope.org_entity_id, input.obligation_id);
+    const withStatus = await Promise.all(snapshots.map(async (s) => ({ s, status: await resolveCurrentSourceStatus(scope.org_entity_id, s) })));
+    const stale = withStatus
+      .filter((x) => (EVIDENCE_STALE_STATUSES as readonly string[]).includes(x.status))
+      .map((x) => ({ snapshot_id: x.s.snapshot_id, decision_point: x.s.decision_point, current_source_status: x.status }));
+
+    // Still current → record the recheck (RECHECKED) and return. No governed state changes; the
+    // audit is the sole artifact, so its failure is a clean retry (nothing partial persisted).
+    if (stale.length === 0) {
+      const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECKED", details: { obligation_id: input.obligation_id, snapshot_count: snapshots.length } });
+      if (!a.ok) { this.oblLog("recheck_audit_uncommitted", scope, { obligation_id: input.obligation_id }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
+      return { ok: true, status: "current", stale: [], remediation_obligation_id: null, remediation_created: false };
+    }
+
+    // Stale basis → raise (idempotently) a remediation obligation. The key binds to the exact stale
+    // set so the same drift is idempotent (no duplicate alert) while a new drift raises a fresh one.
+    const staleKey = computeEvidenceFingerprint({
+      obligation_id: input.obligation_id,
+      stale: [...stale].map((x) => ({ id: x.snapshot_id, status: x.current_source_status })).sort((p, q) => p.id.localeCompare(q.id)),
+    });
+    const originKey = `truth-remediation:OBLIGATION:${input.obligation_id}:${staleKey}`;
+    // SAFE content only — ids + safe classifications, never source text (validated by createOrGet).
+    const recheckDetails: Record<string, unknown> = { evidence_recheck: { of_record_type: "OBLIGATION", of_record_id: input.obligation_id, stale } };
+    const res = await createOrGetObligation(
+      scope,
+      {
+        obligation_type: "SAFETY_CONCERN",
+        title: "Evidence changed for a completed decision — review required",
+        creator_entity_id: entity_id,
+        responsible_entity_id: obligation.responsible_entity_id,
+        origin_key: originKey,
+        priority: "ELEVATED",
+        parent_obligation_id: input.obligation_id,
+        details: recheckDetails,
+      },
+      { actor_entity_id: entity_id, extra_details: recheckDetails },
+    );
+    if (res.kind === "invalid_content" || res.kind === "invalid_state") { this.oblLog("remediation_invalid", scope, { reason: res.kind }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_INVALID_INPUT", message: "The remediation could not be raised." }; }
+    if (res.kind === "invalid_reference") { this.oblLog("remediation_invalid_reference", scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_INVALID_REFERENCE", message: "The remediation reference is invalid." }; }
+    if (res.kind === "audit_consistency_failure") { this.oblLog("remediation_audit_uncommitted", scope, { obligation_id: input.obligation_id }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The remediation could not be recorded and was rolled back. Please retry." }; }
+
+    // Remediation persisted (atomic OBLIGATION_CREATED). Record RECHECK_REQUIRED. On the rare audit
+    // failure here the remediation already exists + is itself audited; the idempotent origin_key
+    // means a retry returns the same remediation and re-attempts this audit (self-healing).
+    const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECK_REQUIRED", details: { obligation_id: input.obligation_id, remediation_obligation_id: res.obligation.obligation_id, stale_count: stale.length } });
+    if (!a.ok) { this.oblLog("recheck_audit_uncommitted", scope, { obligation_id: input.obligation_id, remediation_obligation_id: res.obligation.obligation_id }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
+    if (res.created) this.oblLog("remediation_raised", scope, { obligation_id: input.obligation_id, remediation_obligation_id: res.obligation.obligation_id });
+    return { ok: true, status: "remediation_open", stale, remediation_obligation_id: res.obligation.obligation_id, remediation_created: res.created };
   }
 
   /** Evidence snapshots for a handoff the caller is a party to. The receiver can see that evidence

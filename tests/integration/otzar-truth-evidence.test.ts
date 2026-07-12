@@ -158,6 +158,104 @@ describe("Otzar truth-evidence snapshots (Stage-2)", () => {
     if (!foreignEv.ok) expect(foreignEv.code).toBe("OTZAR_OBLIGATION_NOT_FOUND");
   });
 
+  it("recheck (§7): a still-current basis reports 'current' and raises NO remediation (idempotent)", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUser(auth);
+    const ledger = await seedExecutedLedger(u);
+    const o = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "x", action_ref: ledger });
+    if (!o.ok) throw new Error();
+    await otzar.completeObligation({ token: u.token, obligation_id: o.obligation.obligation_id, expected_version: o.obligation.version });
+    const r1 = await otzar.recheckObligationEvidence({ token: u.token, obligation_id: o.obligation.obligation_id });
+    expect(r1.ok).toBe(true); if (!r1.ok) return;
+    expect(r1.status).toBe("current");
+    expect(r1.stale).toHaveLength(0);
+    expect(r1.remediation_obligation_id).toBeNull();
+    // No SAFETY_CONCERN raised, and a RECHECKED audit was written.
+    expect(await prisma.obligation.count({ where: { org_entity_id: u.orgId, obligation_type: "SAFETY_CONCERN", parent_obligation_id: o.obligation.obligation_id } })).toBe(0);
+    expect(await prisma.auditEvent.count({ where: { event_type: "TRUTH_EVIDENCE_RECHECKED", target_entity_id: u.orgId } })).toBeGreaterThanOrEqual(1);
+  });
+
+  it("recheck (§7): a later drift raises an idempotent SAFETY_CONCERN remediation for the responsible party — WITHOUT rewriting the captured basis", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUser(auth);
+    const ledger = await seedExecutedLedger(u);
+    const o = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "x", action_ref: ledger });
+    if (!o.ok) throw new Error();
+    const completedVersion = o.obligation.version;
+    await otzar.completeObligation({ token: u.token, obligation_id: o.obligation.obligation_id, expected_version: completedVersion });
+    // Simulate a later upstream change (the completed, terminal obligation can't be superseded).
+    await prisma.obligation.update({ where: { obligation_id: o.obligation.obligation_id }, data: { version: completedVersion + 5 } });
+
+    const r1 = await otzar.recheckObligationEvidence({ token: u.token, obligation_id: o.obligation.obligation_id });
+    expect(r1.ok).toBe(true); if (!r1.ok) return;
+    expect(r1.status).toBe("remediation_open");
+    expect(r1.remediation_created).toBe(true);
+    expect(r1.stale.length).toBeGreaterThanOrEqual(1);
+    expect(r1.stale.some((s) => s.current_source_status === "changed")).toBe(true);
+    const remId = r1.remediation_obligation_id!;
+    expect(remId).toBeTruthy();
+    // The remediation is a real SAFETY_CONCERN obligation parented to the affected decision, and it
+    // shows up in the responsible party's obligation list (governed, actionable work).
+    const rem = await prisma.obligation.findUnique({ where: { obligation_id: remId }, select: { obligation_type: true, parent_obligation_id: true, responsible_entity_id: true, state: true, priority: true } });
+    expect(rem?.obligation_type).toBe("SAFETY_CONCERN");
+    expect(rem?.parent_obligation_id).toBe(o.obligation.obligation_id);
+    expect(rem?.responsible_entity_id).toBe(u.userId);
+    expect(rem?.state).toBe("OPEN");
+    const list = await otzar.listObligations({ token: u.token, obligation_type: "SAFETY_CONCERN" });
+    expect(list.ok && list.obligations.some((x) => x.obligation_id === remId)).toBe(true);
+    // The captured snapshot is still immutable; RECHECK_REQUIRED audit exists.
+    const ev = await otzar.getObligationEvidence({ token: u.token, obligation_id: o.obligation.obligation_id });
+    if (ev.ok) expect(ev.evidence.find((e) => e.decision_point === "OBLIGATION_COMPLETION")!.source_version).toBe(completedVersion + 1);
+    expect(await prisma.auditEvent.count({ where: { event_type: "TRUTH_EVIDENCE_RECHECK_REQUIRED", target_entity_id: u.orgId } })).toBeGreaterThanOrEqual(1);
+
+    // Idempotent: the SAME drift rechecked again returns the SAME remediation, creates nothing new.
+    const r2 = await otzar.recheckObligationEvidence({ token: u.token, obligation_id: o.obligation.obligation_id });
+    expect(r2.ok).toBe(true); if (!r2.ok) return;
+    expect(r2.remediation_created).toBe(false);
+    expect(r2.remediation_obligation_id).toBe(remId);
+    expect(await prisma.obligation.count({ where: { org_entity_id: u.orgId, obligation_type: "SAFETY_CONCERN", parent_obligation_id: o.obligation.obligation_id } })).toBe(1);
+  });
+
+  it("recheck (§7): a recheck-audit failure returns AUDIT_UNCOMMITTED and self-heals on retry (no duplicate remediation)", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUser(auth);
+    const ledger = await seedExecutedLedger(u);
+    const o = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "x", action_ref: ledger });
+    if (!o.ok) throw new Error();
+    const completedVersion = o.obligation.version;
+    await otzar.completeObligation({ token: u.token, obligation_id: o.obligation.obligation_id, expected_version: completedVersion });
+    await prisma.obligation.update({ where: { obligation_id: o.obligation.obligation_id }, data: { version: completedVersion + 5 } });
+    // The remediation obligation persists (its own atomic OBLIGATION_CREATED audit), but the
+    // RECHECK_REQUIRED audit fails → typed AUDIT_UNCOMMITTED (never a silent success).
+    __otzarTruthEvidenceTestHooks.failAudit = true;
+    const failed = await otzar.recheckObligationEvidence({ token: u.token, obligation_id: o.obligation.obligation_id });
+    __otzarTruthEvidenceTestHooks.failAudit = false;
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.code).toBe("OTZAR_OBLIGATION_AUDIT_UNCOMMITTED");
+    // Retry heals: the idempotent origin_key returns the SAME remediation (no duplicate) and now the
+    // recheck audit commits.
+    const healed = await otzar.recheckObligationEvidence({ token: u.token, obligation_id: o.obligation.obligation_id });
+    expect(healed.ok).toBe(true); if (!healed.ok) return;
+    expect(healed.status).toBe("remediation_open");
+    expect(healed.remediation_created).toBe(false);
+    expect(await prisma.obligation.count({ where: { org_entity_id: u.orgId, obligation_type: "SAFETY_CONCERN", parent_obligation_id: o.obligation.obligation_id } })).toBe(1);
+  });
+
+  it("recheck (§7): a foreign caller cannot recheck another's obligation and raises no remediation", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUser(auth);
+    const foreign = await orgUser(auth);
+    const ledger = await seedExecutedLedger(u);
+    const o = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "x", action_ref: ledger });
+    if (!o.ok) throw new Error();
+    await otzar.completeObligation({ token: u.token, obligation_id: o.obligation.obligation_id, expected_version: o.obligation.version });
+    await prisma.obligation.update({ where: { obligation_id: o.obligation.obligation_id }, data: { version: o.obligation.version + 5 } });
+    const r = await otzar.recheckObligationEvidence({ token: foreign.token, obligation_id: o.obligation.obligation_id });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("OTZAR_OBLIGATION_NOT_FOUND");
+    expect(await prisma.obligation.count({ where: { org_entity_id: u.orgId, obligation_type: "SAFETY_CONCERN", parent_obligation_id: o.obligation.obligation_id } })).toBe(0);
+  });
+
   it("no-leak: the evidence projection exposes classifications/hashes, never raw content or policy internals", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUser(auth);

@@ -303,6 +303,8 @@ export {
   listSnapshotsForObligation,
   listSnapshotsForHandoff,
   resolveCurrentSourceStatus,
+  writeEvidenceRecheckAudit,
+  EVIDENCE_STALE_STATUSES,
   RESOLVER_VERSION,
   __otzarTruthEvidenceTestHooks,
 } from "./queries/otzar-truth-evidence.js";
@@ -311,6 +313,7 @@ export type {
   CaptureEvidenceInput,
   CaptureResult,
   CurrentSourceStatus,
+  EvidenceRecheckEvent,
 } from "./queries/otzar-truth-evidence.js";
 
 export type {
