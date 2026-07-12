@@ -22,7 +22,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 import { writeAuditEvent, type AuditEventType } from "./audit.js";
 import { validateSafeJson, isTerminalState } from "./otzar-obligation-validation.js";
-import { captureEvidenceSnapshot } from "./otzar-truth-evidence.js";
+import { captureEvidenceSnapshot, type EvidenceEnrichment } from "./otzar-truth-evidence.js";
 
 // ── Typed vocabularies (service-tier enforced; String columns stay additive) ──────────────
 
@@ -592,6 +592,9 @@ export interface CompleteObligationArgs extends CasArgs {
   completion_turn_id?: string | null;
   completion_action_ref?: string | null;
   completion_evidence?: Record<string, unknown> | null;
+  /** [TRUTH-EVIDENCE] Resolved substrate values (communication-lineage → truth-weight → source-
+   *  integrity), resolved by the service and captured POINT-IN-TIME with the completion. */
+  evidence_enrichment?: EvidenceEnrichment;
 }
 
 /**
@@ -670,6 +673,10 @@ export async function completeObligation(scope: ObligationScope, args: CompleteO
       ...(args.completion_turn_id != null ? { source_turn_id: args.completion_turn_id } : {}),
       ...(actionRef != null ? { action_ref: actionRef } : {}),
       ...(row.conversation_id !== null ? { conversation_id: row.conversation_id } : {}),
+      // Resolved substrate values (communication_act / truth_class / truth_weight_rank /
+      // authority_class / currentness / source_integrity_state) — the WHY behind the decision,
+      // pinned immutably at completion. Absent when the source carries no stamped lineage.
+      ...(args.evidence_enrichment ?? {}),
       metadata: { evidence: args.completion_turn_id != null ? "turn" : "action" },
     }, tx);
     if (res.kind !== "ok") throw new Error("evidence_capture_failed");

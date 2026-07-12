@@ -81,6 +81,7 @@ import {
   computeEvidenceFingerprint,
   EVIDENCE_STALE_STATUSES,
   REMEDIABLE_DECISION_POINTS,
+  type EvidenceEnrichment,
   type SafeEvidenceSnapshot,
   type SafeHandoff,
   type HandoffScope,
@@ -98,6 +99,10 @@ import {
 } from "@niov/database";
 import type { OtzarConversationTurn } from "@prisma/client";
 import { resolveAuthoritativeThread } from "./thread-resolution.service.js";
+// [TRUTH-EVIDENCE] Resolve the point-in-time substrate values at a decision — REUSING the existing
+// truth substrate (no re-implementation): parse the stamped statement lineage off a record's
+// details, weigh it, and read the source-integrity state.
+import { lineageFromDetails, computeTruthWeight } from "./truth-weight.service.js";
 import { logger } from "../../logger.js";
 import type { AuthService } from "../auth.service.js";
 import type { COEService } from "../coe/coe.service.js";
@@ -3605,14 +3610,52 @@ export class OtzarService {
 
   /** Complete — requires validated durable evidence (ACTION_CONFIRMATION: linked ledger
    *  EXECUTED; else a real in-scope USER completion turn). Audit is atomic. */
+  /**
+   * [TRUTH-EVIDENCE] Resolve the substrate values (communication_act / truth_class /
+   * truth_weight_rank / authority_class / currentness / source_integrity_state) a completion
+   * relies upon, REUSING the existing substrate: parse the stamped statement lineage off the
+   * obligation's own details or its linked ledger row (comms-ingest stamps details.
+   * communication_lineage), weigh it, and read details.source_integrity.state. Returns undefined
+   * when no stamped lineage exists (the fields then stay null — never fabricated). Pure compute
+   * over already-stored JSON; the only I/O is reading the linked ledger's details.
+   */
+  private async resolveObligationCompletionEnrichment(obligationId: string, orgEntityId: string): Promise<EvidenceEnrichment | undefined> {
+    const obl = await prisma.obligation.findFirst({ where: { obligation_id: obligationId, org_entity_id: orgEntityId }, select: { details: true, action_ref: true } });
+    if (obl === null) return undefined;
+    // Prefer the obligation's own stamped lineage; fall back to the linked work-ledger row.
+    let sourceDetails: unknown = obl.details;
+    let lineage = lineageFromDetails(sourceDetails);
+    if (lineage === null && obl.action_ref !== null) {
+      const led = await prisma.workLedgerEntry.findUnique({ where: { ledger_entry_id: obl.action_ref }, select: { details: true } });
+      if (led !== null) { sourceDetails = led.details; lineage = lineageFromDetails(led.details); }
+    }
+    if (lineage === null) return undefined;
+    const tw = computeTruthWeight(lineage);
+    const enrichment: EvidenceEnrichment = {
+      communication_act: lineage.communication_act,
+      authority_class: lineage.authority_status,
+      currentness: lineage.currentness,
+      truth_class: tw.weight_class,
+      truth_weight_rank: tw.rank,
+    };
+    // source-integrity is stored on the source row's details (never fabricated); read it directly.
+    const si = (typeof sourceDetails === "object" && sourceDetails !== null && !Array.isArray(sourceDetails)) ? (sourceDetails as Record<string, unknown>).source_integrity : null;
+    const siState = (typeof si === "object" && si !== null) ? (si as Record<string, unknown>).state : null;
+    if (typeof siState === "string") enrichment.source_integrity_state = siState;
+    return enrichment;
+  }
+
   async completeObligation(input: { token: string; obligation_id: string; expected_version: number; completion_turn_id?: string | null; completion_action_ref?: string | null; completion_evidence?: Record<string, unknown> | null }): Promise<{ ok: true; obligation: SafeObligation } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) return resolved;
+    // Resolve the point-in-time substrate values BEFORE the transition; captured atomically with it.
+    const enrichment = await this.resolveObligationCompletionEnrichment(input.obligation_id, resolved.scope.org_entity_id);
     const outcome = await completeObligation(resolved.scope, {
       obligation_id: input.obligation_id, expected_version: input.expected_version, actor_entity_id: resolved.entity_id,
       ...(input.completion_turn_id !== undefined ? { completion_turn_id: input.completion_turn_id } : {}),
       ...(input.completion_action_ref !== undefined ? { completion_action_ref: input.completion_action_ref } : {}),
       ...(input.completion_evidence !== undefined ? { completion_evidence: input.completion_evidence } : {}),
+      ...(enrichment !== undefined ? { evidence_enrichment: enrichment } : {}),
     });
     if (outcome.kind !== "ok") { this.oblLogOutcome(resolved.scope, input.obligation_id, outcome); return this.mapObligationFailure(outcome); }
     this.oblLog("completed", resolved.scope, { obligation_id: input.obligation_id });

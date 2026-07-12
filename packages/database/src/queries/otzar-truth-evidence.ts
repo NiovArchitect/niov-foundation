@@ -93,6 +93,22 @@ export function computeEvidenceFingerprint(fields: Record<string, unknown>): str
 
 // ── Capture ────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The resolved truth-substrate values a decision relied upon, resolved by the SERVICE from the
+ * EXISTING substrate (communication-lineage → truth-weight → source-integrity) and threaded into
+ * the atomic capture. Data-only (the query layer can't import the apps/api resolvers — dependency
+ * direction). Only fields with a real resolver are here; the `*_ref` fields are intentionally
+ * absent (no producer exists — we never fabricate provenance).
+ */
+export interface EvidenceEnrichment {
+  communication_act?: string | null;
+  truth_class?: string | null;
+  truth_weight_rank?: number | null;
+  authority_class?: string | null;
+  currentness?: string | null;
+  source_integrity_state?: string | null;
+}
+
 export interface CaptureEvidenceInput {
   org_entity_id: string;
   decision_point: string;
