@@ -140,6 +140,45 @@ export const SCHEMA_MANIFEST: TableRequirement[] = [
     ],
     uniques: [{ columns: ["org_entity_id", "origin_key"] }],
   },
+  {
+    // OTZAR STAGE-2 §L — governed responsibility handoffs.
+    table: "handoffs",
+    columns: [
+      { name: "handoff_id", dataType: "uuid", notNull: true },
+      { name: "org_entity_id", dataType: "uuid", notNull: true },
+      { name: "creator_entity_id", dataType: "uuid", notNull: true },
+      { name: "outgoing_responsible_entity_id", dataType: "uuid", notNull: true },
+      { name: "incoming_responsible_entity_id", dataType: "uuid" },
+      { name: "workspace_id", dataType: "uuid" },
+      { name: "title", dataType: "text", notNull: true },
+      { name: "details", dataType: "jsonb", notNull: true },
+      { name: "priority", dataType: "text", notNull: true },
+      { name: "state", dataType: "text", notNull: true },
+      { name: "version", dataType: "integer", notNull: true },
+      { name: "visibility_scope", dataType: "text", notNull: true },
+      { name: "retention_class", dataType: "text", notNull: true },
+      { name: "origin_key", dataType: "text" },
+      { name: "acknowledged_by_entity_id", dataType: "uuid" },
+      { name: "acknowledged_turn_id", dataType: "uuid" },
+      { name: "created_at", dataType: "timestamp without time zone", notNull: true },
+      { name: "updated_at", dataType: "timestamp without time zone", notNull: true },
+      { name: "completed_at", dataType: "timestamp without time zone" },
+    ],
+    uniques: [{ columns: ["org_entity_id", "origin_key"] }],
+  },
+  {
+    // OTZAR STAGE-2 §L — handoff↔obligation link + per-obligation disposition.
+    table: "handoff_obligations",
+    columns: [
+      { name: "handoff_obligation_id", dataType: "uuid", notNull: true },
+      { name: "handoff_id", dataType: "uuid", notNull: true },
+      { name: "obligation_id", dataType: "uuid", notNull: true },
+      { name: "org_entity_id", dataType: "uuid", notNull: true },
+      { name: "disposition", dataType: "text", notNull: true },
+      { name: "created_at", dataType: "timestamp without time zone", notNull: true },
+    ],
+    uniques: [{ columns: ["handoff_id", "obligation_id"] }],
+  },
 ];
 
 // Minimal read-only probe seam (prisma satisfies this).

@@ -829,7 +829,19 @@ export type AuditEventType =
   | "OBLIGATION_BLOCKED"
   | "OBLIGATION_REASSIGNED"
   | "OBLIGATION_SUPERSEDED"
-  | "OBLIGATION_EXPIRED";
+  | "OBLIGATION_EXPIRED"
+  // [OTZAR STAGE-2 §L] Governed responsibility-handoff lifecycle. Leak-safe details only.
+  | "HANDOFF_CREATED"
+  | "HANDOFF_READY"
+  | "HANDOFF_SENT"
+  | "HANDOFF_RECEIVED"
+  | "HANDOFF_ACKNOWLEDGED"
+  | "HANDOFF_CLARIFICATION_REQUESTED"
+  | "HANDOFF_SUPERSEDED"
+  | "HANDOFF_COMPLETED"
+  | "HANDOFF_ESCALATED"
+  | "HANDOFF_OBLIGATION_LINKED"
+  | "HANDOFF_OBLIGATION_DISPOSED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
 // INPUT: None.
@@ -1136,6 +1148,18 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "OBLIGATION_REASSIGNED",
   "OBLIGATION_SUPERSEDED",
   "OBLIGATION_EXPIRED",
+  // [OTZAR STAGE-2 §L] Handoff lifecycle (kept in sync with the union above).
+  "HANDOFF_CREATED",
+  "HANDOFF_READY",
+  "HANDOFF_SENT",
+  "HANDOFF_RECEIVED",
+  "HANDOFF_ACKNOWLEDGED",
+  "HANDOFF_CLARIFICATION_REQUESTED",
+  "HANDOFF_SUPERSEDED",
+  "HANDOFF_COMPLETED",
+  "HANDOFF_ESCALATED",
+  "HANDOFF_OBLIGATION_LINKED",
+  "HANDOFF_OBLIGATION_DISPOSED",
 ] as const satisfies readonly AuditEventType[];
 
 export function isKnownAuditEventType(

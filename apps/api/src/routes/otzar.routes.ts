@@ -20,7 +20,13 @@ import {
   isRequiredResponseClass,
   isSourceChannel,
   isProvenanceClass,
+  HANDOFF_STATES,
+  HANDOFF_DISPOSITIONS,
 } from "@niov/database";
+
+const HANDOFF_STATE_SET: ReadonlySet<string> = new Set(HANDOFF_STATES);
+const HANDOFF_DISPOSITION_SET: ReadonlySet<string> = new Set(HANDOFF_DISPOSITIONS);
+const isHandoffStateStr = (v: unknown): v is string => typeof v === "string" && HANDOFF_STATE_SET.has(v);
 
 // WHAT: Hard ceiling on caller-supplied token_budget. Above this,
 //        reject with BUDGET_TOO_LARGE 422 -- protects the LLM
@@ -78,14 +84,24 @@ function statusForCode(code: string): number {
     case "INVALID_REQUEST_ID":
       return 422;
     case "OTZAR_OBLIGATION_NOT_FOUND":
+    case "OTZAR_HANDOFF_NOT_FOUND":
       return 404;
     case "OTZAR_OBLIGATION_EVIDENCE_REQUIRED":
     case "OTZAR_OBLIGATION_NOT_ACKNOWLEDGEABLE":
     case "OTZAR_OBLIGATION_INVALID_INPUT":
     case "OTZAR_OBLIGATION_INVALID_REFERENCE":
+    case "OTZAR_HANDOFF_INVALID_INPUT":
+    case "OTZAR_HANDOFF_INVALID_REFERENCE":
+    case "OTZAR_HANDOFF_PRECONDITION":
       return 422;
+    case "OTZAR_HANDOFF_NOT_AUTHORIZED":
+      return 403;
     case "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED":
+    case "OTZAR_HANDOFF_AUDIT_UNCOMMITTED":
       return 503;
+    case "OTZAR_HANDOFF_STATE_CHANGED":
+    case "OTZAR_HANDOFF_ILLEGAL_TRANSITION":
+      return 409;
     case "ALREADY_INGESTED":
     case "OTZAR_REQUEST_ID_CONFLICT":
     case "OTZAR_THREAD_CLOSED":
@@ -1060,6 +1076,148 @@ export async function registerOtzarRoutes(
         return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "request_record_id is required" });
       }
       const result = await otzarService.projectUnresolvedQuestionObligation({ token, request_record_id: body.request_record_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // ──────────────────────────────────────────────────────────────
+  // [OTZAR STAGE-2 §L] Handoff routes. Bearer-gated; every read/transition is MULTI-PARTY
+  // scope-gated (org + caller-is-a-party) at the service tier; mutations party-authorized.
+
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/handoffs",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.title !== "string" || body.title.trim().length === 0) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "title is required" });
+      if (body.priority !== undefined && !isObligationPriority(body.priority)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown priority" });
+      const result = await otzarService.createHandoff({
+        token, title: body.title,
+        ...(typeof body.incoming_responsible_entity_id === "string" ? { incoming_responsible_entity_id: body.incoming_responsible_entity_id } : {}),
+        ...(typeof body.workspace_id === "string" ? { workspace_id: body.workspace_id } : {}),
+        ...(typeof body.conversation_id === "string" ? { conversation_id: body.conversation_id } : {}),
+        ...(typeof body.summary === "string" ? { summary: body.summary } : {}),
+        ...(typeof body.details === "object" && body.details !== null ? { details: body.details as Record<string, unknown> } : {}),
+        ...(typeof body.priority === "string" ? { priority: body.priority } : {}),
+        ...(typeof body.origin_key === "string" ? { origin_key: body.origin_key } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.get<{ Querystring: { role?: string; state?: string; limit?: string } }>(
+    "/api/v1/otzar/handoffs",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const rawLimit = Number(request.query.limit);
+      if (request.query.role !== undefined && request.query.role !== "outgoing" && request.query.role !== "incoming") return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "role must be outgoing|incoming" });
+      const states = typeof request.query.state === "string" && request.query.state.length > 0 ? request.query.state.split(",").filter((s) => s.length > 0) : undefined;
+      if (states !== undefined && !states.every(isHandoffStateStr)) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "unknown state filter" });
+      const result = await otzarService.listHandoffs({
+        token,
+        ...(states !== undefined ? { states: states as never } : {}),
+        ...(request.query.role === "outgoing" || request.query.role === "incoming" ? { role: request.query.role } : {}),
+        ...(Number.isFinite(rawLimit) && rawLimit > 0 ? { limit: Math.floor(rawLimit) } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.get<{ Params: { handoff_id: string } }>(
+    "/api/v1/otzar/handoffs/:handoff_id",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.getHandoff({ token, handoff_id: request.params.handoff_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { handoff_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/handoffs/:handoff_id/link-obligation",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.obligation_id !== "string") return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "obligation_id is required" });
+      const result = await otzarService.linkHandoffObligation({ token, handoff_id: request.params.handoff_id, obligation_id: body.obligation_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { handoff_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/handoffs/:handoff_id/dispose-obligation",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      if (typeof body.obligation_id !== "string" || typeof body.disposition !== "string" || body.disposition === "PENDING" || !HANDOFF_DISPOSITION_SET.has(body.disposition)) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "obligation_id and a disposition of ACCEPTED|REASSIGNED|SUPERSEDED|RETAINED are required" });
+      }
+      if (body.disposition === "REASSIGNED" && typeof body.new_responsible_entity_id !== "string") {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "REASSIGNED requires new_responsible_entity_id" });
+      }
+      const result = await otzarService.disposeHandoffObligation({
+        token, handoff_id: request.params.handoff_id, obligation_id: body.obligation_id, disposition: body.disposition as never,
+        ...(typeof body.new_responsible_entity_id === "string" ? { new_responsible_entity_id: body.new_responsible_entity_id } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { handoff_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/handoffs/:handoff_id/transition",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const v = Number(body.expected_version);
+      const ALLOWED = ["ready", "send", "receive", "acknowledge", "request_clarification", "escalate", "complete"];
+      if (!Number.isInteger(v) || v < 0 || typeof body.transition !== "string" || !ALLOWED.includes(body.transition)) {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version and a valid transition are required" });
+      }
+      const result = await otzarService.transitionHandoff({
+        token, handoff_id: request.params.handoff_id, expected_version: v, transition: body.transition as never,
+        ...(typeof body.incoming_responsible_entity_id === "string" ? { incoming_responsible_entity_id: body.incoming_responsible_entity_id } : {}),
+        ...(typeof body.acknowledged_turn_id === "string" ? { acknowledged_turn_id: body.acknowledged_turn_id } : {}),
+        ...(typeof body.escalation_id === "string" ? { escalation_id: body.escalation_id } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { handoff_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/handoffs/:handoff_id/supersede",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const v = Number(body.expected_version);
+      const replacement = body.replacement;
+      if (!Number.isInteger(v) || v < 0 || typeof replacement !== "object" || replacement === null) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "expected_version and replacement are required" });
+      const r = replacement as Record<string, unknown>;
+      if (typeof r.title !== "string" || r.title.trim().length === 0) return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "replacement.title is required" });
+      const result = await otzarService.supersedeHandoff({
+        token, handoff_id: request.params.handoff_id, expected_version: v,
+        replacement: {
+          title: r.title,
+          ...(typeof r.incoming_responsible_entity_id === "string" ? { incoming_responsible_entity_id: r.incoming_responsible_entity_id } : {}),
+          ...(typeof r.workspace_id === "string" ? { workspace_id: r.workspace_id } : {}),
+          ...(typeof r.conversation_id === "string" ? { conversation_id: r.conversation_id } : {}),
+          ...(typeof r.summary === "string" ? { summary: r.summary } : {}),
+          ...(typeof r.details === "object" && r.details !== null ? { details: r.details as Record<string, unknown> } : {}),
+          ...(typeof r.priority === "string" ? { priority: r.priority } : {}),
+        },
+      });
       if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
       return reply.code(200).send(result);
     },

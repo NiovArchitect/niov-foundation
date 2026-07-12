@@ -1387,3 +1387,39 @@ describe("obligation routes — enum validation + auth gate", () => {
     expect((await app.inject({ method: "POST", url: `/api/v1/otzar/obligations/${id}/acknowledge`, headers: auth(token), payload: { expected_version: 0 } })).statusCode).toBe(422);
   });
 });
+
+// [OTZAR STAGE-2 §L/§19] Handoff routes: auth gate + enum/precondition validation at the route.
+describe("handoff routes — auth gate + input validation", () => {
+  const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+  const id = "00000000-0000-4000-8000-000000000000";
+
+  it("401 without a bearer token", async () => {
+    expect((await app.inject({ method: "POST", url: "/api/v1/otzar/handoffs", payload: { title: "x" } })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/v1/otzar/handoffs" })).statusCode).toBe(401);
+  });
+
+  it("422 on missing title / unknown priority", async () => {
+    const { token } = await loginAndAttachTwin();
+    expect((await app.inject({ method: "POST", url: "/api/v1/otzar/handoffs", headers: auth(token), payload: { title: "  " } })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: "/api/v1/otzar/handoffs", headers: auth(token), payload: { title: "ok", priority: "NOPE" } })).statusCode).toBe(422);
+  });
+
+  it("422 on unknown list role / state filters", async () => {
+    const { token } = await loginAndAttachTwin();
+    expect((await app.inject({ method: "GET", url: "/api/v1/otzar/handoffs?role=nope", headers: auth(token) })).statusCode).toBe(422);
+    expect((await app.inject({ method: "GET", url: "/api/v1/otzar/handoffs?state=NOPE", headers: auth(token) })).statusCode).toBe(422);
+  });
+
+  it("422 on unknown transition verb / missing expected_version / missing ack turn", async () => {
+    const { token } = await loginAndAttachTwin();
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/handoffs/${id}/transition`, headers: auth(token), payload: { expected_version: 0, transition: "explode" } })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/handoffs/${id}/transition`, headers: auth(token), payload: { transition: "send" } })).statusCode).toBe(422);
+  });
+
+  it("422 on invalid disposition / REASSIGNED without new_responsible / PENDING disposition", async () => {
+    const { token } = await loginAndAttachTwin();
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/handoffs/${id}/dispose-obligation`, headers: auth(token), payload: { obligation_id: id, disposition: "NOPE" } })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/handoffs/${id}/dispose-obligation`, headers: auth(token), payload: { obligation_id: id, disposition: "PENDING" } })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: `/api/v1/otzar/handoffs/${id}/dispose-obligation`, headers: auth(token), payload: { obligation_id: id, disposition: "REASSIGNED" } })).statusCode).toBe(422);
+  });
+});

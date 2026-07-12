@@ -258,6 +258,43 @@ export {
 } from "./queries/otzar-obligation-validation.js";
 export type { SafeJsonResult, SafeJsonLimits } from "./queries/otzar-obligation-validation.js";
 
+// [OTZAR STAGE-2 §L] Governed responsibility-handoff layer (multi-party scoped reads + party-
+// authorized CAS lifecycle with atomic audit; links obligations with per-obligation disposition;
+// completion gated on ack + all-obligations-disposed).
+export {
+  createOrGetHandoff,
+  listHandoffs,
+  getHandoffForScope,
+  listHandoffObligations,
+  readyHandoff,
+  sendHandoff,
+  receiveHandoff,
+  acknowledgeHandoff,
+  requestClarificationHandoff,
+  escalateHandoff,
+  linkObligationToHandoff,
+  disposeHandoffObligation,
+  completeHandoff,
+  supersedeHandoff,
+  HANDOFF_STATES,
+  HANDOFF_DISPOSITIONS,
+  TERMINAL_HANDOFF_STATES,
+  OPEN_HANDOFF_STATES,
+  isHandoffState,
+  isHandoffDisposition,
+  isTerminalHandoffState,
+  __otzarHandoffTestHooks,
+} from "./queries/otzar-handoffs.js";
+export type {
+  HandoffScope,
+  HandoffState,
+  HandoffDisposition,
+  SafeHandoff,
+  CreateHandoffInput,
+  CreateHandoffResult,
+  HandoffOutcome,
+} from "./queries/otzar-handoffs.js";
+
 export type {
   Entity,
   AuditLog,
