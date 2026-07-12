@@ -887,7 +887,7 @@ export async function registerOtzarRoutes(
   );
 
   // GET /obligations — the caller's obligations (restoration read; survives thread close).
-  app.get<{ Querystring: { state?: string; obligation_type?: string; conversation_id?: string; open_only?: string; limit?: string } }>(
+  app.get<{ Querystring: { state?: string; obligation_type?: string; conversation_id?: string; open_only?: string; limit?: string; with_basis?: string } }>(
     "/api/v1/otzar/obligations",
     async (request, reply) => {
       const token = bearerFrom(request.headers.authorization);
@@ -908,6 +908,7 @@ export async function registerOtzarRoutes(
         ...(typeof request.query.conversation_id === "string" && request.query.conversation_id.length > 0 ? { conversation_id: request.query.conversation_id } : {}),
         ...(request.query.open_only === "true" ? { open_only: true } : {}),
         ...(Number.isFinite(rawLimit) && rawLimit > 0 ? { limit: Math.floor(rawLimit) } : {}),
+        ...(request.query.with_basis === "true" ? { with_basis: true } : {}),
       });
       if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
       return reply.code(200).send(result);

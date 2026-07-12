@@ -3567,9 +3567,26 @@ export class OtzarService {
 
   /** List the caller's obligations (restoration read — survives thread close/archive/staff
    *  change; scoped by (org, subject, twin, state), never join-gated on conversation status). */
+  /**
+   * [TRUTH-EVIDENCE §7] Live basis status for one obligation: recheck its FINAL-decision snapshots
+   * (REMEDIABLE only) against the current source WITHOUT mutating them. "none" = no durable basis
+   * captured yet (e.g. still open); "current" = every basis still holds; "stale" = at least one
+   * basis has changed/superseded/retracted/gone. Read-only — surfaces staleness proactively at read
+   * time; it never raises a remediation (that stays an explicit action).
+   */
+  private async computeObligationBasisStatus(orgEntityId: string, obligationId: string): Promise<"current" | "stale" | "none"> {
+    const snaps = (await listSnapshotsForObligation(orgEntityId, obligationId)).filter((s) => REMEDIABLE_DECISION_POINTS.includes(s.decision_point));
+    if (snaps.length === 0) return "none";
+    for (const s of snaps) {
+      const st = await resolveCurrentSourceStatus(orgEntityId, s);
+      if ((EVIDENCE_STALE_STATUSES as readonly string[]).includes(st)) return "stale";
+    }
+    return "current";
+  }
+
   async listObligations(input: {
-    token: string; states?: ObligationState[]; obligation_type?: ObligationType; conversation_id?: string; open_only?: boolean; limit?: number;
-  }): Promise<{ ok: true; obligations: SafeObligation[] } | OtzarFailure> {
+    token: string; states?: ObligationState[]; obligation_type?: ObligationType; conversation_id?: string; open_only?: boolean; limit?: number; with_basis?: boolean;
+  }): Promise<{ ok: true; obligations: Array<SafeObligation & { basis_status?: string }> } | OtzarFailure> {
     const resolved = await this.obligationScope(input.token);
     if ("ok" in resolved) {
       // A caller with no obligation context legitimately has an empty list, not an error.
@@ -3583,7 +3600,12 @@ export class OtzarService {
       ...(input.limit !== undefined ? { limit: input.limit } : {}),
     };
     const obligations = await listObligations(resolved.scope, options);
-    return { ok: true, obligations };
+    if (input.with_basis !== true) return { ok: true, obligations };
+    // Live basis-status pass (bounded by the list size) — the Action Center highlights decisions
+    // whose captured basis has since changed, without any manual per-obligation recheck.
+    const org = resolved.scope.org_entity_id;
+    const withBasis = await Promise.all(obligations.map(async (o) => ({ ...o, basis_status: await this.computeObligationBasisStatus(org, o.obligation_id) })));
+    return { ok: true, obligations: withBasis };
   }
 
   /** A single obligation, scope-gated. Foreign/absent → OTZAR_OBLIGATION_NOT_FOUND. */

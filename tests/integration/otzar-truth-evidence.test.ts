@@ -402,6 +402,39 @@ describe("Otzar truth-evidence snapshots (Stage-2)", () => {
     expect(snap.truth_weight_rank).toBeNull();
   });
 
+  it("basis-status (§7): the obligation list surfaces live basis_status (current / stale / none) — read-only, no remediation raised", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUser(auth);
+    // (1) completed, basis still current
+    const l1 = await seedExecutedLedger(u);
+    const oCurrent = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "current", action_ref: l1 });
+    if (!oCurrent.ok) throw new Error();
+    await otzar.completeObligation({ token: u.token, obligation_id: oCurrent.obligation.obligation_id, expected_version: oCurrent.obligation.version });
+    // (2) completed, then a later drift → basis stale
+    const l2 = await seedExecutedLedger(u);
+    const oStale = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "stale", action_ref: l2 });
+    if (!oStale.ok) throw new Error();
+    await otzar.completeObligation({ token: u.token, obligation_id: oStale.obligation.obligation_id, expected_version: oStale.obligation.version });
+    await prisma.obligation.update({ where: { obligation_id: oStale.obligation.obligation_id }, data: { version: oStale.obligation.version + 9 } });
+    // (3) open, never completed → no durable basis captured
+    const oOpen = await otzar.createObligation({ token: u.token, obligation_type: "FOLLOW_UP", title: "open" });
+    if (!oOpen.ok) throw new Error();
+
+    const list = await otzar.listObligations({ token: u.token, with_basis: true });
+    expect(list.ok).toBe(true); if (!list.ok) return;
+    const byId = (id: string) => list.obligations.find((o) => o.obligation_id === id);
+    expect(byId(oCurrent.obligation.obligation_id)?.basis_status).toBe("current");
+    expect(byId(oStale.obligation.obligation_id)?.basis_status).toBe("stale");
+    expect(byId(oOpen.obligation.obligation_id)?.basis_status).toBe("none");
+    // Read-only: surfacing "stale" did NOT auto-raise a remediation (that stays explicit).
+    expect(await prisma.obligation.count({ where: { org_entity_id: u.orgId, obligation_type: "SAFETY_CONCERN" } })).toBe(0);
+
+    // Backward-compatible: without with_basis, no basis_status field is attached.
+    const plain = await otzar.listObligations({ token: u.token });
+    if (!plain.ok) return;
+    expect(plain.obligations.every((o) => (o as { basis_status?: string }).basis_status === undefined)).toBe(true);
+  });
+
   it("no-leak: the evidence projection exposes classifications/hashes, never raw content or policy internals", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUser(auth);
