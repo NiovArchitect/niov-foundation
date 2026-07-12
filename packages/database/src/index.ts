@@ -498,6 +498,7 @@ export type {
   SourceCandidate,
   SafeOrgTruthRecord,
   SafeConflictSet,
+  SafeConflictCandidate,
   PromoteOrgTruthInput,
   PromoteResult,
   ResolveConflictInput,
