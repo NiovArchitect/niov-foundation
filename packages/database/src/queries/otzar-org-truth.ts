@@ -493,15 +493,41 @@ export async function getTruthRecord(org: string, truthRecordId: string): Promis
   const row = await prisma.orgTruthRecord.findFirst({ where: { org_entity_id: org, truth_record_id: truthRecordId }, select: RECORD_SELECT });
   return row === null ? null : toSafeRecord(row as Record<string, unknown>);
 }
-export async function listConflictSetsForOrg(org: string, states?: ConflictSetState[]): Promise<SafeConflictSet[]> {
+export async function listConflictSetsForOrg(org: string, states?: ConflictSetState[]): Promise<Array<SafeConflictSet & { candidate_count: number }>> {
   const rows = await prisma.orgTruthConflictSet.findMany({ where: { org_entity_id: org, ...(states !== undefined ? { state: { in: states } } : {}) }, orderBy: { created_at: "desc" }, take: 100, select: CONFLICT_SELECT });
-  return rows as SafeConflictSet[];
+  if (rows.length === 0) return [];
+  const counts = await prisma.orgTruthConflictCandidate.groupBy({ by: ["conflict_set_id"], where: { conflict_set_id: { in: rows.map((r) => (r as SafeConflictSet).conflict_set_id) } }, _count: { candidate_id: true } });
+  const byId = new Map(counts.map((c) => [c.conflict_set_id, c._count.candidate_id]));
+  return rows.map((r) => ({ ...(r as SafeConflictSet), candidate_count: byId.get((r as SafeConflictSet).conflict_set_id) ?? 0 }));
 }
-export async function getConflictSet(org: string, conflictSetId: string): Promise<{ set: SafeConflictSet; candidates: Array<{ source_record_type: string; source_record_id: string; truth_class: string | null; authority_status: string | null; currentness: string | null }> } | null> {
+/** Safe candidate projection — safe classifications only (source authority/currentness/integrity/
+ *  truth-weight for the reviewer comparison); NEVER raw source content, hashes, or metadata. */
+export interface SafeConflictCandidate {
+  source_record_type: string;
+  source_record_id: string;
+  source_version: number | null;
+  communication_act: string | null;
+  truth_class: string | null;
+  truth_weight_rank: number | null;
+  authority_status: string | null;
+  currentness: string | null;
+  source_integrity_state: string | null;
+  permission_eligible: boolean;
+  superseded: boolean;
+  retracted: boolean;
+  is_winner: boolean;
+}
+const CANDIDATE_SELECT = {
+  source_record_type: true, source_record_id: true, source_version: true, communication_act: true,
+  truth_class: true, truth_weight_rank: true, authority_status: true, currentness: true,
+  source_integrity_state: true, permission_eligible: true, superseded: true, retracted: true, is_winner: true,
+} as const;
+
+export async function getConflictSet(org: string, conflictSetId: string): Promise<{ set: SafeConflictSet; candidates: SafeConflictCandidate[] } | null> {
   const set = await prisma.orgTruthConflictSet.findFirst({ where: { org_entity_id: org, conflict_set_id: conflictSetId }, select: CONFLICT_SELECT });
   if (set === null) return null;
-  const cands = await prisma.orgTruthConflictCandidate.findMany({ where: { conflict_set_id: conflictSetId }, select: { source_record_type: true, source_record_id: true, truth_class: true, authority_status: true, currentness: true }, take: 100 });
-  return { set: set as SafeConflictSet, candidates: cands };
+  const cands = await prisma.orgTruthConflictCandidate.findMany({ where: { conflict_set_id: conflictSetId }, select: CANDIDATE_SELECT, orderBy: [{ truth_weight_rank: "asc" }, { source_record_id: "asc" }], take: 100 });
+  return { set: set as SafeConflictSet, candidates: cands as SafeConflictCandidate[] };
 }
 
 // Local wrapper around the exported computeOrgTruthKey (keeps call sites terse).

@@ -114,6 +114,17 @@ describe("Otzar organizational-truth promotion + conflict (Section 10 §20)", ()
     // both candidates preserved.
     const cs = await getConflictSet(owner.orgId, r1.conflict_set.conflict_set_id);
     expect(cs?.candidates.length).toBe(2);
+    // [CT REVIEW UI] enriched safe candidate projection — classifications for the reviewer compare.
+    const c0 = cs!.candidates[0]!;
+    expect(c0).toHaveProperty("source_integrity_state");
+    expect(c0).toHaveProperty("truth_weight_rank");
+    expect(c0).toHaveProperty("currentness");
+    expect(c0).toHaveProperty("permission_eligible");
+    expect(typeof c0.is_winner).toBe("boolean");
+    // list projection carries candidate_count for the conflict-list lane.
+    const listed = await listConflictSetsForOrg(owner.orgId);
+    const thisSet = listed.find((s) => s.conflict_set_id === r1.conflict_set.conflict_set_id);
+    expect(thisSet?.candidate_count).toBe(2);
     // exactly one CLARIFICATION obligation to the owner.
     expect(r1.review_obligation_id).toBeTruthy();
     expect(await safeCount(owner.orgId)).toBe(1);
