@@ -81,6 +81,8 @@ import {
   computeEvidenceFingerprint,
   EVIDENCE_STALE_STATUSES,
   REMEDIABLE_DECISION_POINTS,
+  recheckRecordAndRemediate,
+  type RecheckRemediateOutcome,
   type EvidenceEnrichment,
   type SafeEvidenceSnapshot,
   type SafeHandoff,
@@ -3988,56 +3990,51 @@ export class OtzarService {
     const obligation = await getObligationForScope(scope, input.obligation_id);
     if (obligation === null) return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "This obligation is not available to you." };
 
-    // Only FINAL-decision snapshots gate remediation; point-in-time-by-design snapshots never
-    // false-trigger on normal progression (§7 — REMEDIABLE_DECISION_POINTS).
-    const snapshots = (await listSnapshotsForObligation(scope.org_entity_id, input.obligation_id)).filter((s) => REMEDIABLE_DECISION_POINTS.includes(s.decision_point));
-    const withStatus = await Promise.all(snapshots.map(async (s) => ({ s, status: await resolveCurrentSourceStatus(scope.org_entity_id, s) })));
-    const stale = withStatus
-      .filter((x) => (EVIDENCE_STALE_STATUSES as readonly string[]).includes(x.status))
-      .map((x) => ({ snapshot_id: x.s.snapshot_id, decision_point: x.s.decision_point, current_source_status: x.status }));
-
-    // Still current → record the recheck (RECHECKED) and return. No governed state changes; the
-    // audit is the sole artifact, so its failure is a clean retry (nothing partial persisted).
-    if (stale.length === 0) {
-      const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECKED", details: { obligation_id: input.obligation_id, snapshot_count: snapshots.length } });
-      if (!a.ok) { this.oblLog("recheck_audit_uncommitted", scope, { obligation_id: input.obligation_id }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
-      return { ok: true, status: "current", stale: [], remediation_obligation_id: null, remediation_created: false };
-    }
-
-    // Stale basis → raise (idempotently) a remediation obligation. The key binds to the exact stale
-    // set so the same drift is idempotent (no duplicate alert) while a new drift raises a fresh one.
-    const staleKey = computeEvidenceFingerprint({
-      obligation_id: input.obligation_id,
-      stale: [...stale].map((x) => ({ id: x.snapshot_id, status: x.current_source_status })).sort((p, q) => p.id.localeCompare(q.id)),
+    // Delegate to the shared recheck→remediation core (same core the sweep uses). Remediation is
+    // raised in the obligation's own scope, assigned to its current responsible party.
+    const outcome = await recheckRecordAndRemediate({
+      org_entity_id: scope.org_entity_id, record_kind: "OBLIGATION", record_id: input.obligation_id,
+      resolveRemediationScope: async () => scope, responsible_entity_id: obligation.responsible_entity_id,
+      actor_entity_id: entity_id, parent_obligation_id: input.obligation_id, audit_current: true,
     });
-    const originKey = `truth-remediation:OBLIGATION:${input.obligation_id}:${staleKey}`;
-    // SAFE content only — ids + safe classifications, never source text (validated by createOrGet).
-    const recheckDetails: Record<string, unknown> = { evidence_recheck: { of_record_type: "OBLIGATION", of_record_id: input.obligation_id, stale } };
-    const res = await createOrGetObligation(
-      scope,
-      {
-        obligation_type: "SAFETY_CONCERN",
-        title: "Evidence changed for a completed decision — review required",
-        creator_entity_id: entity_id,
-        responsible_entity_id: obligation.responsible_entity_id,
-        origin_key: originKey,
-        priority: "ELEVATED",
-        parent_obligation_id: input.obligation_id,
-        details: recheckDetails,
-      },
-      { actor_entity_id: entity_id, extra_details: recheckDetails },
-    );
-    if (res.kind === "invalid_content" || res.kind === "invalid_state") { this.oblLog("remediation_invalid", scope, { reason: res.kind }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_INVALID_INPUT", message: "The remediation could not be raised." }; }
-    if (res.kind === "invalid_reference") { this.oblLog("remediation_invalid_reference", scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_INVALID_REFERENCE", message: "The remediation reference is invalid." }; }
-    if (res.kind === "audit_consistency_failure") { this.oblLog("remediation_audit_uncommitted", scope, { obligation_id: input.obligation_id }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The remediation could not be recorded and was rolled back. Please retry." }; }
+    return this.mapRecheckOutcome(outcome, "OBLIGATION", scope, input.obligation_id);
+  }
 
-    // Remediation persisted (atomic OBLIGATION_CREATED). Record RECHECK_REQUIRED. On the rare audit
-    // failure here the remediation already exists + is itself audited; the idempotent origin_key
-    // means a retry returns the same remediation and re-attempts this audit (self-healing).
-    const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECK_REQUIRED", details: { obligation_id: input.obligation_id, remediation_obligation_id: res.obligation.obligation_id, stale_count: stale.length } });
-    if (!a.ok) { this.oblLog("recheck_audit_uncommitted", scope, { obligation_id: input.obligation_id, remediation_obligation_id: res.obligation.obligation_id }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
-    if (res.created) this.oblLog("remediation_raised", scope, { obligation_id: input.obligation_id, remediation_obligation_id: res.obligation.obligation_id });
-    return { ok: true, status: "remediation_open", stale, remediation_obligation_id: res.obligation.obligation_id, remediation_created: res.created };
+  /** Map the shared recheck→remediation core outcome to the interactive response shape + typed
+   *  OtzarFailure codes + leak-safe monitoring. Used by both recheck{Obligation,Handoff}Evidence. */
+  private mapRecheckOutcome(
+    outcome: RecheckRemediateOutcome,
+    kind: "OBLIGATION" | "HANDOFF",
+    scope: ObligationScope | HandoffScope,
+    recordId: string,
+  ): { ok: true; status: "current" | "remediation_open"; stale: Array<{ snapshot_id: string; decision_point: string; current_source_status: string }>; remediation_obligation_id: string | null; remediation_created: boolean } | OtzarFailure {
+    const log = (event: string, extra: Record<string, unknown> = {}) =>
+      kind === "OBLIGATION" ? this.oblLog(event, scope as ObligationScope, extra, "warn") : this.hoffLog(event, scope as HandoffScope, extra, "warn");
+    const codeInvalid = kind === "OBLIGATION" ? "OTZAR_OBLIGATION_INVALID_INPUT" : "OTZAR_HANDOFF_INVALID_INPUT";
+    const codeRef = kind === "OBLIGATION" ? "OTZAR_OBLIGATION_INVALID_REFERENCE" : "OTZAR_HANDOFF_INVALID_REFERENCE";
+    const codeAudit = kind === "OBLIGATION" ? "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED" : "OTZAR_HANDOFF_AUDIT_UNCOMMITTED";
+    switch (outcome.kind) {
+      case "current":
+        return { ok: true, status: "current", stale: [], remediation_obligation_id: null, remediation_created: false };
+      case "remediation":
+        return { ok: true, status: "remediation_open", stale: outcome.stale, remediation_obligation_id: outcome.remediation_obligation_id, remediation_created: outcome.created };
+      case "would_remediate":
+        // Unreachable on the interactive path (it never dry-runs); treat defensively as a failed
+        // recheck rather than reporting a remediation that was not actually raised.
+        log("recheck_dry_run_unexpected", { record_id: recordId });
+        return { ok: false, code: codeAudit, message: "The recheck could not be recorded. Please retry." };
+      case "no_remediation_scope":
+        return { ok: false, code: "OTZAR_HANDOFF_PRECONDITION", message: "A stale basis was detected but no obligation context exists to raise a remediation.", detail: "no_remediation_scope" };
+      case "invalid":
+        log("remediation_invalid", { record_id: recordId, reason: outcome.reason });
+        return { ok: false, code: codeInvalid, message: "The remediation could not be raised." };
+      case "invalid_reference":
+        log("remediation_invalid_reference", { record_id: recordId, reason: outcome.reason });
+        return { ok: false, code: codeRef, message: "The remediation reference is invalid." };
+      case "audit_uncommitted":
+        log("recheck_audit_uncommitted", { record_id: recordId });
+        return { ok: false, code: codeAudit, message: "The recheck could not be recorded. Please retry." };
+    }
   }
 
   /** Evidence snapshots for a handoff the caller is a party to. The receiver can see that evidence
@@ -4070,52 +4067,15 @@ export class OtzarService {
     const handoff = await getHandoffForScope(scope, input.handoff_id);
     if (handoff === null) return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
 
-    const snapshots = (await listSnapshotsForHandoff(scope.org_entity_id, input.handoff_id)).filter((s) => REMEDIABLE_DECISION_POINTS.includes(s.decision_point));
-    const withStatus = await Promise.all(snapshots.map(async (s) => ({ s, status: await resolveCurrentSourceStatus(scope.org_entity_id, s) })));
-    const stale = withStatus
-      .filter((x) => (EVIDENCE_STALE_STATUSES as readonly string[]).includes(x.status))
-      .map((x) => ({ snapshot_id: x.s.snapshot_id, decision_point: x.s.decision_point, current_source_status: x.status }));
-
-    if (stale.length === 0) {
-      const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECKED", details: { handoff_id: input.handoff_id, snapshot_count: snapshots.length } });
-      if (!a.ok) { this.hoffLog("recheck_audit_uncommitted", scope, { handoff_id: input.handoff_id }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
-      return { ok: true, status: "current", stale: [], remediation_obligation_id: null, remediation_created: false };
-    }
-
-    // Raise the remediation in the caller's own obligation scope (subject = caller). A handoff party
-    // without an obligation context can't be issued governed work — surface a clear precondition.
-    const oblScope = await this.restoreScope(entity_id);
-    if (oblScope === null) return { ok: false, code: "OTZAR_HANDOFF_PRECONDITION", message: "A stale basis was detected but no obligation context exists to raise a remediation.", detail: "no_remediation_scope" };
-
-    const staleKey = computeEvidenceFingerprint({
-      handoff_id: input.handoff_id,
-      stale: [...stale].map((x) => ({ id: x.snapshot_id, status: x.current_source_status })).sort((p, q) => p.id.localeCompare(q.id)),
+    // Delegate to the shared core. The remediation is raised in the CALLER's own obligation scope
+    // (the party who rechecked is alerted); the scope resolves LAZILY so a still-current handoff
+    // never needs it (preserving the pre-refactor behavior).
+    const outcome = await recheckRecordAndRemediate({
+      org_entity_id: scope.org_entity_id, record_kind: "HANDOFF", record_id: input.handoff_id,
+      resolveRemediationScope: () => this.restoreScope(entity_id), responsible_entity_id: entity_id,
+      actor_entity_id: entity_id, audit_current: true,
     });
-    const originKey = `truth-remediation:HANDOFF:${input.handoff_id}:${staleKey}`;
-    // SAFE content only — ids + safe classifications. The handoff is referenced via details (no FK
-    // link field exists for a handoff on an obligation), validated by createOrGet's safe-JSON.
-    const recheckDetails: Record<string, unknown> = { evidence_recheck: { of_record_type: "HANDOFF", of_record_id: input.handoff_id, stale } };
-    const res = await createOrGetObligation(
-      oblScope,
-      {
-        obligation_type: "SAFETY_CONCERN",
-        title: "Evidence changed for a completed handoff — review required",
-        creator_entity_id: entity_id,
-        responsible_entity_id: entity_id,
-        origin_key: originKey,
-        priority: "ELEVATED",
-        details: recheckDetails,
-      },
-      { actor_entity_id: entity_id, extra_details: recheckDetails },
-    );
-    if (res.kind === "invalid_content" || res.kind === "invalid_state") { this.hoffLog("remediation_invalid", scope, { reason: res.kind }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_INVALID_INPUT", message: "The remediation could not be raised." }; }
-    if (res.kind === "invalid_reference") { this.hoffLog("remediation_invalid_reference", scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_INVALID_REFERENCE", message: "The remediation reference is invalid." }; }
-    if (res.kind === "audit_consistency_failure") { this.hoffLog("remediation_audit_uncommitted", scope, { handoff_id: input.handoff_id }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The remediation could not be recorded and was rolled back. Please retry." }; }
-
-    const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECK_REQUIRED", details: { handoff_id: input.handoff_id, remediation_obligation_id: res.obligation.obligation_id, stale_count: stale.length } });
-    if (!a.ok) { this.hoffLog("recheck_audit_uncommitted", scope, { handoff_id: input.handoff_id, remediation_obligation_id: res.obligation.obligation_id }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
-    if (res.created) this.hoffLog("remediation_raised", scope, { handoff_id: input.handoff_id, remediation_obligation_id: res.obligation.obligation_id });
-    return { ok: true, status: "remediation_open", stale, remediation_obligation_id: res.obligation.obligation_id, remediation_created: res.created };
+    return this.mapRecheckOutcome(outcome, "HANDOFF", scope, input.handoff_id);
   }
 
   // ──────────────────────────────────────────────────────────────

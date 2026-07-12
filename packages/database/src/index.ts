@@ -317,6 +317,14 @@ export type {
   EvidenceRecheckEvent,
   EvidenceEnrichment,
 } from "./queries/otzar-truth-evidence.js";
+// [OTZAR STAGE-2 TRUTH-EVIDENCE §7] Shared recheck→remediation core (interactive + sweep).
+export { recheckRecordAndRemediate } from "./queries/otzar-evidence-remediation.js";
+export type {
+  RecheckRemediateArgs,
+  RecheckRemediateOutcome,
+  RemediableRecordKind,
+  StaleBasisRef,
+} from "./queries/otzar-evidence-remediation.js";
 
 export type {
   Entity,

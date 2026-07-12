@@ -8,6 +8,9 @@
 
 import type { FastifyInstance } from "fastify";
 import type { OtzarService, IngestSourceEventInput } from "../services/otzar/otzar.service.js";
+import type { AuthService } from "../services/auth.service.js";
+import { requireAdminCapability } from "../middleware/admin.middleware.js";
+import { tickTruthEvidenceRecheck, parseTruthEvidenceTargets, TRUTH_EVIDENCE_RECHECK_TARGETS_ENV } from "../services/otzar/truth-evidence-recheck.service.js";
 import {
   isDemoModeAllowed,
   DEMO_MODE_NOT_ALLOWED,
@@ -125,6 +128,7 @@ function statusForCode(code: string): number {
 export async function registerOtzarRoutes(
   app: FastifyInstance,
   otzarService: OtzarService,
+  authService?: AuthService,
 ): Promise<void> {
   app.post<{
     Body: {
@@ -1274,4 +1278,25 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // [OTZAR STAGE-2 TRUTH-EVIDENCE §7 — SWEEP · §L] Admin-triggered auto-remediation sweep over the
+  // FAIL-CLOSED env allowlist (double-gated: can_admin_org WHO + OTZAR_TRUTH_EVIDENCE_RECHECK_TARGETS
+  // WHICH). `dry_run: true` (the default) previews stale counts and creates nothing — the required
+  // pre-activation check. `dry_run: false` performs the governed idempotent remediation. Registered
+  // only when an AuthService is available (production).
+  if (authService !== undefined) {
+    app.post<{ Body: { dry_run?: unknown } }>(
+      "/api/v1/otzar/evidence/recheck-sweep",
+      { preHandler: requireAdminCapability(authService, "can_admin_org") },
+      async (request, reply) => {
+        // Default to dry-run: a governed run requires an explicit dry_run:false.
+        const dryRun = (request.body?.dry_run) !== false;
+        const result = await tickTruthEvidenceRecheck(
+          parseTruthEvidenceTargets(process.env[TRUTH_EVIDENCE_RECHECK_TARGETS_ENV]),
+          { dry_run: dryRun },
+        );
+        return reply.code(200).send({ ok: true, result });
+      },
+    );
+  }
 }
