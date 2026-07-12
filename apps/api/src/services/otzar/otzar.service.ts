@@ -3619,30 +3619,51 @@ export class OtzarService {
    * when no stamped lineage exists (the fields then stay null — never fabricated). Pure compute
    * over already-stored JSON; the only I/O is reading the linked ledger's details.
    */
+  /**
+   * [TRUTH-EVIDENCE] Build the resolved substrate enrichment from the FIRST candidate details JSON
+   * that carries a stamped statement lineage. Pure over already-fetched JSON — REUSES the existing
+   * resolvers (lineageFromDetails → computeTruthWeight) and reads source-integrity off the same row.
+   * Never fabricates: no stamped lineage in any candidate → undefined (fields stay null).
+   */
+  private enrichmentFromDetails(candidates: readonly unknown[]): EvidenceEnrichment | undefined {
+    for (const details of candidates) {
+      const lineage = lineageFromDetails(details);
+      if (lineage === null) continue;
+      const tw = computeTruthWeight(lineage);
+      const enrichment: EvidenceEnrichment = {
+        communication_act: lineage.communication_act,
+        authority_class: lineage.authority_status,
+        currentness: lineage.currentness,
+        truth_class: tw.weight_class,
+        truth_weight_rank: tw.rank,
+      };
+      const si = (typeof details === "object" && details !== null && !Array.isArray(details)) ? (details as Record<string, unknown>).source_integrity : null;
+      const siState = (typeof si === "object" && si !== null) ? (si as Record<string, unknown>).state : null;
+      if (typeof siState === "string") enrichment.source_integrity_state = siState;
+      return enrichment;
+    }
+    return undefined;
+  }
+
+  /** Obligation completion enrichment: the obligation's own stamped lineage, else its linked
+   *  work-ledger row (comms-ingest stamps details.communication_lineage on ledger rows). */
   private async resolveObligationCompletionEnrichment(obligationId: string, orgEntityId: string): Promise<EvidenceEnrichment | undefined> {
     const obl = await prisma.obligation.findFirst({ where: { obligation_id: obligationId, org_entity_id: orgEntityId }, select: { details: true, action_ref: true } });
     if (obl === null) return undefined;
-    // Prefer the obligation's own stamped lineage; fall back to the linked work-ledger row.
-    let sourceDetails: unknown = obl.details;
-    let lineage = lineageFromDetails(sourceDetails);
-    if (lineage === null && obl.action_ref !== null) {
+    const candidates: unknown[] = [obl.details];
+    if (lineageFromDetails(obl.details) === null && obl.action_ref !== null) {
       const led = await prisma.workLedgerEntry.findUnique({ where: { ledger_entry_id: obl.action_ref }, select: { details: true } });
-      if (led !== null) { sourceDetails = led.details; lineage = lineageFromDetails(led.details); }
+      if (led !== null) candidates.push(led.details);
     }
-    if (lineage === null) return undefined;
-    const tw = computeTruthWeight(lineage);
-    const enrichment: EvidenceEnrichment = {
-      communication_act: lineage.communication_act,
-      authority_class: lineage.authority_status,
-      currentness: lineage.currentness,
-      truth_class: tw.weight_class,
-      truth_weight_rank: tw.rank,
-    };
-    // source-integrity is stored on the source row's details (never fabricated); read it directly.
-    const si = (typeof sourceDetails === "object" && sourceDetails !== null && !Array.isArray(sourceDetails)) ? (sourceDetails as Record<string, unknown>).source_integrity : null;
-    const siState = (typeof si === "object" && si !== null) ? (si as Record<string, unknown>).state : null;
-    if (typeof siState === "string") enrichment.source_integrity_state = siState;
-    return enrichment;
+    return this.enrichmentFromDetails(candidates);
+  }
+
+  /** Handoff decision enrichment: the handoff's own stamped lineage (handoffs carry no linked
+   *  ledger). Absent → undefined. */
+  private async resolveHandoffEnrichment(handoffId: string, orgEntityId: string): Promise<EvidenceEnrichment | undefined> {
+    const h = await prisma.handoff.findFirst({ where: { handoff_id: handoffId, org_entity_id: orgEntityId }, select: { details: true } });
+    if (h === null) return undefined;
+    return this.enrichmentFromDetails([h.details]);
   }
 
   async completeObligation(input: { token: string; obligation_id: string; expected_version: number; completion_turn_id?: string | null; completion_action_ref?: string | null; completion_evidence?: Record<string, unknown> | null }): Promise<{ ok: true; obligation: SafeObligation } | OtzarFailure> {
@@ -3866,17 +3887,23 @@ export class OtzarService {
     const resolved = await this.handoffScope(input.token);
     if ("ok" in resolved) return resolved;
     const a = { handoff_id: input.handoff_id, expected_version: input.expected_version };
+    // Resolve the point-in-time substrate values for the capturing transitions (send / complete);
+    // captured atomically with the transition (absent stamped lineage → null, never fabricated).
+    const enrichment = (input.transition === "send" || input.transition === "complete")
+      ? await this.resolveHandoffEnrichment(input.handoff_id, resolved.scope.org_entity_id)
+      : undefined;
+    const enr = enrichment !== undefined ? { evidence_enrichment: enrichment } : {};
     let outcome: HandoffOutcome;
     switch (input.transition) {
       case "ready": outcome = await readyHandoff(resolved.scope, a); break;
-      case "send": outcome = await sendHandoff(resolved.scope, { ...a, ...(input.incoming_responsible_entity_id !== undefined ? { incoming_responsible_entity_id: input.incoming_responsible_entity_id } : {}) }); break;
+      case "send": outcome = await sendHandoff(resolved.scope, { ...a, ...enr, ...(input.incoming_responsible_entity_id !== undefined ? { incoming_responsible_entity_id: input.incoming_responsible_entity_id } : {}) }); break;
       case "receive": outcome = await receiveHandoff(resolved.scope, a); break;
       case "acknowledge":
         if (input.acknowledged_turn_id === undefined) return { ok: false, code: "OTZAR_HANDOFF_INVALID_INPUT", message: "acknowledged_turn_id is required" };
         outcome = await acknowledgeHandoff(resolved.scope, { ...a, acknowledged_turn_id: input.acknowledged_turn_id }); break;
       case "request_clarification": outcome = await requestClarificationHandoff(resolved.scope, a); break;
       case "escalate": outcome = await escalateHandoff(resolved.scope, { ...a, ...(input.escalation_id !== undefined ? { escalation_id: input.escalation_id } : {}) }); break;
-      case "complete": outcome = await completeHandoff(resolved.scope, a); break;
+      case "complete": outcome = await completeHandoff(resolved.scope, { ...a, ...enr }); break;
     }
     if (outcome.kind !== "ok") { this.hoffLog(input.transition + "_failed", resolved.scope, { handoff_id: input.handoff_id, reason: outcome.kind }, "warn"); return this.mapHandoffFailure(outcome); }
     this.hoffLog(input.transition, resolved.scope, { handoff_id: input.handoff_id });

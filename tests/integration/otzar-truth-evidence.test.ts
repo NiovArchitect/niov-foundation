@@ -258,7 +258,7 @@ describe("Otzar truth-evidence snapshots (Stage-2)", () => {
 
   // Two-party handoff driven to completion (send → receive → ack → complete). Returns the outgoing
   // party (a, who created it), the incoming party token, and the completed handoff id.
-  async function completedHandoff(auth: AuthService, otzar: OtzarService): Promise<{ a: OrgUser; handoffId: string }> {
+  async function completedHandoff(auth: AuthService, otzar: OtzarService, details?: Record<string, unknown>): Promise<{ a: OrgUser; handoffId: string }> {
     const a = await orgUser(auth);
     const bUser = await createEntity(makeEntityInput({ entity_type: "PERSON", password: "correct-horse-battery" }));
     await prisma.entityMembership.create({ data: { parent_id: a.orgId, child_id: bUser.entity_id, is_active: true } });
@@ -267,7 +267,7 @@ describe("Otzar truth-evidence snapshots (Stage-2)", () => {
     await prisma.twinConfig.create({ data: { twin_id: bTwin.entity_id, autonomy_level: "APPROVAL_REQUIRED", is_admin_twin: false, role_template: null } });
     const bLogin = (await auth.login((await prisma.entity.findUnique({ where: { entity_id: bUser.entity_id }, select: { email: true } }))!.email!, "correct-horse-battery", ["read", "write"], { ip_address: null })) as LoginResult;
     if (!bLogin.ok) throw new Error();
-    const h = await otzar.createHandoff({ token: a.token, title: "H", incoming_responsible_entity_id: bUser.entity_id });
+    const h = await otzar.createHandoff({ token: a.token, title: "H", incoming_responsible_entity_id: bUser.entity_id, ...(details !== undefined ? { details } : {}) });
     if (!h.ok) throw new Error();
     const sent = await otzar.transitionHandoff({ token: a.token, handoff_id: h.handoff.handoff_id, expected_version: h.handoff.version, transition: "send" });
     if (!sent.ok) throw new Error();
@@ -369,6 +369,37 @@ describe("Otzar truth-evidence snapshots (Stage-2)", () => {
     expect(snap2.communication_act).toBeNull();
     expect(snap2.truth_class).toBeNull();
     expect(snap2.truth_weight_rank).toBeNull();
+  });
+
+  it("enrichment: handoff SEND + COMPLETION resolve the substrate values from the handoff's stamped lineage (same reused resolver)", async () => {
+    const { auth, otzar } = makeServices();
+    const { a, handoffId } = await completedHandoff(auth, otzar, {
+      communication_lineage: { communication_act: "approval", authority_status: "within_authority", currentness: "current", superseded_by: null },
+      source_integrity: { state: "SNAPSHOTTED" },
+    });
+    const ev = await otzar.getHandoffEvidence({ token: a.token, handoff_id: handoffId });
+    expect(ev.ok).toBe(true); if (!ev.ok) return;
+    for (const dp of ["HANDOFF_SEND", "HANDOFF_COMPLETION"]) {
+      const snap = ev.evidence.find((e) => e.decision_point === dp)!;
+      expect(snap, dp).toBeDefined();
+      expect(snap.communication_act, dp).toBe("approval");
+      expect(snap.authority_class, dp).toBe("within_authority");
+      expect(snap.truth_class, dp).toBe("authorized_decision"); // approval + within_authority → rank 2
+      expect(snap.truth_weight_rank, dp).toBe(2);
+      expect(snap.currentness, dp).toBe("current");
+      expect(snap.source_integrity_state, dp).toBe("SNAPSHOTTED");
+    }
+  });
+
+  it("enrichment: a handoff with no stamped lineage captures null substrate fields (never fabricated)", async () => {
+    const { auth, otzar } = makeServices();
+    const { a, handoffId } = await completedHandoff(auth, otzar); // no details
+    const ev = await otzar.getHandoffEvidence({ token: a.token, handoff_id: handoffId });
+    if (!ev.ok) return;
+    const snap = ev.evidence.find((e) => e.decision_point === "HANDOFF_COMPLETION")!;
+    expect(snap.communication_act).toBeNull();
+    expect(snap.truth_class).toBeNull();
+    expect(snap.truth_weight_rank).toBeNull();
   });
 
   it("no-leak: the evidence projection exposes classifications/hashes, never raw content or policy internals", async () => {
