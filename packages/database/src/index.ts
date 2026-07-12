@@ -315,6 +315,7 @@ export type {
   CaptureResult,
   CurrentSourceStatus,
   EvidenceRecheckEvent,
+  EvidenceEnrichment,
 } from "./queries/otzar-truth-evidence.js";
 
 export type {

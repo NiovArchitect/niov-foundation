@@ -330,6 +330,47 @@ describe("Otzar truth-evidence snapshots (Stage-2)", () => {
     expect(await prisma.obligation.count({ where: { org_entity_id: a.orgId, obligation_type: "SAFETY_CONCERN", subject_entity_id: a.userId } })).toBe(0);
   });
 
+  it("enrichment: completion resolves the substrate values (communication_act/truth_class/rank/authority/currentness/source-integrity) from the linked ledger's stamped lineage — and stays null when none exists", async () => {
+    const { auth, otzar } = makeServices();
+    const u = await orgUser(auth);
+    // A work-ledger row carrying the 3B statement stamp (details.communication_lineage) + a
+    // source-integrity state — exactly what comms-ingest writes.
+    const stamped = await prisma.workLedgerEntry.create({
+      data: {
+        org_entity_id: u.orgId, ledger_type: "DECISION", owner_entity_id: u.userId, title: "Ship v2", status: "EXECUTED",
+        details: { communication_lineage: { communication_act: "decision", authority_status: "within_authority", currentness: "current", superseded_by: null }, source_integrity: { state: "AVAILABLE" } },
+      },
+      select: { ledger_entry_id: true },
+    });
+    const o = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "Confirm ship", action_ref: stamped.ledger_entry_id });
+    if (!o.ok) throw new Error();
+    const done = await otzar.completeObligation({ token: u.token, obligation_id: o.obligation.obligation_id, expected_version: o.obligation.version });
+    expect(done.ok).toBe(true);
+    const ev = await otzar.getObligationEvidence({ token: u.token, obligation_id: o.obligation.obligation_id });
+    expect(ev.ok).toBe(true); if (!ev.ok) return;
+    const snap = ev.evidence.find((e) => e.decision_point === "OBLIGATION_COMPLETION")!;
+    // The resolved substrate values were captured point-in-time — reusing truth-weight, NOT invented.
+    expect(snap.communication_act).toBe("decision");
+    expect(snap.authority_class).toBe("within_authority");
+    expect(snap.currentness).toBe("current");
+    expect(snap.truth_class).toBe("authorized_decision"); // decision + within_authority → rank 2
+    expect(snap.truth_weight_rank).toBe(2);
+    expect(snap.source_integrity_state).toBe("AVAILABLE");
+
+    // Control: a plain ledger with NO stamped lineage → enrichment absent (fields stay null; never
+    // fabricated).
+    const plain = await seedExecutedLedger(u);
+    const o2 = await otzar.createObligation({ token: u.token, obligation_type: "ACTION_CONFIRMATION", title: "Confirm plain", action_ref: plain });
+    if (!o2.ok) throw new Error();
+    await otzar.completeObligation({ token: u.token, obligation_id: o2.obligation.obligation_id, expected_version: o2.obligation.version });
+    const ev2 = await otzar.getObligationEvidence({ token: u.token, obligation_id: o2.obligation.obligation_id });
+    if (!ev2.ok) return;
+    const snap2 = ev2.evidence.find((e) => e.decision_point === "OBLIGATION_COMPLETION")!;
+    expect(snap2.communication_act).toBeNull();
+    expect(snap2.truth_class).toBeNull();
+    expect(snap2.truth_weight_rank).toBeNull();
+  });
+
   it("no-leak: the evidence projection exposes classifications/hashes, never raw content or policy internals", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUser(auth);
