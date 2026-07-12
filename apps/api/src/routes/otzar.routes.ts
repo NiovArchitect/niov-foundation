@@ -1246,4 +1246,18 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // [OTZAR STAGE-2 TRUTH-EVIDENCE §7] Recheck an obligation's captured evidence vs the current
+  // source; a stale basis raises an idempotent SAFETY_CONCERN remediation. The captured basis is
+  // never mutated. Idempotent per (obligation, stale-set) — safe to call repeatedly / poll.
+  app.post<{ Params: { obligation_id: string } }>(
+    "/api/v1/otzar/obligations/:obligation_id/evidence/recheck",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.recheckObligationEvidence({ token, obligation_id: request.params.obligation_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
 }

@@ -260,3 +260,29 @@ export async function resolveCurrentSourceStatus(orgEntityId: string, snapshot: 
   }
   return "unknown";
 }
+
+// ── Recheck → remediation (§7: a changed/retracted basis must be surfaced, not silently kept) ────
+
+/** Statuses that mean a past decision's captured basis is NO LONGER current — the trigger for a
+ *  governed remediation. `unchanged`/`unknown` are NOT stale (unknown = no version to compare, so
+ *  we never raise a false remediation on it). */
+export const EVIDENCE_STALE_STATUSES: readonly CurrentSourceStatus[] = ["changed", "superseded", "retracted", "unavailable"];
+
+export type EvidenceRecheckEvent = "TRUTH_EVIDENCE_RECHECK_REQUIRED" | "TRUTH_EVIDENCE_RECHECKED";
+
+/**
+ * Write the recheck audit (RECHECKED when the basis is still current; RECHECK_REQUIRED when a
+ * remediation was raised). A single append-only audit row — atomic on its own. Returns a typed
+ * failure (never swallows to a silent success): the caller surfaces AUDIT_UNCOMMITTED and retries.
+ * The remediation obligation is idempotent (origin_key), so a retry heals a rare failure here
+ * without duplicating the alert.
+ */
+export async function writeEvidenceRecheckAudit(input: { org_entity_id: string; actor_entity_id: string; event_type: EvidenceRecheckEvent; details: Record<string, unknown> }): Promise<{ ok: boolean }> {
+  try {
+    if (__otzarTruthEvidenceTestHooks.failAudit) throw new Error("injected recheck audit failure");
+    await writeAuditEvent({ event_type: input.event_type, outcome: "SUCCESS", actor_entity_id: input.actor_entity_id, target_entity_id: input.org_entity_id, details: input.details });
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
