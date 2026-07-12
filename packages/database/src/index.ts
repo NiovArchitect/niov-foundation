@@ -477,3 +477,31 @@ export {
 } from "./queries/connector-binding.js";
 
 export type { CreateConnectorBindingInput } from "./queries/connector-binding.js";
+
+// [SECTION-10 ORG-TRUTH §9-§15] Governed organizational-truth promotion + conflict runtime.
+export {
+  promoteOrgTruth,
+  resolveConflict,
+  retractOrgTruth,
+  resolveOrgTruthAuthority,
+  resolveDomainOwner,
+  getCurrentPromotedTruth,
+  getTruthRecord,
+  listConflictSetsForOrg,
+  getConflictSet,
+  __otzarOrgTruthTestHooks,
+} from "./queries/otzar-org-truth.js";
+export type {
+  OrgTruthScope,
+  OrgTruthState,
+  ConflictSetState,
+  SourceCandidate,
+  SafeOrgTruthRecord,
+  SafeConflictSet,
+  PromoteOrgTruthInput,
+  PromoteResult,
+  ResolveConflictInput,
+  ResolveConflictResult,
+  RetractResult,
+  AuthorityOutcome,
+} from "./queries/otzar-org-truth.js";
