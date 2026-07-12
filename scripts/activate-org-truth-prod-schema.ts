@@ -122,7 +122,7 @@ const DDL: string[] = [
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "org_truth_conflict_candidates_pkey" PRIMARY KEY ("candidate_id")
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS "org_truth_conflict_candidates_conflict_set_id_source_record_type_source_record_id_key" ON "org_truth_conflict_candidates"("conflict_set_id", "source_record_type", "source_record_id")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "org_truth_conflict_candidates_src_key" ON "org_truth_conflict_candidates"("conflict_set_id", "source_record_type", "source_record_id")`,
   `CREATE INDEX IF NOT EXISTS "org_truth_conflict_candidates_conflict_set_id_idx" ON "org_truth_conflict_candidates"("conflict_set_id")`,
   `CREATE INDEX IF NOT EXISTS "org_truth_conflict_candidates_org_entity_id_idx" ON "org_truth_conflict_candidates"("org_entity_id")`,
 ];
@@ -132,7 +132,7 @@ const REQUIRED_INDEXES = [
   "org_truth_records_org_entity_id_origin_key_key",
   "org_truth_records_one_promoted_per_key",
   "org_truth_conflict_sets_org_entity_id_origin_key_key",
-  "org_truth_conflict_candidates_conflict_set_id_source_record_type_source_record_id_key",
+  "org_truth_conflict_candidates_src_key",
 ] as const;
 
 function redact(url: string | undefined): string {

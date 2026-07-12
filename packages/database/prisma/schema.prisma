@@ -2581,7 +2581,7 @@ model OrgTruthConflictCandidate {
   metadata               Json     @default("{}")
   created_at             DateTime @default(now())
 
-  @@unique([conflict_set_id, source_record_type, source_record_id])
+  @@unique([conflict_set_id, source_record_type, source_record_id], map: "org_truth_conflict_candidates_src_key")
   @@index([conflict_set_id])
   @@index([org_entity_id])
   @@map("org_truth_conflict_candidates")
