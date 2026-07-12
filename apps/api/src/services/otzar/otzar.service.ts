@@ -58,6 +58,27 @@ import {
   projectObligationFromAwaitingConfirmation,
   projectObligationFromUnresolvedQuestion,
   validateResponsibleEntity,
+  // [OTZAR STAGE-2 §L] Handoff layer.
+  createOrGetHandoff,
+  listHandoffs,
+  getHandoffForScope,
+  listHandoffObligations,
+  readyHandoff,
+  sendHandoff,
+  receiveHandoff,
+  acknowledgeHandoff,
+  requestClarificationHandoff,
+  escalateHandoff,
+  linkObligationToHandoff,
+  disposeHandoffObligation,
+  completeHandoff,
+  supersedeHandoff,
+  type SafeHandoff,
+  type HandoffScope,
+  type HandoffState,
+  type HandoffDisposition,
+  type CreateHandoffInput,
+  type HandoffOutcome,
   type SafeObligation,
   type ObligationScope,
   type CreateObligationInput,
@@ -442,7 +463,16 @@ export interface OtzarFailure {
     // [HARDENING] validation + audit-consistency failures.
     | "OTZAR_OBLIGATION_INVALID_INPUT"
     | "OTZAR_OBLIGATION_INVALID_REFERENCE"
-    | "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED";
+    | "OTZAR_OBLIGATION_AUDIT_UNCOMMITTED"
+    // [OTZAR STAGE-2 §L] handoff lifecycle failures.
+    | "OTZAR_HANDOFF_NOT_FOUND"
+    | "OTZAR_HANDOFF_STATE_CHANGED"
+    | "OTZAR_HANDOFF_ILLEGAL_TRANSITION"
+    | "OTZAR_HANDOFF_NOT_AUTHORIZED"
+    | "OTZAR_HANDOFF_PRECONDITION"
+    | "OTZAR_HANDOFF_INVALID_INPUT"
+    | "OTZAR_HANDOFF_INVALID_REFERENCE"
+    | "OTZAR_HANDOFF_AUDIT_UNCOMMITTED";
   message: string;
   detail?: unknown;
 }
@@ -3675,6 +3705,150 @@ export class OtzarService {
     if (res.kind !== "projected") { this.oblLog("projection_inconsistent", resolved.scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "No unresolved question to project here." }; }
     if (res.created) this.oblLog("created", resolved.scope, { obligation_id: res.obligation.obligation_id, projected_from: "unresolved_question" });
     return { ok: true, obligation: res.obligation, created: res.created };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // [OTZAR STAGE-2 §L] Governed responsibility handoffs. MULTI-PARTY: reads scoped by (org,
+  // caller-is-a-party) so the receiver sees what was sent; mutations are party-authorized; every
+  // governed mutation's HANDOFF_* audit is atomic with the transition; completion is gated on ack
+  // + all linked obligations disposed.
+
+  /** Resolve the caller's handoff scope (org + caller entity). No twin (handoffs are inter-party). */
+  private async handoffScope(token: string): Promise<{ scope: HandoffScope; entity_id: string } | OtzarFailure> {
+    const session = await this.authService.validateSession(token, "read");
+    if (!session.valid) return { ok: false, code: session.code, message: "Handoff access denied" };
+    const { getOrgEntityId } = await import("../governance/org.js");
+    let orgEntityId: string | null;
+    try { orgEntityId = await getOrgEntityId(session.entity_id); } catch { orgEntityId = null; }
+    if (orgEntityId === null) return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "No handoff context for this caller." };
+    return { scope: { org_entity_id: orgEntityId, caller_entity_id: session.entity_id }, entity_id: session.entity_id };
+  }
+
+  private mapHandoffFailure(outcome: Exclude<HandoffOutcome, { kind: "ok" }>): OtzarFailure {
+    switch (outcome.kind) {
+      case "not_found": return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
+      case "stale_version": return { ok: false, code: "OTZAR_HANDOFF_STATE_CHANGED", message: "This handoff changed since you last read it." };
+      case "illegal_transition": return { ok: false, code: "OTZAR_HANDOFF_ILLEGAL_TRANSITION", message: "That change isn't allowed from the handoff's current state." };
+      case "not_authorized": return { ok: false, code: "OTZAR_HANDOFF_NOT_AUTHORIZED", message: "You aren't the party authorized for this handoff action." };
+      case "precondition": return { ok: false, code: "OTZAR_HANDOFF_PRECONDITION", message: "A precondition for this handoff action is not met.", detail: outcome.reason };
+      case "audit_consistency_failure": return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The change could not be recorded and was rolled back. Please retry." };
+    }
+  }
+
+  private hoffLog(event: string, scope: HandoffScope, extra: Record<string, unknown> = {}, level: "info" | "warn" = "info"): void {
+    logger[level]({ event: `handoff.${event}`, org: scope.org_entity_id, caller: scope.caller_entity_id, ...extra }, `handoff ${event}`);
+  }
+
+  async createHandoff(input: {
+    token: string; title: string; incoming_responsible_entity_id?: string; workspace_id?: string; conversation_id?: string;
+    summary?: string; details?: Record<string, unknown>; priority?: string; origin_key?: string; due_at?: Date;
+  }): Promise<{ ok: true; handoff: SafeHandoff; created: boolean } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const { scope, entity_id } = resolved;
+    const createInput: CreateHandoffInput = {
+      title: input.title, outgoing_responsible_entity_id: entity_id, creator_entity_id: entity_id,
+      ...(input.incoming_responsible_entity_id !== undefined ? { incoming_responsible_entity_id: input.incoming_responsible_entity_id } : {}),
+      ...(input.workspace_id !== undefined ? { workspace_id: input.workspace_id } : {}),
+      ...(input.conversation_id !== undefined ? { conversation_id: input.conversation_id } : {}),
+      ...(input.summary !== undefined ? { summary: input.summary } : {}),
+      ...(input.details !== undefined ? { details: input.details } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      ...(input.origin_key !== undefined ? { origin_key: input.origin_key } : {}),
+      ...(input.due_at !== undefined ? { due_at: input.due_at } : {}),
+    };
+    const res = await createOrGetHandoff(scope, createInput, { actor_entity_id: entity_id });
+    if (res.kind === "invalid_content") { this.hoffLog("invalid_input", scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_INVALID_INPUT", message: "The handoff input was rejected." }; }
+    if (res.kind === "invalid_reference") { this.hoffLog("invalid_reference", scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_INVALID_REFERENCE", message: "A linked reference is invalid or not available to you." }; }
+    if (res.kind === "audit_consistency_failure") { this.hoffLog("audit_uncommitted", scope, {}, "warn"); return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The handoff could not be recorded and was rolled back. Please retry." }; }
+    if (res.created) this.hoffLog("created", scope, { handoff_id: res.handoff.handoff_id });
+    return { ok: true, handoff: res.handoff, created: res.created };
+  }
+
+  async listHandoffs(input: { token: string; states?: HandoffState[]; role?: "outgoing" | "incoming"; limit?: number }): Promise<{ ok: true; handoffs: SafeHandoff[] } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved.code === "OTZAR_HANDOFF_NOT_FOUND" ? { ok: true, handoffs: [] } : resolved;
+    const handoffs = await listHandoffs(resolved.scope, {
+      ...(input.states !== undefined ? { states: input.states } : {}),
+      ...(input.role !== undefined ? { role: input.role } : {}),
+      ...(input.limit !== undefined ? { limit: input.limit } : {}),
+    });
+    return { ok: true, handoffs };
+  }
+
+  async getHandoff(input: { token: string; handoff_id: string }): Promise<{ ok: true; handoff: SafeHandoff; obligations: Array<{ obligation_id: string; disposition: string }> } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const handoff = await getHandoffForScope(resolved.scope, input.handoff_id);
+    if (handoff === null) return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
+    const obligations = (await listHandoffObligations(resolved.scope, input.handoff_id)) ?? [];
+    return { ok: true, handoff, obligations: obligations.map((o) => ({ obligation_id: o.obligation_id, disposition: o.disposition })) };
+  }
+
+  /** Link one of the caller's own obligations to a DRAFTED/READY handoff (outgoing party). */
+  async linkHandoffObligation(input: { token: string; handoff_id: string; obligation_id: string }): Promise<{ ok: true } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const res = await linkObligationToHandoff(resolved.scope, input.handoff_id, input.obligation_id);
+    if ("kind" in res && res.kind === "linked") { this.hoffLog("obligation_linked", resolved.scope, { handoff_id: input.handoff_id }); return { ok: true }; }
+    return this.mapHandoffFailure(res as Exclude<HandoffOutcome, { kind: "ok" }>);
+  }
+
+  /** Set the receiver's disposition for a linked obligation (incoming party). */
+  async disposeHandoffObligation(input: { token: string; handoff_id: string; obligation_id: string; disposition: Exclude<HandoffDisposition, "PENDING"> }): Promise<{ ok: true } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const res = await disposeHandoffObligation(resolved.scope, input.handoff_id, input.obligation_id, input.disposition);
+    if ("kind" in res && res.kind === "disposed") { this.hoffLog("obligation_disposed", resolved.scope, { handoff_id: input.handoff_id, disposition: input.disposition }); return { ok: true }; }
+    return this.mapHandoffFailure(res as Exclude<HandoffOutcome, { kind: "ok" }>);
+  }
+
+  /** A handoff lifecycle transition (ready / send / receive / acknowledge / request_clarification /
+   *  escalate / complete). Party authority + atomic audit are enforced in the query layer. */
+  async transitionHandoff(input: {
+    token: string; handoff_id: string; expected_version: number;
+    transition: "ready" | "send" | "receive" | "acknowledge" | "request_clarification" | "escalate" | "complete";
+    incoming_responsible_entity_id?: string; acknowledged_turn_id?: string; escalation_id?: string;
+  }): Promise<{ ok: true; handoff: SafeHandoff } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const a = { handoff_id: input.handoff_id, expected_version: input.expected_version };
+    let outcome: HandoffOutcome;
+    switch (input.transition) {
+      case "ready": outcome = await readyHandoff(resolved.scope, a); break;
+      case "send": outcome = await sendHandoff(resolved.scope, { ...a, ...(input.incoming_responsible_entity_id !== undefined ? { incoming_responsible_entity_id: input.incoming_responsible_entity_id } : {}) }); break;
+      case "receive": outcome = await receiveHandoff(resolved.scope, a); break;
+      case "acknowledge":
+        if (input.acknowledged_turn_id === undefined) return { ok: false, code: "OTZAR_HANDOFF_INVALID_INPUT", message: "acknowledged_turn_id is required" };
+        outcome = await acknowledgeHandoff(resolved.scope, { ...a, acknowledged_turn_id: input.acknowledged_turn_id }); break;
+      case "request_clarification": outcome = await requestClarificationHandoff(resolved.scope, a); break;
+      case "escalate": outcome = await escalateHandoff(resolved.scope, { ...a, ...(input.escalation_id !== undefined ? { escalation_id: input.escalation_id } : {}) }); break;
+      case "complete": outcome = await completeHandoff(resolved.scope, a); break;
+    }
+    if (outcome.kind !== "ok") { this.hoffLog(input.transition + "_failed", resolved.scope, { handoff_id: input.handoff_id, reason: outcome.kind }, "warn"); return this.mapHandoffFailure(outcome); }
+    this.hoffLog(input.transition, resolved.scope, { handoff_id: input.handoff_id });
+    return { ok: true, handoff: outcome.handoff };
+  }
+
+  async supersedeHandoff(input: { token: string; handoff_id: string; expected_version: number; replacement: { title: string; incoming_responsible_entity_id?: string; workspace_id?: string; conversation_id?: string; summary?: string; details?: Record<string, unknown>; priority?: string } }): Promise<{ ok: true; handoff: SafeHandoff; replacement: SafeHandoff } | OtzarFailure> {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const replacement: CreateHandoffInput = {
+      title: input.replacement.title, outgoing_responsible_entity_id: resolved.entity_id, creator_entity_id: resolved.entity_id,
+      ...(input.replacement.incoming_responsible_entity_id !== undefined ? { incoming_responsible_entity_id: input.replacement.incoming_responsible_entity_id } : {}),
+      ...(input.replacement.workspace_id !== undefined ? { workspace_id: input.replacement.workspace_id } : {}),
+      ...(input.replacement.conversation_id !== undefined ? { conversation_id: input.replacement.conversation_id } : {}),
+      ...(input.replacement.summary !== undefined ? { summary: input.replacement.summary } : {}),
+      ...(input.replacement.details !== undefined ? { details: input.replacement.details } : {}),
+      ...(input.replacement.priority !== undefined ? { priority: input.replacement.priority } : {}),
+    };
+    const { outcome, replacement: repl } = await supersedeHandoff(resolved.scope, { handoff_id: input.handoff_id, expected_version: input.expected_version, replacement });
+    if (outcome.kind !== "ok" || repl === undefined) {
+      if (outcome.kind !== "ok") this.hoffLog("supersede_failed", resolved.scope, { handoff_id: input.handoff_id, reason: outcome.kind }, "warn");
+      return outcome.kind === "ok" ? { ok: false, code: "OTZAR_HANDOFF_STATE_CHANGED", message: "Supersession did not complete." } : this.mapHandoffFailure(outcome);
+    }
+    this.hoffLog("superseded", resolved.scope, { handoff_id: input.handoff_id, replacement_handoff_id: repl.handoff_id });
+    return { ok: true, handoff: outcome.handoff, replacement: repl };
   }
 
   // ──────────────────────────────────────────────────────────────
