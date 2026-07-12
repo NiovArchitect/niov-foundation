@@ -280,6 +280,9 @@ export {
   HANDOFF_DISPOSITIONS,
   TERMINAL_HANDOFF_STATES,
   OPEN_HANDOFF_STATES,
+  isHandoffState,
+  isHandoffDisposition,
+  isTerminalHandoffState,
   __otzarHandoffTestHooks,
 } from "./queries/otzar-handoffs.js";
 export type {

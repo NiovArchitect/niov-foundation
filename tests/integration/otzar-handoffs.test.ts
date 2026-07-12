@@ -233,4 +233,102 @@ describe("Otzar handoffs (Stage-2 §L)", () => {
     expect((await otzar.getHandoff({ token: foreign.token, handoff_id: h.handoff.handoff_id })).ok).toBe(false);
     expect((await otzar.transitionHandoff({ token: foreign.token, handoff_id: h.handoff.handoff_id, expected_version: h.handoff.version, transition: "ready" })).ok).toBe(false);
   });
+
+  it("[§9] obligation linking: LINKED audit; foreign / terminal / cross-subject obligations refused; duplicate idempotent", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgWithUser(auth);
+    const b = await memberOf(auth, a.orgId);
+    const h = await otzar.createHandoff({ token: a.token, title: "H", incoming_responsible_entity_id: b.userId });
+    if (!h.ok) throw new Error();
+    // Foreign-subject obligation (owned by co-member b, not a) → refused.
+    const foreignOb = await seedObligation(a.orgId, b.userId, a.twinId);
+    expect((await otzar.linkHandoffObligation({ token: a.token, handoff_id: h.handoff.handoff_id, obligation_id: foreignOb })).ok).toBe(false);
+    // Terminal obligation → refused.
+    const termOb = await seedObligation(a.orgId, a.userId, a.twinId);
+    await prisma.obligation.update({ where: { obligation_id: termOb }, data: { state: "CANCELLED" } });
+    expect((await otzar.linkHandoffObligation({ token: a.token, handoff_id: h.handoff.handoff_id, obligation_id: termOb })).ok).toBe(false);
+    // Valid link → LINKED audit; duplicate → idempotent, no second audit.
+    const obId = await seedObligation(a.orgId, a.userId, a.twinId);
+    expect((await otzar.linkHandoffObligation({ token: a.token, handoff_id: h.handoff.handoff_id, obligation_id: obId })).ok).toBe(true);
+    expect((await otzar.linkHandoffObligation({ token: a.token, handoff_id: h.handoff.handoff_id, obligation_id: obId })).ok).toBe(true);
+    expect(await prisma.handoffObligation.count({ where: { handoff_id: h.handoff.handoff_id, obligation_id: obId } })).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { event_type: "HANDOFF_OBLIGATION_LINKED", details: { path: ["obligation_id"], equals: obId } } })).toBe(1);
+  });
+
+  it("[§11] acknowledgement evidence: an ASSISTANT turn and a PRE-SEND turn are refused", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgWithUser(auth);
+    const b = await memberOf(auth, a.orgId);
+    const h = await otzar.createHandoff({ token: a.token, title: "H", incoming_responsible_entity_id: b.userId });
+    if (!h.ok) throw new Error();
+    // Pre-send turn (created before send) — seed it now, then send.
+    const preSend = await prisma.otzarConversationTurn.create({ data: { conversation_id: randomUUID(), org_entity_id: a.orgId, subject_entity_id: b.userId, author_entity_id: b.userId, role: "USER", content: "early", content_hash: createHash("sha256").update(randomUUID()).digest("hex"), sequence: 111111, source_channel: "CHAT", created_at: new Date(Date.now() - 3_600_000) }, select: { turn_id: true } });
+    const sent = await otzar.transitionHandoff({ token: a.token, handoff_id: h.handoff.handoff_id, expected_version: h.handoff.version, transition: "send" });
+    if (!sent.ok) throw new Error();
+    // Assistant turn (author = a twin) → refused.
+    const asst = await prisma.otzarConversationTurn.create({ data: { conversation_id: randomUUID(), org_entity_id: a.orgId, subject_entity_id: b.userId, author_entity_id: b.userId, twin_entity_id: a.twinId, role: "ASSISTANT", content: "ok", content_hash: "h" + randomUUID(), sequence: 222222, source_channel: "CHAT" }, select: { turn_id: true } });
+    expect((await otzar.transitionHandoff({ token: b.token, handoff_id: h.handoff.handoff_id, expected_version: sent.handoff.version, transition: "acknowledge", acknowledged_turn_id: asst.turn_id })).ok).toBe(false);
+    // Pre-send USER turn → refused (created before send).
+    expect((await otzar.transitionHandoff({ token: b.token, handoff_id: h.handoff.handoff_id, expected_version: sent.handoff.version, transition: "acknowledge", acknowledged_turn_id: preSend.turn_id })).ok).toBe(false);
+    // A fresh post-send USER turn → accepted.
+    expect((await otzar.transitionHandoff({ token: b.token, handoff_id: h.handoff.handoff_id, expected_version: sent.handoff.version, transition: "acknowledge", acknowledged_turn_id: await seedUserTurn(a.orgId, b.userId) })).ok).toBe(true);
+  });
+
+  it("[§12] REASSIGNED disposition actually reassigns the obligation; refused without a valid new party", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgWithUser(auth);
+    const b = await memberOf(auth, a.orgId);
+    const mate = await memberOf(auth, a.orgId);
+    const foreign = await orgWithUser(auth);
+    const obId = await seedObligation(a.orgId, a.userId, a.twinId);
+    const h = await otzar.createHandoff({ token: a.token, title: "H", incoming_responsible_entity_id: b.userId });
+    if (!h.ok) throw new Error();
+    expect((await otzar.linkHandoffObligation({ token: a.token, handoff_id: h.handoff.handoff_id, obligation_id: obId })).ok).toBe(true);
+    // REASSIGNED without new_responsible → refused.
+    expect((await otzar.disposeHandoffObligation({ token: b.token, handoff_id: h.handoff.handoff_id, obligation_id: obId, disposition: "REASSIGNED" })).ok).toBe(false);
+    // REASSIGNED to a foreign (non-member) → refused.
+    expect((await otzar.disposeHandoffObligation({ token: b.token, handoff_id: h.handoff.handoff_id, obligation_id: obId, disposition: "REASSIGNED", new_responsible_entity_id: foreign.userId })).ok).toBe(false);
+    // REASSIGNED to an active co-member → succeeds AND the obligation's responsible actually changes.
+    expect((await otzar.disposeHandoffObligation({ token: b.token, handoff_id: h.handoff.handoff_id, obligation_id: obId, disposition: "REASSIGNED", new_responsible_entity_id: mate.userId })).ok).toBe(true);
+    expect((await prisma.obligation.findUnique({ where: { obligation_id: obId } }))!.responsible_entity_id).toBe(mate.userId);
+  });
+
+  it("completion: duplicate refused; exactly one HANDOFF_COMPLETED audit", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgWithUser(auth);
+    const b = await memberOf(auth, a.orgId);
+    const h = await otzar.createHandoff({ token: a.token, title: "H", incoming_responsible_entity_id: b.userId });
+    if (!h.ok) throw new Error();
+    const sent = await otzar.transitionHandoff({ token: a.token, handoff_id: h.handoff.handoff_id, expected_version: h.handoff.version, transition: "send" });
+    expect(sent.ok).toBe(true); if (!sent.ok) return;
+    const ack = await otzar.transitionHandoff({ token: b.token, handoff_id: h.handoff.handoff_id, expected_version: sent.handoff.version, transition: "acknowledge", acknowledged_turn_id: await seedUserTurn(a.orgId, b.userId) });
+    expect(ack.ok).toBe(true); if (!ack.ok) return;
+    // No linked obligations → complete succeeds.
+    const done = await otzar.transitionHandoff({ token: b.token, handoff_id: h.handoff.handoff_id, expected_version: ack.handoff.version, transition: "complete" });
+    expect(done.ok).toBe(true); if (!done.ok) return;
+    expect(done.handoff.state).toBe("COMPLETED");
+    // Duplicate completion refused.
+    expect((await otzar.transitionHandoff({ token: b.token, handoff_id: h.handoff.handoff_id, expected_version: done.handoff.version, transition: "complete" })).ok).toBe(false);
+    // Exactly one completion audit.
+    expect(await prisma.auditEvent.count({ where: { event_type: "HANDOFF_COMPLETED", details: { path: ["handoff_id"], equals: h.handoff.handoff_id } } })).toBe(1);
+  });
+
+  it("restoration + no-leak: both parties restore across a fresh login; projection omits internal fields", async () => {
+    const { auth, otzar } = makeServices();
+    const a = await orgWithUser(auth);
+    const b = await memberOf(auth, a.orgId);
+    const h = await otzar.createHandoff({ token: a.token, title: "Shift note", incoming_responsible_entity_id: b.userId });
+    if (!h.ok) throw new Error();
+    await otzar.transitionHandoff({ token: a.token, handoff_id: h.handoff.handoff_id, expected_version: h.handoff.version, transition: "send" });
+    // Fresh login for A (outgoing) — restores from server.
+    const aLogin2 = (await auth.login((await prisma.entity.findUnique({ where: { entity_id: a.userId }, select: { email: true } }))!.email!, "correct-horse-battery", ["read", "write"], { ip_address: null })) as LoginResult;
+    if (aLogin2.ok) {
+      const list = await otzar.listHandoffs({ token: aLogin2.token, role: "outgoing" });
+      expect(list.ok && list.handoffs.some((x) => x.handoff_id === h.handoff.handoff_id)).toBe(true);
+    }
+    // No-leak: the safe projection exposes no lease/provider/audit-internal fields.
+    const got = await otzar.getHandoff({ token: b.token, handoff_id: h.handoff.handoff_id });
+    expect(got.ok).toBe(true);
+    if (got.ok) expect(JSON.stringify(got.handoff)).not.toMatch(/lease|provider_attempt|audit_event_id|acknowledged_by_entity_id/i);
+  });
 });

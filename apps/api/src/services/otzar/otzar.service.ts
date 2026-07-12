@@ -3794,11 +3794,12 @@ export class OtzarService {
     return this.mapHandoffFailure(res as Exclude<HandoffOutcome, { kind: "ok" }>);
   }
 
-  /** Set the receiver's disposition for a linked obligation (incoming party). */
-  async disposeHandoffObligation(input: { token: string; handoff_id: string; obligation_id: string; disposition: Exclude<HandoffDisposition, "PENDING"> }): Promise<{ ok: true } | OtzarFailure> {
+  /** Set the receiver's disposition for a linked obligation (incoming party). REASSIGNED requires
+   *  new_responsible_entity_id and actually reassigns the underlying obligation. */
+  async disposeHandoffObligation(input: { token: string; handoff_id: string; obligation_id: string; disposition: Exclude<HandoffDisposition, "PENDING">; new_responsible_entity_id?: string }): Promise<{ ok: true } | OtzarFailure> {
     const resolved = await this.handoffScope(input.token);
     if ("ok" in resolved) return resolved;
-    const res = await disposeHandoffObligation(resolved.scope, input.handoff_id, input.obligation_id, input.disposition);
+    const res = await disposeHandoffObligation(resolved.scope, input.handoff_id, input.obligation_id, input.disposition, input.new_responsible_entity_id !== undefined ? { new_responsible_entity_id: input.new_responsible_entity_id } : {});
     if ("kind" in res && res.kind === "disposed") { this.hoffLog("obligation_disposed", resolved.scope, { handoff_id: input.handoff_id, disposition: input.disposition }); return { ok: true }; }
     return this.mapHandoffFailure(res as Exclude<HandoffOutcome, { kind: "ok" }>);
   }

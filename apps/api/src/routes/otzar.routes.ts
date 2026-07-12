@@ -1161,7 +1161,13 @@ export async function registerOtzarRoutes(
       if (typeof body.obligation_id !== "string" || typeof body.disposition !== "string" || body.disposition === "PENDING" || !HANDOFF_DISPOSITION_SET.has(body.disposition)) {
         return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "obligation_id and a disposition of ACCEPTED|REASSIGNED|SUPERSEDED|RETAINED are required" });
       }
-      const result = await otzarService.disposeHandoffObligation({ token, handoff_id: request.params.handoff_id, obligation_id: body.obligation_id, disposition: body.disposition as never });
+      if (body.disposition === "REASSIGNED" && typeof body.new_responsible_entity_id !== "string") {
+        return reply.code(422).send({ ok: false, code: "INVALID_REQUEST", message: "REASSIGNED requires new_responsible_entity_id" });
+      }
+      const result = await otzarService.disposeHandoffObligation({
+        token, handoff_id: request.params.handoff_id, obligation_id: body.obligation_id, disposition: body.disposition as never,
+        ...(typeof body.new_responsible_entity_id === "string" ? { new_responsible_entity_id: body.new_responsible_entity_id } : {}),
+      });
       if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
       return reply.code(200).send(result);
     },

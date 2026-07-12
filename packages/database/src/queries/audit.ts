@@ -840,6 +840,7 @@ export type AuditEventType =
   | "HANDOFF_SUPERSEDED"
   | "HANDOFF_COMPLETED"
   | "HANDOFF_ESCALATED"
+  | "HANDOFF_OBLIGATION_LINKED"
   | "HANDOFF_OBLIGATION_DISPOSED";
 
 // WHAT: Runtime-iterable list of every recognized AuditEventType.
@@ -1157,6 +1158,7 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "HANDOFF_SUPERSEDED",
   "HANDOFF_COMPLETED",
   "HANDOFF_ESCALATED",
+  "HANDOFF_OBLIGATION_LINKED",
   "HANDOFF_OBLIGATION_DISPOSED",
 ] as const satisfies readonly AuditEventType[];
 

@@ -14,6 +14,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 import { writeAuditEvent, type AuditEventType } from "./audit.js";
 import { validateSafeJson } from "./otzar-obligation-validation.js";
+import { reassignObligation, validateResponsibleEntity } from "./otzar-obligations.js";
 
 export type HandoffState =
   | "DRAFTED" | "READY_FOR_REVIEW" | "SENT" | "RECEIVED" | "ACKNOWLEDGED"
@@ -29,6 +30,12 @@ export const HANDOFF_DISPOSITIONS: readonly HandoffDisposition[] = ["PENDING", "
 export const TERMINAL_HANDOFF_STATES: readonly HandoffState[] = ["COMPLETED", "SUPERSEDED"];
 /** Non-terminal states a handoff can still transition from. */
 export const OPEN_HANDOFF_STATES: readonly HandoffState[] = ["DRAFTED", "READY_FOR_REVIEW", "SENT", "RECEIVED", "ACKNOWLEDGED", "CLARIFICATION_REQUIRED", "ESCALATED"];
+
+const HANDOFF_STATE_SET: ReadonlySet<string> = new Set(HANDOFF_STATES);
+const HANDOFF_DISPOSITION_SET: ReadonlySet<string> = new Set(HANDOFF_DISPOSITIONS);
+export const isHandoffState = (v: unknown): v is HandoffState => typeof v === "string" && HANDOFF_STATE_SET.has(v);
+export const isHandoffDisposition = (v: unknown): v is HandoffDisposition => typeof v === "string" && HANDOFF_DISPOSITION_SET.has(v);
+export const isTerminalHandoffState = (v: string): boolean => (TERMINAL_HANDOFF_STATES as readonly string[]).includes(v);
 
 /** Multi-party caller scope: org + the acting entity (a party to the handoff). */
 export interface HandoffScope {
@@ -316,8 +323,20 @@ export async function acknowledgeHandoff(scope: HandoffScope, args: HandoffCas &
   const row = await readParty(scope, args.handoff_id);
   if (row === null) return { kind: "not_found" };
   if (row.incoming_responsible_entity_id !== scope.caller_entity_id) return { kind: "not_authorized" };
-  const turn = await prisma.otzarConversationTurn.findUnique({ where: { turn_id: args.acknowledged_turn_id }, select: { role: true, author_entity_id: true, org_entity_id: true, conversation_id: true } });
-  if (turn === null || turn.role !== "USER" || turn.author_entity_id !== scope.caller_entity_id || turn.org_entity_id !== scope.org_entity_id || (row.conversation_id !== null && turn.conversation_id !== row.conversation_id)) {
+  const turn = await prisma.otzarConversationTurn.findUnique({ where: { turn_id: args.acknowledged_turn_id }, select: { role: true, author_entity_id: true, org_entity_id: true, conversation_id: true, created_at: true } });
+  // [§11] evidence: a real USER turn authored by the incoming party, in scope + the handoff's
+  // conversation, created AFTER the handoff was sent (or created). A generated/twin turn or a
+  // clearly-stale pre-send turn cannot acknowledge. The 5s tolerance absorbs app↔DB clock skew
+  // (the turn's created_at and the handoff's sent_at come from potentially different clocks); a
+  // genuinely pre-existing turn (seconds+ before the send) is still refused.
+  const SKEW_TOLERANCE_MS = 5_000;
+  const notBefore = (row.sent_at ?? row.created_at).getTime() - SKEW_TOLERANCE_MS;
+  if (
+    turn === null || turn.role !== "USER" || turn.author_entity_id !== scope.caller_entity_id ||
+    turn.org_entity_id !== scope.org_entity_id ||
+    (row.conversation_id !== null && turn.conversation_id !== row.conversation_id) ||
+    turn.created_at.getTime() < notBefore
+  ) {
     return { kind: "not_authorized" };
   }
   return casHandoff(scope, args, ["SENT", "RECEIVED", "CLARIFICATION_REQUIRED"], "ACKNOWLEDGED", "acknowledged_at",
@@ -350,23 +369,58 @@ export async function linkObligationToHandoff(scope: HandoffScope, handoffId: st
   if (row === null) return { kind: "not_found" };
   if (row.outgoing_responsible_entity_id !== scope.caller_entity_id) return { kind: "not_authorized" };
   if (!["DRAFTED", "READY_FOR_REVIEW"].includes(row.state)) return { kind: "illegal_transition", current: toSafeHandoff(row as unknown as HandoffRow, scope.caller_entity_id) };
-  // The obligation must belong to the outgoing party's own obligation scope (org + subject=caller).
-  const ob = await prisma.obligation.findUnique({ where: { obligation_id: obligationId }, select: { org_entity_id: true, subject_entity_id: true } });
+  // [§9] The obligation must belong to the outgoing party's own obligation scope (org +
+  // subject=caller) — a foreign / cross-subject / cross-twin private obligation cannot be
+  // silently promoted into shared handoff state. Terminal obligations are not linkable.
+  const ob = await prisma.obligation.findUnique({ where: { obligation_id: obligationId }, select: { org_entity_id: true, subject_entity_id: true, state: true } });
   if (ob === null || ob.org_entity_id !== scope.org_entity_id || ob.subject_entity_id !== scope.caller_entity_id) return { kind: "precondition", reason: "obligation_not_owned" };
+  if ((["COMPLETED", "CANCELLED", "SUPERSEDED", "EXPIRED"] as string[]).includes(ob.state)) return { kind: "precondition", reason: "obligation_terminal" };
   try {
-    await prisma.handoffObligation.create({ data: { handoff_id: handoffId, obligation_id: obligationId, org_entity_id: scope.org_entity_id } });
+    // [§9/§15] link creation is atomic with its HANDOFF_OBLIGATION_LINKED audit.
+    await prisma.$transaction(async (tx) => {
+      await tx.handoffObligation.create({ data: { handoff_id: handoffId, obligation_id: obligationId, org_entity_id: scope.org_entity_id } });
+      await writeHandoffAuditInTx(tx, scope.org_entity_id, { event_type: "HANDOFF_OBLIGATION_LINKED", actor_entity_id: scope.caller_entity_id, details: { handoff_id: handoffId, obligation_id: obligationId } });
+    });
   } catch (e) {
-    if (!isUniqueViolation(e)) throw e; // already linked — idempotent
+    if (isUniqueViolation(e)) return { kind: "linked" }; // already linked — idempotent (no second audit)
+    return { kind: "audit_consistency_failure" }; // audit failed → link rolled back
   }
   return { kind: "linked" };
 }
 
-/** Set the receiver's disposition for a linked obligation (incoming party only). ACCEPTED /
- *  REASSIGNED / SUPERSEDED / RETAINED. Atomic with its HANDOFF_OBLIGATION_DISPOSED audit. */
-export async function disposeHandoffObligation(scope: HandoffScope, handoffId: string, obligationId: string, disposition: Exclude<HandoffDisposition, "PENDING">): Promise<HandoffOutcome | { kind: "disposed" }> {
+/**
+ * Set the receiver's disposition for a linked obligation (incoming party only). [§12]
+ * ACCEPTED / SUPERSEDED / RETAINED record the receiver's decision atomically with a
+ * HANDOFF_OBLIGATION_DISPOSED audit. REASSIGNED additionally requires new_responsible_entity_id
+ * and REASSIGNS THE OBLIGATION FIRST — the disposition cannot claim reassignment unless the
+ * obligation reassignment actually succeeded (source of truth stays on the obligation).
+ */
+export async function disposeHandoffObligation(
+  scope: HandoffScope, handoffId: string, obligationId: string,
+  disposition: Exclude<HandoffDisposition, "PENDING">, options: { new_responsible_entity_id?: string } = {},
+): Promise<HandoffOutcome | { kind: "disposed" }> {
   const row = await readParty(scope, handoffId);
   if (row === null) return { kind: "not_found" };
   if (row.incoming_responsible_entity_id !== scope.caller_entity_id) return { kind: "not_authorized" };
+  // The obligation must actually be linked to this handoff.
+  const link = await prisma.handoffObligation.findUnique({ where: { handoff_id_obligation_id: { handoff_id: handoffId, obligation_id: obligationId } }, select: { handoff_obligation_id: true } });
+  if (link === null) return { kind: "precondition", reason: "obligation_not_linked" };
+
+  if (disposition === "REASSIGNED") {
+    // [§12] REASSIGNED coordinates with a real obligation reassignment. The obligation is scoped to
+    // its subject; the receiver reassigns it to a new active party. Do the obligation reassignment
+    // FIRST — only claim the disposition if it succeeded.
+    if (options.new_responsible_entity_id == null) return { kind: "precondition", reason: "reassign_requires_new_responsible" };
+    const ob = await prisma.obligation.findUnique({ where: { obligation_id: obligationId }, select: { org_entity_id: true, subject_entity_id: true, twin_entity_id: true, version: true } });
+    if (ob === null || ob.org_entity_id !== scope.org_entity_id) return { kind: "precondition", reason: "obligation_not_found" };
+    if (ob.twin_entity_id === null) return { kind: "precondition", reason: "obligation_no_twin" };
+    const obScope = { org_entity_id: ob.org_entity_id, subject_entity_id: ob.subject_entity_id, twin_entity_id: ob.twin_entity_id };
+    const memberErr = await validateResponsibleEntity(obScope, options.new_responsible_entity_id);
+    if (memberErr !== null) return { kind: "precondition", reason: `new_responsible_${memberErr}` };
+    const r = await reassignObligation(obScope, { obligation_id: obligationId, expected_version: ob.version, new_responsible_entity_id: options.new_responsible_entity_id, assigning_actor_entity_id: scope.caller_entity_id, reason: `handoff:${handoffId}` });
+    if (r.outcome.kind !== "ok") return { kind: "precondition", reason: `obligation_reassign_${r.outcome.kind}` };
+  }
+
   try {
     const done = await prisma.$transaction(async (tx) => {
       const n = await tx.$executeRawUnsafe(
@@ -374,7 +428,10 @@ export async function disposeHandoffObligation(scope: HandoffScope, handoffId: s
         disposition, scope.caller_entity_id, handoffId, obligationId, scope.org_entity_id,
       );
       if (n !== 1) return false;
-      await writeHandoffAuditInTx(tx, scope.org_entity_id, { event_type: "HANDOFF_OBLIGATION_DISPOSED", actor_entity_id: scope.caller_entity_id, details: { handoff_id: handoffId, obligation_id: obligationId, disposition } });
+      await writeHandoffAuditInTx(tx, scope.org_entity_id, {
+        event_type: "HANDOFF_OBLIGATION_DISPOSED", actor_entity_id: scope.caller_entity_id,
+        details: { handoff_id: handoffId, obligation_id: obligationId, disposition, ...(options.new_responsible_entity_id != null ? { new_responsible_entity_id: options.new_responsible_entity_id } : {}) },
+      });
       return true;
     });
     return done ? { kind: "disposed" } : { kind: "precondition", reason: "obligation_not_linked" };
