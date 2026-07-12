@@ -80,6 +80,7 @@ import {
   writeEvidenceRecheckAudit,
   computeEvidenceFingerprint,
   EVIDENCE_STALE_STATUSES,
+  REMEDIABLE_DECISION_POINTS,
   type SafeEvidenceSnapshot,
   type SafeHandoff,
   type HandoffScope,
@@ -3895,7 +3896,9 @@ export class OtzarService {
     const obligation = await getObligationForScope(scope, input.obligation_id);
     if (obligation === null) return { ok: false, code: "OTZAR_OBLIGATION_NOT_FOUND", message: "This obligation is not available to you." };
 
-    const snapshots = await listSnapshotsForObligation(scope.org_entity_id, input.obligation_id);
+    // Only FINAL-decision snapshots gate remediation; point-in-time-by-design snapshots never
+    // false-trigger on normal progression (§7 — REMEDIABLE_DECISION_POINTS).
+    const snapshots = (await listSnapshotsForObligation(scope.org_entity_id, input.obligation_id)).filter((s) => REMEDIABLE_DECISION_POINTS.includes(s.decision_point));
     const withStatus = await Promise.all(snapshots.map(async (s) => ({ s, status: await resolveCurrentSourceStatus(scope.org_entity_id, s) })));
     const stale = withStatus
       .filter((x) => (EVIDENCE_STALE_STATUSES as readonly string[]).includes(x.status))
@@ -3955,6 +3958,72 @@ export class OtzarService {
     const snapshots = await listSnapshotsForHandoff(resolved.scope.org_entity_id, input.handoff_id);
     const evidence = await Promise.all(snapshots.map(async (s) => ({ ...s, current_source_status: await resolveCurrentSourceStatus(resolved.scope.org_entity_id, s) })));
     return { ok: true, evidence };
+  }
+
+  /**
+   * [OTZAR STAGE-2 TRUTH-EVIDENCE §7] Recheck a handoff's FINAL-decision evidence (HANDOFF_COMPLETION
+   * only — the HANDOFF_SEND snapshot is point-in-time-by-design and is deliberately never a
+   * remediation trigger) and, on a stale basis, raise an idempotent SAFETY_CONCERN remediation in
+   * the CALLER's own obligation scope (the party who rechecked is alerted that a handoff they are
+   * party to now rests on a changed/retracted basis). The captured snapshots are never mutated.
+   */
+  async recheckHandoffEvidence(input: { token: string; handoff_id: string }): Promise<
+    | { ok: true; status: "current" | "remediation_open"; stale: Array<{ snapshot_id: string; decision_point: string; current_source_status: string }>; remediation_obligation_id: string | null; remediation_created: boolean }
+    | OtzarFailure
+  > {
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const { scope, entity_id } = resolved;
+    // Access gate: the caller must be a party to the handoff.
+    const handoff = await getHandoffForScope(scope, input.handoff_id);
+    if (handoff === null) return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
+
+    const snapshots = (await listSnapshotsForHandoff(scope.org_entity_id, input.handoff_id)).filter((s) => REMEDIABLE_DECISION_POINTS.includes(s.decision_point));
+    const withStatus = await Promise.all(snapshots.map(async (s) => ({ s, status: await resolveCurrentSourceStatus(scope.org_entity_id, s) })));
+    const stale = withStatus
+      .filter((x) => (EVIDENCE_STALE_STATUSES as readonly string[]).includes(x.status))
+      .map((x) => ({ snapshot_id: x.s.snapshot_id, decision_point: x.s.decision_point, current_source_status: x.status }));
+
+    if (stale.length === 0) {
+      const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECKED", details: { handoff_id: input.handoff_id, snapshot_count: snapshots.length } });
+      if (!a.ok) { this.hoffLog("recheck_audit_uncommitted", scope, { handoff_id: input.handoff_id }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
+      return { ok: true, status: "current", stale: [], remediation_obligation_id: null, remediation_created: false };
+    }
+
+    // Raise the remediation in the caller's own obligation scope (subject = caller). A handoff party
+    // without an obligation context can't be issued governed work — surface a clear precondition.
+    const oblScope = await this.restoreScope(entity_id);
+    if (oblScope === null) return { ok: false, code: "OTZAR_HANDOFF_PRECONDITION", message: "A stale basis was detected but no obligation context exists to raise a remediation.", detail: "no_remediation_scope" };
+
+    const staleKey = computeEvidenceFingerprint({
+      handoff_id: input.handoff_id,
+      stale: [...stale].map((x) => ({ id: x.snapshot_id, status: x.current_source_status })).sort((p, q) => p.id.localeCompare(q.id)),
+    });
+    const originKey = `truth-remediation:HANDOFF:${input.handoff_id}:${staleKey}`;
+    // SAFE content only — ids + safe classifications. The handoff is referenced via details (no FK
+    // link field exists for a handoff on an obligation), validated by createOrGet's safe-JSON.
+    const recheckDetails: Record<string, unknown> = { evidence_recheck: { of_record_type: "HANDOFF", of_record_id: input.handoff_id, stale } };
+    const res = await createOrGetObligation(
+      oblScope,
+      {
+        obligation_type: "SAFETY_CONCERN",
+        title: "Evidence changed for a completed handoff — review required",
+        creator_entity_id: entity_id,
+        responsible_entity_id: entity_id,
+        origin_key: originKey,
+        priority: "ELEVATED",
+        details: recheckDetails,
+      },
+      { actor_entity_id: entity_id, extra_details: recheckDetails },
+    );
+    if (res.kind === "invalid_content" || res.kind === "invalid_state") { this.hoffLog("remediation_invalid", scope, { reason: res.kind }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_INVALID_INPUT", message: "The remediation could not be raised." }; }
+    if (res.kind === "invalid_reference") { this.hoffLog("remediation_invalid_reference", scope, { reason: res.reason }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_INVALID_REFERENCE", message: "The remediation reference is invalid." }; }
+    if (res.kind === "audit_consistency_failure") { this.hoffLog("remediation_audit_uncommitted", scope, { handoff_id: input.handoff_id }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The remediation could not be recorded and was rolled back. Please retry." }; }
+
+    const a = await writeEvidenceRecheckAudit({ org_entity_id: scope.org_entity_id, actor_entity_id: entity_id, event_type: "TRUTH_EVIDENCE_RECHECK_REQUIRED", details: { handoff_id: input.handoff_id, remediation_obligation_id: res.obligation.obligation_id, stale_count: stale.length } });
+    if (!a.ok) { this.hoffLog("recheck_audit_uncommitted", scope, { handoff_id: input.handoff_id, remediation_obligation_id: res.obligation.obligation_id }, "warn"); return { ok: false, code: "OTZAR_HANDOFF_AUDIT_UNCOMMITTED", message: "The recheck could not be recorded. Please retry." }; }
+    if (res.created) this.hoffLog("remediation_raised", scope, { handoff_id: input.handoff_id, remediation_obligation_id: res.obligation.obligation_id });
+    return { ok: true, status: "remediation_open", stale, remediation_obligation_id: res.obligation.obligation_id, remediation_created: res.created };
   }
 
   // ──────────────────────────────────────────────────────────────

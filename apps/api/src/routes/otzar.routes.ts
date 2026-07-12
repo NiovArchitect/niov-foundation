@@ -1260,4 +1260,17 @@ export async function registerOtzarRoutes(
       return reply.code(200).send(result);
     },
   );
+
+  // Recheck a handoff's FINAL-decision evidence; a stale basis raises an idempotent SAFETY_CONCERN
+  // remediation in the caller's own scope. HANDOFF_SEND (point-in-time) never triggers.
+  app.post<{ Params: { handoff_id: string } }>(
+    "/api/v1/otzar/handoffs/:handoff_id/evidence/recheck",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const result = await otzarService.recheckHandoffEvidence({ token, handoff_id: request.params.handoff_id });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
 }

@@ -256,6 +256,80 @@ describe("Otzar truth-evidence snapshots (Stage-2)", () => {
     expect(await prisma.obligation.count({ where: { org_entity_id: u.orgId, obligation_type: "SAFETY_CONCERN", parent_obligation_id: o.obligation.obligation_id } })).toBe(0);
   });
 
+  // Two-party handoff driven to completion (send → receive → ack → complete). Returns the outgoing
+  // party (a, who created it), the incoming party token, and the completed handoff id.
+  async function completedHandoff(auth: AuthService, otzar: OtzarService): Promise<{ a: OrgUser; handoffId: string }> {
+    const a = await orgUser(auth);
+    const bUser = await createEntity(makeEntityInput({ entity_type: "PERSON", password: "correct-horse-battery" }));
+    await prisma.entityMembership.create({ data: { parent_id: a.orgId, child_id: bUser.entity_id, is_active: true } });
+    const bTwin = await createEntity(makeEntityInput({ entity_type: "AI_AGENT" }));
+    await prisma.entityMembership.create({ data: { parent_id: bUser.entity_id, child_id: bTwin.entity_id, role_title: "Digital Twin", is_active: true } });
+    await prisma.twinConfig.create({ data: { twin_id: bTwin.entity_id, autonomy_level: "APPROVAL_REQUIRED", is_admin_twin: false, role_template: null } });
+    const bLogin = (await auth.login((await prisma.entity.findUnique({ where: { entity_id: bUser.entity_id }, select: { email: true } }))!.email!, "correct-horse-battery", ["read", "write"], { ip_address: null })) as LoginResult;
+    if (!bLogin.ok) throw new Error();
+    const h = await otzar.createHandoff({ token: a.token, title: "H", incoming_responsible_entity_id: bUser.entity_id });
+    if (!h.ok) throw new Error();
+    const sent = await otzar.transitionHandoff({ token: a.token, handoff_id: h.handoff.handoff_id, expected_version: h.handoff.version, transition: "send" });
+    if (!sent.ok) throw new Error();
+    const ackTurn = await prisma.otzarConversationTurn.create({ data: { conversation_id: randomUUID(), org_entity_id: a.orgId, subject_entity_id: bUser.entity_id, author_entity_id: bUser.entity_id, role: "USER", content: "ack", content_hash: createHash("sha256").update(randomUUID()).digest("hex"), sequence: 424242, source_channel: "CHAT" }, select: { turn_id: true } });
+    const ack = await otzar.transitionHandoff({ token: bLogin.token, handoff_id: h.handoff.handoff_id, expected_version: sent.handoff.version, transition: "acknowledge", acknowledged_turn_id: ackTurn.turn_id });
+    if (!ack.ok) throw new Error();
+    const done = await otzar.transitionHandoff({ token: bLogin.token, handoff_id: h.handoff.handoff_id, expected_version: ack.handoff.version, transition: "complete" });
+    if (!done.ok) throw new Error();
+    return { a, handoffId: h.handoff.handoff_id };
+  }
+
+  it("handoff recheck (§7): normal completion does NOT false-trigger — the point-in-time HANDOFF_SEND snapshot is excluded; only the terminal HANDOFF_COMPLETION basis gates remediation", async () => {
+    const { auth, otzar } = makeServices();
+    const { a, handoffId } = await completedHandoff(auth, otzar);
+    // The SEND snapshot's version is BELOW the completed handoff version (normal progression) — a
+    // naive recheck would read it "changed" and false-raise. The remediable filter excludes it.
+    const ev = await otzar.getHandoffEvidence({ token: a.token, handoff_id: handoffId });
+    expect(ev.ok).toBe(true); if (!ev.ok) return;
+    const send = ev.evidence.find((e) => e.decision_point === "HANDOFF_SEND");
+    expect(send?.current_source_status).toBe("changed"); // proves the hazard is real…
+    const r = await otzar.recheckHandoffEvidence({ token: a.token, handoff_id: handoffId });
+    expect(r.ok).toBe(true); if (!r.ok) return;
+    expect(r.status).toBe("current"); // …and is correctly NOT treated as a remediation trigger
+    expect(await prisma.obligation.count({ where: { org_entity_id: a.orgId, obligation_type: "SAFETY_CONCERN", subject_entity_id: a.userId } })).toBe(0);
+  });
+
+  it("handoff recheck (§7): a later drift in the completed handoff raises an idempotent SAFETY_CONCERN remediation in the caller's scope (handoff referenced in details)", async () => {
+    const { auth, otzar } = makeServices();
+    const { a, handoffId } = await completedHandoff(auth, otzar);
+    const cur = await prisma.handoff.findUnique({ where: { handoff_id: handoffId }, select: { version: true } });
+    // Out-of-band change to the terminal handoff → the HANDOFF_COMPLETION basis is no longer current.
+    await prisma.handoff.update({ where: { handoff_id: handoffId }, data: { version: cur!.version + 7 } });
+    const r1 = await otzar.recheckHandoffEvidence({ token: a.token, handoff_id: handoffId });
+    expect(r1.ok).toBe(true); if (!r1.ok) return;
+    expect(r1.status).toBe("remediation_open");
+    expect(r1.remediation_created).toBe(true);
+    expect(r1.stale.some((s) => s.decision_point === "HANDOFF_COMPLETION" && s.current_source_status === "changed")).toBe(true);
+    const remId = r1.remediation_obligation_id!;
+    const rem = await prisma.obligation.findUnique({ where: { obligation_id: remId }, select: { obligation_type: true, subject_entity_id: true, responsible_entity_id: true, details: true } });
+    expect(rem?.obligation_type).toBe("SAFETY_CONCERN");
+    expect(rem?.subject_entity_id).toBe(a.userId);
+    expect(rem?.responsible_entity_id).toBe(a.userId);
+    expect(JSON.stringify(rem?.details)).toContain(handoffId); // handoff referenced via safe details
+    expect(await prisma.auditEvent.count({ where: { event_type: "TRUTH_EVIDENCE_RECHECK_REQUIRED", target_entity_id: a.orgId } })).toBeGreaterThanOrEqual(1);
+    // Idempotent: same drift → same remediation, nothing new.
+    const r2 = await otzar.recheckHandoffEvidence({ token: a.token, handoff_id: handoffId });
+    expect(r2.ok && r2.remediation_created === false && r2.remediation_obligation_id === remId).toBe(true);
+    expect(await prisma.obligation.count({ where: { org_entity_id: a.orgId, obligation_type: "SAFETY_CONCERN", subject_entity_id: a.userId } })).toBe(1);
+  });
+
+  it("handoff recheck (§7): a non-party caller is denied and raises no remediation", async () => {
+    const { auth, otzar } = makeServices();
+    const { a, handoffId } = await completedHandoff(auth, otzar);
+    const cur = await prisma.handoff.findUnique({ where: { handoff_id: handoffId }, select: { version: true } });
+    await prisma.handoff.update({ where: { handoff_id: handoffId }, data: { version: cur!.version + 7 } });
+    const foreign = await orgUser(auth); // different org, not a party
+    const r = await otzar.recheckHandoffEvidence({ token: foreign.token, handoff_id: handoffId });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("OTZAR_HANDOFF_NOT_FOUND");
+    expect(await prisma.obligation.count({ where: { org_entity_id: a.orgId, obligation_type: "SAFETY_CONCERN", subject_entity_id: a.userId } })).toBe(0);
+  });
+
   it("no-leak: the evidence projection exposes classifications/hashes, never raw content or policy internals", async () => {
     const { auth, otzar } = makeServices();
     const u = await orgUser(auth);
