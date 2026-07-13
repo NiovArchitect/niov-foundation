@@ -160,6 +160,23 @@ describe("Otzar organizational-truth promotion + conflict (Section 10 §20)", ()
     expect(await prisma.auditEvent.count({ where: { event_type: "ORG_TRUTH_CONFLICT_RESOLVED", target_entity_id: owner.orgId } })).toBeGreaterThanOrEqual(1);
   });
 
+  it("resolveConflict derives the truth_key from the conflict set — a CT reviewer resolves without reconstructing the topic", async () => {
+    const owner = await orgUser({ owns: [DOMAIN] });
+    const winner = source({ date: "A" });
+    const competing = source({ date: "B" });
+    const opened = await promoteOrgTruth({ scope: scope(owner), actor_entity_id: owner.userId, winner, competing: [competing], resolveOwnerScope: ownerScopeOf(owner) });
+    if (opened.kind !== "conflict_open") throw new Error();
+    const key = opened.conflict_set.truth_key;
+    // Resolve with a scope whose TOPIC is wrong/unknown (the reviewer only has the conflict set).
+    const resolved = await resolveConflict(scope(owner, "REVIEWER-DOES-NOT-KNOW-TOPIC"), { conflict_set_id: opened.conflict_set.conflict_set_id, actor_entity_id: owner.userId, winner: competing, reason: "resolved from the conflict view", expected_conflict_version: opened.conflict_set.version });
+    expect(resolved.kind).toBe("promoted"); if (resolved.kind !== "promoted") return;
+    // Promotion landed under the CONFLICT's own truth_key (not the wrong-topic key).
+    expect(resolved.record.truth_key).toBe(key);
+    const current = await getCurrentPromotedTruth(owner.orgId, key);
+    expect(current?.truth_record_id).toBe(resolved.record.truth_record_id);
+    expect(current?.winning_source_record_id).toBe(competing.source_record_id);
+  });
+
   it("atomic: an injected snapshot or audit failure rolls back the whole promotion (no record persisted)", async () => {
     const p = await orgUser({ owns: [DOMAIN] });
     const before = await prisma.orgTruthRecord.count({ where: { org_entity_id: p.orgId } });
