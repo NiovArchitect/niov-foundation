@@ -446,7 +446,10 @@ export async function resolveConflict(scope: OrgTruthScope, input: ResolveConfli
     ...(input.title !== undefined ? { title: input.title } : {}), ...(input.value !== undefined ? { value: input.value } : {}),
     ...(input.value_type !== undefined ? { value_type: input.value_type } : {}),
     ...(input.expected_current_version !== undefined ? { expected_current_version: input.expected_current_version } : {}),
-  }, computeOrgTruthKeyLocal(scope), org, scope.decision_domain, input.actor_entity_id, input.conflict_set_id);
+    // Promote under the conflict's OWN stored truth_key/domain — never a caller-recomputed key
+    // (a reviewer can't reconstruct the embedded topic, and a mismatched scope must never promote
+    // under a different key than the conflict being resolved).
+  }, set.truth_key, org, set.decision_domain, input.actor_entity_id, input.conflict_set_id);
 
   if (promote.kind !== "promoted") return promote;
 
