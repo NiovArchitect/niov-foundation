@@ -526,11 +526,16 @@ const CANDIDATE_SELECT = {
   source_integrity_state: true, permission_eligible: true, superseded: true, retracted: true, is_winner: true,
 } as const;
 
-export async function getConflictSet(org: string, conflictSetId: string): Promise<{ set: SafeConflictSet; candidates: SafeConflictCandidate[] } | null> {
+export async function getConflictSet(org: string, conflictSetId: string): Promise<{ set: SafeConflictSet; candidates: SafeConflictCandidate[]; current_promoted_truth: SafeOrgTruthRecord | null } | null> {
   const set = await prisma.orgTruthConflictSet.findFirst({ where: { org_entity_id: org, conflict_set_id: conflictSetId }, select: CONFLICT_SELECT });
-  if (set === null) return null;
+  if (set === null) return null; // inaccessible/foreign conflict is indistinguishable from absent
   const cands = await prisma.orgTruthConflictCandidate.findMany({ where: { conflict_set_id: conflictSetId }, select: CANDIDATE_SELECT, orderBy: [{ truth_weight_rank: "asc" }, { source_record_id: "asc" }], take: 100 });
-  return { set: set as SafeConflictSet, candidates: cands as SafeConflictCandidate[] };
+  // The reviewer must see what their selection would replace. Resolved server-side from the
+  // conflict's OWN stored truth_key (the client never reconstructs it) — authorized through the
+  // conflict access above. Only a currently-PROMOTED record; the partial-unique index guarantees
+  // at most one per key, so no multiple-current inconsistency is reachable. null ⇒ no current answer.
+  const current = await getCurrentPromotedTruth(org, (set as SafeConflictSet).truth_key);
+  return { set: set as SafeConflictSet, candidates: cands as SafeConflictCandidate[], current_promoted_truth: current };
 }
 
 // Local wrapper around the exported computeOrgTruthKey (keeps call sites terse).

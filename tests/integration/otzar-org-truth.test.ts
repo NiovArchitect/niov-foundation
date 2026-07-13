@@ -160,6 +160,32 @@ describe("Otzar organizational-truth promotion + conflict (Section 10 §20)", ()
     expect(await prisma.auditEvent.count({ where: { event_type: "ORG_TRUTH_CONFLICT_RESOLVED", target_entity_id: owner.orgId } })).toBeGreaterThanOrEqual(1);
   });
 
+  it("conflict detail surfaces the current promoted truth the reviewer would replace (server-resolved from the conflict's truth_key)", async () => {
+    const owner = await orgUser({ owns: [DOMAIN] });
+    // 1. clean promotion → a current organizational answer A on the key.
+    const a = await promoteOrgTruth({ scope: scope(owner), actor_entity_id: owner.userId, winner: source({ date: "A" }), resolveOwnerScope: ownerScopeOf(owner) });
+    expect(a.kind).toBe("promoted"); if (a.kind !== "promoted") return;
+    // 2. open a conflict on the SAME key (two materially competing candidates); current A retained.
+    const opened = await promoteOrgTruth({ scope: scope(owner), actor_entity_id: owner.userId, winner: source({ date: "B" }), competing: [source({ date: "C" })], resolveOwnerScope: ownerScopeOf(owner) });
+    expect(opened.kind).toBe("conflict_open"); if (opened.kind !== "conflict_open") return;
+    // 3. conflict detail carries the current promoted truth (A) — the reviewer sees what's replaced.
+    const cs = await getConflictSet(owner.orgId, opened.conflict_set.conflict_set_id);
+    expect(cs?.current_promoted_truth?.truth_record_id).toBe(a.record.truth_record_id);
+    expect(cs?.current_promoted_truth?.state).toBe("PROMOTED");
+  });
+
+  it("conflict detail current_promoted_truth is null when nothing is promoted; a foreign org can't read the conflict", async () => {
+    const owner = await orgUser({ owns: [DOMAIN] });
+    const opened = await promoteOrgTruth({ scope: scope(owner), actor_entity_id: owner.userId, winner: source({ date: "A" }), competing: [source({ date: "B" })], resolveOwnerScope: ownerScopeOf(owner) });
+    if (opened.kind !== "conflict_open") throw new Error();
+    const cs = await getConflictSet(owner.orgId, opened.conflict_set.conflict_set_id);
+    expect(cs).not.toBeNull();
+    expect(cs?.current_promoted_truth).toBeNull(); // no answer promoted → null, not an error
+    // cross-org: a foreign org reading this conflict id gets null (indistinguishable from absent).
+    const foreign = await orgUser({ owns: [DOMAIN] });
+    expect(await getConflictSet(foreign.orgId, opened.conflict_set.conflict_set_id)).toBeNull();
+  });
+
   it("resolveConflict derives the truth_key from the conflict set — a CT reviewer resolves without reconstructing the topic", async () => {
     const owner = await orgUser({ owns: [DOMAIN] });
     const winner = source({ date: "A" });
