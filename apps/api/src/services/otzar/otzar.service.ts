@@ -626,6 +626,23 @@ export interface ContextHealthSuccess {
   identity: IdentityContext;
 }
 
+// WHAT: Inputs for getDgiCoherence (WAVE-2 product surface).
+// WHY: Token only — self-scoped via session.entity_id. Same strip the
+//      Twin sees, projected as JSON for Control Tower (never raw memory).
+export interface GetDgiCoherenceInput {
+  token: string;
+}
+
+// WHAT: Successful getDgiCoherence return.
+// WHY: Single source of truth for the Today organizational-intelligence
+//      panel. Always 200 when session is valid — pairing failures are
+//      expressed as coherence_status BLOCKED/UNPAIRED, not HTTP errors,
+//      so the UI can guide recovery without a failed fetch.
+export interface DgiCoherenceSuccess {
+  ok: true;
+  coherence: import("./dgi-coherence.service.js").DgiCoherenceSnapshot;
+}
+
 // WHAT: Inputs for getMyTwin.
 export interface GetMyTwinInput {
   token: string;
@@ -1319,14 +1336,17 @@ export class OtzarService {
       cache: this.cache,
     });
 
-    // [DGI-COHERENCE WAVE-1] Bounded organizational-intelligence strip so the Twin
-    // reasons from governed obligations + truth-conflict state + personal corrections,
-    // not chat history alone. Leak-safe titles/counts only; never blocks on failure.
+    // [DGI-COHERENCE WAVE-1/2] Bounded organizational-intelligence strip so the Twin
+    // reasons from governed obligations + handoffs + truth-conflict state + personal
+    // corrections, not chat history alone. Leak-safe titles/counts only; never blocks
+    // on failure.
     const { buildDgiCoherenceSnapshot } = await import("./dgi-coherence.service.js");
     const dgiCoherence = await buildDgiCoherenceSnapshot({
       orgEntityId,
       subjectEntityId: ownerEntityId,
       twinEntityId: twin.entity_id,
+      twin_pairing_status: "OK",
+      eligible_twin_count: 1,
     });
 
     // Look up the caller's wallet for layer queries.
@@ -3340,6 +3360,63 @@ export class OtzarService {
       status,
       identity,
     };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // getDgiCoherence -- WAVE-2 product projection of collaborative
+  // Domain General Intelligence state for Control Tower.
+  //
+  // WHAT: Assemble the SAME leak-safe coherence snapshot the Twin
+  //       receives as a system-prompt strip, plus closed-vocab
+  //       pairing + coherence_status for glanceable UX.
+  // INPUT: GetDgiCoherenceInput { token }.
+  // OUTPUT: DgiCoherenceSuccess (200) or OtzarFailure (SESSION_* only).
+  // WHY: Closes the fan-out gap (CT no longer guesses from separate
+  //      obligations + conflicts calls). Multi-Twin / unpaired states
+  //      are honest fields, not silent oldest-Twin picks. Never
+  //      returns transcripts, raw claims, secrets, or cross-user data.
+  // ──────────────────────────────────────────────────────────────
+  async getDgiCoherence(
+    input: GetDgiCoherenceInput,
+  ): Promise<DgiCoherenceSuccess | OtzarFailure> {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return {
+        ok: false,
+        code: session.code,
+        message: "DGI coherence denied",
+      };
+    }
+    const ownerEntityId = session.entity_id;
+
+    const { getOrgEntityId } = await import("../governance/org.js");
+    let orgEntityId: string | null;
+    try {
+      orgEntityId = await getOrgEntityId(ownerEntityId);
+    } catch {
+      orgEntityId = null;
+    }
+
+    const { resolvePrimaryTwin } = await import("./twin-resolution.js");
+    const {
+      selectPrimaryTwinStrict,
+      twinPairingFromSelection,
+      buildDgiCoherenceSnapshot,
+    } = await import("./dgi-coherence.service.js");
+
+    const resolvedTwin = await resolvePrimaryTwin(ownerEntityId);
+    const twinPick = selectPrimaryTwinStrict(resolvedTwin);
+    const pairing = twinPairingFromSelection(twinPick);
+
+    const coherence = await buildDgiCoherenceSnapshot({
+      orgEntityId,
+      subjectEntityId: ownerEntityId,
+      twinEntityId: pairing.twin_entity_id,
+      twin_pairing_status: pairing.twin_pairing_status,
+      eligible_twin_count: pairing.eligible_twin_count,
+    });
+
+    return { ok: true, coherence };
   }
 
   // ──────────────────────────────────────────────────────────────
