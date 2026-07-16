@@ -167,7 +167,11 @@ export function projectCollaborationRequestSafeView(row: {
 
 // WHAT: Same-org guard for a candidate target_entity_id. Returns
 //        true iff the candidate is a member (parent_id =
-//        orgEntityId) OR is the org itself.
+//        orgEntityId) OR is the org itself OR is an AI Twin whose
+//        human principal is an org member (Twin↔Twin collab).
+// WHY: [COHERENCE-RECOVERY LIVE] Twins are children of PERSON parents,
+//      not of the ORG. Checking only direct org membership denied every
+//      EMPLOYEE_TWIN collab with CROSS_ORG_DENIED in production.
 async function isSameOrgEntity(
   candidateEntityId: string,
   orgEntityId: string,
@@ -181,7 +185,37 @@ async function isSameOrgEntity(
     },
     select: { child_id: true },
   });
-  return found !== null;
+  if (found !== null) return true;
+
+  // Twin path: candidate is AI_AGENT child of a PERSON who is org member.
+  const twinEntity = await prisma.entity.findFirst({
+    where: {
+      entity_id: candidateEntityId,
+      entity_type: "AI_AGENT",
+      deleted_at: null,
+    },
+    select: { entity_id: true },
+  });
+  if (twinEntity === null) return false;
+
+  const principalLink = await prisma.entityMembership.findFirst({
+    where: {
+      child_id: candidateEntityId,
+      is_active: true,
+    },
+    select: { parent_id: true },
+  });
+  if (principalLink === null) return false;
+
+  const principalInOrg = await prisma.entityMembership.findFirst({
+    where: {
+      parent_id: orgEntityId,
+      child_id: principalLink.parent_id,
+      is_active: true,
+    },
+    select: { child_id: true },
+  });
+  return principalInOrg !== null;
 }
 
 // WHAT: Create a collaboration request on behalf of the caller.
