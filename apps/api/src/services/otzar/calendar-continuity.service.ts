@@ -209,6 +209,47 @@ interface ParsedTime {
  * DOCUMENTED default (1–6 → PM, 7–11 → AM, 12 → noon) and the resolved
  * absolute time is always shown to the user for correction.
  */
+/** Weekday → JS getUTCDay index (Sun=0). */
+const WEEKDAY_INDEX: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+/**
+ * Resolve a named weekday relative to "today" in the caller's timezone.
+ * - "Thursday" → next occurrence of Thursday (if today is Thursday and time
+ *   already passed, detectCalendarProposal handles past-time separately).
+ * - "next Thursday" → always the Thursday of the following week when today
+ *   is Thursday; otherwise the upcoming Thursday (same as plain weekday when
+ *   not today). Plain "next" before a weekday means "the coming" occurrence
+ *   that is strictly after today when today is that weekday.
+ */
+export function resolveWeekdayOffset(
+  lower: string,
+  localDow: number,
+): { daysAhead: number; weekday: string } | null {
+  const m = lower.match(
+    /\b(?:(next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/,
+  );
+  if (m === null || m[2] === undefined) return null;
+  const weekday = m[2];
+  const target = WEEKDAY_INDEX[weekday];
+  if (target === undefined) return null;
+  let daysAhead = (target - localDow + 7) % 7;
+  const saidNext = m[1] === "next";
+  // "next Thursday" when today is not Thursday → upcoming Thursday (daysAhead).
+  // When today IS Thursday, "next Thursday" means +7, not today.
+  if (saidNext && daysAhead === 0) daysAhead = 7;
+  // Plain "Thursday" when today is Thursday → today (daysAhead 0); past-time
+  // clarify handles if the clock already passed.
+  return { daysAhead, weekday };
+}
+
 export function parseTimePhrase(text: string): ParsedTime | null {
   const lower = text.toLowerCase();
   const dayHint: ParsedTime["day_hint"] = /\btomorrow\b/.test(lower)
@@ -292,17 +333,40 @@ export function detectCalendarProposal(
 
   const tz = temporal.timezone;
   const { year, month, day } = temporal.local;
+  const lower = message.toLowerCase();
 
-  // Resolve against TODAY first.
+  // Local day-of-week from civil Y/M/D (authoritative "today" in user tz).
+  const localDowFromParts = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+
+  // Resolve against TODAY first, then apply day/weekday offsets.
   let startIso = localWallClockToUtcIso(tz, year, month, day, time.hour24, time.minute);
   const todayPassed = new Date(startIso).getTime() <= temporal.now_ms;
 
-  if (time.day_hint === "tomorrow") {
-    const t = new Date(temporal.now_ms + 24 * 60 * 60 * 1000);
-    const tp = localPartsInTz(tz, t);
-    startIso = localWallClockToUtcIso(tz, tp.year, tp.month, tp.day, time.hour24, time.minute);
+  const weekdayHit = resolveWeekdayOffset(lower, localDowFromParts);
+  if (weekdayHit !== null) {
+    const civil = addCivilDays(year, month, day, weekdayHit.daysAhead);
+    startIso = localWallClockToUtcIso(
+      tz,
+      civil.year,
+      civil.month,
+      civil.day,
+      time.hour24,
+      time.minute,
+    );
+  } else if (time.day_hint === "tomorrow") {
+    const civil = addCivilDays(year, month, day, 1);
+    startIso = localWallClockToUtcIso(
+      tz,
+      civil.year,
+      civil.month,
+      civil.day,
+      time.hour24,
+      time.minute,
+    );
   } else if (todayPassed) {
     // Correction #2: never silently schedule tomorrow. Ask, and persist nothing.
+    // Exception: when a weekday/next-week phrase was present we already resolved
+    // above; this branch is time-only ("at 11:30").
     const timeLabel = new Intl.DateTimeFormat("en-US", {
       timeZone: tz, hour: "numeric", minute: "2-digit", timeZoneName: "short",
     }).format(new Date(startIso));
@@ -311,7 +375,13 @@ export function detectCalendarProposal(
   const endIso = new Date(new Date(startIso).getTime() + DEFAULT_DURATION_MIN * 60 * 1000).toISOString();
 
   // Temporal sanity guard: never propose a materially-past instant.
-  if (new Date(startIso).getTime() < temporal.now_ms - 5 * 60 * 1000) return null;
+  if (new Date(startIso).getTime() < temporal.now_ms - 5 * 60 * 1000) {
+    // Weekday landed in the past (rare) → clarify instead of inventing +7.
+    const timeLabel = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    }).format(new Date(startIso));
+    return { kind: "clarify_past_time", time_label: timeLabel, timezone: tz };
+  }
 
   const resolvedLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: tz, weekday: "short", month: "short", day: "numeric", year: "numeric",
@@ -329,6 +399,21 @@ export function detectCalendarProposal(
       original_phrase: message.trim().slice(0, 300),
       meridiem_defaulted: !time.meridiem_explicit,
     },
+  };
+}
+
+/** Pure civil-date arithmetic (no DST ambiguity — wall clock applied later). */
+export function addCivilDays(
+  year: number,
+  month: number,
+  day: number,
+  days: number,
+): { year: number; month: number; day: number } {
+  const d = new Date(Date.UTC(year, month - 1, day + days));
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
   };
 }
 
