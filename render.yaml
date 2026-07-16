@@ -14,22 +14,37 @@
 # After the service is created, add the custom domain api.otzar.ai in Settings →
 # Custom Domains; Render shows the exact CNAME target for Namecheap. The container
 # binds 0.0.0.0:$PORT (Render sets PORT) and serves health at /api/v1/health.
+#
+# ─── IF ROUTES 404 AFTER MERGE TO MAIN (stuck deploy) ───────────────────────
+#   Diagnosis (local):
+#     bash scripts/render-deploy-check.sh
+#   Manual (browser, already logged in):
+#     1. https://dashboard.render.com → service otzar-api
+#     2. Settings → Build & Deploy:
+#          Branch = main | Auto-Deploy = Yes
+#          Root Directory empty | Dockerfile Path = ./Dockerfile
+#     3. Manual Deploy → Deploy latest commit
+#     4. Events: status Live for latest origin/main SHA
+#     5. Verify: POST /api/v1/relay/messages returns 401 (not 404)
+#        GET /api/v1/health includes git_commit matching main
+#   API trigger (valid key from Account Settings → API Keys):
+#     export RENDER_API_KEY=rnd_…
+#     bash scripts/render-deploy-check.sh --trigger
+# ────────────────────────────────────────────────────────────────────────────
 services:
   - type: web
     runtime: docker
     name: otzar-api
     branch: main
+    rootDir: .
     dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/v1/health
-    # Always-on paid tier (recommended: the Action scheduler that executes
-    # approved work runs continuously). Change to `free` for a cheaper instance
-    # that sleeps on idle (cold starts; scheduler pauses while asleep).
+    # Always-on paid tier (Action scheduler needs continuous process).
     plan: starter
-    # Auto-Deploy ON for main — production tracks origin/main after green merges.
-    # CI still gates merges (branch protection). If a deploy races a red PR that
-    # somehow landed, roll back via Render deploys history. After changing this
-    # flag, also set the live service: Settings → Build & Deploy → Auto-Deploy = Yes
-    # (or re-apply this Blueprint). Watched branch: main.
+    # Auto-Deploy ON for main. Blueprint value does NOT always sync to an
+    # already-created service — re-check Auto-Deploy=Yes in the live service
+    # Settings after Blueprint apply.
     autoDeploy: true
     envVars:
       # --- non-secret config ---
@@ -43,18 +58,28 @@ services:
         value: scribe_v1
       - key: CONTROL_TOWER_URL
         value: https://app.otzar.ai
-      # --- secrets: paste each value in the Render dashboard (never in git) ---
-      - key: DATABASE_URL          # Supabase pooled URL (append ?pgbouncer=true&connection_limit=1)
+      # --- secrets: paste in Render dashboard (never in git) ---
+      - key: DATABASE_URL
         sync: false
-      - key: DIRECT_URL            # Supabase direct (5432) URL — for prisma db push
+      - key: DIRECT_URL
         sync: false
-      - key: REDIS_URL             # Render Key Value Internal URL (create it first)
+      - key: REDIS_URL
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: ENCRYPTION_KEY        # generate locally: openssl rand -hex 32  (REQUIRED in production)
+      - key: ENCRYPTION_KEY
+        sync: false
+      # Required at boot (embedding provider constructed at startup).
+      - key: OPENAI_API_KEY
+        sync: false
+      # Stable APPLICATION entity id — avoid minting a new one every boot.
+      - key: OTZAR_ENTITY_ID
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
