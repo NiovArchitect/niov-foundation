@@ -1674,6 +1674,27 @@ export class OtzarService {
       };
     }
 
+    // [TWIN-ACCURACY] Hard server guard against free-text inventing open work.
+    const { applyTwinAccuracyGuard } = await import("./twin-accuracy-guard.js");
+    const accuracy = applyTwinAccuracyGuard({
+      userMessage: input.message,
+      assistantText: llmResult.text,
+      grounding: {
+        open_incoming_handoffs_count: dgiCoherence.open_incoming_handoffs_count,
+        open_obligations_count: dgiCoherence.open_obligations_count,
+        open_org_truth_conflicts_count: dgiCoherence.open_org_truth_conflicts_count,
+        open_incoming_handoff_titles: dgiCoherence.open_incoming_handoff_titles,
+        open_obligation_titles: dgiCoherence.open_obligation_titles,
+      },
+    });
+    const responseText = accuracy.text;
+    if (accuracy.corrected) {
+      logger.info(
+        { reasons: accuracy.reasons, org: orgEntityId },
+        "otzar twin accuracy guard corrected free-text overclaim",
+      );
+    }
+
     // Persist conversation row (create or update). Check existence first: a
     // client may send a conversation_id whose row does not exist (a stale/fresh
     // id, or a cross-thread probe). A blind update would both log a spurious
@@ -1784,7 +1805,7 @@ export class OtzarService {
     // hide / disable a "speak aloud" affordance that would produce
     // no audio while still letting the speech-ready text reach
     // future audio consumers.
-    const speechReadyText = toSpeechReadyText(llmResult.text);
+    const speechReadyText = toSpeechReadyText(responseText);
     const voiceOutputSupported = computeVoiceOutputSupported();
 
     // Phase EDX-4 PR 4 — conservative deterministic verb-scan over
@@ -1913,7 +1934,7 @@ export class OtzarService {
       if (requestLease !== null && llmUserTurnId !== null) {
         const done = await this.completeCanonical({
           lease: requestLease, userTurnId: llmUserTurnId, orgEntityId, subjectEntityId: ownerEntityId,
-          twinId: twin.entity_id, conversationId, content: llmResult.text, responseClass: llmClass,
+          twinId: twin.entity_id, conversationId, content: responseText, responseClass: llmClass,
           modelProvider: llmResult.provider ?? null, sourceChannel: input.source_channel ?? "CHAT",
         });
         if (done.kind === "replay") return done.success;
@@ -1922,7 +1943,7 @@ export class OtzarService {
       } else {
         await this.persistAssistantTurn({
           conversationId, orgEntityId, subjectEntityId: ownerEntityId, twinId: twin.entity_id,
-          userTurnId: llmUserTurnId, content: llmResult.text, modelProvider: llmResult.provider ?? null,
+          userTurnId: llmUserTurnId, content: responseText, modelProvider: llmResult.provider ?? null,
           sourceChannel: input.source_channel ?? "CHAT",
         });
       }
@@ -1930,7 +1951,7 @@ export class OtzarService {
 
     return {
       ok: true,
-      response: llmResult.text,
+      response: responseText,
       context_used: contextUsed,
       tokens_consumed: truncated.total_tokens,
       conversation_id: conversationId,
@@ -4236,10 +4257,12 @@ export class OtzarService {
       };
     }
 
-    // Prefer the handoff's conversation when the caller can append there;
-    // otherwise mint a caller-owned thread. Governance requires matching
-    // conversation only when the handoff stamps one — null is free.
+    // Prefer the handoff's conversation when the caller can append there.
+    // If bound to an outgoing-only thread, rebind to a caller-owned ambient
+    // thread so one-tap ack still works (multi-party recovery — not a silent
+    // cross-thread leak; only the handoff row's conversation_id pointer moves).
     let conversationId: string | null = null;
+    let reboundFromForeign = false;
     if (handoff.conversation_id !== null && handoff.conversation_id.length > 0) {
       try {
         const resolvedThread = await resolveAuthoritativeThread({
@@ -4252,13 +4275,8 @@ export class OtzarService {
         });
         conversationId = resolvedThread.conversation_id;
       } catch {
-        return {
-          ok: false,
-          code: "OTZAR_HANDOFF_PRECONDITION",
-          message:
-            "This handoff is bound to a conversation you cannot write in. Acknowledge it from that conversation, or ask the sender to re-send without a bound thread.",
-          detail: "handoff_conversation_not_appendable",
-        };
+        reboundFromForeign = true;
+        conversationId = null;
       }
     }
 
@@ -4272,6 +4290,18 @@ export class OtzarService {
           timezone: "UTC",
         });
         conversationId = thread.conversation_id;
+        if (reboundFromForeign || handoff.conversation_id !== conversationId) {
+          // Point evidence at the incoming party's durable thread so ack CAS
+          // can require turn.conversation_id === handoff.conversation_id.
+          await prisma.handoff.updateMany({
+            where: {
+              handoff_id: input.handoff_id,
+              org_entity_id: scope.org_entity_id,
+              incoming_responsible_entity_id: entity_id,
+            },
+            data: { conversation_id: conversationId },
+          });
+        }
       } catch (e) {
         logger.error({ err: e, handoff_id: input.handoff_id }, "ambient handoff ack thread create failed");
         return {
@@ -4371,6 +4401,106 @@ export class OtzarService {
       handoff: outcome.handoff,
       acknowledged_turn_id: userTurnId,
       conversation_id: conversationId,
+    };
+  }
+
+  /**
+   * One-tap complete for an ACKNOWLEDGED handoff: dispose every still-PENDING
+   * linked obligation as ACCEPTED, then COMPLETE. Incoming party only.
+   */
+  async completeIncomingHandoffAmbient(input: {
+    token: string;
+    handoff_id: string;
+    expected_version?: number;
+  }): Promise<
+    | {
+        ok: true;
+        handoff: SafeHandoff;
+        disposed_obligation_ids: string[];
+        skipped_already_disposed: number;
+      }
+    | OtzarFailure
+  > {
+    const session = await this.authService.validateSession(input.token, "write");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Handoff complete denied" };
+    }
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const { scope } = resolved;
+
+    const handoff = await getHandoffForScope(scope, input.handoff_id);
+    if (handoff === null) {
+      return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
+    }
+    if (!handoff.caller_is_incoming) {
+      return {
+        ok: false,
+        code: "OTZAR_HANDOFF_NOT_AUTHORIZED",
+        message: "Only the incoming party can complete this handoff.",
+      };
+    }
+    if (handoff.state !== "ACKNOWLEDGED") {
+      return {
+        ok: false,
+        code: "OTZAR_HANDOFF_ILLEGAL_TRANSITION",
+        message:
+          handoff.state === "SENT" || handoff.state === "RECEIVED"
+            ? "Acknowledge this handoff first, then complete it."
+            : "That change isn't allowed from the handoff's current state.",
+      };
+    }
+
+    const linked = (await listHandoffObligations(scope, input.handoff_id)) ?? [];
+    const disposed: string[] = [];
+    let skipped = 0;
+    for (const link of linked) {
+      if (link.disposition !== "PENDING") {
+        skipped += 1;
+        continue;
+      }
+      const d = await disposeHandoffObligation(
+        scope,
+        input.handoff_id,
+        link.obligation_id,
+        "ACCEPTED",
+      );
+      if ("kind" in d && d.kind === "disposed") {
+        disposed.push(link.obligation_id);
+      } else if ("kind" in d) {
+        return this.mapHandoffFailure(d as Exclude<HandoffOutcome, { kind: "ok" }>);
+      }
+    }
+
+    const version =
+      typeof input.expected_version === "number" && Number.isInteger(input.expected_version)
+        ? input.expected_version
+        : handoff.version;
+    const enrichment = await this.resolveHandoffEnrichment(
+      input.handoff_id,
+      scope.org_entity_id,
+    );
+    const outcome = await completeHandoff(scope, {
+      handoff_id: input.handoff_id,
+      expected_version: version,
+      ...(enrichment !== undefined ? { evidence_enrichment: enrichment } : {}),
+    });
+    if (outcome.kind !== "ok") {
+      this.hoffLog("ambient_complete_failed", scope, {
+        handoff_id: input.handoff_id,
+        reason: outcome.kind,
+      }, "warn");
+      return this.mapHandoffFailure(outcome);
+    }
+    this.hoffLog("ambient_complete", scope, {
+      handoff_id: input.handoff_id,
+      disposed_count: disposed.length,
+    });
+    return {
+      ok: true,
+      handoff: outcome.handoff,
+      disposed_obligation_ids: disposed,
+      skipped_already_disposed: skipped,
     };
   }
 
