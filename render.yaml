@@ -25,10 +25,12 @@ services:
     # approved work runs continuously). Change to `free` for a cheaper instance
     # that sleeps on idle (cold starts; scheduler pauses while asleep).
     plan: starter
-    # [P0-OPS] autoDeploy is OFF — the binding rail is manual verified
-    # deploys (merge on green CI -> API deploy with commitId -> poll
-    # "live <sha>" -> smoke). See CT docs/otzar/OTZAR_PILOT_OPS_RUNBOOK.md.
-    autoDeploy: false
+    # Auto-Deploy ON for main — production tracks origin/main after green merges.
+    # CI still gates merges (branch protection). If a deploy races a red PR that
+    # somehow landed, roll back via Render deploys history. After changing this
+    # flag, also set the live service: Settings → Build & Deploy → Auto-Deploy = Yes
+    # (or re-apply this Blueprint). Watched branch: main.
+    autoDeploy: true
     envVars:
       # --- non-secret config ---
       - key: NODE_ENV
