@@ -58,9 +58,13 @@ echo "  ✓ db-push guard passed"
 
 echo "→ typecheck (tsc --noEmit; zero-error baseline)"
 npx tsc --noEmit -p tsconfig.json 2>&1 | tee /tmp/niov-precommit-tsc.log
-ERROR_COUNT=$(grep -c "error TS" /tmp/niov-precommit-tsc.log || echo 0)
+# grep -c prints "0" with exit 1 when no matches; `|| echo 0` then yields "0\n0".
+# Normalize to a single integer for the -gt test.
+ERROR_COUNT=$(grep -c "error TS" /tmp/niov-precommit-tsc.log 2>/dev/null || true)
+ERROR_COUNT=$(printf '%s' "$ERROR_COUNT" | tr -d '[:space:]')
+if [ -z "$ERROR_COUNT" ]; then ERROR_COUNT=0; fi
 echo "  TS error count: $ERROR_COUNT (baseline: 0)"
-if [ "$ERROR_COUNT" -gt 0 ]; then
+if [ "$ERROR_COUNT" -gt 0 ] 2>/dev/null; then
   echo "  ::error:: TS error count $ERROR_COUNT exceeds zero-error baseline — fix before commit"
   exit 1
 fi
