@@ -1346,8 +1346,11 @@ export async function registerOtzarRoutes(
     async (request, reply) => {
       const token = bearerFrom(request.headers.authorization);
       if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
-      const b = request.body ?? {};
-      const result = await otzarService.promoteOrgTruth(b as unknown as Parameters<typeof otzarService.promoteOrgTruth>[0] & { token: string });
+      // [WAVE-4 FIX] Bearer token must be injected — body alone never carries session.
+      const result = await otzarService.promoteOrgTruth({
+        ...(request.body ?? {}),
+        token,
+      } as unknown as Parameters<typeof otzarService.promoteOrgTruth>[0]);
       if (!("ok" in result) || result.ok === false) return reply.code(statusForCode((result as { code: string }).code)).send(result);
       return reply.code(200).send(result);
     },
