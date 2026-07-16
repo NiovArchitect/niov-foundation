@@ -36,7 +36,6 @@ import {
   listConflictSetsForOrg,
   listObligations,
   listHandoffs,
-  OPEN_HANDOFF_STATES,
   type ObligationScope,
   type SafeObligation,
   type SafeHandoff,
@@ -494,7 +493,14 @@ export async function buildDgiCoherenceSnapshot(args: {
     const now = new Date();
     const twinId = args.twinEntityId;
 
-    const openHandoffStates = [...OPEN_HANDOFF_STATES] as HandoffState[];
+    // Incoming pressure = still needs human acknowledgment — not already ACK'd
+    // or terminal. OPEN_HANDOFF_STATES includes ACKNOWLEDGED (still in flight for
+    // completion), which must NOT drive "acknowledge handoff" next-best-step.
+    const openHandoffStates = [
+      "SENT",
+      "RECEIVED",
+      "CLARIFICATION_REQUIRED",
+    ] as HandoffState[];
 
     const [obligations, conflicts, corrections, grants, handoffs] =
       await Promise.all([
