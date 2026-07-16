@@ -641,6 +641,21 @@ export interface GetDgiCoherenceInput {
 export interface DgiCoherenceSuccess {
   ok: true;
   coherence: import("./dgi-coherence.service.js").DgiCoherenceSnapshot;
+  /** WAVE-4: bounded collaboration plan for caller (no private memory). */
+  collaboration_plan: import("./dgi-caller-plan.service.js").DgiCollaborationPlanView;
+  /**
+   * WAVE-4: closed-vocab authority posture for material Twin work.
+   * Does not grant rights — surfaces whether any ACTIVE grant exists
+   * for common action classes.
+   */
+  twin_authority_posture: {
+    has_active_grants: boolean;
+    sample_action_checks: Array<{
+      action_type: string;
+      allowed: boolean;
+      reason: string | null;
+    }>;
+  };
 }
 
 // WHAT: Inputs for getMyTwin.
@@ -3416,7 +3431,62 @@ export class OtzarService {
       eligible_twin_count: pairing.eligible_twin_count,
     });
 
-    return { ok: true, coherence };
+    // [WAVE-4] Caller-scoped collaboration plan + authority posture.
+    const { buildCallerCollaborationPlan } = await import(
+      "./dgi-caller-plan.service.js"
+    );
+    const collaboration_plan = await buildCallerCollaborationPlan({
+      orgEntityId,
+      subjectEntityId: ownerEntityId,
+      twinEntityId: pairing.twin_entity_id,
+    });
+
+    const twin_authority_posture = {
+      has_active_grants: coherence.active_twin_authority_grants_count > 0,
+      sample_action_checks: [] as Array<{
+        action_type: string;
+        allowed: boolean;
+        reason: string | null;
+      }>,
+    };
+
+    if (
+      orgEntityId !== null &&
+      pairing.twin_entity_id !== null &&
+      pairing.twin_pairing_status === "OK"
+    ) {
+      const { checkAuthorityForAction } = await import(
+        "./twin-authority-grant.service.js"
+      );
+      const sampleActions = [
+        "message.send",
+        "calendar.create",
+        "ticket.update",
+      ] as const;
+      for (const actionType of sampleActions) {
+        try {
+          const check = await checkAuthorityForAction({
+            granteeEntityId: pairing.twin_entity_id,
+            orgEntityId,
+            scopeType: "ORG",
+            actionType,
+          });
+          twin_authority_posture.sample_action_checks.push({
+            action_type: actionType,
+            allowed: check.allowed,
+            reason: check.allowed ? null : check.reason,
+          });
+        } catch {
+          twin_authority_posture.sample_action_checks.push({
+            action_type: actionType,
+            allowed: false,
+            reason: "NO_MATCHING_GRANT",
+          });
+        }
+      }
+    }
+
+    return { ok: true, coherence, collaboration_plan, twin_authority_posture };
   }
 
   // ──────────────────────────────────────────────────────────────
