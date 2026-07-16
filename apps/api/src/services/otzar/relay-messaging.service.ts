@@ -269,3 +269,195 @@ export async function listRelayMessages(args: {
 
   return { ok: true, messages };
 }
+
+async function assertThreadOwned(
+  actor: string,
+  threadId: string,
+): Promise<
+  | {
+      org_entity_id: string;
+      subject_entity_id: string;
+      twin_entity_id: string;
+    }
+  | RelayFailure
+> {
+  const scope = await resolveScope(actor);
+  if ("ok" in scope) return scope;
+  const owned = await prisma.otzarConversation.findFirst({
+    where: {
+      conversation_id: threadId,
+      org_entity_id: scope.org_entity_id,
+      entity_id: scope.subject_entity_id,
+      deleted_at: null,
+    },
+    select: { conversation_id: true },
+  });
+  if (owned === null) {
+    return { ok: false, code: "NOT_FOUND", message: "Conversation not available." };
+  }
+  return scope;
+}
+
+/**
+ * Ask the caller's AI Teammate for a DRAFT reply in-thread.
+ * Always labeled TWIN_DRAFT — never sent as the human.
+ */
+export async function draftTwinInThread(args: {
+  actor_entity_id: string;
+  thread_id: string;
+  prompt?: string;
+}): Promise<{ ok: true; message: RelayMessageView } | RelayFailure> {
+  const scope = await assertThreadOwned(args.actor_entity_id, args.thread_id);
+  if ("ok" in scope) return scope;
+
+  const turns = await listConversationTurns(
+    args.thread_id,
+    {
+      org_entity_id: scope.org_entity_id,
+      subject_entity_id: scope.subject_entity_id,
+      twin_entity_id: scope.twin_entity_id,
+    },
+    { limit: 30 },
+  );
+  const transcript = turns
+    .map((t) => {
+      const who =
+        t.role === "ASSISTANT"
+          ? "AI Teammate"
+          : t.author_entity_id === args.actor_entity_id
+            ? "You"
+            : "Participant";
+      return `${who}: ${t.content}`;
+    })
+    .join("\n");
+
+  const userAsk =
+    typeof args.prompt === "string" && args.prompt.trim().length > 0
+      ? args.prompt.trim().slice(0, 500)
+      : "Summarize what needs attention and suggest one next step. Do not pretend to send messages as the human.";
+
+  let draftBody: string;
+  try {
+    const { getLLMProvider } = await import("../llm/llm.service.js");
+    const llm = getLLMProvider();
+    const result = await llm.generateResponse({
+      system:
+        "You are this person's AI Teammate inside Otzar Relay. You draft only. " +
+        "Never claim you sent a message. Never invent org facts. " +
+        "Start with: [Draft — not sent]. Keep under 120 words. Plain language.",
+      user: `Conversation so far:\n${transcript || "(empty)"}\n\nHuman request: ${userAsk}`,
+    });
+    draftBody = result.ok
+      ? result.text.trim()
+      : "[Draft — not sent] Live drafting isn't available right now. Try Talk in Otzar, or rephrase.";
+  } catch {
+    draftBody =
+      "[Draft — not sent] I couldn't draft a reply yet. Open Talk in Otzar for full assistance.";
+  }
+  if (!draftBody.startsWith("[Draft")) {
+    draftBody = `[Draft — not sent]\n${draftBody}`;
+  }
+
+  const turn = await appendConversationTurn({
+    conversation_id: args.thread_id,
+    org_entity_id: scope.org_entity_id,
+    subject_entity_id: scope.subject_entity_id,
+    author_entity_id: scope.twin_entity_id,
+    twin_entity_id: scope.twin_entity_id,
+    role: "ASSISTANT",
+    content: draftBody.slice(0, MAX_BODY),
+    source_channel: "AMBIENT",
+    request_id: `relay-twin-draft:${randomUUID()}`,
+  });
+
+  return {
+    ok: true,
+    message: {
+      message_id: turn.turn_id,
+      thread_id: args.thread_id,
+      body: draftBody.slice(0, MAX_BODY),
+      author_label: "SYSTEM",
+      created_at: new Date().toISOString(),
+      ai_involvement: "TWIN_DRAFT",
+    },
+  };
+}
+
+/**
+ * Extract structured work from a Relay thread (read-only preview).
+ * Does not create Actions — same contract as /comms/extract.
+ */
+export async function extractWorkFromThread(args: {
+  actor_entity_id: string;
+  thread_id: string;
+}): Promise<
+  | {
+      ok: true;
+      extraction: {
+        summary: string;
+        decisions: string[];
+        commitments: string[];
+        risks_or_blockers: string[];
+        extraction_mode: string;
+      };
+      next_surface: string;
+    }
+  | RelayFailure
+> {
+  const scope = await assertThreadOwned(args.actor_entity_id, args.thread_id);
+  if ("ok" in scope) return scope;
+
+  const turns = await listConversationTurns(
+    args.thread_id,
+    {
+      org_entity_id: scope.org_entity_id,
+      subject_entity_id: scope.subject_entity_id,
+      twin_entity_id: scope.twin_entity_id,
+    },
+    { limit: 50 },
+  );
+  if (turns.length === 0) {
+    return {
+      ok: false,
+      code: "INVALID_INPUT",
+      message: "No messages to extract work from yet.",
+    };
+  }
+  const captured_text = turns
+    .map((t) => {
+      const who =
+        t.role === "ASSISTANT"
+          ? "AI Teammate (draft)"
+          : t.author_entity_id === args.actor_entity_id
+            ? "Human"
+            : "Participant";
+      return `${who}: ${t.content}`;
+    })
+    .join("\n");
+
+  const { extractFromCapturedText } = await import("./comms-extract.service.js");
+  let llmProvider = null;
+  try {
+    const { getLLMProvider } = await import("../llm/llm.service.js");
+    llmProvider = getLLMProvider();
+  } catch {
+    llmProvider = null;
+  }
+  const extraction = await extractFromCapturedText(
+    { viewerEntityId: args.actor_entity_id, captured_text },
+    llmProvider,
+  );
+
+  return {
+    ok: true,
+    extraction: {
+      summary: extraction.summary,
+      decisions: extraction.decisions ?? [],
+      commitments: extraction.commitments ?? [],
+      risks_or_blockers: extraction.risks_or_blockers ?? [],
+      extraction_mode: extraction.extraction_mode,
+    },
+    // Experience surface — not backend object names.
+    next_surface: "/app/action-center",
+  };
+}
