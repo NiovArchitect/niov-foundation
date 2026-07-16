@@ -568,6 +568,13 @@ export type AuditEventType =
   // [OTZAR-CONTINUITY] a chat-turn calendar proposal was drafted + persisted
   // (pending caller confirmation). Additive; no migration.
   | "CALENDAR_PROPOSAL_DRAFTED"
+  // [GOOGLE-DOCS-WRITE] Gated Google Doc creation. Emitted on every create
+  // ATTEMPT: SUCCESS only when the Docs API returned a document id after
+  // every human + scope gate passed. DENIED with a scrubbed gate code
+  // otherwise. SAFE details: gate code + has_body boolean only.
+  // FORBIDDEN: tokens, document titles/body, drive paths, raw provider
+  // bodies, account emails.
+  | "GOOGLE_DOC_CREATE"
   // Phase 1288-B — Foundation generalized Entity & Authority Envelope.
   // Emitted whenever the Foundation authority evaluator computes an
   // AuthorityEnvelope for an entity (self via /foundation/authority/me,
@@ -1073,6 +1080,8 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CALENDAR_EVENT_CREATE",
   "CALENDAR_EVENT_DELETE",
   "CALENDAR_PROPOSAL_DRAFTED",
+  // [GOOGLE-DOCS-WRITE] Gated Google Doc creation.
+  "GOOGLE_DOC_CREATE",
   // Phase 1288-B Foundation Entity & Authority Envelope evaluation.
   "AUTHORITY_ENVELOPE_EVALUATED",
   // Phase 1290-A Foundation economic substrate quote (mock-only).
