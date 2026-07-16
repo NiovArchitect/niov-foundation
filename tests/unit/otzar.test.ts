@@ -1481,7 +1481,7 @@ describe("getMyTwin", () => {
 // ──────────────────────────────────────────────────────────────────
 
 describe("conductSession + getMyTwin -- deterministic primary-twin selection", () => {
-  it("both resolve the oldest active twin; getMyTwin reports has_multiple_twins", async () => {
+  it("getMyTwin surfaces multiplicity; conductSession fails closed (no silent blend)", async () => {
     const { auth, otzar } = makeServices();
     const owner = await loginAs(auth);
     const oldTwin = await attachTwinAt(
@@ -1492,7 +1492,7 @@ describe("conductSession + getMyTwin -- deterministic primary-twin selection", (
       owner.entity.entity_id,
       new Date("2024-01-01T00:00:00.000Z"),
     );
-    // The twin a user SEES.
+    // The twin a user SEES (still deterministic primary for identity UI).
     const seen = await otzar.getMyTwin({ token: owner.token });
     expect(seen.ok).toBe(true);
     if (!seen.ok) return;
@@ -1500,18 +1500,15 @@ describe("conductSession + getMyTwin -- deterministic primary-twin selection", (
     expect(seen.twin.twin_id).not.toBe(newTwin);
     expect(seen.has_multiple_twins).toBe(true);
     expect(seen.twin_count).toBe(2);
-    // The twin a user TALKS TO must equal the twin they SEE.
+    // [DGI-COHERENCE] Talk path refuses silent oldest-pick when multiple
+    // eligible Twins exist — never blend human–Twin relationships.
     const conv = await otzar.conductSession({
       token: owner.token,
       message: "hello",
     });
-    expect(conv.ok).toBe(true);
-    if (!conv.ok) return;
-    const row = await prisma.otzarConversation.findUnique({
-      where: { conversation_id: conv.conversation_id },
-    });
-    expect(row?.twin_id).toBe(seen.twin.twin_id);
-    expect(row?.twin_id).toBe(oldTwin);
+    expect(conv.ok).toBe(false);
+    if (conv.ok) return;
+    expect(conv.code).toBe("TWIN_AMBIGUOUS");
   });
 });
 
