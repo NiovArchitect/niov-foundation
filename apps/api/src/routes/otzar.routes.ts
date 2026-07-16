@@ -342,6 +342,30 @@ export async function registerOtzarRoutes(
     return reply.code(200).send(result);
   });
 
+  // GET /api/v1/otzar/dgi-coherence -- [DGI-COHERENCE WAVE-2]
+  // Product projection of collaborative Domain General Intelligence
+  // state. Self-read: bearer + "read" only. Returns the SAME leak-safe
+  // strip the Twin receives (counts + safe titles + closed-vocab
+  // coherence_status + twin pairing). Multi-Twin / unpaired states are
+  // honest fields (BLOCKED / UNPAIRED), not silent oldest picks and not
+  // 4xx — so Control Tower can always render recovery UX.
+  // NEVER includes transcripts, raw claims, secrets, or cross-user data.
+  app.get("/api/v1/otzar/dgi-coherence", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const result = await otzarService.getDgiCoherence({ token });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
   // POST /api/v1/otzar/comms/extract -- Phase 1213
   // [OTZAR-AMBIENT-COMMS]. Given the assembled captured text of a
   // conversation (from CT's demo-capture timer, manual paste, or
