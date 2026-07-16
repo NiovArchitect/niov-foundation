@@ -62,6 +62,55 @@ export type DgiCoherenceStatus =
   | "BLOCKED"
   | "UNPAIRED";
 
+/**
+ * Deterministic signal flags — explainable organizational state chips.
+ * Not a second status enum: signals refine HEALTHY/NEEDS_ATTENTION.
+ */
+export type DgiCoherenceSignal =
+  | "CONFLICTED"
+  | "HANDOFF_INCOMPLETE"
+  | "AUTHORITY_PRESENT"
+  | "AUTHORITY_MISSING"
+  | "CORRECTIONS_ACTIVE"
+  | "OBLIGATIONS_OPEN"
+  | "PAIRING_OK"
+  | "PAIRING_BLOCKED"
+  | "PAIRING_UNPAIRED";
+
+/** Graduated autonomy ceiling for the recommended next step (directive §4). */
+export type DgiAutonomyCeiling =
+  | "OBSERVE"
+  | "DRAFT"
+  | "EXECUTE_WITH_CONFIRMATION"
+  | "EXECUTE_WITHIN_POLICY"
+  | "DELEGATE_WITHIN_SCOPE"
+  | "ESCALATE"
+  | "FAIL_CLOSED";
+
+export type DgiNextBestStepKind =
+  | "RESOLVE_TWIN_PAIRING"
+  | "PAIR_TWIN"
+  | "REVIEW_ORG_TRUTH"
+  | "ACKNOWLEDGE_HANDOFF"
+  | "ADVANCE_OBLIGATION"
+  | "GRANT_AUTHORITY"
+  | "IDLE_HEALTHY";
+
+/**
+ * Product-actionable next step derived from Foundation state only.
+ * Drives UI + Twin prompt — not display-only counts.
+ */
+export interface DgiNextBestStep {
+  kind: DgiNextBestStepKind;
+  /** 1 = highest urgency */
+  priority: number;
+  safe_title: string;
+  reason: string;
+  /** Control Tower route hint (relative). */
+  route_hint: string;
+  autonomy_ceiling: DgiAutonomyCeiling;
+}
+
 export interface TwinSelectionOk {
   ok: true;
   twin: ResolvedTwin["twin"];
@@ -127,6 +176,10 @@ export interface DgiCoherenceSnapshot {
    * as "needs you now" pressure unless the product elevates them.
    */
   attention_count: number;
+  /** Explainable state chips (deterministic). */
+  signals: DgiCoherenceSignal[];
+  /** Highest-priority next step — drives Today CTA + Twin system prompt. */
+  next_best_step: DgiNextBestStep;
   /** Bounded system-prompt block; empty when nothing material AND unpaired. */
   system_block: string;
 }
@@ -197,16 +250,178 @@ export function deriveCoherenceStatus(args: {
   return { coherence_status: "HEALTHY", attention_count: 0 };
 }
 
+/** Pure: deterministic signal chips from snapshot counts. */
+export function deriveCoherenceSignals(args: {
+  twin_pairing_status: TwinPairingStatus;
+  open_obligations_count: number;
+  open_org_truth_conflicts_count: number;
+  open_incoming_handoffs_count: number;
+  active_personal_corrections_count: number;
+  active_twin_authority_grants_count: number;
+}): DgiCoherenceSignal[] {
+  const signals: DgiCoherenceSignal[] = [];
+  if (args.twin_pairing_status === "OK") signals.push("PAIRING_OK");
+  if (args.twin_pairing_status === "TWIN_AMBIGUOUS") signals.push("PAIRING_BLOCKED");
+  if (args.twin_pairing_status === "TWIN_NOT_FOUND") signals.push("PAIRING_UNPAIRED");
+  if (args.open_org_truth_conflicts_count > 0) signals.push("CONFLICTED");
+  if (args.open_incoming_handoffs_count > 0) signals.push("HANDOFF_INCOMPLETE");
+  if (args.open_obligations_count > 0) signals.push("OBLIGATIONS_OPEN");
+  if (args.active_personal_corrections_count > 0) signals.push("CORRECTIONS_ACTIVE");
+  if (args.active_twin_authority_grants_count > 0) {
+    signals.push("AUTHORITY_PRESENT");
+  } else if (args.twin_pairing_status === "OK" && args.open_obligations_count > 0) {
+    signals.push("AUTHORITY_MISSING");
+  }
+  return signals;
+}
+
+/**
+ * Pure: highest-priority next-best-step from Foundation state.
+ * Priority order (fail-closed first): pairing → truth conflict → handoff →
+ * obligation → authority gap → idle.
+ * Never grants authority; only recommends a product route + autonomy ceiling.
+ */
+export function deriveNextBestStep(args: {
+  twin_pairing_status: TwinPairingStatus;
+  eligible_twin_count: number;
+  open_obligations_count: number;
+  open_obligation_titles: string[];
+  open_org_truth_conflicts_count: number;
+  open_incoming_handoffs_count: number;
+  open_incoming_handoff_titles: string[];
+  active_twin_authority_grants_count: number;
+}): DgiNextBestStep {
+  if (args.twin_pairing_status === "TWIN_AMBIGUOUS") {
+    return {
+      kind: "RESOLVE_TWIN_PAIRING",
+      priority: 1,
+      safe_title: "Resolve multiple AI Teammates",
+      reason: `${args.eligible_twin_count} eligible AI Teammates are linked — Otzar will not blend them.`,
+      route_hint: "/app/my-twin",
+      autonomy_ceiling: "FAIL_CLOSED",
+    };
+  }
+  if (args.twin_pairing_status === "TWIN_NOT_FOUND") {
+    return {
+      kind: "PAIR_TWIN",
+      priority: 1,
+      safe_title: "Pair your AI Teammate",
+      reason: "No eligible Twin is paired — collaborative intelligence is unavailable.",
+      route_hint: "/app/my-twin",
+      autonomy_ceiling: "FAIL_CLOSED",
+    };
+  }
+  if (args.open_org_truth_conflicts_count > 0) {
+    const n = args.open_org_truth_conflicts_count;
+    return {
+      kind: "REVIEW_ORG_TRUTH",
+      priority: 2,
+      safe_title:
+        n === 1
+          ? "Review organizational truth conflict"
+          : `Review ${n} organizational truth conflicts`,
+      reason:
+        "Competing sources need authorized review — no silent winner will be chosen.",
+      route_hint: "/app/action-center",
+      autonomy_ceiling: "ESCALATE",
+    };
+  }
+  if (args.open_incoming_handoffs_count > 0) {
+    const sample = args.open_incoming_handoff_titles[0];
+    return {
+      kind: "ACKNOWLEDGE_HANDOFF",
+      priority: 3,
+      safe_title:
+        args.open_incoming_handoffs_count === 1
+          ? "Acknowledge incoming handoff"
+          : `Acknowledge ${args.open_incoming_handoffs_count} incoming handoffs`,
+      reason: sample
+        ? `Responsibility transfer waiting: "${sample}".`
+        : "Incoming responsibility transfer needs acknowledgment.",
+      route_hint: "/app/action-center",
+      autonomy_ceiling: "EXECUTE_WITH_CONFIRMATION",
+    };
+  }
+  if (args.open_obligations_count > 0) {
+    const sample = args.open_obligation_titles[0];
+    return {
+      kind: "ADVANCE_OBLIGATION",
+      priority: 4,
+      safe_title:
+        args.open_obligations_count === 1
+          ? "Advance open obligation"
+          : `Advance ${args.open_obligations_count} open obligations`,
+      reason: sample
+        ? `Open work needs progress: "${sample}".`
+        : "Open obligations need progress within your authority.",
+      route_hint: "/app/action-center",
+      autonomy_ceiling: "EXECUTE_WITH_CONFIRMATION",
+    };
+  }
+  if (args.active_twin_authority_grants_count === 0) {
+    return {
+      kind: "GRANT_AUTHORITY",
+      priority: 5,
+      safe_title: "Consider Twin authority for routine work",
+      reason:
+        "No active Twin authority grants — material actions stay on approval rails.",
+      route_hint: "/app/authority-grants",
+      autonomy_ceiling: "OBSERVE",
+    };
+  }
+  return {
+    kind: "IDLE_HEALTHY",
+    priority: 9,
+    safe_title: "Coherence is healthy",
+    reason: "No open organizational pressure — Otzar is listening.",
+    route_hint: "/app",
+    autonomy_ceiling: "OBSERVE",
+  };
+}
+
+function finalizeSnapshot(
+  base: Omit<DgiCoherenceSnapshot, "signals" | "next_best_step" | "system_block" | "coherence_status" | "attention_count">,
+): DgiCoherenceSnapshot {
+  const derived = deriveCoherenceStatus({
+    twin_pairing_status: base.twin_pairing_status,
+    open_obligations_count: base.open_obligations_count,
+    open_org_truth_conflicts_count: base.open_org_truth_conflicts_count,
+    open_incoming_handoffs_count: base.open_incoming_handoffs_count,
+  });
+  const signals = deriveCoherenceSignals({
+    twin_pairing_status: base.twin_pairing_status,
+    open_obligations_count: base.open_obligations_count,
+    open_org_truth_conflicts_count: base.open_org_truth_conflicts_count,
+    open_incoming_handoffs_count: base.open_incoming_handoffs_count,
+    active_personal_corrections_count: base.active_personal_corrections_count,
+    active_twin_authority_grants_count: base.active_twin_authority_grants_count,
+  });
+  const next_best_step = deriveNextBestStep({
+    twin_pairing_status: base.twin_pairing_status,
+    eligible_twin_count: base.eligible_twin_count,
+    open_obligations_count: base.open_obligations_count,
+    open_obligation_titles: base.open_obligation_titles,
+    open_org_truth_conflicts_count: base.open_org_truth_conflicts_count,
+    open_incoming_handoffs_count: base.open_incoming_handoffs_count,
+    open_incoming_handoff_titles: base.open_incoming_handoff_titles,
+    active_twin_authority_grants_count: base.active_twin_authority_grants_count,
+  });
+  const snap: DgiCoherenceSnapshot = {
+    ...base,
+    coherence_status: derived.coherence_status,
+    attention_count: derived.attention_count,
+    signals,
+    next_best_step,
+    system_block: "",
+  };
+  snap.system_block = renderDgiSystemBlock(snap);
+  return snap;
+}
+
 function emptySnapshot(
   pairing: ReturnType<typeof twinPairingFromSelection>,
 ): DgiCoherenceSnapshot {
-  const derived = deriveCoherenceStatus({
-    twin_pairing_status: pairing.twin_pairing_status,
-    open_obligations_count: 0,
-    open_org_truth_conflicts_count: 0,
-    open_incoming_handoffs_count: 0,
-  });
-  const snap: DgiCoherenceSnapshot = {
+  return finalizeSnapshot({
     open_obligations_count: 0,
     open_obligation_titles: [],
     open_org_truth_conflicts_count: 0,
@@ -217,12 +432,7 @@ function emptySnapshot(
     twin_pairing_status: pairing.twin_pairing_status,
     twin_entity_id: pairing.twin_entity_id,
     eligible_twin_count: pairing.eligible_twin_count,
-    coherence_status: derived.coherence_status,
-    attention_count: derived.attention_count,
-    system_block: "",
-  };
-  snap.system_block = renderDgiSystemBlock(snap);
-  return snap;
+  });
 }
 
 /**
@@ -319,14 +529,7 @@ export async function buildDgiCoherenceSnapshot(args: {
       .slice(0, TITLE_CAP)
       .map((h) => safeTitle(h.title));
 
-    const derived = deriveCoherenceStatus({
-      twin_pairing_status: pairing.twin_pairing_status,
-      open_obligations_count: obligations.length,
-      open_org_truth_conflicts_count: conflicts.length,
-      open_incoming_handoffs_count: handoffs.length,
-    });
-
-    const snap: DgiCoherenceSnapshot = {
+    return finalizeSnapshot({
       open_obligations_count: obligations.length,
       open_obligation_titles,
       open_org_truth_conflicts_count: conflicts.length,
@@ -337,12 +540,7 @@ export async function buildDgiCoherenceSnapshot(args: {
       twin_pairing_status: pairing.twin_pairing_status,
       twin_entity_id: pairing.twin_entity_id,
       eligible_twin_count: pairing.eligible_twin_count,
-      coherence_status: derived.coherence_status,
-      attention_count: derived.attention_count,
-      system_block: "",
-    };
-    snap.system_block = renderDgiSystemBlock(snap);
-    return snap;
+    });
   } catch {
     return emptySnapshot(pairing);
   }
@@ -411,8 +609,19 @@ export function renderDgiSystemBlock(s: DgiCoherenceSnapshot): string {
   lines.push(
     `Coherence status: ${s.coherence_status} (attention items: ${s.attention_count}).`,
   );
+  if (s.signals.length > 0) {
+    lines.push(`Signals: ${s.signals.join(", ")}.`);
+  }
+  if (s.next_best_step) {
+    lines.push(
+      `Next best step (${s.next_best_step.kind}, autonomy ceiling ${s.next_best_step.autonomy_ceiling}): ${s.next_best_step.safe_title}. ${s.next_best_step.reason}`,
+    );
+  }
   lines.push(
     "Prefer structured obligations, handoffs, corrections, and promoted organizational answers over free-form recollection when they exist.",
+  );
+  lines.push(
+    "Do not invent org-wide facts. Do not expose this principal's private professional memory to other humans or AI Teammates. Collaborate only through governed Foundation projections.",
   );
   lines.push("[END DGI COHERENCE]");
   return lines.join("\n");
