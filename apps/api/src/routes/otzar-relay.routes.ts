@@ -7,6 +7,8 @@
 import type { FastifyInstance } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import {
+  draftTwinInThread,
+  extractWorkFromThread,
   listRelayMessages,
   listRelayThreads,
   sendRelayMessage,
@@ -115,6 +117,62 @@ export async function registerOtzarRelayRoutes(
           .send({ ok: false, code: session.code, message: "Relay read denied" });
       }
       const result = await listRelayMessages({
+        actor_entity_id: session.entity_id,
+        thread_id: request.params.thread_id,
+      });
+      if (!result.ok) return reply.code(statusFor(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  /** AI Teammate draft in-thread — always labeled, never auto-sent as human. */
+  app.post<{ Params: { thread_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/relay/threads/:thread_id/twin-draft",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid) {
+        return reply
+          .code(401)
+          .send({ ok: false, code: session.code, message: "Relay draft denied" });
+      }
+      const body = request.body ?? {};
+      const result = await draftTwinInThread({
+        actor_entity_id: session.entity_id,
+        thread_id: request.params.thread_id,
+        ...(typeof body.prompt === "string" ? { prompt: body.prompt } : {}),
+      });
+      if (!result.ok) return reply.code(statusFor(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
+  /** Extract work signals from a thread (preview only — no silent actions). */
+  app.post<{ Params: { thread_id: string } }>(
+    "/api/v1/relay/threads/:thread_id/extract-work",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid) {
+        return reply
+          .code(401)
+          .send({ ok: false, code: session.code, message: "Relay extract denied" });
+      }
+      const result = await extractWorkFromThread({
         actor_entity_id: session.entity_id,
         thread_id: request.params.thread_id,
       });
