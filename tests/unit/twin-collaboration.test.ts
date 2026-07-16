@@ -19,6 +19,9 @@ const { prismaMock, auditMock } = vi.hoisted(() => ({
     entityMembership: {
       findFirst: vi.fn(),
     },
+    entity: {
+      findFirst: vi.fn(),
+    },
   },
   auditMock: vi.fn(),
 }));
@@ -104,6 +107,8 @@ beforeEach(() => {
   prismaMock.twinCollaborationRequest.findMany.mockReset();
   prismaMock.twinCollaborationRequest.update.mockReset();
   prismaMock.entityMembership.findFirst.mockReset();
+  prismaMock.entity.findFirst.mockReset();
+  prismaMock.entity.findFirst.mockResolvedValue(null); // not a Twin unless a test says so
   auditMock.mockReset();
   isActiveProjectMemberMock.mockReset();
   evalPolicyMock.mockReset();
@@ -183,6 +188,7 @@ describe("createTwinCollaborationRequestForCaller", () => {
 
   it("returns CROSS_ORG_DENIED when target is not in caller's org", async () => {
     prismaMock.entityMembership.findFirst.mockResolvedValue(null); // not in org
+    prismaMock.entity.findFirst.mockResolvedValue(null); // not a Twin
     const r = await createTwinCollaborationRequestForCaller({
       callerEntityId: CALLER_ID,
       orgEntityId: ORG_ID,
@@ -192,6 +198,37 @@ describe("createTwinCollaborationRequestForCaller", () => {
       safeSummary: "Test",
     });
     expect(r).toEqual({ ok: false, code: "CROSS_ORG_DENIED" });
+  });
+
+  it("allows EMPLOYEE_TWIN when Twin principal is in the same org", async () => {
+    const TWIN_ID = "55555555-5555-5555-5555-555555555555";
+    // 1) direct org membership of twin → miss
+    // 2) principal membership of twin → hit parent
+    // 3) principal in org → hit
+    prismaMock.entityMembership.findFirst
+      .mockResolvedValueOnce(null) // twin not direct org member
+      .mockResolvedValueOnce({ parent_id: TARGET_ID }) // twin's principal
+      .mockResolvedValueOnce({ child_id: TARGET_ID }); // principal in org
+    prismaMock.entity.findFirst.mockResolvedValue({ entity_id: TWIN_ID });
+    prismaMock.twinCollaborationRequest.create.mockResolvedValue(
+      rowFixture({
+        target_type: "EMPLOYEE_TWIN",
+        target_twin_entity_id: TWIN_ID,
+        target_entity_id: TARGET_ID,
+        requested_by_ai: true,
+      }),
+    );
+    const r = await createTwinCollaborationRequestForCaller({
+      callerEntityId: CALLER_ID,
+      orgEntityId: ORG_ID,
+      targetType: "EMPLOYEE_TWIN",
+      targetEntityId: TARGET_ID,
+      targetTwinEntityId: TWIN_ID,
+      requestType: "STATUS_REQUEST",
+      safeSummary: "Twin status request",
+      requestedByAi: true,
+    });
+    expect(r.ok).toBe(true);
   });
 
   it("returns TARGET_NOT_FOUND when target_type=EMPLOYEE but no targetEntityId", async () => {
