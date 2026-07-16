@@ -469,6 +469,8 @@ export interface OtzarFailure {
     | "SESSION_INVALIDATED"
     | "OPERATION_NOT_PERMITTED"
     | "TWIN_NOT_FOUND"
+    /** Multiple eligible personal Twins — refuse silent blend (DGI coherence). */
+    | "TWIN_AMBIGUOUS"
     | "INVALID_HISTORY"
     | "TOKEN_BUDGET_EXCEEDED"
     | "LLM_UNAVAILABLE"
@@ -1013,15 +1015,17 @@ export class OtzarService {
     // (oldest active AI_AGENT; created_at ASC, entity_id ASC) — the IDENTICAL twin the user
     // SEES (/otzar/my-twin) and the server RESTORES (C6). No duplicated selection logic.
     const { resolvePrimaryTwin } = await import("./twin-resolution.js");
+    const { selectPrimaryTwinStrict } = await import("./dgi-coherence.service.js");
     const resolvedTwin = await resolvePrimaryTwin(ownerEntityId);
-    const twin = resolvedTwin?.twin;
-    if (twin === undefined) {
+    const twinPick = selectPrimaryTwinStrict(resolvedTwin);
+    if (!twinPick.ok) {
       return {
         ok: false,
-        code: "TWIN_NOT_FOUND",
-        message: "Caller has no digital twin",
+        code: twinPick.code,
+        message: twinPick.message,
       };
     }
+    const twin = twinPick.twin;
     const twinConfig = await prisma.twinConfig.findUnique({
       where: { twin_id: twin.entity_id },
     });
@@ -1315,6 +1319,16 @@ export class OtzarService {
       cache: this.cache,
     });
 
+    // [DGI-COHERENCE WAVE-1] Bounded organizational-intelligence strip so the Twin
+    // reasons from governed obligations + truth-conflict state + personal corrections,
+    // not chat history alone. Leak-safe titles/counts only; never blocks on failure.
+    const { buildDgiCoherenceSnapshot } = await import("./dgi-coherence.service.js");
+    const dgiCoherence = await buildDgiCoherenceSnapshot({
+      orgEntityId,
+      subjectEntityId: ownerEntityId,
+      twinEntityId: twin.entity_id,
+    });
+
     // Look up the caller's wallet for layer queries.
     const ownerWallet = await prisma.wallet.findUnique({
       where: { entity_id: ownerEntityId },
@@ -1515,7 +1529,11 @@ export class OtzarService {
     };
 
     const bundle: LayerBundle = {
-      priming: priming.text,
+      // DGI strip rides with priming (identity-adjacent, outside trimmable work memory).
+      priming:
+        dgiCoherence.system_block.length > 0
+          ? `${dgiCoherence.system_block}\n\n${priming.text}`
+          : priming.text,
       L1,
       L2,
       L3,
@@ -3396,9 +3414,12 @@ export class OtzarService {
     // [OTZAR-CONTINUITY D] Same shared resolver conductSession uses → restoration reads the
     // exact human–Twin relationship the user talks to (never a different/blended Twin).
     const { resolvePrimaryTwin } = await import("./twin-resolution.js");
+    const { selectPrimaryTwinStrict } = await import("./dgi-coherence.service.js");
     const resolved = await resolvePrimaryTwin(ownerEntityId);
-    if (resolved === null) return null;
-    return { org_entity_id: orgEntityId, subject_entity_id: ownerEntityId, twin_entity_id: resolved.twin.entity_id };
+    const pick = selectPrimaryTwinStrict(resolved);
+    // Multi-Twin or missing Twin → no restore scope (fail closed; never blend).
+    if (!pick.ok) return null;
+    return { org_entity_id: orgEntityId, subject_entity_id: ownerEntityId, twin_entity_id: pick.twin.entity_id };
   }
 
   // [OTZAR-CONTINUITY C6] Server thread restoration: the caller's most-recent ACTIVE thread

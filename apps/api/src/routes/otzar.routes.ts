@@ -83,6 +83,8 @@ function statusForCode(code: string): number {
     case "TWIN_NOT_FOUND":
     case "CONVERSATION_NOT_FOUND":
       return 404;
+    case "TWIN_AMBIGUOUS":
+      return 409;
     case "INVALID_HISTORY":
     case "INVALID_REQUEST_ID":
       return 422;
