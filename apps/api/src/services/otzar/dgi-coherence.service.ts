@@ -106,9 +106,15 @@ export interface DgiNextBestStep {
   priority: number;
   safe_title: string;
   reason: string;
-  /** Control Tower route hint (relative). */
+  /** Control Tower route hint (relative, may include query for deep-link). */
   route_hint: string;
   autonomy_ceiling: DgiAutonomyCeiling;
+  /** Optional exact object ids for deep-link focus (never secrets). */
+  focus?: {
+    obligation_id?: string;
+    conflict_set_id?: string;
+    handoff_id?: string;
+  };
 }
 
 export interface TwinSelectionOk {
@@ -160,12 +166,16 @@ export function selectPrimaryTwinStrict(
 export interface DgiCoherenceSnapshot {
   open_obligations_count: number;
   open_obligation_titles: string[];
+  /** First N open obligation ids for deep-link focus (order matches titles). */
+  open_obligation_ids: string[];
   open_org_truth_conflicts_count: number;
+  open_org_truth_conflict_ids: string[];
   active_personal_corrections_count: number;
   active_twin_authority_grants_count: number;
   /** Open multi-party handoffs where the caller is the incoming party. */
   open_incoming_handoffs_count: number;
   open_incoming_handoff_titles: string[];
+  open_incoming_handoff_ids: string[];
   twin_pairing_status: TwinPairingStatus;
   twin_entity_id: string | null;
   eligible_twin_count: number;
@@ -286,9 +296,12 @@ export function deriveNextBestStep(args: {
   eligible_twin_count: number;
   open_obligations_count: number;
   open_obligation_titles: string[];
+  open_obligation_ids?: string[];
   open_org_truth_conflicts_count: number;
+  open_org_truth_conflict_ids?: string[];
   open_incoming_handoffs_count: number;
   open_incoming_handoff_titles: string[];
+  open_incoming_handoff_ids?: string[];
   active_twin_authority_grants_count: number;
 }): DgiNextBestStep {
   if (args.twin_pairing_status === "TWIN_AMBIGUOUS") {
@@ -313,6 +326,7 @@ export function deriveNextBestStep(args: {
   }
   if (args.open_org_truth_conflicts_count > 0) {
     const n = args.open_org_truth_conflicts_count;
+    const cid = args.open_org_truth_conflict_ids?.[0];
     return {
       kind: "REVIEW_ORG_TRUTH",
       priority: 2,
@@ -322,12 +336,16 @@ export function deriveNextBestStep(args: {
           : `Review ${n} organizational truth conflicts`,
       reason:
         "Competing sources need authorized review — no silent winner will be chosen.",
-      route_hint: "/app/action-center",
+      route_hint: cid
+        ? `/app/action-center?conflict=${encodeURIComponent(cid)}`
+        : "/app/action-center?lane=org-truth",
       autonomy_ceiling: "ESCALATE",
+      focus: cid ? { conflict_set_id: cid } : undefined,
     };
   }
   if (args.open_incoming_handoffs_count > 0) {
     const sample = args.open_incoming_handoff_titles[0];
+    const hid = args.open_incoming_handoff_ids?.[0];
     return {
       kind: "ACKNOWLEDGE_HANDOFF",
       priority: 3,
@@ -338,12 +356,16 @@ export function deriveNextBestStep(args: {
       reason: sample
         ? `Responsibility transfer waiting: "${sample}".`
         : "Incoming responsibility transfer needs acknowledgment.",
-      route_hint: "/app/action-center",
+      route_hint: hid
+        ? `/app/action-center?handoff=${encodeURIComponent(hid)}`
+        : "/app/action-center?lane=handoffs",
       autonomy_ceiling: "EXECUTE_WITH_CONFIRMATION",
+      focus: hid ? { handoff_id: hid } : undefined,
     };
   }
   if (args.open_obligations_count > 0) {
     const sample = args.open_obligation_titles[0];
+    const oid = args.open_obligation_ids?.[0];
     return {
       kind: "ADVANCE_OBLIGATION",
       priority: 4,
@@ -354,8 +376,11 @@ export function deriveNextBestStep(args: {
       reason: sample
         ? `Open work needs progress: "${sample}".`
         : "Open obligations need progress within your authority.",
-      route_hint: "/app/action-center",
+      route_hint: oid
+        ? `/app/action-center?obligation=${encodeURIComponent(oid)}`
+        : "/app/action-center?lane=decisions",
       autonomy_ceiling: "EXECUTE_WITH_CONFIRMATION",
+      focus: oid ? { obligation_id: oid } : undefined,
     };
   }
   if (args.active_twin_authority_grants_count === 0) {
@@ -401,9 +426,12 @@ function finalizeSnapshot(
     eligible_twin_count: base.eligible_twin_count,
     open_obligations_count: base.open_obligations_count,
     open_obligation_titles: base.open_obligation_titles,
+    open_obligation_ids: base.open_obligation_ids,
     open_org_truth_conflicts_count: base.open_org_truth_conflicts_count,
+    open_org_truth_conflict_ids: base.open_org_truth_conflict_ids,
     open_incoming_handoffs_count: base.open_incoming_handoffs_count,
     open_incoming_handoff_titles: base.open_incoming_handoff_titles,
+    open_incoming_handoff_ids: base.open_incoming_handoff_ids,
     active_twin_authority_grants_count: base.active_twin_authority_grants_count,
   });
   const snap: DgiCoherenceSnapshot = {
@@ -424,11 +452,14 @@ function emptySnapshot(
   return finalizeSnapshot({
     open_obligations_count: 0,
     open_obligation_titles: [],
+    open_obligation_ids: [],
     open_org_truth_conflicts_count: 0,
+    open_org_truth_conflict_ids: [],
     active_personal_corrections_count: 0,
     active_twin_authority_grants_count: 0,
     open_incoming_handoffs_count: 0,
     open_incoming_handoff_titles: [],
+    open_incoming_handoff_ids: [],
     twin_pairing_status: pairing.twin_pairing_status,
     twin_entity_id: pairing.twin_entity_id,
     eligible_twin_count: pairing.eligible_twin_count,
@@ -525,18 +556,30 @@ export async function buildDgiCoherenceSnapshot(args: {
     const open_obligation_titles = obligations
       .slice(0, TITLE_CAP)
       .map((o) => safeTitle(o.title));
+    const open_obligation_ids = obligations
+      .slice(0, TITLE_CAP)
+      .map((o) => o.obligation_id);
     const open_incoming_handoff_titles = handoffs
       .slice(0, TITLE_CAP)
       .map((h) => safeTitle(h.title));
+    const open_incoming_handoff_ids = handoffs
+      .slice(0, TITLE_CAP)
+      .map((h) => h.handoff_id);
+    const open_org_truth_conflict_ids = conflicts
+      .slice(0, TITLE_CAP)
+      .map((c) => c.conflict_set_id);
 
     return finalizeSnapshot({
       open_obligations_count: obligations.length,
       open_obligation_titles,
+      open_obligation_ids,
       open_org_truth_conflicts_count: conflicts.length,
+      open_org_truth_conflict_ids,
       active_personal_corrections_count: corrections,
       active_twin_authority_grants_count: grants,
       open_incoming_handoffs_count: handoffs.length,
       open_incoming_handoff_titles,
+      open_incoming_handoff_ids,
       twin_pairing_status: pairing.twin_pairing_status,
       twin_entity_id: pairing.twin_entity_id,
       eligible_twin_count: pairing.eligible_twin_count,

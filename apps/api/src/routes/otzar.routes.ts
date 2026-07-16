@@ -366,6 +366,24 @@ export async function registerOtzarRoutes(
     return reply.code(200).send(result);
   });
 
+  // [COHERENCE-RECOVERY] GET /api/v1/otzar/team-work — "What is my team working on?"
+  // Capacity-only open work by org member. Never private memory.
+  app.get("/api/v1/otzar/team-work", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply.code(401).send({
+        ok: false,
+        code: "SESSION_INVALID",
+        message: "Missing bearer token",
+      });
+    }
+    const result = await otzarService.getTeamWorkSummary({ token });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
   // POST /api/v1/otzar/comms/extract -- Phase 1213
   // [OTZAR-AMBIENT-COMMS]. Given the assembled captured text of a
   // conversation (from CT's demo-capture timer, manual paste, or

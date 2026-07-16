@@ -3490,6 +3490,51 @@ export class OtzarService {
   }
 
   // ──────────────────────────────────────────────────────────────
+  // getTeamWorkSummary -- COHERENCE-RECOVERY: "What is my team working on?"
+  // Capacity-only; never private memory. Org members with open work only.
+  // ──────────────────────────────────────────────────────────────
+  async getTeamWorkSummary(input: {
+    token: string;
+  }): Promise<
+    | {
+        ok: true;
+        team_work: import("./team-work-summary.service.js").TeamWorkSummary;
+      }
+    | OtzarFailure
+  > {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return {
+        ok: false,
+        code: session.code,
+        message: "Team work summary denied",
+      };
+    }
+    const { getOrgEntityId } = await import("../governance/org.js");
+    let orgEntityId: string | null;
+    try {
+      orgEntityId = await getOrgEntityId(session.entity_id);
+    } catch {
+      orgEntityId = null;
+    }
+    if (orgEntityId === null) {
+      return {
+        ok: false,
+        code: "OTZAR_ORG_TRUTH_NO_ORG",
+        message: "No organization context for this caller.",
+      };
+    }
+    const { buildTeamWorkSummary } = await import(
+      "./team-work-summary.service.js"
+    );
+    const team_work = await buildTeamWorkSummary({
+      orgEntityId,
+      callerEntityId: session.entity_id,
+    });
+    return { ok: true, team_work };
+  }
+
+  // ──────────────────────────────────────────────────────────────
   // listConversations -- metadata-only continuity feed.
   //
   // WHAT: List the caller's OWN OtzarConversation rows, metadata only.

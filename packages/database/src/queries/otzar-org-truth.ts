@@ -380,14 +380,20 @@ async function openConflict(
   const conflictSetId = setRow.conflict_set_id;
 
   // Preserve every eligible candidate (idempotent per (set, source)).
+  // Safe claim summary lands in metadata for reviewer identity (never raw transcripts).
   for (const c of candidates) {
     if (!candidateEligible(c)) continue;
     try {
+      const claimMeta: Prisma.InputJsonValue =
+        c.claim !== null && c.claim !== undefined && typeof c.claim === "object"
+          ? ({ claim: c.claim as Prisma.InputJsonValue } as Prisma.InputJsonValue)
+          : ({} as Prisma.InputJsonValue);
       await prisma.orgTruthConflictCandidate.create({ data: {
         conflict_set_id: conflictSetId, org_entity_id: org, source_record_type: c.source_record_type, source_record_id: c.source_record_id,
         source_version: c.source_version ?? null, source_hash: c.source_hash ?? null, communication_act: c.communication_act ?? null,
         truth_class: c.truth_class ?? null, truth_weight_rank: c.truth_weight_rank ?? null, authority_status: c.authority_status ?? null,
         currentness: c.currentness ?? null, source_integrity_state: c.source_integrity_state ?? null,
+        metadata: claimMeta,
       } });
     } catch (e) { if (!isUniqueViolation(e)) throw e; /* candidate already preserved */ }
   }
@@ -453,9 +459,31 @@ export async function resolveConflict(scope: OrgTruthScope, input: ResolveConfli
 
   if (promote.kind !== "promoted") return promote;
 
+  // [COHERENCE-RECOVERY] When a conflict is resolved, the linked review
+  // obligation must leave the open work surface — otherwise Home/DGI
+  // still counts "review required" for a RESOLVED set (live defect).
+  const reviewObligationId =
+    typeof set.review_obligation_id === "string" ? set.review_obligation_id : null;
+
   await prisma.$transaction(async (tx) => {
     await tx.orgTruthConflictSet.update({ where: { conflict_set_id: input.conflict_set_id }, data: { state: "RESOLVED", resolved_at: new Date(), resolver_entity_id: input.actor_entity_id, resolution_reason: input.reason, winning_source_record_id: input.winner.source_record_id, resulting_truth_record_id: promote.record.truth_record_id, version: { increment: 1 } } });
-    await writeOrgTruthAudit(tx, "ORG_TRUTH_CONFLICT_RESOLVED", org, input.actor_entity_id, { conflict_set_id: input.conflict_set_id, resulting_truth_record_id: promote.record.truth_record_id, reason: input.reason });
+    if (reviewObligationId !== null) {
+      // Best-effort complete: only OPEN-class states; never reopen terminal rows.
+      await tx.$executeRawUnsafe(
+        `UPDATE obligations SET state = 'COMPLETED', completed_at = now(), version = version + 1, updated_at = now()
+         WHERE obligation_id = $1::uuid AND org_entity_id = $2::uuid
+           AND state IN ('OPEN','AWAITING_RESPONSE','ACKNOWLEDGED','IN_PROGRESS','ESCALATED')`,
+        reviewObligationId,
+        org,
+      );
+    }
+    await writeOrgTruthAudit(tx, "ORG_TRUTH_CONFLICT_RESOLVED", org, input.actor_entity_id, {
+      conflict_set_id: input.conflict_set_id,
+      resulting_truth_record_id: promote.record.truth_record_id,
+      reason: input.reason,
+      review_obligation_id: reviewObligationId,
+      review_obligation_completed: reviewObligationId !== null,
+    });
   });
   return promote;
 }
@@ -503,8 +531,8 @@ export async function listConflictSetsForOrg(org: string, states?: ConflictSetSt
   const byId = new Map(counts.map((c) => [c.conflict_set_id, c._count.candidate_id]));
   return rows.map((r) => ({ ...(r as SafeConflictSet), candidate_count: byId.get((r as SafeConflictSet).conflict_set_id) ?? 0 }));
 }
-/** Safe candidate projection — safe classifications only (source authority/currentness/integrity/
- *  truth-weight for the reviewer comparison); NEVER raw source content, hashes, or metadata. */
+/** Safe candidate projection — classifications + human-readable identity for review.
+ *  NEVER raw transcripts/hashes. display_label is always present (never anonymous UUID alone). */
 export interface SafeConflictCandidate {
   source_record_type: string;
   source_record_id: string;
@@ -519,12 +547,90 @@ export interface SafeConflictCandidate {
   superseded: boolean;
   retracted: boolean;
   is_winner: boolean;
+  /** Human-readable identity for the reviewer (e.g. "Work ledger assertion · rank 1"). */
+  display_label: string;
+  /** Optional safe claim summary from structured metadata (never free-form dump). */
+  claim_summary: string | null;
 }
 const CANDIDATE_SELECT = {
   source_record_type: true, source_record_id: true, source_version: true, communication_act: true,
   truth_class: true, truth_weight_rank: true, authority_status: true, currentness: true,
   source_integrity_state: true, permission_eligible: true, superseded: true, retracted: true, is_winner: true,
+  metadata: true,
 } as const;
+
+function humanizeSourceType(t: string): string {
+  const map: Record<string, string> = {
+    WORK_LEDGER_ENTRY: "Work ledger entry",
+    OTZAR_CONVERSATION_TURN: "Conversation turn",
+    OTZAR_CONVERSATION_REQUEST: "Conversation request",
+    MEMORY_CAPSULE: "Memory capsule",
+    DOCUMENT_CONTEXT: "Document",
+    OBLIGATION: "Obligation",
+    HANDOFF: "Handoff",
+  };
+  return map[t] ?? t.replace(/_/g, " ").toLowerCase();
+}
+
+function claimSummaryFromMetadata(meta: unknown): string | null {
+  if (meta === null || typeof meta !== "object") return null;
+  const claim = (meta as { claim?: unknown }).claim;
+  if (claim === null || claim === undefined) return null;
+  if (typeof claim === "string") {
+    const s = claim.replace(/\s+/g, " ").trim();
+    return s.length === 0 ? null : s.length > 160 ? `${s.slice(0, 159)}…` : s;
+  }
+  if (typeof claim === "object") {
+    try {
+      const parts = Object.entries(claim as Record<string, unknown>)
+        .filter(([, v]) => v !== null && v !== undefined)
+        .slice(0, 4)
+        .map(([k, v]) => `${k}: ${String(v).slice(0, 40)}`);
+      if (parts.length === 0) return null;
+      const s = parts.join(" · ");
+      return s.length > 160 ? `${s.slice(0, 159)}…` : s;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function toSafeCandidate(row: Record<string, unknown>): SafeConflictCandidate {
+  const type = String(row.source_record_type ?? "SOURCE");
+  const rank = row.truth_weight_rank as number | null;
+  const tclass = row.truth_class as string | null;
+  const auth = row.authority_status as string | null;
+  const id = String(row.source_record_id ?? "");
+  const short = id.length >= 8 ? id.slice(0, 8) : id;
+  const claim_summary = claimSummaryFromMetadata(row.metadata);
+  const bits = [
+    humanizeSourceType(type),
+    tclass ? tclass.toLowerCase() : null,
+    rank != null ? `rank ${rank}` : null,
+    auth ? auth.toLowerCase().replace(/_/g, " ") : null,
+  ].filter(Boolean);
+  const display_label = claim_summary
+    ? `${bits.join(" · ")} — ${claim_summary}`
+    : `${bits.join(" · ")} · ref ${short}`;
+  return {
+    source_record_type: type,
+    source_record_id: id,
+    source_version: (row.source_version as number | null) ?? null,
+    communication_act: (row.communication_act as string | null) ?? null,
+    truth_class: tclass,
+    truth_weight_rank: rank,
+    authority_status: auth,
+    currentness: (row.currentness as string | null) ?? null,
+    source_integrity_state: (row.source_integrity_state as string | null) ?? null,
+    permission_eligible: Boolean(row.permission_eligible ?? true),
+    superseded: Boolean(row.superseded ?? false),
+    retracted: Boolean(row.retracted ?? false),
+    is_winner: Boolean(row.is_winner ?? false),
+    display_label,
+    claim_summary,
+  };
+}
 
 export async function getConflictSet(org: string, conflictSetId: string): Promise<{ set: SafeConflictSet; candidates: SafeConflictCandidate[]; current_promoted_truth: SafeOrgTruthRecord | null } | null> {
   const set = await prisma.orgTruthConflictSet.findFirst({ where: { org_entity_id: org, conflict_set_id: conflictSetId }, select: CONFLICT_SELECT });
@@ -535,7 +641,11 @@ export async function getConflictSet(org: string, conflictSetId: string): Promis
   // conflict access above. Only a currently-PROMOTED record; the partial-unique index guarantees
   // at most one per key, so no multiple-current inconsistency is reachable. null ⇒ no current answer.
   const current = await getCurrentPromotedTruth(org, (set as SafeConflictSet).truth_key);
-  return { set: set as SafeConflictSet, candidates: cands as SafeConflictCandidate[], current_promoted_truth: current };
+  return {
+    set: set as SafeConflictSet,
+    candidates: cands.map((c) => toSafeCandidate(c as unknown as Record<string, unknown>)),
+    current_promoted_truth: current,
+  };
 }
 
 // Local wrapper around the exported computeOrgTruthKey (keeps call sites terse).
