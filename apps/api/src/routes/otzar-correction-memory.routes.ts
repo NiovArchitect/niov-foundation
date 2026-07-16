@@ -9,6 +9,8 @@
 //          - POST /api/v1/otzar/my-twin/corrections
 //          - GET  /api/v1/otzar/my-twin/corrections
 //          - POST /api/v1/otzar/my-twin/corrections/:correction_id/revoke
+//          - POST /api/v1/otzar/my-twin/corrections/:correction_id/promote
+//            (SECTION-10 correction-promotion → live org-truth promote)
 //
 //          Coexists with POST /api/v1/otzar/correction (ADR-0055 Wave
 //          2C; the existing free-form CORRECTION MemoryCapsule
@@ -37,6 +39,8 @@ import {
   type TwinCorrectionState,
   type TwinCorrectionType,
 } from "../services/otzar/twin-correction-memory.service.js";
+import { promoteTwinCorrectionToOrgTruth } from "../services/otzar/correction-promotion.service.js";
+import { getOrgEntityId } from "../services/governance/org.js";
 import type { TwinAuthoritySensitivityClass } from "@prisma/client";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
@@ -385,6 +389,154 @@ export async function registerOtzarCorrectionMemoryRoutes(
           case "ALREADY_EXPIRED":
           case "ALREADY_PROMOTED":
             httpCode = 409;
+            break;
+        }
+        return reply.code(httpCode).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /api/v1/otzar/my-twin/corrections/:correction_id/promote
+  // [SECTION-10 CORRECTION-PROMOTION] Owner-consented, decision-rights-gated
+  // promotion of a TEAM/ORG best-practice candidate into org-truth (or open
+  // a conflict when competing candidates assert different claims).
+  app.post<{
+    Params: { correction_id: string };
+    Body: {
+      decision_domain?: unknown;
+      topic?: unknown;
+      reason?: unknown;
+      subject_ref?: unknown;
+      subject_ref_class?: unknown;
+      workspace_id?: unknown;
+      competing_correction_ids?: unknown;
+      expected_current_version?: unknown;
+    };
+  }>(
+    "/api/v1/otzar/my-twin/corrections/:correction_id/promote",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid) {
+        return reply
+          .code(401)
+          .send({ ok: false, code: session.code, message: "denied" });
+      }
+
+      let orgEntityId: string;
+      try {
+        orgEntityId = await getOrgEntityId(session.entity_id);
+      } catch {
+        return reply.code(403).send({
+          ok: false,
+          code: "OTZAR_ORG_TRUTH_NO_ORG",
+          message: "No organization context for this caller.",
+        });
+      }
+
+      const body = request.body ?? {};
+      if (typeof body.decision_domain !== "string" || body.decision_domain.trim().length === 0) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "decision_domain is required",
+        });
+      }
+      if (typeof body.topic !== "string" || body.topic.trim().length === 0) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "topic is required",
+        });
+      }
+      if (typeof body.reason !== "string" || body.reason.trim().length === 0) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "reason is required",
+        });
+      }
+
+      let competing: string[] | undefined;
+      if (body.competing_correction_ids !== undefined) {
+        if (
+          !Array.isArray(body.competing_correction_ids) ||
+          !body.competing_correction_ids.every((id) => typeof id === "string")
+        ) {
+          return reply.code(422).send({
+            ok: false,
+            code: "INVALID_REQUEST",
+            message: "competing_correction_ids must be an array of strings when provided",
+          });
+        }
+        competing = body.competing_correction_ids as string[];
+      }
+
+      let expectedCurrent: number | null | undefined;
+      if (body.expected_current_version !== undefined && body.expected_current_version !== null) {
+        const n = Number(body.expected_current_version);
+        if (!Number.isFinite(n) || !Number.isInteger(n)) {
+          return reply.code(422).send({
+            ok: false,
+            code: "INVALID_REQUEST",
+            message: "expected_current_version must be an integer when provided",
+          });
+        }
+        expectedCurrent = n;
+      } else if (body.expected_current_version === null) {
+        expectedCurrent = null;
+      }
+
+      const result = await promoteTwinCorrectionToOrgTruth({
+        actorEntityId: session.entity_id,
+        orgEntityId,
+        correctionId: request.params.correction_id,
+        decisionDomain: body.decision_domain,
+        topic: body.topic,
+        reason: body.reason,
+        subjectRef: typeof body.subject_ref === "string" ? body.subject_ref : null,
+        subjectRefClass:
+          typeof body.subject_ref_class === "string" ? body.subject_ref_class : null,
+        workspaceId: typeof body.workspace_id === "string" ? body.workspace_id : null,
+        ...(competing !== undefined ? { competingCorrectionIds: competing } : {}),
+        ...(expectedCurrent !== undefined ? { expectedCurrentVersion: expectedCurrent } : {}),
+      });
+
+      if (!result.ok) {
+        let httpCode = 400;
+        switch (result.code) {
+          case "CORRECTION_NOT_FOUND":
+          case "COMPETING_NOT_FOUND":
+            httpCode = 404;
+            break;
+          case "NOT_OWNER":
+          case "UNAUTHORIZED":
+          case "RECOMMEND_ONLY":
+          case "COMPETING_CROSS_ORG":
+            httpCode = 403;
+            break;
+          case "ALREADY_PROMOTED":
+          case "NOT_ACTIVE":
+          case "STATE_CHANGED":
+            httpCode = 409;
+            break;
+          case "NOT_PROMOTABLE_TYPE":
+          case "COMPETING_NOT_PROMOTABLE":
+          case "INVALID_INPUT":
+          case "INELIGIBLE_SOURCE":
+            httpCode = 422;
+            break;
+          case "AUDIT_UNCOMMITTED":
+          case "ORG_TRUTH_FAILED":
+            httpCode = 503;
             break;
         }
         return reply.code(httpCode).send(result);
