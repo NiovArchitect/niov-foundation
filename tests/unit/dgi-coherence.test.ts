@@ -181,6 +181,8 @@ describe("renderDgiSystemBlock", () => {
     expect(text).toContain("DGI COHERENCE");
     expect(text).toContain("Next best step");
     expect(text).toContain("private professional memory");
+    expect(text).toContain("ACCURACY (fail-closed)");
+    expect(text).toContain("Never claim an open obligation");
     expect(text).not.toMatch(/password|token|secret|transcript/i);
   });
 

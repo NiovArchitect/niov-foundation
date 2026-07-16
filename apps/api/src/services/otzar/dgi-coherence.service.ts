@@ -36,7 +36,6 @@ import {
   listConflictSetsForOrg,
   listObligations,
   listHandoffs,
-  OPEN_HANDOFF_STATES,
   type ObligationScope,
   type SafeObligation,
   type SafeHandoff,
@@ -494,7 +493,14 @@ export async function buildDgiCoherenceSnapshot(args: {
     const now = new Date();
     const twinId = args.twinEntityId;
 
-    const openHandoffStates = [...OPEN_HANDOFF_STATES] as HandoffState[];
+    // Incoming pressure = still needs human acknowledgment — not already ACK'd
+    // or terminal. OPEN_HANDOFF_STATES includes ACKNOWLEDGED (still in flight for
+    // completion), which must NOT drive "acknowledge handoff" next-best-step.
+    const openHandoffStates = [
+      "SENT",
+      "RECEIVED",
+      "CLARIFICATION_REQUIRED",
+    ] as HandoffState[];
 
     const [obligations, conflicts, corrections, grants, handoffs] =
       await Promise.all([
@@ -662,6 +668,12 @@ export function renderDgiSystemBlock(s: DgiCoherenceSnapshot): string {
   }
   lines.push(
     "Prefer structured obligations, handoffs, corrections, and promoted organizational answers over free-form recollection when they exist.",
+  );
+  lines.push(
+    "ACCURACY (fail-closed): Never claim an open obligation, incoming handoff, collaboration request, authority grant, org-truth conflict, or completed action unless this block (or another governed tool result in this turn) states it. If counts are zero or absent, say so plainly — do not invent work, status, or teammate actions.",
+  );
+  lines.push(
+    "When the human asks what needs them, ground only in the durable counts/titles/next_best_step above. Prefer routing them to the named next step over free-form promises.",
   );
   lines.push(
     "Do not invent org-wide facts. Do not expose this principal's private professional memory to other humans or AI Teammates. Collaborate only through governed Foundation projections.",

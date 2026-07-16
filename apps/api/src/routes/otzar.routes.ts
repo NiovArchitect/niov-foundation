@@ -1257,6 +1257,39 @@ export async function registerOtzarRoutes(
     },
   );
 
+  /** One-tap ambient acknowledge — mints durable USER turn evidence then ACKs. */
+  app.post<{ Params: { handoff_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/handoffs/:handoff_id/acknowledge",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) return reply.code(401).send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      const body = request.body ?? {};
+      const expectedRaw = body.expected_version;
+      const expected_version =
+        expectedRaw === undefined || expectedRaw === null
+          ? undefined
+          : Number(expectedRaw);
+      if (
+        expected_version !== undefined &&
+        (!Number.isInteger(expected_version) || expected_version < 0)
+      ) {
+        return reply.code(422).send({
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "expected_version must be a non-negative integer when provided",
+        });
+      }
+      const result = await otzarService.acknowledgeIncomingHandoffAmbient({
+        token,
+        handoff_id: request.params.handoff_id,
+        ...(expected_version !== undefined ? { expected_version } : {}),
+        ...(typeof body.note === "string" ? { note: body.note } : {}),
+      });
+      if (!result.ok) return reply.code(statusForCode(result.code)).send(result);
+      return reply.code(200).send(result);
+    },
+  );
+
   app.post<{ Params: { handoff_id: string }; Body: Record<string, unknown> }>(
     "/api/v1/otzar/handoffs/:handoff_id/supersede",
     async (request, reply) => {

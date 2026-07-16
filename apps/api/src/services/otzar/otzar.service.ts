@@ -413,6 +413,8 @@ export interface ConductSessionSuccess {
   context_used: number;
   tokens_consumed: number;
   conversation_id: string;
+  /** Durable USER turn for this request — UI may chain governed transitions (handoff ack). */
+  user_turn_id?: string | null;
   transparency?: ChatTransparency;
   context_provenance?: ContextProvenanceItem[];
   next_step: ConductNextStep;
@@ -1883,6 +1885,8 @@ export class OtzarService {
 
     // [OTZAR-CONTINUITY P5 Stage 1] Persist the ASSISTANT turn (author = Twin)
     // before the HTTP response is considered durable, linked to its user turn.
+    // Hoisted so the HTTP success payload can return user_turn_id for governed chains.
+    let durableUserTurnId: string | null = turnCtx.userTurnId ?? ambientUserTurnId ?? null;
     if (orgEntityId !== null) {
       // Deferred (ambient) → persist the user turn now to the resolved thread (unless
       // Phase B already did, which only happens on a mutating act that continuity
@@ -1899,6 +1903,7 @@ export class OtzarService {
             sourceChannel: input.source_channel ?? "CHAT",
           }))
         : turnCtx.userTurnId;
+      durableUserTurnId = llmUserTurnId ?? durableUserTurnId;
       const llmClass: ResponseClass = actionProposed || approvalRequired
         ? "ACTION_PROPOSED"
         : clarificationNeeded ? "CLARIFICATION" : "ANSWERED";
@@ -1929,6 +1934,8 @@ export class OtzarService {
       context_used: contextUsed,
       tokens_consumed: truncated.total_tokens,
       conversation_id: conversationId,
+      // Surface durable USER turn so Action Center / ambient can chain handoff ack without re-fetching threads.
+      user_turn_id: durableUserTurnId,
       transparency,
       context_provenance,
       next_step: nextStep,
@@ -2434,6 +2441,7 @@ export class OtzarService {
       context_used: 0,
       tokens_consumed: 0,
       conversation_id: conversationId,
+      user_turn_id: asst.reply_to_turn_id ?? asst.response_to_turn_id ?? null,
       next_step: awaiting ? "ACTION_PROPOSED" : "ANSWERED",
       correction_capture_available: true,
       speech_ready_text: asst.content,
@@ -4167,6 +4175,203 @@ export class OtzarService {
     if (outcome.kind !== "ok") { this.hoffLog(input.transition + "_failed", resolved.scope, { handoff_id: input.handoff_id, reason: outcome.kind }, "warn"); return this.mapHandoffFailure(outcome); }
     this.hoffLog(input.transition, resolved.scope, { handoff_id: input.handoff_id });
     return { ok: true, handoff: outcome.handoff };
+  }
+
+  /**
+   * One-tap ambient acknowledge for the incoming party.
+   * Mints a durable USER turn (governed evidence — never ASSISTANT/LLM) then
+   * transitions SENT|RECEIVED|CLARIFICATION_REQUIRED → ACKNOWLEDGED.
+   * Prefer this over raw transition when the human confirms from Today / Action Center.
+   */
+  async acknowledgeIncomingHandoffAmbient(input: {
+    token: string;
+    handoff_id: string;
+    expected_version?: number;
+    note?: string;
+  }): Promise<
+    | { ok: true; handoff: SafeHandoff; acknowledged_turn_id: string; conversation_id: string }
+    | OtzarFailure
+  > {
+    const session = await this.authService.validateSession(input.token, "write");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Handoff acknowledge denied" };
+    }
+    const resolved = await this.handoffScope(input.token);
+    if ("ok" in resolved) return resolved;
+    const { scope, entity_id } = resolved;
+
+    const handoff = await getHandoffForScope(scope, input.handoff_id);
+    if (handoff === null) {
+      return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
+    }
+    if (!handoff.caller_is_incoming) {
+      return {
+        ok: false,
+        code: "OTZAR_HANDOFF_NOT_AUTHORIZED",
+        message: "Only the incoming party can acknowledge this handoff.",
+      };
+    }
+    const ackable = new Set(["SENT", "RECEIVED", "CLARIFICATION_REQUIRED"]);
+    if (!ackable.has(handoff.state)) {
+      return {
+        ok: false,
+        code: "OTZAR_HANDOFF_ILLEGAL_TRANSITION",
+        message: "That change isn't allowed from the handoff's current state.",
+      };
+    }
+
+    const expectedVersion =
+      typeof input.expected_version === "number" && Number.isInteger(input.expected_version)
+        ? input.expected_version
+        : handoff.version;
+
+    // Twin-scoped thread for durable USER evidence (same resolver as chat).
+    const twinScope = await this.restoreScope(entity_id);
+    if (twinScope === null) {
+      return {
+        ok: false,
+        code: "OTZAR_HANDOFF_PRECONDITION",
+        message: "Pair a single AI Teammate before acknowledging handoffs from Today.",
+        detail: "twin_scope_required",
+      };
+    }
+
+    // Prefer the handoff's conversation when the caller can append there;
+    // otherwise mint a caller-owned thread. Governance requires matching
+    // conversation only when the handoff stamps one — null is free.
+    let conversationId: string | null = null;
+    if (handoff.conversation_id !== null && handoff.conversation_id.length > 0) {
+      try {
+        const resolvedThread = await resolveAuthoritativeThread({
+          conversation_id: handoff.conversation_id,
+          org_entity_id: twinScope.org_entity_id,
+          subject_entity_id: twinScope.subject_entity_id,
+          twin_entity_id: twinScope.twin_entity_id,
+          timezone: "UTC",
+          now_ms: Date.now(),
+        });
+        conversationId = resolvedThread.conversation_id;
+      } catch {
+        return {
+          ok: false,
+          code: "OTZAR_HANDOFF_PRECONDITION",
+          message:
+            "This handoff is bound to a conversation you cannot write in. Acknowledge it from that conversation, or ask the sender to re-send without a bound thread.",
+          detail: "handoff_conversation_not_appendable",
+        };
+      }
+    }
+
+    if (conversationId === null) {
+      try {
+        const thread = await createThread({
+          org_entity_id: twinScope.org_entity_id,
+          subject_entity_id: twinScope.subject_entity_id,
+          twin_entity_id: twinScope.twin_entity_id,
+          source_type: "AMBIENT",
+          timezone: "UTC",
+        });
+        conversationId = thread.conversation_id;
+      } catch (e) {
+        logger.error({ err: e, handoff_id: input.handoff_id }, "ambient handoff ack thread create failed");
+        return {
+          ok: false,
+          code: "OTZAR_HANDOFF_PRECONDITION",
+          message: "Could not open a durable thread for the acknowledgment. Please retry.",
+          detail: "thread_create_failed",
+        };
+      }
+    }
+
+    const safeTitle =
+      typeof handoff.title === "string" && handoff.title.trim().length > 0
+        ? handoff.title.trim().slice(0, 160)
+        : "incoming handoff";
+    const note =
+      typeof input.note === "string" && input.note.trim().length > 0
+        ? input.note.trim().slice(0, 500)
+        : null;
+    const content = note
+      ? `I acknowledge responsibility for handoff "${safeTitle}". ${note}`
+      : `I acknowledge responsibility for handoff "${safeTitle}" and accept incoming ownership.`;
+
+    let userTurnId: string;
+    try {
+      const turn = await appendConversationTurn({
+        conversation_id: conversationId,
+        org_entity_id: twinScope.org_entity_id,
+        subject_entity_id: twinScope.subject_entity_id,
+        author_entity_id: entity_id,
+        twin_entity_id: twinScope.twin_entity_id,
+        role: "USER",
+        content,
+        source_channel: "AMBIENT",
+        request_id: `handoff-ack:${input.handoff_id}:${expectedVersion}`,
+      });
+      userTurnId = turn.turn_id;
+    } catch (e) {
+      if (e instanceof IdempotencyConflictError) {
+        return {
+          ok: false,
+          code: "OTZAR_HANDOFF_STATE_CHANGED",
+          message: "This handoff changed since you last read it.",
+        };
+      }
+      logger.error({ err: e, handoff_id: input.handoff_id }, "ambient handoff ack turn persist failed");
+      return {
+        ok: false,
+        code: "OTZAR_HANDOFF_PRECONDITION",
+        message: "Could not record your acknowledgment. Please retry.",
+        detail: "turn_persist_failed",
+      };
+    }
+
+    // Soft-receive first when still SENT so the timeline reflects receipt → ack.
+    let versionForAck = expectedVersion;
+    if (handoff.state === "SENT") {
+      const recv = await receiveHandoff(scope, {
+        handoff_id: input.handoff_id,
+        expected_version: versionForAck,
+      });
+      if (recv.kind === "ok") {
+        versionForAck = recv.handoff.version;
+      } else if (recv.kind !== "illegal_transition" && recv.kind !== "stale_version") {
+        this.hoffLog("ambient_receive_failed", scope, {
+          handoff_id: input.handoff_id,
+          reason: recv.kind,
+        }, "warn");
+        return this.mapHandoffFailure(recv);
+      } else {
+        const fresh = await getHandoffForScope(scope, input.handoff_id);
+        if (fresh === null) {
+          return { ok: false, code: "OTZAR_HANDOFF_NOT_FOUND", message: "This handoff is not available to you." };
+        }
+        versionForAck = fresh.version;
+      }
+    }
+
+    const outcome = await acknowledgeHandoff(scope, {
+      handoff_id: input.handoff_id,
+      expected_version: versionForAck,
+      acknowledged_turn_id: userTurnId,
+    });
+    if (outcome.kind !== "ok") {
+      this.hoffLog("ambient_acknowledge_failed", scope, {
+        handoff_id: input.handoff_id,
+        reason: outcome.kind,
+      }, "warn");
+      return this.mapHandoffFailure(outcome);
+    }
+    this.hoffLog("ambient_acknowledge", scope, {
+      handoff_id: input.handoff_id,
+      acknowledged_turn_id: userTurnId,
+    });
+    return {
+      ok: true,
+      handoff: outcome.handoff,
+      acknowledged_turn_id: userTurnId,
+      conversation_id: conversationId,
+    };
   }
 
   async supersedeHandoff(input: { token: string; handoff_id: string; expected_version: number; replacement: { title: string; incoming_responsible_entity_id?: string; workspace_id?: string; conversation_id?: string; summary?: string; details?: Record<string, unknown>; priority?: string } }): Promise<{ ok: true; handoff: SafeHandoff; replacement: SafeHandoff } | OtzarFailure> {
