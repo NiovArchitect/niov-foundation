@@ -11,6 +11,7 @@ import {
   createGoogleDoc,
   type GoogleDocCreateInput,
 } from "../services/connector/google-doc.service.js";
+import { shareGoogleDoc } from "../services/connector/google-doc-share.service.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -119,6 +120,45 @@ export async function registerGoogleDocRoutes(
         body_inserted: result.body_inserted,
         body_char_count: result.body_char_count,
         project_id: result.project_id,
+      });
+    },
+  );
+
+  // POST share — gated permissions.create (email never audited)
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/google/docs/share",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const orgEntityId = await resolveOrgOrFail(session.entity_id, reply);
+      if (orgEntityId === null) return;
+      const body = request.body ?? {};
+      const roleRaw = body.role;
+      const role =
+        roleRaw === "reader" || roleRaw === "commenter" || roleRaw === "writer"
+          ? roleRaw
+          : undefined;
+      const result = await shareGoogleDoc({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        document_id: typeof body.document_id === "string" ? body.document_id : "",
+        email: typeof body.email === "string" ? body.email : "",
+        ...(role ? { role } : {}),
+        caller_confirmed: body.caller_confirmed === true,
+      });
+      if (result.ok === false) {
+        return reply
+          .code(result.code === "PROVIDER_ERROR" ? 502 : statusForGate(result.code))
+          .send({ ok: false, code: result.code });
+      }
+      return reply.code(200).send({
+        ok: true,
+        permission_id: result.permission_id,
+        role: result.role,
       });
     },
   );

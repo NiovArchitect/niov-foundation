@@ -1,0 +1,16 @@
+{
+  "scenario": "Launch the enterprise customer pilot",
+  "project_name": "Launch the enterprise customer pilot",
+  "transcript_excerpt": "Product: We need to ship Launch the enterprise customer pilot. CEO: Priority confirmed. Eng: SSO is required. Compliance: No PHI in pilot. Product: Kickoff Thursday 16:00 UTC — everyone agreed. Action: circulate the brief.",
+  "oracle": {
+    "classification": "exact",
+    "decisions_confirmed": [
+      "Priority on enterprise pilot",
+      "Kickoff Thursday 16:00 UTC",
+      "No PHI in pilot"
+    ],
+    "requirements_proposed": ["SSO for pilot tenants"],
+    "document_type": "Project brief",
+    "meeting_required": true
+  }
+}

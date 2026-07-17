@@ -206,6 +206,9 @@ export interface CalendarEventProposalInput {
   // owner (the person accountable for it). Defaults to the actor when absent.
   // Feeds the WorkLedger owner + the CLOSED notification recipient set.
   owner_entity_id?: string;
+  // [PROJECT-COHERENCE] Optional WorkProject linkage — stamped on MEETING ledger.
+  project_id?: string;
+  conversation_id?: string;
 }
 
 export interface CalendarEventProposalView {
@@ -334,6 +337,7 @@ export type CalendarEventCreateResult =
       html_link: string | null;
       start: string;
       end: string;
+      project_id: string | null;
     }
   | { ok: false; code: CalendarEventGateCode | "PROVIDER_ERROR" };
 
@@ -462,6 +466,10 @@ export async function createCalendarEvent(args: {
   // (a) Terminal WorkLedger MEETING row — reads as COMPLETED (EXECUTED is
   // terminal, excluded from blind spots, and getMyWork marks it not-completable
   // so it never surfaces as needs-action work). Best-effort enhancement.
+  const projectId =
+    typeof args.input.project_id === "string" && args.input.project_id.length > 0
+      ? args.input.project_id
+      : null;
   try {
     await createLedgerEntry({
       org_entity_id: args.org_entity_id,
@@ -472,6 +480,10 @@ export async function createCalendarEvent(args: {
       status: "EXECUTED",
       priority: "ROUTINE",
       owner_entity_id: ownerEntityId,
+      ...(projectId ? { project_id: projectId } : {}),
+      ...(typeof args.input.conversation_id === "string"
+        ? { conversation_id: args.input.conversation_id }
+        : {}),
       details: {
         source: "calendar_event",
         event_id: eventId,
@@ -480,6 +492,7 @@ export async function createCalendarEvent(args: {
         end: endOut,
         provider: "google_calendar_event",
         audit_event_id: auditEventId,
+        project_id: projectId,
         // Persist the CLOSED recipient set + title so a later delete can fan the
         // cancellation to the same humans without re-deriving from an input.
         recipient_entity_ids: recipients,
@@ -521,6 +534,7 @@ export async function createCalendarEvent(args: {
     html_link: typeof body.htmlLink === "string" ? body.htmlLink : null,
     start: startOut,
     end: endOut,
+    project_id: projectId,
   };
 }
 

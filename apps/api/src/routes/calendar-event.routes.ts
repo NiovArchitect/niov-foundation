@@ -115,6 +115,13 @@ function parseProposal(body: Record<string, unknown>): CalendarEventProposalInpu
     ...(typeof body.owner_entity_id === "string" && body.owner_entity_id.length > 0
       ? { owner_entity_id: body.owner_entity_id }
       : {}),
+    ...(typeof body.project_id === "string" && body.project_id.length > 0
+      ? { project_id: body.project_id }
+      : {}),
+    ...(typeof body.conversation_id === "string" &&
+    body.conversation_id.length > 0
+      ? { conversation_id: body.conversation_id }
+      : {}),
   };
 }
 
@@ -178,6 +185,7 @@ export async function registerCalendarEventRoutes(
         html_link: result.html_link,
         start: result.start,
         end: result.end,
+        project_id: result.project_id,
       });
     },
   );
