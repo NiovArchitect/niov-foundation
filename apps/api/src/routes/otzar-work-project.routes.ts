@@ -36,6 +36,7 @@ import { createProjectGoogleDocument } from "../services/otzar/project-document.
 import type { ProjectDocumentSections } from "../services/otzar/project-document-body.js";
 import { runProjectKickoffLoop } from "../services/otzar/project-execution-loop.service.js";
 import { resolveProjectFromText } from "../services/otzar/project-context-resolve.js";
+import { extractProjectSectionsFromTranscript } from "../services/otzar/project-transcript-extract.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -361,6 +362,47 @@ export async function registerOtzarWorkProjectRoutes(
     },
   );
 
+  // POST extract structured sections from transcript (deterministic; no LLM invent)
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/work-projects/extract-from-transcript",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      }
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid) {
+        return reply.code(401).send({ ok: false, code: session.code });
+      }
+      const body = request.body ?? {};
+      const transcript =
+        typeof body.transcript === "string" ? body.transcript : "";
+      if (transcript.trim().length < 20) {
+        return reply
+          .code(422)
+          .send({ ok: false, code: "INVALID_INPUT", message: "transcript required" });
+      }
+      const extracted = extractProjectSectionsFromTranscript({
+        transcript,
+        ...(typeof body.project_name === "string"
+          ? { project_name: body.project_name }
+          : {}),
+      });
+      return reply.code(200).send({
+        ok: true,
+        extraction: {
+          speakers: extracted.speakers,
+          meeting_required: extracted.meeting_required,
+          body_useful: extracted.body_useful,
+          body_preview_chars: extracted.body_preview_chars,
+          decisions_confirmed: extracted.decisions_confirmed,
+          requirements_proposed: extracted.requirements_proposed,
+          sections: extracted.sections,
+        },
+      });
+    },
+  );
+
   // POST resolve text → project (honest classification; no silent attach)
   app.post<{ Body: Record<string, unknown> }>(
     "/api/v1/otzar/work-projects/resolve-context",
@@ -456,12 +498,59 @@ export async function registerOtzarWorkProjectRoutes(
           };
         }
       }
+
+      // Prefer explicit sections; else extract from transcript when supplied.
+      let sections = parseSections(body.sections);
+      let extractionMeta: Record<string, unknown> | undefined;
+      if (
+        Object.keys(sections).length === 0 &&
+        typeof body.transcript === "string" &&
+        body.transcript.trim().length >= 20
+      ) {
+        // Load project name for extract context
+        const projects = await listWorkProjectsForCaller({
+          callerEntityId: session.entity_id,
+          take: 100,
+        });
+        const mine = projects.find(
+          (p) => p.project_id === request.params.project_id,
+        );
+        const extracted = extractProjectSectionsFromTranscript({
+          transcript: body.transcript,
+          project_name: mine?.name,
+        });
+        sections = extracted.sections;
+        extractionMeta = {
+          speakers: extracted.speakers,
+          meeting_required: extracted.meeting_required,
+          body_useful: extracted.body_useful,
+          source: "transcript_deterministic",
+        };
+        // Auto-suggest meeting block from extract if caller omitted meeting
+        // but set meeting_start/end on body.
+        if (
+          !meeting &&
+          extracted.meeting_required &&
+          typeof body.meeting_start === "string" &&
+          typeof body.meeting_end === "string"
+        ) {
+          meeting = {
+            title:
+              typeof body.meeting_title === "string"
+                ? body.meeting_title
+                : `Kickoff — ${mine?.name ?? "project"}`,
+            start: body.meeting_start,
+            end: body.meeting_end,
+          };
+        }
+      }
+
       const result = await runProjectKickoffLoop({
         actor_entity_id: session.entity_id,
         org_entity_id: orgEntityId,
         project_id: request.params.project_id,
         caller_confirmed: body.caller_confirmed === true,
-        sections: parseSections(body.sections),
+        sections,
         ...(typeof body.document_title === "string"
           ? { document_title: body.document_title }
           : {}),
@@ -481,6 +570,7 @@ export async function registerOtzarWorkProjectRoutes(
         project_id: result.project_id,
         document: result.document,
         meeting: result.meeting,
+        ...(extractionMeta ? { extraction: extractionMeta } : {}),
       });
     },
   );

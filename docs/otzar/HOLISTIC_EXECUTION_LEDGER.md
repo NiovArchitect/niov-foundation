@@ -75,16 +75,15 @@ Prior phases remain on the ledger even when not active.
 
 ### Exact blocker (now)
 
-**C.1 live-proven** on `4c5e0e8` (non-empty project doc).  
-**C.2 in flight:** calendar `project_id` stamp, resolve-context, kickoff loop
-(doc+meeting), Google share — needs merge + deploy + live kickoff proof.  
-Edit detection + full transcript extract precision still open (C.2b).
+**C.1 + C.2 live-proven** on `a44806d` (non-empty doc, kickoff, share, resolve).  
+**C.2b in flight:** deterministic transcript→sections + oracle score +
+kickoff-from-transcript — merge/deploy for live proof. Edit detection still open.
 
 ### Next executable step
 
-1. Merge/deploy C.2; live `POST .../kickoff` → doc body_inserted + calendar project_id.
-2. Live share via `POST /google/docs/share`.
-3. C.2b oracle extract score; then Phase A Dandelion (ledger preserved).
+1. Merge/deploy C.2b; live extract-from-transcript + kickoff with transcript body only.
+2. Edit detection for created docs (C.3).
+3. Phase A Dandelion operational path (ledger preserved).
 
 ## Substrate map (do not invent a third project system)
 
