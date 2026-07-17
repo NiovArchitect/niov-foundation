@@ -140,9 +140,9 @@ describe("createGoogleDoc (hard enforcement)", () => {
     expect(r.code).toBe("GOOGLE_RECONNECT_REQUIRED");
   });
 
-  it("creates a real doc ONLY with doc-write scope + every gate passed", async () => {
+  it("creates a real doc via Drive API when doc-write scope + every gate passed", async () => {
     grantedScopesMock.mockResolvedValue([
-      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/drive.file",
     ]);
     tokenMock.mockResolvedValue({ ok: true, access_token: "tok-doc" });
     const fetchMock = vi
@@ -151,8 +151,9 @@ describe("createGoogleDoc (hard enforcement)", () => {
         ok: true,
         status: 200,
         json: async () => ({
-          documentId: "doc-xyz",
-          title: "Collab brief",
+          id: "doc-xyz",
+          name: "Collab brief",
+          webViewLink: "https://docs.google.com/document/d/doc-xyz/edit",
         }),
       })
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
@@ -169,7 +170,7 @@ describe("createGoogleDoc (hard enforcement)", () => {
     expect(r.web_view_link).toContain("doc-xyz");
     expect(fetchMock).toHaveBeenCalled();
     const createCall = fetchMock.mock.calls[0]!;
-    expect(String(createCall[0])).toContain("docs.googleapis.com/v1/documents");
+    expect(String(createCall[0])).toContain("googleapis.com/drive/v3/files");
     const audit = writeAuditEventMock.mock.calls.at(-1)?.[0] as {
       outcome: string;
       details: Record<string, unknown>;
@@ -179,7 +180,37 @@ describe("createGoogleDoc (hard enforcement)", () => {
     expect(JSON.stringify(audit.details)).not.toContain("Collab brief");
   });
 
-  it("provider 403 on create → DOC_WRITE_SCOPE_MISSING (never fake CREATED)", async () => {
+  it("falls back to Docs API when Drive create is forbidden", async () => {
+    grantedScopesMock.mockResolvedValue([
+      "https://www.googleapis.com/auth/documents",
+    ]);
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-doc" });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({}),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ documentId: "doc-from-docs", title: "Collab brief" }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await createGoogleDoc({
+      actor_entity_id: "actor-1",
+      org_entity_id: "org-1",
+      input: readyInput(),
+    });
+    vi.unstubAllGlobals();
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected created");
+    expect(r.document_id).toBe("doc-from-docs");
+  });
+
+  it("provider 403 on both create paths → DOC_WRITE_SCOPE_MISSING (never fake CREATED)", async () => {
     grantedScopesMock.mockResolvedValue([
       "https://www.googleapis.com/auth/documents",
     ]);

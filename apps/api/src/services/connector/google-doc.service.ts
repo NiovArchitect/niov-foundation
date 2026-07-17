@@ -142,36 +142,98 @@ export async function createGoogleDoc(args: {
     return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
   }
 
-  let res: Response;
-  try {
-    res = await fetch("https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ title }),
-    });
-  } catch {
-    await audit("DENIED", "provider_fetch_failed");
-    return { ok: false, code: "PROVIDER_ERROR" };
-  }
-  if (res.status === 401 || res.status === 403) {
-    await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
-    return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
-  }
-  if (!res.ok) {
-    await audit("DENIED", `http_${res.status}`);
-    return { ok: false, code: "PROVIDER_ERROR" };
-  }
-  const body = (await res.json().catch(() => ({}))) as {
-    documentId?: unknown;
-    title?: unknown;
+  // Prefer Drive files.create (native Google Doc mime). This works with
+  // drive.file when the Google Cloud project has Drive API enabled —
+  // the usual path after Workspace OAuth. Docs API documents.create is
+  // a fallback (needs the Docs API product enabled on the GCP project).
+  const authHeaders = {
+    Authorization: `Bearer ${token.access_token}`,
+    "Content-Type": "application/json",
   };
-  const documentId =
-    typeof body.documentId === "string" ? body.documentId : "";
+
+  let documentId = "";
+  let createdTitle = title;
+  let webViewLink: string | null = null;
+  let lastHttp = 0;
+
+  // Path A — Drive API
+  try {
+    const driveRes = await fetch(
+      "https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink",
+      {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          name: title,
+          mimeType: "application/vnd.google-apps.document",
+        }),
+      },
+    );
+    lastHttp = driveRes.status;
+    if (driveRes.status === 401 || driveRes.status === 403) {
+      // fall through to Docs API before deciding scope-missing
+    } else if (driveRes.ok) {
+      const driveBody = (await driveRes.json().catch(() => ({}))) as {
+        id?: unknown;
+        name?: unknown;
+        webViewLink?: unknown;
+      };
+      if (typeof driveBody.id === "string" && driveBody.id.length > 0) {
+        documentId = driveBody.id;
+        if (typeof driveBody.name === "string" && driveBody.name.length > 0) {
+          createdTitle = driveBody.name;
+        }
+        if (typeof driveBody.webViewLink === "string") {
+          webViewLink = driveBody.webViewLink;
+        }
+      }
+    }
+  } catch {
+    // try Docs API next
+  }
+
+  // Path B — Docs API (fallback)
   if (documentId.length === 0) {
-    await audit("DENIED", "no_document_id");
+    try {
+      const docsRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ title }),
+      });
+      lastHttp = docsRes.status;
+      if (docsRes.status === 401 || docsRes.status === 403) {
+        await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
+        return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
+      }
+      if (!docsRes.ok) {
+        await audit("DENIED", `http_${docsRes.status}`);
+        return { ok: false, code: "PROVIDER_ERROR" };
+      }
+      const docsBody = (await docsRes.json().catch(() => ({}))) as {
+        documentId?: unknown;
+        title?: unknown;
+      };
+      documentId =
+        typeof docsBody.documentId === "string" ? docsBody.documentId : "";
+      if (
+        typeof docsBody.title === "string" &&
+        docsBody.title.length > 0
+      ) {
+        createdTitle = docsBody.title;
+      }
+    } catch {
+      await audit("DENIED", "provider_fetch_failed");
+      return { ok: false, code: "PROVIDER_ERROR" };
+    }
+  }
+
+  if (documentId.length === 0) {
+    // Both paths failed without a clear 401/403 on Docs.
+    if (lastHttp === 401 || lastHttp === 403) {
+      await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
+      return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
+    }
+    await audit("DENIED", lastHttp > 0 ? `http_${lastHttp}` : "no_document_id");
     return { ok: false, code: "PROVIDER_ERROR" };
   }
 
@@ -184,10 +246,7 @@ export async function createGoogleDoc(args: {
         `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}:batchUpdate`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token.access_token}`,
-            "Content-Type": "application/json",
-          },
+          headers: authHeaders,
           body: JSON.stringify({
             requests: [
               {
@@ -208,7 +267,9 @@ export async function createGoogleDoc(args: {
   }
 
   const auditEventId = await audit("SUCCESS", "created");
-  const webViewLink = `https://docs.google.com/document/d/${documentId}/edit`;
+  if (webViewLink === null || webViewLink.length === 0) {
+    webViewLink = `https://docs.google.com/document/d/${documentId}/edit`;
+  }
   const ownerEntityId = args.input.owner_entity_id ?? args.actor_entity_id;
 
   // Best-effort WorkLedger DOCUMENT row — enhancement only.
@@ -239,10 +300,7 @@ export async function createGoogleDoc(args: {
     ok: true,
     status: "CREATED",
     document_id: documentId,
-    title:
-      typeof body.title === "string" && body.title.length > 0
-        ? body.title
-        : title,
+    title: createdTitle,
     web_view_link: webViewLink,
   };
 }
