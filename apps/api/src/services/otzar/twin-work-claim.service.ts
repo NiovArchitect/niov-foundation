@@ -58,6 +58,13 @@ export type TwinWorkClaimResult =
 
 // WHAT: Claim work for the human's primary Twin and notify the human.
 // WHY: Prevent human + Twin doing the same task; ambient awareness without burden.
+/** Accuracy posture for Twin-handled document/task work. */
+export type TwinWorkAccuracyClass =
+  | "STANDARD"
+  | "REGULATED_HEALTH"
+  | "REGULATED_FINANCE"
+  | "INSURANCE";
+
 export async function claimWorkForTwin(args: {
   org_entity_id: string;
   human_entity_id: string;
@@ -69,6 +76,8 @@ export async function claimWorkForTwin(args: {
   web_view_link?: string | null;
   next_action?: string;
   work_kind?: "DOCUMENT" | "TASK" | "CONNECTOR_UPDATE" | "OTHER";
+  /** Clinical, insurance, or financial documentation requires higher care. */
+  accuracy_class?: TwinWorkAccuracyClass;
 }): Promise<TwinWorkClaimResult> {
   const title = args.title.trim();
   if (title.length === 0) return { ok: false, code: "INVALID_INPUT" };
@@ -76,6 +85,8 @@ export async function claimWorkForTwin(args: {
   const resolved = await resolvePrimaryTwin(args.human_entity_id);
   if (resolved === null) return { ok: false, code: "TWIN_REQUIRED" };
   const twinId = resolved.twin.entity_id;
+  const accuracy: TwinWorkAccuracyClass = args.accuracy_class ?? "STANDARD";
+  const regulated = accuracy !== "STANDARD";
 
   const created = await createLedgerEntry({
     org_entity_id: args.org_entity_id,
@@ -84,22 +95,29 @@ export async function claimWorkForTwin(args: {
     title,
     summary:
       args.summary ??
-      "Your AI Teammate is handling this so you do not need to duplicate the work.",
+      (regulated
+        ? `Accuracy-critical (${accuracy}): your AI Teammate is handling this carefully and will not invent facts.`
+        : "Your AI Teammate is handling this so you do not need to duplicate the work."),
     status: "EXECUTING",
-    priority: "ROUTINE",
+    priority: regulated ? "PROJECT_CRITICAL" : "ROUTINE",
     owner_entity_id: args.human_entity_id,
     requester_entity_id: twinId,
     ...(typeof args.project_id === "string" ? { project_id: args.project_id } : {}),
     ...(typeof args.conversation_id === "string"
       ? { conversation_id: args.conversation_id }
       : {}),
-    next_action: args.next_action ?? "Twin executing; human notified",
+    next_action: args.next_action ?? (regulated
+      ? "Twin executing with verification posture; human notified"
+      : "Twin executing; human notified"),
     details: {
       twin_work: {
         twin_entity_id: twinId,
         human_entity_id: args.human_entity_id,
         state: "CLAIMED_WORKING",
         work_kind: args.work_kind ?? "TASK",
+        accuracy_class: accuracy,
+        requires_verification: regulated,
+        no_invented_facts: true,
         claimed_at: new Date().toISOString(),
         document_id: args.document_id ?? null,
         web_view_link: args.web_view_link ?? null,
@@ -126,7 +144,9 @@ export async function claimWorkForTwin(args: {
     human_entity_id: args.human_entity_id,
     twin_entity_id: twinId,
     notification_class: TWIN_WORK_CLASS.WORKING,
-    body_summary: `Your AI Teammate is working on: "${title.slice(0, 120)}" — no need to start this yourself unless you want to take over.`,
+    body_summary: regulated
+      ? `Your AI Teammate is carefully handling accuracy-critical work (${accuracy}): "${title.slice(0, 100)}" — no need to duplicate; it will ask only if verification needs you.`
+      : `Your AI Teammate is working on: "${title.slice(0, 120)}" — no need to start this yourself unless you want to take over.`,
   });
 
   return {
@@ -373,8 +393,10 @@ export async function openTwinWorkFromExtract(args: {
   web_view_link?: string | null;
   next_actions: StructuredFact[];
   document_title?: string;
+  accuracy_class?: TwinWorkAccuracyClass;
 }): Promise<{ ok: true; claims: TwinWorkClaimResult[] } | { ok: false; code: string }> {
   const claims: TwinWorkClaimResult[] = [];
+  const accuracy = args.accuracy_class ?? "STANDARD";
 
   if (args.document_id) {
     claims.push(
@@ -390,6 +412,7 @@ export async function openTwinWorkFromExtract(args: {
         document_id: args.document_id,
         web_view_link: args.web_view_link,
         work_kind: "DOCUMENT",
+        accuracy_class: accuracy,
         next_action: "Twin drafting/maintaining doc; human notified",
       }),
     );
@@ -404,6 +427,7 @@ export async function openTwinWorkFromExtract(args: {
         summary: `Extracted action (${a.status}). Twin claimed to avoid duplicate human effort.`,
         project_id: args.project_id,
         work_kind: "TASK",
+        accuracy_class: accuracy,
         next_action: a.owner_label
           ? `Coordinate with ${a.owner_label}`
           : "Twin executing",

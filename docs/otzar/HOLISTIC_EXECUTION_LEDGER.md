@@ -15,138 +15,144 @@ execution, and remains ambient without obstructing daily work.
 Decision rights control authority. Projects control work context. AI Teammates execute
 within those boundaries. Foundation keeps it coherent.
 
-### AI Teammate work model (founder clarity)
+### AI Teammate work model
 
 Documents and follow-ups extracted from communications are often **human work
 executed by the AI Teammate** after clarity is extracted:
 
-1. Extract clarity from communications (deterministic + governed extract).
-2. Twin **claims** the work (status EXECUTING) and **notifies the human** so
-   human + Twin do not duplicate effort.
+1. Extract clarity from communications (all forms: meetings, chat, email, notes).
+2. Twin **claims** the work (EXECUTING) and **notifies the human** — no dual effort.
 3. Twin may ask a **light clarity** question (not a burden storm).
-4. On finish: Twin **completes** and notifies human, and/or **requests
-   collaboration** when others must join.
-5. Connector writes (Jira update, etc.) remain **gated provider rails** —
-   Twin may prepare/claim "CONNECTOR_UPDATE" work, never silent external mutation.
+4. On finish: Twin **completes** and notifies, and/or **requests collaboration**.
+5. External tool writes (Jira, EHR forms, banking systems, etc.) remain **gated** —
+   Twin may claim `CONNECTOR_UPDATE` work; never silent mutation.
 
-Routes: `/api/v1/otzar/twin-work/*` · kickoff auto-claims when `claim_twin_work`
-is not false.
+Routes: `/api/v1/otzar/twin-work/*` · kickoff auto-claims when `claim_twin_work ≠ false`.
+
+### Regulated & high-accuracy documents (healthcare, finance, insurance)
+
+“Document” is not only a Google Doc. In a **medical clinic**, caretakers complete
+forms for insurance and clinical accuracy. In a **financial institution**, staff
+complete sensitive documentation requiring verification and evidence.
+
+Therefore Twin-handled document work must eventually support:
+
+| Requirement | Status |
+|-------------|--------|
+| Accuracy-critical flag on claimed work | **designed → implementing** (`accuracy_class`) |
+| Source communication lineage | partial (extract + project stamp) |
+| Human notification while Twin works | **live-authenticated** |
+| Collaboration before finalization | **live-authenticated** (request-collab) |
+| Verification / dual-control for high sensitivity | deferred (reuse GOVSEC / dual-control) |
+| Industry form templates (care plan, claim form, KYC pack) | deferred Phase D/E |
+| Never invent clinical/financial facts | **enforced** in deterministic extract |
+
+### Enterprise tools connection model (no Jira-first complexity)
+
+Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not MCP homework.
+
+| Actor | Experience |
+|-------|------------|
+| **Employee** | Pick a capability → connect their tool of choice in a few clicks; use it for their role |
+| **Admin** | See **which tools each employee uses**; accuracy/health **KPIs**; **approve / deny / revoke** any app |
+| **Org** | Domain-wide connection where provider allows; policy sets read/draft/write classes |
+| **Advanced** | MCP / custom servers stay behind “Advanced integration” — never primary IA |
+
+**Unlocked trust with boundaries:** employees move fast; enterprise retains power.
+
+| Layer | Rule |
+|-------|------|
+| Capability catalog | Human language: calendars, documents, email, projects, clinical forms, finance packs… |
+| Employee connect | Self-serve when org policy allows that capability |
+| Admin visibility | Per-employee / per-team tool inventory + last success + risk |
+| Admin control | Approve pending tools · deny · force-revoke · set autonomy ceilings |
+| KPI / accuracy | Completion with verification, error rates, Twin claim vs human override |
+| MCP | Transport for custom tools — **not** the product vocabulary |
+
+**Phase E status:** designed (this ledger) · partial substrate (Tools & Connections IA, OAuth Google, MCP mock invoke) · **not** production-ready multi-app marketplace.
+
+**No Jira-specific work this sprint.** When project tools land, they use the same catalog + policy + Twin-claim pattern.
 
 ## Live fingerprint (update after each deploy)
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | `ee641c59d37c` | 2026-07-17 |
-| Foundation main tip | track with `git rev-parse origin/main` | |
+| Foundation live SHA | **`1da22dbc0e76`** | 2026-07-17 |
+| Foundation main tip | `1da22dbc0e76` | 2026-07-17 |
 | Control Tower main tip | `f0741a6b02fb` | 2026-07-17 |
 | Control Tower live bundle | **not fingerprinted** — gap | |
-| Live providers | Google Calendar create/delete **provider-proven**; Google Doc shell create **provider-proven**; body insert **incomplete**; sharing **incomplete** | |
+| Live providers | Calendar write · non-empty project Google Doc · share · resolve · transcript extract kickoff · **Twin claim/clarity/complete** | |
 
 ## Active coherent phase
 
-**Phase C — Project-centered collaboration loop** (active)
-
-Prior phases remain on the ledger even when not active.
+**Phase C — Project-centered collaboration + Twin work claim** (active)
 
 | Phase | Name | Status |
 |-------|------|--------|
-| A | Organizational discovery + Dandelion operational path | deferred (next after C minimum) |
+| A | Organizational discovery + Dandelion operational path | deferred (after C.3) |
 | B | Hierarchy propose + admin confirmation | deferred |
-| **C** | **Project coherence: conversation → people → docs/calendar → obligations → UI** | **ACTIVE** |
-| D | Role-templated AI Teammate provisioning | deferred |
-| E | Connections at scale (org/team/user; MCP advanced-only) | deferred |
-| F | Full UI consolidation (fewer routes, ambient) | partial (Wave-1 nav live; not closed) |
-| G | Relay prerequisites + repository | partial (substrate live; app not production-complete) |
+| **C** | **Comms → project → doc/calendar → Twin claim → notify → complete/collab** | **ACTIVE** |
+| D | Role-templated AI Teammate + industry accuracy packs | deferred |
+| E | Enterprise tools: click-and-play + admin inventory/KPI/approve | designed · deferred implementation |
+| F | Full UI consolidation | partial |
+| G | Relay | partial |
 | H | Scale and pressure proof | deferred |
 
 ## Active slice
 
-**C.1 — Non-empty project document + WorkProject linkage + honest body proof**
+**C.3 — Accuracy-critical Twin document work + stay the course**
 
-### Completed proof (this program)
+C.1–C.2b + Twin-work **live-proven**. Next: accuracy_class on claims, Today “Twin is on it” UI signal, edit detection.
+
+### Completed proof (honest)
+
+| Item | Level |
+|------|--------|
+| Non-empty project Google Doc from structured sections | live-authenticated |
+| Transcript → extract → kickoff doc + calendar + share | live-authenticated |
+| Twin claim → clarity → complete + notify | live-authenticated (`1da22db`) |
+| Kickoff auto twin_claims (doc + next actions) | live-authenticated |
+| Empty body rejection (`BODY_REQUIRED`) | live-authenticated |
+
+### Incomplete proof
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Google OAuth + calendar write | provider-proven / live-authenticated | event create+delete |
-| Google Doc **shell** create (Drive) | provider-proven | empty body does **not** count as E2E |
-| Relay messages / twin-draft / extract | provider-proven / live-authenticated | not full project loop |
-| WorkProject + members substrate | implemented / unit-proven | OWNER/MEMBER/REVIEWER |
-| Wave-1 employee nav | browser-proven partial | CT main still has red history fixed in #148 |
-| Ambient Today one-tap empty doc | implemented | **misleading until body+project** |
-
-### Incomplete proof (do not mark complete)
-
-| Item | Level | Blocker |
-|------|-------|---------|
-| Non-empty useful Google Doc body | incomplete → implementing | batchUpdate soft-fail; no structured generation |
-| Document ↔ WorkProject linkage | incomplete | ledger optional project_id not set on create |
-| Document ↔ source conversation | incomplete | not wired |
-| Sharing / permissions | incomplete | not implemented |
-| Edit detection → obligation update | incomplete | not implemented |
-| Comms ingest → project resolution | incomplete | partial extract only |
-| Dandelion operational discovery | incomplete | mostly static/catalog + service Phase 0 |
-| Hierarchy propose+confirm UX | incomplete | graph models partial; no admin editor |
-| Role-templated Twin first session | incomplete | not closed |
-| Auto-deploy after CI | incomplete | manual Render; RENDER_API_KEY invalid |
-| CT live bundle fingerprint | incomplete | no health equivalent |
+| accuracy_class on document claims (clinical/financial) | designed → next code | |
+| Today / Needs me “Twin is working on this” | incomplete | notifications exist; surface not composed |
+| Edit detection on created docs | incomplete | |
+| Dual-control verification for high sensitivity | incomplete | |
+| Employee click-and-play multi-tool catalog | incomplete | Phase E |
+| Admin tool inventory + approve/deny KPI | incomplete | Phase E |
+| Dandelion operational discovery | incomplete | Phase A |
+| Hierarchy confirm UX | incomplete | Phase B |
 
 ### Exact blocker (now)
 
-**C.1 + C.2 live-proven** on `a44806d` (non-empty doc, kickoff, share, resolve).  
-**C.2b in flight:** deterministic transcript→sections + oracle score +
-kickoff-from-transcript — merge/deploy for live proof. Edit detection still open.
+Stay on **Phase C**: accuracy-critical document claims + human-visible Twin activity.
+Do **not** start Jira or broad MCP marketplace. Phase E remains designed only until C.3 closes.
 
 ### Next executable step
 
-1. Merge/deploy C.2b; live extract-from-transcript + kickoff with transcript body only.
-2. Edit detection for created docs (C.3).
-3. Phase A Dandelion operational path (ledger preserved).
+1. Add `accuracy_class` (STANDARD \| REGULATED_HEALTH \| REGULATED_FINANCE \| INSURANCE) on twin claims + kickoff docs.
+2. Surface Twin-working notifications in Today/Needs me (CT).
+3. C.3b edit detection; then Phase A Dandelion.
 
 ## Substrate map (do not invent a third project system)
 
 | Spine | Role |
 |--------|------|
-| **WorkProject + WorkProjectMember** | Canonical project id, membership (OWNER/MEMBER/REVIEWER) |
-| **WorkLedgerEntry.project_id** | Universal join for DOCUMENT / MEETING / DECISION / work |
-| **CollaborationWorkspace** | Parallel collab room (conversation-sourced) — optional later link, not replacement |
-
-| Capability | Verdict |
-|------------|---------|
-| Project id/name/status/owner | reuse (+ expose owner on safe view) |
-| Membership human | reuse; twin role discriminator = extend |
-| Conversation → project | **gap** (no project_id on OtzarConversation) |
-| Document artifact + project/convo | **extend** (stamps — C.1 does project_id on create) |
-| Obligation ↔ project | **gap** (workspace only) |
-| Meeting/calendar ↔ project | **extend** (C.2 stamps MEETING.project_id) |
-| Share Google Doc | **extend** (C.2 gated permissions.create) |
-| Edit detection for created docs | **gap** (import revalidate exists) |
+| **WorkProject + WorkProjectMember** | Canonical project |
+| **WorkLedgerEntry.project_id** | Universal join |
+| **Twin work claim (TASK + twin_work details)** | AI Teammate execution + human awareness |
+| **Tools & Connections** | Human connector IA; MCP advanced-only |
+| **CollaborationWorkspace** | Parallel collab room — optional later link |
 
 ## Deferred work and dependency
 
 | Deferred | Depends on |
 |----------|------------|
-| Full hierarchy drag-editor | B + graph projections |
-| Connections at 1k employees | E + org OAuth policy |
-| Relay production app | G + F presence |
-| 100k scale | H + infra |
-| Obligation/calendar project FK | after C.1 live stamps proven |
-
-## UI consolidation status
-
-- Employee primary: Today / Talk / Needs me / People / Memory (+ Team admin) — partial production.
-- Admin: Tools & Connections human IA — partial.
-- Project surface as single composition — **not closed**.
-- Misleading empty-doc success UX — **active debt**.
-
-## Multi-user / scale / AI collab smoke
-
-| Smoke | Status |
-|-------|--------|
-| Multi-user handoff/collab | previously live-proven (close-partials) |
-| AI-to-AI governed collab | incomplete |
-| Scale 10–100–1000 | incomplete |
-
-## Update rule
-
-On every slice close: update live SHA, move items between completed/incomplete,
-set exact blocker + next step. Never claim production-ready without the proof level row.
+| Click-and-play multi-tool (Phase E) | Capability catalog + org policy + admin inventory |
+| Clinical/insurance form packs | Phase D accuracy + dual-control |
+| Hierarchy drag-editor | Phase B |
+| 100k scale | Phase H |

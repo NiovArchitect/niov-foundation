@@ -81,6 +81,12 @@ export async function registerOtzarTwinWorkRoutes(
           body.work_kind === "TASK"
             ? body.work_kind
             : "OTHER",
+        ...(body.accuracy_class === "REGULATED_HEALTH" ||
+        body.accuracy_class === "REGULATED_FINANCE" ||
+        body.accuracy_class === "INSURANCE" ||
+        body.accuracy_class === "STANDARD"
+          ? { accuracy_class: body.accuracy_class }
+          : {}),
       });
       if (!result.ok)
         return reply.code(statusFor(result.code)).send({ ok: false, code: result.code });
