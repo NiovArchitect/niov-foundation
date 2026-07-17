@@ -399,6 +399,8 @@ export async function registerOtzarWorkProjectRoutes(
           decisions_confirmed: extracted.decisions_confirmed,
           requirements_proposed: extracted.requirements_proposed,
           sections: extracted.sections,
+          // Communication is the OS: Otzar chooses the work product.
+          artifact: extracted.artifact,
         },
       });
     },
@@ -503,6 +505,9 @@ export async function registerOtzarWorkProjectRoutes(
       // Prefer explicit sections; else extract from transcript when supplied.
       let sections = parseSections(body.sections);
       let extractionMeta: Record<string, unknown> | undefined;
+      let artifactFromComms:
+        | import("../services/otzar/artifact-from-communication.js").ArtifactChoice
+        | undefined;
       if (
         Object.keys(sections).length === 0 &&
         typeof body.transcript === "string" &&
@@ -521,11 +526,13 @@ export async function registerOtzarWorkProjectRoutes(
           project_name: mine?.name,
         });
         sections = extracted.sections;
+        artifactFromComms = extracted.artifact;
         extractionMeta = {
           speakers: extracted.speakers,
           meeting_required: extracted.meeting_required,
           body_useful: extracted.body_useful,
           source: "transcript_deterministic",
+          artifact: extracted.artifact,
         };
         // Auto-suggest meeting block from extract if caller omitted meeting
         // but set meeting_start/end on body.
@@ -552,9 +559,14 @@ export async function registerOtzarWorkProjectRoutes(
         project_id: request.params.project_id,
         caller_confirmed: body.caller_confirmed === true,
         sections,
+        ...(artifactFromComms ? { artifact: artifactFromComms } : {}),
         ...(typeof body.document_title === "string"
           ? { document_title: body.document_title }
-          : {}),
+          : artifactFromComms
+            ? {
+                document_title: `${artifactFromComms.title_label} — project work`,
+              }
+            : {}),
         ...(meeting ? { meeting } : {}),
         ...(typeof body.conversation_id === "string"
           ? { conversation_id: body.conversation_id }
@@ -567,8 +579,7 @@ export async function registerOtzarWorkProjectRoutes(
         return reply.code(httpCodeForFailure(result.code)).send(result);
       }
 
-      // AI Teammate claims document + extracted next actions; human is notified
-      // so they do not duplicate work.
+      // AI Teammate claims the communication-chosen artifact + next actions.
       let twin_claims: unknown[] | undefined;
       if (body.claim_twin_work !== false) {
         const nextActions =
@@ -581,14 +592,23 @@ export async function registerOtzarWorkProjectRoutes(
           body.accuracy_class === "INSURANCE" ||
           body.accuracy_class === "STANDARD"
             ? body.accuracy_class
-            : "STANDARD";
+            : (artifactFromComms?.accuracy_class ?? "STANDARD");
+        const docTitle =
+          result.document?.title ??
+          (artifactFromComms
+            ? `${artifactFromComms.title_label} (Twin preparing — provider pending)`
+            : "Project work");
         const opened = await openTwinWorkFromExtract({
           org_entity_id: orgEntityId,
           human_entity_id: session.entity_id,
           project_id: result.project_id,
-          document_id: result.document.document_id,
-          web_view_link: result.document.web_view_link,
-          document_title: result.document.title,
+          ...(result.document
+            ? {
+                document_id: result.document.document_id,
+                web_view_link: result.document.web_view_link,
+              }
+            : {}),
+          document_title: docTitle,
           accuracy_class: accuracy,
           next_actions: nextActions.map((a) => ({
             text: a.text,
@@ -620,6 +640,7 @@ export async function registerOtzarWorkProjectRoutes(
       return reply.code(200).send({
         ok: true,
         project_id: result.project_id,
+        artifact: result.artifact,
         document: result.document,
         meeting: result.meeting,
         ...(extractionMeta ? { extraction: extractionMeta } : {}),

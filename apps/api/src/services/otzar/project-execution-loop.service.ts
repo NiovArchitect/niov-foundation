@@ -9,6 +9,7 @@ import { prisma } from "@niov/database";
 import { createProjectGoogleDocument } from "./project-document.service.js";
 import type { ProjectDocumentSections } from "./project-document-body.js";
 import { createCalendarEvent } from "../connector/calendar-event.service.js";
+import type { ArtifactChoice } from "./artifact-from-communication.js";
 
 export async function runProjectKickoffLoop(args: {
   actor_entity_id: string;
@@ -17,6 +18,8 @@ export async function runProjectKickoffLoop(args: {
   caller_confirmed: boolean;
   sections: ProjectDocumentSections;
   document_title?: string;
+  /** Otzar OS artifact choice from communication context. */
+  artifact?: ArtifactChoice;
   meeting?: {
     title: string;
     start: string;
@@ -29,13 +32,14 @@ export async function runProjectKickoffLoop(args: {
   | {
       ok: true;
       project_id: string;
+      artifact: ArtifactChoice | null;
       document: {
         document_id: string;
         web_view_link: string | null;
         body_inserted: boolean;
         body_char_count: number;
         title: string;
-      };
+      } | null;
       meeting: {
         event_id: string;
         html_link: string | null;
@@ -68,23 +72,49 @@ export async function runProjectKickoffLoop(args: {
   });
   if (membership === null) return { ok: false, code: "NOT_PROJECT_MEMBER" };
 
-  const doc = await createProjectGoogleDocument({
-    actor_entity_id: args.actor_entity_id,
-    org_entity_id: args.org_entity_id,
-    project_id: args.project_id,
-    caller_confirmed: true,
-    sections: args.sections,
-    ...(typeof args.document_title === "string"
-      ? { title: args.document_title }
-      : {}),
-    ...(typeof args.conversation_id === "string"
-      ? { conversation_id: args.conversation_id }
-      : {}),
-    ...(typeof args.organization_label === "string"
-      ? { organization_label: args.organization_label }
-      : {}),
-  });
-  if (!doc.ok) return { ok: false, code: doc.code };
+  const artifact = args.artifact ?? null;
+  // Materialize only when communication chose a rail we can create now
+  // (e.g. Google Docs). Slides/other: Twin still claims work (caller path).
+  const shouldMaterialize =
+    artifact === null || artifact.materialize_now === true;
+
+  let document: {
+    document_id: string;
+    web_view_link: string | null;
+    body_inserted: boolean;
+    body_char_count: number;
+    title: string;
+  } | null = null;
+
+  if (shouldMaterialize) {
+    const doc = await createProjectGoogleDocument({
+      actor_entity_id: args.actor_entity_id,
+      org_entity_id: args.org_entity_id,
+      project_id: args.project_id,
+      caller_confirmed: true,
+      sections: args.sections,
+      artifact_type: artifact?.title_label ?? "Project brief",
+      ...(typeof args.document_title === "string"
+        ? { title: args.document_title }
+        : artifact
+          ? { title: `${artifact.title_label} — ${project.name}` }
+          : {}),
+      ...(typeof args.conversation_id === "string"
+        ? { conversation_id: args.conversation_id }
+        : {}),
+      ...(typeof args.organization_label === "string"
+        ? { organization_label: args.organization_label }
+        : {}),
+    });
+    if (!doc.ok) return { ok: false, code: doc.code };
+    document = {
+      document_id: doc.document_id,
+      web_view_link: doc.web_view_link,
+      body_inserted: doc.body_inserted,
+      body_char_count: doc.body_char_count,
+      title: doc.title,
+    };
+  }
 
   let meeting: {
     event_id: string;
@@ -142,13 +172,8 @@ export async function runProjectKickoffLoop(args: {
   return {
     ok: true,
     project_id: args.project_id,
-    document: {
-      document_id: doc.document_id,
-      web_view_link: doc.web_view_link,
-      body_inserted: doc.body_inserted,
-      body_char_count: doc.body_char_count,
-      title: doc.title,
-    },
+    artifact,
+    document,
     meeting,
   };
 }
