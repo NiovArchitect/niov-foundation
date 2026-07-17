@@ -87,6 +87,25 @@ project membership smoke + conversation/oracle loop + sharing + edit detection.
 3. Hide/archive empty shell docs from UI status (classify; no irreversible delete).
 4. Close C.1 then open Phase A (Dandelion operational discovery) without losing C remainder.
 
+## Substrate map (do not invent a third project system)
+
+| Spine | Role |
+|--------|------|
+| **WorkProject + WorkProjectMember** | Canonical project id, membership (OWNER/MEMBER/REVIEWER) |
+| **WorkLedgerEntry.project_id** | Universal join for DOCUMENT / MEETING / DECISION / work |
+| **CollaborationWorkspace** | Parallel collab room (conversation-sourced) — optional later link, not replacement |
+
+| Capability | Verdict |
+|------------|---------|
+| Project id/name/status/owner | reuse (+ expose owner on safe view) |
+| Membership human | reuse; twin role discriminator = extend |
+| Conversation → project | **gap** (no project_id on OtzarConversation) |
+| Document artifact + project/convo | **extend** (stamps — C.1 does project_id on create) |
+| Obligation ↔ project | **gap** (workspace only) |
+| Meeting/calendar ↔ project | **gap** (stamp MEETING ledger) |
+| Share Google Doc | **gap** |
+| Edit detection for created docs | **gap** (import revalidate exists) |
+
 ## Deferred work and dependency
 
 | Deferred | Depends on |
@@ -95,6 +114,7 @@ project membership smoke + conversation/oracle loop + sharing + edit detection.
 | Connections at 1k employees | E + org OAuth policy |
 | Relay production app | G + F presence |
 | 100k scale | H + infra |
+| Obligation/calendar project FK | after C.1 live stamps proven |
 
 ## UI consolidation status
 
