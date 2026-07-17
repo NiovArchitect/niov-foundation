@@ -19,11 +19,11 @@ within those boundaries. Foundation keeps it coherent.
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | `ee641c59d37c` | 2026-07-17 |
-| Foundation main tip | track with `git rev-parse origin/main` | |
+| Foundation live SHA | `4c5e0e8cf8e1` | 2026-07-17 |
+| Foundation main tip | `4c5e0e8cf8e1` | 2026-07-17 |
 | Control Tower main tip | `f0741a6b02fb` | 2026-07-17 |
 | Control Tower live bundle | **not fingerprinted** — gap | |
-| Live providers | Google Calendar create/delete **provider-proven**; Google Doc shell create **provider-proven**; body insert **incomplete**; sharing **incomplete** | |
+| Live providers | Calendar write **provider-proven**; project Google Doc **non-empty body_inserted** **provider-proven** (1720 chars, 13 sections); sharing **incomplete** | |
 
 ## Active coherent phase
 
@@ -55,37 +55,40 @@ Prior phases remain on the ledger even when not active.
 | Relay messages / twin-draft / extract | provider-proven / live-authenticated | not full project loop |
 | WorkProject + members substrate | implemented / unit-proven | OWNER/MEMBER/REVIEWER |
 | Wave-1 employee nav | browser-proven partial | CT main still has red history fixed in #148 |
-| Ambient Today one-tap empty doc | implemented | **misleading until body+project** |
+| Ambient Today one-tap empty doc | implemented | still misleading UI if used without require_body |
+| Non-empty project Google Doc | **provider-proven / live-authenticated** | 2026-07-17: project `3bf917f1-…` doc `1FrLBai2…` body_inserted true, 1720 chars, 13 sections |
+| Document ↔ WorkProject on create | **provider-proven** | `project_id` on create response + ledger stamp |
+| Empty require_body rejection | **live-authenticated** | 409 `BODY_REQUIRED` |
 
 ### Incomplete proof (do not mark complete)
 
 | Item | Level | Blocker |
 |------|-------|---------|
-| Non-empty useful Google Doc body | incomplete → implementing | batchUpdate soft-fail; no structured generation |
-| Document ↔ WorkProject linkage | incomplete | ledger optional project_id not set on create |
-| Document ↔ source conversation | incomplete | not wired |
+| Document ↔ source conversation | incomplete | not wired on conversation model |
 | Sharing / permissions | incomplete | not implemented |
 | Edit detection → obligation update | incomplete | not implemented |
 | Comms ingest → project resolution | incomplete | partial extract only |
-| Dandelion operational discovery | incomplete | mostly static/catalog + service Phase 0 |
-| Hierarchy propose+confirm UX | incomplete | graph models partial; no admin editor |
-| Role-templated Twin first session | incomplete | not closed |
+| Oracle transcript full loop | incomplete | C.2 |
+| Calendar event ↔ project stamp | incomplete | C.2 |
+| Dandelion operational discovery | incomplete | Phase A |
+| Hierarchy propose+confirm UX | incomplete | Phase B |
+| Role-templated Twin first session | incomplete | Phase D |
 | Auto-deploy after CI | incomplete | manual Render; RENDER_API_KEY invalid |
 | CT live bundle fingerprint | incomplete | no health equivalent |
 
 ### Exact blocker (now)
 
-C.1 code landed on branch `otzar-holistic-project-doc-coherence` (not yet live):
-Drive multipart body + `body_inserted` gate + project document route.
-Still incomplete on live: deploy + provider proof of **non-empty** body +
-project membership smoke + conversation/oracle loop + sharing + edit detection.
+**C.1 closed on live** for non-empty project-linked Google Doc path.
+**C.2 open:** conversation/oracle ingest → project resolution → calendar stamp →
+sharing → edit detection. Do not start Phase A until C.2 minimum is designed
+against WorkLedger.project_id stamps.
 
 ### Next executable step
 
-1. Merge + deploy C.1 (multipart body + project docs route).
-2. Live: create WorkProject → project Google Doc with sections → verify body length.
-3. Hide/archive empty shell docs from UI status (classify; no irreversible delete).
-4. Close C.1 then open Phase A (Dandelion operational discovery) without losing C remainder.
+1. C.2 smoke transcript + hidden oracle (precision/recall).
+2. Stamp conversation/calendar/obligation project_id where columns exist.
+3. Gated Google share API (smallest connector write).
+4. Then Phase A Dandelion operational path (ledger preserved).
 
 ## Substrate map (do not invent a third project system)
 
