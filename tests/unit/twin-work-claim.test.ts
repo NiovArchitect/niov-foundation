@@ -7,6 +7,7 @@ const {
   notifyMock,
   writeAuditMock,
   updateMock,
+  findFirstMock,
 } = vi.hoisted(() => ({
   resolveTwinMock: vi.fn(),
   createLedgerMock: vi.fn(),
@@ -14,6 +15,7 @@ const {
   notifyMock: vi.fn().mockResolvedValue({ ok: true }),
   writeAuditMock: vi.fn().mockResolvedValue({ audit_id: "a1" }),
   updateMock: vi.fn().mockResolvedValue({}),
+  findFirstMock: vi.fn(),
 }));
 
 vi.mock("@niov/database", async (importOriginal) => {
@@ -22,8 +24,7 @@ vi.mock("@niov/database", async (importOriginal) => {
     ...actual,
     writeAuditEvent: writeAuditMock,
     prisma: {
-      ...(actual.prisma as object),
-      workLedgerEntry: { update: updateMock },
+      workLedgerEntry: { update: updateMock, findFirst: findFirstMock },
     },
   };
 });
@@ -57,6 +58,14 @@ beforeEach(() => {
   notifyMock.mockClear();
   writeAuditMock.mockClear();
   updateMock.mockClear();
+  findFirstMock.mockReset();
+  findFirstMock.mockResolvedValue({
+    details: {
+      twin_work: {
+        twin_entity_id: "00000000-0000-0000-0000-000000000099",
+      },
+    },
+  });
 });
 
 describe("claimWorkForTwin", () => {
