@@ -416,6 +416,22 @@ export async function openTwinWorkFromExtract(args: {
         next_action: "Twin drafting/maintaining doc; human notified",
       }),
     );
+  } else if (args.document_title) {
+    // Communication chose an artifact without a live provider rail yet
+    // (e.g. slides). Twin still claims so human is not double-working.
+    claims.push(
+      await claimWorkForTwin({
+        org_entity_id: args.org_entity_id,
+        human_entity_id: args.human_entity_id,
+        title: args.document_title.slice(0, 200),
+        summary:
+          "Work product chosen from communication context. Provider materialization pending; your AI Teammate owns preparation.",
+        project_id: args.project_id,
+        work_kind: "DOCUMENT",
+        accuracy_class: accuracy,
+        next_action: "Twin preparing; provider rail may follow",
+      }),
+    );
   }
 
   for (const a of args.next_actions.slice(0, 8)) {
