@@ -940,6 +940,10 @@ export interface TwinWorkProjection {
   claimed_at: string | null;
   web_view_link: string | null;
   clarity_question: string | null;
+  /** [C.3b] Doc changed after claim (Drive modifiedTime). Sticky once true. */
+  edit_detected: boolean;
+  edit_signal: string | null;
+  last_drive_modified_at: string | null;
 }
 
 interface LedgerRow {
@@ -1326,6 +1330,13 @@ export function twinWorkFromDetails(details: unknown): TwinWorkProjection | unde
     web_view_link: link,
     clarity_question:
       typeof o.clarity_question === "string" ? o.clarity_question.slice(0, 300) : null,
+    edit_detected:
+      o.edit_detected === true || o.edit_signal === "MODIFIED_AFTER_CLAIM",
+    edit_signal: typeof o.edit_signal === "string" ? o.edit_signal : null,
+    last_drive_modified_at:
+      typeof o.last_drive_modified_at === "string"
+        ? o.last_drive_modified_at
+        : null,
   };
 }
 
