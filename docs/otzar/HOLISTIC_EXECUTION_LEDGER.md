@@ -75,17 +75,16 @@ Prior phases remain on the ledger even when not active.
 
 ### Exact blocker (now)
 
-C.1 code landed on branch `otzar-holistic-project-doc-coherence` (not yet live):
-Drive multipart body + `body_inserted` gate + project document route.
-Still incomplete on live: deploy + provider proof of **non-empty** body +
-project membership smoke + conversation/oracle loop + sharing + edit detection.
+**C.1 live-proven** on `4c5e0e8` (non-empty project doc).  
+**C.2 in flight:** calendar `project_id` stamp, resolve-context, kickoff loop
+(doc+meeting), Google share — needs merge + deploy + live kickoff proof.  
+Edit detection + full transcript extract precision still open (C.2b).
 
 ### Next executable step
 
-1. Merge + deploy C.1 (multipart body + project docs route).
-2. Live: create WorkProject → project Google Doc with sections → verify body length.
-3. Hide/archive empty shell docs from UI status (classify; no irreversible delete).
-4. Close C.1 then open Phase A (Dandelion operational discovery) without losing C remainder.
+1. Merge/deploy C.2; live `POST .../kickoff` → doc body_inserted + calendar project_id.
+2. Live share via `POST /google/docs/share`.
+3. C.2b oracle extract score; then Phase A Dandelion (ledger preserved).
 
 ## Substrate map (do not invent a third project system)
 
@@ -102,8 +101,8 @@ project membership smoke + conversation/oracle loop + sharing + edit detection.
 | Conversation → project | **gap** (no project_id on OtzarConversation) |
 | Document artifact + project/convo | **extend** (stamps — C.1 does project_id on create) |
 | Obligation ↔ project | **gap** (workspace only) |
-| Meeting/calendar ↔ project | **gap** (stamp MEETING ledger) |
-| Share Google Doc | **gap** |
+| Meeting/calendar ↔ project | **extend** (C.2 stamps MEETING.project_id) |
+| Share Google Doc | **extend** (C.2 gated permissions.create) |
 | Edit detection for created docs | **gap** (import revalidate exists) |
 
 ## Deferred work and dependency

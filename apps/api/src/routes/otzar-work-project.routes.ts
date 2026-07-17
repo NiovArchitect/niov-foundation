@@ -34,6 +34,8 @@ import {
 } from "../services/otzar/work-project.service.js";
 import { createProjectGoogleDocument } from "../services/otzar/project-document.service.js";
 import type { ProjectDocumentSections } from "../services/otzar/project-document-body.js";
+import { runProjectKickoffLoop } from "../services/otzar/project-execution-loop.service.js";
+import { resolveProjectFromText } from "../services/otzar/project-context-resolve.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -49,6 +51,7 @@ const VALID_ROLES: ReadonlyArray<WorkProjectMemberRole> = [
 ];
 
 function httpCodeForFailure(code: string): number {
+  if (code.startsWith("MEETING_")) return 409;
   switch (code) {
     case "PROJECT_NOT_FOUND":
       return 404;
@@ -354,6 +357,130 @@ export async function registerOtzarWorkProjectRoutes(
         body_char_count: result.body_char_count,
         section_count: result.section_count,
         project_id: result.project_id,
+      });
+    },
+  );
+
+  // POST resolve text → project (honest classification; no silent attach)
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/work-projects/resolve-context",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      }
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid) {
+        return reply.code(401).send({ ok: false, code: session.code });
+      }
+      const projects = await listWorkProjectsForCaller({
+        callerEntityId: session.entity_id,
+        state: "ACTIVE",
+        take: 100,
+      });
+      const text =
+        typeof request.body?.text === "string" ? request.body.text : "";
+      const resolved = resolveProjectFromText({
+        text,
+        projects: projects.map((p) => ({
+          project_id: p.project_id,
+          name: p.name,
+        })),
+      });
+      return reply.code(200).send({ ok: true, resolution: resolved });
+    },
+  );
+
+  // POST kickoff loop: non-empty doc + optional calendar, same project_id
+  app.post<{
+    Params: { project_id: string };
+    Body: Record<string, unknown>;
+  }>(
+    "/api/v1/otzar/work-projects/:project_id/kickoff",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      }
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid) {
+        return reply.code(401).send({ ok: false, code: session.code });
+      }
+      let orgEntityId: string;
+      try {
+        orgEntityId = await getOrgEntityId(session.entity_id);
+      } catch {
+        return reply.code(404).send({ ok: false, code: "NO_ORG_FOR_CALLER" });
+      }
+      const body = request.body ?? {};
+      const meetingRaw = body.meeting;
+      let meeting:
+        | {
+            title: string;
+            start: string;
+            end: string;
+            participants?: Array<{
+              label: string;
+              resolved?: boolean;
+              entity_id?: string;
+            }>;
+          }
+        | undefined;
+      if (meetingRaw !== null && typeof meetingRaw === "object") {
+        const m = meetingRaw as Record<string, unknown>;
+        if (
+          typeof m.title === "string" &&
+          typeof m.start === "string" &&
+          typeof m.end === "string"
+        ) {
+          meeting = {
+            title: m.title,
+            start: m.start,
+            end: m.end,
+            ...(Array.isArray(m.participants)
+              ? {
+                  participants: (m.participants as unknown[]).map((p) => {
+                    const o = (p ?? {}) as Record<string, unknown>;
+                    return {
+                      label: typeof o.label === "string" ? o.label : "",
+                      ...(typeof o.resolved === "boolean"
+                        ? { resolved: o.resolved }
+                        : {}),
+                      ...(typeof o.entity_id === "string"
+                        ? { entity_id: o.entity_id }
+                        : {}),
+                    };
+                  }),
+                }
+              : {}),
+          };
+        }
+      }
+      const result = await runProjectKickoffLoop({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        project_id: request.params.project_id,
+        caller_confirmed: body.caller_confirmed === true,
+        sections: parseSections(body.sections),
+        ...(typeof body.document_title === "string"
+          ? { document_title: body.document_title }
+          : {}),
+        ...(meeting ? { meeting } : {}),
+        ...(typeof body.conversation_id === "string"
+          ? { conversation_id: body.conversation_id }
+          : {}),
+        ...(typeof body.organization_label === "string"
+          ? { organization_label: body.organization_label }
+          : {}),
+      });
+      if (!result.ok) {
+        return reply.code(httpCodeForFailure(result.code)).send(result);
+      }
+      return reply.code(200).send({
+        ok: true,
+        project_id: result.project_id,
+        document: result.document,
+        meeting: result.meeting,
       });
     },
   );
