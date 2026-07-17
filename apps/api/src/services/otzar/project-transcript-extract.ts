@@ -11,6 +11,10 @@ import type {
   StructuredFact,
 } from "./project-document-body.js";
 import { buildProjectDocumentBody, isUsefulDocumentBody } from "./project-document-body.js";
+import {
+  chooseArtifactFromCommunication,
+  type ArtifactChoice,
+} from "./artifact-from-communication.js";
 
 export interface TranscriptLine {
   speaker: string;
@@ -25,6 +29,8 @@ export interface TranscriptExtractResult {
   requirements_proposed: string[];
   body_preview_chars: number;
   body_useful: boolean;
+  /** Otzar OS choice: what work product communication implies. */
+  artifact: ArtifactChoice;
 }
 
 function parseLines(transcript: string): TranscriptLine[] {
@@ -170,10 +176,16 @@ export function extractProjectSectionsFromTranscript(args: {
       "Extracted deterministically from transcript. Unstated items omitted, not invented.",
   };
 
+  // Communication is the OS: choose artifact from context (doc/slides/form/…).
+  const artifact = chooseArtifactFromCommunication({
+    text: args.transcript,
+    project_name: args.project_name,
+  });
+
   const built = buildProjectDocumentBody({
     project_name: args.project_name ?? "Project",
     sections,
-    artifact_type: "Project brief",
+    artifact_type: artifact.title_label,
   });
 
   const decisionsConfirmed = (sections.decisions ?? [])
@@ -189,6 +201,7 @@ export function extractProjectSectionsFromTranscript(args: {
     requirements_proposed: requirementsProposed,
     body_preview_chars: built.char_count,
     body_useful: isUsefulDocumentBody(built.body),
+    artifact,
   };
 }
 

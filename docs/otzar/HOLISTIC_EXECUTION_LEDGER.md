@@ -15,17 +15,29 @@ execution, and remains ambient without obstructing daily work.
 Decision rights control authority. Projects control work context. AI Teammates execute
 within those boundaries. Foundation keeps it coherent.
 
+### Communication is the OS
+
+Otzar does **not** default every ask to a blank Google Doc because a button exists.
+**Communication context chooses the work product**: project brief, slides, form,
+care plan, insurance form, financial pack, meeting notes, decision memo, handoff
+package, etc. Provider materialization follows when a real rail exists; otherwise
+the Twin still **claims** the work honestly (e.g. slides until Slides create lands).
+
+```
+communication → extract clarity → choose artifact → (materialize if rail) → Twin claims → notify human
+```
+
 ### AI Teammate work model
 
-Documents and follow-ups extracted from communications are often **human work
-executed by the AI Teammate** after clarity is extracted:
+Documents, slides, forms, and follow-ups extracted from communications are often
+**human work executed by the AI Teammate** after clarity is extracted:
 
 1. Extract clarity from communications (all forms: meetings, chat, email, notes).
-2. Twin **claims** the work (EXECUTING) and **notifies the human** — no dual effort.
-3. Twin may ask a **light clarity** question (not a burden storm).
-4. On finish: Twin **completes** and notifies, and/or **requests collaboration**.
-5. External tool writes (Jira, EHR forms, banking systems, etc.) remain **gated** —
-   Twin may claim `CONNECTOR_UPDATE` work; never silent mutation.
+2. **Choose artifact** from that context (OS decision).
+3. Twin **claims** the work (EXECUTING) and **notifies the human** — no dual effort.
+4. Twin may ask a **light clarity** question (not a burden storm).
+5. On finish: Twin **completes** and notifies, and/or **requests collaboration**.
+6. External tool writes remain **gated** — Twin may claim `CONNECTOR_UPDATE`; never silent mutation.
 
 Routes: `/api/v1/otzar/twin-work/*` · kickoff auto-claims when `claim_twin_work ≠ false`.
 
