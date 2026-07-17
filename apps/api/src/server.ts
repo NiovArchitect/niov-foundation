@@ -114,6 +114,7 @@ import { registerOtzarAuthorityGrantsRoutes } from "./routes/otzar-authority-gra
 import { registerOtzarCorrectionMemoryRoutes } from "./routes/otzar-correction-memory.routes.js";
 import { registerOtzarCollaborationRoutes } from "./routes/otzar-collaboration.routes.js";
 import { registerOtzarWorkProjectRoutes } from "./routes/otzar-work-project.routes.js";
+import { registerOtzarTwinWorkRoutes } from "./routes/otzar-twin-work.routes.js";
 import { registerOtzarCollaborationWorkspaceRoutes } from "./routes/otzar-collaboration-workspace.routes.js";
 import { registerOtzarExternalCollaboratorRoutes } from "./routes/otzar-external-collaborator.routes.js";
 import { registerOtzarMeetingCaptureRoutes } from "./routes/otzar-meeting-capture.routes.js";
@@ -882,6 +883,7 @@ export async function buildApp(
   await registerOtzarCorrectionMemoryRoutes(app, authService);
   await registerOtzarCollaborationRoutes(app, authService);
   await registerOtzarWorkProjectRoutes(app, authService);
+  await registerOtzarTwinWorkRoutes(app, authService);
   await registerOtzarCollaborationWorkspaceRoutes(app, authService);
   await registerOtzarExternalCollaboratorRoutes(app, authService);
   await registerOtzarMeetingCaptureRoutes(app, authService);
