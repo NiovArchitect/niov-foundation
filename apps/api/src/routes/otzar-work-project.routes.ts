@@ -575,6 +575,13 @@ export async function registerOtzarWorkProjectRoutes(
           (sections.next_actions as
             | Array<{ text: string; status: string; owner_label?: string }>
             | undefined) ?? [];
+        const accuracy =
+          body.accuracy_class === "REGULATED_HEALTH" ||
+          body.accuracy_class === "REGULATED_FINANCE" ||
+          body.accuracy_class === "INSURANCE" ||
+          body.accuracy_class === "STANDARD"
+            ? body.accuracy_class
+            : "STANDARD";
         const opened = await openTwinWorkFromExtract({
           org_entity_id: orgEntityId,
           human_entity_id: session.entity_id,
@@ -582,6 +589,7 @@ export async function registerOtzarWorkProjectRoutes(
           document_id: result.document.document_id,
           web_view_link: result.document.web_view_link,
           document_title: result.document.title,
+          accuracy_class: accuracy,
           next_actions: nextActions.map((a) => ({
             text: a.text,
             status:

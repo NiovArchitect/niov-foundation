@@ -112,6 +112,39 @@ describe("claimWorkForTwin", () => {
     expect(n.body_summary.toLowerCase()).toContain("working on");
     expect(createLedgerMock.mock.calls[0]![0].status).toBe("EXECUTING");
   });
+
+  it("regulated health accuracy elevates priority and verification posture", async () => {
+    resolveTwinMock.mockResolvedValue({
+      twin: { entity_id: "00000000-0000-0000-0000-000000000099" },
+      eligible_count: 1,
+    });
+    createLedgerMock.mockResolvedValue({
+      ok: true,
+      entry: {
+        ledger_entry_id: "00000000-0000-0000-0000-000000000011",
+        status: "EXECUTING",
+        title: "Insurance prior-auth form",
+        details: {},
+      },
+    });
+    const r = await claimWorkForTwin({
+      org_entity_id: "00000000-0000-0000-0000-000000000001",
+      human_entity_id: "00000000-0000-0000-0000-000000000002",
+      title: "Insurance prior-auth form",
+      work_kind: "DOCUMENT",
+      accuracy_class: "REGULATED_HEALTH",
+    });
+    expect(r.ok).toBe(true);
+    const input = createLedgerMock.mock.calls[0]![0] as {
+      priority: string;
+      details: { twin_work: { accuracy_class: string; requires_verification: boolean } };
+    };
+    expect(input.priority).toBe("PROJECT_CRITICAL");
+    expect(input.details.twin_work.accuracy_class).toBe("REGULATED_HEALTH");
+    expect(input.details.twin_work.requires_verification).toBe(true);
+    const n = notifyMock.mock.calls[0]![0] as { body_summary: string };
+    expect(n.body_summary.toLowerCase()).toContain("accuracy-critical");
+  });
 });
 
 describe("twinRequestClarity / complete", () => {
