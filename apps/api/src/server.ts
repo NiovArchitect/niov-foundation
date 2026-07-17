@@ -138,6 +138,7 @@ import { registerOtzarVoiceReadyRoutes } from "./routes/otzar-voice-ready.routes
 import { registerConnectorRailsRoutes } from "./routes/connector-rails.routes.js";
 import { registerConnectorDataRoutes } from "./routes/connector-data.routes.js";
 import { registerCalendarEventRoutes } from "./routes/calendar-event.routes.js";
+import { registerGoogleDocRoutes } from "./routes/google-doc.routes.js";
 import { registerWorkOsAuthorityRoutes } from "./routes/work-os-authority.routes.js";
 import { registerFoundationRoutes } from "./routes/foundation.routes.js";
 import {
@@ -905,6 +906,7 @@ export async function buildApp(
   await registerConnectorRailsRoutes(app, authService);
   await registerConnectorDataRoutes(app, authService, otzarService);
   await registerCalendarEventRoutes(app, authService);
+  await registerGoogleDocRoutes(app, authService);
   await registerWorkOsAuthorityRoutes(app, authService);
   await registerSystemRuntimeRoutes(app, authService);
   await registerWorkOsLedgerRoutes(app, authService);

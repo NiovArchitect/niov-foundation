@@ -134,7 +134,7 @@ describe("Phase 1261 — provider vocabulary + registry coherence", () => {
     }
   });
 
-  it("Google requests the scheduling reads + the ONE gated event-write scope, and NOT broad calendar/Gmail-send/Drive scopes", async () => {
+  it("Google requests scheduling reads + gated calendar/docs writes, and NOT broad calendar/Gmail-send/full-Drive scopes", async () => {
     setGoogleEnvs();
     const start = await startOAuthForOrg({
       provider_slug: "google",
@@ -149,7 +149,7 @@ describe("Phase 1261 — provider vocabulary + registry coherence", () => {
       (url.searchParams.get("scope") ?? "").split(/\s+/).filter(Boolean),
     );
 
-    // Group 1 (request now): least-privilege scheduling reads.
+    // Group 1 (request now): least-privilege scheduling reads + gated writes.
     for (const s of [
       "https://www.googleapis.com/auth/calendar.freebusy",
       "https://www.googleapis.com/auth/calendar.events.freebusy",
@@ -158,11 +158,15 @@ describe("Phase 1261 — provider vocabulary + registry coherence", () => {
       // [CALENDAR-WRITE] the single event-write scope for the
       // approval-gated create/delete rail (calendar-event.service.ts).
       "https://www.googleapis.com/auth/calendar.events",
+      // [GOOGLE-DOCS-WRITE] least-privilege doc create + body insert for
+      // the approval-gated google-doc create rail (google-doc.service.ts).
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/documents",
     ]) {
       expect(requested.has(s)).toBe(true);
     }
 
-    // Group 2/3 (deferred / gated): MUST NOT be requested by default.
+    // Group 2/3 (deferred / broad): MUST NOT be requested by default.
     for (const forbidden of [
       "https://www.googleapis.com/auth/calendar", // full calendar (see/edit/share/delete-ALL) stays forbidden
       "https://www.googleapis.com/auth/calendar.acls",
@@ -172,8 +176,7 @@ describe("Phase 1261 — provider vocabulary + registry coherence", () => {
       "https://www.googleapis.com/auth/gmail.modify",
       "https://www.googleapis.com/auth/gmail.compose",
       "https://www.googleapis.com/auth/gmail.drafts.create",
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive", // full Drive write stays forbidden
       "https://www.googleapis.com/auth/drive.meet.readonly",
     ]) {
       expect(requested.has(forbidden)).toBe(false);

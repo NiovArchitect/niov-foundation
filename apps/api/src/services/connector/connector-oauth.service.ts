@@ -159,6 +159,15 @@ function providerConfig(provider: OAuthProviderKey): OAuthProviderConfig {
           // write. A re-consent is required to grant it; until then the
           // create rail answers EVENT_WRITE_SCOPE_MISSING honestly.
           "https://www.googleapis.com/auth/calendar.events",
+          // [GOOGLE-DOCS-WRITE] Least-privilege doc create + body insert
+          // on documents the app creates. Reached only through the
+          // approval-gated google-doc create rail. drive.file alone
+          // covers app-created files; documents covers Docs API create
+          // + batchUpdate. Re-consent required; until then create
+          // answers DOC_WRITE_SCOPE_MISSING honestly. No full Drive,
+          // no Gmail-send, no delete-all.
+          "https://www.googleapis.com/auth/drive.file",
+          "https://www.googleapis.com/auth/documents",
         ],
         client_id_env: "GOOGLE_OAUTH_CLIENT_ID",
         client_secret_env: "GOOGLE_OAUTH_CLIENT_SECRET",
