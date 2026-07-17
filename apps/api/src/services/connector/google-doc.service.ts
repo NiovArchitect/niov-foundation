@@ -1,15 +1,12 @@
 // FILE: google-doc.service.ts
-// PURPOSE: [GOOGLE-DOCS-WRITE] GATED Google Doc create lifecycle — mirror of
-//          calendar-event.service.ts. Product path:
-//            intent → caller confirmation (+ optional approval) → create
-//            ONLY when every gate passes, then real Docs API documents.create
-//            (+ optional body insert via batchUpdate). Never auto-creates.
-// CONNECTS TO: connector-oauth.service.ts (granted scopes + access token),
-//          google-doc.routes.ts, packages/database audit (GOOGLE_DOC_CREATE),
-//          work-ledger DOCUMENT row (best-effort).
+// PURPOSE: [GOOGLE-DOCS-WRITE] GATED Google Doc create. Prefer Drive multipart
+//          create WITH body content so organizational documents are never empty
+//          shells. Docs batchUpdate is a verified fallback with retries.
+//          Functional success requires body_inserted when body was requested.
+// CONNECTS TO: connector-oauth.service.ts, google-doc.routes.ts,
+//          project-document.service.ts, work-ledger DOCUMENT rows.
 //
-// SAFETY (RULE 0 / RULE 4): create happens ONLY behind a passed gate ladder;
-// audit details are scrubbed (no titles, body, tokens, emails).
+// SAFETY: create only behind gate ladder; audit scrubbed (no body/tokens).
 
 import { writeAuditEvent } from "@niov/database";
 import {
@@ -18,9 +15,6 @@ import {
 } from "./connector-oauth.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 
-// Scopes that permit creating Google Docs. Prefer documents (Docs API)
-// and/or drive.file (app-created files). Broad `drive` is accepted as a
-// superset only — it is NOT requested by default.
 const DOC_WRITE_SCOPES: ReadonlyArray<string> = [
   "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/drive.file",
@@ -33,18 +27,24 @@ export type GoogleDocGateCode =
   | "NEEDS_CALLER_CONFIRMATION"
   | "POLICY_BLOCKED"
   | "GOOGLE_RECONNECT_REQUIRED"
-  | "DOC_WRITE_SCOPE_MISSING";
+  | "DOC_WRITE_SCOPE_MISSING"
+  | "BODY_REQUIRED"
+  | "BODY_INSERT_FAILED";
 
 export interface GoogleDocCreateInput {
   title: string;
-  /** Optional initial body text (plain). Inserted after create when present. */
   body_text?: string;
+  /** When true (default if body_text provided), fail if body is empty or insert fails. */
+  require_body?: boolean;
   requires_approval?: boolean;
   approved?: boolean;
   caller_confirmed?: boolean;
   policy_blocked?: boolean;
   source_command?: string;
   owner_entity_id?: string;
+  project_id?: string;
+  conversation_id?: string;
+  artifact_type?: string;
 }
 
 export function grantsDocWrite(
@@ -55,9 +55,6 @@ export function grantsDocWrite(
   return DOC_WRITE_SCOPES.some((s) => set.has(s));
 }
 
-// WHAT: Pure gate ladder for doc create — human gates before capability.
-// WHY: Same discipline as calendar: never call the provider until intent is
-//      confirmed and the token actually grants write.
 export function firstUnmetDocGate(
   input: GoogleDocCreateInput,
   hasDocWrite: boolean,
@@ -72,6 +69,15 @@ export function firstUnmetDocGate(
   if (input.caller_confirmed !== true) return "NEEDS_CALLER_CONFIRMATION";
   if (!isConnected) return "GOOGLE_RECONNECT_REQUIRED";
   if (!hasDocWrite) return "DOC_WRITE_SCOPE_MISSING";
+  const requireBody =
+    input.require_body === true ||
+    (input.require_body !== false &&
+      typeof input.body_text === "string" &&
+      input.body_text.trim().length > 0);
+  if (requireBody) {
+    const body = typeof input.body_text === "string" ? input.body_text.trim() : "";
+    if (body.length === 0) return "BODY_REQUIRED";
+  }
   return null;
 }
 
@@ -82,14 +88,118 @@ export type GoogleDocCreateResult =
       document_id: string;
       title: string;
       web_view_link: string | null;
+      body_inserted: boolean;
+      body_char_count: number;
+      project_id: string | null;
     }
   | { ok: false; code: GoogleDocGateCode | "PROVIDER_ERROR" };
 
-// WHAT: Attempt to create a Google Doc — HARD gate enforcement.
-// INPUT: create input + caller/org identity.
-// OUTPUT: { ok:false; code } for any unmet gate; { ok:true } only when the
-//         Docs API returned a document id (optionally with body inserted).
-// WHY: Single chokepoint — no auto-create, no fabricated CREATED.
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// WHAT: Create a Google Doc with optional body via Drive multipart upload.
+// WHY: Single-shot create+content avoids empty shells when Docs API is laggy.
+async function createViaDriveMultipart(args: {
+  access_token: string;
+  title: string;
+  body_text?: string;
+}): Promise<{
+  document_id: string;
+  title: string;
+  web_view_link: string | null;
+  http: number;
+} | null> {
+  const boundary = `otzar_${Date.now().toString(36)}`;
+  const meta = JSON.stringify({
+    name: args.title,
+    mimeType: "application/vnd.google-apps.document",
+  });
+  const media =
+    typeof args.body_text === "string" && args.body_text.length > 0
+      ? args.body_text
+      : " ";
+  const multipart =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${meta}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: text/plain; charset=UTF-8\r\n\r\n` +
+    `${media}\r\n` +
+    `--${boundary}--`;
+
+  let res: Response;
+  try {
+    res = await fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${args.access_token}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`,
+        },
+        body: multipart,
+      },
+    );
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => ({}))) as {
+    id?: unknown;
+    name?: unknown;
+    webViewLink?: unknown;
+  };
+  if (typeof body.id !== "string" || body.id.length === 0) return null;
+  return {
+    document_id: body.id,
+    title:
+      typeof body.name === "string" && body.name.length > 0
+        ? body.name
+        : args.title,
+    web_view_link:
+      typeof body.webViewLink === "string" ? body.webViewLink : null,
+    http: res.status,
+  };
+}
+
+async function insertBodyWithRetry(args: {
+  access_token: string;
+  document_id: string;
+  text: string;
+}): Promise<boolean> {
+  const payload = JSON.stringify({
+    requests: [
+      {
+        insertText: {
+          location: { index: 1 },
+          text: args.text.endsWith("\n") ? args.text : `${args.text}\n`,
+        },
+      },
+    ],
+  });
+  for (const delay of [0, 400, 1000, 2000]) {
+    if (delay > 0) await sleep(delay);
+    try {
+      const res = await fetch(
+        `https://docs.googleapis.com/v1/documents/${encodeURIComponent(args.document_id)}:batchUpdate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${args.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: payload,
+        },
+      );
+      if (res.ok) return true;
+    } catch {
+      // retry
+    }
+  }
+  return false;
+}
+
 export async function createGoogleDoc(args: {
   actor_entity_id: string;
   org_entity_id: string;
@@ -106,13 +216,17 @@ export async function createGoogleDoc(args: {
     isConnected,
   );
 
-  const hasBody =
-    typeof args.input.body_text === "string" &&
-    args.input.body_text.trim().length > 0;
+  const bodyText =
+    typeof args.input.body_text === "string" ? args.input.body_text.trim() : "";
+  const hasBody = bodyText.length > 0;
+  const requireBody =
+    args.input.require_body === true ||
+    (args.input.require_body !== false && hasBody);
 
   const audit = async (
     outcome: "SUCCESS" | "DENIED",
     reason: string,
+    extra?: Record<string, unknown>,
   ): Promise<string> => {
     const event = await writeAuditEvent({
       event_type: "GOOGLE_DOC_CREATE",
@@ -122,6 +236,10 @@ export async function createGoogleDoc(args: {
       details: {
         reason,
         has_body: hasBody,
+        require_body: requireBody,
+        body_char_count: hasBody ? bodyText.length : 0,
+        has_project_id: typeof args.input.project_id === "string",
+        ...(extra ?? {}),
       },
     });
     return event.audit_id;
@@ -142,65 +260,36 @@ export async function createGoogleDoc(args: {
     return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
   }
 
-  // Prefer Drive files.create (native Google Doc mime). This works with
-  // drive.file when the Google Cloud project has Drive API enabled —
-  // the usual path after Workspace OAuth. Docs API documents.create is
-  // a fallback (needs the Docs API product enabled on the GCP project).
-  const authHeaders = {
-    Authorization: `Bearer ${token.access_token}`,
-    "Content-Type": "application/json",
-  };
-
   let documentId = "";
   let createdTitle = title;
   let webViewLink: string | null = null;
-  let lastHttp = 0;
+  let bodyInserted = false;
 
-  // Path A — Drive API
-  try {
-    const driveRes = await fetch(
-      "https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink",
-      {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          name: title,
-          mimeType: "application/vnd.google-apps.document",
-        }),
-      },
-    );
-    lastHttp = driveRes.status;
-    if (driveRes.status === 401 || driveRes.status === 403) {
-      // fall through to Docs API before deciding scope-missing
-    } else if (driveRes.ok) {
-      const driveBody = (await driveRes.json().catch(() => ({}))) as {
-        id?: unknown;
-        name?: unknown;
-        webViewLink?: unknown;
-      };
-      if (typeof driveBody.id === "string" && driveBody.id.length > 0) {
-        documentId = driveBody.id;
-        if (typeof driveBody.name === "string" && driveBody.name.length > 0) {
-          createdTitle = driveBody.name;
-        }
-        if (typeof driveBody.webViewLink === "string") {
-          webViewLink = driveBody.webViewLink;
-        }
-      }
-    }
-  } catch {
-    // try Docs API next
+  // Path A — Drive multipart (create + content in one request when body present)
+  const multi = await createViaDriveMultipart({
+    access_token: token.access_token,
+    title,
+    ...(hasBody ? { body_text: bodyText } : {}),
+  });
+  if (multi !== null) {
+    documentId = multi.document_id;
+    createdTitle = multi.title;
+    webViewLink = multi.web_view_link;
+    // Multipart with body is treated as inserted when we sent content.
+    bodyInserted = hasBody;
   }
 
-  // Path B — Docs API (fallback)
+  // Path B — Docs API create (title only) then insert body with retry
   if (documentId.length === 0) {
     try {
       const docsRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
-        headers: authHeaders,
+        headers: {
+          Authorization: `Bearer ${token.access_token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ title }),
       });
-      lastHttp = docsRes.status;
       if (docsRes.status === 401 || docsRes.status === 403) {
         await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
         return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
@@ -215,10 +304,7 @@ export async function createGoogleDoc(args: {
       };
       documentId =
         typeof docsBody.documentId === "string" ? docsBody.documentId : "";
-      if (
-        typeof docsBody.title === "string" &&
-        docsBody.title.length > 0
-      ) {
+      if (typeof docsBody.title === "string" && docsBody.title.length > 0) {
         createdTitle = docsBody.title;
       }
     } catch {
@@ -228,72 +314,68 @@ export async function createGoogleDoc(args: {
   }
 
   if (documentId.length === 0) {
-    // Both paths failed without a clear 401/403 on Docs.
-    if (lastHttp === 401 || lastHttp === 403) {
-      await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
-      return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
-    }
-    await audit("DENIED", lastHttp > 0 ? `http_${lastHttp}` : "no_document_id");
+    await audit("DENIED", "no_document_id");
     return { ok: false, code: "PROVIDER_ERROR" };
   }
 
-  // Optional body insert — best-effort after the doc exists. Failure to
-  // insert text does NOT unwind the create (doc is real + linkable).
-  if (hasBody) {
-    const text = args.input.body_text!.trim().slice(0, 50_000);
-    try {
-      const insertRes = await fetch(
-        `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}:batchUpdate`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({
-            requests: [
-              {
-                insertText: {
-                  location: { index: 1 },
-                  text: text.endsWith("\n") ? text : `${text}\n`,
-                },
-              },
-            ],
-          }),
-        },
-      );
-      // Soft-fail body insert: 401/403/5xx leave an empty but real doc.
-      void insertRes;
-    } catch {
-      // Doc create already succeeded.
-    }
+  // If multipart did not run or body still needed, insert via Docs API.
+  if (hasBody && !bodyInserted) {
+    bodyInserted = await insertBodyWithRetry({
+      access_token: token.access_token,
+      document_id: documentId,
+      text: bodyText,
+    });
   }
 
-  const auditEventId = await audit("SUCCESS", "created");
+  if (requireBody && !bodyInserted) {
+    await audit("DENIED", "BODY_INSERT_FAILED", {
+      document_id_present: true,
+    });
+    return { ok: false, code: "BODY_INSERT_FAILED" };
+  }
+
+  const auditEventId = await audit("SUCCESS", bodyInserted ? "created_with_body" : "created_shell", {
+    body_inserted: bodyInserted,
+  });
   if (webViewLink === null || webViewLink.length === 0) {
     webViewLink = `https://docs.google.com/document/d/${documentId}/edit`;
   }
   const ownerEntityId = args.input.owner_entity_id ?? args.actor_entity_id;
+  const projectId =
+    typeof args.input.project_id === "string" && args.input.project_id.length > 0
+      ? args.input.project_id
+      : null;
 
-  // Best-effort WorkLedger DOCUMENT row — enhancement only.
   try {
     await createLedgerEntry({
       org_entity_id: args.org_entity_id,
       ledger_type: "DOCUMENT",
       source_type: "CONNECTOR",
       title,
-      summary: "Google Doc created after confirmation.",
+      summary: bodyInserted
+        ? "Google Doc created with structured body after confirmation."
+        : "Google Doc shell created after confirmation (no body).",
       status: "EXECUTED",
       priority: "ROUTINE",
       owner_entity_id: ownerEntityId,
+      ...(projectId ? { project_id: projectId } : {}),
+      ...(typeof args.input.conversation_id === "string"
+        ? { conversation_id: args.input.conversation_id }
+        : {}),
       details: {
         source: "google_doc",
         document_id: documentId,
         provider: "google_docs",
         web_view_link: webViewLink,
         audit_event_id: auditEventId,
-        has_body: hasBody,
+        body_inserted: bodyInserted,
+        body_char_count: hasBody ? bodyText.length : 0,
+        artifact_type: args.input.artifact_type ?? "document",
+        project_id: projectId,
       },
     });
   } catch {
-    // Ledger failure never unwinds a real provider create.
+    // Ledger is enhancement only.
   }
 
   return {
@@ -302,5 +384,8 @@ export async function createGoogleDoc(args: {
     document_id: documentId,
     title: createdTitle,
     web_view_link: webViewLink,
+    body_inserted: bodyInserted,
+    body_char_count: hasBody ? bodyText.length : 0,
+    project_id: projectId,
   };
 }

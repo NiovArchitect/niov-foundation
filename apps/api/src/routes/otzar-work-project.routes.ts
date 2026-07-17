@@ -22,6 +22,7 @@
 
 import type { FastifyInstance } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
+import { getOrgEntityId } from "../services/governance/org.js";
 import {
   addWorkProjectMemberForCaller,
   archiveWorkProjectForCaller,
@@ -31,6 +32,8 @@ import {
   type WorkProjectMemberRole,
   type WorkProjectState,
 } from "../services/otzar/work-project.service.js";
+import { createProjectGoogleDocument } from "../services/otzar/project-document.service.js";
+import type { ProjectDocumentSections } from "../services/otzar/project-document-body.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -52,14 +55,29 @@ function httpCodeForFailure(code: string): number {
     case "NOT_PROJECT_OWNER":
     case "NOT_PROJECT_MEMBER":
     case "CROSS_ORG_DENIED":
+    case "CROSS_ORG":
+    case "POLICY_BLOCKED":
       return 403;
     case "PROJECT_ARCHIVED":
     case "ALREADY_ARCHIVED":
     case "ALREADY_MEMBER":
+    case "BODY_NOT_USEFUL":
+    case "BODY_REQUIRED":
+    case "BODY_INSERT_FAILED":
+    case "NEEDS_CALLER_CONFIRMATION":
+    case "DOC_WRITE_SCOPE_MISSING":
+    case "GOOGLE_RECONNECT_REQUIRED":
       return 409;
+    case "PROVIDER_ERROR":
+      return 502;
     default:
       return 400;
   }
+}
+
+function parseSections(raw: unknown): ProjectDocumentSections {
+  if (raw === null || typeof raw !== "object") return {};
+  return raw as ProjectDocumentSections;
 }
 
 export async function registerOtzarWorkProjectRoutes(
@@ -275,6 +293,68 @@ export async function registerOtzarWorkProjectRoutes(
         return reply.code(httpCodeForFailure(result.code)).send(result);
       }
       return reply.code(200).send(result);
+    },
+  );
+
+  // POST project-linked non-empty Google Doc (structured body required)
+  app.post<{
+    Params: { project_id: string };
+    Body: Record<string, unknown>;
+  }>(
+    "/api/v1/otzar/work-projects/:project_id/documents/google",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid) {
+        return reply
+          .code(401)
+          .send({ ok: false, code: session.code, message: "denied" });
+      }
+      let orgEntityId: string;
+      try {
+        orgEntityId = await getOrgEntityId(session.entity_id);
+      } catch {
+        return reply.code(404).send({ ok: false, code: "NO_ORG_FOR_CALLER" });
+      }
+      const body = request.body ?? {};
+      const result = await createProjectGoogleDocument({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        project_id: request.params.project_id,
+        caller_confirmed: body.caller_confirmed === true,
+        sections: parseSections(body.sections),
+        ...(typeof body.title === "string" ? { title: body.title } : {}),
+        ...(typeof body.artifact_type === "string"
+          ? { artifact_type: body.artifact_type }
+          : {}),
+        ...(typeof body.conversation_id === "string"
+          ? { conversation_id: body.conversation_id }
+          : {}),
+        ...(typeof body.organization_label === "string"
+          ? { organization_label: body.organization_label }
+          : {}),
+      });
+      if (!result.ok) {
+        return reply.code(httpCodeForFailure(result.code)).send(result);
+      }
+      return reply.code(200).send({
+        ok: true,
+        source_kind: "google_docs",
+        document_id: result.document_id,
+        title: result.title,
+        web_view_link: result.web_view_link,
+        body_inserted: result.body_inserted,
+        body_char_count: result.body_char_count,
+        section_count: result.section_count,
+        project_id: result.project_id,
+      });
     },
   );
 }

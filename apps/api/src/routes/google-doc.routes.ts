@@ -51,6 +51,9 @@ function parseCreateInput(body: Record<string, unknown>): GoogleDocCreateInput {
   return {
     title: typeof body.title === "string" ? body.title : "",
     ...(typeof body.body_text === "string" ? { body_text: body.body_text } : {}),
+    ...(typeof body.require_body === "boolean"
+      ? { require_body: body.require_body }
+      : {}),
     requires_approval: body.requires_approval === true,
     approved: body.approved === true,
     caller_confirmed: body.caller_confirmed === true,
@@ -61,6 +64,16 @@ function parseCreateInput(body: Record<string, unknown>): GoogleDocCreateInput {
     ...(typeof body.owner_entity_id === "string" &&
     body.owner_entity_id.length > 0
       ? { owner_entity_id: body.owner_entity_id }
+      : {}),
+    ...(typeof body.project_id === "string" && body.project_id.length > 0
+      ? { project_id: body.project_id }
+      : {}),
+    ...(typeof body.conversation_id === "string" &&
+    body.conversation_id.length > 0
+      ? { conversation_id: body.conversation_id }
+      : {}),
+    ...(typeof body.artifact_type === "string"
+      ? { artifact_type: body.artifact_type }
       : {}),
   };
 }
@@ -103,6 +116,9 @@ export async function registerGoogleDocRoutes(
         document_id: result.document_id,
         title: result.title,
         web_view_link: result.web_view_link,
+        body_inserted: result.body_inserted,
+        body_char_count: result.body_char_count,
+        project_id: result.project_id,
       });
     },
   );
