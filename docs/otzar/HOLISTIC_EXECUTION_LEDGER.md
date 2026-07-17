@@ -115,7 +115,8 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 **C.3 — Accuracy-critical Twin document work + stay the course**
 
 C.1–C.2b + Twin-work + accuracy_class + artifact chooser **live-proven** (`53cee14`).  
-Active remaining: Today “Twin is on it” UI (my-work `twin_work` projection) + edit detection.
+`twin_work` projection **live-proven** on api.otzar.ai (`c14147c`, 12 active claims).  
+Active remaining: C.3b edit detection + CT Today panel live bundle fingerprint.
 
 ### Completed proof (honest)
 
@@ -129,14 +130,14 @@ Active remaining: Today “Twin is on it” UI (my-work `twin_work` projection) 
 | accuracy_class on twin claims (clinical/finance/insurance) | live-authenticated (`65345ed`+) |
 | Communication chooses artifact (doc vs slides vs form) | live-authenticated (`73ac793`) |
 | Twin claims non-materialized artifacts (e.g. slides) | live-authenticated (`53cee14`) |
-| Safe `twin_work` projection on WorkLedgerView | code (my-work wire) |
+| Safe `twin_work` projection on WorkLedgerView | live-authenticated (`c14147c`) |
+| Today / Needs me “Twin is working on this” (CT) | code merged (`e5ff407`) | needs live UI fingerprint |
 
 ### Incomplete proof
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Today / Needs me “Twin is working on this” | in progress | FND projects `twin_work`; CT AmbientWorkSurface panel |
-| Edit detection on created docs | incomplete | |
+| Edit detection on created docs | in progress | Drive modifiedTime after claim; detect-edits routes |
 | Dual-control verification for high sensitivity | incomplete | |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |
@@ -150,8 +151,8 @@ Do **not** start Jira or broad MCP marketplace. Phase E remains designed only un
 
 ### Next executable step
 
-1. CT: AmbientWorkSurface “Your AI Teammate is working on…” from my-work `twin_work`.
-2. C.3b edit detection; then Phase A Dandelion.
+1. Ship C.3b detect-edits (Drive modifiedTime) + CT edit signal.
+2. Live fingerprint CT Today panel; then Phase A Dandelion.
 
 ## Substrate map (do not invent a third project system)
 

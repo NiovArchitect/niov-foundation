@@ -12,6 +12,10 @@ import {
   twinRequestCollaboration,
   openTwinWorkFromExtract,
 } from "../services/otzar/twin-work-claim.service.js";
+import {
+  detectTwinWorkDocumentEdits,
+  detectTwinWorkDocumentEditsBatch,
+} from "../services/otzar/twin-work-doc-edit.js";
 import type { StructuredFact } from "../services/otzar/project-document-body.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
@@ -31,6 +35,11 @@ function statusFor(code: string): number {
     case "INVALID_INPUT":
     case "INVALID_REQUEST":
       return 422;
+    case "NO_DOCUMENT":
+    case "NO_TWIN_CLAIM":
+      return 422;
+    case "GOOGLE_RECONNECT_REQUIRED":
+      return 403;
     default:
       return 400;
   }
@@ -193,6 +202,66 @@ export async function registerOtzarTwinWorkRoutes(
         status: result.entry.status,
         notified: true,
       });
+    },
+  );
+
+  // [C.3b] Detect Drive edits on a Twin-claimed document.
+  app.post<{ Params: { ledger_entry_id: string } }>(
+    "/api/v1/otzar/twin-work/:ledger_entry_id/detect-edits",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const org = await orgOf(session.entity_id);
+      if (org === null)
+        return reply.code(404).send({ ok: false, code: "NO_ORG_FOR_CALLER" });
+      const result = await detectTwinWorkDocumentEdits({
+        org_entity_id: org,
+        human_entity_id: session.entity_id,
+        ledger_entry_id: request.params.ledger_entry_id,
+      });
+      if (!result.ok)
+        return reply.code(statusFor(result.code)).send({ ok: false, code: result.code });
+      return reply.code(200).send({
+        ok: true,
+        ledger_entry_id: result.entry.ledger_entry_id,
+        edit_detected: result.edit_detected,
+        edit_signal: result.edit_signal,
+        drive_modified_at: result.drive_modified_at,
+        twin_work: result.entry.twin_work ?? null,
+        notified: result.notified,
+      });
+    },
+  );
+
+  // [C.3b] Batch edit detection for Today refresh (max 10).
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/otzar/twin-work/detect-edits-batch",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const org = await orgOf(session.entity_id);
+      if (org === null)
+        return reply.code(404).send({ ok: false, code: "NO_ORG_FOR_CALLER" });
+      const raw = request.body?.ledger_entry_ids;
+      const ids = Array.isArray(raw)
+        ? raw.filter((x): x is string => typeof x === "string" && x.length > 0)
+        : [];
+      if (ids.length === 0)
+        return reply.code(422).send({ ok: false, code: "INVALID_INPUT" });
+      const result = await detectTwinWorkDocumentEditsBatch({
+        org_entity_id: org,
+        human_entity_id: session.entity_id,
+        ledger_entry_ids: ids,
+      });
+      return reply.code(200).send(result);
     },
   );
 

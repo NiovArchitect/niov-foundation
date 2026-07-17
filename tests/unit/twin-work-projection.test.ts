@@ -35,6 +35,9 @@ describe("twinWorkFromDetails", () => {
       claimed_at: "2026-07-16T12:00:00.000Z",
       web_view_link: "https://docs.google.com/document/d/abc/edit",
       clarity_question: null,
+      edit_detected: false,
+      edit_signal: null,
+      last_drive_modified_at: null,
     });
     // Entity ids and raw document_id stay off the wire projection.
     expect(JSON.stringify(p)).not.toContain("00000000");
@@ -62,4 +65,18 @@ describe("twinWorkFromDetails", () => {
     expect(p?.state).toBe("NEEDS_CLARITY");
     expect(p?.clarity_question).toBe("Which coverage year should we use?");
   });
+
+  it("projects sticky edit_detected after claim", () => {
+    const p = twinWorkFromDetails({
+      twin_work: {
+        state: "CLAIMED_WORKING",
+        edit_signal: "MODIFIED_AFTER_CLAIM",
+        last_drive_modified_at: "2026-07-16T13:00:00.000Z",
+      },
+    });
+    expect(p?.edit_detected).toBe(true);
+    expect(p?.edit_signal).toBe("MODIFIED_AFTER_CLAIM");
+    expect(p?.last_drive_modified_at).toBe("2026-07-16T13:00:00.000Z");
+  });
 });
+
