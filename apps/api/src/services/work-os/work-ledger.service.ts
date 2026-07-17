@@ -923,6 +923,23 @@ export interface WorkLedgerView {
   // caller (My Work only): true when the caller OWNS this active task and may
   // mark it complete. The PATCH route re-enforces this; this only drives UI.
   can_complete?: boolean;
+  // [PROJECT-COHERENCE C.3] Safe AI Teammate work-claim projection so Today /
+  // My Work can show "Your Twin is on this" without reading the opaque
+  // details blob. Present only when claimWorkForTwin (or successors) wrote
+  // details.twin_work. Never entity UUIDs for the Twin — state + accuracy +
+  // optional doc link only.
+  twin_work?: TwinWorkProjection;
+}
+
+/** Safe subset of details.twin_work for CT ambient surfaces. */
+export interface TwinWorkProjection {
+  state: string;
+  work_kind: string;
+  accuracy_class: string;
+  requires_verification: boolean;
+  claimed_at: string | null;
+  web_view_link: string | null;
+  clarity_question: string | null;
 }
 
 interface LedgerRow {
@@ -1285,6 +1302,33 @@ export function scheduledMeetingFromDetails(
   };
 }
 
+// WHAT: Safe AI Teammate claim projection from details.twin_work.
+// OUTPUT: TwinWorkProjection or undefined when no claim was recorded.
+// WHY: Today / My Work need "Twin is on this" without exposing the full
+//      details JSON (entity ids, internal timestamps beyond claim).
+export function twinWorkFromDetails(details: unknown): TwinWorkProjection | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  const raw = (details as Record<string, unknown>).twin_work;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.state !== "string" || o.state.length === 0) return undefined;
+  const link =
+    typeof o.web_view_link === "string" && o.web_view_link.startsWith("https://")
+      ? o.web_view_link
+      : null;
+  return {
+    state: o.state,
+    work_kind: typeof o.work_kind === "string" ? o.work_kind : "TASK",
+    accuracy_class:
+      typeof o.accuracy_class === "string" ? o.accuracy_class : "STANDARD",
+    requires_verification: o.requires_verification === true,
+    claimed_at: typeof o.claimed_at === "string" ? o.claimed_at : null,
+    web_view_link: link,
+    clarity_question:
+      typeof o.clarity_question === "string" ? o.clarity_question.slice(0, 300) : null,
+  };
+}
+
 function projectLedger(row: LedgerRow): WorkLedgerView {
   const enrichment = enrichmentFromDetails(row.details);
   const meetingIntelligence = meetingIntelligenceFromDetails(row.details);
@@ -1293,6 +1337,7 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
   const seededOrigin = seededOriginFromDetails(row.details);
   const coordination = coordinationFromDetails(row.details);
   const watchers = watchersFromDetails(row.details);
+  const twinWork = twinWorkFromDetails(row.details);
   const detailsObj =
     typeof row.details === "object" && row.details !== null
       ? (row.details as Record<string, unknown>)
@@ -1345,5 +1390,6 @@ function projectLedger(row: LedgerRow): WorkLedgerView {
     // actually recorded — the UI never invents an origin.
     ...(sourceLineage !== undefined ? { source_lineage: sourceLineage } : {}),
     ...(seededOrigin !== undefined ? { seeded_origin: seededOrigin } : {}),
+    ...(twinWork !== undefined ? { twin_work: twinWork } : {}),
   };
 }
