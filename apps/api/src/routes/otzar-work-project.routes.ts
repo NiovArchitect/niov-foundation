@@ -37,6 +37,7 @@ import type { ProjectDocumentSections } from "../services/otzar/project-document
 import { runProjectKickoffLoop } from "../services/otzar/project-execution-loop.service.js";
 import { resolveProjectFromText } from "../services/otzar/project-context-resolve.js";
 import { extractProjectSectionsFromTranscript } from "../services/otzar/project-transcript-extract.js";
+import { openTwinWorkFromExtract } from "../services/otzar/twin-work-claim.service.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
   if (typeof value !== "string" || !value.startsWith("Bearer ")) return null;
@@ -565,12 +566,56 @@ export async function registerOtzarWorkProjectRoutes(
       if (!result.ok) {
         return reply.code(httpCodeForFailure(result.code)).send(result);
       }
+
+      // AI Teammate claims document + extracted next actions; human is notified
+      // so they do not duplicate work.
+      let twin_claims: unknown[] | undefined;
+      if (body.claim_twin_work !== false) {
+        const nextActions =
+          (sections.next_actions as
+            | Array<{ text: string; status: string; owner_label?: string }>
+            | undefined) ?? [];
+        const opened = await openTwinWorkFromExtract({
+          org_entity_id: orgEntityId,
+          human_entity_id: session.entity_id,
+          project_id: result.project_id,
+          document_id: result.document.document_id,
+          web_view_link: result.document.web_view_link,
+          document_title: result.document.title,
+          next_actions: nextActions.map((a) => ({
+            text: a.text,
+            status:
+              a.status === "confirmed" ||
+              a.status === "proposed" ||
+              a.status === "rejected" ||
+              a.status === "unresolved" ||
+              a.status === "corrected"
+                ? a.status
+                : "proposed",
+            ...(a.owner_label ? { owner_label: a.owner_label } : {}),
+          })),
+        });
+        if (opened.ok) {
+          twin_claims = opened.claims.map((c) =>
+            c.ok
+              ? {
+                  ok: true,
+                  ledger_entry_id: c.entry.ledger_entry_id,
+                  status: c.entry.status,
+                  title: c.entry.title,
+                }
+              : { ok: false, code: c.code },
+          );
+        }
+      }
+
       return reply.code(200).send({
         ok: true,
         project_id: result.project_id,
         document: result.document,
         meeting: result.meeting,
         ...(extractionMeta ? { extraction: extractionMeta } : {}),
+        ...(twin_claims ? { twin_claims } : {}),
       });
     },
   );

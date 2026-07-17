@@ -15,6 +15,23 @@ execution, and remains ambient without obstructing daily work.
 Decision rights control authority. Projects control work context. AI Teammates execute
 within those boundaries. Foundation keeps it coherent.
 
+### AI Teammate work model (founder clarity)
+
+Documents and follow-ups extracted from communications are often **human work
+executed by the AI Teammate** after clarity is extracted:
+
+1. Extract clarity from communications (deterministic + governed extract).
+2. Twin **claims** the work (status EXECUTING) and **notifies the human** so
+   human + Twin do not duplicate effort.
+3. Twin may ask a **light clarity** question (not a burden storm).
+4. On finish: Twin **completes** and notifies human, and/or **requests
+   collaboration** when others must join.
+5. Connector writes (Jira update, etc.) remain **gated provider rails** —
+   Twin may prepare/claim "CONNECTOR_UPDATE" work, never silent external mutation.
+
+Routes: `/api/v1/otzar/twin-work/*` · kickoff auto-claims when `claim_twin_work`
+is not false.
+
 ## Live fingerprint (update after each deploy)
 
 | Surface | Value | As of (UTC) |
