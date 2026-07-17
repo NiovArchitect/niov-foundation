@@ -114,7 +114,8 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 **C.3 — Accuracy-critical Twin document work + stay the course**
 
-C.1–C.2b + Twin-work **live-proven**. Next: accuracy_class on claims, Today “Twin is on it” UI signal, edit detection.
+C.1–C.2b + Twin-work + accuracy_class + artifact chooser **live-proven** (`53cee14`).  
+Active remaining: Today “Twin is on it” UI (my-work `twin_work` projection) + edit detection.
 
 ### Completed proof (honest)
 
@@ -125,13 +126,16 @@ C.1–C.2b + Twin-work **live-proven**. Next: accuracy_class on claims, Today �
 | Twin claim → clarity → complete + notify | live-authenticated (`1da22db`) |
 | Kickoff auto twin_claims (doc + next actions) | live-authenticated |
 | Empty body rejection (`BODY_REQUIRED`) | live-authenticated |
+| accuracy_class on twin claims (clinical/finance/insurance) | live-authenticated (`65345ed`+) |
+| Communication chooses artifact (doc vs slides vs form) | live-authenticated (`73ac793`) |
+| Twin claims non-materialized artifacts (e.g. slides) | live-authenticated (`53cee14`) |
+| Safe `twin_work` projection on WorkLedgerView | code (my-work wire) |
 
 ### Incomplete proof
 
 | Item | Level | Notes |
 |------|-------|-------|
-| accuracy_class on document claims (clinical/financial) | designed → next code | |
-| Today / Needs me “Twin is working on this” | incomplete | notifications exist; surface not composed |
+| Today / Needs me “Twin is working on this” | in progress | FND projects `twin_work`; CT AmbientWorkSurface panel |
 | Edit detection on created docs | incomplete | |
 | Dual-control verification for high sensitivity | incomplete | |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
@@ -141,14 +145,13 @@ C.1–C.2b + Twin-work **live-proven**. Next: accuracy_class on claims, Today �
 
 ### Exact blocker (now)
 
-Stay on **Phase C**: accuracy-critical document claims + human-visible Twin activity.
+Stay on **Phase C**: human-visible Twin activity on Today, then edit detection.
 Do **not** start Jira or broad MCP marketplace. Phase E remains designed only until C.3 closes.
 
 ### Next executable step
 
-1. Add `accuracy_class` (STANDARD \| REGULATED_HEALTH \| REGULATED_FINANCE \| INSURANCE) on twin claims + kickoff docs.
-2. Surface Twin-working notifications in Today/Needs me (CT).
-3. C.3b edit detection; then Phase A Dandelion.
+1. CT: AmbientWorkSurface “Your AI Teammate is working on…” from my-work `twin_work`.
+2. C.3b edit detection; then Phase A Dandelion.
 
 ## Substrate map (do not invent a third project system)
 
