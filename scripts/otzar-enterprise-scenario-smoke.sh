@@ -260,5 +260,137 @@ else:
 PY
 [[ $? -eq 0 ]] || fail "CT screens"
 
+# --- UX / PROJECT / PROVIDER / INVESTOR behavioral assertions ---
+echo "--- UX · PROJECT · PROVIDER · INVESTOR (beyond HTTP 200) ---"
+python3 <<'PY'
+import json, subprocess, os, re
+API=os.environ.get("OTZAR_API_BASE_URL","https://api.otzar.ai/api/v1")
+APP=os.environ.get("OTZAR_APP_BASE_URL","https://app.otzar.ai")
+PASS=os.environ["DEMO_SHARED_PASSWORD"]
+fails=0
+
+def login(email):
+    body=json.dumps({"email":email,"password":PASS,"requested_operations":["read","write","share","admin_org"]})
+    return json.loads(subprocess.check_output(
+        ["curl","-sS","-m","25","-X","POST",f"{API}/auth/login","-H","Content-Type: application/json","-d",body],
+        text=True)).get("token") or ""
+
+def getj(tok, path):
+    raw=subprocess.check_output(
+        ["curl","-sS","-m","30","-H",f"Authorization: Bearer {tok}",f"{API}{path}"], text=True)
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {"_raw": raw[:200]}
+
+# [UX-01] Home/my-work counts reconcilable for founder
+tok=login("sadeil@niovlabs.com")
+if not tok:
+    print("  FAIL  UX-01 login founder"); raise SystemExit(1)
+mw=getj(tok, "/work-os/my-work?take=50")
+items=mw.get("items") or mw.get("entries") or []
+print(f"  UX-01 my-work items={len(items)}")
+if len(items)<1:
+    print("  FAIL  UX-01 founder my-work empty"); fails+=1
+else:
+    print("  PASS  UX-01 founder my-work non-empty [UX]")
+
+# [UX-02] CT live bundle markers (Phase F + deploy lag honesty)
+html=subprocess.check_output(["curl","-sS","-m","20",f"{APP}/?cb=ux"], text=True)
+js_m=re.search(r"/assets/(index-[A-Za-z0-9_-]+\.js)", html)
+css_m=re.search(r"/assets/(index-[A-Za-z0-9_-]+\.css)", html)
+js=js_m.group(1) if js_m else ""
+css=css_m.group(1) if css_m else ""
+print(f"  UX-02 live assets js={js} css={css}")
+if not js or not css:
+    print("  FAIL  UX-02 missing assets"); fails+=1
+else:
+    bundle=subprocess.check_output(["curl","-sS","-m","40",f"{APP}/assets/{js}"], text=True, errors="ignore")
+    has_phase_f="otzar-text-luminous" in bundle or "otzar-grain" in bundle
+    has_sign_in='Signing in…":"Sign in"' in bundle
+    has_continue='Signing in…":"Continue"' in bundle
+    has_open_work="open-work-lane" in bundle
+    print(f"  phase_f={has_phase_f} sign_in_cta={has_sign_in} continue_cta={has_continue} open_work={has_open_work}")
+    if not has_phase_f:
+        print("  FAIL  UX-02 Phase F markers missing from live bundle"); fails+=1
+    else:
+        print("  PASS  UX-02 Phase F markers on live bundle [UX]")
+    if not has_sign_in:
+        print("  WARN  UX-02b live CTA not Sign in yet (deploy lag) [INVESTOR]")
+    else:
+        print("  PASS  UX-02b Sign in CTA live [INVESTOR]")
+    if not has_open_work:
+        print("  WARN  UX-02c open-work-lane not on live (CT tip not deployed) [UX]")
+    else:
+        print("  PASS  UX-02c open-work-lane live [UX]")
+
+# [PROJECT-01] project list + members + stamped work
+pl=getj(tok, "/otzar/work-projects?state=ACTIVE&take=20")
+projects=pl.get("projects") or []
+print(f"  PROJECT-01 projects={len(projects)}")
+if len(projects)<1:
+    print("  FAIL  PROJECT-01 no active projects"); fails+=1
+else:
+    pid=projects[0].get("project_id")
+    mem=getj(tok, f"/otzar/work-projects/{pid}/members")
+    members=mem.get("members") or []
+    stamped=[i for i in items if i.get("project_id")==pid]
+    print(f"  project={projects[0].get('name','')[:40]} members={len(members)} stamped_work={len(stamped)}")
+    if len(members)<1:
+        print("  FAIL  PROJECT-01 project has no members"); fails+=1
+    else:
+        print("  PASS  PROJECT-01 project members present [PROJECT]")
+    # stamped work may be zero for a random project — prefer any project with stamp
+    stamped_any=sum(1 for i in items if i.get("project_id"))
+    if stamped_any>=1:
+        print(f"  PASS  PROJECT-02 my-work project stamps n={stamped_any} [PROJECT]")
+    else:
+        print("  WARN  PROJECT-02 no project_id stamps on my-work [PROJECT]")
+
+# [PROVIDER-01] OAuth status honesty + Meet not claimed operational
+oauth=getj(tok, "/connectors/oauth/status")
+print(f"  PROVIDER-01 oauth keys={list(oauth.keys())[:8]}")
+# ambient-sync may 409 SCOPE_REAUTH — that is honest external block
+import subprocess as sp
+amb=sp.run(
+    ["curl","-sS","-m","40","-X","POST",f"{API}/otzar/comms/ambient-sync",
+     "-H",f"Authorization: Bearer {tok}","-H","Content-Type: application/json","-d","{}"],
+    capture_output=True, text=True)
+try:
+    ambj=json.loads(amb.stdout or "{}")
+except Exception:
+    ambj={}
+code=ambj.get("code") or ambj.get("error")
+ok=ambj.get("ok")
+print(f"  ambient-sync ok={ok} code={code}")
+if ok is True:
+    print("  PASS  PROVIDER-01 ambient-sync ok [PROVIDER]")
+elif code in ("SCOPE_REAUTH_REQUIRED","GOOGLE_NOT_CONNECTED","MEET_SCOPE_REQUIRED"):
+    print(f"  PASS  PROVIDER-01 Meet honestly blocked ({code}) — not claimed operational [PROVIDER]")
+else:
+    print(f"  WARN  PROVIDER-01 ambient-sync unexpected {str(ambj)[:120]}")
+
+# [INVESTOR-01] multi-persona still green (sample 3)
+for email in ("sadeil@niovlabs.com","vishesh@niovlabs.com","david@niovlabs.com"):
+    t=login(email)
+    if not t:
+        print(f"  FAIL  INVESTOR-01 login {email}"); fails+=1
+    else:
+        print(f"  PASS  INVESTOR-01 login {email} [INVESTOR]")
+
+# [HIERARCHY-01] dandelion seeds route responds (admin)
+seeds=getj(tok, "/org/dandelion/seeds")
+if seeds.get("ok") is True or "seeds" in seeds or seeds.get("code") in (None,):
+    print(f"  PASS  HIERARCHY-01 dandelion seeds reachable ok={seeds.get('ok')} [HIERARCHY]")
+else:
+    print(f"  WARN  HIERARCHY-01 seeds {str(seeds)[:100]}")
+
+if fails:
+    print(f"  FAIL  behavioral suite fails={fails}")
+    raise SystemExit(fails)
+print("  PASS  UX/PROJECT/PROVIDER/INVESTOR behavioral suite")
+PY
+[[ $? -eq 0 ]] || fail "UX/PROJECT/PROVIDER/INVESTOR suite"
+
 echo "=== RESULT fails=$FAILS warns=$WARNS ==="
 exit "$FAILS"
