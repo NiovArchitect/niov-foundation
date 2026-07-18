@@ -2,8 +2,9 @@
 
 > **Purpose:** Survive context compaction. Any agent continuing Otzar work MUST
 > read this file + `HOLISTIC_EXECUTION_LEDGER.md` before building or smoking.
-> Updated: 2026-07-18 (autonomous loop green whole-system smoke on live `da9c008`).
-> Continuity: PRs 697–701 FND, CT 164–167. Script: scripts/otzar-whole-system-smoke.sh
+> Updated: 2026-07-18 — **comms ingestion is ambient/automatic; manual paste is FALLBACK only**.
+> Continuity: FND #705 ambient-sync merged; CT #168 ambient Comms UI merged.
+> Script: scripts/otzar-whole-system-smoke.sh (includes ambient probes).
 
 ---
 
@@ -16,7 +17,7 @@ proven **end-to-end** so enterprises can run on Otzar as the Work OS of the futu
 
 | Pillar | Meaning |
 |--------|---------|
-| **Communication is the OS** | Verbal or text, any medium → extract clarity → choose artifact → Twin executes → notify human. Not blank-doc-first. |
+| **Communication is the OS** | Verbal or text, any medium → extract clarity → choose artifact → Twin executes → notify human. Not blank-doc-first. **Ingestion is ambient** from connected tools (Meet first); **manual paste/demo is fallback only**. |
 | **AI Teammate per employee** | Every person is pegged to a role-aware Twin that does real work on their behalf (docs, forms, follow-ups, collab). |
 | **Memory wallet portability** | Employee skills, flows, preferences, corrections travel with the person from Org A → Org B **like a phone number between carriers**. Org data, secrets, and peer wallets **never leave** with them. No harm to the org on exit. |
 | **Source of truth + ETL** | Optimal pipelines to/from SoT. Any app can connect; connectors are click-and-play; MCP is advanced-only. |
@@ -76,24 +77,30 @@ just copilots. Otzar wins by being:
 
 ### Recently shipped (main)
 
+- **Ambient comms primary** FND `#705` `044916d` — `GET /otzar/comms/sources` + `POST /otzar/comms/ambient-sync` (Google Meet pull → same ingest spine). Manual `/comms/ingest` = fallback.
+- **Ambient Comms UI** CT `#168` `f5fb8a3` — primary hero = sync connected sources; live capture/paste secondary; auto-pull on Comms open.
 - D.1 FND `#694` / CT `#163` — accuracy packs + My Twin panel.
 - Smoke repair FND `#697` `d5d37cc` — role templates, repair endpoint, TECH packs, human role_title.
 - Whole-system FND `#698` `da9c008` — OAuth tool readiness + wallet portability.
-- CT `#164` continuity pointer · `#165` wallet portability panel `137b66a`.
-- Live smoke post-`d5d37cc`: FOUNDER role_title, CEO template, 5 packs, repair ok; employees 5 projects.
+- CT `#164`–`#167` continuity, wallet panel, empty-work routes, AI Teammates missing-tool labels.
+- Live smoke post-`d5d37cc`: FOUNDER role_title, CEO template, 5 packs; employees 5 projects; collab workspace.
 
 ### Merged (awaiting Render if git_commit lags)
 
 | PR | Notes |
 |----|-------|
-| FND **#697** `d5d37cc` | Role-template repair endpoint, createTwin human role, TECH packs, continuity memory |
-| CT **#164** `b47a93a` | Continuity pointer |
+| FND **#705** `044916d` | Ambient auto-sync primary (Meet → WorkSourceEvent → ingest) |
+| FND **#704** `9ff4e7d` | Whole-system smoke collab workspaces |
+| CT **#168** | Ambient-primary Comms UI |
+| **Live lag note** | As of merge, live `git_commit` still `07ad476` — Render autoDeploy true but agent `RENDER_API_KEY` is **401**; cannot force deploy. Re-probe until `044916d` (or later). |
 
 ### In flight (autonomous)
 
-- **Tool readiness** matches OAuth (Google connected) + AgentTemplate seed path via `import.meta.url`
-- **Wallet portability** posture on getMyTwin + CT panel
-- Live: demo team added as MEMBERs on smoke projects (david/vishesh **5 projects**)
+- **Post-deploy smoke** of ambient sources + ambient-sync once `git_commit` includes `#705`
+- **Collab ETL fan-out** — multi-person import resolves owners; my-work must fan to all owners automatically
+- **Background ambient** (beyond Comms page open) — cron/webhook so pull happens without UI visit
+- **More auto sources** after Meet (Slack/email when connectors ready)
+- Phase F design system / third-party UI / wallet export enforcement
 
 **Live data repair already applied (prod, via admin API, 2026-07-18):**
 
@@ -163,12 +170,13 @@ Run **after every coherent deploy**. Fail closed on red product paths.
 ### Coherence invariants
 
 1. Communication → artifact → claim → notify (one spine).
-2. Role template matches human role (never stuck on Digital Twin shell).
-3. Industry packs match org industry.
-4. Tools readiness reflects real bindings + template required_tools.
-5. No cross-tenant data in twin context or export.
-6. Wallet portability never includes other employees' or org-only capsules.
-7. UI never forces user to "live in Otzar" for daily work.
+2. **Comms ingestion is automatic from connected tools; manual paste is fallback only.**
+3. Role template matches human role (never stuck on Digital Twin shell).
+4. Industry packs match org industry.
+5. Tools readiness reflects real bindings + template required_tools.
+6. No cross-tenant data in twin context or export.
+7. Wallet portability never includes other employees' or org-only capsules.
+8. UI never forces user to "live in Otzar" for daily work.
 
 ### How to smoke (API)
 
@@ -178,7 +186,9 @@ API=https://api.otzar.ai/api/v1
 curl -sS -X POST $API/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"sadeil@niovlabs.com","password":"…","requested_operations":["read","write","share","admin_org","create_hives","external_api"]}'
 # then Bearer probe: /otzar/my-twin, /org/ai-teammates, /otzar/enterprise-tools/*, /work-os/my-work, /otzar/work-projects
+# ambient primary: GET /otzar/comms/sources · POST /otzar/comms/ambient-sync
 # conversation: POST /otzar/conversation/message
+# whole-system: bash scripts/otzar-whole-system-smoke.sh
 ```
 
 CT also: `npm run test:e2e:live:workos:full` with `DEMO_SHARED_PASSWORD` set.

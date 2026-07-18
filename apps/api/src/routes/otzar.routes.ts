@@ -613,6 +613,10 @@ export async function registerOtzarRoutes(
         if (result.code === "GOOGLE_NOT_CONNECTED") {
           return reply.code(409).send(result);
         }
+        if (result.code === "SCOPE_REAUTH_REQUIRED") {
+          // Connected Workspace, missing Meet scopes — human reconnect, not a 5xx.
+          return reply.code(409).send(result);
+        }
         if (result.code === "NO_ORG_FOR_CALLER") {
           return reply.code(404).send(result);
         }

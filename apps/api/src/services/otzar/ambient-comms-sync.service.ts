@@ -71,6 +71,12 @@ export interface AmbientCommsSyncResult {
 export type AmbientCommsSyncFailure =
   | { ok: false; code: "NO_ORG_FOR_CALLER" }
   | { ok: false; code: "GOOGLE_NOT_CONNECTED"; message: string }
+  | {
+      ok: false;
+      code: "SCOPE_REAUTH_REQUIRED";
+      message: string;
+      detail?: string;
+    }
   | { ok: false; code: "PROVIDER_ERROR"; message: string; detail?: string };
 
 function statusLabel(s: AmbientSourceStatus): string {
@@ -192,6 +198,16 @@ export async function runAmbientCommsSyncForCaller(args: {
     page_size: maxRecords,
   });
   if (listed.ok === false) {
+    // Meet needs meetings.space.readonly — Workspace may be "connected" without it.
+    if (listed.code === "SCOPE_REAUTH_REQUIRED") {
+      return {
+        ok: false,
+        code: "SCOPE_REAUTH_REQUIRED",
+        message:
+          "Reconnect Google Workspace and grant Meet transcript access so Otzar can auto-pull. Paste remains available as fallback.",
+        detail: listed.code,
+      };
+    }
     return {
       ok: false,
       code: "PROVIDER_ERROR",

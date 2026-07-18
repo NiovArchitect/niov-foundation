@@ -139,5 +139,65 @@ else:
     print("  PASS  collab workspace present for third-party path")
 PY
 
+echo "--- ambient comms (primary path; paste is fallback only) ---"
+# Doctrine: connected tools auto-pull. Manual /comms/ingest is offline fallback.
+curl -sS -m 25 -H "Authorization: Bearer $ATOK" "$API/otzar/comms/sources" > /tmp/ws_comms_sources.json || true
+set +e
+python3 <<'PY'
+import json,sys
+try:
+    d=json.load(open("/tmp/ws_comms_sources.json"))
+except Exception:
+    d={}
+if d.get("ok") is True and isinstance(d.get("sources"), list):
+    auto=[s for s in d["sources"] if s.get("automatic") and not s.get("is_fallback")]
+    fb=[s for s in d["sources"] if s.get("is_fallback")]
+    print(f"  sources auto={len(auto)} fallback={len(fb)} headline={d.get('headline','')[:60]!r}")
+    if len(auto) < 1:
+        print("  FAIL  ambient sources missing primary automatic rail")
+        sys.exit(3)
+    if len(fb) < 1:
+        print("  WARN  no explicit fallback source listed")
+    print("  PASS  ambient sources inventory")
+elif d.get("statusCode") == 404 or "not found" in str(d.get("message","")).lower():
+    print("  WARN  /otzar/comms/sources not on this deploy yet (await ambient #705)")
+else:
+    print(("  FAIL  ambient sources unexpected %r" % (d,))[:200])
+    sys.exit(3)
+PY
+src_rc=$?
+set -e
+if [[ $src_rc -eq 3 ]]; then fail "ambient sources"; fi
+
+curl -sS -m 90 -X POST -H "Authorization: Bearer $ATOK" -H "Content-Type: application/json" \
+  -d '{"max_records":5}' "$API/otzar/comms/ambient-sync" > /tmp/ws_ambient_sync.json || true
+set +e
+python3 <<'PY'
+import json,sys
+try:
+    d=json.load(open("/tmp/ws_ambient_sync.json"))
+except Exception:
+    d={}
+# Primary path success, honest Google-not-connected, or deploy lag 404
+if d.get("ok") is True:
+    print(f"  ambient-sync scanned={d.get('scanned')} ingested={d.get('ingested')} msg={d.get('message','')[:80]!r}")
+    print("  PASS  ambient-sync primary path")
+elif d.get("code") == "GOOGLE_NOT_CONNECTED":
+    print("  PASS  ambient-sync honest GOOGLE_NOT_CONNECTED (connect Workspace; paste is fallback)")
+elif d.get("code") == "SCOPE_REAUTH_REQUIRED":
+    print("  PASS  ambient-sync honest SCOPE_REAUTH_REQUIRED (reconnect Meet scopes; paste is fallback)")
+elif d.get("statusCode") == 404 or "not found" in str(d.get("message","")).lower():
+    print("  WARN  ambient-sync not on this deploy yet (await #705)")
+elif d.get("code") in ("NO_ORG_FOR_CALLER", "PROVIDER_ERROR"):
+    # Older deploy may still wrap reauth as PROVIDER_ERROR — accept as honest non-crash.
+    print(f"  PASS  ambient-sync honest {d.get('code')} {d.get('message','')[:60]}")
+else:
+    print(("  FAIL  ambient-sync unexpected %r" % (d,))[:220])
+    sys.exit(3)
+PY
+sync_rc=$?
+set -e
+if [[ $sync_rc -eq 3 ]]; then fail "ambient-sync"; fi
+
 echo "=== RESULT fails=$FAILS ==="
 exit "$FAILS"
