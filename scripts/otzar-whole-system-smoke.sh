@@ -125,5 +125,19 @@ if n < 1:
 print("  PASS  employee has projects")
 PY
 
+echo "--- third-party / collab SoT ---"
+probe admin "$ATOK" "/otzar/collaboration/workspaces"
+curl -sS -m 25 -H "Authorization: Bearer $ATOK" "$API/otzar/collaboration/workspaces" > /tmp/ws_collab.json
+python3 <<'PY'
+import json
+d=json.load(open("/tmp/ws_collab.json"))
+n=len(d.get("workspaces") or [])
+print(f"  collab workspaces={n}")
+if n < 1:
+    print("  WARN  no collab workspaces (seed [SMOKE] Client pilot collab if empty)")
+else:
+    print("  PASS  collab workspace present for third-party path")
+PY
+
 echo "=== RESULT fails=$FAILS ==="
 exit "$FAILS"
