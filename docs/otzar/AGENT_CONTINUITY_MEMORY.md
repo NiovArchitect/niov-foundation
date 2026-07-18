@@ -145,6 +145,24 @@ just copilots. Otzar wins by being:
 
 ---
 
+## Enterprise scenario catalog (binding)
+
+**128 scenarios** (32 each family) live in:
+
+- `docs/otzar/ENTERPRISE_SCENARIO_CATALOG.md` — full narrative tables  
+- `docs/otzar/enterprise-scenario-catalog.json` — IDs for harness mapping  
+
+| Family | Prefix | Count |
+|--------|--------|-------|
+| User | U- | 32 |
+| Collaboration | C- | 32 |
+| AI Teammate | T- | 32 |
+| Third party | X- | 32 |
+
+Smoke output should tag scenario IDs (e.g. `PASS U-10`, `PASS X-30`). Anti-scenarios A-01…A-08 (never invent clinical/financial facts; paste not primary; etc.) are binding.
+
+---
+
 ## Whole-system smoke matrix (continuous)
 
 Run **after every coherent deploy**. Fail closed on red product paths.
