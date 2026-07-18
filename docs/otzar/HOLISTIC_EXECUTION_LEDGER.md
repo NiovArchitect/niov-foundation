@@ -97,26 +97,27 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active coherent phase
 
-**Phase A — Dandelion operational order** (active)
+**Phase B — Hierarchy propose + admin confirmation** (active)
 
 | Phase | Name | Status |
 |-------|------|--------|
-| **A** | **Organizational discovery + Dandelion operational path** | **ACTIVE** |
-| B | Hierarchy propose + admin confirmation | deferred |
+| A | Organizational discovery + Dandelion operational path | **closed · deployed** |
+| **B** | **Hierarchy propose + admin confirmation** | **ACTIVE** |
 | C | Comms → project → doc/calendar → Twin claim → notify → complete/collab | **closed · live-proven** |
 | D | Role-templated AI Teammate + industry accuracy packs | deferred |
-| E | Enterprise tools: click-and-play + admin inventory/KPI/approve | designed · deferred implementation |
+| E | Enterprise tools: click-and-play + admin inventory/KPI/approve | designed · next after B |
 | F | Full UI consolidation | partial |
 | G | Relay | partial |
 | H | Scale and pressure proof | deferred |
 
 ## Active slice
 
-**A.3 — Ambient structure placement (not admin homework)**
+**B.1 — Hierarchy propose + admin confirm**
 
-Experience: users do not live in Otzar. Structure gaps → ambient TASK + notice
-to **manager/lead**; they place people when it fits. Admin seeding = oversight.
-Project visibility (A.2) + growth→seed (A.1) stay.
+Experience: Otzar discovers members without a manager, **proposes** a soft
+candidate (department + who already leads people), lands a `set_manager` seed.
+Admin **confirms or chooses** — never auto-written. Users do not live in Otzar;
+this is light governance so ambient placement has a reporting home.
 
 ### Completed proof (honest)
 
@@ -139,22 +140,20 @@ Project visibility (A.2) + growth→seed (A.1) stay.
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Ambient structure placement (A.3) | deployed | FND `f37a5be` + CT admin assign exception; live human smoke |
-| Hierarchy confirm UX | incomplete | Phase B |
+| Ambient structure placement (A.3) | deployed | FND `f37a5be` + CT admin assign exception |
+| Hierarchy propose + confirm (B.1) | implementing | growth NEEDS_MANAGER + set_manager seeds |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |
 
 ### Exact blocker (now)
 
-**Phase A.3 deployed** (API `f37a5be`). Experience: ambient manager path default;
-admin **Assign to project** when necessary; Hold / Dismiss remain. Users do not
-live in Otzar. Do **not** start Jira or broad MCP marketplace.
+**Phase B.1**: ship hierarchy propose + admin confirm (`set_manager` seeds).
+Do **not** start Jira or broad MCP marketplace. Phase E next after B.
 
 ### Next executable step
 
-1. Human live smoke (browser session with full TAR): structure refresh → manager
-   notice → place on led project → loop closes; admin exception assign works.
-2. Then Phase B hierarchy or Phase E tools.
+1. Merge + deploy B.1 FND/CT; live smoke: refresh structure → set_manager seed → confirm manager.
+2. Phase E click-and-play tools.
 
 ## Substrate map (do not invent a third project system)
 

@@ -115,6 +115,7 @@ export async function registerOtzarDandelionRoutes(
       orgEntityId: ctx.orgId,
       adminEntityId: ctx.adminId,
       needs_first_project_people: growth.growth.needs_first_project_people,
+      needs_manager_people: growth.growth.needs_manager_people,
     });
     const seeds = await listOrgSeeds(ctx.orgId);
     return reply.code(200).send({
@@ -124,6 +125,8 @@ export async function registerOtzarDandelionRoutes(
       growth_headline: growth.growth.headline,
       members_without_project_count:
         growth.growth.signals.members_without_project_count,
+      members_without_manager_count:
+        growth.growth.signals.members_without_manager_count,
       seeds,
     });
   });
@@ -140,6 +143,7 @@ export async function registerOtzarDandelionRoutes(
         decision?: unknown;
         link_external_collaborator_id?: unknown;
         project_id?: unknown;
+        manager_entity_id?: unknown;
       };
     }>(
       `/api/v1/org/dandelion/seeds/:id/${verb}`,
@@ -162,6 +166,11 @@ export async function registerOtzarDandelionRoutes(
           verb === "approve" && isStr(b.project_id)
             ? (b.project_id as string)
             : undefined;
+        // Phase B — hierarchy seed: admin-confirmed manager.
+        const managerId =
+          verb === "approve" && isStr(b.manager_entity_id)
+            ? (b.manager_entity_id as string)
+            : undefined;
         const result = await fn({
           seedId: request.params.id,
           orgEntityId: ctx.orgId,
@@ -170,6 +179,7 @@ export async function registerOtzarDandelionRoutes(
           ...(decision !== undefined ? { decision } : {}),
           ...(linkId !== undefined ? { linkExternalCollaboratorId: linkId } : {}),
           ...(projectId !== undefined ? { project_id: projectId } : {}),
+          ...(managerId !== undefined ? { manager_entity_id: managerId } : {}),
         });
         if (result.ok === false) {
           return reply.code(result.code === "NOT_FOUND" ? 404 : 422).send(result);

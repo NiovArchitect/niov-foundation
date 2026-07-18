@@ -1,9 +1,12 @@
 // FILE: dandelion-structure-seeds.test.ts
-// PURPOSE: Phase A — pure plan of structure seeds from org-growth people.
-// CONNECTS TO: planStructureSeedsFromGrowth (dandelion-seed.service).
+// PURPOSE: Phase A/B — pure plan of structure + hierarchy seeds from growth.
+// CONNECTS TO: planStructureSeedsFromGrowth, planManagerSeedsFromGrowth.
 
 import { describe, expect, it } from "vitest";
-import { planStructureSeedsFromGrowth } from "../../apps/api/src/services/otzar/dandelion-seed.service.js";
+import {
+  planManagerSeedsFromGrowth,
+  planStructureSeedsFromGrowth,
+} from "../../apps/api/src/services/otzar/dandelion-seed.service.js";
 
 describe("planStructureSeedsFromGrowth", () => {
   it("maps people without projects to add_project_membership seeds", () => {
@@ -30,5 +33,34 @@ describe("planStructureSeedsFromGrowth", () => {
     ]);
     expect(plan).toHaveLength(1);
     expect(plan[0]!.subject_entity_id).toBe("p1");
+  });
+});
+
+describe("planManagerSeedsFromGrowth (Phase B)", () => {
+  it("maps people without managers to set_manager seeds with proposal", () => {
+    const plan = planManagerSeedsFromGrowth([
+      {
+        person_entity_id: "p1",
+        display_name: "Alex",
+        proposed_manager_entity_id: "m1",
+        proposed_manager_name: "Sam Lead",
+      },
+    ]);
+    expect(plan).toHaveLength(1);
+    expect(plan[0]).toMatchObject({
+      seed_type: "set_manager",
+      subject_entity_id: "p1",
+      proposed_manager_entity_id: "m1",
+      proposed_manager_name: "Sam Lead",
+    });
+    expect(plan[0]!.recommended_action).toMatch(/Sam Lead/);
+  });
+
+  it("works without a proposed manager", () => {
+    const plan = planManagerSeedsFromGrowth([
+      { person_entity_id: "p2", display_name: "Jordan" },
+    ]);
+    expect(plan[0]!.recommended_action).toMatch(/Set a manager for Jordan/);
+    expect(plan[0]!.proposed_manager_entity_id).toBeNull();
   });
 });
