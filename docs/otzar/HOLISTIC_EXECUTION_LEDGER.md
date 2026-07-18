@@ -97,13 +97,13 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active coherent phase
 
-**Phase C — Project-centered collaboration + Twin work claim** (active)
+**Phase A — Dandelion operational order** (active)
 
 | Phase | Name | Status |
 |-------|------|--------|
-| A | Organizational discovery + Dandelion operational path | deferred (after C.3) |
+| **A** | **Organizational discovery + Dandelion operational path** | **ACTIVE** |
 | B | Hierarchy propose + admin confirmation | deferred |
-| **C** | **Comms → project → doc/calendar → Twin claim → notify → complete/collab** | **ACTIVE** |
+| C | Comms → project → doc/calendar → Twin claim → notify → complete/collab | **closed · live-proven** |
 | D | Role-templated AI Teammate + industry accuracy packs | deferred |
 | E | Enterprise tools: click-and-play + admin inventory/KPI/approve | designed · deferred implementation |
 | F | Full UI consolidation | partial |
@@ -112,10 +112,12 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**C.3 — Accuracy-critical Twin document work + stay the course**
+**A.1 — Dandelion operational order (structure the substrate)**
 
-C.1–C.3b **live-proven** (`111335b` API + CT `index-BLhYsPgT.js`).  
-Active remaining: **C.3c** dual-control human verify for regulated claims.
+Canonical order: **Listen → Discover → Seed → Govern → Grow**  
+Doctrine: `docs/otzar/DANDELION_OPERATIONAL_ORDER.md`.  
+Bridge: org-growth structure gaps → durable `ORG_SEEDING` seeds (idempotent).  
+Admin surface: one queue, root-first (people → structure → tools → external).
 
 ### Completed proof (honest)
 
@@ -130,28 +132,28 @@ Active remaining: **C.3c** dual-control human verify for regulated claims.
 | Communication chooses artifact (doc vs slides vs form) | live-authenticated (`73ac793`) |
 | Twin claims non-materialized artifacts (e.g. slides) | live-authenticated (`53cee14`) |
 | Safe `twin_work` projection on WorkLedgerView | live-authenticated (`c14147c`→`111335b`) |
-| Today “Twin is working on this” (CT) | live-authenticated (bundle `index-BLhYsPgT.js`) |
-| Edit detection on created docs | live-authenticated (`111335b`, Drive modifiedTime) |
+| Today “Twin is working on this” (CT) | live-authenticated |
+| Edit detection on created docs | live-authenticated (`111335b`) |
+| Dual-control verification (C.3c) | live-authenticated (`013b5d6`) |
 
 ### Incomplete proof
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Dual-control verification for high sensitivity | in progress | human verify gate + Today Verify button |
+| Dandelion operational order (A.1) | in progress | growth→seed bridge + root-first queues |
+| Hierarchy confirm UX | incomplete | Phase B |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |
-| Dandelion operational discovery | incomplete | Phase A |
-| Hierarchy confirm UX | incomplete | Phase B |
 
 ### Exact blocker (now)
 
-Close **C.3c** (regulated complete requires human verify), then Phase A Dandelion.
+**Phase A.1**: one ordered Dandelion spine — Discover lands as Seeds; admin governs; grow without auto-grant.
 Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Ship C.3c verify gate + Today Verify control.
-2. Live-prove regulated complete → VERIFICATION_REQUIRED → verify → complete; then Phase A.
+1. Ship sync-from-growth + Organization Seeding order strip.
+2. Live: Discover from structure → seeds appear → approve → assignment TASK only.
 
 ## Substrate map (do not invent a third project system)
 

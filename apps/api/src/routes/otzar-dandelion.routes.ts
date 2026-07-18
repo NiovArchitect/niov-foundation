@@ -16,7 +16,13 @@ import {
   proposeOnboardingMemoryForCaller,
   proposeTwinCalibrationForCaller,
 } from "../services/otzar/dandelion-growth.service.js";
-import { listOrgSeeds, approveSeed, rejectSeed, holdSeed } from "../services/otzar/dandelion-seed.service.js";
+import {
+  listOrgSeeds,
+  approveSeed,
+  rejectSeed,
+  holdSeed,
+  syncGrowthDiscoveriesToSeeds,
+} from "../services/otzar/dandelion-seed.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 
 function bearerFrom(value: string | string[] | undefined): string | null {
@@ -92,6 +98,34 @@ export async function registerOtzarDandelionRoutes(
     if (ctx === null) return;
     const seeds = await listOrgSeeds(ctx.orgId);
     return reply.code(200).send({ ok: true, seeds });
+  });
+
+  // Phase A — Discover → Seed: land org-growth structure gaps into the
+  // governed queue (idempotent). Never grants membership.
+  app.post("/api/v1/org/dandelion/seeds/sync-from-growth", async (request, reply) => {
+    const ctx = await adminOrg(request, reply);
+    if (ctx === null) return;
+    const growth = await getOrgGrowthForCaller(ctx.adminId);
+    if (growth.ok === false) {
+      return reply
+        .code(growth.code === "ADMIN_REQUIRED" ? 403 : 404)
+        .send({ ok: false, code: growth.code });
+    }
+    const synced = await syncGrowthDiscoveriesToSeeds({
+      orgEntityId: ctx.orgId,
+      adminEntityId: ctx.adminId,
+      needs_first_project_people: growth.growth.needs_first_project_people,
+    });
+    const seeds = await listOrgSeeds(ctx.orgId);
+    return reply.code(200).send({
+      ok: true,
+      created: synced.created,
+      skipped_existing: synced.skipped_existing,
+      growth_headline: growth.growth.headline,
+      members_without_project_count:
+        growth.growth.signals.members_without_project_count,
+      seeds,
+    });
   });
 
   for (const [verb, fn] of [

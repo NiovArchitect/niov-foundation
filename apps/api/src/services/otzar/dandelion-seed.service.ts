@@ -365,6 +365,39 @@ export async function approveSeed(args: {
     resultingAction = setup.ok
       ? `setup action created (${setup.entry.ledger_entry_id}) — access is NOT granted automatically`
       : "approved; setup action creation pending";
+  } else if (
+    d.seed_type === "add_project_membership" ||
+    d.seed_type === "add_team_membership"
+  ) {
+    // Structure seed: advance to a human assignment TASK — never auto-join.
+    const subject =
+      typeof d.subject_name === "string" && d.subject_name.trim().length > 0
+        ? d.subject_name.trim()
+        : "this person";
+    const setup = await createLedgerEntry({
+      org_entity_id: args.orgEntityId,
+      ledger_type: "TASK",
+      source_type: "TRANSCRIPT",
+      owner_entity_id: args.adminEntityId,
+      ...(typeof d.subject_entity_id === "string"
+        ? { target_entity_id: d.subject_entity_id }
+        : {}),
+      title: `Assign ${subject} to a project or workspace`,
+      status: "NEEDS_APPROVAL",
+      priority: "ROUTINE",
+      extraction_source: "TYPESCRIPT_DETERMINISTIC",
+      next_action:
+        "Choose an active project and add membership — Otzar did not auto-assign.",
+      details: {
+        source: "dandelion_seed_approval",
+        from_seed_id: args.seedId,
+        seed_type: d.seed_type,
+        subject_entity_id: d.subject_entity_id ?? null,
+      },
+    });
+    resultingAction = setup.ok
+      ? `assignment setup created — membership is NOT granted automatically`
+      : "approved; assignment setup pending";
   }
   return transition(args.seedId, args.orgEntityId, args.adminEntityId, "SEED_APPROVED", { resulting_action: resultingAction }, "DANDELION_SEED_APPROVED");
 }
@@ -401,4 +434,152 @@ export async function holdSeed(args: {
     { hold_reason: args.reason ?? "Held for later." },
     "DANDELION_SEED_HELD",
   );
+}
+
+// ── Phase A: Discover → Seed bridge ─────────────────────────────────────────
+// Org-growth recommendations (layer 2) land as durable ORG_SEEDING rows (layer 3)
+// so structure gaps share ONE admin queue with work-evidence seeds.
+// See docs/otzar/DANDELION_OPERATIONAL_ORDER.md.
+
+const OPEN_SEED_STATUSES = [
+  "SEED_PROPOSED",
+  "SEED_NEEDS_REVIEW",
+  "SEED_HELD",
+] as const;
+
+export type GrowthSeedCandidate = {
+  seed_type: "add_project_membership";
+  subject_entity_id: string;
+  subject_name: string;
+  recommended_action: string;
+  source_evidence: string;
+  risk_if_ignored: string;
+};
+
+// WHAT: Pure plan of structure seeds from growth people list (unit-testable).
+// WHY: Layer 2 → layer 3 without inventing people who are not org members.
+export function planStructureSeedsFromGrowth(people: Array<{
+  person_entity_id: string;
+  display_name: string;
+}>): GrowthSeedCandidate[] {
+  const out: GrowthSeedCandidate[] = [];
+  const seen = new Set<string>();
+  for (const p of people) {
+    const id = p.person_entity_id.trim();
+    const name = p.display_name.trim();
+    if (id.length === 0 || name.length === 0) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      seed_type: "add_project_membership",
+      subject_entity_id: id,
+      subject_name: name,
+      recommended_action: `Assign ${name} to a first project or workspace`,
+      source_evidence: `${name} is an org member without a live project/workspace assignment (org structure scan).`,
+      risk_if_ignored:
+        "Work, tools, and Twin context stay harder to route accurately for this person.",
+    });
+  }
+  return out;
+}
+
+/**
+ * Materialize org-growth structure discoveries into the governed seed queue.
+ * Idempotent: skips when an open seed already exists for the same type+subject.
+ * NEVER creates memberships, invites, or grants access.
+ */
+export async function syncGrowthDiscoveriesToSeeds(args: {
+  orgEntityId: string;
+  adminEntityId: string;
+  needs_first_project_people: Array<{
+    person_entity_id: string;
+    display_name: string;
+  }>;
+}): Promise<{
+  ok: true;
+  created: number;
+  skipped_existing: number;
+  seeds: OrgSeedView[];
+}> {
+  const planned = planStructureSeedsFromGrowth(args.needs_first_project_people);
+  let created = 0;
+  let skipped = 0;
+  const fresh: OrgSeedView[] = [];
+
+  // Load open seeds once for idempotency (not per candidate).
+  const openRows = await prisma.workLedgerEntry.findMany({
+    where: {
+      org_entity_id: args.orgEntityId,
+      ledger_type: "ORG_SEEDING",
+      status: { in: [...OPEN_SEED_STATUSES] },
+    },
+    select: { ledger_entry_id: true, details: true },
+    take: 200,
+  });
+  const openKeys = new Set(
+    openRows.map((r) => {
+      const d = (r.details ?? {}) as SeedDetails;
+      return `${d.seed_type ?? ""}::${d.subject_entity_id ?? ""}`;
+    }),
+  );
+
+  for (const cand of planned.slice(0, 50)) {
+    const key = `${cand.seed_type}::${cand.subject_entity_id}`;
+    if (openKeys.has(key)) {
+      skipped += 1;
+      continue;
+    }
+
+    const made = await createLedgerEntry({
+      org_entity_id: args.orgEntityId,
+      ledger_type: "ORG_SEEDING",
+      source_type: "TRANSCRIPT",
+      title: cand.recommended_action,
+      summary: cand.source_evidence,
+      status: "SEED_PROPOSED",
+      priority: "ROUTINE",
+      extraction_source: "TYPESCRIPT_DETERMINISTIC",
+      owner_entity_id: args.adminEntityId,
+      next_action: "Admin review — assign to a project (nothing auto-applied)",
+      evidence: [{ quote: cand.source_evidence }],
+      details: {
+        seed_type: cand.seed_type,
+        subject_name: cand.subject_name,
+        subject_entity_id: cand.subject_entity_id,
+        recommended_action: cand.recommended_action,
+        source_conversation_id: null,
+        confidence: "high",
+        approval_required: true,
+        policy_status: "needs_review",
+        sensitivity: "internal",
+        risk_if_ignored: cand.risk_if_ignored,
+        discovery_source: "org_growth_structure",
+      },
+    });
+    if (made.ok) {
+      created += 1;
+      openKeys.add(key);
+      const row = await prisma.workLedgerEntry.findUnique({
+        where: { ledger_entry_id: made.entry.ledger_entry_id },
+      });
+      if (row) fresh.push(projectSeed(row as unknown as SeedRow));
+    }
+  }
+
+  if (created > 0) {
+    await writeAuditEvent({
+      event_type: "ADMIN_ACTION",
+      outcome: "SUCCESS",
+      actor_entity_id: args.adminEntityId,
+      target_entity_id: args.adminEntityId,
+      details: {
+        action: "DANDELION_SYNC_GROWTH_TO_SEEDS",
+        org_entity_id: args.orgEntityId,
+        created,
+        skipped_existing: skipped,
+      },
+    });
+  }
+
+  return { ok: true, created, skipped_existing: skipped, seeds: fresh };
 }
