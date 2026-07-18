@@ -89,14 +89,14 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`100ece7814c3`** (E.1 enterprise tools) | 2026-07-18 |
-| Foundation main tip | `100ece7814c3` | 2026-07-18 |
-| Control Tower main tip | `010e77880efd` (E.1 UX) | 2026-07-18 |
-| Live providers | Calendar write · non-empty project Google Doc · share · Twin claim · **enterprise-tools catalog/inventory** | |
+| Foundation live SHA | **`caa0fbbb3041`** (E.3 accuracy KPIs) | 2026-07-18 |
+| Foundation main tip | `caa0fbbb3041` | 2026-07-18 |
+| Control Tower main tip | `b99fef2799e6` (E.3 accuracy UI) | 2026-07-18 |
+| Live providers | Twin claim · enterprise-tools catalog/inventory · **accuracy dual-control KPIs** | |
 
 ## Active coherent phase
 
-**Phase E — Enterprise tools click-and-play** (active)
+**Phase E — Enterprise tools** (closed · deployed through E.3)
 
 | Phase | Name | Status |
 |-------|------|--------|
@@ -104,18 +104,16 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 | B | Hierarchy propose + admin confirmation | **closed · deployed** |
 | C | Comms → project → doc/calendar → Twin claim → notify → complete/collab | **closed · live-proven** |
 | D | Role-templated AI Teammate + industry accuracy packs | deferred |
-| **E** | **Enterprise tools: click-and-play + admin inventory/KPI/approve** | **ACTIVE** |
+| E | Enterprise tools: click-and-play + inventory/KPI/approve/accuracy | **closed · deployed (E.1–E.3)** |
 | F | Full UI consolidation | partial |
 | G | Relay | partial |
 | H | Scale and pressure proof | deferred |
 
 ## Active slice
 
-**E.3 — Twin accuracy KPI rollups**
-
-Experience: admin inventory shows **Twin vs human dual-control** counts —
-regulated claims, awaiting verify, human verified, human edits after claim.
-Honest rollup from recent ledger twin_work only. Never invents metrics.
+**Phase E complete (E.1–E.3).** No active E slice until directed.
+Optional next: Phase D accuracy packs, Phase F UI consolidation, or deeper
+accuracy dashboards — not started.
 
 ### Completed proof (honest)
 
@@ -143,17 +141,17 @@ Honest rollup from recent ledger twin_work only. Never invents metrics.
 | Employee click-and-play multi-tool catalog (E.1) | deployed | `100ece78` + CT Your tools |
 | Admin tool inventory + KPI (E.1) | deployed | Inventory & KPIs tab |
 | Per-person inventory + approve/deny/revoke (E.2) | deployed | people + decide/revoke |
-| Twin accuracy KPI rollups (E.3) | implementing | inventory.accuracy |
+| Twin accuracy KPI rollups (E.3) | deployed | API `caa0fbb` + inventory.accuracy |
 
 ### Exact blocker (now)
 
-**Phase E.3**: ship Twin accuracy KPIs on admin inventory.
-Do **not** start Jira or broad MCP marketplace.
+**None on Phase E.** Click-and-play, inventory, approve/deny/revoke, and Twin
+accuracy KPIs are live. Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Merge + deploy E.3; live smoke: Inventory shows Twin accuracy strip.
-2. Optional: deeper accuracy dashboards / per-project accuracy.
+1. Browser smoke (full TAR): Inventory → Twin accuracy strip; Approve/Deny; Revoke.
+2. On direction: Phase D accuracy packs, Phase F UI, or deeper accuracy dashboards.
 
 ## Substrate map (do not invent a third project system)
 
