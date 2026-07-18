@@ -98,10 +98,10 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`29d664baf69d`** (D.1 accuracy packs + ledger) | 2026-07-18 |
-| Foundation main tip | `29d664baf69d` | 2026-07-18 |
-| Control Tower main tip | `5998f23c5e0a` (D.1 My Twin accuracy packs UI) | 2026-07-18 |
-| Live providers | Twin claim · enterprise-tools · accuracy KPIs · **industry accuracy packs + role posture** | |
+| Foundation live SHA | **`da9c008b9ced`** (whole-system: tools OAuth readiness + wallet portability) | 2026-07-18 |
+| Foundation main tip | `5042269`+ (continuity) / feature `da9c008` | 2026-07-18 |
+| Control Tower main tip | `0427a1d` (wallet panel + My Work ambient empty) | 2026-07-18 |
+| Live providers | Twin claim · enterprise-tools · accuracy packs · **wallet portability** · **OAuth tool readiness** | |
 
 ## Active coherent phase
 
