@@ -33,8 +33,12 @@ package, etc. Provider materialization follows when a real rail exists; otherwis
 the Twin still **claims** the work honestly (e.g. slides until Slides create lands).
 
 ```
-communication → extract clarity → choose artifact → (materialize if rail) → Twin claims → notify human
+connected tools (auto primary) → WorkSourceEvent → extract clarity → choose artifact → Twin claims → notify
+manual paste / live capture (fallback only) ↗
 ```
+
+**Doctrine:** Ingestion of comms is **not** manual. Paste/demo is offline fallback.
+Rails: `GET /otzar/comms/sources` · `POST /otzar/comms/ambient-sync` · fallback `POST /otzar/comms/ingest`.
 
 ### AI Teammate work model
 
@@ -98,14 +102,14 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`da9c008b9ced`** (whole-system: tools OAuth readiness + wallet portability) | 2026-07-18 |
-| Foundation main tip | `5042269`+ (continuity) / feature `da9c008` | 2026-07-18 |
-| Control Tower main tip | `0427a1d` (wallet panel + My Work ambient empty) | 2026-07-18 |
-| Live providers | Twin claim · enterprise-tools · accuracy packs · **wallet portability** · **OAuth tool readiness** | |
+| Foundation live SHA | **`07ad47615945`** (lags main — awaiting Render autoDeploy of `#705`) | 2026-07-18 |
+| Foundation main tip | **`044916d`** ambient auto-sync primary (`#705`) | 2026-07-18 |
+| Control Tower main tip | **`f5fb8a3`** ambient Comms UI (`#168`) — live static may lag | 2026-07-18 |
+| Live providers | Twin claim · enterprise-tools · accuracy packs · wallet · **ambient Meet sync (main; live pending)** | |
 
 ## Active coherent phase
 
-**Phase D — Role-templated AI Teammate + industry accuracy packs** (D.1 closed · deployed)
+**Comms ambient primary + Phase D/E closed.** Manual paste is fallback only.
 
 | Phase | Name | Status |
 |-------|------|--------|
