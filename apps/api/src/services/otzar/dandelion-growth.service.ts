@@ -602,13 +602,13 @@ export async function getOrgGrowthForCaller(
   }
 
   // Phase B recommendations: only when hierarchy has *started* (someone already
-  // manages people) or the person has a department — pure flat orgs stay calm
-  // (needs_manager_people still lists everyone for seed sync / admin confirm).
+  // manages people). Flat orgs stay calm on the capped card list;
+  // needs_manager_people still lists everyone for seed sync / admin confirm.
   const hierarchyStarted = managerEdges.length > 0;
   let managerRecs = 0;
   for (const gap of needsManagerPeople) {
+    if (!hierarchyStarted) break;
     if (managerRecs >= 4) break;
-    if (!hierarchyStarted && gap.department === null) continue;
     const proposed = gap.proposed_manager_name;
     recommendations.push({
       kind: "NEEDS_MANAGER",
