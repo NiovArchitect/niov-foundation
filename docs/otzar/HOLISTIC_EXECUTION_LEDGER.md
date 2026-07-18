@@ -97,27 +97,27 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active coherent phase
 
-**Phase B — Hierarchy propose + admin confirmation** (active)
+**Phase E — Enterprise tools click-and-play** (active)
 
 | Phase | Name | Status |
 |-------|------|--------|
 | A | Organizational discovery + Dandelion operational path | **closed · deployed** |
-| **B** | **Hierarchy propose + admin confirmation** | **ACTIVE** |
+| B | Hierarchy propose + admin confirmation | **closed · deployed** |
 | C | Comms → project → doc/calendar → Twin claim → notify → complete/collab | **closed · live-proven** |
 | D | Role-templated AI Teammate + industry accuracy packs | deferred |
-| E | Enterprise tools: click-and-play + admin inventory/KPI/approve | designed · next after B |
+| **E** | **Enterprise tools: click-and-play + admin inventory/KPI/approve** | **ACTIVE** |
 | F | Full UI consolidation | partial |
 | G | Relay | partial |
 | H | Scale and pressure proof | deferred |
 
 ## Active slice
 
-**B.1 — Hierarchy propose + admin confirm**
+**E.1 — Capability catalog + admin inventory**
 
-Experience: Otzar discovers members without a manager, **proposes** a soft
-candidate (department + who already leads people), lands a `set_manager` seed.
-Admin **confirms or chooses** — never auto-written. Users do not live in Otzar;
-this is light governance so ambient placement has a reporting home.
+Experience: employees pick a **capability** (calendars, documents, chat…) and
+connect in a few clicks when org credentials allow; otherwise they request
+access. Admins see inventory + KPI strip + pending requests. MCP is advanced
+only — never primary vocabulary. Users do not live in Otzar.
 
 ### Completed proof (honest)
 
