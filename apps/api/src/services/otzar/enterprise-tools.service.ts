@@ -24,6 +24,11 @@ import {
 } from "../connector-rails/scope-grant.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
 import { approveSeed, rejectSeed } from "./dandelion-seed.service.js";
+import {
+  emptyTwinAccuracyKpis,
+  rollupTwinAccuracyKpis,
+  type TwinAccuracyKpis,
+} from "./twin-accuracy-kpis.js";
 
 export type ToolConnectStatus =
   | "connected"
@@ -401,6 +406,8 @@ export type EnterpriseToolsInventoryView = {
       allowed_operations: string[];
     }>;
   }>;
+  /** Phase E.3 — Twin accuracy / dual-control KPI rollup (recent ledger). */
+  accuracy: TwinAccuracyKpis;
   generated_at: string;
 };
 
@@ -618,12 +625,23 @@ export async function getEnterpriseToolsInventoryForAdmin(
     active_employee_grants: employeeGrants.length,
   };
 
+  // Phase E.3 — Twin accuracy KPIs from recent ledger rows (bounded sample).
+  const recentLedger = await prisma.workLedgerEntry.findMany({
+    where: { org_entity_id: orgEntityId },
+    select: { status: true, details: true },
+    orderBy: { updated_at: "desc" },
+    take: 500,
+  });
+  const accuracy = rollupTwinAccuracyKpis(recentLedger);
+
   const headline =
-    kpis.pending_access_requests > 0
-      ? `${kpis.pending_access_requests} tool request${kpis.pending_access_requests === 1 ? "" : "s"} need a decision.`
-      : kpis.capabilities_connected > 0
-        ? `${kpis.capabilities_connected} capability area${kpis.capabilities_connected === 1 ? "" : "s"} live — inventory below.`
-        : "No tools connected yet. Enable app credentials, then employees can click-and-play.";
+    accuracy.awaiting_human_verify > 0
+      ? `${accuracy.awaiting_human_verify} accuracy-critical Twin item${accuracy.awaiting_human_verify === 1 ? "" : "s"} need human verification.`
+      : kpis.pending_access_requests > 0
+        ? `${kpis.pending_access_requests} tool request${kpis.pending_access_requests === 1 ? "" : "s"} need a decision.`
+        : kpis.capabilities_connected > 0
+          ? `${kpis.capabilities_connected} capability area${kpis.capabilities_connected === 1 ? "" : "s"} live — inventory below.`
+          : "No tools connected yet. Enable app credentials, then employees can click-and-play.";
 
   return {
     ok: true,
@@ -633,10 +651,14 @@ export async function getEnterpriseToolsInventoryForAdmin(
       tools,
       pending_requests,
       people,
+      accuracy,
       generated_at: new Date().toISOString(),
     },
   };
 }
+
+/** Exported for unit tests / future standalone accuracy route. */
+export { emptyTwinAccuracyKpis, rollupTwinAccuracyKpis };
 
 /**
  * Phase E.2 — admin decides a tool access request in place (approve/deny).
