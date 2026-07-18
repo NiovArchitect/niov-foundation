@@ -77,7 +77,10 @@ just copilots. Otzar wins by being:
 ### Recently shipped (main)
 
 - D.1 FND `#694` / CT `#163` — accuracy packs + My Twin panel.
-- Live fingerprint was `b54d793` ledger / feature `29d664b` / CT `5998f23` (update after next deploy).
+- Smoke repair FND `#697` `d5d37cc` — role templates, repair endpoint, TECH packs, human role_title.
+- Whole-system FND `#698` `da9c008` — OAuth tool readiness + wallet portability.
+- CT `#164` continuity pointer · `#165` wallet portability panel `137b66a`.
+- Live smoke post-`d5d37cc`: FOUNDER role_title, CEO template, 5 packs, repair ok; employees 5 projects.
 
 ### Merged (awaiting Render if git_commit lags)
 
