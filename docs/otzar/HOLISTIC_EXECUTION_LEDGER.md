@@ -23,7 +23,8 @@ non-blocking ambient harness (voice-first capable). Goal: autonomous enterprises
 
 > Full continuity (smoke matrix, live repairs, open PRs, gaps):  
 > **`docs/otzar/AGENT_CONTINUITY_MEMORY.md`** — read before continuing any agent session.  
-> **`docs/otzar/ENTERPRISE_SCENARIO_CATALOG.md`** — 128 binding scenarios (U/C/T/X × 32).
+> **`docs/otzar/ENTERPRISE_SCENARIO_CATALOG.md`** — 128 binding scenarios (U/C/T/X × 32).  
+> **`docs/otzar/HOLISTIC_ACCEPTANCE_GATE.md`** — founder completion gate (CT deploy, investor journey, consolidation).
 
 ### Communication is the OS
 
@@ -103,10 +104,12 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`044916d081a6`** ambient auto-sync primary live · Meet may need SCOPE reauth | 2026-07-18 |
-| Foundation main tip | **`044916d`** ambient auto-sync primary (`#705`) | 2026-07-18 |
-| Control Tower main tip | **`f5fb8a3`** ambient Comms UI (`#168`) — live static may lag | 2026-07-18 |
-| Live providers | Twin claim · enterprise-tools · accuracy packs · wallet · **ambient Meet sync (main; live pending)** | |
+| Foundation live SHA | **`86746d3a25c0`** (enterprise smoke harness on main) | 2026-07-18 |
+| Foundation main tip | **`86746d3`** + acceptance gate doc in flight | 2026-07-18 |
+| Control Tower main tip | **`d959c30`** Phase F wave-2 `#170` | 2026-07-18 |
+| Control Tower **live** bundle | **`index-4BPnPgW8.js`** + **`index-DzNUeESq.css`** (last-modified 18:22:57Z) Phase F markers **present** | 2026-07-18 |
+| Live providers | Google Doc **CREATED** + Calendar event **CREATED**; Meet ambient-sync **SCOPE_REAUTH_REQUIRED** (not operational) | 2026-07-18 |
+| Acceptance gate | **OPEN** — see `HOLISTIC_ACCEPTANCE_GATE.md` | 2026-07-18 |
 
 ## Active coherent phase
 
