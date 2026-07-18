@@ -47,7 +47,7 @@ When seeds land, admins review in this order — structure before tools:
 |-----------|-----------------|----------------------|
 | `confirm_or_activate_person` | Person from workstream | Next governed step (no auto-invite) |
 | `resolve_identity` | Who is this? | Confirm identity |
-| `add_project_membership` | Needs first project / workspace | Setup TASK: assign to a project — **no auto-membership** |
+| `add_project_membership` | Needs first project / workspace | Admin **chooses** project → membership write; or setup TASK if no project chosen — **never auto-picks** |
 | `add_team_membership` | Team structure | Setup TASK — no auto-join |
 | `confirm_support_role` | Support edge, not owner | Confirm role |
 | `add_work_owner_edge` | Ownership relationship | Confirm owner |

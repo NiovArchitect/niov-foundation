@@ -112,13 +112,11 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**A.2 — Projects visible in Work OS (structure blind spot)**
+**A.3 — Structure seed → assign to project (close the loop)**
 
-Projects are the coherence anchor for Dandelion structure + Twin work.  
-Employees must **see** projects they are on (Today + nav More + Projects page),
-with human names — not hidden routes or raw entity UUIDs.
-
-**A.1** (landed): Listen → Discover → Seed → Govern → Grow + growth→seed bridge.
+Admin picks an active project on a structure seed → membership write (org-admin
+rail) + seed SEED_APPROVED. No auto-pick. A.1/A.2 landed (growth→seed, project
+visibility).
 
 ### Completed proof (honest)
 
@@ -141,20 +139,20 @@ with human names — not hidden routes or raw entity UUIDs.
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Dandelion operational order (A.1) | in progress | growth→seed bridge + root-first queues |
+| Structure seed → project assign (A.3) | in progress | approve with project_id |
 | Hierarchy confirm UX | incomplete | Phase B |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |
 
 ### Exact blocker (now)
 
-**Phase A.2**: project visibility in employee Work OS so structure seeds and Twin context have a place to land.
+**Phase A.3**: admin assigns seed subject to a chosen project in one governed step.
 Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Ship Projects in More + Today panel + display names + colleague picker.
-2. Live: employee sees projects; empty state honest; admin seed → assign still governed.
+1. Live A.2 projects + A.3 seed assign.
+2. Then Phase B hierarchy or Phase E tools.
 
 ## Substrate map (do not invent a third project system)
 

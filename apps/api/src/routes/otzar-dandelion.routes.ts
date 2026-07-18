@@ -135,7 +135,12 @@ export async function registerOtzarDandelionRoutes(
   ] as const) {
     app.post<{
       Params: { id: string };
-      Body: { reason?: unknown; decision?: unknown; link_external_collaborator_id?: unknown };
+      Body: {
+        reason?: unknown;
+        decision?: unknown;
+        link_external_collaborator_id?: unknown;
+        project_id?: unknown;
+      };
     }>(
       `/api/v1/org/dandelion/seeds/:id/${verb}`,
       async (request, reply) => {
@@ -152,6 +157,11 @@ export async function registerOtzarDandelionRoutes(
           verb === "approve" && isStr(b.link_external_collaborator_id)
             ? (b.link_external_collaborator_id as string)
             : undefined;
+        // [A.3] structure seed: explicit project assignment on approve.
+        const projectId =
+          verb === "approve" && isStr(b.project_id)
+            ? (b.project_id as string)
+            : undefined;
         const result = await fn({
           seedId: request.params.id,
           orgEntityId: ctx.orgId,
@@ -159,6 +169,7 @@ export async function registerOtzarDandelionRoutes(
           ...(reason !== undefined ? { reason } : {}),
           ...(decision !== undefined ? { decision } : {}),
           ...(linkId !== undefined ? { linkExternalCollaboratorId: linkId } : {}),
+          ...(projectId !== undefined ? { project_id: projectId } : {}),
         });
         if (result.ok === false) {
           return reply.code(result.code === "NOT_FOUND" ? 404 : 422).send(result);

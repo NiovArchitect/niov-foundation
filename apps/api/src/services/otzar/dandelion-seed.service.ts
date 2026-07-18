@@ -26,6 +26,7 @@ import {
   recordCollaboratorIdentifier,
   type PossibleCollaboratorMatch,
 } from "./external-collaborator-identity.service.js";
+import { addWorkProjectMemberForCaller } from "./work-project.service.js";
 
 export interface OrgSeedView {
   seed_id: string;
@@ -208,6 +209,13 @@ export async function approveSeed(args: {
    *  for. Dismiss = the existing reject verb. */
   decision?: "link_existing" | "track_new";
   linkExternalCollaboratorId?: string;
+  /**
+   * [A.3] For add_project_membership seeds: when set, admin assigns the
+   * subject to this ACTIVE org project (via org-admin membership rail)
+   * instead of only creating a follow-up TASK. Explicit project choice
+   * required — never auto-picks a project.
+   */
+  project_id?: string;
 }): Promise<SeedActionSuccess | SeedActionFailure> {
   const row = await loadSeed(args.seedId, args.orgEntityId);
   if (row === null) return { ok: false, code: "NOT_FOUND", message: "seed not found" };
@@ -365,11 +373,80 @@ export async function approveSeed(args: {
     resultingAction = setup.ok
       ? `setup action created (${setup.entry.ledger_entry_id}) — access is NOT granted automatically`
       : "approved; setup action creation pending";
-  } else if (
-    d.seed_type === "add_project_membership" ||
-    d.seed_type === "add_team_membership"
-  ) {
-    // Structure seed: advance to a human assignment TASK — never auto-join.
+  } else if (d.seed_type === "add_project_membership") {
+    const subject =
+      typeof d.subject_name === "string" && d.subject_name.trim().length > 0
+        ? d.subject_name.trim()
+        : "this person";
+    const subjectId =
+      typeof d.subject_entity_id === "string" ? d.subject_entity_id : null;
+    const projectId =
+      typeof args.project_id === "string" && args.project_id.length > 0
+        ? args.project_id
+        : null;
+
+    if (projectId !== null && subjectId !== null) {
+      // Explicit admin choice of project — assign via governed org-admin rail.
+      const project = await prisma.workProject.findFirst({
+        where: {
+          project_id: projectId,
+          org_entity_id: args.orgEntityId,
+          state: "ACTIVE",
+        },
+        select: { project_id: true, name: true },
+      });
+      if (project === null) {
+        return {
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: "Choose an active project in your organization.",
+        };
+      }
+      const added = await addWorkProjectMemberForCaller({
+        callerEntityId: args.adminEntityId,
+        projectId: project.project_id,
+        entityId: subjectId,
+        role: "MEMBER",
+        actorIsOrgAdmin: true,
+        actorOrgEntityId: args.orgEntityId,
+      });
+      if (!added.ok && added.code !== "ALREADY_MEMBER") {
+        return {
+          ok: false,
+          code: "INVALID_REQUEST",
+          message: `Could not assign to project (${added.code}).`,
+        };
+      }
+      resultingAction =
+        added.ok === false && added.code === "ALREADY_MEMBER"
+          ? `already on project “${project.name}” — seed closed`
+          : `assigned to project “${project.name}” — membership recorded (admin-approved)`;
+    } else {
+      // No project chosen: create assignment TASK only (never auto-pick).
+      const setup = await createLedgerEntry({
+        org_entity_id: args.orgEntityId,
+        ledger_type: "TASK",
+        source_type: "TRANSCRIPT",
+        owner_entity_id: args.adminEntityId,
+        ...(subjectId !== null ? { target_entity_id: subjectId } : {}),
+        title: `Assign ${subject} to a project or workspace`,
+        status: "NEEDS_APPROVAL",
+        priority: "ROUTINE",
+        extraction_source: "TYPESCRIPT_DETERMINISTIC",
+        next_action:
+          "Choose an active project and add membership — Otzar did not auto-assign.",
+        details: {
+          source: "dandelion_seed_approval",
+          from_seed_id: args.seedId,
+          seed_type: d.seed_type,
+          subject_entity_id: subjectId,
+        },
+      });
+      resultingAction = setup.ok
+        ? `assignment setup created — pick a project to finish (not auto-assigned)`
+        : "approved; assignment setup pending";
+    }
+  } else if (d.seed_type === "add_team_membership") {
     const subject =
       typeof d.subject_name === "string" && d.subject_name.trim().length > 0
         ? d.subject_name.trim()
@@ -382,12 +459,11 @@ export async function approveSeed(args: {
       ...(typeof d.subject_entity_id === "string"
         ? { target_entity_id: d.subject_entity_id }
         : {}),
-      title: `Assign ${subject} to a project or workspace`,
+      title: `Assign ${subject} to a team`,
       status: "NEEDS_APPROVAL",
       priority: "ROUTINE",
       extraction_source: "TYPESCRIPT_DETERMINISTIC",
-      next_action:
-        "Choose an active project and add membership — Otzar did not auto-assign.",
+      next_action: "Choose team membership — Otzar did not auto-assign.",
       details: {
         source: "dandelion_seed_approval",
         from_seed_id: args.seedId,
@@ -396,8 +472,8 @@ export async function approveSeed(args: {
       },
     });
     resultingAction = setup.ok
-      ? `assignment setup created — membership is NOT granted automatically`
-      : "approved; assignment setup pending";
+      ? `team assignment setup created — not auto-joined`
+      : "approved; team setup pending";
   }
   return transition(args.seedId, args.orgEntityId, args.adminEntityId, "SEED_APPROVED", { resulting_action: resultingAction }, "DANDELION_SEED_APPROVED");
 }
