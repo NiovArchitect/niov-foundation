@@ -916,6 +916,23 @@ export interface MyTwinView {
   // SAFE labels + pack catalog priors only. Never invents clinical
   // or financial facts; never exposes template body or capability flags.
   accuracy_pack_posture?: AccuracyPackPostureView;
+  // Whole-system — memory wallet portability posture (personal vs org).
+  wallet_portability?: WalletPortabilityPostureView;
+}
+
+/** Safe projection of person vs org wallet portability. */
+export interface WalletPortabilityPostureView {
+  portable_summary: string;
+  org_retained_summary: string;
+  never_export_summary: string;
+  buckets: Array<{
+    class: string;
+    label: string;
+    description: string;
+    examples: string[];
+  }>;
+  leaves_org_without_harm: true;
+  takes_only_personal_layer: true;
 }
 
 /** Phase D.1 safe projection of industry accuracy pack posture. */
@@ -3173,6 +3190,30 @@ export class OtzarService {
       accuracyPackPosture = undefined;
     }
 
+    // Wallet portability — pure posture; personal layer travels, org stays.
+    let walletPortability: WalletPortabilityPostureView | undefined;
+    try {
+      const { resolveWalletPortabilityPosture } = await import(
+        "./wallet-portability.js"
+      );
+      const wp = resolveWalletPortabilityPosture();
+      walletPortability = {
+        portable_summary: wp.portable_summary,
+        org_retained_summary: wp.org_retained_summary,
+        never_export_summary: wp.never_export_summary,
+        buckets: wp.buckets.map((b) => ({
+          class: b.class,
+          label: b.label,
+          description: b.description,
+          examples: b.examples,
+        })),
+        leaves_org_without_harm: true,
+        takes_only_personal_layer: true,
+      };
+    } catch {
+      walletPortability = undefined;
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -3219,6 +3260,9 @@ export class OtzarService {
         : {}),
       ...(accuracyPackPosture !== undefined
         ? { accuracy_pack_posture: accuracyPackPosture }
+        : {}),
+      ...(walletPortability !== undefined
+        ? { wallet_portability: walletPortability }
         : {}),
       voice_readiness_state: voiceReadinessState,
     };

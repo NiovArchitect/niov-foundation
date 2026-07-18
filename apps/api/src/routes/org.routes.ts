@@ -78,6 +78,7 @@ import { assertEntitledForOrgSoftGate } from "../services/billing/entitlement-ch
 import { recordUsageForOrg } from "../services/billing/usage-meter.service.js";
 import { normalizeTwinAutonomy } from "../services/governance/twin-autonomy.js";
 import { computeTwinToolReadiness } from "../services/otzar/twin-tool-readiness.js";
+import { getOAuthStatusForOrg } from "../services/connector/connector-oauth.service.js";
 import type { AuthService } from "../services/auth.service.js";
 
 // [SEC — PROD-UX-APPROVAL-LOOP finding] The raw `Entity` row carries
@@ -2757,7 +2758,8 @@ export async function registerOrgRoutes(
             .filter((r): r is string => typeof r === "string" && r.length > 0),
         ),
       );
-      const [orgBindings, twinConvs, ownerLedger, pageTemplates] = await Promise.all([
+      const [orgBindings, twinConvs, ownerLedger, pageTemplates, oauthStatus] =
+        await Promise.all([
         prisma.connectorBinding.findMany({
           where: { org_entity_id: orgEntityId, enabled: true, deleted_at: null },
           select: { type: true },
@@ -2786,9 +2788,25 @@ export async function registerOrgRoutes(
               },
               select: { role_name: true, required_tools: true },
             }),
+        // OAuth is the live click-and-play connect truth (catalog); include
+        // VERIFIED / CONNECTED_UNVERIFIED providers so readiness matches UI.
+        getOAuthStatusForOrg(orgEntityId).catch(() => ({
+          ok: true as const,
+          providers: [] as Array<{ provider: string; status: string }>,
+        })),
       ]);
-      const connectedToolsCount = new Set(orgBindings.map((b) => b.type)).size;
+      const oauthConnectedProviders = (oauthStatus.providers ?? [])
+        .filter(
+          (p) =>
+            p.status === "VERIFIED" || p.status === "CONNECTED_UNVERIFIED",
+        )
+        .map((p) => p.provider);
       const orgBindingTypes = orgBindings.map((b) => b.type);
+      const connectedToolsCount = new Set(
+        [...orgBindingTypes, ...oauthConnectedProviders].map((t) =>
+          t.trim().toUpperCase(),
+        ),
+      ).size;
       const requiredByTemplate = new Map(
         pageTemplates.map((t) => [t.role_name, t.required_tools]),
       );
@@ -2842,6 +2860,7 @@ export async function registerOrgRoutes(
             requiredByTemplate.get(configByTwin.get(t.entity_id)?.role_template ?? "") ?? [],
             orgBindingTypes,
             connectedToolsCount,
+            oauthConnectedProviders,
           ),
           recent_activity: activity,
         };
