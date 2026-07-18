@@ -26,7 +26,12 @@ import {
   recordCollaboratorIdentifier,
   type PossibleCollaboratorMatch,
 } from "./external-collaborator-identity.service.js";
-import { addWorkProjectMemberForCaller } from "./work-project.service.js";
+import {
+  addWorkProjectMemberForCaller,
+} from "./work-project.service.js";
+import { makeNotificationService } from "../notification/notification.service.js";
+
+const notificationService = makeNotificationService({});
 
 export interface OrgSeedView {
   seed_id: string;
@@ -210,10 +215,9 @@ export async function approveSeed(args: {
   decision?: "link_existing" | "track_new";
   linkExternalCollaboratorId?: string;
   /**
-   * [A.3] For add_project_membership seeds: when set, admin assigns the
-   * subject to this ACTIVE org project (via org-admin membership rail)
-   * instead of only creating a follow-up TASK. Explicit project choice
-   * required — never auto-picks a project.
+   * [A.3] Exception path only: org-admin may supply project_id to place the
+   * person immediately. Default path routes a TASK to their manager / lead.
+   * Never auto-picks a project.
    */
   project_id?: string;
 }): Promise<SeedActionSuccess | SeedActionFailure> {
@@ -374,6 +378,8 @@ export async function approveSeed(args: {
       ? `setup action created (${setup.entry.ledger_entry_id}) — access is NOT granted automatically`
       : "approved; setup action creation pending";
   } else if (d.seed_type === "add_project_membership") {
+    // Placement is manager/lead work. Default: TASK for their manager.
+    // Optional project_id = org-admin exception only (explicit override).
     const subject =
       typeof d.subject_name === "string" && d.subject_name.trim().length > 0
         ? d.subject_name.trim()
@@ -386,7 +392,7 @@ export async function approveSeed(args: {
         : null;
 
     if (projectId !== null && subjectId !== null) {
-      // Explicit admin choice of project — assign via governed org-admin rail.
+      // Admin exception: place now (still explicit project — never auto-pick).
       const project = await prisma.workProject.findFirst({
         where: {
           project_id: projectId,
@@ -419,32 +425,67 @@ export async function approveSeed(args: {
       }
       resultingAction =
         added.ok === false && added.code === "ALREADY_MEMBER"
-          ? `already on project “${project.name}” — seed closed`
-          : `assigned to project “${project.name}” — membership recorded (admin-approved)`;
+          ? `already on project “${project.name}” — seed closed (admin exception)`
+          : `admin exception: assigned to “${project.name}” — normally their manager places them`;
     } else {
-      // No project chosen: create assignment TASK only (never auto-pick).
+      // Default grow path: task for their manager (or reviewer if none).
+      let managerId: string | null = null;
+      if (subjectId !== null) {
+        const mgrEdge = await prisma.entityMembership.findFirst({
+          where: {
+            child_id: subjectId,
+            is_active: true,
+            // Manager edge is person→person: parent is manager, not the org.
+            parent_id: { not: args.orgEntityId },
+          },
+          select: { parent_id: true },
+        });
+        if (mgrEdge !== null) {
+          const parent = await prisma.entity.findFirst({
+            where: {
+              entity_id: mgrEdge.parent_id,
+              entity_type: "PERSON",
+              status: "ACTIVE",
+              deleted_at: null,
+            },
+            select: { entity_id: true },
+          });
+          managerId = parent?.entity_id ?? null;
+        }
+      }
+      const taskOwner = managerId ?? args.adminEntityId;
       const setup = await createLedgerEntry({
         org_entity_id: args.orgEntityId,
         ledger_type: "TASK",
         source_type: "TRANSCRIPT",
-        owner_entity_id: args.adminEntityId,
+        owner_entity_id: taskOwner,
         ...(subjectId !== null ? { target_entity_id: subjectId } : {}),
-        title: `Assign ${subject} to a project or workspace`,
+        title:
+          managerId !== null
+            ? `Place ${subject} on a first project (you manage them)`
+            : `Place ${subject} on a first project (no manager set — hierarchy or lead needed)`,
         status: "NEEDS_APPROVAL",
         priority: "ROUTINE",
         extraction_source: "TYPESCRIPT_DETERMINISTIC",
         next_action:
-          "Choose an active project and add membership — Otzar did not auto-assign.",
+          managerId !== null
+            ? "As their manager, add them to a project you lead — Otzar does not auto-assign."
+            : "Set their manager in hierarchy, or a project lead adds them to a project.",
         details: {
           source: "dandelion_seed_approval",
           from_seed_id: args.seedId,
           seed_type: d.seed_type,
           subject_entity_id: subjectId,
+          routed_to_manager: managerId !== null,
+          manager_entity_id: managerId,
+          placement_authority: "MANAGER_OR_PROJECT_LEAD",
         },
       });
       resultingAction = setup.ok
-        ? `assignment setup created — pick a project to finish (not auto-assigned)`
-        : "approved; assignment setup pending";
+        ? managerId !== null
+          ? `routed to their manager — they place ${subject} on a project they lead`
+          : `task created — no manager on file; set hierarchy or a project lead places them`
+        : "approved; placement task pending";
     }
   } else if (d.seed_type === "add_team_membership") {
     const subject =
@@ -512,9 +553,9 @@ export async function holdSeed(args: {
   );
 }
 
-// ── Phase A: Discover → Seed bridge ─────────────────────────────────────────
-// Org-growth recommendations (layer 2) land as durable ORG_SEEDING rows (layer 3)
-// so structure gaps share ONE admin queue with work-evidence seeds.
+// ── Phase A: Discover → Seed → ambient grow ─────────────────────────────────
+// Structure gaps should NOT become admin homework. Otzar lands a placement
+// task on the manager's Work OS + a light notification — humans stay in flow.
 // See docs/otzar/DANDELION_OPERATIONAL_ORDER.md.
 
 const OPEN_SEED_STATUSES = [
@@ -522,6 +563,128 @@ const OPEN_SEED_STATUSES = [
   "SEED_NEEDS_REVIEW",
   "SEED_HELD",
 ] as const;
+
+/** Resolve active person-manager of subject (parent of person edge). */
+async function resolveManagerOfPerson(args: {
+  orgEntityId: string;
+  personEntityId: string;
+}): Promise<string | null> {
+  const edges = await prisma.entityMembership.findMany({
+    where: {
+      child_id: args.personEntityId,
+      is_active: true,
+      parent_id: { not: args.orgEntityId },
+    },
+    select: { parent_id: true },
+    take: 8,
+  });
+  for (const e of edges) {
+    const parent = await prisma.entity.findFirst({
+      where: {
+        entity_id: e.parent_id,
+        entity_type: "PERSON",
+        status: "ACTIVE",
+        deleted_at: null,
+      },
+      select: { entity_id: true },
+    });
+    if (parent !== null) return parent.entity_id;
+  }
+  return null;
+}
+
+/**
+ * Ambient grow: place a TASK on the manager's My Work + notify them.
+ * Does NOT write membership. Manager/lead acts when ready — or ignores.
+ */
+export async function routeStructurePlacementAmbient(args: {
+  orgEntityId: string;
+  subjectEntityId: string;
+  subjectName: string;
+  seedId: string;
+  actorEntityId: string;
+}): Promise<{ manager_entity_id: string | null; task_id: string | null }> {
+  const managerId = await resolveManagerOfPerson({
+    orgEntityId: args.orgEntityId,
+    personEntityId: args.subjectEntityId,
+  });
+  const taskOwner = managerId ?? args.actorEntityId;
+  const title =
+    managerId !== null
+      ? `Place ${args.subjectName} on a first project`
+      : `Place ${args.subjectName} on a first project (no manager set)`;
+  const made = await createLedgerEntry({
+    org_entity_id: args.orgEntityId,
+    ledger_type: "TASK",
+    source_type: "TRANSCRIPT",
+    owner_entity_id: taskOwner,
+    target_entity_id: args.subjectEntityId,
+    title,
+    summary:
+      managerId !== null
+        ? `Otzar noticed ${args.subjectName} has no project yet. You manage them — when convenient, add them to a project you lead. Nothing urgent unless their work is blocked.`
+        : `${args.subjectName} has no project and no manager on file. A project lead or hierarchy update will clear this.`,
+    status: "DETECTED",
+    priority: "ROUTINE",
+    extraction_source: "TYPESCRIPT_DETERMINISTIC",
+    next_action:
+      managerId !== null
+        ? "When ready: add them to a project you lead (Projects → People)."
+        : "Set manager in hierarchy, or a project owner invites them.",
+    details: {
+      ambient_placement: true,
+      from_seed_id: args.seedId,
+      seed_type: "add_project_membership",
+      subject_entity_id: args.subjectEntityId,
+      manager_entity_id: managerId,
+      placement_authority: "MANAGER_OR_PROJECT_LEAD",
+      non_blocking: true,
+    },
+  });
+  if (made.ok && managerId !== null) {
+    try {
+      await notificationService.createInternalNotification({
+        org_entity_id: args.orgEntityId,
+        recipient_entity_id: managerId,
+        source_entity_id: args.actorEntityId,
+        notification_class: "STRUCTURE_PLACEMENT_NEEDED",
+        body_summary: `${args.subjectName} still needs a first project — place them when it fits. Otzar will not nag.`,
+        action_id: null,
+      });
+    } catch {
+      // notify best-effort
+    }
+  }
+  // Mark seed as ambiently routed (still open for hold/reject oversight).
+  const seedRow = await prisma.workLedgerEntry.findUnique({
+    where: { ledger_entry_id: args.seedId },
+    select: { details: true },
+  });
+  const prev =
+    typeof seedRow?.details === "object" && seedRow.details !== null
+      ? (seedRow.details as Record<string, unknown>)
+      : {};
+  await prisma.workLedgerEntry.update({
+    where: { ledger_entry_id: args.seedId },
+    data: {
+      next_action:
+        managerId !== null
+          ? "Ambient: on manager's work — no admin action required"
+          : "Ambient: placement task created — hierarchy gap",
+      details: {
+        ...prev,
+        ambient_routed_at: new Date().toISOString(),
+        ambient_manager_entity_id: managerId,
+        ambient_task_id: made.ok ? made.entry.ledger_entry_id : null,
+        placement_authority: "MANAGER_OR_PROJECT_LEAD",
+      } as object,
+    },
+  });
+  return {
+    manager_entity_id: managerId,
+    task_id: made.ok ? made.entry.ledger_entry_id : null,
+  };
+}
 
 export type GrowthSeedCandidate = {
   seed_type: "add_project_membership";
@@ -616,7 +779,8 @@ export async function syncGrowthDiscoveriesToSeeds(args: {
       priority: "ROUTINE",
       extraction_source: "TYPESCRIPT_DETERMINISTIC",
       owner_entity_id: args.adminEntityId,
-      next_action: "Admin review — assign to a project (nothing auto-applied)",
+      next_action:
+        "Ambient: Otzar routes placement to their manager — admin oversight only",
       evidence: [{ quote: cand.source_evidence }],
       details: {
         seed_type: cand.seed_type,
@@ -625,7 +789,7 @@ export async function syncGrowthDiscoveriesToSeeds(args: {
         recommended_action: cand.recommended_action,
         source_conversation_id: null,
         confidence: "high",
-        approval_required: true,
+        approval_required: false,
         policy_status: "needs_review",
         sensitivity: "internal",
         risk_if_ignored: cand.risk_if_ignored,
@@ -635,6 +799,14 @@ export async function syncGrowthDiscoveriesToSeeds(args: {
     if (made.ok) {
       created += 1;
       openKeys.add(key);
+      // Ambient grow immediately — do not wait for admin to click.
+      await routeStructurePlacementAmbient({
+        orgEntityId: args.orgEntityId,
+        subjectEntityId: cand.subject_entity_id,
+        subjectName: cand.subject_name,
+        seedId: made.entry.ledger_entry_id,
+        actorEntityId: args.adminEntityId,
+      });
       const row = await prisma.workLedgerEntry.findUnique({
         where: { ledger_entry_id: made.entry.ledger_entry_id },
       });

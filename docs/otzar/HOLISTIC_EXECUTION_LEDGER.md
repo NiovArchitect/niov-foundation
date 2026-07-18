@@ -112,11 +112,11 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**A.3 — Structure seed → assign to project (close the loop)**
+**A.3 — Ambient structure placement (not admin homework)**
 
-Admin picks an active project on a structure seed → membership write (org-admin
-rail) + seed SEED_APPROVED. No auto-pick. A.1/A.2 landed (growth→seed, project
-visibility).
+Experience: users do not live in Otzar. Structure gaps → ambient TASK + notice
+to **manager/lead**; they place people when it fits. Admin seeding = oversight.
+Project visibility (A.2) + growth→seed (A.1) stay.
 
 ### Completed proof (honest)
 
@@ -139,7 +139,7 @@ visibility).
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Structure seed → project assign (A.3) | in progress | approve with project_id |
+| Ambient structure placement (A.3) | in progress | manager task + notify on discover |
 | Hierarchy confirm UX | incomplete | Phase B |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |

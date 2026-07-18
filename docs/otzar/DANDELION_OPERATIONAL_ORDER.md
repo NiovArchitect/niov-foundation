@@ -1,81 +1,81 @@
 # Dandelion Operational Order
 
-> How Otzar grows an organization without mass invites, auto-grants, or dashboard chaos.
-> Canonical product order for Phase A. Complements ADR-0082 activation catalogs
-> (maturity stages A–F) — this document is the **day-to-day operational spine**.
+> How Otzar grows an organization without mass invites, auto-grants, or forcing
+> people to live inside Otzar. Complements ADR-0082 activation catalogs.
+> Experience law: **ambient, autonomous, non-blocking DGI**.
 
 ## Canonical phrase
 
-**Otzar listens. Seeds land. Admins choose. Growth stays governed.**
+**Otzar listens. Work lands in the right place. Humans stay in their flow.
+Growth stays governed.**
 
-Dandelion never mass-invites, never auto-creates people from noise, never grants
-access on approve, and always reconnects activation to the company root (org,
-policy, role, audit).
+Users do **not** live in Otzar. Otzar is the ambient layer that moves company
+goals forward with domain-general intelligence — not another dashboard for
+managers and admins to babysit.
+
+## Experience law (non-negotiable)
+
+| Law | Meaning |
+|-----|---------|
+| **Ambient** | Surfaces only when real state needs a human; otherwise quiet |
+| **Autonomous** | Otzar routes, claims, and notifies without requiring a daily login ritual |
+| **Non-blocking** | Gaps become light work + optional notice — never admin homework storms |
+| **Governed** | Membership, tools, and identity still need authority; never silent grants |
 
 ## Five layers (strict order)
 
-| # | Layer | What it is | Substrate (already exists) | Who |
-|---|--------|------------|----------------------------|-----|
-| **1** | **Listen** | Work evidence + org graph facts | Comms ingest, work-graph events, entity membership, projects | System |
-| **2** | **Discover** | Calm recommendations (ephemeral) | `GET /otzar/dandelion/org-growth` | Admin read |
-| **3** | **Seed** | Durable, approval-gated proposals | `ORG_SEEDING` ledger rows · `GET /org/dandelion/seeds` | Admin queue |
-| **4** | **Govern** | Approve / hold / reject | seed lifecycle · never auto-apply | Admin write |
-| **5** | **Grow** | Next governed step only | setup TASK, external track, assignment prompt | Human does work |
+| # | Layer | What happens | Human burden |
+|---|--------|--------------|--------------|
+| **1** | **Listen** | Workstream + org graph | None |
+| **2** | **Discover** | Structure / tool / identity signals | None (ephemeral or seed) |
+| **3** | **Seed** | Durable proposal when policy cares | Admin oversight only when needed |
+| **4** | **Route (ambient grow)** | Task + notification to the **right authority** (manager, project lead) | One light item in their existing Work OS / inbox — not a new app home |
+| **5** | **Act** | Human places person / connects tool when it fits their day | Optional, non-nagging |
 
-Employee **onboarding pollination** (`/otzar/dandelion/onboarding`) is a parallel
-self-scoped path — consent-gated memory only; never admin topology.
+Admin **Organization Seeding** is an **oversight** surface (policy, hold/reject,
+exceptions) — **not** where daily placement work is done.
 
-Activation **envelope plans** (docs/dandelion-activation, Stage F) are the
-**plan-tier** map for first-time org setup. Operational Dandelion (this file)
-is the **ongoing** map after the org is live.
+## Who places people on projects
 
-## Root-first triage (admin seed queues)
+| Role | Authority |
+|------|-----------|
+| **Manager of the person** | Places reports onto projects they lead (OWNER) |
+| **Project owner / lead** | Invites people onto their project |
+| **Org admin** | Exception / bootstrap only — not the default path |
 
-When seeds land, admins review in this order — structure before tools:
+## Structure gap path (example)
 
-1. **People Otzar heard about** — activate / resolve identity (can't route work without people)
-2. **Structure — projects & teams** — first project, membership, support roles
-3. **Tools Otzar noticed** — connector / grant_tool_access (setup action only)
-4. **External collaborators** — review before tracking (no auto-promote)
-5. **Ambiguous / low confidence** — confirm before acting
-6. **Held** — paused
-7. **Resolved** — approved / rejected / applied
+```
+Listen: member has no ACTIVE project
+  → Discover (org-growth)
+  → Seed (ORG_SEEDING, oversight)
+  → Ambient: TASK on manager's My Work + calm notification
+  → Manager (when ready): Projects → add person, or Talk to Otzar
+  → Membership written under project-owner / manager authority
+```
 
-## Seed type vocabulary (single registry)
+No auto-membership. No admin forced to pick a project for every person.
 
-| Seed type | Layer 3 meaning | On approve (layer 5) |
-|-----------|-----------------|----------------------|
-| `confirm_or_activate_person` | Person from workstream | Next governed step (no auto-invite) |
-| `resolve_identity` | Who is this? | Confirm identity |
-| `add_project_membership` | Needs first project / workspace | Admin **chooses** project → membership write; or setup TASK if no project chosen — **never auto-picks** |
-| `add_team_membership` | Team structure | Setup TASK — no auto-join |
-| `confirm_support_role` | Support edge, not owner | Confirm role |
-| `add_work_owner_edge` | Ownership relationship | Confirm owner |
-| `grant_tool_access` / `connector_setup` | Tool gap from real work | Setup TASK — **access NOT granted** |
-| `review_external_party` | External mention | Track or link — **no access grant** |
+## Seed types (registry)
 
-## Discovery → Seed bridge (operational path)
+| Seed type | Ambient grow behavior |
+|-----------|------------------------|
+| `add_project_membership` | Route placement task to manager; admin may hold/reject |
+| `grant_tool_access` / `connector_setup` | Setup TASK — never auto-grant access |
+| `confirm_or_activate_person` / `resolve_identity` | Identity / activation path |
+| `review_external_party` | Admin (or policy) review before track |
 
-Org-growth recommendations (layer 2) must be able to **land as seeds** (layer 3)
-so structure gaps are not a separate dead-end list.
+## Invariants
 
-- `POST /org/dandelion/seeds/sync-from-growth` (admin)
-- Idempotent: one open seed per `(seed_type, subject_entity_id)` 
-- Sources: `needs_first_project_people` → `add_project_membership`
-- Never writes membership; never invites; never grants tools
-
-## Invariants (do not break)
-
-1. No auto-invite, auto-user-create from noise, or auto-grant on approve  
-2. `ORG_SEEDING` excluded from My Work / Team Work  
-3. Tenant isolation on every seed load  
-4. Every transition audits `ADMIN_ACTION`  
-5. Employee surfaces never show admin Dandelion jargon  
-6. Work-evidence seeds and structure seeds share **one** admin queue  
+1. Never mass-invite or invent people from noise  
+2. Never auto-grant tools or membership  
+3. `ORG_SEEDING` excluded from employee My Work (oversight lane)  
+4. Placement tasks **do** appear on the **manager’s** My Work (action lane)  
+5. Tenant isolation + audit on membership writes  
+6. Employee UI never becomes a Dandelion control panel  
 
 ## Related
 
-- ADR-0082 Dandelion Activation Architecture (+ Amendment 1)  
 - Ambient Work OS Design Law §3 Dandelion Propagation Law  
-- `dandelion-growth.service.ts` · `dandelion-seed.service.ts` · `work-graph-memory.ts`  
-- CT: Organization Seeding (`/organization-seeding`)
+- `dandelion-growth.service.ts` · `dandelion-seed.service.ts` · `work-project.service.ts`  
+- Phase C Twin work claim (same ambient “Twin is on this” pattern)
