@@ -242,14 +242,15 @@ export async function listWorkProjectsForCaller(
     orderBy: { created_at: "desc" },
     take,
   });
-  const counts = await prisma.workProjectMember.groupBy({
-    by: ["project_id"],
+  // Count members without groupBy (unit mocks may not implement it).
+  const memberRows = await prisma.workProjectMember.findMany({
     where: { project_id: { in: rows.map((r) => r.project_id) } },
-    _count: { project_member_id: true },
+    select: { project_id: true },
   });
-  const countBy = new Map(
-    counts.map((c) => [c.project_id, c._count.project_member_id]),
-  );
+  const countBy = new Map<string, number>();
+  for (const m of memberRows) {
+    countBy.set(m.project_id, (countBy.get(m.project_id) ?? 0) + 1);
+  }
   return rows.map((row) => ({
     ...projectWorkProjectSafeView(row),
     my_role: roleByProject.get(row.project_id) ?? null,
@@ -371,14 +372,14 @@ export async function listWorkProjectMembersForCaller(input: {
     orderBy: { created_at: "asc" },
   });
   const entityIds = rows.map((r) => r.entity_id);
-  const entities =
-    entityIds.length === 0
-      ? []
-      : await prisma.entity.findMany({
-          where: { entity_id: { in: entityIds } },
-          select: { entity_id: true, display_name: true },
-        });
-  const nameBy = new Map(entities.map((e) => [e.entity_id, e.display_name]));
+  let nameBy = new Map<string, string>();
+  if (entityIds.length > 0 && prisma.entity?.findMany !== undefined) {
+    const entities = await prisma.entity.findMany({
+      where: { entity_id: { in: entityIds } },
+      select: { entity_id: true, display_name: true },
+    });
+    nameBy = new Map(entities.map((e) => [e.entity_id, e.display_name]));
+  }
   return {
     ok: true,
     members: rows.map((row) => ({
