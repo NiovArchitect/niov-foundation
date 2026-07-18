@@ -111,11 +111,11 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**E.2 — Per-person inventory + approve/deny/revoke**
+**E.3 — Twin accuracy KPI rollups**
 
-Experience: admins decide tool requests **in inventory** (approve / deny), see
-who has open requests or employee grants, and **force-revoke** org OAuth or
-employee grants. Never silent grant. Builds on E.1 catalog.
+Experience: admin inventory shows **Twin vs human dual-control** counts —
+regulated claims, awaiting verify, human verified, human edits after claim.
+Honest rollup from recent ledger twin_work only. Never invents metrics.
 
 ### Completed proof (honest)
 
@@ -142,17 +142,18 @@ employee grants. Never silent grant. Builds on E.1 catalog.
 | Hierarchy propose + confirm (B.1) | deployed | set_manager seeds |
 | Employee click-and-play multi-tool catalog (E.1) | deployed | `100ece78` + CT Your tools |
 | Admin tool inventory + KPI (E.1) | deployed | Inventory & KPIs tab |
-| Per-person inventory + approve/deny/revoke (E.2) | implementing | inventory.people + decide/revoke |
+| Per-person inventory + approve/deny/revoke (E.2) | deployed | people + decide/revoke |
+| Twin accuracy KPI rollups (E.3) | implementing | inventory.accuracy |
 
 ### Exact blocker (now)
 
-**Phase E.2**: ship in-inventory approve/deny + org OAuth revoke + people rollup.
+**Phase E.3**: ship Twin accuracy KPIs on admin inventory.
 Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Merge + deploy E.2; live smoke: Ask admin → inventory Approve/Deny; Revoke connected OAuth.
-2. Optional E.3: accuracy KPI rollups (Twin vs human override).
+1. Merge + deploy E.3; live smoke: Inventory shows Twin accuracy strip.
+2. Optional: deeper accuracy dashboards / per-project accuracy.
 
 ## Substrate map (do not invent a third project system)
 
