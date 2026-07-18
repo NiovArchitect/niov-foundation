@@ -3436,6 +3436,55 @@ export class OtzarService {
   }
 
   // ──────────────────────────────────────────────────────────────
+  // Ambient comms sources + sync — PRIMARY intake from connected tools
+  // (Meet). Manual paste remains on /comms/ingest as FALLBACK only.
+  async getAmbientCommsSources(
+    input: { token: string },
+  ): Promise<
+    | import("./ambient-comms-sync.service.js").AmbientCommsSourcesResult
+    | OtzarFailure
+  > {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Ambient sources denied" };
+    }
+    const { getAmbientCommsSourcesForCaller } = await import(
+      "./ambient-comms-sync.service.js"
+    );
+    const result = await getAmbientCommsSourcesForCaller(session.entity_id);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: "OTZAR_ORG_TRUTH_NO_ORG",
+        message: "Caller has no organization",
+      };
+    }
+    return result;
+  }
+
+  async runAmbientCommsSync(
+    input: { token: string; max_records?: number },
+  ): Promise<
+    | import("./ambient-comms-sync.service.js").AmbientCommsSyncResult
+    | import("./ambient-comms-sync.service.js").AmbientCommsSyncFailure
+    | OtzarFailure
+  > {
+    const session = await this.authService.validateSession(input.token, "read");
+    if (!session.valid) {
+      return { ok: false, code: session.code, message: "Ambient sync denied" };
+    }
+    const { runAmbientCommsSyncForCaller } = await import(
+      "./ambient-comms-sync.service.js"
+    );
+    return runAmbientCommsSyncForCaller({
+      callerEntityId: session.entity_id,
+      llmProvider: this.llmProvider,
+      ...(input.max_records !== undefined
+        ? { max_records: input.max_records }
+        : {}),
+    });
+  }
+
   // ingestSourceEvent -- Slice A. The source-agnostic sibling of ingestComms:
   // any NON-transcript source (Slack message, email thread, webhook, MCP event,
   // manual capture) is normalized to a WorkSourceEvent and flows through the

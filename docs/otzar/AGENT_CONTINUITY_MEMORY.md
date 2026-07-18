@@ -218,11 +218,12 @@ CT also: `npm run test:e2e:live:workos:full` with `DEMO_SHARED_PASSWORD` set.
 ## Agent operating rules (from founder)
 
 - Prefer **whole-system smoke** after every ship; not only unit green.
-- Fix → ship → Render autodeploy → re-smoke → continue autonomously.
+- Fix → ship → Render autodeploy → re-smoke → **continue autonomously without waiting for human input**.
 - Do **not** start Jira-first or broad MCP marketplace.
 - Never invent clinical/financial facts.
 - Users do not live in Otzar; ambient + exception admin paths only.
 - Multi-industry enterprises are the test of "world class," not a single demo org.
+- **Comms ingestion is automatic from connected tools (Meet, later Slack/Gmail). Manual paste / demo capture is FALLBACK only.**
 
 ---
 
