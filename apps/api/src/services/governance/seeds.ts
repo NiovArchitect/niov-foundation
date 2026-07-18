@@ -138,9 +138,24 @@ export async function seedAgentTemplates(
   const fs = await import("node:fs/promises");
   // Docker WORKDIR is /repo; local may be monorepo root or apps/api.
   // Try candidates so role templates always seed in production.
+  // Resolve relative to this module first (works under tsx Docker WORKDIR
+  // /repo and local monorepo) so required_tools always land in production.
+  let moduleDir: string | null = null;
+  try {
+    const { fileURLToPath } = await import("node:url");
+    moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    moduleDir = null;
+  }
   const candidates = templatesDir
     ? [templatesDir]
     : [
+        ...(moduleDir
+          ? [
+              // apps/api/src/services/governance → apps/api/templates/roles
+              path.resolve(moduleDir, "../../../templates/roles"),
+            ]
+          : []),
         path.resolve(process.cwd(), "apps/api/templates/roles"),
         path.resolve(process.cwd(), "templates/roles"),
         path.resolve(process.cwd(), "../templates/roles"),

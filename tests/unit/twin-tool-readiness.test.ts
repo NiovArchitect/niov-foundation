@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   bindingSatisfiesTool,
   computeTwinToolReadiness,
+  mergeOrgConnectedToolKeys,
   toolLabel,
 } from "../../apps/api/src/services/otzar/twin-tool-readiness.js";
 
@@ -33,6 +34,22 @@ describe("[GAP-H TOOLS] computeTwinToolReadiness", () => {
     const r = computeTwinToolReadiness(["GOOGLE_WORKSPACE"], [], 0);
     expect(r.status).toBe("needs_setup");
     expect(r.missing_tools[0]?.label).toBe("Google Workspace");
+  });
+  it("OAuth-connected provider satisfies GOOGLE_WORKSPACE without bindings", () => {
+    const r = computeTwinToolReadiness(
+      ["SLACK", "GOOGLE_WORKSPACE"],
+      [],
+      0,
+      ["GOOGLE_WORKSPACE"],
+    );
+    expect(r.status).toBe("needs_setup");
+    expect(r.missing_tools.map((m) => m.tool_key)).toEqual(["SLACK"]);
+    expect(r.connected_tools_count).toBeGreaterThanOrEqual(1);
+  });
+  it("mergeOrgConnectedToolKeys unions bindings + oauth", () => {
+    expect(
+      mergeOrgConnectedToolKeys(["SLACK_WRITE"], ["GOOGLE_WORKSPACE"]).sort(),
+    ).toEqual(["GOOGLE_WORKSPACE", "SLACK_WRITE"]);
   });
   it("duplicate/blank requirement entries normalize safely", () => {
     const r = computeTwinToolReadiness(["slack", "SLACK", "  "], ["SLACK"], 1);

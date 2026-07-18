@@ -2,7 +2,8 @@
 
 > **Purpose:** Survive context compaction. Any agent continuing Otzar work MUST
 > read this file + `HOLISTIC_EXECUTION_LEDGER.md` before building or smoking.
-> Updated: 2026-07-18 (deep smoke + founder whole-system mandate).
+> Updated: 2026-07-18 (autonomous loop — membership repair, tool readiness OAuth,
+> wallet portability posture; PR #697 merged `d5d37cc`).
 
 ---
 
@@ -78,20 +79,18 @@ just copilots. Otzar wins by being:
 - D.1 FND `#694` / CT `#163` — accuracy packs + My Twin panel.
 - Live fingerprint was `b54d793` ledger / feature `29d664b` / CT `5998f23` (update after next deploy).
 
-### In flight (do not drop)
+### Merged (awaiting Render if git_commit lags)
 
-**PR https://github.com/NiovArchitect/niov-foundation/pull/697**  
-Branch: `smoke-d1-role-template-repair`
+| PR | Notes |
+|----|-------|
+| FND **#697** `d5d37cc` | Role-template repair endpoint, createTwin human role, TECH packs, continuity memory |
+| CT **#164** `b47a93a` | Continuity pointer |
 
-Contents:
+### In flight (autonomous)
 
-- `createTwin` resolves role template from **owner job_title / org role** when membership is shell `"Digital Twin"`.
-- Admin `POST /api/v1/org/ai-teammates/repair-role-templates` (idempotent backfill).
-- Broader title aliases (founder, tech lead, GTM, media, risk/compliance).
-- AgentTemplate seed multi-path (Docker/local).
-- TECH/unknown industries always surface accuracy pack catalog.
-- `getMyTwin` prefers human job_title over shell `"Digital Twin"`.
-- Test alignment: shell label → `role_title: null` without job_title.
+- **Tool readiness** matches OAuth (Google connected) + AgentTemplate seed path via `import.meta.url`
+- **Wallet portability** posture on getMyTwin + CT panel
+- Live: demo team added as MEMBERs on smoke projects (david/vishesh **5 projects**)
 
 **Live data repair already applied (prod, via admin API, 2026-07-18):**
 
@@ -99,6 +98,7 @@ Contents:
 |--------|--------|
 | `PATCH /org/settings` industry | **TECH** |
 | All 8 AI teammates `role_template` | CEO, software-engineer ×4, product-manager, marketing-manager ×2, finance-analyst |
+| Project memberships | Team on pilot/insurance/slides smoke projects |
 
 ---
 
