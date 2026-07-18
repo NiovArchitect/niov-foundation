@@ -367,7 +367,105 @@ export async function addWorkProjectMemberForCaller(
       ...(authority === "MANAGER_LEAD" ? { via_manager_of_person: true } : {}),
     },
   });
+  // Ambient close-the-loop: real membership clears quiet placement work +
+  // oversight seeds so Otzar does not keep asking after the goal moved.
+  await resolveAmbientPlacementAfterMembership({
+    orgEntityId: project.org_entity_id,
+    personEntityId: input.entityId,
+    projectId: input.projectId,
+    actorEntityId: input.callerEntityId,
+  });
   return { ok: true, member: projectWorkProjectMemberSafeView(row), audit_event_id: audit.audit_id };
+}
+
+/**
+ * When a person lands on a project, close ambient placement TASKs and
+ * structure seeds for them. Non-blocking UX: humans do not re-open Otzar
+ * to dismiss homework the world already fixed.
+ */
+async function resolveAmbientPlacementAfterMembership(args: {
+  orgEntityId: string;
+  personEntityId: string;
+  projectId: string;
+  actorEntityId: string;
+}): Promise<void> {
+  try {
+    const openTasks = await prisma.workLedgerEntry.findMany({
+      where: {
+        org_entity_id: args.orgEntityId,
+        ledger_type: "TASK",
+        target_entity_id: args.personEntityId,
+        status: { notIn: ["CLOSED", "COMPLETED", "DONE", "CANCELLED"] },
+      },
+      select: { ledger_entry_id: true, details: true, title: true },
+      take: 40,
+    });
+    for (const t of openTasks) {
+      const d =
+        typeof t.details === "object" && t.details !== null
+          ? (t.details as Record<string, unknown>)
+          : {};
+      const ambient =
+        d.ambient_placement === true ||
+        d.seed_type === "add_project_membership" ||
+        (typeof t.title === "string" &&
+          t.title.toLowerCase().includes("first project"));
+      if (!ambient) continue;
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: t.ledger_entry_id },
+        data: {
+          status: "CLOSED",
+          next_action: "Placed on project — ambient loop closed",
+          verified_at: new Date(),
+          details: {
+            ...d,
+            ambient_resolved_at: new Date().toISOString(),
+            ambient_resolved_by: args.actorEntityId,
+            ambient_resolved_project_id: args.projectId,
+            ambient_resolution: "MEMBERSHIP_WRITTEN",
+          } as object,
+        },
+      });
+    }
+    const openSeeds = await prisma.workLedgerEntry.findMany({
+      where: {
+        org_entity_id: args.orgEntityId,
+        ledger_type: "ORG_SEEDING",
+        status: {
+          notIn: ["SEED_APPROVED", "SEED_REJECTED", "SEED_HELD", "CLOSED"],
+        },
+      },
+      select: { ledger_entry_id: true, details: true },
+      take: 80,
+    });
+    for (const s of openSeeds) {
+      const d =
+        typeof s.details === "object" && s.details !== null
+          ? (s.details as Record<string, unknown>)
+          : {};
+      if (d.seed_type !== "add_project_membership") continue;
+      if (d.subject_entity_id !== args.personEntityId) continue;
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: s.ledger_entry_id },
+        data: {
+          status: "SEED_APPROVED",
+          next_action: "Resolved by ambient membership — no admin action",
+          verified_at: new Date(),
+          details: {
+            ...d,
+            ambient_resolved_at: new Date().toISOString(),
+            ambient_resolved_by: args.actorEntityId,
+            ambient_resolved_project_id: args.projectId,
+            ambient_resolution: "MEMBERSHIP_WRITTEN",
+            reviewer_entity_id: args.actorEntityId,
+            reviewed_at: new Date().toISOString(),
+          } as object,
+        },
+      });
+    }
+  } catch {
+    // Best-effort: membership already written; cleanup must never block.
+  }
 }
 
 // WHAT: Direct reports of the caller who have no ACTIVE project membership.

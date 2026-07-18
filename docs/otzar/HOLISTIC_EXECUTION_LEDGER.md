@@ -139,19 +139,20 @@ Project visibility (A.2) + growth→seed (A.1) stay.
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Ambient structure placement (A.3) | in progress | manager task + notify on discover |
+| Ambient structure placement (A.3) | in progress | manager task + notify on discover; membership closes loop |
 | Hierarchy confirm UX | incomplete | Phase B |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |
 
 ### Exact blocker (now)
 
-**Phase A.3**: admin assigns seed subject to a chosen project in one governed step.
-Do **not** start Jira or broad MCP marketplace.
+**Phase A.3**: ship ambient manager placement (FND route + CT Projects surface).
+Users do **not** live in Otzar — no admin placement theater. Do **not** start
+Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Live A.2 projects + A.3 seed assign.
+1. Deploy + live-smoke: structure sync → manager TASK/notice → place on project → seed/task auto-close.
 2. Then Phase B hierarchy or Phase E tools.
 
 ## Substrate map (do not invent a third project system)
