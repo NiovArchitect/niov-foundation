@@ -258,11 +258,28 @@ export async function listWorkProjectsForCaller(
   }));
 }
 
-// WHAT: Add a member to a project the caller owns.
-// WHY: Caller-must-be-OWNER. Same-org guard. Idempotent
-//      ALREADY_MEMBER on collision (unique constraint guard).
-//      Archived projects reject. Emits ADMIN_ACTION audit
-//      BEFORE returning.
+// WHAT: Is caller an active manager of person (person→person hierarchy edge)?
+// WHY: Project placement is normally manager/lead work, not org-admin default.
+export async function isActiveManagerOfPerson(args: {
+  managerEntityId: string;
+  personEntityId: string;
+}): Promise<boolean> {
+  if (args.managerEntityId === args.personEntityId) return false;
+  const edge = await prisma.entityMembership.findFirst({
+    where: {
+      parent_id: args.managerEntityId,
+      child_id: args.personEntityId,
+      is_active: true,
+    },
+    select: { membership_id: true },
+  });
+  return edge !== null;
+}
+
+// WHAT: Add a member to a project.
+// WHY: Authority (in order): project OWNER · manager-of-person who owns the
+//      project · org-admin exception. Same-org. Idempotent ALREADY_MEMBER.
+//      Never mass-add. Archived projects reject.
 export async function addWorkProjectMemberForCaller(
   input: AddWorkProjectMemberInput,
 ): Promise<AddMemberResult> {
@@ -272,27 +289,37 @@ export async function addWorkProjectMemberForCaller(
   if (project === null) return { ok: false, code: "PROJECT_NOT_FOUND" };
   if (project.state === "ARCHIVED")
     return { ok: false, code: "PROJECT_ARCHIVED" };
-  // [PROD-UX-ASSIGN] Org-admin authority: a route-verified org admin may add
-  // members to any project of THEIR OWN org (both flags route-computed; the
-  // org match is re-checked here so a mismatched override never bypasses the
-  // owner gate). Otherwise the existing peer rule holds: caller must be
-  // OWNER on this project.
+  // Org-admin exception (bootstrap / rare) — route-computed flags only.
   const adminOverride =
     input.actorIsOrgAdmin === true &&
     typeof input.actorOrgEntityId === "string" &&
     input.actorOrgEntityId === project.org_entity_id;
-  if (!adminOverride) {
-    const callerMembership = await prisma.workProjectMember.findUnique({
-      where: {
-        project_id_entity_id: {
-          project_id: input.projectId,
-          entity_id: input.callerEntityId,
-        },
+  const callerMembership = await prisma.workProjectMember.findUnique({
+    where: {
+      project_id_entity_id: {
+        project_id: input.projectId,
+        entity_id: input.callerEntityId,
       },
-    });
-    if (callerMembership === null || callerMembership.role !== "OWNER")
-      return { ok: false, code: "NOT_PROJECT_OWNER" };
+    },
+  });
+  const isProjectOwner =
+    callerMembership !== null && callerMembership.role === "OWNER";
+  // Manager of the person may place them only onto a project they lead (own).
+  const isManagerPlacingReport =
+    isProjectOwner &&
+    (await isActiveManagerOfPerson({
+      managerEntityId: input.callerEntityId,
+      personEntityId: input.entityId,
+    }));
+  if (!adminOverride && !isProjectOwner) {
+    return { ok: false, code: "NOT_PROJECT_OWNER" };
   }
+  // Track authority for audit (manager vs pure owner vs admin).
+  const authority: "ORG_ADMIN" | "PROJECT_OWNER" | "MANAGER_LEAD" = adminOverride
+    ? "ORG_ADMIN"
+    : isManagerPlacingReport
+      ? "MANAGER_LEAD"
+      : "PROJECT_OWNER";
   // Same-org guard for the candidate member.
   if (input.entityId !== project.org_entity_id) {
     const orgLink = await prisma.entityMembership.findFirst({
@@ -333,12 +360,207 @@ export async function addWorkProjectMemberForCaller(
       action: "WORK_PROJECT_MEMBER_ADDED",
       project_id: input.projectId,
       role: row.role,
-      // [PROD-UX-ASSIGN] Provenance: this add came through org-admin
-      // assignment authority (People & Collaboration), not project ownership.
-      ...(adminOverride ? { via_org_admin: true, org_entity_id: project.org_entity_id } : {}),
+      authority,
+      ...(adminOverride
+        ? { via_org_admin: true, org_entity_id: project.org_entity_id }
+        : {}),
+      ...(authority === "MANAGER_LEAD" ? { via_manager_of_person: true } : {}),
     },
   });
+  // Ambient close-the-loop: real membership clears quiet placement work +
+  // oversight seeds so Otzar does not keep asking after the goal moved.
+  await resolveAmbientPlacementAfterMembership({
+    orgEntityId: project.org_entity_id,
+    personEntityId: input.entityId,
+    projectId: input.projectId,
+    actorEntityId: input.callerEntityId,
+  });
   return { ok: true, member: projectWorkProjectMemberSafeView(row), audit_event_id: audit.audit_id };
+}
+
+/**
+ * When a person lands on a project, close ambient placement TASKs and
+ * structure seeds for them. Non-blocking UX: humans do not re-open Otzar
+ * to dismiss homework the world already fixed.
+ */
+async function resolveAmbientPlacementAfterMembership(args: {
+  orgEntityId: string;
+  personEntityId: string;
+  projectId: string;
+  actorEntityId: string;
+}): Promise<void> {
+  try {
+    const openTasks = await prisma.workLedgerEntry.findMany({
+      where: {
+        org_entity_id: args.orgEntityId,
+        ledger_type: "TASK",
+        target_entity_id: args.personEntityId,
+        status: { notIn: ["CLOSED", "COMPLETED", "DONE", "CANCELLED"] },
+      },
+      select: { ledger_entry_id: true, details: true, title: true },
+      take: 40,
+    });
+    for (const t of openTasks) {
+      const d =
+        typeof t.details === "object" && t.details !== null
+          ? (t.details as Record<string, unknown>)
+          : {};
+      const ambient =
+        d.ambient_placement === true ||
+        d.seed_type === "add_project_membership" ||
+        (typeof t.title === "string" &&
+          t.title.toLowerCase().includes("first project"));
+      if (!ambient) continue;
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: t.ledger_entry_id },
+        data: {
+          status: "CLOSED",
+          next_action: "Placed on project — ambient loop closed",
+          verified_at: new Date(),
+          details: {
+            ...d,
+            ambient_resolved_at: new Date().toISOString(),
+            ambient_resolved_by: args.actorEntityId,
+            ambient_resolved_project_id: args.projectId,
+            ambient_resolution: "MEMBERSHIP_WRITTEN",
+          } as object,
+        },
+      });
+    }
+    const openSeeds = await prisma.workLedgerEntry.findMany({
+      where: {
+        org_entity_id: args.orgEntityId,
+        ledger_type: "ORG_SEEDING",
+        status: {
+          notIn: ["SEED_APPROVED", "SEED_REJECTED", "SEED_HELD", "CLOSED"],
+        },
+      },
+      select: { ledger_entry_id: true, details: true },
+      take: 80,
+    });
+    for (const s of openSeeds) {
+      const d =
+        typeof s.details === "object" && s.details !== null
+          ? (s.details as Record<string, unknown>)
+          : {};
+      if (d.seed_type !== "add_project_membership") continue;
+      if (d.subject_entity_id !== args.personEntityId) continue;
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: s.ledger_entry_id },
+        data: {
+          status: "SEED_APPROVED",
+          next_action: "Resolved by ambient membership — no admin action",
+          verified_at: new Date(),
+          details: {
+            ...d,
+            ambient_resolved_at: new Date().toISOString(),
+            ambient_resolved_by: args.actorEntityId,
+            ambient_resolved_project_id: args.projectId,
+            ambient_resolution: "MEMBERSHIP_WRITTEN",
+            reviewer_entity_id: args.actorEntityId,
+            reviewed_at: new Date().toISOString(),
+          } as object,
+        },
+      });
+    }
+  } catch {
+    // Best-effort: membership already written; cleanup must never block.
+  }
+}
+
+// WHAT: Direct reports of the caller who have no ACTIVE project membership.
+// WHY: Managers place their people — not org-admin by default (Dandelion grow).
+export async function listManagerStructureGaps(args: {
+  callerEntityId: string;
+}): Promise<
+  | {
+      ok: true;
+      reports: Array<{
+        person_entity_id: string;
+        display_name: string;
+      }>;
+      my_led_projects: Array<{ project_id: string; name: string }>;
+    }
+  | { ok: false; code: "NO_ORG_FOR_CALLER" }
+> {
+  let orgEntityId: string;
+  try {
+    orgEntityId = await getOrgEntityId(args.callerEntityId);
+  } catch {
+    return { ok: false, code: "NO_ORG_FOR_CALLER" };
+  }
+  // Reports: person edges where I am parent (manager).
+  const reportEdges = await prisma.entityMembership.findMany({
+    where: {
+      parent_id: args.callerEntityId,
+      is_active: true,
+    },
+    select: { child_id: true },
+    take: 200,
+  });
+  const reportIds = reportEdges.map((e) => e.child_id);
+  if (reportIds.length === 0) {
+    return { ok: true, reports: [], my_led_projects: [] };
+  }
+  const activeProjects = await prisma.workProject.findMany({
+    where: { org_entity_id: orgEntityId, state: "ACTIVE" },
+    select: { project_id: true },
+  });
+  const activeIds = activeProjects.map((p) => p.project_id);
+  const onProject =
+    activeIds.length === 0
+      ? []
+      : await prisma.workProjectMember.findMany({
+          where: {
+            entity_id: { in: reportIds },
+            project_id: { in: activeIds },
+          },
+          select: { entity_id: true },
+        });
+  const hasProject = new Set(onProject.map((m) => m.entity_id));
+  const gapIds = reportIds.filter((id) => !hasProject.has(id));
+  const people =
+    gapIds.length === 0
+      ? []
+      : await prisma.entity.findMany({
+          where: {
+            entity_id: { in: gapIds },
+            entity_type: "PERSON",
+            status: "ACTIVE",
+            deleted_at: null,
+          },
+          select: { entity_id: true, display_name: true },
+          orderBy: { display_name: "asc" },
+        });
+  // Projects I lead (OWNER) — where I can place reports.
+  const owned = await prisma.workProjectMember.findMany({
+    where: {
+      entity_id: args.callerEntityId,
+      role: "OWNER",
+    },
+    select: { project_id: true },
+  });
+  const ownedIds = owned.map((o) => o.project_id);
+  const ledProjects =
+    ownedIds.length === 0
+      ? []
+      : await prisma.workProject.findMany({
+          where: {
+            project_id: { in: ownedIds },
+            state: "ACTIVE",
+            org_entity_id: orgEntityId,
+          },
+          select: { project_id: true, name: true },
+          orderBy: { name: "asc" },
+        });
+  return {
+    ok: true,
+    reports: people.map((p) => ({
+      person_entity_id: p.entity_id,
+      display_name: p.display_name,
+    })),
+    my_led_projects: ledProjects,
+  };
 }
 
 // WHAT: List the members of a project the caller is a member of.

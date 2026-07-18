@@ -112,13 +112,11 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**A.2 — Projects visible in Work OS (structure blind spot)**
+**A.3 — Ambient structure placement (not admin homework)**
 
-Projects are the coherence anchor for Dandelion structure + Twin work.  
-Employees must **see** projects they are on (Today + nav More + Projects page),
-with human names — not hidden routes or raw entity UUIDs.
-
-**A.1** (landed): Listen → Discover → Seed → Govern → Grow + growth→seed bridge.
+Experience: users do not live in Otzar. Structure gaps → ambient TASK + notice
+to **manager/lead**; they place people when it fits. Admin seeding = oversight.
+Project visibility (A.2) + growth→seed (A.1) stay.
 
 ### Completed proof (honest)
 
@@ -141,20 +139,21 @@ with human names — not hidden routes or raw entity UUIDs.
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Dandelion operational order (A.1) | in progress | growth→seed bridge + root-first queues |
+| Ambient structure placement (A.3) | in progress | manager task + notify on discover; membership closes loop |
 | Hierarchy confirm UX | incomplete | Phase B |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |
 
 ### Exact blocker (now)
 
-**Phase A.2**: project visibility in employee Work OS so structure seeds and Twin context have a place to land.
-Do **not** start Jira or broad MCP marketplace.
+**Phase A.3**: ship ambient manager placement (FND route + CT Projects surface).
+Users do **not** live in Otzar — no admin placement theater. Do **not** start
+Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Ship Projects in More + Today panel + display names + colleague picker.
-2. Live: employee sees projects; empty state honest; admin seed → assign still governed.
+1. Deploy + live-smoke: structure sync → manager TASK/notice → place on project → seed/task auto-close.
+2. Then Phase B hierarchy or Phase E tools.
 
 ## Substrate map (do not invent a third project system)
 
