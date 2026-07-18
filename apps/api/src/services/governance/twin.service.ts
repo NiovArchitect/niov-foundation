@@ -240,7 +240,32 @@ async function createTwinInTx(
   // / generic role resolves to null and the twin keeps the generalist runtime
   // fallback (no fabricated template). Org boundary preserved: only a standard
   // (null-org) template or one owned by THIS org is ever applied.
-  const roleTemplateSlug = resolveRoleTemplateSlug(roleTitle);
+  //
+  // Membership role_title is often the shell label "Digital Twin" (starter
+  // provision / demo seed). That must NOT block template apply — resolve from
+  // the human's job_title / org membership role when the shell label is used.
+  let roleTemplateSlug = resolveRoleTemplateSlug(roleTitle);
+  if (roleTemplateSlug === null) {
+    const ownerProfile = await tx.entityProfile.findUnique({
+      where: { entity_id: input.owner_entity_id },
+      select: { job_title: true },
+    });
+    roleTemplateSlug = resolveRoleTemplateSlug(ownerProfile?.job_title ?? null);
+  }
+  if (roleTemplateSlug === null) {
+    const ownerOrgMembership = await tx.entityMembership.findFirst({
+      where: {
+        child_id: input.owner_entity_id,
+        parent_id: input.org_entity_id,
+        is_active: true,
+      },
+      select: { role_title: true },
+      orderBy: { created_at: "asc" },
+    });
+    roleTemplateSlug = resolveRoleTemplateSlug(
+      ownerOrgMembership?.role_title ?? null,
+    );
+  }
   let appliedRoleTemplate: string | null = null;
   let templateAutonomyDefault: string | null = null;
   if (roleTemplateSlug !== null) {

@@ -2795,7 +2795,10 @@ export class OtzarService {
       }
     }
 
-    const roleTitle =
+    // Twin membership role_title is often the shell label "Digital Twin".
+    // Prefer the human's job_title / org role for product-facing role_title
+    // so My Twin never looks role-less when a real title exists.
+    const membershipRoleTitle =
       memberships.find((m) => m.child_id === primary.entity_id)?.role_title ??
       null;
 
@@ -2817,6 +2820,7 @@ export class OtzarService {
         department: true,
         hierarchy_level: true,
         is_admin: true,
+        role_title: true,
       },
       orderBy: { created_at: "asc" },
     });
@@ -2835,6 +2839,21 @@ export class OtzarService {
       where: { entity_id: ownerEntityId },
       select: { job_title: true },
     });
+
+    const shellTwinLabel =
+      typeof membershipRoleTitle === "string" &&
+      /^digital twin$/i.test(membershipRoleTitle.trim());
+    const roleTitle =
+      (typeof ownerProfile?.job_title === "string" &&
+      ownerProfile.job_title.trim().length > 0
+        ? ownerProfile.job_title.trim()
+        : null) ??
+      (typeof primaryOwnerMembership?.role_title === "string" &&
+      primaryOwnerMembership.role_title.trim().length > 0 &&
+      !/^digital twin$/i.test(primaryOwnerMembership.role_title)
+        ? primaryOwnerMembership.role_title.trim()
+        : null) ??
+      (shellTwinLabel ? null : membershipRoleTitle);
 
     // Self-scoped continuity COUNTS only (no content, no IDs, no storage
     // locations). Wave 2A uses total self-scoped counts; the `recent_`

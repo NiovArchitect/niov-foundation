@@ -316,9 +316,10 @@ function scorePack(
   const role = roleTemplate?.toLowerCase() ?? null;
   if (role !== null && pack.role_templates.includes(role)) score += 2;
 
-  // Non-matching industry packs stay available at low weight (catalog discoverability).
+  // Non-matching industry packs stay discoverable at floor weight 1
+  // (TECH/SERVICES still surface care plan/KYC as "available", never empty).
   if (!industryHit && industryKey !== "UNKNOWN") {
-    score = Math.max(score - 2, 0);
+    score = Math.max(score - 1, 1);
   }
 
   let relevance: AccuracyPackSuggestion["relevance"] = "available";
@@ -344,11 +345,12 @@ export function resolveAccuracyPackPosture(args: {
   const scored = PACKS.map((pack) => {
     const { score, relevance } = scorePack(pack, industryKey, roleTemplate);
     return { pack, score, relevance };
-  })
-    .filter((x) => x.score > 0 || industryKey === "UNKNOWN")
-    .sort((a, b) => b.score - a.score || a.pack.pack_id.localeCompare(b.pack.pack_id));
+  }).sort(
+    (a, b) => b.score - a.score || a.pack.pack_id.localeCompare(b.pack.pack_id),
+  );
 
-  // When industry unknown, surface packs as available (education), not primary.
+  // Always surface packs (discoverability). Unknown/non-regulated industries
+  // keep non-matching packs as "available" education, never invent facts.
   const packs: AccuracyPackSuggestion[] = scored.map(({ pack, relevance, score }) => ({
     pack_id: pack.pack_id,
     label: pack.label,
@@ -358,7 +360,15 @@ export function resolveAccuracyPackPosture(args: {
     dual_control_required: pack.dual_control_required,
     suggested_sections: [...pack.suggested_sections],
     relevance:
-      industryKey === "UNKNOWN" && score < 2 ? "available" : relevance,
+      industryKey === "UNKNOWN" ||
+      (industryKey !== "HEALTHCARE" &&
+        industryKey !== "FINANCE" &&
+        industryKey !== "INSURANCE" &&
+        score < 3)
+        ? score >= 4
+          ? relevance
+          : "available"
+        : relevance,
   }));
 
   // Limit UI surface — primary/secondary first, then available, max 5.

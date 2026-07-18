@@ -40,26 +40,52 @@ const KNOWN_SLUGS: ReadonlySet<string> = new Set([
 // and "Account Executive" keep their specific templates.
 const ALIASES: ReadonlyArray<{ slug: string; patterns: RegExp[] }> = [
   // C-suite first (a title like "COO" must not match operations-manager).
-  { slug: "chief-executive-officer", patterns: [/\bceo\b/, /chief executive/] },
+  {
+    slug: "chief-executive-officer",
+    patterns: [/\bceo\b/, /chief executive/, /\bfounder\b/, /managing director/],
+  },
   { slug: "chief-operating-officer", patterns: [/\bcoo\b/, /chief operating/] },
   {
     slug: "chief-technology-officer",
-    patterns: [/\bcto\b/, /chief technology/, /chief technical/],
+    patterns: [/\bcto\b/, /chief technology/, /chief technical/, /head of engineering/, /vp.*engineering/],
   },
-  // Engineering.
+  // Engineering / technical IC (after CTO so "chief technology" wins).
   {
     slug: "software-engineer",
-    patterns: [/engineer/, /developer/, /\bdev\b/, /\bswe\b/, /programmer/, /coding/],
+    patterns: [
+      /engineer/,
+      /developer/,
+      /\bdev\b/,
+      /\bswe\b/,
+      /programmer/,
+      /coding/,
+      /tech lead/,
+      /technical lead/,
+      /\bnlp\b/,
+      /\bai\b.*engineer/,
+      /ui engineer/,
+    ],
   },
   // Product.
   {
     slug: "product-manager",
     patterns: [/product manager/, /product owner/, /product lead/, /\bpm\b/],
   },
-  // Marketing.
+  // Marketing / GTM / media (before generic growth catch if any).
   {
     slug: "marketing-manager",
-    patterns: [/marketing/, /\bcmo\b/, /\bgrowth\b/, /\bbrand\b/, /\bpr\b/, /communications/],
+    patterns: [
+      /marketing/,
+      /\bcmo\b/,
+      /\bgrowth\b/,
+      /\bbrand\b/,
+      /\bpr\b/,
+      /communications/,
+      /go[- ]?to[- ]?market/,
+      /\bgtm\b/,
+      /\bmedia\b/,
+      /content lead/,
+    ],
   },
   // Sales — specific leadership / AE BEFORE the generic IC catch-all.
   {
@@ -79,10 +105,20 @@ const ALIASES: ReadonlyArray<{ slug: string; patterns: RegExp[] }> = [
     slug: "customer-success-manager",
     patterns: [/customer success/, /\bcsm\b/, /support lead/, /customer support/, /account success/],
   },
-  // Finance.
+  // Finance / risk / compliance.
   {
     slug: "finance-analyst",
-    patterns: [/finance/, /financial/, /accountant/, /accounting/, /\bcfo\b/, /controller/],
+    patterns: [
+      /finance/,
+      /financial/,
+      /accountant/,
+      /accounting/,
+      /\bcfo\b/,
+      /controller/,
+      /compliance/,
+      /\brisk\b/,
+      /audit/,
+    ],
   },
   // HR / people.
   {

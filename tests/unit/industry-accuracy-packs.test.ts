@@ -70,6 +70,16 @@ describe("industry-accuracy-packs — Phase D.1", () => {
     expect(p.industry_label).toBe("Not set");
   });
 
+  it("TECH industry still surfaces packs as available (not empty catalog)", () => {
+    const p = resolveAccuracyPackPosture({
+      industry: "TECH",
+      role_template: "chief-executive-officer",
+    });
+    expect(p.default_accuracy_class).toBe("STANDARD");
+    expect(p.packs.length).toBeGreaterThan(0);
+    expect(p.packs.every((x) => x.relevance === "available" || x.relevance === "secondary" || x.relevance === "primary")).toBe(true);
+  });
+
   it("catalog is non-empty and dual-control for regulated packs", () => {
     const catalog = listAccuracyPackCatalog();
     expect(catalog.length).toBeGreaterThanOrEqual(4);
