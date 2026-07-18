@@ -944,6 +944,9 @@ export interface TwinWorkProjection {
   edit_detected: boolean;
   edit_signal: string | null;
   last_drive_modified_at: string | null;
+  /** [C.3c] Dual-control: PENDING / AWAITING_HUMAN / VERIFIED / NOT_REQUIRED. */
+  verification_state: string | null;
+  verified_at: string | null;
 }
 
 interface LedgerRow {
@@ -1337,6 +1340,9 @@ export function twinWorkFromDetails(details: unknown): TwinWorkProjection | unde
       typeof o.last_drive_modified_at === "string"
         ? o.last_drive_modified_at
         : null,
+    verification_state:
+      typeof o.verification_state === "string" ? o.verification_state : null,
+    verified_at: typeof o.verified_at === "string" ? o.verified_at : null,
   };
 }
 

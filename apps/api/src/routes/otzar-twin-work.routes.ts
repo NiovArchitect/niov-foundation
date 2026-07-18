@@ -11,6 +11,7 @@ import {
   twinRequestClarity,
   twinRequestCollaboration,
   openTwinWorkFromExtract,
+  humanVerifyTwinWork,
 } from "../services/otzar/twin-work-claim.service.js";
 import {
   detectTwinWorkDocumentEdits,
@@ -37,6 +38,7 @@ function statusFor(code: string): number {
       return 422;
     case "NO_DOCUMENT":
     case "NO_TWIN_CLAIM":
+    case "VERIFICATION_REQUIRED":
       return 422;
     case "GOOGLE_RECONNECT_REQUIRED":
       return 403;
@@ -163,11 +165,55 @@ export async function registerOtzarTwinWorkRoutes(
           : {}),
       });
       if (!result.ok)
+        return reply
+          .code(statusFor(result.code))
+          .send({
+            ok: false,
+            code: result.code,
+            ...(result.code === "VERIFICATION_REQUIRED"
+              ? {
+                  message:
+                    "Accuracy-critical work needs human verification before complete",
+                }
+              : {}),
+          });
+      return reply.code(200).send({
+        ok: true,
+        ledger_entry_id: result.entry.ledger_entry_id,
+        status: result.entry.status,
+        notified: true,
+      });
+    },
+  );
+
+  // [C.3c] Human verifies accuracy-critical Twin work (dual-control).
+  app.post<{ Params: { ledger_entry_id: string }; Body: Record<string, unknown> }>(
+    "/api/v1/otzar/twin-work/:ledger_entry_id/verify",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const org = await orgOf(session.entity_id);
+      if (org === null)
+        return reply.code(404).send({ ok: false, code: "NO_ORG_FOR_CALLER" });
+      const body = request.body ?? {};
+      const result = await humanVerifyTwinWork({
+        org_entity_id: org,
+        human_entity_id: session.entity_id,
+        ledger_entry_id: request.params.ledger_entry_id,
+        ...(typeof body.note === "string" ? { note: body.note } : {}),
+        complete_after: body.complete_after === true,
+      });
+      if (!result.ok)
         return reply.code(statusFor(result.code)).send({ ok: false, code: result.code });
       return reply.code(200).send({
         ok: true,
         ledger_entry_id: result.entry.ledger_entry_id,
         status: result.entry.status,
+        twin_work: result.entry.twin_work ?? null,
         notified: true,
       });
     },
