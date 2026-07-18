@@ -871,6 +871,7 @@ export type {
 export {
   buildResponsibilityGraph,
   buildLeadCoordinationCard,
+  enrichResponsibilityGraphFromExtraction,
 } from "./services/otzar/responsibility-graph.js";
 export type {
   ResponsibilityGraph,

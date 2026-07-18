@@ -6,7 +6,11 @@
 // CONNECTS TO: services/otzar/responsibility-graph.ts.
 
 import { describe, expect, it } from "vitest";
-import { buildResponsibilityGraph, buildLeadCoordinationCard } from "@niov/api";
+import {
+  buildResponsibilityGraph,
+  buildLeadCoordinationCard,
+  enrichResponsibilityGraphFromExtraction,
+} from "@niov/api";
 
 // Encodes the founder-described meeting: Sadeil hands to David (lead); Shiney
 // owns integration; Samiksha auth support; Pratham UI support; Dishant OpenClaw;
@@ -67,5 +71,41 @@ describe("responsibility graph — work structure", () => {
     // Sadeil (founder authority) is not tracked as an IC.
     expect(card?.tracks.find((t) => t.name === "Sadeil")).toBeUndefined();
     expect(card?.tracks.find((t) => t.name === "Shiney")?.role).toBe("owner");
+  });
+});
+
+describe("responsibility graph — enterprise-natural ownership fan-out", () => {
+  it("places owners for will-complete / will-ship commitments", () => {
+    const t = [
+      "Sadeil: David will complete the UI flow review by Friday.",
+      "David: Agreed, I own the UI flow review.",
+      "Sadeil: Vishesh will ship ambient orb polish this week.",
+    ].join(" ");
+    const g = buildResponsibilityGraph(t);
+    expect(g.nodes.find((n) => n.name === "David")?.role).toBe("owner");
+    expect(g.nodes.find((n) => n.name === "Vishesh")?.role).toBe("owner");
+  });
+
+  it("enrichment from commitment strings fills graph when patterns miss", () => {
+    const empty = buildResponsibilityGraph("random chatter with no roles.");
+    const enriched = enrichResponsibilityGraphFromExtraction(empty, {
+      commitments: [
+        "David will complete the UI flow review by Friday",
+        "Vishesh will ship ambient orb polish this week",
+      ],
+      suggested_actions: [
+        {
+          target: {
+            display_name: "David Odie",
+            entity_id: "id-david",
+          },
+          source_excerpt: "David will complete the UI flow review",
+          draft_text: "Hi David",
+          resolution_status: "RESOLVED",
+        },
+      ],
+    });
+    expect(enriched.nodes.find((n) => n.name === "David")?.role).toBe("owner");
+    expect(enriched.nodes.find((n) => n.name === "Vishesh")?.role).toBe("owner");
   });
 });
