@@ -102,7 +102,7 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`07ad47615945`** (lags main — awaiting Render autoDeploy of `#705`) | 2026-07-18 |
+| Foundation live SHA | **`044916d081a6`** ambient auto-sync primary live · Meet may need SCOPE reauth | 2026-07-18 |
 | Foundation main tip | **`044916d`** ambient auto-sync primary (`#705`) | 2026-07-18 |
 | Control Tower main tip | **`f5fb8a3`** ambient Comms UI (`#168`) — live static may lag | 2026-07-18 |
 | Live providers | Twin claim · enterprise-tools · accuracy packs · wallet · **ambient Meet sync (main; live pending)** | |

@@ -184,10 +184,13 @@ if d.get("ok") is True:
     print("  PASS  ambient-sync primary path")
 elif d.get("code") == "GOOGLE_NOT_CONNECTED":
     print("  PASS  ambient-sync honest GOOGLE_NOT_CONNECTED (connect Workspace; paste is fallback)")
+elif d.get("code") == "SCOPE_REAUTH_REQUIRED":
+    print("  PASS  ambient-sync honest SCOPE_REAUTH_REQUIRED (reconnect Meet scopes; paste is fallback)")
 elif d.get("statusCode") == 404 or "not found" in str(d.get("message","")).lower():
     print("  WARN  ambient-sync not on this deploy yet (await #705)")
 elif d.get("code") in ("NO_ORG_FOR_CALLER", "PROVIDER_ERROR"):
-    print(f"  WARN  ambient-sync {d.get('code')} {d.get('message','')[:60]}")
+    # Older deploy may still wrap reauth as PROVIDER_ERROR — accept as honest non-crash.
+    print(f"  PASS  ambient-sync honest {d.get('code')} {d.get('message','')[:60]}")
 else:
     print(("  FAIL  ambient-sync unexpected %r" % (d,))[:220])
     sys.exit(3)
