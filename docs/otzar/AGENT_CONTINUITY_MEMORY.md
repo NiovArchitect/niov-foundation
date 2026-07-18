@@ -2,8 +2,8 @@
 
 > **Purpose:** Survive context compaction. Any agent continuing Otzar work MUST
 > read this file + `HOLISTIC_EXECUTION_LEDGER.md` before building or smoking.
-> Updated: 2026-07-18 (autonomous loop — membership repair, tool readiness OAuth,
-> wallet portability posture; PR #697 merged `d5d37cc`).
+> Updated: 2026-07-18 (autonomous loop green whole-system smoke on live `da9c008`).
+> Continuity: PRs 697–701 FND, CT 164–167. Script: scripts/otzar-whole-system-smoke.sh
 
 ---
 
@@ -243,3 +243,18 @@ CT also: `npm run test:e2e:live:workos:full` with `DEMO_SHARED_PASSWORD` set.
 ---
 
 *End of continuity memory. Update on every coherent merge/deploy and after every deep smoke.*
+
+
+## Autonomous session log (2026-07-18)
+
+| Ship | Result |
+|------|--------|
+| #697 role-template repair | **live** `d5d37cc` — FOUNDER title, CEO template, 5 packs, repair endpoint |
+| Live membership repair | david/vishesh **5 projects** |
+| #698 OAuth readiness + wallet | **live** `da9c008` — tool req/conn/missing honest; wallet_portability True |
+| #700 whole-system smoke script | merged |
+| #701 ledger fingerprint | merged |
+| CT #165 wallet panel, #166 My Work empty, #167 tools labels | merged |
+| Whole-system smoke script | **fails=0** on live da9c008 |
+
+Next autonomous: Phase F ambient design system, third-party SoT E2E, wallet export enforcement, clock-out playground.
