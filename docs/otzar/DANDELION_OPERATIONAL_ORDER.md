@@ -61,6 +61,7 @@ No auto-membership. No admin forced to pick a project for every person.
 | Seed type | Ambient grow behavior |
 |-----------|------------------------|
 | `add_project_membership` | Route placement task to manager; admin may hold/reject |
+| `set_manager` | **Phase B** — Otzar proposes manager; **admin confirms** (never auto-write) |
 | `grant_tool_access` / `connector_setup` | Setup TASK — never auto-grant access |
 | `confirm_or_activate_person` / `resolve_identity` | Identity / activation path |
 | `review_external_party` | Admin (or policy) review before track |

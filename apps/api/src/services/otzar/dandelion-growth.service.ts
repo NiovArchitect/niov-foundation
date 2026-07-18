@@ -59,10 +59,11 @@ export type GrowthRecommendationKind =
   // of connection into one word — an org member with a manager, team, and
   // hierarchy read as "disconnected from the org". The recommendation names
   // the ONE missing object precisely: a first project/workspace assignment.
-  // Future gap categories (NEEDS_MANAGER, NEEDS_DEPARTMENT, NEEDS_AI_TWIN,
-  // NEEDS_ROLE_TOOLS) follow this naming — never broad connected/disconnected
-  // language.
+  // Future gap categories (NEEDS_DEPARTMENT, NEEDS_AI_TWIN, NEEDS_ROLE_TOOLS)
+  // follow this naming — never broad connected/disconnected language.
   | "NEEDS_PROJECT_OR_WORKSPACE"
+  // Phase B — hierarchy propose + admin confirmation.
+  | "NEEDS_MANAGER"
   | "PREPARE_ONBOARDING";
 
 // [PROD-UX-BUGD] Structured source-of-truth metadata so no consumer has to
@@ -100,6 +101,8 @@ export interface OrgGrowthView {
     external_collaborators_count: number;
     unowned_external_count: number;
     members_without_project_count: number;
+    /** Phase B — active members with no person→person manager edge. */
+    members_without_manager_count: number;
   };
   /** [GAP-B] The FULL setup queue behind the capped recommendation list:
    *  every member with no live project/workspace assignment (the uncapped
@@ -110,6 +113,18 @@ export interface OrgGrowthView {
   needs_first_project_people: Array<{
     person_entity_id: string;
     display_name: string;
+  }>;
+  /**
+   * Phase B — full queue of members without a manager. Optional proposed
+   * manager is a soft heuristic (department peer who already manages people);
+   * admin must confirm — never auto-written.
+   */
+  needs_manager_people: Array<{
+    person_entity_id: string;
+    display_name: string;
+    department: string | null;
+    proposed_manager_entity_id: string | null;
+    proposed_manager_name: string | null;
   }>;
   generated_at: string;
 }
@@ -491,6 +506,14 @@ export async function getOrgGrowthForCaller(
   // the old copy ("isn't connected to any project or workspace yet") read as
   // "disconnected from the org" and broke trust.
   const managerByPerson = new Map(managerEdges.map((e) => [e.child_id, e.parent_id]));
+  // Report counts per manager — used for soft hierarchy proposals (Phase B).
+  const reportCountByManager = new Map<string, number>();
+  for (const e of managerEdges) {
+    reportCountByManager.set(
+      e.parent_id,
+      (reportCountByManager.get(e.parent_id) ?? 0) + 1,
+    );
+  }
   for (const lonely of withoutProject) {
     const buddy =
       mostConnectedId !== null ? byId.get(mostConnectedId) : undefined;
@@ -524,6 +547,47 @@ export async function getOrgGrowthForCaller(
     });
   }
 
+  // Phase B — members without a reporting manager (person→person edge).
+  const withoutManager = members.filter((m) => !managerByPerson.has(m.entity_id));
+  const proposeManagerFor = (
+    personId: string,
+    department: string | null,
+  ): { id: string; name: string } | null => {
+    // Prefer someone in the same department who already manages others.
+    const candidates = members.filter((m) => m.entity_id !== personId);
+    const scored = candidates
+      .map((m) => {
+        const reports = reportCountByManager.get(m.entity_id) ?? 0;
+        const sameDept =
+          department !== null &&
+          m.department !== null &&
+          m.department.toLowerCase() === department.toLowerCase()
+            ? 1
+            : 0;
+        // Score: existing managers in same dept win; else people with reports.
+        return { m, score: sameDept * 100 + reports };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.m.display_name.localeCompare(b.m.display_name));
+    const best = scored[0];
+    if (best === undefined) return null;
+    return { id: best.m.entity_id, name: best.m.display_name };
+  };
+
+  const needsManagerPeople = [...withoutManager]
+    .sort((a, b) => a.display_name.localeCompare(b.display_name))
+    .map((m) => {
+      const proposed = proposeManagerFor(m.entity_id, m.department);
+      return {
+        person_entity_id: m.entity_id,
+        display_name: m.display_name,
+        department: m.department,
+        proposed_manager_entity_id: proposed?.id ?? null,
+        proposed_manager_name: proposed?.name ?? null,
+      };
+    });
+
+  // Onboarding before hierarchy noise so capped cards stay useful.
   for (const m of members) {
     if (m.job_title === null) {
       recommendations.push({
@@ -535,6 +599,35 @@ export async function getOrgGrowthForCaller(
           "Ask them to complete their getting-started questions, or set their role on My Organization.",
       });
     }
+  }
+
+  // Phase B recommendations: only for *orphans* — no manager, no reports of
+  // their own, and a department (suggests they should sit under someone).
+  // Org tops (people who lead others, or undepartmented founders) stay quiet.
+  // needs_manager_people still lists everyone for seed sync / admin confirm.
+  let managerRecs = 0;
+  for (const gap of needsManagerPeople) {
+    if (managerRecs >= 4) break;
+    if (gap.department === null) continue;
+    if ((reportCountByManager.get(gap.person_entity_id) ?? 0) > 0) continue;
+    const proposed = gap.proposed_manager_name;
+    recommendations.push({
+      kind: "NEEDS_MANAGER",
+      title: `${gap.display_name} needs a manager in the reporting structure`,
+      why:
+        proposed !== null
+          ? `${gap.display_name} has no manager on file. Otzar suggests ${proposed} based on department and who already leads people — confirm or choose someone else.`
+          : `${gap.display_name} has no manager on file. Reviews and ambient placement need a reporting home.`,
+      people:
+        proposed !== null
+          ? [gap.display_name, proposed]
+          : [gap.display_name],
+      suggested_next_step:
+        proposed !== null
+          ? `Confirm ${gap.display_name} reports to ${proposed}, or pick another manager on People & Roles.`
+          : `Set a manager for ${gap.display_name} on People & Roles (Reporting structure).`,
+    });
+    managerRecs += 1;
   }
 
   const capped = recommendations.slice(0, MAX_RECOMMENDATIONS);
@@ -549,6 +642,7 @@ export async function getOrgGrowthForCaller(
         external_collaborators_count: externalCount,
         unowned_external_count: unownedExternals.length,
         members_without_project_count: withoutProject.length,
+        members_without_manager_count: withoutManager.length,
       },
       needs_first_project_people: [...withoutProject]
         .sort((a, b) => a.display_name.localeCompare(b.display_name))
@@ -556,6 +650,7 @@ export async function getOrgGrowthForCaller(
           person_entity_id: m.entity_id,
           display_name: m.display_name,
         })),
+      needs_manager_people: needsManagerPeople,
       generated_at: new Date().toISOString(),
     },
   };

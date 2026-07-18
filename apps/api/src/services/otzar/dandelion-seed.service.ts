@@ -29,6 +29,7 @@ import {
 import {
   addWorkProjectMemberForCaller,
 } from "./work-project.service.js";
+import { assignManager } from "../governance/hierarchy.service.js";
 import { makeNotificationService } from "../notification/notification.service.js";
 
 const notificationService = makeNotificationService({});
@@ -63,6 +64,9 @@ export interface OrgSeedView {
    *  projection time (never stored — matches must be fresh). Otzar lists;
    *  the admin decides. */
   possible_matches?: PossibleCollaboratorMatch[];
+  /** Phase B — soft proposed manager on set_manager seeds (admin must confirm). */
+  proposed_manager_entity_id?: string | null;
+  proposed_manager_name?: string | null;
 }
 
 type SeedDetails = {
@@ -81,6 +85,9 @@ type SeedDetails = {
   hold_reason?: string | null;
   reviewer_entity_id?: string | null;
   reviewed_at?: string | null;
+  /** Phase B — soft hierarchy proposal (never auto-applied). */
+  proposed_manager_entity_id?: string | null;
+  proposed_manager_name?: string | null;
 };
 
 type SeedRow = {
@@ -126,6 +133,16 @@ function projectSeed(row: SeedRow): OrgSeedView {
     hold_reason: d.hold_reason ?? null,
     reviewed: d.reviewed_at != null,
     created_at: row.created_at.toISOString(),
+    ...(typeof d.proposed_manager_entity_id === "string" ||
+    d.proposed_manager_entity_id === null
+      ? {
+          proposed_manager_entity_id: d.proposed_manager_entity_id ?? null,
+          proposed_manager_name:
+            typeof d.proposed_manager_name === "string"
+              ? d.proposed_manager_name
+              : null,
+        }
+      : {}),
   };
 }
 
@@ -220,6 +237,11 @@ export async function approveSeed(args: {
    * Never auto-picks a project.
    */
   project_id?: string;
+  /**
+   * Phase B — for set_manager seeds: admin-confirmed manager. Falls back to
+   * proposed_manager_entity_id on the seed when absent. Never auto-picks.
+   */
+  manager_entity_id?: string | null;
 }): Promise<SeedActionSuccess | SeedActionFailure> {
   const row = await loadSeed(args.seedId, args.orgEntityId);
   if (row === null) return { ok: false, code: "NOT_FOUND", message: "seed not found" };
@@ -515,6 +537,68 @@ export async function approveSeed(args: {
     resultingAction = setup.ok
       ? `team assignment setup created — not auto-joined`
       : "approved; team setup pending";
+  } else if (d.seed_type === "set_manager") {
+    // Phase B — hierarchy propose + admin confirmation. Never auto-writes.
+    const subjectId =
+      typeof d.subject_entity_id === "string" ? d.subject_entity_id : null;
+    if (subjectId === null) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "Hierarchy seed is missing the person.",
+      };
+    }
+    const fromBody =
+      args.manager_entity_id !== undefined
+        ? args.manager_entity_id
+        : undefined;
+    const fromProposal =
+      typeof d.proposed_manager_entity_id === "string" &&
+      d.proposed_manager_entity_id.length > 0
+        ? d.proposed_manager_entity_id
+        : null;
+    const managerId =
+      fromBody !== undefined
+        ? fromBody
+        : fromProposal;
+    if (managerId === null || managerId === undefined || managerId.length === 0) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "Choose a manager to confirm this reporting relationship.",
+      };
+    }
+    const assigned = await assignManager({
+      org_entity_id: args.orgEntityId,
+      actor_entity_id: args.adminEntityId,
+      person_entity_id: subjectId,
+      manager_entity_id: managerId,
+    });
+    if (!assigned.ok) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message:
+          assigned.code === "CYCLE"
+            ? "That manager would create a reporting cycle."
+            : assigned.code === "MANAGER_NOT_FOUND" ||
+                assigned.code === "PERSON_NOT_FOUND"
+              ? "That person is not in your organization."
+              : "Could not save the reporting change.",
+      };
+    }
+    const subjectName =
+      typeof d.subject_name === "string" && d.subject_name.trim().length > 0
+        ? d.subject_name.trim()
+        : "this person";
+    const proposedName =
+      typeof d.proposed_manager_name === "string"
+        ? d.proposed_manager_name
+        : null;
+    resultingAction =
+      proposedName !== null && managerId === d.proposed_manager_entity_id
+        ? `confirmed: ${subjectName} reports to ${proposedName}`
+        : `manager set for ${subjectName}`;
   }
   return transition(args.seedId, args.orgEntityId, args.adminEntityId, "SEED_APPROVED", { resulting_action: resultingAction }, "DANDELION_SEED_APPROVED");
 }
@@ -687,12 +771,14 @@ export async function routeStructurePlacementAmbient(args: {
 }
 
 export type GrowthSeedCandidate = {
-  seed_type: "add_project_membership";
+  seed_type: "add_project_membership" | "set_manager";
   subject_entity_id: string;
   subject_name: string;
   recommended_action: string;
   source_evidence: string;
   risk_if_ignored: string;
+  proposed_manager_entity_id?: string | null;
+  proposed_manager_name?: string | null;
 };
 
 // WHAT: Pure plan of structure seeds from growth people list (unit-testable).
@@ -722,10 +808,60 @@ export function planStructureSeedsFromGrowth(people: Array<{
   return out;
 }
 
+// WHAT: Pure plan of hierarchy (set_manager) seeds from growth manager gaps.
+// WHY: Phase B — Otzar proposes; admin confirms. Never auto-writes hierarchy.
+export function planManagerSeedsFromGrowth(
+  people: Array<{
+    person_entity_id: string;
+    display_name: string;
+    proposed_manager_entity_id?: string | null;
+    proposed_manager_name?: string | null;
+  }>,
+): GrowthSeedCandidate[] {
+  const out: GrowthSeedCandidate[] = [];
+  const seen = new Set<string>();
+  for (const p of people) {
+    const id = p.person_entity_id.trim();
+    const name = p.display_name.trim();
+    if (id.length === 0 || name.length === 0) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const proposedId =
+      typeof p.proposed_manager_entity_id === "string" &&
+      p.proposed_manager_entity_id.trim().length > 0
+        ? p.proposed_manager_entity_id.trim()
+        : null;
+    const proposedName =
+      typeof p.proposed_manager_name === "string" &&
+      p.proposed_manager_name.trim().length > 0
+        ? p.proposed_manager_name.trim()
+        : null;
+    out.push({
+      seed_type: "set_manager",
+      subject_entity_id: id,
+      subject_name: name,
+      recommended_action:
+        proposedName !== null
+          ? `Confirm ${name} reports to ${proposedName}`
+          : `Set a manager for ${name}`,
+      source_evidence:
+        proposedName !== null
+          ? `${name} has no manager on file. Otzar proposes ${proposedName} from department and existing leadership — confirm or choose someone else.`
+          : `${name} is an org member with no manager on the reporting structure (hierarchy scan).`,
+      risk_if_ignored:
+        "Reviews, ambient placement, and team routing lack a reporting home for this person.",
+      proposed_manager_entity_id: proposedId,
+      proposed_manager_name: proposedName,
+    });
+  }
+  return out;
+}
+
 /**
  * Materialize org-growth structure discoveries into the governed seed queue.
  * Idempotent: skips when an open seed already exists for the same type+subject.
  * NEVER creates memberships, invites, or grants access.
+ * Phase B: also lands set_manager hierarchy proposals for admin confirmation.
  */
 export async function syncGrowthDiscoveriesToSeeds(args: {
   orgEntityId: string;
@@ -734,13 +870,22 @@ export async function syncGrowthDiscoveriesToSeeds(args: {
     person_entity_id: string;
     display_name: string;
   }>;
+  needs_manager_people?: Array<{
+    person_entity_id: string;
+    display_name: string;
+    proposed_manager_entity_id?: string | null;
+    proposed_manager_name?: string | null;
+  }>;
 }): Promise<{
   ok: true;
   created: number;
   skipped_existing: number;
   seeds: OrgSeedView[];
 }> {
-  const planned = planStructureSeedsFromGrowth(args.needs_first_project_people);
+  const planned = [
+    ...planStructureSeedsFromGrowth(args.needs_first_project_people),
+    ...planManagerSeedsFromGrowth(args.needs_manager_people ?? []),
+  ];
   let created = 0;
   let skipped = 0;
   const fresh: OrgSeedView[] = [];
@@ -762,13 +907,14 @@ export async function syncGrowthDiscoveriesToSeeds(args: {
     }),
   );
 
-  for (const cand of planned.slice(0, 50)) {
+  for (const cand of planned.slice(0, 80)) {
     const key = `${cand.seed_type}::${cand.subject_entity_id}`;
     if (openKeys.has(key)) {
       skipped += 1;
       continue;
     }
 
+    const isHierarchy = cand.seed_type === "set_manager";
     const made = await createLedgerEntry({
       org_entity_id: args.orgEntityId,
       ledger_type: "ORG_SEEDING",
@@ -779,8 +925,9 @@ export async function syncGrowthDiscoveriesToSeeds(args: {
       priority: "ROUTINE",
       extraction_source: "TYPESCRIPT_DETERMINISTIC",
       owner_entity_id: args.adminEntityId,
-      next_action:
-        "Ambient: Otzar routes placement to their manager — admin oversight only",
+      next_action: isHierarchy
+        ? "Admin confirms manager — Otzar does not write hierarchy alone"
+        : "Ambient: Otzar routes placement to their manager — admin oversight only",
       evidence: [{ quote: cand.source_evidence }],
       details: {
         seed_type: cand.seed_type,
@@ -789,24 +936,35 @@ export async function syncGrowthDiscoveriesToSeeds(args: {
         recommended_action: cand.recommended_action,
         source_conversation_id: null,
         confidence: "high",
-        approval_required: false,
+        approval_required: isHierarchy,
         policy_status: "needs_review",
         sensitivity: "internal",
         risk_if_ignored: cand.risk_if_ignored,
-        discovery_source: "org_growth_structure",
+        discovery_source: isHierarchy
+          ? "org_growth_hierarchy"
+          : "org_growth_structure",
+        ...(isHierarchy
+          ? {
+              proposed_manager_entity_id:
+                cand.proposed_manager_entity_id ?? null,
+              proposed_manager_name: cand.proposed_manager_name ?? null,
+            }
+          : {}),
       },
     });
     if (made.ok) {
       created += 1;
       openKeys.add(key);
-      // Ambient grow immediately — do not wait for admin to click.
-      await routeStructurePlacementAmbient({
-        orgEntityId: args.orgEntityId,
-        subjectEntityId: cand.subject_entity_id,
-        subjectName: cand.subject_name,
-        seedId: made.entry.ledger_entry_id,
-        actorEntityId: args.adminEntityId,
-      });
+      // Project gaps: ambient route to manager. Hierarchy: admin confirm only.
+      if (!isHierarchy) {
+        await routeStructurePlacementAmbient({
+          orgEntityId: args.orgEntityId,
+          subjectEntityId: cand.subject_entity_id,
+          subjectName: cand.subject_name,
+          seedId: made.entry.ledger_entry_id,
+          actorEntityId: args.adminEntityId,
+        });
+      }
       const row = await prisma.workLedgerEntry.findUnique({
         where: { ledger_entry_id: made.entry.ledger_entry_id },
       });

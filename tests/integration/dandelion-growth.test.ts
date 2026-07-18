@@ -219,6 +219,9 @@ describe("Phase 1237 — Dandelion org growth", () => {
     expect(kinds).toContain("REDUCE_OVERLOAD");
     expect(kinds).toContain("NEEDS_PROJECT_OR_WORKSPACE");
     expect(kinds).toContain("PREPARE_ONBOARDING");
+    // Phase B — hierarchy may appear when the org already has manager edges.
+    expect(Array.isArray(r.growth.needs_manager_people)).toBe(true);
+    expect(typeof r.growth.signals.members_without_manager_count).toBe("number");
     expect(r.growth.headline).toContain("strengthen your organization");
     expect(r.growth.signals.unowned_external_count).toBe(1);
     expect(r.growth.signals.members_without_project_count).toBe(1);
@@ -521,8 +524,10 @@ describe("Phase 1237 — Dandelion org growth", () => {
     });
     const r = await getOrgGrowthForCaller(adminId);
     if (r.ok === false) throw new Error("expected ok");
+    // Flat healthy org (everyone has a project, no manager edges yet) stays calm.
     expect(r.growth.recommendations).toEqual([]);
     expect(r.growth.headline).toContain("looks healthy");
+    expect(r.growth.signals.members_without_project_count).toBe(0);
   });
 
   it("[SMOKE-TENANCY] a SUSPENDED member vanishes from growth counts and recommendations (soft rail leaves the membership row)", async () => {
