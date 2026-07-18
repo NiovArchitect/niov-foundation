@@ -524,8 +524,10 @@ describe("Phase 1237 — Dandelion org growth", () => {
     });
     const r = await getOrgGrowthForCaller(adminId);
     if (r.ok === false) throw new Error("expected ok");
+    // Flat healthy org (everyone has a project, no manager edges yet) stays calm.
     expect(r.growth.recommendations).toEqual([]);
     expect(r.growth.headline).toContain("looks healthy");
+    expect(r.growth.signals.members_without_project_count).toBe(0);
   });
 
   it("[SMOKE-TENANCY] a SUSPENDED member vanishes from growth counts and recommendations (soft rail leaves the membership row)", async () => {
