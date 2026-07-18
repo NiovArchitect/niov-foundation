@@ -83,3 +83,104 @@ export function resolveWalletPortabilityPosture(): WalletPortabilityPosture {
     takes_only_personal_layer: true,
   };
 }
+
+/** Substrate kinds that may appear in an export candidate list. */
+export type WalletExportKind =
+  | "twin_skill"
+  | "correction_memory"
+  | "personal_preference"
+  | "role_template_fit"
+  | "work_ledger"
+  | "work_project"
+  | "org_document"
+  | "org_seed"
+  | "hierarchy"
+  | "oauth_token"
+  | "api_key"
+  | "connector_credential"
+  | "peer_twin"
+  | "peer_memory"
+  | "other_employee_data";
+
+export interface WalletExportCandidate {
+  kind: WalletExportKind;
+  /** Opaque id for audit — never secrets. */
+  ref_id: string;
+  label: string;
+}
+
+export interface WalletExportDecision {
+  kind: WalletExportKind;
+  ref_id: string;
+  label: string;
+  class: WalletPortabilityClass;
+  /** True only when class is PORTABLE_PERSONAL. */
+  include_in_export: boolean;
+  reason: string;
+}
+
+const KIND_CLASS: Readonly<Record<WalletExportKind, WalletPortabilityClass>> =
+  Object.freeze({
+    twin_skill: "PORTABLE_PERSONAL",
+    correction_memory: "PORTABLE_PERSONAL",
+    personal_preference: "PORTABLE_PERSONAL",
+    role_template_fit: "PORTABLE_PERSONAL",
+    work_ledger: "ORG_SCOPED",
+    work_project: "ORG_SCOPED",
+    org_document: "ORG_SCOPED",
+    org_seed: "ORG_SCOPED",
+    hierarchy: "ORG_SCOPED",
+    oauth_token: "NEVER_EXPORT",
+    api_key: "NEVER_EXPORT",
+    connector_credential: "NEVER_EXPORT",
+    peer_twin: "NEVER_EXPORT",
+    peer_memory: "NEVER_EXPORT",
+    other_employee_data: "NEVER_EXPORT",
+  });
+
+const CLASS_REASON: Readonly<Record<WalletPortabilityClass, string>> =
+  Object.freeze({
+    PORTABLE_PERSONAL: "Personal AI Teammate layer — travels with the person.",
+    ORG_SCOPED: "Enterprise work product — stays with the organization.",
+    NEVER_EXPORT: "Secrets or peer data — never leave.",
+  });
+
+// WHAT: Classify one export candidate under wallet-portability doctrine.
+// WHY: Enforcement substrate — UI posture alone is not enough.
+export function classifyWalletExportItem(
+  item: WalletExportCandidate,
+): WalletExportDecision {
+  const cls = KIND_CLASS[item.kind];
+  return {
+    kind: item.kind,
+    ref_id: item.ref_id,
+    label: item.label,
+    class: cls,
+    include_in_export: cls === "PORTABLE_PERSONAL",
+    reason: CLASS_REASON[cls],
+  };
+}
+
+// WHAT: Filter a candidate set to the portable personal layer only.
+// WHY: Export packages must never include ORG_SCOPED or NEVER_EXPORT rows.
+export function filterWalletExportPackage(
+  candidates: readonly WalletExportCandidate[],
+): {
+  included: WalletExportDecision[];
+  excluded: WalletExportDecision[];
+  portable_count: number;
+  org_retained_count: number;
+  never_export_count: number;
+} {
+  const decisions = candidates.map(classifyWalletExportItem);
+  const included = decisions.filter((d) => d.include_in_export);
+  const excluded = decisions.filter((d) => !d.include_in_export);
+  return {
+    included,
+    excluded,
+    portable_count: included.length,
+    org_retained_count: excluded.filter((d) => d.class === "ORG_SCOPED").length,
+    never_export_count: excluded.filter((d) => d.class === "NEVER_EXPORT")
+      .length,
+  };
+}
