@@ -29,6 +29,7 @@ import {
   createWorkProjectForCaller,
   listWorkProjectMembersForCaller,
   listWorkProjectsForCaller,
+  listProjectColleaguesForCaller,
   type WorkProjectMemberRole,
   type WorkProjectState,
 } from "../services/otzar/work-project.service.js";
@@ -184,6 +185,38 @@ export async function registerOtzarWorkProjectRoutes(
         take: takeNum,
       });
       return reply.code(200).send({ ok: true, projects });
+    },
+  );
+
+  // GET org colleagues for project invite picker (names only — no raw UUIDs in UI).
+  app.get(
+    "/api/v1/otzar/work-projects/colleagues",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply.code(401).send({
+          ok: false,
+          code: "SESSION_INVALID",
+          message: "Missing bearer token",
+        });
+      }
+      const session = await authService.validateSession(token, "read");
+      if (!session.valid) {
+        return reply
+          .code(401)
+          .send({ ok: false, code: session.code, message: "denied" });
+      }
+      const result = await listProjectColleaguesForCaller({
+        callerEntityId: session.entity_id,
+      });
+      if (result.ok === false) {
+        return reply
+          .code(404)
+          .send({ ok: false, code: result.code, message: "no org" });
+      }
+      return reply
+        .code(200)
+        .send({ ok: true, colleagues: result.colleagues });
     },
   );
 

@@ -112,12 +112,13 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**A.1 — Dandelion operational order (structure the substrate)**
+**A.2 — Projects visible in Work OS (structure blind spot)**
 
-Canonical order: **Listen → Discover → Seed → Govern → Grow**  
-Doctrine: `docs/otzar/DANDELION_OPERATIONAL_ORDER.md`.  
-Bridge: org-growth structure gaps → durable `ORG_SEEDING` seeds (idempotent).  
-Admin surface: one queue, root-first (people → structure → tools → external).
+Projects are the coherence anchor for Dandelion structure + Twin work.  
+Employees must **see** projects they are on (Today + nav More + Projects page),
+with human names — not hidden routes or raw entity UUIDs.
+
+**A.1** (landed): Listen → Discover → Seed → Govern → Grow + growth→seed bridge.
 
 ### Completed proof (honest)
 
@@ -147,13 +148,13 @@ Admin surface: one queue, root-first (people → structure → tools → externa
 
 ### Exact blocker (now)
 
-**Phase A.1**: one ordered Dandelion spine — Discover lands as Seeds; admin governs; grow without auto-grant.
+**Phase A.2**: project visibility in employee Work OS so structure seeds and Twin context have a place to land.
 Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Ship sync-from-growth + Organization Seeding order strip.
-2. Live: Discover from structure → seeds appear → approve → assignment TASK only.
+1. Ship Projects in More + Today panel + display names + colleague picker.
+2. Live: employee sees projects; empty state honest; admin seed → assign still governed.
 
 ## Substrate map (do not invent a third project system)
 

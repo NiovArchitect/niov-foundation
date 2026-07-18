@@ -36,6 +36,7 @@ import type {
   WorkProjectState,
 } from "@prisma/client";
 import { prisma } from "@niov/database";
+import { getOrgEntityId } from "../governance/org.js";
 
 export type { WorkProjectMemberRole, WorkProjectState };
 
@@ -59,6 +60,10 @@ export interface WorkProjectSafeView {
   state: WorkProjectState;
   created_at: string;
   archivable: boolean;
+  /** Caller's role on this project when listed for them; null if unknown. */
+  my_role?: WorkProjectMemberRole | null;
+  /** Member count for glanceable capacity (safe integer). */
+  member_count?: number;
 }
 
 // WHAT: Safe employee-facing projection of a WorkProjectMember row.
@@ -68,6 +73,14 @@ export interface WorkProjectMemberSafeView {
   entity_id: string;
   role: WorkProjectMemberRole;
   created_at: string;
+  /** Human label only — never email in list surfaces. */
+  display_name?: string;
+}
+
+/** Org colleague for project invite picker (safe labels). */
+export interface ProjectColleagueView {
+  entity_id: string;
+  display_name: string;
 }
 
 // WHAT: Inputs for listWorkProjectsForCaller.
@@ -206,14 +219,19 @@ export async function createWorkProjectForCaller(
 // WHAT: List projects the caller is a member of.
 // WHY: Self-scoped via project_member.entity_id; ACTIVE-only by
 //      default unless state filter explicitly passed.
+//      Enriched with my_role + member_count so Today / Projects surfaces
+//      can show "I'm on these projects" without a second round-trip.
 export async function listWorkProjectsForCaller(
   input: ListWorkProjectsInput,
 ): Promise<WorkProjectSafeView[]> {
   const take = Math.min(input.take ?? 50, LIST_TAKE_CAP);
   const memberships = await prisma.workProjectMember.findMany({
     where: { entity_id: input.callerEntityId },
-    select: { project_id: true },
+    select: { project_id: true, role: true },
   });
+  const roleByProject = new Map(
+    memberships.map((m) => [m.project_id, m.role as WorkProjectMemberRole]),
+  );
   const projectIds = memberships.map((m) => m.project_id);
   if (projectIds.length === 0) return [];
   const rows = await prisma.workProject.findMany({
@@ -224,7 +242,19 @@ export async function listWorkProjectsForCaller(
     orderBy: { created_at: "desc" },
     take,
   });
-  return rows.map(projectWorkProjectSafeView);
+  const counts = await prisma.workProjectMember.groupBy({
+    by: ["project_id"],
+    where: { project_id: { in: rows.map((r) => r.project_id) } },
+    _count: { project_member_id: true },
+  });
+  const countBy = new Map(
+    counts.map((c) => [c.project_id, c._count.project_member_id]),
+  );
+  return rows.map((row) => ({
+    ...projectWorkProjectSafeView(row),
+    my_role: roleByProject.get(row.project_id) ?? null,
+    member_count: countBy.get(row.project_id) ?? 0,
+  }));
 }
 
 // WHAT: Add a member to a project the caller owns.
@@ -340,7 +370,70 @@ export async function listWorkProjectMembersForCaller(input: {
     where: { project_id: input.projectId },
     orderBy: { created_at: "asc" },
   });
-  return { ok: true, members: rows.map(projectWorkProjectMemberSafeView) };
+  const entityIds = rows.map((r) => r.entity_id);
+  const entities =
+    entityIds.length === 0
+      ? []
+      : await prisma.entity.findMany({
+          where: { entity_id: { in: entityIds } },
+          select: { entity_id: true, display_name: true },
+        });
+  const nameBy = new Map(entities.map((e) => [e.entity_id, e.display_name]));
+  return {
+    ok: true,
+    members: rows.map((row) => ({
+      ...projectWorkProjectMemberSafeView(row),
+      display_name: nameBy.get(row.entity_id) ?? "Teammate",
+    })),
+  };
+}
+
+// WHAT: Org colleagues the caller may invite onto a project (picker).
+// WHY: Employees must not paste entity UUIDs. Labels only; same-org only.
+export async function listProjectColleaguesForCaller(input: {
+  callerEntityId: string;
+  take?: number;
+}): Promise<
+  | { ok: true; colleagues: ProjectColleagueView[] }
+  | { ok: false; code: "NO_ORG_FOR_CALLER" }
+> {
+  const take = Math.min(input.take ?? 100, LIST_TAKE_CAP);
+  let orgEntityId: string;
+  try {
+    orgEntityId = await getOrgEntityId(input.callerEntityId);
+  } catch {
+    return { ok: false, code: "NO_ORG_FOR_CALLER" };
+  }
+  const memberLinks = await prisma.entityMembership.findMany({
+    where: {
+      parent_id: orgEntityId,
+      is_active: true,
+    },
+    select: { child_id: true },
+    take: 500,
+  });
+  const ids = memberLinks
+    .map((m) => m.child_id)
+    .filter((id) => id !== input.callerEntityId);
+  if (ids.length === 0) return { ok: true, colleagues: [] };
+  const people = await prisma.entity.findMany({
+    where: {
+      entity_id: { in: ids },
+      entity_type: "PERSON",
+      status: "ACTIVE",
+      deleted_at: null,
+    },
+    select: { entity_id: true, display_name: true },
+    orderBy: { display_name: "asc" },
+    take,
+  });
+  return {
+    ok: true,
+    colleagues: people.map((p) => ({
+      entity_id: p.entity_id,
+      display_name: p.display_name,
+    })),
+  };
 }
 
 // WHAT: Archive a project the caller owns.
