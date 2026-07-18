@@ -36,6 +36,8 @@ interface TrackBody {
   display_name?: unknown;
   email?: unknown;
   company_name?: unknown;
+  /** Alias for company_name (product: third-party organization label). */
+  organization_label?: unknown;
   relationship_type?: unknown;
   internal_owner_entity_id?: unknown;
   purpose_summary?: unknown;
@@ -133,7 +135,16 @@ export async function registerOtzarExternalCollaboratorRoutes(
         callerEntityId: session.entity_id,
         displayName: body.display_name,
         ...(isStr(body.email) ? { email: body.email } : {}),
-        ...(isStr(body.company_name) ? { companyName: body.company_name } : {}),
+        // company_name is canonical; organization_label accepted as alias
+        // (product language for third-party orgs in SoT).
+        ...((isStr(body.company_name) ? body.company_name : null) ??
+        (isStr(body.organization_label) ? body.organization_label : null)
+          ? {
+              companyName: (isStr(body.company_name)
+                ? body.company_name
+                : body.organization_label) as string,
+            }
+          : {}),
         ...(asRelationship(body.relationship_type) === undefined
           ? {}
           : { relationshipType: asRelationship(body.relationship_type)! }),
