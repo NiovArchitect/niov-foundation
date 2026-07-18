@@ -12,11 +12,18 @@ import { getOrgEntityId } from "../governance/org.js";
 import { listConnectorAdapters } from "../connectors/connector-adapter-registry.js";
 import {
   getOAuthStatusForOrg,
+  revokeOAuthConnection,
+  slugForProvider,
   type OAuthConnectionStatus,
   type OAuthProviderKey,
 } from "../connector/connector-oauth.service.js";
 import { listConnectorBindingsForOrgService } from "../connector/connector-binding.service.js";
+import {
+  listConnectorScopeGrants,
+  revokeConnectorScopeGrant,
+} from "../connector-rails/scope-grant.service.js";
 import { createLedgerEntry } from "../work-os/work-ledger.service.js";
+import { approveSeed, rejectSeed } from "./dandelion-seed.service.js";
 
 export type ToolConnectStatus =
   | "connected"
@@ -354,6 +361,8 @@ export type EnterpriseToolsInventoryView = {
     oauth_ready_for_consent: number;
     org_bindings_enabled: number;
     pending_access_requests: number;
+    people_with_open_requests: number;
+    active_employee_grants: number;
   };
   tools: Array<{
     provider: string;
@@ -361,16 +370,36 @@ export type EnterpriseToolsInventoryView = {
     category: string;
     adapter_status: string;
     oauth_status: string | null;
+    oauth_slug: string | null;
     account_label: string | null;
     last_verified_at: string | null;
     can_write: boolean;
     employee_self_serve: boolean;
+    /** Org OAuth can be force-revoked (wipes secrets; never silent). */
+    revocable: boolean;
   }>;
   pending_requests: Array<{
     seed_id: string;
     subject_name: string | null;
+    subject_entity_id: string | null;
+    capability_id: string | null;
+    provider: string | null;
     recommended_action: string;
     created_at: string;
+  }>;
+  /** Phase E.2 — per-person tool footprint (requests + employee scope grants). */
+  people: Array<{
+    person_entity_id: string;
+    display_name: string;
+    open_request_count: number;
+    active_grant_count: number;
+    sample_requests: string[];
+    grants: Array<{
+      grant_id: string;
+      connection_id: string;
+      scope_type: string;
+      allowed_operations: string[];
+    }>;
   }>;
   generated_at: string;
 };
@@ -432,16 +461,32 @@ export async function getEnterpriseToolsInventoryForAdmin(
     )
     .map((a) => {
       const o = oauthBy.get(a.provider_name as OAuthProviderKey);
+      const oauthSlug =
+        o !== undefined
+          ? o.slug
+          : a.provider_name === "GOOGLE_WORKSPACE" ||
+              a.provider_name === "SLACK" ||
+              a.provider_name === "MICROSOFT_365" ||
+              a.provider_name === "ZOOM"
+            ? slugForProvider(a.provider_name as OAuthProviderKey)
+            : null;
+      const revocable =
+        o !== undefined &&
+        (o.status === "VERIFIED" ||
+          o.status === "CONNECTED_UNVERIFIED" ||
+          o.status === "ERROR_NEEDS_RECONNECT");
       return {
         provider: a.provider_name,
         display_name: a.display_name,
         category: a.category,
         adapter_status: a.status,
         oauth_status: o?.status ?? null,
+        oauth_slug: oauthSlug,
         account_label: o?.account_label ?? null,
         last_verified_at: o?.last_verified_at ?? null,
         can_write: a.can_write,
         employee_self_serve: selfServe.has(a.provider_name),
+        revocable,
       };
     });
 
@@ -477,6 +522,11 @@ export async function getEnterpriseToolsInventoryForAdmin(
         seed_id: s.ledger_entry_id,
         subject_name:
           typeof d.subject_name === "string" ? d.subject_name : null,
+        subject_entity_id:
+          typeof d.subject_entity_id === "string" ? d.subject_entity_id : null,
+        capability_id:
+          typeof d.capability_id === "string" ? d.capability_id : null,
+        provider: typeof d.provider === "string" ? d.provider : null,
         recommended_action:
           typeof d.recommended_action === "string"
             ? d.recommended_action
@@ -484,6 +534,67 @@ export async function getEnterpriseToolsInventoryForAdmin(
         created_at: s.created_at.toISOString(),
       };
     });
+
+  // Phase E.2 — employee scope grants + people rollup.
+  const allGrants = await listConnectorScopeGrants(orgEntityId);
+  const employeeGrants = allGrants.filter((g) => g.scope_type === "EMPLOYEE");
+
+  const orgPeopleEdges = await prisma.entityMembership.findMany({
+    where: { parent_id: orgEntityId, is_active: true },
+    select: { child_id: true },
+    take: 300,
+  });
+  const personIds = orgPeopleEdges.map((e) => e.child_id);
+  const peopleRows =
+    personIds.length === 0
+      ? []
+      : await prisma.entity.findMany({
+          where: {
+            entity_id: { in: personIds },
+            entity_type: "PERSON",
+            status: "ACTIVE",
+            deleted_at: null,
+          },
+          select: { entity_id: true, display_name: true },
+          orderBy: { display_name: "asc" },
+          take: 300,
+        });
+
+  const requestsByPerson = new Map<string, typeof pending_requests>();
+  for (const req of pending_requests) {
+    if (req.subject_entity_id === null) continue;
+    const list = requestsByPerson.get(req.subject_entity_id) ?? [];
+    list.push(req);
+    requestsByPerson.set(req.subject_entity_id, list);
+  }
+  const grantsByPerson = new Map<string, typeof employeeGrants>();
+  for (const g of employeeGrants) {
+    if (g.scope_id === null) continue;
+    const list = grantsByPerson.get(g.scope_id) ?? [];
+    list.push(g);
+    grantsByPerson.set(g.scope_id, list);
+  }
+
+  const people = peopleRows
+    .map((p) => {
+      const reqs = requestsByPerson.get(p.entity_id) ?? [];
+      const grants = grantsByPerson.get(p.entity_id) ?? [];
+      return {
+        person_entity_id: p.entity_id,
+        display_name: p.display_name,
+        open_request_count: reqs.length,
+        active_grant_count: grants.length,
+        sample_requests: reqs.slice(0, 3).map((r) => r.recommended_action),
+        grants: grants.slice(0, 10).map((g) => ({
+          grant_id: g.grant_id,
+          connection_id: g.connection_id,
+          scope_type: g.scope_type,
+          allowed_operations: g.allowed_operations as string[],
+        })),
+      };
+    })
+    .filter((p) => p.open_request_count > 0 || p.active_grant_count > 0)
+    .slice(0, 100);
 
   const catalog = await getEnterpriseToolsCatalogForCaller(callerEntityId);
   const caps =
@@ -502,6 +613,9 @@ export async function getEnterpriseToolsInventoryForAdmin(
     ).length,
     org_bindings_enabled: enabledBindings.length,
     pending_access_requests: pending_requests.length,
+    people_with_open_requests: people.filter((p) => p.open_request_count > 0)
+      .length,
+    active_employee_grants: employeeGrants.length,
   };
 
   const headline =
@@ -518,9 +632,192 @@ export async function getEnterpriseToolsInventoryForAdmin(
       kpis,
       tools,
       pending_requests,
+      people,
       generated_at: new Date().toISOString(),
     },
   };
+}
+
+/**
+ * Phase E.2 — admin decides a tool access request in place (approve/deny).
+ * Approve records governance acknowledgement; it does NOT auto-connect OAuth.
+ * Deny closes the seed. Never silent grant.
+ */
+export async function decideEnterpriseToolRequest(args: {
+  adminEntityId: string;
+  seedId: string;
+  decision: "approve" | "deny";
+}): Promise<
+  | { ok: true; seed_id: string; decision: "approve" | "deny" }
+  | {
+      ok: false;
+      code:
+        | "NO_ORG_FOR_CALLER"
+        | "ADMIN_REQUIRED"
+        | "NOT_FOUND"
+        | "NOT_TOOL_REQUEST"
+        | "INVALID_REQUEST";
+      message?: string;
+    }
+> {
+  let orgEntityId: string;
+  try {
+    orgEntityId = await getOrgEntityId(args.adminEntityId);
+  } catch {
+    return { ok: false, code: "NO_ORG_FOR_CALLER" };
+  }
+  const tar = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: args.adminEntityId },
+    select: { can_admin_org: true },
+  });
+  if (tar?.can_admin_org !== true) {
+    return { ok: false, code: "ADMIN_REQUIRED" };
+  }
+  const row = await prisma.workLedgerEntry.findUnique({
+    where: { ledger_entry_id: args.seedId },
+    select: {
+      ledger_entry_id: true,
+      org_entity_id: true,
+      ledger_type: true,
+      details: true,
+      status: true,
+    },
+  });
+  if (
+    row === null ||
+    row.org_entity_id !== orgEntityId ||
+    row.ledger_type !== "ORG_SEEDING"
+  ) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  const d = (row.details ?? {}) as Record<string, unknown>;
+  const seedType = d.seed_type;
+  if (
+    seedType !== "enterprise_tool_request" &&
+    seedType !== "grant_tool_access" &&
+    seedType !== "connector_setup"
+  ) {
+    return {
+      ok: false,
+      code: "NOT_TOOL_REQUEST",
+      message: "That signal is not a tool access request.",
+    };
+  }
+  if (args.decision === "deny") {
+    const result = await rejectSeed({
+      seedId: args.seedId,
+      orgEntityId,
+      adminEntityId: args.adminEntityId,
+      reason: "Denied from Tools & Connections inventory.",
+    });
+    if (!result.ok) {
+      return { ok: false, code: "INVALID_REQUEST", message: result.message };
+    }
+    return { ok: true, seed_id: args.seedId, decision: "deny" };
+  }
+  const result = await approveSeed({
+    seedId: args.seedId,
+    orgEntityId,
+    adminEntityId: args.adminEntityId,
+  });
+  if (!result.ok) {
+    return { ok: false, code: "INVALID_REQUEST", message: result.message };
+  }
+  return { ok: true, seed_id: args.seedId, decision: "approve" };
+}
+
+/**
+ * Phase E.2 — force-revoke org OAuth connection (wipes secrets). Audited.
+ */
+export async function revokeEnterpriseOrgTool(args: {
+  adminEntityId: string;
+  provider_slug: string;
+}): Promise<
+  | { ok: true }
+  | {
+      ok: false;
+      code:
+        | "NO_ORG_FOR_CALLER"
+        | "ADMIN_REQUIRED"
+        | "UNKNOWN_PROVIDER"
+        | "NOT_CONNECTED"
+        | "REVOKE_FAILED";
+      message?: string;
+    }
+> {
+  let orgEntityId: string;
+  try {
+    orgEntityId = await getOrgEntityId(args.adminEntityId);
+  } catch {
+    return { ok: false, code: "NO_ORG_FOR_CALLER" };
+  }
+  const tar = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: args.adminEntityId },
+    select: { can_admin_org: true },
+  });
+  if (tar?.can_admin_org !== true) {
+    return { ok: false, code: "ADMIN_REQUIRED" };
+  }
+  const result = await revokeOAuthConnection({
+    provider_slug: args.provider_slug,
+    org_entity_id: orgEntityId,
+    actor_entity_id: args.adminEntityId,
+  });
+  if (result.ok === true) return { ok: true };
+  if (result.code === "UNKNOWN_PROVIDER") {
+    return { ok: false, code: "UNKNOWN_PROVIDER" };
+  }
+  if (result.code === "NOT_CONNECTED") {
+    return { ok: false, code: "NOT_CONNECTED", message: "Nothing to revoke." };
+  }
+  return {
+    ok: false,
+    code: "REVOKE_FAILED",
+    message: result.message ?? "Could not revoke that connection.",
+  };
+}
+
+/**
+ * Phase E.2 — soft-revoke an employee-scoped connector grant.
+ */
+export async function revokeEnterpriseEmployeeGrant(args: {
+  adminEntityId: string;
+  grantId: string;
+}): Promise<
+  | { ok: true; grant_id: string }
+  | {
+      ok: false;
+      code: "NO_ORG_FOR_CALLER" | "ADMIN_REQUIRED" | "GRANT_NOT_FOUND";
+    }
+> {
+  let orgEntityId: string;
+  try {
+    orgEntityId = await getOrgEntityId(args.adminEntityId);
+  } catch {
+    return { ok: false, code: "NO_ORG_FOR_CALLER" };
+  }
+  const tar = await prisma.tokenAttributeRepository.findUnique({
+    where: { entity_id: args.adminEntityId },
+    select: { can_admin_org: true },
+  });
+  if (tar?.can_admin_org !== true) {
+    return { ok: false, code: "ADMIN_REQUIRED" };
+  }
+  const result = await revokeConnectorScopeGrant(orgEntityId, args.grantId);
+  if (!result.ok) return { ok: false, code: "GRANT_NOT_FOUND" };
+  await writeAuditEvent({
+    event_type: "ADMIN_ACTION",
+    outcome: "SUCCESS",
+    actor_entity_id: args.adminEntityId,
+    target_entity_id: result.grant.scope_id ?? args.adminEntityId,
+    details: {
+      action: "ENTERPRISE_EMPLOYEE_GRANT_REVOKED",
+      org_entity_id: orgEntityId,
+      grant_id: args.grantId,
+      connection_id: result.grant.connection_id,
+    },
+  });
+  return { ok: true, grant_id: args.grantId };
 }
 
 /**

@@ -111,12 +111,11 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**E.1 — Capability catalog + admin inventory**
+**E.2 — Per-person inventory + approve/deny/revoke**
 
-Experience: employees pick a **capability** (calendars, documents, chat…) and
-connect in a few clicks when org credentials allow; otherwise they request
-access. Admins see inventory + KPI strip + pending requests. MCP is advanced
-only — never primary vocabulary. Users do not live in Otzar.
+Experience: admins decide tool requests **in inventory** (approve / deny), see
+who has open requests or employee grants, and **force-revoke** org OAuth or
+employee grants. Never silent grant. Builds on E.1 catalog.
 
 ### Completed proof (honest)
 
@@ -143,17 +142,17 @@ only — never primary vocabulary. Users do not live in Otzar.
 | Hierarchy propose + confirm (B.1) | deployed | set_manager seeds |
 | Employee click-and-play multi-tool catalog (E.1) | deployed | `100ece78` + CT Your tools |
 | Admin tool inventory + KPI (E.1) | deployed | Inventory & KPIs tab |
-| Per-person tool accuracy KPI / force-revoke | incomplete | Phase E.2 |
+| Per-person inventory + approve/deny/revoke (E.2) | implementing | inventory.people + decide/revoke |
 
 ### Exact blocker (now)
 
-**Phase E.1 deployed** (API `100ece78`). Click-and-play catalog + admin
-inventory live. Do **not** start Jira or broad MCP marketplace.
+**Phase E.2**: ship in-inventory approve/deny + org OAuth revoke + people rollup.
+Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Browser live smoke (full TAR session): Your tools Connect/Ask admin; Inventory KPIs.
-2. Phase E.2 optional: per-person tool inventory detail + deny/revoke UX polish.
+1. Merge + deploy E.2; live smoke: Ask admin → inventory Approve/Deny; Revoke connected OAuth.
+2. Optional E.3: accuracy KPI rollups (Twin vs human override).
 
 ## Substrate map (do not invent a third project system)
 
