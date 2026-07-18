@@ -56,7 +56,7 @@ Therefore Twin-handled document work must eventually support:
 | Human notification while Twin works | **live-authenticated** |
 | Collaboration before finalization | **live-authenticated** (request-collab) |
 | Verification / dual-control for high sensitivity | **implementing** (C.3c human verify gate on complete) |
-| Industry form templates (care plan, claim form, KYC pack) | deferred Phase D/E |
+| Industry form templates (care plan, claim form, KYC pack) | **implementing** (D.1 structural packs + dual-control) |
 | Never invent clinical/financial facts | **enforced** in deterministic extract |
 
 ### Enterprise tools connection model (no Jira-first complexity)
@@ -96,14 +96,14 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active coherent phase
 
-**Phase E — Enterprise tools** (closed · deployed through E.3)
+**Phase D — Role-templated AI Teammate + industry accuracy packs** (active · D.1)
 
 | Phase | Name | Status |
 |-------|------|--------|
 | A | Organizational discovery + Dandelion operational path | **closed · deployed** |
 | B | Hierarchy propose + admin confirmation | **closed · deployed** |
 | C | Comms → project → doc/calendar → Twin claim → notify → complete/collab | **closed · live-proven** |
-| D | Role-templated AI Teammate + industry accuracy packs | deferred |
+| D | Role-templated AI Teammate + industry accuracy packs | **active (D.1 implementing)** |
 | E | Enterprise tools: click-and-play + inventory/KPI/approve/accuracy | **closed · deployed (E.1–E.3)** |
 | F | Full UI consolidation | partial |
 | G | Relay | partial |
@@ -111,9 +111,15 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**Phase E complete (E.1–E.3).** No active E slice until directed.
-Optional next: Phase D accuracy packs, Phase F UI consolidation, or deeper
-accuracy dashboards — not started.
+**D.1 — Industry accuracy packs + role-template posture** (implementing)
+
+- Pure catalog: care plan, insurance claim/prior-auth, KYC/financial pack,
+  compliance/audit pack — structural shells only (**never invent facts**).
+- `resolveAccuracyPackPosture(industry, role_template)` → default accuracy_class,
+  dual-control default, ranked pack suggestions.
+- Soft-bias `chooseArtifactFromCommunication` (text keywords still win).
+- Kickoff extract passes org industry + twin role_template.
+- `GET /my-twin` sidecar `accuracy_pack_posture` for employee ambient UI.
 
 ### Completed proof (honest)
 
@@ -145,13 +151,13 @@ accuracy dashboards — not started.
 
 ### Exact blocker (now)
 
-**None on Phase E.** Click-and-play, inventory, approve/deny/revoke, and Twin
-accuracy KPIs are live. Do **not** start Jira or broad MCP marketplace.
+**None on Phase E.** Phase D.1 in progress (accuracy packs + role posture).
+Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Browser smoke (full TAR): Inventory → Twin accuracy strip; Approve/Deny; Revoke.
-2. On direction: Phase D accuracy packs, Phase F UI, or deeper accuracy dashboards.
+1. Land D.1 FND + CT (accuracy pack posture on My Twin).
+2. Optional later: deeper accuracy dashboards, Phase F UI, Phase G Relay.
 
 ## Substrate map (do not invent a third project system)
 

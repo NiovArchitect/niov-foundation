@@ -912,6 +912,33 @@ export interface MyTwinView {
   // identities. Per-source read failures swallowed silently per
   // ADR-0068 §6.
   project_context_summary?: TwinProjectContextSummary;
+  // Phase D.1 — industry accuracy packs + role-template posture.
+  // SAFE labels + pack catalog priors only. Never invents clinical
+  // or financial facts; never exposes template body or capability flags.
+  accuracy_pack_posture?: AccuracyPackPostureView;
+}
+
+/** Phase D.1 safe projection of industry accuracy pack posture. */
+export interface AccuracyPackPostureView {
+  industry: string | null;
+  industry_key: string;
+  industry_label: string;
+  role_template: string | null;
+  role_template_label: string | null;
+  default_accuracy_class: string;
+  dual_control_default: boolean;
+  packs: Array<{
+    pack_id: string;
+    label: string;
+    description: string;
+    accuracy_class: string;
+    artifact_kind: string;
+    dual_control_required: boolean;
+    suggested_sections: string[];
+    relevance: "primary" | "secondary" | "available";
+  }>;
+  posture_summary: string;
+  never_invent_facts: true;
 }
 
 // WHAT: Successful getMyTwin return.
@@ -3086,6 +3113,47 @@ export class OtzarService {
     const voiceReadinessState: TwinVoiceReadinessState =
       computeVoiceReadinessState();
 
+    // Phase D.1 — industry accuracy packs posture from OrgSettings.industry
+    // + TwinConfig.role_template. Pure resolver; per-source miss swallowed.
+    let accuracyPackPosture: AccuracyPackPostureView | undefined;
+    try {
+      const { getOrgSettingsOrDefaults } = await import(
+        "../governance/org.js"
+      );
+      const { resolveAccuracyPackPosture } = await import(
+        "./industry-accuracy-packs.js"
+      );
+      const orgSettings = await getOrgSettingsOrDefaults(ownerEntityId);
+      const posture = resolveAccuracyPackPosture({
+        industry: orgSettings.industry,
+        role_template: config?.role_template ?? null,
+        role_title: roleTitle,
+      });
+      accuracyPackPosture = {
+        industry: posture.industry,
+        industry_key: posture.industry_key,
+        industry_label: posture.industry_label,
+        role_template: posture.role_template,
+        role_template_label: posture.role_template_label,
+        default_accuracy_class: posture.default_accuracy_class,
+        dual_control_default: posture.dual_control_default,
+        packs: posture.packs.map((p) => ({
+          pack_id: p.pack_id,
+          label: p.label,
+          description: p.description,
+          accuracy_class: p.accuracy_class,
+          artifact_kind: p.artifact_kind,
+          dual_control_required: p.dual_control_required,
+          suggested_sections: p.suggested_sections,
+          relevance: p.relevance,
+        })),
+        posture_summary: posture.posture_summary,
+        never_invent_facts: true,
+      };
+    } catch {
+      accuracyPackPosture = undefined;
+    }
+
     const twin: MyTwinView = {
       twin_id: primary.entity_id,
       display_name: primary.display_name,
@@ -3129,6 +3197,9 @@ export class OtzarService {
         : {}),
       ...(projectContextSummary !== undefined
         ? { project_context_summary: projectContextSummary }
+        : {}),
+      ...(accuracyPackPosture !== undefined
+        ? { accuracy_pack_posture: accuracyPackPosture }
         : {}),
       voice_readiness_state: voiceReadinessState,
     };
