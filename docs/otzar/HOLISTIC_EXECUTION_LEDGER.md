@@ -56,7 +56,7 @@ Therefore Twin-handled document work must eventually support:
 | Human notification while Twin works | **live-authenticated** |
 | Collaboration before finalization | **live-authenticated** (request-collab) |
 | Verification / dual-control for high sensitivity | **implementing** (C.3c human verify gate on complete) |
-| Industry form templates (care plan, claim form, KYC pack) | **implementing** (D.1 structural packs + dual-control) |
+| Industry form templates (care plan, claim form, KYC pack) | **merged D.1** (structural packs + dual-control; awaiting deploy) |
 | Never invent clinical/financial facts | **enforced** in deterministic extract |
 
 ### Enterprise tools connection model (no Jira-first complexity)
@@ -103,7 +103,7 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 | A | Organizational discovery + Dandelion operational path | **closed · deployed** |
 | B | Hierarchy propose + admin confirmation | **closed · deployed** |
 | C | Comms → project → doc/calendar → Twin claim → notify → complete/collab | **closed · live-proven** |
-| D | Role-templated AI Teammate + industry accuracy packs | **active (D.1 implementing)** |
+| D | Role-templated AI Teammate + industry accuracy packs | **active (D.1 merged · awaiting deploy)** |
 | E | Enterprise tools: click-and-play + inventory/KPI/approve/accuracy | **closed · deployed (E.1–E.3)** |
 | F | Full UI consolidation | partial |
 | G | Relay | partial |
@@ -111,7 +111,7 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**D.1 — Industry accuracy packs + role-template posture** (implementing)
+**D.1 — Industry accuracy packs + role-template posture** (merged · unit-proven)
 
 - Pure catalog: care plan, insurance claim/prior-auth, KYC/financial pack,
   compliance/audit pack — structural shells only (**never invent facts**).
@@ -120,6 +120,7 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 - Soft-bias `chooseArtifactFromCommunication` (text keywords still win).
 - Kickoff extract passes org industry + twin role_template.
 - `GET /my-twin` sidecar `accuracy_pack_posture` for employee ambient UI.
+- FND PR #694 · CT PR #163 merged to main.
 
 ### Completed proof (honest)
 
