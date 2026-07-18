@@ -7,6 +7,11 @@
 // CONNECTS TO: project-transcript-extract, twin-work-claim, project kickoff
 
 import type { TwinWorkAccuracyClass } from "./twin-work-claim.service.js";
+import {
+  defaultAccuracyClassForContext,
+  industryRoleArtifactBoost,
+  resolveAccuracyPackPosture,
+} from "./industry-accuracy-packs.js";
 
 /** What Otzar decided the work product is. */
 export type CommunicationArtifactKind =
@@ -38,6 +43,8 @@ export interface ArtifactChoice {
   reason: string;
   /** True when a provider create should run (not only Twin claim). */
   materialize_now: boolean;
+  /** Phase D.1 — pack prior that influenced choice when applicable. */
+  accuracy_pack_id?: string | null;
 }
 
 function score(text: string, re: RegExp): number {
@@ -46,28 +53,39 @@ function score(text: string, re: RegExp): number {
 
 // WHAT: Choose artifact kind from communication text (deterministic).
 // WHY: The OS of Otzar is communication — work product follows context.
+//      Phase D.1: optional industry + role_template soft-bias pack kinds
+//      without overriding strong communication keywords.
 export function chooseArtifactFromCommunication(args: {
   text: string;
   project_name?: string;
+  /** OrgSettings.industry — soft bias for accuracy packs. */
+  industry?: string | null;
+  /** TwinConfig.role_template slug — soft bias for role-relevant packs. */
+  role_template?: string | null;
 }): ArtifactChoice {
   const t = `${args.text} ${args.project_name ?? ""}`.toLowerCase();
 
   // Accuracy first — more specific domains before broader clinical.
+  // Text keywords always win over industry defaults.
   let accuracy: TwinWorkAccuracyClass = "STANDARD";
+  let accuracyFromText = false;
   if (/\b(insurance|prior.?auth|claim form|payer|cms|benefits)\b/.test(t)) {
     accuracy = "INSURANCE";
+    accuracyFromText = true;
   } else if (
     /\b(kyc|aml|financial|audit pack|sec filing|loan package|wire|compliance pack)\b/.test(
       t,
     )
   ) {
     accuracy = "REGULATED_FINANCE";
+    accuracyFromText = true;
   } else if (
     /\b(phi|hipaa|patient|clinical|caretaker|care plan|nursing|medical record|ehr|clinic)\b/.test(
       t,
     )
   ) {
     accuracy = "REGULATED_HEALTH";
+    accuracyFromText = true;
   }
 
   type Cand = {
@@ -78,6 +96,13 @@ export function chooseArtifactFromCommunication(args: {
     reason: string;
   };
 
+  const industryBoost = (kind: CommunicationArtifactKind): number =>
+    industryRoleArtifactBoost({
+      kind,
+      industry: args.industry,
+      role_template: args.role_template,
+    });
+
   const cands: Cand[] = [
     {
       kind: "CARE_PLAN",
@@ -86,7 +111,8 @@ export function chooseArtifactFromCommunication(args: {
       score:
         score(t, /\bcare plan\b/) * 3 +
         score(t, /\bpatient care\b/) +
-        score(t, /\bcaretaker\b/),
+        score(t, /\bcaretaker\b/) +
+        industryBoost("CARE_PLAN"),
       reason: "care_language",
     },
     {
@@ -96,7 +122,8 @@ export function chooseArtifactFromCommunication(args: {
       score:
         score(t, /\binsurance\b/) * 2 +
         score(t, /\bprior.?auth\b/) * 3 +
-        score(t, /\bclaim form\b/) * 3,
+        score(t, /\bclaim form\b/) * 3 +
+        industryBoost("INSURANCE_FORM"),
       reason: "insurance_language",
     },
     {
@@ -106,7 +133,8 @@ export function chooseArtifactFromCommunication(args: {
       score:
         score(t, /\bkyc\b/) * 3 +
         score(t, /\bfinancial (pack|documentation|docs)\b/) * 2 +
-        score(t, /\bsec filing\b/) * 2,
+        score(t, /\bsec filing\b/) * 2 +
+        industryBoost("FINANCIAL_PACK"),
       reason: "finance_language",
     },
     {
@@ -116,7 +144,8 @@ export function chooseArtifactFromCommunication(args: {
       score:
         score(t, /\bform\b/) * 2 +
         score(t, /\bcomplete the form\b/) * 3 +
-        score(t, /\bfill out\b/) * 2,
+        score(t, /\bfill out\b/) * 2 +
+        industryBoost("FORM"),
       reason: "form_language",
     },
     {
@@ -185,8 +214,11 @@ export function chooseArtifactFromCommunication(args: {
   cands.sort((a, b) => b.score - a.score);
   const top = cands[0]!;
   // Default when communication implies durable written work without a keyword.
+  // Industry packs alone must not force a regulated form when text is empty-ish.
+  const textOnlyScore =
+    top.score - industryBoost(top.kind);
   const chosen =
-    top.score > 0
+    top.score > 0 && (textOnlyScore > 0 || top.score >= 2)
       ? top
       : {
           kind: "GENERIC_DOCUMENT" as const,
@@ -196,10 +228,51 @@ export function chooseArtifactFromCommunication(args: {
           reason: "default_written_work_from_comms",
         };
 
+  // When text did not set accuracy, inherit pack/industry prior for regulated kinds.
+  if (!accuracyFromText) {
+    const posture = resolveAccuracyPackPosture({
+      industry: args.industry,
+      role_template: args.role_template,
+    });
+    const matchingPack = posture.packs.find(
+      (p) => p.artifact_kind === chosen.kind && p.relevance !== "available",
+    );
+    if (matchingPack) {
+      accuracy = matchingPack.accuracy_class;
+    } else if (
+      chosen.kind === "CARE_PLAN" ||
+      chosen.kind === "INSURANCE_FORM" ||
+      chosen.kind === "FINANCIAL_PACK"
+    ) {
+      accuracy = defaultAccuracyClassForContext({
+        industry: args.industry,
+        role_template: args.role_template,
+      });
+      if (accuracy === "STANDARD") {
+        if (chosen.kind === "CARE_PLAN") accuracy = "REGULATED_HEALTH";
+        else if (chosen.kind === "INSURANCE_FORM") accuracy = "INSURANCE";
+        else accuracy = "REGULATED_FINANCE";
+      }
+    }
+  }
+
+  const postureForPack = resolveAccuracyPackPosture({
+    industry: args.industry,
+    role_template: args.role_template,
+  });
+  const packId =
+    postureForPack.packs.find((p) => p.artifact_kind === chosen.kind)?.pack_id ??
+    null;
+
   const confidence = Math.min(0.95, 0.45 + chosen.score * 0.15);
   // Materialize only when we have a live provider rail.
   // Slides: claim-only until Google Slides create exists (honest OS).
   const materialize_now = chosen.provider === "google_docs";
+
+  const reason =
+    industryBoost(chosen.kind) > 0 && textOnlyScore <= 0
+      ? `${chosen.reason}+industry_pack_prior`
+      : chosen.reason;
 
   return {
     kind: chosen.kind,
@@ -207,8 +280,9 @@ export function chooseArtifactFromCommunication(args: {
     provider_target: chosen.provider,
     accuracy_class: accuracy,
     confidence,
-    reason: chosen.reason,
+    reason,
     materialize_now,
+    accuracy_pack_id: packId,
   };
 }
 

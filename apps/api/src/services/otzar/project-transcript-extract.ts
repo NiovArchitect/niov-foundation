@@ -92,6 +92,10 @@ function pushUnique(
 export function extractProjectSectionsFromTranscript(args: {
   transcript: string;
   project_name?: string;
+  /** Phase D.1 — OrgSettings.industry for accuracy pack priors. */
+  industry?: string | null;
+  /** Phase D.1 — TwinConfig.role_template for role-relevant packs. */
+  role_template?: string | null;
 }): TranscriptExtractResult {
   const lines = parseLines(args.transcript);
   const speakers = [
@@ -177,9 +181,12 @@ export function extractProjectSectionsFromTranscript(args: {
   };
 
   // Communication is the OS: choose artifact from context (doc/slides/form/…).
+  // Phase D.1: industry + role_template soft-bias accuracy packs.
   const artifact = chooseArtifactFromCommunication({
     text: args.transcript,
     project_name: args.project_name,
+    industry: args.industry,
+    role_template: args.role_template,
   });
 
   const built = buildProjectDocumentBody({

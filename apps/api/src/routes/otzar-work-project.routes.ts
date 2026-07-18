@@ -589,9 +589,35 @@ export async function registerOtzarWorkProjectRoutes(
         const mine = projects.find(
           (p) => p.project_id === request.params.project_id,
         );
+        // Phase D.1 — industry + role template priors for accuracy packs.
+        let kickoffIndustry: string | null = null;
+        let kickoffRoleTemplate: string | null = null;
+        try {
+          const { getOrgSettingsOrDefaults } = await import(
+            "../services/governance/org.js"
+          );
+          const orgSettings = await getOrgSettingsOrDefaults(session.entity_id);
+          kickoffIndustry = orgSettings.industry;
+          const { resolvePrimaryTwin } = await import(
+            "../services/otzar/twin-resolution.js"
+          );
+          const resolvedTwin = await resolvePrimaryTwin(session.entity_id);
+          if (resolvedTwin?.twin?.entity_id) {
+            const { prisma } = await import("@niov/database");
+            const cfg = await prisma.twinConfig.findUnique({
+              where: { twin_id: resolvedTwin.twin.entity_id },
+              select: { role_template: true },
+            });
+            kickoffRoleTemplate = cfg?.role_template ?? null;
+          }
+        } catch {
+          // Non-fatal: extract still works without pack priors.
+        }
         const extracted = extractProjectSectionsFromTranscript({
           transcript: body.transcript,
           project_name: mine?.name,
+          industry: kickoffIndustry,
+          role_template: kickoffRoleTemplate,
         });
         sections = extracted.sections;
         artifactFromComms = extracted.artifact;
