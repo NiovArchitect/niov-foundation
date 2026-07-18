@@ -568,6 +568,63 @@ export async function registerOtzarRoutes(
     return reply.code(200).send(result);
   });
 
+  // GET /api/v1/otzar/comms/sources — primary vs fallback intake rails.
+  // Connected tools are automatic; paste is FALLBACK only.
+  app.get("/api/v1/otzar/comms/sources", async (request, reply) => {
+    const token = bearerFrom(request.headers.authorization);
+    if (token === null) {
+      return reply
+        .code(401)
+        .send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+    }
+    const result = await otzarService.getAmbientCommsSources({ token });
+    if (!result.ok) {
+      return reply.code(statusForCode(result.code)).send(result);
+    }
+    return reply.code(200).send(result);
+  });
+
+  // POST /api/v1/otzar/comms/ambient-sync — PRIMARY: pull Meet (and later
+  // other) communications from connected tools into the governed work spine.
+  // Manual /comms/ingest remains the offline FALLBACK.
+  app.post<{ Body: { max_records?: unknown } }>(
+    "/api/v1/otzar/comms/ambient-sync",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null) {
+        return reply
+          .code(401)
+          .send({ ok: false, code: "SESSION_INVALID", message: "Missing bearer token" });
+      }
+      const maxRaw = request.body?.max_records;
+      const max_records =
+        typeof maxRaw === "number" && Number.isFinite(maxRaw)
+          ? maxRaw
+          : typeof maxRaw === "string"
+            ? Number.parseInt(maxRaw, 10)
+            : undefined;
+      const result = await otzarService.runAmbientCommsSync({
+        token,
+        ...(typeof max_records === "number" && Number.isFinite(max_records)
+          ? { max_records }
+          : {}),
+      });
+      if (!result.ok) {
+        if (result.code === "GOOGLE_NOT_CONNECTED") {
+          return reply.code(409).send(result);
+        }
+        if (result.code === "NO_ORG_FOR_CALLER") {
+          return reply.code(404).send(result);
+        }
+        if (result.code === "PROVIDER_ERROR") {
+          return reply.code(502).send(result);
+        }
+        return reply.code(statusForCode(result.code)).send(result);
+      }
+      return reply.code(200).send(result);
+    },
+  );
+
   // POST /api/v1/otzar/ingest/source-event -- Slice A. Source-agnostic intake:
   // any NON-transcript source (Slack message, email thread, webhook, MCP event,
   // manual capture) is normalized to a source event and flows through the SAME
