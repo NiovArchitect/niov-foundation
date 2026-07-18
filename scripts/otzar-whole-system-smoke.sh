@@ -35,21 +35,22 @@ login() {
 
 echo "=== Otzar whole-system smoke ==="
 echo "API $API"
+echo "Scenario catalog: docs/otzar/ENTERPRISE_SCENARIO_CATALOG.md (U/C/T/X × 32)"
 
 HEALTH=$(curl -sS -m 20 "$API/health" || true)
 GIT=$(python3 -c "import json,sys; d=json.loads(sys.argv[1] or '{}'); print((d.get('git_commit') or '')[:12], d.get('ok'), d.get('database'))" "$HEALTH" 2>/dev/null || echo "?")
 echo "health: $GIT"
 python3 -c "import json,sys; d=json.loads(sys.argv[1] or '{}'); sys.exit(0 if d.get('ok') and d.get('database') in ('ok','connected') else 1)" "$HEALTH" \
-  && pass "health" || fail "health"
+  && pass "health [U-01 infrastructure]" || fail "health"
 
 ADMIN=$(login "$ADMIN_EMAIL")
 ATOK=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d.get('token') or '')" "$ADMIN")
 AOPS=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(len(d.get('allowed_operations') or []))" "$ADMIN")
-[[ -n "$ATOK" && "$AOPS" -gt 0 ]] && pass "admin login ops=$AOPS" || fail "admin login"
+[[ -n "$ATOK" && "$AOPS" -gt 0 ]] && pass "admin login ops=$AOPS [U-01,U-23,U-29]" || fail "admin login"
 
 EMP=$(login "$EMP_EMAIL")
 ETOK=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d.get('token') or '')" "$EMP")
-[[ -n "$ETOK" ]] && pass "employee login" || fail "employee login"
+[[ -n "$ETOK" ]] && pass "employee login [U-01]" || fail "employee login"
 
 probe() {
   local label="$1" tok="$2" path="$3" expect_ok="${4:-true}"
@@ -100,9 +101,9 @@ if not rt:
 if packs < 1:
     print("  FAIL  accuracy packs empty")
     raise SystemExit(3)
-print("  PASS  twin role template + packs")
+print("  PASS  twin role template + packs [U-14,U-15,T-01,T-03]")
 if wp:
-    print("  PASS  wallet_portability present")
+    print("  PASS  wallet_portability present [U-21,T-wallet]")
 else:
     print("  WARN  wallet_portability not on this deploy yet")
 PY
@@ -122,7 +123,7 @@ print(f"  employee projects={n}")
 if n < 1:
     print("  FAIL  employee has zero projects (placement gap)")
     raise SystemExit(3)
-print("  PASS  employee has projects")
+print("  PASS  employee has projects [U-19]")
 PY
 
 echo "--- third-party / collab SoT ---"
@@ -136,7 +137,7 @@ print(f"  collab workspaces={n}")
 if n < 1:
     print("  WARN  no collab workspaces (seed [SMOKE] Client pilot collab if empty)")
 else:
-    print("  PASS  collab workspace present for third-party path")
+    print("  PASS  collab workspace present for third-party path [X-03,X-16,X-30,C-14]")
 PY
 
 echo "--- ambient comms (primary path; paste is fallback only) ---"
@@ -158,7 +159,7 @@ if d.get("ok") is True and isinstance(d.get("sources"), list):
         sys.exit(3)
     if len(fb) < 1:
         print("  WARN  no explicit fallback source listed")
-    print("  PASS  ambient sources inventory")
+    print("  PASS  ambient sources inventory [U-07,U-08]")
 elif d.get("statusCode") == 404 or "not found" in str(d.get("message","")).lower():
     print("  WARN  /otzar/comms/sources not on this deploy yet (await ambient #705)")
 else:
@@ -181,16 +182,16 @@ except Exception:
 # Primary path success, honest Google-not-connected, or deploy lag 404
 if d.get("ok") is True:
     print(f"  ambient-sync scanned={d.get('scanned')} ingested={d.get('ingested')} msg={d.get('message','')[:80]!r}")
-    print("  PASS  ambient-sync primary path")
+    print("  PASS  ambient-sync primary path [U-07]")
 elif d.get("code") == "GOOGLE_NOT_CONNECTED":
-    print("  PASS  ambient-sync honest GOOGLE_NOT_CONNECTED (connect Workspace; paste is fallback)")
+    print("  PASS  ambient-sync honest GOOGLE_NOT_CONNECTED [U-07,U-09 fallback] (connect Workspace; paste is fallback)")
 elif d.get("code") == "SCOPE_REAUTH_REQUIRED":
-    print("  PASS  ambient-sync honest SCOPE_REAUTH_REQUIRED (reconnect Meet scopes; paste is fallback)")
+    print("  PASS  ambient-sync honest SCOPE_REAUTH_REQUIRED [U-07] (reconnect Meet scopes; paste is fallback)")
 elif d.get("statusCode") == 404 or "not found" in str(d.get("message","")).lower():
     print("  WARN  ambient-sync not on this deploy yet (await #705)")
 elif d.get("code") in ("NO_ORG_FOR_CALLER", "PROVIDER_ERROR"):
     # Older deploy may still wrap reauth as PROVIDER_ERROR — accept as honest non-crash.
-    print(f"  PASS  ambient-sync honest {d.get('code')} {d.get('message','')[:60]}")
+    print(f"  PASS  ambient-sync honest {d.get('code')} [U-07] {d.get('message','')[:60]}")
 else:
     print(("  FAIL  ambient-sync unexpected %r" % (d,))[:220])
     sys.exit(3)

@@ -22,7 +22,8 @@ across orgs (skills/flows only — never org data). Third parties belong in SoT.
 non-blocking ambient harness (voice-first capable). Goal: autonomous enterprises with trust.
 
 > Full continuity (smoke matrix, live repairs, open PRs, gaps):  
-> **`docs/otzar/AGENT_CONTINUITY_MEMORY.md`** — read before continuing any agent session.
+> **`docs/otzar/AGENT_CONTINUITY_MEMORY.md`** — read before continuing any agent session.  
+> **`docs/otzar/ENTERPRISE_SCENARIO_CATALOG.md`** — 128 binding scenarios (U/C/T/X × 32).
 
 ### Communication is the OS
 
