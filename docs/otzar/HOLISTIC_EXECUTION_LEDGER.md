@@ -15,6 +15,15 @@ execution, and remains ambient without obstructing daily work.
 Decision rights control authority. Projects control work context. AI Teammates execute
 within those boundaries. Foundation keeps it coherent.
 
+**Whole system, not parts.** Every ship must re-smoke Otzar end-to-end across enterprise
+use cases (tech, healthcare, finance, insurance, services; multi-tenant when live).
+Communication is the OS. AI Teammates execute work. Memory wallet is portable person→person
+across orgs (skills/flows only — never org data). Third parties belong in SoT. Desktop is a
+non-blocking ambient harness (voice-first capable). Goal: autonomous enterprises with trust.
+
+> Full continuity (smoke matrix, live repairs, open PRs, gaps):  
+> **`docs/otzar/AGENT_CONTINUITY_MEMORY.md`** — read before continuing any agent session.
+
 ### Communication is the OS
 
 Otzar does **not** default every ask to a blank Google Doc because a button exists.
@@ -158,8 +167,9 @@ broad MCP marketplace.
 
 ### Next executable step
 
-1. Browser smoke: My Twin → Accuracy packs (set org industry HEALTHCARE/FINANCE).
-2. On direction: deeper pack materialization, Phase F UI, or Phase G Relay.
+1. Land **PR #697** (role-template repair + seed path + TECH packs) → Render autodeploy.
+2. **Whole-system re-smoke** per `AGENT_CONTINUITY_MEMORY.md` (not partial).
+3. Then: employee empty-work fix · wallet portability · Phase F UI overhaul · third-party SoT.
 
 ## Substrate map (do not invent a third project system)
 

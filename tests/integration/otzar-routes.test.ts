@@ -368,7 +368,9 @@ describe("GET /otzar/my-twin", () => {
     };
     expect(body.ok).toBe(true);
     expect(typeof body.twin.twin_id).toBe("string");
-    expect(body.twin.role_title).toBe("Digital Twin");
+    // Shell membership label "Digital Twin" is not product-facing without a
+    // human job_title — prefer null over the twin shell role.
+    expect(body.twin.role_title).toBeNull();
     expect(body.twin.autonomy_mode).toBe("APPROVAL_REQUIRED");
     expect(body.twin.is_admin_twin).toBe(false);
     expect(body.twin.status).toBe("ACTIVE");

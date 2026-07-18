@@ -136,13 +136,30 @@ export async function seedAgentTemplates(
 ): Promise<number> {
   const path = await import("node:path");
   const fs = await import("node:fs/promises");
-  const dir =
-    templatesDir ??
-    path.resolve(process.cwd(), "apps/api/templates/roles");
-  let entries: string[];
-  try {
-    entries = await fs.readdir(dir);
-  } catch {
+  // Docker WORKDIR is /repo; local may be monorepo root or apps/api.
+  // Try candidates so role templates always seed in production.
+  const candidates = templatesDir
+    ? [templatesDir]
+    : [
+        path.resolve(process.cwd(), "apps/api/templates/roles"),
+        path.resolve(process.cwd(), "templates/roles"),
+        path.resolve(process.cwd(), "../templates/roles"),
+        path.resolve(process.cwd(), "../../apps/api/templates/roles"),
+      ];
+  let dir: string | null = null;
+  let entries: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      entries = await fs.readdir(candidate);
+      if (entries.some((e) => e.endsWith(".md"))) {
+        dir = candidate;
+        break;
+      }
+    } catch {
+      // try next
+    }
+  }
+  if (dir === null) {
     // Directory missing -- treat as no-op (caller can choose to
     // surface the absence as an error elsewhere).
     return 0;

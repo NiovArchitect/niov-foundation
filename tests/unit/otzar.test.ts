@@ -1241,7 +1241,9 @@ describe("getMyTwin", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.twin.twin_id).toBe(twinId);
-    expect(result.twin.role_title).toBe("Digital Twin");
+    // Shell membership label "Digital Twin" is not product-facing without a
+    // human job_title — prefer null over the twin shell role.
+    expect(result.twin.role_title).toBeNull();
     expect(result.twin.autonomy_mode).toBe("APPROVAL_REQUIRED");
     expect(result.twin.swarm_enabled).toBe(false);
     expect(result.twin.role_template).toBeNull();

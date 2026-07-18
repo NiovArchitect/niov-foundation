@@ -35,8 +35,21 @@ describe("resolveRoleTemplateSlug", () => {
 
   it("maps C-suite titles without colliding with operations/engineering", () => {
     expect(resolveRoleTemplateSlug("CEO")).toBe("chief-executive-officer");
+    expect(resolveRoleTemplateSlug("Founder & CEO")).toBe("chief-executive-officer");
     expect(resolveRoleTemplateSlug("COO")).toBe("chief-operating-officer");
     expect(resolveRoleTemplateSlug("CTO")).toBe("chief-technology-officer");
+  });
+
+  it("maps tech lead / AI engineer / GTM / risk titles used in live orgs", () => {
+    expect(resolveRoleTemplateSlug("Tech Lead")).toBe("software-engineer");
+    expect(resolveRoleTemplateSlug("AI UI Engineer")).toBe("software-engineer");
+    expect(resolveRoleTemplateSlug("AI/NLP Engineer")).toBe("software-engineer");
+    expect(resolveRoleTemplateSlug("Go-to-Market Lead")).toBe("marketing-manager");
+    expect(resolveRoleTemplateSlug("Media Lead")).toBe("marketing-manager");
+    expect(resolveRoleTemplateSlug("Risk & Compliance Lead")).toBe(
+      "finance-analyst",
+    );
+    expect(resolveRoleTemplateSlug("Product Lead")).toBe("product-manager");
   });
 
   it("maps marketing, finance, HR, operations, customer success", () => {

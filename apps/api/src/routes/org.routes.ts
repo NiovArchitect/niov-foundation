@@ -71,6 +71,7 @@ import {
   executeEnterpriseActivationForCaller,
 } from "../services/governance/dandelion-activation.service.js";
 import { createTwin } from "../services/governance/twin.service.js";
+import { repairRoleTemplatesForOrg } from "../services/governance/role-template-repair.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 import { countEscalationsPending } from "../services/governance/escalation.service.js";
 import { assertEntitledForOrgSoftGate } from "../services/billing/entitlement-check.service.js";
@@ -2642,6 +2643,27 @@ export async function registerOrgRoutes(
           message,
         });
       }
+    },
+  );
+
+  // POST /org/ai-teammates/repair-role-templates — backfill role templates
+  // for twins provisioned with the "Digital Twin" shell (deep-smoke fix).
+  app.post<{ Body: { force?: unknown } }>(
+    "/api/v1/org/ai-teammates/repair-role-templates",
+    {
+      preHandler: requireAdminCapability(authService, "can_admin_org"),
+    },
+    async (request, reply) => {
+      const callerId = request.auth!.entity_id;
+      const orgEntityId = await resolveOrgOrFail(callerId, reply);
+      if (orgEntityId === null) return;
+      const force = request.body?.force === true;
+      const result = await repairRoleTemplatesForOrg({
+        org_entity_id: orgEntityId,
+        actor_entity_id: callerId,
+        force,
+      });
+      return reply.code(200).send(result);
     },
   );
 
