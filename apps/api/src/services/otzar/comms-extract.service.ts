@@ -66,6 +66,7 @@ import {
 } from "./recipient-governance.js";
 import {
   buildResponsibilityGraph,
+  enrichResponsibilityGraphFromExtraction,
   buildLeadCoordinationCard,
   type ResponsibilityGraph,
   type ResponsibilityRole,
@@ -439,7 +440,18 @@ export function governExtraction(
   priors?: PriorRecipientDecisions,
   structuredRights?: ReadonlyArray<PartyDomainRights>,
 ): CommsExtractionResult {
-  const graph = buildResponsibilityGraph(capturedText);
+  // Deterministic transcript graph first; then enrich from commitment strings /
+  // RESOLVED follow-up targets so LLM paths still fan owned work to My Work.
+  let graph = buildResponsibilityGraph(capturedText);
+  graph = enrichResponsibilityGraphFromExtraction(graph, {
+    commitments: pre.commitments,
+    suggested_actions: pre.suggested_actions.map((a) => ({
+      target: a.target,
+      source_excerpt: a.source_excerpt,
+      draft_text: a.draft_text,
+      resolution_status: a.resolution_status,
+    })),
+  });
   const ref = provablyReferenced(capturedText, null, roster);
   const workDomain = classifyWorkDomain(`${pre.summary} ${capturedText}`);
   // [SECTION-12-WORKGRAPH] Decision-rights for the meeting, extracted from the

@@ -96,6 +96,7 @@ just copilots. Otzar wins by being:
 
 ### In flight (autonomous)
 
+- **Owned-work fan-out** — commitments → COMMITMENT rows on owner My Work (not only caller FOLLOW_UPs)
 - **Post-deploy smoke** of ambient sources + ambient-sync once `git_commit` includes `#705`
 - **Collab ETL fan-out** — multi-person import resolves owners; my-work must fan to all owners automatically
 - **Background ambient** (beyond Comms page open) — cron/webhook so pull happens without UI visit

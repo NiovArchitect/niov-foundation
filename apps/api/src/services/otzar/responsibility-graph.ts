@@ -80,12 +80,23 @@ const LEAD_PATTERNS: RegExp[] = [
 
 // Ownership / focal point: "Shiney is going to lead the team on X", "you are the
 // focal point", "X owns Y", "X is the focal point", "X is responsible for Y".
+// Enterprise-natural commitments: "David will complete the UI review",
+// "Vishesh will ship ambient polish", "Annie will prepare the pack".
+// Do NOT swallow support ("will support") or meeting lead ("will lead the call")
+// — those patterns run first / separately with higher or distinct verbs.
+const OWNER_ACTION =
+  "(?:complete|ship|deliver|handle|finish|implement|build|write|send|prepare|draft|own|drive|run|fix|take|fix)";
 const OWNER_PATTERNS: RegExp[] = [
   new RegExp(`${NAME}\\s+is going to lead the team`),
   new RegExp(`${NAME}\\s+is\\s+(?:the\\s+)?focal point`),
   new RegExp(`${NAME}\\s+owns?\\b`),
   new RegExp(`${NAME}\\s+is\\s+responsible for`),
   new RegExp(`${NAME}\\s+will own`),
+  new RegExp(`${NAME}\\s+(?:will|is going to)\\s+${OWNER_ACTION}\\b`),
+  // Speaker self-claim after attribution: "David: I own the UI review."
+  new RegExp(`${NAME}:\\s+(?:.*\\b)?I\\s+(?:own|will own|will ${OWNER_ACTION})\\b`),
+  // "… is mine" after speaker label (Vishesh: ambient orb polish is mine).
+  new RegExp(`${NAME}:\\s+.*\\bis mine\\b`, "i"),
 ];
 
 const SUPPORT_PATTERNS: RegExp[] = [
@@ -200,6 +211,101 @@ export function buildResponsibilityGraph(transcript: string): ResponsibilityGrap
   }
 
   return { lead, founderAuthority, nodes: Array.from(byName.values()) };
+}
+
+/**
+ * WHAT: When the transcript graph is thin but LLM/demo extraction already
+ *       listed clear commitments (and optional resolved follow-up targets),
+ *       place owner nodes so planWorkItems can fan owned work into My Work.
+ * WHY:  Ambient/LLM paths often extract "David will complete X" as a commitment
+ *       string without the deterministic OWNER_PATTERNS firing (punctuation,
+ *       speaker labels). Network-effect requires each proven owner to get a
+ *       COMMITMENT row — FOLLOW_UP alone is the sender's draft, not their work.
+ * NEVER invents people: only uses names already present in commitment text or
+ *       a RESOLVED suggested-action target with a real entity_id.
+ */
+export function enrichResponsibilityGraphFromExtraction(
+  graph: ResponsibilityGraph,
+  args: {
+    commitments: readonly string[];
+    suggested_actions?: ReadonlyArray<{
+      target: {
+        display_name: string;
+        entity_id: string | null;
+      };
+      source_excerpt: string | null;
+      draft_text: string;
+      resolution_status: string;
+    }>;
+  },
+): ResponsibilityGraph {
+  const byName = new Map<string, ResponsibilityNode>();
+  for (const n of graph.nodes) byName.set(n.name.toLowerCase(), n);
+
+  const placeOwner = (
+    name: string,
+    workItem: string | null,
+    evidence: string,
+  ): void => {
+    const key = name.toLowerCase();
+    // Never overwrite a deterministic graph role (support stays support).
+    if (byName.has(key)) return;
+    byName.set(key, {
+      name: name.trim(),
+      role: "owner",
+      workItem,
+      evidence,
+      confidence: "medium",
+    });
+  };
+
+  for (const c of args.commitments) {
+    const text = c.trim();
+    if (text.length === 0) continue;
+    // "David will …" / "David Odie will …" / "David owns …"
+    // Skip pure support phrasing in commitment strings.
+    if (/\bwill support\b|\bcan support\b|\bis optional\b/i.test(text)) continue;
+    const m = text.match(
+      new RegExp(
+        `^${NAME}(?:\\s+${NAME})?\\s+(?:will|owns?|is responsible for|is going to)\\b`,
+      ),
+    );
+    if (m && m[1]) {
+      const name = m[1];
+      const rest = text.replace(new RegExp(`^${name}(?:\\s+[A-Z][A-Za-z]+)?\\s+`), "").trim();
+      placeOwner(name, rest.length > 0 ? rest : null, text);
+    }
+  }
+
+  for (const a of args.suggested_actions ?? []) {
+    if (a.resolution_status !== "RESOLVED" || a.target.entity_id === null) continue;
+    const first =
+      a.target.display_name.trim().split(/\s+/)[0] ?? a.target.display_name.trim();
+    if (!/^[A-Z][A-Za-z]+$/.test(first)) continue;
+    const evidence = (a.source_excerpt ?? "").trim();
+    // Require the target's first name in the excerpt so a buggy LLM mapping
+    // (Shiney → Shweta) cannot invent graph ownership for the wrong person.
+    if (evidence.length === 0) continue;
+    if (!new RegExp(`\\b${first}\\b`, "i").test(evidence)) continue;
+    // Support/review excerpts are not ownership proof.
+    if (/\bwill support\b|\bcan support\b|\bis optional\b|\bto support\b/i.test(evidence)) {
+      continue;
+    }
+    const matchingCommitment = args.commitments.find((c) =>
+      c.toLowerCase().includes(first.toLowerCase()),
+    );
+    placeOwner(
+      first,
+      matchingCommitment ?? a.draft_text.slice(0, 80),
+      evidence,
+    );
+  }
+
+  return {
+    lead: graph.lead,
+    founderAuthority: graph.founderAuthority,
+    nodes: Array.from(byName.values()),
+  };
 }
 
 /** Compose the lead's coordination card body from the graph — references the
