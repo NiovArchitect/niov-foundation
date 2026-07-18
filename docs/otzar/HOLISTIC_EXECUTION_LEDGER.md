@@ -89,11 +89,10 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`111335bf4b8a`** | 2026-07-17 |
-| Foundation main tip | `111335bf4b8a` | 2026-07-17 |
-| Control Tower main tip | `2ce849f7fd60` | 2026-07-17 |
-| Control Tower live bundle | **`index-BLhYsPgT.js`** (twin-working-panel + detect-edits) | 2026-07-17 |
-| Live providers | Calendar write · non-empty project Google Doc · share · resolve · transcript extract kickoff · **Twin claim/clarity/complete** | |
+| Foundation live SHA | **`100ece7814c3`** (E.1 enterprise tools) | 2026-07-18 |
+| Foundation main tip | `100ece7814c3` | 2026-07-18 |
+| Control Tower main tip | `010e77880efd` (E.1 UX) | 2026-07-18 |
+| Live providers | Calendar write · non-empty project Google Doc · share · Twin claim · **enterprise-tools catalog/inventory** | |
 
 ## Active coherent phase
 
@@ -140,20 +139,21 @@ only — never primary vocabulary. Users do not live in Otzar.
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Ambient structure placement (A.3) | deployed | FND `f37a5be` + CT admin assign exception |
-| Hierarchy propose + confirm (B.1) | implementing | growth NEEDS_MANAGER + set_manager seeds |
-| Employee click-and-play multi-tool catalog | incomplete | Phase E |
-| Admin tool inventory + approve/deny KPI | incomplete | Phase E |
+| Ambient structure placement (A.3) | deployed | managers + admin exception |
+| Hierarchy propose + confirm (B.1) | deployed | set_manager seeds |
+| Employee click-and-play multi-tool catalog (E.1) | deployed | `100ece78` + CT Your tools |
+| Admin tool inventory + KPI (E.1) | deployed | Inventory & KPIs tab |
+| Per-person tool accuracy KPI / force-revoke | incomplete | Phase E.2 |
 
 ### Exact blocker (now)
 
-**Phase B.1**: ship hierarchy propose + admin confirm (`set_manager` seeds).
-Do **not** start Jira or broad MCP marketplace. Phase E next after B.
+**Phase E.1 deployed** (API `100ece78`). Click-and-play catalog + admin
+inventory live. Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Merge + deploy B.1 FND/CT; live smoke: refresh structure → set_manager seed → confirm manager.
-2. Phase E click-and-play tools.
+1. Browser live smoke (full TAR session): Your tools Connect/Ask admin; Inventory KPIs.
+2. Phase E.2 optional: per-person tool inventory detail + deny/revoke UX polish.
 
 ## Substrate map (do not invent a third project system)
 
