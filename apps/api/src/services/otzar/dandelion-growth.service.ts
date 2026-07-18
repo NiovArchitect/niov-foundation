@@ -601,14 +601,15 @@ export async function getOrgGrowthForCaller(
     }
   }
 
-  // Phase B recommendations: only when hierarchy has *started* (someone already
-  // manages people). Flat orgs stay calm on the capped card list;
+  // Phase B recommendations: only for *orphans* — no manager, no reports of
+  // their own, and a department (suggests they should sit under someone).
+  // Org tops (people who lead others, or undepartmented founders) stay quiet.
   // needs_manager_people still lists everyone for seed sync / admin confirm.
-  const hierarchyStarted = managerEdges.length > 0;
   let managerRecs = 0;
   for (const gap of needsManagerPeople) {
-    if (!hierarchyStarted) break;
     if (managerRecs >= 4) break;
+    if (gap.department === null) continue;
+    if ((reportCountByManager.get(gap.person_entity_id) ?? 0) > 0) continue;
     const proposed = gap.proposed_manager_name;
     recommendations.push({
       kind: "NEEDS_MANAGER",
