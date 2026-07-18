@@ -56,7 +56,7 @@ Therefore Twin-handled document work must eventually support:
 | Human notification while Twin works | **live-authenticated** |
 | Collaboration before finalization | **live-authenticated** (request-collab) |
 | Verification / dual-control for high sensitivity | **implementing** (C.3c human verify gate on complete) |
-| Industry form templates (care plan, claim form, KYC pack) | **merged D.1** (structural packs + dual-control; awaiting deploy) |
+| Industry form templates (care plan, claim form, KYC pack) | **deployed D.1** (structural packs + dual-control) |
 | Never invent clinical/financial facts | **enforced** in deterministic extract |
 
 ### Enterprise tools connection model (no Jira-first complexity)
@@ -89,21 +89,21 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`caa0fbbb3041`** (E.3 accuracy KPIs) | 2026-07-18 |
-| Foundation main tip | `caa0fbbb3041` | 2026-07-18 |
-| Control Tower main tip | `b99fef2799e6` (E.3 accuracy UI) | 2026-07-18 |
-| Live providers | Twin claim · enterprise-tools catalog/inventory · **accuracy dual-control KPIs** | |
+| Foundation live SHA | **`29d664baf69d`** (D.1 accuracy packs + ledger) | 2026-07-18 |
+| Foundation main tip | `29d664baf69d` | 2026-07-18 |
+| Control Tower main tip | `5998f23c5e0a` (D.1 My Twin accuracy packs UI) | 2026-07-18 |
+| Live providers | Twin claim · enterprise-tools · accuracy KPIs · **industry accuracy packs + role posture** | |
 
 ## Active coherent phase
 
-**Phase D — Role-templated AI Teammate + industry accuracy packs** (active · D.1)
+**Phase D — Role-templated AI Teammate + industry accuracy packs** (D.1 closed · deployed)
 
 | Phase | Name | Status |
 |-------|------|--------|
 | A | Organizational discovery + Dandelion operational path | **closed · deployed** |
 | B | Hierarchy propose + admin confirmation | **closed · deployed** |
 | C | Comms → project → doc/calendar → Twin claim → notify → complete/collab | **closed · live-proven** |
-| D | Role-templated AI Teammate + industry accuracy packs | **active (D.1 merged · awaiting deploy)** |
+| D | Role-templated AI Teammate + industry accuracy packs | **D.1 closed · deployed** |
 | E | Enterprise tools: click-and-play + inventory/KPI/approve/accuracy | **closed · deployed (E.1–E.3)** |
 | F | Full UI consolidation | partial |
 | G | Relay | partial |
@@ -111,7 +111,7 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 ## Active slice
 
-**D.1 — Industry accuracy packs + role-template posture** (merged · unit-proven)
+**D.1 complete (deployed).** Industry accuracy packs + role-template posture live.
 
 - Pure catalog: care plan, insurance claim/prior-auth, KYC/financial pack,
   compliance/audit pack — structural shells only (**never invent facts**).
@@ -119,8 +119,8 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
   dual-control default, ranked pack suggestions.
 - Soft-bias `chooseArtifactFromCommunication` (text keywords still win).
 - Kickoff extract passes org industry + twin role_template.
-- `GET /my-twin` sidecar `accuracy_pack_posture` for employee ambient UI.
-- FND PR #694 · CT PR #163 merged to main.
+- `GET /my-twin` sidecar `accuracy_pack_posture` + CT Accuracy packs panel.
+- FND PR #694 · CT PR #163 · live `29d664b` / `5998f23`.
 
 ### Completed proof (honest)
 
@@ -149,16 +149,17 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 | Admin tool inventory + KPI (E.1) | deployed | Inventory & KPIs tab |
 | Per-person inventory + approve/deny/revoke (E.2) | deployed | people + decide/revoke |
 | Twin accuracy KPI rollups (E.3) | deployed | API `caa0fbb` + inventory.accuracy |
+| Industry accuracy packs + role posture (D.1) | deployed | FND `29d664b` + CT `5998f23` My Twin panel |
 
 ### Exact blocker (now)
 
-**None on Phase E.** Phase D.1 in progress (accuracy packs + role posture).
-Do **not** start Jira or broad MCP marketplace.
+**None on D.1.** Accuracy packs + role posture live. Do **not** start Jira or
+broad MCP marketplace.
 
 ### Next executable step
 
-1. Land D.1 FND + CT (accuracy pack posture on My Twin).
-2. Optional later: deeper accuracy dashboards, Phase F UI, Phase G Relay.
+1. Browser smoke: My Twin → Accuracy packs (set org industry HEALTHCARE/FINANCE).
+2. On direction: deeper pack materialization, Phase F UI, or Phase G Relay.
 
 ## Substrate map (do not invent a third project system)
 
