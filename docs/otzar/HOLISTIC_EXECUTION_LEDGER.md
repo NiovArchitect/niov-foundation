@@ -55,7 +55,7 @@ Therefore Twin-handled document work must eventually support:
 | Source communication lineage | partial (extract + project stamp) |
 | Human notification while Twin works | **live-authenticated** |
 | Collaboration before finalization | **live-authenticated** (request-collab) |
-| Verification / dual-control for high sensitivity | deferred (reuse GOVSEC / dual-control) |
+| Verification / dual-control for high sensitivity | **implementing** (C.3c human verify gate on complete) |
 | Industry form templates (care plan, claim form, KYC pack) | deferred Phase D/E |
 | Never invent clinical/financial facts | **enforced** in deterministic extract |
 
@@ -89,10 +89,10 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 | Surface | Value | As of (UTC) |
 |---------|-------|-------------|
-| Foundation live SHA | **`1da22dbc0e76`** | 2026-07-17 |
-| Foundation main tip | `1da22dbc0e76` | 2026-07-17 |
-| Control Tower main tip | `f0741a6b02fb` | 2026-07-17 |
-| Control Tower live bundle | **not fingerprinted** — gap | |
+| Foundation live SHA | **`111335bf4b8a`** | 2026-07-17 |
+| Foundation main tip | `111335bf4b8a` | 2026-07-17 |
+| Control Tower main tip | `2ce849f7fd60` | 2026-07-17 |
+| Control Tower live bundle | **`index-BLhYsPgT.js`** (twin-working-panel + detect-edits) | 2026-07-17 |
 | Live providers | Calendar write · non-empty project Google Doc · share · resolve · transcript extract kickoff · **Twin claim/clarity/complete** | |
 
 ## Active coherent phase
@@ -114,9 +114,8 @@ Otzar is an **enterprise** product. Connectors must feel **click-and-play**, not
 
 **C.3 — Accuracy-critical Twin document work + stay the course**
 
-C.1–C.2b + Twin-work + accuracy_class + artifact chooser **live-proven** (`53cee14`).  
-`twin_work` projection **live-proven** on api.otzar.ai (`c14147c`, 12 active claims).  
-Active remaining: C.3b edit detection + CT Today panel live bundle fingerprint.
+C.1–C.3b **live-proven** (`111335b` API + CT `index-BLhYsPgT.js`).  
+Active remaining: **C.3c** dual-control human verify for regulated claims.
 
 ### Completed proof (honest)
 
@@ -130,15 +129,15 @@ Active remaining: C.3b edit detection + CT Today panel live bundle fingerprint.
 | accuracy_class on twin claims (clinical/finance/insurance) | live-authenticated (`65345ed`+) |
 | Communication chooses artifact (doc vs slides vs form) | live-authenticated (`73ac793`) |
 | Twin claims non-materialized artifacts (e.g. slides) | live-authenticated (`53cee14`) |
-| Safe `twin_work` projection on WorkLedgerView | live-authenticated (`c14147c`) |
-| Today / Needs me “Twin is working on this” (CT) | code merged (`e5ff407`) | needs live UI fingerprint |
+| Safe `twin_work` projection on WorkLedgerView | live-authenticated (`c14147c`→`111335b`) |
+| Today “Twin is working on this” (CT) | live-authenticated (bundle `index-BLhYsPgT.js`) |
+| Edit detection on created docs | live-authenticated (`111335b`, Drive modifiedTime) |
 
 ### Incomplete proof
 
 | Item | Level | Notes |
 |------|-------|-------|
-| Edit detection on created docs | in progress | Drive modifiedTime after claim; detect-edits routes |
-| Dual-control verification for high sensitivity | incomplete | |
+| Dual-control verification for high sensitivity | in progress | human verify gate + Today Verify button |
 | Employee click-and-play multi-tool catalog | incomplete | Phase E |
 | Admin tool inventory + approve/deny KPI | incomplete | Phase E |
 | Dandelion operational discovery | incomplete | Phase A |
@@ -146,13 +145,13 @@ Active remaining: C.3b edit detection + CT Today panel live bundle fingerprint.
 
 ### Exact blocker (now)
 
-Stay on **Phase C**: human-visible Twin activity on Today, then edit detection.
-Do **not** start Jira or broad MCP marketplace. Phase E remains designed only until C.3 closes.
+Close **C.3c** (regulated complete requires human verify), then Phase A Dandelion.
+Do **not** start Jira or broad MCP marketplace.
 
 ### Next executable step
 
-1. Ship C.3b detect-edits (Drive modifiedTime) + CT edit signal.
-2. Live fingerprint CT Today panel; then Phase A Dandelion.
+1. Ship C.3c verify gate + Today Verify control.
+2. Live-prove regulated complete → VERIFICATION_REQUIRED → verify → complete; then Phase A.
 
 ## Substrate map (do not invent a third project system)
 

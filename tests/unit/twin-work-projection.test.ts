@@ -38,6 +38,8 @@ describe("twinWorkFromDetails", () => {
       edit_detected: false,
       edit_signal: null,
       last_drive_modified_at: null,
+      verification_state: null,
+      verified_at: null,
     });
     // Entity ids and raw document_id stay off the wire projection.
     expect(JSON.stringify(p)).not.toContain("00000000");

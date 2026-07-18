@@ -24,7 +24,51 @@ export const TWIN_WORK_CLASS = {
   CLARITY: "TWIN_NEEDS_CLARITY",
   COMPLETE: "TWIN_WORK_COMPLETED",
   COLLAB: "TWIN_COLLAB_REQUESTED",
+  /** Human verified accuracy-critical Twin work (C.3c dual-control). */
+  VERIFIED: "TWIN_WORK_HUMAN_VERIFIED",
+  /** Twin finished drafting but cannot complete until human verifies. */
+  AWAITING_VERIFY: "TWIN_WORK_AWAITING_VERIFICATION",
 } as const;
+
+export type TwinWorkVerificationState =
+  | "NOT_REQUIRED"
+  | "PENDING"
+  | "AWAITING_HUMAN"
+  | "VERIFIED";
+
+// WHAT: Pure gate — regulated claims cannot complete without human verification.
+// WHY: Dual-control for clinical/finance/insurance accuracy (C.3c).
+export function twinWorkCompletionGate(twinWork: Record<string, unknown> | null): {
+  allowed: boolean;
+  code?: "VERIFICATION_REQUIRED";
+  verification_state: TwinWorkVerificationState;
+} {
+  if (twinWork === null) {
+    return { allowed: true, verification_state: "NOT_REQUIRED" };
+  }
+  const regulated =
+    twinWork.requires_verification === true ||
+    (typeof twinWork.accuracy_class === "string" &&
+      twinWork.accuracy_class !== "STANDARD" &&
+      twinWork.accuracy_class.length > 0);
+  if (!regulated) {
+    return { allowed: true, verification_state: "NOT_REQUIRED" };
+  }
+  const state =
+    twinWork.verification_state === "VERIFIED"
+      ? "VERIFIED"
+      : twinWork.verification_state === "AWAITING_HUMAN"
+        ? "AWAITING_HUMAN"
+        : "PENDING";
+  if (state === "VERIFIED") {
+    return { allowed: true, verification_state: "VERIFIED" };
+  }
+  return {
+    allowed: false,
+    code: "VERIFICATION_REQUIRED",
+    verification_state: state,
+  };
+}
 
 async function notifyHuman(args: {
   org_entity_id: string;
@@ -117,6 +161,7 @@ export async function claimWorkForTwin(args: {
         work_kind: args.work_kind ?? "TASK",
         accuracy_class: accuracy,
         requires_verification: regulated,
+        verification_state: regulated ? "PENDING" : "NOT_REQUIRED",
         no_invented_facts: true,
         claimed_at: new Date().toISOString(),
         document_id: args.document_id ?? null,
@@ -263,6 +308,39 @@ export async function twinMarkWorkComplete(args: {
     typeof details.twin_work === "object" && details.twin_work !== null
       ? (details.twin_work as Record<string, unknown>)
       : {};
+  const gate = twinWorkCompletionGate(prevTwin);
+  if (!gate.allowed) {
+    // Park as awaiting human verification — do not EXECUTED.
+    const twinIdPark =
+      typeof prevTwin.twin_entity_id === "string"
+        ? prevTwin.twin_entity_id
+        : (await resolvePrimaryTwin(args.human_entity_id))?.twin.entity_id;
+    if (!twinIdPark) return { ok: false, code: "TWIN_REQUIRED" };
+    details.twin_work = {
+      ...prevTwin,
+      state: "AWAITING_VERIFICATION",
+      verification_state: "AWAITING_HUMAN",
+      completion_pending_note: (args.completion_note ?? "").slice(0, 500),
+      await_verify_at: new Date().toISOString(),
+    };
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: args.ledger_entry_id },
+      data: {
+        status: "NEEDS_CALLER_CONFIRMATION",
+        next_action: "Accuracy-critical — human verification required before complete",
+        details: details as object,
+      },
+    });
+    await notifyHuman({
+      org_entity_id: args.org_entity_id,
+      human_entity_id: args.human_entity_id,
+      twin_entity_id: twinIdPark,
+      notification_class: TWIN_WORK_CLASS.AWAITING_VERIFY,
+      body_summary: `Your AI Teammate finished drafting accuracy-critical work: "${existing.entry.title.slice(0, 100)}" — please verify before it is marked complete.`,
+    });
+    return { ok: false, code: "VERIFICATION_REQUIRED" };
+  }
+
   const twinWork: Record<string, unknown> = {
     ...prevTwin,
     state: "COMPLETED",
@@ -294,6 +372,123 @@ export async function twinMarkWorkComplete(args: {
       args.completion_note ? ` — ${args.completion_note.slice(0, 100)}` : ""
     }`,
   });
+
+  const again = await getLedgerEntry({
+    ledger_entry_id: args.ledger_entry_id,
+    org_entity_id: args.org_entity_id,
+    caller_entity_id: args.human_entity_id,
+    is_manager: true,
+  });
+  if (again.ok === false) return { ok: false, code: again.code };
+  return {
+    ok: true,
+    entry: again.entry,
+    twin_entity_id: twinId,
+    notified: true,
+  };
+}
+
+// WHAT: Human verifies accuracy-critical Twin work (dual-control C.3c).
+// WHY: Regulated claims must not auto-complete without a human check.
+export async function humanVerifyTwinWork(args: {
+  org_entity_id: string;
+  human_entity_id: string;
+  ledger_entry_id: string;
+  note?: string;
+  /** When true, complete the claim immediately after verify. */
+  complete_after?: boolean;
+}): Promise<TwinWorkClaimResult> {
+  const existing = await getLedgerEntry({
+    ledger_entry_id: args.ledger_entry_id,
+    org_entity_id: args.org_entity_id,
+    caller_entity_id: args.human_entity_id,
+    is_manager: true,
+  });
+  if (existing.ok === false) return { ok: false, code: existing.code };
+
+  // Only the work owner (human) may verify — not a random session.
+  if (
+    existing.entry.owner_entity_id !== null &&
+    existing.entry.owner_entity_id !== args.human_entity_id
+  ) {
+    return { ok: false, code: "FORBIDDEN" };
+  }
+
+  const row = await prisma.workLedgerEntry.findFirst({
+    where: {
+      ledger_entry_id: args.ledger_entry_id,
+      org_entity_id: args.org_entity_id,
+    },
+    select: { details: true },
+  });
+  const details = {
+    ...(typeof row?.details === "object" && row.details !== null
+      ? (row.details as Record<string, unknown>)
+      : {}),
+  };
+  const prevTwin =
+    typeof details.twin_work === "object" && details.twin_work !== null
+      ? (details.twin_work as Record<string, unknown>)
+      : null;
+  if (prevTwin === null) return { ok: false, code: "NO_TWIN_CLAIM" };
+
+  const twinId =
+    typeof prevTwin.twin_entity_id === "string"
+      ? prevTwin.twin_entity_id
+      : (await resolvePrimaryTwin(args.human_entity_id))?.twin.entity_id;
+  if (!twinId) return { ok: false, code: "TWIN_REQUIRED" };
+
+  const wasAwaiting = prevTwin.verification_state === "AWAITING_HUMAN";
+  const twinWork: Record<string, unknown> = {
+    ...prevTwin,
+    verification_state: "VERIFIED",
+    verified_at: new Date().toISOString(),
+    verified_by_human: true,
+    verification_note: (args.note ?? "").slice(0, 400),
+  };
+  details.twin_work = twinWork;
+
+  await prisma.workLedgerEntry.update({
+    where: { ledger_entry_id: args.ledger_entry_id },
+    data: {
+      next_action: wasAwaiting
+        ? "Human verified — ready to complete"
+        : "Human verified accuracy-critical work",
+      details: details as object,
+    },
+  });
+
+  await writeAuditEvent({
+    event_type: "ADMIN_ACTION",
+    outcome: "SUCCESS",
+    actor_entity_id: args.human_entity_id,
+    target_entity_id: twinId,
+    details: {
+      action: "TWIN_WORK_HUMAN_VERIFIED",
+      ledger_entry_id: args.ledger_entry_id,
+      accuracy_class: prevTwin.accuracy_class ?? null,
+    },
+  });
+
+  await notifyHuman({
+    org_entity_id: args.org_entity_id,
+    human_entity_id: args.human_entity_id,
+    twin_entity_id: twinId,
+    notification_class: TWIN_WORK_CLASS.VERIFIED,
+    body_summary: `You verified accuracy-critical work: "${existing.entry.title.slice(0, 100)}"`,
+  });
+
+  if (args.complete_after === true || wasAwaiting) {
+    return twinMarkWorkComplete({
+      org_entity_id: args.org_entity_id,
+      human_entity_id: args.human_entity_id,
+      ledger_entry_id: args.ledger_entry_id,
+      completion_note:
+        typeof prevTwin.completion_pending_note === "string"
+          ? prevTwin.completion_pending_note
+          : args.note,
+    });
+  }
 
   const again = await getLedgerEntry({
     ledger_entry_id: args.ledger_entry_id,

@@ -48,6 +48,7 @@ import {
   claimWorkForTwin,
   twinMarkWorkComplete,
   twinRequestClarity,
+  humanVerifyTwinWork,
   TWIN_WORK_CLASS,
 } from "../../apps/api/src/services/otzar/twin-work-claim.service.js";
 
@@ -201,5 +202,106 @@ describe("twinRequestClarity / complete", () => {
     const n = notifyMock.mock.calls.at(-1)?.[0] as { notification_class: string };
     expect(n.notification_class).toBe(TWIN_WORK_CLASS.COMPLETE);
     expect(updateMock).toHaveBeenCalled();
+  });
+
+  it("regulated complete parks for human verification", async () => {
+    getLedgerMock.mockResolvedValue({
+      ok: true,
+      entry: {
+        ledger_entry_id: "00000000-0000-0000-0000-000000000010",
+        title: "Insurance form",
+        status: "EXECUTING",
+        owner_entity_id: "00000000-0000-0000-0000-000000000002",
+        details: {
+          twin_work: {
+            twin_entity_id: "00000000-0000-0000-0000-000000000099",
+            accuracy_class: "INSURANCE",
+            requires_verification: true,
+            verification_state: "PENDING",
+          },
+        },
+      },
+    });
+    findFirstMock.mockResolvedValue({
+      details: {
+        twin_work: {
+          twin_entity_id: "00000000-0000-0000-0000-000000000099",
+          accuracy_class: "INSURANCE",
+          requires_verification: true,
+          verification_state: "PENDING",
+        },
+      },
+    });
+    const r = await twinMarkWorkComplete({
+      org_entity_id: "00000000-0000-0000-0000-000000000001",
+      human_entity_id: "00000000-0000-0000-0000-000000000002",
+      ledger_entry_id: "00000000-0000-0000-0000-000000000010",
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("x");
+    expect(r.code).toBe("VERIFICATION_REQUIRED");
+    const n = notifyMock.mock.calls.at(-1)?.[0] as { notification_class: string };
+    expect(n.notification_class).toBe(TWIN_WORK_CLASS.AWAITING_VERIFY);
+  });
+
+  it("human verify then complete after awaiting", async () => {
+    getLedgerMock.mockResolvedValue({
+      ok: true,
+      entry: {
+        ledger_entry_id: "00000000-0000-0000-0000-000000000010",
+        title: "Insurance form",
+        status: "NEEDS_CALLER_CONFIRMATION",
+        owner_entity_id: "00000000-0000-0000-0000-000000000002",
+        details: {},
+      },
+    });
+    findFirstMock.mockResolvedValue({
+      details: {
+        twin_work: {
+          twin_entity_id: "00000000-0000-0000-0000-000000000099",
+          accuracy_class: "INSURANCE",
+          requires_verification: true,
+          verification_state: "AWAITING_HUMAN",
+          completion_pending_note: "form ready",
+        },
+      },
+    });
+    // second findFirst for complete path after verify
+    findFirstMock
+      .mockResolvedValueOnce({
+        details: {
+          twin_work: {
+            twin_entity_id: "00000000-0000-0000-0000-000000000099",
+            accuracy_class: "INSURANCE",
+            requires_verification: true,
+            verification_state: "AWAITING_HUMAN",
+            completion_pending_note: "form ready",
+          },
+        },
+      })
+      .mockResolvedValue({
+        details: {
+          twin_work: {
+            twin_entity_id: "00000000-0000-0000-0000-000000000099",
+            accuracy_class: "INSURANCE",
+            requires_verification: true,
+            verification_state: "VERIFIED",
+            completion_pending_note: "form ready",
+          },
+        },
+      });
+
+    const r = await humanVerifyTwinWork({
+      org_entity_id: "00000000-0000-0000-0000-000000000001",
+      human_entity_id: "00000000-0000-0000-0000-000000000002",
+      ledger_entry_id: "00000000-0000-0000-0000-000000000010",
+      note: "Checked against source comms",
+    });
+    expect(r.ok).toBe(true);
+    const n = notifyMock.mock.calls.map(
+      (c) => (c[0] as { notification_class: string }).notification_class,
+    );
+    expect(n).toContain(TWIN_WORK_CLASS.VERIFIED);
+    expect(n).toContain(TWIN_WORK_CLASS.COMPLETE);
   });
 });
