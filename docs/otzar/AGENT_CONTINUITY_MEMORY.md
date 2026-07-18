@@ -161,6 +161,24 @@ just copilots. Otzar wins by being:
 
 Smoke output should tag scenario IDs (e.g. `PASS U-10`, `PASS X-30`). Anti-scenarios A-01…A-08 (never invent clinical/financial facts; paste not primary; etc.) are binding.
 
+### Live enterprise scenario smoke (2026-07-18)
+
+Harness: `scripts/otzar-enterprise-scenario-smoke.sh` — **fails=0**.
+
+| Check | Result |
+|-------|--------|
+| 8 persona logins | PASS |
+| Core API surfaces (25+) | PASS |
+| All 8 twins role_template + 5 packs + projects | PASS |
+| Multi-person fan-out U-10 | PASS (David/Vishesh can_complete) |
+| Third-party workspace + Acme external | PASS |
+| 40 CT SPA screens HTTP 200 | PASS |
+| Ambient Meet | Honest SCOPE_REAUTH (U-07/U-09) |
+| API git | `1c184c9` |
+| CT redesign #169/#170 | on main; static autoDeploy may lag |
+
+
+
 ---
 
 ## Whole-system smoke matrix (continuous)
