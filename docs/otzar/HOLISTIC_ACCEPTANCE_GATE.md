@@ -112,6 +112,7 @@
 | P0-CT-DEPLOY-OBS | Cannot read Render deploy SHA | Operator: rotate RENDER_API_KEY |
 | P0-MEET | ambient-sync SCOPE_REAUTH_REQUIRED | External reauth / token path (see §9) |
 | P0-JOURNEY-UX | Investor journey not fully browser-proven | Run/repair Playwright journey |
+| P0-LOGIN-CTA | Live login button labeled **Continue** (Phase F); e2e + users expect **Sign in** — browser journey timed out at first click | CT PR **#171** restores Sign in; re-run e2e after autoDeploy |
 | P0-PROJECT-COMPOSE | Project not composed single surface | Product work after journey |
 | P0-ROUTE-COUNT | 40+ routes still available | Route disposition + consolidation |
 
