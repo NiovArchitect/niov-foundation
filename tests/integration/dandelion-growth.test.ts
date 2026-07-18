@@ -219,6 +219,9 @@ describe("Phase 1237 — Dandelion org growth", () => {
     expect(kinds).toContain("REDUCE_OVERLOAD");
     expect(kinds).toContain("NEEDS_PROJECT_OR_WORKSPACE");
     expect(kinds).toContain("PREPARE_ONBOARDING");
+    // Phase B — hierarchy may appear when the org already has manager edges.
+    expect(Array.isArray(r.growth.needs_manager_people)).toBe(true);
+    expect(typeof r.growth.signals.members_without_manager_count).toBe("number");
     expect(r.growth.headline).toContain("strengthen your organization");
     expect(r.growth.signals.unowned_external_count).toBe(1);
     expect(r.growth.signals.members_without_project_count).toBe(1);

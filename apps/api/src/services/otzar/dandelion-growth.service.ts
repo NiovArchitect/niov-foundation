@@ -587,7 +587,28 @@ export async function getOrgGrowthForCaller(
       };
     });
 
-  for (const gap of needsManagerPeople.slice(0, 8)) {
+  // Onboarding before hierarchy noise so capped cards stay useful.
+  for (const m of members) {
+    if (m.job_title === null) {
+      recommendations.push({
+        kind: "PREPARE_ONBOARDING",
+        title: `Finish onboarding for ${m.display_name}`,
+        why: "Their role isn't recorded yet, so Otzar can't tailor their day, their authority defaults, or their introductions.",
+        people: [m.display_name],
+        suggested_next_step:
+          "Ask them to complete their getting-started questions, or set their role on My Organization.",
+      });
+    }
+  }
+
+  // Phase B recommendations: only when hierarchy has *started* (someone already
+  // manages people) or the person has a department — pure flat orgs stay calm
+  // (needs_manager_people still lists everyone for seed sync / admin confirm).
+  const hierarchyStarted = managerEdges.length > 0;
+  let managerRecs = 0;
+  for (const gap of needsManagerPeople) {
+    if (managerRecs >= 4) break;
+    if (!hierarchyStarted && gap.department === null) continue;
     const proposed = gap.proposed_manager_name;
     recommendations.push({
       kind: "NEEDS_MANAGER",
@@ -605,19 +626,7 @@ export async function getOrgGrowthForCaller(
           ? `Confirm ${gap.display_name} reports to ${proposed}, or pick another manager on People & Roles.`
           : `Set a manager for ${gap.display_name} on People & Roles (Reporting structure).`,
     });
-  }
-
-  for (const m of members) {
-    if (m.job_title === null) {
-      recommendations.push({
-        kind: "PREPARE_ONBOARDING",
-        title: `Finish onboarding for ${m.display_name}`,
-        why: "Their role isn't recorded yet, so Otzar can't tailor their day, their authority defaults, or their introductions.",
-        people: [m.display_name],
-        suggested_next_step:
-          "Ask them to complete their getting-started questions, or set their role on My Organization.",
-      });
-    }
+    managerRecs += 1;
   }
 
   const capped = recommendations.slice(0, MAX_RECOMMENDATIONS);
