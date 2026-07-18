@@ -32,6 +32,8 @@ import { tickRegulatorAccessExpirySweep } from "../cosmp/regulator-expiry.servic
 import { prisma } from "@niov/database";
 import { tickActionExecutor } from "./executor.js";
 import { transitionActionStatus } from "./lifecycle.service.js";
+import { getLLMProvider } from "../llm/llm.service.js";
+import { tickAmbientCommsOrgSync } from "../otzar/ambient-comms-background.service.js";
 
 // WHAT: The default maximum batch size the scheduler ticks claim per
 //        invocation.
@@ -220,6 +222,19 @@ export function startActionScheduler(): ActionSchedulerHandle {
   tasks.push(
     cron.schedule("30 * * * * *", () => {
       void tickRegulatorAccessExpirySweep().catch(() => {});
+    }),
+  );
+
+  // Ambient comms primary path — every 5 minutes, pull Meet (etc.) for orgs
+  // with connected Google Workspace. Humans do not need to open Comms.
+  // Paste remains fallback only. Failures (reauth / no transcript) are honest.
+  tasks.push(
+    cron.schedule("0 */5 * * * *", () => {
+      void tickAmbientCommsOrgSync({
+        llmProvider: getLLMProvider(),
+        max_orgs: 15,
+        max_records_per_org: 5,
+      }).catch(() => {});
     }),
   );
 

@@ -78,6 +78,8 @@ just copilots. Otzar wins by being:
 ### Recently shipped (main)
 
 - **Ambient comms primary** FND `#705` `044916d` — `GET /otzar/comms/sources` + `POST /otzar/comms/ambient-sync` (Google Meet pull → same ingest spine). Manual `/comms/ingest` = fallback.
+- **Owned-work fan-out** FND `#707` `3c96840` — multi-person commitments → per-owner COMMITMENTs on My Work (live-proven).
+- **Background ambient** (in flight / main) — cron every 5m pulls Meet for orgs with Google OAuth; no UI open required.
 - **Ambient Comms UI** CT `#168` `f5fb8a3` — primary hero = sync connected sources; live capture/paste secondary; auto-pull on Comms open.
 - D.1 FND `#694` / CT `#163` — accuracy packs + My Twin panel.
 - Smoke repair FND `#697` `d5d37cc` — role templates, repair endpoint, TECH packs, human role_title.
@@ -85,23 +87,22 @@ just copilots. Otzar wins by being:
 - CT `#164`–`#167` continuity, wallet panel, empty-work routes, AI Teammates missing-tool labels.
 - Live smoke post-`d5d37cc`: FOUNDER role_title, CEO template, 5 packs; employees 5 projects; collab workspace.
 
-### Merged (awaiting Render if git_commit lags)
+### Live fingerprint (autoDeploy on main)
 
-| PR | Notes |
-|----|-------|
-| FND **#705** `044916d` | Ambient auto-sync primary (Meet → WorkSourceEvent → ingest) |
-| FND **#704** `9ff4e7d` | Whole-system smoke collab workspaces |
-| CT **#168** | Ambient-primary Comms UI |
-| **Live lag note** | As of merge, live `git_commit` still `07ad476` — Render autoDeploy true but agent `RENDER_API_KEY` is **401**; cannot force deploy. Re-probe until `044916d` (or later). |
+| Surface | Value |
+|---------|-------|
+| API live | **`3c96840`** fan-out + ambient primary (autoDeploy) |
+| CT app | ambient UI live (bundle includes ambient-sync / Fallback capture) |
+| Meet pull | Honest **SCOPE_REAUTH_REQUIRED** until Workspace re-grants `meetings.space.readonly` |
+| Fan-out | Live-proven: David/Vishesh get owned COMMITMENTs + `can_complete` |
+
+**Doctrine:** rely on Render **autoDeploy** after green merge — do not wait for humans; re-probe `git_commit` and continue.
 
 ### In flight (autonomous)
 
-- **Owned-work fan-out** — commitments → COMMITMENT rows on owner My Work (not only caller FOLLOW_UPs)
-- **Post-deploy smoke** of ambient sources + ambient-sync once `git_commit` includes `#705`
-- **Collab ETL fan-out** — multi-person import resolves owners; my-work must fan to all owners automatically
-- **Background ambient** (beyond Comms page open) — cron/webhook so pull happens without UI visit
+- **Background ambient cron** (this branch) — 5m org sweep without Comms open
 - **More auto sources** after Meet (Slack/email when connectors ready)
-- Phase F design system / third-party UI / wallet export enforcement
+- Phase F design system / wallet export enforcement / third-party UI depth
 
 **Live data repair already applied (prod, via admin API, 2026-07-18):**
 
