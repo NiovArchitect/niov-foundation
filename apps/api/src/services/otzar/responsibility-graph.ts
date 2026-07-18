@@ -248,9 +248,8 @@ export function enrichResponsibilityGraphFromExtraction(
     evidence: string,
   ): void => {
     const key = name.toLowerCase();
-    const existing = byName.get(key);
-    if (existing !== undefined && existing.role === "owner") return;
-    if (existing !== undefined && existing.role === "meeting_lead") return;
+    // Never overwrite a deterministic graph role (support stays support).
+    if (byName.has(key)) return;
     byName.set(key, {
       name: name.trim(),
       role: "owner",
@@ -264,6 +263,8 @@ export function enrichResponsibilityGraphFromExtraction(
     const text = c.trim();
     if (text.length === 0) continue;
     // "David will …" / "David Odie will …" / "David owns …"
+    // Skip pure support phrasing in commitment strings.
+    if (/\bwill support\b|\bcan support\b|\bis optional\b/i.test(text)) continue;
     const m = text.match(
       new RegExp(
         `^${NAME}(?:\\s+${NAME})?\\s+(?:will|owns?|is responsible for|is going to)\\b`,
@@ -281,8 +282,15 @@ export function enrichResponsibilityGraphFromExtraction(
     const first =
       a.target.display_name.trim().split(/\s+/)[0] ?? a.target.display_name.trim();
     if (!/^[A-Z][A-Za-z]+$/.test(first)) continue;
-    const evidence = a.source_excerpt?.trim() || a.draft_text;
-    // Prefer matching commitment text for workItem; else draft snippet.
+    const evidence = (a.source_excerpt ?? "").trim();
+    // Require the target's first name in the excerpt so a buggy LLM mapping
+    // (Shiney → Shweta) cannot invent graph ownership for the wrong person.
+    if (evidence.length === 0) continue;
+    if (!new RegExp(`\\b${first}\\b`, "i").test(evidence)) continue;
+    // Support/review excerpts are not ownership proof.
+    if (/\bwill support\b|\bcan support\b|\bis optional\b|\bto support\b/i.test(evidence)) {
+      continue;
+    }
     const matchingCommitment = args.commitments.find((c) =>
       c.toLowerCase().includes(first.toLowerCase()),
     );
