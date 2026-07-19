@@ -1454,7 +1454,8 @@ export class OtzarService {
       ).replace("{owner_display_name}", ownerDisplayName);
     }
 
-    // LAYER 3 -- WORK_PATTERN / COMMUNICATION_PREF / DECISION_STYLE.
+    // LAYER 3 -- WORK_PATTERN / COMMUNICATION_PREF / DECISION_STYLE
+    // + approved work-style learning (TwinCorrectionMemory, safe only).
     const l3Caps =
       ownerWalletId === null
         ? []
@@ -1474,10 +1475,30 @@ export class OtzarService {
             take: 5,
             select: { payload_summary: true },
           });
-    const L3 =
-      l3Caps.length > 0
-        ? "[WORK PROFILE]\n" + l3Caps.map((c) => c.payload_summary).join("\n")
-        : "";
+    let workStyleLines: string[] = [];
+    try {
+      const { loadWorkStylePreferenceLinesForPriming } = await import(
+        "./work-style-learning.service.js"
+      );
+      workStyleLines = await loadWorkStylePreferenceLinesForPriming(
+        ownerEntityId,
+      );
+    } catch {
+      workStyleLines = [];
+    }
+    const l3Parts: string[] = [];
+    if (l3Caps.length > 0) {
+      l3Parts.push(
+        "[WORK PROFILE]\n" + l3Caps.map((c) => c.payload_summary).join("\n"),
+      );
+    }
+    if (workStyleLines.length > 0) {
+      l3Parts.push(
+        "[PERSONAL WORK-STYLE PREFERENCES — approved by the user; never override access, compliance, or decision rights]\n" +
+          workStyleLines.join("\n"),
+      );
+    }
+    const L3 = l3Parts.join("\n\n");
 
     // LAYERS 4 + 5 via single COE call, partitioned by capsule_type.
     const coe = await this.coeService.assembleContext(
