@@ -199,6 +199,19 @@ else
   hard "skipped work-style behavioral — API not live (deploy defect)"
 fi
 
+# Level-2: hierarchy authority + isolation + provider honesty
+echo "--- level-2 hierarchy / isolation / provider ---"
+L2="$(dirname "$0")/otzar-enterprise-pressure-level2.sh"
+if [[ -x "$L2" ]] || [[ -f "$L2" ]]; then
+  if DEMO_SHARED_PASSWORD="$PASS" bash "$L2"; then
+    pass "level-2 pressure submodule"
+  else
+    fail "level-2 pressure submodule failed"
+  fi
+else
+  warn "level-2 harness missing"
+fi
+
 # Top defects summary
 echo "=== PRESSURE LEVEL-1 RESULT ==="
 echo "fails=$FAILS hard=$HARD warns=$WARNS live_sha=$SHA"

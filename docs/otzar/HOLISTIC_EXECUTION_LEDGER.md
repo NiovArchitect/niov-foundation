@@ -6,6 +6,26 @@
 > live-authenticated · scale-proven · production-ready · externally-blocked.
 
 
+
+## 2026-07-19 — Enterprise pressure Level-2 (live 7caa94b)
+
+**Standard:** expose defects under org pressure; not happy-path confirmation.
+
+### Level-2 results (`functionally_pressure_green`, fails=0)
+- Hierarchy assign: admin tech→founder OK; **CYCLE** refused; foreign id **PERSON_NOT_FOUND**; non-admin **403**
+- Hierarchy re-read coherent after assign pressure
+- Isolation: work-style prefs, twin_id, my-work ids distinct founder vs david
+- Meet ambient: honest `SCOPE_REAUTH_REQUIRED`
+- Docs gates: `NEEDS_CALLER_CONFIRMATION` / `BODY_REQUIRED` / `NEEDS_DOCUMENT_ID`; confirmed invalid doc → `APPEND_FAILED` (scopes present path)
+- CT: `reporting-assign` + manager select markers present; DnD machinery present in bundle
+
+### Still open (honest gaps, not greenwashed)
+- **True cross-tenant:** `smoke-admin@niovlabs.com` not loginable with `DEMO_SHARED_PASSWORD` — second-tenant isolation not fully exercised live
+- **Google reauth / real Docs write:** Meet remains external until reconnect; material append to a real document not proven
+- Browser hierarchy DnD end-to-end not Playwright-proven (API + CT markers only)
+
+Harness: `scripts/otzar-enterprise-pressure-level2.sh` (also invoked from Level-1).
+
 ## 2026-07-19 — Enterprise pressure Level-1 (live c593dff)
 
 **Standard:** smoke exposes what Otzar cannot yet do under org pressure; not happy-path confirmation.
