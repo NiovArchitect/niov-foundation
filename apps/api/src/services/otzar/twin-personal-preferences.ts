@@ -53,7 +53,11 @@ export interface TwinPersonalPreferencesSummary {
 }
 
 // WHAT: Compute the caller's personal preferences summary.
-// INPUT: callerEntityId — the resolved owner.
+// INPUT: callerEntityId — the human owner entity id (NOT the twin
+//        AI_AGENT id). TwinCorrectionMemory rows from work-style
+//        learning and correction-memory routes are owned by the
+//        human session entity; counting against the twin id yields
+//        a permanent zero surface and erodes trust.
 // OUTPUT: TwinPersonalPreferencesSummary.
 // WHY: Six bounded Prisma counts (one per surfaced correction_type
 //      filter) + one findFirst for the most recent ACTIVE row. All
