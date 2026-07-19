@@ -541,6 +541,12 @@ export async function appendGoogleDocBody(args: {
     await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
     return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
   }
+  // Create can use Drive multipart with drive.file alone. Material append uses
+  // Docs batchUpdate and requires auth/documents — honest code for reauth.
+  if (!scopes.includes("https://www.googleapis.com/auth/documents")) {
+    await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
+    return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
+  }
 
   const token = await getProviderAccessTokenForOrg({
     provider: "GOOGLE_WORKSPACE",
