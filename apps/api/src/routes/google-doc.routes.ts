@@ -8,6 +8,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AuthService } from "../services/auth.service.js";
 import { getOrgEntityId } from "../services/governance/org.js";
 import {
+  appendGoogleDocBody,
   createGoogleDoc,
   type GoogleDocCreateInput,
 } from "../services/connector/google-doc.service.js";
@@ -159,6 +160,49 @@ export async function registerGoogleDocRoutes(
         ok: true,
         permission_id: result.permission_id,
         role: result.role,
+      });
+    },
+  );
+
+  // POST append — material body change for edit-propagation (caller_confirmed).
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/v1/google/docs/append",
+    async (request, reply) => {
+      const token = bearerFrom(request.headers.authorization);
+      if (token === null)
+        return reply.code(401).send({ ok: false, code: "SESSION_INVALID" });
+      const session = await authService.validateSession(token, "write");
+      if (!session.valid)
+        return reply.code(401).send({ ok: false, code: session.code });
+      const orgEntityId = await resolveOrgOrFail(session.entity_id, reply);
+      if (orgEntityId === null) return;
+      const body = request.body ?? {};
+      const result = await appendGoogleDocBody({
+        actor_entity_id: session.entity_id,
+        org_entity_id: orgEntityId,
+        input: {
+          document_id:
+            typeof body.document_id === "string" ? body.document_id : "",
+          body_text: typeof body.body_text === "string" ? body.body_text : "",
+          caller_confirmed: body.caller_confirmed === true,
+          policy_blocked: body.policy_blocked === true,
+        },
+      });
+      if (result.ok === false) {
+        return reply
+          .code(
+            result.code === "PROVIDER_ERROR" || result.code === "APPEND_FAILED"
+              ? 502
+              : statusForGate(result.code),
+          )
+          .send({ ok: false, code: result.code });
+      }
+      return reply.code(200).send({
+        ok: true,
+        document_id: result.document_id,
+        appended: true,
+        body_char_count: result.body_char_count,
+        web_view_link: result.web_view_link,
       });
     },
   );

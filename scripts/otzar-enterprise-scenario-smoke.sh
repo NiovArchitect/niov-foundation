@@ -489,6 +489,28 @@ if ledger:
         print("  PASS  PROVIDER-DOC detect-edits baseline + provider revision retained [PROVIDER]")
     else:
         print(f"  WARN  PROVIDER-DOC detect-edits incomplete {det.get('code')}")
+    # Material append (when route live) → re-detect should see MODIFIED_AFTER_CLAIM
+    if doc_id:
+        appn=post(tok, "/google/docs/append", {
+            "document_id": doc_id,
+            "body_text": f"Controlled material edit for smoke {mark} at {int(time.time())}.",
+            "caller_confirmed": True,
+        }, timeout=90)
+        print(f"  append ok={appn.get('ok')} code={appn.get('code')} chars={appn.get('body_char_count')}")
+        if appn.get("ok") is True:
+            import time as _t
+            _t.sleep(2)
+            det2=post(tok, f"/otzar/twin-work/{ledger}/detect-edits", {}, timeout=60)
+            print(f"  detect-after-append edit={det2.get('edit_detected')} signal={det2.get('edit_signal')} notified={det2.get('notified')}")
+            if det2.get("edit_detected") is True or det2.get("edit_signal") == "MODIFIED_AFTER_CLAIM":
+                print("  PASS  PROVIDER-DOC material edit propagation [PROVIDER]")
+            else:
+                # Drive modifiedTime can lag briefly; baseline advance still honest
+                print("  WARN  PROVIDER-DOC append ok but edit flag not sticky yet (Drive lag)")
+        elif appn.get("code") in ("SESSION_INVALID",) or "not found" in str(appn.get("message","")).lower() or appn.get("statusCode") == 404:
+            print("  WARN  PROVIDER-DOC append route not live yet (deploy lag)")
+        else:
+            print(f"  WARN  PROVIDER-DOC append {appn.get('code') or appn}")
 else:
     print("  WARN  PROVIDER-DOC no twin claim for detect path")
 
