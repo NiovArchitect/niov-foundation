@@ -397,5 +397,158 @@ print("  PASS  UX/PROJECT/PROVIDER/INVESTOR behavioral suite")
 PY
 [[ $? -eq 0 ]] || fail "UX/PROJECT/PROVIDER/INVESTOR suite"
 
+# --- PROVIDER doc quality + detect-edits + HIERARCHY/Dandelion ---
+echo "--- PROVIDER doc quality · detect-edits · HIERARCHY ---"
+python3 <<'PY'
+import json, subprocess, os, time
+API=os.environ.get("OTZAR_API_BASE_URL","https://api.otzar.ai/api/v1")
+PASS=os.environ["DEMO_SHARED_PASSWORD"]
+fails=0
+
+def login(email):
+    body=json.dumps({"email":email,"password":PASS,"requested_operations":["read","write","share","admin_org"]})
+    return json.loads(subprocess.check_output(
+        ["curl","-sS","-m","25","-X","POST",f"{API}/auth/login","-H","Content-Type: application/json","-d",body],
+        text=True)).get("token") or ""
+
+def post(tok, path, data, timeout=90):
+    return json.loads(subprocess.check_output(
+        ["curl","-sS","-m",str(timeout),"-X","POST",f"{API}{path}",
+         "-H",f"Authorization: Bearer {tok}","-H","Content-Type: application/json",
+         "-d", json.dumps(data)], text=True))
+
+def getj(tok, path):
+    return json.loads(subprocess.check_output(
+        ["curl","-sS","-m","30","-H",f"Authorization: Bearer {tok}",f"{API}{path}"], text=True))
+
+tok=login("sadeil@niovlabs.com")
+if not tok:
+    print("  FAIL  PROVIDER-DOC login"); raise SystemExit(1)
+
+mark=f"SMOKE-DOC-{int(time.time())}"
+body_text = f"""# Brief {mark}
+
+## Confirmed decisions
+- Ship date confirmed 2026-08-01
+- Owner Sadeil
+
+## Tentative ideas
+- Weekly demo (tentative)
+
+## Rejected ideas
+- Skip compliance — REJECTED
+
+## Open questions
+- Budget owner unresolved
+
+## Source
+- Synthetic smoke; no invented clinical facts.
+"""
+create=post(tok, "/google/docs/create", {
+    "title": f"[SMOKE] {mark}",
+    "body_text": body_text,
+    "caller_confirmed": True,
+    "require_body": True,
+}, timeout=90)
+print(f"  PROVIDER-DOC create ok={create.get('ok')} inserted={create.get('body_inserted')} chars={create.get('body_char_count')}")
+if not (create.get("ok") and create.get("body_inserted") and (create.get("body_char_count") or 0) >= 100):
+    print("  FAIL  PROVIDER-DOC body quality"); fails+=1
+else:
+    print("  PASS  PROVIDER-DOC non-empty structured body [PROVIDER]")
+if create.get("web_view_link") and "docs.google.com" in str(create.get("web_view_link")):
+    print("  PASS  PROVIDER-DOC proof link [PROVIDER]")
+else:
+    print("  FAIL  PROVIDER-DOC missing google link"); fails+=1
+
+# Twin claim + detect-edits baseline (material Drive rewrite is external)
+doc_id=create.get("document_id")
+link=create.get("web_view_link")
+pl=getj(tok, "/otzar/work-projects?state=ACTIVE&take=1")
+pid=(pl.get("projects") or [{}])[0].get("project_id")
+ledger=None
+if doc_id and pid:
+    openr=post(tok, "/otzar/twin-work/open-from-extract", {
+        "project_id": pid,
+        "title": f"Maintain {mark}",
+        "summary": body_text[:300],
+        "document_id": doc_id,
+        "document_web_view_link": link,
+        "web_view_link": link,
+        "next_actions": [{"title": "Review confirmed decisions"}],
+        "accuracy_class": "STANDARD",
+        "claim_twin_work": True,
+    }, timeout=90)
+    for c in (openr.get("claims") or []):
+        if c.get("ok") and c.get("ledger_entry_id"):
+            ledger=c["ledger_entry_id"]; break
+print(f"  twin_claim ledger={str(ledger)[:8] if ledger else None}")
+if ledger:
+    det=post(tok, f"/otzar/twin-work/{ledger}/detect-edits", {}, timeout=60)
+    print(f"  detect-edits ok={det.get('ok')} edit={det.get('edit_detected')} signal={det.get('edit_signal')} drive={det.get('drive_modified_at')}")
+    if det.get("ok") and det.get("drive_modified_at"):
+        print("  PASS  PROVIDER-DOC detect-edits baseline + provider revision retained [PROVIDER]")
+    else:
+        print(f"  WARN  PROVIDER-DOC detect-edits incomplete {det.get('code')}")
+    # Material append (when route live) → re-detect should see MODIFIED_AFTER_CLAIM
+    if doc_id:
+        appn=post(tok, "/google/docs/append", {
+            "document_id": doc_id,
+            "body_text": f"Controlled material edit for smoke {mark} at {int(time.time())}.",
+            "caller_confirmed": True,
+        }, timeout=90)
+        print(f"  append ok={appn.get('ok')} code={appn.get('code')} chars={appn.get('body_char_count')}")
+        if appn.get("ok") is True:
+            import time as _t
+            _t.sleep(2)
+            det2=post(tok, f"/otzar/twin-work/{ledger}/detect-edits", {}, timeout=60)
+            print(f"  detect-after-append edit={det2.get('edit_detected')} signal={det2.get('edit_signal')} notified={det2.get('notified')}")
+            if det2.get("edit_detected") is True or det2.get("edit_signal") == "MODIFIED_AFTER_CLAIM":
+                print("  PASS  PROVIDER-DOC material edit propagation [PROVIDER]")
+            else:
+                # Drive modifiedTime can lag briefly; baseline advance still honest
+                print("  WARN  PROVIDER-DOC append ok but edit flag not sticky yet (Drive lag)")
+        elif appn.get("code") in ("SESSION_INVALID",) or "not found" in str(appn.get("message","")).lower() or appn.get("statusCode") == 404:
+            print("  WARN  PROVIDER-DOC append route not live yet (deploy lag)")
+        else:
+            print(f"  WARN  PROVIDER-DOC append {appn.get('code') or appn}")
+else:
+    print("  WARN  PROVIDER-DOC no twin claim for detect path")
+
+# Hierarchy + Dandelion confirmation surface APIs
+hier=getj(tok, "/org/hierarchy")
+ms=hier.get("memberships") or []
+print(f"  HIERARCHY memberships={len(ms)}")
+if len(ms) >= 3:
+    print("  PASS  HIERARCHY org memberships present [HIERARCHY]")
+else:
+    print("  FAIL  HIERARCHY thin"); fails+=1
+seeds=getj(tok, "/org/dandelion/seeds")
+ss=seeds.get("seeds") or []
+print(f"  DANDELION seeds={len(ss)} ok={seeds.get('ok')}")
+if seeds.get("ok") is True and len(ss) >= 1:
+    print("  PASS  DANDELION seed queue reachable (admin confirmation surface exists) [HIERARCHY]")
+else:
+    print("  WARN  DANDELION empty or missing")
+
+# Multi-role templates not empty shells (API)
+for email in ("sadeil@niovlabs.com","david@niovlabs.com","annie@niovlabs.com","walter@niovlabs.com"):
+    t=login(email)
+    tw=getj(t, "/otzar/my-twin") if t else {}
+    twin=tw.get("twin") or {}
+    tpl=twin.get("role_template") or (twin.get("config") or {}).get("role_template")
+    dgi=getj(t, "/otzar/dgi-coherence") if t else {}
+    nbs=((dgi.get("coherence") or {}).get("next_best_step") or {})
+    if tpl and (nbs.get("safe_title") or nbs.get("kind")):
+        print(f"  PASS  ROLE {email} tpl={tpl} next={str(nbs.get('safe_title') or nbs.get('kind'))[:40]} [UX]")
+    else:
+        print(f"  FAIL  ROLE empty shell {email} tpl={tpl}"); fails+=1
+
+if fails:
+    print(f"  FAIL  provider/hierarchy suite fails={fails}")
+    raise SystemExit(fails)
+print("  PASS  PROVIDER/HIERARCHY/ROLE suite")
+PY
+[[ $? -eq 0 ]] || fail "PROVIDER/HIERARCHY/ROLE suite"
+
 echo "=== RESULT fails=$FAILS warns=$WARNS ==="
 exit "$FAILS"

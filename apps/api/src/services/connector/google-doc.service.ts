@@ -389,3 +389,211 @@ export async function createGoogleDoc(args: {
     project_id: projectId,
   };
 }
+
+// ── [ACCEPTANCE] Material append for edit-propagation proof ────────────────
+// Controlled body append behind the same confirmation + scope gates as create.
+// Used to prove: new Drive revision → twin-work detect-edits → notify.
+
+export type GoogleDocAppendResult =
+  | {
+      ok: true;
+      document_id: string;
+      appended: true;
+      body_char_count: number;
+      web_view_link: string | null;
+    }
+  | { ok: false; code: GoogleDocGateCode | "NEEDS_DOCUMENT_ID" | "PROVIDER_ERROR" | "APPEND_FAILED" };
+
+export interface GoogleDocAppendInput {
+  document_id: string;
+  body_text: string;
+  caller_confirmed?: boolean;
+  policy_blocked?: boolean;
+}
+
+async function fetchDocEndIndex(args: {
+  access_token: string;
+  document_id: string;
+}): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://docs.googleapis.com/v1/documents/${encodeURIComponent(args.document_id)}?fields=body(content(endIndex))`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${args.access_token}` },
+      },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      body?: { content?: Array<{ endIndex?: number }> };
+    };
+    const content = body.body?.content ?? [];
+    let max = 1;
+    for (const seg of content) {
+      if (typeof seg.endIndex === "number" && seg.endIndex > max) {
+        max = seg.endIndex;
+      }
+    }
+    // Insert before the final newline of the document body.
+    return Math.max(1, max - 1);
+  } catch {
+    return null;
+  }
+}
+
+async function insertBodyAtIndex(args: {
+  access_token: string;
+  document_id: string;
+  text: string;
+  index: number;
+}): Promise<boolean> {
+  const payload = JSON.stringify({
+    requests: [
+      {
+        insertText: {
+          location: { index: args.index },
+          text: args.text.endsWith("\n") ? args.text : `${args.text}\n`,
+        },
+      },
+    ],
+  });
+  for (const delay of [0, 400, 1000, 2000]) {
+    if (delay > 0) await sleep(delay);
+    try {
+      const res = await fetch(
+        `https://docs.googleapis.com/v1/documents/${encodeURIComponent(args.document_id)}:batchUpdate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${args.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: payload,
+        },
+      );
+      if (res.ok) return true;
+    } catch {
+      // retry
+    }
+  }
+  return false;
+}
+
+/**
+ * Append text to an existing Google Doc (material change for detect-edits).
+ * Hard-gated: caller_confirmed + doc-write scopes. Never logs body text.
+ */
+export async function appendGoogleDocBody(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  input: GoogleDocAppendInput;
+}): Promise<GoogleDocAppendResult> {
+  const documentId =
+    typeof args.input.document_id === "string"
+      ? args.input.document_id.trim()
+      : "";
+  const bodyText =
+    typeof args.input.body_text === "string" ? args.input.body_text.trim() : "";
+
+  const audit = async (
+    outcome: "SUCCESS" | "DENIED",
+    reason: string,
+  ): Promise<void> => {
+    await writeAuditEvent({
+      event_type: "GOOGLE_DOC_APPEND",
+      outcome,
+      actor_entity_id: args.actor_entity_id,
+      target_entity_id: args.org_entity_id,
+      details: {
+        reason,
+        document_id_present: documentId.length > 0,
+        body_char_count: bodyText.length,
+      },
+    });
+  };
+
+  if (args.input.policy_blocked === true) {
+    await audit("DENIED", "POLICY_BLOCKED");
+    return { ok: false, code: "POLICY_BLOCKED" };
+  }
+  if (documentId.length === 0) {
+    await audit("DENIED", "NEEDS_DOCUMENT_ID");
+    return { ok: false, code: "NEEDS_DOCUMENT_ID" };
+  }
+  if (bodyText.length === 0) {
+    await audit("DENIED", "BODY_REQUIRED");
+    return { ok: false, code: "BODY_REQUIRED" };
+  }
+  if (args.input.caller_confirmed !== true) {
+    await audit("DENIED", "NEEDS_CALLER_CONFIRMATION");
+    return { ok: false, code: "NEEDS_CALLER_CONFIRMATION" };
+  }
+
+  const scopes = await getProviderGrantedScopes({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (scopes === null) {
+    await audit("DENIED", "GOOGLE_RECONNECT_REQUIRED");
+    return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
+  }
+  if (!grantsDocWrite(scopes)) {
+    await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
+    return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
+  }
+
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await audit("DENIED", "GOOGLE_RECONNECT_REQUIRED");
+    return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
+  }
+
+  return appendWithToken({
+    access_token: token.access_token,
+    document_id: documentId,
+    body_text: bodyText,
+    audit,
+  });
+}
+
+async function appendWithToken(args: {
+  access_token: string;
+  document_id: string;
+  body_text: string;
+  audit: (outcome: "SUCCESS" | "DENIED", reason: string) => Promise<void>;
+}): Promise<GoogleDocAppendResult> {
+  const endIndex = await fetchDocEndIndex({
+    access_token: args.access_token,
+    document_id: args.document_id,
+  });
+  if (endIndex === null) {
+    await args.audit("DENIED", "PROVIDER_ERROR");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+
+  const material = `\n\n## Material change (acceptance)\n${args.body_text}\n`;
+  const ok = await insertBodyAtIndex({
+    access_token: args.access_token,
+    document_id: args.document_id,
+    text: material,
+    index: endIndex,
+  });
+  if (!ok) {
+    await args.audit("DENIED", "APPEND_FAILED");
+    return { ok: false, code: "APPEND_FAILED" };
+  }
+
+  await args.audit("SUCCESS", "appended");
+  // Drive webViewLink is stable by id
+  const web_view_link = `https://docs.google.com/document/d/${encodeURIComponent(args.document_id)}/edit`;
+  return {
+    ok: true,
+    document_id: args.document_id,
+    appended: true,
+    body_char_count: material.length,
+    web_view_link,
+  };
+}
