@@ -32,6 +32,23 @@
 - Communication-to-execution at scale
 - Regulator/compliance disclosure substrate
 
+
+## Work-style learning (P0 active)
+
+**Benefit:** Each user explains less over time; Otzar produces work that increasingly reflects their professional methods—without absorbing company-confidential data, silently expanding authority, or trapping learning inside one employer.
+
+**Reuse map:** TwinCorrectionMemory (approved store) · Otzar observation consent UX · wallet-portability classification · conductSession L3 priming · no new memory wallet.
+
+**Lifecycle shipped:**
+- Org policy enable `POST /otzar/work-style/policy`
+- User session start/signal/stop → candidates
+- Approve/reject → durable TwinCorrectionMemory
+- Preferences listed; injected into conductSession L3 as labeled preferences (never override access/compliance)
+- Memory UI: real status, session, review, approved list
+- Unit tests + `scripts/otzar-work-style-learning-smoke.sh`
+
+**Still open:** live deploy + smoke on api.otzar.ai; Google reauth; hierarchy drag-drop; cross-tenant re-proof; CT tip live verify.
+
 ## Product north star
 
 Otzar understands organizational structure and how work flows, provisions every person
