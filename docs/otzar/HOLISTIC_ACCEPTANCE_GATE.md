@@ -3,7 +3,7 @@
 > **Purpose:** Close the founder acceptance gate. Durable proven state.
 > Do **not** treat API smoke alone as completion.
 >
-> **Updated:** 2026-07-19T09:10Z (doc quality, multi-role browser, Dandelion confirm)
+> **Updated:** 2026-07-19T09:16Z (doc append rail, project compose depth, nav shrink)
 
 ---
 
@@ -11,19 +11,18 @@
 
 | Surface | Exact value | As of (UTC) |
 |---------|-------------|-------------|
-| **Foundation live `git_commit`** | `034b8c7…` (gate #714) | 2026-07-19 ~09:03 |
-| **CT main tip** | `fee4916` multi-role first-5-min e2e | 2026-07-19 |
-| **Live CT bundle** | `index-CiFLTkjP.js` @ **08:32:59Z** (+ later deploys may advance) | Sign in · open-work · project-context |
-| **Investor browser journey** | **PASS** on live tip | 2026-07-19 |
-| **Multi-role browser first-5-min** | **5/5 PASS** CEO·manager·employee·executive·contractor | 2026-07-19 |
-| **Google Doc quality** | `body_text` create: body_inserted=true, body_char_count≥100, sections present, docs.google.com link | 2026-07-19 |
-| **Doc twin claim + detect-edits** | claim EXECUTING + detect baseline drive_modified_at; edit_detected=false until Drive changes | 2026-07-19 |
-| **Doc share** | share to david@ as writer **PASS** | 2026-07-19 |
-| **Material Drive rewrite → notify** | **PARTIAL** — detect path live; controlled external rewrite not automated in harness | open |
-| **Dandelion confirmation UX** | **EXISTS** `/organization-seeding` + API list/approve; 8 seeds; approve live | 2026-07-19 |
-| **Hierarchy** | 8 org memberships via `/org/hierarchy` | 2026-07-19 |
+| **Foundation live** | advancing from `034b8c7` / `a8b7268` (#715) | 2026-07-19 |
+| **CT main tip** | `0f47f98` project compose depth + nav shrink | 2026-07-19 |
+| **Live CT bundle** | `index-CiFLTkjP.js` class (Sign in · open-work · project-context) | live |
+| **Investor browser journey** | **PASS** | 2026-07-19 |
+| **Multi-role browser first-5-min** | **5/5 PASS** | 2026-07-19 |
+| **Google Doc quality** | `body_text` create non-empty structured body + Google link | live |
+| **Doc twin claim + detect-edits** | baseline `drive_modified_at` retained | live |
+| **Doc append (material edit)** | `POST /google/docs/append` shipped on PR — **await FND deploy** then smoke | main-bound |
+| **Dandelion confirmation UX** | `/organization-seeding` + list/approve live | proven |
+| **Hierarchy** | 8 org memberships | proven |
 | **Google Meet** | SCOPE_REAUTH_REQUIRED | external |
-| **Enterprise smoke** | UX/PROJECT/PROVIDER + doc/role extensions | shipping |
+| **Enterprise smoke** | fails=0 including UX/PROJECT/PROVIDER/HIERARCHY/ROLE | 2026-07-19 |
 
 ---
 
@@ -31,28 +30,27 @@
 
 | Criterion | State |
 |-----------|-------|
-| Latest CT UI live | **YES** |
+| Latest CT UI live | **YES** (tip class live; `0f47f98` auto-deploy pending) |
 | Investor journey browser-proven | **YES** |
-| Multi-role first-5-min browser | **YES** (5 personas) |
+| Multi-role first-5-min browser | **YES** |
 | Open-work not dead-end | **YES** |
-| Project context people+work | **YES** (partial full compose) |
-| Docs create quality | **YES** (body_text + sections) |
-| Doc edit propagation full | **PARTIAL** (detect baseline; material rewrite open) |
+| Project context people+work+docs+blockers | **YES on main** (await CT deploy for docs/blockers lanes) |
+| Docs create quality | **YES** |
+| Doc edit propagation full | **IN PROGRESS** — append rail shipped; live proof after FND deploy |
 | Dandelion/hierarchy status | **PARTIAL→YES surface** (queue + approve; not drag-drop bulk) |
-| Meet operational | **NO** (external) |
-| Route shrink material | **PARTIAL** |
+| Meet operational | **NO** |
+| Route shrink material | **PARTIAL→YES step** — More drawer thinned; collab policy hidden |
 | Cross-tenant re-proof | **NOT this cycle** |
 
-**Gate status: OPEN** — substantial progress; Meet external; material doc rewrite + deeper compose + drag-drop hierarchy still open.
+**Gate status: OPEN** — tip product strong; Meet external; material append live proof + drag-drop hierarchy remain.
 
 ### Active now
-1. Material doc edit → classification → notify (if product requires full loop)
-2. Deeper project compose (docs/calendar/obligations in panel)
-3. Route shrink
-4. Meet reauth (operator)
+1. Land FND append + re-run material edit→detect smoke on live API
+2. Confirm CT `0f47f98` live (docs/blockers in project panel)
+3. Meet reauth (operator)
 
 ### Next
-- Role template depth beyond first screen
+- Drag-drop / bulk hierarchy confirmation polish
 - Enterprise connector domain-wide
 - Ambient desktop/voice
 

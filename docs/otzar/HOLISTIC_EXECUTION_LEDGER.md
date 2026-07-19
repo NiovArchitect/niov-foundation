@@ -5,22 +5,21 @@
 > browser-proven · provider-proven · multi-user-proven · AI-collaboration-proven ·
 > live-authenticated · scale-proven · production-ready · externally-blocked.
 
-## Acceptance gate status (2026-07-18)
+## Acceptance gate status (2026-07-19)
 
-**Gate: OPEN.** CT live still `index-4BPnPgW8.js` @ 18:22:57Z (Phase F markers) while main tip includes `#171` Sign in + Needs me **open-work lane** (`5c3c998`). `RENDER_API_KEY` 401. Browser investor journey run on live (soft fails: CTA Continue, open-work-lane absent until deploy, console 401/409). Meet external SCOPE_REAUTH. Full record: `HOLISTIC_ACCEPTANCE_GATE.md`.
+**Gate: OPEN** (tip live). CT live `index-CiFLTkjP.js` @ 08:32:59Z — Sign in, open-work-lane, project-context-panel proven. Investor browser journey **PASS** (44 open-work items, project compose people+work). Meet external SCOPE_REAUTH. FND live still `d9ac931` (main tip `034b8c7` may lag). Full record: `HOLISTIC_ACCEPTANCE_GATE.md`.
 
 ### Active now
 
-1. CT deployment reconciliation (tip not live)
-2. Five-minute investor journey re-verify after deploy
-3. Project-centered coherence
-4. UI consolidation / route shrink
-5. Live provider proof (Meet blocked)
+1. UI consolidation / route shrink
+2. Doc edit propagation
+3. Multi-role first-5-min twin browser
+4. Meet reauth (operator)
+5. Dandelion / hierarchy confirmation UX
 
 ### Next
 
-- Dandelion / hierarchy confirmation
-- Role-templated AI Teammates first-5-min
+- Role-templated AI Teammates first-5-min all roles
 - Enterprise connector provisioning
 - Ambient desktop/voice proof
 
