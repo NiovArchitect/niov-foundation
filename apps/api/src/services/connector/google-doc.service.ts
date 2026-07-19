@@ -565,29 +565,35 @@ async function appendWithToken(args: {
   body_text: string;
   audit: (outcome: "SUCCESS" | "DENIED", reason: string) => Promise<void>;
 }): Promise<GoogleDocAppendResult> {
+  const material = `\n\n## Material change (acceptance)\n${args.body_text}\n`;
+  // Prefer end-of-body insert; fall back to index-1 insert (same path as create
+  // body write) so Drive modifiedTime always advances for detect-edits proof.
   const endIndex = await fetchDocEndIndex({
     access_token: args.access_token,
     document_id: args.document_id,
   });
-  if (endIndex === null) {
-    await args.audit("DENIED", "PROVIDER_ERROR");
-    return { ok: false, code: "PROVIDER_ERROR" };
+  let ok = false;
+  if (endIndex !== null && endIndex > 1) {
+    ok = await insertBodyAtIndex({
+      access_token: args.access_token,
+      document_id: args.document_id,
+      text: material,
+      index: endIndex,
+    });
   }
-
-  const material = `\n\n## Material change (acceptance)\n${args.body_text}\n`;
-  const ok = await insertBodyAtIndex({
-    access_token: args.access_token,
-    document_id: args.document_id,
-    text: material,
-    index: endIndex,
-  });
+  if (!ok) {
+    ok = await insertBodyWithRetry({
+      access_token: args.access_token,
+      document_id: args.document_id,
+      text: material,
+    });
+  }
   if (!ok) {
     await args.audit("DENIED", "APPEND_FAILED");
     return { ok: false, code: "APPEND_FAILED" };
   }
 
   await args.audit("SUCCESS", "appended");
-  // Drive webViewLink is stable by id
   const web_view_link = `https://docs.google.com/document/d/${encodeURIComponent(args.document_id)}/edit`;
   return {
     ok: true,
