@@ -20,8 +20,16 @@
 1. **MyTwin `personal_preferences_summary` always zero after approved work-style learning** — counted against twin AI_AGENT id; memory is human-owned (`session.entity_id`). Trust break: "I taught Otzar but Memory shows nothing." Fix: count by `ownerEntityId` (this PR).
 2. Pressure harness / smoke portability: macOS bash 3.2 (`mapfile`), wrong conduct path, soft-warns that hid (1).
 
-### Classification
-`defects_exposed` until twin-summary fix is live and re-smoked green.
+### Classification (updated post-deploy)
+Live `db242cd` re-smoke: work-style fails=0; Level-1 **functionally_pressure_green** (fails=0 hard=0).
+Twin `personal_preferences_summary` non-zero after learning (total≥1). Deploy lag of #720 itself is a process defect (push workflows did not auto-fire; Render advanced after manual build/dispatch).
+
+### Still open under pressure (beyond Level-1 green)
+- Hierarchy **DnD/reorder** not exercised (read-only hierarchy 200 only)
+- True **cross-tenant** isolation suite not run (only same-tenant role isolation)
+- Google Meet remains external until reauth (`SCOPE_REAUTH_REQUIRED` honest)
+- Docs material write path not fully pressure-proven on live (scope honesty pending reauth)
+
 
 ## Acceptance gate status (2026-07-19)
 
