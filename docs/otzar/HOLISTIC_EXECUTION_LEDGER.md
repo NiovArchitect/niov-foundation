@@ -5,6 +5,34 @@
 > browser-proven · provider-proven · multi-user-proven · AI-collaboration-proven ·
 > live-authenticated · scale-proven · production-ready · externally-blocked.
 
+## Acceptance gate status (2026-07-18)
+
+**Gate: OPEN.** CT live still `index-4BPnPgW8.js` @ 18:22:57Z (Phase F markers) while main tip includes `#171` Sign in + Needs me **open-work lane** (`5c3c998`). `RENDER_API_KEY` 401. Browser investor journey run on live (soft fails: CTA Continue, open-work-lane absent until deploy, console 401/409). Meet external SCOPE_REAUTH. Full record: `HOLISTIC_ACCEPTANCE_GATE.md`.
+
+### Active now
+
+1. CT deployment reconciliation (tip not live)
+2. Five-minute investor journey re-verify after deploy
+3. Project-centered coherence
+4. UI consolidation / route shrink
+5. Live provider proof (Meet blocked)
+
+### Next
+
+- Dandelion / hierarchy confirmation
+- Role-templated AI Teammates first-5-min
+- Enterprise connector provisioning
+- Ambient desktop/voice proof
+
+### Preserved roadmap
+
+- Otzar Relay prerequisites → Relay
+- Elixir/BEAM real-time boundary
+- Mobile/desktop messaging client
+- Phone credential + portable professional identity
+- Communication-to-execution at scale
+- Regulator/compliance disclosure substrate
+
 ## Product north star
 
 Otzar understands organizational structure and how work flows, provisions every person
