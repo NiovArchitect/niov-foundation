@@ -5,6 +5,24 @@
 > browser-proven · provider-proven · multi-user-proven · AI-collaboration-proven ·
 > live-authenticated · scale-proven · production-ready · externally-blocked.
 
+
+## 2026-07-19 — Enterprise pressure Level-1 (live c593dff)
+
+**Standard:** smoke exposes what Otzar cannot yet do under org pressure; not happy-path confirmation.
+
+### Confirmed live (#719)
+- Work-style lifecycle: policy → session → candidates → approve/reject → durable prefs → revoke
+- Confidential bait excluded; cross-user isolation holds
+- Later conduct (`POST /otzar/conversation/message`) echoes approved prefs (preference_echo_hits≥5)
+- 8-persona concurrent login + my-work fan-in; messy comms → multi-owner work; hierarchy+dandelion; Meet `SCOPE_REAUTH_REQUIRED` honest
+
+### Defects exposed (repair targets)
+1. **MyTwin `personal_preferences_summary` always zero after approved work-style learning** — counted against twin AI_AGENT id; memory is human-owned (`session.entity_id`). Trust break: "I taught Otzar but Memory shows nothing." Fix: count by `ownerEntityId` (this PR).
+2. Pressure harness / smoke portability: macOS bash 3.2 (`mapfile`), wrong conduct path, soft-warns that hid (1).
+
+### Classification
+`defects_exposed` until twin-summary fix is live and re-smoked green.
+
 ## Acceptance gate status (2026-07-19)
 
 **Gate: OPEN** (tip live). CT live `index-CiFLTkjP.js` @ 08:32:59Z — Sign in, open-work-lane, project-context-panel proven. Investor browser journey **PASS** (44 open-work items, project compose people+work). Meet external SCOPE_REAUTH. FND live still `d9ac931` (main tip `034b8c7` may lag). Full record: `HOLISTIC_ACCEPTANCE_GATE.md`.

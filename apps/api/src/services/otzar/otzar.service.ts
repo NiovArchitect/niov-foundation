@@ -3121,16 +3121,19 @@ export class OtzarService {
 
     // Phase EDX-5 PR 3 employee Twin self-state extension —
     // personal_preferences_summary sidecar. Self-scoped via
-    // primary.entity_id as the owner. Distinct from the existing
-    // ADR-0055 Wave 2C CORRECTION MemoryCapsule (which is read at
-    // L1 of conductSession, not surfaced via this sidecar).
+    // ownerEntityId (the human), matching TwinCorrectionMemory
+    // ownership used by work-style learning + correction-memory
+    // routes (session.entity_id). Using the twin AI_AGENT id here
+    // under-counts to zero and breaks user trust ("I taught Otzar
+    // but My Memory shows nothing"). Distinct from ADR-0055 Wave 2C
+    // CORRECTION MemoryCapsule (L1 of conductSession).
     // Per-source read miss swallowed silently per ADR-0068 §6.
     let personalPreferencesSummary:
       | TwinPersonalPreferencesSummary
       | undefined;
     try {
       personalPreferencesSummary =
-        await computePersonalPreferencesSummaryForCaller(primary.entity_id);
+        await computePersonalPreferencesSummaryForCaller(ownerEntityId);
     } catch {
       personalPreferencesSummary = undefined;
     }
