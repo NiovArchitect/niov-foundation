@@ -3,7 +3,22 @@
 > **Purpose:** Close the founder acceptance gate. Durable proven state.
 > Do **not** treat API smoke alone as completion.
 >
-> **Updated:** 2026-07-19T09:16Z (doc append rail, project compose depth, nav shrink)
+> **Updated:** 2026-07-20 — MASTER COMPLETION CONTRACT is controlling.
+
+---
+
+## Controlling register (required)
+
+Product completion is governed by **otzar-control-tower**:
+
+| File | Role |
+|------|------|
+| `docs/otzar/master/MASTER_COMPLETION_CONTRACT.md` | Rules / anti-drift |
+| `docs/otzar/master/FOUNDER_REQUIREMENTS_REGISTER.json` | Machine requirements |
+| `docs/otzar/master/MASTER_COMPLETION_GATE.md` | Phase + P0 order |
+| `docs/otzar/master/REQUIREMENTS_PROOF_MATRIX.md` | Proof matrix |
+
+This Foundation file is a **pointer + live snapshot**. Update the CT register when status changes. Do not mark CLOSED from harness greens alone.
 
 ---
 
@@ -11,55 +26,29 @@
 
 | Surface | Exact value | As of (UTC) |
 |---------|-------------|-------------|
-| **Foundation live** | advancing from `034b8c7` / `a8b7268` (#715) | 2026-07-19 |
-| **CT main tip** | `0f47f98` project compose depth + nav shrink | 2026-07-19 |
-| **Live CT bundle** | `index-CiFLTkjP.js` class (Sign in · open-work · project-context) | live |
-| **Investor browser journey** | **PASS** | 2026-07-19 |
-| **Multi-role browser first-5-min** | **5/5 PASS** | 2026-07-19 |
-| **Google Doc quality** | `body_text` create non-empty structured body + Google link | live |
-| **Doc twin claim + detect-edits** | baseline `drive_modified_at` retained | live |
-| **Doc append (material edit)** | `POST /google/docs/append` shipped on PR — **await FND deploy** then smoke | main-bound |
-| **Dandelion confirmation UX** | `/organization-seeding` + list/approve live | proven |
-| **Hierarchy** | 8 org memberships | proven |
-| **Google Meet** | SCOPE_REAUTH_REQUIRED | external |
-| **Enterprise smoke** | fails=0 including UX/PROJECT/PROVIDER/HIERARCHY/ROLE | 2026-07-19 |
+| **CT main tip** | `683fc46` Meet/tools reconnect honesty (#180) | 2026-07-20 |
+| **Live CT** | `index-DISpRqZe.js` | 2026-07-20 07:47Z |
+| **Register LIVE_VERIFIED** | A-01..03, A-07, B-01, C-02, C-05/06, F-01, J-01, K-02, N-01, OPS-01 | see JSON |
+| **Google Meet operational** | **EXTERNALLY_BLOCKED** (N-02) — reconnect path product-honest | operator OAuth |
+| **Render lag policy** | Short poll (~3m) then **MANUAL DEPLOY** | OPS-01 |
 
 ---
 
-## Completion checklist
+## Gate status: **OPEN**
 
-| Criterion | State |
-|-----------|-------|
-| Latest CT UI live | **YES** (tip class live; `0f47f98` auto-deploy pending) |
-| Investor journey browser-proven | **YES** |
-| Multi-role first-5-min browser | **YES** |
-| Open-work not dead-end | **YES** |
-| Project context people+work+docs+blockers | **YES on main** (await CT deploy for docs/blockers lanes) |
-| Docs create quality | **YES** |
-| Doc edit propagation full | **IN PROGRESS** — append rail shipped; live proof after FND deploy |
-| Dandelion/hierarchy status | **PARTIAL→YES surface** (queue + approve; not drag-drop bulk) |
-| Meet operational | **NO** |
-| Route shrink material | **PARTIAL→YES step** — More drawer thinned; collab policy hidden |
-| Cross-tenant re-proof | **NOT this cycle** |
+Phase 0 first-use substantially advanced. Open P0 includes A-04 server walkthrough, B-02 Home trust, C-01 inventory, F-02 drag-drop hierarchy, N-02 Meet provider, Q multi-tenant, R pressure, S YC continuous.
 
-**Gate status: OPEN** — tip product strong; Meet external; material append live proof + drag-drop hierarchy remain.
+### Founder deploy protocol
+1. Agent merges + CI green  
+2. Brief wait ~3m  
+3. If not live → **MANUAL DEPLOY** banner with SHA  
+4. Founder deploys otzar-app → `deployed`  
+5. Agent smokes  
 
-### Active now
-1. Land FND append + re-run material edit→detect smoke on live API
-2. Confirm CT `0f47f98` live (docs/blockers in project panel)
-3. Meet reauth (operator)
-
-### Next
-- Drag-drop / bulk hierarchy confirmation polish
-- Enterprise connector domain-wide
-- Ambient desktop/voice
-
-### Preserved roadmap
-- Otzar Relay prerequisites → Relay
-- Elixir/BEAM real-time boundary
-- Mobile/desktop messaging client
-- Phone credential + portable identity
-- Communication-to-execution at scale
-- Regulator/compliance substrate
-
-**Do not begin Relay before Foundation prerequisites close.**
+### Residuals (do not forget)
+* A-04 server-side multi-role walkthrough  
+* F-02 drag-drop hierarchy  
+* N-02 Meet PROVIDER_PROVEN  
+* Q cross-tenant zero-leak continuous  
+* S dedicated YC org unscripted  
+* T Relay separate app (preserve)  
