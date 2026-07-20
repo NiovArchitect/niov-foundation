@@ -7,6 +7,17 @@
 
 
 
+
+## 2026-07-20 — Hierarchy browser pressure (CT live)
+
+**CT PR #172** — `otzar-live-hierarchy-pressure.spec.ts` live 3/3 pass on app.otzar.ai.
+
+- API: CYCLE / PERSON_NOT_FOUND / non-admin 403
+- UI: Control Tower `/users` reporting-card + assign; non-admin blocked
+- **Discoverability pressure note:** ambient People (`/app/collaboration`) does **not** surface reporting authoring; admins must open Control Tower `/users`. `/app/users` is ambient catch-all → Today (not Members).
+
+Still open: true cross-tenant (smoke-admin creds), Google reauth + real Docs material write.
+
 ## 2026-07-19 — Enterprise pressure Level-2 (live 7caa94b)
 
 **Standard:** expose defects under org pressure; not happy-path confirmation.
