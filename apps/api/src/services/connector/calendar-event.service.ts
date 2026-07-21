@@ -209,6 +209,11 @@ export interface CalendarEventProposalInput {
   // [PROJECT-COHERENCE] Optional WorkProject linkage — stamped on MEETING ledger.
   project_id?: string;
   conversation_id?: string;
+  /**
+   * Stable create key. Same key returns the prior Google event without
+   * minting a second one (retry / lost-response / reconnect safe).
+   */
+  idempotency_key?: string;
 }
 
 export interface CalendarEventProposalView {
@@ -338,6 +343,8 @@ export type CalendarEventCreateResult =
       start: string;
       end: string;
       project_id: string | null;
+      /** True when a prior successful create with the same idempotency key was reused. */
+      already_applied: boolean;
     }
   | { ok: false; code: CalendarEventGateCode | "PROVIDER_ERROR" };
 
@@ -405,6 +412,59 @@ export async function createCalendarEvent(args: {
     await audit("DENIED", "GOOGLE_RECONNECT_REQUIRED");
     return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
   }
+
+  const projectIdEarly =
+    typeof args.input.project_id === "string" && args.input.project_id.length > 0
+      ? args.input.project_id
+      : null;
+  const conversationIdEarly =
+    typeof args.input.conversation_id === "string" &&
+    args.input.conversation_id.length > 0
+      ? args.input.conversation_id
+      : null;
+  const calIdem =
+    typeof args.input.idempotency_key === "string" &&
+    args.input.idempotency_key.trim().length > 0
+      ? args.input.idempotency_key.trim().slice(0, 160)
+      : conversationIdEarly !== null
+        ? `cal:create:${args.org_entity_id}:${projectIdEarly ?? "none"}:${conversationIdEarly}:${sel.start}`
+        : null;
+
+  // Idempotent resume: prior MEETING ledger with same key → no second events.insert.
+  if (calIdem !== null) {
+    const prior = await prisma.workLedgerEntry.findFirst({
+      where: {
+        org_entity_id: args.org_entity_id,
+        ledger_type: "MEETING",
+        details: { path: ["idempotency_key"], equals: calIdem },
+      },
+      orderBy: { created_at: "desc" },
+      select: { details: true },
+    });
+    if (prior !== null) {
+      const d =
+        typeof prior.details === "object" && prior.details !== null
+          ? (prior.details as Record<string, unknown>)
+          : {};
+      const priorEventId = typeof d.event_id === "string" ? d.event_id : "";
+      if (priorEventId.length > 0) {
+        await audit("SUCCESS", "create_already_applied");
+        return {
+          ok: true,
+          status: "CREATED",
+          event_id: priorEventId,
+          calendar_id:
+            typeof d.calendar_id === "string" ? d.calendar_id : calendarId,
+          html_link: typeof d.html_link === "string" ? d.html_link : null,
+          start: typeof d.start === "string" ? d.start : sel.start,
+          end: typeof d.end === "string" ? d.end : sel.end,
+          project_id: projectIdEarly,
+          already_applied: true,
+        };
+      }
+    }
+  }
+
   let res: Response;
   try {
     res = await fetch(
@@ -466,10 +526,7 @@ export async function createCalendarEvent(args: {
   // (a) Terminal WorkLedger MEETING row — reads as COMPLETED (EXECUTED is
   // terminal, excluded from blind spots, and getMyWork marks it not-completable
   // so it never surfaces as needs-action work). Best-effort enhancement.
-  const projectId =
-    typeof args.input.project_id === "string" && args.input.project_id.length > 0
-      ? args.input.project_id
-      : null;
+  const projectId = projectIdEarly;
   try {
     await createLedgerEntry({
       org_entity_id: args.org_entity_id,
@@ -480,9 +537,10 @@ export async function createCalendarEvent(args: {
       status: "EXECUTED",
       priority: "ROUTINE",
       owner_entity_id: ownerEntityId,
+      requester_entity_id: args.actor_entity_id,
       ...(projectId ? { project_id: projectId } : {}),
-      ...(typeof args.input.conversation_id === "string"
-        ? { conversation_id: args.input.conversation_id }
+      ...(conversationIdEarly
+        ? { conversation_id: conversationIdEarly }
         : {}),
       details: {
         source: "calendar_event",
@@ -493,6 +551,8 @@ export async function createCalendarEvent(args: {
         provider: "google_calendar_event",
         audit_event_id: auditEventId,
         project_id: projectId,
+        html_link: typeof body.htmlLink === "string" ? body.htmlLink : null,
+        ...(calIdem !== null ? { idempotency_key: calIdem } : {}),
         // Persist the CLOSED recipient set + title so a later delete can fan the
         // cancellation to the same humans without re-deriving from an input.
         recipient_entity_ids: recipients,
@@ -535,6 +595,7 @@ export async function createCalendarEvent(args: {
     start: startOut,
     end: endOut,
     project_id: projectId,
+    already_applied: false,
   };
 }
 

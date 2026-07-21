@@ -122,6 +122,10 @@ function parseProposal(body: Record<string, unknown>): CalendarEventProposalInpu
     body.conversation_id.length > 0
       ? { conversation_id: body.conversation_id }
       : {}),
+    ...(typeof body.idempotency_key === "string" &&
+    body.idempotency_key.length > 0
+      ? { idempotency_key: body.idempotency_key }
+      : {}),
   };
 }
 
@@ -186,6 +190,7 @@ export async function registerCalendarEventRoutes(
         start: result.start,
         end: result.end,
         project_id: result.project_id,
+        already_applied: result.already_applied,
       });
     },
   );

@@ -3,19 +3,36 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { grantedScopesMock, writeAuditEventMock, tokenMock, ledgerMock } =
-  vi.hoisted(() => ({
-    grantedScopesMock: vi.fn(),
-    writeAuditEventMock: vi
-      .fn()
-      .mockResolvedValue({ audit_id: "00000000-0000-0000-0000-000000000001" }),
-    tokenMock: vi.fn(),
-    ledgerMock: vi.fn().mockResolvedValue({ ok: true, entry: {} }),
-  }));
+const {
+  grantedScopesMock,
+  writeAuditEventMock,
+  tokenMock,
+  ledgerMock,
+  findLedgerMock,
+} = vi.hoisted(() => ({
+  grantedScopesMock: vi.fn(),
+  writeAuditEventMock: vi
+    .fn()
+    .mockResolvedValue({ audit_id: "00000000-0000-0000-0000-000000000001" }),
+  tokenMock: vi.fn(),
+  ledgerMock: vi.fn().mockResolvedValue({ ok: true, entry: {} }),
+  findLedgerMock: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock("@niov/database", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  return { ...actual, writeAuditEvent: writeAuditEventMock };
+  return {
+    ...actual,
+    writeAuditEvent: writeAuditEventMock,
+    prisma: {
+      ...(typeof actual.prisma === "object" && actual.prisma !== null
+        ? (actual.prisma as object)
+        : {}),
+      workLedgerEntry: {
+        findFirst: findLedgerMock,
+      },
+    },
+  };
 });
 
 vi.mock(
@@ -71,6 +88,9 @@ beforeEach(() => {
   writeAuditEventMock.mockClear();
   tokenMock.mockReset();
   ledgerMock.mockClear();
+  findLedgerMock.mockReset();
+  findLedgerMock.mockResolvedValue(null);
+  vi.unstubAllGlobals();
 });
 
 describe("firstUnmetDocGate", () => {
@@ -147,6 +167,42 @@ describe("createGoogleDoc", () => {
     };
     expect(ledgerArg.project_id).toBe("proj-1");
     expect(ledgerArg.details.body_inserted).toBe(true);
+    expect(r.already_applied).toBe(false);
+  });
+
+  it("idempotent create returns prior document without second Drive write", async () => {
+    grantedScopesMock.mockResolvedValue([
+      "https://www.googleapis.com/auth/drive.file",
+    ]);
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok-doc" });
+    findLedgerMock.mockResolvedValue({
+      title: "Collab brief",
+      details: {
+        document_id: "doc-prior",
+        web_view_link: "https://docs.google.com/document/d/doc-prior/edit",
+        body_inserted: true,
+        body_char_count: 400,
+        idempotency_key: "doc:key:1",
+      },
+    });
+    const fetchMock = vi.fn(async () => {
+      throw new Error("provider must not be called on already_applied create");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await createGoogleDoc({
+      actor_entity_id: "actor-1",
+      org_entity_id: "org-1",
+      input: readyInput({
+        project_id: "proj-1",
+        idempotency_key: "doc:key:1",
+      }),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.document_id).toBe("doc-prior");
+    expect(r.already_applied).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(ledgerMock).not.toHaveBeenCalled();
   });
 
   it("BODY_INSERT_FAILED when require_body and both paths leave body empty", async () => {

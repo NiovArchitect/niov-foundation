@@ -45,6 +45,12 @@ export interface GoogleDocCreateInput {
   project_id?: string;
   conversation_id?: string;
   artifact_type?: string;
+  /**
+   * Stable create key (org+project+conversation+title/op). When present, a
+   * second create with the same key returns the prior document without minting
+   * another Drive object (retry / lost-response / reconnect safe).
+   */
+  idempotency_key?: string;
 }
 
 export function grantsDocWrite(
@@ -91,6 +97,8 @@ export type GoogleDocCreateResult =
       body_inserted: boolean;
       body_char_count: number;
       project_id: string | null;
+      /** True when a prior successful create with the same idempotency key was reused. */
+      already_applied: boolean;
     }
   | { ok: false; code: GoogleDocGateCode | "PROVIDER_ERROR" };
 
@@ -260,6 +268,69 @@ export async function createGoogleDoc(args: {
     return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
   }
 
+  const projectId =
+    typeof args.input.project_id === "string" && args.input.project_id.length > 0
+      ? args.input.project_id
+      : null;
+  const conversationId =
+    typeof args.input.conversation_id === "string" &&
+    args.input.conversation_id.length > 0
+      ? args.input.conversation_id
+      : null;
+  const idem =
+    typeof args.input.idempotency_key === "string" &&
+    args.input.idempotency_key.trim().length > 0
+      ? args.input.idempotency_key.trim().slice(0, 160)
+      : // Natural key when clients omit explicit key (historical retry path).
+        conversationId !== null
+        ? `doc:create:${args.org_entity_id}:${projectId ?? "none"}:${conversationId}:${title.slice(0, 80)}`
+        : null;
+
+  // Idempotent resume: prior DOCUMENT ledger with same key → no second Drive create.
+  if (idem !== null) {
+    const prior = await prisma.workLedgerEntry.findFirst({
+      where: {
+        org_entity_id: args.org_entity_id,
+        ledger_type: "DOCUMENT",
+        details: { path: ["idempotency_key"], equals: idem },
+      },
+      orderBy: { created_at: "desc" },
+      select: { details: true, title: true },
+    });
+    if (prior !== null) {
+      const d =
+        typeof prior.details === "object" && prior.details !== null
+          ? (prior.details as Record<string, unknown>)
+          : {};
+      const priorDocId =
+        typeof d.document_id === "string" ? d.document_id : "";
+      if (priorDocId.length > 0) {
+        const link =
+          typeof d.web_view_link === "string" && d.web_view_link.length > 0
+            ? d.web_view_link
+            : `https://docs.google.com/document/d/${priorDocId}/edit`;
+        await audit("SUCCESS", "create_already_applied", {
+          already_applied: true,
+        });
+        return {
+          ok: true,
+          status: "CREATED",
+          document_id: priorDocId,
+          title:
+            typeof prior.title === "string" && prior.title.length > 0
+              ? prior.title
+              : title,
+          web_view_link: link,
+          body_inserted: d.body_inserted === true,
+          body_char_count:
+            typeof d.body_char_count === "number" ? d.body_char_count : 0,
+          project_id: projectId,
+          already_applied: true,
+        };
+      }
+    }
+  }
+
   let documentId = "";
   let createdTitle = title;
   let webViewLink: string | null = null;
@@ -341,10 +412,6 @@ export async function createGoogleDoc(args: {
     webViewLink = `https://docs.google.com/document/d/${documentId}/edit`;
   }
   const ownerEntityId = args.input.owner_entity_id ?? args.actor_entity_id;
-  const projectId =
-    typeof args.input.project_id === "string" && args.input.project_id.length > 0
-      ? args.input.project_id
-      : null;
 
   try {
     await createLedgerEntry({
@@ -358,10 +425,9 @@ export async function createGoogleDoc(args: {
       status: "EXECUTED",
       priority: "ROUTINE",
       owner_entity_id: ownerEntityId,
+      requester_entity_id: args.actor_entity_id,
       ...(projectId ? { project_id: projectId } : {}),
-      ...(typeof args.input.conversation_id === "string"
-        ? { conversation_id: args.input.conversation_id }
-        : {}),
+      ...(conversationId ? { conversation_id: conversationId } : {}),
       details: {
         source: "google_doc",
         document_id: documentId,
@@ -372,6 +438,7 @@ export async function createGoogleDoc(args: {
         body_char_count: hasBody ? bodyText.length : 0,
         artifact_type: args.input.artifact_type ?? "document",
         project_id: projectId,
+        ...(idem !== null ? { idempotency_key: idem } : {}),
       },
     });
   } catch {
@@ -387,6 +454,7 @@ export async function createGoogleDoc(args: {
     body_inserted: bodyInserted,
     body_char_count: hasBody ? bodyText.length : 0,
     project_id: projectId,
+    already_applied: false,
   };
 }
 

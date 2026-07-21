@@ -357,6 +357,11 @@ export async function registerWorkOsLedgerRoutes(
           ...(strParam(b.status) ? { status: strParam(b.status) } : {}),
           ...(strParam(b.next_action) ? { next_action: strParam(b.next_action) } : {}),
           ...(strParam(b.priority) ? { priority: strParam(b.priority) } : {}),
+          ...(b.project_id === null
+            ? { project_id: null }
+            : strParam(b.project_id)
+              ? { project_id: strParam(b.project_id) }
+              : {}),
         },
       });
       if (result.ok === false)
