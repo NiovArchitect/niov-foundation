@@ -497,6 +497,11 @@ export async function getLedgerEntry(args: {
   caller_entity_id: string;
   is_manager: boolean;
 }): Promise<{ ok: true; entry: WorkLedgerView } | LedgerFailure> {
+  // Malformed IDs must not reach Prisma (P2023 → 500 with internal detail).
+  // Same NOT_FOUND envelope as a missing row — no existence oracle, no stack.
+  if (!UUID_RE.test(args.ledger_entry_id)) {
+    return { ok: false, code: "NOT_FOUND", message: "ledger entry not found" };
+  }
   const row = await prisma.workLedgerEntry.findUnique({
     where: { ledger_entry_id: args.ledger_entry_id },
   });
