@@ -8,7 +8,7 @@
 //
 // SAFETY: create only behind gate ladder; audit scrubbed (no body/tokens).
 
-import { writeAuditEvent } from "@niov/database";
+import { prisma, writeAuditEvent } from "@niov/database";
 import {
   getProviderGrantedScopes,
   getProviderAccessTokenForOrg,
@@ -628,6 +628,24 @@ export async function appendGoogleDocBody(args: {
   if (!grantsDocWrite(scopes)) {
     await audit("DENIED", "DOC_SCOPE_INSUFFICIENT");
     return { ok: false, code: "DOC_SCOPE_INSUFFICIENT" };
+  }
+
+  // Tenant bind: only mutate docs this org created / ledgered as DOCUMENT.
+  // Prevents cross-tenant append when a foreign org's Google token can reach
+  // a shared Drive file. Same shape for missing vs foreign (no existence leak).
+  const owned = await prisma.workLedgerEntry.findFirst({
+    where: {
+      org_entity_id: args.org_entity_id,
+      ledger_type: "DOCUMENT",
+      details: { path: ["document_id"], equals: documentId },
+    },
+    select: { ledger_entry_id: true },
+  });
+  if (owned === null) {
+    await audit("DENIED", "DOC_ARTIFACT_NOT_FOUND", {
+      reason: "no_org_document_ledger",
+    });
+    return { ok: false, code: "DOC_ARTIFACT_NOT_FOUND" };
   }
 
   const token = await getProviderAccessTokenForOrg({

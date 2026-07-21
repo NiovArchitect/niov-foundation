@@ -2,17 +2,34 @@
 // PURPOSE: Typed append failures + idempotency marker + endOfSegment path.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { grantedScopesMock, writeAuditEventMock, tokenMock } = vi.hoisted(() => ({
+const {
+  grantedScopesMock,
+  writeAuditEventMock,
+  tokenMock,
+  findLedgerMock,
+} = vi.hoisted(() => ({
   grantedScopesMock: vi.fn(),
   writeAuditEventMock: vi
     .fn()
     .mockResolvedValue({ audit_id: "00000000-0000-0000-0000-000000000099" }),
   tokenMock: vi.fn(),
+  findLedgerMock: vi.fn(),
 }));
 
 vi.mock("@niov/database", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  return { ...actual, writeAuditEvent: writeAuditEventMock };
+  return {
+    ...actual,
+    writeAuditEvent: writeAuditEventMock,
+    prisma: {
+      ...(typeof actual.prisma === "object" && actual.prisma !== null
+        ? (actual.prisma as object)
+        : {}),
+      workLedgerEntry: {
+        findFirst: findLedgerMock,
+      },
+    },
+  };
 });
 
 vi.mock(
@@ -35,6 +52,11 @@ beforeEach(() => {
   grantedScopesMock.mockReset();
   writeAuditEventMock.mockClear();
   tokenMock.mockReset();
+  findLedgerMock.mockReset();
+  // Default: org owns the document (append path under test).
+  findLedgerMock.mockResolvedValue({
+    ledger_entry_id: "00000000-0000-0000-0000-000000000001",
+  });
   vi.unstubAllGlobals();
 });
 
@@ -325,6 +347,31 @@ describe("appendGoogleDocBody", () => {
     const patchBody = String((drivePatch?.[1] as { body?: string })?.body ?? "");
     expect(patchBody).toContain("<b>");
     expect(patchBody).toContain("Title line");
+  });
+
+  it("returns DOC_ARTIFACT_NOT_FOUND when org has no DOCUMENT ledger for id", async () => {
+    grantedScopesMock.mockResolvedValue([
+      "https://www.googleapis.com/auth/drive.file",
+    ]);
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok" });
+    findLedgerMock.mockResolvedValue(null);
+    const fetchMock = vi.fn(async () => {
+      throw new Error("provider must not be called without org ownership");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const r = await appendGoogleDocBody({
+      actor_entity_id: "a",
+      org_entity_id: "foreign-org",
+      input: {
+        document_id: DOC_ID,
+        body_text: "foreign should not append",
+        caller_confirmed: true,
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("DOC_ARTIFACT_NOT_FOUND");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns typed DOC_WRITE_PERMISSION_DENIED when Docs and Drive both fail", async () => {
