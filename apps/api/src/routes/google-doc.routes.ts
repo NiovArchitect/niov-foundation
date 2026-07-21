@@ -164,7 +164,7 @@ export async function registerGoogleDocRoutes(
     },
   );
 
-  // POST append — material body change for edit-propagation (caller_confirmed).
+  // POST append — material / formatting mutation for edit-propagation.
   app.post<{ Body: Record<string, unknown> }>(
     "/api/v1/google/docs/append",
     async (request, reply) => {
@@ -177,6 +177,8 @@ export async function registerGoogleDocRoutes(
       const orgEntityId = await resolveOrgOrFail(session.entity_id, reply);
       if (orgEntityId === null) return;
       const body = request.body ?? {};
+      const changeKind =
+        body.change_kind === "FORMATTING_ONLY" ? "FORMATTING_ONLY" : "MATERIAL";
       const result = await appendGoogleDocBody({
         actor_entity_id: session.entity_id,
         org_entity_id: orgEntityId,
@@ -186,16 +188,32 @@ export async function registerGoogleDocRoutes(
           body_text: typeof body.body_text === "string" ? body.body_text : "",
           caller_confirmed: body.caller_confirmed === true,
           policy_blocked: body.policy_blocked === true,
+          change_kind: changeKind,
+          ...(typeof body.idempotency_key === "string" &&
+          body.idempotency_key.length > 0
+            ? { idempotency_key: body.idempotency_key }
+            : {}),
         },
       });
       if (result.ok === false) {
+        const providerish =
+          result.code === "PROVIDER_ERROR" ||
+          result.code === "APPEND_FAILED" ||
+          result.code === "DOC_PROVIDER_WRITE_FAILED" ||
+          result.code === "DOC_PROVIDER_REQUEST_INVALID" ||
+          result.code === "DOC_WRITE_PERMISSION_DENIED" ||
+          result.code === "DOC_ARTIFACT_NOT_FOUND" ||
+          result.code === "DOC_INVALID_INSERT_INDEX" ||
+          result.code === "DOC_REVISION_CONFLICT";
         return reply
-          .code(
-            result.code === "PROVIDER_ERROR" || result.code === "APPEND_FAILED"
-              ? 502
-              : statusForGate(result.code),
-          )
-          .send({ ok: false, code: result.code });
+          .code(providerish ? 502 : statusForGate(result.code))
+          .send({
+            ok: false,
+            code: result.code,
+            ...(result.provider_http_status !== undefined
+              ? { provider_http_status: result.provider_http_status }
+              : {}),
+          });
       }
       return reply.code(200).send({
         ok: true,
@@ -203,6 +221,9 @@ export async function registerGoogleDocRoutes(
         appended: true,
         body_char_count: result.body_char_count,
         web_view_link: result.web_view_link,
+        change_kind: result.change_kind,
+        materiality: result.materiality,
+        already_applied: result.already_applied,
       });
     },
   );

@@ -390,9 +390,30 @@ export async function createGoogleDoc(args: {
   };
 }
 
-// ── [ACCEPTANCE] Material append for edit-propagation proof ────────────────
-// Controlled body append behind the same confirmation + scope gates as create.
-// Used to prove: new Drive revision → twin-work detect-edits → notify.
+// ── [ACCEPTANCE] Material / formatting mutation for edit-propagation ─────
+// Controlled Docs batchUpdate behind the same confirmation + scope gates as
+// create. Prefer endOfSegmentLocation (body) over fragile end-index math —
+// Drive-created docs + structural trailing newlines routinely broke index-1 /
+// max-1 inserts and collapsed every failure into opaque APPEND_FAILED.
+
+export type GoogleDocAppendFailureCode =
+  | GoogleDocGateCode
+  | "NEEDS_DOCUMENT_ID"
+  | "PROVIDER_ERROR"
+  | "APPEND_FAILED"
+  | "DOC_ARTIFACT_NOT_FOUND"
+  | "DOC_PROVIDER_ID_MISSING"
+  | "DOC_SCOPE_INSUFFICIENT"
+  | "DOC_WRITE_PERMISSION_DENIED"
+  | "DOC_REVISION_CONFLICT"
+  | "DOC_INVALID_INSERT_INDEX"
+  | "DOC_PROVIDER_REQUEST_INVALID"
+  | "DOC_PROVIDER_WRITE_FAILED"
+  | "DOC_WRITE_SUCCEEDED_RECEIPT_FAILED"
+  | "DOC_RECONCILIATION_REQUIRED"
+  | "DOC_CHANGE_ALREADY_APPLIED";
+
+export type GoogleDocChangeKind = "MATERIAL" | "FORMATTING_ONLY";
 
 export type GoogleDocAppendResult =
   | {
@@ -401,20 +422,71 @@ export type GoogleDocAppendResult =
       appended: true;
       body_char_count: number;
       web_view_link: string | null;
+      change_kind: GoogleDocChangeKind;
+      materiality: "MATERIAL" | "FORMATTING_ONLY";
+      already_applied: boolean;
+      provider_http_status: number | null;
     }
-  | { ok: false; code: GoogleDocGateCode | "NEEDS_DOCUMENT_ID" | "PROVIDER_ERROR" | "APPEND_FAILED" };
+  | { ok: false; code: GoogleDocAppendFailureCode; provider_http_status?: number };
 
 export interface GoogleDocAppendInput {
   document_id: string;
   body_text: string;
   caller_confirmed?: boolean;
   policy_blocked?: boolean;
+  /** MATERIAL (default) inserts semantic text; FORMATTING_ONLY applies style only. */
+  change_kind?: GoogleDocChangeKind;
+  /**
+   * Stable idempotency key (org+doc+op+hash). When present, a second call with
+   * the same key returns success without duplicating content if the marker is
+   * already in the document.
+   */
+  idempotency_key?: string;
+}
+
+function classifyBatchUpdateFailure(http: number): GoogleDocAppendFailureCode {
+  if (http === 401 || http === 403) return "DOC_WRITE_PERMISSION_DENIED";
+  if (http === 404) return "DOC_ARTIFACT_NOT_FOUND";
+  if (http === 400) return "DOC_PROVIDER_REQUEST_INVALID";
+  if (http === 409 || http === 412) return "DOC_REVISION_CONFLICT";
+  if (http >= 500) return "DOC_PROVIDER_WRITE_FAILED";
+  if (http > 0) return "DOC_PROVIDER_WRITE_FAILED";
+  return "APPEND_FAILED";
+}
+
+/** Stable, non-secret marker embedded for idempotent re-apply detection. */
+export function changeMarkerLine(idempotencyKey: string): string {
+  // Keep short + alphanumeric-ish for Docs search reliability.
+  const safe = idempotencyKey.replace(/[^A-Za-z0-9._:-]/g, "").slice(0, 80);
+  return `«otzar-change:${safe}»`;
+}
+
+async function fetchDocPlainText(args: {
+  access_token: string;
+  document_id: string;
+}): Promise<{ ok: true; text: string } | { ok: false; http: number }> {
+  try {
+    // Export via Drive files.export — works for Docs created by this app under
+    // drive.file + documents scopes.
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(args.document_id)}/export?mimeType=text/plain`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${args.access_token}` },
+      },
+    );
+    if (!res.ok) return { ok: false, http: res.status };
+    const text = await res.text();
+    return { ok: true, text };
+  } catch {
+    return { ok: false, http: 0 };
+  }
 }
 
 async function fetchDocEndIndex(args: {
   access_token: string;
   document_id: string;
-}): Promise<number | null> {
+}): Promise<{ ok: true; index: number } | { ok: false; http: number }> {
   try {
     const res = await fetch(
       `https://docs.googleapis.com/v1/documents/${encodeURIComponent(args.document_id)}?fields=body(content(endIndex))`,
@@ -423,7 +495,7 @@ async function fetchDocEndIndex(args: {
         headers: { Authorization: `Bearer ${args.access_token}` },
       },
     );
-    if (!res.ok) return null;
+    if (!res.ok) return { ok: false, http: res.status };
     const body = (await res.json()) as {
       body?: { content?: Array<{ endIndex?: number }> };
     };
@@ -434,29 +506,25 @@ async function fetchDocEndIndex(args: {
         max = seg.endIndex;
       }
     }
-    // Insert before the final newline of the document body.
-    return Math.max(1, max - 1);
+    // Insert before the final structural newline of the document body.
+    return { ok: true, index: Math.max(1, max - 1) };
   } catch {
-    return null;
+    return { ok: false, http: 0 };
   }
 }
 
-async function insertBodyAtIndex(args: {
+type BatchUpdateAttempt = {
+  ok: boolean;
+  http: number;
+};
+
+async function batchUpdateDoc(args: {
   access_token: string;
   document_id: string;
-  text: string;
-  index: number;
-}): Promise<boolean> {
-  const payload = JSON.stringify({
-    requests: [
-      {
-        insertText: {
-          location: { index: args.index },
-          text: args.text.endsWith("\n") ? args.text : `${args.text}\n`,
-        },
-      },
-    ],
-  });
+  requests: unknown[];
+}): Promise<BatchUpdateAttempt> {
+  const payload = JSON.stringify({ requests: args.requests });
+  let lastHttp = 0;
   for (const delay of [0, 400, 1000, 2000]) {
     if (delay > 0) await sleep(delay);
     try {
@@ -471,17 +539,25 @@ async function insertBodyAtIndex(args: {
           body: payload,
         },
       );
-      if (res.ok) return true;
+      lastHttp = res.status;
+      if (res.ok) return { ok: true, http: res.status };
+      // Retry only transient 5xx / 429.
+      if (res.status !== 429 && res.status < 500) {
+        return { ok: false, http: res.status };
+      }
     } catch {
-      // retry
+      lastHttp = 0;
     }
   }
-  return false;
+  return { ok: false, http: lastHttp };
 }
 
 /**
- * Append text to an existing Google Doc (material change for detect-edits).
+ * Append / mutate an existing Google Doc.
  * Hard-gated: caller_confirmed + doc-write scopes. Never logs body text.
+ *
+ * MATERIAL: inserts semantic text at end of body (endOfSegmentLocation first).
+ * FORMATTING_ONLY: bolds a small existing range without semantic content change.
  */
 export async function appendGoogleDocBody(args: {
   actor_entity_id: string;
@@ -494,10 +570,18 @@ export async function appendGoogleDocBody(args: {
       : "";
   const bodyText =
     typeof args.input.body_text === "string" ? args.input.body_text.trim() : "";
+  const changeKind: GoogleDocChangeKind =
+    args.input.change_kind === "FORMATTING_ONLY" ? "FORMATTING_ONLY" : "MATERIAL";
+  const idem =
+    typeof args.input.idempotency_key === "string" &&
+    args.input.idempotency_key.trim().length > 0
+      ? args.input.idempotency_key.trim()
+      : null;
 
   const audit = async (
     outcome: "SUCCESS" | "DENIED",
     reason: string,
+    extra?: Record<string, unknown>,
   ): Promise<void> => {
     await writeAuditEvent({
       event_type: "GOOGLE_DOC_APPEND",
@@ -508,6 +592,9 @@ export async function appendGoogleDocBody(args: {
         reason,
         document_id_present: documentId.length > 0,
         body_char_count: bodyText.length,
+        change_kind: changeKind,
+        has_idempotency_key: idem !== null,
+        ...(extra ?? {}),
       },
     });
   };
@@ -517,10 +604,11 @@ export async function appendGoogleDocBody(args: {
     return { ok: false, code: "POLICY_BLOCKED" };
   }
   if (documentId.length === 0) {
-    await audit("DENIED", "NEEDS_DOCUMENT_ID");
-    return { ok: false, code: "NEEDS_DOCUMENT_ID" };
+    await audit("DENIED", "DOC_PROVIDER_ID_MISSING");
+    return { ok: false, code: "DOC_PROVIDER_ID_MISSING" };
   }
-  if (bodyText.length === 0) {
+  // Formatting-only may have empty body_text (style-only mutation).
+  if (changeKind === "MATERIAL" && bodyText.length === 0) {
     await audit("DENIED", "BODY_REQUIRED");
     return { ok: false, code: "BODY_REQUIRED" };
   }
@@ -538,8 +626,8 @@ export async function appendGoogleDocBody(args: {
     return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
   }
   if (!grantsDocWrite(scopes)) {
-    await audit("DENIED", "DOC_WRITE_SCOPE_MISSING");
-    return { ok: false, code: "DOC_WRITE_SCOPE_MISSING" };
+    await audit("DENIED", "DOC_SCOPE_INSUFFICIENT");
+    return { ok: false, code: "DOC_SCOPE_INSUFFICIENT" };
   }
 
   const token = await getProviderAccessTokenForOrg({
@@ -551,55 +639,199 @@ export async function appendGoogleDocBody(args: {
     return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
   }
 
-  return appendWithToken({
+  // Idempotency: if marker already present, reconcile without rewriting.
+  if (idem !== null && changeKind === "MATERIAL") {
+    const marker = changeMarkerLine(idem);
+    const plain = await fetchDocPlainText({
+      access_token: token.access_token,
+      document_id: documentId,
+    });
+    if (plain.ok && plain.text.includes(marker)) {
+      await audit("SUCCESS", "DOC_CHANGE_ALREADY_APPLIED", {
+        already_applied: true,
+      });
+      return {
+        ok: true,
+        document_id: documentId,
+        appended: true,
+        body_char_count: 0,
+        web_view_link: `https://docs.google.com/document/d/${encodeURIComponent(documentId)}/edit`,
+        change_kind: changeKind,
+        materiality: changeKind,
+        already_applied: true,
+        provider_http_status: 200,
+      };
+    }
+  }
+
+  return applyDocMutationWithToken({
     access_token: token.access_token,
     document_id: documentId,
     body_text: bodyText,
+    change_kind: changeKind,
+    idempotency_key: idem,
     audit,
   });
 }
 
-async function appendWithToken(args: {
+async function applyDocMutationWithToken(args: {
   access_token: string;
   document_id: string;
   body_text: string;
-  audit: (outcome: "SUCCESS" | "DENIED", reason: string) => Promise<void>;
+  change_kind: GoogleDocChangeKind;
+  idempotency_key: string | null;
+  audit: (
+    outcome: "SUCCESS" | "DENIED",
+    reason: string,
+    extra?: Record<string, unknown>,
+  ) => Promise<void>;
 }): Promise<GoogleDocAppendResult> {
-  const material = `\n\n## Material change (acceptance)\n${args.body_text}\n`;
-  // Prefer end-of-body insert; fall back to index-1 insert (same path as create
-  // body write) so Drive modifiedTime always advances for detect-edits proof.
-  const endIndex = await fetchDocEndIndex({
-    access_token: args.access_token,
-    document_id: args.document_id,
-  });
-  let ok = false;
-  if (endIndex !== null && endIndex > 1) {
-    ok = await insertBodyAtIndex({
+  const web_view_link = `https://docs.google.com/document/d/${encodeURIComponent(args.document_id)}/edit`;
+
+  if (args.change_kind === "FORMATTING_ONLY") {
+    // Bold the first few characters of body (index 1..min(end, 20)) — no semantic insert.
+    const end = await fetchDocEndIndex({
       access_token: args.access_token,
       document_id: args.document_id,
-      text: material,
-      index: endIndex,
     });
-  }
-  if (!ok) {
-    ok = await insertBodyWithRetry({
+    if (!end.ok) {
+      const code = classifyBatchUpdateFailure(end.http);
+      await args.audit("DENIED", code, { provider_http_status: end.http });
+      return { ok: false, code, provider_http_status: end.http };
+    }
+    const endExclusive = Math.min(Math.max(end.index, 2), 24);
+    const attempt = await batchUpdateDoc({
       access_token: args.access_token,
       document_id: args.document_id,
-      text: material,
+      requests: [
+        {
+          updateTextStyle: {
+            range: { startIndex: 1, endIndex: endExclusive },
+            textStyle: { bold: true },
+            fields: "bold",
+          },
+        },
+      ],
     });
-  }
-  if (!ok) {
-    await args.audit("DENIED", "APPEND_FAILED");
-    return { ok: false, code: "APPEND_FAILED" };
+    if (!attempt.ok) {
+      const code = classifyBatchUpdateFailure(attempt.http);
+      await args.audit("DENIED", code, { provider_http_status: attempt.http });
+      return { ok: false, code, provider_http_status: attempt.http };
+    }
+    await args.audit("SUCCESS", "formatting_only_applied", {
+      provider_http_status: attempt.http,
+    });
+    return {
+      ok: true,
+      document_id: args.document_id,
+      appended: true,
+      body_char_count: 0,
+      web_view_link,
+      change_kind: "FORMATTING_ONLY",
+      materiality: "FORMATTING_ONLY",
+      already_applied: false,
+      provider_http_status: attempt.http,
+    };
   }
 
-  await args.audit("SUCCESS", "appended");
-  const web_view_link = `https://docs.google.com/document/d/${encodeURIComponent(args.document_id)}/edit`;
+  // MATERIAL: insert semantic text at end of body.
+  const marker =
+    args.idempotency_key !== null
+      ? changeMarkerLine(args.idempotency_key)
+      : null;
+  const material =
+    marker !== null
+      ? `\n\n## Material change\n${marker}\n${args.body_text}\n`
+      : `\n\n## Material change\n${args.body_text}\n`;
+
+  // 1) Preferred: endOfSegmentLocation on body (segmentId "") — no fragile index.
+  let attempt = await batchUpdateDoc({
+    access_token: args.access_token,
+    document_id: args.document_id,
+    requests: [
+      {
+        insertText: {
+          endOfSegmentLocation: { segmentId: "" },
+          text: material.endsWith("\n") ? material : `${material}\n`,
+        },
+      },
+    ],
+  });
+
+  // 2) Fallback: computed end index (max endIndex - 1).
+  if (!attempt.ok) {
+    const end = await fetchDocEndIndex({
+      access_token: args.access_token,
+      document_id: args.document_id,
+    });
+    if (end.ok && end.index >= 1) {
+      attempt = await batchUpdateDoc({
+        access_token: args.access_token,
+        document_id: args.document_id,
+        requests: [
+          {
+            insertText: {
+              location: { index: end.index },
+              text: material.endsWith("\n") ? material : `${material}\n`,
+            },
+          },
+        ],
+      });
+      if (!attempt.ok && attempt.http === 400) {
+        // 3) Last resort: index 1 (start of body) — same as create path.
+        attempt = await batchUpdateDoc({
+          access_token: args.access_token,
+          document_id: args.document_id,
+          requests: [
+            {
+              insertText: {
+                location: { index: 1 },
+                text: material.endsWith("\n") ? material : `${material}\n`,
+              },
+            },
+          ],
+        });
+      }
+    } else if (!end.ok) {
+      const code = classifyBatchUpdateFailure(end.http || attempt.http);
+      await args.audit("DENIED", code, {
+        provider_http_status: end.http || attempt.http,
+        phase: "fetch_end_index",
+      });
+      return {
+        ok: false,
+        code,
+        provider_http_status: end.http || attempt.http,
+      };
+    }
+  }
+
+  if (!attempt.ok) {
+    const code = classifyBatchUpdateFailure(attempt.http);
+    await args.audit("DENIED", code, { provider_http_status: attempt.http });
+    return { ok: false, code, provider_http_status: attempt.http };
+  }
+
+  await args.audit("SUCCESS", "material_appended", {
+    provider_http_status: attempt.http,
+    body_char_count: material.length,
+  });
   return {
     ok: true,
     document_id: args.document_id,
     appended: true,
     body_char_count: material.length,
     web_view_link,
+    change_kind: "MATERIAL",
+    materiality: "MATERIAL",
+    already_applied: false,
+    provider_http_status: attempt.http,
   };
+}
+
+/** Pure helper for tests — maps HTTP status → typed append failure. */
+export function mapProviderHttpToAppendCode(
+  http: number,
+): GoogleDocAppendFailureCode {
+  return classifyBatchUpdateFailure(http);
 }
