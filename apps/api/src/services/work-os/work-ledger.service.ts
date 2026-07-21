@@ -73,6 +73,9 @@ export const LEDGER_TYPES = [
   // VERIFIED + ownerless by contract; like ORG_SEEDING/GOAL it is excluded
   // from every personal/team work view — context, never a to-do.
   "DOCUMENT_CONTEXT",
+  // [GOOGLE-DOCS-WRITE] App-created Google Doc ownership row (details.document_id).
+  // Required for tenant-bound append/share; not personal My Work by default.
+  "DOCUMENT",
 ] as const;
 export const SOURCE_TYPES = [
   "VOICE_COMMAND", "CHAT", "MEETING", "TRANSCRIPT", "CONNECTOR", "SYSTEM", "MANUAL",
@@ -614,7 +617,7 @@ export async function getMyWork(args: {
       // owns) IS the caller's pending work and belongs here — it is also
       // resumable as a rich send-card in Comms via getPendingFollowUps, but the
       // ledger row is the single store, surfaced on every relevant page.
-      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT"] },
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT", "DOCUMENT"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
     },
     // Stable pagination order: created_at DESC with the id as a tiebreaker so
@@ -668,7 +671,7 @@ export async function getTeamWork(args: {
       org_entity_id: args.org_entity_id,
       // ORG_SEEDING entries are admin org-seeding suggestions, GOAL rows are
       // objectives (their own surface) — neither is Team Work.
-      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT"] },
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT", "DOCUMENT"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED", "VERIFIED"] } },
     },
     // Stable pagination order: created_at DESC with the id tiebreaker so
