@@ -230,4 +230,132 @@ describe("appendGoogleDocBody", () => {
     expect(body).toContain("updateTextStyle");
     expect(body).toContain("bold");
   });
+
+  it("falls back to Drive rewrite when Docs batchUpdate is 403", async () => {
+    grantedScopesMock.mockResolvedValue([
+      "https://www.googleapis.com/auth/drive.file",
+    ]);
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok" });
+    const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
+      const u = String(url);
+      if (u.includes(":batchUpdate")) {
+        return { ok: false, status: 403, json: async () => ({ error: "denied" }) };
+      }
+      if (u.includes("/export")) {
+        return { ok: true, status: 200, text: async () => "prior body text" };
+      }
+      if (u.includes("upload/drive") && init?.method === "PATCH") {
+        return { ok: true, status: 200, json: async () => ({ id: DOC_ID }) };
+      }
+      return { ok: false, status: 500, json: async () => ({}) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const r = await appendGoogleDocBody({
+      actor_entity_id: "a",
+      org_entity_id: "o",
+      input: {
+        document_id: DOC_ID,
+        body_text:
+          "The project risk register now includes a dependency that must be resolved before the September 18 milestone.",
+        caller_confirmed: true,
+        change_kind: "MATERIAL",
+        idempotency_key: "mat:risk:drive-fallback",
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.materiality).toBe("MATERIAL");
+      expect(r.already_applied).toBe(false);
+    }
+    const drivePatch = fetchMock.mock.calls.find(
+      (c) =>
+        String(c[0]).includes("upload/drive") &&
+        (c[1] as { method?: string })?.method === "PATCH",
+    );
+    expect(drivePatch).toBeDefined();
+    const patchBody = String((drivePatch?.[1] as { body?: string })?.body ?? "");
+    expect(patchBody).toContain("Material change");
+    expect(patchBody).toContain("otzar-change:");
+  });
+
+  it("FORMATTING_ONLY falls back to Drive HTML rewrite on Docs 403", async () => {
+    grantedScopesMock.mockResolvedValue([
+      "https://www.googleapis.com/auth/drive.file",
+    ]);
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok" });
+    const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
+      const u = String(url);
+      // Docs get structure + batchUpdate both denied.
+      if (u.includes("docs.googleapis.com")) {
+        return { ok: false, status: 403, json: async () => ({}) };
+      }
+      if (u.includes("/export")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => "Title line\nBody paragraph",
+        };
+      }
+      if (u.includes("upload/drive") && init?.method === "PATCH") {
+        return { ok: true, status: 200, json: async () => ({ id: DOC_ID }) };
+      }
+      return { ok: false, status: 500, json: async () => ({}) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const r = await appendGoogleDocBody({
+      actor_entity_id: "a",
+      org_entity_id: "o",
+      input: {
+        document_id: DOC_ID,
+        body_text: "",
+        caller_confirmed: true,
+        change_kind: "FORMATTING_ONLY",
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.materiality).toBe("FORMATTING_ONLY");
+    const drivePatch = fetchMock.mock.calls.find(
+      (c) =>
+        String(c[0]).includes("upload/drive") &&
+        (c[1] as { method?: string })?.method === "PATCH",
+    );
+    expect(drivePatch).toBeDefined();
+    const patchBody = String((drivePatch?.[1] as { body?: string })?.body ?? "");
+    expect(patchBody).toContain("<b>");
+    expect(patchBody).toContain("Title line");
+  });
+
+  it("returns typed DOC_WRITE_PERMISSION_DENIED when Docs and Drive both fail", async () => {
+    grantedScopesMock.mockResolvedValue([
+      "https://www.googleapis.com/auth/drive.file",
+    ]);
+    tokenMock.mockResolvedValue({ ok: true, access_token: "tok" });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes(":batchUpdate")) {
+        return { ok: false, status: 403, json: async () => ({}) };
+      }
+      if (String(url).includes("/export")) {
+        return { ok: false, status: 403, text: async () => "" };
+      }
+      return { ok: false, status: 403, json: async () => ({}) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const r = await appendGoogleDocBody({
+      actor_entity_id: "a",
+      org_entity_id: "o",
+      input: {
+        document_id: DOC_ID,
+        body_text: "material",
+        caller_confirmed: true,
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe("DOC_WRITE_PERMISSION_DENIED");
+      expect(r.provider_http_status).toBe(403);
+    }
+  });
 });

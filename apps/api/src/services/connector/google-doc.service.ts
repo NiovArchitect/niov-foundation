@@ -694,44 +694,75 @@ async function applyDocMutationWithToken(args: {
       access_token: args.access_token,
       document_id: args.document_id,
     });
-    if (!end.ok) {
-      const code = classifyBatchUpdateFailure(end.http);
-      await args.audit("DENIED", code, { provider_http_status: end.http });
-      return { ok: false, code, provider_http_status: end.http };
+    let attempt: BatchUpdateAttempt | null = null;
+    if (end.ok) {
+      const endExclusive = Math.min(Math.max(end.index, 2), 24);
+      attempt = await batchUpdateDoc({
+        access_token: args.access_token,
+        document_id: args.document_id,
+        requests: [
+          {
+            updateTextStyle: {
+              range: { startIndex: 1, endIndex: endExclusive },
+              textStyle: { bold: true },
+              fields: "bold",
+            },
+          },
+        ],
+      });
+      if (attempt.ok) {
+        await args.audit("SUCCESS", "formatting_only_applied", {
+          provider_http_status: attempt.http,
+          path: "docs_updateTextStyle",
+        });
+        return {
+          ok: true,
+          document_id: args.document_id,
+          appended: true,
+          body_char_count: 0,
+          web_view_link,
+          change_kind: "FORMATTING_ONLY",
+          materiality: "FORMATTING_ONLY",
+          already_applied: false,
+          provider_http_status: attempt.http,
+        };
+      }
     }
-    const endExclusive = Math.min(Math.max(end.index, 2), 24);
-    const attempt = await batchUpdateDoc({
+
+    // Drive HTML rewrite fallback — same permission surface as create when
+    // Docs API style mutations are 403. Bold first line without semantic change.
+    const driveFmt = await formatViaDriveHtmlRewrite({
       access_token: args.access_token,
       document_id: args.document_id,
-      requests: [
-        {
-          updateTextStyle: {
-            range: { startIndex: 1, endIndex: endExclusive },
-            textStyle: { bold: true },
-            fields: "bold",
-          },
-        },
-      ],
     });
-    if (!attempt.ok) {
-      const code = classifyBatchUpdateFailure(attempt.http);
-      await args.audit("DENIED", code, { provider_http_status: attempt.http });
-      return { ok: false, code, provider_http_status: attempt.http };
+    if (driveFmt.ok) {
+      await args.audit("SUCCESS", "formatting_only_applied_drive_html", {
+        provider_http_status: driveFmt.http,
+        path: "drive_html_rewrite",
+      });
+      return {
+        ok: true,
+        document_id: args.document_id,
+        appended: true,
+        body_char_count: 0,
+        web_view_link,
+        change_kind: "FORMATTING_ONLY",
+        materiality: "FORMATTING_ONLY",
+        already_applied: false,
+        provider_http_status: driveFmt.http,
+      };
     }
-    await args.audit("SUCCESS", "formatting_only_applied", {
-      provider_http_status: attempt.http,
+
+    const docsHttp = attempt?.http ?? (end.ok ? 0 : end.http);
+    const failHttp = driveFmt.http || docsHttp || 0;
+    const code = classifyBatchUpdateFailure(failHttp);
+    await args.audit("DENIED", code, {
+      provider_http_status: failHttp,
+      docs_http: docsHttp,
+      drive_http: driveFmt.http,
+      path: "formatting_all_failed",
     });
-    return {
-      ok: true,
-      document_id: args.document_id,
-      appended: true,
-      body_char_count: 0,
-      web_view_link,
-      change_kind: "FORMATTING_ONLY",
-      materiality: "FORMATTING_ONLY",
-      already_applied: false,
-      provider_http_status: attempt.http,
-    };
+    return { ok: false, code, provider_http_status: failHttp };
   }
 
   // MATERIAL: insert semantic text at end of body.
@@ -744,7 +775,7 @@ async function applyDocMutationWithToken(args: {
       ? `\n\n## Material change\n${marker}\n${args.body_text}\n`
       : `\n\n## Material change\n${args.body_text}\n`;
 
-  // 1) Preferred: endOfSegmentLocation on body (segmentId "") — no fragile index.
+  // 1) Preferred: Docs API endOfSegmentLocation (body) — no fragile index.
   let attempt = await batchUpdateDoc({
     access_token: args.access_token,
     document_id: args.document_id,
@@ -759,7 +790,7 @@ async function applyDocMutationWithToken(args: {
   });
 
   // 2) Fallback: computed end index (max endIndex - 1).
-  if (!attempt.ok) {
+  if (!attempt.ok && attempt.http !== 403 && attempt.http !== 401) {
     const end = await fetchDocEndIndex({
       access_token: args.access_token,
       document_id: args.document_id,
@@ -778,7 +809,6 @@ async function applyDocMutationWithToken(args: {
         ],
       });
       if (!attempt.ok && attempt.http === 400) {
-        // 3) Last resort: index 1 (start of body) — same as create path.
         attempt = await batchUpdateDoc({
           access_token: args.access_token,
           document_id: args.document_id,
@@ -792,24 +822,51 @@ async function applyDocMutationWithToken(args: {
           ],
         });
       }
-    } else if (!end.ok) {
-      const code = classifyBatchUpdateFailure(end.http || attempt.http);
-      await args.audit("DENIED", code, {
-        provider_http_status: end.http || attempt.http,
-        phase: "fetch_end_index",
-      });
-      return {
-        ok: false,
-        code,
-        provider_http_status: end.http || attempt.http,
-      };
     }
   }
 
+  // 3) Drive export+rewrite fallback — create already works via Drive multipart
+  // under drive.file when Docs API batchUpdate is 403 (Docs API disabled /
+  // workspace policy). Same permission surface as successful create.
   if (!attempt.ok) {
-    const code = classifyBatchUpdateFailure(attempt.http);
-    await args.audit("DENIED", code, { provider_http_status: attempt.http });
-    return { ok: false, code, provider_http_status: attempt.http };
+    const drive = await appendViaDriveRewrite({
+      access_token: args.access_token,
+      document_id: args.document_id,
+      append_text: material,
+    });
+    if (drive.ok) {
+      await args.audit("SUCCESS", "material_appended_drive_rewrite", {
+        provider_http_status: drive.http,
+        body_char_count: material.length,
+        path: "drive_export_rewrite",
+      });
+      return {
+        ok: true,
+        document_id: args.document_id,
+        appended: true,
+        body_char_count: material.length,
+        web_view_link,
+        change_kind: "MATERIAL",
+        materiality: "MATERIAL",
+        already_applied: false,
+        provider_http_status: drive.http,
+      };
+    }
+    // Prefer the more specific of Docs vs Drive failure codes.
+    const code = classifyBatchUpdateFailure(
+      drive.http || attempt.http || 0,
+    );
+    await args.audit("DENIED", code, {
+      provider_http_status: drive.http || attempt.http,
+      docs_http: attempt.http,
+      drive_http: drive.http,
+      path: "all_failed",
+    });
+    return {
+      ok: false,
+      code,
+      provider_http_status: drive.http || attempt.http,
+    };
   }
 
   await args.audit("SUCCESS", "material_appended", {
@@ -827,6 +884,121 @@ async function applyDocMutationWithToken(args: {
     already_applied: false,
     provider_http_status: attempt.http,
   };
+}
+
+/**
+ * Drive-native material append: export plain text, concatenate, rewrite via
+ * media upload. Used when Docs API batchUpdate is denied (common when
+ * create used Drive multipart and Docs API is restricted).
+ * Never logs content.
+ */
+async function appendViaDriveRewrite(args: {
+  access_token: string;
+  document_id: string;
+  append_text: string;
+}): Promise<{ ok: true; http: number } | { ok: false; http: number }> {
+  const exported = await fetchDocPlainText({
+    access_token: args.access_token,
+    document_id: args.document_id,
+  });
+  if (!exported.ok) return { ok: false, http: exported.http };
+
+  const next = `${exported.text.trimEnd()}\n${args.append_text.endsWith("\n") ? args.append_text : `${args.append_text}\n`}`;
+
+  return driveMultipartRewrite({
+    access_token: args.access_token,
+    document_id: args.document_id,
+    content_type: "text/plain; charset=UTF-8",
+    body: next,
+  });
+}
+
+/**
+ * Formatting-only via Drive: export plain text, bold the first non-empty line
+ * via HTML, rewrite. No semantic content change (same plain-text extract).
+ * Never logs content.
+ */
+async function formatViaDriveHtmlRewrite(args: {
+  access_token: string;
+  document_id: string;
+}): Promise<{ ok: true; http: number } | { ok: false; http: number }> {
+  const exported = await fetchDocPlainText({
+    access_token: args.access_token,
+    document_id: args.document_id,
+  });
+  if (!exported.ok) return { ok: false, http: exported.http };
+
+  const lines = exported.text.split("\n");
+  let bolded = false;
+  const htmlLines: string[] = [];
+  for (const line of lines) {
+    if (!bolded && line.trim().length > 0) {
+      // Escape minimal HTML specials; bold only the first content line.
+      const esc = line
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      htmlLines.push(`<p><b>${esc}</b></p>`);
+      bolded = true;
+    } else {
+      const esc = line
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      htmlLines.push(esc.length === 0 ? "<p><br></p>" : `<p>${esc}</p>`);
+    }
+  }
+  if (!bolded) {
+    // Empty doc — nothing to format.
+    return { ok: false, http: 400 };
+  }
+  const html = `<html><body>${htmlLines.join("")}</body></html>`;
+
+  return driveMultipartRewrite({
+    access_token: args.access_token,
+    document_id: args.document_id,
+    content_type: "text/html; charset=UTF-8",
+    body: html,
+  });
+}
+
+/** Shared Drive multipart PATCH rewrite (create-equivalent permission surface). */
+async function driveMultipartRewrite(args: {
+  access_token: string;
+  document_id: string;
+  content_type: string;
+  body: string;
+}): Promise<{ ok: true; http: number } | { ok: false; http: number }> {
+  const boundary = `otzar_ap_${Date.now().toString(36)}`;
+  const meta = JSON.stringify({
+    mimeType: "application/vnd.google-apps.document",
+  });
+  const multipart =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${meta}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: ${args.content_type}\r\n\r\n` +
+    `${args.body}\r\n` +
+    `--${boundary}--`;
+
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(args.document_id)}?uploadType=multipart`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${args.access_token}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`,
+        },
+        body: multipart,
+      },
+    );
+    if (!res.ok) return { ok: false, http: res.status };
+    return { ok: true, http: res.status };
+  } catch {
+    return { ok: false, http: 0 };
+  }
 }
 
 /** Pure helper for tests — maps HTTP status → typed append failure. */
