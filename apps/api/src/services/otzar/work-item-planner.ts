@@ -106,7 +106,9 @@ export function isPronounOrNonName(name: string): boolean {
   const t = name.trim();
   if (t.length === 0) return true;
   if (PRONOUN_TOKENS.has(t.toLowerCase())) return true; // catches "His"/"THEY" too
-  if (!/^[A-Za-z][A-Za-z'.-]*$/.test(t.split(/\s+/)[0] ?? "")) return true; // first token must look like a name
+  // First token must look like a person/handle: classic names (David) OR
+  // alphanumeric roster handles (R03P1). Digits are allowed; pure punctuation is not.
+  if (!/^[A-Za-z][A-Za-z0-9'.-]*$/.test(t.split(/\s+/)[0] ?? "")) return true;
   if (!/^[A-Z]/.test(t)) return true; // a name starts capitalized
   return false;
 }

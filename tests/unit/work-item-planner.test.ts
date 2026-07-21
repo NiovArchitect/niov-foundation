@@ -161,3 +161,30 @@ describe("identity truth — pronoun / non-name owners are never displayed or se
     }
   });
 });
+
+
+describe("work-item planner — synthetic digit handles", () => {
+  it("assigns PROVEN owners for R03P1/R03P4 style handles", () => {
+    const graph = {
+      lead: null,
+      founderAuthority: null,
+      nodes: [
+        { name: "R03P1", role: "owner" as const, workItem: "the pilot brief", evidence: "R03P1 owns the brief", confidence: "high" as const },
+        { name: "R03P4", role: "owner" as const, workItem: "cutover readiness", evidence: "R03P4 owns cutover readiness", confidence: "high" as const },
+      ],
+    };
+    const roster: Record<string, string> = {
+      R03P1: "id-p1",
+      R03P4: "id-p4",
+    };
+    const plan = planWorkItems(graph, (name) => {
+      const id = roster[name];
+      return id
+        ? { entityId: id, ambiguous: false, alternatives: [] }
+        : { entityId: null, ambiguous: false, alternatives: [] };
+    });
+    expect(plan.workItems).toHaveLength(2);
+    expect(plan.workItems.every((w) => w.status === "PROPOSED" && w.ownerEntityId !== null)).toBe(true);
+    expect(plan.workItems.map((w) => w.ownerName).sort()).toEqual(["R03P1", "R03P4"]);
+  });
+});

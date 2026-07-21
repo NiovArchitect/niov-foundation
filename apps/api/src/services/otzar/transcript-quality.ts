@@ -98,9 +98,22 @@ const FILLER_PHRASES: ReadonlySet<string> = new Set([
   "perfect",
 ]);
 
-/** Strip a leading "Speaker:" or "[00:12] Speaker:" prefix. Returns [speaker|null, text]. */
+/**
+ * Strip a leading "Speaker:" or "[timestamp] Speaker:" prefix.
+ * Returns [speaker|null, text].
+ *
+ * Bracket content is intentionally broad (`[^\]]+`) so ISO datetimes
+ * (`[2026-07-21 09:12]`), plain clocks (`[00:12]`), and chat stamps
+ * (`[Mon 3:04 PM]`) all peel off. The prior `[0-9:.\s]+` class rejected
+ * hyphens and left the full stamp in the utterance body, which:
+ *   1) left speaker=null (roster/owner proof never saw "R03P1"), and
+ *   2) poisoned alphabetic-ratio scoring with digit-heavy timestamps so
+ *      date-rich enterprise lines were mislabeled asr_garbage.
+ */
 function splitSpeaker(line: string): [string | null, string] {
-  const m = line.match(/^\s*(?:\[[0-9:.\s]+\]\s*)?([A-Z][A-Za-z0-9 .'-]{0,40}?):\s+(.*)$/);
+  const m = line.match(
+    /^\s*(?:\[[^\]]+\]\s*)?([A-Z][A-Za-z0-9 .'-]{0,40}?):\s+(.*)$/,
+  );
   if (m && m[1] && m[2] !== undefined) return [m[1].trim(), m[2].trim()];
   return [null, line.trim()];
 }
@@ -109,10 +122,31 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Strip ISO dates / clock times / residual bracket stamps before alpha
+ * scoring. Enterprise work conversations legitimately say "lock 2026-09-18"
+ * and "reject 2026-09-11"; those digits must not quarantine the line as ASR
+ * garbage when the remaining prose is clearly human language.
+ */
+function contentForAlpha(s: string): string {
+  return s
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function alphaRatio(s: string): number {
-  if (s.length === 0) return 0;
-  const letters = (s.match(/[a-zA-Z]/g) ?? []).length;
-  return letters / s.length;
+  const scored = contentForAlpha(s);
+  if (scored.length === 0) {
+    // Pure date/time stamp with no prose — treat as non-alpha so short
+    // timestamp-only lines stay low_confidence / noise, not trusted.
+    if (s.length === 0) return 0;
+    return 0;
+  }
+  const letters = (scored.match(/[a-zA-Z]/g) ?? []).length;
+  return letters / scored.length;
 }
 
 function asciiRatio(s: string): number {

@@ -167,7 +167,8 @@ export interface RosterEntry {
 /** Extract candidate person-name tokens from free text. Captures capitalized
  *  words ("David", "Shiney") and all-caps tokens ("SHINEY"). */
 export function extractNameTokens(text: string): string[] {
-  const matches = text.match(/\b[A-Z][A-Za-z]+\b/g) ?? [];
+  // Allow digit-bearing roster handles (R03P1) alongside classic names (David).
+  const matches = text.match(/\b[A-Z][A-Za-z0-9]+\b/g) ?? [];
   return Array.from(new Set(matches));
 }
 

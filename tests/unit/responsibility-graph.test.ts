@@ -109,3 +109,32 @@ describe("responsibility graph — enterprise-natural ownership fan-out", () => 
     expect(enriched.nodes.find((n) => n.name === "Vishesh")?.role).toBe("owner");
   });
 });
+
+describe("responsibility graph — synthetic roster handles + project-loop ownership", () => {
+  const PROJECT_LOOP = [
+    "[2026-07-21 09:13] R03P4: engineering is blocked on the compliance memo — not ready for 2026-09-11.",
+    "[2026-07-21 09:15] R03P1: correction — product owns the brief; engineering owns the runtime cutover only.",
+    "[2026-07-21 09:18] R03P4: ok then lock 2026-09-18 for the go/no-go. Reject auto-booking 2026-09-11.",
+    "[2026-07-21 09:19] R03P0: decision: 2026-09-18 is final. R03P1 owns the brief; R03P4 owns cutover readiness.",
+  ].join("\n");
+
+  it("places R03P1 / R03P4 as owners from explicit 'owns' language (digit handles)", () => {
+    const g = buildResponsibilityGraph(PROJECT_LOOP);
+    expect(g.nodes.find((n) => n.name === "R03P1")?.role).toBe("owner");
+    expect(g.nodes.find((n) => n.name === "R03P4")?.role).toBe("owner");
+  });
+
+  it("enrichment accepts LLM 'to deliver' commitments and decision ownership lines", () => {
+    const empty = buildResponsibilityGraph("side chat with no role language.");
+    const enriched = enrichResponsibilityGraphFromExtraction(empty, {
+      commitments: [
+        "R03P1 to deliver the pilot brief",
+        "R03P4 to ensure cutover readiness by 2026-09-18",
+        "R03P1 owns the pilot brief",
+        "R03P4 owns cutover readiness",
+      ],
+    });
+    expect(enriched.nodes.find((n) => n.name === "R03P1")?.role).toBe("owner");
+    expect(enriched.nodes.find((n) => n.name === "R03P4")?.role).toBe("owner");
+  });
+});
