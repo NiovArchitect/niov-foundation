@@ -43,7 +43,14 @@ export interface ResponsibilityGraph {
   nodes: ResponsibilityNode[];
 }
 
-const NAME = "([A-Z][A-Za-z]+)";
+/**
+ * Person/handle token as it appears in enterprise chat.
+ * - Classic given names: David, Shiney
+ * - Synthetic / roster handles with digits: R03P1, R03P30
+ * Does NOT allow spaces (multi-word names use optional second NAME in
+ * enrichment). Case-sensitive leading capital keeps "the"/"will" out.
+ */
+const NAME = "([A-Z][A-Za-z0-9]+)";
 
 function sentences(text: string): string[] {
   return text
@@ -145,6 +152,38 @@ function matchAny(
   return null;
 }
 
+/**
+ * All non-overlapping NAME hits for a role pattern set in one sentence.
+ * Needed for enterprise turns that assign multiple owners in one line:
+ *   "R03P1 owns the brief; R03P4 owns cutover readiness."
+ * matchAny alone would place only the first owner and `continue`.
+ */
+function matchAll(
+  sentence: string,
+  patterns: RegExp[],
+): Array<{ name: string; quote: string }> {
+  const hits: Array<{ name: string; quote: string }> = [];
+  const seen = new Set<string>();
+  for (const re of patterns) {
+    // Force global so we can walk every occurrence; clone flags without
+    // mutating the module-level pattern (some are non-global).
+    const flags = re.flags.includes("g") ? re.flags : `${re.flags}g`;
+    const gre = new RegExp(re.source, flags);
+    let m: RegExpExecArray | null;
+    while ((m = gre.exec(sentence)) !== null) {
+      const name = m[1];
+      if (!name || seen.has(name.toLowerCase())) {
+        // Avoid zero-length loops if a pattern ever matches empty.
+        if (m[0].length === 0) gre.lastIndex += 1;
+        continue;
+      }
+      seen.add(name.toLowerCase());
+      hits.push({ name, quote: sentence });
+    }
+  }
+  return hits;
+}
+
 /** Build the responsibility graph from a transcript. Deterministic; only places
  *  a person when the transcript explicitly connects them to the work. */
 export function buildResponsibilityGraph(transcript: string): ResponsibilityGraph {
@@ -198,16 +237,31 @@ export function buildResponsibilityGraph(transcript: string): ResponsibilityGrap
       const node = place(founderHit.name, "founder_context_authority", founderHit.quote, "medium");
       if (founderAuthority === null) founderAuthority = node;
     }
-    const ownerHit = matchAny(s, OWNER_PATTERNS);
-    if (ownerHit) { place(ownerHit.name, "owner", ownerHit.quote, "high"); continue; }
-    const approverHit = matchAny(s, APPROVER_PATTERNS);
-    if (approverHit) { place(approverHit.name, "approver", approverHit.quote, "high"); continue; }
-    const reviewHit = matchAny(s, REVIEW_PATTERNS);
-    if (reviewHit) { place(reviewHit.name, "reviewer", reviewHit.quote, "medium"); continue; }
-    const optionalHit = matchAny(s, OPTIONAL_PATTERNS);
-    if (optionalHit) { place(optionalHit.name, "optional_advisor", optionalHit.quote, "medium"); continue; }
-    const supportHit = matchAny(s, SUPPORT_PATTERNS);
-    if (supportHit) { place(supportHit.name, "support", supportHit.quote, "medium"); continue; }
+    // Multi-owner lines ("A owns X; B owns Y") must place every owner.
+    const ownerHits = matchAll(s, OWNER_PATTERNS);
+    if (ownerHits.length > 0) {
+      for (const hit of ownerHits) place(hit.name, "owner", hit.quote, "high");
+      continue;
+    }
+    const approverHits = matchAll(s, APPROVER_PATTERNS);
+    if (approverHits.length > 0) {
+      for (const hit of approverHits) place(hit.name, "approver", hit.quote, "high");
+      continue;
+    }
+    const reviewHits = matchAll(s, REVIEW_PATTERNS);
+    if (reviewHits.length > 0) {
+      for (const hit of reviewHits) place(hit.name, "reviewer", hit.quote, "medium");
+      continue;
+    }
+    const optionalHits = matchAll(s, OPTIONAL_PATTERNS);
+    if (optionalHits.length > 0) {
+      for (const hit of optionalHits) place(hit.name, "optional_advisor", hit.quote, "medium");
+      continue;
+    }
+    const supportHits = matchAll(s, SUPPORT_PATTERNS);
+    if (supportHits.length > 0) {
+      for (const hit of supportHits) place(hit.name, "support", hit.quote, "medium");
+    }
   }
 
   return { lead, founderAuthority, nodes: Array.from(byName.values()) };
@@ -262,17 +316,24 @@ export function enrichResponsibilityGraphFromExtraction(
   for (const c of args.commitments) {
     const text = c.trim();
     if (text.length === 0) continue;
-    // "David will …" / "David Odie will …" / "David owns …"
+    // "David will …" / "David Odie will …" / "David owns …" / "R03P1 to deliver …"
     // Skip pure support phrasing in commitment strings.
     if (/\bwill support\b|\bcan support\b|\bis optional\b/i.test(text)) continue;
     const m = text.match(
       new RegExp(
-        `^${NAME}(?:\\s+${NAME})?\\s+(?:will|owns?|is responsible for|is going to)\\b`,
+        // "to <verb>" covers LLM commitment phrasing ("R03P1 to deliver the brief")
+        // that does not use will/owns. Require a following word so bare "Team to"
+        // without a verb still needs the verb token (deliver/ensure/…).
+        `^${NAME}(?:\\s+${NAME})?\\s+(?:will|owns?|is responsible for|is going to|to)\\b`,
       ),
     );
     if (m && m[1]) {
       const name = m[1];
-      const rest = text.replace(new RegExp(`^${name}(?:\\s+[A-Z][A-Za-z]+)?\\s+`), "").trim();
+      // Strip leading name (+ optional second name token) only — keep the verb
+      // phrase as workItem. Second token must allow digits (R03P handles).
+      const rest = text
+        .replace(new RegExp(`^${name}(?:\\s+[A-Z][A-Za-z0-9]+)?\\s+`), "")
+        .trim();
       placeOwner(name, rest.length > 0 ? rest : null, text);
     }
   }

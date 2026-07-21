@@ -725,6 +725,8 @@ export { extractFromCapturedText, governExtraction } from "./services/otzar/comm
 export type {
   CommsExtractionResult,
   CommsExtractionMode,
+  CommsExtractionOutcome,
+  CommsExtractionFallbackReason,
   CommsSuggestedAction,
   CommsLeadCard,
   PreGovExtraction,

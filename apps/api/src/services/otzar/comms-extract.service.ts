@@ -86,6 +86,29 @@ export type CommsExtractionMode =
   | "LLM"
   | "LOCAL_FALLBACK";
 
+/**
+ * Honest extraction outcome — distinct from HTTP 200 capture acceptance.
+ * Capture can succeed while extraction is degraded; callers must not assume
+ * organizational work was created from a bare 200.
+ */
+export type CommsExtractionOutcome =
+  | "EXTRACTION_COMPLETED_WITH_SIGNALS"
+  | "EXTRACTION_COMPLETED_ZERO_SIGNALS"
+  | "EXTRACTION_PROVIDER_UNAVAILABLE"
+  | "EXTRACTION_FAILED"
+  | "EXTRACTION_FORCED_LOCAL_FALLBACK"
+  | "EXTRACTION_DEMO_SCRIPTED";
+
+/** Closed-vocab reason when extraction_mode is LOCAL_FALLBACK (never secret values). */
+export type CommsExtractionFallbackReason =
+  | "FORCE_MODE_LOCAL_FALLBACK"
+  | "PROVIDER_NULL"
+  | "PROVIDER_ERROR"
+  | "PROVIDER_CIRCUIT_OPEN"
+  | "PROVIDER_MALFORMED_RESPONSE"
+  | "PROVIDER_EXCEPTION"
+  | "DEMO_DISALLOWED_FALLTHROUGH";
+
 export interface CommsSuggestedAction {
   /** Stable client-side identity so the CT consumer can dedupe.
    *  Derived deterministically from `(target_email || display_name) +
@@ -151,12 +174,52 @@ export interface CommsExtractionResult {
   risks_or_blockers: string[];
   suggested_actions: CommsSuggestedAction[];
   extraction_mode: CommsExtractionMode;
+  /**
+   * Outcome distinct from capture acceptance. UI/harness must treat
+   * EXTRACTION_PROVIDER_UNAVAILABLE / EXTRACTION_FAILED as degraded — not
+   * as proof that organizational work was created.
+   */
+  extraction_outcome: CommsExtractionOutcome;
+  /** Present when extraction_mode === LOCAL_FALLBACK; closed-vocab only. */
+  fallback_reason: CommsExtractionFallbackReason | null;
   /** [SECTION-12-WORKGRAPH] Responsibility graph derived from the transcript —
    *  who leads / owns / supports / reviews / is optional. Drives card
    *  generation and the recipient-governance work-connection proof. */
   responsibility_graph: ResponsibilityGraph;
   /** Lead/coordinator card when a meeting lead is detected, else null. */
   lead_card: CommsLeadCard | null;
+}
+
+function classifyExtractionOutcome(
+  mode: CommsExtractionMode,
+  result: Pick<
+    CommsExtractionResult,
+    "decisions" | "commitments" | "suggested_actions" | "responsibility_graph"
+  >,
+  fallback: CommsExtractionFallbackReason | null,
+): CommsExtractionOutcome {
+  if (mode === "DEMO_SCRIPTED") return "EXTRACTION_DEMO_SCRIPTED";
+  if (mode === "LOCAL_FALLBACK") {
+    if (fallback === "FORCE_MODE_LOCAL_FALLBACK") {
+      return "EXTRACTION_FORCED_LOCAL_FALLBACK";
+    }
+    if (
+      fallback === "PROVIDER_NULL" ||
+      fallback === "PROVIDER_CIRCUIT_OPEN" ||
+      fallback === "PROVIDER_ERROR"
+    ) {
+      return "EXTRACTION_PROVIDER_UNAVAILABLE";
+    }
+    return "EXTRACTION_FAILED";
+  }
+  const signalCount =
+    result.decisions.length +
+    result.commitments.length +
+    result.suggested_actions.length +
+    result.responsibility_graph.nodes.length;
+  return signalCount > 0
+    ? "EXTRACTION_COMPLETED_WITH_SIGNALS"
+    : "EXTRACTION_COMPLETED_ZERO_SIGNALS";
 }
 
 const CANONICAL_FIXTURE_KEY =
@@ -440,11 +503,13 @@ export function governExtraction(
   priors?: PriorRecipientDecisions,
   structuredRights?: ReadonlyArray<PartyDomainRights>,
 ): CommsExtractionResult {
-  // Deterministic transcript graph first; then enrich from commitment strings /
-  // RESOLVED follow-up targets so LLM paths still fan owned work to My Work.
+  // Deterministic transcript graph first; then enrich from commitment AND
+  // decision strings / RESOLVED follow-up targets so LLM paths still fan owned
+  // work to My Work. Decisions often carry the ownership correction
+  // ("R03P1 owns the pilot brief") that commitments paraphrase differently.
   let graph = buildResponsibilityGraph(capturedText);
   graph = enrichResponsibilityGraphFromExtraction(graph, {
-    commitments: pre.commitments,
+    commitments: [...pre.commitments, ...pre.decisions],
     suggested_actions: pre.suggested_actions.map((a) => ({
       target: a.target,
       source_excerpt: a.source_excerpt,
@@ -545,7 +610,7 @@ export function governExtraction(
     return { ...a, target, recipient_governance: governance, autonomy, resolution_status };
   });
 
-  return {
+  const base = {
     summary: pre.summary,
     decisions: pre.decisions,
     commitments: pre.commitments,
@@ -554,6 +619,17 @@ export function governExtraction(
     extraction_mode: pre.extraction_mode,
     responsibility_graph: graph,
     lead_card: buildLeadCoordinationCard(graph),
+  };
+  // Outcome/fallback are filled by extractFromCapturedText (has provider
+  // failure context). governExtraction alone defaults outcome from mode+signals.
+  return {
+    ...base,
+    extraction_outcome: classifyExtractionOutcome(
+      pre.extraction_mode,
+      base,
+      null,
+    ),
+    fallback_reason: null,
   };
 }
 
@@ -595,6 +671,9 @@ export interface ExtractFromTextInput {
  * Top-level entry point. Builds the viewer's identity context (for
  * roster resolution) and routes to DEMO_SCRIPTED / LLM /
  * LOCAL_FALLBACK as appropriate.
+ *
+ * LOCAL_FALLBACK is never a silent success: the result always carries
+ * extraction_outcome + fallback_reason so capture ≠ organizational work.
  */
 export async function extractFromCapturedText(
   input: ExtractFromTextInput,
@@ -631,8 +710,14 @@ export async function extractFromCapturedText(
     return governExtraction(buildDemoExtraction(roster), input.captured_text, roster, input.priors, structuredRights);
   }
 
-  // LLM path.
-  if (llmProvider !== null && effectiveMode !== "LOCAL_FALLBACK") {
+  let fallbackReason: CommsExtractionFallbackReason | null = null;
+
+  if (input.force_mode === "LOCAL_FALLBACK") {
+    fallbackReason = "FORCE_MODE_LOCAL_FALLBACK";
+  } else if (llmProvider === null) {
+    fallbackReason = "PROVIDER_NULL";
+  } else if (effectiveMode !== "LOCAL_FALLBACK") {
+    // LLM path — only fall through with an explicit reason.
     try {
       const result = await llmProvider.generateResponse({
         system: LLM_EXTRACTION_SYSTEM_PROMPT,
@@ -646,14 +731,24 @@ export async function extractFromCapturedText(
         if (parsed !== null) {
           return governExtraction(parsed, input.captured_text, roster, input.priors, structuredRights);
         }
+        fallbackReason = "PROVIDER_MALFORMED_RESPONSE";
+      } else {
+        const msg = ("fallback_message" in result ? result.fallback_message : "") ?? "";
+        fallbackReason = /circuit/i.test(msg)
+          ? "PROVIDER_CIRCUIT_OPEN"
+          : "PROVIDER_ERROR";
       }
     } catch {
-      // Fall through to LOCAL_FALLBACK.
+      fallbackReason = "PROVIDER_EXCEPTION";
     }
+  } else if (input.force_mode === "DEMO_SCRIPTED" && !demoAllowed) {
+    fallbackReason = "DEMO_DISALLOWED_FALLTHROUGH";
   }
 
   // LOCAL_FALLBACK -- honest empty extraction (still governed for shape parity).
-  return governExtraction(
+  // Capture is preserved by the ingest layer; this result must not be treated
+  // as organizational intelligence.
+  const degraded = governExtraction(
     {
       summary:
         "Otzar captured this conversation but live extraction isn't configured. Connect an LLM provider, or use demo capture mode to see organized output.",
@@ -668,4 +763,14 @@ export async function extractFromCapturedText(
     undefined,
     structuredRights,
   );
+  const reason = fallbackReason ?? "PROVIDER_NULL";
+  return {
+    ...degraded,
+    fallback_reason: reason,
+    extraction_outcome: classifyExtractionOutcome(
+      "LOCAL_FALLBACK",
+      degraded,
+      reason,
+    ),
+  };
 }

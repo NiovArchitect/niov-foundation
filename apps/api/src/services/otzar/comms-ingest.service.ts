@@ -125,6 +125,15 @@ export interface IngestTranscriptResult {
    *  suggested_actions with recipient trust + responsibility graph) so the
    *  Comms UI keeps its existing trust-chip review surface unchanged. */
   extraction: CommsExtractionResult;
+  /**
+   * Capture always returns ok:true when the source is persisted. This field
+   * tells the harness whether organizational extraction succeeded — never
+   * assume work_items from HTTP 200 alone.
+   * Mirrors extraction.extraction_outcome.
+   */
+  extraction_outcome: CommsExtractionResult["extraction_outcome"];
+  /** Closed-vocab fallback reason when mode is LOCAL_FALLBACK; else null. */
+  fallback_reason: CommsExtractionResult["fallback_reason"];
 }
 
 export interface IngestTranscriptFailure {
@@ -821,5 +830,7 @@ export async function ingestSourceEvent(
     dandelion_seeds: wgMemory.seeds,
     work_graph_event_count: wgMemory.events.length,
     extraction,
+    extraction_outcome: extraction.extraction_outcome,
+    fallback_reason: extraction.fallback_reason,
   };
 }

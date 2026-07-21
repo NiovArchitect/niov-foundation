@@ -77,6 +77,34 @@ Pratham: I will connect Google sign-in this week.`;
     expect(r.stats.trusted).toBe(3);
   });
 
+  it("ISO datetime speaker stamps peel off so date-rich enterprise lines stay trusted", () => {
+    // Production project-loop shape: [YYYY-MM-DD HH:MM] Handle: body
+    // Prior gate treated hyphens as non-stamp → speaker=null + digit-poisoned
+    // alpha ratio → asr_garbage on the final-date / rejected-date lines.
+    const enterprise = `
+[2026-07-21 09:12] R03P0: can we still target the pilot checkpoint next week for Enterprise Customer Pilot?
+[2026-07-21 09:13] R03P4: engineering is blocked on the compliance memo — not ready for 2026-09-11.
+[2026-07-21 09:15] R03P1: correction — product owns the brief; engineering owns the runtime cutover only.
+[2026-07-21 09:18] R03P4: ok then lock 2026-09-18 for the go/no-go. Reject auto-booking 2026-09-11.
+[2026-07-21 09:19] R03P0: decision: 2026-09-18 is final. R03P1 owns the brief; R03P4 owns cutover readiness.
+[2026-07-21 09:20] R03P30: also the field contractor cannot see executive margin notes.
+`.trim();
+    const r = segmentTranscriptQuality(enterprise);
+    expect(r.noisyTailStartIndex).toBeNull();
+    // Speakers recovered from ISO stamps.
+    expect(r.segments.every((s) => s.speaker !== null)).toBe(true);
+    expect(r.segments.map((s) => s.speaker)).toEqual(
+      expect.arrayContaining(["R03P0", "R03P4", "R03P1", "R03P30"]),
+    );
+    // Final agreed date + ownership must reach the extractor (trustedText).
+    expect(r.trustedText).toMatch(/2026-09-18/);
+    expect(r.trustedText).toMatch(/R03P1 owns the brief/);
+    expect(r.trustedText).toMatch(/Reject auto-booking 2026-09-11|not ready for 2026-09-11/);
+    // No line should be asr_garbage solely because it mentions ISO dates.
+    expect(r.segments.every((s) => s.quality !== "asr_garbage")).toBe(true);
+    expect(r.stats.trusted).toBeGreaterThanOrEqual(5);
+  });
+
   it("a stray 'okay' mid-meeting does NOT trigger a tail", () => {
     const stray = `Sadeil: Let's start and assign the demo owners now.
 David: Okay.
