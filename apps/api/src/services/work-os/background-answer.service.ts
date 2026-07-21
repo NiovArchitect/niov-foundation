@@ -109,7 +109,7 @@ export async function answerNamedSubjectBackground(args: {
   const liveRows = await prisma.workLedgerEntry.findMany({
     where: {
       org_entity_id: args.org_entity_id,
-      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT"] },
+      ledger_type: { notIn: ["ORG_SEEDING", "GOAL", "DOCUMENT_CONTEXT", "DOCUMENT"] },
       NOT: { status: { in: ["CANCELLED", "EXPIRED"] } },
       ...(args.is_manager
         ? {}

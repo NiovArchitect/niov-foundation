@@ -8,7 +8,7 @@
 //
 // SAFETY: create only behind gate ladder; audit scrubbed (no body/tokens).
 
-import { writeAuditEvent } from "@niov/database";
+import { prisma, writeAuditEvent } from "@niov/database";
 import {
   getProviderGrantedScopes,
   getProviderAccessTokenForOrg,
@@ -630,6 +630,24 @@ export async function appendGoogleDocBody(args: {
     return { ok: false, code: "DOC_SCOPE_INSUFFICIENT" };
   }
 
+  // Tenant bind: only mutate docs this org created / ledgered as DOCUMENT.
+  // Prevents cross-tenant append when a foreign org's Google token can reach
+  // a shared Drive file. Same shape for missing vs foreign (no existence leak).
+  const owned = await prisma.workLedgerEntry.findFirst({
+    where: {
+      org_entity_id: args.org_entity_id,
+      ledger_type: "DOCUMENT",
+      details: { path: ["document_id"], equals: documentId },
+    },
+    select: { ledger_entry_id: true, project_id: true, details: true },
+  });
+  if (owned === null) {
+    await audit("DENIED", "DOC_ARTIFACT_NOT_FOUND", {
+      reason: "no_org_document_ledger",
+    });
+    return { ok: false, code: "DOC_ARTIFACT_NOT_FOUND" };
+  }
+
   const token = await getProviderAccessTokenForOrg({
     provider: "GOOGLE_WORKSPACE",
     org_entity_id: args.org_entity_id,
@@ -664,7 +682,7 @@ export async function appendGoogleDocBody(args: {
     }
   }
 
-  return applyDocMutationWithToken({
+  const result = await applyDocMutationWithToken({
     access_token: token.access_token,
     document_id: documentId,
     body_text: bodyText,
@@ -672,6 +690,108 @@ export async function appendGoogleDocBody(args: {
     idempotency_key: idem,
     audit,
   });
+
+  // Selective organizational propagation (no private body text).
+  if (result.ok) {
+    await recordDocChangeOnLedger({
+      org_entity_id: args.org_entity_id,
+      actor_entity_id: args.actor_entity_id,
+      document_ledger_id: owned.ledger_entry_id,
+      project_id: owned.project_id,
+      document_id: documentId,
+      change_kind: changeKind,
+      already_applied: result.already_applied,
+      body_char_count: result.body_char_count,
+      prior_details:
+        typeof owned.details === "object" && owned.details !== null
+          ? (owned.details as Record<string, unknown>)
+          : {},
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Record material vs formatting classification on the DOCUMENT ledger and,
+ * for MATERIAL only, open one bounded work item. Never stores body text.
+ */
+async function recordDocChangeOnLedger(args: {
+  org_entity_id: string;
+  actor_entity_id: string;
+  document_ledger_id: string;
+  project_id: string | null;
+  document_id: string;
+  change_kind: GoogleDocChangeKind;
+  already_applied: boolean;
+  body_char_count: number;
+  prior_details: Record<string, unknown>;
+}): Promise<void> {
+  if (args.already_applied) return;
+  const now = new Date().toISOString();
+  const revisionMeta =
+    args.change_kind === "MATERIAL"
+      ? {
+          last_material_change_at: now,
+          last_material_actor_entity_id: args.actor_entity_id,
+          last_material_body_char_count: args.body_char_count,
+          last_change_kind: "MATERIAL" as const,
+        }
+      : {
+          last_formatting_change_at: now,
+          last_formatting_actor_entity_id: args.actor_entity_id,
+          last_change_kind: "FORMATTING_ONLY" as const,
+        };
+
+  try {
+    await prisma.workLedgerEntry.update({
+      where: { ledger_entry_id: args.document_ledger_id },
+      data: {
+        details: {
+          ...args.prior_details,
+          document_id: args.document_id,
+          ...revisionMeta,
+        } as object,
+      },
+    });
+  } catch {
+    // Ledger metadata is enhancement; mutation already succeeded at provider.
+  }
+
+  // MATERIAL only: one attributable work item (risk/dependency style). No
+  // obligation for formatting-only (prevents organizational noise).
+  if (args.change_kind !== "MATERIAL") return;
+  try {
+    await createLedgerEntry({
+      org_entity_id: args.org_entity_id,
+      ledger_type: "BLOCKER",
+      source_type: "CONNECTOR",
+      title: "Material document change requires operational reflection",
+      summary:
+        "A material Google Doc revision was applied. Confirm project risk/dependency impact before the linked milestone.",
+      status: "DETECTED",
+      priority: "PROJECT_CRITICAL",
+      owner_entity_id: args.actor_entity_id,
+      ...(args.project_id ? { project_id: args.project_id } : {}),
+      details: {
+        source: "google_doc_append",
+        materiality: "MATERIAL",
+        document_id: args.document_id,
+        document_ledger_id: args.document_ledger_id,
+        // No body text — only classification + linkage.
+      },
+      evidence: [
+        {
+          kind: "provider_document_revision",
+          document_ledger_id: args.document_ledger_id,
+          materiality: "MATERIAL",
+          at: now,
+        },
+      ],
+    });
+  } catch {
+    // Non-fatal: provider write is the primary success.
+  }
 }
 
 async function applyDocMutationWithToken(args: {
