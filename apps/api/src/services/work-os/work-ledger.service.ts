@@ -513,13 +513,38 @@ export async function getLedgerEntry(args: {
   if (row === null || row.org_entity_id !== args.org_entity_id) {
     return { ok: false, code: "NOT_FOUND", message: "ledger entry not found" };
   }
-  if (
-    !args.is_manager &&
-    row.owner_entity_id !== args.caller_entity_id &&
-    row.target_entity_id !== args.caller_entity_id &&
-    row.requester_entity_id !== args.caller_entity_id
-  ) {
-    return { ok: false, code: "NOT_FOUND", message: "ledger entry not found" };
+  const isParty =
+    row.owner_entity_id === args.caller_entity_id ||
+    row.target_entity_id === args.caller_entity_id ||
+    row.requester_entity_id === args.caller_entity_id;
+  if (!args.is_manager && !isParty) {
+    // Project-linked connector / intent artifacts are readable by ACTIVE
+    // project members (YC reviewer, team) without expanding employee My Work.
+    // Cross-tenant still fails above; foreign projects never match membership.
+    const PROJECT_READABLE = new Set([
+      "DOCUMENT",
+      "MEETING",
+      "DOCUMENT_CONTEXT",
+    ]);
+    let projectMember = false;
+    if (
+      typeof row.project_id === "string" &&
+      row.project_id.length > 0 &&
+      PROJECT_READABLE.has(row.ledger_type)
+    ) {
+      const mem = await prisma.workProjectMember.findFirst({
+        where: {
+          project_id: row.project_id,
+          entity_id: args.caller_entity_id,
+          org_entity_id: args.org_entity_id,
+        },
+        select: { entity_id: true },
+      });
+      projectMember = mem !== null;
+    }
+    if (!projectMember) {
+      return { ok: false, code: "NOT_FOUND", message: "ledger entry not found" };
+    }
   }
   const entry = projectLedger(row);
   // [T-1] single-row external context (same deterministic links as lists).
@@ -536,6 +561,8 @@ export async function patchLedgerEntry(args: {
     status?: string;
     next_action?: string;
     priority?: string;
+    // Manager-only project re-link for intent/proof reconciliation (404 repair).
+    project_id?: string | null;
     // Slice F — the ledger→Action link backfill. Both columns already
     // exist on WorkLedgerEntry; before Slice F nothing populated them.
     // The execution bridge sets proposed_action_id when it creates the
@@ -548,6 +575,26 @@ export async function patchLedgerEntry(args: {
   const existing = await getLedgerEntry(args);
   if (existing.ok === false) return existing;
   const data: Record<string, unknown> = {};
+  if (args.patch.project_id !== undefined) {
+    if (!args.is_manager) {
+      return {
+        ok: false,
+        code: "FORBIDDEN",
+        message: "only a manager can re-link project_id",
+      };
+    }
+    if (args.patch.project_id === null) {
+      data.project_id = null;
+    } else if (!UUID_RE.test(args.patch.project_id)) {
+      return {
+        ok: false,
+        code: "INVALID_REQUEST",
+        message: "invalid project_id",
+      };
+    } else {
+      data.project_id = args.patch.project_id;
+    }
+  }
   if (args.patch.status !== undefined) {
     if (!LEDGER_STATUSES.includes(args.patch.status as (typeof LEDGER_STATUSES)[number])) {
       return { ok: false, code: "INVALID_REQUEST", message: "invalid status" };

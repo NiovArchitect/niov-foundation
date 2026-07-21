@@ -77,6 +77,10 @@ function parseCreateInput(body: Record<string, unknown>): GoogleDocCreateInput {
     ...(typeof body.artifact_type === "string"
       ? { artifact_type: body.artifact_type }
       : {}),
+    ...(typeof body.idempotency_key === "string" &&
+    body.idempotency_key.length > 0
+      ? { idempotency_key: body.idempotency_key }
+      : {}),
   };
 }
 
@@ -121,6 +125,7 @@ export async function registerGoogleDocRoutes(
         body_inserted: result.body_inserted,
         body_char_count: result.body_char_count,
         project_id: result.project_id,
+        already_applied: result.already_applied,
       });
     },
   );
