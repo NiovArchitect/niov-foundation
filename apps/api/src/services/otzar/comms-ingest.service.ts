@@ -238,13 +238,51 @@ export async function ingestSourceEvent(
 
   // Roster for strict, proof-only owner resolution (same matcher recipient-governance uses).
   const identity = await buildIdentityContext(event.callerEntityId);
-  const roster: RosterEntry[] = identity.org_roster.map((p) => ({
+  // LLM extraction still uses the bounded identity peer roster (prompt size /
+  // L0_IDENTITY). OWNER RESOLUTION must not silently drop real org members
+  // just because they fell outside the identity take:50 window — that produced
+  // false NEEDS_OWNER for R03P1 while R03P4 (in the window) became PROPOSED.
+  // Load the full active PERSON membership of the org for resolve only.
+  const identityRoster: RosterEntry[] = identity.org_roster.map((p) => ({
     entity_id: p.entity_id,
     display_name: p.display_name,
     email: p.email,
     title: p.title,
     shared_project_count: p.shared_project_count,
   }));
+  let roster: RosterEntry[] = identityRoster;
+  if (identity.org.org_id !== null) {
+    const memberships = await prisma.entityMembership.findMany({
+      where: {
+        parent_id: identity.org.org_id,
+        is_active: true,
+        child: { entity_type: "PERSON", deleted_at: null },
+      },
+      include: { child: { select: { entity_id: true, display_name: true, email: true } } },
+      // Bounded enterprise (S250-class). Not unlimited — still deterministic.
+      take: 500,
+    });
+    const byId = new Map<string, RosterEntry>();
+    for (const m of memberships) {
+      byId.set(m.child.entity_id, {
+        entity_id: m.child.entity_id,
+        display_name: m.child.display_name,
+        email: m.child.email,
+        title: m.role_title ?? "MEMBER",
+        shared_project_count: 0,
+      });
+    }
+    // Prefer identity-roster shared_project_count when present.
+    for (const p of identityRoster) {
+      const existing = byId.get(p.entity_id);
+      if (existing) {
+        byId.set(p.entity_id, { ...existing, shared_project_count: p.shared_project_count, title: p.title });
+      } else {
+        byId.set(p.entity_id, p);
+      }
+    }
+    roster = Array.from(byId.values());
+  }
   // org_roster is the caller's PEERS (excludes the caller). Add the caller so a
   // capturer who is also named as an owner resolves to themselves.
   if (!roster.some((r) => r.entity_id === event.callerEntityId)) {
