@@ -1,0 +1,59 @@
+{
+  "campaign": "OTZAR-RC2-SIGNAL-FREEZE",
+  "date": "2026-07-27",
+  "principle": "Preserve intelligence; recompose surfaces",
+  "results": [
+    {
+      "capability": "First-use walkthrough v3",
+      "status": "PRESERVED_AND_IMPROVED",
+      "note": "Skip pauses; Restart added; live markers present"
+    },
+    {
+      "capability": "Talk ambient bar",
+      "status": "PRESERVED",
+      "note": "No AmbientOtzarBar rewrite"
+    },
+    {
+      "capability": "Today AmbientWorkSurface",
+      "status": "PRESERVED",
+      "note": "No band deletion"
+    },
+    {
+      "capability": "People structure glance",
+      "status": "PRESERVED_AND_IMPROVED",
+      "note": "people-structure-anchor in live JS"
+    },
+    {
+      "capability": "Dandelion engine",
+      "status": "PRESERVED",
+      "note": "No Dandelion code in CT product commit"
+    },
+    {
+      "capability": "Action Center backend",
+      "status": "PRESERVED",
+      "note": "Foundation runtime SHA unchanged afe1491"
+    },
+    {
+      "capability": "Team work summary Foundation",
+      "status": "PRESERVED",
+      "note": "API routes still present; CT routes language to them"
+    },
+    {
+      "capability": "Admin commercial demotion",
+      "status": "PRESERVED",
+      "note": "nav.ts not modified"
+    },
+    {
+      "capability": "Caretaker Relay isolation",
+      "status": "PRESERVED",
+      "note": "Not touched"
+    },
+    {
+      "capability": "Foundation API runtime",
+      "status": "PRESERVED",
+      "note": "No runtime deploy; live git_commit still afe1491"
+    }
+  ],
+  "broken_previously_working": [],
+  "count_broken": 0
+}
