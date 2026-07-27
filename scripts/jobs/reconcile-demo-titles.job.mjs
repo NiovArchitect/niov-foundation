@@ -1,13 +1,10 @@
 // FILE: reconcile-demo-titles.job.mjs
-// PURPOSE: Production one-off — set Annie + William membership role_title
-//          strings only. NO authority / TAR / hierarchy / is_admin changes.
-// FOUNDER AUTHORIZATION: titles only (2026-07-27).
-//   Annie  → Senior Engineer and Researcher
-//   William → CPO
-// USAGE via submit-render-job.mjs with TITLE_RECONCILE_MODE=apply and
-//   NIOV_APPROVE_TITLE_RECONCILE='APPROVE DEMO TITLE RECONCILE — titles only'
+// PURPOSE: Production one-off — Annie + William membership role_title only.
+//          CommonJS for Render job rail (node -e eval).
+// MODE: TITLE_RECONCILE_MODE=dry-run|apply
+// APPROVAL: NIOV_APPROVE_TITLE_RECONCILE='APPROVE DEMO TITLE RECONCILE — titles only'
 
-import { PrismaClient } from "@prisma/client";
+const { PrismaClient } = require("@prisma/client");
 
 const APPROVAL_ENV = "NIOV_APPROVE_TITLE_RECONCILE";
 const APPROVAL_PHRASE = "APPROVE DEMO TITLE RECONCILE — titles only";
@@ -52,7 +49,7 @@ async function main() {
       select: { entity_id: true, display_name: true, email: true },
     });
     if (!person) {
-      console.log("[title-reconcile] MISSING person", u.email);
+      console.log("[title-reconcile] MISSING person", u.email.split("@")[0]);
       continue;
     }
     const mem = await prisma.entityMembership.findFirst({
@@ -65,7 +62,10 @@ async function main() {
       },
     });
     if (!mem) {
-      console.log("[title-reconcile] MISSING membership", u.email);
+      console.log(
+        "[title-reconcile] MISSING membership",
+        u.email.split("@")[0],
+      );
       continue;
     }
     console.log(
@@ -85,7 +85,10 @@ async function main() {
         where: { membership_id: mem.membership_id },
         data: { role_title: u.role_title },
       });
-      console.log("[title-reconcile] UPDATED role_title only for", u.email.split("@")[0]);
+      console.log(
+        "[title-reconcile] UPDATED role_title only for",
+        u.email.split("@")[0],
+      );
     }
   }
   console.log("[title-reconcile] authority_changes=0");
@@ -93,7 +96,9 @@ async function main() {
 }
 
 main().catch(async (e) => {
-  console.error("[title-reconcile] FAILED", e?.message || e);
-  await prisma.$disconnect();
+  console.error("[title-reconcile] FAILED", e && e.message ? e.message : e);
+  try {
+    await prisma.$disconnect();
+  } catch (_) {}
   process.exit(1);
 });
