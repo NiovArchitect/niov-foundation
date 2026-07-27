@@ -70,10 +70,29 @@ From `scripts/provision-demo-team-accounts.ts` ALLOWLIST:
 - `apps/api/src/services/otzar/synthetic-principal.ts`  
 - Wired: `identity-context.ts`, `team-work-summary.service.ts`  
 - Tests: `tests/unit/synthetic-principal.test.ts`  
+- **Merged:** PR #737 → `main` merge `b8c6b3e`  
+- **Live API:** `git_commit=b8c6b3e9…` (2026-07-27)  
+
+## Soft isolation procedure (reversible)
+
+Script: `scripts/soft-isolate-synthetic-memberships.ts`
+
+```bash
+set -a; . ./.env; set +a   # valid production-adjacent DATABASE_URL
+npx tsx scripts/soft-isolate-synthetic-memberships.ts --dry-run
+NIOV_APPROVE_SOFT_ISOLATE_SYNTHETICS='APPROVE SOFT ISOLATE SYNTHETICS' \
+  npx tsx scripts/soft-isolate-synthetic-memberships.ts --apply
+```
+
+Sets `entity_membership.is_active=false` for synthetic PERSON children.  
+Does **not** delete Entity rows. Reverse by re-activating memberships.
+
+**2026-07-27 operator run:** dry-run against local `.env` **failed DB auth** (stale credentials). Soft-isolate **not applied** — needs valid operator DATABASE_URL.
 
 ## Residual risk
 
-- Hierarchy API still returns synthetic memberships; CT structure filters names.  
+- Hierarchy API still returns synthetic memberships until soft-isolate apply.  
 - Admin CT `/users` may still list them.  
 - Metrics endpoints not fully audited.  
-- Soft-delete / archive campaign for rc2-admin rows is **forward-queued** after dependency inventory.  
+- Soft-isolate apply blocked without live DB credentials in this agent.  
+
