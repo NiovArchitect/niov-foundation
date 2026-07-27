@@ -78,7 +78,16 @@ const LEGAL_TRANSITIONS: ReadonlyMap<
   ],
   [
     "RUNNING",
-    new Set<ActionStatus>(["SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELLED"]),
+    // SCHEDULED is recovery-only: stale orphan re-queue after a worker
+    // crash mid-attempt (see tickStaleRunningReconcile). In-process
+    // retries stay RUNNING; they do not flip back to SCHEDULED.
+    new Set<ActionStatus>([
+      "SUCCEEDED",
+      "FAILED",
+      "TIMED_OUT",
+      "CANCELLED",
+      "SCHEDULED",
+    ]),
   ],
 ]);
 

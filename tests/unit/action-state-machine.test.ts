@@ -49,9 +49,8 @@ const NON_TERMINAL_STATUSES: ActionStatus[] = [
 // Canonical legal edges per ADR-0057 §1. The state-machine module
 // preserves these by construction; the test pins them so a future
 // edit that adds or removes an edge has to update this list too.
-// Note: ADR-0057 §11 keeps the parent Action in RUNNING through
-// all attempts (retry happens in-tick), so there is no
-// RUNNING → SCHEDULED edge.
+// In-process retries stay RUNNING. RUNNING → SCHEDULED is recovery-
+// only for stale worker orphans after crash/deploy (tickStaleRunningReconcile).
 const LEGAL_EDGES: Array<[ActionStatus, ActionStatus]> = [
   ["PROPOSED", "APPROVED"],
   ["PROPOSED", "REJECTED"],
@@ -65,6 +64,7 @@ const LEGAL_EDGES: Array<[ActionStatus, ActionStatus]> = [
   ["RUNNING", "FAILED"],
   ["RUNNING", "TIMED_OUT"],
   ["RUNNING", "CANCELLED"],
+  ["RUNNING", "SCHEDULED"],
 ];
 
 describe("ADR-0057 §1 — Action lifecycle state machine", () => {
@@ -125,10 +125,10 @@ describe("ADR-0057 §1 — Action lifecycle state machine", () => {
   });
 
   describe("Scheduler / executor edges (ADR-0057 §1 + §11)", () => {
-    it("APPROVED → SCHEDULED is the only admission edge", () => {
+    it("APPROVED → SCHEDULED is the primary admission edge (RUNNING → SCHEDULED is stale recovery only)", () => {
       for (const from of ALL_STATUSES) {
         const allowed = canTransitionAction(from, "SCHEDULED");
-        if (from === "APPROVED") expect(allowed).toBe(true);
+        if (from === "APPROVED" || from === "RUNNING") expect(allowed).toBe(true);
         else expect(allowed).toBe(false);
       }
     });
