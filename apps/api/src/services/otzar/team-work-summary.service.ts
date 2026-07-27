@@ -59,7 +59,7 @@ export async function buildTeamWorkSummary(args: {
     const childIds = memberships.map((m) => m.child_id);
     if (childIds.length === 0) return empty;
 
-    const people = await prisma.entity.findMany({
+    const peopleRaw = await prisma.entity.findMany({
       where: {
         entity_id: { in: childIds },
         entity_type: "PERSON",
@@ -69,6 +69,9 @@ export async function buildTeamWorkSummary(args: {
       select: { entity_id: true, display_name: true, email: true },
       take: PERSON_CAP * 2,
     });
+    // Capacity views must not treat RC2/pressure principals as team members.
+    const { filterCoworkerPeople } = await import("./synthetic-principal.js");
+    const people = filterCoworkerPeople(peopleRaw);
 
     // Open obligations per subject (org-scoped).
     const openObl = await prisma.obligation.findMany({

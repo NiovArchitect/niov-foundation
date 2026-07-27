@@ -294,14 +294,19 @@ export async function buildIdentityContext(
       );
     }
 
-    orgRoster = peerMemberships.map((m) => ({
-      entity_id: m.child_id,
-      display_name: m.child.display_name,
-      email: m.child.email,
-      title: m.role_title ?? "MEMBER",
-      shared_project_count: sharedProjectCountByPeer.get(m.child_id) ?? 0,
-      recent_collab_count: collabCountByPeer.get(m.child_id) ?? 0,
-    }));
+    // Exclude RC2 / pressure / S250 synthetic principals from LLM + People
+    // projections (founder rejection — they are not real coworkers).
+    const { filterCoworkerPeople } = await import("./synthetic-principal.js");
+    orgRoster = filterCoworkerPeople(
+      peerMemberships.map((m) => ({
+        entity_id: m.child_id,
+        display_name: m.child.display_name,
+        email: m.child.email,
+        title: m.role_title ?? "MEMBER",
+        shared_project_count: sharedProjectCountByPeer.get(m.child_id) ?? 0,
+        recent_collab_count: collabCountByPeer.get(m.child_id) ?? 0,
+      })),
+    );
   }
 
   return {
