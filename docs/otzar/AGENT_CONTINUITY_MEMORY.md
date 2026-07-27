@@ -42,6 +42,35 @@ just copilots. Otzar wins by being:
 
 ---
 
+
+## Session note (2026-07-27 — authenticated Work OS campaign)
+
+| Item | Status |
+|------|--------|
+| PR #737 identity projection filter | MERGED + LIVE `b8c6b3e` (superseded by later main when autoDeploy catches) |
+| PR #738 soft-isolate + title jobs | **MERGED** `79510e6` |
+| Soft-isolate fixture proof | PASS (local test DB dry-run/apply/reactivate; 3 HIGH deactivated; allowlist 4 active; 0 deletes) |
+| Prod soft-isolate dry-run | **BLOCKED** — RENDER_API_KEY 401 Unauthorized; local DATABASE_URL/DIRECT_URL auth fail |
+| Prod title reconcile Annie/Will | **BLOCKED** same secure path |
+| DEMO_SHARED_PASSWORD in agent shell | **ABSENT** |
+| Authenticated multi-persona smoke | **NOT RUN** (no demo credential path) |
+| Work OS loop / AI collab receipt | **NOT COMPLETE** |
+| CT titles humanizer (CPO / Senior Engineer…) | Pushed `629813d` on otzar-control-tower main |
+| Caretaker Relay | UNTOUCHED |
+| Founder experience | AWAITING REVIEW |
+| RC2 signal freeze | NOT RESTORED |
+
+### Founder one-command unlocks (no secret paste in chat)
+
+1. **Restore Render API access:** `render login` in the agent shell (or replace shell `RENDER_API_KEY` from Render Dashboard → Account Settings → API Keys). Then:
+   ```
+   node scripts/submit-render-job.mjs --file scripts/jobs/soft-isolate-synthetics.job.mjs --mode dry-run --execute
+   SOFT_ISOLATE_MODE=apply node scripts/submit-render-job.mjs --file scripts/jobs/soft-isolate-synthetics.job.mjs --mode apply --execute
+   ```
+2. **Title reconcile (after dry-run review):** run `scripts/jobs/reconcile-demo-titles.job.mjs` via same submit helper with `TITLE_RECONCILE_MODE=apply` + approval phrase (titles only; authority=0).
+3. **Demo password for multi-persona smoke:** ensure `DEMO_SHARED_PASSWORD` exists on Render `otzar-api` env (or inject into agent shell from secret manager without pasting in chat). Reply "done" when ready.
+
+
 ## Live environment
 
 | Surface | Value |

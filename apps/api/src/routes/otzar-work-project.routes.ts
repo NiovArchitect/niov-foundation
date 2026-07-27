@@ -160,9 +160,14 @@ export async function registerOtzarWorkProjectRoutes(
           .code(401)
           .send({ ok: false, code: session.code, message: "denied" });
       }
-      let stateFilter: WorkProjectState | undefined;
+      // Default ACTIVE so archived/smoke projects drop out of ordinary
+      // Projects / Today projections (service comment: ACTIVE-only by
+      // default). Pass state=ARCHIVED or state=ALL only when explicit.
+      let stateFilter: WorkProjectState | undefined = "ACTIVE";
       if (typeof request.query.state === "string") {
-        if (
+        if (request.query.state === "ALL") {
+          stateFilter = undefined;
+        } else if (
           !(VALID_STATES as ReadonlyArray<string>).includes(
             request.query.state,
           )
@@ -172,8 +177,9 @@ export async function registerOtzarWorkProjectRoutes(
             code: "INVALID_REQUEST",
             message: "state must be a closed-vocab value when provided",
           });
+        } else {
+          stateFilter = request.query.state as WorkProjectState;
         }
-        stateFilter = request.query.state as WorkProjectState;
       }
       let takeNum: number | undefined;
       if (typeof request.query.take === "string") {
