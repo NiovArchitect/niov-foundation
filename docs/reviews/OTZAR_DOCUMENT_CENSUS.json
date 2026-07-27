@@ -1,0 +1,142 @@
+{
+  "audit_date": "2026-07-27",
+  "foundation_head": "afe1491d882cbca4b0ce95db6f85ec0ad85dd16f",
+  "control_tower_head": "96eb95489639ec665fac803592728c4c0f423bc3",
+  "live_api_git_commit": "afe1491d882cbca4b0ce95db6f85ec0ad85dd16f",
+  "live_app_bundle": "assets/index-DmQQIMEk.js",
+  "counts": {
+    "foundation_docs_md": 248,
+    "foundation_adrs": 94,
+    "foundation_docs_otzar_md": 13,
+    "control_tower_docs_md": 104,
+    "control_tower_otzar_docs": "large (docs/otzar + master + product)",
+    "agency_agents_md": 274,
+    "agent_zero_md": 2
+  },
+  "repositories_scanned": [
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/niov-foundation",
+      "role": "foundation_api",
+      "primary_doc_roots": ["docs/", "CLAUDE.md", "AGENTS.md", "CURRENT_BUILD_STATE.md", "README.md"]
+    },
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/otzar-control-tower",
+      "role": "otzar_frontend",
+      "primary_doc_roots": ["docs/", "docs/otzar/", "docs/otzar/master/", "AGENTS.md", "CLAUDE.md", "CONTEXT.md"]
+    },
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/otzar-relay",
+      "role": "relay_shell",
+      "primary_doc_roots": ["README.md"]
+    },
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/niov-avp",
+      "role": "avp2_client",
+      "primary_doc_roots": ["docs/", "README.md"]
+    },
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/niov-federation-cloud",
+      "role": "federation_ui",
+      "primary_doc_roots": ["docs/", "README.md"]
+    },
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/AGENT-ZERO",
+      "role": "process_framework",
+      "primary_doc_roots": ["AGENTS.md", "README.md"]
+    }
+  ],
+  "excluded_repositories": [
+    "/Users/genghishameha/dev/NIOV Labs/github/caretaker-relay",
+    "/Users/genghishameha/dev/NIOV Labs/github/caretaker-relay-foundation"
+  ],
+  "stale_or_secondary": [
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/otzar-control-tower 2",
+      "status": "stale_lovable_clone",
+      "head": "2b4c349a5498d972db81f68156cc04abcf004c30"
+    },
+    {
+      "path": "/Users/genghishameha/dev/NIOV Labs/github/foundation-command",
+      "status": "adjacent_legacy_ui_not_otzar_ct"
+    }
+  ],
+  "controlling_documents": [
+    {
+      "path": "otzar-control-tower/docs/otzar/master/RC2_CONTROLLING_DIRECTION.md",
+      "type": "founder_direction",
+      "status": "current",
+      "notes": "Preserve intelligence; recompose surfaces; live truth vocabulary"
+    },
+    {
+      "path": "otzar-control-tower/docs/otzar/master/MASTER_COMPLETION_CONTRACT.md",
+      "type": "completion_contract",
+      "status": "current"
+    },
+    {
+      "path": "otzar-control-tower/docs/otzar/master/FOUNDER_REQUIREMENTS_REGISTER.json",
+      "type": "requirements_register",
+      "status": "current"
+    },
+    {
+      "path": "otzar-control-tower/docs/otzar/master/YC_RC2_STATUS.md",
+      "type": "release_status",
+      "status": "current",
+      "notes": "YC_RC1_REOPENED_FOR_SIGNAL_AND_FIRST_USE_REPAIR; not YC_RELEASE_CANDIDATE_READY"
+    },
+    {
+      "path": "niov-foundation/docs/otzar/DOMAIN_GENERAL_INTELLIGENCE_DOCTRINE.md",
+      "type": "doctrine",
+      "status": "current",
+      "linked_adr": "0052"
+    },
+    {
+      "path": "niov-foundation/docs/otzar/HOLISTIC_ACCEPTANCE_GATE.md",
+      "type": "acceptance_gate",
+      "status": "OPEN_pointer",
+      "notes": "Points at CT master register; SHAs in body may lag HEAD"
+    },
+    {
+      "path": "niov-foundation/docs/product/otzar-system-map.md",
+      "type": "system_map",
+      "status": "living_verify",
+      "notes": "Phase 1285-A; verify gaps against current code"
+    },
+    {
+      "path": "niov-foundation/CLAUDE.md",
+      "type": "operating_rules",
+      "status": "current"
+    }
+  ],
+  "document_types": {
+    "adr": {"foundation": 94, "status": "mixed_accepted_proposed"},
+    "doctrine": {"examples": ["DOMAIN_GENERAL_INTELLIGENCE_DOCTRINE.md", "ADR-0052"]},
+    "prd": {"ct_examples": ["PRD-01..06 under docs/otzar"]},
+    "smoke_e2e": {"ct": "many LIVE_SMOKE / e2e specs + scripts"},
+    "completion_matrix": {"ct_master": true},
+    "runbooks": {"foundation_ops": true, "ct_render": true},
+    "investor_demo": {"ct": "MERIDIAN_* under docs/otzar/demo"},
+    "simulation": {"ct": "redwood-atlas corpus"}
+  },
+  "contradiction_hotspots": [
+    {
+      "claim_source": "CURRENT_BUILD_STATE.md last updated 2026-06-10",
+      "conflict": "HEAD is 2026-07-21 work-os; many features landed after snapshot",
+      "resolution": "treat as historical; use CT master + git log + live health"
+    },
+    {
+      "claim_source": "HOLISTIC_ACCEPTANCE_GATE CT tip SHAs",
+      "conflict": "document body SHAs lag origin/main tips",
+      "resolution": "always re-curl live bundle + health git_commit"
+    },
+    {
+      "claim_source": "YC investor readiness handoff 2026-06-24",
+      "conflict": "RC2 reopened for signal/first-use 2026-07",
+      "resolution": "YC_RC2_STATUS controlling for experience freeze"
+    },
+    {
+      "claim_source": "ADR Accepted",
+      "conflict": "design ADRs 0053-0055 originally no-code; runtime later landed",
+      "resolution": "compliance matrix separates design lock vs runtime"
+    }
+  ]
+}

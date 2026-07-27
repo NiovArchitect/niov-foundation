@@ -1,0 +1,48 @@
+{
+  "campaign": "OTZAR-RC2-SIGNAL-FREEZE",
+  "date": "2026-07-27",
+  "note": "Bounded automated proof this session; full live persona matrix not re-run.",
+  "scenarios": {
+    "A_employee_first_hour": {
+      "status": "PARTIAL",
+      "evidence": [
+        "walkthrough Skip/Continue/Restart coded + unit",
+        "Today AmbientWorkSurface exists (not legacy EmployeeHome)",
+        "Action Center route + WORK_OS approval routing"
+      ],
+      "missing": ["live FOUNDER_VISIBLE re-login", "full Playwright matrix this session"]
+    },
+    "B_manager_team": {
+      "status": "PARTIAL",
+      "evidence": [
+        "team-status phrases → /app/team-work (unit)",
+        "Foundation team-work-summary + work-os/team-work APIs live"
+      ],
+      "missing": ["live manager credentialed browser proof this session"]
+    },
+    "C_founder_ceo": {
+      "status": "NOT_RUN_THIS_SESSION",
+      "evidence": ["executive walkthrough steps exist"],
+      "missing": ["founder path live"]
+    },
+    "D_admin_operating_shell": {
+      "status": "PARTIAL",
+      "evidence": [
+        "nav hides Billing/Marketplace/Federation",
+        "Organization setup + Dandelion deep link preserved",
+        "live API health ok"
+      ],
+      "missing": ["admin live smoke this session"]
+    },
+    "walkthrough_talk_pointer": {
+      "status": "CODE_PRESERVED",
+      "evidence": ["z-45 coach, z-65 Talk, compact on otzar:open; e2e file present"],
+      "missing": ["live e2e re-run this session"]
+    }
+  },
+  "unit_this_session": {
+    "ask-twin.test.ts": "11 passed",
+    "first-use-walkthrough.test.ts": "17 passed",
+    "typecheck": "passed"
+  }
+}

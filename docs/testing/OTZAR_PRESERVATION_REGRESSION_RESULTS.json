@@ -1,0 +1,54 @@
+{
+  "campaign": "OTZAR-RC2-SIGNAL-FREEZE",
+  "date": "2026-07-27",
+  "principle": "Preserve intelligence; recompose surfaces",
+  "results": [
+    {
+      "capability": "First-use walkthrough v3 exists",
+      "status": "PRESERVED_AND_IMPROVED",
+      "note": "Skip no longer completes; restart added"
+    },
+    {
+      "capability": "Talk ambient bar",
+      "status": "PRESERVED",
+      "note": "No AmbientOtzarBar rewrite; z-index contract unchanged"
+    },
+    {
+      "capability": "Today AmbientWorkSurface bands",
+      "status": "PRESERVED",
+      "note": "No delete of dgi/what-changed/home bands"
+    },
+    {
+      "capability": "People structure glance",
+      "status": "PRESERVED_AND_IMPROVED",
+      "note": "Viewport sticky/scroll"
+    },
+    {
+      "capability": "Dandelion engine",
+      "status": "PRESERVED",
+      "note": "No Dandelion service/route removal"
+    },
+    {
+      "capability": "Action Center backend",
+      "status": "PRESERVED",
+      "note": "No Action* API changes"
+    },
+    {
+      "capability": "Team work summary Foundation",
+      "status": "PRESERVED",
+      "note": "CT routes natural language to existing surface"
+    },
+    {
+      "capability": "Admin commercial demotion",
+      "status": "PRESERVED",
+      "note": "Billing/Marketplace/Federation remain hidden"
+    },
+    {
+      "capability": "Caretaker Relay isolation",
+      "status": "PRESERVED",
+      "note": "Not touched"
+    }
+  ],
+  "broken_previously_working": [],
+  "count_broken": 0
+}
