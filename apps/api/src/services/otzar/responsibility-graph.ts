@@ -301,11 +301,42 @@ export function enrichResponsibilityGraphFromExtraction(
     workItem: string | null,
     evidence: string,
   ): void => {
-    const key = name.toLowerCase();
-    // Never overwrite a deterministic graph role (support stays support).
-    if (byName.has(key)) return;
+    const trimmed = name.trim();
+    const key = trimmed.toLowerCase();
+    const first = (trimmed.split(/\s+/)[0] ?? trimmed).toLowerCase();
+    // Prefer exact key; fall back to first-name match so "David Odie: …"
+    // upgrades an existing owner node titled "David".
+    const existing =
+      byName.get(key) ??
+      (first !== key
+        ? [...byName.values()].find(
+            (n) =>
+              n.role === "owner" &&
+              n.name.toLowerCase().split(/\s+/)[0] === first,
+          )
+        : undefined);
+    const existingKey = existing
+      ? existing.name.toLowerCase()
+      : key;
+    // Never overwrite a deterministic non-owner role (support stays support).
+    if (existing !== undefined && existing.role !== "owner") return;
+    // Existing owner with empty workItem: upgrade title from commitment text
+    // (LLM commitments are the grounded deliverable; empty "Follow-up owned by X"
+    // titles are the degraded path this enrichment must close).
+    if (existing !== undefined && existing.role === "owner") {
+      const empty =
+        existing.workItem === null || existing.workItem.trim().length === 0;
+      if (empty && workItem !== null && workItem.trim().length > 0) {
+        byName.set(existingKey, {
+          ...existing,
+          workItem: workItem.trim(),
+          evidence: evidence.length > 0 ? evidence : existing.evidence,
+        });
+      }
+      return;
+    }
     byName.set(key, {
-      name: name.trim(),
+      name: trimmed,
       role: "owner",
       workItem,
       evidence,
@@ -319,6 +350,14 @@ export function enrichResponsibilityGraphFromExtraction(
     // "David will …" / "David Odie will …" / "David owns …" / "R03P1 to deliver …"
     // Skip pure support phrasing in commitment strings.
     if (/\bwill support\b|\bcan support\b|\bis optional\b/i.test(text)) continue;
+    // LLM often returns "David Odie: finish soft-isolation …" (colon form).
+    const colon = text.match(
+      new RegExp(`^(${NAME}(?:\\s+${NAME})?)\\s*:\\s*(.+)$`),
+    );
+    if (colon && colon[1] && colon[2]) {
+      placeOwner(colon[1], colon[2].trim(), text);
+      continue;
+    }
     const m = text.match(
       new RegExp(
         // "to <verb>" covers LLM commitment phrasing ("R03P1 to deliver the brief")
