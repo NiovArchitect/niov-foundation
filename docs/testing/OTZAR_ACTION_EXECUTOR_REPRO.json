@@ -1,0 +1,24 @@
+{
+  "date": "2026-07-27",
+  "stuck_actions": [
+    {
+      "action_id": "d8dfa6a0-3b23-4c75-9fa3-caed197e1252",
+      "action_type": "RECORD_CAPSULE",
+      "status": "RUNNING",
+      "attempt_id": "7ba5d60a-12a7-479b-93e4-3b575648fe2d",
+      "attempt_started_at": "2026-07-27T23:00:00.676Z",
+      "timeout_ms": 30000,
+      "worker_id": "executor:30",
+      "ended_at": null
+    },
+    {
+      "action_id": "84b8030d-f38a-44f3-9cbb-7d3adf3a7bc8",
+      "action_type": "SEND_INTERNAL_NOTIFICATION",
+      "status": "RUNNING",
+      "attempts": 0
+    }
+  ],
+  "root_cause": "no_stale_RUNNING_reconcile_after_worker_process_death",
+  "worker_topology": "in_process_otzar_api_cron",
+  "repair": "tickStaleRunningReconcile + RUNNING_to_SCHEDULED recovery edge"
+}

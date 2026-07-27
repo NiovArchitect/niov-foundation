@@ -40,6 +40,7 @@ import { prisma } from "@niov/database";
 import type { Action } from "@prisma/client";
 import { executeActionHandler } from "./handlers.js";
 import {
+  ATTEMPT_TIMEOUT_MS_DEFAULT,
   createActionAttempt,
   createActionResult,
   emitLifecycleAudit,
@@ -60,6 +61,18 @@ import {
 // WHY: One named constant so the executor + the audit row + the
 //      integration tests share one identifier.
 export const EXECUTOR_TIMEOUT_ERROR_CLASS = "EXECUTOR_TIMEOUT" as const;
+
+/** Open attempt past started_at + timeout with no end — worker orphan. */
+export const STALE_ORPHAN_ERROR_CLASS = "STALE_WORKER_ORPHAN" as const;
+
+/** RUNNING with no attempt after claim — process died between promote and attempt. */
+export const STALE_PROMOTE_ORPHAN_ERROR_CLASS = "STALE_PROMOTE_ORPHAN" as const;
+
+/** Grace beyond timeout_ms before reconciler claims an open attempt stale. */
+export const STALE_ATTEMPT_GRACE_MS = 5_000;
+
+/** RUNNING with zero attempts older than this is treated as promote-orphan. */
+export const STALE_PROMOTE_GRACE_MS = 120_000;
 
 // WHAT: The default maximum batch size the executor will claim per
 //        tick.
@@ -448,3 +461,200 @@ export async function tickActionExecutor(
 // OUTPUT: None.
 // WHY: Re-export discipline — only export what callers consume.
 export { emitLifecycleAudit as _emitLifecycleAuditForTests };
+
+// WHAT: Result of one stale-RUNNING reconciliation pass.
+export interface TickStaleRunningReconcileResult {
+  open_attempts_terminalized: number;
+  actions_timed_out: number;
+  actions_requeued: number;
+  promote_orphans_timed_out: number;
+}
+
+/**
+ * WHAT: Recover Actions stuck in RUNNING after worker crash/deploy.
+ * INPUT: Optional now clock + batch cap.
+ * OUTPUT: Counts of reconciled attempts/actions.
+ * WHY: The in-process withTimeout only fires while the claiming process
+ *      is alive. A deploy (or crash) after SCHEDULED→RUNNING leaves open
+ *      ActionAttempts forever because later ticks only claim SCHEDULED.
+ *      This reconciler is the durable terminal-state guarantee.
+ */
+export async function tickStaleRunningReconcile(
+  options: { now?: Date; maxBatch?: number } = {},
+): Promise<TickStaleRunningReconcileResult> {
+  const now = options.now ?? new Date();
+  const maxBatch = options.maxBatch ?? EXECUTOR_DEFAULT_BATCH;
+  let open_attempts_terminalized = 0;
+  let actions_timed_out = 0;
+  let actions_requeued = 0;
+  let promote_orphans_timed_out = 0;
+
+  const openAttempts = await prisma.actionAttempt.findMany({
+    where: { ended_at: null },
+    orderBy: { started_at: "asc" },
+    take: maxBatch,
+    select: {
+      attempt_id: true,
+      action_id: true,
+      started_at: true,
+      timeout_ms: true,
+      attempt_number: true,
+    },
+  });
+
+  for (const att of openAttempts) {
+    const deadline =
+      att.started_at.getTime() +
+      (att.timeout_ms ?? ATTEMPT_TIMEOUT_MS_DEFAULT) +
+      STALE_ATTEMPT_GRACE_MS;
+    if (now.getTime() < deadline) continue;
+
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.actionAttempt.findUnique({
+        where: { attempt_id: att.attempt_id },
+        select: { ended_at: true },
+      });
+      if (current === null || current.ended_at !== null) return;
+      await terminalizeActionAttempt(tx, {
+        attempt_id: att.attempt_id,
+        outcome: "TIMED_OUT",
+        error_class: STALE_ORPHAN_ERROR_CLASS,
+        error_summary:
+          "attempt left open past timeout — worker crash or deploy orphan",
+        now,
+      });
+    });
+    open_attempts_terminalized += 1;
+
+    const action = await prisma.action.findUnique({
+      where: { action_id: att.action_id },
+      select: {
+        action_id: true,
+        action_type: true,
+        status: true,
+        org_entity_id: true,
+        risk_tier: true,
+      },
+    });
+    if (action === null || action.status !== "RUNNING") continue;
+
+    const attemptCount = await prisma.actionAttempt.count({
+      where: { action_id: action.action_id },
+    });
+    const matchedPolicy = await prisma.actionPolicy.findUnique({
+      where: {
+        org_entity_id_action_type_risk_tier: {
+          org_entity_id: action.org_entity_id,
+          action_type: action.action_type,
+          risk_tier: action.risk_tier,
+        },
+      },
+      select: { retry_budget: true, attempt_timeout_ms_override: true },
+    });
+    const budget = resolveRetryBudget(matchedPolicy, action.action_type);
+
+    if (attemptCount < budget) {
+      await prisma.$transaction(async (tx) => {
+        const cur = await tx.action.findUnique({
+          where: { action_id: action.action_id },
+          select: { status: true, action_type: true },
+        });
+        if (cur === null || cur.status !== "RUNNING") return;
+        await transitionActionStatus(tx, {
+          action: {
+            action_id: action.action_id,
+            action_type: cur.action_type,
+            status: cur.status,
+          },
+          nextStatus: "SCHEDULED",
+          eventType: "ACTION_SCHEDULED",
+          outcome: "SUCCESS",
+          extraDetails: {
+            decision_reason: "stale_orphan_requeue",
+            error_class: STALE_ORPHAN_ERROR_CLASS,
+            attempt_number: att.attempt_number,
+          },
+        });
+      });
+      actions_requeued += 1;
+    } else {
+      await prisma.$transaction(async (tx) => {
+        const cur = await tx.action.findUnique({
+          where: { action_id: action.action_id },
+          select: { status: true, action_type: true },
+        });
+        if (cur === null || cur.status !== "RUNNING") return;
+        await transitionActionStatus(tx, {
+          action: {
+            action_id: action.action_id,
+            action_type: cur.action_type,
+            status: cur.status,
+          },
+          nextStatus: "TIMED_OUT",
+          eventType: "ACTION_FAILED",
+          outcome: "ERROR",
+          extraDetails: {
+            error_class: STALE_ORPHAN_ERROR_CLASS,
+            error_summary:
+              "retry budget exhausted after stale orphan attempt timeout",
+            attempt_id: att.attempt_id,
+            attempt_number: att.attempt_number,
+          },
+        });
+      });
+      actions_timed_out += 1;
+    }
+  }
+
+  const runningCandidates = await prisma.action.findMany({
+    where: {
+      status: "RUNNING",
+      deleted_at: null,
+      updated_at: { lte: new Date(now.getTime() - STALE_PROMOTE_GRACE_MS) },
+    },
+    take: maxBatch * 3,
+    select: { action_id: true, action_type: true, status: true },
+  });
+  for (const row of runningCandidates) {
+    const hasAttempts = await prisma.actionAttempt.count({
+      where: { action_id: row.action_id },
+    });
+    if (hasAttempts > 0) continue;
+    await prisma.$transaction(async (tx) => {
+      const cur = await tx.action.findUnique({
+        where: { action_id: row.action_id },
+        select: { status: true, action_type: true },
+      });
+      if (cur === null || cur.status !== "RUNNING") return;
+      const again = await tx.actionAttempt.count({
+        where: { action_id: row.action_id },
+      });
+      if (again > 0) return;
+      await transitionActionStatus(tx, {
+        action: {
+          action_id: row.action_id,
+          action_type: cur.action_type,
+          status: cur.status,
+        },
+        nextStatus: "TIMED_OUT",
+        eventType: "ACTION_FAILED",
+        outcome: "ERROR",
+        extraDetails: {
+          error_class: STALE_PROMOTE_ORPHAN_ERROR_CLASS,
+          error_summary:
+            "RUNNING with zero attempts past grace — claim died before attempt create",
+        },
+      });
+    });
+    promote_orphans_timed_out += 1;
+    if (promote_orphans_timed_out >= maxBatch) break;
+  }
+
+  return {
+    open_attempts_terminalized,
+    actions_timed_out,
+    actions_requeued,
+    promote_orphans_timed_out,
+  };
+}
+

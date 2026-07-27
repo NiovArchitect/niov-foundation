@@ -30,7 +30,10 @@
 import * as cron from "node-cron";
 import { tickRegulatorAccessExpirySweep } from "../cosmp/regulator-expiry.service.js";
 import { prisma } from "@niov/database";
-import { tickActionExecutor } from "./executor.js";
+import {
+  tickActionExecutor,
+  tickStaleRunningReconcile,
+} from "./executor.js";
 import { transitionActionStatus } from "./lifecycle.service.js";
 import { getLLMProvider } from "../llm/llm.service.js";
 import { tickAmbientCommsOrgSync } from "../otzar/ambient-comms-background.service.js";
@@ -206,6 +209,14 @@ export function startActionScheduler(): ActionSchedulerHandle {
   tasks.push(
     cron.schedule("*/30 * * * * *", () => {
       void tickActionExecutor().catch(() => {});
+    }),
+  );
+
+  // Stale RUNNING reconcile — every 30 seconds recovers orphaned
+  // attempts after worker crash/deploy (terminal-state guarantee).
+  tasks.push(
+    cron.schedule("*/30 * * * * *", () => {
+      void tickStaleRunningReconcile().catch(() => {});
     }),
   );
 
