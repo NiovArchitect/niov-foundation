@@ -120,14 +120,13 @@ Backend preserved classifications (do not break): project loop, doc propagation,
 8. Deploy — **BLOCKED until merge + founder/deploy gate**  
 9. Live fingerprint re-verify after deploy  
 
-### CT files changed (local, uncommitted)
+### APPLY record (2026-07-27)
 
-- `src/components/first-use/FirstUseReveal.tsx`
-- `src/components/otzar/PeopleStructureGlance.tsx`
-- `src/lib/voice/voice-action-runtime.ts`
-- `src/pages/app/Preferences.tsx`
-- `tests/unit/ask-twin.test.ts`
-- `tests/unit/first-use-walkthrough.test.ts`
+- CT commit `28376f77e0104055d1cd9de6893996ca1bc4051d` on `origin/main`
+- CT deploy `dep-d9jrqjqd0e5s7384cksg` → live bundle `assets/index-C-6AC26J.js`
+- Foundation docs commit `3a8355a` on branch `docs/rc2-signal-freeze-audit-pack` (PR #736); runtime still `afe1491`
+- FOUNDER_EXPERIENCE_APPROVED: **not claimed**
+- Next: founder personal verdict
 
 ---
 

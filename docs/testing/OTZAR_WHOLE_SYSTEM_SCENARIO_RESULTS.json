@@ -1,48 +1,56 @@
 {
   "campaign": "OTZAR-RC2-SIGNAL-FREEZE",
   "date": "2026-07-27",
-  "note": "Bounded automated proof this session; full live persona matrix not re-run.",
-  "scenarios": {
-    "A_employee_first_hour": {
-      "status": "PARTIAL",
-      "evidence": [
-        "walkthrough Skip/Continue/Restart coded + unit",
-        "Today AmbientWorkSurface exists (not legacy EmployeeHome)",
-        "Action Center route + WORK_OS approval routing"
-      ],
-      "missing": ["live FOUNDER_VISIBLE re-login", "full Playwright matrix this session"]
-    },
-    "B_manager_team": {
-      "status": "PARTIAL",
-      "evidence": [
-        "team-status phrases → /app/team-work (unit)",
-        "Foundation team-work-summary + work-os/team-work APIs live"
-      ],
-      "missing": ["live manager credentialed browser proof this session"]
-    },
-    "C_founder_ceo": {
-      "status": "NOT_RUN_THIS_SESSION",
-      "evidence": ["executive walkthrough steps exist"],
-      "missing": ["founder path live"]
-    },
-    "D_admin_operating_shell": {
-      "status": "PARTIAL",
-      "evidence": [
-        "nav hides Billing/Marketplace/Federation",
-        "Organization setup + Dandelion deep link preserved",
-        "live API health ok"
-      ],
-      "missing": ["admin live smoke this session"]
-    },
-    "walkthrough_talk_pointer": {
-      "status": "CODE_PRESERVED",
-      "evidence": ["z-45 coach, z-65 Talk, compact on otzar:open; e2e file present"],
-      "missing": ["live e2e re-run this session"]
-    }
+  "prior_session_note": "Pre-deploy partial results superseded for deploy fingerprint only; historical unit results preserved in fields below.",
+  "deploy": {
+    "ct_commit": "28376f77e0104055d1cd9de6893996ca1bc4051d",
+    "ct_deploy_id": "dep-d9jrqjqd0e5s7384cksg",
+    "bundle_before": "assets/index-DmQQIMEk.js",
+    "bundle_after": "assets/index-C-6AC26J.js",
+    "api_live_sha": "afe1491d882cbca4b0ce95db6f85ec0ad85dd16f",
+    "deploy_parity": "YES"
   },
   "unit_this_session": {
     "ask-twin.test.ts": "11 passed",
     "first-use-walkthrough.test.ts": "17 passed",
-    "typecheck": "passed"
-  }
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "scenarios": {
+    "A_employee_first_hour": {
+      "status": "PARTIAL",
+      "evidence": [
+        "live bundle contains Skip for now / Continue / Restart walkthrough",
+        "unit routing for approvals and what-changed",
+        "no credentialed browser in agent env"
+      ],
+      "missing": ["founder live login path"]
+    },
+    "B_manager_team": {
+      "status": "PARTIAL",
+      "evidence": [
+        "live JS contains team-work routes and 'team working' / team status patterns",
+        "API /otzar/team-work and /work-os/team-work return SESSION_INVALID (route exists)"
+      ],
+      "missing": ["credentialed manager browser"]
+    },
+    "C_founder_ceo": {
+      "status": "AWAITING_FOUNDER_REVIEW",
+      "evidence": ["public app serving 28376f7 markers"],
+      "missing": ["founder personal walkthrough"]
+    },
+    "D_admin_operating_shell": {
+      "status": "PARTIAL",
+      "evidence": [
+        "no SCALE_PROVEN in live JS",
+        "nav commercial demotion not touched this slice"
+      ],
+      "missing": ["credentialed admin browser this session"]
+    },
+    "walkthrough_talk_pointer": {
+      "status": "CODE_AND_BUNDLE_PROVEN",
+      "evidence": ["markers in live JS; z-index contract unchanged in source"]
+    }
+  },
+  "authenticated_e2e": "NOT_RUN_NO_DEMO_PASSWORD_IN_AGENT_ENV"
 }

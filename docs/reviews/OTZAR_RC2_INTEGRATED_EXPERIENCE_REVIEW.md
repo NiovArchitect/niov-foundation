@@ -1,7 +1,8 @@
 # OTZAR RC2 — Integrated Experience Review
 
-**Date:** 2026-07-27  
-**Reality Checker posture:** **NEEDS WORK** until founder LIVE re-login and FOUNDER_EXPERIENCE_APPROVED
+**Date:** 2026-07-27 (updated post-deploy)  
+**Live bundle:** `assets/index-C-6AC26J.js` @ CT `28376f7`  
+**Reality Checker posture:** **PUBLICLY DEPLOYED AND AUTOMATION-PROVEN** for signal markers; **NEEDS WORK / AWAITING FOUNDER** for FOUNDER_EXPERIENCE_APPROVED
 
 ## First-hour narrative (target after this slice deploys)
 

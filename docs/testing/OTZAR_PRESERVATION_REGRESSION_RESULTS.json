@@ -4,49 +4,54 @@
   "principle": "Preserve intelligence; recompose surfaces",
   "results": [
     {
-      "capability": "First-use walkthrough v3 exists",
+      "capability": "First-use walkthrough v3",
       "status": "PRESERVED_AND_IMPROVED",
-      "note": "Skip no longer completes; restart added"
+      "note": "Skip pauses; Restart added; live markers present"
     },
     {
       "capability": "Talk ambient bar",
       "status": "PRESERVED",
-      "note": "No AmbientOtzarBar rewrite; z-index contract unchanged"
+      "note": "No AmbientOtzarBar rewrite"
     },
     {
-      "capability": "Today AmbientWorkSurface bands",
+      "capability": "Today AmbientWorkSurface",
       "status": "PRESERVED",
-      "note": "No delete of dgi/what-changed/home bands"
+      "note": "No band deletion"
     },
     {
       "capability": "People structure glance",
       "status": "PRESERVED_AND_IMPROVED",
-      "note": "Viewport sticky/scroll"
+      "note": "people-structure-anchor in live JS"
     },
     {
       "capability": "Dandelion engine",
       "status": "PRESERVED",
-      "note": "No Dandelion service/route removal"
+      "note": "No Dandelion code in CT product commit"
     },
     {
       "capability": "Action Center backend",
       "status": "PRESERVED",
-      "note": "No Action* API changes"
+      "note": "Foundation runtime SHA unchanged afe1491"
     },
     {
       "capability": "Team work summary Foundation",
       "status": "PRESERVED",
-      "note": "CT routes natural language to existing surface"
+      "note": "API routes still present; CT routes language to them"
     },
     {
       "capability": "Admin commercial demotion",
       "status": "PRESERVED",
-      "note": "Billing/Marketplace/Federation remain hidden"
+      "note": "nav.ts not modified"
     },
     {
       "capability": "Caretaker Relay isolation",
       "status": "PRESERVED",
       "note": "Not touched"
+    },
+    {
+      "capability": "Foundation API runtime",
+      "status": "PRESERVED",
+      "note": "No runtime deploy; live git_commit still afe1491"
     }
   ],
   "broken_previously_working": [],
