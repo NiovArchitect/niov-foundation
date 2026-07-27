@@ -35,6 +35,8 @@ From `scripts/provision-demo-team-accounts.ts` ALLOWLIST:
 |-------|---------|-------|
 | sadeil@niovlabs.com | Sadeil Lewis | Founder & CEO |
 | david@niovlabs.com | David Odie | Tech Lead |
+| annie@niovlabs.com | Annie | **Senior Engineer and Researcher** (founder 2026-07-27; was Risk & Compliance Lead) |
+| william@niovlabs.com | William | **CPO** (founder 2026-07-27; was Product Lead) |
 | vishesh@niovlabs.com | Vishesh Sharma | AI UI Engineer |
 | samiksha@niovlabs.com | Samiksha Sharma | AI/NLP Engineer |
 | shweta@niovlabs.com | Shweta | Go-to-Market Lead |

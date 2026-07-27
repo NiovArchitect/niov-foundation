@@ -1,33 +1,80 @@
-# OTZAR Team Truth Reconciliation (proposed)
+# OTZAR Team Truth Reconciliation
 
 **Date:** 2026-07-27  
 **Sources:** `scripts/provision-demo-team-accounts.ts` ALLOWLIST + founder direction  
-**Rule:** Do not silently rewrite authority or hierarchy without conflict resolution  
+**Rule:** Title / role-template display only — do **not** silently rewrite authority, hierarchy, approvals, org ownership, tool authority, or data visibility.
 
-| Email | Current script display | Current script title | Founder direction | Proposed display title | Functional role | Authority (script) | Conflict? |
-|-------|------------------------|----------------------|-------------------|------------------------|-----------------|--------------------|-----------|
-| sadeil@niovlabs.com | Sadeil Lewis | Founder & CEO | Founder and CEO | Founder & CEO | Org admin + founder | can_admin_org | **NONE** |
-| david@niovlabs.com | David Odie | Tech Lead | Technical Lead | Tech Lead | Engineering lead | base TAR | **NONE** (wording only) |
-| annie@niovlabs.com | Annie | Risk & Compliance Lead | Senior Engineer and Researcher | **NEEDS FOUNDER** | Engineering/research vs compliance | base TAR | **YES** — title conflict |
-| william@niovlabs.com | William | Product Lead | CPO / Product Lead | **NEEDS FOUNDER** | Product | base TAR | **YES** — CPO vs Product Lead |
-| shweta@niovlabs.com | Shweta | Go-to-Market Lead | Marketing / GTM | Go-to-Market Lead | GTM | base TAR | **NONE** (synonym) |
-| walter@niovlabs.com | Walter | Media Lead | Video / Media | Media Lead | Media | base TAR | **NONE** (synonym) |
-| vishesh@niovlabs.com | Vishesh Sharma | AI UI Engineer | Keep if supported | AI UI Engineer | Experience engineering | base TAR | **NONE** |
-| samiksha@niovlabs.com | Samiksha Sharma | AI/NLP Engineer | Keep if supported | AI/NLP Engineer | Intelligence engineering | base TAR | **NONE** |
-| Sumeet | (not on allowlist) | — | Must not label Ops unless verified | **Do not invent** | — | — | **NONE** if absent |
+## Founder title decisions (AUTHORIZED)
+
+| Person | Canonical email | Display name | Previous title | **Authorized display title** | Functional role (internal) | Authority | Manager | Conflict resolved? |
+|--------|-----------------|--------------|----------------|------------------------------|----------------------------|-----------|---------|--------------------|
+| Sadeil Lewis | sadeil@niovlabs.com | Sadeil Lewis | Founder & CEO | Founder & CEO | Org admin + founder | can_admin_org (unchanged) | — | YES |
+| David Odie | david@niovlabs.com | David Odie | Tech Lead | Tech Lead (Technical Lead synonym) | Engineering lead | base TAR (unchanged) | Sadeil (expected) | YES |
+| **Annie** | annie@niovlabs.com | Annie | Risk & Compliance Lead | **Senior Engineer and Researcher** | Engineering / research | base TAR (**no change**) | Sadeil (expected) | **YES — founder resolved** |
+| **William / Will** | william@niovlabs.com | William | Product Lead | **CPO** | Product (Product Lead functional OK internally) | base TAR (**no change**) | Sadeil (expected) | **YES — founder resolved** |
+| Shweta | shweta@niovlabs.com | Shweta | Go-to-Market Lead | Go-to-Market Lead | Marketing / GTM | base TAR | Sadeil (expected) | YES |
+| Walter | walter@niovlabs.com | Walter | Media Lead | Media Lead | Video / Media | base TAR | Sadeil (expected) | YES |
+| Vishesh Sharma | vishesh@niovlabs.com | Vishesh Sharma | AI UI Engineer | AI UI Engineer (retain if verified live) | Experience engineering | base TAR | Sadeil (expected) | retain only if live-verified |
+| Samiksha Sharma | samiksha@niovlabs.com | Samiksha Sharma | AI/NLP Engineer | AI/NLP Engineer (retain if verified live) | Intelligence engineering | base TAR | Sadeil (expected) | retain only if live-verified |
+| Sumeet | (not on allowlist) | — | — | **Do not invent** | — | — | — | Do **not** label Operations unless org truth proves it |
+
+## Mutation scope for title reconciliation
+
+**AUTHORIZED mutations only:**
+
+- `Entity.display` fields / membership `role_title` string for Annie → `Senior Engineer and Researcher`
+- membership `role_title` string for William → `CPO`
+- AI-Teammate **role template selection** if currently bound to compliance/product-lead labels solely because of the old title (template label only; no permission expansion)
+
+**FORBIDDEN without separate approval:**
+
+- permissions / TAR flags
+- hierarchy edges / manager rewrites
+- approval rights / dual-control bindings
+- organization ownership
+- tool authority / connector scopes
+- data visibility / wallet access
+
+**AUTHORITY CHANGES FROM TITLE RECONCILIATION: 0** (title strings only)
+
+## Affected surfaces (title string consumers)
+
+| Surface | How title appears |
+|---------|-------------------|
+| People / org roster | membership `role_title` / profile job_title |
+| My Twin / AI-Teammate | role_template label may lag until re-mapped |
+| Admin users | role_title column |
+| Talk / team-work capacity | may show role labels if projected |
+| provision-demo-team-accounts.ts | ALLOWLIST `title` field (source of future provision) |
+
+## Affected tests
+
+| Test / seed | Change |
+|-------------|--------|
+| `tests/unit/synthetic-principal.test.ts` | allowlist emails unchanged; titles not asserted |
+| `scripts/provision-demo-team-accounts.ts` | ALLOWLIST titles for Annie + William |
+| demo seed docs (`docs/operations/local-demo-logins.md`) | display titles aligned |
+| Live integration smoke asserting "Risk & Compliance" or "Product Lead" | update expected display string only |
+
+## AI-Teammate role template
+
+| Person | Prior template cue | Proposed template selection | Authority impact |
+|--------|--------------------|----------------------------|------------------|
+| Annie | finance-analyst / compliance-adjacent if any | software-engineer or research-aligned template if available | **none** (template label) |
+| William | product-manager | product-manager or CPO-equivalent product template if exists | **none** |
+
+Do not invent a new privileged template.
+
+## Live apply status
+
+| Step | Status |
+|------|--------|
+| Founder title decision recorded | **DONE** |
+| Source ALLOWLIST titles updated | pending same commit |
+| Production membership role_title apply | **BLOCKED** — secure prod DB path required (Render job / valid DATABASE_URL) |
+| Hierarchy / authority re-verify after apply | pending live inventory |
 
 ## Manager / hierarchy
 
-Not re-written this session. Soft-isolation of synthetics does not change allowlist reporting lines.  
-Live hierarchy edges require authenticated inventory after soft-isolate apply.
-
-## AI Teammate templates
-
-Forward: map titles to existing role templates in `apps/api/templates/roles` without inventing new authority.
-
-## FOUNDER APPROVAL REQUIRED
-
-1. Annie: Risk & Compliance Lead **vs** Senior Engineer and Researcher  
-2. William: Product Lead **vs** CPO  
-
-All other rows are non-conflicting wording alignment.  
+Soft-isolation of synthetics does not change allowlist reporting lines.  
+Live hierarchy edges require authenticated inventory after soft-isolate apply on production.

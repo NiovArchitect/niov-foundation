@@ -88,8 +88,17 @@ const ALLOWLIST: ReadonlyArray<DemoAccount> = [
     isFounder: false,
   },
   { email: "shweta@niovlabs.com", displayName: "Shweta", title: "Go-to-Market Lead", isFounder: false },
-  { email: "william@niovlabs.com", displayName: "William", title: "Product Lead", isFounder: false },
-  { email: "annie@niovlabs.com", displayName: "Annie", title: "Risk & Compliance Lead", isFounder: false },
+  // Founder title decisions (2026-07-27): CPO is user-facing; Product Lead may
+  // still describe functional responsibility internally — authority unchanged.
+  { email: "william@niovlabs.com", displayName: "William", title: "CPO", isFounder: false },
+  // Founder title decision (2026-07-27): Senior Engineer and Researcher.
+  // Do not use Risk & Compliance Lead. Authority / TAR unchanged.
+  {
+    email: "annie@niovlabs.com",
+    displayName: "Annie",
+    title: "Senior Engineer and Researcher",
+    isFounder: false,
+  },
   { email: "walter@niovlabs.com", displayName: "Walter", title: "Media Lead", isFounder: false },
 ];
 
