@@ -1,0 +1,18 @@
+{
+  "date": "2026-07-27",
+  "meeting_capture_id": "3f09d77c-fab6-48fe-8032-be031c376d16",
+  "extraction_mode": "LLM",
+  "extraction_outcome": "EXTRACTION_COMPLETED_WITH_SIGNALS",
+  "fallback_reason": null,
+  "decisions": 3,
+  "commitments": 5,
+  "risks_or_blockers": 4,
+  "work_items_created": 4,
+  "admin_llm_status": {
+    "provider": "anthropic",
+    "status": "CONFIGURED",
+    "model": "claude-sonnet-4-5"
+  },
+  "prior_degraded_summary_substring": "live extraction isn't configured",
+  "title_enrichment_fix": "PR#741 a36ad81"
+}
