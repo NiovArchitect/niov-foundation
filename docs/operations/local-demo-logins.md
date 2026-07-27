@@ -34,8 +34,8 @@ random password.
 | `vishesh@niovlabs.com` | `LocalTest-SafePassword-123!` | AI UI Engineer | `twin-vishesh@niovlabs.com` | Otzar Live Test + Enterprise Demo Readiness |
 | `samiksha@niovlabs.com` | `LocalTest-SafePassword-123!` | AI/NLP Engineer | `twin-samiksha@niovlabs.com` | Otzar Live Test + Foundation Runtime Deployment |
 | `shweta@niovlabs.com` | `LocalTest-SafePassword-123!` | Go-to-Market Lead | `twin-shweta@niovlabs.com` | Enterprise Demo Readiness |
-| `william@niovlabs.com` | `LocalTest-SafePassword-123!` | Product Lead | `twin-william@niovlabs.com` | **Owner** of Enterprise Demo Readiness; member of Otzar Live Test |
-| `annie@niovlabs.com` | `LocalTest-SafePassword-123!` | Risk & Compliance Lead | `twin-annie@niovlabs.com` | Enterprise Demo Readiness |
+| `william@niovlabs.com` | `LocalTest-SafePassword-123!` | CPO | `twin-william@niovlabs.com` | **Owner** of Enterprise Demo Readiness; member of Otzar Live Test |
+| `annie@niovlabs.com` | `LocalTest-SafePassword-123!` | Senior Engineer and Researcher | `twin-annie@niovlabs.com` | Enterprise Demo Readiness |
 | `walter@niovlabs.com` | `LocalTest-SafePassword-123!` | Media Lead | `twin-walter@niovlabs.com` | Enterprise Demo Readiness |
 
 Each teammate has:
