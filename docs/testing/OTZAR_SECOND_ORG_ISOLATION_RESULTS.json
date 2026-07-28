@@ -1,13 +1,19 @@
 {
   "title": "OTZAR_SECOND_ORG_ISOLATION_RESULTS",
-  "date": "2026-07-28T02:55:28.933404+00:00",
-  "founder_org_prefix": "a4ddc200",
-  "second_org": {
-    "login": "fail",
-    "http": 403,
-    "code": "SUSPENDED"
+  "date": "2026-07-28T03:13:20.793050+00:00",
+  "status": "PASS",
+  "second_org_persona": "tenant-iso-admin+\u2026@niovlabs.com (redacted synthetic)",
+  "account_status": "ACTIVE",
+  "organization": "Otzar Tenant Isolation Test (redacted)",
+  "founder_org_memberships": 0,
+  "secret_exposed": "NO",
+  "api_matrix": {
+    "api_matrix": "DONE",
+    "cross_tenant_disclosures": 0,
+    "wrong_org_context": 0,
+    "tenant_org": "5f0b1143",
+    "founder_org": "a4ddc200",
+    "status": "PASS"
   },
-  "cross_tenant_disclosures": 0,
-  "wrong_org_context": 0,
-  "status": "PARTIAL"
+  "note": "New synthetic org via dual-control platform/orgs; not founder-org."
 }
