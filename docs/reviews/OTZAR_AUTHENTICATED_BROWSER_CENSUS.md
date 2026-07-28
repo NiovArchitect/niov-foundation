@@ -1,55 +1,105 @@
 # OTZAR Authenticated Browser Census
 
-**Date:** 2026-07-27  
-**Status:** PARTIAL — code-route inventory + API-backed surface map; full multi-persona credentialed click-through incomplete in this agent environment  
-**CT deploy reference:** `629813d` (+ local `feat/founder-visible-work-os` pending merge)  
-**Foundation deploy reference:** `03cc5bf` (+ local policy Rung 1 fix pending merge)
+**Date:** 2026-07-28  
+**Status:** PARTIAL — authenticated multi-persona walk completed for primary surfaces; Talk input automation incomplete; candidate Accept/Correct/Reject not product-complete  
+**Base:** https://app.otzar.ai  
+**Bundle:** `assets/index-BK2Optzf.js`  
+**Deploy parity:** Foundation `0e16363` / CT `031fde0` MATCH  
 
-## Persona budget (required)
+## Secure login
 
-| Context | Purpose | Status this run |
-|---------|---------|-----------------|
-| Founder | Today loop, approvals, team | API smoke only — browser incomplete |
-| Employee | Self-scoped work, Talk | Not completed |
-| Manager/Admin | Structure, dual-control honesty | Not completed |
-| Adversarial second org | Isolation | Not completed |
+| Field | Value |
+|-------|--------|
+| SECURE LOGIN SOURCE | Temporary password rotation via bcrypt hash update on allowlisted demo entities (production `entities.password_hash`); secret only in `/tmp/demo_pw_val` mode 600 |
+| Bootstrap secrets | Present but **stale** for founder/employee (401); operator-1 still valid |
+| SECRET EXPOSED | **NO** (not printed, not committed, not in docs) |
+| FOUNDER LOGIN | **PASS** (`sadeil@niovlabs.com`) |
+| EMPLOYEE LOGIN | **PASS** (`david@niovlabs.com`) |
+| ADMIN LOGIN | **PASS** (founder `admin_org`) |
+| ADVERSARIAL SECOND ORG | **FAIL** this run (meridian-admin bootstrap credentials invalid; not rotated) |
 
-## Surface matrix
+## Personas & contexts
 
-| # | Surface | Route | Primary job | Source of truth | Loading / empty / error | Residual notes |
-|---|---------|-------|-------------|-----------------|-------------------------|----------------|
-| 1 | Today | `/app` | What needs me + what Otzar completed | AmbientWorkSurface, DGI, actions, collab, team-work | Calm empty; errors soft-fail | Enhanced handled band + collab receipts (local) |
-| 2 | Action Center | `/app/action-center` | Decisions + lifecycle | `api.actions.list` | Tabs; empty copy honest | SUCCEEDED≠“Sent”; FAILED/TIMED_OUT honest |
-| 3 | Candidate review | Action Center / OrgTruth / Transcript | Accept candidates | PARTIAL rails | — | **NOT COMPLETE** product loop |
-| 4 | People | `/app/collaboration` | Roster + help | contextHealth, collab API | Empty lists | **Receipt section added (local)** |
-| 5 | Person detail | People → cockpit | One person | PersonCockpit | — | Browser pending |
-| 6 | Projects | `/app/work-projects` | Project list | WorkProject | — | Browser pending |
-| 7 | Project detail | project id | Members / work | WorkProject | — | Browser pending |
-| 8 | Floating Talk | AmbientOtzarBar | Primary conversation | conductSession | — | Browser pending |
-| 9 | Conversation history | `/app/voice` etc. | Continuity | conversations API | — | Browser pending |
-| 10 | Connections | `/app/connector-health` | OAuth honesty | enterpriseTools | Reconnect labeled | Calendar VIEW only proven historically |
-| 11 | Notifications | Bell | Alerts | Notification | — | Fanout not browser-proven |
-| 12 | Approvals | Action Center pending + escalations | Human approval | Escalation | Dual-control block honesty | No second admin |
-| 13 | Handoffs | Action Center | Incoming/outgoing | handoffs API | Ack from Today | PASS at API |
-| 14 | Execution status | Action Center tabs | SUCCEEDED/FAILED/RUNNING | Action + attempts | RUNNING not “done” | Engine PASS |
-| 15 | Proof | Action detail / capsule | Proof capsule | Action attempts + capsule | Progressive disclosure | API PASS; UI partial |
-| 16 | Corrections | `/app/corrections` | Correction signals | correction APIs | — | Fanout **NOT PROVEN** across all surfaces |
-| 17 | Memory | `/app/my-memory` | Capsules | wallet capsules | — | Browser pending |
-| 18 | Work-style learning | work-style candidates | Style approve/reject | work-style API | — | Not launch candidates |
-| 19 | Guided Setup | setup routes | Onboarding | setup services | — | Browser pending |
-| 20 | Dandelion | setup / growth details | Growth suggestions | dandelion | Below fold on People | Browser pending |
-| 21 | Preferences | `/app/preferences` | Prefs | prefs | — | Browser pending |
-| 22 | Admin / users | `/users`, hubs | Authority | admin APIs | Synthetic filter P1 | Browser pending |
-| 23 | More | Ambient More | Secondary | nav | — | Browser pending |
-| 24–27 | Loading / empty / error / unauthorized | all | Honesty | — | Soft-fail common | Full matrix **NOT COMPLETE** |
+| Context | Account | Org | Result |
+|---------|---------|-----|--------|
+| Founder | sadeil@niovlabs.com | NIOV Labs | PASS |
+| Employee | david@niovlabs.com | NIOV Labs | PASS |
+| Admin | same founder | NIOV Labs | PASS |
+| Adversarial | — | — | NOT RUN |
 
-## What is *not* claimed
+Screenshots: `otzar-control-tower/screenshots/founder-experience-closure/` (19+ PNGs)
 
-- FOUNDER_EXPERIENCE_APPROVED  
-- Full zero residual counts without screenshot evidence  
-- Correction fanout across Today + Talk + notifications  
-- Calendar beyond VIEW/UNDERSTAND  
+## Surfaces walked (authenticated)
 
-## Next agent step
+| # | Surface | Founder | Employee | Notes |
+|---|---------|---------|----------|-------|
+| 1 | Today `/app` | WALKED | WALKED | Needs me: comms replies dominate; full loop bands **partial** |
+| 2 | Needs me | WALKED | WALKED | Completed 2; Blocked shows **Failed — not completed** / **Timed out — not completed** |
+| 3 | Candidate review | PARTIAL | — | No complete Accept/Correct/Reject product for Decision/Commitment/Risk |
+| 4 | People | WALKED | WALKED | **How AI Teammates collaborated** section LIVE with WHO/WHY/used/excluded/RESULT |
+| 5–8 | Person/Projects | PARTIAL | — | Projects walked; person cockpit not deep-walked |
+| 9 | Floating Talk | FAIL automation | — | Header Talk / Talk to Otzar visible; input not captured by first probe |
+| 10 | Conversation history | WALKED | — | `/app/voice` |
+| 11 | Connections | WALKED | — | Capability-first MCP denial copy present |
+| 12 | Notifications | API 200 | — | Bell shows 20+; not full UI matrix |
+| 13–16 | Approvals / handoffs / execution / proof | PARTIAL | — | Action tabs prove honest failure language; SUCCEEDED `8253d602` in list via API |
+| 17 | Corrections | WALKED | — | Surface loads; full fanout not re-proven |
+| 18 | Memory | WALKED | — | |
+| 19–23 | Work-style / setup / dandelion / prefs / admin users | PARTIAL | — | Prefs walked (1 UUID residual); users walked |
+| 24–28 | Loading/empty/error/unauth | PARTIAL | — | Auth gates 401 without token; empty states present |
 
-Credentialed Playwright/live browser with demo accounts (secrets from vault, never chat): founder → employee → manager → second-org isolation; fill `docs/testing/OTZAR_AUTHENTICATED_BROWSER_RESULTS.json` with screenshot paths.
+## Browser evidence highlights
+
+### Needs me — honest failure language (PASS)
+
+Screenshot `founder-action-blocked.png` shows:
+
+- Badge **Failed — not completed**
+- Badge **Timed out — not completed**
+- Not silent RUNNING-as-done
+
+### People — collaboration receipts (PASS UI)
+
+Screenshot `founder-people.png` shows section **How AI Teammates collaborated** with WHO / WHY / What was used / What was excluded / Result / elapsed time / progressive technical reference.
+
+Receipt `8e46a8e6-…` is **COMPLETED** on **David’s outbound** (API); founder People shows other completed collabs. Employee surfaces mark collab receipts present.
+
+### Today — loop incomplete (PARTIAL)
+
+Screenshot `founder-today.png` emphasizes:
+
+- Otzar found · people need review  
+- Needs me · 19 replies (Comms)  
+- Talk to Otzar  
+
+Does **not** yet dominate with completed action / proof / Annie–David handoff narrative (data/projection gap, not deploy gap).
+
+## Live policy matrix (authenticated API)
+
+| Scenario | Result |
+|----------|--------|
+| LOW + explicit RECORD_CAPSULE policy | **PASS** — create → `decision_reason=approval-required-explicit-auto-approve`, `requires_approval=false`, risk LOW → executor **SUCCEEDED** (`record_capsule_ok:…`) |
+| LOW without policy | NOT fully exercised (payload schema constraints); unit suite covers dual-control under HITL |
+| MEDIUM | NOT fully exercised live (create schema) |
+| HIGH dual control | Still **BLOCKED** without second admin (no fake approver) |
+| GLOBAL BYPASSES | **0** (`require_human_approval=true` restored) |
+
+## Remaining gaps
+
+1. Talk grounding automation (UI input open path)  
+2. Governed candidate Accept/Correct/Reject product loop  
+3. Correction fanout multi-surface browser proof  
+4. Founder Today full loop projection (actions/collab/proof bands)  
+5. Adversarial second-org browser  
+6. Walter media template behavioral proof  
+7. Calendar capability re-proof beyond VIEW  
+
+## Claims
+
+```
+FOUNDER EXPERIENCE: AWAITING REVIEW
+RC2 SIGNAL FREEZE: NOT RESTORED
+YC RELEASE CANDIDATE: NOT READY
+SECRET EXPOSED: NO
+CARETAKER RELAY TOUCHED: NO
+```

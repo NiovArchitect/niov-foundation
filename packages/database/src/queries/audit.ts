@@ -564,6 +564,7 @@ export type AuditEventType =
   // has_selected_time booleans only. FORBIDDEN: tokens, attendee
   // identities/emails, event titles, raw provider bodies.
   | "CALENDAR_EVENT_CREATE"
+  | "CALENDAR_EVENT_UPDATE"
   | "CALENDAR_EVENT_DELETE"
   // [OTZAR-CONTINUITY] a chat-turn calendar proposal was drafted + persisted
   // (pending caller confirmation). Additive; no migration.
@@ -1076,8 +1077,9 @@ export const AUDIT_EVENT_TYPE_VALUES = [
   "CONNECTOR_GOOGLE_ACCOUNT_MISMATCH_BLOCKED",
   // Phase 1270 read-only connector data bridges.
   "CONNECTOR_DATA_READ",
-  // Phase 1272 gated calendar event creation.
+  // Phase 1272 gated calendar event creation / update / delete.
   "CALENDAR_EVENT_CREATE",
+  "CALENDAR_EVENT_UPDATE",
   "CALENDAR_EVENT_DELETE",
   "CALENDAR_PROPOSAL_DRAFTED",
   // [GOOGLE-DOCS-WRITE] Gated Google Doc creation.

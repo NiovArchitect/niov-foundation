@@ -1,22 +1,19 @@
 {
   "title": "OTZAR_ACTION_POLICY_MATRIX_RESULTS",
-  "date": "2026-07-27",
-  "status": "UNIT_PASS_LIVE_RESTORE_PENDING",
-  "code_change": "Rung 1 refined: require_human_approval no longer short-circuits explicit LOW AUTO_APPROVE when org_auto_approve_low_risk=true",
-  "unit_file": "tests/unit/action-policy-evaluator.test.ts",
-  "unit_results": {
-    "low_explicit_policy_under_hitl": "PASS",
-    "low_without_policy_under_hitl": "PASS_DUAL_CONTROL",
-    "low_policy_without_org_auto_flag": "PASS_DUAL_CONTROL",
-    "medium_under_hitl": "PASS_DUAL_CONTROL",
-    "high_under_hitl": "PASS_DUAL_CONTROL"
+  "date": "2026-07-28T01:01:55.693537+00:00",
+  "status": "LIVE_PARTIAL",
+  "foundation_deploy_sha": "0e1636343f108d211d03508fb65a0d12232df60f",
+  "live_org": {
+    "require_human_approval": true,
+    "auto_approve_low_risk": true
   },
-  "live_org_settings": {
-    "require_human_approval": "STILL_FALSE_UNTIL_DEPLOY_AND_RESTORE",
-    "auto_approve_low_risk": "true_demo",
-    "restore_after_deploy": true
+  "low_explicit_record_capsule": {
+    "result": "PASS",
+    "decision_reason": "approval-required-explicit-auto-approve",
+    "terminal": "SUCCEEDED",
+    "proof_summary_prefix": "record_capsule_ok"
   },
   "high_risk_dual_control": "BLOCKED_NO_SECOND_APPROVER",
-  "fake_second_approver": false,
-  "global_approval_bypasses": "DEMO_FLAG_STILL_WEAKENED_UNTIL_RESTORE"
+  "global_approval_bypasses": 0,
+  "high_risk_auto_approvals": 0
 }

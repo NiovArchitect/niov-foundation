@@ -599,6 +599,233 @@ export async function createCalendarEvent(args: {
   };
 }
 
+// [CALENDAR-WRITE] Update/reschedule a previously-created event — preserves
+// event identity (PATCH, never a second insert). Title and/or start/end.
+export type CalendarEventUpdateResult =
+  | {
+      ok: true;
+      status: "UPDATED";
+      event_id: string;
+      calendar_id: string;
+      html_link: string | null;
+      start: string | null;
+      end: string | null;
+      title: string | null;
+    }
+  | {
+      ok: false;
+      code:
+        | "GOOGLE_RECONNECT_REQUIRED"
+        | "EVENT_WRITE_SCOPE_MISSING"
+        | "PROVIDER_ERROR"
+        | "INVALID_REQUEST"
+        | "EVENT_NOT_FOUND";
+    };
+
+export interface CalendarEventUpdateInput {
+  event_id: string;
+  calendar_id?: string;
+  /** New title when renaming. */
+  title?: string;
+  /** New start/end when rescheduling (both required together). */
+  selected_time?: SelectedTime | null;
+}
+
+/**
+ * WHAT: Patch an existing Google Calendar event (title and/or time).
+ * INPUT: org actor + event_id + optional title + optional selected_time.
+ * OUTPUT: same event_id on success (no duplicate); honest gate codes on deny.
+ * WHY: Close calendar lifecycle without rebuilding integration; PATCH
+ *      preserves identity; create/delete remain the bookends.
+ */
+export async function updateCalendarEvent(args: {
+  actor_entity_id: string;
+  org_entity_id: string;
+  input: CalendarEventUpdateInput;
+}): Promise<CalendarEventUpdateResult> {
+  const eventId =
+    typeof args.input.event_id === "string" ? args.input.event_id.trim() : "";
+  if (eventId.length === 0) {
+    return { ok: false, code: "INVALID_REQUEST" };
+  }
+  const hasTitle =
+    typeof args.input.title === "string" && args.input.title.trim().length > 0;
+  const sel = args.input.selected_time;
+  const hasTime =
+    sel !== undefined &&
+    sel !== null &&
+    typeof sel.start === "string" &&
+    sel.start.length > 0 &&
+    typeof sel.end === "string" &&
+    sel.end.length > 0;
+  if (!hasTitle && !hasTime) {
+    return { ok: false, code: "INVALID_REQUEST" };
+  }
+
+  const calendarId =
+    typeof args.input.calendar_id === "string" && args.input.calendar_id.length > 0
+      ? args.input.calendar_id
+      : "primary";
+
+  const audit = async (
+    outcome: "SUCCESS" | "DENIED",
+    reason: string,
+  ): Promise<void> => {
+    await writeAuditEvent({
+      event_type: "CALENDAR_EVENT_UPDATE",
+      outcome,
+      actor_entity_id: args.actor_entity_id,
+      target_entity_id: args.org_entity_id,
+      details: {
+        reason,
+        has_title: hasTitle,
+        has_selected_time: hasTime,
+      },
+    });
+  };
+
+  const scopes = await getProviderGrantedScopes({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (scopes === null) {
+    await audit("DENIED", "GOOGLE_RECONNECT_REQUIRED");
+    return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
+  }
+  if (!grantsEventWrite(scopes)) {
+    await audit("DENIED", "EVENT_WRITE_SCOPE_MISSING");
+    return { ok: false, code: "EVENT_WRITE_SCOPE_MISSING" };
+  }
+
+  const token = await getProviderAccessTokenForOrg({
+    provider: "GOOGLE_WORKSPACE",
+    org_entity_id: args.org_entity_id,
+  });
+  if (token.ok === false) {
+    await audit("DENIED", "GOOGLE_RECONNECT_REQUIRED");
+    return { ok: false, code: "GOOGLE_RECONNECT_REQUIRED" };
+  }
+
+  const patchBody: Record<string, unknown> = {};
+  if (hasTitle) {
+    patchBody.summary = (args.input.title as string).trim();
+  }
+  if (hasTime && sel) {
+    patchBody.start = { dateTime: sel.start };
+    patchBody.end = { dateTime: sel.end };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(patchBody),
+      },
+    );
+  } catch {
+    await audit("DENIED", "provider_fetch_failed");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  if (res.status === 401 || res.status === 403) {
+    await audit("DENIED", "EVENT_WRITE_SCOPE_MISSING");
+    return { ok: false, code: "EVENT_WRITE_SCOPE_MISSING" };
+  }
+  if (res.status === 404 || res.status === 410) {
+    await audit("DENIED", "EVENT_NOT_FOUND");
+    return { ok: false, code: "EVENT_NOT_FOUND" };
+  }
+  if (!res.ok) {
+    await audit("DENIED", `http_${res.status}`);
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  const body = (await res.json().catch(() => ({}))) as {
+    id?: unknown;
+    htmlLink?: unknown;
+    summary?: unknown;
+    start?: { dateTime?: unknown };
+    end?: { dateTime?: unknown };
+  };
+  const returnedId = typeof body.id === "string" ? body.id : eventId;
+  // Identity must not change — a different id would mean a duplicate path.
+  if (returnedId !== eventId) {
+    await audit("DENIED", "event_id_mismatch");
+    return { ok: false, code: "PROVIDER_ERROR" };
+  }
+  await audit("SUCCESS", hasTime && hasTitle ? "reschedule_and_rename" : hasTime ? "reschedule" : "rename");
+
+  // Best-effort: patch matching MEETING ledger row details for start/end/title.
+  // Direct Prisma update — patchLedgerEntry is manager-scoped and wrong shape here.
+  try {
+    const prior = await prisma.workLedgerEntry.findFirst({
+      where: {
+        org_entity_id: args.org_entity_id,
+        ledger_type: "MEETING",
+        details: { path: ["event_id"], equals: eventId },
+      },
+      orderBy: { created_at: "desc" },
+      select: { ledger_entry_id: true, details: true },
+    });
+    if (prior !== null) {
+      const d =
+        typeof prior.details === "object" && prior.details !== null
+          ? ({ ...(prior.details as Record<string, unknown>) } as Record<
+              string,
+              unknown
+            >)
+          : {};
+      if (hasTitle) d.title = (args.input.title as string).trim();
+      if (hasTime && sel) {
+        d.start = sel.start;
+        d.end = sel.end;
+      }
+      d.updated_via = "calendar_event_update";
+      await prisma.workLedgerEntry.update({
+        where: { ledger_entry_id: prior.ledger_entry_id },
+        data: {
+          ...(hasTitle
+            ? { title: (args.input.title as string).trim() }
+            : {}),
+          details: d as object,
+        },
+      });
+    }
+  } catch {
+    // ledger enhancement only
+  }
+
+  return {
+    ok: true,
+    status: "UPDATED",
+    event_id: eventId,
+    calendar_id: calendarId,
+    html_link: typeof body.htmlLink === "string" ? body.htmlLink : null,
+    start:
+      typeof body.start?.dateTime === "string"
+        ? body.start.dateTime
+        : hasTime && sel
+          ? sel.start
+          : null,
+    end:
+      typeof body.end?.dateTime === "string"
+        ? body.end.dateTime
+        : hasTime && sel
+          ? sel.end
+          : null,
+    title:
+      typeof body.summary === "string"
+        ? body.summary
+        : hasTitle
+          ? (args.input.title as string).trim()
+          : null,
+  };
+}
+
 // [CALENDAR-WRITE] Delete a previously-created event — the cleanup rail
 // (and the honest "cancel the meeting" path). Reached only with the
 // event-write scope; audited CALENDAR_EVENT_DELETE. Idempotent: a 404/410

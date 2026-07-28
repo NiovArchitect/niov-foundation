@@ -1,0 +1,31 @@
+{
+  "title": "OTZAR_AUTONOMY_LEARNING_RESULTS",
+  "date": "2026-07-28T02:26:54.688069+00:00",
+  "status": "PASS",
+  "correction": {
+    "status": 201,
+    "correction_id": "9413b649",
+    "original_resolution": "Walter",
+    "corrected_resolution": "Annie",
+    "scope": "ORG + project/work type product-launch research",
+    "authority_expansion": 0,
+    "eligible_scope": "same organization; launch research dependencies",
+    "prohibited_scope": "global rules; permission changes; other orgs"
+  },
+  "learned_pattern": {
+    "candidate_id": "21f63a62",
+    "preference_id": "ac89b731",
+    "scope": "caller + org-bound preference; no permission change",
+    "approver": "sadeil@niovlabs.com",
+    "http": 200
+  },
+  "run2_learning_applied": {
+    "annie_research_pattern_active": true,
+    "wrong_walter_draft_still_active": false,
+    "corrected_error_repeated": 0
+  },
+  "learning_authority_expansions": 0,
+  "corrected_error_repeated": 0,
+  "first_run_interventions": 2,
+  "second_run_interventions": 0
+}
