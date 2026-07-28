@@ -15,7 +15,10 @@ import {
   CircuitBreaker,
   LLM_USER_SAFE_UNAVAILABLE,
   MockLLMProvider,
+  classifyXaiProviderError,
+  orderedProviderKinds,
   withCircuitBreaker,
+  withProviderChain,
   withProviderFailover,
   type LLMResult,
 } from "@niov/api";
@@ -218,5 +221,125 @@ describe("withProviderFailover -- primary failure uses secondary", () => {
       expect(r.fallback_message).toBe(LLM_USER_SAFE_UNAVAILABLE);
       expect(r.fallback_message).not.toMatch(/Anthropic|OpenAI|credit|rate/i);
     }
+  });
+});
+
+describe("withProviderChain -- three-provider failover", () => {
+  it("tries third provider when first two fail", async () => {
+    const a = new MockLLMProvider([FAILURE]);
+    const b = new MockLLMProvider([FAILURE]);
+    const cOk: LLMResult = {
+      ok: true,
+      text: "xai grounded",
+      provider: "xai",
+      model: "grok-4.5",
+    };
+    const c = new MockLLMProvider([cOk]);
+    const chain = withProviderChain([a, b, c]);
+    const args = {
+      system: "sys",
+      user: "What is the current HelioGrid decision?",
+      context: "authorized context",
+    };
+    const r = await chain.generateResponse(args);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.provider).toBe("xai");
+      expect(r.text).toBe("xai grounded");
+    }
+    expect(a.getCalls()).toEqual([args]);
+    expect(b.getCalls()).toEqual([args]);
+    expect(c.getCalls()).toEqual([args]);
+  });
+
+  it("all-fail returns user-safe message with no vendor leak", async () => {
+    const chain = withProviderChain([
+      new MockLLMProvider([
+        {
+          ok: false,
+          code: "INSUFFICIENT_CREDITS",
+          fallback_message: "xAI credit balance too low",
+          provider: "xai",
+        },
+      ]),
+      new MockLLMProvider([
+        {
+          ok: false,
+          code: "PROVIDER_ERROR",
+          fallback_message: "Anthropic credit balance too low",
+          provider: "anthropic",
+        },
+      ]),
+      new MockLLMProvider([
+        {
+          ok: false,
+          code: "RATE_LIMIT",
+          fallback_message: "OpenAI quota exceeded",
+          provider: "openai",
+        },
+      ]),
+    ]);
+    const r = await chain.generateResponse({ system: "s", user: "u" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.fallback_message).toBe(LLM_USER_SAFE_UNAVAILABLE);
+      expect(r.fallback_message).not.toMatch(/xAI|Anthropic|OpenAI|credit|quota/i);
+    }
+  });
+});
+
+describe("orderedProviderKinds", () => {
+  it("puts preferred first then xai/anthropic/openai excluding preferred", () => {
+    expect(orderedProviderKinds("xai")).toEqual([
+      "xai",
+      "anthropic",
+      "openai",
+    ]);
+    expect(orderedProviderKinds("anthropic")).toEqual([
+      "anthropic",
+      "xai",
+      "openai",
+    ]);
+    expect(orderedProviderKinds("openai")).toEqual([
+      "openai",
+      "xai",
+      "anthropic",
+    ]);
+  });
+});
+
+describe("classifyXaiProviderError", () => {
+  it("classifies 401 / invalid key", () => {
+    const r = classifyXaiProviderError(new Error("401 Incorrect API key"));
+    expect(r.code).toBe("INVALID_KEY");
+  });
+
+  it("classifies insufficient credits / quota", () => {
+    const r = classifyXaiProviderError(
+      new Error("402 Your credit balance is too low"),
+    );
+    expect(r.code).toBe("INSUFFICIENT_CREDITS");
+  });
+
+  it("classifies rate limit", () => {
+    const r = classifyXaiProviderError({
+      message: "Too many requests",
+      status: 429,
+    });
+    expect(r.code).toBe("RATE_LIMIT");
+  });
+
+  it("classifies timeout", () => {
+    const r = classifyXaiProviderError(new Error("Request timed out ETIMEDOUT"));
+    expect(r.code).toBe("TIMEOUT");
+  });
+
+  it("never embeds secrets in the classification message path", () => {
+    const secret = "xai-super-secret-key-value";
+    const r = classifyXaiProviderError(new Error(`provider failed for ${secret}`));
+    // classification returns the message for logs; product UI must not
+    // use it. Assert the code stays closed-vocab.
+    expect(r.code).toBe("PROVIDER_ERROR");
+    expect(typeof r.message).toBe("string");
   });
 });

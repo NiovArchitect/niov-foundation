@@ -609,15 +609,22 @@ export {
   LLM_USER_SAFE_UNAVAILABLE,
   MockLLMProvider,
   OpenAIProvider,
+  XAIProvider,
+  classifyXaiProviderError,
   computeLLMInputHash,
   getLLMProvider,
+  isXaiEnabled,
+  orderedProviderKinds,
+  resolvePreferredProviderKind,
   withCircuitBreaker,
+  withProviderChain,
   withProviderFailover,
 } from "./services/llm/llm.service.js";
 export type {
   CircuitState,
   FixtureFile,
   LLMProvider,
+  LLMProviderKind,
   LLMResult,
 } from "./services/llm/llm.service.js";
 
