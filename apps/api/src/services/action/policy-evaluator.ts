@@ -266,10 +266,12 @@ function resolvePolicyDecision(
 //
 //      Order of evaluation (most restrictive first; earliest match wins):
 //        STRUCTURAL VALIDATION → ENVELOPE_INVALID
-//        Rung 1 (§4.1) — org_require_human_approval → REQUIRE_DUAL_CONTROL
 //        EXPLICIT POLICY FORBIDDEN — overrides everything below (per
 //          §4.2 note that policy FORBIDDEN overrides the CRITICAL floor)
 //        Rung 3 (§4.3) — autonomy_level OBSERVE_ONLY → FORBIDDEN
+//        Rung 1 (§4.1 refined) — org_require_human_approval →
+//          REQUIRE_DUAL_CONTROL UNLESS explicit LOW + ActionPolicy
+//          AUTO_APPROVE + org_auto_approve_low_risk (bounded automation)
 //        EXPLICIT POLICY REQUIRE_BREAK_GLASS → REQUIRE_BREAK_GLASS
 //        Rung 2 (§4.2) — risk_tier CRITICAL → REQUIRE_DUAL_CONTROL floor
 //        EXPLICIT POLICY REQUIRE_DUAL_CONTROL → REQUIRE_DUAL_CONTROL
@@ -316,15 +318,31 @@ export function evaluateActionPolicy(
     };
   }
 
-  // Rung 1 (§4.1) — org_require_human_approval = true overrides
-  // everything below (every autonomy_level, every risk_tier). Default
-  // true per schema.prisma OrgSettings; safe HITL default.
+  // Rung 1 (§4.1 refined) — org_require_human_approval = true is the
+  // organization DEFAULT for human approval on consequential work.
+  // It must NOT silently short-circuit every ActionPolicy path:
+  // when risk is LOW, an explicit ActionPolicy AUTO_APPROVE row
+  // exists for the (action_type, risk_tier) pair, AND
+  // org_auto_approve_low_risk is true, fall through so Rung 4/5/6
+  // can grant bounded low-risk automation. MEDIUM/HIGH/CRITICAL
+  // never auto-approve through this exception (HIGH/CRITICAL still
+  // dual-control; MEDIUM still requires later rungs / human path).
+  // Default require_human_approval=true per OrgSettings remains the
+  // safe HITL posture; demo org can restore it without killing
+  // explicit RECORD_CAPSULE / notification LOW auto-approve policies.
   if (org_require_human_approval) {
-    return {
-      ok: true,
-      decision: "REQUIRE_DUAL_CONTROL",
-      reason: REASON_CODES.ORG_REQUIRE_HUMAN_APPROVAL,
-    };
+    const explicitLowAutoApprove =
+      risk_tier === "LOW" &&
+      policy_decision === "AUTO_APPROVE" &&
+      org_auto_approve_low_risk === true;
+    if (!explicitLowAutoApprove) {
+      return {
+        ok: true,
+        decision: "REQUIRE_DUAL_CONTROL",
+        reason: REASON_CODES.ORG_REQUIRE_HUMAN_APPROVAL,
+      };
+    }
+    // Fall through: bounded LOW auto-approve continues to Rung 4/5/6.
   }
 
   // EXPLICIT POLICY REQUIRE_BREAK_GLASS — paired with BreakGlassGrant

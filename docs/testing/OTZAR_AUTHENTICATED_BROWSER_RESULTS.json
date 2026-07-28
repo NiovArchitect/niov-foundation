@@ -1,0 +1,33 @@
+{
+  "title": "OTZAR_AUTHENTICATED_BROWSER_RESULTS",
+  "date": "2026-07-27",
+  "status": "PARTIAL",
+  "note": "Credentialed full click-through incomplete in agent environment. Code-route census + unit tests only. Do not claim clean zero residuals.",
+  "foundation_deploy_sha": "03cc5bfa63ac29f187487d81649fd323e91ec481",
+  "control_tower_deploy_sha": "629813d1471412db3129bab3a331c2e5ce2fea6d",
+  "local_ct_branch": "feat/founder-visible-work-os",
+  "local_fnd_branch": "fix/action-policy-explicit-low-auto-under-hitl",
+  "personas": {
+    "founder": "NOT_RUN_BROWSER",
+    "employee": "NOT_RUN_BROWSER",
+    "manager_admin": "NOT_RUN_BROWSER",
+    "adversarial_second_org": "NOT_RUN_BROWSER"
+  },
+  "surfaces_reviewed_code": 27,
+  "surfaces_reviewed_browser": 0,
+  "screenshots": [],
+  "dead_primary_controls": null,
+  "raw_fixture_identities": null,
+  "developer_language_blockers": null,
+  "meaningless_metrics": null,
+  "unexplained_primary_assets": null,
+  "raw_uuids_in_ordinary_ui": null,
+  "cross_surface_data_conflicts": null,
+  "cross_tenant_disclosures": null,
+  "wrong_org_context": null,
+  "claims_forbidden": [
+    "FOUNDER_EXPERIENCE_APPROVED",
+    "RC2_SIGNAL_FREEZE_RESTORED",
+    "YC_RELEASE_CANDIDATE_READY"
+  ]
+}

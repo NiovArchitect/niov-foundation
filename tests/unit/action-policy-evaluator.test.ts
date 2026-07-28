@@ -213,8 +213,8 @@ describe("ADR-0057 §3 + §4 — evaluateActionPolicy pure deterministic evaluat
     });
   });
 
-  describe("Rung 1 (§4.1) — org_require_human_approval", () => {
-    it("Case 3: forces REQUIRE_DUAL_CONTROL at LOW", () => {
+  describe("Rung 1 (§4.1 refined) — org_require_human_approval", () => {
+    it("Case 3: forces REQUIRE_DUAL_CONTROL at LOW without explicit policy", () => {
       const r = evaluateActionPolicy(
         input("LOW", { org_require_human_approval: true }),
       );
@@ -235,6 +235,53 @@ describe("ADR-0057 §3 + §4 — evaluateActionPolicy pure deterministic evaluat
       );
       expect(r.ok === true && r.decision).toBe("REQUIRE_DUAL_CONTROL");
       expect(r.ok === true && r.reason).toBe(REASON_CODES.ORG_REQUIRE_HUMAN_APPROVAL);
+    });
+    it("LOW + explicit AUTO_APPROVE + org_auto_approve_low_risk under HITL default → AUTO_APPROVE", () => {
+      // Preferred steady state: require_human_approval=true (HITL default)
+      // still allows bounded low-risk automation when ActionPolicy is explicit.
+      const r = evaluateActionPolicy(
+        input("LOW", {
+          org_require_human_approval: true,
+          org_auto_approve_low_risk: true,
+          twin_autonomy_level: "APPROVAL_REQUIRED",
+          action_policy_row: policy("RECORD_CAPSULE", "LOW", "AUTO_APPROVE"),
+        }),
+      );
+      expect(r).toEqual({
+        ok: true,
+        decision: "AUTO_APPROVE",
+        reason: REASON_CODES.APPROVAL_REQUIRED_EXPLICIT_AUTO_APPROVE,
+      });
+    });
+    it("LOW + explicit AUTO_APPROVE but org_auto_approve_low_risk=false → REQUIRE_DUAL_CONTROL", () => {
+      const r = evaluateActionPolicy(
+        input("LOW", {
+          org_require_human_approval: true,
+          org_auto_approve_low_risk: false,
+          twin_autonomy_level: "APPROVAL_REQUIRED",
+          action_policy_row: policy("RECORD_CAPSULE", "LOW", "AUTO_APPROVE"),
+        }),
+      );
+      expect(r).toEqual({
+        ok: true,
+        decision: "REQUIRE_DUAL_CONTROL",
+        reason: REASON_CODES.ORG_REQUIRE_HUMAN_APPROVAL,
+      });
+    });
+    it("MEDIUM + explicit AUTO_APPROVE under HITL default → REQUIRE_DUAL_CONTROL (no medium auto via Rung 1)", () => {
+      const r = evaluateActionPolicy(
+        input("MEDIUM", {
+          org_require_human_approval: true,
+          org_auto_approve_low_risk: true,
+          twin_autonomy_level: "APPROVAL_REQUIRED",
+          action_policy_row: policy("RECORD_CAPSULE", "MEDIUM", "AUTO_APPROVE"),
+        }),
+      );
+      expect(r).toEqual({
+        ok: true,
+        decision: "REQUIRE_DUAL_CONTROL",
+        reason: REASON_CODES.ORG_REQUIRE_HUMAN_APPROVAL,
+      });
     });
   });
 
