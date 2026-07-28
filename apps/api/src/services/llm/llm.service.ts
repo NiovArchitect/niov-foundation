@@ -2,18 +2,19 @@
 // PURPOSE: LLM provider abstraction with circuit-breaker fault
 //          isolation. Section 11B's conductSession routes through
 //          this layer; one CLOSED→OPEN→HALF_OPEN cycle prevents a
-//          downstream Anthropic / OpenAI outage from cascading.
+//          downstream Anthropic / OpenAI / xAI outage from cascading.
 //
-// CONCRETE provider classes (AnthropicProvider, OpenAIProvider) are
-// exported for production use. CI tests use MockLLMProvider only --
-// real API calls are deliberately excluded from CI to keep tests
-// fast, deterministic, and free of API key requirements. To smoke-
-// test real providers, run scripts/smoke-llm.ts manually with API
-// keys set.
+// CONCRETE provider classes (AnthropicProvider, OpenAIProvider,
+// XAIProvider) are exported for production use. CI tests use
+// MockLLMProvider only -- real API calls are deliberately excluded
+// from CI to keep tests fast, deterministic, and free of API key
+// requirements. To smoke-test real providers, run scripts/smoke-llm.ts
+// manually with API keys set.
 //
-// CONNECTS TO: @anthropic-ai/sdk and openai (production calls),
-//              tests/unit/llm.test.ts (circuit-breaker matrix
-//              against MockLLMProvider).
+// CONNECTS TO: @anthropic-ai/sdk and openai (production calls;
+//              XAIProvider reuses the OpenAI SDK against api.x.ai),
+//              tests/unit/llm.test.ts (circuit-breaker + failover
+//              matrix against MockLLMProvider).
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -308,6 +309,148 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
+// WHAT: Official xAI Grok API provider. OpenAI-compatible Chat
+//        Completions against https://api.x.ai/v1. NEVER uses consumer
+//        OAuth, ~/.grok/auth.json, or grok.com browser sessions.
+// INPUT: XAI_API_KEY + optional model / base URL / timeout / retries.
+// OUTPUT: An LLMProvider that calls the xAI API.
+// WHY: Production multi-user Talk requires an API key path. Same
+//      system/user/context contract as Anthropic and OpenAI so COE
+//      grounding and governance stay unchanged.
+export class XAIProvider implements LLMProvider {
+  readonly name = "xai";
+  private readonly client: OpenAI;
+  private readonly model: string;
+
+  constructor(
+    args: {
+      apiKey?: string;
+      model?: string;
+      baseURL?: string;
+      timeoutMs?: number;
+      maxRetries?: number;
+    } = {},
+  ) {
+    const apiKey = args.apiKey ?? process.env.XAI_API_KEY;
+    if (typeof apiKey !== "string" || apiKey.length === 0) {
+      throw new Error("XAIProvider: XAI_API_KEY env var is required");
+    }
+    const baseURL =
+      args.baseURL ??
+      process.env.XAI_BASE_URL ??
+      "https://api.x.ai/v1";
+    const timeoutRaw =
+      args.timeoutMs ?? Number(process.env.XAI_TIMEOUT_MS ?? "60000");
+    const retriesRaw =
+      args.maxRetries ?? Number(process.env.XAI_MAX_RETRIES ?? "1");
+    this.client = new OpenAI({
+      apiKey,
+      baseURL,
+      timeout: Number.isFinite(timeoutRaw) ? timeoutRaw : 60_000,
+      maxRetries: Number.isFinite(retriesRaw) ? retriesRaw : 1,
+    });
+    // Model selection precedence:
+    //   1. explicit args.model
+    //   2. XAI_MODEL env var
+    //   3. MODEL_ROUTER_DEFAULT_MODEL env var
+    //   4. "grok-4.5" hard-coded default (official docs candidate;
+    //      override via env after live model discovery)
+    this.model =
+      args.model ??
+      process.env.XAI_MODEL ??
+      process.env.MODEL_ROUTER_DEFAULT_MODEL ??
+      "grok-4.5";
+  }
+
+  async generateResponse(
+    args: { system: string; user: string; context?: string },
+    _opts?: { fixtureKey?: string },
+  ): Promise<LLMResult> {
+    try {
+      const userContent =
+        args.context !== undefined && args.context.length > 0
+          ? `${args.context}\n\n---\n\n${args.user}`
+          : args.user;
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        max_tokens: 4096,
+        messages: [
+          { role: "system", content: args.system },
+          { role: "user", content: userContent },
+        ],
+      });
+      const text = response.choices[0]?.message.content ?? "";
+      return { ok: true, text, provider: this.name, model: this.model };
+    } catch (err) {
+      const classified = classifyXaiProviderError(err);
+      return {
+        ok: false,
+        code: classified.code,
+        // Internal detail only — otzar.service + withProviderChain
+        // never surface this string to employees.
+        fallback_message: `xAI provider failed: ${classified.message}`,
+        provider: this.name,
+      };
+    }
+  }
+}
+
+// WHAT: Map xAI/OpenAI-SDK errors to closed-vocab failure codes.
+// INPUT: Unknown thrown value from the SDK / network.
+// OUTPUT: { code, message } for audit-safe logging + breaker.
+// WHY: Failover must distinguish billing/rate-limit from auth denials
+//      without leaking raw vendor bodies to product UI.
+export function classifyXaiProviderError(err: unknown): {
+  code: string;
+  message: string;
+} {
+  const message = err instanceof Error ? err.message : String(err);
+  const lower = message.toLowerCase();
+  // Prefer structured status when present (OpenAI SDK APIError).
+  const status =
+    typeof err === "object" &&
+    err !== null &&
+    "status" in err &&
+    typeof (err as { status?: unknown }).status === "number"
+      ? (err as { status: number }).status
+      : null;
+  if (status === 401 || /invalid.?api.?key|incorrect.?api.?key|unauthorized/.test(lower)) {
+    return { code: "INVALID_KEY", message };
+  }
+  if (
+    status === 402 ||
+    /insufficient.?credit|credit.?balance|billing|payment.?required|quota/.test(
+      lower,
+    )
+  ) {
+    return { code: "INSUFFICIENT_CREDITS", message };
+  }
+  if (status === 403 || /forbidden|permission|not.?allowed/.test(lower)) {
+    return { code: "FORBIDDEN", message };
+  }
+  if (status === 404 || /model.?not.?found|does not exist|unknown model/.test(lower)) {
+    return { code: "MODEL_UNAVAILABLE", message };
+  }
+  if (status === 429 || /rate.?limit|too many requests/.test(lower)) {
+    return { code: "RATE_LIMIT", message };
+  }
+  if (
+    (status !== null && status >= 500) ||
+    /internal server error|bad gateway|service unavailable|502|503|504/.test(
+      lower,
+    )
+  ) {
+    return { code: "PROVIDER_5XX", message };
+  }
+  if (/timeout|etimedout|aborted|deadline/.test(lower)) {
+    return { code: "TIMEOUT", message };
+  }
+  if (/context.?length|too large|maximum context|token limit/.test(lower)) {
+    return { code: "CONTEXT_TOO_LARGE", message };
+  }
+  return { code: "PROVIDER_ERROR", message };
+}
+
 // WHAT: User-safe failure copy. NEVER surface vendor names, credit
 //        balances, model ids, or raw SDK bodies to employees.
 // INPUT: None.
@@ -316,48 +459,78 @@ export class OpenAIProvider implements LLMProvider {
 export const LLM_USER_SAFE_UNAVAILABLE =
   "Otzar could not finish that answer right now. Please try again in a moment.";
 
-// WHAT: Compose primary + secondary providers so a primary outage
-//        (credits, rate-limit, 5xx, circuit open) fails over to the
-//        secondary without changing caller contracts.
-// INPUT: primary and secondary LLMProviders (each already
-//        circuit-breaker wrapped when used from getLLMProvider).
-// OUTPUT: An LLMProvider that tries primary then secondary.
-// WHY: Talk must not depend on a single vendor when both keys are
-//      configured. Same system/user/context args are used for both —
-//      governance and grounding are caller-side and unchanged.
-export function withProviderFailover(
-  primary: LLMProvider,
-  secondary: LLMProvider,
-): LLMProvider {
+// WHAT: Canonical provider kind identifiers for factory routing.
+export type LLMProviderKind = "anthropic" | "openai" | "xai";
+
+// WHAT: Compose an ordered chain of providers. Tries each in order
+//        with identical system/user/context args until one succeeds.
+// INPUT: Non-empty array of LLMProviders (already circuit-breaker
+//        wrapped when built by getLLMProvider).
+// OUTPUT: A single LLMProvider facade.
+// WHY: Talk must tolerate primary outages when any approved fallback
+//      is configured. Governance/grounding stay caller-side.
+export function withProviderChain(providers: LLMProvider[]): LLMProvider {
+  if (providers.length === 0) {
+    throw new Error("withProviderChain: at least one provider is required");
+  }
+  if (providers.length === 1) {
+    return providers[0]!;
+  }
   return {
-    name: `${primary.name}+${secondary.name}`,
+    name: providers.map((p) => p.name).join("+"),
     async generateResponse(args, opts) {
-      const first = await primary.generateResponse(args, opts);
-      if (first.ok) return first;
-      const second = await secondary.generateResponse(args, opts);
-      if (second.ok) {
-        return {
-          ok: true,
-          text: second.text,
-          // Report which provider answered for audit-safe telemetry.
-          provider: second.provider,
-          model: second.model,
-        };
+      let lastProvider = providers[0]!.name;
+      for (const provider of providers) {
+        lastProvider = provider.name;
+        const result = await provider.generateResponse(args, opts);
+        if (result.ok) {
+          return {
+            ok: true,
+            text: result.text,
+            provider: result.provider,
+            model: result.model,
+          };
+        }
       }
       return {
         ok: false,
         code: "PROVIDER_ERROR",
         fallback_message: LLM_USER_SAFE_UNAVAILABLE,
-        provider: primary.name,
+        provider: lastProvider,
       };
     },
   };
 }
 
-function tryBuildProvider(
-  kind: "anthropic" | "openai",
-): LLMProvider | null {
+// WHAT: Compose primary + secondary providers (2-way failover).
+// INPUT: primary and secondary LLMProviders.
+// OUTPUT: An LLMProvider that tries primary then secondary.
+// WHY: Back-compat wrapper over withProviderChain for existing tests
+//      and call sites that pass exactly two providers.
+export function withProviderFailover(
+  primary: LLMProvider,
+  secondary: LLMProvider,
+): LLMProvider {
+  return withProviderChain([primary, secondary]);
+}
+
+// WHAT: Whether xAI is allowed in the production provider chain.
+// INPUT: Reads XAI_ENABLED env (default true when unset).
+// OUTPUT: boolean.
+// WHY: Deploy the adapter safely with XAI_ENABLED=false until key
+//      + billing are ready; key absence alone also skips xAI.
+export function isXaiEnabled(): boolean {
+  const flag = (process.env.XAI_ENABLED ?? "true").toLowerCase();
+  return flag !== "false" && flag !== "0" && flag !== "no" && flag !== "off";
+}
+
+function tryBuildProvider(kind: LLMProviderKind): LLMProvider | null {
   try {
+    if (kind === "xai") {
+      if (!isXaiEnabled()) return null;
+      if (!process.env.XAI_API_KEY) return null;
+      return withCircuitBreaker(new XAIProvider());
+    }
     if (kind === "openai") {
       if (!process.env.OPENAI_API_KEY) return null;
       return withCircuitBreaker(new OpenAIProvider());
@@ -369,51 +542,74 @@ function tryBuildProvider(
   }
 }
 
+// WHAT: Resolve preferred primary provider kind from env.
+// INPUT: process.env LLM_PROVIDER / PREFERRED_LLM / XAI key presence.
+// OUTPUT: LLMProviderKind.
+// WHY: Explicit LLM_PROVIDER wins. When unset and xAI is configured,
+//      prefer xAI so recovery does not depend on unfunded Anthropic
+//      / OpenAI. Otherwise default anthropic (historical default).
+export function resolvePreferredProviderKind(): LLMProviderKind {
+  const raw = (
+    process.env.LLM_PROVIDER ?? process.env.PREFERRED_LLM ?? ""
+  ).toLowerCase();
+  if (raw === "openai" || raw === "anthropic" || raw === "xai") {
+    return raw;
+  }
+  if (raw.length > 0) {
+    throw new Error(
+      `getLLMProvider: unknown LLM_PROVIDER "${raw}" (expected "anthropic", "openai", or "xai")`,
+    );
+  }
+  if (isXaiEnabled() && typeof process.env.XAI_API_KEY === "string" && process.env.XAI_API_KEY.length > 0) {
+    return "xai";
+  }
+  return "anthropic";
+}
+
+// WHAT: Stable fallback order with preferred kind first.
+// INPUT: preferred primary kind.
+// OUTPUT: Ordered kinds: preferred, then xai → anthropic → openai
+//         excluding the preferred entry.
+// WHY: xAI listed first among secondaries so recovery prefers a funded
+//      Grok key when Anthropic/OpenAI are exhausted.
+export function orderedProviderKinds(
+  preferred: LLMProviderKind,
+): LLMProviderKind[] {
+  const base: LLMProviderKind[] = ["xai", "anthropic", "openai"];
+  return [preferred, ...base.filter((k) => k !== preferred)];
+}
+
 // WHAT: Pick the production LLM provider per env config.
-// INPUT: None (reads LLM_PROVIDER or PREFERRED_LLM env, defaults to "anthropic").
+// INPUT: None (reads LLM_PROVIDER / PREFERRED_LLM / provider keys /
+//        XAI_ENABLED).
 // OUTPUT: A circuit-breaker-wrapped LLMProvider, with cross-provider
-//         failover when BOTH keys are present.
+//         failover chain when multiple keys are present.
 // WHY: Single factory used by buildApp's production path. Tests
 //      construct providers + breakers directly with injected clocks.
 //
 //      Env precedence for PRIMARY:
 //        1. LLM_PROVIDER (Founder-facing canonical name; preferred)
 //        2. PREFERRED_LLM (legacy; preserved for back-compat)
-//        3. "anthropic" hard-coded default
+//        3. "xai" when XAI_API_KEY present and XAI_ENABLED
+//        4. "anthropic" hard-coded default
 //
-//      When the non-primary provider's API key is also set, returns
-//      withProviderFailover(primary, secondary). Callers see one
-//      LLMProvider; Talk / voice / extract paths do not change.
+//      When additional providers have keys, returns withProviderChain
+//      in preferred-first order. Callers see one LLMProvider; Talk /
+//      voice / extract paths do not change.
 export function getLLMProvider(): LLMProvider {
-  const preferred = (
-    process.env.LLM_PROVIDER ?? process.env.PREFERRED_LLM ?? "anthropic"
-  ).toLowerCase();
-  if (preferred !== "openai" && preferred !== "anthropic") {
+  const preferred = resolvePreferredProviderKind();
+  const kinds = orderedProviderKinds(preferred);
+  const built: LLMProvider[] = [];
+  for (const kind of kinds) {
+    const provider = tryBuildProvider(kind);
+    if (provider !== null) built.push(provider);
+  }
+  if (built.length === 0) {
     throw new Error(
-      `getLLMProvider: unknown PREFERRED_LLM "${preferred}" (expected "anthropic" or "openai")`,
+      `getLLMProvider: no LLM API keys configured (need XAI_API_KEY and/or ANTHROPIC_API_KEY and/or OPENAI_API_KEY)`,
     );
   }
-  const primaryKind: "anthropic" | "openai" =
-    preferred === "openai" ? "openai" : "anthropic";
-  const secondaryKind: "anthropic" | "openai" =
-    primaryKind === "openai" ? "anthropic" : "openai";
-
-  const primary = tryBuildProvider(primaryKind);
-  if (primary === null) {
-    // Primary missing key — fall through to secondary alone if available.
-    const onlySecondary = tryBuildProvider(secondaryKind);
-    if (onlySecondary === null) {
-      throw new Error(
-        `getLLMProvider: no LLM API keys configured (need ANTHROPIC_API_KEY and/or OPENAI_API_KEY)`,
-      );
-    }
-    return onlySecondary;
-  }
-  const secondary = tryBuildProvider(secondaryKind);
-  if (secondary === null) {
-    return primary;
-  }
-  return withProviderFailover(primary, secondary);
+  return withProviderChain(built);
 }
 
 // WHAT: Test fixture -- a fully-scripted LLMProvider whose responses

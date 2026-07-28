@@ -7,84 +7,12 @@
  * the route may encounter — without ever calling the real provider
  * SDK.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-// We import the route module so we can re-export an internal helper.
-// To keep the surface small, the test exercises the response shape by
-// hitting the request handler via inject() in an integration test;
-// at the unit tier we just assert the env classification matches what
-// the route would produce. The classification is intentionally pure
-// + branchy + small, so a unit-only assertion across the env axes is
-// the right granularity.
-
-type Code =
-  | "CONFIGURED"
-  | "CONFIGURED_TEST_MODE"
-  | "MISSING_KEY"
-  | "MISSING_PROVIDER"
-  | "MOCK_MODE";
-
-function classifyForTest(env: NodeJS.ProcessEnv): {
-  provider: "anthropic" | "openai" | "mock";
-  status: Code;
-  model: string | null;
-} {
-  if (env.NODE_ENV === "test") {
-    return { provider: "mock", status: "MOCK_MODE", model: null };
-  }
-  const preferred = (
-    env.LLM_PROVIDER ??
-    env.PREFERRED_LLM ??
-    "anthropic"
-  ).toLowerCase();
-  if (preferred !== "anthropic" && preferred !== "openai") {
-    return { provider: "mock", status: "MISSING_PROVIDER", model: null };
-  }
-  const keyEnv =
-    preferred === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
-  const keyValue = env[keyEnv];
-  const keyConfigured =
-    typeof keyValue === "string" &&
-    keyValue.length > 0 &&
-    !keyValue.startsWith("test-stub");
-  if (!keyConfigured) {
-    return {
-      provider: preferred as "anthropic" | "openai",
-      status: "MISSING_KEY",
-      model: null,
-    };
-  }
-  const overrideEnv =
-    preferred === "anthropic" ? "ANTHROPIC_MODEL" : "OPENAI_MODEL";
-  const override = env[overrideEnv];
-  const sharedDefault = env.MODEL_ROUTER_DEFAULT_MODEL;
-  const hardcoded = preferred === "anthropic" ? "claude-sonnet-4-6" : "gpt-4o";
-  const model =
-    typeof override === "string" && override.length > 0
-      ? override
-      : typeof sharedDefault === "string" && sharedDefault.length > 0
-        ? sharedDefault
-        : hardcoded;
-  return {
-    provider: preferred as "anthropic" | "openai",
-    status: "CONFIGURED",
-    model,
-  };
-}
-
-// Snapshot + restore process.env around each test.
-let preservedEnv: NodeJS.ProcessEnv;
-
-beforeEach(() => {
-  preservedEnv = { ...process.env };
-});
-afterEach(() => {
-  process.env = preservedEnv;
-});
+import { describe, expect, it } from "vitest";
+import { classifyAdminLlmStatus } from "../../apps/api/src/routes/admin-llm-status.routes.js";
 
 describe("admin LLM status — closed-vocab classifier", () => {
   it("NODE_ENV=test forces MOCK_MODE regardless of keys", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "test",
       LLM_PROVIDER: "openai",
       OPENAI_API_KEY: "sk-real-key",
@@ -93,11 +21,12 @@ describe("admin LLM status — closed-vocab classifier", () => {
       provider: "mock",
       status: "MOCK_MODE",
       model: null,
+      failover_configured: [],
     });
   });
 
   it("OPENAI + real key + dev mode → CONFIGURED gpt-4o default", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "openai",
       OPENAI_API_KEY: "sk-real-key",
@@ -108,7 +37,7 @@ describe("admin LLM status — closed-vocab classifier", () => {
   });
 
   it("ANTHROPIC + real key + dev mode → CONFIGURED claude-sonnet-4-6 default", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "anthropic",
       ANTHROPIC_API_KEY: "sk-ant-real",
@@ -118,8 +47,31 @@ describe("admin LLM status — closed-vocab classifier", () => {
     expect(out.model).toBe("claude-sonnet-4-6");
   });
 
+  it("XAI + real key → CONFIGURED grok-4.5 default", () => {
+    const out = classifyAdminLlmStatus({
+      NODE_ENV: "development",
+      LLM_PROVIDER: "xai",
+      XAI_API_KEY: "xai-real-key",
+    });
+    expect(out.status).toBe("CONFIGURED");
+    expect(out.provider).toBe("xai");
+    expect(out.model).toBe("grok-4.5");
+  });
+
+  it("XAI_ENABLED=false → DISABLED even when key present", () => {
+    const out = classifyAdminLlmStatus({
+      NODE_ENV: "development",
+      LLM_PROVIDER: "xai",
+      XAI_API_KEY: "xai-real-key",
+      XAI_ENABLED: "false",
+    });
+    expect(out.status).toBe("DISABLED");
+    expect(out.provider).toBe("xai");
+    expect(out.model).toBeNull();
+  });
+
   it("OPENAI_MODEL env overrides hardcoded default", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "openai",
       OPENAI_API_KEY: "sk-real-key",
@@ -129,7 +81,7 @@ describe("admin LLM status — closed-vocab classifier", () => {
   });
 
   it("MODEL_ROUTER_DEFAULT_MODEL is consulted when provider-specific override absent", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "openai",
       OPENAI_API_KEY: "sk-real-key",
@@ -139,7 +91,7 @@ describe("admin LLM status — closed-vocab classifier", () => {
   });
 
   it("OPENAI_MODEL takes precedence over MODEL_ROUTER_DEFAULT_MODEL", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "openai",
       OPENAI_API_KEY: "sk-real-key",
@@ -150,7 +102,7 @@ describe("admin LLM status — closed-vocab classifier", () => {
   });
 
   it("test-stub key → MISSING_KEY", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "openai",
       OPENAI_API_KEY: "test-stub-not-real",
@@ -161,7 +113,7 @@ describe("admin LLM status — closed-vocab classifier", () => {
   });
 
   it("empty key → MISSING_KEY", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "anthropic",
       ANTHROPIC_API_KEY: "",
@@ -170,7 +122,7 @@ describe("admin LLM status — closed-vocab classifier", () => {
   });
 
   it("missing provider env → MISSING_PROVIDER", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "azure-openai",
       OPENAI_API_KEY: "sk-real",
@@ -180,7 +132,7 @@ describe("admin LLM status — closed-vocab classifier", () => {
   });
 
   it("LLM_PROVIDER takes precedence over PREFERRED_LLM", () => {
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "openai",
       PREFERRED_LLM: "anthropic",
@@ -189,8 +141,8 @@ describe("admin LLM status — closed-vocab classifier", () => {
     expect(out.provider).toBe("openai");
   });
 
-  it("default provider is anthropic when neither env var set", () => {
-    const out = classifyForTest({
+  it("default provider is anthropic when neither env var set and no XAI key", () => {
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       ANTHROPIC_API_KEY: "sk-ant-real",
     });
@@ -198,9 +150,20 @@ describe("admin LLM status — closed-vocab classifier", () => {
     expect(out.status).toBe("CONFIGURED");
   });
 
+  it("default provider prefers xai when XAI_API_KEY present and LLM_PROVIDER unset", () => {
+    const out = classifyAdminLlmStatus({
+      NODE_ENV: "development",
+      XAI_API_KEY: "xai-real",
+      ANTHROPIC_API_KEY: "sk-ant-real",
+    });
+    expect(out.provider).toBe("xai");
+    expect(out.status).toBe("CONFIGURED");
+    expect(out.failover_configured).toContain("anthropic");
+  });
+
   it("never echoes the key value anywhere in the response shape", () => {
     const keyValue = "sk-this-is-a-fake-key-value-that-should-never-appear";
-    const out = classifyForTest({
+    const out = classifyAdminLlmStatus({
       NODE_ENV: "development",
       LLM_PROVIDER: "openai",
       OPENAI_API_KEY: keyValue,
