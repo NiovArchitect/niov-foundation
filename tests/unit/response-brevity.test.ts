@@ -19,14 +19,19 @@ describe("response-brevity", () => {
     expect(RESPONSE_BREVITY_SYSTEM_STRIP).toMatch(/What would you like to know/);
   });
 
-  it("polishResponseBrevity strips opening and trailing noise", () => {
+  it("polishResponseBrevity strips opening and trailing offer paragraphs", () => {
     const noisy =
-      "Based on the information available, Casey owns security. " +
+      "Based on the information available, Casey owns security.\n\n" +
       "What would you like to know? I can help with decisions and risks.";
     const polished = polishResponseBrevity(noisy);
     expect(polished.toLowerCase()).not.toMatch(/^based on the information/);
     expect(polished.toLowerCase()).not.toMatch(/what would you like to know/);
     expect(polished).toMatch(/Casey owns security/);
+  });
+
+  it("polishResponseBrevity does not mutilate mid-sentence 'I can help'", () => {
+    const text = "Here is what I can help with today for your queue.";
+    expect(polishResponseBrevity(text)).toBe(text);
   });
 
   it("polishResponseBrevity preserves material facts and risk language", () => {

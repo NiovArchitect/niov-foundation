@@ -17,8 +17,10 @@ export const RESPONSE_BREVITY_SYSTEM_STRIP = [
   "- Voice will speak a short summary separately — keep the main answer scannable on screen.",
 ].join("\n");
 
-const TRAILING_NOISE =
-  /\n*(?:(?:I can help with|What would you like to know\?|Would you like me to|If you('d| would) like|Let me know if|Feel free to ask)[\s\S]*)$/i;
+// Only strip whole trailing paragraphs that open with offer/filler — never
+// mid-sentence "I can help with" (that would mutilate real answers).
+const TRAILING_OFFER_PARAGRAPH =
+  /(?:\n\s*)+(?:I can help with|What would you like to know\?|Would you like me to|If you(?:'d| would) like|Let me know if|Feel free to ask)[^\n]*(?:\n[^\n]*)*$/i;
 
 const OPENING_NOISE =
   /^(?:Based on (?:the )?(?:information|context|records?) available[,:]?\s*|Here is a comprehensive overview[:\s]*|It is important to note that\s*|To provide some context[,:]?\s*|As an AI[,:]?\s*|In summary[,:]?\s*)/i;
@@ -31,7 +33,13 @@ export function polishResponseBrevity(text: string): string {
   if (text.length === 0) return text;
   let out = text.trim();
   out = out.replace(OPENING_NOISE, "");
-  out = out.replace(TRAILING_NOISE, "");
+  // Strip only a separate trailing offer paragraph (not mid-sentence).
+  out = out.replace(TRAILING_OFFER_PARAGRAPH, "");
+  // Single-line pure offer closers at the very end.
+  out = out.replace(
+    /\s+(?:What would you like to know\?|Feel free to ask(?: me)?[^.]*\.?)\s*$/i,
+    "",
+  );
   // Collapse 3+ blank lines
   out = out.replace(/\n{3,}/g, "\n\n").trim();
   return out;
